@@ -1,0 +1,8134 @@
+{
+ "source": "Wikidata (https://www.wikidata.org), zapytanie SPARQL w polu `query`",
+ "license": "CC0-1.0 (https://creativecommons.org/publicdomain/zero/1.0/)",
+ "retrieved": "2026-09-25",
+ "formerSince": "2018-12-31",
+ "query": "SELECT ?m ?nis ?coord ?end ?dissolved ?pl ?nl ?fr ?en ?mul WHERE {\n  {\n    ?m p:P31 ?st . ?st ps:P31 wd:Q493522 .\n    OPTIONAL { ?st pq:P582 ?end }\n  } UNION {\n    # Gminy zniesione przy fuzjach: część ma inną klasę („gmina dawna”), ale zachowuje kod NIS.\n    ?m wdt:P1567 ?anyNis ; wdt:P576 ?dissolvedAt ; wdt:P17 wd:Q31 .\n    FILTER(?dissolvedAt >= \"2018-12-31T00:00:00Z\"^^xsd:dateTime)\n  }\n  OPTIONAL { ?m wdt:P576 ?dissolved }\n  OPTIONAL { ?m wdt:P1567 ?nis }\n  OPTIONAL { ?m wdt:P625 ?coord }\n  OPTIONAL { ?m rdfs:label ?pl FILTER(LANG(?pl)=\"pl\") }\n  OPTIONAL { ?m rdfs:label ?nl FILTER(LANG(?nl)=\"nl\") }\n  OPTIONAL { ?m rdfs:label ?fr FILTER(LANG(?fr)=\"fr\") }\n  OPTIONAL { ?m rdfs:label ?en FILTER(LANG(?en)=\"en\") }\n  OPTIONAL { ?m rdfs:label ?mul FILTER(LANG(?mul)=\"mul\") }\n}",
+ "skipped": [
+  "Q94095: brak współrzędnych/NIS",
+  "Q94139: brak współrzędnych/NIS",
+  "Q18786372: nieznany koniec",
+  "Q23376446: nieznany koniec"
+ ],
+ "items": [
+  {
+   "qid": "Q303246",
+   "refnis": "11001",
+   "lat": 51.133333,
+   "lng": 4.386944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aartselaar",
+    "nl": "Aartselaar",
+    "fr": "Aartselaar",
+    "en": "Aartselaar",
+    "mul": "Aartselaar"
+   }
+  },
+  {
+   "qid": "Q12892",
+   "refnis": "11002",
+   "lat": 51.221111,
+   "lng": 4.399722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Antwerpia",
+    "nl": "Antwerpen",
+    "fr": "Anvers",
+    "en": "Antwerp",
+    "mul": "Antwerpen"
+   }
+  },
+  {
+   "qid": "Q723822",
+   "refnis": "11004",
+   "lat": 51.163611,
+   "lng": 4.496389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Boechout",
+    "nl": "Boechout",
+    "fr": "Boechout",
+    "en": "Boechout",
+    "mul": "Boechout"
+   }
+  },
+  {
+   "qid": "Q723972",
+   "refnis": "11005",
+   "lat": 51.0875,
+   "lng": 4.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Boom",
+    "nl": "Boom",
+    "fr": "Boom",
+    "en": "Boom",
+    "mul": "Boom"
+   }
+  },
+  {
+   "qid": "Q66311737",
+   "refnis": "11007A",
+   "lat": 51.1978,
+   "lng": 4.4836,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "nl": "Gemeente Borsbeek",
+    "fr": "commune de Borsbeek",
+    "en": "Municipality of Borsbeek"
+   }
+  },
+  {
+   "qid": "Q693513",
+   "refnis": "11008",
+   "lat": 51.293056,
+   "lng": 4.489444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Brasschaat",
+    "nl": "Brasschaat",
+    "fr": "Brasschaat",
+    "en": "Brasschaat",
+    "mul": "Brasschaat"
+   }
+  },
+  {
+   "qid": "Q724131",
+   "refnis": "11009",
+   "lat": 51.349444,
+   "lng": 4.639444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Brecht (Belgia)",
+    "nl": "Brecht",
+    "fr": "Brecht",
+    "en": "Brecht"
+   }
+  },
+  {
+   "qid": "Q724238",
+   "refnis": "11013",
+   "lat": 51.154722,
+   "lng": 4.445833,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Edegem",
+    "nl": "Edegem",
+    "fr": "Edegem",
+    "en": "Edegem",
+    "mul": "Edegem"
+   }
+  },
+  {
+   "qid": "Q724283",
+   "refnis": "11016",
+   "lat": 51.467778,
+   "lng": 4.47,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Essen",
+    "nl": "Essen",
+    "fr": "Essen",
+    "en": "Essen"
+   }
+  },
+  {
+   "qid": "Q724448",
+   "refnis": "11018",
+   "lat": 51.143056,
+   "lng": 4.341111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hemiksem",
+    "nl": "Hemiksem",
+    "fr": "Hemiksem",
+    "en": "Hemiksem",
+    "mul": "Hemiksem"
+   }
+  },
+  {
+   "qid": "Q649982",
+   "refnis": "11021",
+   "lat": 51.148611,
+   "lng": 4.4775,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hove (prowincja Antwerpia)",
+    "nl": "Hove",
+    "fr": "Hove",
+    "en": "Hove"
+   }
+  },
+  {
+   "qid": "Q724777",
+   "refnis": "11022",
+   "lat": 51.383333,
+   "lng": 4.476389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kalmthout",
+    "nl": "Kalmthout",
+    "fr": "Kalmthout",
+    "en": "Kalmthout"
+   }
+  },
+  {
+   "qid": "Q724942",
+   "refnis": "11023",
+   "lat": 51.315,
+   "lng": 4.429444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kapellen",
+    "nl": "Kapellen",
+    "fr": "Kapellen",
+    "en": "Kapellen",
+    "mul": "Kapellen"
+   }
+  },
+  {
+   "qid": "Q725074",
+   "refnis": "11024",
+   "lat": 51.134444,
+   "lng": 4.445556,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kontich",
+    "nl": "Kontich",
+    "fr": "Kontich",
+    "en": "Kontich"
+   }
+  },
+  {
+   "qid": "Q725268",
+   "refnis": "11025",
+   "lat": 51.127828,
+   "lng": 4.494343,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lint (Belgia)",
+    "nl": "Lint",
+    "fr": "Lint",
+    "en": "Lint"
+   }
+  },
+  {
+   "qid": "Q688781",
+   "refnis": "11029",
+   "lat": 51.170278,
+   "lng": 4.456667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mortsel",
+    "nl": "Mortsel",
+    "fr": "Mortsel",
+    "en": "Mortsel",
+    "mul": "Mortsel"
+   }
+  },
+  {
+   "qid": "Q912054",
+   "refnis": "11030",
+   "lat": 51.11,
+   "lng": 4.330278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Niel (prowincja Antwerpia)",
+    "nl": "Niel",
+    "fr": "Niel",
+    "en": "Niel",
+    "mul": "Niel"
+   }
+  },
+  {
+   "qid": "Q501748",
+   "refnis": "11035",
+   "lat": 51.1896,
+   "lng": 4.5634,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ranst (Belgia)",
+    "nl": "Ranst",
+    "fr": "Ranst",
+    "en": "Ranst"
+   }
+  },
+  {
+   "qid": "Q943446",
+   "refnis": "11037",
+   "lat": 51.0769,
+   "lng": 4.4233,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rumst",
+    "nl": "Rumst",
+    "fr": "Rumst",
+    "en": "Rumst",
+    "mul": "Rumst"
+   }
+  },
+  {
+   "qid": "Q911968",
+   "refnis": "11038",
+   "lat": 51.133333,
+   "lng": 4.333333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Schelle (Belgia)",
+    "nl": "Schelle",
+    "fr": "Schelle",
+    "en": "Schelle",
+    "mul": "Schelle"
+   }
+  },
+  {
+   "qid": "Q263177",
+   "refnis": "11039",
+   "lat": 51.2389,
+   "lng": 4.5815,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Schilde",
+    "nl": "Schilde",
+    "fr": "Schilde",
+    "en": "Schilde",
+    "mul": "Schilde"
+   }
+  },
+  {
+   "qid": "Q655203",
+   "refnis": "11040",
+   "lat": 51.25,
+   "lng": 4.5,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Schoten",
+    "nl": "Schoten",
+    "fr": "Schoten",
+    "en": "Schoten",
+    "mul": "Schoten"
+   }
+  },
+  {
+   "qid": "Q595654",
+   "refnis": "11044",
+   "lat": 51.333333,
+   "lng": 4.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Stabroek (Belgia)",
+    "nl": "Stabroek",
+    "fr": "Stabroek",
+    "en": "Stabroek",
+    "mul": "Stabroek"
+   }
+  },
+  {
+   "qid": "Q527808",
+   "refnis": "11050",
+   "lat": 51.2278,
+   "lng": 4.5156,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wijnegem",
+    "nl": "Wijnegem",
+    "fr": "Wijnegem",
+    "en": "Wijnegem",
+    "mul": "Wijnegem"
+   }
+  },
+  {
+   "qid": "Q839037",
+   "refnis": "11052",
+   "lat": 51.2036,
+   "lng": 4.5219,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wommelgem",
+    "nl": "Wommelgem",
+    "fr": "Wommelghem",
+    "en": "Wommelgem",
+    "mul": "Wommelgem"
+   }
+  },
+  {
+   "qid": "Q912045",
+   "refnis": "11053",
+   "lat": 51.3922,
+   "lng": 4.5942,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wuustwezel",
+    "nl": "Wuustwezel",
+    "fr": "Wuustwezel",
+    "en": "Wuustwezel",
+    "mul": "Wuustwezel"
+   }
+  },
+  {
+   "qid": "Q146656",
+   "refnis": "11054",
+   "lat": 51.2136,
+   "lng": 4.66,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zandhoven",
+    "nl": "Zandhoven",
+    "fr": "Zandhoven",
+    "en": "Zandhoven"
+   }
+  },
+  {
+   "qid": "Q218253",
+   "refnis": "11055",
+   "lat": 51.2689,
+   "lng": 4.7125,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zoersel",
+    "nl": "Zoersel",
+    "fr": "Zoersel",
+    "en": "Zoersel"
+   }
+  },
+  {
+   "qid": "Q244690",
+   "refnis": "11056",
+   "lat": 51.216667,
+   "lng": 4.333333,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Zwijndrecht",
+    "nl": "Zwijndrecht",
+    "fr": "Zwijndrecht",
+    "en": "Zwijndrecht"
+   }
+  },
+  {
+   "qid": "Q917591",
+   "refnis": "11057",
+   "lat": 51.298889,
+   "lng": 4.690833,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Malle",
+    "nl": "Malle",
+    "fr": "Malle",
+    "en": "Malle"
+   }
+  },
+  {
+   "qid": "Q723774",
+   "refnis": "12002",
+   "lat": 51.117778,
+   "lng": 4.6575,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Berlaar",
+    "nl": "Berlaar",
+    "fr": "Berlaar",
+    "en": "Berlaar"
+   }
+  },
+  {
+   "qid": "Q528222",
+   "refnis": "12005",
+   "lat": 51.025278,
+   "lng": 4.548333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bonheiden",
+    "nl": "Bonheiden",
+    "fr": "Bonheiden",
+    "en": "Bonheiden"
+   }
+  },
+  {
+   "qid": "Q724025",
+   "refnis": "12007",
+   "lat": 51.095278,
+   "lng": 4.234167,
+   "formerUntil": null,
+   "labels": {
+    "mul": "Bornem"
+   }
+  },
+  {
+   "qid": "Q615109",
+   "refnis": "12009",
+   "lat": 51.095833,
+   "lng": 4.506111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Duffel",
+    "nl": "Duffel",
+    "fr": "Duffel",
+    "en": "Duffel"
+   }
+  },
+  {
+   "qid": "Q257979",
+   "refnis": "12014",
+   "lat": 51.075833,
+   "lng": 4.728611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Heist-op-den-Berg",
+    "nl": "Heist-op-den-Berg",
+    "fr": "Heist-op-den-Berg",
+    "en": "Heist-op-den-Berg"
+   }
+  },
+  {
+   "qid": "Q12460",
+   "refnis": "12021",
+   "lat": 51.131111,
+   "lng": 4.569722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lier",
+    "nl": "Lier",
+    "fr": "Lierre",
+    "en": "Lier",
+    "mul": "Lier"
+   }
+  },
+  {
+   "qid": "Q162022",
+   "refnis": "12025",
+   "lat": 51.028056,
+   "lng": 4.480278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mechelen",
+    "nl": "Mechelen",
+    "fr": "Malines",
+    "en": "Mechelen",
+    "mul": "Mechelen"
+   }
+  },
+  {
+   "qid": "Q912084",
+   "refnis": "12026",
+   "lat": 51.161111,
+   "lng": 4.670278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Nijlen",
+    "nl": "Nijlen",
+    "fr": "Nylen",
+    "en": "Nijlen",
+    "mul": "Nijlen"
+   }
+  },
+  {
+   "qid": "Q929397",
+   "refnis": "12029",
+   "lat": 51.0542,
+   "lng": 4.6294,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Putte",
+    "nl": "Putte",
+    "fr": "Putte",
+    "en": "Putte"
+   }
+  },
+  {
+   "qid": "Q908546",
+   "refnis": "12030",
+   "lat": 51.0761,
+   "lng": 4.2803,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Puurs",
+    "nl": "Puurs",
+    "fr": "Puurs",
+    "en": "Puurs"
+   }
+  },
+  {
+   "qid": "Q912030",
+   "refnis": "12034",
+   "lat": 51.0525,
+   "lng": 4.205,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Sint-Amands",
+    "nl": "Sint-Amands",
+    "fr": "Saint-Amand",
+    "en": "Sint-Amands"
+   }
+  },
+  {
+   "qid": "Q696578",
+   "refnis": "12035",
+   "lat": 51.066667,
+   "lng": 4.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Katelijne-Waver",
+    "nl": "Sint-Katelijne-Waver",
+    "fr": "Wavre-Sainte-Catherine",
+    "en": "Sint-Katelijne-Waver",
+    "mul": "Sint-Katelijne-Waver"
+   }
+  },
+  {
+   "qid": "Q695278",
+   "refnis": "12040",
+   "lat": 51.0597,
+   "lng": 4.3581,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Willebroek",
+    "nl": "Willebroek",
+    "fr": "Willebroeck",
+    "en": "Willebroek",
+    "mul": "Willebroek"
+   }
+  },
+  {
+   "qid": "Q45202943",
+   "refnis": "12041",
+   "lat": 51.076127,
+   "lng": 4.277621,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Puurs-Sint-Amands",
+    "nl": "Puurs-Sint-Amands",
+    "fr": "Puers-Saint-Amand",
+    "en": "Puurs-Sint-Amands",
+    "mul": "Puurs-Sint-Amands"
+   }
+  },
+  {
+   "qid": "Q641905",
+   "refnis": "13001",
+   "lat": 51.320278,
+   "lng": 5.086389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Arendonk",
+    "nl": "Arendonk",
+    "fr": "Arendonk",
+    "en": "Arendonk"
+   }
+  },
+  {
+   "qid": "Q244959",
+   "refnis": "13002",
+   "lat": 51.438333,
+   "lng": 4.931667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Baarle-Hertog",
+    "nl": "Baarle-Hertog",
+    "fr": "Baerle-Duc",
+    "en": "Baarle-Hertog"
+   }
+  },
+  {
+   "qid": "Q723651",
+   "refnis": "13003",
+   "lat": 51.170833,
+   "lng": 5.169722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Balen",
+    "nl": "Balen",
+    "fr": "Balen",
+    "en": "Balen"
+   }
+  },
+  {
+   "qid": "Q723728",
+   "refnis": "13004",
+   "lat": 51.319167,
+   "lng": 4.856389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beerse",
+    "nl": "Beerse",
+    "fr": "Beerse",
+    "en": "Beerse"
+   }
+  },
+  {
+   "qid": "Q386732",
+   "refnis": "13006",
+   "lat": 51.239444,
+   "lng": 5.113333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dessel",
+    "nl": "Dessel",
+    "fr": "Dessel",
+    "en": "Dessel"
+   }
+  },
+  {
+   "qid": "Q464454",
+   "refnis": "13008",
+   "lat": 51.161111,
+   "lng": 4.990278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Geel",
+    "nl": "Geel",
+    "fr": "Geel",
+    "en": "Geel",
+    "mul": "Geel"
+   }
+  },
+  {
+   "qid": "Q724389",
+   "refnis": "13010",
+   "lat": 51.191944,
+   "lng": 4.738611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Grobbendonk",
+    "nl": "Grobbendonk",
+    "fr": "Grobbendonk",
+    "en": "Grobbendonk",
+    "mul": "Grobbendonk"
+   }
+  },
+  {
+   "qid": "Q383723",
+   "refnis": "13011",
+   "lat": 51.176667,
+   "lng": 4.836389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herentals",
+    "nl": "Herentals",
+    "fr": "Herentals",
+    "en": "Herentals",
+    "mul": "Herentals"
+   }
+  },
+  {
+   "qid": "Q724534",
+   "refnis": "13012",
+   "lat": 51.139167,
+   "lng": 4.754444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herenthout",
+    "nl": "Herenthout",
+    "fr": "Herenthout",
+    "en": "Herenthout"
+   }
+  },
+  {
+   "qid": "Q280182",
+   "refnis": "13013",
+   "lat": 51.053611,
+   "lng": 4.883333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herselt",
+    "nl": "Herselt",
+    "fr": "Herselt",
+    "en": "Herselt",
+    "mul": "Herselt"
+   }
+  },
+  {
+   "qid": "Q724638",
+   "refnis": "13014",
+   "lat": 51.400833,
+   "lng": 4.761111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hoogstraten",
+    "nl": "Hoogstraten",
+    "fr": "Hogstrate",
+    "en": "Hoogstraten",
+    "mul": "Hoogstraten"
+   }
+  },
+  {
+   "qid": "Q518758",
+   "refnis": "13016",
+   "lat": 51.075278,
+   "lng": 4.788611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hulshout",
+    "nl": "Hulshout",
+    "fr": "Hulshout",
+    "en": "Hulshout",
+    "mul": "Hulshout"
+   }
+  },
+  {
+   "qid": "Q725029",
+   "refnis": "13017",
+   "lat": 51.240833,
+   "lng": 4.967778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kasterlee",
+    "nl": "Kasterlee",
+    "fr": "Kasterlee",
+    "en": "Kasterlee"
+   }
+  },
+  {
+   "qid": "Q725235",
+   "refnis": "13019",
+   "lat": 51.238333,
+   "lng": 4.824167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lille",
+    "nl": "Lille",
+    "fr": "Lille",
+    "en": "Lille"
+   }
+  },
+  {
+   "qid": "Q846207",
+   "refnis": "13021",
+   "lat": 51.131667,
+   "lng": 5.077222,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Meerhout",
+    "nl": "Meerhout",
+    "fr": "Meerhout",
+    "en": "Meerhout",
+    "mul": "Meerhout"
+   }
+  },
+  {
+   "qid": "Q532277",
+   "refnis": "13023",
+   "lat": 51.358056,
+   "lng": 4.862778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Merksplas",
+    "nl": "Merksplas",
+    "fr": "Merksplas",
+    "en": "Merksplas"
+   }
+  },
+  {
+   "qid": "Q465710",
+   "refnis": "13025",
+   "lat": 51.184167,
+   "lng": 5.115556,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mol",
+    "nl": "Mol",
+    "fr": "Mol",
+    "en": "Mol",
+    "mul": "Mol"
+   }
+  },
+  {
+   "qid": "Q839044",
+   "refnis": "13029",
+   "lat": 51.143889,
+   "lng": 4.859722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Olen",
+    "nl": "Olen",
+    "fr": "Olen",
+    "en": "Olen"
+   }
+  },
+  {
+   "qid": "Q943555",
+   "refnis": "13031",
+   "lat": 51.317778,
+   "lng": 4.981667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oud-Turnhout",
+    "nl": "Oud-Turnhout",
+    "fr": "Vieux-Turnhout",
+    "en": "Oud-Turnhout"
+   }
+  },
+  {
+   "qid": "Q839119",
+   "refnis": "13035",
+   "lat": 51.3703,
+   "lng": 4.9936,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ravels",
+    "nl": "Ravels",
+    "fr": "Ravels",
+    "en": "Ravels"
+   }
+  },
+  {
+   "qid": "Q912062",
+   "refnis": "13036",
+   "lat": 51.2658,
+   "lng": 5.0828,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Retie",
+    "nl": "Retie",
+    "fr": "Réthy",
+    "en": "Retie"
+   }
+  },
+  {
+   "qid": "Q929459",
+   "refnis": "13037",
+   "lat": 51.3489,
+   "lng": 4.7597,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rijkevorsel",
+    "nl": "Rijkevorsel",
+    "fr": "Rijkevorsel",
+    "en": "Rijkevorsel",
+    "mul": "Rijkevorsel"
+   }
+  },
+  {
+   "qid": "Q271783",
+   "refnis": "13040",
+   "lat": 51.316667,
+   "lng": 4.933333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Turnhout",
+    "nl": "Turnhout",
+    "fr": "Turnhout",
+    "en": "Turnhout",
+    "mul": "Turnhout"
+   }
+  },
+  {
+   "qid": "Q909914",
+   "refnis": "13044",
+   "lat": 51.2019,
+   "lng": 4.7717,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vorselaar",
+    "nl": "Vorselaar",
+    "fr": "Vorselaar",
+    "en": "Vorselaar"
+   }
+  },
+  {
+   "qid": "Q929485",
+   "refnis": "13046",
+   "lat": 51.3081,
+   "lng": 4.8883,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vosselaar",
+    "nl": "Vosselaar",
+    "fr": "Vosselaar",
+    "en": "Vosselaar"
+   }
+  },
+  {
+   "qid": "Q475931",
+   "refnis": "13049",
+   "lat": 51.0897,
+   "lng": 4.9153,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Westerlo",
+    "nl": "Westerlo",
+    "fr": "Westerlo",
+    "en": "Westerlo",
+    "mul": "Westerlo"
+   }
+  },
+  {
+   "qid": "Q725122",
+   "refnis": "13053",
+   "lat": 51.080556,
+   "lng": 5.02,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Laakdal",
+    "nl": "Laakdal",
+    "fr": "Laakdal",
+    "en": "Laakdal",
+    "mul": "Laakdal"
+   }
+  },
+  {
+   "qid": "Q12886",
+   "refnis": "21001",
+   "lat": 50.839167,
+   "lng": 4.329722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Anderlecht",
+    "nl": "Anderlecht",
+    "fr": "Anderlecht",
+    "en": "Anderlecht",
+    "mul": "Anderlecht"
+   }
+  },
+  {
+   "qid": "Q272228",
+   "refnis": "21002",
+   "lat": 50.817222,
+   "lng": 4.426944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Auderghem",
+    "nl": "Oudergem",
+    "fr": "Auderghem",
+    "en": "Auderghem",
+    "mul": "Auderghem"
+   }
+  },
+  {
+   "qid": "Q272272",
+   "refnis": "21003",
+   "lat": 50.865,
+   "lng": 4.294722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Berchem-Sainte-Agathe",
+    "nl": "Sint-Agatha-Berchem",
+    "fr": "Berchem-Sainte-Agathe",
+    "en": "Berchem-Sainte-Agathe",
+    "mul": "Berchem-Sainte-Agathe"
+   }
+  },
+  {
+   "qid": "Q239",
+   "refnis": "21004",
+   "lat": 50.846667,
+   "lng": 4.351667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bruksela",
+    "nl": "Brussel",
+    "fr": "Bruxelles",
+    "en": "Brussels"
+   }
+  },
+  {
+   "qid": "Q192859",
+   "refnis": "21005",
+   "lat": 50.836111,
+   "lng": 4.386111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Etterbeek",
+    "nl": "Etterbeek",
+    "fr": "Etterbeek",
+    "en": "Etterbeek",
+    "mul": "Etterbeek"
+   }
+  },
+  {
+   "qid": "Q321718",
+   "refnis": "21006",
+   "lat": 50.871944,
+   "lng": 4.403333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Evere",
+    "nl": "Evere",
+    "fr": "Evere",
+    "en": "Evere",
+    "mul": "Evere"
+   }
+  },
+  {
+   "qid": "Q72946",
+   "refnis": "21007",
+   "lat": 50.811667,
+   "lng": 4.318056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Forest",
+    "nl": "Vorst",
+    "fr": "Forest",
+    "en": "Forest",
+    "mul": "Forest"
+   }
+  },
+  {
+   "qid": "Q366552",
+   "refnis": "21008",
+   "lat": 50.870278,
+   "lng": 4.307778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ganshoren",
+    "nl": "Ganshoren",
+    "fr": "Ganshoren",
+    "en": "Ganshoren",
+    "mul": "Ganshoren"
+   }
+  },
+  {
+   "qid": "Q208713",
+   "refnis": "21009",
+   "lat": 50.833056,
+   "lng": 4.366944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Elsene",
+    "nl": "Elsene",
+    "fr": "Ixelles",
+    "mul": "Ixelles - Elsene"
+   }
+  },
+  {
+   "qid": "Q241918",
+   "refnis": "21010",
+   "lat": 50.875833,
+   "lng": 4.324444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Jette",
+    "nl": "Jette",
+    "fr": "Jette",
+    "en": "Jette",
+    "mul": "Jette"
+   }
+  },
+  {
+   "qid": "Q219244",
+   "refnis": "21011",
+   "lat": 50.860556,
+   "lng": 4.331667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Koekelberg",
+    "mul": "Koekelberg"
+   }
+  },
+  {
+   "qid": "Q180775",
+   "refnis": "21012",
+   "lat": 50.854722,
+   "lng": 4.338611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Molenbeek-Saint-Jean",
+    "nl": "Sint-Jans-Molenbeek",
+    "fr": "Molenbeek-Saint-Jean",
+    "mul": "Molenbeek-Saint-Jean - Sint-Jans-Molenbeek"
+   }
+  },
+  {
+   "qid": "Q237674",
+   "refnis": "21013",
+   "lat": 50.826667,
+   "lng": 4.345556,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Gillis",
+    "nl": "Sint-Gillis",
+    "fr": "Saint-Gilles",
+    "en": "Saint-Gilles",
+    "mul": "Saint-Gilles"
+   }
+  },
+  {
+   "qid": "Q272243",
+   "refnis": "21014",
+   "lat": 50.850833,
+   "lng": 4.369167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Saint-Josse-ten-Noode",
+    "nl": "Sint-Joost-ten-Node",
+    "fr": "Saint-Josse-ten-Noode",
+    "en": "Saint-Josse-ten-Noode",
+    "mul": "Saint-Josse-ten-Noode"
+   }
+  },
+  {
+   "qid": "Q12887",
+   "refnis": "21015",
+   "lat": 50.8675,
+   "lng": 4.373611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Schaarbeek",
+    "nl": "Schaarbeek",
+    "fr": "Schaerbeek",
+    "mul": "Schaerbeek - Schaarbeek"
+   }
+  },
+  {
+   "qid": "Q203312",
+   "refnis": "21016",
+   "lat": 50.803611,
+   "lng": 4.333889,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ukkel",
+    "nl": "Ukkel",
+    "fr": "Uccle",
+    "en": "Uccle",
+    "mul": "Uccle"
+   }
+  },
+  {
+   "qid": "Q272262",
+   "refnis": "21017",
+   "lat": 50.798056,
+   "lng": 4.417778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Watermael-Boitsfort",
+    "nl": "Watermaal-Bosvoorde",
+    "fr": "Watermael-Boitsfort",
+    "en": "Watermael-Boitsfort"
+   }
+  },
+  {
+   "qid": "Q211764",
+   "refnis": "21018",
+   "lat": 50.843722,
+   "lng": 4.426009,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Lambrechts-Woluwe",
+    "nl": "Sint-Lambrechts-Woluwe",
+    "fr": "Woluwe-Saint-Lambert",
+    "en": "Woluwe-Saint-Lambert",
+    "mul": "Woluwe-Saint-Lambert"
+   }
+  },
+  {
+   "qid": "Q242393",
+   "refnis": "21019",
+   "lat": 50.836944,
+   "lng": 4.4275,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Woluwe-Saint-Pierre",
+    "nl": "Sint-Pieters-Woluwe",
+    "fr": "Woluwe-Saint-Pierre",
+    "en": "Woluwe-Saint-Pierre",
+    "mul": "Woluwe-Saint-Pierre"
+   }
+  },
+  {
+   "qid": "Q515710",
+   "refnis": "23002",
+   "lat": 50.9,
+   "lng": 4.2,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Asse",
+    "nl": "Asse",
+    "fr": "Asse",
+    "en": "Asse",
+    "mul": "Asse"
+   }
+  },
+  {
+   "qid": "Q692168",
+   "refnis": "23003",
+   "lat": 50.7631,
+   "lng": 4.3086,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beersel",
+    "nl": "Beersel",
+    "fr": "Beersel",
+    "en": "Beersel"
+   }
+  },
+  {
+   "qid": "Q839017",
+   "refnis": "23009",
+   "lat": 50.716667,
+   "lng": 3.933333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bever",
+    "nl": "Bever",
+    "fr": "Biévène",
+    "en": "Bever",
+    "mul": "Bever"
+   }
+  },
+  {
+   "qid": "Q641134",
+   "refnis": "23016",
+   "lat": 50.845,
+   "lng": 4.265,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dilbeek",
+    "nl": "Dilbeek",
+    "fr": "Dilbeek",
+    "en": "Dilbeek",
+    "mul": "Dilbeek"
+   }
+  },
+  {
+   "qid": "Q908554",
+   "refnis": "23023",
+   "lat": 50.75,
+   "lng": 3.966667,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Galmaarden",
+    "nl": "Galmaarden",
+    "fr": "Gammerages",
+    "en": "Galmaarden",
+    "mul": "Galmaarden"
+   }
+  },
+  {
+   "qid": "Q912014",
+   "refnis": "23024",
+   "lat": 50.8,
+   "lng": 4.116667,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Gooik",
+    "nl": "Gooik",
+    "fr": "Gooik",
+    "en": "Gooik",
+    "mul": "Gemeente Gooik"
+   }
+  },
+  {
+   "qid": "Q633063",
+   "refnis": "23025",
+   "lat": 50.933333,
+   "lng": 4.383333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Grimbergen",
+    "nl": "Grimbergen",
+    "fr": "Grimbergen",
+    "en": "Grimbergen",
+    "mul": "Grimbergen"
+   }
+  },
+  {
+   "qid": "Q210003",
+   "refnis": "23027",
+   "lat": 50.736111,
+   "lng": 4.237222,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Halle",
+    "nl": "Halle",
+    "fr": "Hal",
+    "en": "Halle",
+    "mul": "Halle"
+   }
+  },
+  {
+   "qid": "Q567808",
+   "refnis": "23032",
+   "lat": 50.7242,
+   "lng": 4.0339,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Herne",
+    "nl": "Herne",
+    "fr": "Hérinnes",
+    "en": "Herne",
+    "mul": "Herne"
+   }
+  },
+  {
+   "qid": "Q641278",
+   "refnis": "23033",
+   "lat": 50.766667,
+   "lng": 4.466667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hoeilaart",
+    "nl": "Hoeilaart",
+    "fr": "Hoeilaert",
+    "en": "Hoeilaart",
+    "mul": "Hoeilaart"
+   }
+  },
+  {
+   "qid": "Q492453",
+   "refnis": "23038",
+   "lat": 50.94131,
+   "lng": 4.54958,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kampenhout",
+    "nl": "Kampenhout",
+    "fr": "Kampenhout",
+    "en": "Kampenhout",
+    "mul": "Kampenhout"
+   }
+  },
+  {
+   "qid": "Q911995",
+   "refnis": "23039",
+   "lat": 51.016667,
+   "lng": 4.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kapelle-op-den-Bos",
+    "nl": "Kapelle-op-den-Bos",
+    "fr": "Capelle-au-Bois",
+    "en": "Kapelle-op-den-Bos",
+    "mul": "Kapelle-op-den-Bos"
+   }
+  },
+  {
+   "qid": "Q818621",
+   "refnis": "23044",
+   "lat": 50.866667,
+   "lng": 4.083333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Liedekerke",
+    "nl": "Liedekerke",
+    "fr": "Liedekerke",
+    "en": "Liedekerke",
+    "mul": "Liedekerke"
+   }
+  },
+  {
+   "qid": "Q587819",
+   "refnis": "23045",
+   "lat": 51,
+   "lng": 4.3,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Londerzeel",
+    "nl": "Londerzeel",
+    "fr": "Londerzeel",
+    "en": "Londerzeel"
+   }
+  },
+  {
+   "qid": "Q752115",
+   "refnis": "23047",
+   "lat": 50.9103,
+   "lng": 4.4367,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Machelen",
+    "nl": "Machelen",
+    "fr": "Machelen",
+    "en": "Machelen",
+    "mul": "Machelen"
+   }
+  },
+  {
+   "qid": "Q922260",
+   "refnis": "23050",
+   "lat": 50.933333,
+   "lng": 4.333333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Meise",
+    "nl": "Meise",
+    "fr": "Meise",
+    "en": "Meise"
+   }
+  },
+  {
+   "qid": "Q912106",
+   "refnis": "23052",
+   "lat": 50.966667,
+   "lng": 4.233333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Merchtem",
+    "nl": "Merchtem",
+    "fr": "Merchtem",
+    "en": "Merchtem",
+    "mul": "Merchtem"
+   }
+  },
+  {
+   "qid": "Q930292",
+   "refnis": "23060",
+   "lat": 50.966667,
+   "lng": 4.183333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Opwijk",
+    "nl": "Opwijk",
+    "fr": "Opwijk",
+    "en": "Opwijk"
+   }
+  },
+  {
+   "qid": "Q599127",
+   "refnis": "23062",
+   "lat": 50.783333,
+   "lng": 4.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Overijse",
+    "nl": "Overijse",
+    "fr": "Overijse",
+    "en": "Overijse",
+    "mul": "Overijse"
+   }
+  },
+  {
+   "qid": "Q646037",
+   "refnis": "23064",
+   "lat": 50.75,
+   "lng": 4.15,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pepingen",
+    "nl": "Pepingen",
+    "fr": "Pepingen",
+    "en": "Pepingen",
+    "mul": "Pepingen"
+   }
+  },
+  {
+   "qid": "Q688790",
+   "refnis": "23077",
+   "lat": 50.783333,
+   "lng": 4.25,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Pieters-Leeuw",
+    "nl": "Sint-Pieters-Leeuw",
+    "fr": "Leeuw-Saint-Pierre",
+    "en": "Sint-Pieters-Leeuw"
+   }
+  },
+  {
+   "qid": "Q984888",
+   "refnis": "23081",
+   "lat": 50.9189,
+   "lng": 4.5083,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Steenokkerzeel",
+    "nl": "Steenokkerzeel",
+    "fr": "Steenokkerzeel",
+    "en": "Steenokkerzeel",
+    "mul": "Steenokkerzeel"
+   }
+  },
+  {
+   "qid": "Q930249",
+   "refnis": "23086",
+   "lat": 50.866667,
+   "lng": 4.183333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ternat (Belgia)",
+    "nl": "Ternat",
+    "fr": "Ternat",
+    "en": "Ternat",
+    "mul": "Ternat"
+   }
+  },
+  {
+   "qid": "Q318418",
+   "refnis": "23088",
+   "lat": 50.928139,
+   "lng": 4.424489,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vilvoorde",
+    "nl": "Vilvoorde",
+    "fr": "Vilvorde",
+    "en": "Vilvoorde",
+    "mul": "Vilvoorde"
+   }
+  },
+  {
+   "qid": "Q28898",
+   "refnis": "23094",
+   "lat": 50.883333,
+   "lng": 4.466667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zaventem",
+    "nl": "Zaventem",
+    "fr": "Zaventem",
+    "en": "Zaventem",
+    "mul": "Zaventem"
+   }
+  },
+  {
+   "qid": "Q179249",
+   "refnis": "23096",
+   "lat": 50.9828,
+   "lng": 4.4611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zemst",
+    "nl": "Zemst",
+    "fr": "Zemst",
+    "en": "Zemst",
+    "mul": "Zemst"
+   }
+  },
+  {
+   "qid": "Q936660",
+   "refnis": "23097",
+   "lat": 50.8439,
+   "lng": 4.0745,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Roosdaal",
+    "nl": "Roosdaal",
+    "fr": "Roosdaal",
+    "en": "Roosdaal",
+    "mul": "Roosdaal"
+   }
+  },
+  {
+   "qid": "Q688377",
+   "refnis": "23098",
+   "lat": 50.783333,
+   "lng": 4.316667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Drogenbos",
+    "nl": "Drogenbos",
+    "fr": "Drogenbos",
+    "en": "Drogenbos"
+   }
+  },
+  {
+   "qid": "Q839023",
+   "refnis": "23099",
+   "lat": 50.842027,
+   "lng": 4.468709,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kraainem",
+    "nl": "Kraainem",
+    "fr": "Kraainem",
+    "en": "Kraainem",
+    "mul": "Kraainem"
+   }
+  },
+  {
+   "qid": "Q631639",
+   "refnis": "23100",
+   "lat": 50.766667,
+   "lng": 4.333333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Linkebeek",
+    "nl": "Linkebeek",
+    "fr": "Linkebeek",
+    "en": "Linkebeek",
+    "mul": "Linkebeek"
+   }
+  },
+  {
+   "qid": "Q841597",
+   "refnis": "23101",
+   "lat": 50.745,
+   "lng": 4.3464,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Genesius-Rode",
+    "nl": "Sint-Genesius-Rode",
+    "fr": "Rhode-Saint-Genèse",
+    "en": "Sint-Genesius-Rode"
+   }
+  },
+  {
+   "qid": "Q913195",
+   "refnis": "23102",
+   "lat": 50.9087,
+   "lng": 4.3029,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wemmel",
+    "nl": "Wemmel",
+    "fr": "Wemmel",
+    "en": "Wemmel"
+   }
+  },
+  {
+   "qid": "Q912091",
+   "refnis": "23103",
+   "lat": 50.833333,
+   "lng": 4.5,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wezembeek-Oppem",
+    "nl": "Wezembeek-Oppem",
+    "fr": "Wezembeek-Oppem",
+    "en": "Wezembeek-Oppem"
+   }
+  },
+  {
+   "qid": "Q912022",
+   "refnis": "23104",
+   "lat": 50.8,
+   "lng": 4.15,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lennik",
+    "nl": "Lennik",
+    "fr": "Lennik",
+    "en": "Lennik",
+    "mul": "Lennik"
+   }
+  },
+  {
+   "qid": "Q382860",
+   "refnis": "23105",
+   "lat": 50.9033,
+   "lng": 4.1176,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Affligem",
+    "nl": "Affligem",
+    "fr": "Afflighem",
+    "en": "Affligem",
+    "mul": "Affligem"
+   }
+  },
+  {
+   "qid": "Q123848537",
+   "refnis": "23106",
+   "lat": 50.7355,
+   "lng": 4.0202,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pajottegem",
+    "nl": "Pajottegem",
+    "fr": "Pajottegem",
+    "en": "Pajottegem",
+    "mul": "Pajottegem"
+   }
+  },
+  {
+   "qid": "Q273442",
+   "refnis": "24001",
+   "lat": 50.9842,
+   "lng": 4.8333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aarschot",
+    "nl": "Aarschot",
+    "fr": "Aerschot",
+    "en": "Aarschot",
+    "mul": "Aarschot"
+   }
+  },
+  {
+   "qid": "Q432610",
+   "refnis": "24007",
+   "lat": 51.0186,
+   "lng": 4.785,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Begijnendijk",
+    "nl": "Begijnendijk",
+    "fr": "Begijnendijk",
+    "en": "Begijnendijk"
+   }
+  },
+  {
+   "qid": "Q815054",
+   "refnis": "24008",
+   "lat": 50.95,
+   "lng": 4.966667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bekkevoort",
+    "nl": "Bekkevoort",
+    "fr": "Bekkevoort",
+    "en": "Bekkevoort"
+   }
+  },
+  {
+   "qid": "Q827665",
+   "refnis": "24009",
+   "lat": 50.85,
+   "lng": 4.616667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bertem",
+    "nl": "Bertem",
+    "fr": "Bertem",
+    "en": "Bertem",
+    "mul": "Bertem"
+   }
+  },
+  {
+   "qid": "Q729929",
+   "refnis": "24011",
+   "lat": 50.833333,
+   "lng": 4.766667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bierbeek",
+    "nl": "Bierbeek",
+    "fr": "Bierbeek",
+    "en": "Bierbeek",
+    "mul": "Bierbeek"
+   }
+  },
+  {
+   "qid": "Q746078",
+   "refnis": "24014",
+   "lat": 50.983333,
+   "lng": 4.566667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Boortmeerbeek",
+    "nl": "Boortmeerbeek",
+    "fr": "Boortmeerbeek",
+    "en": "Boortmeerbeek",
+    "mul": "Boortmeerbeek"
+   }
+  },
+  {
+   "qid": "Q895293",
+   "refnis": "24016",
+   "lat": 50.85,
+   "lng": 4.833333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Boutersem",
+    "nl": "Boutersem",
+    "fr": "Boutersem",
+    "en": "Boutersem",
+    "mul": "Boutersem"
+   }
+  },
+  {
+   "qid": "Q743236",
+   "refnis": "24020",
+   "lat": 50.9847,
+   "lng": 5.0514,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Diest",
+    "nl": "Diest",
+    "fr": "Diest",
+    "en": "Diest",
+    "mul": "Diest"
+   }
+  },
+  {
+   "qid": "Q984874",
+   "refnis": "24028",
+   "lat": 50.883333,
+   "lng": 5.116667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Geetbets",
+    "nl": "Geetbets",
+    "fr": "Geetbets",
+    "en": "Geetbets"
+   }
+  },
+  {
+   "qid": "Q950129",
+   "refnis": "24033",
+   "lat": 50.9767,
+   "lng": 4.6372,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Haacht",
+    "nl": "Haacht",
+    "fr": "Haecht",
+    "en": "Haacht",
+    "mul": "Haacht"
+   }
+  },
+  {
+   "qid": "Q930269",
+   "refnis": "24038",
+   "lat": 50.9081,
+   "lng": 4.6706,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herent",
+    "nl": "Herent",
+    "fr": "Herent",
+    "en": "Herent",
+    "mul": "Herent"
+   }
+  },
+  {
+   "qid": "Q818787",
+   "refnis": "24041",
+   "lat": 50.77415,
+   "lng": 4.88703,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hoegaarden",
+    "nl": "Hoegaarden",
+    "fr": "Hoegaarden",
+    "en": "Hoegaarden",
+    "mul": "Hoegaarden"
+   }
+  },
+  {
+   "qid": "Q676893",
+   "refnis": "24043",
+   "lat": 50.916667,
+   "lng": 4.766667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Holsbeek",
+    "nl": "Holsbeek",
+    "fr": "Holsbeek",
+    "en": "Holsbeek",
+    "mul": "Holsbeek"
+   }
+  },
+  {
+   "qid": "Q943472",
+   "refnis": "24045",
+   "lat": 50.783333,
+   "lng": 4.583333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Huldenberg",
+    "nl": "Huldenberg",
+    "fr": "Huldenberg",
+    "en": "Huldenberg",
+    "mul": "Huldenberg"
+   }
+  },
+  {
+   "qid": "Q984894",
+   "refnis": "24048",
+   "lat": 51.0031,
+   "lng": 4.6311,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Keerbergen",
+    "nl": "Keerbergen",
+    "fr": "Keerbergen",
+    "en": "Keerbergen",
+    "mul": "Keerbergen"
+   }
+  },
+  {
+   "qid": "Q984877",
+   "refnis": "24054",
+   "lat": 50.9,
+   "lng": 5.066667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kortenaken",
+    "nl": "Kortenaken",
+    "fr": "Kortenaken",
+    "en": "Kortenaken"
+   }
+  },
+  {
+   "qid": "Q929474",
+   "refnis": "24055",
+   "lat": 50.883333,
+   "lng": 4.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kortenberg",
+    "nl": "Kortenberg",
+    "fr": "Cortenbergh",
+    "en": "Kortenberg"
+   }
+  },
+  {
+   "qid": "Q943502",
+   "refnis": "24059",
+   "lat": 50.7547,
+   "lng": 5.0814,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Landen",
+    "nl": "Landen",
+    "fr": "Landen",
+    "en": "Landen",
+    "mul": "Landen"
+   }
+  },
+  {
+   "qid": "Q118958",
+   "refnis": "24062",
+   "lat": 50.8775,
+   "lng": 4.704444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Leuven",
+    "nl": "Leuven",
+    "fr": "Louvain",
+    "en": "Leuven",
+    "mul": "Leuven"
+   }
+  },
+  {
+   "qid": "Q929447",
+   "refnis": "24066",
+   "lat": 50.881667,
+   "lng": 4.841389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lubbeek",
+    "nl": "Lubbeek",
+    "fr": "Lubbeek",
+    "en": "Lubbeek",
+    "mul": "Lubbeek"
+   }
+  },
+  {
+   "qid": "Q746641",
+   "refnis": "24086",
+   "lat": 50.833333,
+   "lng": 4.666667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oud-Heverlee",
+    "nl": "Oud-Heverlee",
+    "fr": "Oud-Heverlee",
+    "en": "Oud-Heverlee"
+   }
+  },
+  {
+   "qid": "Q926139",
+   "refnis": "24094",
+   "lat": 50.9511,
+   "lng": 4.7108,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rotselaar",
+    "nl": "Rotselaar",
+    "fr": "Rotselaer",
+    "en": "Rotselaar"
+   }
+  },
+  {
+   "qid": "Q456544",
+   "refnis": "24104",
+   "lat": 50.816667,
+   "lng": 4.5,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tervuren",
+    "nl": "Tervuren",
+    "fr": "Tervuren",
+    "en": "Tervuren",
+    "mul": "Tervuren"
+   }
+  },
+  {
+   "qid": "Q456550",
+   "refnis": "24107",
+   "lat": 50.80748,
+   "lng": 4.93717,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tienen",
+    "nl": "Tienen",
+    "fr": "Tirlemont",
+    "en": "Tienen",
+    "mul": "Tienen"
+   }
+  },
+  {
+   "qid": "Q926110",
+   "refnis": "24109",
+   "lat": 50.9911,
+   "lng": 4.7044,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tremelo",
+    "nl": "Tremelo",
+    "fr": "Tremelo",
+    "en": "Tremelo"
+   }
+  },
+  {
+   "qid": "Q227070",
+   "refnis": "24130",
+   "lat": 50.8333,
+   "lng": 5.1036,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zoutleeuw",
+    "nl": "Zoutleeuw",
+    "fr": "Léau",
+    "en": "Zoutleeuw",
+    "mul": "Zoutleeuw"
+   }
+  },
+  {
+   "qid": "Q984881",
+   "refnis": "24133",
+   "lat": 50.8,
+   "lng": 5.05,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Linter",
+    "nl": "Linter",
+    "fr": "Linter",
+    "en": "Linter"
+   }
+  },
+  {
+   "qid": "Q932020",
+   "refnis": "24134",
+   "lat": 50.9802,
+   "lng": 4.974,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Scherpenheuvel-Zichem",
+    "nl": "Scherpenheuvel-Zichem",
+    "fr": "Montaigu-Zichem",
+    "en": "Scherpenheuvel-Zichem"
+   }
+  },
+  {
+   "qid": "Q984892",
+   "refnis": "24135",
+   "lat": 50.93601,
+   "lng": 4.90955,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tielt-Winge",
+    "nl": "Tielt-Winge",
+    "fr": "Tielt-Winge",
+    "en": "Tielt-Winge",
+    "mul": "Tielt-Winge"
+   }
+  },
+  {
+   "qid": "Q984868",
+   "refnis": "24137",
+   "lat": 50.866667,
+   "lng": 4.95,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Glabbeek",
+    "nl": "Glabbeek",
+    "fr": "Glabbeek",
+    "en": "Glabbeek"
+   }
+  },
+  {
+   "qid": "Q276266",
+   "refnis": "25005",
+   "lat": 50.783333,
+   "lng": 4.766667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beauvechain",
+    "nl": "Bevekom",
+    "fr": "Beauvechain",
+    "en": "Beauvechain"
+   }
+  },
+  {
+   "qid": "Q497572",
+   "refnis": "25014",
+   "lat": 50.6806,
+   "lng": 4.3717,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Braine-l'Alleud",
+    "nl": "Eigenbrakel",
+    "fr": "Braine-l'Alleud",
+    "en": "Braine-l'Alleud"
+   }
+  },
+  {
+   "qid": "Q497558",
+   "refnis": "25015",
+   "lat": 50.683333,
+   "lng": 4.266667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Braine-le-Château",
+    "nl": "Kasteelbrakel",
+    "fr": "Braine-le-Château",
+    "en": "Braine-le-Château"
+   }
+  },
+  {
+   "qid": "Q670141",
+   "refnis": "25018",
+   "lat": 50.683861,
+   "lng": 4.694725,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chaumont-Gistoux",
+    "nl": "Chaumont-Gistoux",
+    "fr": "Chaumont-Gistoux",
+    "en": "Chaumont-Gistoux",
+    "mul": "Chaumont-Gistoux"
+   }
+  },
+  {
+   "qid": "Q670210",
+   "refnis": "25023",
+   "lat": 50.633333,
+   "lng": 4.566667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Court-Saint-Étienne",
+    "nl": "Court-Saint-Étienne",
+    "fr": "Court-Saint-Étienne",
+    "en": "Court-Saint-Étienne"
+   }
+  },
+  {
+   "qid": "Q517899",
+   "refnis": "25031",
+   "lat": 50.6103,
+   "lng": 4.4497,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Genappe",
+    "nl": "Genepiën",
+    "fr": "Genappe",
+    "en": "Genappe",
+    "mul": "Genappe"
+   }
+  },
+  {
+   "qid": "Q670310",
+   "refnis": "25037",
+   "lat": 50.733333,
+   "lng": 4.7,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Grez-Doiceau",
+    "nl": "Graven",
+    "fr": "Grez-Doiceau",
+    "en": "Grez-Doiceau"
+   }
+  },
+  {
+   "qid": "Q670455",
+   "refnis": "25043",
+   "lat": 50.7,
+   "lng": 4.783333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Incourt",
+    "nl": "Incourt",
+    "fr": "Incourt",
+    "en": "Incourt",
+    "mul": "Incourt"
+   }
+  },
+  {
+   "qid": "Q281080",
+   "refnis": "25044",
+   "lat": 50.65,
+   "lng": 4.266667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ittre",
+    "nl": "Itter",
+    "fr": "Ittre",
+    "en": "Ittre"
+   }
+  },
+  {
+   "qid": "Q670500",
+   "refnis": "25048",
+   "lat": 50.716667,
+   "lng": 4.866667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Jodoigne",
+    "nl": "Geldenaken",
+    "fr": "Jodoigne",
+    "en": "Jodoigne",
+    "mul": "Jodoigne"
+   }
+  },
+  {
+   "qid": "Q670407",
+   "refnis": "25050",
+   "lat": 50.733333,
+   "lng": 4.483333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "La Hulpe",
+    "nl": "Terhulpen",
+    "fr": "La Hulpe",
+    "en": "La Hulpe"
+   }
+  },
+  {
+   "qid": "Q650152",
+   "refnis": "25068",
+   "lat": 50.633333,
+   "lng": 4.616667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mont-Saint-Guibert",
+    "nl": "Mont-Saint-Guibert",
+    "fr": "Mont-Saint-Guibert",
+    "en": "Mont-Saint-Guibert"
+   }
+  },
+  {
+   "qid": "Q319463",
+   "refnis": "25072",
+   "lat": 50.5964,
+   "lng": 4.3236,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Nivelles",
+    "nl": "Nijvel",
+    "fr": "Nivelles",
+    "en": "Nivelles"
+   }
+  },
+  {
+   "qid": "Q678458",
+   "refnis": "25084",
+   "lat": 50.624144,
+   "lng": 4.814956,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Perwez",
+    "nl": "Perwijs",
+    "fr": "Perwez",
+    "en": "Perwez",
+    "mul": "Perwez"
+   }
+  },
+  {
+   "qid": "Q630478",
+   "refnis": "25091",
+   "lat": 50.716667,
+   "lng": 4.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rixensart",
+    "nl": "Rixensart",
+    "fr": "Rixensart",
+    "en": "Rixensart"
+   }
+  },
+  {
+   "qid": "Q497549",
+   "refnis": "25105",
+   "lat": 50.692833,
+   "lng": 4.205,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tubize",
+    "nl": "Tubeke",
+    "fr": "Tubize",
+    "en": "Tubize"
+   }
+  },
+  {
+   "qid": "Q678612",
+   "refnis": "25107",
+   "lat": 50.583333,
+   "lng": 4.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Villers-la-Ville",
+    "nl": "Villers-la-Ville",
+    "fr": "Villers-la-Ville",
+    "en": "Villers-la-Ville"
+   }
+  },
+  {
+   "qid": "Q179034",
+   "refnis": "25110",
+   "lat": 50.716667,
+   "lng": 4.383333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Waterloo",
+    "nl": "Waterloo",
+    "fr": "Waterloo",
+    "en": "Waterloo"
+   }
+  },
+  {
+   "qid": "Q181314",
+   "refnis": "25112",
+   "lat": 50.716667,
+   "lng": 4.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wavre",
+    "nl": "Waver",
+    "fr": "Wavre",
+    "en": "Wavre",
+    "mul": "Wavre"
+   }
+  },
+  {
+   "qid": "Q618054",
+   "refnis": "25117",
+   "lat": 50.6,
+   "lng": 4.633333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chastre",
+    "nl": "Chastre",
+    "fr": "Chastre",
+    "en": "Chastre"
+   }
+  },
+  {
+   "qid": "Q670355",
+   "refnis": "25118",
+   "lat": 50.75,
+   "lng": 4.983333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hélécine",
+    "nl": "Heilissem",
+    "fr": "Hélécine",
+    "en": "Hélécine",
+    "mul": "Hélécine"
+   }
+  },
+  {
+   "qid": "Q678158",
+   "refnis": "25119",
+   "lat": 50.683333,
+   "lng": 4.483333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lasne",
+    "nl": "Lasne",
+    "fr": "Lasne",
+    "en": "Lasne"
+   }
+  },
+  {
+   "qid": "Q678218",
+   "refnis": "25120",
+   "lat": 50.683333,
+   "lng": 4.95,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Orp-Jauche",
+    "nl": "Orp-Jauche",
+    "fr": "Orp-Jauche",
+    "en": "Orp-Jauche"
+   }
+  },
+  {
+   "qid": "Q329642",
+   "refnis": "25121",
+   "lat": 50.666961,
+   "lng": 4.589247,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ottignies-Louvain-la-Neuve",
+    "nl": "Ottignies-Louvain-la-Neuve",
+    "fr": "Ottignies-Louvain-la-Neuve",
+    "en": "Ottignies-Louvain-la-Neuve",
+    "mul": "Ottignies-Louvain-la-Neuve"
+   }
+  },
+  {
+   "qid": "Q531456",
+   "refnis": "25122",
+   "lat": 50.636667,
+   "lng": 4.914722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ramillies",
+    "nl": "Ramillies",
+    "fr": "Ramillies",
+    "en": "Ramillies",
+    "mul": "Ramillies"
+   }
+  },
+  {
+   "qid": "Q374861",
+   "refnis": "25123",
+   "lat": 50.65,
+   "lng": 4.133333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rebecq",
+    "nl": "Rebecq",
+    "fr": "Rebecq",
+    "en": "Rebecq"
+   }
+  },
+  {
+   "qid": "Q650216",
+   "refnis": "25124",
+   "lat": 50.641111,
+   "lng": 4.668056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Walhain",
+    "nl": "Walhain",
+    "fr": "Walhain",
+    "en": "Walhain",
+    "mul": "Walhain"
+   }
+  },
+  {
+   "qid": "Q687921",
+   "refnis": "31003",
+   "lat": 51.1428,
+   "lng": 3.3408,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beernem",
+    "nl": "Beernem",
+    "fr": "Beernem",
+    "en": "Beernem",
+    "mul": "Beernem"
+   }
+  },
+  {
+   "qid": "Q328104",
+   "refnis": "31004",
+   "lat": 51.3112,
+   "lng": 3.1324,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Blankenberge",
+    "nl": "Blankenberge",
+    "fr": "Blanckenberghe",
+    "en": "Blankenberge",
+    "mul": "Blankenberge"
+   }
+  },
+  {
+   "qid": "Q12994",
+   "refnis": "31005",
+   "lat": 51.208889,
+   "lng": 3.224167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Brugia",
+    "nl": "Brugge",
+    "fr": "Bruges",
+    "en": "Bruges"
+   }
+  },
+  {
+   "qid": "Q323408",
+   "refnis": "31006",
+   "lat": 51.25,
+   "lng": 3.283333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Damme",
+    "nl": "Damme",
+    "fr": "Damme",
+    "en": "Damme",
+    "mul": "Damme"
+   }
+  },
+  {
+   "qid": "Q465973",
+   "refnis": "31012",
+   "lat": 51.183333,
+   "lng": 3.1,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Jabbeke",
+    "nl": "Jabbeke",
+    "fr": "Jabbeke",
+    "en": "Jabbeke"
+   }
+  },
+  {
+   "qid": "Q742892",
+   "refnis": "31022",
+   "lat": 51.1544,
+   "lng": 3.2353,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oostkamp",
+    "nl": "Oostkamp",
+    "fr": "Oostkamp",
+    "en": "Oostkamp",
+    "mul": "Oostkamp"
+   }
+  },
+  {
+   "qid": "Q270633",
+   "refnis": "31033",
+   "lat": 51.066124,
+   "lng": 3.10137,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Torhout",
+    "nl": "Torhout",
+    "fr": "Thourout",
+    "en": "Torhout"
+   }
+  },
+  {
+   "qid": "Q184287",
+   "refnis": "31040",
+   "lat": 51.1431,
+   "lng": 3.1361,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zedelgem",
+    "nl": "Zedelgem",
+    "fr": "Zedelghem",
+    "en": "Zedelgem"
+   }
+  },
+  {
+   "qid": "Q228685",
+   "refnis": "31042",
+   "lat": 51.265,
+   "lng": 3.1564,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zuienkerke",
+    "nl": "Zuienkerke",
+    "fr": "Zuyenkerque",
+    "en": "Zuienkerke"
+   }
+  },
+  {
+   "qid": "Q12988",
+   "refnis": "31043",
+   "lat": 51.341389,
+   "lng": 3.286944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Knokke-Heist",
+    "nl": "Knokke-Heist",
+    "fr": "Knocke-Heyst",
+    "en": "Knokke-Heist"
+   }
+  },
+  {
+   "qid": "Q215244",
+   "refnis": "32003",
+   "lat": 51.033333,
+   "lng": 2.865,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Diksmuide",
+    "nl": "Diksmuide",
+    "fr": "Dixmude",
+    "en": "Diksmuide",
+    "mul": "Diksmuide"
+   }
+  },
+  {
+   "qid": "Q696942",
+   "refnis": "32006",
+   "lat": 50.9783,
+   "lng": 2.9506,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Houthulst",
+    "nl": "Houthulst",
+    "fr": "Houthulst",
+    "en": "Houthulst"
+   }
+  },
+  {
+   "qid": "Q822795",
+   "refnis": "32010",
+   "lat": 51.0906,
+   "lng": 2.9803,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Koekelare",
+    "nl": "Koekelare",
+    "fr": "Koekelare",
+    "en": "Koekelare"
+   }
+  },
+  {
+   "qid": "Q822763",
+   "refnis": "32011",
+   "lat": 51.0286,
+   "lng": 3.0444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kortemark",
+    "nl": "Kortemark",
+    "fr": "Kortemark",
+    "en": "Kortemark"
+   }
+  },
+  {
+   "qid": "Q822790",
+   "refnis": "32030",
+   "lat": 50.983333,
+   "lng": 2.75,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lo-Reninge",
+    "nl": "Lo-Reninge",
+    "fr": "Lo-Reninge",
+    "en": "Lo-Reninge",
+    "mul": "Lo-Reninge"
+   }
+  },
+  {
+   "qid": "Q102728",
+   "refnis": "33011",
+   "lat": 50.850833,
+   "lng": 2.885,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ieper",
+    "nl": "Ieper",
+    "fr": "Ypres",
+    "en": "Ypres"
+   }
+  },
+  {
+   "qid": "Q737077",
+   "refnis": "33016",
+   "lat": 50.766667,
+   "lng": 2.9,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mesen",
+    "nl": "Mesen",
+    "fr": "Messines",
+    "en": "Mesen",
+    "mul": "Mesen"
+   }
+  },
+  {
+   "qid": "Q499588",
+   "refnis": "33021",
+   "lat": 50.8547,
+   "lng": 2.7256,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Poperinge",
+    "nl": "Poperinge",
+    "fr": "Poperinge",
+    "en": "Poperinge",
+    "mul": "Poperinge"
+   }
+  },
+  {
+   "qid": "Q318532",
+   "refnis": "33029",
+   "lat": 50.7797,
+   "lng": 3.04,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wervik",
+    "nl": "Wervik",
+    "fr": "Wervicq",
+    "en": "Wervik",
+    "mul": "Wervik"
+   }
+  },
+  {
+   "qid": "Q214154",
+   "refnis": "33037",
+   "lat": 50.866667,
+   "lng": 2.983333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zonnebeke",
+    "nl": "Zonnebeke",
+    "fr": "Zonnebeke",
+    "en": "Zonnebeke"
+   }
+  },
+  {
+   "qid": "Q822755",
+   "refnis": "33039",
+   "lat": 50.766667,
+   "lng": 2.816667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Heuvelland",
+    "nl": "Heuvelland",
+    "fr": "Heuvelland",
+    "en": "Heuvelland"
+   }
+  },
+  {
+   "qid": "Q735865",
+   "refnis": "33040",
+   "lat": 50.9133,
+   "lng": 2.9181,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Langemark-Poelkapelle",
+    "nl": "Langemark-Poelkapelle",
+    "fr": "Langemark-Poelkapelle",
+    "en": "Langemark-Poelkapelle"
+   }
+  },
+  {
+   "qid": "Q735813",
+   "refnis": "33041",
+   "lat": 50.9139,
+   "lng": 2.7414,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vleteren",
+    "nl": "Vleteren",
+    "fr": "Vleteren",
+    "en": "Vleteren"
+   }
+  },
+  {
+   "qid": "Q614274",
+   "refnis": "34002",
+   "lat": 50.8336,
+   "lng": 3.4783,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Anzegem",
+    "nl": "Anzegem",
+    "fr": "Anseghem",
+    "en": "Anzegem",
+    "mul": "Anzegem"
+   }
+  },
+  {
+   "qid": "Q177133",
+   "refnis": "34003",
+   "lat": 50.7753,
+   "lng": 3.4442,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Avelgem",
+    "nl": "Avelgem",
+    "fr": "Avelghem",
+    "en": "Avelgem"
+   }
+  },
+  {
+   "qid": "Q822771",
+   "refnis": "34009",
+   "lat": 50.8533,
+   "lng": 3.3533,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Deerlijk",
+    "nl": "Deerlijk",
+    "fr": "Deerlijk",
+    "en": "Deerlijk"
+   }
+  },
+  {
+   "qid": "Q478797",
+   "refnis": "34013",
+   "lat": 50.8567,
+   "lng": 3.3131,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Harelbeke",
+    "nl": "Harelbeke",
+    "fr": "Harelbeke",
+    "en": "Harelbeke"
+   }
+  },
+  {
+   "qid": "Q12995",
+   "refnis": "34022",
+   "lat": 50.8275,
+   "lng": 3.265833,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kortrijk",
+    "nl": "Kortrijk",
+    "fr": "Courtrai",
+    "en": "Kortrijk",
+    "mul": "Kortrijk"
+   }
+  },
+  {
+   "qid": "Q731501",
+   "refnis": "34023",
+   "lat": 50.8519,
+   "lng": 3.2861,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kuurne",
+    "nl": "Kuurne",
+    "fr": "Cuerne",
+    "en": "Kuurne"
+   }
+  },
+  {
+   "qid": "Q696887",
+   "refnis": "34025",
+   "lat": 50.8858,
+   "lng": 3.2372,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lendelede",
+    "nl": "Lendelede",
+    "fr": "Lendelede",
+    "en": "Lendelede"
+   }
+  },
+  {
+   "qid": "Q213224",
+   "refnis": "34027",
+   "lat": 50.795556,
+   "lng": 3.121667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Menen",
+    "nl": "Menen",
+    "fr": "Menin",
+    "en": "Menen"
+   }
+  },
+  {
+   "qid": "Q204547",
+   "refnis": "34040",
+   "lat": 50.881078,
+   "lng": 3.400099,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Waregem",
+    "nl": "Waregem",
+    "fr": "Waregem",
+    "en": "Waregem"
+   }
+  },
+  {
+   "qid": "Q392343",
+   "refnis": "34041",
+   "lat": 50.8081,
+   "lng": 3.1839,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wevelgem",
+    "nl": "Wevelgem",
+    "fr": "Wevelgem",
+    "en": "Wevelgem"
+   }
+  },
+  {
+   "qid": "Q244513",
+   "refnis": "34042",
+   "lat": 50.8,
+   "lng": 3.333333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zwevegem",
+    "nl": "Zwevegem",
+    "fr": "Zwevegem",
+    "en": "Zwevegem"
+   }
+  },
+  {
+   "qid": "Q846212",
+   "refnis": "34043",
+   "lat": 50.7269,
+   "lng": 3.3669,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Spiere-Helkijn",
+    "nl": "Spiere-Helkijn",
+    "fr": "Espierres-Helchin",
+    "en": "Spiere-Helkijn"
+   }
+  },
+  {
+   "qid": "Q742920",
+   "refnis": "35002",
+   "lat": 51.2336,
+   "lng": 2.9756,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bredene",
+    "nl": "Bredene",
+    "fr": "Bredene",
+    "en": "Bredene"
+   }
+  },
+  {
+   "qid": "Q815948",
+   "refnis": "35005",
+   "lat": 51.1561,
+   "lng": 2.9672,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gistel",
+    "fr": "Ghistelles",
+    "mul": "Gistel"
+   }
+  },
+  {
+   "qid": "Q281181",
+   "refnis": "35006",
+   "lat": 51.1,
+   "lng": 3,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ichtegem",
+    "nl": "Ichtegem",
+    "fr": "Ichteghem",
+    "en": "Ichtegem",
+    "mul": "Ichtegem"
+   }
+  },
+  {
+   "qid": "Q492369",
+   "refnis": "35011",
+   "lat": 51.1847,
+   "lng": 2.8192,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Middelkerke",
+    "nl": "Middelkerke",
+    "fr": "Middelkerke",
+    "en": "Middelkerke"
+   }
+  },
+  {
+   "qid": "Q12996",
+   "refnis": "35013",
+   "lat": 51.225833,
+   "lng": 2.919444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ostenda",
+    "nl": "Oostende",
+    "fr": "Ostende",
+    "en": "Ostend"
+   }
+  },
+  {
+   "qid": "Q835128",
+   "refnis": "35014",
+   "lat": 51.183333,
+   "lng": 3,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oudenburg",
+    "nl": "Oudenburg",
+    "fr": "Audembourg",
+    "en": "Oudenburg"
+   }
+  },
+  {
+   "qid": "Q492351",
+   "refnis": "35029",
+   "lat": 51.2731,
+   "lng": 3.0336,
+   "formerUntil": null,
+   "labels": {
+    "pl": "De Haan",
+    "nl": "De Haan",
+    "fr": "Le Coq",
+    "en": "De Haan"
+   }
+  },
+  {
+   "qid": "Q696907",
+   "refnis": "36006",
+   "lat": 50.9781,
+   "lng": 3.0817,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hooglede",
+    "nl": "Hooglede",
+    "fr": "Hooglede",
+    "en": "Hooglede"
+   }
+  },
+  {
+   "qid": "Q822748",
+   "refnis": "36007",
+   "lat": 50.9208,
+   "lng": 3.2533,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ingelmunster",
+    "nl": "Ingelmunster",
+    "fr": "Ingelmunster",
+    "en": "Ingelmunster"
+   }
+  },
+  {
+   "qid": "Q392337",
+   "refnis": "36008",
+   "lat": 50.9172,
+   "lng": 3.215,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Izegem",
+    "nl": "Izegem",
+    "fr": "Iseghem",
+    "en": "Izegem"
+   }
+  },
+  {
+   "qid": "Q735842",
+   "refnis": "36010",
+   "lat": 50.8531,
+   "lng": 3.1267,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ledegem",
+    "nl": "Ledegem",
+    "fr": "Ledeghem",
+    "en": "Ledegem"
+   }
+  },
+  {
+   "qid": "Q696871",
+   "refnis": "36011",
+   "lat": 51.033333,
+   "lng": 3.133333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lichtervelde",
+    "nl": "Lichtervelde",
+    "fr": "Lichtervelde",
+    "en": "Lichtervelde",
+    "mul": "Lichtervelde"
+   }
+  },
+  {
+   "qid": "Q628733",
+   "refnis": "36012",
+   "lat": 50.8906,
+   "lng": 3.0628,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Moorslede",
+    "nl": "Moorslede",
+    "fr": "Moorslede",
+    "en": "Moorslede"
+   }
+  },
+  {
+   "qid": "Q211037",
+   "refnis": "36015",
+   "lat": 50.944722,
+   "lng": 3.123333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Roeselare",
+    "nl": "Roeselare",
+    "fr": "Roulers",
+    "en": "Roeselare",
+    "mul": "Roeselare"
+   }
+  },
+  {
+   "qid": "Q742876",
+   "refnis": "36019",
+   "lat": 50.975,
+   "lng": 3.0147,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Staden",
+    "nl": "Staden",
+    "fr": "Staden",
+    "en": "Staden"
+   }
+  },
+  {
+   "qid": "Q742906",
+   "refnis": "37002",
+   "lat": 50.9636,
+   "lng": 3.4153,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dentergem",
+    "nl": "Dentergem",
+    "fr": "Denterghem",
+    "en": "Dentergem"
+   }
+  },
+  {
+   "qid": "Q822783",
+   "refnis": "37007",
+   "lat": 50.9497,
+   "lng": 3.2869,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Meulebeke",
+    "nl": "Meulebeke",
+    "fr": "Meulebeke",
+    "en": "Meulebeke",
+    "mul": "Meulebeke"
+   }
+  },
+  {
+   "qid": "Q822777",
+   "refnis": "37010",
+   "lat": 50.916667,
+   "lng": 3.333333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oostrozebeke",
+    "nl": "Oostrozebeke",
+    "fr": "Oostrozebeke",
+    "en": "Oostrozebeke"
+   }
+  },
+  {
+   "qid": "Q651724",
+   "refnis": "37011",
+   "lat": 50.983333,
+   "lng": 3.266667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pittem",
+    "nl": "Pittem",
+    "fr": "Pittem",
+    "en": "Pittem",
+    "mul": "Pittem"
+   }
+  },
+  {
+   "qid": "Q696982",
+   "refnis": "37012",
+   "lat": 51.033333,
+   "lng": 3.383333,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Ruiselede",
+    "nl": "Ruiselede",
+    "fr": "Ruiselede",
+    "en": "Ruiselede",
+    "mul": "Ruiselede"
+   }
+  },
+  {
+   "qid": "Q339395",
+   "refnis": "37017",
+   "lat": 50.9089,
+   "lng": 3.3697,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wielsbeke",
+    "nl": "Wielsbeke",
+    "fr": "Wielsbeke",
+    "en": "Wielsbeke"
+   }
+  },
+  {
+   "qid": "Q639974",
+   "refnis": "37020",
+   "lat": 50.966667,
+   "lng": 3.183333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ardooie",
+    "nl": "Ardooie",
+    "fr": "Ardoye",
+    "en": "Ardooie"
+   }
+  },
+  {
+   "qid": "Q735797",
+   "refnis": "37021",
+   "lat": 51.05,
+   "lng": 3.266667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wingene",
+    "nl": "Wingene",
+    "fr": "Wingene",
+    "en": "Wingene",
+    "mul": "Wingene"
+   }
+  },
+  {
+   "qid": "Q651811",
+   "refnis": "37022",
+   "lat": 50.9989,
+   "lng": 3.3258,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tielt",
+    "nl": "Tielt",
+    "fr": "Tielt",
+    "en": "Tielt",
+    "mul": "Tielt"
+   }
+  },
+  {
+   "qid": "Q448840",
+   "refnis": "38002",
+   "lat": 51.0111,
+   "lng": 2.7108,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Alveringem",
+    "nl": "Alveringem",
+    "fr": "Alveringem",
+    "en": "Alveringem",
+    "mul": "Alveringem"
+   }
+  },
+  {
+   "qid": "Q674954",
+   "refnis": "38008",
+   "lat": 51.1019,
+   "lng": 2.5917,
+   "formerUntil": null,
+   "labels": {
+    "pl": "De Panne",
+    "nl": "De Panne",
+    "fr": "La Panne",
+    "en": "De Panne"
+   }
+  },
+  {
+   "qid": "Q465545",
+   "refnis": "38014",
+   "lat": 51.1,
+   "lng": 2.65,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Koksijde",
+    "nl": "Koksijde",
+    "fr": "Coxyde",
+    "en": "Koksijde"
+   }
+  },
+  {
+   "qid": "Q623310",
+   "refnis": "38016",
+   "lat": 51.129444,
+   "lng": 2.751389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Nieuwpoort",
+    "nl": "Nieuwpoort",
+    "fr": "Nieuport",
+    "en": "Nieuwpoort"
+   }
+  },
+  {
+   "qid": "Q506707",
+   "refnis": "38025",
+   "lat": 51.0722,
+   "lng": 2.6622,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Veurne",
+    "nl": "Veurne",
+    "fr": "Furnes",
+    "en": "Veurne"
+   }
+  },
+  {
+   "qid": "Q13121",
+   "refnis": "41002",
+   "lat": 50.938333,
+   "lng": 4.039167,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Aalst",
+    "fr": "Alost",
+    "en": "Aalst",
+    "mul": "Aalst"
+   }
+  },
+  {
+   "qid": "Q696825",
+   "refnis": "41011",
+   "lat": 50.883333,
+   "lng": 4.083333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Denderleeuw",
+    "nl": "Denderleeuw",
+    "fr": "Denderleeuw",
+    "en": "Denderleeuw"
+   }
+  },
+  {
+   "qid": "Q499532",
+   "refnis": "41018",
+   "lat": 50.766667,
+   "lng": 3.866667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Geraardsbergen",
+    "nl": "Geraardsbergen",
+    "fr": "Grammont",
+    "en": "Geraardsbergen"
+   }
+  },
+  {
+   "qid": "Q911974",
+   "refnis": "41024",
+   "lat": 50.9,
+   "lng": 4,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Haaltert",
+    "nl": "Haaltert",
+    "fr": "Haaltert",
+    "en": "Haaltert",
+    "mul": "Haaltert"
+   }
+  },
+  {
+   "qid": "Q587979",
+   "refnis": "41027",
+   "lat": 50.883333,
+   "lng": 3.883333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herzele",
+    "nl": "Herzele",
+    "fr": "Herzele",
+    "en": "Herzele",
+    "mul": "Herzele"
+   }
+  },
+  {
+   "qid": "Q912113",
+   "refnis": "41034",
+   "lat": 50.9658,
+   "lng": 3.9778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lede",
+    "nl": "Lede",
+    "fr": "Lede",
+    "en": "Lede",
+    "mul": "Lede"
+   }
+  },
+  {
+   "qid": "Q385026",
+   "refnis": "41048",
+   "lat": 50.833333,
+   "lng": 4.016667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ninove",
+    "nl": "Ninove",
+    "fr": "Ninove",
+    "en": "Ninove",
+    "mul": "Ninove"
+   }
+  },
+  {
+   "qid": "Q817372",
+   "refnis": "41063",
+   "lat": 50.916667,
+   "lng": 3.866667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Lievens-Houtem",
+    "nl": "Sint-Lievens-Houtem",
+    "fr": "Hautem-Saint-Liévin",
+    "en": "Sint-Lievens-Houtem",
+    "mul": "Sint-Lievens-Houtem"
+   }
+  },
+  {
+   "qid": "Q226941",
+   "refnis": "41081",
+   "lat": 50.866667,
+   "lng": 3.816667,
+   "formerUntil": null,
+   "labels": {
+    "mul": "Zottegem"
+   }
+  },
+  {
+   "qid": "Q817458",
+   "refnis": "41082",
+   "lat": 50.933333,
+   "lng": 3.966667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Erpe-Mere",
+    "nl": "Erpe-Mere",
+    "fr": "Erpe-Mere",
+    "en": "Erpe-Mere",
+    "mul": "Erpe-Mere"
+   }
+  },
+  {
+   "qid": "Q793584",
+   "refnis": "42003",
+   "lat": 51.025,
+   "lng": 4.0025,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Berlare",
+    "nl": "Berlare",
+    "fr": "Berlare",
+    "en": "Berlare",
+    "mul": "Berlare"
+   }
+  },
+  {
+   "qid": "Q202309",
+   "refnis": "42004",
+   "lat": 51.01526,
+   "lng": 4.20226,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Buggenhout",
+    "nl": "Buggenhout",
+    "fr": "Buggenhout",
+    "en": "Buggenhout",
+    "mul": "Buggenhout"
+   }
+  },
+  {
+   "qid": "Q13122",
+   "refnis": "42006",
+   "lat": 51.03123,
+   "lng": 4.0981,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dendermonde",
+    "nl": "Dendermonde",
+    "fr": "Termonde",
+    "en": "Dendermonde",
+    "mul": "Dendermonde"
+   }
+  },
+  {
+   "qid": "Q391294",
+   "refnis": "42008",
+   "lat": 51.0919,
+   "lng": 4.1356,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hamme",
+    "nl": "Hamme",
+    "fr": "Hamme",
+    "en": "Hamme",
+    "mul": "Hamme"
+   }
+  },
+  {
+   "qid": "Q730696",
+   "refnis": "42010",
+   "lat": 51.0292,
+   "lng": 3.8519,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Laarne",
+    "nl": "Laarne",
+    "fr": "Laerne",
+    "en": "Laarne",
+    "mul": "Laarne"
+   }
+  },
+  {
+   "qid": "Q504653",
+   "refnis": "42011",
+   "lat": 51,
+   "lng": 4.116667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lebbeke",
+    "nl": "Lebbeke",
+    "fr": "Lebbeke",
+    "en": "Lebbeke",
+    "mul": "Lebbeke"
+   }
+  },
+  {
+   "qid": "Q587906",
+   "refnis": "42023",
+   "lat": 51.109773,
+   "lng": 4.084357,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Waasmunster",
+    "nl": "Waasmunster",
+    "fr": "Waesmunster",
+    "en": "Waasmunster",
+    "mul": "Waasmunster"
+   }
+  },
+  {
+   "qid": "Q643980",
+   "refnis": "42025",
+   "lat": 51,
+   "lng": 3.883333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wetteren",
+    "nl": "Wetteren",
+    "fr": "Wetteren",
+    "en": "Wetteren",
+    "mul": "Wetteren"
+   }
+  },
+  {
+   "qid": "Q730801",
+   "refnis": "42026",
+   "lat": 51.0042,
+   "lng": 3.9725,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wichelen",
+    "nl": "Wichelen",
+    "fr": "Wichelen",
+    "en": "Wichelen",
+    "mul": "Wichelen"
+   }
+  },
+  {
+   "qid": "Q388115",
+   "refnis": "42028",
+   "lat": 51.066667,
+   "lng": 4.033333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zele",
+    "nl": "Zele",
+    "fr": "Zele",
+    "en": "Zele",
+    "mul": "Zele"
+   }
+  },
+  {
+   "qid": "Q12901",
+   "refnis": "43002",
+   "lat": 51.233333,
+   "lng": 3.75,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Assenede",
+    "nl": "Assenede",
+    "fr": "Assenede",
+    "en": "Assenede"
+   }
+  },
+  {
+   "qid": "Q12440",
+   "refnis": "43005",
+   "lat": 51.1858,
+   "lng": 3.5639,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Eeklo",
+    "nl": "Eeklo",
+    "fr": "Eeklo",
+    "en": "Eeklo",
+    "mul": "Eeklo"
+   }
+  },
+  {
+   "qid": "Q12437",
+   "refnis": "43007",
+   "lat": 51.216667,
+   "lng": 3.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kaprijke",
+    "nl": "Kaprijke",
+    "fr": "Kaprijke",
+    "en": "Kaprijke",
+    "mul": "Kaprijke"
+   }
+  },
+  {
+   "qid": "Q12896",
+   "refnis": "43010",
+   "lat": 51.2089,
+   "lng": 3.4464,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Maldegem",
+    "nl": "Maldegem",
+    "fr": "Maldeghem",
+    "en": "Maldegem"
+   }
+  },
+  {
+   "qid": "Q13126",
+   "refnis": "43014",
+   "lat": 51.233333,
+   "lng": 3.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Laureins",
+    "nl": "Sint-Laureins",
+    "fr": "Saint-Laurent",
+    "en": "Sint-Laureins",
+    "mul": "Sint-Laureins"
+   }
+  },
+  {
+   "qid": "Q14062",
+   "refnis": "43018",
+   "lat": 51.1975,
+   "lng": 3.8139,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zelzate",
+    "nl": "Zelzate",
+    "fr": "Zelzate",
+    "en": "Zelzate",
+    "mul": "Zelzate"
+   }
+  },
+  {
+   "qid": "Q842454",
+   "refnis": "44012",
+   "lat": 50.9919,
+   "lng": 3.6478,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "De Pinte",
+    "nl": "De Pinte",
+    "fr": "La Pinte",
+    "en": "De Pinte"
+   }
+  },
+  {
+   "qid": "Q3177595",
+   "refnis": "44013",
+   "lat": 51.05,
+   "lng": 3.8,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Destelbergen",
+    "nl": "Destelbergen",
+    "fr": "Destelbergen",
+    "en": "Destelbergen",
+    "mul": "Destelbergen"
+   }
+  },
+  {
+   "qid": "Q12997",
+   "refnis": "44019",
+   "lat": 51.1086,
+   "lng": 3.7075,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Evergem",
+    "nl": "Evergem",
+    "fr": "Everghem",
+    "en": "Evergem",
+    "mul": "Evergem"
+   }
+  },
+  {
+   "qid": "Q690611",
+   "refnis": "44020",
+   "lat": 50.9283,
+   "lng": 3.6611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gavere",
+    "nl": "Gavere",
+    "fr": "Gavre",
+    "en": "Gavere",
+    "mul": "Gavere"
+   }
+  },
+  {
+   "qid": "Q1296",
+   "refnis": "44021",
+   "lat": 51.053611,
+   "lng": 3.725278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gandawa",
+    "nl": "Gent",
+    "fr": "Gand",
+    "en": "Ghent",
+    "mul": "Gent"
+   }
+  },
+  {
+   "qid": "Q912069",
+   "refnis": "44029A",
+   "lat": 51.1389,
+   "lng": 3.4139,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Knesselare",
+    "nl": "Knesselare",
+    "fr": "Knesselare",
+    "en": "Knesselare",
+    "mul": "Knesselare"
+   }
+  },
+  {
+   "qid": "Q840968",
+   "refnis": "44036",
+   "lat": 51.095,
+   "lng": 3.6056,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Lovendegem",
+    "nl": "Lovendegem",
+    "fr": "Lovendegem",
+    "en": "Lovendegem",
+    "mul": "Lovendegem"
+   }
+  },
+  {
+   "qid": "Q696355",
+   "refnis": "44040",
+   "lat": 51,
+   "lng": 3.8,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Melle",
+    "nl": "Melle",
+    "fr": "Melle",
+    "en": "Melle",
+    "mul": "Melle"
+   }
+  },
+  {
+   "qid": "Q187755",
+   "refnis": "44043",
+   "lat": 50.9939,
+   "lng": 3.7461,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Merelbeke",
+    "nl": "Merelbeke",
+    "fr": "Merelbeke",
+    "en": "Merelbeke",
+    "mul": "Merelbeke"
+   }
+  },
+  {
+   "qid": "Q397705",
+   "refnis": "44045",
+   "lat": 51.1733,
+   "lng": 3.9422,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Moerbeke",
+    "nl": "Moerbeke",
+    "fr": "Moerbeke",
+    "en": "Moerbeke",
+    "mul": "Moerbeke"
+   }
+  },
+  {
+   "qid": "Q580315",
+   "refnis": "44048",
+   "lat": 50.966667,
+   "lng": 3.6,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Nazareth",
+    "nl": "Nazareth",
+    "fr": "Nazareth",
+    "en": "Nazareth",
+    "mul": "Nazareth"
+   }
+  },
+  {
+   "qid": "Q822651",
+   "refnis": "44049",
+   "lat": 51.0342,
+   "lng": 3.5475,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Nevele",
+    "nl": "Nevele",
+    "fr": "Nevele",
+    "en": "Nevele",
+    "mul": "Nevele"
+   }
+  },
+  {
+   "qid": "Q842477",
+   "refnis": "44052",
+   "lat": 50.9458,
+   "lng": 3.8042,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oosterzele",
+    "nl": "Oosterzele",
+    "fr": "Oosterzele",
+    "en": "Oosterzele",
+    "mul": "Oosterzele"
+   }
+  },
+  {
+   "qid": "Q737538",
+   "refnis": "44064",
+   "lat": 51.018611,
+   "lng": 3.637778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Martens-Latem",
+    "nl": "Sint-Martens-Latem",
+    "fr": "Laethem-Saint-Martin",
+    "en": "Sint-Martens-Latem",
+    "mul": "Sint-Martens-Latem"
+   }
+  },
+  {
+   "qid": "Q911983",
+   "refnis": "44072",
+   "lat": 51.15,
+   "lng": 3.6,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Waarschoot",
+    "nl": "Waarschoot",
+    "fr": "Waarschoot",
+    "en": "Waarschoot",
+    "mul": "Waarschoot"
+   }
+  },
+  {
+   "qid": "Q696349",
+   "refnis": "44073",
+   "lat": 51.17,
+   "lng": 3.8594,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Wachtebeke",
+    "nl": "Wachtebeke",
+    "fr": "Wachtebeke",
+    "en": "Wachtebeke",
+    "mul": "Wachtebeke"
+   }
+  },
+  {
+   "qid": "Q219827",
+   "refnis": "44080",
+   "lat": 51.116667,
+   "lng": 3.566667,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Zomergem",
+    "nl": "Zomergem",
+    "fr": "Zomergem",
+    "en": "Zomergem",
+    "mul": "Zomergem"
+   }
+  },
+  {
+   "qid": "Q228863",
+   "refnis": "44081",
+   "lat": 50.914444,
+   "lng": 3.4425,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zulte",
+    "nl": "Zulte",
+    "fr": "Zulte",
+    "en": "Zulte",
+    "mul": "Zulte"
+   }
+  },
+  {
+   "qid": "Q499313",
+   "refnis": "44083",
+   "lat": 50.983333,
+   "lng": 3.527222,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Deinze",
+    "nl": "Deinze",
+    "fr": "Deinze",
+    "en": "Deinze",
+    "mul": "Deinze"
+   }
+  },
+  {
+   "qid": "Q300970",
+   "refnis": "44084",
+   "lat": 51.083333,
+   "lng": 3.45,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aalter",
+    "nl": "Aalter",
+    "fr": "Aalter",
+    "en": "Aalter",
+    "mul": "Aalter"
+   }
+  },
+  {
+   "qid": "Q46865167",
+   "refnis": "44085",
+   "lat": 51.130353,
+   "lng": 3.593253,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lievegem",
+    "nl": "Lievegem",
+    "fr": "Lievegem",
+    "en": "Lievegem",
+    "mul": "Lievegem"
+   }
+  },
+  {
+   "qid": "Q125550409",
+   "refnis": "44086",
+   "lat": 50.983965,
+   "lng": 3.632176,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Nazareth-De Pinte",
+    "fr": "Nazareth-La Pinte",
+    "en": "Nazareth-De Pinte",
+    "mul": "Nazareth-De Pinte"
+   }
+  },
+  {
+   "qid": "Q735827",
+   "refnis": "44087",
+   "lat": 51.0953,
+   "lng": 3.8325,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lochristi",
+    "nl": "Lochristi",
+    "fr": "Lochristi",
+    "en": "Lochristi",
+    "mul": "Lochristi"
+   }
+  },
+  {
+   "qid": "Q124477893",
+   "refnis": "44088",
+   "lat": 50.987712,
+   "lng": 3.778866,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Merelbeke-Melle",
+    "fr": "Merelbeke-Melle",
+    "en": "Merelbeke-Melle",
+    "mul": "Merelbeke-Melle"
+   }
+  },
+  {
+   "qid": "Q817375",
+   "refnis": "45017",
+   "lat": 50.9,
+   "lng": 3.533333,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Kruishoutem",
+    "nl": "Kruishoutem",
+    "fr": "Kruishoutem",
+    "en": "Kruishoutem",
+    "mul": "Kruishoutem"
+   }
+  },
+  {
+   "qid": "Q12992",
+   "refnis": "45035",
+   "lat": 50.85,
+   "lng": 3.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oudenaarde",
+    "nl": "Oudenaarde",
+    "fr": "Audenarde",
+    "en": "Oudenaarde",
+    "mul": "Oudenaarde"
+   }
+  },
+  {
+   "qid": "Q268219",
+   "refnis": "45041",
+   "lat": 50.75,
+   "lng": 3.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ronse",
+    "nl": "Ronse",
+    "fr": "Renaix",
+    "en": "Ronse",
+    "mul": "Ronse"
+   }
+  },
+  {
+   "qid": "Q204477",
+   "refnis": "45057",
+   "lat": 50.9042,
+   "lng": 3.6536,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Zingem",
+    "nl": "Zingem",
+    "fr": "Zingem",
+    "en": "Zingem",
+    "mul": "Zingem"
+   }
+  },
+  {
+   "qid": "Q845980",
+   "refnis": "45059",
+   "lat": 50.7979,
+   "lng": 3.7627,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Brakel",
+    "nl": "Brakel",
+    "fr": "Brakel",
+    "en": "Brakel",
+    "mul": "Brakel"
+   }
+  },
+  {
+   "qid": "Q840517",
+   "refnis": "45060",
+   "lat": 50.78874,
+   "lng": 3.51355,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kluisbergen",
+    "nl": "Kluisbergen",
+    "fr": "Kluisbergen",
+    "en": "Kluisbergen",
+    "mul": "Kluisbergen"
+   }
+  },
+  {
+   "qid": "Q840935",
+   "refnis": "45061",
+   "lat": 50.8536,
+   "lng": 3.5183,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wortegem-Petegem",
+    "nl": "Wortegem-Petegem",
+    "fr": "Wortegem-Petegem",
+    "en": "Wortegem-Petegem",
+    "mul": "Wortegem-Petegem"
+   }
+  },
+  {
+   "qid": "Q912076",
+   "refnis": "45062",
+   "lat": 50.833333,
+   "lng": 3.683333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Horebeke",
+    "nl": "Horebeke",
+    "fr": "Horebeke",
+    "en": "Horebeke",
+    "mul": "Horebeke"
+   }
+  },
+  {
+   "qid": "Q648509",
+   "refnis": "45063",
+   "lat": 50.816667,
+   "lng": 3.85,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lierde",
+    "nl": "Lierde",
+    "fr": "Lierde",
+    "en": "Lierde",
+    "mul": "Lierde"
+   }
+  },
+  {
+   "qid": "Q912099",
+   "refnis": "45064",
+   "lat": 50.8,
+   "lng": 3.616667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Maarkedal",
+    "nl": "Maarkedal",
+    "fr": "Markedal",
+    "en": "Maarkedal",
+    "mul": "Maarkedal"
+   }
+  },
+  {
+   "qid": "Q231568",
+   "refnis": "45065",
+   "lat": 50.8769,
+   "lng": 3.7256,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zwalm",
+    "nl": "Zwalm",
+    "fr": "Zwalin",
+    "en": "Zwalm",
+    "mul": "Zwalm"
+   }
+  },
+  {
+   "qid": "Q46865464",
+   "refnis": "45068",
+   "lat": 50.90855,
+   "lng": 3.56489,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kruisem",
+    "nl": "Kruisem",
+    "fr": "Kruisem",
+    "en": "Kruisem",
+    "mul": "Kruisem"
+   }
+  },
+  {
+   "qid": "Q270644",
+   "refnis": "46003",
+   "lat": 51.2,
+   "lng": 4.25,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Beveren",
+    "nl": "Beveren",
+    "fr": "Beveren",
+    "en": "Beveren",
+    "mul": "Beveren"
+   }
+  },
+  {
+   "qid": "Q916980",
+   "refnis": "46013",
+   "lat": 51.1686,
+   "lng": 4.3092,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Kruibeke",
+    "nl": "Kruibeke",
+    "fr": "Kruibeke",
+    "en": "Kruibeke"
+   }
+  },
+  {
+   "qid": "Q430510",
+   "refnis": "46020",
+   "lat": 51.2186,
+   "lng": 4.1236,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Gillis-Waas",
+    "nl": "Sint-Gillis-Waas",
+    "fr": "Saint-Gilles-Waes",
+    "en": "Sint-Gillis-Waas"
+   }
+  },
+  {
+   "qid": "Q13127",
+   "refnis": "46021",
+   "lat": 51.164444,
+   "lng": 4.139167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Niklaas",
+    "nl": "Sint-Niklaas",
+    "fr": "Saint-Nicolas",
+    "en": "Sint-Niklaas"
+   }
+  },
+  {
+   "qid": "Q735851",
+   "refnis": "46024",
+   "lat": 51.2061,
+   "lng": 4.04,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Stekene",
+    "nl": "Stekene",
+    "fr": "Stekene",
+    "en": "Stekene"
+   }
+  },
+  {
+   "qid": "Q823623",
+   "refnis": "46025",
+   "lat": 51.126111,
+   "lng": 4.213333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Temse",
+    "nl": "Temse",
+    "fr": "Tamise",
+    "en": "Temse",
+    "mul": "Temse"
+   }
+  },
+  {
+   "qid": "Q12910",
+   "refnis": "46029",
+   "lat": 51.1,
+   "lng": 3.983333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lokeren",
+    "nl": "Lokeren",
+    "fr": "Lokeren",
+    "en": "Lokeren",
+    "mul": "Lokeren"
+   }
+  },
+  {
+   "qid": "Q130298413",
+   "refnis": "46030",
+   "lat": 51.197448,
+   "lng": 4.286736,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Beveren-Kruibeke-Zwijndrecht",
+    "en": "Beveren-Kruibeke-Zwijndrecht",
+    "mul": "Beveren-Kruibeke-Zwijndrecht"
+   }
+  },
+  {
+   "qid": "Q95096",
+   "refnis": "51004",
+   "lat": 50.631139,
+   "lng": 3.776941,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ath",
+    "nl": "Aat",
+    "fr": "Ath",
+    "en": "Ath",
+    "mul": "Ath"
+   }
+  },
+  {
+   "qid": "Q95105",
+   "refnis": "51008",
+   "lat": 50.533333,
+   "lng": 3.716667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Belœil",
+    "nl": "Belle",
+    "fr": "Belœil",
+    "en": "Belœil"
+   }
+  },
+  {
+   "qid": "Q95112",
+   "refnis": "51009",
+   "lat": 50.483333,
+   "lng": 3.65,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bernissart",
+    "nl": "Bernissart",
+    "fr": "Bernissart",
+    "en": "Bernissart",
+    "mul": "Bernissart"
+   }
+  },
+  {
+   "qid": "Q95130",
+   "refnis": "51012",
+   "lat": 50.6,
+   "lng": 3.85,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Brugelette",
+    "nl": "Brugelette",
+    "fr": "Brugelette",
+    "en": "Brugelette"
+   }
+  },
+  {
+   "qid": "Q95318",
+   "refnis": "51014",
+   "lat": 50.583333,
+   "lng": 3.8,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chièvres",
+    "nl": "Chièvres",
+    "fr": "Chièvres",
+    "en": "Chièvres",
+    "mul": "Chièvres"
+   }
+  },
+  {
+   "qid": "Q665992",
+   "refnis": "51017",
+   "lat": 50.733333,
+   "lng": 3.683333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ellezelles",
+    "nl": "Elzele",
+    "fr": "Ellezelles",
+    "en": "Ellezelles"
+   }
+  },
+  {
+   "qid": "Q666559",
+   "refnis": "51019",
+   "lat": 50.733333,
+   "lng": 3.733333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Flobecq",
+    "nl": "Vloesberg",
+    "fr": "Flobecq",
+    "en": "Flobecq"
+   }
+  },
+  {
+   "qid": "Q666813",
+   "refnis": "51065",
+   "lat": 50.666667,
+   "lng": 3.616667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Frasnes-lez-Anvaing",
+    "nl": "Frasnes-lez-Anvaing",
+    "fr": "Frasnes-lez-Anvaing",
+    "en": "Frasnes-lez-Anvaing",
+    "mul": "Frasnes-lez-Anvaing"
+   }
+  },
+  {
+   "qid": "Q666238",
+   "refnis": "51067",
+   "lat": 50.695556,
+   "lng": 4.041111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Enghien",
+    "nl": "Edingen",
+    "fr": "Enghien",
+    "en": "Enghien",
+    "mul": "Enghien"
+   }
+  },
+  {
+   "qid": "Q669088",
+   "refnis": "51068",
+   "lat": 50.65,
+   "lng": 3.916667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Silly",
+    "nl": "Opzullik",
+    "fr": "Silly",
+    "en": "Silly"
+   }
+  },
+  {
+   "qid": "Q667790",
+   "refnis": "51069",
+   "lat": 50.7117,
+   "lng": 3.83,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lessines",
+    "nl": "Lessen",
+    "fr": "Lessines",
+    "en": "Lessines"
+   }
+  },
+  {
+   "qid": "Q95140",
+   "refnis": "52010",
+   "lat": 50.466667,
+   "lng": 4.283333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chapelle-lez-Herlaimont",
+    "nl": "Chapelle-lez-Herlaimont",
+    "fr": "Chapelle-lez-Herlaimont",
+    "en": "Chapelle-lez-Herlaimont"
+   }
+  },
+  {
+   "qid": "Q81046",
+   "refnis": "52011",
+   "lat": 50.416667,
+   "lng": 4.444167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Charleroi",
+    "mul": "Charleroi"
+   }
+  },
+  {
+   "qid": "Q95144",
+   "refnis": "52012",
+   "lat": 50.403889,
+   "lng": 4.525278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Châtelet",
+    "nl": "Châtelet",
+    "fr": "Châtelet",
+    "en": "Châtelet",
+    "mul": "Châtelet"
+   }
+  },
+  {
+   "qid": "Q665860",
+   "refnis": "52015",
+   "lat": 50.4578,
+   "lng": 4.37562,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Courcelles",
+    "nl": "Courcelles",
+    "fr": "Courcelles",
+    "en": "Courcelles",
+    "mul": "Courcelles"
+   }
+  },
+  {
+   "qid": "Q666503",
+   "refnis": "52018",
+   "lat": 50.431389,
+   "lng": 4.5475,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Farciennes",
+    "nl": "Farciennes",
+    "fr": "Farciennes",
+    "en": "Farciennes",
+    "mul": "Farciennes"
+   }
+  },
+  {
+   "qid": "Q314922",
+   "refnis": "52021",
+   "lat": 50.483333,
+   "lng": 4.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fleurus",
+    "nl": "Fleurus",
+    "fr": "Fleurus",
+    "en": "Fleurus"
+   }
+  },
+  {
+   "qid": "Q666696",
+   "refnis": "52022",
+   "lat": 50.416667,
+   "lng": 4.316667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fontaine-l’Évêque",
+    "nl": "Fontaine-l'Évêque",
+    "fr": "Fontaine-l'Évêque",
+    "en": "Fontaine-l'Évêque",
+    "mul": "Fontaine-l'Évêque"
+   }
+  },
+  {
+   "qid": "Q666902",
+   "refnis": "52025",
+   "lat": 50.3369,
+   "lng": 4.5283,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gerpinnes",
+    "nl": "Gerpinnes",
+    "fr": "Gerpinnes",
+    "en": "Gerpinnes"
+   }
+  },
+  {
+   "qid": "Q668437",
+   "refnis": "52048",
+   "lat": 50.38,
+   "lng": 4.38,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Montigny-le-Tilleul",
+    "nl": "Montigny-le-Tilleul",
+    "fr": "Montigny-le-Tilleul",
+    "en": "Montigny-le-Tilleul"
+   }
+  },
+  {
+   "qid": "Q607182",
+   "refnis": "52055",
+   "lat": 50.51,
+   "lng": 4.363333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pont-à-Celles",
+    "nl": "Pont-à-Celles",
+    "fr": "Pont-à-Celles",
+    "en": "Pont-à-Celles"
+   }
+  },
+  {
+   "qid": "Q95004",
+   "refnis": "52074",
+   "lat": 50.416667,
+   "lng": 4.566667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aiseau-Presles",
+    "nl": "Aiseau-Presles",
+    "fr": "Aiseau-Presles",
+    "en": "Aiseau-Presles",
+    "mul": "Aiseau-Presles"
+   }
+  },
+  {
+   "qid": "Q95123",
+   "refnis": "52075",
+   "lat": 50.536667,
+   "lng": 4.45,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Les Bons Villers",
+    "nl": "Les Bons Villers",
+    "fr": "Les Bons Villers",
+    "en": "Les Bons Villers"
+   }
+  },
+  {
+   "qid": "Q95126",
+   "refnis": "53014",
+   "lat": 50.433125,
+   "lng": 3.79609,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Boussu",
+    "nl": "Boussu",
+    "fr": "Boussu",
+    "en": "Boussu",
+    "mul": "Boussu"
+   }
+  },
+  {
+   "qid": "Q665938",
+   "refnis": "53020",
+   "lat": 50.397882,
+   "lng": 3.78069,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dour",
+    "nl": "Dour",
+    "fr": "Dour",
+    "en": "Dour"
+   }
+  },
+  {
+   "qid": "Q666751",
+   "refnis": "53028",
+   "lat": 50.408757,
+   "lng": 3.890566,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Frameries",
+    "nl": "Frameries",
+    "fr": "Frameries",
+    "en": "Frameries"
+   }
+  },
+  {
+   "qid": "Q666983",
+   "refnis": "53039",
+   "lat": 50.432839,
+   "lng": 3.684722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hensies",
+    "nl": "Hensies",
+    "fr": "Hensies",
+    "en": "Hensies"
+   }
+  },
+  {
+   "qid": "Q377152",
+   "refnis": "53044",
+   "lat": 50.533333,
+   "lng": 3.933333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Jurbise",
+    "nl": "Jurbeke",
+    "fr": "Jurbise",
+    "en": "Jurbise"
+   }
+  },
+  {
+   "qid": "Q667158",
+   "refnis": "53046",
+   "lat": 50.55,
+   "lng": 3.9,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lens",
+    "nl": "Lens",
+    "fr": "Lens",
+    "en": "Lens"
+   }
+  },
+  {
+   "qid": "Q83407",
+   "refnis": "53053",
+   "lat": 50.454722,
+   "lng": 3.9525,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mons",
+    "nl": "Bergen",
+    "fr": "Mons",
+    "en": "Mons"
+   }
+  },
+  {
+   "qid": "Q538735",
+   "refnis": "53065",
+   "lat": 50.433333,
+   "lng": 3.866667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Quaregnon",
+    "nl": "Quaregnon",
+    "fr": "Quaregnon",
+    "en": "Quaregnon"
+   }
+  },
+  {
+   "qid": "Q668815",
+   "refnis": "53068",
+   "lat": 50.404874,
+   "lng": 3.682905,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Quiévrain",
+    "nl": "Quiévrain",
+    "fr": "Quiévrain",
+    "en": "Quiévrain"
+   }
+  },
+  {
+   "qid": "Q668950",
+   "refnis": "53070",
+   "lat": 50.45,
+   "lng": 3.816667,
+   "formerUntil": null,
+   "labels": {
+    "mul": "Saint-Ghislain"
+   }
+  },
+  {
+   "qid": "Q665573",
+   "refnis": "53082",
+   "lat": 50.405664,
+   "lng": 3.851396,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Colfontaine",
+    "nl": "Colfontaine",
+    "fr": "Colfontaine",
+    "en": "Colfontaine"
+   }
+  },
+  {
+   "qid": "Q667091",
+   "refnis": "53083",
+   "lat": 50.352089,
+   "lng": 3.731019,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Honnelles",
+    "nl": "Honnelles",
+    "fr": "Honnelles",
+    "en": "Honnelles"
+   }
+  },
+  {
+   "qid": "Q668702",
+   "refnis": "53084",
+   "lat": 50.366723,
+   "lng": 3.943903,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Quévy",
+    "nl": "Quévy",
+    "fr": "Quévy",
+    "en": "Quévy",
+    "mul": "Quévy"
+   }
+  },
+  {
+   "qid": "Q95129",
+   "refnis": "55004",
+   "lat": 50.609722,
+   "lng": 4.136111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Braine-le-Comte",
+    "nl": "'s-Gravenbrakel",
+    "fr": "Braine-le-Comte",
+    "en": "Braine-le-Comte",
+    "mul": "Braine-le-Comte"
+   }
+  },
+  {
+   "qid": "Q668861",
+   "refnis": "55035",
+   "lat": 50.5,
+   "lng": 4.1,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Le Rœulx",
+    "nl": "Le Rœulx",
+    "fr": "Le Rœulx",
+    "en": "Le Rœulx"
+   }
+  },
+  {
+   "qid": "Q462985",
+   "refnis": "55040",
+   "lat": 50.566667,
+   "lng": 4.066667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Soignies",
+    "nl": "Zinnik",
+    "fr": "Soignies",
+    "en": "Soignies",
+    "mul": "Soignies"
+   }
+  },
+  {
+   "qid": "Q273316",
+   "refnis": "55050",
+   "lat": 50.566667,
+   "lng": 4.183333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Écaussinnes",
+    "nl": "Écaussinnes",
+    "fr": "Écaussinnes",
+    "en": "Écaussinnes"
+   }
+  },
+  {
+   "qid": "Q669051",
+   "refnis": "55085",
+   "lat": 50.533333,
+   "lng": 4.25,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Seneffe",
+    "nl": "Seneffe",
+    "fr": "Seneffe",
+    "en": "Seneffe"
+   }
+  },
+  {
+   "qid": "Q667987",
+   "refnis": "55086",
+   "lat": 50.5,
+   "lng": 4.233333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Manage",
+    "nl": "Manage",
+    "fr": "Manage",
+    "en": "Manage"
+   }
+  },
+  {
+   "qid": "Q95005",
+   "refnis": "56001",
+   "lat": 50.407997,
+   "lng": 4.26961,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Anderlues",
+    "nl": "Anderlues",
+    "fr": "Anderlues",
+    "en": "Anderlues"
+   }
+  },
+  {
+   "qid": "Q95100",
+   "refnis": "56005",
+   "lat": 50.235529,
+   "lng": 4.238312,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beaumont",
+    "nl": "Beaumont",
+    "fr": "Beaumont",
+    "en": "Beaumont",
+    "mul": "Beaumont"
+   }
+  },
+  {
+   "qid": "Q95380",
+   "refnis": "56016",
+   "lat": 50.047927,
+   "lng": 4.317334,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chimay",
+    "nl": "Chimay",
+    "fr": "Chimay",
+    "en": "Chimay",
+    "mul": "Chimay"
+   }
+  },
+  {
+   "qid": "Q666335",
+   "refnis": "56022",
+   "lat": 50.3101,
+   "lng": 4.121872,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Erquelinnes",
+    "nl": "Erquelinnes",
+    "fr": "Erquelinnes",
+    "en": "Erquelinnes"
+   }
+  },
+  {
+   "qid": "Q666853",
+   "refnis": "56029",
+   "lat": 50.150143,
+   "lng": 4.328302,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Froidchapelle",
+    "nl": "Froidchapelle",
+    "fr": "Froidchapelle",
+    "en": "Froidchapelle",
+    "mul": "Froidchapelle"
+   }
+  },
+  {
+   "qid": "Q667936",
+   "refnis": "56044",
+   "lat": 50.346019,
+   "lng": 4.265487,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lobbes",
+    "nl": "Lobbes",
+    "fr": "Lobbes",
+    "en": "Lobbes"
+   }
+  },
+  {
+   "qid": "Q668139",
+   "refnis": "56049",
+   "lat": 50.323404,
+   "lng": 4.164482,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Merbes-le-Château",
+    "nl": "Merbes-le-Château",
+    "fr": "Merbes-le-Château",
+    "en": "Merbes-le-Château"
+   }
+  },
+  {
+   "qid": "Q668187",
+   "refnis": "56051",
+   "lat": 50.029444,
+   "lng": 4.166667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Momignies",
+    "nl": "Momignies",
+    "fr": "Momignies",
+    "en": "Momignies",
+    "mul": "Momignies"
+   }
+  },
+  {
+   "qid": "Q669186",
+   "refnis": "56078",
+   "lat": 50.339745,
+   "lng": 4.287048,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Thuin",
+    "nl": "Thuin",
+    "fr": "Thuin",
+    "en": "Thuin",
+    "mul": "Thuin"
+   }
+  },
+  {
+   "qid": "Q666952",
+   "refnis": "56086",
+   "lat": 50.317162,
+   "lng": 4.380322,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ham-sur-Heure-Nalinnes",
+    "nl": "Ham-sur-Heure-Nalinnes",
+    "fr": "Ham-sur-Heure-Nalinnes",
+    "en": "Ham-sur-Heure-Nalinnes",
+    "mul": "Ham-sur-Heure-Nalinnes"
+   }
+  },
+  {
+   "qid": "Q669136",
+   "refnis": "56088",
+   "lat": 50.167781,
+   "lng": 4.180831,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sivry-Rance",
+    "nl": "Sivry-Rance",
+    "fr": "Sivry-Rance",
+    "en": "Sivry-Rance"
+   }
+  },
+  {
+   "qid": "Q95011",
+   "refnis": "57003",
+   "lat": 50.5669,
+   "lng": 3.4494,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Antoing",
+    "nl": "Antoing",
+    "fr": "Antoing",
+    "en": "Antoing",
+    "mul": "Antoing"
+   }
+  },
+  {
+   "qid": "Q95136",
+   "refnis": "57018",
+   "lat": 50.7117,
+   "lng": 3.4569,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Celles",
+    "nl": "Celles",
+    "fr": "Celles",
+    "en": "Celles"
+   }
+  },
+  {
+   "qid": "Q666393",
+   "refnis": "57027",
+   "lat": 50.7063,
+   "lng": 3.2639,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Estaimpuis",
+    "nl": "Estaimpuis",
+    "fr": "Estaimpuis",
+    "en": "Estaimpuis"
+   }
+  },
+  {
+   "qid": "Q668540",
+   "refnis": "57062",
+   "lat": 50.685789,
+   "lng": 3.33518,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pecq",
+    "nl": "Pecq",
+    "fr": "Pecq",
+    "en": "Pecq"
+   }
+  },
+  {
+   "qid": "Q668630",
+   "refnis": "57064",
+   "lat": 50.511755,
+   "lng": 3.588933,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Péruwelz",
+    "nl": "Péruwelz",
+    "fr": "Péruwelz",
+    "en": "Péruwelz",
+    "mul": "Péruwelz"
+   }
+  },
+  {
+   "qid": "Q668903",
+   "refnis": "57072",
+   "lat": 50.5561,
+   "lng": 3.3039,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rumes",
+    "nl": "Rumes",
+    "fr": "Rumes",
+    "en": "Rumes"
+   }
+  },
+  {
+   "qid": "Q173219",
+   "refnis": "57081",
+   "lat": 50.605556,
+   "lng": 3.388056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tournai",
+    "nl": "Doornik",
+    "fr": "Tournai",
+    "en": "Tournai",
+    "mul": "Tournai"
+   }
+  },
+  {
+   "qid": "Q95132",
+   "refnis": "57093",
+   "lat": 50.516667,
+   "lng": 3.416667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Brunehaut",
+    "nl": "Brunehaut",
+    "fr": "Brunehaut",
+    "en": "Brunehaut"
+   }
+  },
+  {
+   "qid": "Q667862",
+   "refnis": "57094",
+   "lat": 50.6,
+   "lng": 3.616667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Leuze-en-Hainaut",
+    "nl": "Leuze-en-Hainaut",
+    "fr": "Leuze-en-Hainaut",
+    "en": "Leuze-en-Hainaut"
+   }
+  },
+  {
+   "qid": "Q668295",
+   "refnis": "57095",
+   "lat": 50.7369,
+   "lng": 3.5039,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mont-de-l'Enclus",
+    "nl": "Mont-de-l'Enclus",
+    "fr": "Mont-de-l'Enclus",
+    "en": "Mont-de-l'Enclus"
+   }
+  },
+  {
+   "qid": "Q220145",
+   "refnis": "57096",
+   "lat": 50.7444,
+   "lng": 3.2156,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mouscron",
+    "nl": "Moeskroen",
+    "fr": "Mouscron",
+    "en": "Mouscron"
+   }
+  },
+  {
+   "qid": "Q665761",
+   "refnis": "57097",
+   "lat": 50.766667,
+   "lng": 3,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Comines-Warneton",
+    "nl": "Komen-Waasten",
+    "fr": "Comines-Warneton",
+    "en": "Comines-Warneton"
+   }
+  },
+  {
+   "qid": "Q211572",
+   "refnis": "58001",
+   "lat": 50.477778,
+   "lng": 4.188056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "La Louvière",
+    "nl": "La Louvière",
+    "fr": "La Louvière",
+    "en": "La Louvière",
+    "mul": "La Louvière"
+   }
+  },
+  {
+   "qid": "Q95121",
+   "refnis": "58002",
+   "lat": 50.4103,
+   "lng": 4.165163,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Binche",
+    "nl": "Binche",
+    "fr": "Binche",
+    "en": "Binche",
+    "mul": "Binche"
+   }
+  },
+  {
+   "qid": "Q666446",
+   "refnis": "58003",
+   "lat": 50.39767,
+   "lng": 4.097576,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Estinnes",
+    "nl": "Estinnes",
+    "fr": "Estinnes",
+    "en": "Estinnes",
+    "mul": "Estinnes"
+   }
+  },
+  {
+   "qid": "Q668493",
+   "refnis": "58004",
+   "lat": 50.45,
+   "lng": 4.233333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Morlanwelz",
+    "nl": "Morlanwelz",
+    "fr": "Morlanwelz",
+    "en": "Morlanwelz",
+    "mul": "Morlanwelz"
+   }
+  },
+  {
+   "qid": "Q455969",
+   "refnis": "61003",
+   "lat": 50.5478,
+   "lng": 5.3192,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Amay",
+    "nl": "Amay",
+    "fr": "Amay",
+    "en": "Amay",
+    "mul": "Amay"
+   }
+  },
+  {
+   "qid": "Q681368",
+   "refnis": "61010",
+   "lat": 50.583333,
+   "lng": 5.066667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Burdinne",
+    "nl": "Burdinne",
+    "fr": "Burdinne",
+    "en": "Burdinne",
+    "mul": "Burdinne"
+   }
+  },
+  {
+   "qid": "Q681854",
+   "refnis": "61012",
+   "lat": 50.416667,
+   "lng": 5.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Clavier",
+    "nl": "Clavier",
+    "fr": "Clavier",
+    "en": "Clavier",
+    "mul": "Clavier"
+   }
+  },
+  {
+   "qid": "Q682570",
+   "refnis": "61019",
+   "lat": 50.400278,
+   "lng": 5.606944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ferrières (Belgia)",
+    "nl": "Ferrières",
+    "fr": "Ferrières",
+    "en": "Ferrières",
+    "mul": "Ferrières"
+   }
+  },
+  {
+   "qid": "Q683083",
+   "refnis": "61024",
+   "lat": 50.433333,
+   "lng": 5.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hamoir",
+    "nl": "Hamoir",
+    "fr": "Hamoir",
+    "en": "Hamoir",
+    "mul": "Hamoir"
+   }
+  },
+  {
+   "qid": "Q683321",
+   "refnis": "61028",
+   "lat": 50.55,
+   "lng": 5.083333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Héron",
+    "nl": "Héron",
+    "fr": "Héron",
+    "en": "Héron",
+    "mul": "Héron"
+   }
+  },
+  {
+   "qid": "Q207095",
+   "refnis": "61031",
+   "lat": 50.516667,
+   "lng": 5.233333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Huy",
+    "nl": "Hoei",
+    "fr": "Huy",
+    "en": "Huy",
+    "mul": "Huy"
+   }
+  },
+  {
+   "qid": "Q710190",
+   "refnis": "61039",
+   "lat": 50.466667,
+   "lng": 5.233333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Marchin",
+    "nl": "Marchin",
+    "fr": "Marchin",
+    "en": "Marchin",
+    "mul": "Marchin"
+   }
+  },
+  {
+   "qid": "Q710237",
+   "refnis": "61041",
+   "lat": 50.442258,
+   "lng": 5.300581,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Modave",
+    "nl": "Modave",
+    "fr": "Modave",
+    "en": "Modave",
+    "mul": "Modave"
+   }
+  },
+  {
+   "qid": "Q710280",
+   "refnis": "61043",
+   "lat": 50.5,
+   "lng": 5.416667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Nandrin",
+    "nl": "Nandrin",
+    "fr": "Nandrin",
+    "en": "Nandrin",
+    "mul": "Nandrin"
+   }
+  },
+  {
+   "qid": "Q222233",
+   "refnis": "61048",
+   "lat": 50.433333,
+   "lng": 5.466667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ouffet",
+    "nl": "Ouffet",
+    "fr": "Ouffet",
+    "en": "Ouffet",
+    "mul": "Ouffet"
+   }
+  },
+  {
+   "qid": "Q711292",
+   "refnis": "61063",
+   "lat": 50.6,
+   "lng": 5.316667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Verlaine",
+    "nl": "Verlaine",
+    "fr": "Verlaine",
+    "en": "Verlaine",
+    "mul": "Verlaine"
+   }
+  },
+  {
+   "qid": "Q711373",
+   "refnis": "61068",
+   "lat": 50.583333,
+   "lng": 5.266667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Villers-le-Bouillet",
+    "nl": "Villers-le-Bouillet",
+    "fr": "Villers-le-Bouillet",
+    "en": "Villers-le-Bouillet",
+    "mul": "Villers-le-Bouillet"
+   }
+  },
+  {
+   "qid": "Q711443",
+   "refnis": "61072",
+   "lat": 50.5353,
+   "lng": 5.2133,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wanze",
+    "nl": "Wanze",
+    "fr": "Wanze",
+    "en": "Wanze",
+    "mul": "Wanze"
+   }
+  },
+  {
+   "qid": "Q572472",
+   "refnis": "61079",
+   "lat": 50.4814,
+   "lng": 5.5217,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Anthisnes",
+    "nl": "Anthisnes",
+    "fr": "Anthisnes",
+    "en": "Anthisnes",
+    "mul": "Anthisnes"
+   }
+  },
+  {
+   "qid": "Q682223",
+   "refnis": "61080",
+   "lat": 50.583333,
+   "lng": 5.416667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Engis",
+    "nl": "Engis",
+    "fr": "Engis",
+    "en": "Engis",
+    "mul": "Engis"
+   }
+  },
+  {
+   "qid": "Q711152",
+   "refnis": "61081",
+   "lat": 50.483333,
+   "lng": 5.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tinlot",
+    "nl": "Tinlot",
+    "fr": "Tinlot",
+    "en": "Tinlot",
+    "mul": "Tinlot"
+   }
+  },
+  {
+   "qid": "Q499594",
+   "refnis": "62003",
+   "lat": 50.6625,
+   "lng": 5.52,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ans",
+    "nl": "Ans",
+    "fr": "Ans",
+    "en": "Ans",
+    "mul": "Ans"
+   }
+  },
+  {
+   "qid": "Q680564",
+   "refnis": "62006",
+   "lat": 50.6669,
+   "lng": 5.4633,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Awans",
+    "nl": "Awans",
+    "fr": "Awans",
+    "en": "Awans",
+    "mul": "Awans"
+   }
+  },
+  {
+   "qid": "Q793396",
+   "refnis": "62009",
+   "lat": 50.4733,
+   "lng": 5.6739,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aywaille",
+    "nl": "Aywaille",
+    "fr": "Aywaille",
+    "en": "Aywaille"
+   }
+  },
+  {
+   "qid": "Q680918",
+   "refnis": "62011",
+   "lat": 50.7586,
+   "lng": 5.6086,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bassenge",
+    "nl": "Bitsingen",
+    "fr": "Bassenge",
+    "en": "Bassenge"
+   }
+  },
+  {
+   "qid": "Q681039",
+   "refnis": "62015",
+   "lat": 50.616667,
+   "lng": 5.65,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beyne-Heusay",
+    "nl": "Beyne-Heusay",
+    "fr": "Beyne-Heusay",
+    "en": "Beyne-Heusay",
+    "mul": "Beyne-Heusay"
+   }
+  },
+  {
+   "qid": "Q503363",
+   "refnis": "62022",
+   "lat": 50.583333,
+   "lng": 5.633333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chaudfontaine",
+    "nl": "Chaudfontaine",
+    "fr": "Chaudfontaine",
+    "en": "Chaudfontaine"
+   }
+  },
+  {
+   "qid": "Q681909",
+   "refnis": "62026",
+   "lat": 50.466667,
+   "lng": 5.583333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Comblain-au-Point",
+    "nl": "Comblain-au-Pont",
+    "fr": "Comblain-au-Pont",
+    "en": "Comblain-au-Pont",
+    "mul": "Comblain-au-Pont"
+   }
+  },
+  {
+   "qid": "Q846182",
+   "refnis": "62027",
+   "lat": 50.716667,
+   "lng": 5.716667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dalhem",
+    "nl": "Dalhem",
+    "fr": "Dalhem",
+    "en": "Dalhem"
+   }
+  },
+  {
+   "qid": "Q682271",
+   "refnis": "62032",
+   "lat": 50.533333,
+   "lng": 5.566667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Esneux",
+    "nl": "Esneux",
+    "fr": "Esneux",
+    "en": "Esneux"
+   }
+  },
+  {
+   "qid": "Q682811",
+   "refnis": "62038",
+   "lat": 50.616667,
+   "lng": 5.683333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fléron",
+    "nl": "Fléron",
+    "fr": "Fléron",
+    "en": "Fléron",
+    "mul": "Fléron"
+   }
+  },
+  {
+   "qid": "Q211033",
+   "refnis": "62051",
+   "lat": 50.6644,
+   "lng": 5.63,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herstal",
+    "nl": "Herstal",
+    "fr": "Herstal",
+    "en": "Herstal"
+   }
+  },
+  {
+   "qid": "Q914102",
+   "refnis": "62060",
+   "lat": 50.716667,
+   "lng": 5.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Juprelle",
+    "nl": "Juprelle",
+    "fr": "Juprelle",
+    "en": "Juprelle"
+   }
+  },
+  {
+   "qid": "Q3992",
+   "refnis": "62063",
+   "lat": 50.639722,
+   "lng": 5.570556,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Liège",
+    "nl": "Luik",
+    "fr": "Liège",
+    "en": "Liège",
+    "mul": "Liège"
+   }
+  },
+  {
+   "qid": "Q286215",
+   "refnis": "62079",
+   "lat": 50.7083,
+   "lng": 5.6431,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oupeye",
+    "nl": "Oupeye",
+    "fr": "Oupeye",
+    "en": "Oupeye",
+    "mul": "Oupeye"
+   }
+  },
+  {
+   "qid": "Q65062",
+   "refnis": "62093",
+   "lat": 50.633333,
+   "lng": 5.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Saint-Nicolas",
+    "nl": "Saint-Nicolas",
+    "fr": "Saint-Nicolas",
+    "en": "Saint-Nicolas",
+    "mul": "Saint-Nicolas"
+   }
+  },
+  {
+   "qid": "Q194037",
+   "refnis": "62096",
+   "lat": 50.5986,
+   "lng": 5.5122,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Seraing",
+    "nl": "Seraing",
+    "fr": "Seraing",
+    "en": "Seraing",
+    "mul": "Seraing"
+   }
+  },
+  {
+   "qid": "Q696099",
+   "refnis": "62099",
+   "lat": 50.616667,
+   "lng": 5.75,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Soumagne",
+    "nl": "Soumagne",
+    "fr": "Soumagne",
+    "en": "Soumagne",
+    "mul": "Soumagne"
+   }
+  },
+  {
+   "qid": "Q696110",
+   "refnis": "62100",
+   "lat": 50.5,
+   "lng": 5.666667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sprimont",
+    "nl": "Sprimont",
+    "fr": "Sprimont",
+    "en": "Sprimont"
+   }
+  },
+  {
+   "qid": "Q49743",
+   "refnis": "62108",
+   "lat": 50.733333,
+   "lng": 5.683333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Visé",
+    "nl": "Wezet",
+    "fr": "Visé",
+    "en": "Visé",
+    "mul": "Visé"
+   }
+  },
+  {
+   "qid": "Q683034",
+   "refnis": "62118",
+   "lat": 50.6325,
+   "lng": 5.476944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Grâce-Hollogne",
+    "nl": "Grâce-Hollogne",
+    "fr": "Grâce-Hollogne",
+    "en": "Grâce-Hollogne",
+    "mul": "Grâce-Hollogne"
+   }
+  },
+  {
+   "qid": "Q681109",
+   "refnis": "62119",
+   "lat": 50.666667,
+   "lng": 5.733333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Blegny",
+    "nl": "Blegny",
+    "fr": "Blegny",
+    "en": "Blegny"
+   }
+  },
+  {
+   "qid": "Q175322",
+   "refnis": "62120",
+   "lat": 50.6011,
+   "lng": 5.4628,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Flémalle",
+    "nl": "Flémalle",
+    "fr": "Flémalle",
+    "en": "Flémalle",
+    "mul": "Flémalle"
+   }
+  },
+  {
+   "qid": "Q710316",
+   "refnis": "62121",
+   "lat": 50.533333,
+   "lng": 5.483333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Neupré",
+    "nl": "Neupré",
+    "fr": "Neupré",
+    "en": "Neupré",
+    "mul": "Neupré"
+   }
+  },
+  {
+   "qid": "Q711205",
+   "refnis": "62122",
+   "lat": 50.573611,
+   "lng": 5.687222,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Trooz",
+    "nl": "Trooz",
+    "fr": "Trooz",
+    "en": "Trooz"
+   }
+  },
+  {
+   "qid": "Q159868",
+   "refnis": "63001",
+   "lat": 50.3539,
+   "lng": 6.1692,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Amel",
+    "nl": "Amel",
+    "fr": "Amblève",
+    "en": "Amel"
+   }
+  },
+  {
+   "qid": "Q678920",
+   "refnis": "63003",
+   "lat": 50.7019,
+   "lng": 5.8583,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aubel",
+    "nl": "Aubel",
+    "fr": "Aubel",
+    "en": "Aubel"
+   }
+  },
+  {
+   "qid": "Q680845",
+   "refnis": "63004",
+   "lat": 50.63,
+   "lng": 5.9714,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Baelen",
+    "nl": "Baelen",
+    "fr": "Baelen",
+    "en": "Baelen"
+   }
+  },
+  {
+   "qid": "Q152737",
+   "refnis": "63012",
+   "lat": 50.4,
+   "lng": 6.25,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Büllingen",
+    "nl": "Büllingen",
+    "fr": "Bullange",
+    "en": "Büllingen"
+   }
+  },
+  {
+   "qid": "Q160005",
+   "refnis": "63013",
+   "lat": 50.4262,
+   "lng": 6.2041,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bütgenbach",
+    "nl": "Bütgenbach",
+    "fr": "Butgenbach",
+    "en": "Bütgenbach"
+   }
+  },
+  {
+   "qid": "Q682105",
+   "refnis": "63020",
+   "lat": 50.616667,
+   "lng": 5.85,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dison",
+    "nl": "Dison",
+    "fr": "Dison",
+    "en": "Dison"
+   }
+  },
+  {
+   "qid": "Q151831",
+   "refnis": "63023",
+   "lat": 50.633333,
+   "lng": 6.033333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Eupen",
+    "nl": "Eupen",
+    "fr": "Eupen",
+    "en": "Eupen",
+    "mul": "Eupen"
+   }
+  },
+  {
+   "qid": "Q683465",
+   "refnis": "63035",
+   "lat": 50.633333,
+   "lng": 5.8,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herve",
+    "nl": "Herve",
+    "fr": "Herve",
+    "en": "Herve"
+   }
+  },
+  {
+   "qid": "Q683634",
+   "refnis": "63038",
+   "lat": 50.5572,
+   "lng": 5.9642,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Jalhay",
+    "nl": "Jalhay",
+    "fr": "Jalhay",
+    "en": "Jalhay",
+    "mul": "Jalhay"
+   }
+  },
+  {
+   "qid": "Q159864",
+   "refnis": "63040",
+   "lat": 50.7,
+   "lng": 6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kelmis",
+    "nl": "Kelmis",
+    "fr": "La Calamine",
+    "en": "Kelmis",
+    "mul": "Kelmis"
+   }
+  },
+  {
+   "qid": "Q710022",
+   "refnis": "63045",
+   "lat": 50.285,
+   "lng": 5.7925,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lierneux",
+    "nl": "Lierneux",
+    "fr": "Lierneux",
+    "en": "Lierneux",
+    "mul": "Lierneux"
+   }
+  },
+  {
+   "qid": "Q506739",
+   "refnis": "63046",
+   "lat": 50.6122,
+   "lng": 5.9403,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Limbourg",
+    "nl": "Limburg",
+    "fr": "Limbourg",
+    "en": "Limbourg",
+    "mul": "Limbourg"
+   }
+  },
+  {
+   "qid": "Q159958",
+   "refnis": "63048",
+   "lat": 50.683333,
+   "lng": 6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lontzen",
+    "nl": "Lontzen",
+    "fr": "Lontzen",
+    "en": "Lontzen"
+   }
+  },
+  {
+   "qid": "Q159838",
+   "refnis": "63049",
+   "lat": 50.423889,
+   "lng": 6.025833,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Malmedy",
+    "nl": "Malmedy",
+    "fr": "Malmedy",
+    "en": "Malmedy"
+   }
+  },
+  {
+   "qid": "Q710358",
+   "refnis": "63057",
+   "lat": 50.583333,
+   "lng": 5.75,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Olne",
+    "nl": "Olne",
+    "fr": "Olne",
+    "en": "Olne"
+   }
+  },
+  {
+   "qid": "Q710522",
+   "refnis": "63058",
+   "lat": 50.566667,
+   "lng": 5.816667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pepinster",
+    "nl": "Pepinster",
+    "fr": "Pepinster",
+    "en": "Pepinster"
+   }
+  },
+  {
+   "qid": "Q152734",
+   "refnis": "63061",
+   "lat": 50.683333,
+   "lng": 6.116667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Raeren",
+    "nl": "Raeren",
+    "fr": "Raeren",
+    "en": "Raeren"
+   }
+  },
+  {
+   "qid": "Q152748",
+   "refnis": "63067",
+   "lat": 50.283333,
+   "lng": 6.133333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "St. Vith",
+    "nl": "Sankt Vith",
+    "fr": "Saint-Vith",
+    "en": "Sankt Vith"
+   }
+  },
+  {
+   "qid": "Q39865",
+   "refnis": "63072",
+   "lat": 50.492277,
+   "lng": 5.862211,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Spa",
+    "nl": "Spa",
+    "fr": "Spa",
+    "en": "Spa",
+    "mul": "Spa"
+   }
+  },
+  {
+   "qid": "Q468920",
+   "refnis": "63073",
+   "lat": 50.394444,
+   "lng": 5.931111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Stavelot",
+    "nl": "Stavelot",
+    "fr": "Stavelot",
+    "en": "Stavelot",
+    "mul": "Stavelot"
+   }
+  },
+  {
+   "qid": "Q711046",
+   "refnis": "63075",
+   "lat": 50.4081,
+   "lng": 5.8078,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Stoumont",
+    "nl": "Stoumont",
+    "fr": "Stoumont",
+    "en": "Stoumont",
+    "mul": "Stoumont"
+   }
+  },
+  {
+   "qid": "Q711079",
+   "refnis": "63076",
+   "lat": 50.53494,
+   "lng": 5.81342,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Theux",
+    "nl": "Theux",
+    "fr": "Theux",
+    "en": "Theux"
+   }
+  },
+  {
+   "qid": "Q202954",
+   "refnis": "63079",
+   "lat": 50.583333,
+   "lng": 5.85,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Verviers",
+    "nl": "Verviers",
+    "fr": "Verviers",
+    "en": "Verviers",
+    "mul": "Verviers"
+   }
+  },
+  {
+   "qid": "Q159961",
+   "refnis": "63080",
+   "lat": 50.416667,
+   "lng": 6.116667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Waimes",
+    "nl": "Weismes",
+    "fr": "Waimes",
+    "en": "Waimes",
+    "mul": "Waimes"
+   }
+  },
+  {
+   "qid": "Q152743",
+   "refnis": "63084",
+   "lat": 50.6606,
+   "lng": 5.9714,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Welkenraedt",
+    "nl": "Welkenraedt",
+    "fr": "Welkenraedt",
+    "en": "Welkenraedt"
+   }
+  },
+  {
+   "qid": "Q711183",
+   "refnis": "63086",
+   "lat": 50.3717,
+   "lng": 5.8706,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Trois-Ponts",
+    "nl": "Trois-Ponts",
+    "fr": "Trois-Ponts",
+    "en": "Trois-Ponts",
+    "mul": "Trois-Ponts"
+   }
+  },
+  {
+   "qid": "Q159981",
+   "refnis": "63087",
+   "lat": 50.1964,
+   "lng": 6.1344,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Burg-Reuland",
+    "nl": "Burg-Reuland",
+    "fr": "Burg-Reuland",
+    "en": "Burg-Reuland"
+   }
+  },
+  {
+   "qid": "Q710606",
+   "refnis": "63088",
+   "lat": 50.733333,
+   "lng": 5.95,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Plombières",
+    "nl": "Plombières",
+    "fr": "Plombières",
+    "en": "Plombières"
+   }
+  },
+  {
+   "qid": "Q711115",
+   "refnis": "63089",
+   "lat": 50.65,
+   "lng": 5.85,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Thimister-Clermont",
+    "nl": "Thimister-Clermont",
+    "fr": "Thimister-Clermont",
+    "en": "Thimister-Clermont",
+    "mul": "Thimister-Clermont"
+   }
+  },
+  {
+   "qid": "Q680978",
+   "refnis": "64008",
+   "lat": 50.6978,
+   "lng": 5.2114,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Berloz",
+    "nl": "Berloz",
+    "fr": "Berloz",
+    "en": "Berloz"
+   }
+  },
+  {
+   "qid": "Q681153",
+   "refnis": "64015",
+   "lat": 50.633333,
+   "lng": 5.15,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Braives",
+    "nl": "Braives",
+    "fr": "Braives",
+    "en": "Braives",
+    "mul": "Braives"
+   }
+  },
+  {
+   "qid": "Q929415",
+   "refnis": "64021",
+   "lat": 50.716667,
+   "lng": 5.4,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Crisnée",
+    "nl": "Crisnée",
+    "fr": "Crisnée",
+    "en": "Crisnée"
+   }
+  },
+  {
+   "qid": "Q682163",
+   "refnis": "64023",
+   "lat": 50.65,
+   "lng": 5.316667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Donceel",
+    "nl": "Donceel",
+    "fr": "Donceel",
+    "en": "Donceel"
+   }
+  },
+  {
+   "qid": "Q379113",
+   "refnis": "64025",
+   "lat": 50.666667,
+   "lng": 5.4,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fexhe-le-Haut-Clocher",
+    "nl": "Fexhe-le-Haut-Clocher",
+    "fr": "Fexhe-le-Haut-Clocher",
+    "en": "Fexhe-le-Haut-Clocher"
+   }
+  },
+  {
+   "qid": "Q682982",
+   "refnis": "64029",
+   "lat": 50.666667,
+   "lng": 5.166667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Geer",
+    "nl": "Geer",
+    "fr": "Geer",
+    "en": "Geer"
+   }
+  },
+  {
+   "qid": "Q683141",
+   "refnis": "64034",
+   "lat": 50.67247,
+   "lng": 5.078,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hannut",
+    "nl": "Hannuit",
+    "fr": "Hannut",
+    "en": "Hannut",
+    "mul": "Hannut"
+   }
+  },
+  {
+   "qid": "Q509457",
+   "refnis": "64047",
+   "lat": 50.716667,
+   "lng": 5.033333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lincent",
+    "nl": "Lijsem",
+    "fr": "Lincent",
+    "en": "Lincent",
+    "mul": "Lincent"
+   }
+  },
+  {
+   "qid": "Q710409",
+   "refnis": "64056",
+   "lat": 50.733333,
+   "lng": 5.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oreye",
+    "nl": "Oerle",
+    "fr": "Oreye",
+    "en": "Oreye"
+   }
+  },
+  {
+   "qid": "Q710690",
+   "refnis": "64063",
+   "lat": 50.683333,
+   "lng": 5.333333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Remicourt",
+    "nl": "Remicourt",
+    "fr": "Remicourt",
+    "en": "Remicourt"
+   }
+  },
+  {
+   "qid": "Q710718",
+   "refnis": "64065",
+   "lat": 50.6,
+   "lng": 5.35,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Saint-Georges-sur-Meuse",
+    "nl": "Saint-Georges-sur-Meuse",
+    "fr": "Saint-Georges-sur-Meuse",
+    "en": "Saint-Georges-sur-Meuse"
+   }
+  },
+  {
+   "qid": "Q711474",
+   "refnis": "64074",
+   "lat": 50.7,
+   "lng": 5.25,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Waremme",
+    "nl": "Borgworm",
+    "fr": "Waremme",
+    "en": "Waremme",
+    "mul": "Waremme"
+   }
+  },
+  {
+   "qid": "Q711502",
+   "refnis": "64075",
+   "lat": 50.616667,
+   "lng": 5,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wasseiges",
+    "nl": "Wasseiges",
+    "fr": "Wasseiges",
+    "en": "Wasseiges",
+    "mul": "Wasseiges"
+   }
+  },
+  {
+   "qid": "Q682441",
+   "refnis": "64076",
+   "lat": 50.666667,
+   "lng": 5.266667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Faimes",
+    "nl": "Faimes",
+    "fr": "Faimes",
+    "en": "Faimes"
+   }
+  },
+  {
+   "qid": "Q696591",
+   "refnis": "71002",
+   "lat": 51,
+   "lng": 5.583333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "As",
+    "nl": "As",
+    "fr": "As",
+    "en": "As"
+   }
+  },
+  {
+   "qid": "Q242407",
+   "refnis": "71004",
+   "lat": 51.033333,
+   "lng": 5.216667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beringen",
+    "nl": "Beringen",
+    "fr": "Béringue",
+    "en": "Beringen",
+    "mul": "Beringen"
+   }
+  },
+  {
+   "qid": "Q651826",
+   "refnis": "71011",
+   "lat": 50.9072,
+   "lng": 5.4175,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Diepenbeek",
+    "nl": "Diepenbeek",
+    "fr": "Diepenbeek",
+    "en": "Diepenbeek",
+    "mul": "Diepenbeek"
+   }
+  },
+  {
+   "qid": "Q189692",
+   "refnis": "71016",
+   "lat": 50.966249,
+   "lng": 5.502096,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Genk",
+    "nl": "Genk",
+    "fr": "Genk",
+    "en": "Genk",
+    "mul": "Genk"
+   }
+  },
+  {
+   "qid": "Q651837",
+   "refnis": "71017",
+   "lat": 50.7492,
+   "lng": 5.1328,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gingelom",
+    "nl": "Gingelom",
+    "fr": "Gingelom",
+    "en": "Gingelom",
+    "mul": "Gingelom"
+   }
+  },
+  {
+   "qid": "Q461436",
+   "refnis": "71020",
+   "lat": 50.948056,
+   "lng": 5.114444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Halen",
+    "nl": "Halen",
+    "fr": "Halen",
+    "en": "Halen",
+    "mul": "Halen"
+   }
+  },
+  {
+   "qid": "Q696585",
+   "refnis": "71024",
+   "lat": 50.9406,
+   "lng": 5.1672,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herk-de-Stad",
+    "nl": "Herk-de-Stad",
+    "fr": "Herck-la-Ville",
+    "en": "Herk-de-Stad",
+    "mul": "Herk-de-Stad"
+   }
+  },
+  {
+   "qid": "Q736120",
+   "refnis": "71034",
+   "lat": 51.1169,
+   "lng": 5.2558,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Leopoldsburg",
+    "nl": "Leopoldsburg",
+    "fr": "Bourg-Léopold",
+    "en": "Leopoldsburg",
+    "mul": "Leopoldsburg"
+   }
+  },
+  {
+   "qid": "Q329628",
+   "refnis": "71037",
+   "lat": 50.983333,
+   "lng": 5.2,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lummen",
+    "nl": "Lummen",
+    "fr": "Lummen",
+    "en": "Lummen",
+    "mul": "Lummen"
+   }
+  },
+  {
+   "qid": "Q696740",
+   "refnis": "71045",
+   "lat": 50.866667,
+   "lng": 5.2,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Nieuwerkerken",
+    "nl": "Nieuwerkerken",
+    "fr": "Nieuwerkerken",
+    "en": "Nieuwerkerken",
+    "mul": "Nieuwerkerken"
+   }
+  },
+  {
+   "qid": "Q651801",
+   "refnis": "71047A",
+   "lat": 51.0422,
+   "lng": 5.5825,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Opglabbeek",
+    "nl": "Opglabbeek",
+    "fr": "Opglabbeek",
+    "en": "Opglabbeek"
+   }
+  },
+  {
+   "qid": "Q37792",
+   "refnis": "71053",
+   "lat": 50.816667,
+   "lng": 5.183333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sint-Truiden",
+    "nl": "Sint-Truiden",
+    "fr": "Saint-Trond",
+    "en": "Sint-Truiden"
+   }
+  },
+  {
+   "qid": "Q740852",
+   "refnis": "71057",
+   "lat": 51.0697,
+   "lng": 5.0897,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Tessenderlo",
+    "nl": "Tessenderlo",
+    "fr": "Tessenderlo",
+    "en": "Tessenderlo"
+   }
+  },
+  {
+   "qid": "Q133769",
+   "refnis": "71066",
+   "lat": 50.985278,
+   "lng": 5.364722,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zonhoven",
+    "nl": "Zonhoven",
+    "fr": "Zonhoven",
+    "en": "Zonhoven",
+    "mul": "Zonhoven"
+   }
+  },
+  {
+   "qid": "Q231090",
+   "refnis": "71067",
+   "lat": 50.933333,
+   "lng": 5.566667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Zutendaal",
+    "nl": "Zutendaal",
+    "fr": "Zutendaal",
+    "en": "Zutendaal"
+   }
+  },
+  {
+   "qid": "Q695354",
+   "refnis": "71069",
+   "lat": 51.1008,
+   "lng": 5.1597,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Ham",
+    "nl": "Ham",
+    "fr": "Ham",
+    "en": "Ham"
+   }
+  },
+  {
+   "qid": "Q319792",
+   "refnis": "71070",
+   "lat": 51.05,
+   "lng": 5.283333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Heusden-Zolder",
+    "nl": "Heusden-Zolder",
+    "fr": "Heusden-Zolder",
+    "en": "Heusden-Zolder",
+    "mul": "Heusden-Zolder"
+   }
+  },
+  {
+   "qid": "Q130298677",
+   "refnis": "71071",
+   "lat": 51.078022,
+   "lng": 5.124268,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Tessenderlo-Ham",
+    "fr": "Tessenderlo-Ham",
+    "en": "Tessenderlo-Ham",
+    "mul": "Tessenderlo-Ham"
+   }
+  },
+  {
+   "qid": "Q58780",
+   "refnis": "71072",
+   "lat": 50.930481,
+   "lng": 5.338497,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hasselt",
+    "nl": "Hasselt",
+    "fr": "Hasselt",
+    "en": "Hasselt",
+    "mul": "Hasselt"
+   }
+  },
+  {
+   "qid": "Q819152",
+   "refnis": "71072",
+   "lat": 50.85,
+   "lng": 5.483333,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Hoeselt",
+    "nl": "Hoeselt",
+    "fr": "Hoeselt",
+    "en": "Hoeselt"
+   }
+  },
+  {
+   "qid": "Q889044",
+   "refnis": "72003",
+   "lat": 51.1722,
+   "lng": 5.5794,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bocholt",
+    "nl": "Bocholt",
+    "fr": "Bocholt",
+    "en": "Bocholt"
+   }
+  },
+  {
+   "qid": "Q275863",
+   "refnis": "72004",
+   "lat": 51.133333,
+   "lng": 5.583333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bree",
+    "nl": "Bree",
+    "fr": "Brée",
+    "en": "Bree",
+    "mul": "Bree"
+   }
+  },
+  {
+   "qid": "Q819133",
+   "refnis": "72018",
+   "lat": 51.145,
+   "lng": 5.7403,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Kinrooi",
+    "nl": "Kinrooi",
+    "fr": "Kinrooi",
+    "en": "Kinrooi"
+   }
+  },
+  {
+   "qid": "Q194366",
+   "refnis": "72020",
+   "lat": 51.233333,
+   "lng": 5.316667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lommel",
+    "nl": "Lommel",
+    "fr": "Lommel",
+    "en": "Lommel",
+    "mul": "Lommel"
+   }
+  },
+  {
+   "qid": "Q110989",
+   "refnis": "72021",
+   "lat": 51.101944,
+   "lng": 5.785556,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Maaseik",
+    "nl": "Maaseik",
+    "fr": "Maseyk",
+    "en": "Maaseik"
+   }
+  },
+  {
+   "qid": "Q651751",
+   "refnis": "72025A",
+   "lat": 51.22724,
+   "lng": 5.43173,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Neerpelt",
+    "nl": "Neerpelt",
+    "fr": "Neerpelt",
+    "en": "Neerpelt"
+   }
+  },
+  {
+   "qid": "Q651736",
+   "refnis": "72029A",
+   "lat": 51.2111,
+   "lng": 5.4256,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Overpelt",
+    "nl": "Overpelt",
+    "fr": "Overpelt",
+    "en": "Overpelt"
+   }
+  },
+  {
+   "qid": "Q736085",
+   "refnis": "72030",
+   "lat": 51.1328,
+   "lng": 5.4536,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Peer",
+    "nl": "Peer",
+    "fr": "Peer",
+    "en": "Peer",
+    "mul": "Peer"
+   }
+  },
+  {
+   "qid": "Q499599",
+   "refnis": "72037",
+   "lat": 51.25,
+   "lng": 5.533333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hamont-Achel",
+    "nl": "Hamont-Achel",
+    "fr": "Hamont-Achel",
+    "en": "Hamont-Achel",
+    "mul": "Hamont-Achel"
+   }
+  },
+  {
+   "qid": "Q819164",
+   "refnis": "72038",
+   "lat": 51.1411,
+   "lng": 5.3761,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hechtel-Eksel",
+    "nl": "Hechtel-Eksel",
+    "fr": "Hechtel-Eksel",
+    "en": "Hechtel-Eksel",
+    "mul": "Hechtel-Eksel"
+   }
+  },
+  {
+   "qid": "Q478795",
+   "refnis": "72039",
+   "lat": 51.033333,
+   "lng": 5.383333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Houthalen-Helchteren",
+    "nl": "Houthalen-Helchteren",
+    "fr": "Houthalen-Helchteren",
+    "en": "Houthalen-Helchteren"
+   }
+  },
+  {
+   "qid": "Q125979",
+   "refnis": "72040",
+   "lat": 51.1,
+   "lng": 5.516667,
+   "formerUntil": "2018-12-31",
+   "labels": {
+    "pl": "Meeuwen-Gruitrode",
+    "nl": "Meeuwen-Gruitrode",
+    "fr": "Meeuwen-Gruitrode",
+    "en": "Meeuwen-Gruitrode"
+   }
+  },
+  {
+   "qid": "Q581246",
+   "refnis": "72041",
+   "lat": 51.0314,
+   "lng": 5.7178,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dilsen-Stokkem",
+    "nl": "Dilsen-Stokkem",
+    "fr": "Dilsen-Stockem",
+    "en": "Dilsen-Stokkem"
+   }
+  },
+  {
+   "qid": "Q41795471",
+   "refnis": "72042",
+   "lat": 51.05,
+   "lng": 5.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Oudsbergen",
+    "nl": "Oudsbergen",
+    "fr": "Oudsbergen",
+    "en": "Oudsbergen"
+   }
+  },
+  {
+   "qid": "Q42878311",
+   "refnis": "72043",
+   "lat": 51.216667,
+   "lng": 5.416667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Pelt",
+    "nl": "Pelt",
+    "fr": "Pelt",
+    "en": "Pelt",
+    "mul": "Pelt"
+   }
+  },
+  {
+   "qid": "Q499604",
+   "refnis": "73001",
+   "lat": 50.876111,
+   "lng": 5.307778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Alken",
+    "nl": "Alken",
+    "fr": "Alken",
+    "en": "Alken",
+    "mul": "Alken"
+   }
+  },
+  {
+   "qid": "Q241898",
+   "refnis": "73006",
+   "lat": 50.866667,
+   "lng": 5.516667,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Bilzen",
+    "nl": "Bilzen",
+    "fr": "Bilzen",
+    "en": "Bilzen",
+    "mul": "Bilzen"
+   }
+  },
+  {
+   "qid": "Q499609",
+   "refnis": "73009",
+   "lat": 50.8022,
+   "lng": 5.3433,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Borgloon",
+    "nl": "Borgloon",
+    "fr": "Looz",
+    "en": "Borgloon",
+    "mul": "Borgloon"
+   }
+  },
+  {
+   "qid": "Q819162",
+   "refnis": "73022",
+   "lat": 50.7511,
+   "lng": 5.3014,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Heers",
+    "nl": "Heers",
+    "fr": "Heers",
+    "en": "Heers"
+   }
+  },
+  {
+   "qid": "Q499584",
+   "refnis": "73028",
+   "lat": 50.726518,
+   "lng": 5.426144,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herstappe",
+    "nl": "Herstappe",
+    "fr": "Herstappe",
+    "en": "Herstappe",
+    "mul": "Herstappe"
+   }
+  },
+  {
+   "qid": "Q819139",
+   "refnis": "73040",
+   "lat": 50.866667,
+   "lng": 5.383333,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Kortessem",
+    "nl": "Kortessem",
+    "fr": "Kortessem",
+    "en": "Kortessem"
+   }
+  },
+  {
+   "qid": "Q695315",
+   "refnis": "73042",
+   "lat": 50.8925,
+   "lng": 5.6497,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Lanaken",
+    "nl": "Lanaken",
+    "fr": "Lanaken",
+    "en": "Lanaken"
+   }
+  },
+  {
+   "qid": "Q736097",
+   "refnis": "73066",
+   "lat": 50.8089,
+   "lng": 5.6019,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Riemst",
+    "nl": "Riemst",
+    "fr": "Riemst",
+    "en": "Riemst"
+   }
+  },
+  {
+   "qid": "Q190113",
+   "refnis": "73083",
+   "lat": 50.7794,
+   "lng": 5.4631,
+   "formerUntil": "2024-12-31",
+   "labels": {
+    "pl": "Tongeren",
+    "nl": "Tongeren",
+    "fr": "Tongres",
+    "en": "Tongeren",
+    "mul": "Tongeren"
+   }
+  },
+  {
+   "qid": "Q119331",
+   "refnis": "73098",
+   "lat": 50.8394,
+   "lng": 5.3394,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wellen",
+    "nl": "Wellen",
+    "fr": "Wellen",
+    "en": "Wellen"
+   }
+  },
+  {
+   "qid": "Q329633",
+   "refnis": "73107",
+   "lat": 50.9967,
+   "lng": 5.7025,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Maasmechelen",
+    "nl": "Maasmechelen",
+    "fr": "Maasmechelen",
+    "en": "Maasmechelen"
+   }
+  },
+  {
+   "qid": "Q460479",
+   "refnis": "73109",
+   "lat": 50.75,
+   "lng": 5.783333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Voeren",
+    "nl": "Voeren",
+    "fr": "Fourons",
+    "en": "Voeren"
+   }
+  },
+  {
+   "qid": "Q125522830",
+   "refnis": "73110",
+   "lat": 50.860546,
+   "lng": 5.501571,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Bilzen-Hoeselt",
+    "fr": "Bilzen-Hoeselt",
+    "en": "Bilzen-Hoeselt",
+    "mul": "Bilzen-Hoeselt"
+   }
+  },
+  {
+   "qid": "Q125378487",
+   "refnis": "73111",
+   "lat": 50.793745,
+   "lng": 5.404461,
+   "formerUntil": null,
+   "labels": {
+    "nl": "Tongeren-Borgloon",
+    "fr": "Tongres-Looz",
+    "en": "Tongeren-Borgloon",
+    "mul": "Tongeren-Borgloon"
+   }
+  },
+  {
+   "qid": "Q675960",
+   "refnis": "81001",
+   "lat": 49.683611,
+   "lng": 5.816667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Arlon",
+    "nl": "Aarlen",
+    "fr": "Arlon",
+    "en": "Arlon",
+    "mul": "Arlon"
+   }
+  },
+  {
+   "qid": "Q690926",
+   "refnis": "81003",
+   "lat": 49.75,
+   "lng": 5.786667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Attert",
+    "nl": "Attert",
+    "fr": "Attert",
+    "en": "Attert",
+    "mul": "Attert"
+   }
+  },
+  {
+   "qid": "Q713088",
+   "refnis": "81004",
+   "lat": 49.566667,
+   "lng": 5.805,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Aubange",
+    "nl": "Aubange",
+    "fr": "Aubange",
+    "en": "Aubange",
+    "mul": "Aubange"
+   }
+  },
+  {
+   "qid": "Q713498",
+   "refnis": "81013",
+   "lat": 49.831111,
+   "lng": 5.737222,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Martelange",
+    "nl": "Martelange",
+    "fr": "Martelange",
+    "en": "Martelange"
+   }
+  },
+  {
+   "qid": "Q692243",
+   "refnis": "81015",
+   "lat": 49.595,
+   "lng": 5.818333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Messancy",
+    "nl": "Messancy",
+    "fr": "Messancy",
+    "en": "Messancy",
+    "mul": "Messancy"
+   }
+  },
+  {
+   "qid": "Q34021",
+   "refnis": "82003",
+   "lat": 50.004167,
+   "lng": 5.72,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bastogne",
+    "nl": "Bastenaken",
+    "fr": "Bastogne",
+    "en": "Bastogne"
+   }
+  },
+  {
+   "qid": "Q713118",
+   "refnis": "82005",
+   "lat": 50.084,
+   "lng": 5.6676,
+   "formerUntil": "2024-12-02",
+   "labels": {
+    "pl": "Bertogne",
+    "nl": "Bertogne",
+    "fr": "Bertogne",
+    "en": "Bertogne"
+   }
+  },
+  {
+   "qid": "Q713282",
+   "refnis": "82009",
+   "lat": 49.85107,
+   "lng": 5.66564,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fauvillers",
+    "nl": "Fauvillers",
+    "fr": "Fauvillers",
+    "en": "Fauvillers"
+   }
+  },
+  {
+   "qid": "Q650274",
+   "refnis": "82014",
+   "lat": 50.13202,
+   "lng": 5.78936,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Houffalize",
+    "nl": "Houffalize",
+    "fr": "Houffalize",
+    "en": "Houffalize",
+    "mul": "Houffalize"
+   }
+  },
+  {
+   "qid": "Q650172",
+   "refnis": "82032",
+   "lat": 50.286111,
+   "lng": 5.918056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vielsalm",
+    "nl": "Vielsalm",
+    "fr": "Vielsalm",
+    "en": "Vielsalm"
+   }
+  },
+  {
+   "qid": "Q713864",
+   "refnis": "82036",
+   "lat": 49.91093,
+   "lng": 5.56629,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vaux-sur-Sûre",
+    "nl": "Vaux-sur-Sûre",
+    "fr": "Vaux-sur-Sûre",
+    "en": "Vaux-sur-Sûre"
+   }
+  },
+  {
+   "qid": "Q713319",
+   "refnis": "82037",
+   "lat": 50.18737,
+   "lng": 5.94489,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gouvy",
+    "nl": "Gouvy",
+    "fr": "Gouvy",
+    "en": "Gouvy"
+   }
+  },
+  {
+   "qid": "Q713708",
+   "refnis": "82038",
+   "lat": 50.02696,
+   "lng": 5.52387,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sainte-Ode",
+    "nl": "Sainte-Ode",
+    "fr": "Sainte-Ode",
+    "en": "Sainte-Ode"
+   }
+  },
+  {
+   "qid": "Q497697",
+   "refnis": "83012",
+   "lat": 50.3522,
+   "lng": 5.4564,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Durbuy",
+    "nl": "Durbuy",
+    "fr": "Durbuy",
+    "en": "Durbuy",
+    "mul": "Durbuy"
+   }
+  },
+  {
+   "qid": "Q287813",
+   "refnis": "83013",
+   "lat": 50.291667,
+   "lng": 5.558333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Érezée",
+    "nl": "Érezée",
+    "fr": "Érezée",
+    "en": "Érezée"
+   }
+  },
+  {
+   "qid": "Q160709",
+   "refnis": "83028",
+   "lat": 50.268333,
+   "lng": 5.446667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hotton",
+    "nl": "Hotton",
+    "fr": "Hotton",
+    "en": "Hotton"
+   }
+  },
+  {
+   "qid": "Q159974",
+   "refnis": "83031",
+   "lat": 50.181667,
+   "lng": 5.575,
+   "formerUntil": null,
+   "labels": {
+    "pl": "La Roche-en-Ardenne",
+    "nl": "La Roche-en-Ardenne",
+    "fr": "La Roche-en-Ardenne",
+    "en": "La Roche-en-Ardenne"
+   }
+  },
+  {
+   "qid": "Q269908",
+   "refnis": "83034",
+   "lat": 50.2275,
+   "lng": 5.344444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Marche-en-Famenne",
+    "nl": "Marche-en-Famenne",
+    "fr": "Marche-en-Famenne",
+    "en": "Marche-en-Famenne"
+   }
+  },
+  {
+   "qid": "Q429794",
+   "refnis": "83040",
+   "lat": 50.128611,
+   "lng": 5.341944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Nassogne",
+    "nl": "Nassogne",
+    "fr": "Nassogne",
+    "en": "Nassogne"
+   }
+  },
+  {
+   "qid": "Q713615",
+   "refnis": "83044",
+   "lat": 50.234167,
+   "lng": 5.503889,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rendeux",
+    "nl": "Rendeux",
+    "fr": "Rendeux",
+    "en": "Rendeux"
+   }
+  },
+  {
+   "qid": "Q511239",
+   "refnis": "83049",
+   "lat": 50.091944,
+   "lng": 5.524444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tenneville",
+    "nl": "Tenneville",
+    "fr": "Tenneville",
+    "en": "Tenneville",
+    "mul": "Tenneville"
+   }
+  },
+  {
+   "qid": "Q713458",
+   "refnis": "83055",
+   "lat": 50.291389,
+   "lng": 5.659167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Manhay",
+    "nl": "Manhay",
+    "fr": "Manhay",
+    "en": "Manhay"
+   }
+  },
+  {
+   "qid": "Q713135",
+   "refnis": "84009",
+   "lat": 49.854167,
+   "lng": 5.253333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bertrix",
+    "nl": "Bertrix",
+    "fr": "Bertrix",
+    "en": "Bertrix",
+    "mul": "Bertrix"
+   }
+  },
+  {
+   "qid": "Q217216",
+   "refnis": "84010",
+   "lat": 49.795556,
+   "lng": 5.068056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bouillon",
+    "mul": "Bouillon"
+   }
+  },
+  {
+   "qid": "Q713189",
+   "refnis": "84016",
+   "lat": 50.021667,
+   "lng": 5.118056,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Daverdisse",
+    "nl": "Daverdisse",
+    "fr": "Daverdisse",
+    "en": "Daverdisse",
+    "mul": "Daverdisse"
+   }
+  },
+  {
+   "qid": "Q713353",
+   "refnis": "84029",
+   "lat": 49.780833,
+   "lng": 5.2375,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Herbeumont",
+    "nl": "Herbeumont",
+    "fr": "Herbeumont",
+    "en": "Herbeumont",
+    "mul": "Herbeumont"
+   }
+  },
+  {
+   "qid": "Q713404",
+   "refnis": "84033",
+   "lat": 49.8,
+   "lng": 5.5375,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Léglise",
+    "nl": "Léglise",
+    "fr": "Léglise",
+    "en": "Léglise",
+    "mul": "Léglise"
+   }
+  },
+  {
+   "qid": "Q713433",
+   "refnis": "84035",
+   "lat": 49.982778,
+   "lng": 5.257778,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Libin",
+    "nl": "Libin",
+    "fr": "Libin",
+    "en": "Libin",
+    "mul": "Libin"
+   }
+  },
+  {
+   "qid": "Q650135",
+   "refnis": "84043",
+   "lat": 49.841111,
+   "lng": 5.435278,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Neufchâteau",
+    "nl": "Neufchâteau",
+    "fr": "Neufchâteau",
+    "en": "Neufchâteau",
+    "mul": "Neufchâteau"
+   }
+  },
+  {
+   "qid": "Q696127",
+   "refnis": "84050",
+   "lat": 49.904167,
+   "lng": 5.135556,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Paliseul",
+    "nl": "Paliseul",
+    "fr": "Paliseul",
+    "en": "Paliseul",
+    "mul": "Paliseul"
+   }
+  },
+  {
+   "qid": "Q713740",
+   "refnis": "84059",
+   "lat": 50.025556,
+   "lng": 5.374167,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Saint-Hubert",
+    "nl": "Saint-Hubert",
+    "fr": "Saint-Hubert",
+    "en": "Saint-Hubert",
+    "mul": "Saint-Hubert"
+   }
+  },
+  {
+   "qid": "Q713812",
+   "refnis": "84068",
+   "lat": 50.081667,
+   "lng": 5.218333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tellin",
+    "nl": "Tellin",
+    "fr": "Tellin",
+    "en": "Tellin",
+    "mul": "Tellin"
+   }
+  },
+  {
+   "qid": "Q713911",
+   "refnis": "84075",
+   "lat": 50.081667,
+   "lng": 5.113333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Wellin",
+    "nl": "Wellin",
+    "fr": "Wellin",
+    "en": "Wellin",
+    "mul": "Wellin"
+   }
+  },
+  {
+   "qid": "Q612267",
+   "refnis": "84077",
+   "lat": 49.918056,
+   "lng": 5.376111,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Libramont-Chevigny",
+    "nl": "Libramont-Chevigny",
+    "fr": "Libramont-Chevigny",
+    "en": "Libramont-Chevigny",
+    "mul": "Libramont-Chevigny"
+   }
+  },
+  {
+   "qid": "Q713170",
+   "refnis": "85007",
+   "lat": 49.738333,
+   "lng": 5.343333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Chiny",
+    "nl": "Chiny",
+    "fr": "Chiny",
+    "en": "Chiny"
+   }
+  },
+  {
+   "qid": "Q288872",
+   "refnis": "85009",
+   "lat": 49.673889,
+   "lng": 5.601944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Étalle",
+    "nl": "Étalle",
+    "fr": "Étalle",
+    "en": "Étalle"
+   }
+  },
+  {
+   "qid": "Q713300",
+   "refnis": "85011",
+   "lat": 49.698333,
+   "lng": 5.31,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Florenville",
+    "nl": "Florenville",
+    "fr": "Florenville",
+    "en": "Florenville",
+    "mul": "Florenville"
+   }
+  },
+  {
+   "qid": "Q669134",
+   "refnis": "85024",
+   "lat": 49.605,
+   "lng": 5.48,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Meix-devant-Virton",
+    "nl": "Meix-devant-Virton",
+    "fr": "Meix-devant-Virton",
+    "en": "Meix-devant-Virton"
+   }
+  },
+  {
+   "qid": "Q713538",
+   "refnis": "85026",
+   "lat": 49.558333,
+   "lng": 5.705,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Musson",
+    "nl": "Musson",
+    "fr": "Musson",
+    "en": "Musson",
+    "mul": "Musson"
+   }
+  },
+  {
+   "qid": "Q713786",
+   "refnis": "85034",
+   "lat": 49.612778,
+   "lng": 5.657222,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Saint-Léger",
+    "nl": "Saint-Léger",
+    "fr": "Saint-Léger",
+    "en": "Saint-Léger",
+    "mul": "Saint-Léger"
+   }
+  },
+  {
+   "qid": "Q713845",
+   "refnis": "85039",
+   "lat": 49.682778,
+   "lng": 5.514444,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Tintigny",
+    "nl": "Tintigny",
+    "fr": "Tintigny",
+    "en": "Tintigny"
+   }
+  },
+  {
+   "qid": "Q456495",
+   "refnis": "85045",
+   "lat": 49.5675,
+   "lng": 5.5325,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Virton",
+    "nl": "Virton",
+    "fr": "Virton",
+    "en": "Virton"
+   }
+  },
+  {
+   "qid": "Q713334",
+   "refnis": "85046",
+   "lat": 49.730278,
+   "lng": 5.646389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Habay",
+    "nl": "Habay",
+    "fr": "Habay",
+    "en": "Habay",
+    "mul": "Habay"
+   }
+  },
+  {
+   "qid": "Q713677",
+   "refnis": "85047",
+   "lat": 49.538333,
+   "lng": 5.490833,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rouvroy",
+    "nl": "Rouvroy",
+    "fr": "Rouvroy",
+    "en": "Rouvroy"
+   }
+  },
+  {
+   "qid": "Q545889",
+   "refnis": "91005",
+   "lat": 50.30984,
+   "lng": 4.87715,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Anhée",
+    "nl": "Anhée",
+    "fr": "Anhée",
+    "en": "Anhée"
+   }
+  },
+  {
+   "qid": "Q329621",
+   "refnis": "91013",
+   "lat": 50.1089,
+   "lng": 4.9561,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Beauraing",
+    "nl": "Beauraing",
+    "fr": "Beauraing",
+    "en": "Beauraing",
+    "mul": "Beauraing"
+   }
+  },
+  {
+   "qid": "Q715371",
+   "refnis": "91015",
+   "lat": 49.941111,
+   "lng": 5.016389,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Bièvre",
+    "nl": "Bièvre",
+    "fr": "Bièvre",
+    "en": "Bièvre",
+    "mul": "Bièvre"
+   }
+  },
+  {
+   "qid": "Q456490",
+   "refnis": "91030",
+   "lat": 50.2964,
+   "lng": 5.1003,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ciney",
+    "nl": "Ciney",
+    "fr": "Ciney",
+    "en": "Ciney"
+   }
+  },
+  {
+   "qid": "Q108247",
+   "refnis": "91034",
+   "lat": 50.256389,
+   "lng": 4.913611,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Dinant",
+    "nl": "Dinant",
+    "fr": "Dinant",
+    "en": "Dinant",
+    "mul": "Dinant"
+   }
+  },
+  {
+   "qid": "Q241069",
+   "refnis": "91054",
+   "lat": 49.980556,
+   "lng": 4.936944,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gedinne",
+    "nl": "Gedinne",
+    "fr": "Gedinne",
+    "en": "Gedinne",
+    "mul": "Gedinne"
+   }
+  },
+  {
+   "qid": "Q696133",
+   "refnis": "91059",
+   "lat": 50.333333,
+   "lng": 5.133333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hamois",
+    "nl": "Hamois",
+    "fr": "Hamois",
+    "en": "Hamois"
+   }
+  },
+  {
+   "qid": "Q720709",
+   "refnis": "91064",
+   "lat": 50.383333,
+   "lng": 5.25,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Havelange",
+    "nl": "Havelange",
+    "fr": "Havelange",
+    "en": "Havelange"
+   }
+  },
+  {
+   "qid": "Q695390",
+   "refnis": "91072",
+   "lat": 50.1844,
+   "lng": 5.0086,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Houyet",
+    "nl": "Houyet",
+    "fr": "Houyet",
+    "en": "Houyet",
+    "mul": "Houyet"
+   }
+  },
+  {
+   "qid": "Q695349",
+   "refnis": "91103",
+   "lat": 50.25,
+   "lng": 4.833333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Onhaye",
+    "nl": "Onhaye",
+    "fr": "Onhaye",
+    "en": "Onhaye"
+   }
+  },
+  {
+   "qid": "Q497764",
+   "refnis": "91114",
+   "lat": 50.159044,
+   "lng": 5.22185,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Rochefort",
+    "nl": "Rochefort",
+    "fr": "Rochefort",
+    "en": "Rochefort",
+    "mul": "Rochefort"
+   }
+  },
+  {
+   "qid": "Q721342",
+   "refnis": "91120",
+   "lat": 50.333333,
+   "lng": 5.366667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Somme-Leuze",
+    "nl": "Somme-Leuze",
+    "fr": "Somme-Leuze",
+    "en": "Somme-Leuze"
+   }
+  },
+  {
+   "qid": "Q650163",
+   "refnis": "91141",
+   "lat": 50.3258,
+   "lng": 4.8779,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Yvoir",
+    "nl": "Yvoir",
+    "fr": "Yvoir",
+    "en": "Yvoir"
+   }
+  },
+  {
+   "qid": "Q514641",
+   "refnis": "91142",
+   "lat": 50.216667,
+   "lng": 4.833333,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Hastière",
+    "nl": "Hastière",
+    "fr": "Hastière",
+    "en": "Hastière",
+    "mul": "Hastière"
+   }
+  },
+  {
+   "qid": "Q650206",
+   "refnis": "91143",
+   "lat": 49.872167,
+   "lng": 4.931667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Vresse-sur-Semois",
+    "nl": "Vresse-sur-Semois",
+    "fr": "Vresse-sur-Semois",
+    "en": "Vresse-sur-Semois",
+    "mul": "Vresse-sur-Semois"
+   }
+  },
+  {
+   "qid": "Q333466",
+   "refnis": "92003",
+   "lat": 50.483333,
+   "lng": 5.1,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Andenne",
+    "nl": "Andenne",
+    "fr": "Andenne",
+    "en": "Andenne",
+    "mul": "Andenne"
+   }
+  },
+  {
+   "qid": "Q715246",
+   "refnis": "92006",
+   "lat": 50.3711,
+   "lng": 5.0231,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Assesse",
+    "nl": "Assesse",
+    "fr": "Assesse",
+    "en": "Assesse"
+   }
+  },
+  {
+   "qid": "Q274522",
+   "refnis": "92035",
+   "lat": 50.583333,
+   "lng": 4.916667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Éghezée",
+    "nl": "Éghezée",
+    "fr": "Éghezée",
+    "en": "Éghezée"
+   }
+  },
+  {
+   "qid": "Q578583",
+   "refnis": "92045",
+   "lat": 50.436667,
+   "lng": 4.76,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Floreffe",
+    "nl": "Floreffe",
+    "fr": "Floreffe",
+    "en": "Floreffe"
+   }
+  },
+  {
+   "qid": "Q720478",
+   "refnis": "92048",
+   "lat": 50.4,
+   "lng": 4.7,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fosses-la-Ville",
+    "nl": "Fosses-la-Ville",
+    "fr": "Fosses-la-Ville",
+    "en": "Fosses-la-Ville",
+    "mul": "Fosses-la-Ville"
+   }
+  },
+  {
+   "qid": "Q388879",
+   "refnis": "92054",
+   "lat": 50.4017,
+   "lng": 5.0767,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gesves",
+    "nl": "Gesves",
+    "fr": "Gesves",
+    "en": "Gesves"
+   }
+  },
+  {
+   "qid": "Q118769",
+   "refnis": "92087",
+   "lat": 50.3192,
+   "lng": 4.6569,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Mettet",
+    "nl": "Mettet",
+    "fr": "Mettet",
+    "en": "Mettet",
+    "mul": "Mettet"
+   }
+  },
+  {
+   "qid": "Q134121",
+   "refnis": "92094",
+   "lat": 50.466667,
+   "lng": 4.866667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Namur",
+    "nl": "Namen",
+    "fr": "Namur",
+    "en": "Namur"
+   }
+  },
+  {
+   "qid": "Q721090",
+   "refnis": "92097",
+   "lat": 50.4353,
+   "lng": 5.1217,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Ohey",
+    "nl": "Ohey",
+    "fr": "Ohey",
+    "en": "Ohey"
+   }
+  },
+  {
+   "qid": "Q696940",
+   "refnis": "92101",
+   "lat": 50.3769,
+   "lng": 4.87,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Profondeville",
+    "nl": "Profondeville",
+    "fr": "Profondeville",
+    "en": "Profondeville",
+    "mul": "Profondeville"
+   }
+  },
+  {
+   "qid": "Q650226",
+   "refnis": "92114",
+   "lat": 50.516667,
+   "lng": 4.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sombreffe",
+    "nl": "Sombreffe",
+    "fr": "Sombreffe",
+    "en": "Sombreffe",
+    "mul": "Sombreffe"
+   }
+  },
+  {
+   "qid": "Q650185",
+   "refnis": "92137",
+   "lat": 50.45,
+   "lng": 4.6,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Sambreville",
+    "nl": "Sambreville",
+    "fr": "Sambreville",
+    "en": "Sambreville",
+    "mul": "Sambreville"
+   }
+  },
+  {
+   "qid": "Q696104",
+   "refnis": "92138",
+   "lat": 50.5536,
+   "lng": 4.9856,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Fernelmont",
+    "nl": "Fernelmont",
+    "fr": "Fernelmont",
+    "en": "Fernelmont",
+    "mul": "Fernelmont"
+   }
+  },
+  {
+   "qid": "Q720791",
+   "refnis": "92140",
+   "lat": 50.466667,
+   "lng": 4.666667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Jemeppe-sur-Sambre",
+    "nl": "Jemeppe-sur-Sambre",
+    "fr": "Jemeppe-sur-Sambre",
+    "en": "Jemeppe-sur-Sambre",
+    "mul": "Jemeppe-sur-Sambre"
+   }
+  },
+  {
+   "qid": "Q715422",
+   "refnis": "92141",
+   "lat": 50.5,
+   "lng": 4.8,
+   "formerUntil": null,
+   "labels": {
+    "pl": "La Bruyère",
+    "nl": "La Bruyère",
+    "fr": "La Bruyère",
+    "en": "La Bruyère",
+    "mul": "La Bruyère"
+   }
+  },
+  {
+   "qid": "Q223927",
+   "refnis": "92142",
+   "lat": 50.5594,
+   "lng": 4.6922,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Gembloux",
+    "nl": "Gembloers",
+    "fr": "Gembloux",
+    "en": "Gembloux",
+    "mul": "Gembloux"
+   }
+  },
+  {
+   "qid": "Q715474",
+   "refnis": "93010",
+   "lat": 50.166667,
+   "lng": 4.416667,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Cerfontaine",
+    "nl": "Cerfontaine",
+    "fr": "Cerfontaine",
+    "en": "Cerfontaine",
+    "mul": "Cerfontaine"
+   }
+  },
+  {
+   "qid": "Q326771",
+   "refnis": "93014",
+   "lat": 50.0519,
+   "lng": 4.4961,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Couvin",
+    "nl": "Couvin",
+    "fr": "Couvin",
+    "en": "Couvin"
+   }
+  },
+  {
+   "qid": "Q720275",
+   "refnis": "93018",
+   "lat": 50.133333,
+   "lng": 4.75,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Doische",
+    "nl": "Doische",
+    "fr": "Doische",
+    "en": "Doische"
+   }
+  },
+  {
+   "qid": "Q720429",
+   "refnis": "93022",
+   "lat": 50.2514,
+   "lng": 4.6044,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Florennes",
+    "nl": "Florennes",
+    "fr": "Florennes",
+    "en": "Florennes",
+    "mul": "Florennes"
+   }
+  },
+  {
+   "qid": "Q650239",
+   "refnis": "93056",
+   "lat": 50.1958,
+   "lng": 4.5431,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Philippeville",
+    "nl": "Philippeville",
+    "fr": "Philippeville",
+    "en": "Philippeville",
+    "mul": "Philippeville"
+   }
+  },
+  {
+   "qid": "Q497565",
+   "refnis": "93088",
+   "lat": 50.2519,
+   "lng": 4.4322,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Walcourt",
+    "nl": "Walcourt",
+    "fr": "Walcourt",
+    "en": "Walcourt",
+    "mul": "Walcourt"
+   }
+  },
+  {
+   "qid": "Q650261",
+   "refnis": "93090",
+   "lat": 50.073889,
+   "lng": 4.553889,
+   "formerUntil": null,
+   "labels": {
+    "pl": "Viroinval",
+    "nl": "Viroinval",
+    "fr": "Viroinval",
+    "en": "Viroinval",
+    "mul": "Viroinval"
+   }
+  }
+ ]
+}

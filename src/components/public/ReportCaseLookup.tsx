@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { lookupReportCase } from '@/lib/actions/content-reports';
-import type { ReportCaseView, ReportStatus } from '@/lib/content-reports/case';
+import type { ReportCaseAppeal, ReportCaseView, ReportStatus } from '@/lib/content-reports/case';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import {
@@ -121,6 +121,27 @@ export function ReportCaseLookup(): React.JSX.Element {
         : serverError
           ? tRoot(toUserMessageKey(serverError))
           : null;
+
+  const renderAppeal = (appeal: ReportCaseAppeal, testId: string) => (
+    <div className="space-y-1 rounded-md bg-soft p-3 text-sm" data-testid={testId}>
+      <h3 className="font-semibold text-foreground">{t('appealStatusTitle', { reference: appeal.reference })}</h3>
+      <p className="text-muted-foreground">
+        {t(APPEAL_STATUS_KEY[appeal.status] ?? 'appealStatusPending', {
+          date: formatDate(
+            appeal.status === 'pending'
+              ? (appeal.dueAt ?? appeal.submittedAt)
+              : (appeal.decidedAt ?? appeal.submittedAt),
+          ),
+        })}
+      </p>
+      {appeal.reasoning ? (
+        <p className="break-words text-foreground">
+          <span className="text-xs text-muted-foreground">{t('appealReasoning')}: </span>
+          {appeal.reasoning}
+        </p>
+      ) : null}
+    </div>
+  );
 
   const caseError = errors.caseNumber?.message ? tRoot(String(errors.caseNumber.message)) : null;
   const codeError = errors.accessCode?.message ? tRoot(String(errors.accessCode.message)) : null;
@@ -234,26 +255,7 @@ export function ReportCaseLookup(): React.JSX.Element {
             ) : null}
           </dl>
           {report.appeal ? (
-            <div className="space-y-1 rounded-md bg-soft p-3 text-sm" data-testid="report-case-appeal">
-              <h3 className="font-semibold text-foreground">
-                {t('appealStatusTitle', { reference: report.appeal.reference })}
-              </h3>
-              <p className="text-muted-foreground">
-                {t(APPEAL_STATUS_KEY[report.appeal.status] ?? 'appealStatusPending', {
-                  date: formatDate(
-                    report.appeal.status === 'pending'
-                      ? (report.appeal.dueAt ?? report.appeal.submittedAt)
-                      : (report.appeal.decidedAt ?? report.appeal.submittedAt),
-                  ),
-                })}
-              </p>
-              {report.appeal.reasoning ? (
-                <p className="break-words text-foreground">
-                  <span className="text-xs text-muted-foreground">{t('appealReasoning')}: </span>
-                  {report.appeal.reasoning}
-                </p>
-              ) : null}
-            </div>
+            renderAppeal(report.appeal, 'report-case-appeal')
           ) : report.appealState === 'OK' ? (
             <div className="space-y-3" data-testid="report-case-appeal-form">
               <h3 className="text-sm font-semibold text-foreground">{t('appealTitle')}</h3>
@@ -278,6 +280,42 @@ export function ReportCaseLookup(): React.JSX.Element {
             </div>
           ) : report.appealState === 'APPEAL_WINDOW_CLOSED' ? (
             <p className="text-sm text-muted-foreground">{t('appealWindowClosed')}</p>
+          ) : null}
+          {report.restoration ? (
+            <div className="space-y-3" data-testid="report-case-restoration">
+              <h3 className="text-sm font-semibold text-foreground">{t('restorationTitle')}</h3>
+              <p className="text-sm text-muted-foreground">
+                {t('restorationInfo', { date: formatDate(report.restoration.restoredAt) })}
+              </p>
+              {report.restoration.appeal ? (
+                renderAppeal(report.restoration.appeal, 'report-case-restoration-appeal')
+              ) : report.restoration.appealState === 'OK' ? (
+                <div className="space-y-3" data-testid="report-case-restoration-appeal-form">
+                  <h4 className="text-sm font-semibold text-foreground">{t('restorationAppealTitle')}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {t('restorationAppealIntro')}{' '}
+                    {report.restoration.appealDeadline
+                      ? t('appealDeadline', { date: formatDate(report.restoration.appealDeadline) })
+                      : t('restorationAppealDeadlineNotStarted')}
+                  </p>
+                  <AppealForm
+                    target={{
+                      kind: 'case',
+                      caseNumber: getValues('caseNumber'),
+                      accessCode: getValues('accessCode'),
+                      restoration: true,
+                    }}
+                    messages="contentReport"
+                    onSubmitted={() => undefined}
+                  />
+                  <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+                    {t('appealLegalPlaceholder')}
+                  </p>
+                </div>
+              ) : report.restoration.appealState === 'APPEAL_WINDOW_CLOSED' ? (
+                <p className="text-sm text-muted-foreground">{t('restorationAppealWindowClosed')}</p>
+              ) : null}
+            </div>
           ) : null}
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">{t('historyTitle')}</h3>

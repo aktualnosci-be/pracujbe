@@ -83,6 +83,7 @@ export default async function AdminAppealsPage({ params }: { params: Promise<{ l
             </h3>
             <div className="flex flex-wrap gap-1.5">
               <span className={TAG}>{t(appeal.role === 'author' ? 'appealRoleAuthor' : 'appealRoleReporter')}</span>
+              {appeal.restoration ? <span className={TAG}>{t('appealTargetRestoration')}</span> : null}
               <span className={TAG}>{t(STATUS_KEY[appeal.status] ?? 'appealStatusPending')}</span>
               {overdue ? (
                 <span className={cn(TAG, 'bg-error/10 text-error-text')}>{t('appealOverdue')}</span>
@@ -107,6 +108,14 @@ export default async function AdminAppealsPage({ params }: { params: Promise<{ l
               </p>
               {appeal.decision.facts ? (
                 <p className="break-words text-foreground">{appeal.decision.facts}</p>
+              ) : null}
+              {appeal.restoration ? (
+                <p className="break-words text-foreground">
+                  {t('appealRestorationSummary', {
+                    date: formatDate(appeal.restoration.restoredAt),
+                    reason: appeal.restoration.reason ?? '—',
+                  })}
+                </p>
               ) : null}
             </div>
             {appeal.grounds ? (
