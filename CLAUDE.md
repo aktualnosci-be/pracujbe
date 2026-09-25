@@ -571,9 +571,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   godziny, zmiany; escapowany); Article z `image`, `dateModified` (`guides.ts` `updatedAt`) i logo
   wydawcy. Obraz marki `/og.png` przez `brandShareImageUrl` na wszystkich publicznych stronach z
   własnym `openGraph` (#116/#182; strażnik `tests/unit/structured-data.test.ts`).
-  `hiringOrganization.sameAs`/`logo` (migracja `0108`): `get_public_job` zwraca `company_website`/
+  `hiringOrganization.sameAs`/`logo` (migracja `0109`): `get_public_job` zwraca `company_website`/
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
-  JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL108 (kontrole ujemne:
+  JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL109 (kontrole ujemne:
   bez walidacji / bez bramki weryfikacji link wycieka). **Otwarte:** edycja strony i logo firmy
   w panelu pracodawcy (dziś pola tylko w schemacie).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)

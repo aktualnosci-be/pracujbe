@@ -94,9 +94,9 @@ export interface JobDetail extends JobListItem {
   companyDescription: string;
   /** Data wygaśnięcia oferty (ISO) — do JSON-LD validThrough (P1-12). */
   expiresAt?: string;
-  /** Strona firmy (https, tylko firma verified — 0108) — JSON-LD `hiringOrganization.sameAs`. */
+  /** Strona firmy (https, tylko firma verified — 0109) — JSON-LD `hiringOrganization.sameAs`. */
   companyWebsite?: string;
-  /** Logo firmy (https, tylko firma verified — 0108) — JSON-LD `hiringOrganization.logo`. */
+  /** Logo firmy (https, tylko firma verified — 0109) — JSON-LD `hiringOrganization.logo`. */
   companyLogoUrl?: string;
   /** Język treści (tytuł, opis, listy) — może różnić się od języka strony; brak = nieznany (#301). */
   contentLocale?: Locale;

@@ -9000,7 +9000,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- OL108. Linki firmy w publicznym detalu oferty (0108): get_public_job zwraca
+-- OL109. Linki firmy w publicznym detalu oferty (0109): get_public_job zwraca
 --        company_website / company_logo_url tylko dla firmy verified i tylko jako
 --        bezwzględny https (public_https_url). Kontrole ujemne w transakcjach cofanych:
 --        bez walidacji zły URL wycieka, bez bramki weryfikacji wycieka link firmy
@@ -9010,7 +9010,7 @@ reset role;
 \set OLB 'c1080000-0000-0000-0000-0000000000a2'
 \set OLU 'c1080000-0000-0000-0000-0000000000a3'
 \set OLN 'c1080000-0000-0000-0000-0000000000a4'
-\echo '--- OL108 company links in get_public_job ---'
+\echo '--- OL109 company links in get_public_job ---'
 reset role; reset app.current_uid;
 insert into public.companies(id,name,status,is_demo,website,logo_url) values
   (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
@@ -9023,61 +9023,61 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   ('c1080000-0000-0000-0000-0000000000b3',:'OLU','ol-unverified','Magazynier bez weryfikacji','warehouse','permanent','Gent','Flandria','active','pl'),
   ('c1080000-0000-0000-0000-0000000000b4',:'OLN','ol-none','Magazynier bez linków','warehouse','permanent','Gent','Flandria','active','pl');
 
--- OL108-1: walidator — tylko bezwzględny https z hostem; reszta null.
-select pg_temp.assert(public.public_https_url(u) is null, 'OL108-1 odrzucony adres: ' || coalesce(u, '<null>'))
+-- OL109-1: walidator — tylko bezwzględny https z hostem; reszta null.
+select pg_temp.assert(public.public_https_url(u) is null, 'OL109-1 odrzucony adres: ' || coalesce(u, '<null>'))
 from unnest(array[null, '', '   ', 'http://a.example', 'javascript:alert(1)', '//a.example',
                   'https://localhost', 'https://a.example/x y', 'https://a.example/"><script>',
                   'https://user:pw@a.example', 'https://a.example/' || repeat('x', 2048),
                   'HTTPS://A.EXAMPLE', 'data:text/html,x', 'https://-a.example']) u;
 select pg_temp.assert(public.public_https_url(' https://a.example/logo.png?v=2#x ') = 'https://a.example/logo.png?v=2#x',
-  'OL108-1b poprawny https (obcięte spacje)');
+  'OL109-1b poprawny https (obcięte spacje)');
 select pg_temp.assert(public.public_https_url('https://a.example:8443') = 'https://a.example:8443',
-  'OL108-1c https z portem');
+  'OL109-1c https z portem');
 
--- OL108-2: gość — poprawne linki firmy verified; złe i puste → null; firma niezweryfikowana → brak wiersza.
+-- OL109-2: gość — poprawne linki firmy verified; złe i puste → null; firma niezweryfikowana → brak wiersza.
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select company_website = 'https://www.linki.example/o-nas?x=1'
       and company_logo_url = 'https://cdn.linki.example/logo.png'
    from public.get_public_job('ol-ok', 'pl')),
-  'OL108-2 firma verified: website i logo');
+  'OL109-2 firma verified: website i logo');
 select pg_temp.assert(
   (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl')),
-  'OL108-2b http / javascript: → brak pól');
+  'OL109-2b http / javascript: → brak pól');
 select pg_temp.assert(
   (select company_website is null and company_logo_url is null from public.get_public_job('ol-none', 'pl')),
-  'OL108-2c brak / pusty adres → brak pól');
+  'OL109-2c brak / pusty adres → brak pól');
 select pg_temp.assert((select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
-  'OL108-2d firma niezweryfikowana → brak oferty (i linków)');
+  'OL109-2d firma niezweryfikowana → brak oferty (i linków)');
 reset role;
 
--- OL108-3: kontrole ujemne (zmiana definicji w transakcji cofanej).
+-- OL109-3: kontrole ujemne (zmiana definicji w transakcji cofanej).
 create function pg_temp.ol_patch(p_from text, p_to text) returns void language plpgsql as $$
 declare
   v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
 begin
   if position(p_from in v_def) = 0 then
-    raise exception 'ASSERT FAILED: OL108-3 fragment „%” nie występuje w get_public_job', p_from;
+    raise exception 'ASSERT FAILED: OL109-3 fragment „%” nie występuje w get_public_job', p_from;
   end if;
   execute replace(v_def, p_from, p_to);
 end $$;
--- Bez walidacji adresu zły URL trafia do wyniku (więc OL108-2b wykrywa regresję).
+-- Bez walidacji adresu zły URL trafia do wyniku (więc OL109-2b wykrywa regresję).
 begin; select pg_temp.ol_patch('public.public_https_url(c.website)', 'c.website');
 select pg_temp.assert((select company_website from public.get_public_job('ol-bad', 'pl')) = 'http://zle.example',
-  'OL108-3 bez walidacji wycieka http'); rollback;
+  'OL109-3 bez walidacji wycieka http'); rollback;
 -- Po zdjęciu filtra wierszy bramka kolumny nadal ukrywa link firmy niezweryfikowanej…
 begin; select pg_temp.ol_patch(E'and c.status = ''verified''\n', '');
 select pg_temp.assert(
   (select company_website is null and company_logo_url is null from public.get_public_job('ol-unverified', 'pl')),
-  'OL108-3b bramka kolumny: niezweryfikowana firma bez linków');
--- …a bez niej link wycieka (asercja OL108-3b wykrywa regresję).
+  'OL109-3b bramka kolumny: niezweryfikowana firma bez linków');
+-- …a bez niej link wycieka (asercja OL109-3b wykrywa regresję).
 select pg_temp.ol_patch('case when c.status = ''verified'' then public.public_https_url(c.website)',
                         'case when true then public.public_https_url(c.website)');
 select pg_temp.assert((select company_website from public.get_public_job('ol-unverified', 'pl')) = 'https://bez.example',
-  'OL108-3c bez bramki weryfikacji wycieka link'); rollback;
+  'OL109-3c bez bramki weryfikacji wycieka link'); rollback;
 select pg_temp.assert(
   (select company_website is null and company_logo_url is null from public.get_public_job('ol-bad', 'pl'))
   and (select count(*) from public.get_public_job('ol-unverified', 'pl')) = 0,
-  'OL108-3d po cofnięciu definicja wróciła');
+  'OL109-3d po cofnięciu definicja wróciła');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
