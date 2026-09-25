@@ -71,6 +71,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | Zmienna | Uwagi |
 |---|---|
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
+| `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance` — tylko po decyzji właściciela o terminach (#40) |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
 | `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_META_PIXEL_ID` | tracking wyłącznie po zgodzie (Invariant #7) |
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry bez DSN do decyzji o DPA/regionie (#502) |
