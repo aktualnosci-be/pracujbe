@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 
-import { env, isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
+import { env } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
 
 /**
@@ -8,7 +11,7 @@ import { captureError } from '@/lib/sentry';
  *
  * Tylko POST z formularza tej samej witryny: cookies sesji są `SameSite=Lax`, więc obca strona
  * nie wyśle żądania z sesją; dodatkowo `Origin` musi wskazywać ten serwis. Dane buduje RPC
- * `export_my_data` (0105) pod sesją kandydata — zakres, pominięcie danych innych osób, limit
+ * `export_my_data` (0105) pod sesją kandydata (#25: `withPortalTransaction`) — zakres, pominięcie danych innych osób, limit
  * 10 eksportów na dobę i ślad wniosku żyją w bazie. Odpowiedź `no-store` (nie trafia do cache
  * przeglądarki ani pośredników); treść nie jest logowana. Błędy bez technikaliów (Invariant #8).
  *
@@ -57,26 +60,22 @@ function failure(error: 'forbidden' | 'unauthorized' | 'rate_limited' | 'unavail
 
 export async function POST(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return failure('forbidden', 403);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return download({ format: 'pracujbe-export/1', demo: true, generatedAt: new Date().toISOString() });
   }
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('export_my_data');
-    if (error) {
-      const message = error.message ?? '';
-      if (message.includes('RATE_LIMITED')) return failure('rate_limited', 429);
-      if (message.includes('PERMISSION_DENIED') || message.includes('UNAUTHENTICATED') || message.includes('JWT')) {
-        return failure('unauthorized', 401);
-      }
-      captureError(error, { area: 'account.export' });
-      return failure('unavailable', 503);
-    }
+    const me = await getPortalIdentity();
+    if (!me) return failure('unauthorized', 401);
+    const data = await withPortalTransaction(me, (tx) => rpc(tx, 'export_my_data'));
     if (typeof data !== 'object' || data === null) return failure('unavailable', 503);
     return download(data);
   } catch (error) {
+    const message = databaseErrorMessage(error);
+    if (isDatabaseError(error) && message.includes('RATE_LIMITED')) return failure('rate_limited', 429);
+    if (isDatabaseError(error) && (message.includes('PERMISSION_DENIED') || message.includes('UNAUTHENTICATED'))) {
+      return failure('unauthorized', 401);
+    }
     captureError(error, { area: 'account.export' });
     return failure('unavailable', 503);
   }

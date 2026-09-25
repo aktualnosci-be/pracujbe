@@ -5,10 +5,12 @@ import { z } from 'zod/v3';
 import { isLocale } from '@/i18n/routing';
 import { getOlderThreadMessages, type ThreadCursor } from '@/lib/data/messages';
 import { toMessageViews, type ThreadMessageView } from '@/lib/messaging/thread-view';
-import { createServerClient } from '@/lib/supabase/server';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
-import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { captureError } from '@/lib/sentry';
 import { messageBodySchema } from '@/lib/validation/message';
 
 /**
@@ -16,9 +18,10 @@ import { messageBodySchema } from '@/lib/validation/message';
  * Cała logika domenowa (walidacja relacji/uczestnictwa, tworzenie konwersacji z obiema
  * stronami, powiadomienia in-app, kolejka e-mail w języku ODBIORCY) jest w DB (SECURITY
  * DEFINER). Tu: walidacja wejścia + rate limit + mapowanie błędu na kod użytkowy (bez
- * technikaliów — Invariant #8).
+ * technikaliów — Invariant #8). RPC wołane POD SESJĄ (`withPortalTransaction`, #25) —
+ * strona firmowa rozmowy (aktywny członek recruiter+) i uczestnictwo ustala baza.
  *
- * Tryb demo (brak konfiguracji Supabase) zwraca sukces-atrapę, aby UI działało bez backendu.
+ * Tryb demo (brak konfiguracji bazy/sesji) zwraca sukces-atrapę, aby UI działało bez backendu.
  */
 
 export type MsgResult = { ok: true; id: string } | { ok: false; error: ErrorCode };
@@ -39,6 +42,13 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
+/** Błąd bazy → kod użytkowy; inny wyjątek (sieć, konfiguracja) → Sentry + INTERNAL. */
+function mapFailure(error: unknown, area: string): ErrorCode {
+  if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
+  captureError(error, { area });
+  return 'INTERNAL';
+}
+
 /**
  * Otwiera (lub zwraca istniejącą) konwersację powiązaną z aplikacją LUB propozycją.
  * Dokładnie jedno z pól musi być podane — RPC dodatkowo waliduje, że wywołujący jest stroną.
@@ -55,16 +65,23 @@ export async function openConversation(input: {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, id: 'demo' };
+  if (!isPortalDataConfigured()) return { ok: true, id: 'demo' };
 
-  const supabase = await createServerClient();
-  const { data, error } = await supabase.rpc('get_or_create_conversation', {
-    p_application_id: applicationId ?? null,
-    p_offer_id: offerId ?? null,
-  });
-
-  if (error) return { ok: false, error: mapPgError(error.message) };
-  return { ok: true, id: String(data) };
+  try {
+    // Bez sesji RPC i tak odmawia (UNAUTHENTICATED → PERMISSION_DENIED) — nie pytamy bazy.
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'get_or_create_conversation', {
+        p_application_id: applicationId ?? null,
+        p_offer_id: offerId ?? null,
+      }),
+    );
+    if (typeof data !== 'string' || !data) return { ok: false, error: 'INTERNAL' };
+    return { ok: true, id: data };
+  } catch (error) {
+    return { ok: false, error: mapFailure(error, 'messages.openConversation') };
+  }
 }
 
 const clientMessageIdSchema = z.string().uuid();
@@ -85,35 +102,45 @@ export async function sendMessage(
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  if (!isSupabaseConfigured()) return { ok: true, id: 'demo' };
+  if (!isPortalDataConfigured()) return { ok: true, id: 'demo' };
 
   // Rate limit per IP (60 wiadomości / godz) — ochrona przed spamowaniem konwersacji.
   if (!(await checkRateLimit('message', { max: 60, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
 
-  const supabase = await createServerClient();
-  const { data, error } = await supabase.rpc('send_message', {
-    p_conversation_id: conversationId,
-    p_body: parsed.data,
-    p_client_message_id: clientMessageId,
-  });
-
-  if (error) return { ok: false, error: mapPgError(error.message) };
-  return { ok: true, id: String(data) };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // Ten sam `client_message_id` przy ponowieniu = ta sama wiadomość (idempotencja w RPC, 0075).
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'send_message', {
+        p_conversation_id: conversationId,
+        p_body: parsed.data,
+        p_client_message_id: clientMessageId,
+      }),
+    );
+    if (typeof data !== 'string' || !data) return { ok: false, error: 'INTERNAL' };
+    return { ok: true, id: data };
+  } catch (error) {
+    return { ok: false, error: mapFailure(error, 'messages.sendMessage') };
+  }
 }
 
 /** Oznacza konwersację jako przeczytaną (ustawia `last_read_at`, wygasza powiadomienia). */
 export async function markConversationRead(conversationId: string): Promise<OkResult> {
-  if (!isSupabaseConfigured()) return { ok: true };
+  if (!isPortalDataConfigured()) return { ok: true };
 
-  const supabase = await createServerClient();
-  const { error } = await supabase.rpc('mark_conversation_read', {
-    p_conversation_id: conversationId,
-  });
-
-  if (error) return { ok: false, error: mapPgError(error.message) };
-  return { ok: true };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'mark_conversation_read', { p_conversation_id: conversationId }),
+    );
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: mapFailure(error, 'messages.markConversationRead') };
+  }
 }
 
 const olderMessagesInput = z.object({

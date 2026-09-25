@@ -1,10 +1,10 @@
 /**
  * Warstwa dostępu do danych POWIADOMIEŃ in-app — Pracuj.be (Etap 6).
  *
- * Strategia (spójna z `@/lib/data/candidate`): gdy `isSupabaseConfigured()` — powiadomienia
- * czytane są POD SESJĄ użytkownika (`createServerClient`, RLS = właściciel powiadomienia,
- * `notifications.profile_id = auth.uid()`); bez env — 3 pozycje DEMO (build i UX działają
- * bez backendu).
+ * Strategia (spójna z `@/lib/data/candidate`): gdy backend jest skonfigurowany
+ * (`isPortalDataConfigured()`) — powiadomienia czytane są POD SESJĄ użytkownika
+ * (`withPortalTransaction`, RLS = właściciel powiadomienia, `notifications.profile_id =
+ * auth.uid()`); bez env — 3 pozycje DEMO (build i UX działają bez backendu).
  *
  * INVARIANT #1/#2: treść powiadomienia jest lokalizowana w APLIKACJI (nie trzymamy tekstu
  * w DB) — tytuł wyznaczamy z `type` przez klucze i18n (`notifications.item*`), a względny
@@ -17,7 +17,8 @@
 
 import { getTranslations } from 'next-intl/server';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryCount, queryRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 
@@ -252,47 +253,33 @@ export async function getNotifications(
   const resolvedLocale = toLocale(locale);
   const t = await getTranslations({ locale: resolvedLocale, namespace: 'notifications' });
 
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return demoNotifications(t, resolvedLocale, demoRole);
   }
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) throw authError;
-    const userId = user?.id ?? null;
-    if (!userId) return { status: 'ready', items: [], unread: 0 };
-
-    const [profileRes, notifRes, unreadRes] = await Promise.all([
-      supabase.from('profiles').select('role').eq('id', userId).maybeSingle(),
-      supabase
-        .from('notifications')
-        .select('id, type, data, entity_type, entity_id, read_at, created_at')
-        .eq('profile_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20),
-      // Licznik nieprzeczytanych osobnym zapytaniem count — NIE z pobranej listy (limit 20),
-      // która zaniżałaby wynik przy >20 nieprzeczytanych.
-      supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('profile_id', userId)
-        .is('read_at', null),
-    ]);
-    if (profileRes.error) throw profileRes.error;
-    if (notifRes.error) throw notifRes.error;
-    if (unreadRes.error) throw unreadRes.error;
-
-    const role = asStr(asRecord(profileRes.data)['role']);
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'ready', items: [], unread: 0 };
+    const role = me.role;
     if (role !== 'candidate' && role !== 'employer') {
       throw new Error('Notification profile role unavailable');
     }
-    if (!Array.isArray(notifRes.data) || unreadRes.count === null || unreadRes.count === undefined) {
-      throw new Error('Notification read incomplete');
-    }
 
-    const items: NotificationView[] = asArr(notifRes.data).map((row) => {
+    const { rows, unread } = await withPortalTransaction(me, async (tx) => ({
+      // notifications_select_own (RLS): wyłącznie powiadomienia właściciela sesji.
+      rows: await queryRows(tx, 'notifications.latest',
+        `SELECT id, type, data, entity_type, entity_id, read_at, created_at
+           FROM public.notifications
+          WHERE profile_id = $1
+          ORDER BY created_at DESC
+          LIMIT 20`, [me.id]),
+      // Licznik nieprzeczytanych osobnym zapytaniem count — NIE z pobranej listy (limit 20),
+      // która zaniżałaby wynik przy >20 nieprzeczytanych.
+      unread: await queryCount(tx, 'notifications.unread',
+        'SELECT 1 FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL', [me.id]),
+    }));
+
+    const items: NotificationView[] = asArr(rows).map((row) => {
       const r = asRecord(row);
       const type = asStr(r['type'], 'system');
       return {
@@ -304,7 +291,7 @@ export async function getNotifications(
       };
     });
 
-    return { status: 'ready', items, unread: unreadRes.count };
+    return { status: 'ready', items, unread };
   } catch (error) {
     captureError(error, { area: 'notifications.getNotifications' });
     return { status: 'error' };

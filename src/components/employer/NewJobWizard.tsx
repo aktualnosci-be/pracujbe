@@ -11,15 +11,23 @@ import { JobImportPanel, type JobImportSuccess } from '@/components/employer/Job
  * szkic — z jego identyfikatorem, więc kolejne kroki zapisują się do tego samego szkicu.
  * Bez flagi importu komponent renderuje zwykły kreator.
  */
-export function NewJobWizard({ importEnabled }: { importEnabled: boolean }): React.JSX.Element {
+export function NewJobWizard({
+  importEnabled,
+  assistEnabled = false,
+}: {
+  importEnabled: boolean;
+  /** #37: asystent redagowania treści na krokach 5–6. */
+  assistEnabled?: boolean;
+}): React.JSX.Element {
   const [imported, setImported] = React.useState<{ result: JobImportSuccess; key: number } | null>(null);
 
-  if (!importEnabled) return <JobWizard />;
+  if (!importEnabled) return <JobWizard assistEnabled={assistEnabled} />;
 
   const result = imported?.result ?? null;
   return (
     <JobWizard
       key={imported?.key ?? 0}
+      assistEnabled={assistEnabled}
       initialJobId={result?.jobId ?? undefined}
       initialValues={result?.values}
       importReview={result ? { fields: result.review, suspicious: result.suspicious } : undefined}

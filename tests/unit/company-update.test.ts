@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateCompany } from '@/lib/actions/company';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
 import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/company-context', () => ({
   ACTIVE_COMPANY_COOKIE: 'pb_active_company',
   getActiveCompany: vi.fn(),
@@ -14,25 +12,15 @@ vi.mock('@/lib/company-context', () => ({
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
-function client(data: unknown, error: unknown = null) {
-  const query = {
-    update: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    select: vi.fn().mockResolvedValue({ data, error }),
-  };
-  const supabase = {
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }),
-    },
-    from: vi.fn().mockReturnValue(query),
-  };
-  vi.mocked(createServerClient).mockResolvedValue(supabase as never);
-  return { supabase, query };
+const USER = '11111111-1111-4111-8111-111111111111';
+
+function db(rows: unknown[] | (() => never)) {
+  fakeDb.exec('company.update', typeof rows === 'function' ? rows : () => ({ rows }));
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  resetFakeDb({ id: USER, role: 'employer' });
   vi.mocked(checkRateLimit).mockResolvedValue(true);
   vi.mocked(getActiveCompany).mockResolvedValue({
     activeId: 'company-1',
@@ -42,7 +30,7 @@ beforeEach(() => {
 
 describe('company update authorization', () => {
   it('rejects a regular member before writing', async () => {
-    const { supabase } = client([{ id: 'company-1' }]);
+    db([{ id: 'company-1' }]);
     vi.mocked(getActiveCompany).mockResolvedValue({
       activeId: 'company-1',
       activeRole: 'member',
@@ -51,21 +39,41 @@ describe('company update authorization', () => {
       ok: false,
       error: 'PERMISSION_DENIED',
     });
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('does not claim success when RLS updates zero rows', async () => {
-    const { query } = client([]);
+    db([]);
     expect(await updateCompany({ name: 'Acme' })).toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
-    expect(query.select).toHaveBeenCalledWith('id, status');
+    expect(fakeDb.callsTo('company.update')[0]?.text).toMatch(/RETURNING id, status/);
   });
 
-  it('accepts one confirmed update by an owner', async () => {
-    client([{ id: 'company-1' }]);
+  it('accepts one confirmed update by an owner, scoped to the active company', async () => {
+    db([{ id: 'company-1' }]);
     expect(await updateCompany({ name: 'Acme' })).toEqual({ ok: true });
+    // Tylko nazwa: VAT nie jest nadpisywany (flaga false), UPDATE pod sesją użytkownika.
+    expect(fakeDb.callsTo('company.update')[0]).toMatchObject({
+      as: USER,
+      values: ['company-1', true, 'Acme', false, null],
+    });
+  });
+
+  it('empty VAT clears the value; empty input writes nothing', async () => {
+    db([{ id: 'company-1' }]);
+    expect(await updateCompany({ vatNumber: '' })).toEqual({ ok: true });
+    expect(fakeDb.callsTo('company.update')[0]?.values).toEqual(['company-1', false, null, true, null]);
+    expect(await updateCompany({})).toEqual({ ok: true });
+    expect(fakeDb.callsTo('company.update')).toHaveLength(1);
+  });
+
+  it('maps an RLS/trigger rejection to a user code', async () => {
+    db(() => {
+      throw pgError('42501', 'PERMISSION_DENIED: status/weryfikacja firmy tylko przez backend/admina');
+    });
+    expect(await updateCompany({ name: 'Acme' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
   });
 
   it('informuje, gdy zmiana danych zweryfikowanej firmy wraca do weryfikacji', async () => {
@@ -74,7 +82,7 @@ describe('company update authorization', () => {
       activeRole: 'owner',
       activeStatus: 'verified',
     } as never);
-    client([{ id: 'company-1', status: 'pending' }]);
+    db([{ id: 'company-1', status: 'pending' }]);
     expect(await updateCompany({ name: 'Acme Nowa' })).toEqual({
       ok: true,
       reverificationRequired: true,
@@ -87,7 +95,7 @@ describe('company update authorization', () => {
       activeRole: 'owner',
       activeStatus: 'verified',
     } as never);
-    client([{ id: 'company-1', status: 'verified' }]);
+    db([{ id: 'company-1', status: 'verified' }]);
     expect(await updateCompany({ name: 'Acme' })).toEqual({ ok: true });
   });
 });

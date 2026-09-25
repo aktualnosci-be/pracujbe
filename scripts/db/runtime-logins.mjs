@@ -33,6 +33,14 @@ export const LOGIN_SPECS = [
     passwordEnv: "AUTH_MAIL_DATABASE_PASSWORD",
     nextPasswordEnv: "AUTH_MAIL_DATABASE_NEW_PASSWORD",
   },
+  {
+    // #25: zadania uprzywilejowane (worker poczty, webhooki, cron, odczyty admina).
+    key: "service",
+    login: "pracujbe_service_runtime",
+    role: "service_role",
+    passwordEnv: "SERVICE_DATABASE_PASSWORD",
+    nextPasswordEnv: "SERVICE_DATABASE_NEW_PASSWORD",
+  },
 ];
 
 function required(env, name) {

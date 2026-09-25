@@ -17,7 +17,7 @@ Baza: b35087b, gałąź infra/railway oparta na pracach PR #8. Zmiany migracyjne
 - [P1: Railway — odbiór produkcji i integracji](https://github.com/aktualnosci-be/pracujbe/issues/16)
 - [P2: Railway — dzienna retencja i GC](https://github.com/aktualnosci-be/pracujbe/issues/17)
 - [P1: Railway — domeny, cutover, rollback i obserwacja](https://github.com/aktualnosci-be/pracujbe/issues/18)
-- [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19)
+- [P2: Railway — IaC i cleanup po okresie stabilności](https://github.com/aktualnosci-be/pracujbe/issues/19) — `.railway/railway.ts` + strażnik gotowe, niewłączone ([IAC.md](IAC.md)); cleanup Vercela otwarty
 - [P2: Railway — opcjonalne usprawnienia po migracji](https://github.com/aktualnosci-be/pracujbe/issues/20)
 ## Pierwszy etap implementacji
 
@@ -42,6 +42,16 @@ Bootstrap ról, wykonawca migracji z blokadą transakcyjną i kontrolą sum oraz
 To fundament, nie gotowa migracja: publiczny odczyt ofert jest już przełączony na PostgreSQL; przepływy logowania, prywatny odczyt/zapis domeny i magazyn CV nadal wymagają spięcia z aplikacją. Nie uruchamiaj samego schematu auth jako predeploy. `npm run db:migrate:production` układa bootstrap, całą historię domeny i migracje auth we wspólną transakcję z kontrolą sum. Rollback kodu zostawia tabele auth; usunięcie tabel skasowałoby sesje i poświadczenia.
 
 Pule runtime (`src/lib/db/pool.ts`) używają oddzielnych loginów i ról startup dla auth oraz domeny. Kontrola odrzuca login superusera, CREATEROLE, ADMIN OPTION, dodatkowe członkostwo i właściciela bazy. Siedem testów na rzeczywistym PG16 potwierdza startup na dwóch różnych połączeniach, odmowę dostępu między pulami i brak eskalacji. Helper sesji (`src/lib/auth/session.ts`) bierze uprawnienia z aktywnego profilu, a nie pól klienta/cookie, oraz wymaga zweryfikowanego adresu. Sesje oczekują na spięcie z trasami; prywatne panele nadal korzystają ze starego dostawcy.
+
+## Usunięcie Supabase z runtime — 25 września 2026 (#27, część kodowa)
+
+Brak `@supabase/*` w zależnościach i w `src/`: usunięte klienty `src/lib/supabase/*`, `src/lib/storage.ts` (PDF faktur — billing wyłączony, #51), hook GoTrue `/api/auth/email-hook` z `SEND_EMAIL_HOOK_SECRET` (e-maile kont wysyła worker Better Auth), zmienne `NEXT_PUBLIC_SUPABASE_*`/`SUPABASE_*` i hosty `*.supabase.co` w CSP/`next/image`. Kolejka usuwania obiektów bez bucketu Railway zwraca `STORAGE_UNCONFIGURED` i ponawia wiersz. Tryb demo bez zmian. Strażnik `tests/unit/no-supabase-runtime.test.ts` z kontrolą ujemną. Bez migracji i bez zmian zmiennych Railway. Do odbioru #27 zostaje: smoke produkcji (healthcheck, wersja w stopce, ścieżki użytkownika) i domena `pracuj.be` w Cloudflare.
+
+## Warstwa danych paneli na PostgreSQL — 24 września 2026 (#25)
+
+Loadery, Server Actions, layouty paneli kandydata/pracodawcy/admina, onboarding, worker poczty, webhooki, rejestr naruszeń (#490) i cron korzystają z `src/lib/db/*` zamiast klienta Supabase: tożsamość z sesji Better Auth (`getPortalIdentity` → `getCurrentIdentity` z #24), jedno połączenie na transakcję z `SET LOCAL ROLE authenticated`/`anon` i `app.current_uid`, RLS i te same RPC w bazie. Zadania uprzywilejowane idą osobną pulą `service` (`DATABASE_SERVICE_URL`, login z jedynym członkostwem `service_role`, piąty login `db:logins`). Limiter: login z #24 (`DATABASE_RATE_LIMIT_URL`), przejściowo pula `service`. Gotowość produkcji wymaga też `DATABASE_SERVICE_URL`. Migracja `0107` nadaje `claim_email_batch` EXECUTE dla `service_role`. Opis: `docs/railway/WARSTWA_DANYCH.md`.
+
+Dowód: 8 plików `tests/integration/portal-*.test.ts` na PostgreSQL 16 z pełnymi migracjami i loginami jak w produkcji (prywatność: inny kandydat, obca firma, gość; stronicowanie; idempotencja RPC), testy unit na atrapie transakcji. Klient Supabase został wyłącznie w sesjach/trasach auth i middleware (#24) oraz w uploadzie CV (#26); SDK usuwa #27. Nie ustawiono zmiennych Railway. Znane braki: nazwa firmy z rejestracji nie podpowiada się w formularzu zakładania firmy (metadane konta niedostępne dla `authenticated` — wymaga #24 albo wąskiego RPC); kandydat nie widzi nazwy firmy w wiadomościach (stan od 0014, bez zmian).
 
 ## Integracja zmian — 21 września 2026, wieczór
 
@@ -72,6 +82,23 @@ Rejestracja, logowanie, wylogowanie, reset hasła, potwierdzenie adresu i sesje 
 `isAppReady()` w produkcji wymaga teraz PostgreSQL zamiast Supabase: `DATABASE_APP_URL`, `DATABASE_AUTH_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (= origin `NEXT_PUBLIC_SITE_URL`, HTTPS), `DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET` i publiczny https URL. `/api/health` dodatkowo wykonuje `SELECT 1` przez pulę domeny (limit 2 s) — niedostępna baza = 503 `unavailable`, więc healthcheck Railway odzwierciedla realną dostępność PostgreSQL. `checks` (za `HEALTH_CHECK_SECRET`) raportują `database`, `auth`, `authUrl`, `rateLimit`, `authMail`, `databaseReachable`.
 
 Technicznie 503 znika po tym PR, gdy te zmienne są ustawione. **Nie ustawiać jednak `APP_MODE=production`, dopóki nie są scalone #25 (panele i akcje domenowe na PostgreSQL) i #26 (pliki CV)** — do tego czasu loadery paneli wciąż czytają Supabase i przy zalogowanej sesji Better Auth pokazywałyby dane demonstracyjne lub puste. Kolejność ustala integrator; bez migracji, loginów (`db:logins`) i zmiennych Railway kod działa tylko w testach.
+
+### #429 — odbiór na żywo (25 września 2026)
+
+Po #532 i #533 `isAppReady()` i `/api/health` wymagają wyłącznie PostgreSQL + Better Auth + limitera
+(`DATABASE_APP_URL`, `DATABASE_SERVICE_URL`, `DATABASE_AUTH_URL`, `DATABASE_RATE_LIMIT_URL`,
+`RATE_LIMIT_KEY_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, publiczny https URL); żadna zmienna
+Supabase nie jest potrzebna. Sprawdzone lokalnie: build i `next start` z `APP_MODE=production` na
+PostgreSQL 16 (migracje produkcyjne + ograniczone loginy, bez zmiennych Supabase) — `/api/health`
+200 (`databaseReachable: true`), strony publiczne i auth 200, `/sitemap.xml` 200, panel bez sesji →
+logowanie; wstrzymana baza → `/api/health` 503 `unavailable`, po wznowieniu 200.
+
+Znaleziony i naprawiony bloker: `sitemap.xml` był prerenderowany w buildzie, a build produkcyjny
+celowo nie czyta bazy (#534) — sitemap bez liczników przerywał build z `APP_MODE=production` (Railway
+buduje ze zmiennymi usługi). Teraz `dynamic = 'force-dynamic'`. Strażnik i macierz gotowości (każda
+zmienna rdzenia osobno → 503 w middleware i health, komplet Supabase bez `DATABASE_*` → 503, tryb
+demo bez zmian): `tests/unit/readiness-postgres-only.test.ts`. CI nie buduje z `APP_MODE=production`,
+więc tego przypadku nie wykryje sam build w CI — pilnuje go ten test.
 
 ## Cron caller i rozdział sekretów (#13) — 24 września 2026
 

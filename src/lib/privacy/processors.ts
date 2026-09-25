@@ -13,7 +13,6 @@ type ToConfirm = typeof TO_CONFIRM;
 
 export type ProcessorId =
   | 'railway'
-  | 'supabase'
   | 'resend'
   | 'sentry'
   | 'cloudflare-turnstile'
@@ -62,26 +61,12 @@ export const PROCESSORS: readonly Processor[] = [
       'Hosting aplikacji (usługa production z gałęzi main), baza PostgreSQL, zadania cron wywołujące /api/maintenance i /api/email/process, logi usługi.',
     dataCategories: ['Wszystkie kategorie z tabel bazy (patrz mapa tabel)', 'Logi aplikacji i żądań HTTP'],
     dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści', 'Administratorzy', 'Odwiedzający'],
-    activation: 'Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.',
-    codeRefs: ['docs/railway/README.md', 'docs/railway/OPERATIONS.md', 'src/lib/db/pool.ts', 'scripts/railway-cron-call.mjs'],
+    activation: 'Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_SERVICE_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.',
+    codeRefs: ['docs/railway/README.md', 'docs/railway/OPERATIONS.md', 'src/lib/db/pool.ts', 'src/lib/db/portal.ts', 'scripts/railway-cron-call.mjs'],
     notes: [
-      'Adapter bucketa S3 (src/lib/storage/railway-bucket.ts) istnieje, ale obecny kod plików CV korzysta z Supabase Storage (src/lib/storage.ts).',
+      'Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.',
+      'Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.',
       'Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.',
-    ],
-    ...UNKNOWN,
-  },
-  {
-    id: 'supabase',
-    name: 'Supabase',
-    purpose:
-      'Warstwa przejściowa: klient Supabase w panelach i Server Actions (PostgREST), prywatny bucket candidate-files na pliki CV, ścieżka limitera zapytań.',
-    dataCategories: ['Dane profili, aplikacji, wiadomości odczytywane pod sesją', 'Pliki CV (PDF/DOC/DOCX)', 'Klucz limitera z adresem IP (ścieżka Supabase)'],
-    dataSubjects: ['Kandydaci', 'Pracodawcy i członkowie firm', 'Administratorzy'],
-    activation: 'NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (+ SUPABASE_SERVICE_ROLE_KEY po stronie serwera).',
-    codeRefs: ['src/lib/supabase/server.ts', 'src/lib/supabase/admin.ts', 'src/lib/storage.ts', 'src/lib/rate-limit.ts'],
-    notes: [
-      'CLAUDE.md opisuje Supabase jako przejściowe; docelowa baza to PostgreSQL na Railway.',
-      'Limiter przez Supabase buduje klucz z akcji i adresu IP bez haszowania; ścieżka PostgreSQL (src/lib/db/rate-limit.ts) zapisuje HMAC.',
     ],
     ...UNKNOWN,
   },
@@ -98,7 +83,7 @@ export const PROCESSORS: readonly Processor[] = [
     ],
     dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści'],
     activation: 'RESEND_API_KEY (bez klucza worker pomija wysyłkę); webhook wymaga RESEND_WEBHOOK_SECRET.',
-    codeRefs: ['src/lib/email/outbox.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/app/api/auth/email-hook/route.ts', 'src/emails/wiring.ts'],
+    codeRefs: ['src/lib/email/outbox.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/lib/auth/email-worker.ts', 'src/emails/wiring.ts'],
     notes: [
       'Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.',
       'Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).',

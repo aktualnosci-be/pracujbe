@@ -1,48 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyToJob, transitionApplication } from '@/lib/actions/applications';
-import { loadOlderMessages, markConversationRead, openConversation, sendMessage } from '@/lib/actions/messages';
-import { getOlderThreadMessages } from '@/lib/data/messages';
 import { respondToOffer, sendOffer } from '@/lib/actions/offers';
 import { saveOnboardingStep } from '@/lib/actions/onboarding';
-import { isSupabaseConfigured } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #350 — cienka warstwa Server Actions przepływu z CLAUDE.md §9 (aplikacja → status →
- * propozycja → odpowiedź → wiadomość → onboarding). Logika domenowa jest w DB (rls.sql);
+ * propozycja → odpowiedź → onboarding; wiadomości: messages-actions.test). Logika domenowa jest
+ * w DB (rls.sql, PG16: tests/integration/portal-candidate.test.ts);
  * tu pilnujemy granicy: walidacja przed RPC, limit przed RPC, klucz idempotencji przekazany
  * bez zmian (Invariant #3) i błędy Postgresa zamienione na kody użytkowe bez surowego tekstu
  * (Invariant #8).
  */
 
-const rpc = vi.fn();
-const upsert = vi.fn();
-const updateEq = vi.fn();
-const from = vi.fn(() => ({ upsert, update: () => ({ eq: updateEq }) }));
-const getUser = vi.fn();
-const adminRpc = vi.fn();
-
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn(() => true) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: vi.fn(async () => ({ rpc, from, auth: { getUser } })),
-}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: adminRpc }) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('next-intl/server', () => ({ getLocale: async () => 'nl' }));
 vi.mock('next/headers', () => ({ headers: async () => new Headers({ 'user-agent': 'vitest' }) }));
-vi.mock('@/lib/data/messages', () => ({ getOlderThreadMessages: vi.fn() }));
 
 const JOB = '11111111-1111-4111-8111-111111111111';
 const KEY = '22222222-2222-4222-8222-222222222222';
 const CANDIDATE = '33333333-3333-4333-8333-333333333333';
 const OFFER = '44444444-4444-4444-8444-444444444444';
-const CONVERSATION = '55555555-5555-4555-8555-555555555555';
-const CLIENT_MSG = '66666666-6666-4666-8666-666666666666';
 const USER = '66666666-6666-4666-8666-666666666666';
 
-/** Surowe komunikaty Postgresa/PostgREST → oczekiwany kod użytkowy. */
+/** Surowe komunikaty Postgresa → oczekiwany kod użytkowy. */
 const PG_ERRORS: Array<[string, string]> = [
   ['COMPANY_NOT_VERIFIED: company 7 is pending', 'COMPANY_NOT_VERIFIED'],
   ['JOB_NOT_ACTIVE', 'JOB_NOT_ACTIVE'],
@@ -63,31 +48,39 @@ function expectNoTechnicalText(result: unknown, pgMessage: string) {
 
 const application = { jobId: JOB, agreeTerms: true as const, idempotencyKey: KEY };
 
+const RPCS = [
+  'apply_to_job', 'transition_application', 'send_offer', 'respond_to_offer',
+  'save_candidate_onboarding_step3', 'save_candidate_onboarding_step5', 'finish_onboarding',
+  'record_document_acceptance',
+] as const;
+
+/** Wszystkie RPC przepływu zwracają wynik; `fail(name, message)` = błąd bazy (pg: message + SQLSTATE). */
+function fail(name: string, message: string) {
+  fakeDb.rpc(name, () => { throw pgError('P0001', message); });
+}
+const rpcCalls = () => fakeDb.calls.filter((call) => call.kind === 'rpc' || call.kind === 'rpcrows');
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
-  rpc.mockResolvedValue({ data: 'row-1', error: null });
-  upsert.mockResolvedValue({ error: null });
-  updateEq.mockResolvedValue({ error: null });
-  adminRpc.mockResolvedValue({ error: null });
-  getUser.mockResolvedValue({ data: { user: { id: USER } } });
+  resetFakeDb({ id: USER, role: 'candidate' });
+  for (const name of RPCS) fakeDb.rpc(name, name === 'finish_onboarding' ? true : 'row-1');
+  fakeDb.exec('onboarding.step1-profile', 1).exec('onboarding.candidate-profile-upsert', 1);
 });
 
 describe('applyToJob', () => {
   it('sukces: RPC apply_to_job dostaje klucz idempotencji klienta bez zmian', async () => {
     expect(await applyToJob(application)).toEqual({ ok: true, id: 'row-1' });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith(
-      'apply_to_job',
-      expect.objectContaining({ p_job_id: JOB, p_idempotency_key: KEY }),
-    );
+    expect(rpcCalls()).toHaveLength(1);
+    expect(fakeDb.callsTo('apply_to_job')[0]).toMatchObject({
+      as: USER, args: { p_job_id: JOB, p_idempotency_key: KEY },
+    });
   });
 
   it('ponowienie z tym samym kluczem wysyła do RPC identyczny klucz (Invariant #3)', async () => {
     await applyToJob(application);
     await applyToJob(application);
-    const keys = rpc.mock.calls.map((call) => call[1].p_idempotency_key);
+    const keys = fakeDb.callsTo('apply_to_job').map((call) => call.args['p_idempotency_key']);
     expect(keys).toEqual([KEY, KEY]);
   });
 
@@ -95,7 +88,7 @@ describe('applyToJob', () => {
     vi.mocked(checkRateLimit).mockResolvedValue(false);
     expect(await applyToJob(application)).toEqual({ ok: false, error: 'RATE_LIMITED' });
     expect(checkRateLimit).toHaveBeenCalledWith('apply', expect.any(Object));
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpcCalls()).toHaveLength(0);
   });
 
   it.each([
@@ -104,7 +97,7 @@ describe('applyToJob', () => {
     ['klucz idempotencji nie-UUID', { ...application, idempotencyKey: 'klik-1' }],
   ])('niepoprawne dane (%s) → VALIDATION_FAILED, RPC niewołane', async (_label, input) => {
     expect(await applyToJob(input as never)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpcCalls()).toHaveLength(0);
   });
 
   // applyToJob odróżnia brak sesji (UNAUTHENTICATED → link logowania w modalu) od PERMISSION_DENIED.
@@ -113,7 +106,7 @@ describe('applyToJob', () => {
   );
 
   it.each(APPLY_ERRORS)('błąd RPC „%s” → %s bez technikaliów', async (message, code) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    fail('apply_to_job', message);
     const result = await applyToJob(application);
     expect(result).toEqual({ ok: false, error: code });
     expectNoTechnicalText(result, message);
@@ -123,7 +116,7 @@ describe('applyToJob', () => {
 describe('transitionApplication', () => {
   it('sukces: przekazuje identyfikator i status docelowy', async () => {
     expect(await transitionApplication(OFFER, 'shortlisted')).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('transition_application', {
+    expect(fakeDb.callsTo('transition_application')[0]!.args).toEqual({
       p_application_id: OFFER,
       p_target: 'shortlisted',
     });
@@ -134,7 +127,7 @@ describe('transitionApplication', () => {
     ['status zmienił się równolegle', 'INVALID_TRANSITION'],
     ...PG_ERRORS,
   ])('błąd RPC „%s” → %s', async (message, code) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    fail('transition_application', message);
     const result = await transitionApplication(OFFER, 'rejected');
     expect(result).toEqual({ ok: false, error: code });
     expectNoTechnicalText(result, message);
@@ -146,7 +139,7 @@ describe('sendOffer', () => {
 
   it('sukces: klucz idempotencji klienta trafia do send_offer bez zmian, brak treści → NULL', async () => {
     expect(await sendOffer(offer)).toEqual({ ok: true, id: 'row-1' });
-    expect(rpc).toHaveBeenCalledWith('send_offer', {
+    expect(fakeDb.callsTo('send_offer')[0]!.args).toEqual({
       p_job_id: JOB,
       p_candidate_id: CANDIDATE,
       p_idempotency_key: KEY,
@@ -158,16 +151,16 @@ describe('sendOffer', () => {
   it('bez klucza idempotencji → VALIDATION_FAILED, RPC niewołane (retry nie może tworzyć nowego klucza)', async () => {
     const { idempotencyKey: _omit, ...withoutKey } = offer;
     expect(await sendOffer(withoutKey as never)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpcCalls()).toHaveLength(0);
   });
 
   it('za krótka treść → VALIDATION_FAILED, RPC niewołane', async () => {
     expect(await sendOffer({ ...offer, message: 'Hej' })).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpcCalls()).toHaveLength(0);
   });
 
   it.each(PG_ERRORS)('błąd RPC „%s” → %s bez technikaliów', async (message, code) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    fail('send_offer', message);
     const result = await sendOffer(offer);
     expect(result).toEqual({ ok: false, error: code });
     expectNoTechnicalText(result, message);
@@ -177,113 +170,23 @@ describe('sendOffer', () => {
 describe('respondToOffer', () => {
   it('sukces: akceptacja trafia do respond_to_offer', async () => {
     expect(await respondToOffer(OFFER, true)).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('respond_to_offer', { p_offer_id: OFFER, p_accept: true });
+    expect(fakeDb.callsTo('respond_to_offer')[0]).toMatchObject({ as: USER, args: { p_offer_id: OFFER, p_accept: true } });
   });
 
   it.each(['', 'oferta-1', `${OFFER}x`])('identyfikator „%s” → VALIDATION_FAILED bez RPC', async (id) => {
     expect(await respondToOffer(id, false)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpcCalls()).toHaveLength(0);
   });
 
   it.each(PG_ERRORS.filter(([, code]) => code !== 'COMPANY_NOT_VERIFIED'))(
     'błąd RPC „%s” → %s bez technikaliów',
     async (message, code) => {
-      rpc.mockResolvedValue({ data: null, error: { message } });
+      fail('respond_to_offer', message);
       const result = await respondToOffer(OFFER, false);
       expect(result).toEqual({ ok: false, error: code });
       expectNoTechnicalText(result, message);
     },
   );
-});
-
-describe('wiadomości', () => {
-  const MSG_ERRORS = PG_ERRORS.filter(([, code]) => !['COMPANY_NOT_VERIFIED', 'JOB_NOT_ACTIVE'].includes(code));
-
-  it('openConversation: dokładnie jedna relacja, inaczej VALIDATION_FAILED bez RPC', async () => {
-    expect(await openConversation({})).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(await openConversation({ applicationId: JOB, offerId: OFFER })).toEqual({
-      ok: false,
-      error: 'VALIDATION_FAILED',
-    });
-    expect(rpc).not.toHaveBeenCalled();
-    expect(await openConversation({ offerId: OFFER })).toEqual({ ok: true, id: 'row-1' });
-    expect(rpc).toHaveBeenCalledWith('get_or_create_conversation', {
-      p_application_id: null,
-      p_offer_id: OFFER,
-    });
-  });
-
-  it('sendMessage: sukces i limit przed RPC', async () => {
-    expect(await sendMessage(CONVERSATION, 'Dzień dobry, kiedy mogę przyjść?', CLIENT_MSG)).toEqual({
-      ok: true,
-      id: 'row-1',
-    });
-    expect(rpc).toHaveBeenCalledWith('send_message', {
-      p_conversation_id: CONVERSATION,
-      p_body: 'Dzień dobry, kiedy mogę przyjść?',
-      p_client_message_id: CLIENT_MSG,
-    });
-    rpc.mockClear();
-    vi.mocked(checkRateLimit).mockResolvedValue(false);
-    expect(await sendMessage(CONVERSATION, 'Druga wiadomość', CLIENT_MSG)).toEqual({
-      ok: false,
-      error: 'RATE_LIMITED',
-    });
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it('sendMessage: pusta treść → VALIDATION_FAILED bez RPC', async () => {
-    expect(await sendMessage(CONVERSATION, '   ', CLIENT_MSG)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it.each(['', 'msg-1', `${CLIENT_MSG}x`])('sendMessage: klucz operacji „%s” nie-UUID → VALIDATION_FAILED bez RPC (#147)', async (key) => {
-    expect(await sendMessage(CONVERSATION, 'Dzień dobry', key)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(rpc).not.toHaveBeenCalled();
-  });
-
-  it.each(MSG_ERRORS)('sendMessage/openConversation/markConversationRead: „%s” → %s', async (message, code) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
-    for (const result of [
-      await sendMessage(CONVERSATION, 'Dzień dobry', CLIENT_MSG),
-      await openConversation({ applicationId: JOB }),
-      await markConversationRead(CONVERSATION),
-    ]) {
-      expect(result).toEqual({ ok: false, error: code });
-      expectNoTechnicalText(result, message);
-    }
-  });
-});
-
-describe('loadOlderMessages', () => {
-  const CURSOR = { createdAt: '2026-09-20T10:00:00.000Z', id: OFFER };
-
-  it.each([
-    ['nieobsługiwany język', 'de', CONVERSATION, CURSOR],
-    ['konwersacja nie-UUID', 'pl', 'c-1', CURSOR],
-    ['kursor bez daty', 'pl', CONVERSATION, { id: OFFER }],
-  ])('%s → error bez odczytu', async (_label, locale, conversation, cursor) => {
-    expect(await loadOlderMessages(locale, conversation, cursor)).toEqual({ status: 'error' });
-    expect(getOlderThreadMessages).not.toHaveBeenCalled();
-  });
-
-  it('strona starszych wiadomości: odczyt pod sesją i etykieta czasu w języku strony', async () => {
-    const message = { id: JOB, body: 'Dzień dobry', createdAt: '2026-09-19T08:30:00.000Z', mine: false };
-    vi.mocked(getOlderThreadMessages).mockResolvedValue({
-      status: 'ready',
-      messages: [message],
-      olderCursor: null,
-    } as never);
-    const result = await loadOlderMessages('nl', CONVERSATION, CURSOR);
-    expect(getOlderThreadMessages).toHaveBeenCalledWith(CONVERSATION, CURSOR);
-    expect(result).toMatchObject({ status: 'ready', olderCursor: null, messages: [{ id: JOB, body: 'Dzień dobry' }] });
-    expect(result.status === 'ready' && typeof result.messages[0]!.timeLabel).toBe('string');
-  });
-
-  it.each(['not-found', 'error'] as const)('wynik odczytu %s przekazany bez zmian', async (status) => {
-    vi.mocked(getOlderThreadMessages).mockResolvedValue({ status } as never);
-    expect(await loadOlderMessages('pl', CONVERSATION, CURSOR)).toEqual({ status });
-  });
 });
 
 describe('saveOnboardingStep', () => {
@@ -297,46 +200,44 @@ describe('saveOnboardingStep', () => {
 
   it('krok 3: doświadczenie i umiejętności jednym RPC (jedna transakcja, #142)', async () => {
     expect(await saveOnboardingStep(3, STEP3)).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith('save_candidate_onboarding_step3', {
-      p_experience_years: 3,
-      p_skills: ['wózek widłowy'],
+    expect(fakeDb.calls).toHaveLength(1);
+    expect(fakeDb.callsTo('save_candidate_onboarding_step3')[0]).toMatchObject({
+      as: USER, args: { p_experience_years: 3, p_skills: ['wózek widłowy'] },
     });
     // Żadnego osobnego zapisu doświadczenia przed RPC — inaczej błąd RPC zostawiłby część kroku.
-    expect(upsert).not.toHaveBeenCalled();
   });
 
   it('krok 5: języki i certyfikaty jednym RPC (jedna transakcja, #142)', async () => {
     expect(await saveOnboardingStep(5, STEP5)).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    // Data ważności trafia do RPC (#96); certyfikat bez daty = bezterminowy (null).
-    expect(rpc).toHaveBeenCalledWith('save_candidate_onboarding_step5', {
-      p_languages: [{ language: 'nl', level: 'basic' }],
-      p_certificates: [
-        { label: 'VCA', expires_at: '2027-01-31' },
-        { label: 'ADR', expires_at: null },
-      ],
-    });
-    expect(upsert).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(1);
+    // Data ważności trafia do RPC (#96); certyfikat bez daty = bezterminowy (null). Argumenty
+    // jsonb idą jako JSON (nie literał tablicy PG).
+    const args = fakeDb.callsTo('save_candidate_onboarding_step5')[0]!.args;
+    expect(JSON.parse(args['p_languages'] as string)).toEqual([{ language: 'nl', level: 'basic' }]);
+    expect(JSON.parse(args['p_certificates'] as string)).toEqual([
+      { label: 'VCA', expires_at: '2027-01-31' },
+      { label: 'ADR', expires_at: null },
+    ]);
   });
 
   it('krok 6 z finish: finish_onboarding i receipt zgody', async () => {
-    rpc.mockResolvedValue({ data: true, error: null });
     expect(await saveOnboardingStep(6, STEP6, { finish: true })).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('finish_onboarding');
-    expect(adminRpc).toHaveBeenCalledWith(
-      'record_document_acceptance',
-      expect.objectContaining({ p_profile_id: USER, p_documents: ['terms', 'privacy'] }),
-    );
+    expect(fakeDb.callsTo('onboarding.candidate-profile-upsert')[0]!.as).toBe(USER);
+    expect(fakeDb.callsTo('finish_onboarding')[0]).toMatchObject({ as: USER, args: {} });
+    // Receipt: RPC tylko dla service_role, kluczowane UUID z sesji.
+    expect(fakeDb.callsTo('record_document_acceptance')[0]).toMatchObject({
+      as: 'service',
+      args: { p_profile_id: USER, p_documents: ['terms', 'privacy'], p_locale: 'nl', p_user_agent: 'vitest' },
+    });
   });
 
   it('krok 6 z finish: profil niekompletny w DB → ONBOARDING_INCOMPLETE, bez receiptu', async () => {
-    rpc.mockResolvedValue({ data: false, error: null });
+    fakeDb.rpc('finish_onboarding', false);
     expect(await saveOnboardingStep(6, STEP6, { finish: true })).toEqual({
       ok: false,
       error: 'ONBOARDING_INCOMPLETE',
     });
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.callsTo('record_document_acceptance')).toHaveLength(0);
   });
 
   it.each([
@@ -344,33 +245,28 @@ describe('saveOnboardingStep', () => {
     [5, STEP5, 'save_candidate_onboarding_step5'],
     [6, STEP6, 'finish_onboarding'],
   ] as const)('krok %s: błąd RPC %s → ok:false (nie sukces)', async (step, data, failing) => {
-    rpc.mockImplementation(async (name: string) =>
-      name === failing
-        ? { data: null, error: { message: 'new row violates row-level security policy' } }
-        : { data: true, error: null },
-    );
+    fail(failing, 'new row violates row-level security policy');
     const result = await saveOnboardingStep(step, data, { finish: step === 6 });
     expect(result).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     expectNoTechnicalText(result, 'violates policy');
   });
 
   it('błąd zapisu profilu (krok 1) → ok:false; nieoczekiwany wyjątek → INTERNAL', async () => {
-    updateEq.mockResolvedValue({ error: { message: 'JWT expired' } });
+    fakeDb.exec('onboarding.step1-profile', () => { throw pgError('42501', 'permission denied: row-level security'); });
     expect(await saveOnboardingStep(1, { firstName: 'Anna', lastName: 'Nowak' })).toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
-    upsert.mockRejectedValue(new Error('socket hang up at 10.0.0.1:5432'));
+    fakeDb.exec('onboarding.candidate-profile-upsert', () => { throw new Error('socket hang up at 10.0.0.1:5432'); });
     const result = await saveOnboardingStep(2, { occupations: ['magazynier'], categories: ['warehouse'] });
     expect(result).toEqual({ ok: false, error: 'INTERNAL' });
     expect(JSON.stringify(result)).not.toContain('socket');
   });
 
   it('bez sesji → PERMISSION_DENIED, nic nie jest zapisywane', async () => {
-    getUser.mockResolvedValue({ data: { user: null } });
+    fakeSession.identity = null;
     expect(await saveOnboardingStep(3, STEP3)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
-    expect(upsert).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('niepoprawne dane kroku → VALIDATION_FAILED, nic nie jest zapisywane', async () => {
@@ -382,6 +278,6 @@ describe('saveOnboardingStep', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(getUser).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });

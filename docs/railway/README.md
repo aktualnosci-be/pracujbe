@@ -58,7 +58,13 @@ Vercel → usuń `CRON_SECRET` z usługi web (`legacyCronSecret: false`). Rollba
 
 ## Operacje (#47)
 
+Test wdrożeniowy produkcji (tryb, SHA artefaktu, panele bez sesji, indeksowanie) i odbiór #12: [TEST_WDROZENIOWY.md](TEST_WDROZENIOWY.md).
+
 Czujki `/api/health/ops`, kopie zaszyfrowane z retencją, okresowe odtworzenie i pomiar wyszukiwania opisuje [OPERATIONS.md](OPERATIONS.md). Kroki infrastruktury (sekret, login monitoringu, uptime, cron kopii) są w sekcji 5 tego dokumentu i nie zostały wykonane.
+
+## Cutover, rollback i smoke test (#16, #18)
+
+Kolejność włączania `APP_MODE=production`, Better Auth i Resend, rollback (wyzerowanie zmiennych, redeploy ostatniego dobrego wdrożenia) i obserwację po wdrożeniu opisuje [CUTOVER_ROLLBACK.md](CUTOVER_ROLLBACK.md). Smoke test produkcji (poza CI): `node scripts/railway/prod-smoke.mjs`.
 
 ## Stan przejściowy kodu
 
@@ -67,8 +73,9 @@ wyniku „Deploy”, gdy wdrożenie zostało pominięte z powodu braku tokenu.
 `vercel.json` oraz integracje Supabase i Stripe pozostają długiem migracyjnym,
 bo ich przepływy są jeszcze używane. Usuwamy je dopiero razem z zastępującym
 je przepływem i testem regresyjnym. Nie konfiguruj sekretów Vercela ani nie
-uruchamiaj drugiej produkcji. Przyszłe IaC pobierz z działającego projektu
-Railway; nie zapisuj sekretów w repo.
+uruchamiaj drugiej produkcji. IaC usług z tego repo (`pracujbe`, `db-migrator`) jest w
+`.railway/railway.ts` — niewłączone; opis, strażnik i kroki włączenia w
+[IAC.md](IAC.md). Nie zapisuj sekretów w repo.
 
 ## Źródła sprawdzone podczas implementacji
 

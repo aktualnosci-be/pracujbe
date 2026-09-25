@@ -20,14 +20,6 @@ export const env = {
   get defaultLocale(): string {
     return process.env.NEXT_PUBLIC_DEFAULT_LOCALE ?? 'pl';
   },
-  /** URL projektu Supabase — undefined, gdy nieskonfigurowany (tryb demo). */
-  get supabaseUrl(): string | undefined {
-    return process.env.NEXT_PUBLIC_SUPABASE_URL || undefined;
-  },
-  /** Klucz anon Supabase — undefined, gdy nieskonfigurowany (tryb demo). */
-  get supabaseAnonKey(): string | undefined {
-    return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined;
-  },
   /**
    * Tryb aplikacji (SEC-19): 'production' | 'demo'. Jedynym źródłem jest APP_MODE. Produkcja
    * MUSI ustawić `APP_MODE=production` (patrz docs/LAUNCH_CHECKLIST.md) — inaczej brak
@@ -66,14 +58,6 @@ export const env = {
     return process.env.RATE_LIMIT_KEY_SECRET || undefined;
   },
 };
-
-/**
- * Czy Supabase jest skonfigurowane (URL + anon key obecne).
- * Warstwa danych (@/lib/jobs itp.) używa tego do wyboru: DB vs fallback demo.
- */
-export function isSupabaseConfigured(): boolean {
-  return Boolean(env.supabaseUrl && env.supabaseAnonKey);
-}
 
 /** Publiczne oferty korzystają z ograniczonego loginu PostgreSQL Railway. */
 export function isDatabaseConfigured(): boolean {
@@ -128,11 +112,6 @@ export function isProductionDeployment(): boolean {
   return !NON_PROD_HOST_RE.test(env.siteUrl);
 }
 
-/** Klucz service-role obecny (operacje serwerowe: admin, webhooki, worker e-mail). */
-export function hasServiceRoleKey(): boolean {
-  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
 /** Publiczny URL jest realny (https, nie localhost) — wymagane w produkcji (linki, e-maile). */
 export function hasPublicHttpsUrl(): boolean {
   try {
@@ -143,6 +122,11 @@ export function hasPublicHttpsUrl(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Login zadań serwerowych PostgreSQL (#25): worker poczty, webhooki, cron, odczyty admina. */
+export function isServiceDatabaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_SERVICE_URL);
 }
 
 /**
@@ -215,13 +199,15 @@ export function isFileStorageConfigured(): boolean {
  * PostgreSQL Railway: pula domeny (`DATABASE_APP_URL`), Better Auth (`DATABASE_AUTH_URL`,
  * `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` = origin serwisu), limiter prób logowania/rejestracji
  * (`DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET`; bez niego akcje auth są blokowane) oraz
- * realny https URL. Supabase nie jest już warunkiem gotowości (konta i sesje przepięte, #24).
+ * login zadań serwerowych (`DATABASE_SERVICE_URL`, service_role: worker poczty, webhooki, cron,
+ * odczyty admina — #25) oraz realny https URL.
  * Dostawcy opcjonalni (Resend/worker poczty/Sentry) NIE blokują gotowości — ich stan raportuje
  * /api/health jako `checks` (obserwowalność bez twardego 503).
  */
 export function readinessChecks(): Record<string, boolean> {
   return {
     database: isDatabaseConfigured(),
+    serviceDatabase: isServiceDatabaseConfigured(),
     auth: isAuthRuntimeConfigured(),
     authUrl: hasCanonicalAuthUrl(),
     rateLimit: isRateLimitDatabaseConfigured(),
@@ -242,12 +228,12 @@ export function readinessChecks(): Record<string, boolean> {
 
 /**
  * Gotowość do obsługi ruchu (SEC-19 + P1-18 + #429). Tryb demo: zawsze gotowe (lokalnie/E2E).
- * Tryb produkcyjny: wymaga rdzenia PostgreSQL + Better Auth + limitera + realnego https URL —
+ * Tryb produkcyjny: wymaga rdzenia PostgreSQL (WWW + zadań serwerowych) + Better Auth + limitera + realnego https URL —
  * brak = „nieskonfigurowany" (fail-closed: 503/maintenance, nie fikcyjne demo). Sama obecność
  * zmiennych; łączność z bazą sprawdza dodatkowo `/api/health`. Nie ujawnia sekretów.
  */
 export function isAppReady(): boolean {
   if (!isProductionMode()) return true;
-  return isDatabaseConfigured() && isAuthRuntimeConfigured() && hasCanonicalAuthUrl()
+  return isDatabaseConfigured() && isServiceDatabaseConfigured() && isAuthRuntimeConfigured() && hasCanonicalAuthUrl()
     && isRateLimitDatabaseConfigured() && hasPublicHttpsUrl();
 }

@@ -1,8 +1,7 @@
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryOne, queryRows, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 import { resolveCoordinates, type LocationRow } from '@/lib/matching/locations';
 import { referenceDate } from '@/lib/matching/reference-date';
@@ -28,8 +27,9 @@ import {
  * Języki przechodzą z poziomami po obu stronach (#195); współrzędne miejscowości pochodzą
  * ze słownika `locations` (#194) — miasto spoza słownika = odległość nieznana.
  *
- * Prywatność: profil kandydata czytany pod RLS (własny wiersz); oferta przez SECURITY
- * DEFINER RPC ograniczone do ofert active+verified i bezpiecznych kolumn.
+ * Prywatność: profil kandydata czytany pod RLS (własny wiersz, transakcja sesji
+ * `withPortalTransaction`, #25); oferta przez SECURITY DEFINER RPC ograniczone do ofert
+ * active+verified i bezpiecznych kolumn.
  */
 
 function asStr(value: unknown, fallback = ''): string {
@@ -60,7 +60,7 @@ function languagesFrom(rows: unknown, labelField: string): LanguageEntry[] {
 function locationRows(rows: unknown): LocationRow[] {
   return asArr(rows).map((r) => {
     const rec = asRecord(r);
-    // numeric z PostgREST może przyjść jako string — konwersja jawna.
+    // numeric może przyjść jako string (zależnie od serializacji) — konwersja jawna.
     const coord = (v: unknown): number | null => {
       const n = typeof v === 'string' ? Number(v) : v;
       return typeof n === 'number' && Number.isFinite(n) ? n : null;
@@ -90,13 +90,6 @@ function certificatesFrom(rows: unknown): CertificateEntry[] {
     .filter((c) => c.label.length > 0);
 }
 
-async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
-
 /** Jawny wynik dopasowania — błąd odczytu nigdy nie udaje wyniku ani braku profilu/oferty. */
 export type JobMatchLoad =
   | { status: 'ok'; result: MatchResult }
@@ -111,9 +104,13 @@ class MatchReadError extends Error {
   }
 }
 
-function check<T extends { error: unknown }>(result: T, source: string): T {
-  if (result.error) throw new MatchReadError(source, result.error);
-  return result;
+/** Odczyt jednego wejścia: błąd bazy oznaczamy źródłem (pusta relacja po sukcesie ≠ błąd). */
+async function read<T>(source: string, action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    throw new MatchReadError(source, error);
+  }
 }
 
 /**
@@ -121,7 +118,7 @@ function check<T extends { error: unknown }>(result: T, source: string): T {
  * Bezpieczne do wołania także dla anonimów/pracodawców — wtedy zwraca `none`.
  */
 export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     // Izolowany serwer dev testów E2E (błąd odczytu). Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
       return { status: 'error' };
@@ -131,47 +128,41 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
   if (!jobId) return { status: 'none' };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
-    if (!userId) return { status: 'none' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'none' };
+    const inputs = await withPortalTransaction(me, async (tx) => {
+      // Profil kandydata (własny wiersz pod RLS). Brak (po udanym odczycie) → nie kandydat.
+      const cpData = await read('candidate_profiles', () => queryOne(tx, 'matching.candidate-profile',
+        `SELECT id, occupations, categories, preferred_contract_types, city, region, radius_km,
+                has_driving_license, has_car, experience_years, availability
+           FROM public.candidate_profiles
+          WHERE profile_id = $1`, [me.id]));
+      if (!cpData) return null;
+      const profileId = asStr(asRecord(cpData)['id']);
+      if (!profileId) return null;
+      // Każdy odczyt osobno (sekwencyjnie na jednej transakcji): pusta relacja po sukcesie
+      // ≠ relacja nieodczytana (błąd przerywa całość z nazwą źródła).
+      const skills = await read('candidate_skills', () => queryRows(tx, 'matching.candidate-skills',
+        'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1', [profileId]));
+      const languages = await read('candidate_languages', () => queryRows(tx, 'matching.candidate-languages',
+        'SELECT language_label, level FROM public.candidate_languages WHERE candidate_profile_id = $1', [profileId]));
+      const certificates = await read('candidate_certificates', () => queryRows(tx, 'matching.candidate-certificates',
+        'SELECT certificate_label, expires_at FROM public.candidate_certificates WHERE candidate_profile_id = $1',
+        [profileId]));
+      const jobRows = await read('get_job_match_profile', () =>
+        rpcRows(tx, 'get_job_match_profile', { p_job_id: jobId }));
+      const locations = await read('locations', () => queryRows(tx, 'matching.locations',
+        'SELECT name, slug, latitude, longitude FROM public.locations WHERE is_active = true'));
+      return { cpData, skills, languages, certificates, jobRows, locationRows: locations };
+    });
+    if (!inputs) return { status: 'none' };
+    const cp = asRecord(inputs.cpData);
 
-    // Profil kandydata (własny wiersz pod RLS). Brak (po udanym odczycie) → nie kandydat.
-    const { data: cpData } = check(
-      await supabase
-        .from('candidate_profiles')
-        .select(
-          'id, occupations, categories, preferred_contract_types, city, region, radius_km, ' +
-            'has_driving_license, has_car, experience_years, availability',
-        )
-        .eq('profile_id', userId)
-        .maybeSingle(),
-      'candidate_profiles',
-    );
-    if (!cpData) return { status: 'none' };
-    const cp = asRecord(cpData);
-    const profileId = asStr(cp['id']);
-    if (!profileId) return { status: 'none' };
-
-    const [skillsRes, langsRes, certsRes, jobRes, locationsRes] = await Promise.all([
-      supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', profileId),
-      supabase.from('candidate_languages').select('language_label, level').eq('candidate_profile_id', profileId),
-      supabase.from('candidate_certificates').select('certificate_label, expires_at').eq('candidate_profile_id', profileId),
-      supabase.rpc('get_job_match_profile', { p_job_id: jobId }),
-      supabase.from('locations').select('name, slug, latitude, longitude').eq('is_active', true),
-    ]);
-    // Każdy odczyt osobno: pusta relacja po sukcesie ≠ relacja nieodczytana (błąd).
-    check(skillsRes, 'candidate_skills');
-    check(langsRes, 'candidate_languages');
-    check(certsRes, 'candidate_certificates');
-    check(jobRes, 'get_job_match_profile');
-    check(locationsRes, 'locations');
-
-    const jobRow = asArr(jobRes.data)[0];
+    const jobRow = inputs.jobRows[0];
     // Udany odczyt bez wiersza: oferta niedostępna publicznie (nie active/verified) lub nie istnieje.
     if (!jobRow) return { status: 'none' };
     const jr = asRecord(jobRow);
-    const locations = locationRows(locationsRes.data);
+    const locations = locationRows(inputs.locationRows);
     const candidateCity = asStr(cp['city']) || undefined;
     const jobCity = asStr(jr['city']) || undefined;
     // Poziomy wymagane przez ofertę (0074); starsze RPC bez kolumny → same etykiety (poziom dowolny).
@@ -181,15 +172,15 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
     const candidate: MatchCandidate = {
       occupations: asStrArr(cp['occupations']),
       categories: asStrArr(cp['categories']),
-      skills: labelsFrom(skillsRes.data, 'skill_label'),
+      skills: labelsFrom(inputs.skills, 'skill_label'),
       city: candidateCity,
       region: asStr(cp['region']) || undefined,
       radiusKm: asNum(cp['radius_km']),
       coordinates: resolveCoordinates(candidateCity, locations),
       experienceYears: asNum(cp['experience_years']),
       availability: asStr(cp['availability']) || undefined,
-      languages: languagesFrom(langsRes.data, 'language_label'),
-      certificates: certificatesFrom(certsRes.data),
+      languages: languagesFrom(inputs.languages, 'language_label'),
+      certificates: certificatesFrom(inputs.certificates),
       hasDrivingLicense: cp['has_driving_license'] === true,
       hasCar: cp['has_car'] === true,
       preferredContractTypes: asStrArr(cp['preferred_contract_types']),

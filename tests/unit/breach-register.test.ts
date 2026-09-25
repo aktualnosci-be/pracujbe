@@ -25,8 +25,7 @@ import { AUDIT_ACTION_KEY, AUDIT_ENTITY_TYPES } from '@/lib/admin/list-params';
 import { appLocalInputToUtc, utcToAppLocalInput } from '@/lib/datetime';
 import { renderEmail } from '@/emails/templates';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #490 — rejestr incydentów i naruszeń danych osobowych: kontrakt z migracją 0106, reguły
@@ -35,11 +34,7 @@ import { createServerClient } from '@/lib/supabase/server';
  * odbiorcy.
  */
 
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: vi.fn(),
-}));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const MIGRATION = readFileSync(resolve(process.cwd(), 'supabase/migrations/0106_breach_register.sql'), 'utf8');
@@ -62,18 +57,24 @@ function validForm(overrides: Partial<BreachForm> = {}): BreachForm {
   };
 }
 
-function mockSession(rpcResult: { data?: unknown; error?: { message: string } | null }) {
-  const rpc = vi.fn().mockResolvedValue({ data: rpcResult.data ?? null, error: rpcResult.error ?? null });
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: () => Promise.resolve({ data: { user: { id: 'admin-1' } } }) },
-    rpc,
-  } as never);
-  return rpc;
+const ADMIN = { id: '7c2a0b6e-4d3f-4e5a-9b9c-3f4a5b6c7d8e', role: 'admin' } as const;
+
+/** Wynik RPC w atrapie DB (błąd = wyjątek bazy jak z pg). Zwraca wywołania danej funkcji. */
+function mockSession(fn: string, rpcResult: { data?: unknown; error?: { message: string } | null }) {
+  fakeDb.rpc(fn, () => {
+    if (rpcResult.error) throw pgError('P0001', rpcResult.error.message);
+    return rpcResult.data ?? null;
+  });
+  return () => fakeDb.callsTo(fn);
+}
+
+/** Argument jsonb (`jsonArg`) trafia do bazy jako tekst JSON. */
+function json(value: unknown): unknown {
+  return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
 beforeEach(() => {
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  vi.mocked(createServerClient).mockReset();
+  resetFakeDb(ADMIN);
 });
 
 describe('#490 kontrakt z migracją 0106', () => {
@@ -249,40 +250,48 @@ describe('#490 odbiorcy zawiadomienia i eksport', () => {
 
 describe('#490 Server Actions', () => {
   it('niepoprawny formularz nie woła RPC', async () => {
-    const rpc = mockSession({});
+    const calls = mockSession('admin_create_breach_incident', {});
     const res = await createBreachIncident(KEY, { ...validForm(), title: '' });
     expect(res).toMatchObject({ ok: false, error: 'VALIDATION_FAILED', fields: { title: 'required' } });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(0);
   });
 
-  it('nowy wpis: jeden RPC z kluczem idempotencji', async () => {
-    const rpc = mockSession({ data: ID });
+  it('nowy wpis: jeden RPC z kluczem idempotencji, pod sesją administratora', async () => {
+    const calls = mockSession('admin_create_breach_incident', { data: ID });
     const res = await createBreachIncident(KEY, validForm());
     expect(res).toEqual({ ok: true, id: ID });
-    expect(rpc).toHaveBeenCalledWith('admin_create_breach_incident', {
-      p_client_key: KEY,
-      p_data: expect.objectContaining({ title: 'Błędny adresat', detectedAt: '2026-09-24T10:00:00.000Z' }),
-    });
+    expect(calls()).toHaveLength(1);
+    const [call] = calls();
+    expect(call!.as).toBe(ADMIN.id);
+    expect(call!.args['p_client_key']).toBe(KEY);
+    expect(json(call!.args['p_data'])).toMatchObject({ title: 'Błędny adresat', detectedAt: '2026-09-24T10:00:00.000Z' });
+  });
+
+  it('bez sesji → PERMISSION_DENIED, bez RPC', async () => {
+    fakeSession.identity = null;
+    const calls = mockSession('admin_create_breach_incident', { data: ID });
+    expect(await createBreachIncident(KEY, validForm())).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(calls()).toHaveLength(0);
   });
 
   it('błąd pola z bazy wraca przy polu; konflikt wersji → STALE_STATE', async () => {
-    mockSession({ error: { message: 'VALIDATION_FAILED: detectedAt:future' } });
+    mockSession('admin_update_breach_incident', { error: { message: 'VALIDATION_FAILED: detectedAt:future' } });
     expect(await updateBreachIncident(ID, 2, validForm())).toMatchObject({
       ok: false,
       fields: { detectedAt: 'future' },
     });
-    mockSession({ error: { message: 'STALE_STATE: wpis zmieniono w międzyczasie' } });
+    mockSession('admin_update_breach_incident', { error: { message: 'STALE_STATE: wpis zmieniono w międzyczasie' } });
     expect(await updateBreachIncident(ID, 2, validForm())).toMatchObject({ ok: false, error: 'STALE_STATE' });
   });
 
   it('bez env (DEMO) nic nie zapisuje', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await createBreachIncident(KEY, validForm())).toEqual({ ok: true, demo: true });
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('zawiadomienie: zły format odbiorcy bez RPC; brak języków z bazy → lista braków', async () => {
-    const rpc = mockSession({
+    const calls = mockSession('admin_notify_breach_subjects', {
       data: { status: 'invalid', unknown: [], unknownCount: 0, missingLocales: ['nl'] },
     });
     const bad = await notifyBreachSubjects(ID, KEY, {
@@ -290,19 +299,18 @@ describe('#490 Server Actions', () => {
       content: { pl: { subject: 'a', body: 'b' } },
     });
     expect(bad).toMatchObject({ ok: false, field: 'recipients', malformed: ['nie-adres'] });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(calls()).toHaveLength(0);
 
     const res = await notifyBreachSubjects(ID, KEY, {
       recipients: 'a@test.be',
       content: { pl: { subject: ' Temat ', body: 'Treść' }, nl: { subject: '', body: '' }, de: { subject: 'x', body: 'y' } },
     });
     expect(res).toMatchObject({ ok: false, missingLocales: ['nl'] });
-    expect(rpc).toHaveBeenCalledWith('admin_notify_breach_subjects', {
-      p_id: ID,
-      p_client_key: KEY,
-      p_recipients: ['a@test.be'],
-      p_content: { pl: { subject: 'Temat', body: 'Treść' } },
-    });
+    const [call] = calls();
+    expect(call!.args['p_id']).toBe(ID);
+    expect(call!.args['p_client_key']).toBe(KEY);
+    expect(call!.args['p_recipients']).toEqual(['a@test.be']);
+    expect(json(call!.args['p_content'])).toEqual({ pl: { subject: 'Temat', body: 'Treść' } });
   });
 });
 

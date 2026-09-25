@@ -2,10 +2,12 @@
 
 import { z } from 'zod/v3';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { attempt, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
-import { loadProfileVisibility } from '@/lib/data/profile-visibility';
+import { readProfileVisibility } from '@/lib/data/profile-visibility';
 
 /**
  * Server Action widoczności profilu kandydata dla firm (#494).
@@ -13,8 +15,8 @@ import { loadProfileVisibility } from '@/lib/data/profile-visibility';
  * Zapis wyłącznie przez RPC `set_candidate_searchable` (SECURITY DEFINER, 0029/0100): konto
  * kandydata z sesji (właściciela nie przyjmujemy od klienta), `true` tylko dla ukończonego
  * profilu, `false` zawsze; znacznik czasu i historia zapisywane w bazie przy realnej zmianie.
- * Zwracany stan pochodzi z bazy (ponowny odczyt po zapisie), nie z wartości wysłanej przez
- * przeglądarkę. Błędy → kod użytkowy (Invariant #8).
+ * Zwracany stan pochodzi z bazy (ponowny odczyt po zapisie w tej samej transakcji sesji),
+ * nie z wartości wysłanej przez przeglądarkę. Błędy → kod użytkowy (Invariant #8).
  */
 
 export type SetProfileVisibilityResult =
@@ -34,23 +36,26 @@ export async function setProfileVisibilityAction(searchable: unknown): Promise<S
   const parsed = z.boolean().safeParse(searchable);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
 
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     return { ok: true, searchable: parsed.data, changedAt: new Date().toISOString(), demo: true };
   }
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('set_candidate_searchable', { p_searchable: parsed.data });
-    if (error) return { ok: false, error: mapPgError(error.message) };
-
-    const confirmed = await loadProfileVisibility();
-    if (confirmed.status === 'ready') {
-      return { ok: true, searchable: confirmed.searchable, changedAt: confirmed.changedAt };
-    }
-    // Zapis przeszedł, odczyt nie: wartość zwrócona przez RPC jest stanem z bazy.
-    return { ok: true, searchable: data === true, changedAt: null };
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    return await withPortalTransaction(me, async (tx): Promise<SetProfileVisibilityResult> => {
+      const data = await rpc(tx, 'set_candidate_searchable', { p_searchable: parsed.data });
+      // Odczyt w SAVEPOINT: jego awaria nie cofa zapisu.
+      const confirmed = await attempt(tx, () => readProfileVisibility(tx, me.id));
+      if (confirmed.ok) {
+        return { ok: true, searchable: confirmed.value.searchable, changedAt: confirmed.value.changedAt };
+      }
+      captureError(confirmed.error, { area: 'profile-visibility.setAction.read' });
+      // Zapis przeszedł, odczyt nie: wartość zwrócona przez RPC jest stanem z bazy.
+      return { ok: true, searchable: data === true, changedAt: null };
+    });
   } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'profile-visibility.setAction' });
     return { ok: false, error: 'INTERNAL' };
   }

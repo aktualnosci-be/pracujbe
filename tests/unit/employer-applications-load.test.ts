@@ -1,35 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EMPLOYER_APPLICATIONS_PAGE_SIZE, getEmployerApplicationsPage } from '@/lib/data/employer';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
 import { getActiveCompany } from '@/lib/company-context';
 import { captureError } from '@/lib/sentry';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
-function client(rows: unknown[], error: unknown = null) {
-  const query = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    range: vi.fn().mockResolvedValue({ data: rows, error }),
-  };
-  const supabase = {
-    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } }) },
-    from: vi.fn().mockReturnValue(query),
-  };
-  vi.mocked(createServerClient).mockResolvedValue(supabase as never);
-  return { supabase, query };
+const USER = '11111111-1111-4111-8111-111111111111';
+
+function db(rows: unknown[], error: unknown = null) {
+  fakeDb.rows('employer.applications-page', () => {
+    if (error) throw error;
+    return rows;
+  });
 }
 
 beforeEach(() => {
-  vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  vi.clearAllMocks();
+  resetFakeDb({ id: USER, role: 'employer' });
   vi.mocked(getActiveCompany).mockResolvedValue({
     activeId: 'company-1', activeStatus: 'verified', activeName: 'Firma',
     activeRole: 'owner', companies: [],
@@ -38,20 +29,20 @@ beforeEach(() => {
 
 describe('employer applications page data', () => {
   it('returns a separate error state instead of an empty list on read failure', async () => {
-    const error = { code: 'DATABASE_UNAVAILABLE' };
-    const { query } = client([], error);
+    const error = pgError('XX000', 'DATABASE_UNAVAILABLE');
+    db([], error);
     expect(await getEmployerApplicationsPage(1)).toEqual({ status: 'error' });
-    expect(query.eq).toHaveBeenCalledWith('company_id', 'company-1');
+    expect(fakeDb.callsTo('employer.applications-page')[0]?.values[0]).toBe('company-1');
     expect(captureError).toHaveBeenCalledWith(error, { area: 'employer.getEmployerApplicationsPage' });
   });
 
   it('loads a bounded, stable page and uses one extra row to expose older results', async () => {
     const rows = Array.from({ length: EMPLOYER_APPLICATIONS_PAGE_SIZE + 1 }, (_, index) => ({
-      id: `app-${index}`, status: 'submitted',
+      id: `app-${index}`, status: 'submitted', candidate_id: `cand-${index}`,
       profiles: { first_name: 'Ada', last_name: 'Nowak' },
       jobs: { title: 'Operator' },
     }));
-    const { query } = client(rows);
+    db(rows);
     const result = await getEmployerApplicationsPage(2);
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
@@ -59,38 +50,51 @@ describe('employer applications page data', () => {
     expect(result.applications[0]).toEqual({ id: 'app-0', candidateName: 'Ada Nowak', jobTitle: 'Operator', status: 'submitted' });
     expect(result.hasMore).toBe(true);
     expect(result.isDemo).toBe(false);
-    expect(query.range).toHaveBeenCalledWith(12, 24);
-    expect(query.order).toHaveBeenCalledWith('submitted_at', { ascending: false });
-    expect(query.order).toHaveBeenCalledWith('id', { ascending: false });
+    const [call] = fakeDb.callsTo('employer.applications-page');
+    // LIMIT = strona + 1, OFFSET = (strona - 1) × 12.
+    expect(call?.values).toEqual(['company-1', 13, 12]);
+    expect(call?.text).toContain('ORDER BY a.submitted_at DESC, a.id DESC');
+    expect(call?.text).toContain('a.deleted_at IS NULL');
+    expect(call?.as).toBe(USER);
+  });
+
+  it('shows a guest application with its snapshot name (#98)', async () => {
+    db([{ id: 'app-g', status: 'submitted', candidate_id: null, guest_name: 'Jan Gość', profiles: null, jobs: { title: 'Operator' } }]);
+    const result = await getEmployerApplicationsPage(1);
+    expect(result.status === 'ok' && result.applications[0]).toEqual({
+      id: 'app-g', candidateName: 'Jan Gość', jobTitle: 'Operator', status: 'submitted', isGuest: true,
+    });
   });
 
   it('shows an actual empty state after a successful read', async () => {
-    client([]);
+    db([]);
     expect(await getEmployerApplicationsPage(1)).toEqual({ status: 'ok', applications: [], hasMore: false, isDemo: false });
   });
 
   it('does not read applications without an active company', async () => {
-    const { supabase } = client([]);
+    db([]);
     vi.mocked(getActiveCompany).mockResolvedValueOnce({
       activeId: null, activeStatus: 'unverified', activeName: '', activeRole: 'member', companies: [],
     });
     expect(await getEmployerApplicationsPage(1)).toEqual({ status: 'ok', applications: [], hasMore: false, isDemo: false });
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('rejects unbounded page numbers before accessing data', async () => {
-    const { supabase } = client([]);
+    db([]);
     expect(await getEmployerApplicationsPage(1001)).toEqual({ status: 'error' });
-    expect(supabase.from).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
+    expect(getActiveCompany).not.toHaveBeenCalled();
   });
 
   it('marks synthetic data clearly and does not spill it into later pages', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     const first = await getEmployerApplicationsPage(1);
     expect(first.status).toBe('ok');
     if (first.status !== 'ok') return;
     expect(first.isDemo).toBe(true);
     expect(first.applications.length).toBeGreaterThan(0);
     expect(await getEmployerApplicationsPage(2)).toEqual({ status: 'ok', applications: [], hasMore: false, isDemo: true });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });

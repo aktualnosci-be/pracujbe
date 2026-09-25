@@ -1,9 +1,11 @@
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { getTranslations } from 'next-intl/server';
 
 import { isLocale, type Locale } from '@/i18n/routing';
+import type { PortalIdentity } from '@/lib/auth/session';
+import { withPortalTransaction } from '@/lib/db/portal';
+import { rpcRows } from '@/lib/db/sql';
 import type { SalaryPeriod } from '@/lib/jobs';
 import { formatSalaryRange } from '@/lib/salary';
 import { salaryLabelsFor } from '@/lib/salary-labels';
@@ -65,15 +67,20 @@ export function toCampaignJob(row: unknown): CampaignJob | null {
   };
 }
 
+/** Odczyt pod sesją wywołującego (`withPortalTransaction`, #25); błąd bazy = `error`. */
 export async function loadManagedCampaignJob(
-  supabase: SupabaseClient,
+  me: PortalIdentity,
   jobId: string,
   locale: Locale,
 ): Promise<CampaignJobLoad> {
   if (!isCampaignJobId(jobId)) return { status: 'unavailable' };
-  const { data, error } = await supabase.rpc('get_managed_campaign_job', { p_job_id: jobId, p_locale: locale });
-  if (error) return { status: 'error' };
-  const rows = Array.isArray(data) ? data : [];
+  let rows: unknown[];
+  try {
+    rows = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_managed_campaign_job', { p_job_id: jobId, p_locale: locale }));
+  } catch {
+    return { status: 'error' };
+  }
   const job = rows.length === 1 ? toCampaignJob(rows[0]) : null;
   return job ? { status: 'ok', job } : { status: 'unavailable' };
 }

@@ -24,6 +24,15 @@ import { getAllGuideSlugs } from '@/lib/guides/guides';
  * lokalizowanych slugów zaktualizować ścieżki per język.
  */
 
+/**
+ * Generowany per żądanie, nie w `next build` (#429). W produkcji build celowo nie czyta bazy
+ * (#534: liczniki i oferty w fazie builda = brak danych), a sitemap bez liczników nie może
+ * zgadywać — prerender przerywał build z `APP_MODE=production` (Railway buduje ze zmiennymi
+ * usługi). Per żądanie sitemap widzi aktualne oferty; roboty pobierają go rzadko.
+ * Strażnik: `tests/unit/readiness-postgres-only.test.ts`.
+ */
+export const dynamic = 'force-dynamic';
+
 const JOBS_PATH = '/oferty-pracy';
 const HUB_PATH = '/praca';
 const GUIDES_PATH = '/poradniki';

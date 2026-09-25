@@ -2,12 +2,16 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getActiveCompany } from '@/lib/company-context';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpcRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/sentry';
 import { canManageTeam } from '@/lib/team/permissions';
 
 /**
- * Dane strony zespołu firmy (#403) — odczyt przez RPC z 0086 pod SESJĄ użytkownika.
+ * Dane strony zespołu firmy (#403) — odczyt przez RPC z 0086 pod SESJĄ użytkownika
+ * (`withPortalTransaction`, RLS; nigdy service-role).
  *
  * Wynik jawny: `ok` (także tryb demo bez env, `demo: true`) albo `error` — UI nigdy nie
  * pokazuje pustego zespołu zamiast błędu. Lista członków i zaproszeń firmy tylko dla
@@ -122,14 +126,18 @@ function mapMyInvitations(data: unknown): MyTeamInvitation[] {
   }));
 }
 
+function readMyInvitations(tx: TransactionQuery): Promise<Record<string, unknown>[]> {
+  return rpcRows(tx, 'get_my_company_invitations');
+}
+
 /** Zaproszenia do zespołów skierowane do zalogowanego (także bez własnej firmy). */
 export const getMyTeamInvitations = cache(async (): Promise<MyInvitationsResult> => {
-  if (!isSupabaseConfigured()) return { status: 'ok', invitations: [] };
+  if (!isPortalDataConfigured()) return { status: 'ok', invitations: [] };
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('get_my_company_invitations');
-    if (error) throw error;
+    const me = await getPortalIdentity();
+    // Gość nie ma prawa wykonania RPC (tylko authenticated) — jak dotąd: stan błędu.
+    if (!me) return { status: 'error' };
+    const data = await withPortalTransaction(me, readMyInvitations);
     return { status: 'ok', invitations: mapMyInvitations(data) };
   } catch (error) {
     captureError(error, { area: 'team.getMyTeamInvitations' });
@@ -138,24 +146,26 @@ export const getMyTeamInvitations = cache(async (): Promise<MyInvitationsResult>
 });
 
 export async function getTeamPageData(): Promise<TeamPageData> {
-  if (!isSupabaseConfigured()) return DEMO_DATA;
+  if (!isPortalDataConfigured()) return DEMO_DATA;
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) return { status: 'error' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
 
-    const { getActiveCompany } = await import('@/lib/company-context');
-    const ctx = await getActiveCompany(supabase, user.id);
-    if (!ctx.activeId) return { status: 'error' };
+    // Jedna transakcja „wszystko albo nic": kontekst firmy, własne zaproszenia, zespół.
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      const ctx = await getActiveCompany(tx, me.id);
+      if (!ctx.activeId) return null;
+      const mine = await readMyInvitations(tx);
+      if (!canManageTeam(ctx.activeRole)) return { ctx, mine, team: null, invites: [] };
+      const team = await rpcRows(tx, 'get_company_team', { p_company_id: ctx.activeId });
+      const invites = await rpcRows(tx, 'get_company_invitations', { p_company_id: ctx.activeId });
+      return { ctx, mine, team, invites };
+    });
+    if (!loaded) return { status: 'error' };
+    const { ctx } = loaded;
+    const myInvitations = mapMyInvitations(loaded.mine);
 
-    const mine = await getMyTeamInvitations();
-    if (mine.status === 'error') return { status: 'error' };
-
-    if (!canManageTeam(ctx.activeRole)) {
+    if (loaded.team === null) {
       return {
         status: 'ok',
         demo: false,
@@ -163,18 +173,11 @@ export async function getTeamPageData(): Promise<TeamPageData> {
         companyName: ctx.activeName,
         members: null,
         invitations: [],
-        myInvitations: mine.invitations,
+        myInvitations,
       };
     }
 
-    const [team, invites] = await Promise.all([
-      supabase.rpc('get_company_team', { p_company_id: ctx.activeId }),
-      supabase.rpc('get_company_invitations', { p_company_id: ctx.activeId }),
-    ]);
-    if (team.error) throw team.error;
-    if (invites.error) throw invites.error;
-
-    const members: TeamMember[] = rows(team.data).map((r) => ({
+    const members: TeamMember[] = rows(loaded.team).map((r) => ({
       id: asString(r['member_id']),
       name: [asString(r['first_name']), asString(r['last_name'])]
         .map((s) => s.trim())
@@ -186,7 +189,7 @@ export async function getTeamPageData(): Promise<TeamPageData> {
       joinedAt: asString(r['joined_at']),
       isSelf: r['is_self'] === true,
     }));
-    const invitations: TeamInvitation[] = rows(invites.data).map((r) => ({
+    const invitations: TeamInvitation[] = rows(loaded.invites).map((r) => ({
       id: asString(r['invitation_id']),
       email: asString(r['email']),
       role: asString(r['role']),
@@ -200,7 +203,7 @@ export async function getTeamPageData(): Promise<TeamPageData> {
       companyName: ctx.activeName,
       members,
       invitations,
-      myInvitations: mine.invitations,
+      myInvitations,
     };
   } catch (error) {
     captureError(error, { area: 'team.getTeamPageData' });
