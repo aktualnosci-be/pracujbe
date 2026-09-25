@@ -4,6 +4,11 @@ import type { GetJobsParams } from '../jobs';
 import { isLocale, routing } from '@/i18n/routing';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import {
+  isJobListPageBeyondLimit,
+  jobListLastPage,
+  jobListNaturalOffset,
+} from '@/lib/job-list-pagination';
+import {
   withUserTransaction,
   type TransactionPool,
   type TransactionQuery,
@@ -16,6 +21,9 @@ export interface PublicJobsResult {
   total: number;
   page: number;
   pageSize: number;
+  /** Ostatnia osiągalna strona (#593) — nigdy więcej niż `MAX_JOB_LIST_OFFSET` naturalnego
+   *  offsetu; `total` zostaje dokładny nawet gdy przekracza tę granicę. */
+  maxPage: number;
 }
 
 // To wyłącznie stałe nazwy argumentów RPC. Dane zawsze trafiają do parametrów
@@ -104,21 +112,28 @@ export async function getPublicJobs(
   const pageSize = positiveInteger(params.pageSize, 12, 100);
   const values = filterValues(params);
   return withUserTransaction(pool, viewerId, async (transaction) => {
-    // to_jsonb zachowuje daty jako tekst ISO oraz liczby/NULL/tablice, bez parserów
-    // typów pg zmieniających timestamptz/date na obiekty Date w starej warstwie UI.
-    const result = (await transaction.query(
-      `SELECT to_jsonb(job) AS job
-      FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-        p_sort => $14::text, p_limit => $15::integer, p_offset => $16::integer) AS job`,
-      [
-        ...values,
-        params.sort ?? 'newest',
-        pageSize,
-        Math.min(10_000, (page - 1) * pageSize),
-      ],
-    )) as { rows: { job: PublicJobRow }[] };
     const total = await readCount(transaction, values);
-    return { rows: result.rows.map((row) => row.job), total, page, pageSize };
+    // #593: strona POZA rzeczywistą granicą danych (naturalny offset > 10 000) nie odpytuje
+    // RPC — inaczej różne numery stron zmapowałyby się na ten sam klampowany offset i
+    // zwróciły identyczny wycinek. Jawny, pusty koniec listy zamiast duplikatu.
+    const rows = isJobListPageBeyondLimit(page, pageSize)
+      ? []
+      : // to_jsonb zachowuje daty jako tekst ISO oraz liczby/NULL/tablice, bez parserów
+        // typów pg zmieniających timestamptz/date na obiekty Date w starej warstwie UI.
+        (
+          (await transaction.query(
+            `SELECT to_jsonb(job) AS job
+            FROM public.get_public_jobs(${FILTER_ARGUMENTS},
+              p_sort => $14::text, p_limit => $15::integer, p_offset => $16::integer) AS job`,
+            [
+              ...values,
+              params.sort ?? 'newest',
+              pageSize,
+              jobListNaturalOffset(page, pageSize),
+            ],
+          )) as { rows: { job: PublicJobRow }[] }
+        ).rows.map((row) => row.job);
+    return { rows, total, page, pageSize, maxPage: jobListLastPage(total, pageSize) };
   });
 }
 
