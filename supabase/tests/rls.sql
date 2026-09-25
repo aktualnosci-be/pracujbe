@@ -11540,6 +11540,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'RVC4','rvc4@test.be','Rv Cztery','{"role":"candidate","first_name":"Rv","last_name":"Cztery","locale":"en"}'),
   (:'RVC5','rvc5@test.be','Rv Piec','{"role":"candidate","first_name":"Rv","last_name":"Piec","locale":"pl"}'),
   (:'RVC6','rvc6@test.be','Rv Szesc','{"role":"candidate","first_name":"Rv","last_name":"Szesc","locale":"pl"}');
+select test_fixture.attest_candidates();
 -- DR486-8 zmieniła dwie wartości przez admina — przywracamy wartości z opracowania.
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select public.admin_set_retention_policy('closed_application', 180);
