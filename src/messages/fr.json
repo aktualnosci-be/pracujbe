@@ -1201,7 +1201,20 @@
     "itemModerationAppealUpheld": "Recours examiné : décision maintenue",
     "itemModerationAppealReversed": "Recours accueilli : décision modifiée",
     "itemScreeningApproved": "Une question de votre offre a été acceptée",
-    "itemScreeningRejected": "Une question de votre offre n’a pas été acceptée"
+    "itemScreeningRejected": "Une question de votre offre n’a pas été acceptée",
+    "listIntro": "Toutes les notifications de votre compte, des plus récentes aux plus anciennes.",
+    "filterLabel": "Filtre des notifications",
+    "filterAll": "Toutes",
+    "filterUnread": "Non lues",
+    "markRead": "Marquer comme lue",
+    "markReadItem": "Marquer comme lue : {title}",
+    "markedRead": "Notification marquée comme lue.",
+    "emptyUnread": "Vous n’avez aucune notification non lue.",
+    "unreadCount": "{count, plural, =0 {Aucune non lue} one {1 non lue} other {# non lues}}",
+    "loadMore": "Afficher plus",
+    "loadingMore": "Chargement…",
+    "listEnd": "Ce sont toutes vos notifications.",
+    "moreError": "Impossible de charger plus de notifications. Veuillez réessayer."
   },
   "pricing": {
     "standard": "Standard",

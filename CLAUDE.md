@@ -1222,8 +1222,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w panelu. **Otwarte (#503, właściciel):** czy cytat wiadomości rekrutera może trafić do e-maila.
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
-  tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” ukryte do czasu
-  dedykowanej listy (#148).
+  tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
+  pełnej listy (#148).
+  Pełna lista (#148): `/candidate/powiadomienia` i `/employer/powiadomienia` (noindex, guard
+  layoutu) — `getNotificationsPage` pod sesją/RLS, po 20 kursorem `created_at` + `id`
+  (`loadMoreNotifications`, kursor/locale/filtr walidowane), filtr `?nieprzeczytane=1`
+  (nawigacja z `aria-current`), oznaczanie pojedynczo i wszystkich (`mark_notifications_read`,
+  fokus na tytule/nagłówku, błąd z kodu), cele i tytuły z tych samych `resolveHref`/
+  `titleKeyForType` co dropdown, data w Europe/Brussels + czas względny; kalka `panel-styles.ts`.
+  Wczytane strony zostają po oznaczeniu i po błędzie kolejnej strony. Bez migracji (indeks
+  `idx_notifications_profile`). Dowód: `portal-notifications.test.ts` (PG16: równy
+  `created_at` na granicy strony, filtr, obcy kursor; mutacja kursora = czerwony), unit
+  `notifications-page`, `notifications-list` (kontrola ujemna bez listy), E2E
+  `notifications-list` (4 języki, obie role), `panel-a11y` (nowe trasy).
   Dzwonek (#353): nazwa z liczbą nieprzeczytanych (ICU `notifications.bellLabel`), panel = region
   nazwany tytułem, „Nieprzeczytane” dla czytnika; Escape zamyka i wraca fokusem na dzwonek, wyjście
   fokusem poza panel go zamyka. „Oznacz wszystkie” (#354): `aria-busy` + „Zapisywanie…”, jedno
@@ -1582,7 +1593,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
-  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 26 trasach
+  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 29 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),

@@ -1201,7 +1201,20 @@
     "itemModerationAppealUpheld": "Bezwaar behandeld: beslissing gehandhaafd",
     "itemModerationAppealReversed": "Bezwaar gegrond: beslissing gewijzigd",
     "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
-    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd"
+    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd",
+    "listIntro": "Alle meldingen van je account, nieuwste eerst.",
+    "filterLabel": "Meldingenfilter",
+    "filterAll": "Alle",
+    "filterUnread": "Ongelezen",
+    "markRead": "Markeren als gelezen",
+    "markReadItem": "Markeren als gelezen: {title}",
+    "markedRead": "Melding gemarkeerd als gelezen.",
+    "emptyUnread": "Je hebt geen ongelezen meldingen.",
+    "unreadCount": "{count, plural, =0 {Geen ongelezen} one {1 ongelezen} other {# ongelezen}}",
+    "loadMore": "Meer tonen",
+    "loadingMore": "Laden…",
+    "listEnd": "Dat zijn al je meldingen.",
+    "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw."
   },
   "pricing": {
     "standard": "Standaard",
