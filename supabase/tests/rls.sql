@@ -9236,6 +9236,81 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
+-- LOC194. Słownik miejscowości z aliasami (#194, 0112): gminy Belgii + lista kanoniczna,
+--         aliasy PL/NL/FR/EN po kluczu cityKey, odczyt publiczny, zapis tylko serwisowy.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.locations where kind = 'municipality' and is_demo = false) >= 560
+  and (select count(*) from public.locations where kind = 'former_municipality') >= 20,
+  'LOC194-1 gminy obecne i zniesione przy fuzjach w słowniku');
+select pg_temp.assert(not exists (
+    select 1 from public.locations l
+     where l.country = 'BE' and l.latitude is not null
+       and not exists (select 1 from public.location_aliases a where a.location_id = l.id)),
+  'LOC194-2 każda miejscowość ma alias');
+select pg_temp.assert(
+  (select (name, latitude, longitude, sort_order) = ('Brussels', 50.850300, 4.351700, 10)
+     from public.locations where slug = 'brussels')
+  and (select (name, latitude, longitude, sort_order) = ('Liège', 50.632600, 5.579700, 70)
+     from public.locations where slug = 'liege'),
+  'LOC194-3 wiersze 0010 bez zmian');
+
+-- Zapytanie loadera (src/lib/data/matching.ts) pod rolą klienta i RLS.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select array_agg(format('%s:%s,%s', a.alias_key, l.latitude, l.longitude) order by a.alias_key)
+     from public.location_aliases a join public.locations l on l.id = a.location_id
+    where l.is_active = true and a.alias_key = any(array['antwerpia', 'luik', 'atlantyda']))
+  = array['antwerpia:51.219400,4.402500', 'luik:50.632600,5.579700'],
+  'LOC194-4 alias PL/NL → współrzędne, nieznane miasto bez wiersza');
+select pg_temp.assert(
+  (select location_id from public.location_aliases where alias_key = 'elsene')
+  = (select location_id from public.location_aliases where alias_key = 'ixelles'),
+  'LOC194-5 nazwy NL/FR gminy spoza listy w kodzie wskazują ten sam wiersz');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''X'', ''x-loc194'' from public.locations limit 1',
+  'permission denied', 'LOC194-6 zalogowany nie dodaje aliasu');
+select pg_temp.expect_error('update public.location_aliases set alias = alias',
+  'permission denied', 'LOC194-6b zalogowany nie zmienia aliasu');
+select pg_temp.expect_error('update public.locations set latitude = 0',
+  'permission denied', 'LOC194-6c zalogowany nie zmienia współrzędnych');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases where alias_key = 'bruksela') = 1,
+  'LOC194-7 anon czyta aliasy');
+select pg_temp.expect_error('delete from public.location_aliases',
+  'permission denied', 'LOC194-7b anon nie usuwa aliasów');
+reset role;
+
+-- Integralność: jeden klucz = jedna miejscowość, klucz w postaci cityKey, NIS unikalny.
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Antwerpia'', ''antwerpia'' from public.locations where slug = ''ghent''',
+  'duplicate key', 'LOC194-8 alias nie wskazuje dwóch miejscowości');
+select pg_temp.expect_error(
+  'insert into public.location_aliases (location_id, alias, alias_key) select id, ''Sint-X'', ''Sint-X'' from public.locations where slug = ''ghent''',
+  'location_aliases_key_format', 'LOC194-8b klucz nie w postaci cityKey');
+select pg_temp.expect_error(
+  'update public.locations set refnis = (select refnis from public.locations where slug = ''antwerp'') where slug = ''ghent''',
+  'duplicate key', 'LOC194-8c kod NIS unikalny');
+
+-- Usunięcie miejscowości usuwa jej aliasy (kaskada), bez sierot.
+begin;
+delete from public.locations where slug = 'namur';
+select pg_temp.assert(not exists (select 1 from public.location_aliases where alias_key in ('namur', 'namen')),
+  'LOC194-9 aliasy usuwane kaskadowo');
+rollback;
+
+-- Kontrola ujemna: bez polityki odczytu klient nie widzi aliasów (RLS włączone, deny).
+begin;
+drop policy location_aliases_public_read on public.location_aliases;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.location_aliases) = 0,
+  'LOC194-10 kontrola ujemna: bez polityki RLS brak odczytu');
+reset role;
+rollback;
+
+-- ============================================================================
 -- AC45. Panel admina kampanii e-mail (#45, 0111): admin_activate/cancel_email_campaign —
 --       tylko admin (is_admin), CAS statusu (STALE_STATE), macierz przejść
 --       (INVALID_TRANSITION), skutek = istniejące RPC z 0101, audyt bez treści i odbiorców.

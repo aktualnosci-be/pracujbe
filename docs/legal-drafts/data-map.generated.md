@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
+Tabele w migracjach: 92; z danymi osobowymi: 58; bez danych osobowych: 34.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -1063,6 +1063,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
 | `public.job_translations` | Treść ogłoszenia (dane firmy). |
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |
+| `public.location_aliases` | Słownik/konfiguracja (nazwy miejscowości PL/NL/FR/EN) — bez danych osobowych. |
 | `public.locations` | Słownik/konfiguracja (miejscowości) — bez danych osobowych. |
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |

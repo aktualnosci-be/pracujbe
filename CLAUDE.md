@@ -812,8 +812,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `locations` z bazy, potem kanoniczna lista ~46 belgijskich miast w kodzie z aliasami
   PL/NL/FR/EN (`src/lib/matching/belgian-cities.ts`, 10 miast = wartości z `0010`, strażnik
   w `matching-locations.test.ts`); miasto spoza obu → ten sam region = 10 bez etykiety
-  „w promieniu”. **Do zrobienia:** współrzędne w bazie dla pozostałych miast (migracja
-  `locations`), geokodowanie miejscowości spoza listy.
+  „w promieniu”.
+  Słownik w bazie (#194, migracja `0112`): 602 miejscowości = lista
+  kanoniczna z kodu (jej współrzędne i aliasy mają pierwszeństwo) + wszystkie gminy Belgii
+  i gminy zniesione przy fuzjach 2019/2025 z migawki Wikidata (CC0 1.0,
+  `data/locations/`, bez API w runtime), `is_demo = false`. Kolumny `locations.kind`
+  (`municipality`/`former_municipality`/`locality`) i `refnis` (kod NIS). Tabela
+  `location_aliases` (nazwy PL/NL/FR/EN, `alias_key` = `cityKey`, unikalny; własna nazwa gminy
+  wygrywa z egzonimem — „Saint-Nicolas” to gmina w prowincji Liège, nie Sint-Niklaas),
+  odczyt publiczny, zapis service_role. Loader `getMyJobMatch` pyta tylko o klucze miasta
+  kandydata i oferty. Migracja jest GENEROWANA (`node scripts/locations/build-migration.mjs`;
+  odświeżenie migawki `node scripts/locations/fetch-wikidata.mjs`); test porównuje plik
+  z generatorem, lustro TS z bazą (z kontrolą ujemną) i klucze z `cityKey`. Dowód: `rls.sql`
+  sekcja LOC194 (kontrola ujemna bez polityki RLS), rollback `supabase/rollback/0112_…down.sql`,
+  integracja `portal-candidate` (Puurs–Bornem tylko z bazy; mutacja bez słownika = czerwony).
+  **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
+  zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
