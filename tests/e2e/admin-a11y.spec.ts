@@ -45,6 +45,8 @@ const ROUTES = [
   '/admin/dziennik',
   '/admin/odwolania',
   '/admin/raport-dsa',
+  // Koszty AI (#36) — raport tylko do odczytu.
+  '/admin/koszty-ai',
 ];
 
 for (const viewport of [

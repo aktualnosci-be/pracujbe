@@ -70,7 +70,10 @@ Limity w kodzie:
 | Wywołanie API | timeout 60 s, 1 ponowienie, `max_tokens` 8000 | `src/lib/ai-import/extract.ts` |
 
 Górna granica przy pełnym wykorzystaniu limitu: ~30 × 0,14 USD ≈ 4 USD dziennie na firmę (Opus 5).
-Globalny budżet miesięczny i raport kosztów (`usage`) → #36.
+Globalny budżet (#36, `docs/AI_BUDGET.md`): każde wywołanie rezerwuje górną granicę kosztu
+(Opus 5: ~0,21–0,33 USD) przed API i rozlicza się tokenami z `usage`; limit startowy 10 USD/dobę
+i 100 USD/miesiąc dla wszystkich funkcji AI. Po przekroczeniu import zwraca
+`AI_BUDGET_EXCEEDED` bez wywołania modelu. Raport: `/admin/koszty-ai`.
 
 Limiter używa istniejącego `rate_limit_hit` (0015) — nowa migracja nie była potrzebna
 (zarezerwowany numer 0090 pozostaje wolny).

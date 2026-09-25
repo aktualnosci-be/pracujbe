@@ -141,9 +141,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'employer-contact': {
     name: 'Kontakt pracodawca–kandydat',
-    inCode: 'Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata.',
+    inCode: 'Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata.',
     processors: [...HOSTING, 'resend', 'emaillabs'],
-    retentionInCode: 'Propozycje wygasają (expires_at), dane nie są usuwane.',
+    retentionInCode:
+      'Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue.',
   },
   companies: {
     name: 'Konta firm, zespół i weryfikacja',
@@ -410,8 +411,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
 
   // --- Pliki ------------------------------------------------------------------------------
   'public.files': {
-    activities: ['cv-files'],
-    subjects: ['candidate'],
+    activities: ['cv-files', 'employer-contact'],
+    subjects: ['candidate', 'employer'],
     columns: {
       owner_id: 'reference',
       bucket: 'file',
@@ -422,7 +423,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane. entity_type: candidate_cv (CV) albo message_attachment (załącznik rozmowy, entity_id = rozmowa).',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------
@@ -534,6 +535,17 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['employer-contact'],
     subjects: ['candidate', 'employer'],
     columns: { sender_id: 'reference', body: 'correspondence', read_at: 'technical' },
+  },
+  'public.message_attachments': {
+    activities: ['employer-contact'],
+    subjects: ['candidate', 'employer'],
+    columns: { uploader_id: 'reference', file_id: 'reference', message_id: 'reference' },
+    notPersonal: {
+      client_upload_id: 'Losowy klucz idempotencji uploadu.',
+      position: 'Kolejność pliku w wiadomości.',
+      linked_at: 'Czas wysłania z wiadomością.',
+    },
+    note: 'Powiązanie pliku (public.files) z rozmową i wiadomością; treść i nazwa pliku w public.files/buckecie.',
   },
 
   // --- Firmy -------------------------------------------------------------------------------
@@ -711,6 +723,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       decided_by: 'reference',
     },
     note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
+  },
+  'public.ai_budget_limits': DICTIONARY('globalne limity kosztów AI, #36'),
+  'public.ai_usage_ledger': {
+    activities: ['ai-job-import'],
+    subjects: [],
+    columns: {},
+    note: 'Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36).',
   },
   'public.dsa_retention_runs': {
     activities: ['dsa-moderation'],
