@@ -4,37 +4,48 @@ import { resolve } from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { resendApiKeyFromEnv } from '@/lib/email/transport/select';
+
 /**
  * #587 — skopiowany bez zmian `.env.example` nie może dawać fałszywej gotowości poczty. Placeholder
- * `re_YOUR_KEY` musi zachowywać się jak brak klucza: `resendApiKey()`/`readinessChecks().resend`
- * i workery kolejki (`email/outbox.ts`, `auth/email-worker.ts`) czytają wyłącznie ten helper.
+ * `re_YOUR_KEY` musi zachowywać się jak brak klucza w KAŻDYM miejscu, które czyta `RESEND_API_KEY`:
+ * `resendApiKeyFromEnv()` jest jedynym źródłem prawdy dla `emailProviderFromEnv`/`mailTransportFromEnv`
+ * (`src/lib/email/transport/`) i dla `readinessChecks().resend` (`src/lib/env.ts`).
  */
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('resendApiKey odrzuca placeholdery (#587)', () => {
-  it.each([undefined, '', 're_YOUR_KEY'])('traktuje %s jak brak klucza', async (value) => {
-    if (value === undefined) vi.stubEnv('RESEND_API_KEY', '');
-    else vi.stubEnv('RESEND_API_KEY', value);
-    const { resendApiKey } = await import('@/lib/env');
-    expect(resendApiKey()).toBeUndefined();
+describe('resendApiKeyFromEnv odrzuca placeholdery (#587)', () => {
+  it.each([undefined, '', 're_YOUR_KEY', '  re_YOUR_KEY  '])('traktuje %s jak brak klucza', (value) => {
+    expect(resendApiKeyFromEnv({ RESEND_API_KEY: value })).toBeNull();
   });
 
-  it('zwraca prawdziwy klucz bez zmian', async () => {
+  it('zwraca prawdziwy klucz bez zmian', () => {
+    expect(resendApiKeyFromEnv({ RESEND_API_KEY: 're_live_realistic_key_123' })).toBe(
+      're_live_realistic_key_123',
+    );
+  });
+
+  it('domyślnie czyta z process.env (#587: .env.example skopiowany bez zmian)', () => {
+    vi.stubEnv('RESEND_API_KEY', 're_YOUR_KEY');
+    expect(resendApiKeyFromEnv()).toBeNull();
+
     vi.stubEnv('RESEND_API_KEY', 're_live_realistic_key_123');
-    const { resendApiKey } = await import('@/lib/env');
-    expect(resendApiKey()).toBe('re_live_realistic_key_123');
+    expect(resendApiKeyFromEnv()).toBe('re_live_realistic_key_123');
   });
 
   it('readinessChecks().resend jest false z placeholderem, true z prawdziwym kluczem', async () => {
     vi.stubEnv('RESEND_API_KEY', 're_YOUR_KEY');
+    vi.stubEnv('EMAIL_PROVIDER', 'resend');
     const { readinessChecks } = await import('@/lib/env');
     expect(readinessChecks().resend).toBe(false);
+    expect(readinessChecks().emailProviderReady).toBe(false);
 
     vi.stubEnv('RESEND_API_KEY', 're_live_realistic_key_123');
     expect(readinessChecks().resend).toBe(true);
+    expect(readinessChecks().emailProviderReady).toBe(true);
   });
 });
 

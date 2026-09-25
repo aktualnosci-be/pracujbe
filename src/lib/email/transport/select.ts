@@ -60,4 +60,3 @@ export function emailProviderFromEnv(env: Env = process.env): EmailProviderSelec
   if (resendReady) return { provider: 'resend', ready: true };
   return { provider: null, ready: false };
 }
-
