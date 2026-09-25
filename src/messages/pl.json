@@ -2188,6 +2188,8 @@
     "breachExportJson": "Eksport JSON",
     "breachExportCsv": "Eksport CSV",
     "breachExportHint": "Eksport zawiera wpis i historię zmian, bez adresów odbiorców zawiadomień. Każdy eksport zostaje w historii.",
+    "breachExportPending": "Eksportowanie…",
+    "breachExportError": "Nie udało się pobrać eksportu. Spróbuj ponownie.",
     "breachActionClose": "Zamknij wpis",
     "breachActionReopen": "Otwórz ponownie",
     "breachCloseTitle": "Zamknąć wpis?",

@@ -53,6 +53,8 @@ import {
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
  *
+ * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
+ * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
  * Chroniony `MAINTENANCE_SECRET` (`Authorization: Bearer`); przejściowo także `CRON_SECRET`
  * (`src/lib/cron/secrets.ts` — sekret e-mail nie otwiera tego zadania).
  * Wymaga puli service_role (`DATABASE_SERVICE_URL`; RPC są service_role-only). #25: każde
@@ -226,8 +228,12 @@ async function run(request: Request): Promise<Response> {
   });
 }
 
-export async function GET(request: Request): Promise<Response> {
-  return run(request);
+/**
+ * GET jest metodą bezpieczną (RFC 9110 §9.2.1) i nie może uruchamiać zadań mutujących —
+ * `405` bez autoryzacji, dostępu do bazy ani żadnego efektu ubocznego (#581).
+ */
+export async function GET(): Promise<Response> {
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405, headers: { Allow: 'POST' } });
 }
 export async function POST(request: Request): Promise<Response> {
   return run(request);

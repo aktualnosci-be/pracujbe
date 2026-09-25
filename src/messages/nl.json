@@ -2188,6 +2188,8 @@
     "breachExportJson": "Export JSON",
     "breachExportCsv": "Export CSV",
     "breachExportHint": "De export bevat de registerregel en de geschiedenis, zonder adressen van ontvangers. Elke export blijft in de geschiedenis.",
+    "breachExportPending": "Bezig met exporteren…",
+    "breachExportError": "Exporteren is mislukt. Probeer het opnieuw.",
     "breachActionClose": "Registerregel afsluiten",
     "breachActionReopen": "Heropenen",
     "breachCloseTitle": "Registerregel afsluiten?",
