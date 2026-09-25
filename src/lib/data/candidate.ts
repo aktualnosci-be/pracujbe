@@ -288,7 +288,7 @@ async function fetchOfferedJobsMap(tx: TransactionQuery, locale: Locale): Promis
 
 /**
  * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Parametr
- * `p_job_ids` zawęża wynik WEWNĄTRZ RPC (0109), więc baza nie liczy całej historii, a „Pokaż
+ * `p_job_ids` zawęża wynik WEWNĄTRZ RPC (0113), więc baza nie liczy całej historii, a „Pokaż
  * więcej” nie przesyła jej danych. RPC zwraca wyłącznie oferty własnych aplikacji
  * (auth.uid()), dlatego cudze lub niepowiązane `job_id` nie dają żadnego wiersza.
  */

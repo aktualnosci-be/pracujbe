@@ -9236,7 +9236,7 @@ select pg_temp.assert((select count(*) >= 0 from public.claim_email_batch(1, 60)
 reset role;
 
 -- ============================================================================
--- PL109. Payloady e-maili i odczyt historii (0109; #293, #22, #290, #184):
+-- PL109. Payloady e-maili i odczyt historii (0113; #293, #22, #290, #184):
 --   send_offer → expiresAt + kwoty oferty (bez treści wiadomości rekrutera, #503),
 --   send_message → conversationId, get_applied_jobs_display(p_locale, p_job_ids).
 --   Kontrole ujemne (transakcje cofane): definicja bez nowego klucza → asercja pada.
