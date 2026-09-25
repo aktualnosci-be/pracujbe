@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { processStorageDeletions, railwayDeleter, supabaseDeleter } from '@/lib/storage-deletion';
+import { processStorageDeletions, railwayDeleter, unconfiguredDeleter, type ObjectDeleter } from '@/lib/storage-deletion';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
@@ -10,9 +10,10 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
-function storage(remove: (bucket: string, paths: string[]) => Promise<{ error: unknown }>) {
-  const from = vi.fn((bucket: string) => ({ remove: (paths: string[]) => remove(bucket, paths) }));
-  return { client: { storage: { from } }, from };
+/** Usuwacz obiektów jak adapter bucketu: `null` = sukces, inaczej kod błędu. */
+function storage(remove: (bucket: string, path: string) => Promise<string | null>) {
+  const from = vi.fn(remove);
+  return { deleter: from as ObjectDeleter, from };
 }
 
 function claim(rows: unknown) {
@@ -34,14 +35,14 @@ describe('processStorageDeletions', () => {
       { id: 'q2', bucket: 'candidate-files', path: 'u2/cv-b.pdf' },
       { id: 'q3', bucket: 'candidate-files', path: 'u3/cv-c.pdf' },
     ]);
-    const { client } = storage((_bucket, paths) =>
-      paths[0] === 'u2/cv-b.pdf'
-        ? Promise.resolve({ error: { message: 'Service unavailable at storage.internal' } })
-        : paths[0] === 'u3/cv-c.pdf'
+    const { deleter } = storage((_bucket, path) =>
+      path === 'u2/cv-b.pdf'
+        ? Promise.resolve('STORAGE_ERROR')
+        : path === 'u3/cv-c.pdf'
           ? Promise.reject(new Error('socket hang up'))
-          : Promise.resolve({ error: null }),
+          : Promise.resolve(null),
     );
-    expect(await processStorageDeletions(supabaseDeleter(client), 10)).toEqual({ claimed: 3, deleted: 1, failed: 2 });
+    expect(await processStorageDeletions(deleter, 10)).toEqual({ claimed: 3, deleted: 1, failed: 2 });
     expect(fakeDb.callsTo('claim_storage_deletions')[0]).toMatchObject({ args: { p_limit: 10 }, as: 'service' });
     expect(completions()).toEqual([
       { p_id: 'q1', p_ok: true, p_error: null },
@@ -54,15 +55,15 @@ describe('processStorageDeletions', () => {
 
   it('błąd pobrania partii przerywa zadanie (503 w maintenance)', async () => {
     fakeDb.rpc('claim_storage_deletions', () => { throw pgError('42501', 'permission denied'); });
-    const { client, from } = storage(() => Promise.resolve({ error: null }));
-    await expect(processStorageDeletions(supabaseDeleter(client))).rejects.toMatchObject({ message: 'permission denied' });
+    const { deleter, from } = storage(() => Promise.resolve(null));
+    await expect(processStorageDeletions(deleter)).rejects.toMatchObject({ message: 'permission denied' });
     expect(from).not.toHaveBeenCalled();
   });
 
   it('pomija wiersze o nieoczekiwanym kształcie', async () => {
     claim([{ id: 'q1' }, null]);
-    const { client, from } = storage(() => Promise.resolve({ error: null }));
-    expect(await processStorageDeletions(supabaseDeleter(client))).toEqual({ claimed: 0, deleted: 0, failed: 0 });
+    const { deleter, from } = storage(() => Promise.resolve(null));
+    expect(await processStorageDeletions(deleter)).toEqual({ claimed: 0, deleted: 0, failed: 0 });
     expect(from).not.toHaveBeenCalled();
     expect(completions()).toEqual([]);
   });
@@ -78,5 +79,11 @@ describe('processStorageDeletions', () => {
     expect(await processStorageDeletions(railwayDeleter({ delete: del }))).toEqual({ claimed: 2, deleted: 1, failed: 1 });
     expect(del).toHaveBeenCalledWith({ key: 'u1/cv-a.pdf' });
     expect(completions()).toContainEqual({ p_id: 'q2', p_ok: false, p_error: 'UNAVAILABLE' });
+  });
+
+  it('bez bucketu każdy wiersz wraca do kolejki z kodem STORAGE_UNCONFIGURED', async () => {
+    claim([{ id: 'q1', bucket: 'candidate-files', path: 'u1/cv.pdf' }]);
+    expect(await processStorageDeletions(unconfiguredDeleter)).toEqual({ claimed: 1, deleted: 0, failed: 1 });
+    expect(completions()).toEqual([{ p_id: 'q1', p_ok: false, p_error: 'STORAGE_UNCONFIGURED' }]);
   });
 });

@@ -16,7 +16,7 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 
-1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Railway.
+1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
 3. **Niezmienne reguły (NIGDY nie łam):** patrz sekcja „Invariants". Najważniejsze: język e-maili = język odbiorcy; wysyłka propozycji idempotentna; brak service-role key w przeglądarce; brak trackingu przed zgodą; RLS na wszystkim; żadnych tekstów UI na sztywno.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
@@ -83,10 +83,10 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   `withPortalTransaction` = RLS jako użytkownik, `withServiceRole` = osobna pula `DATABASE_SERVICE_URL` tylko dla
   workera/webhooków/crona/odczytów admina), zapytania `src/lib/db/sql.ts`. Konwencje: `docs/railway/WARSTWA_DANYCH.md`.
   Testy: atrapa `tests/helpers/fake-db.ts`, PG16 `tests/integration/portal-*.test.ts`.
-- **Auth/Storage (przejściowo):** **Supabase** — sesje (#24) i upload CV (#26), SDK do usunięcia w #27. Trzy klienty:
-  - `src/lib/supabase/server.ts` — RSC/Server Actions/Route Handlers (cookies, sesja użytkownika).
-  - `src/lib/supabase/client.ts` — komponenty klienckie (anon key).
-  - `src/lib/supabase/admin.ts` — **tylko** kod serwerowy zaufany (service role). NIGDY nie importować w komponencie klienckim.
+- **Auth/Storage:** konta i sesje **Better Auth** na PostgreSQL Railway (#24, `src/lib/auth/*`), pliki CV w prywatnym
+  buckecie Railway (#26, `src/lib/files/*`). **Supabase usunięte (#27)** — brak SDK, zmiennych i hooka GoTrue; strażnik
+  `tests/unit/no-supabase-runtime.test.ts` (z kontrolą ujemną) odrzuca import `@supabase/*`, zmienne i hosty Supabase
+  w `src/`. Katalog `supabase/` to wyłącznie migracje SQL i testy RLS (nazwa historyczna).
 - **Bezpieczeństwo danych:** **Row Level Security** na każdej tabeli. Operacje wrażliwe = Server Actions/Route Handlers.
 - **Formularze:** React Hook Form + Zod resolver. Server Actions do zapisu.
 - **E-mail:** **Resend** + **React Email** (szablony w `src/emails`), wysyłka przez kolejkę (`email_deliveries`).
@@ -138,7 +138,6 @@ pracujbe/
 │  │  ├─ public/                  # komponenty stron publicznych
 │  │  └─ cookies/                 # baner + centrum zgód
 │  ├─ lib/
-│  │  ├─ supabase/                # server.ts, client.ts, admin.ts
 │  │  ├─ i18n/                    # konfiguracja next-intl, locale, fallback e-mail
 │  │  ├─ matching/                # deterministyczny scoring dopasowania
 │  │  ├─ email/                   # wysyłka + kolejka + wybór języka odbiorcy
@@ -217,7 +216,7 @@ Te reguły wynikają wprost ze specyfikacji i z błędów poprzedniego produktu.
    Podwójne kliknięcie / retry z tym samym kluczem = brak duplikatu.
 4. **Aplikowanie idempotentne.** Unikat `(candidate_id, job_id)` — jedna aplikacja.
 5. **RLS wszędzie.** Każda tabela z danymi użytkownika ma polityki. Domyślnie deny.
-6. **Service role key tylko na serwerze.** `src/lib/supabase/admin.ts` nie może trafić do bundle klienta.
+6. **Uprawnienia service_role tylko na serwerze.** Pula `withServiceRole` (`DATABASE_SERVICE_URL`, `src/lib/db/portal.ts`, `server-only`) nie może trafić do bundle klienta.
 7. **Zero trackingu przed zgodą.** GA/Meta Pixel/remarketing ładują się dopiero po zgodzie w kategoriach cookies.
 8. **Użytkownik nie widzi technikaliów.** Żadnego stack trace/SQL/surowej odpowiedzi API/komunikatu dostawcy.
    Błędy przez centralny system (`src/lib/errors`), user-facing komunikat z klucza tłumaczenia.
@@ -748,6 +747,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   pole z e-mailem/telefonem czyszczone, identyfikator → odmowa `JOB_IMPORT_SENSITIVE_DATA`.
   Zrzutu nie redagujemy lokalnie (brak OCR). Test: `ai-import-minimize`. **Otwarte (#500):**
   ocena prawna (art. 6/14, role), decyzja o imporcie obrazu.
+- [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
+  domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
+  (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
+  i 60/dobę fail-closed, hook budżetu `src/lib/ai-assist/budget.ts` dla #36) → Claude
+  (`claude-opus-5-5`, `AI_JOB_ASSIST_MODEL`, structured output) → propozycja brzmienia opisu,
+  obowiązków i wymagań w języku oferty. Wejście ścisłe (tylko tekst oferty — bez danych
+  kandydatów), e-maile/telefony/identyfikatory usuwane przed wysłaniem, polecenia dla AI
+  (wzorce PL/NL/FR/EN + flaga modelu) = brak propozycji; propozycja z nową liczbą/linkiem albo
+  danymi kontaktowymi nie jest pokazywana. Pole zmienia się tylko po „Użyj propozycji”, obok
+  zawsze tekst rekrutera i „Przywróć mój tekst”; akcja niczego nie zapisuje i nie publikuje.
+  Informacja o AI przed pierwszym użyciem. Atrapa `AI_JOB_ASSIST_PROVIDER=fixture` tylko poza
+  produkcją. Testy: `job-assist-guard`, `job-assist-action`, `ai-inventory`, E2E `job-assist`.
+  **Otwarte:** część dla kandydata (#37), budżet globalny (#36), ocena prawna art. 50 AI Act,
+  fakty słowne (bez liczb) wykrywa tylko przegląd rekrutera.
 - [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
   zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
   `/api/maintenance` (cron Railway co godzinę, `docs/railway/README.md`). Panel nie czeka na cron:
@@ -839,8 +852,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   kluczem nie nadpisuje odpowiedzi. Odczyt odpowiedzi: kandydat i recruiter+ firmy oferty; widok
   w szczególe zgłoszenia. Bez reguł dyskwalifikujących i bez LLM (osobny etap). Dowód: `rls.sql`
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
-  `employer-application-screening`. **Otwarte:** lista pytań po stronie kandydata w historii
-  zgłoszeń (RLS gotowe).
+  `employer-application-screening`. Historia zgłoszeń kandydata: karta z zapisanymi
+  odpowiedziami ma rozwijane „Moje odpowiedzi” (`ApplicationScreeningAnswers`; licznik z
+  podzapytania strony, treść przy pierwszym rozwinięciu przez `loadApplicationScreeningAnswers`
+  → `getMyApplicationScreeningAnswers` pod sesją/RLS, snapshot w języku widza z fallbackiem,
+  błąd z ponowieniem). Dowód: `portal-candidate.test.ts` (PG16), unit
+  `candidate-application-answers`, E2E `candidate-application-answers`, `panel-a11y`.
   Kontrola treści pytań przed publikacją (#497, migracja `0103`): detektor
   deterministyczny (wzorce PL/NL/FR/EN, bez AI) w bazie (`screening_fold`,
   `screening_risk_patterns`, `screening_question_risk`) sprawdza treść i KAŻDĄ opcję we
@@ -879,6 +896,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w trybie bez aplikacji waliduje odpowiedzi przy wysłaniu, potwierdzenie zapisuje je do
   `application_screening_answers` (GA98-13). Retencja w `/api/maintenance`: niepotwierdzone 7 dni po ostatnim linku,
   duplikaty 7 dni po potwierdzeniu (z e-mailami), token przejęcia zerowany po 30 dniach.
+  Linki (#505): token we fragmencie `#token=` → POST do cookie HttpOnly ścieżki → czysty URL;
+  stary format `?token=` odrzucany w middleware (303 bez cookie, „link nieprawidłowy”) —
+  `guest-legacy-link.test` z kontrolą ujemną.
   Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
   o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
   prywatności (#40).
@@ -952,7 +972,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
   0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
-  (`process_saved_search_alerts`, 0092, #100); Auth — confirm/reset/magic link/zmiana e-maila/zaproszenie. **Świadomie nieużywane** (brak
+  (`process_saved_search_alerts`, 0092, #100); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
@@ -1174,6 +1194,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), raport CSP + `Referrer-Policy`, blokada HTTP w testach, wyszukiwanie
   `unaccent` + escapowanie LIKE (zmiana `get_public_jobs` po #188).
+  Cutover i rollback (#16/#18): runbook `docs/railway/CUTOVER_ROLLBACK.md` (kolejność: bazy →
+  Better Auth → Resend/cron → `APP_MODE` na decyzję właściciela; rollback = wyzerowanie zmiennych
+  w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
+  obserwacja 48 h) + smoke `node scripts/railway/prod-smoke.mjs` (poza CI; bramka hasła z env,
+  4 języki + health, kod ≠ 0 przy błędzie; test `railway-prod-smoke` z atrapą serwera).
+  **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa): Sentry — #508
   (`src/lib/sentry-egress.ts`: `beforeSend` buduje nowe zdarzenie z samym kodem błędu,
   `captureError` wysyła tylko kod, tracing wyłączony). Logi serwera — wspólne reguły redakcji
@@ -1190,7 +1216,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
   (`claim_email_batch` dla `service_role`). Dowód: `tests/integration/portal-*.test.ts` (PG16). **Otwarte:** nazwa
   firmy z rejestracji w formularzu firmy (metadane konta), nazwa firmy w wiadomościach kandydata (od 0014);
-  spięcie z trasami sesji (#24) i usunięcie SDK (#27).
+  spięcie z trasami sesji (#24, zrobione w #532).
+- [~] Usunięcie Supabase z runtime (#27, część kodowa): brak `@supabase/*` w `package.json`, usunięte `src/lib/supabase/*`,
+  `src/lib/storage.ts` (PDF faktur — billing wyłączony #51, `pdfUrl` = null), hook GoTrue `/api/auth/email-hook` +
+  `src/lib/email/auth-email.ts` (e-maile kont wysyła worker Better Auth), zmienne `NEXT_PUBLIC_SUPABASE_*`/`SUPABASE_*`/
+  `SEND_EMAIL_HOOK_SECRET`, hosty `*.supabase.co` z CSP i `images.remotePatterns`. Kolejka usuwania obiektów bez bucketu →
+  `STORAGE_UNCONFIGURED` (ponowienie), bez klienta Storage. Strażnik `no-supabase-runtime.test.ts`. **Otwarte (odbiór #27):**
+  smoke produkcji na Railway (healthcheck, wersja w stopce, ścieżki użytkownika), domena `pracuj.be` w Cloudflare, archiwalne
+  dokumenty Supabase (`docs/SUPABASE_SETUP.md`, `docs/STAGING.md`) i nazwa katalogu `supabase/` (migracje).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
@@ -1264,8 +1297,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Ponowna zgoda na marketing po wycofaniu woła `fbq('consent','grant')`. Kontrakt parametrów
   `recordConsent` ↔ `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
-  **Do zrobienia:** asercje `email_deliveries.locale` na żywej bazie w `rls.sql` (#348, SQL),
-  raport flaków (#375).
+  Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
+  newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
+  Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta
+  w różnych językach, fallback preferred → account → signup → `en`, komplet szablonów sekcji;
+  kontrole ujemne (język sesji nadawcy, odwrócony fallback). Raport flaków z kilku lokalnych
+  przebiegów (#375, poza CI): `npm run test:e2e:flaky -- --runs N` (`scripts/e2e-flaky-report.mjs`,
+  opis `docs/E2E_FLAKY_REPORT.md`, test `flaky-aggregate`).
   Post 1080×1080 z prawdziwej oferty (#181): `scripts/export-job-post.mjs slug locale wyjście`
   — dane wyłącznie z `get_public_job` (`DATABASE_APP_URL`, `SET LOCAL ROLE anon`, odmowa loginu
   superusera; `scripts/lib/job-post-source.mjs`), bez JSON od operatora; renderer przyjmuje tylko
@@ -1300,7 +1338,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   „Performance budget (lab CWV)” w `e2e` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,
   pierwsza wizyta i ze zgodą; `scripts/perf-lab.mjs`, ten sam build i Chromium). Budżety i
   progi w `perf-budgets.json`, opis w `docs/PERFORMANCE_CHECKLIST.md` §10; strażnik kroków
-  w `check-ci-workflows.mjs`. **Do zrobienia:** INP-proxy w bramce, dane polowe CWV.
+  w `check-ci-workflows.mjs`. INP-proxy w tym samym kroku: tapnięcie „Filtry”, zapis oferty
+  (odpowiedź `getPublicSavedJobs` podmieniona na kandydata — CI bez sesji) i „Aplikuj teraz”,
+  Event Timing (najdłuższy wpis interakcji), CPU 4×, mediana 3 prób vs `inpMs` (200 ms);
+  kontrola ujemna `--inject-click-delay-ms 300` → czerwony. **Do zrobienia:** dane polowe CWV.
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
@@ -1324,8 +1365,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   rejestracji i liście ofert (strażnik `static-public-pages.test`);
   layout `(public)` odrzuca nieobsługiwany locale (`notFound`). Middleware: bramka hasła i
   odświeżone cookies sesji → `private, no-store`; alias miasta → 308 w middleware (redirect z ISR
-  dublował `Location`). **Otwarte:** ISR zapisuje na dysk także 404 losowych slugów ofert
-  (`isrFlushToDisk: false` odpada — wyłącza cache obrazów); limit = własny `cacheHandler`. Straże: `static-public-pages.test`, `check-next-build.mjs`
+  dublował `Location`). Własny `cacheHandler` (`src/lib/cache/isr-cache-handler.mjs`, `next.config.mjs`): LRU w pamięci
+  (64 MB / 2000 wpisów), 404 losowych slugów tylko w puli pamięci (200 wpisów, TTL 60 s) — nigdy
+  na dysku; wpisy runtime w `.next/cache/isr-handler` (256 MB / 5000 wpisów / 4 MB na wpis,
+  najstarsze usuwane, indeks odbudowany po restarcie); strony z buildu czytane z `.next/server/app`
+  bez nadpisywania; cache obrazów bez zmian. Testy: `isr-cache-handler.test` (mutacja detektora
+  404 = czerwony), E2E `public-cache-headers` (40 losowych slugów = 0 plików; bez handlera +120). Straże: `static-public-pages.test`, `check-next-build.mjs`
   (prerender), E2E `public-cache-headers.spec`. Lista `/oferty-pracy` (filtry), auth, panele — per żądanie.
 - [x] Dokumentacja (architektura, setup, checklisty) — podstawa
   Wydanie 1.0.0 (#103): kryteria, blokery i procedura (decyzja właściciela, zielone CI, SHA

@@ -10,7 +10,7 @@ import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-
 import {
   processStorageDeletions,
   railwayDeleter,
-  supabaseDeleter,
+  unconfiguredDeleter,
   type ObjectDeleter,
 } from '@/lib/storage-deletion';
 
@@ -66,24 +66,13 @@ function authorized(request: Request): boolean {
 }
 
 /**
- * Pliki CV leżą w prywatnym buckecie Railway (#26); bez jego konfiguracji — Supabase Storage
- * (przejściowo, klient Storage tworzony tylko w tej gałęzi; usunięcie SDK = #27).
+ * Pliki CV leżą w prywatnym buckecie Railway (#26). Brak jego konfiguracji to błąd każdego
+ * wiersza kolejki (ponowienie z backoffem), a nie awaria całego przebiegu maintenance.
  */
 async function objectDeleter(): Promise<ObjectDeleter> {
   const { fileBucketConfig } = await import('@/lib/env');
   const config = fileBucketConfig();
-  if (!config) {
-    // Klient Storage dopiero przy pierwszym obiekcie w kolejce: brak jego konfiguracji to błąd
-    // tego wiersza (ponowienie z backoffem), a nie awaria całego przebiegu maintenance.
-    let deleter: ObjectDeleter | undefined;
-    return async (bucket, path) => {
-      if (!deleter) {
-        const { createAdminClient } = await import('@/lib/supabase/admin');
-        deleter = supabaseDeleter(createAdminClient());
-      }
-      return deleter(bucket, path);
-    };
-  }
+  if (!config) return unconfiguredDeleter;
   const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
   return railwayDeleter(createRailwayBucket(config));
 }
