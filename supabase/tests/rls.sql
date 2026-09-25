@@ -11735,4 +11735,63 @@ select pg_temp.expect_error(
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
 rollback;
 
+-- ============================================================================
+-- CVR164. Dokończenie #349 (migracja 0164) — record_consent niesie wersję polityki
+-- 'cookies' FAKTYCZNIE pokazaną klientowi (cookie/`p_version`), przyjętą tylko po
+-- weryfikacji w consent_versions; nieznana wersja = cichy fallback do bieżącej.
+-- ============================================================================
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000164000001', 'cookies', '2026-01', null, true, '2026-01-01'::timestamptz),
+  ('00000000-0000-0000-0000-000164000002', 'cookies', '2024-06', null, false, '2024-06-01'::timestamptz);
+
+-- CVR164-1: p_version zgodna z ISTNIEJĄCYM wierszem (nawet nie-bieżącym) trafia do receiptu —
+-- to jest sedno #349: receipt niesie wersję, którą użytkownik naprawdę widział, nie zawsze bieżącą.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-1', null, null, '2024-06');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-1' limit 1)
+    = '00000000-0000-0000-0000-000164000002'::uuid,
+  'CVR164-1 wersja z klienta (nie-bieżąca, ale istniejąca) trafia do receiptu');
+
+-- CVR164-2 (kontrola ujemna): NIEISTNIEJĄCA wersja z klienta NIE trafia do receiptu wprost —
+-- cichy fallback do bieżącej wersji dokumentu 'cookies' (zachowanie jak przed 0164), nigdy
+-- zapis dowolnego tekstu klienta jako powiązania z wierszem consent_versions.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-2', null, null,
+  'wersja-ktorej-nie-ma-w-bazie');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-2' limit 1)
+    = '00000000-0000-0000-0000-000164000001'::uuid,
+  'CVR164-2 nieistniejąca wersja klienta -> fallback do bieżącej, nie zapisana wprost');
+
+-- CVR164-3: brak p_version (stare wywołanie / stary cookie bez `v`) -> też bieżąca wersja.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-3');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-3' limit 1)
+    = '00000000-0000-0000-0000-000164000001'::uuid,
+  'CVR164-3 bez p_version -> bieżąca wersja (zgodność z zachowaniem sprzed 0164)');
+
+-- CVR164-4 (kontrola ujemna): authenticated (CANDA) nie nadpisze / nie dopisze się pod cudzy
+-- receipt innego konta (CANDB) — record_consent zawsze pisze profile_id = auth.uid() BIEŻĄCEJ
+-- sesji; klient nie ma żadnego parametru wskazującego inne konto (ani p_version go nie daje).
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select public.record_consent('{"marketing":true}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared') as cvr_b_before \gset
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.record_consent('{"marketing":false}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared')
+    = :'cvr_b_before',
+  'CVR164-4 authenticated A nie zmienia/nie dopisuje receiptu profile_id=CANDB (izolacja po auth.uid())');
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 4,
+  'CVR164-4b własny receipt A zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
