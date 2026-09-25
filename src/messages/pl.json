@@ -662,6 +662,7 @@
     "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe.",
     "moderationLocked": "Ta treść jest ograniczona decyzją moderacyjną, więc nie można zmienić jej statusu.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
+    "siteAccessUnavailable": "Wejście do serwisu jest chwilowo niedostępne. Spróbuj ponownie później.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
     "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
     "appealExists": "Odwołanie od tej decyzji zostało już złożone.",
@@ -2502,7 +2503,8 @@
     "passwordLabel": "Hasło dostępu",
     "submit": "Wejdź",
     "error": "Nieprawidłowe hasło. Spróbuj ponownie.",
-    "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut."
+    "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
+    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później."
   },
   "offline": {
     "title": "Brak połączenia",

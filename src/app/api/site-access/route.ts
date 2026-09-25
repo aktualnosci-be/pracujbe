@@ -1,7 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
-import { isLocale, routing, type Locale } from '@/i18n/routing';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { isLocale, routing, type Locale } from "@/i18n/routing";
+import { isProductionMode } from "@/lib/env";
+import { captureError } from "@/lib/error-report";
+import { AppError, ErrorCodes } from "@/lib/errors";
+import { trustedClientIp } from "@/lib/http/trusted-ip";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { withinLocalSiteAccessLimit } from "@/lib/site-access-local-limit";
 import {
   SITE_ACCESS_COOKIE,
   SITE_ACCESS_DENIED_PARAM,
@@ -11,7 +16,7 @@ import {
   renderSiteAccessPage,
   siteAccessReturnPath,
   siteAccessToken,
-} from '@/lib/site-access';
+} from "@/lib/site-access";
 
 /**
  * Formularz bramki dostępu (patrz `src/lib/site-access.ts`). Poprawne hasło → cookie z HMAC
@@ -24,12 +29,26 @@ import {
  * hasła i bez ujawnienia, czy akurat podane hasło jest poprawne.
  */
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 const FAILURE_DELAY_MS = 750;
-const RATE_LIMIT_ACTION = 'site-access';
+const RATE_LIMIT_ACTION = "site-access";
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+
+function unavailable(locale: Locale, next: string): Response {
+  return new NextResponse(
+    renderSiteAccessPage({ locale, next, error: false, unavailable: true }),
+    {
+      status: 503,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "x-robots-tag": "noindex,nofollow",
+      },
+    },
+  );
+}
 
 function tooManyRequests(locale: Locale, next: string): Response {
   return new NextResponse(
@@ -37,10 +56,10 @@ function tooManyRequests(locale: Locale, next: string): Response {
     {
       status: 429,
       headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'no-store',
-        'x-robots-tag': 'noindex,nofollow',
-        'retry-after': String(RATE_LIMIT_WINDOW_SECONDS),
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "x-robots-tag": "noindex,nofollow",
+        "retry-after": String(RATE_LIMIT_WINDOW_SECONDS),
       },
     },
   );
@@ -63,10 +82,10 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     form = new FormData();
   }
-  const rawLocale = form.get('locale');
+  const rawLocale = form.get("locale");
   const locale = isLocale(rawLocale) ? rawLocale : routing.defaultLocale;
   const target = siteAccessReturnPath(
-    typeof form.get('next') === 'string' ? (form.get('next') as string) : null,
+    typeof form.get("next") === "string" ? (form.get("next") as string) : null,
     locale,
   );
 
@@ -74,34 +93,46 @@ export async function POST(request: Request): Promise<Response> {
   if (!expected) return redirectTo(target);
 
   // Limit prób (#584) — przed jakimkolwiek porównaniem hasła (koszt HMAC też jest ograniczony).
-  const withinLimit = await checkRateLimit(RATE_LIMIT_ACTION, {
-    max: RATE_LIMIT_MAX,
-    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
-  });
-  if (!withinLimit) return tooManyRequests(locale, target);
+  // Klucz limitera = zaufany adres klienta; bez niego nie ma wspólnego klucza (#625).
+  if (trustedClientIp(request.headers) === null) {
+    if (isProductionMode()) {
+      captureError(new AppError(ErrorCodes.SITE_ACCESS_UNAVAILABLE), {
+        area: "site-access",
+      });
+      return unavailable(locale, target);
+    }
+    if (!withinLocalSiteAccessLimit(RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_SECONDS))
+      return tooManyRequests(locale, target);
+  } else {
+    const withinLimit = await checkRateLimit(RATE_LIMIT_ACTION, {
+      max: RATE_LIMIT_MAX,
+      windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return tooManyRequests(locale, target);
+  }
 
-  const password = form.get('password');
-  const given = typeof password === 'string' ? password.trim() : '';
+  const password = form.get("password");
+  const given = typeof password === "string" ? password.trim() : "";
   const [givenToken, expectedToken] = await Promise.all([
-    siteAccessToken(given || '\u0000'),
+    siteAccessToken(given || "\u0000"),
     siteAccessToken(expected),
   ]);
 
   if (!given || !constantTimeEqual(givenToken, expectedToken)) {
     await new Promise((resolve) => setTimeout(resolve, FAILURE_DELAY_MS));
-    const url = new URL(target, 'https://pracuj.invalid');
-    url.searchParams.set(SITE_ACCESS_DENIED_PARAM, 'denied');
+    const url = new URL(target, "https://pracuj.invalid");
+    url.searchParams.set(SITE_ACCESS_DENIED_PARAM, "denied");
     return redirectTo(`${url.pathname}${url.search}`);
   }
 
   const response = redirectTo(target);
   response.cookies.set(SITE_ACCESS_COOKIE, expectedToken, {
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: "lax",
     secure:
-      request.headers.get('x-forwarded-proto') === 'https' ||
-      new URL(request.url).protocol === 'https:',
-    path: '/',
+      request.headers.get("x-forwarded-proto") === "https" ||
+      new URL(request.url).protocol === "https:",
+    path: "/",
     maxAge: SITE_ACCESS_MAX_AGE,
   });
   return response;
