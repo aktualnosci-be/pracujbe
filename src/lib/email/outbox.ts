@@ -296,7 +296,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       );
 
       // #100 / #466 pkt 8: ponowna kontrola zgody tuż przed wysyłką (kategoria, blokada
-      // adresu, wyłączony alert, kampania). Odbiorca mógł się wypisać po claimie — wtedy
+      // adresu, uprawnienie odbiorcy firmowego z 0122, wyłączony alert, kampania). Odbiorca mógł się wypisać po claimie — wtedy
       // baza wygasza wiersz (ślad zostaje), a my nic nie wysyłamy i nie zużywamy budżetu.
       const blockedReason = await withServiceRole((tx) =>
         rpc<string | null>(tx, 'email_delivery_send_check', { p_delivery_id: row.id }),

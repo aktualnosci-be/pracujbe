@@ -687,7 +687,7 @@ token HMAC `src/lib/email/saved-search-alert-token.ts`: UUID konta + wyszukiwani
 domena podpisu, sekret `EMAIL_UNSUBSCRIBE_SECRET`, bez e-maila w URL; zapis po kliknięciu przez
 `saved_search_alert_unsubscribe`, tylko service_role, tylko właściciel z tokenu). Link liczy
 worker (payload go nie podmieni). Kolejka: `email_delivery_suppression_reason` (blokada adresu,
-zgoda kategorii, wyłączony/usunięty alert, kampania) w `claim_email_batch` i w
+zgoda kategorii, uprawnienie odbiorcy firmowego z 0122 — kontrola `ES503-2b/2c`, wyłączony/usunięty alert, kampania) w `claim_email_batch` i w
 `email_delivery_send_check` — worker woła ją tuż przed budżetem i `send` (#466 pkt 8), wiersz
 niedozwolony jest wygaszany (`suppressed_alert_disabled` / `suppressed_opt_out`…). Dowód:
 `rls.sql` sekcja SS108 (kontrole ujemne), unit `saved-search-followups`,
