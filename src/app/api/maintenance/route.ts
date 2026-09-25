@@ -32,7 +32,7 @@ import {
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
- * 0113: załączniki wiadomości przygotowane, a niewysłane przez 24 h
+ * 0119: załączniki wiadomości przygotowane, a niewysłane przez 24 h
  * (`purge_stale_message_attachments`) — wiersz files usunięty, obiekt trafia do kolejki storage.
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
@@ -152,7 +152,7 @@ async function run(request: Request): Promise<Response> {
   } catch (error) {
     failures.push({ task: 'retention', error });
   }
-  // 0113: przygotowane, a niewysłane załączniki wiadomości (> 24 h) → kolejka storage niżej.
+  // 0119: przygotowane, a niewysłane załączniki wiadomości (> 24 h) → kolejka storage niżej.
   const purgedMessageAttachments = await task('messageAttachments', 'purge_stale_message_attachments', {
     p_older_than_hours: 24,
   });

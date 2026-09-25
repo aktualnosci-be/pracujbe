@@ -14,7 +14,7 @@ import { createPrivateDownloadToken } from '@/lib/storage/private-download-token
 import { pgError } from '../helpers/fake-db';
 
 /**
- * Serwis załączników wiadomości (0113). Transakcja i RPC zastąpione — dostęp, blokadę firmy,
+ * Serwis załączników wiadomości (0119). Transakcja i RPC zastąpione — dostęp, blokadę firmy,
  * kwarantannę i idempotencję w bazie sprawdza `supabase/tests/rls.sql` (sekcja MA). Tu:
  * walidacja bajtów przed bucketem, brak zapisu bez dostępu, sprzątanie obiektu, podpis linku
  * związany z domeną załączników i ponowna kontrola bazy przy pobraniu.

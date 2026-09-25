@@ -2,7 +2,7 @@
  * Reguły załącznika wiadomości — jedno źródło dla przeglądarki (`MessageComposer`) i serwera
  * (`uploadMessageAttachment`). Limit i typy dokumentów jak CV (`cv-file.ts`, #362) plus
  * zdjęcia JPG/PNG; 5 MB leży poniżej limitu ciała Server Actions (`6mb`). Serwer dodatkowo
- * sprawdza sygnaturę treści (magic bytes) i strukturę DOCX, a baza (0113) — MIME, rozmiar
+ * sprawdza sygnaturę treści (magic bytes) i strukturę DOCX, a baza (0119) — MIME, rozmiar
  * i klucz obiektu.
  */
 
@@ -10,7 +10,7 @@ import { CV_MAX_BYTES, type CvFileProblem } from './cv-file';
 
 export const ATTACHMENT_MAX_BYTES = CV_MAX_BYTES; // 5 MB
 
-/** Najwięcej plików w jednej wiadomości (= limit w `send_message`, 0113). */
+/** Najwięcej plików w jednej wiadomości (= limit w `send_message`, 0119). */
 export const MESSAGE_ATTACHMENTS_MAX = 3;
 
 export type AttachmentExtension = 'pdf' | 'doc' | 'docx' | 'jpg' | 'png';

@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0113_message_attachments.sql — załączniki w rozmowach (Etap 5, „Wiadomości").
--- NUMER TYMCZASOWY — ostateczny nada integrator (kolejka migracji).
+-- 0119_message_attachments.sql — załączniki w rozmowach (Etap 5, „Wiadomości").
 --
 -- Model:
 --   * obiekt w prywatnym buckecie Railway (#26), klucz `<conversation_id>/att-<uuid>.<ext>`
@@ -28,10 +27,11 @@
 --
 -- send_message: nowy podpis (uuid, text, uuid, uuid[] default '{}'); stary 3-argumentowy
 -- jest usuwany (wywołania 3-argumentowe działają przez wartość domyślną). Pusta treść jest
--- dozwolona tylko z co najmniej jednym załącznikiem. Reszta treści 1:1 z 0075.
+-- dozwolona tylko z co najmniej jednym załącznikiem. Reszta treści 1:1 z 0113
+-- (payload `newMessage` z `conversationId`, #290).
 --
 -- Rollback: drop function send_message(uuid, text, uuid, uuid[]); odtworzyć
--- send_message(uuid, text, uuid) z 0075 (z grantami); drop functions
+-- send_message(uuid, text, uuid) z 0113 (z grantami); drop functions
 -- stage_message_attachment, discard_message_attachment, get_message_attachments,
 -- get_message_attachment_download, purge_stale_message_attachments,
 -- message_attachment_visible, can_attach_in_conversation; drop triggery
@@ -406,6 +406,7 @@ begin
     where not r.is_company or public.company_recipient_ok(v_company, r.profile_id);
 
   -- E-mail dla niewyciszonych (idempotentnie: klucz per wiadomość+odbiorca).
+  -- #290 (0113): conversationId → przycisk prowadzi do właściwego wątku.
   -- Odbiorca spoza firmy nie dostaje danych osobowych piszącego członka firmy.
   perform public.enqueue_email(
             r.profile_id, 'newMessage', 'message', v_msg_id,
@@ -415,7 +416,8 @@ begin
                 when v_sender_is_company and not r.is_company then coalesce(v_company_name, '—')
                 else v_sender_name
               end,
-              'panel', case when p.role = 'employer' then 'employer' else 'candidate' end))
+              'panel', case when p.role = 'employer' then 'employer' else 'candidate' end,
+              'conversationId', p_conversation_id))
     from (
       select cm.profile_id,
              exists (select 1 from public.company_members m

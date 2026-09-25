@@ -166,7 +166,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'dsa-moderation': {
     name: 'Zgłoszenia treści (DSA) i moderacja',
-    inCode: 'Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron.',
+    inCode: 'Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora).',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode: null,
   },
@@ -679,8 +679,10 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   // --- DSA i moderacja ------------------------------------------------------------------------
   'public.reports': {
     activities: ['dsa-moderation'],
-    subjects: ['reporter', 'employer'],
+    // Zgłoszenie wiadomości (0116): zgłaszający i nadawca to kandydat albo członek firmy.
+    subjects: ['reporter', 'employer', 'candidate'],
     columns: {
+      conversation_id: 'reference',
       reporter_id: 'reference',
       reason: 'moderation',
       details: 'correspondence',
@@ -691,7 +693,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       reporter_email: 'contact',
       reporter_locale: 'preferences',
       good_faith_at: 'consent',
-      target_snapshot: 'moderation',
+      // Dowód: stan oferty/firmy (DSA) albo treść zgłoszonej wiadomości i id nadawcy (0116).
+      target_snapshot: 'correspondence',
     },
   },
   'public.report_events': {

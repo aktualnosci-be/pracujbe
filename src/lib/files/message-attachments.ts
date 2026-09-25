@@ -19,11 +19,11 @@ import {
 import { attachmentDisposition, isValidCvContent } from './cv-content';
 
 /**
- * Załączniki wiadomości na prywatnym buckecie Railway (0113, Invariant #10).
+ * Załączniki wiadomości na prywatnym buckecie Railway (0119, Invariant #10).
  *
  * Granica zaufania: `userId` wyłącznie z potwierdzonej sesji serwera; klucz obiektu nadaje
  * serwer (`<rozmowa>/att-<uuid>.<ext>`); klient zna tylko ID załącznika. Dostęp do rozmowy,
- * blokadę firmy (#97), idempotencję i kwarantannę rozstrzyga baza (RPC 0113) pod RLS
+ * blokadę firmy (#97), idempotencję i kwarantannę rozstrzyga baza (RPC 0119) pod RLS
  * (`withUserTransaction`); operacje S3 zawsze poza transakcją.
  *
  * Kolejność uploadu: kontrola dostępu → PUT → `stage_message_attachment`. Ponowienie z tym samym

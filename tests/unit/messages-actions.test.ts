@@ -94,7 +94,7 @@ describe('wiadomości', () => {
     expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it('sendMessage z załącznikami (0113): identyfikatory do RPC, pusta treść tylko z plikiem', async () => {
+  it('sendMessage z załącznikami (0119): identyfikatory do RPC, pusta treść tylko z plikiem', async () => {
     const A1 = '77777777-7777-4777-8777-777777777771';
     const A2 = '77777777-7777-4777-8777-777777777772';
     expect(await sendMessage(CONVERSATION, '  ', CLIENT_MSG, [A1, A2])).toEqual({ ok: true, id: 'row-1' });

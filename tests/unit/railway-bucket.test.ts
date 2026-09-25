@@ -80,7 +80,7 @@ async function requireStream(
 afterEach(() => vi.useRealTimers());
 
 describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
-  it("załączniki rozmów (0113): klucz `<rozmowa>/att-<uuid>` z JPG/PNG; CV nadal bez obrazów", async () => {
+  it("załączniki rozmów (0119): klucz `<rozmowa>/att-<uuid>` z JPG/PNG; CV nadal bez obrazów", async () => {
     const { store, handle } = fixture();
     const png = createMessageAttachmentKey(owner, "png");
     expect(png).toMatch(

@@ -16,7 +16,7 @@ const OBJECT_UUID =
   "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const OWNER = new RegExp(`^${UUID}$`);
 const KEY = new RegExp(`^${UUID}/cv-${OBJECT_UUID}\\.(pdf|doc|docx)$`);
-/** Załącznik rozmowy (0113): prefiks = id rozmowy, nazwa `att-<uuid>` nadana przez serwer. */
+/** Załącznik rozmowy (0119): prefiks = id rozmowy, nazwa `att-<uuid>` nadana przez serwer. */
 const ATTACHMENT_KEY = new RegExp(
   `^${UUID}/att-${OBJECT_UUID}\\.(pdf|doc|docx|jpg|png)$`,
 );

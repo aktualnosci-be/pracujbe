@@ -11,6 +11,8 @@ import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
 import { BUBBLE, BUBBLE_MINE } from '@/components/candidate/candidate-styles';
 import { MessageAttachmentList } from './MessageAttachmentList';
 
+import { ReportContentButton } from './ReportContentButton';
+
 /**
  * ThreadMessageList — lista wiadomości wątku ze stronicowaniem od najnowszych (#146).
  *
@@ -31,6 +33,8 @@ export interface ThreadMessageListProps {
   displayName: string;
   initialMessages: ThreadMessageView[];
   initialOlderCursor: ThreadCursor | null;
+  /** Wiadomości z otwartym zgłoszeniem bieżącego użytkownika (0116). */
+  reportedMessageIds?: string[];
 }
 
 export function ThreadMessageList({
@@ -39,6 +43,7 @@ export function ThreadMessageList({
   displayName,
   initialMessages,
   initialOlderCursor,
+  reportedMessageIds = [],
 }: ThreadMessageListProps): React.JSX.Element {
   const t = useTranslations('messages');
   const [messages, setMessages] = React.useState(initialMessages);
@@ -181,6 +186,17 @@ export function ThreadMessageList({
                 {message.body ? <p className="whitespace-pre-wrap break-words">{message.body}</p> : null}
                 <MessageAttachmentList attachments={message.attachments ?? []} />
               </div>
+              {/* Zgłoszenie wiadomości drugiej strony (0116) — po treści w DOM, wizualnie pod podpisem. */}
+              {!message.mine ? (
+                <ReportContentButton
+                  className="order-last mt-0.5"
+                  conversationId={conversationId}
+                  messageId={message.id}
+                  reported={reportedMessageIds.includes(message.id)}
+                  label={t('reportMessageLabel', { sender: senderLine(message) })}
+                  quote={message.body}
+                />
+              ) : null}
             </li>
           );
         })}

@@ -28,7 +28,7 @@ import { MessageAttachmentList } from '@/components/messaging/MessageAttachmentL
 import { MessageComposer } from '@/components/messaging/MessageComposer';
 
 /**
- * Załączniki w UI (0113): upload od razu po wyborze pliku, blokada wysyłki w trakcie, reguły
+ * Załączniki w UI (0119): upload od razu po wyborze pliku, blokada wysyłki w trakcie, reguły
  * pliku przed wysłaniem bajtów, ponowienie tym samym kluczem, wysyłka z identyfikatorami
  * gotowych plików; w wątku — pobranie przez krótki link i stan kwarantanny.
  */

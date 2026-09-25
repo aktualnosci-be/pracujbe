@@ -18,7 +18,7 @@ import {
 import { getAttachmentServiceDeps, readSessionUserId } from '@/lib/files/runtime';
 import { checkRateLimit } from '@/lib/rate-limit';
 
-/** Granica akcji i trasy pobrania załączników (0113): tożsamość tylko z sesji, odmowy bez szczegółów. */
+/** Granica akcji i trasy pobrania załączników (0119): tożsamość tylko z sesji, odmowy bez szczegółów. */
 
 vi.mock('@/lib/db/portal', () => ({ getPortalIdentity: vi.fn() }));
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn() }));

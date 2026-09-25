@@ -34,8 +34,8 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | Grupa | Ekran prototypu | Trasa aplikacji | % różnicy 1280 | % różnicy 390 | style 1280 | style 390 | Status | Uzasadnienie / odstępstwa |
 |---|---|---|---|---|---|---|---|---|
 | public | `home` | `/pl` | 7.6% | 10.7% | 100% | 100% | ~ | Różnice = teksty aplikacji („Zaloguj się”, podpis zdjęcia), stany demo i sekcje spoza prototypu pod „W czym jesteś dobry?”. ([#484](https://github.com/aktualnosci-be/pracujbe/pull/484)) |
-| public | `jobs` | `/pl/oferty-pracy` | 7.4% | 16.3% | 100% | 98% | ~ | Nagłówek i wyszukiwarka = kalka (ten PR). Różnica: bogatszy panel filtrów (288 px, liczniki) zamiast 190 px, baner demo, breadcrumb, opis pod H1 → zadanie Z3. ([#484](https://github.com/aktualnosci-be/pracujbe/pull/484)) |
-| public | `detail` | `/pl/oferty-pracy/[slug]` | 8% | 15.4% | 79% | 82% | ~ | Szczegół w układzie #3 (zakładki, pasek aplikowania, kontakt) zamiast `offer-layout` prototypu (nadtytuł kategoria/miasto, H1 40 px, panel „Twój następny krok”) → zadanie Z2. ([#484](https://github.com/aktualnosci-be/pracujbe/pull/484)) |
+| public | `jobs` | `/pl/oferty-pracy` | 7.3% | 16.3% | 100% | 98% | ~ | Nagłówek i wyszukiwarka = kalka; panel filtrów = `.p-list-layout` 190/165 px i `.people .filters` (Z3). Różnica: dane demo, baner demo, breadcrumb, opis pod H1, liczniki i „Pokaż więcej” w filtrach (funkcje aplikacji); 390 px — H1 w jednym wierszu zamiast dwóch (krótszy tekst). |
+| public | `detail` | `/pl/oferty-pracy/[slug]` | 7.6% | 15.4% | 94% | 89% | ~ | `offer-layout` prototypu (Z2): nadtytuł „kategoria / miasto”, H1 `.extended`, karta-paszport, treść w `.paper`, panel 300 px „Twój następny krok” (`.btn` + `.btn.secondary`). Różnice: „przyciskiem głównym” prototypu jest CTA karty (12 px), kotwice sekcji, dopasowanie, kontakt i podobne oferty w panelu, dolny pasek aplikowania < 1024 px (prototyp: panel pod treścią < 950 px). |
 | public | `jobs` | `/pl/praca` | — | — | 94% | 94% | ✓ | Brak ekranu; nagłówek `.pp-page-title` = `.p-list-header h1` (ten PR). Bez nadtytułu (treść bez odpowiednika). |
 | public | `jobs` | `/pl/praca/kategoria/logistics` | — | — | 94% | 94% | ✓ | jw. |
 | public | `jobs` | `/pl/praca/miasto/antwerpen` | — | — | 94% | 94% | ✓ | jw. |
@@ -51,13 +51,13 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | public | `jobs` | `/pl/polityka-cookies` | — | — | 94% | 90% | ✓ | jw. |
 | public | `jobs` | `/pl/zglos-tresc` | — | — | 94% | 90% | ✓ | Formularz DSA (#41): `.pp-page-title` (ten PR). |
 | public | `jobs` | `/pl/nie-ma-takiej-strony` | — | — | 98% | 100% | ✓ | Strona 404 = `.p-list-header` (nadtytuł „404”, H1 `.pp-page-title`) + `.pp-btn`/`.pp-btn-secondary` (Z5). Jedyna różnica: przycisk 49 px zamiast 58 px przycisku wyszukiwarki prototypu. |
-| auth | `apply` | `/pl/logowanie` | — | — | 54% | 59% | ✗ | Brak ekranu w prototypie. Minimalny layout auth (logo bez nawigacji, H1 24 px, przyciski shadcn 16 px/500) → zadanie Z4. |
-| auth | `apply` | `/pl/rejestracja` | — | — | 54% | 59% | ✗ | jw. |
-| auth | `apply` | `/pl/rejestracja-pracodawca` | — | — | 54% | 59% | ✗ | jw. |
-| auth | `apply` | `/pl/reset-hasla` | — | — | 54% | 59% | ✗ | jw. |
-| auth | `apply` | `/pl/ustaw-nowe-haslo` | — | — | 54% | 59% | ✗ | jw. |
-| auth | `apply` | `/pl/potwierdzenie` | — | — | 48% | 55% | ✗ | jw. |
-| auth | `apply` | `/pl/wypisz` | — | — | 48% | 55% | ✗ | jw. |
+| auth | `apply` | `/pl/logowanie` | — | — | 95% | 95% | ✓ | Brak ekranu; kalka `#people/apply` (Z4): nagłówek i stopka witryny, H1 `.extended` 40/30 px, `.dash-intro`, karta `.paper.demo-form` (pola 15 px/promień 11 px, przycisk `.people .btn`). Brak nadtytułu (treść bez odpowiednika). |
+| auth | `apply` | `/pl/rejestracja` | — | — | 95% | 95% | ✓ | jw. |
+| auth | `apply` | `/pl/rejestracja-pracodawca` | — | — | 95% | 95% | ✓ | jw. |
+| auth | `apply` | `/pl/reset-hasla` | — | — | 95% | 95% | ✓ | jw. |
+| auth | `apply` | `/pl/ustaw-nowe-haslo` | — | — | 94% | 94% | ✓ | jw. |
+| auth | `apply` | `/pl/potwierdzenie` | — | — | 94% | 94% | ✓ | jw. |
+| auth | `apply` | `/pl/wypisz` | — | — | 94% | 94% | ✓ | jw. |
 | candidate | `candidate` | `/pl/candidate` | 9.5% | 13.1% | 86% | 75% | ~ | Treść = kalka `#people/candidate`. Różnice: chrome panelu (pasek 64 px z powiadomieniami zamiast nagłówka witryny 95 px, logo w sidebarze zamiast `.side-person`) → Z1; ≤ 850 px dolny pasek zakładek (decyzja #496). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `profile` | `/pl/candidate/profil` | 7.4% | 13.1% | 84% | 79% | ~ | jw. (`#people/profile`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
 | candidate | `applications` | `/pl/candidate/aplikacje` | 5.8% | 11.1% | 83% | 79% | ~ | jw. (`#people/applications`). ([#507](https://github.com/aktualnosci-be/pracujbe/pull/507)) |
@@ -131,13 +131,24 @@ favicon prototypu (`#C23D22`, Arial) był szkicem kierunku i nie jest wzorcem.
   `.side-person` (inicjały, nazwa, rola); aplikacja — pasek 64 px z dzwonkiem i kontem, logo
   24 px w sidebarze, a ≤ 850 px dolny pasek zakładek (prototyp: poziome menu). Zmiana dotyka
   `DashboardShell`, testów a11y/zoom wszystkich paneli i decyzji #496 — do decyzji właściciela.
-- **Z2 — szczegół oferty**: układ `offer-layout` prototypu (powrót „← Wszystkie oferty”,
-  nadtytuł „kategoria / miasto”, H1 40 px, karta-paszport, sekcje `.paper`, boczny panel
-  „Twój następny krok” z „Aplikuj”/„Zapisz”) zamiast układu #3 z zakładkami.
-- **Z3 — panel filtrów listy**: kolumna 190 px (≤ 1050: 165 px) z prostymi checkboxami
-  zamiast 288 px z licznikami i „Pokaż więcej”; wymaga sprawdzenia etykiet NL/FR i reflow 200%.
-- **Z4 — strony auth**: brak ekranu w prototypie; propozycja — `.paper.demo-form` z nagłówkiem
-  witryny, H1 `.extended` i przyciskami `.pp-btn` (dziś layout minimalny, H1 24 px, shadcn).
+- ~~**Z2 — szczegół oferty**~~ — zrobione (pomiar 2026-09-25, style 94% / 89%): `.offer-page`
+  (40 px 5%, ≤ 600 px: 25 px), powrót jako `.text-link`, nagłówek `.extended` (nadtytuł
+  „kategoria / miasto”, H1 40/30 px, `.dash-intro` z firmą), karta `.job-passport` z metryką,
+  treść i firma w `.paper` (h2 23 px, h3 18 px, akapity 15 px / 1,7), panel 300 px
+  `.paper.apply-box` („Twój następny krok”, nowe klucze `job.applyBox*`), przyciski `.btn`
+  (także w dolnym pasku). Zostają: kotwice sekcji (#3), dopasowanie, kontakt, podobne oferty,
+  zgłoszenie DSA, dolny pasek < 1024 px.
+- ~~**Z3 — panel filtrów listy**~~ — zrobione (pomiar 2026-09-25): kolumna 190 px (≤ 1050 px:
+  165 px, odstęp 32/24 px), linia `--pp-line-data` (#e8e8e8), h3 15 px/700 bez wersalików,
+  etykiety 13 px, checkbox 16 px, przełącznik jednostki i „Pokaż N ofert” w geometrii `.btn`.
+  Liczniki, wyszukiwarka miejscowości i „Pokaż więcej” zostają (funkcje aplikacji, #188/#216).
+  Panel boczny od 1024 px, poniżej — arkusz filtrów (jak dotąd); 200% tekstu = arkusz.
+  Strażnik: `prototype-matrix.spec.ts` (4 języki, 1280/1040 px, bez poziomego przewijania).
+- ~~**Z4 — strony auth**~~ — zrobione (pomiar 2026-09-25, style 94–95% ✓): layout `(auth)` =
+  nagłówek i stopka witryny, strony z `src/components/auth/auth-page.tsx` (H1 `.extended`,
+  `.dash-intro`, `.paper.demo-form`, ikona stanu jak `.company-icon`), pola `.demo-form input`,
+  przyciski `Button size="passport"` (+ `variant="passportSecondary"`). Przełącznik języka:
+  w nagłówku (> 850 px) i w stopce — zachowuje ścieżkę, parametry i `?next=`.
 - ~~**Z5 — strona 404**~~ — zrobione (pomiar 2026-09-25): `.p-list-header` z nadtytułem „404”,
   H1 `.pp-page-title` (40/32 px), `.pp-btn` + nowy `.pp-btn-secondary` (`.btn.secondary`,
   linia `--pp-line-btn` #ddd); także globalna 404 poza językami.

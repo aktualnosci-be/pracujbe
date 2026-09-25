@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Załączniki w polu wiadomości (0113) w trybie demo (bez bucketu): za duży plik odrzucony
+ * Załączniki w polu wiadomości (0119) w trybie demo (bez bucketu): za duży plik odrzucony
  * w przeglądarce (bez wysyłki bajtów), poprawny plik → komunikat „nie działa w demo” zamiast
  * fikcyjnego sukcesu; wysyłka zablokowana, dopóki plik nie jest gotowy; axe na stanie z plikami.
  */

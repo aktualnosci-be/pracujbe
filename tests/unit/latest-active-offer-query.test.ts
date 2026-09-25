@@ -46,5 +46,6 @@ describe('getLatestActiveOffer', () => {
       .rpc('get_offered_jobs_display', [{ job_id: 'job-2', slug: 'kierowca', title: 'Kierowca', company_name: 'Firma', city: 'Gent' }]);
     await expect(getLatestActiveOffer('pl')).resolves.toMatchObject({ id: 'offer-1', jobTitle: 'Kierowca', companyName: 'Firma', slug: 'kierowca' });
     expect(fakeDb.callsTo('get_offered_jobs_display')[0]!.args).toEqual({ p_locale: 'pl' });
+    expect(fakeDb.callsTo('get_applied_jobs_display')[0]!.args).toEqual({ p_locale: 'pl', p_job_ids: ['job-2'] });
   });
 });

@@ -34,7 +34,7 @@ export interface ConversationListItem {
   counterpartyName: string;
   /** Treść ostatniej wiadomości (skrót). */
   lastPreview: string;
-  /** Ostatnia wiadomość istnieje, ale ma tylko załączniki (pusta treść, 0113) → UI: etykieta. */
+  /** Ostatnia wiadomość istnieje, ale ma tylko załączniki (pusta treść, 0119) → UI: etykieta. */
   lastIsAttachmentOnly?: boolean;
   /** Czas ostatniej wiadomości (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   lastMessageAt: string;
@@ -58,7 +58,7 @@ export interface ThreadMessage {
   /** Strona nadawcy: firma (rekruter/zespół) albo kandydat — wybór etykiety zastępczej w UI. */
   senderSide: 'company' | 'candidate';
   isSystem: boolean;
-  /** Załączniki wysłane z wiadomością (0113), widoczne dla bieżącego uczestnika. */
+  /** Załączniki wysłane z wiadomością (0119), widoczne dla bieżącego uczestnika. */
   attachments?: ThreadAttachment[];
 }
 
@@ -217,7 +217,7 @@ async function fetchMessagePage(
 }
 
 /**
- * Załączniki strony wątku (0113): RPC sprawdza bieżący dostęp do rozmowy i blokadę firmy
+ * Załączniki strony wątku (0119): RPC sprawdza bieżący dostęp do rozmowy i blokadę firmy
  * (#97) — pliki kandydata, który zablokował firmę, nie trafiają do strony firmowej.
  */
 async function fetchAttachments(
@@ -668,4 +668,40 @@ export async function getUnreadConversationsCount(locale?: string): Promise<numb
   // Reużywa `getConversations` (obsługuje demo/env/błędy → nigdy nie rzuca).
   const conversations = await getConversations(locale);
   return conversations.filter((c) => c.unread).length;
+}
+
+/** Własne zgłoszenia w rozmowie (0116): zgłoszone wiadomości i czy zgłoszono całą rozmowę. */
+export interface MyMessageReports {
+  messageIds: string[];
+  conversationReported: boolean;
+}
+
+const NO_REPORTS: MyMessageReports = { messageIds: [], conversationReported: false };
+
+/**
+ * Stan własnych zgłoszeń w rozmowie — RPC `get_my_message_reports` pod sesją (bez dowodu
+ * i opisu). Liczą się tylko sprawy otwarte i w analizie: po rozstrzygnięciu treść można zgłosić
+ * ponownie. Awaria = brak oznaczeń (przycisk zgłoszenia zostaje; baza i tak nie zdubluje sprawy).
+ */
+export async function getMyMessageReports(conversationId: string): Promise<MyMessageReports> {
+  if (!isPortalDataConfigured()) return NO_REPORTS;
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return NO_REPORTS;
+    const rows = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_my_message_reports', { p_conversation_id: conversationId }),
+    );
+    const active = rows
+      .map(asRecord)
+      .filter((row) => ['open', 'reviewing'].includes(asStr(row['status'])));
+    return {
+      messageIds: active
+        .filter((row) => asStr(row['target_type']) === 'message')
+        .map((row) => asStr(row['target_id'])),
+      conversationReported: active.some((row) => asStr(row['target_type']) === 'conversation'),
+    };
+  } catch (error) {
+    captureError(error, { area: 'messages.getMyMessageReports' });
+    return NO_REPORTS;
+  }
 }

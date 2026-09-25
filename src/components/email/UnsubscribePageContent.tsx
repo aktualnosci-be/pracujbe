@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { MailX } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AuthPage,
+  AuthPageHeader,
+  AuthPageIcon,
+  AuthPageIntro,
+  AuthPageTitle,
+  AuthPaper,
+} from '@/components/auth/auth-page';
 import { inspectUnsubscribeLink } from '@/lib/actions/email-unsubscribe';
 import type { EmailPreferenceCategory } from '@/lib/email/categories';
 import { UnsubscribeForm } from './UnsubscribeForm';
@@ -65,15 +72,15 @@ export function UnsubscribePageContent({ locale, labels }: { locale: string; lab
         : inspection.status === 'expired' ? labels.expiredText : labels.unavailableText;
 
   return (
-    <Card>
-      <CardHeader className="items-center space-y-3 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10" aria-hidden="true">
-          <MailX className="h-7 w-7" />
-        </span>
-        <CardTitle as="h1" className="text-2xl">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 text-center text-sm">
+    <AuthPage>
+      <AuthPageHeader>
+        <AuthPageIcon>
+          <MailX />
+        </AuthPageIcon>
+        <AuthPageTitle>{title}</AuthPageTitle>
+        <AuthPageIntro>{description}</AuthPageIntro>
+      </AuthPageHeader>
+      <AuthPaper className="space-y-4 text-sm">
         {inspection?.status === 'valid' ? (
           <UnsubscribeForm
             token={tokenRef.current ?? ''}
@@ -96,7 +103,7 @@ export function UnsubscribePageContent({ locale, labels }: { locale: string; lab
         <Link href="/logowanie" className="font-medium text-primary underline-offset-4 hover:underline">
           {labels.loginLink}
         </Link>
-      </CardContent>
-    </Card>
+      </AuthPaper>
+    </AuthPage>
   );
 }

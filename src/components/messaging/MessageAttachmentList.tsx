@@ -10,7 +10,7 @@ import { toUserMessageKey } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 /**
- * MessageAttachmentList — załączniki wiadomości w wątku (0113).
+ * MessageAttachmentList — załączniki wiadomości w wątku (0119).
  *
  * Nazwa pliku to przycisk: klik prosi serwer o krótki (60 s) podpisany link i dopiero wtedy
  * przechodzi do trasy pobrania (bez adresu bucketu w DOM). Plik w kwarantannie (skan) jest
