@@ -1010,9 +1010,9 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 
 | Szablon | Pola payloadu | Funkcje SQL |
 |---|---|---|
-| `appealReceived` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal` |
-| `appealReversed` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
-| `appealUpheld` | `appealReference`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
+| `appealReceived` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `recipientName` | `submit_moderation_appeal`, `submit_report_appeal`, `submit_report_restoration_appeal` |
+| `appealReversed` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
+| `appealUpheld` | `appealReference`, `appealTarget`, `appellantRole`, `caseNumber`, `companyName`, `decisionReference`, `reasoning`, `recipientName` | `admin_decide_appeal` |
 | `applicationViewed` | `companyName`, `jobTitle` | `transition_application` |
 | `breachNotice` | `incidentReference`, `noticeSubject`, `noticeText`, `panel` | `admin_notify_breach_subjects` |
 | `companyRejected` | `companyName`, `reason` | `admin_set_company_status` |
@@ -1033,6 +1033,7 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 | `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
 | `reportDecisionNoAction` | `caseNumber`, `recipientName`, `targetType` | `admin_decide_report` |
 | `reportReceived` | `accessCode`, `caseNumber`, `recipientName`, `targetType` | `submit_content_report` |
+| `reportRestored` | `caseNumber`, `recipientName` | `admin_restore_moderation` |
 | `statusChanged` | `companyName`, `jobTitle`, `status` | `transition_application` |
 | `teamInvitation` | `companyName`, `inviterName`, `panel` | `invite_company_member` |
 

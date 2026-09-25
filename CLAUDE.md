@@ -1117,8 +1117,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
   6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
-  bazy DSA, treść prawna o procedurze. **Otwarte:** harmonogram czyszczenia (po #40), odwołanie
-  zgłaszającego od cofnięcia ograniczenia, retencja `audit_logs` z uzasadnieniami.
+  bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
+  `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
+  wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
+  zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
+  wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
+  `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
+  rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
+  autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
+  retencja `audit_logs` z uzasadnieniami.
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
