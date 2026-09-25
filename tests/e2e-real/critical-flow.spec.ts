@@ -138,9 +138,20 @@ async function funnelToday(): Promise<{ detail_views: number; apply_started: num
   return row ?? { detail_views: 0, apply_started: 0, search_appearances: 0 };
 }
 
-test('lejek ofert (#99): wyświetlenie, „Aplikuj” i wyniki listy liczone serwerowo, bez cookies; bot pominięty', async ({ browser }) => {
+test('lejek ofert (#99): wyświetlenie, „Aplikuj” i wyniki listy liczone serwerowo, bez cookies; bot pominięty', async ({ browser, baseURL }) => {
   const start = await funnelToday();
   const context = await browser.newContext();
+  // #575: lejek działa tylko po zgodzie analitycznej — zgoda zapisana jak po wcześniejszej wizycie.
+  await context.addCookies([{
+    name: 'pracujbe_consent',
+    value: encodeURIComponent(JSON.stringify({
+      v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
+      categories: { necessary: true, preferences: false, analytics: true, marketing: false },
+      ts: '2026-01-01T00:00:00.000Z',
+      id: 'critical-flow-funnel',
+    })),
+    url: baseURL!,
+  }]);
   try {
     const page = await context.newPage();
     const beacons: { body: Record<string, unknown>; cookie: string | undefined }[] = [];

@@ -11526,6 +11526,80 @@ select pg_temp.assert(
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- ============================================================================
+-- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
+--        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
+--        Kontrola ujemna: bez zadania (sprzątanie tylko przy zapisie, 0089) dane zostają.
+-- ============================================================================
+\echo '--- FC575 job funnel retention ---'
+begin;
+reset role; reset app.current_uid;
+\set FCC  'fc575000-0000-0000-0000-000000000001'
+\set FCJ  'fc575000-0000-0000-0000-0000000000b1'
+\set FCN1 'fc575000-0000-0000-0000-0000000000c1'
+\set FCN2 'fc575000-0000-0000-0000-0000000000c2'
+\set FCN3 'fc575000-0000-0000-0000-0000000000c3'
+insert into public.companies(id, name, status) values (:'FCC', 'Firma FC575', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'FCJ', :'FCC', 'fc575-a', 'Magazynier FC', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl');
+
+-- FC575-1: próg agregatów = 1. dzień miesiąca 12 miesięcy przed bieżącym, dzień w Brukseli.
+select pg_temp.assert(
+  public.job_funnel_retention_cutoff('2026-09-25 12:00:00+02') = date '2025-09-01'
+  and public.job_funnel_retention_cutoff('2026-01-01 00:30:00+01') = date '2025-01-01'
+  and public.job_funnel_retention_cutoff('2025-12-31 23:30:00+00') = date '2025-01-01'
+  and public.job_funnel_retention_cutoff('2025-12-31 22:30:00+00') = date '2024-12-01',
+  'FC575-1 próg 13 miesięcy kalendarzowych liczony w Europe/Brussels');
+
+insert into public.job_funnel_receipts(nonce, event, created_at) values
+  (:'FCN1', 'detail_view', now() - interval '49 hours'),
+  (:'FCN2', 'detail_view', now() - interval '47 hours');
+insert into public.job_funnel_daily(job_id, day, detail_views) values
+  (:'FCJ', public.job_funnel_retention_cutoff(now()) - 1, 5),
+  (:'FCJ', public.job_funnel_retention_cutoff(now()), 3),
+  (:'FCJ', (now() at time zone 'Europe/Brussels')::date, 1);
+
+-- FC575-2: kontrola ujemna — bez zadania maintenance (dawny mechanizm: sprzątanie tylko przy
+-- kolejnym zapisie) przy braku ruchu stary receipt i agregat sprzed progu zostają.
+select pg_temp.assert(
+  exists (select 1 from public.job_funnel_receipts where nonce = :'FCN1')
+  and exists (select 1 from public.job_funnel_daily where job_id = :'FCJ' and day < public.job_funnel_retention_cutoff(now())),
+  'FC575-2 kontrola ujemna: bez zadania dane poza terminem zostają');
+
+-- FC575-3: tylko service_role woła zadanie.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.purge_job_funnel_data(100)', 'permission denied', 'FC575-3 anon bez EXECUTE');
+reset role;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.purge_job_funnel_data(integer)', 'execute')
+  and not has_function_privilege('anon', 'public.purge_job_funnel_data(integer)', 'execute')
+  and has_function_privilege('service_role', 'public.purge_job_funnel_data(integer)', 'execute'),
+  'FC575-3b purge_job_funnel_data tylko dla service_role');
+
+-- FC575-4: zadanie usuwa receipt > 48 h i agregat sprzed progu, zostawia resztę.
+set role service_role;
+select public.purge_job_funnel_data(5000) as fc4 \gset
+reset role;
+select pg_temp.assert(
+  (:'fc4'::jsonb ->> 'receipts')::int >= 1 and (:'fc4'::jsonb ->> 'daily')::int >= 1
+  and not exists (select 1 from public.job_funnel_receipts where nonce = :'FCN1')
+  and exists (select 1 from public.job_funnel_receipts where nonce = :'FCN2')
+  and not exists (select 1 from public.job_funnel_daily where job_id = :'FCJ' and day < public.job_funnel_retention_cutoff(now()))
+  and (select count(*) from public.job_funnel_daily where job_id = :'FCJ') = 2,
+  'FC575-4 receipts > 48 h i agregaty > 13 mies. usunięte, bieżące zachowane');
+
+-- FC575-5: zapis — nonce starszy niż 48 h nie blokuje nowego zliczenia (okno = termin).
+insert into public.job_funnel_receipts(nonce, event, created_at)
+  values (:'FCN3', 'detail_view', now() - interval '49 hours');
+set role anon; select pg_temp.assert_client_role();
+select set_config('pracujbe.funnel_writer', 'on', true);
+select public.record_job_funnel_event('detail_view', :'FCN3'::uuid, array[:'FCJ'::uuid]) as fc5 \gset
+reset role;
+select pg_temp.assert(:'fc5'::int = 1
+  and (select created_at > now() - interval '1 minute' from public.job_funnel_receipts where nonce = :'FCN3'),
+  'FC575-5 stary receipt usunięty przed zapisem, nowe zliczenie przyjęte');
+rollback;
+
+-- ============================================================================
 -- RV574. Retencja wg opracowania 2026-09-25 (#574, 0127): wartości w retention_policies,
 --        niezmienny closed_at (każdy stan końcowy), last_seen_at z sesji, ostrzeżenie 30 dni
 --        przed usunięciem CV/konta, ślad gościa 30/7/7, partie ≥ 601, dry-run bez zmian,

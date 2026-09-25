@@ -49,10 +49,14 @@ import {
  * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
+ * #575: twarde terminy lejka ofert (`purge_job_funnel_data`, 0128) — receipts deduplikacji
+ * najwyżej 48 h, sumy dzienne z bieżącego i 12 poprzednich miesięcy kalendarzowych.
  * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
  *
+ * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
+ * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
  * Chroniony `MAINTENANCE_SECRET` (`Authorization: Bearer`); przejściowo także `CRON_SECRET`
  * (`src/lib/cron/secrets.ts` — sekret e-mail nie otwiera tego zadania).
  * Wymaga puli service_role (`DATABASE_SERVICE_URL`; RPC są service_role-only). #25: każde
@@ -106,6 +110,7 @@ async function run(request: Request): Promise<Response> {
     | 'savedSearchAlerts'
     | 'emailCampaigns'
     | 'retention'
+    | 'jobFunnel'
     | 'messageAttachments'
     | 'storageGc'
     | 'dsaRetention'
@@ -168,6 +173,15 @@ async function run(request: Request): Promise<Response> {
     }
     retention = { ...counters, mode: retentionRunMode, batches };
   }
+  // #575: lejek ofert — receipts ≤ 48 h, agregaty ≤ 13 miesięcy kalendarzowych (0128).
+  let jobFunnel: Record<string, number> = {};
+  try {
+    jobFunnel = retentionCounters(
+      await withServiceRole((tx) => rpc(tx, 'purge_job_funnel_data', { p_limit: 5000 })),
+    );
+  } catch (error) {
+    failures.push({ task: 'jobFunnel', error });
+  }
   // 0119: przygotowane, a niewysłane załączniki wiadomości (> 24 h) → kolejka storage niżej.
   const purgedMessageAttachments = await task('messageAttachments', 'purge_stale_message_attachments', {
     p_older_than_hours: 24,
@@ -219,6 +233,7 @@ async function run(request: Request): Promise<Response> {
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
+    jobFunnel,
     purgedMessageAttachments: purgedMessageAttachments ?? 0,
     storageGc,
     dsaRetention,
@@ -226,8 +241,12 @@ async function run(request: Request): Promise<Response> {
   });
 }
 
-export async function GET(request: Request): Promise<Response> {
-  return run(request);
+/**
+ * GET jest metodą bezpieczną (RFC 9110 §9.2.1) i nie może uruchamiać zadań mutujących —
+ * `405` bez autoryzacji, dostępu do bazy ani żadnego efektu ubocznego (#581).
+ */
+export async function GET(): Promise<Response> {
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405, headers: { Allow: 'POST' } });
 }
 export async function POST(request: Request): Promise<Response> {
   return run(request);
