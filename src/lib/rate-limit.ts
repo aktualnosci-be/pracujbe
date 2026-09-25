@@ -6,8 +6,9 @@
  * Zasady:
  * - PostgreSQL Railway (#24): `DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET` → osobny login
  *   z członkostwem wyłącznie w `pracujbe_rate_limit` (`checkDatabaseRateLimit`, klucz HMAC —
- *   do bazy nie trafia surowy adres IP ani identyfikator). Pierwszeństwo przed Supabase.
- * - Przejściowo: Supabase service-role, gdy PostgreSQL limitera nie skonfigurowano (usunięcie w #27).
+ *   do bazy nie trafia surowy adres IP ani identyfikator). Pierwszeństwo przed pulą service.
+ * - Przejściowo: `rate_limit_hit` w transakcji service_role (`withServiceRole`, #25), gdy login
+ *   limitera nie jest skonfigurowany.
  * - Brak jakiejkolwiek konfiguracji: tryb demo → `true`; tryb produkcyjny → akcje wrażliwe
  *   (auth, płatne API, publiczne formularze) blokowane, reszta przepuszczana.
  * - Błąd RPC / wyjątek -> akcje wrażliwe blokowane (fail-safe), pozostałe fail-open + Sentry.
@@ -19,9 +20,10 @@
 
 import { headers } from 'next/headers';
 
-import { env, isProductionMode, isRateLimitDatabaseConfigured, isSupabaseConfigured } from '@/lib/env';
+import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
+import { env, isProductionMode, isRateLimitDatabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createAdminClient } from '@/lib/supabase/admin';
 
 /** Opcje limitu dla pojedynczej akcji. */
 export interface RateLimitOptions {
@@ -142,7 +144,7 @@ export async function checkRateLimit(action: string, opts?: RateLimitOptions): P
     }
   }
 
-  if (!isSupabaseConfigured()) {
+  if (!isServiceDatabaseConfigured()) {
     return isProductionMode() ? !FAIL_SAFE_ACTIONS.has(action) : true;
   }
 
@@ -150,23 +152,18 @@ export async function checkRateLimit(action: string, opts?: RateLimitOptions): P
     const ip = opts?.perIp === false ? undefined : await clientIp();
     const key = [action, ip, opts?.identifier].filter(Boolean).join(':');
 
-    // Limiter woła się wyłącznie zaufanym klientem service_role (SEC-01): RPC `rate_limit_hit`
+    // Limiter woła się wyłącznie w transakcji service_role (SEC-01): RPC `rate_limit_hit`
     // jest odebrany anon/authenticated, a klucz/limit/okno budujemy po stronie serwera.
-    const supabase = createAdminClient();
-    const { data, error } = await supabase.rpc('rate_limit_hit', {
-      p_key: key,
-      p_max: max,
-      p_window_seconds: windowSeconds,
-    });
-
-    if (error) {
-      captureError(error, { area: 'rate-limit', action });
-      // Akcje wrażliwe: fail-safe (blokuj). Pozostałe: fail-open.
-      return !FAIL_SAFE_ACTIONS.has(action);
-    }
+    const allowed = await withServiceRole((tx) =>
+      rpc<boolean>(tx, 'rate_limit_hit', {
+        p_key: key,
+        p_max: max,
+        p_window_seconds: windowSeconds,
+      }),
+    );
 
     // RPC zwraca boolean (true = w limicie). Tylko jawne `false` blokuje.
-    return data !== false;
+    return allowed !== false;
   } catch (e) {
     captureError(e, { area: 'rate-limit', action });
     // Akcje wrażliwe: fail-safe (blokuj). Pozostałe: fail-open.

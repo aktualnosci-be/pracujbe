@@ -1,6 +1,7 @@
-import type { createAdminClient } from '@/lib/supabase/admin';
+import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import { normalizeResendEvent } from '@/lib/email/provider-events';
-import { hasServiceRoleKey, isProductionMode, isSupabaseConfigured } from '@/lib/env';
+import { isProductionMode } from '@/lib/env';
 import { readTextWithLimit } from '@/lib/http/read-limited';
 import { captureError } from '@/lib/sentry';
 import { verifyStandardWebhook } from '@/lib/webhooks';
@@ -9,7 +10,8 @@ import { verifyStandardWebhook } from '@/lib/webhooks';
  * Webhook zdarzeń doręczeń Resend (#44) — `POST /api/email/webhook/resend`.
  *
  * Kolejność (fail-closed):
- *   1. brak `RESEND_WEBHOOK_SECRET` albo klucza service-role → 503 bez czytania treści
+ *   1. brak `RESEND_WEBHOOK_SECRET` albo puli service_role (`DATABASE_SERVICE_URL`) → 503
+ *      bez czytania treści
  *      (dostawca ponowi dostawę; nigdy nie przyjmujemy zdarzeń bez weryfikacji podpisu),
  *   2. surowe body z limitem rozmiaru przy streamingu → 413,
  *   3. podpis Svix/Standard Webhooks (HMAC-SHA256, stałoczasowo) + świeżość znacznika czasu
@@ -20,6 +22,8 @@ import { verifyStandardWebhook } from '@/lib/webhooks';
  *   6. RPC `record_email_event` (0098): status tylko „w górę”, trwałe odbicie i skarga →
  *      blokada adresu. Błąd → 500 (dostawca ponowi; zapis jest idempotentny),
  *   7. inbox `completed` → 200.
+ * #25: claim, zapis zdarzenia i complete to trzy osobne, krótkie transakcje service_role —
+ * dzierżawa jest widoczna dla równoległych dostaw od chwili claimu.
  *
  * Logi zawierają wyłącznie obszar i rodzaj zdarzenia — bez adresu, treści i sekretów.
  */
@@ -40,7 +44,7 @@ function json(body: Record<string, unknown>, status = 200): Response {
 
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.RESEND_WEBHOOK_SECRET?.trim();
-  if (!secret || !isSupabaseConfigured() || !hasServiceRoleKey()) {
+  if (!secret || !isServiceDatabaseConfigured()) {
     if (isProductionMode()) {
       captureError(new Error('resend webhook called without configuration'), {
         area: 'email.webhook.config',
@@ -79,18 +83,9 @@ export async function POST(request: Request): Promise<Response> {
   if (normalized.status === 'ignored') return json({ ok: true, ignored: true });
   const { event } = normalized;
 
-  let admin: ReturnType<typeof createAdminClient>;
-  try {
-    const { createAdminClient } = await import('@/lib/supabase/admin');
-    admin = createAdminClient();
-  } catch (err) {
-    captureError(err, { area: 'email.webhook.client' });
-    return json({ error: 'unavailable' }, 503);
-  }
-
   const { claimWebhook, completeWebhook } = await import('@/lib/webhook-inbox');
   const inboxId = `resend:${eventId}`;
-  const claim = await claimWebhook(admin, inboxId, INBOX_SOURCE);
+  const claim = await claimWebhook(inboxId, INBOX_SOURCE);
   if (claim === 'duplicate') return json({ ok: true, duplicate: true });
   if (claim === 'locked') return json({ ok: true, locked: true });
   if (claim === 'error') {
@@ -98,15 +93,19 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: 'unavailable' }, 503);
   }
 
-  const { error } = await admin.rpc('record_email_event', {
-    p_provider: event.provider,
-    p_provider_message_id: event.providerMessageId,
-    p_event: event.kind,
-    p_occurred_at: event.occurredAt,
-    p_recipient: event.recipient,
-    p_bounce_type: event.bounceType,
-  });
-  if (error) {
+  try {
+    await withServiceRole((tx) =>
+      rpc(tx, 'record_email_event', {
+        p_provider: event.provider,
+        p_provider_message_id: event.providerMessageId,
+        p_event: event.kind,
+        p_occurred_at: event.occurredAt,
+        p_recipient: event.recipient,
+        p_bounce_type: event.bounceType,
+      }),
+    );
+  } catch {
+    // Treść błędu bazy może zawierać adres — do Sentry idzie tylko rodzaj zdarzenia.
     captureError(new Error('record_email_event failed'), {
       area: 'email.webhook.record',
       kind: event.kind,
@@ -114,7 +113,7 @@ export async function POST(request: Request): Promise<Response> {
     return json({ error: 'processing failed' }, 500);
   }
 
-  if (!(await completeWebhook(admin, inboxId))) {
+  if (!(await completeWebhook(inboxId))) {
     captureError(new Error('webhook inbox completion failed'), { area: 'email.webhook.complete' });
     return json({ error: 'processing failed' }, 500);
   }

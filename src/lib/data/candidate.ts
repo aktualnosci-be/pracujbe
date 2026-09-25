@@ -1,11 +1,12 @@
 /**
  * Warstwa dostępu do danych panelu KANDYDATA — Pracuj.be (Etap 3).
  *
- * Strategia (spójna z `@/lib/jobs`): gdy `isSupabaseConfigured()` — dane czytane są z bazy
- * POD SESJĄ użytkownika (`createServerClient`, RLS wg `auth.uid()`); bez env — te same
- * struktury wypełnione danymi DEMO (build i UX działają bez backendu).
+ * Strategia (spójna z `@/lib/jobs`): gdy `isPortalDataConfigured()` — dane czytane są z bazy
+ * POD SESJĄ użytkownika (`withPortalTransaction`: `SET LOCAL ROLE authenticated` +
+ * `app.current_uid` z sesji serwera, RLS wg `auth.uid()`, #25); bez env — te same struktury
+ * wypełnione danymi DEMO (build i UX działają bez backendu).
  *
- * Odczyt idzie WYŁĄCZNIE przez klienta z sesją (nie service-role). Publiczne dane oferty
+ * Odczyt idzie WYŁĄCZNIE przez transakcję sesji (nie service_role). Publiczne dane oferty
  * (tytuł/firma/miasto) nie są dostępne kandydatowi wprost z tabel `jobs`/`companies`
  * (P1-01: anon/authenticated-niebędący-członkiem nie czyta tabel bazowych), dlatego
  * wzbogacamy je przez RPC `get_public_jobs` (bezpieczne kolumny) i łączymy po `job_id`.
@@ -17,9 +18,10 @@
 
 import { cache } from 'react';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { isSupabaseConfigured } from '@/lib/env';
+import type { PortalIdentity } from '@/lib/auth/session';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { attempt, queryCount, queryOne, queryRows, rpc, rpcRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/sentry';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
@@ -187,7 +189,7 @@ const ACTIVE_APPLICATION_STATUSES = [
 const PUBLIC_JOBS_LOOKUP_LIMIT = 100;
 
 /* ---------------------------------------------------------------------------
- * Wspólne zapytania (ścieżka bazodanowa)
+ * Wspólne zapytania (ścieżka bazodanowa, transakcja sesji `tx`)
  * ------------------------------------------------------------------------- */
 
 interface PublicJobLite {
@@ -198,234 +200,126 @@ interface PublicJobLite {
   city: string;
 }
 
-/** Zwraca zalogowanego użytkownika (albo null). */
-async function getAuthUserId(supabase: SupabaseClient): Promise<string | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
-
-/**
- * Klient serwerowy + sesja rozwiązywane RAZ na żądanie. `cache()` (React) memoizuje wynik
- * per-request — sześć loaderów panelu współdzieli jeden `createServerClient` + jedno
- * `auth.getUser()` zamiast tworzyć osobny klient i pytać o sesję każdy z osobna.
- */
-const getServerContext = cache(
-  async (): Promise<{ supabase: SupabaseClient; userId: string | null }> => {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const userId = await getAuthUserId(supabase);
-    return { supabase, userId };
-  },
-);
-
 /**
  * Liczba konwersacji z nieprzeczytanymi wiadomościami (model `conversation_members.last_read_at`,
  * spójny z `messages.getUnreadConversationsCount`). NIE liczymy po `messages.read_at` — ta kolumna
- * nie jest ustawiana, więc licznik po niej byłby zawyżony.
+ * nie jest ustawiana, więc licznik po niej byłby zawyżony. Nieprzeczytana = istnieje nieusunięta
+ * wiadomość od innej osoby nowsza niż własne `last_read_at` (albo nic jeszcze nie przeczytano).
  */
-async function countUnreadConversations(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<number> {
-  const { data: memberData, error: memberError } = await supabase
-    .from('conversation_members')
-    .select('conversation_id, last_read_at')
-    .eq('profile_id', userId);
-  if (memberError) throw memberError;
-
-  const lastReadByConv = new Map<string, string | null>();
-  for (const row of asArr(memberData)) {
-    const r = asRecord(row);
-    const cid = asStr(r['conversation_id']);
-    if (cid) {
-      lastReadByConv.set(cid, typeof r['last_read_at'] === 'string' ? (r['last_read_at'] as string) : null);
-    }
-  }
-  if (lastReadByConv.size === 0) return 0;
-
-  const { data: msgData, error: msgError } = await supabase
-    .from('messages')
-    .select('conversation_id, sender_id, created_at')
-    .in('conversation_id', [...lastReadByConv.keys()])
-    .is('deleted_at', null);
-  if (msgError) throw msgError;
-
-  const unreadConvs = new Set<string>();
-  for (const row of asArr(msgData)) {
-    const r = asRecord(row);
-    const cid = asStr(r['conversation_id']);
-    if (!cid || unreadConvs.has(cid)) continue;
-    const senderId = asStr(r['sender_id']);
-    const createdAt = asStr(r['created_at']);
-    const lastRead = lastReadByConv.get(cid) ?? null;
-    if (senderId !== userId && createdAt && (!lastRead || createdAt > lastRead)) {
-      unreadConvs.add(cid);
-    }
-  }
-  return unreadConvs.size;
+async function countUnreadConversations(tx: TransactionQuery, userId: string): Promise<number> {
+  return queryCount(tx, 'candidate.unread-conversations',
+    `SELECT 1
+       FROM public.conversation_members cm
+      WHERE cm.profile_id = $1
+        AND EXISTS (
+          SELECT 1 FROM public.messages m
+           WHERE m.conversation_id = cm.conversation_id
+             AND m.deleted_at IS NULL
+             AND m.sender_id IS DISTINCT FROM $1
+             AND (cm.last_read_at IS NULL OR m.created_at > cm.last_read_at))`, [userId]);
 }
 
-/**
- * Mapa job_id → bezpieczne dane publiczne oferty (RPC `get_public_jobs`).
- * `cache()` per-request — gdy kilka loaderów potrzebuje tej samej mapy (te same argumenty:
- * ten sam klient z `getServerContext`, locale, limit) RPC wykona się tylko raz.
- */
-const fetchPublicJobsMap = cache(async (
-  supabase: SupabaseClient,
+function toPublicJobsMap(rows: unknown, idField: 'id' | 'job_id'): Map<string, PublicJobLite> {
+  const map = new Map<string, PublicJobLite>();
+  for (const row of asArr(rows)) {
+    const r = asRecord(row);
+    const id = asStr(r[idField]);
+    if (!id) continue;
+    map.set(id, {
+      id,
+      slug: asStr(r['slug']),
+      title: asStr(r['title']),
+      companyName: asStr(r['company_name']),
+      city: asStr(r['city']),
+    });
+  }
+  return map;
+}
+
+/** Mapa job_id → bezpieczne dane publiczne najnowszych ofert (RPC `get_public_jobs`). */
+async function fetchPublicJobsMap(
+  tx: TransactionQuery,
   locale: Locale,
   limit: number,
-): Promise<Map<string, PublicJobLite>> => {
-  const { data, error } = await supabase.rpc('get_public_jobs', {
+): Promise<Map<string, PublicJobLite>> {
+  const rows = await rpcRows(tx, 'get_public_jobs', {
     p_locale: locale,
     p_keyword: null,
     p_city: null,
     p_limit: limit,
     p_offset: 0,
   });
-  if (error) throw error;
-
-  const map = new Map<string, PublicJobLite>();
-  for (const row of asArr(data)) {
-    const r = asRecord(row);
-    const id = asStr(r['id']);
-    if (!id) continue;
-    map.set(id, {
-      id,
-      slug: asStr(r['slug']),
-      title: asStr(r['title']),
-      companyName: asStr(r['company_name']),
-      city: asStr(r['city']),
-    });
-  }
-  return map;
-});
+  return toPublicJobsMap(rows, 'id');
+}
 
 /**
  * Mapa job_id → bezpieczne dane oferty dla WŁASNYCH aplikacji kandydata (RPC
  * `get_applied_jobs_display`, 0023). W odróżnieniu od `fetchPublicJobsMap` zwraca też
  * oferty nieaktywne/wygasłe/spoza top-N — kandydat ma prawo widzieć ofertę, do której
- * aplikował. `cache()` per-request (te same argumenty → jedno wywołanie RPC).
+ * aplikował.
  */
-const fetchAppliedJobsMap = cache(async (
-  supabase: SupabaseClient,
-  locale: Locale,
-): Promise<Map<string, PublicJobLite>> => {
-  const { data, error } = await supabase.rpc('get_applied_jobs_display', { p_locale: locale });
-  if (error) throw error;
-  return toAppliedJobsMap(data);
-});
+async function fetchAppliedJobsMap(tx: TransactionQuery, locale: Locale): Promise<Map<string, PublicJobLite>> {
+  return toPublicJobsMap(await rpcRows(tx, 'get_applied_jobs_display', { p_locale: locale }), 'job_id');
+}
 
 /**
  * Mapa job_id → dane oferty dla WŁASNYCH propozycji kandydata (RPC `get_offered_jobs_display`,
  * 0090). Jak `fetchAppliedJobsMap`: niezależnie od statusu oferty, top-N listy i blokad firm (#97)
- * — historia propozycji zachowuje tytuł i firmę. `cache()` per-request.
+ * — historia propozycji zachowuje tytuł i firmę.
  */
-const fetchOfferedJobsMap = cache(async (
-  supabase: SupabaseClient,
-  locale: Locale,
-): Promise<Map<string, PublicJobLite>> => {
-  const { data, error } = await supabase.rpc('get_offered_jobs_display', { p_locale: locale });
-  if (error) throw error;
-  return toAppliedJobsMap(data);
-});
+async function fetchOfferedJobsMap(tx: TransactionQuery, locale: Locale): Promise<Map<string, PublicJobLite>> {
+  return toPublicJobsMap(await rpcRows(tx, 'get_offered_jobs_display', { p_locale: locale }), 'job_id');
+}
 
 /**
- * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Filtr `in`
+ * Metadane ofert tylko dla `job_id` jednej strony historii zgłoszeń (#184). Filtr `ANY`
  * zawęża wynik RPC po stronie bazy, więc „Pokaż więcej” nie przesyła danych całej historii.
  * RPC zwraca wyłącznie oferty własnych aplikacji (auth.uid()), dlatego cudze lub
  * niepowiązane `job_id` w filtrze nie dają żadnego wiersza.
  */
 async function fetchAppliedJobsForPage(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   locale: Locale,
   jobIds: string[],
 ): Promise<Map<string, PublicJobLite>> {
   const ids = [...new Set(jobIds.filter((id) => id.length > 0))];
   if (ids.length === 0) return new Map();
-  const { data, error } = await supabase
-    .rpc('get_applied_jobs_display', { p_locale: locale })
-    .in('job_id', ids);
-  if (error) throw error;
-  return toAppliedJobsMap(data);
-}
-
-function toAppliedJobsMap(data: unknown): Map<string, PublicJobLite> {
-  const map = new Map<string, PublicJobLite>();
-  for (const row of asArr(data)) {
-    const r = asRecord(row);
-    const id = asStr(r['job_id']);
-    if (!id) continue;
-    map.set(id, {
-      id,
-      slug: asStr(r['slug']),
-      title: asStr(r['title']),
-      companyName: asStr(r['company_name']),
-      city: asStr(r['city']),
-    });
-  }
-  return map;
+  const rows = await queryRows(tx, 'candidate.applied-jobs-page',
+    `SELECT d.job_id, d.slug, d.title, d.company_name, d.city
+       FROM public.get_applied_jobs_display(p_locale => $1) d
+      WHERE d.job_id = ANY($2::uuid[])`, [locale, ids]);
+  return toPublicJobsMap(rows, 'job_id');
 }
 
 /** Zbiór job_id zapisanych przez kandydata. */
-async function fetchSavedJobIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from('saved_jobs')
-    .select('job_id')
-    .eq('candidate_id', userId);
-  if (error) throw error;
-
+async function fetchSavedJobIds(tx: TransactionQuery, userId: string): Promise<Set<string>> {
+  const rows = await queryRows(tx, 'candidate.saved-job-ids',
+    'SELECT job_id FROM public.saved_jobs WHERE candidate_id = $1', [userId]);
   const set = new Set<string>();
-  for (const row of asArr(data)) {
+  for (const row of rows) {
     const jobId = asStr(asRecord(row)['job_id']);
     if (jobId) set.add(jobId);
   }
   return set;
 }
 
-/**
- * Liczy kompletność profilu + checklistę + imię (jedno źródło dla overview i summary).
- * `cache()` per-request — gdy overview i summary renderują się w tym samym żądaniu,
- * komplet zapytań profilu policzy się tylko raz.
- */
-const computeProfileSummary = cache(async (
-  supabase: SupabaseClient,
+/** Liczy kompletność profilu + checklistę + imię (jedno źródło dla overview i summary). */
+async function computeProfileSummary(
+  tx: TransactionQuery,
   userId: string,
-): Promise<CandidateProfileSummary> => {
-  const [profileResult, candidateResult] = await Promise.all([
-    supabase.from('profiles').select('first_name, last_name').eq('id', userId).maybeSingle(),
-    supabase
-      .from('candidate_profiles')
-      .select('id, experience_years, occupations, categories, city, availability')
-      .eq('profile_id', userId)
-      .maybeSingle(),
-  ]);
-  if (profileResult.error) throw profileResult.error;
-  if (candidateResult.error) throw candidateResult.error;
-
-  const profile = asRecord(profileResult.data);
-  const cp = asRecord(candidateResult.data);
-  const candidateProfileId = asStr(cp['id']);
-
-  let languagesCount = 0;
-  let certificatesCount = 0;
-  if (candidateProfileId) {
-    const [languagesResult, certificatesResult] = await Promise.all([
-      supabase
-        .from('candidate_languages')
-        .select('id', { count: 'exact', head: true })
-        .eq('candidate_profile_id', candidateProfileId),
-      supabase
-        .from('candidate_certificates')
-        .select('id', { count: 'exact', head: true })
-        .eq('candidate_profile_id', candidateProfileId),
-    ]);
-    if (languagesResult.error) throw languagesResult.error;
-    if (certificatesResult.error) throw certificatesResult.error;
-    languagesCount = languagesResult.count ?? 0;
-    certificatesCount = certificatesResult.count ?? 0;
-  }
+): Promise<CandidateProfileSummary> {
+  const profile = asRecord(await queryOne(tx, 'candidate.profile-name',
+    'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [userId]));
+  // Liczniki relacji (języki/certyfikaty) w tym samym wierszu profilu kandydata — brak
+  // profilu kandydata = zera, jak dotąd.
+  const cp = asRecord(await queryOne(tx, 'candidate.profile-completeness',
+    `SELECT cp.id, cp.experience_years, cp.occupations, cp.categories, cp.city, cp.availability,
+            (SELECT count(*)::integer FROM public.candidate_languages l
+              WHERE l.candidate_profile_id = cp.id) AS languages_count,
+            (SELECT count(*)::integer FROM public.candidate_certificates c
+              WHERE c.candidate_profile_id = cp.id) AS certificates_count
+       FROM public.candidate_profiles cp
+      WHERE cp.profile_id = $1`, [userId]));
 
   // Kryteria = kroki kreatora; ta sama definicja co na profilu i w linkach „Dodaj" (#315).
   const checklist = computeProfileChecklist({
@@ -435,8 +329,8 @@ const computeProfileSummary = cache(async (
     categoriesCount: asStrArrLen(cp['categories']),
     experienceYears: cp['experience_years'],
     city: asStr(cp['city']) || null,
-    languagesCount,
-    certificatesCount,
+    languagesCount: asNum(cp['languages_count']),
+    certificatesCount: asNum(cp['certificates_count']),
     availability: asStr(cp['availability']) || null,
   });
 
@@ -444,7 +338,15 @@ const computeProfileSummary = cache(async (
   const firstName = asStr(profile['first_name']) || null;
 
   return { loadFailed: false, firstName, completionPct, checklist };
-});
+}
+
+/**
+ * Podsumowanie profilu we własnej transakcji sesji. `cache()` per-request (klucz = obiekt
+ * tożsamości z `getPortalIdentity`, też memoizowany per żądanie) — gdy overview i summary
+ * renderują się w tym samym żądaniu, komplet zapytań profilu wykona się tylko raz.
+ */
+const loadProfileSummary = cache((me: PortalIdentity): Promise<CandidateProfileSummary> =>
+  withPortalTransaction(me, (tx) => computeProfileSummary(tx, me.id)));
 
 /* ---------------------------------------------------------------------------
  * Dane DEMO (fallback bez bazy) — złożone z ofert demonstracyjnych (lokalizowane, z realnymi slugami)
@@ -576,59 +478,46 @@ const FAILED_PROFILE_SUMMARY: CandidateProfileSummary = {
 
 /** Kafelki podsumowania: nowe oferty / aktywne aplikacje / nieprzeczytane wiadomości / kompletność profilu. */
 export async function getCandidateOverview(): Promise<CandidateOverview> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     if (isDashboardErrorFixture()) {
       return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
     }
     return DEMO_OVERVIEW;
   }
 
-  /** Awaria jednego licznika daje `null` tylko dla niego; pozostałe zachowują prawdziwe wartości. */
-  const settle = async (area: string, read: () => Promise<number>): Promise<number | null> => {
-    try {
-      return await read();
-    } catch (error) {
-      captureError(error, { area: `candidate.getCandidateOverview.${area}` });
-      return null;
-    }
-  };
-
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) {
+    const me = await getPortalIdentity();
+    if (!me) {
       return { newJobsCount: 0, activeApplicationsCount: 0, unreadMessagesCount: 0, profileCompletionPct: 0 };
     }
 
-    const [newJobsCount, activeApplicationsCount, unreadMessagesCount, profile] = await Promise.all([
-      settle('newJobs', async () => {
-        const { data, error } = await supabase.rpc('get_public_jobs_count', {
-          p_keyword: null,
-          p_city: null,
-        });
-        if (error) throw error;
-        return asNum(data);
-      }),
-      settle('activeApplications', async () => {
-        const { count, error } = await supabase
-          .from('applications')
-          .select('id', { count: 'exact', head: true })
-          .eq('candidate_id', userId)
-          .is('deleted_at', null)
-          .in('status', [...ACTIVE_APPLICATION_STATUSES]);
-        if (error) throw error;
-        return count ?? 0;
-      }),
-      settle('unreadMessages', () => countUnreadConversations(supabase, userId)),
-      computeProfileSummary(supabase, userId).catch((error: unknown) => {
-        captureError(error, { area: 'candidate.getCandidateOverview.profileSummary' });
-        return FAILED_PROFILE_SUMMARY;
-      }),
-    ]);
+    // Każdy licznik w osobnej sekcji (SAVEPOINT, sekwencyjnie): awaria jednego daje `null`
+    // tylko dla niego; pozostałe zachowują prawdziwe wartości (#244).
+    const counters = await withPortalTransaction(me, async (tx) => {
+      const newJobs = await attempt(tx, async () =>
+        asNum(await rpc(tx, 'get_public_jobs_count', { p_keyword: null, p_city: null })));
+      const activeApplications = await attempt(tx, () => queryCount(tx, 'candidate.active-applications',
+        `SELECT 1 FROM public.applications
+          WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text = ANY($2::text[])`,
+        [me.id, [...ACTIVE_APPLICATION_STATUSES]]));
+      const unreadMessages = await attempt(tx, () => countUnreadConversations(tx, me.id));
+      return { newJobs, activeApplications, unreadMessages };
+    });
+    const settled = (area: string, result: typeof counters.newJobs): number | null => {
+      if (result.ok) return result.value;
+      captureError(result.error, { area: `candidate.getCandidateOverview.${area}` });
+      return null;
+    };
+
+    const profile = await loadProfileSummary(me).catch((error: unknown) => {
+      captureError(error, { area: 'candidate.getCandidateOverview.profileSummary' });
+      return FAILED_PROFILE_SUMMARY;
+    });
 
     return {
-      newJobsCount,
-      activeApplicationsCount,
-      unreadMessagesCount,
+      newJobsCount: settled('newJobs', counters.newJobs),
+      activeApplicationsCount: settled('activeApplications', counters.activeApplications),
+      unreadMessagesCount: settled('unreadMessages', counters.unreadMessages),
       profileCompletionPct: profile.completionPct,
     };
   } catch (error) {
@@ -639,14 +528,12 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
 
 /** Imię + kompletność profilu (pierścień) + checklista sekcji. */
 export async function getCandidateProfileSummary(): Promise<CandidateProfileSummary> {
-  if (!isSupabaseConfigured()) return DEMO_PROFILE_SUMMARY;
+  if (!isPortalDataConfigured()) return DEMO_PROFILE_SUMMARY;
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) {
-      return DEMO_PROFILE_SUMMARY;
-    }
-    return await computeProfileSummary(supabase, userId);
+    const me = await getPortalIdentity();
+    if (!me) return DEMO_PROFILE_SUMMARY;
+    return await loadProfileSummary(me);
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateProfileSummary' });
     return FAILED_PROFILE_SUMMARY;
@@ -655,34 +542,28 @@ export async function getCandidateProfileSummary(): Promise<CandidateProfileSumm
 
 /** Własny paszport zawodowy; przy błędzie nie podstawiamy fikcyjnych danych demonstracyjnych. */
 export async function getCandidatePassport(): Promise<CandidatePassport> {
-  if (!isSupabaseConfigured()) return EMPTY_PASSPORT;
+  if (!isPortalDataConfigured()) return EMPTY_PASSPORT;
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return EMPTY_PASSPORT;
+    const me = await getPortalIdentity();
+    if (!me) return EMPTY_PASSPORT;
 
-    const { data, error } = await supabase
-      .from('candidate_profiles')
-      .select('id, occupations, city, radius_km, experience_years, availability')
-      .eq('profile_id', userId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (error) throw error;
+    // Profil i jego relacje jednym zapytaniem pod RLS (właściciel profilu).
+    const data = await withPortalTransaction(me, (tx) => queryOne(tx, 'candidate.passport',
+      `SELECT cp.occupations, cp.city, cp.radius_km, cp.experience_years, cp.availability,
+              (SELECT coalesce(json_agg(s.skill_label), '[]'::json) FROM public.candidate_skills s
+                WHERE s.candidate_profile_id = cp.id) AS skills,
+              (SELECT coalesce(json_agg(l.language_label), '[]'::json) FROM public.candidate_languages l
+                WHERE l.candidate_profile_id = cp.id) AS languages,
+              (SELECT coalesce(json_agg(c.certificate_label), '[]'::json) FROM public.candidate_certificates c
+                WHERE c.candidate_profile_id = cp.id) AS certificates
+         FROM public.candidate_profiles cp
+        WHERE cp.profile_id = $1 AND cp.deleted_at IS NULL`, [me.id]));
     if (!data) return EMPTY_PASSPORT;
 
     const profile = asRecord(data);
-    const candidateProfileId = asStr(profile['id']);
-    const [skills, languages, certificates] = await Promise.all([
-      supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', candidateProfileId),
-      supabase.from('candidate_languages').select('language_label').eq('candidate_profile_id', candidateProfileId),
-      supabase.from('candidate_certificates').select('certificate_label').eq('candidate_profile_id', candidateProfileId),
-    ]);
-    if (skills.error) throw skills.error;
-    if (languages.error) throw languages.error;
-    if (certificates.error) throw certificates.error;
-
-    const labels = (rows: unknown, key: string): string[] => asArr(rows)
-      .map((row) => asStr(asRecord(row)[key]).trim())
+    const labels = (value: unknown): string[] => asArr(value)
+      .map((label) => asStr(label).trim())
       .filter(Boolean);
     return {
       loadFailed: false,
@@ -691,9 +572,9 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
       radiusKm: typeof profile['radius_km'] === 'number' ? profile['radius_km'] : null,
       experienceYears: typeof profile['experience_years'] === 'number' ? profile['experience_years'] : null,
       availability: asStr(profile['availability']) || null,
-      skills: labels(skills.data, 'skill_label'),
-      languages: labels(languages.data, 'language_label'),
-      certificates: labels(certificates.data, 'certificate_label'),
+      skills: labels(profile['skills']),
+      languages: labels(profile['languages']),
+      certificates: labels(profile['certificates']),
     };
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidatePassport' });
@@ -710,27 +591,12 @@ const RECOMMENDED_LIMIT = 5;
  * filtry widoczności co lista publiczna (active, niewygasła, firma verified), tłumaczenie w locale.
  */
 async function fetchPublicJobsByIds(
-  supabase: SupabaseClient,
+  tx: TransactionQuery,
   locale: Locale,
   ids: string[],
 ): Promise<Map<string, PublicJobLite>> {
-  const map = new Map<string, PublicJobLite>();
-  if (ids.length === 0) return map;
-  const { data, error } = await supabase.rpc('get_public_jobs_by_ids', { p_ids: ids, p_locale: locale });
-  if (error) throw error;
-  for (const row of asArr(data)) {
-    const r = asRecord(row);
-    const id = asStr(r['id']);
-    if (!id) continue;
-    map.set(id, {
-      id,
-      slug: asStr(r['slug']),
-      title: asStr(r['title']),
-      companyName: asStr(r['company_name']),
-      city: asStr(r['city']),
-    });
-  }
-  return map;
+  if (ids.length === 0) return new Map();
+  return toPublicJobsMap(await rpcRows(tx, 'get_public_jobs_by_ids', { p_ids: ids, p_locale: locale }), 'id');
 }
 
 /**
@@ -740,57 +606,48 @@ async function fetchPublicJobsByIds(
  */
 export async function getRecommendedJobs(locale: string, throwOnError = false): Promise<RecommendedJob[]> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return demoRecommended(resolvedLocale);
+  if (!isPortalDataConfigured()) return demoRecommended(resolvedLocale);
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return [];
+    const me = await getPortalIdentity();
+    if (!me) return [];
 
-    const [matchRes, savedIds] = await Promise.all([
-      supabase
-        .from('matches')
-        .select('job_id, score')
-        .eq('candidate_id', userId)
-        .order('score', { ascending: false })
-        .order('job_id', { ascending: true })
-        .limit(RECOMMENDED_MATCHES_LIMIT),
-      fetchSavedJobIds(supabase, userId),
-    ]);
-    if (matchRes.error) throw matchRes.error;
+    return await withPortalTransaction(me, async (tx) => {
+      const matchRows = (await queryRows(tx, 'candidate.recommended-matches',
+        `SELECT job_id, score FROM public.matches
+          WHERE candidate_id = $1
+          ORDER BY score DESC, job_id ASC
+          LIMIT $2`, [me.id, RECOMMENDED_MATCHES_LIMIT])).map((row) => {
+        const r = asRecord(row);
+        return { jobId: asStr(r['job_id']), score: asNum(r['score']) };
+      }).filter((row) => row.jobId.length > 0);
+      const savedIds = await fetchSavedJobIds(tx, me.id);
+      const jobsById = await fetchPublicJobsByIds(tx, resolvedLocale, [...new Set(matchRows.map((row) => row.jobId))]);
 
-    const matchRows = asArr(matchRes.data).map((row) => {
-      const r = asRecord(row);
-      return { jobId: asStr(r['job_id']), score: asNum(r['score']) };
-    }).filter((row) => row.jobId.length > 0);
-    const jobsById = await fetchPublicJobsByIds(
-      supabase,
-      resolvedLocale,
-      [...new Set(matchRows.map((row) => row.jobId))],
-    );
+      // 1) Realne dopasowania w kolejności wyniku (tylko wciąż aktywne/publiczne).
+      const matched: RecommendedJob[] = [];
+      const seen = new Set<string>();
+      for (const row of matchRows) {
+        const job = jobsById.get(row.jobId);
+        if (!job || seen.has(job.id)) continue;
+        seen.add(job.id);
+        matched.push({ ...job, match: row.score, saved: savedIds.has(job.id) });
+        if (matched.length >= RECOMMENDED_LIMIT) break;
+      }
+      if (matched.length > 0) return matched;
 
-    // 1) Realne dopasowania w kolejności wyniku (tylko wciąż aktywne/publiczne).
-    const matched: RecommendedJob[] = [];
-    const seen = new Set<string>();
-    for (const row of matchRows) {
-      const job = jobsById.get(row.jobId);
-      if (!job || seen.has(job.id)) continue;
-      seen.add(job.id);
-      matched.push({ ...job, match: row.score, saved: savedIds.has(job.id) });
-      if (matched.length >= RECOMMENDED_LIMIT) break;
-    }
-    if (matched.length > 0) return matched;
-
-    const jobsMap = await fetchPublicJobsMap(supabase, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
-    // 2) Fallback: najnowsze oferty publiczne (bez policzonego matchu). Przepuszczamy je przez
-    // RPC po ID, które pod sesją pomija oferty firm zablokowanych przez kandydata (#97).
-    const allowed = await fetchPublicJobsByIds(supabase, resolvedLocale, [...jobsMap.keys()].slice(0, 100));
-    const latest: RecommendedJob[] = [];
-    for (const job of jobsMap.values()) {
-      if (!allowed.has(job.id)) continue;
-      latest.push({ ...job, match: null, saved: savedIds.has(job.id) });
-      if (latest.length >= RECOMMENDED_LIMIT) break;
-    }
-    return latest;
+      const jobsMap = await fetchPublicJobsMap(tx, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
+      // 2) Fallback: najnowsze oferty publiczne (bez policzonego matchu). Przepuszczamy je przez
+      // RPC po ID, które pod sesją pomija oferty firm zablokowanych przez kandydata (#97).
+      const allowed = await fetchPublicJobsByIds(tx, resolvedLocale, [...jobsMap.keys()].slice(0, 100));
+      const latest: RecommendedJob[] = [];
+      for (const job of jobsMap.values()) {
+        if (!allowed.has(job.id)) continue;
+        latest.push({ ...job, match: null, saved: savedIds.has(job.id) });
+        if (latest.length >= RECOMMENDED_LIMIT) break;
+      }
+      return latest;
+    });
   } catch (error) {
     captureError(error, { area: 'candidate.getRecommendedJobs' });
     if (throwOnError) throw error;
@@ -812,7 +669,7 @@ export async function getMyApplicationsPage(
   cursor: ApplicationCursor | null = null,
 ): Promise<MyApplicationsPage> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
       return developmentApplicationFixture(resolvedLocale, cursor);
@@ -824,58 +681,53 @@ export async function getMyApplicationsPage(
   }
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return { items: [], nextCursor: null };
+    const me = await getPortalIdentity();
+    if (!me) return { items: [], nextCursor: null };
 
-    let query = supabase
-      .from('applications')
-      .select('id, job_id, status, submitted_at')
-      .eq('candidate_id', userId)
-      .is('deleted_at', null)
-      .order('submitted_at', { ascending: false })
-      .order('id', { ascending: false });
-    if (cursor) {
-      // PostgREST wymaga cudzysłowu dla wartości z dwukropkiem i kropką (ISO 8601).
-      // Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
-      const timestamp = `"${cursor.submittedAt}"`;
-      query = query.or(
-        `submitted_at.lt.${timestamp},and(submitted_at.eq.${timestamp},id.lt.${cursor.id})`,
+    return await withPortalTransaction(me, async (tx) => {
+      // Kursor (czas + UUID) jako porównanie krotek: starsze zgłoszenie albo ten sam czas
+      // i mniejszy UUID. Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
+      const rows = await queryRows(tx, 'candidate.applications-page',
+        `SELECT id, job_id, status, submitted_at
+           FROM public.applications
+          WHERE candidate_id = $1
+            AND deleted_at IS NULL
+            AND ($2::timestamptz IS NULL OR (submitted_at, id) < ($2::timestamptz, $3::uuid))
+          ORDER BY submitted_at DESC, id DESC
+          LIMIT $4`,
+        [me.id, cursor?.submittedAt ?? null, cursor?.id ?? null, APPLICATION_PAGE_SIZE + 1]);
+
+      if (rows.length === 0) return { items: [], nextCursor: null };
+      const visibleRows = rows.slice(0, APPLICATION_PAGE_SIZE);
+      const last = asRecord(visibleRows[visibleRows.length - 1]);
+      const nextCursor = rows.length > APPLICATION_PAGE_SIZE
+        ? { submittedAt: asStr(last['submitted_at']), id: asStr(last['id']) }
+        : null;
+
+      // Wzbogacamy danymi oferty przez dedykowane RPC ograniczone do WŁASNYCH aplikacji
+      // (auth.uid()) — zwraca tytuł/firmę/slug NIEZALEŻNIE od statusu oferty, więc aplikacje
+      // do ofert zamkniętych/wstrzymanych/wygasłych nie tracą nazwy (get_public_jobs zwraca
+      // tylko active+verified top-N, przez co dawały puste wiersze).
+      // Tylko oferty z tej strony (#184), nie cała historia.
+      const jobsMap = await fetchAppliedJobsForPage(
+        tx,
+        resolvedLocale,
+        visibleRows.map((row) => asStr(asRecord(row)['job_id'])),
       );
-    }
-    const { data, error } = await query.limit(APPLICATION_PAGE_SIZE + 1);
-    if (error) throw error;
-
-    const rows = asArr(data);
-    if (rows.length === 0) return { items: [], nextCursor: null };
-    const visibleRows = rows.slice(0, APPLICATION_PAGE_SIZE);
-    const last = asRecord(visibleRows[visibleRows.length - 1]);
-    const nextCursor = rows.length > APPLICATION_PAGE_SIZE
-      ? { submittedAt: asStr(last['submitted_at']), id: asStr(last['id']) }
-      : null;
-
-    // Wzbogacamy danymi oferty przez dedykowane RPC ograniczone do WŁASNYCH aplikacji
-    // (auth.uid()) — zwraca tytuł/firmę/slug NIEZALEŻNIE od statusu oferty, więc aplikacje
-    // do ofert zamkniętych/wstrzymanych/wygasłych nie tracą nazwy (get_public_jobs zwraca
-    // tylko active+verified top-N, przez co dawały puste wiersze).
-    // Tylko oferty z tej strony (#184), nie cała historia.
-    const jobsMap = await fetchAppliedJobsForPage(
-      supabase,
-      resolvedLocale,
-      visibleRows.map((row) => asStr(asRecord(row)['job_id'])),
-    );
-    const items = visibleRows.map((row) => {
-      const r = asRecord(row);
-      const job = jobsMap.get(asStr(r['job_id']));
-      return {
-        id: asStr(r['id']),
-        jobTitle: job?.title ?? '',
-        companyName: job?.companyName ?? '',
-        slug: job?.slug ?? null,
-        date: asStr(r['submitted_at']),
-        status: asStr(r['status'], 'submitted'),
-      };
+      const items = visibleRows.map((row) => {
+        const r = asRecord(row);
+        const job = jobsMap.get(asStr(r['job_id']));
+        return {
+          id: asStr(r['id']),
+          jobTitle: job?.title ?? '',
+          companyName: job?.companyName ?? '',
+          slug: job?.slug ?? null,
+          date: asStr(r['submitted_at']),
+          status: asStr(r['status'], 'submitted'),
+        };
+      });
+      return { items, nextCursor };
     });
-    return { items, nextCursor };
   } catch (error) {
     captureError(error, { area: 'candidate.getMyApplicationsPage' });
     throw error;
@@ -931,15 +783,15 @@ export type SavedJobsResult =
 
 export async function getSavedJobs(locale: string = routing.defaultLocale): Promise<SavedJobsResult> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return { status: 'ready', jobs: demoSaved(resolvedLocale) };
+  if (!isPortalDataConfigured()) return { status: 'ready', jobs: demoSaved(resolvedLocale) };
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return { status: 'error' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
 
-    const { data, error } = await supabase.rpc('get_saved_jobs_display', { p_locale: resolvedLocale });
-    if (error) throw error;
-    const jobs = asArr(data).map((row): RecommendedJob => {
+    const data = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_saved_jobs_display', { p_locale: resolvedLocale }));
+    const jobs = data.map((row): RecommendedJob => {
       const item = asRecord(row);
       return {
         id: asStr(item['id']),
@@ -972,7 +824,7 @@ export async function getMyOffersPage(
   cursor: OfferCursor | null = null,
 ): Promise<MyOffersPage> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
       return developmentOfferFixture(resolvedLocale, cursor);
@@ -981,58 +833,50 @@ export async function getMyOffersPage(
   }
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return { items: [], nextCursor: null };
+    const me = await getPortalIdentity();
+    if (!me) return { items: [], nextCursor: null };
 
-    let query = supabase
-      .from('offers')
-      .select('id, job_id, status, message, sent_at, created_at, expires_at')
-      .eq('candidate_id', userId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false });
-    if (cursor) {
-      // PostgREST wymaga cudzysłowu dla wartości z dwukropkiem i kropką (ISO 8601).
-      // Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
-      const timestamp = `"${cursor.createdAt}"`;
-      query = query.or(
-        `created_at.lt.${timestamp},and(created_at.eq.${timestamp},id.lt.${cursor.id})`,
-      );
-    }
-    const { data, error } = await query.limit(OFFER_PAGE_SIZE + 1);
-    if (error) throw error;
+    return await withPortalTransaction(me, async (tx) => {
+      // Kursor (czas + UUID) jako porównanie krotek; sprawdzony przez Zod w Server Action.
+      const rows = await queryRows(tx, 'candidate.offers-page',
+        `SELECT id, job_id, status, message, sent_at, created_at, expires_at
+           FROM public.offers
+          WHERE candidate_id = $1
+            AND deleted_at IS NULL
+            AND ($2::timestamptz IS NULL OR (created_at, id) < ($2::timestamptz, $3::uuid))
+          ORDER BY created_at DESC, id DESC
+          LIMIT $4`,
+        [me.id, cursor?.createdAt ?? null, cursor?.id ?? null, OFFER_PAGE_SIZE + 1]);
 
-    const rows = asArr(data);
-    if (rows.length === 0) return { items: [], nextCursor: null };
-    const visibleRows = rows.slice(0, OFFER_PAGE_SIZE);
-    const last = asRecord(visibleRows[visibleRows.length - 1]);
-    const nextCursor = rows.length > OFFER_PAGE_SIZE
-      ? { createdAt: asStr(last['created_at']), id: asStr(last['id']) }
-      : null;
+      if (rows.length === 0) return { items: [], nextCursor: null };
+      const visibleRows = rows.slice(0, OFFER_PAGE_SIZE);
+      const last = asRecord(visibleRows[visibleRows.length - 1]);
+      const nextCursor = rows.length > OFFER_PAGE_SIZE
+        ? { createdAt: asStr(last['created_at']), id: asStr(last['id']) }
+        : null;
 
-    const [appliedMap, offeredMap] = await Promise.all([
-      fetchAppliedJobsMap(supabase, resolvedLocale),
-      fetchOfferedJobsMap(supabase, resolvedLocale),
-    ]);
+      const appliedMap = await fetchAppliedJobsMap(tx, resolvedLocale);
+      const offeredMap = await fetchOfferedJobsMap(tx, resolvedLocale);
 
-    const items = visibleRows.map((row): MyOffer => {
-      const r = asRecord(row);
-      const jobId = asStr(r['job_id']);
-      const job = appliedMap.get(jobId) ?? offeredMap.get(jobId);
-      const sentAt = asStr(r['sent_at']);
-      return {
-        id: asStr(r['id']),
-        jobTitle: job?.title ?? '',
-        companyName: job?.companyName ?? '',
-        slug: job?.slug ?? null,
-        // Szablon zapisany w języku nadawcy → '' (UI pokaże zaproszenie w języku kandydata, #289).
-        message: customOfferMessage(asStr(r['message'])) ?? '',
-        date: sentAt || asStr(r['created_at']),
-        status: asStr(r['status'], 'sent'),
-        expiresAt: asStr(r['expires_at']) || null,
-      };
+      const items = visibleRows.map((row): MyOffer => {
+        const r = asRecord(row);
+        const jobId = asStr(r['job_id']);
+        const job = appliedMap.get(jobId) ?? offeredMap.get(jobId);
+        const sentAt = asStr(r['sent_at']);
+        return {
+          id: asStr(r['id']),
+          jobTitle: job?.title ?? '',
+          companyName: job?.companyName ?? '',
+          slug: job?.slug ?? null,
+          // Szablon zapisany w języku nadawcy → '' (UI pokaże zaproszenie w języku kandydata, #289).
+          message: customOfferMessage(asStr(r['message'])) ?? '',
+          date: sentAt || asStr(r['created_at']),
+          status: asStr(r['status'], 'sent'),
+          expiresAt: asStr(r['expires_at']) || null,
+        };
+      });
+      return { items, nextCursor };
     });
-    return { items, nextCursor };
   } catch (error) {
     captureError(error, { area: 'candidate.getMyOffersPage' });
     throw error;
@@ -1072,46 +916,41 @@ export async function getLatestActiveOffer(
   locale: string = routing.defaultLocale,
 ): Promise<MyOffer | null> {
   const resolvedLocale = toLocale(locale);
-  if (!isSupabaseConfigured()) return latestDemoOffer(resolvedLocale);
+  if (!isPortalDataConfigured()) return latestDemoOffer(resolvedLocale);
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return null;
+    const me = await getPortalIdentity();
+    if (!me) return null;
 
-    const now = new Date().toISOString();
-    const { data, error } = await supabase
-      .from('offers')
-      .select('id, job_id, status, message, sent_at, expires_at')
-      .eq('candidate_id', userId)
-      .is('deleted_at', null)
-      .in('status', ['sent', 'viewed'])
-      .not('sent_at', 'is', null)
-      .or(`expires_at.is.null,expires_at.gt.${now}`)
-      .order('sent_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
+    return await withPortalTransaction(me, async (tx) => {
+      const data = await queryOne(tx, 'candidate.latest-active-offer',
+        `SELECT id, job_id, status, message, sent_at, expires_at
+           FROM public.offers
+          WHERE candidate_id = $1
+            AND deleted_at IS NULL
+            AND status IN ('sent', 'viewed')
+            AND sent_at IS NOT NULL
+            AND (expires_at IS NULL OR expires_at > now())
+          ORDER BY sent_at DESC, id DESC
+          LIMIT 1`, [me.id]);
+      if (!data) return null;
 
-    const row = asRecord(data);
-    const jobId = asStr(row['job_id']);
-    const [appliedMap, offeredMap] = await Promise.all([
-      fetchAppliedJobsMap(supabase, resolvedLocale),
-      fetchOfferedJobsMap(supabase, resolvedLocale),
-    ]);
-    const job = appliedMap.get(jobId) ?? offeredMap.get(jobId);
+      const row = asRecord(data);
+      const jobId = asStr(row['job_id']);
+      const appliedMap = await fetchAppliedJobsMap(tx, resolvedLocale);
+      const job = appliedMap.get(jobId) ?? (await fetchOfferedJobsMap(tx, resolvedLocale)).get(jobId);
 
-    return {
-      id: asStr(row['id']),
-      jobTitle: job?.title ?? '',
-      companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
-      message: customOfferMessage(asStr(row['message'])) ?? '',
-      date: asStr(row['sent_at']),
-      status: asStr(row['status']),
-      expiresAt: asStr(row['expires_at']) || null,
-    };
+      return {
+        id: asStr(row['id']),
+        jobTitle: job?.title ?? '',
+        companyName: job?.companyName ?? '',
+        slug: job?.slug ?? null,
+        message: customOfferMessage(asStr(row['message'])) ?? '',
+        date: asStr(row['sent_at']),
+        status: asStr(row['status']),
+        expiresAt: asStr(row['expires_at']) || null,
+      };
+    });
   } catch (error) {
     captureError(error, { area: 'candidate.getLatestActiveOffer' });
     return null;
@@ -1120,76 +959,43 @@ export async function getLatestActiveOffer(
 
 /** Ostatnie wiadomości/konwersacje kandydata. Pusta lista tylko po udanym odczycie (#244). */
 export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMessage>> {
-  if (!isSupabaseConfigured()) {
+  if (!isPortalDataConfigured()) {
     if (isDashboardErrorFixture()) return { status: 'error' };
     return { status: 'ok', items: demoMessages(routing.defaultLocale) };
   }
 
   try {
-    const { supabase, userId } = await getServerContext();
-    if (!userId) return { status: 'ok', items: [] };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'ok', items: [] };
 
-    const { data: memberData, error: memberError } = await supabase
-      .from('conversation_members')
-      .select('conversation_id, last_read_at')
-      .eq('profile_id', userId);
-    if (memberError) throw memberError;
-
-    const lastReadByConv = new Map<string, string | null>();
-    for (const row of asArr(memberData)) {
-      const r = asRecord(row);
-      const cid = asStr(r['conversation_id']);
-      if (cid) lastReadByConv.set(cid, typeof r['last_read_at'] === 'string' ? (r['last_read_at'] as string) : null);
-    }
-    if (lastReadByConv.size === 0) return { status: 'ok', items: [] };
-
-    const { data: convData, error: convError } = await supabase
-      .from('conversations')
-      .select('id, subject, last_message_at')
-      .in('id', [...lastReadByConv.keys()])
-      .is('deleted_at', null)
-      .order('last_message_at', { ascending: false, nullsFirst: false })
-      .limit(3);
-    if (convError) throw convError;
-
-    const convs = asArr(convData);
-    if (convs.length === 0) return { status: 'ok', items: [] };
-    const topIds = convs.map((c) => asStr(asRecord(c)['id'])).filter(Boolean);
-
-    const { data: msgData, error: msgError } = await supabase
-      .from('messages')
-      .select('conversation_id, body, sender_id, created_at')
-      .in('conversation_id', topIds)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (msgError) throw msgError;
-
-    const latestByConv = new Map<string, { body: string; createdAt: string; senderId: string }>();
-    for (const row of asArr(msgData)) {
-      const r = asRecord(row);
-      const cid = asStr(r['conversation_id']);
-      if (!cid || latestByConv.has(cid)) continue;
-      latestByConv.set(cid, {
-        body: asStr(r['body']),
-        createdAt: asStr(r['created_at']),
-        senderId: asStr(r['sender_id']),
-      });
-    }
+    // Trzy najnowsze własne rozmowy (RLS: członek rozmowy) z ostatnią nieusuniętą wiadomością;
+    // „nieprzeczytana” = ostatnia wiadomość od innej osoby, nowsza niż własne last_read_at.
+    const convs = await withPortalTransaction(me, (tx) => queryRows(tx, 'candidate.latest-messages',
+      `SELECT c.id, c.subject, c.last_message_at,
+              lm.body AS last_body, lm.created_at AS last_created_at,
+              coalesce(lm.sender_id IS DISTINCT FROM $1
+                AND (cm.last_read_at IS NULL OR lm.created_at > cm.last_read_at), false) AS unread
+         FROM public.conversation_members cm
+         JOIN public.conversations c ON c.id = cm.conversation_id
+         LEFT JOIN LATERAL (
+           SELECT m.body, m.sender_id, m.created_at
+             FROM public.messages m
+            WHERE m.conversation_id = c.id AND m.deleted_at IS NULL
+            ORDER BY m.created_at DESC
+            LIMIT 1
+         ) lm ON true
+        WHERE cm.profile_id = $1 AND c.deleted_at IS NULL
+        ORDER BY c.last_message_at DESC NULLS LAST, c.id DESC
+        LIMIT 3`, [me.id]));
 
     const items = convs.map((c): LatestMessage => {
       const r = asRecord(c);
-      const cid = asStr(r['id']);
-      const last = latestByConv.get(cid);
-      const lastRead = lastReadByConv.get(cid) ?? null;
-      const unread = Boolean(
-        last && last.senderId !== userId && last.createdAt && (!lastRead || last.createdAt > lastRead),
-      );
       return {
-        id: cid,
+        id: asStr(r['id']),
         title: asStr(r['subject']),
-        preview: last?.body ?? '',
-        time: last?.createdAt || asStr(r['last_message_at']),
-        unread,
+        preview: asStr(r['last_body']),
+        time: asStr(r['last_created_at']) || asStr(r['last_message_at']),
+        unread: r['unread'] === true,
       };
     });
     return { status: 'ok', items };

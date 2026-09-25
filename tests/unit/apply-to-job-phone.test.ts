@@ -1,20 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyToJob } from '@/lib/actions/applications';
-import { isSupabaseConfigured } from '@/lib/env';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #145 — przepływ aplikowania: niepoprawny numer nie dociera do RPC, poprawny trafia do
  * zapisu w E.164, a tryb demo zwraca rozróżnialny kod zamiast ogólnego błędu walidacji.
  */
 
-const rpc = vi.fn();
-
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn(() => true) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: vi.fn(async () => ({ rpc })),
-}));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
+vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const input = {
   jobId: '11111111-1111-4111-8111-111111111111',
@@ -24,8 +20,8 @@ const input = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  rpc.mockResolvedValue({ data: 'application-1', error: null });
+  resetFakeDb({ id: '44444444-4444-4444-8444-444444444444', role: 'candidate' });
+  fakeDb.rpc('apply_to_job', 'application-1');
 });
 
 describe('applyToJob — phone', () => {
@@ -37,7 +33,7 @@ describe('applyToJob — phone', () => {
         error: 'VALIDATION_FAILED',
         field: 'phone',
       });
-      expect(rpc).not.toHaveBeenCalled();
+      expect(fakeDb.calls).toHaveLength(0);
     },
   );
 
@@ -46,22 +42,19 @@ describe('applyToJob — phone', () => {
       ok: true,
       id: 'application-1',
     });
-    expect(rpc).toHaveBeenCalledWith(
-      'apply_to_job',
-      expect.objectContaining({ p_phone: '+32470123456' }),
-    );
+    expect(fakeDb.callsTo('apply_to_job')[0]!.args).toMatchObject({ p_phone: '+32470123456' });
   });
 
   it('reports the demo mode instead of a validation failure for demo job ids', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(
       await applyToJob({ ...input, jobId: '1002', phone: '470 12 34 56', phoneCountry: 'BE' }),
     ).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('still flags an invalid phone on the field in demo mode', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await applyToJob({ ...input, jobId: '1002', phone: 'abc', phoneCountry: 'PL' })).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
@@ -80,15 +73,18 @@ describe('applyToJob — błędy RPC (#361)', () => {
     ['JOB_NOT_ACTIVE', 'JOB_NOT_ACTIVE'],
     ['duplicate key value violates unique constraint', 'INTERNAL'],
   ])('%s → %s', async (message, code) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    fakeDb.rpc('apply_to_job', () => { throw pgError('42501', message); });
     expect(await applyToJob(valid)).toEqual({ ok: false, error: code });
+  });
+
+  it('brak sesji → UNAUTHENTICATED (link logowania) bez wywołania RPC', async () => {
+    fakeSession.identity = null;
+    expect(await applyToJob(valid)).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('przekazuje klucz idempotencji klienta do RPC (retry = ta sama próba)', async () => {
     await applyToJob(valid);
-    expect(rpc).toHaveBeenCalledWith(
-      'apply_to_job',
-      expect.objectContaining({ p_idempotency_key: input.idempotencyKey }),
-    );
+    expect(fakeDb.callsTo('apply_to_job')[0]!.args).toMatchObject({ p_idempotency_key: input.idempotencyKey });
   });
 });

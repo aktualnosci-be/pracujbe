@@ -3,9 +3,9 @@ import 'server-only';
 import { isLocale } from '@/i18n/routing';
 import type { EmailPreferenceCategory } from '@/lib/email/categories';
 import { unsubscribeSecretFromEnv, verifyUnsubscribeToken } from '@/lib/email/unsubscribe-token';
-import { isSupabaseConfigured } from '@/lib/env';
+import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
-import { createAdminClient } from '@/lib/supabase/admin';
 
 /**
  * Wypisanie z kategorii e-maili na podstawie podpisanego tokenu (#45).
@@ -16,6 +16,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  * claimie, więc wiadomości już zakolejkowane w tej kategorii nie wyjdą.
  * #45, etap 2 (0101): RPC zapisuje dowód wycofania zgody (źródło, język); strona pozwala też
  * wypisać się ze wszystkich kategorii jednym zapisem (`email_unsubscribe_all`).
+ * #25: zapis w krótkiej transakcji puli `service` (`withServiceRole`); bez niej = `unavailable`.
  */
 
 export type UnsubscribeOutcome =
@@ -52,29 +53,26 @@ export async function applyUnsubscribe(
   if (!secret) return { status: 'unavailable' };
   const verified = verifyUnsubscribeToken(token, secret);
   if (!verified.ok) return { status: verified.reason === 'expired' ? 'expired' : 'invalid' };
-  if (!isSupabaseConfigured() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!isServiceDatabaseConfigured()) {
     return { status: 'unavailable' };
   }
 
   const locale = options.locale && isLocale(options.locale) ? options.locale : null;
   try {
-    const { error } =
+    await withServiceRole((tx) =>
       options.scope === 'all'
-        ? await createAdminClient().rpc('email_unsubscribe_all', {
+        ? rpc(tx, 'email_unsubscribe_all', {
             p_profile_id: verified.profileId,
             p_source: options.source,
             p_locale: locale,
           })
-        : await createAdminClient().rpc('email_unsubscribe', {
+        : rpc(tx, 'email_unsubscribe', {
             p_profile_id: verified.profileId,
             p_category: verified.category,
             p_source: options.source,
             p_locale: locale,
-          });
-    if (error) {
-      captureError(error, { area: 'email.unsubscribe' });
-      return { status: 'error' };
-    }
+          }),
+    );
   } catch (err) {
     captureError(err, { area: 'email.unsubscribe' });
     return { status: 'error' };

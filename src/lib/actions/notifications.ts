@@ -1,7 +1,8 @@
 'use server';
 
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/sentry';
 
@@ -33,18 +34,18 @@ function mapPgError(message: string | undefined): ErrorCode {
  * nieprzeczytane. Zwraca liczbę zaktualizowanych rekordów. Bez env → `{ ok: true, count: 0 }`.
  */
 export async function markNotificationsRead(ids?: string[]): Promise<MarkReadResult> {
-  if (!isSupabaseConfigured()) return { ok: true, count: 0 };
+  if (!isPortalDataConfigured()) return { ok: true, count: 0 };
 
   try {
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('mark_notifications_read', {
-      p_ids: ids && ids.length ? ids : null,
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
-
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    const data = await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'mark_notifications_read', { p_ids: ids && ids.length ? ids : null }),
+    );
     const count = typeof data === 'number' ? data : Number(data);
     return { ok: true, count: Number.isFinite(count) ? count : 0 };
   } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'notifications.markNotificationsRead' });
     return { ok: false, error: 'INTERNAL' };
   }

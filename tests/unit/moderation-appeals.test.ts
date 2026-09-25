@@ -25,23 +25,13 @@ import { buildDeliveryData, emailTargetPath } from '@/lib/email/delivery-data';
 
 const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => true),
-  configured: vi.fn(() => true),
-  adminRpc: vi.fn(),
-  sessionRpc: vi.fn(),
-  getUser: vi.fn(async () => ({ data: { user: { id: 'u1' } as { id: string } | null } })),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: mocks.configured,
-}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: mocks.adminRpc }) }));
-vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({ auth: { getUser: mocks.getUser }, rpc: mocks.sessionRpc }),
-}));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import { decideAppeal, submitModerationAppeal, submitReportAppeal } from '@/lib/actions/appeals';
 
 const DECISION = '5b0c8a1e-3f7a-4c52-9d1f-2a8e6b7c9d01';
@@ -52,14 +42,22 @@ const GROUNDS = 'Nie pobieramy opłat od kandydatów; to był błąd w szablonie
 const REASONING = 'Autor wykazał, że opłata nie była pobierana od kandydatów.';
 const SITE = 'https://pracuj.be';
 const LOCALES: Locale[] = ['pl', 'nl', 'fr', 'en'];
+const APPEAL_ROW = { appeal_id: APPEAL, reference: 'APL-6C1D-9B2F-4A8B', created: true };
+
+/** Handler RPC: kolejne wywołania dostają kolejne wyniki (błąd = wyjątek bazy), potem `fallback`. */
+function queue(fallback: unknown, ...results: Array<unknown | Error>) {
+  return () => {
+    const next = results.length ? results.shift() : fallback;
+    if (next instanceof Error) throw next;
+    return next;
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rateLimit.mockResolvedValue(true);
-  mocks.configured.mockReturnValue(true);
-  mocks.getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
-  mocks.sessionRpc.mockResolvedValue({ data: [{ appeal_id: APPEAL, reference: 'APL-6C1D-9B2F-4A8B', created: true }], error: null });
-  mocks.adminRpc.mockResolvedValue({ data: [{ appeal_id: APPEAL, reference: 'APL-6C1D-9B2F-4A8B', created: true }], error: null });
+  resetFakeDb({ id: 'u1', role: 'employer' });
+  fakeDb.rpc('submit_moderation_appeal', [APPEAL_ROW]).rpc('submit_report_appeal', [APPEAL_ROW]).rpc('admin_decide_appeal', APPEAL);
 });
 
 describe('reguły odwołania', () => {
@@ -113,28 +111,45 @@ describe('akcje odwołań', () => {
       reference: 'APL-6C1D-9B2F-4A8B',
       created: true,
     });
-    expect(mocks.sessionRpc).toHaveBeenCalledWith('submit_moderation_appeal', {
-      p_decision_id: DECISION,
-      p_idempotency_key: KEY,
-      p_grounds: GROUNDS,
+    const [call] = fakeDb.callsTo('submit_moderation_appeal');
+    expect(call).toMatchObject({
+      kind: 'rpcrows',
+      as: 'u1',
+      args: { p_decision_id: DECISION, p_idempotency_key: KEY, p_grounds: GROUNDS },
     });
-    expect(mocks.adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls.some((c) => c.as === 'service')).toBe(false);
   });
 
   it('autor: błędy bazy → kody użytkowe, walidacja przed RPC', async () => {
-    mocks.sessionRpc.mockResolvedValueOnce({ data: null, error: { message: 'APPEAL_EXISTS' } });
+    fakeDb.rpc('submit_moderation_appeal', queue([APPEAL_ROW],
+      pgError('P0001', 'APPEAL_EXISTS'),
+      pgError('P0001', 'APPEAL_WINDOW_CLOSED'),
+      pgError('P0001', 'VALIDATION_FAILED: GROUNDS_REQUIRED')));
     expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toEqual({ ok: false, error: 'APPEAL_EXISTS' });
-    mocks.sessionRpc.mockResolvedValueOnce({ data: null, error: { message: 'APPEAL_WINDOW_CLOSED' } });
     expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toEqual({ ok: false, error: 'APPEAL_WINDOW_CLOSED' });
-    mocks.sessionRpc.mockClear();
+    expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toMatchObject({ field: 'grounds', fieldError: 'tooShort' });
+    const before = fakeDb.calls.length;
     expect(await submitModerationAppeal(DECISION, 'krótko', KEY)).toMatchObject({ field: 'grounds', fieldError: 'tooShort' });
     expect(await submitModerationAppeal(DECISION, GROUNDS, 'nie-uuid')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    expect(mocks.sessionRpc).not.toHaveBeenCalled();
-    mocks.getUser.mockResolvedValueOnce({ data: { user: null } });
+    expect(fakeDb.calls.length).toBe(before);
+    fakeSession.identity = null;
     expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(fakeDb.calls.length).toBe(before);
+  });
+
+  it('autor: wyjątek spoza bazy = INTERNAL; bez bazy = tryb demo bez zapytań', async () => {
+    fakeDb.rpc('submit_moderation_appeal', queue([APPEAL_ROW], new Error('ECONNRESET')));
+    expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toEqual({ ok: false, error: 'INTERNAL' });
+    fakeDb.rpc('submit_moderation_appeal', []);
+    expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toEqual({ ok: false, error: 'INTERNAL' });
+    resetFakeDb({ id: 'u1', role: 'employer' });
+    fakeSession.configured = false;
+    expect(await submitModerationAppeal(DECISION, GROUNDS, KEY)).toMatchObject({ ok: true, demo: true });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('zgłaszający: limiter → walidacja → RPC service_role ze znormalizowanym numerem i kodem', async () => {
+    fakeSession.identity = null;
     const result = await submitReportAppeal({
       caseNumber: 'dsa-1a2b-3c4d-5e6f-7a8b',
       accessCode: CODE.toLowerCase(),
@@ -142,45 +157,71 @@ describe('akcje odwołań', () => {
       idempotencyKey: KEY,
     });
     expect(result).toMatchObject({ ok: true, reference: 'APL-6C1D-9B2F-4A8B' });
-    expect(mocks.adminRpc).toHaveBeenCalledWith('submit_report_appeal', {
-      p_case_number: 'DSA-1A2B-3C4D-5E6F-7A8B',
-      p_access_code: CODE,
-      p_idempotency_key: KEY,
-      p_grounds: GROUNDS,
-    });
+    expect(fakeDb.callsTo('submit_report_appeal')).toEqual([
+      expect.objectContaining({
+        as: 'service',
+        args: {
+          p_case_number: 'DSA-1A2B-3C4D-5E6F-7A8B',
+          p_access_code: CODE,
+          p_idempotency_key: KEY,
+          p_grounds: GROUNDS,
+        },
+      }),
+    ]);
     mocks.rateLimit.mockResolvedValueOnce(false);
-    mocks.adminRpc.mockClear();
     expect(
       await submitReportAppeal({ caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', accessCode: CODE, grounds: GROUNDS, idempotencyKey: KEY }),
     ).toEqual({ ok: false, error: 'RATE_LIMITED' });
-    expect(mocks.adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.callsTo('submit_report_appeal')).toHaveLength(1);
+
+    fakeDb.rpc('submit_report_appeal', queue([APPEAL_ROW], pgError('P0001', 'NOT_FOUND')));
+    expect(
+      await submitReportAppeal({ caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', accessCode: CODE, grounds: GROUNDS, idempotencyKey: KEY }),
+    ).toEqual({ ok: false, error: 'NOT_FOUND' });
+
+    fakeSession.serviceConfigured = false;
+    expect(
+      await submitReportAppeal({ caseNumber: 'DSA-1A2B-3C4D-5E6F-7A8B', accessCode: CODE, grounds: GROUNDS, idempotencyKey: KEY }),
+    ).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
   });
 
   it('rozpatrzenie: REVIEWER_CONFLICT i STALE_STATE; nowe ograniczenie tylko dla zgłaszającego', async () => {
-    mocks.sessionRpc.mockResolvedValueOnce({ data: APPEAL, error: null });
+    resetFakeDb({ id: 'admin-1', role: 'admin' });
+    fakeDb.rpc('admin_decide_appeal', queue(APPEAL,
+      APPEAL,
+      APPEAL,
+      pgError('P0001', 'REVIEWER_CONFLICT: inny administrator'),
+      pgError('P0001', 'STALE_STATE: status odwołania zmienił się'),
+      pgError('P0001', 'VALIDATION_FAILED: GROUND_REFERENCE_REQUIRED')));
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', {
       outcome: 'reversed', reasoning: REASONING, decision: 'job_removed', groundType: 'terms', groundReference: '§ 4',
     })).toEqual({ ok: true });
-    expect(mocks.sessionRpc).toHaveBeenLastCalledWith('admin_decide_appeal', expect.objectContaining({
-      p_outcome: 'reversed', p_new_decision: null, p_ground_type: null, p_ground_reference: null,
-    }));
+    expect(fakeDb.callsTo('admin_decide_appeal').at(-1)).toMatchObject({
+      as: 'admin-1',
+      args: { p_outcome: 'reversed', p_new_decision: null, p_ground_type: null, p_ground_reference: null },
+    });
 
-    mocks.sessionRpc.mockResolvedValueOnce({ data: APPEAL, error: null });
     await decideAppeal(APPEAL, 'pending', 'reporter', 'job', {
       outcome: 'reversed', reasoning: REASONING, decision: 'job_removed', groundType: 'law', groundReference: 'Art. 7',
     });
-    expect(mocks.sessionRpc).toHaveBeenLastCalledWith('admin_decide_appeal', expect.objectContaining({
+    expect(fakeDb.callsTo('admin_decide_appeal').at(-1)?.args).toMatchObject({
       p_new_decision: 'job_removed', p_ground_type: 'law', p_ground_reference: 'Art. 7',
-    }));
+    });
 
-    mocks.sessionRpc.mockResolvedValueOnce({ data: null, error: { message: 'REVIEWER_CONFLICT: inny administrator' } });
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
       .toEqual({ ok: false, error: 'REVIEWER_CONFLICT' });
-    mocks.sessionRpc.mockResolvedValueOnce({ data: null, error: { message: 'STALE_STATE: status odwołania zmienił się' } });
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
       .toEqual({ ok: false, error: 'STALE_STATE' });
+    expect(await decideAppeal(APPEAL, 'pending', 'reporter', 'job', {
+      outcome: 'reversed', reasoning: REASONING, decision: 'job_removed', groundType: 'law', groundReference: 'Art. 7',
+    })).toMatchObject({ ok: false, error: 'VALIDATION_FAILED', field: 'groundReference' });
+    const count = fakeDb.callsTo('admin_decide_appeal').length;
     expect(await decideAppeal(APPEAL, 'upheld', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
       .toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    fakeSession.identity = null;
+    expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
+      .toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(fakeDb.callsTo('admin_decide_appeal')).toHaveLength(count);
   });
 });
 

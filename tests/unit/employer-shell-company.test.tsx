@@ -38,17 +38,17 @@ vi.mock('@/components/dashboard/DashboardShell', () => ({
   ),
 }));
 
-vi.mock('@/lib/env', () => ({ isSupabaseConfigured: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 import { EmployerShell } from '@/components/employer/EmployerShell';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { getEmployerShellData } from '@/lib/data/employer';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
 import { getActiveCompany } from '@/lib/company-context';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+
+const USER = '11111111-1111-4111-8111-111111111111';
 
 afterEach(() => {
   cleanup();
@@ -96,20 +96,46 @@ describe('EmployerShell — nazwa firmy (#401)', () => {
 
 describe('getEmployerShellData — jawny wynik (#401)', () => {
   beforeEach(() => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    resetFakeDb({ id: USER, role: 'employer' });
   });
 
   it('bez env zwraca demo', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await getEmployerShellData()).toEqual({ status: 'demo' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('błąd odczytu członkostw daje error, nie null/demo', async () => {
-    vi.mocked(createServerClient).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null }) },
-    } as never);
     vi.mocked(getActiveCompany).mockRejectedValue(new Error('company_members unavailable'));
     expect(await getEmployerShellData()).toEqual({ status: 'error' });
+  });
+
+  it('brak sesji daje error (layout i tak przekierowuje), bez odczytu bazy', async () => {
+    fakeSession.identity = null;
+    expect(await getEmployerShellData()).toEqual({ status: 'error' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  const context = {
+    activeId: 'c1', activeStatus: 'pending', activeName: 'Firma A', activeRole: 'owner',
+    companies: [{ id: 'c1', name: 'Firma A', role: 'owner', status: 'pending' }],
+  };
+
+  it('realna firma i imię użytkownika z profilu własnej sesji', async () => {
+    vi.mocked(getActiveCompany).mockResolvedValue(context);
+    fakeDb.rows('employer.shell-profile', [{ first_name: ' Ada ', last_name: 'Nowak' }]);
+    expect(await getEmployerShellData()).toEqual({
+      status: 'ok', companies: [{ id: 'c1', name: 'Firma A', role: 'owner' }], activeId: 'c1',
+      activeName: 'Firma A', activeRole: 'owner', activeStatus: 'pending', userName: 'Ada Nowak',
+    });
+    expect(vi.mocked(getActiveCompany).mock.calls[0]?.[1]).toBe(USER);
+    expect(fakeDb.callsTo('employer.shell-profile')[0]).toMatchObject({ values: [USER], as: USER });
+  });
+
+  it('błąd odczytu imienia nie jest błędem panelu (neutralna etykieta)', async () => {
+    vi.mocked(getActiveCompany).mockResolvedValue(context);
+    fakeDb.rows('employer.shell-profile', () => { throw pgError('XX000', 'profiles unavailable'); });
+    expect(await getEmployerShellData()).toMatchObject({ status: 'ok', activeName: 'Firma A', userName: '' });
   });
 });
 

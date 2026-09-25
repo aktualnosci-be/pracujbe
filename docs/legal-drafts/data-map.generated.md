@@ -38,8 +38,8 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 - **Cel w portalu:** Hosting aplikacji (usługa production z gałęzi main), baza PostgreSQL, zadania cron wywołujące /api/maintenance i /api/email/process, logi usługi.
 - **Kategorie danych:** Wszystkie kategorie z tabel bazy (patrz mapa tabel); Logi aplikacji i żądań HTTP
 - **Osoby:** Kandydaci, Aplikujący bez konta, Pracodawcy i członkowie firm, Zgłaszający treści, Administratorzy, Odwiedzający
-- **Aktywacja:** Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.
-- **Kod:** `docs/railway/README.md`, `docs/railway/OPERATIONS.md`, `src/lib/db/pool.ts`, `scripts/railway-cron-call.mjs`
+- **Aktywacja:** Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_SERVICE_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.
+- **Kod:** `docs/railway/README.md`, `docs/railway/OPERATIONS.md`, `src/lib/db/pool.ts`, `src/lib/db/portal.ts`, `scripts/railway-cron-call.mjs`
 - **Uwaga:** Adapter bucketa S3 (src/lib/storage/railway-bucket.ts) istnieje, ale obecny kod plików CV korzysta z Supabase Storage (src/lib/storage.ts).
 - **Uwaga:** Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
@@ -50,13 +50,13 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 
 ### Supabase (`supabase`)
 
-- **Cel w portalu:** Warstwa przejściowa: klient Supabase w panelach i Server Actions (PostgREST), prywatny bucket candidate-files na pliki CV, ścieżka limitera zapytań.
-- **Kategorie danych:** Dane profili, aplikacji, wiadomości odczytywane pod sesją; Pliki CV (PDF/DOC/DOCX); Klucz limitera z adresem IP (ścieżka Supabase)
+- **Cel w portalu:** Warstwa przejściowa: sesje i trasy logowania Supabase Auth (do przepięcia w #24, usunięcie SDK w #27). Panele, Server Actions i limiter korzystają z PostgreSQL Railway (#25).
+- **Kategorie danych:** Konto i sesja logowania (e-mail, identyfikator)
 - **Osoby:** Kandydaci, Pracodawcy i członkowie firm, Administratorzy
 - **Aktywacja:** NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (+ SUPABASE_SERVICE_ROLE_KEY po stronie serwera).
-- **Kod:** `src/lib/supabase/server.ts`, `src/lib/supabase/admin.ts`, `src/lib/storage.ts`, `src/lib/rate-limit.ts`
+- **Kod:** `src/lib/supabase/server.ts`, `src/lib/actions/auth.ts`, `src/middleware.ts`
 - **Uwaga:** CLAUDE.md opisuje Supabase jako przejściowe; docelowa baza to PostgreSQL na Railway.
-- **Uwaga:** Limiter przez Supabase buduje klucz z akcji i adresu IP bez haszowania; ścieżka PostgreSQL (src/lib/db/rate-limit.ts) zapisuje HMAC.
+- **Uwaga:** Limiter (src/lib/rate-limit.ts) zapisuje w PostgreSQL Railway klucz z akcji i adresu IP bez haszowania (pula service); wariant z HMAC (src/lib/db/rate-limit.ts) czeka na podłączenie.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -876,7 +876,7 @@ Tabele w migracjach: 91; z danymi osobowymi: 58; bez danych osobowych: 33.
 - **Migracja:** `supabase/migrations/0015_rate_limiting.sql`
 - **Czynności:** Bezpieczeństwo, audyt i limity
 - **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm, Odwiedzający (bez konta)
-- **Uwaga:** Klucz = akcja + adres IP (ścieżka Supabase, bez haszowania) albo HMAC (ścieżka PostgreSQL, src/lib/db/rate-limit.ts).
+- **Uwaga:** Klucz = akcja + adres IP (+ identyfikator) bez haszowania (src/lib/rate-limit.ts, pula service); wariant HMAC src/lib/db/rate-limit.ts niepodłączony.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|

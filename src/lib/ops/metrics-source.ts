@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { hasServiceRoleKey } from '@/lib/env';
+import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
+import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 
 import { parseOpsMetrics, type OpsMetrics } from './sensors';
@@ -14,7 +15,8 @@ export type OpsMetricsResult =
  * Odczyt `public.ops_metrics()` (#47, 0096). Kolejność źródeł:
  * 1. `DATABASE_OPS_URL` — PostgreSQL Railway: osobny login z członkostwem WYŁĄCZNIE
  *    w `pracujbe_ops` (kontrola uprawnień w `createRuntimePool`, jedna sesja na proces);
- * 2. service-role Supabase (ścieżka przejściowa, jak `/api/maintenance`).
+ * 2. pula zadań serwerowych (`DATABASE_SERVICE_URL`, transakcja service_role — ścieżka
+ *    zapasowa, jak `/api/maintenance`).
  * Błąd sterownika nie wychodzi poza moduł (może zawierać adres lub login) — tylko Sentry.
  */
 export async function readOpsMetrics(): Promise<OpsMetricsResult> {
@@ -25,11 +27,8 @@ export async function readOpsMetrics(): Promise<OpsMetricsResult> {
       const pool = await getOpsPool();
       const result = await pool.query<{ metrics: unknown }>('SELECT public.ops_metrics() AS metrics');
       raw = result.rows[0]?.metrics;
-    } else if (hasServiceRoleKey()) {
-      const { createAdminClient } = await import('@/lib/supabase/admin');
-      const { data, error } = await createAdminClient().rpc('ops_metrics');
-      if (error) throw error;
-      raw = data;
+    } else if (isServiceDatabaseConfigured()) {
+      raw = await withServiceRole((tx) => rpc(tx, 'ops_metrics'));
     } else {
       return { kind: 'unconfigured' };
     }

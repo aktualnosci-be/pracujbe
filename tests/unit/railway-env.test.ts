@@ -20,6 +20,7 @@ function stubPostgresProduction(site = 'https://pracuj.be') {
   vi.stubEnv('APP_MODE', 'production');
   vi.stubEnv('NEXT_PUBLIC_SITE_URL', site);
   vi.stubEnv('DATABASE_APP_URL', 'postgresql://web:pw@db.internal:5432/pracujbe');
+  vi.stubEnv('DATABASE_SERVICE_URL', 'postgresql://svc:pw@db.internal:5432/pracujbe');
   vi.stubEnv('DATABASE_AUTH_URL', 'postgresql://auth:pw@db.internal:5432/pracujbe');
   vi.stubEnv('BETTER_AUTH_URL', site);
   vi.stubEnv('BETTER_AUTH_SECRET', SECRET);
@@ -70,6 +71,7 @@ describe('Jawny tryb aplikacji niezależny od hostingu', () => {
   });
 
   it.each([
+    ['DATABASE_SERVICE_URL', ''],
     ['DATABASE_AUTH_URL', ''],
     ['BETTER_AUTH_SECRET', ''],
     ['BETTER_AUTH_URL', ''],
@@ -111,7 +113,7 @@ describe('Jawny tryb aplikacji niezależny od hostingu', () => {
     }));
     const body = await response.json();
     expect(body.checks).toMatchObject({
-      database: true, auth: true, authUrl: true, rateLimit: true, databaseReachable: true, httpsSiteUrl: true,
+      database: true, serviceDatabase: true, auth: true, authUrl: true, rateLimit: true, databaseReachable: true, httpsSiteUrl: true,
     });
     expect(body.checks).not.toHaveProperty('supabase');
     expect(JSON.stringify(body)).not.toContain('pw@');
