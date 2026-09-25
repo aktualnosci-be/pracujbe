@@ -2697,6 +2697,7 @@
   "jobFunnel": {
     "title": "Lejek ofert",
     "range": "Zakres: {from} – {to} (czas Brukseli)",
+    "consentNote": "Pojawienia w wynikach, wyświetlenia i rozpoczęte aplikowanie liczymy tylko u osób, które zgodziły się na cookies analityczne. Wysłane aplikacje liczymy wszystkie.",
     "rangeLabel": "Zakres dat lejka ofert",
     "rangeDays": "{count, plural, one {# dzień} few {# dni} many {# dni} other {# dni}}",
     "searchAppearances": "Pojawienia w wynikach",

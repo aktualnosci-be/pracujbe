@@ -2697,6 +2697,7 @@
   "jobFunnel": {
     "title": "Job funnel",
     "range": "Period: {from} – {to} (Brussels time)",
+    "consentNote": "Search appearances, views and started applications are counted only for people who accepted analytics cookies. All submitted applications are counted.",
     "rangeLabel": "Job funnel date range",
     "rangeDays": "{count, plural, one {# day} other {# days}}",
     "searchAppearances": "Search result appearances",

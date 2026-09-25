@@ -2697,6 +2697,7 @@
   "jobFunnel": {
     "title": "Vacaturetrechter",
     "range": "Periode: {from} – {to} (tijd in Brussel)",
+    "consentNote": "Verschijningen in zoekresultaten, weergaven en gestarte sollicitaties tellen we alleen bij mensen die analytische cookies hebben geaccepteerd. Alle verzonden sollicitaties tellen we mee.",
     "rangeLabel": "Periode van de vacaturetrechter",
     "rangeDays": "{count, plural, one {# dag} other {# dagen}}",
     "searchAppearances": "Vertoningen in zoekresultaten",

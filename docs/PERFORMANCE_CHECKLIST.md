@@ -147,10 +147,15 @@ pilnuje dalej `check-next-build.mjs`.
 |---|---|---|
 | JS `/[locale]/(public)/page` (home) | 164,5 KB | 173 KB |
 | JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 175 KB |
-| JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 242 KB (#576: dwa przedziały wieku w formularzu gościa, +0,2 KB) |
+| JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 243 KB¹ |
 | JS `/[locale]/(public)/poradniki/[slug]/page` | 154,0 KB | 162 KB |
 | JS `/[locale]/(auth)/logowanie/page` | 184,8 KB | 194 KB |
 | font (jeden plik / razem) | 72,8 KB | 100 KB / 150 KB |
+
+¹ 241 → 243 KB (#575, 2026-09-25): main urósł do ok. 240 KB, a lejek ofert dostał bramkę zgody
+analitycznej (odczyt cookie tuż przed wysyłką, kolejka zdarzeń do decyzji) — ok. 1 KB JS na
+stronie oferty, wymóg decyzji właściciela (ePrivacy). Odczyt zgody bez Server Action i store'u
+banera (`src/lib/consent-cookie.ts`), więc nie ciągnie dodatkowych modułów.
 
 Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa biblioteka kliencka
 w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).

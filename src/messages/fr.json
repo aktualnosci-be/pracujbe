@@ -2697,6 +2697,7 @@
   "jobFunnel": {
     "title": "Entonnoir des offres",
     "range": "Période : du {from} au {to} (heure de Bruxelles)",
+    "consentNote": "Les apparitions dans les résultats, les vues et les candidatures commencées ne sont comptées que pour les personnes qui ont accepté les cookies analytiques. Toutes les candidatures envoyées sont comptées.",
     "rangeLabel": "Période de l’entonnoir des offres",
     "rangeDays": "{count, plural, one {# jour} other {# jours}}",
     "searchAppearances": "Affichages dans les résultats",
