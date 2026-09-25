@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0107_consent_separation.sql — #493: rozdzielenie akceptacji regulaminu, potwierdzenia
+-- 0108_consent_separation.sql — #493: rozdzielenie akceptacji regulaminu, potwierdzenia
 -- zapoznania się z informacją o prywatności i zgód opcjonalnych.
 --
 -- Numer tymczasowy (koordynator poda docelowy).

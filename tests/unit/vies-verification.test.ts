@@ -4,10 +4,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { checkCompanyVies } from '@/lib/actions/admin';
-import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createServerClient } from '@/lib/supabase/server';
 import {
   formatBelgianVat,
   hasValidBelgianChecksum,
@@ -21,6 +18,7 @@ import {
 } from '@/lib/vies/client';
 import { compareCompanyNames } from '@/lib/vies/name-match';
 import { buildViesState, companyVatSource } from '@/lib/vies/state';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #92 — weryfikacja belgijskich firm w VIES bez fałszywych ostrzeżeń.
@@ -29,12 +27,7 @@ import { buildViesState, companyVatSource } from '@/lib/vies/state';
  * żadnego zapytania sieciowego. Jedyny test na żywo jest opt-in (`VIES_LIVE_SMOKE=1`).
  */
 
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: vi.fn(),
-}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
 const VALID = '0417497106';
@@ -391,30 +384,21 @@ describe('#92 porównanie nazwy i stan w panelu admina', () => {
 
 const COMPANY_ID = '0b9a9c0e-5f4e-4c1a-9d52-6f1f3c1d2e01';
 
-type Result = { data?: unknown; error?: unknown };
-function chain(result: Result) {
-  const q: Record<string, unknown> = {};
-  for (const m of ['select', 'is', 'eq']) q[m] = () => q;
-  q.maybeSingle = () => Promise.resolve(result);
-  return q;
+const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';
+
+/** Sesja z rolą + RPC zapisu wyniku (void albo błąd bazy). Zwraca wywołania RPC. */
+function mockSession(role: 'admin' | 'employer' | null, rpcError?: string) {
+  resetFakeDb(role ? { id: ADMIN_ID, role } : null);
+  fakeDb.rpc('admin_record_vies_check', () => {
+    if (rpcError) throw pgError('42501', rpcError);
+    return null;
+  });
+  return () => fakeDb.calls.filter((c) => c.kind === 'rpc' || c.kind === 'rpcrows');
 }
 
-function mockSession(role: string | null, rpcResult: { error: unknown } = { error: null }) {
-  const rpc = vi.fn().mockResolvedValue(rpcResult);
-  vi.mocked(createServerClient).mockResolvedValue({
-    auth: { getUser: () => Promise.resolve({ data: { user: { id: 'admin-1' } } }) },
-    from: vi.fn(() => chain({ data: role ? { role } : null, error: null })),
-    rpc,
-  } as never);
-  return rpc;
-}
-
+/** Firma odczytywana przez service_role (po potwierdzeniu roli admina). */
 function mockCompany(vat: string | null, name = 'Logistiek Antwerpen NV') {
-  vi.mocked(createAdminClient).mockReturnValue({
-    from: vi.fn(() =>
-      chain({ data: { id: COMPANY_ID, name, vat_number: vat, registration_number: null }, error: null }),
-    ),
-  } as never);
+  fakeDb.rows('admin.vies-company', [{ id: COMPANY_ID, name, vat_number: vat, registration_number: null }]);
 }
 
 describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających', () => {
@@ -422,7 +406,7 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    resetFakeDb({ id: ADMIN_ID, role: 'admin' });
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -433,9 +417,10 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
   });
 
   it('tryb demo: bez zapytań do VIES i do bazy', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     await expect(checkCompanyVies('demo-c3')).resolves.toEqual({ ok: true, demo: true });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('nie-admin: odmowa zanim cokolwiek trafi do VIES', async () => {
@@ -446,7 +431,24 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
       error: 'PERMISSION_DENIED',
     });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc()).toHaveLength(0);
+    // Odmowa przed odczytem service_role.
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('bez sesji: odmowa bez odczytu firmy i bez VIES', async () => {
+    mockSession(null);
+    await expect(checkCompanyVies(COMPANY_ID)).resolves.toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('firma nieistniejąca/usunięta → NOT_FOUND bez VIES', async () => {
+    mockSession('admin');
+    fakeDb.rows('admin.vies-company', []);
+    await expect(checkCompanyVies(COMPANY_ID)).resolves.toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(fakeDb.callsTo('admin.vies-company')[0]).toMatchObject({ as: 'service', values: [COMPANY_ID] });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('niepoprawne id → VALIDATION_FAILED', async () => {
@@ -463,15 +465,21 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
       saved: true,
       outcome: { status: 'valid', vatNumber: VALID, nameMatch: 'match' },
     });
-    expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith('admin_record_vies_check', {
-      p_company_id: COMPANY_ID,
-      p_vat_number: VALID,
-      p_result: 'valid',
-      p_vies_name: 'NV ANHEUSER-BUSCH INBEV',
-      p_request_date: '2026-09-24',
+    expect(rpc()).toHaveLength(1);
+    // Odczyt firmy jako service_role, zapis wyniku pod sesją admina.
+    expect(fakeDb.callsTo('admin.vies-company')[0]?.as).toBe('service');
+    expect(rpc()[0]).toMatchObject({
+      name: 'admin_record_vies_check',
+      as: ADMIN_ID,
+      args: {
+        p_company_id: COMPANY_ID,
+        p_vat_number: VALID,
+        p_result: 'valid',
+        p_vies_name: 'NV ANHEUSER-BUSCH INBEV',
+        p_request_date: '2026-09-24',
+      },
     });
-    expect(rpc).not.toHaveBeenCalledWith('admin_set_company_status', expect.anything());
+    expect(fakeDb.callsTo('admin_set_company_status')).toHaveLength(0);
   });
 
   it('nieważny: zapis „invalid”, ale bez automatycznego odrzucenia firmy', async () => {
@@ -480,8 +488,8 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
     fetchMock.mockResolvedValue(jsonResponse(200, INVALID_BODY));
     const res = await checkCompanyVies(COMPANY_ID);
     expect(res).toMatchObject({ ok: true, saved: true, outcome: { status: 'invalid' } });
-    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['admin_record_vies_check']);
-    expect(rpc.mock.calls[0]?.[1]).toMatchObject({ p_result: 'invalid', p_vies_name: null });
+    expect(rpc().map((c) => c.name)).toEqual(['admin_record_vies_check']);
+    expect(rpc()[0]?.args).toMatchObject({ p_result: 'invalid', p_vies_name: null });
   });
 
   const infraCases: Array<[string, () => Promise<Response> | never, ViesCheckResult['status']]> = [
@@ -504,7 +512,7 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
       fetchMock.mockImplementation(respond);
       const res = await checkCompanyVies(COMPANY_ID);
       expect(res).toMatchObject({ ok: true, saved: false, outcome: { status: expected } });
-      expect(rpc).not.toHaveBeenCalled();
+      expect(rpc()).toHaveLength(0);
     });
   }
 
@@ -518,11 +526,11 @@ describe('#92 akcja checkCompanyVies — zapis tylko wyników rozstrzygających'
       outcome: { status: 'format_invalid', reason: 'checksum' },
     });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(rpc).not.toHaveBeenCalled();
+    expect(rpc()).toHaveLength(0);
   });
 
   it('błąd zapisu: wynik wraca do admina z saved:false, log bez numeru i nazwy', async () => {
-    mockSession('admin', { error: { message: 'PERMISSION_DENIED' } });
+    mockSession('admin', 'PERMISSION_DENIED');
     mockCompany('BE0417497106');
     fetchMock.mockResolvedValue(jsonResponse(200, VALID_BODY));
     const res = await checkCompanyVies(COMPANY_ID);

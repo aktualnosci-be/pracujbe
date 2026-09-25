@@ -48,7 +48,7 @@ beforeAll(async () => {
   const occupied = await admin.query("SELECT to_regclass('auth.users') AS users, to_regclass('app_migrations.history') AS history");
   expect(occupied.rows[0]).toEqual({ users: null, history: null });
   // Ta sama kolejność co produkcja: bootstrap, potem domena i auth w globalnej numeracji
-  // (migracje domeny po 0059 mogą zmieniać obiekty auth, np. 0107 dla #493).
+  // (migracje domeny po 0059 mogą zmieniać obiekty auth, np. 0108 dla #493).
   await applyMigrations(admin, await loadProductionMigrations());
   const password = randomBytes(24).toString('hex');
   await admin.query(`CREATE ROLE auth_runtime_test_login LOGIN PASSWORD '${password}' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`);

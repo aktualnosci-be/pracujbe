@@ -2,30 +2,39 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deleteMyAccountAction } from '@/lib/actions/account-data';
 import { POST as exportData } from '@/app/api/account/export/route';
-import { isSupabaseConfigured } from '@/lib/env';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #486 — usunięcie konta i eksport danych kandydata: potwierdzenie adresem konta (porównanie
  * w bazie), mapowanie błędów bez technikaliów, eksport tylko z tej samej witryny, `no-store`.
  */
 
-vi.mock('@/lib/env', () => ({
-  isSupabaseConfigured: vi.fn(),
-  env: { siteUrl: 'https://pracuj.be' },
-}));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn() }));
+vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' } }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 
+const SELF = '11111111-1111-4111-8111-111111111111';
+/** Wywołania RPC (nazwa + argumenty po nazwach) z atrapy transakcji (#25). */
 const rpc = vi.fn();
-const signOut = vi.fn();
+/** Wynik RPC: wartość albo komunikat błędu bazy. */
+let outcome: { data?: unknown; error?: string } = {};
+
+function register(fn: string) {
+  fakeDb.rpc(fn, ({ args }: { args: Record<string, unknown> }) => {
+    if (Object.keys(args).length) rpc(fn, args);
+    else rpc(fn);
+    if (outcome.error) throw pgError('P0001', outcome.error);
+    return outcome.data ?? null;
+  });
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  signOut.mockResolvedValue({ error: null });
-  vi.mocked(createServerClient).mockResolvedValue({ rpc, auth: { signOut } } as never);
+  outcome = {};
+  resetFakeDb({ id: SELF, role: 'candidate' });
+  register('request_account_erasure');
+  register('export_my_data');
 });
 
 describe('deleteMyAccountAction', () => {
@@ -36,16 +45,22 @@ describe('deleteMyAccountAction', () => {
   });
 
   it('tryb demo: walidacja bez zapisu', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await deleteMyAccountAction('ja@test.be')).toEqual({ ok: true, demo: true });
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it('wysyła przycięty adres do RPC i zamyka sesję po sukcesie', async () => {
-    rpc.mockResolvedValue({ data: { erased: true }, error: null });
+  it('wysyła przycięty adres do RPC pod sesją właściciela konta', async () => {
+    outcome = { data: { erased: true } };
     expect(await deleteMyAccountAction('  Ja@Test.be ')).toEqual({ ok: true });
     expect(rpc).toHaveBeenCalledWith('request_account_erasure', { p_confirm_email: 'Ja@Test.be' });
-    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(fakeDb.callsTo('request_account_erasure')[0]?.as).toBe(SELF);
+  });
+
+  it('bez sesji → denied bez wywołania bazy', async () => {
+    fakeSession.identity = null;
+    expect(await deleteMyAccountAction('ja@test.be')).toEqual({ ok: false, error: 'denied' });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -54,9 +69,8 @@ describe('deleteMyAccountAction', () => {
     ['UNAUTHENTICATED', 'denied', false],
     ['deadlock detected', 'failed', true],
   ])('błąd RPC %s → %s', async (message, error, reported) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    outcome = { error: message };
     expect(await deleteMyAccountAction('ja@test.be')).toEqual({ ok: false, error });
-    expect(signOut).not.toHaveBeenCalled();
     expect(vi.mocked(captureError).mock.calls.length > 0).toBe(reported);
   });
 });
@@ -75,11 +89,11 @@ describe('POST /api/account/export', () => {
       expect(res.status).toBe(403);
       expect(res.headers.get('cache-control')).toBe('private, no-store');
     }
-    expect(createServerClient).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('tryb demo: plik z oznaczeniem demo', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     const res = await exportData(exportRequest('https://pracuj.be'));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-disposition')).toMatch(/^attachment; filename="pracujbe-dane-\d{4}-\d{2}-\d{2}\.json"$/);
@@ -87,7 +101,7 @@ describe('POST /api/account/export', () => {
   });
 
   it('zwraca dane z RPC jako załącznik no-store', async () => {
-    rpc.mockResolvedValue({ data: { format: 'pracujbe-export/1', profile: { first_name: 'Ala' } }, error: null });
+    outcome = { data: { format: 'pracujbe-export/1', profile: { first_name: 'Ala' } } };
     const res = await exportData(exportRequest('https://pracuj.be'));
     expect(res.status).toBe(200);
     expect(rpc).toHaveBeenCalledWith('export_my_data');
@@ -101,11 +115,18 @@ describe('POST /api/account/export', () => {
     ['PERMISSION_DENIED', 401, 'unauthorized'],
     ['connection terminated: host db.internal', 503, 'unavailable'],
   ])('błąd %s → %i bez szczegółów', async (message, status, error) => {
-    rpc.mockResolvedValue({ data: null, error: { message } });
+    outcome = { error: message };
     const res = await exportData(exportRequest('https://pracuj.be'));
     expect(res.status).toBe(status);
     const body = await res.text();
     expect(JSON.parse(body)).toEqual({ error });
     expect(body).not.toContain('db.internal');
+  });
+
+  it('bez sesji → 401 bez odczytu danych', async () => {
+    fakeSession.identity = null;
+    const res = await exportData(exportRequest('https://pracuj.be'));
+    expect(res.status).toBe(401);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

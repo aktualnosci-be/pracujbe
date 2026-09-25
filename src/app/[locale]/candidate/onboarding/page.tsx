@@ -7,15 +7,16 @@ import {
   type OnboardingStepNumber,
 } from '@/components/candidate/OnboardingWizard';
 import { OnboardingLoadError } from '@/components/candidate/OnboardingLoadError';
-import { isSupabaseConfigured } from '@/lib/env';
-import { createServerClient } from '@/lib/supabase/server';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { queryOne, queryRows } from '@/lib/db/sql';
 
 /**
  * Onboarding kandydata — kreator profilu (makieta 06).
  *
  * Wrapper serwerowy: ustawia locale, metadane (NOINDEX — kreator) i renderuje kliencki
- * `OnboardingWizard`. Gdy Supabase jest skonfigurowane i użytkownik zalogowany, wczytuje
- * dotychczasowe dane profilu (profiles + candidate_profiles) jako wartości początkowe, aby
+ * `OnboardingWizard`. Gdy baza jest skonfigurowana i użytkownik zalogowany, wczytuje (pod sesją,
+ * `withPortalTransaction`) dotychczasowe dane profilu (profiles + candidate_profiles + relacje)
+ * jako wartości początkowe, aby
  * kreator wznawiał wypełnianie. W trybie demo (brak env) — puste pola.
  */
 
@@ -67,64 +68,51 @@ type LoadResult =
   | { status: 'error' };
 
 async function loadInitialValues(): Promise<LoadResult> {
-  if (!isSupabaseConfigured()) return { status: 'demo' };
+  if (!isPortalDataConfigured()) return { status: 'demo' };
 
   try {
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { status: 'demo' }; // guard layoutu i tak przekieruje niezalogowanego
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'demo' }; // guard layoutu i tak przekieruje niezalogowanego
 
-    const [profileRes, candidateRes] = await Promise.all([
-      supabase.from('profiles').select('first_name,last_name,phone').eq('id', user.id).maybeSingle(),
-      supabase
-        .from('candidate_profiles')
-        .select(
-          'id,city,region,radius_km,has_driving_license,has_car,experience_years,availability,occupations,categories,preferred_contract_types,expected_salary_min,expected_salary_currency,bio',
-        )
-        .eq('profile_id', user.id)
-        .maybeSingle(),
-    ]);
+    // Jedna transakcja: błąd dowolnego odczytu przerywa całość → stan błędu (P1-07).
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      const p = await queryOne<ProfileRow>(tx, 'onboarding.load-profile',
+        'SELECT first_name, last_name, phone FROM public.profiles WHERE id = $1', [me.id]);
+      const c = await queryOne<CandidateProfileRow & { id: string }>(tx, 'onboarding.load-candidate-profile',
+        `SELECT id, city, region, radius_km, has_driving_license, has_car, experience_years, availability,
+                occupations, categories, preferred_contract_types, expected_salary_min,
+                expected_salary_currency, bio
+           FROM public.candidate_profiles
+          WHERE profile_id = $1`, [me.id]);
+      // P1-08: WCZYTAJ relacje (umiejętności/języki/certyfikaty), bo krok 3/5 zapisuje je przez
+      // replace-all RPC — bez wczytania kreator startowałby z pustymi tablicami i przy „Dalej"
+      // SKASOWAŁBY istniejące dane. Kluczujemy po candidate_profiles.id.
+      if (!c?.id) return { p, c, relations: null };
+      const skills = await queryRows<{ skill_label: string }>(tx, 'onboarding.load-skills',
+        'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1', [c.id]);
+      const langs = await queryRows<{ language_label: string; level: string }>(tx, 'onboarding.load-languages',
+        'SELECT language_label, level FROM public.candidate_languages WHERE candidate_profile_id = $1', [c.id]);
+      const certs = await queryRows<{ certificate_label: string; expires_at: string | null }>(
+        tx, 'onboarding.load-certificates',
+        'SELECT certificate_label, expires_at FROM public.candidate_certificates WHERE candidate_profile_id = $1',
+        [c.id]);
+      return { p, c, relations: { skills, langs, certs } };
+    });
+    const { p, c, relations } = loaded;
 
-    // P1-07: błąd odczytu profilu/candidate_profiles → stan błędu (NIE pusty formularz).
-    if (profileRes.error || candidateRes.error) return { status: 'error' };
-
-    const p = profileRes.data as ProfileRow | null;
-    const c = candidateRes.data as (CandidateProfileRow & { id: string }) | null;
-
-    // P1-08: WCZYTAJ relacje (umiejętności/języki/certyfikaty), bo krok 3/5 zapisuje je przez
-    // replace-all RPC — bez wczytania kreator startowałby z pustymi tablicami i przy „Dalej"
-    // SKASOWAŁBY istniejące dane. Kluczujemy po candidate_profiles.id.
     let skills: string[] | undefined;
     let languages: OnboardingInitialValues['languages'] | undefined;
     let certificates: string[] | undefined;
     let certificateExpiry: Record<string, string> | undefined;
-    if (c?.id) {
-      const [skillsRes, langsRes, certsRes] = await Promise.all([
-        supabase.from('candidate_skills').select('skill_label').eq('candidate_profile_id', c.id),
-        supabase
-          .from('candidate_languages')
-          .select('language_label,level')
-          .eq('candidate_profile_id', c.id),
-        supabase
-          .from('candidate_certificates')
-          .select('certificate_label,expires_at')
-          .eq('candidate_profile_id', c.id),
-      ]);
-      // P1-07/P1-08: błąd odczytu relacji → stan błędu, by nie skasować danych przy zapisie.
-      if (skillsRes.error || langsRes.error || certsRes.error) {
-        return { status: 'error' };
-      }
-      skills = (skillsRes.data ?? []).map((r) => (r as { skill_label: string }).skill_label);
-      languages = (langsRes.data ?? []).map((r) => {
-        const row = r as { language_label: string; level: string };
-        return { language: row.language_label, level: row.level };
-      }) as OnboardingInitialValues['languages'];
-      const certRows = (certsRes.data ?? []) as { certificate_label: string; expires_at: string | null }[];
-      certificates = certRows.map((r) => r.certificate_label);
+    if (relations) {
+      skills = relations.skills.map((r) => r.skill_label);
+      languages = relations.langs.map((row) => ({
+        language: row.language_label,
+        level: row.level,
+      })) as OnboardingInitialValues['languages'];
+      certificates = relations.certs.map((r) => r.certificate_label);
       certificateExpiry = Object.fromEntries(
-        certRows.filter((r) => r.expires_at).map((r) => [r.certificate_label, String(r.expires_at).slice(0, 10)]),
+        relations.certs.filter((r) => r.expires_at).map((r) => [r.certificate_label, String(r.expires_at).slice(0, 10)]),
       );
     }
 

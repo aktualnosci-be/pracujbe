@@ -11,7 +11,7 @@ import pl from '@/messages/pl.json';
  * - `terms`   — akceptacja regulaminu (wymagana),
  * - `privacy` — potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda),
  * - cele opcjonalne (`OPTIONAL_CONSENT_PURPOSES`) — każdy osobno, domyślnie niezaznaczony,
- *   odmowa nie blokuje konta. Lustro allow-listy `record_signup_consents` (0107); dowód zgody
+ *   odmowa nie blokuje konta. Lustro allow-listy `record_signup_consents` (0108); dowód zgody
  *   zapisuje dziennik #513 (`email_consent_events`, źródło `signup`).
  *
  * Wersja pokazanej treści = `sha256:` z etykiety w języku formularza. Dopóki strony prawne

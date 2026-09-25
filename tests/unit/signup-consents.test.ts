@@ -19,7 +19,7 @@ import {
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
 const MIGRATION = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0107_consent_separation.sql'),
+  resolve(process.cwd(), 'supabase/migrations/0108_consent_separation.sql'),
   'utf8',
 );
 
@@ -59,7 +59,7 @@ describe('zgody opcjonalne', () => {
     expect(signupOptionalConsents({ marketingOptIn: true })).toEqual({ email_marketing: true });
   });
 
-  it('lista celów = allow-lista RPC (0107); źródło signup w dzienniku #513', () => {
+  it('lista celów = allow-lista RPC (0108); źródło signup w dzienniku #513', () => {
     expect(OPTIONAL_CONSENT_PURPOSES).toEqual(['email_marketing']);
     expect(MIGRATION).toContain(`where e.key <> '${OPTIONAL_CONSENT_PURPOSES[0]}'`);
     expect(MIGRATION).toContain("source in ('settings', 'unsubscribe_page', 'one_click', 'direct', 'signup')");

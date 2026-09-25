@@ -654,7 +654,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: {
       profile_id: 'reference',
-      // #493 (0107): rodzaj elementu (regulamin / informacja o prywatności / dawny wspólny) i kanał.
+      // #493 (0108): rodzaj elementu (regulamin / informacja o prywatności / dawny wspólny) i kanał.
       kind: 'consent',
       source: 'consent',
       document_version: 'consent',
@@ -785,7 +785,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['security-audit'],
     subjects: ['candidate', 'employer', 'visitor'],
     columns: { key: 'technical' },
-    note: 'Klucz = akcja + adres IP (ścieżka Supabase, bez haszowania) albo HMAC (ścieżka PostgreSQL, src/lib/db/rate-limit.ts).',
+    note: 'Klucz = akcja + adres IP (+ identyfikator) bez haszowania (src/lib/rate-limit.ts, pula service); wariant HMAC src/lib/db/rate-limit.ts niepodłączony.',
   },
   'public.system_events': {
     activities: ['security-audit'],

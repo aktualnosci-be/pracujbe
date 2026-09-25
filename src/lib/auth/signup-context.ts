@@ -23,7 +23,7 @@ interface SignupCredentials {
 }
 
 interface SignupMetadata {
-  /** v2 (#493): regulamin, informacja o prywatności i zgody opcjonalne osobno (0107). */
+  /** v2 (#493): regulamin, informacja o prywatności i zgody opcjonalne osobno (0108). */
   readonly signup_receipt_version: 2;
   readonly agree_terms: true;
   readonly privacy_notice_ack: true;

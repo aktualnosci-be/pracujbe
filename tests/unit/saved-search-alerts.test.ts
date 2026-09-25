@@ -14,16 +14,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * Zachowanie bazy (izolacja, idempotencja, opt-out) — `supabase/tests/rls.sql` sekcja SS100.
  */
 
-const rpc = vi.fn();
-vi.mock('@/lib/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/env')>()),
-  isSupabaseConfigured: vi.fn(() => true),
-}));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: async () => ({ rpc }) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
-import { isSupabaseConfigured } from '@/lib/env';
+import type { PortalIdentity } from '@/lib/auth/session';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import type { Locale } from '@/i18n/routing';
 import {
   hasSavedSearchFilters,
@@ -39,7 +35,9 @@ import {
 import { renderEmail } from '@/emails/templates';
 import { buildDeliveryData, deliveryJobMatchJobs } from '@/lib/email/delivery-data';
 import { resolveHref, titleKeyForType } from '@/lib/data/notifications';
-import { mapSavedSearchRow } from '@/lib/data/saved-searches';
+import { loadMySavedSearches, mapSavedSearchRow } from '@/lib/data/saved-searches';
+
+const USER = '11111111-1111-4111-8111-111111111111';
 
 const MIGRATION = readFileSync(
   resolve(__dirname, '../../supabase/migrations/0092_saved_search_alerts.sql'),
@@ -142,14 +140,25 @@ describe('akcje zapisanych wyszukiwań', () => {
   };
 
   beforeEach(() => {
-    rpc.mockReset();
-    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+    resetFakeDb({ id: USER, role: 'candidate' } as PortalIdentity);
   });
 
-  it('zapis woła RPC z filtrami i zwraca created', async () => {
-    rpc.mockResolvedValue({ data: [{ saved_search_id: 'id-1', created: true }], error: null });
+  /** Kolejne odpowiedzi RPC: wartość albo błąd bazy (komunikat). */
+  function replies(fn: string, ...values: Array<unknown | { fail: string }>) {
+    let index = 0;
+    fakeDb.rpc(fn, () => {
+      const value = values[Math.min(index++, values.length - 1)];
+      if (value && typeof value === 'object' && 'fail' in value) throw pgError('P0001', String(value.fail));
+      return value;
+    });
+  }
+
+  it('zapis woła RPC z filtrami (jsonb) pod sesją i zwraca created', async () => {
+    replies('save_saved_search', [{ saved_search_id: 'id-1', created: true }]);
     expect(await saveSearchAction(input)).toEqual({ ok: true, id: 'id-1', created: true });
-    expect(rpc).toHaveBeenCalledWith('save_saved_search', {
+    const call = fakeDb.callsTo('save_saved_search')[0]!;
+    expect(call).toMatchObject({ kind: 'rpcrows', as: USER });
+    expect({ ...call.args, p_filters: JSON.parse(String(call.args['p_filters'])) }).toEqual({
       p_name: input.name,
       p_locale: 'pl',
       p_filters: input.filters,
@@ -159,18 +168,25 @@ describe('akcje zapisanych wyszukiwań', () => {
   });
 
   it('istniejące wyszukiwanie → created=false (bez duplikatu)', async () => {
-    rpc.mockResolvedValue({ data: [{ saved_search_id: 'id-1', created: false }], error: null });
+    replies('save_saved_search', [{ saved_search_id: 'id-1', created: false }]);
     expect(await saveSearchAction(input)).toEqual({ ok: true, id: 'id-1', created: false });
   });
 
   it('bez sesji → UNAUTHENTICATED; inna rola → PERMISSION_DENIED; limit → własny kod', async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'UNAUTHENTICATED' } });
+    fakeSession.identity = null;
     expect(await saveSearchAction(input)).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'PERMISSION_DENIED: tylko kandydat' } });
+    expect(fakeDb.calls).toHaveLength(0);
+    fakeSession.identity = { id: USER, role: 'candidate' } as PortalIdentity;
+    replies(
+      'save_saved_search',
+      { fail: 'UNAUTHENTICATED' },
+      { fail: 'PERMISSION_DENIED: tylko kandydat' },
+      { fail: 'SAVED_SEARCH_LIMIT_REACHED: 20' },
+      { fail: 'relation "x" does not exist' },
+    );
+    expect(await saveSearchAction(input)).toEqual({ ok: false, error: 'UNAUTHENTICATED' });
     expect(await saveSearchAction(input)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'SAVED_SEARCH_LIMIT_REACHED: 20' } });
     expect(await saveSearchAction(input)).toEqual({ ok: false, error: 'SAVED_SEARCH_LIMIT_REACHED' });
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'relation "x" does not exist' } });
     expect(await saveSearchAction(input)).toEqual({ ok: false, error: 'INTERNAL' });
   });
 
@@ -184,20 +200,20 @@ describe('akcje zapisanych wyszukiwań', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('tryb demo nic nie zapisuje (bez udawanego sukcesu)', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await saveSearchAction(input)).toEqual({ ok: false, error: 'DEMO_UNAVAILABLE' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('przełącznik alertu i usunięcie: UUID + RPC; cudze → NOT_FOUND', async () => {
     const id = '6f1c2a4e-1b2c-4d5e-8f90-123456789abc';
-    rpc.mockResolvedValue({ data: false, error: null });
+    replies('set_saved_search_alerts', false);
     expect(await setSavedSearchAlertsAction(id, false, 'weekly')).toEqual({ ok: true });
-    expect(rpc).toHaveBeenCalledWith('set_saved_search_alerts', {
+    expect(fakeDb.callsTo('set_saved_search_alerts')[0]!.args).toEqual({
       p_saved_search_id: id,
       p_enabled: false,
       p_frequency: 'weekly',
@@ -207,8 +223,18 @@ describe('akcje zapisanych wyszukiwań', () => {
       error: 'VALIDATION_FAILED',
     });
     expect(await setSavedSearchAlertsAction(id, true, 'hourly')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
-    rpc.mockResolvedValue({ data: null, error: { message: 'NOT_FOUND: wyszukiwanie nie istnieje' } });
+    replies('delete_saved_search', { fail: 'NOT_FOUND: wyszukiwanie nie istnieje' });
     expect(await deleteSavedSearchAction(id)).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
+
+  it('lista: tylko własne wyszukiwania (profil z sesji), błąd ≠ pusta lista', async () => {
+    fakeDb.rows('saved-searches.mine', [{ id: 's1', name: 'n', query: '?keyword=x', frequency: 'daily', alerts_enabled: true }]);
+    expect(await loadMySavedSearches()).toMatchObject({ status: 'ready', demo: false, searches: [{ id: 's1', alertsEnabled: true }] });
+    expect(fakeDb.callsTo('saved-searches.mine')[0]).toMatchObject({ values: [USER], as: USER });
+    fakeDb.rows('saved-searches.mine', () => { throw pgError('XX000', 'boom'); });
+    expect(await loadMySavedSearches()).toEqual({ status: 'error' });
+    fakeSession.configured = false;
+    expect(await loadMySavedSearches()).toEqual({ status: 'ready', searches: [], demo: true });
   });
 });
 

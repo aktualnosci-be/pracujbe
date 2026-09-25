@@ -1,6 +1,6 @@
 /**
- * Blokady firm przez kandydata (#97) — odczyt POD SESJĄ kandydata (RPC SECURITY DEFINER
- * zwracające wyłącznie własne blokady; nigdy service-role).
+ * Blokady firm przez kandydata (#97) — odczyt POD SESJĄ kandydata (`withPortalTransaction`,
+ * RPC SECURITY DEFINER zwracające wyłącznie własne blokady `auth.uid()`; nigdy service-role).
  *
  * Egzekwowanie blokady żyje w bazie (migracja 0078): profil/PII, wyszukiwanie, dopasowania,
  * propozycje i wiadomości zablokowanej firmy. Tu jest tylko odczyt dla ekranu ustawień
@@ -11,7 +11,8 @@
  * `demo: true`), żeby ekran i przepływ odblokowania działały bez backendu.
  */
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/sentry';
 import { demoCompanies } from '@/lib/data/demo';
 
@@ -47,14 +48,13 @@ function asStr(value: unknown): string {
 
 /** Lista własnych blokad (ustawienia kandydata). */
 export async function loadMyCompanyBlocks(): Promise<CompanyBlocksLoad> {
-  if (!isSupabaseConfigured()) return { status: 'ready', blocks: demoBlocks(), demo: true };
+  if (!isPortalDataConfigured()) return { status: 'ready', blocks: demoBlocks(), demo: true };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const { data, error } = await supabase.rpc('get_my_company_blocks');
-    if (error) throw error;
-    const rows: unknown[] = Array.isArray(data) ? data : [];
+    const me = await getPortalIdentity();
+    // Bez sesji nie ma własnych blokad (RPC nie jest dostępne dla gościa).
+    if (!me) return { status: 'ready', blocks: [], demo: false };
+    const rows = await withPortalTransaction(me, (tx) => rpcRows(tx, 'get_my_company_blocks'));
     const blocks = rows
       .map((row) => {
         const r = asRecord(row);
@@ -77,19 +77,16 @@ export async function loadMyCompanyBlocks(): Promise<CompanyBlocksLoad> {
  * niepubliczna i tryb demo → `none` (kontrolka się nie renderuje).
  */
 export async function getJobCompanyBlock(jobId: string): Promise<JobCompanyBlockLoad> {
-  if (!isSupabaseConfigured()) return { status: 'none' };
+  if (!isPortalDataConfigured()) return { status: 'none' };
 
   try {
-    const { createServerClient } = await import('@/lib/supabase/server');
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { status: 'none' };
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'none' };
 
-    const { data, error } = await supabase.rpc('get_job_company_block', { p_job_id: jobId });
-    if (error) throw error;
-    const row = Array.isArray(data) ? asRecord(data[0]) : {};
+    const rows = await withPortalTransaction(me, (tx) =>
+      rpcRows(tx, 'get_job_company_block', { p_job_id: jobId }),
+    );
+    const row = asRecord(rows[0]);
     const companyId = asStr(row['company_id']);
     if (!companyId) return { status: 'none' };
     return {

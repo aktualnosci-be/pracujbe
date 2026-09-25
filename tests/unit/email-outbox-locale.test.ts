@@ -4,6 +4,7 @@ import type { EmailType } from '@/emails/copy';
 import { renderEmail } from '@/emails/templates';
 import type { Locale } from '@/i18n/routing';
 import { processEmailQueue } from '@/lib/email/outbox';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * #348 — Invariant #1 na ścieżce produkcyjnej: worker outboxa (`processEmailQueue`) renderuje
@@ -11,18 +12,14 @@ import { processEmailQueue } from '@/lib/email/outbox';
  * ODBIORCY), a nie w języku domyślnym serwera, payloadu czy sesji nadawcy.
  */
 
-const { send, adminRpc, adminFrom } = vi.hoisted(() => ({
-  send: vi.fn(),
-  adminRpc: vi.fn(),
-  adminFrom: vi.fn(),
-}));
+const { send } = vi.hoisted(() => ({ send: vi.fn() }));
 
 vi.mock('resend', () => ({
   Resend: class {
     emails = { send };
   },
 }));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc: adminRpc, from: adminFrom }) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
@@ -37,20 +34,19 @@ function row(id: string, template: EmailType, locale: string, payload: Record<st
 
 
 /** #45: claim zwraca wiersze, budżet wysyłki (0087) zawsze przyznany w tych testach. */
-function mockClaim(result: { data: unknown; error: unknown }) {
-  adminRpc.mockImplementation(async (name: string) =>
-    name === 'take_email_send_budget' ? { data: [{ granted: true, retry_at: null }], error: null } : result,
-  );
+function mockClaim(result: { data: unknown[] }) {
+  fakeDb.rpc('claim_email_batch', result.data);
+  fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetFakeDb(null).exec('email.outbox.mark-sent').exec('email.outbox.mark-failed');
   process.env.RESEND_API_KEY = 're_test';
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
   // Pułapka: domyślny język serwera NIE może wpływać na język odbiorcy.
   process.env.NEXT_PUBLIC_DEFAULT_LOCALE = 'pl';
-  send.mockResolvedValue({ data: { id: 'provider-1' }, error: null });
-  adminFrom.mockReturnValue({ update: () => ({ eq: async () => ({ error: null }) }) });
+  send.mockResolvedValue({ data: { id: 'provider-1' } });
 });
 
 const CASES: Array<{ template: EmailType; locale: Locale; path: string; payload: Record<string, unknown> }> = [
@@ -64,7 +60,7 @@ const CASES: Array<{ template: EmailType; locale: Locale; path: string; payload:
 
 describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () => {
   it.each(CASES)('$template w $locale: temat, treść i link w języku wiersza', async ({ template, locale, path, payload }) => {
-    mockClaim({ data: [row('d1', template, locale, payload)], error: null });
+    mockClaim({ data: [row('d1', template, locale, payload)] });
 
     const result = await processEmailQueue();
     expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0, ok: true });
@@ -88,7 +84,6 @@ describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () =
         row('a', 'jobOffer', 'fr', { companyName: 'Acme', jobTitle: 'Cariste' }),
         row('b', 'jobOffer', 'en', { companyName: 'Acme', jobTitle: 'Driver' }),
       ],
-      error: null,
     });
     await processEmailQueue();
     const htmlByRecipient = Object.fromEntries(send.mock.calls.map(([m]) => [m.to, m.html as string]));
@@ -97,8 +92,25 @@ describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () =
   });
 
   it('nieobsługiwany język w wierszu → fallback en (nie pl serwera)', async () => {
-    mockClaim({ data: [row('d1', 'jobOffer', 'de', { companyName: 'Acme', jobTitle: 'Fahrer' })], error: null });
+    mockClaim({ data: [row('d1', 'jobOffer', 'de', { companyName: 'Acme', jobTitle: 'Fahrer' })] });
     await processEmailQueue();
     expect(send.mock.calls[0]![0].html).toContain(`${SITE}/en/candidate/propozycje`);
+  });
+
+  it('wynik zapisany osobno po wysyłce: status sent, id dostawcy, attempts+1 (service_role)', async () => {
+    mockClaim({ data: [row('d1', 'jobOffer', 'nl', { companyName: 'Acme', jobTitle: 'X' })] });
+    await processEmailQueue();
+    const [mark] = fakeDb.callsTo('email.outbox.mark-sent');
+    expect(mark).toMatchObject({ as: 'service', values: ['d1', 'provider-1', 1] });
+    // Claim → (wysyłka HTTP) → zapis wyniku: claim to osobna transakcja przed wysyłką.
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(['claim_email_batch', 'take_email_send_budget', 'email.outbox.mark-sent']);
+  });
+
+  it('błąd claimu → ok:false (503 dla monitoringu), bez wysyłki', async () => {
+    fakeDb.rpc('claim_email_batch', () => {
+      throw pgError('08006', 'db down');
+    });
+    expect(await processEmailQueue()).toMatchObject({ processed: 0, skipped: 'claim error', ok: false });
+    expect(send).not.toHaveBeenCalled();
   });
 });

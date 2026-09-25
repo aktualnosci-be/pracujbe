@@ -1,6 +1,6 @@
 # Jednorazowe przygotowanie loginów PostgreSQL na Railway
 
-Ta instrukcja tworzy i rotuje cztery ograniczone loginy runtime po migracjach
+Ta instrukcja tworzy i rotuje pięć ograniczonych loginów runtime po migracjach
 od `0000` do aktualnego ostatniego pliku, bez luk i duplikatów. Nie uruchamia
 migracji, nie usuwa ról ani danych i nie wykonuje żadnego `DROP`. Polecenia
 należy uruchomić lokalnie przez operatora, po ręcznym
@@ -15,6 +15,11 @@ produkcji w ramach PR-a, który go dodaje.
 | `pracujbe_auth_runtime`      | `pracujbe_auth`       | Better Auth        |
 | `pracujbe_limiter`           | `pracujbe_rate_limit` | limiter            |
 | `pracujbe_auth_mail_runtime` | `pracujbe_auth_mail`  | worker poczty auth |
+| `pracujbe_service_runtime`   | `service_role`        | zadania serwerowe (#25): worker poczty, webhooki, cron, odczyty admina |
+
+URL loginu `pracujbe_service_runtime` trafia do `DATABASE_SERVICE_URL`; aplikacja
+(`createRuntimePool(…, 'service')`) odmawia startu puli, gdy login ma inne członkostwo,
+BYPASSRLS albo własność obiektu. Tego loginu nie używają loadery paneli kandydata/pracodawcy.
 
 Każdy login ma `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB
 NOCREATEROLE NOREPLICATION`, bez `ADMIN OPTION`, z `INHERIT FALSE` i `SET TRUE`
@@ -49,6 +54,7 @@ DATABASE_APP_PASSWORD
 AUTH_DATABASE_PASSWORD
 RATE_LIMIT_DATABASE_PASSWORD
 AUTH_MAIL_DATABASE_PASSWORD
+SERVICE_DATABASE_PASSWORD
 ```
 
 `MIGRATION_DATABASE_URL` jest osobnym połączeniem administratora migracji.
@@ -85,19 +91,20 @@ npm run db:logins -- verify
 ```
 
 Ponowienie provisioningu jest bezpieczne: zgodne, istniejące loginy pozostają
-bez zmian. Inne hasło ustawia wyłącznie jawna rotacja. Po verify zbuduj cztery
-URL-e runtime w Railway z odpowiadających loginów i haseł. Sekretów nie kopiuj
+bez zmian. Inne hasło ustawia wyłącznie jawna rotacja. Po verify zbuduj pięć
+URL-i runtime w Railway z odpowiadających loginów i haseł. Sekretów nie kopiuj
 do issue, PR-a ani logów CI.
 
 ## 4. Rotacja
 
-Najpierw ustaw cztery nowe sekrety:
+Najpierw ustaw pięć nowych sekretów:
 
 ```text
 DATABASE_APP_NEW_PASSWORD
 AUTH_DATABASE_NEW_PASSWORD
 RATE_LIMIT_DATABASE_NEW_PASSWORD
 AUTH_MAIL_DATABASE_NEW_PASSWORD
+SERVICE_DATABASE_NEW_PASSWORD
 ```
 
 Następnie wykonaj kontrolę i rotację:

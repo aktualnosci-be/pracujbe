@@ -1,10 +1,11 @@
 'use server';
 
-import { isSupabaseConfigured } from '@/lib/env';
+import { getActiveCompany } from '@/lib/company-context';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/sentry';
-import { createServerClient } from '@/lib/supabase/server';
 import { jobImportModel, jobImportProvider } from '@/lib/ai-import/config';
 import { withJobImportUsageLog } from '@/lib/ai/job-import-usage';
 import { AnthropicJobExtractor, FixtureJobExtractor } from '@/lib/ai-import/extract';
@@ -22,7 +23,9 @@ import { createJobDraft } from '@/lib/actions/jobs';
  * kreatora → zapis WYŁĄCZNIE do szkicu: `createJobDraft` + jedno RPC `save_job_draft` (#192).
  * Publikacja nigdy nie jest wywoływana — robi ją pracodawca w kreatorze (`publish_job`).
  *
- * Tryb demo (bez Supabase) działa tylko z atrapą dostawcy: płatne API wymaga zalogowanego
+ * Zapis i kontekst firmy pod SESJĄ użytkownika (`withPortalTransaction`, RLS — nigdy service-role).
+ *
+ * Tryb demo (bez backendu) działa tylko z atrapą dostawcy: płatne API wymaga zalogowanego
  * rekrutera, więc anonimowy ruch nie może generować kosztów.
  *
  * Plik ani treść strony nie są zapisywane — żyją wyłącznie w pamięci na czas żądania.
@@ -76,19 +79,15 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
   const pre = precheckSource(source);
   if (!pre.ok) return pre;
 
-  const configured = isSupabaseConfigured();
+  const configured = isPortalDataConfigured();
   if (!configured && provider !== 'fixture') return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
   try {
     if (configured) {
-      const supabase = await createServerClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+      const me = await getPortalIdentity();
+      if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-      const { getActiveCompany } = await import('@/lib/company-context');
-      const company = await getActiveCompany(supabase, user.id);
+      const company = await withPortalTransaction(me, (tx) => getActiveCompany(tx, me.id));
       if (!company.activeId || !JOB_MANAGER_ROLES.has(company.activeRole)) {
         return { ok: false, error: 'PERMISSION_DENIED' };
       }
@@ -133,9 +132,13 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
       return { ...base, jobId: created.id, demo: true, savedSteps: mapped.validSteps.map((s) => s.step) };
     }
 
-    const supabase = await createServerClient();
-    const { error } = await supabase.rpc('save_job_draft', { p_job_id: created.id, p_content: content });
-    if (error) {
+    try {
+      const me = await getPortalIdentity();
+      if (!me) throw new Error('Session lost after draft creation');
+      await withPortalTransaction(me, (tx) =>
+        rpc(tx, 'save_job_draft', { p_job_id: created.id, p_content: jsonArg(content) }),
+      );
+    } catch (error) {
       // Szkic istnieje, ale bez treści — kreator zapisze kroki przy „Dalej".
       captureError(error, { area: 'job-import', step: 'save_job_draft' });
       return { ...base, jobId: created.id, savedSteps: [] };

@@ -2,8 +2,9 @@
 
 import { z } from 'zod/v3';
 
-import { createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/env';
+import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { jsonArg, rpc } from '@/lib/db/sql';
 import { routing } from '@/i18n/routing';
 import { emailConsentWordingVersion } from '@/lib/email/consent-wording';
 import type { ErrorCode } from '@/lib/errors';
@@ -16,7 +17,9 @@ import type { ErrorCode } from '@/lib/errors';
  * wiersz (`auth.uid()`) i dowód każdej zmiany zgody e-mail: źródło `settings`, język strony
  * i wersję pokazanej treści (`emailConsentWordingVersion`, #45).
  *
- * TRYB DEMO (Invariant: panele działają bez env): gdy Supabase nie jest skonfigurowane,
+ * #25: RPC w transakcji sesji (`withPortalTransaction`, rola authenticated + `app.current_uid`).
+ *
+ * TRYB DEMO (Invariant: panele działają bez env): gdy backend nie jest skonfigurowany,
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }`. Błędy mapujemy na
  * kod użytkowy (Invariant #8, bez technikaliów).
  */
@@ -43,7 +46,6 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (
     m.includes('PERMISSION_DENIED') ||
     m.includes('UNAUTHENTICATED') ||
-    m.includes('JWT') ||
     m.includes('row-level security')
   ) {
     return 'PERMISSION_DENIED';
@@ -65,34 +67,33 @@ export async function updateNotificationPreferences(
   const prefs = parsed.data;
 
   // 2) Tryb demo (brak env) — nie zapisujemy, ale przepływ działa.
-  if (!isSupabaseConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
-    // 3) Autoryzacja — potrzebny zalogowany użytkownik.
-    const supabase = await createServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'PERMISSION_DENIED' };
+    // 3) Autoryzacja — potrzebny zalogowany użytkownik (tożsamość z sesji serwera).
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     // 4) RPC: upsert własnego wiersza + dowód zmiany zgody (0101).
-    const { error } = await supabase.rpc('set_notification_preferences', {
-      p_prefs: {
-        email_applications: prefs.emailApplications,
-        email_offers: prefs.emailOffers,
-        email_messages: prefs.emailMessages,
-        email_job_matches: prefs.emailJobMatches,
-        email_marketing: prefs.emailMarketing,
-        push_enabled: prefs.pushEnabled,
-        in_app_enabled: prefs.inAppEnabled,
-      },
-      p_locale: prefs.locale,
-      p_wording_version: emailConsentWordingVersion(prefs.locale, prefs.role),
-    });
-    if (error) return { ok: false, error: mapPgError(error.message) };
+    await withPortalTransaction(me, (tx) =>
+      rpc(tx, 'set_notification_preferences', {
+        p_prefs: jsonArg({
+          email_applications: prefs.emailApplications,
+          email_offers: prefs.emailOffers,
+          email_messages: prefs.emailMessages,
+          email_job_matches: prefs.emailJobMatches,
+          email_marketing: prefs.emailMarketing,
+          push_enabled: prefs.pushEnabled,
+          in_app_enabled: prefs.inAppEnabled,
+        }),
+        p_locale: prefs.locale,
+        p_wording_version: emailConsentWordingVersion(prefs.locale, prefs.role),
+      }),
+    );
     return { ok: true };
-  } catch {
-    // Nieoczekiwany błąd — bez technikaliów dla użytkownika (Invariant #8).
+  } catch (error) {
+    // Błąd bazy → kod użytkowy; nieoczekiwany błąd — bez technikaliów (Invariant #8).
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     return { ok: false, error: 'INTERNAL' };
   }
 }

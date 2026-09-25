@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyToJob } from '@/lib/actions/applications';
 import { submitGuestApplication } from '@/lib/actions/guest-applications';
-import { isSupabaseConfigured } from '@/lib/env';
+import { fakeDb, fakeSession, resetFakeDb } from '../helpers/fake-db';
 import { applicationSchema, SENSITIVE_ID_MESSAGE_KEY } from '@/lib/validation/application';
 import { guestApplicationSchema } from '@/lib/validation/guest-application';
 
@@ -13,22 +13,14 @@ import { guestApplicationSchema } from '@/lib/validation/guest-application';
  * Numery są syntetyczne.
  */
 
-const rpc = vi.fn();
-const adminRpc = vi.fn();
-
 vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers({ 'x-real-ip': '203.0.113.9', 'user-agent': 'UA' })),
 }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: vi.fn(async () => null) }));
 vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/env', () => ({
-  isSupabaseConfigured: vi.fn(() => true),
-  hasServiceRoleKey: vi.fn(() => true),
-  isProductionMode: vi.fn(() => false),
-}));
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn(() => ({ rpc: adminRpc })) }));
-vi.mock('@/lib/supabase/server', () => ({ createServerClient: vi.fn(async () => ({ rpc })) }));
+vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => false) }));
+vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
 const QUESTION = '33333333-3333-4333-8333-333333333333';
 const NISS_MESSAGE = 'Dzień dobry, mój numer NISS to 85.07.30-033.28, mogę zacząć od zaraz.';
@@ -53,9 +45,8 @@ const guestInput = {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.GUEST_APPLY_SECRET = 's'.repeat(40);
-  vi.mocked(isSupabaseConfigured).mockReturnValue(true);
-  rpc.mockResolvedValue({ data: 'application-1', error: null });
-  adminRpc.mockResolvedValue({ data: 'request-1', error: null });
+  resetFakeDb({ id: '44444444-4444-4444-8444-444444444444', role: 'candidate' });
+  fakeDb.rpc('apply_to_job', 'application-1').rpc('submit_guest_application', 'request-1');
 });
 
 describe('applyToJob — numery identyfikacyjne (#495)', () => {
@@ -66,18 +57,18 @@ describe('applyToJob — numery identyfikacyjne (#495)', () => {
       field: 'message',
       reason: 'sensitiveId',
     });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('numer paszportu w odpowiedzi na pytanie → błąd przy pytaniu bez zapisu', async () => {
     expect(
       await applyToJob({ ...candidateInput, answers: { [QUESTION]: 'Paszport nr EA1234567' } }),
     ).toEqual({ ok: false, error: 'VALIDATION_FAILED', questionId: QUESTION, reason: 'sensitiveId' });
-    expect(rpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('także w trybie demo (przed jakąkolwiek inną ścieżką)', async () => {
-    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+    fakeSession.configured = false;
     expect(await applyToJob({ ...candidateInput, jobId: '1002', message: NISS_MESSAGE })).toMatchObject({
       field: 'message',
       reason: 'sensitiveId',
@@ -90,7 +81,7 @@ describe('applyToJob — numery identyfikacyjne (#495)', () => {
       ok: true,
       id: 'application-1',
     });
-    expect(rpc).toHaveBeenCalledWith('apply_to_job', expect.objectContaining({ p_message: message }));
+    expect(fakeDb.callsTo('apply_to_job')[0]!.args).toMatchObject({ p_message: message });
   });
 });
 
@@ -102,14 +93,14 @@ describe('submitGuestApplication — numery identyfikacyjne (#495)', () => {
       field: 'message',
       reason: 'sensitiveId',
     });
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('karta eID w odpowiedzi gościa → błąd przy pytaniu', async () => {
     expect(
       await submitGuestApplication({ ...guestInput, answers: { [QUESTION]: 'eID 591-2345678-29' } }),
     ).toEqual({ ok: false, error: 'VALIDATION_FAILED', questionId: QUESTION, reason: 'sensitiveId' });
-    expect(adminRpc).not.toHaveBeenCalled();
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });
 

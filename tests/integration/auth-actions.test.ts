@@ -118,7 +118,7 @@ beforeAll(async () => {
   }
   if (!ready) throw new Error('Izolowany PostgreSQL nie uruchomił się.');
   // Kolejność jak w produkcji (bootstrap, potem domena i auth w globalnej numeracji):
-  // migracje domeny po 0059 mogą zmieniać obiekty auth (np. 0107, #493).
+  // migracje domeny po 0059 mogą zmieniać obiekty auth (np. 0108, #493).
   await applyMigrations(admin, await loadProductionMigrations());
   for (const locale of ['pl', 'nl', 'fr', 'en']) {
     for (const document of ['terms', 'privacy']) {
