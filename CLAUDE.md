@@ -948,6 +948,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ML44, `email-delivery-webhook.test.ts`, `admin-email-suppressions.test.ts`, E2E
   `admin-email-suppressions.spec`. **Do zrobienia (#44):** alarmy (wiek kolejki, wzrost
   bounce/complaint), stany w `/api/health`, adapter drugiego dostawcy.
+  Minimalizacja treści (#503, migracja `0108` — numer tymczasowy): worker przekazuje do
+  szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
+  poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
+  (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
+  odbiorcę firmowego (`email_recipient_authorized`: aplikacja/propozycja/wiadomość →
+  `company_recipient_ok`; brak obiektu = fail-closed) → `suppressed_recipient_unauthorized`.
+  Mapa danych: kolumna „Odrzucane przez workera”. Dowód: `rls.sql` sekcja ES503 (kontrola
+  ujemna), unit `email-payload-minimization` (kanarki w 4 językach, kontrola ujemna). Szkic:
+  `docs/legal-drafts/poczta-transfer-resend.md`. **Otwarte (właściciel/prawnik):** DPA,
+  podprocesorzy, transfer, retencja u dostawcy, tracking na koncie, nazwisko kandydata w
+  e-mailu do firmy, bramka konfiguracji dla nieocenionego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
@@ -960,8 +971,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   treści przy braku nazwy nadawcy (`EmailCopy.anonymous`); CTA do sekcji panelu w locale odbiorcy
   (`src/lib/email/delivery-data.ts`); imię odbiorcy w powitaniu (worker czyta `profiles`); e-maile
   Auth: język wg Invariantu #1 (`src/lib/email/auth-email.ts`) i osobne treści magic link/zmiana
-  e-maila/zaproszenie. **Do zrobienia (SQL):** `send_offer` → `message`/`expiresAt` w payloadzie
-  `jobOffer` (#293), `send_message` → `conversationId` w payloadzie `newMessage` (#290).
+  e-maila/zaproszenie. **Do zrobienia (SQL):** `send_offer` → `expiresAt` w payloadzie
+  `jobOffer` (#293; `message` worker odrzuca od #503 — treść w panelu), `send_message` →
+  `conversationId` w payloadzie `newMessage` (#290).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” ukryte do czasu
