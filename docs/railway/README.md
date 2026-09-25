@@ -32,6 +32,10 @@ Skrypt kończy się kodem0 przy sukcesie,1 przy błędzie żądania/HTTP,2 przy 
 
 Czujki `/api/health/ops`, kopie zaszyfrowane z retencją, okresowe odtworzenie i pomiar wyszukiwania opisuje [OPERATIONS.md](OPERATIONS.md). Kroki infrastruktury (sekret, login monitoringu, uptime, cron kopii) są w sekcji 5 tego dokumentu i nie zostały wykonane.
 
+## Cutover, rollback i smoke test (#16, #18)
+
+Kolejność włączania `APP_MODE=production`, Better Auth i Resend, rollback (wyzerowanie zmiennych, redeploy ostatniego dobrego wdrożenia) i obserwację po wdrożeniu opisuje [CUTOVER_ROLLBACK.md](CUTOVER_ROLLBACK.md). Smoke test produkcji (poza CI): `node scripts/railway/prod-smoke.mjs`.
+
 ## Stan przejściowy kodu
 
 Workflow Vercela został usunięty: repozytorium nie publikuje już zielonego
