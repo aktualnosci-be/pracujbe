@@ -88,3 +88,10 @@ describe('applyToJob — błędy RPC (#361)', () => {
     expect(fakeDb.callsTo('apply_to_job')[0]!.args).toMatchObject({ p_idempotency_key: input.idempotencyKey });
   });
 });
+
+describe('applyToJob — polityka wieku (#492)', () => {
+  it('odmowa bazy bez ważnej deklaracji wieku ma własny kod (komunikat z linkiem do ustawień)', async () => {
+    fakeDb.rpc('apply_to_job', () => { throw pgError('P0001', 'AGE_ATTESTATION_REQUIRED'); });
+    expect(await applyToJob(input)).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED' });
+  });
+});

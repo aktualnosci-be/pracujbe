@@ -147,7 +147,7 @@ pilnuje dalej `check-next-build.mjs`.
 |---|---|---|
 | JS `/[locale]/(public)/page` (home) | 164,5 KB | 173 KB |
 | JS `/[locale]/(public)/oferty-pracy/page` | 166,4 KB | 175 KB |
-| JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 241 KB |
+| JS `/[locale]/(public)/oferty-pracy/[slug]/page` | 228,9 KB | 242 KB (#576: dwa przedziały wieku w formularzu gościa, +0,2 KB) |
 | JS `/[locale]/(public)/poradniki/[slug]/page` | 154,0 KB | 162 KB |
 | JS `/[locale]/(auth)/logowanie/page` | 184,8 KB | 194 KB |
 | font (jeden plik / razem) | 72,8 KB | 100 KB / 150 KB |

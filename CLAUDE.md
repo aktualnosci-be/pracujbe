@@ -682,6 +682,33 @@ unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:**
 od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
 decyzja produktowo-prawna (#485/#34).
 
+Polityka wieku kandydatów (#492, #576, migracja `0126`). Decyzja właściciela 25.09.2026
+(LAUNCH-1): konto kandydata od 16 lat, widoczność profilu dla firm (#494) tylko 18+, młodsi bez
+konta. Próg konta jako dane (`age_policy`: 16 albo 18, domyślnie 16, `confirmed=true`; zmiana
+tylko `admin_set_candidate_min_age` z uzasadnieniem i audytem `age_policy.updated`). Minimalizacja:
+potwierdzenie PRZEDZIAŁU „16–17” / „18 lub więcej” bez daty urodzenia (`candidate_age_attestations.min_age`
+= 16 albo 18, niezmienne, RPC-only; po ukończeniu 18 lat nowe potwierdzenie 18+). Deklaracja:
+rejestracja kandydata (`AgeDeclarationField` — radiogroup obok zgód #493; Better Auth przez trigger
+`auth.record_signup_receipts` w transakcji konta; poniżej progu → `AGE_ATTESTATION_REQUIRED`; RPC
+service_role `record_candidate_age_attestation` dla kont spoza formularza), formularz gościa
+(`p_age_attested_min` → wrapper `submit_guest_application`), sekcja „Wiek” w `/candidate/ustawienia`
+(`attest_candidate_age`; konto 16–17 widzi ograniczenie i potwierdza 18+). Egzekwowanie w bazie
+triggerami: aplikacja i przejęcie aplikacji gościa, propozycja (neutralny błąd), zgłoszenie gościa;
+włączenie widoczności (`set_candidate_searchable` i każda inna ścieżka) tylko przy 18+
+(`candidate_is_adult`, `AGE_ADULT_REQUIRED` → UI: wyłączony przełącznik z wyjaśnieniem
+`profileVisibility.requiresAdult`); migracja jednorazowo ukrywa profile bez 18+. Lejek ofert
+(#99) dla 16–17 = brak zgody: znacznik urządzenia `pracujbe.funnel.minor` (panel kandydata po
+odczycie z bazy — `FunnelMinorMarker`; rejestracja/gość po wyborze 16–17) → `sendFunnelEvent` nic
+nie wysyła; potwierdzenie 18+ zdejmuje znacznik. Formularze pokazują przedziały od
+`candidate_min_age()` (błąd odczytu → tylko 18+). Dowód: `rls.sql` sekcja AGE492 (kontrole ujemne:
+bez triggera aplikacja/gość bez deklaracji przechodzą, konto 16–17 staje się wyszukiwalne — AGE11n);
+unit `age-policy` (lejek z kontrolą ujemną), `profile-visibility`, `guest-apply-form`; E2E
+`auth-age-declaration`, `guest-apply`. Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
+**Otwarte (właściciel/prawnik):** treść informacji o wieku (`07-wiek.md`) po akceptacji, kontakt
+osób poniżej 16 lat z udziałem opiekuna, oznaczenie ofert dla młodocianych, procedura dla
+wykrytego konta poniżej progu, UI zmiany progu w panelu admina, test sieciowy lejka PRIV-01
+(unload, dwie karty) dla znacznika.
+
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
 `saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`
@@ -1339,9 +1366,25 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `npm run test:backup` (scenariusz #486), unit `account-data`, `storage-deletion`, E2E
   `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
   `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
-  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13), aktualizacja
-  `last_seen_at`, sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
+  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13),
+  sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
   potwierdzenie linkiem e-mail.
+  Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
+  `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
+  rozmowy 180 dni od niezmiennego `applications.closed_at` — każdy stan końcowy, także `hired`;
+  CV 365 i konto 730 dni bez aktywności z ostrzeżeniem 30 dni — e-maile `inactiveCvWarning`/
+  `inactiveAccountWarning` w języku odbiorcy, `retention_warnings`; ukrycie profilu 180; gość
+  30/7, IP/UA 7; wnioski 1095; wartości bez zadania: zgody 1095, audyt 365, logi 30, kopie 14,
+  kolumna `enforcement`). `last_seen_at` z triggera na `auth.sessions` (logowanie/odświeżenie,
+  raz na godzinę). **Harmonogram WYŁĄCZONY:** `/api/maintenance` woła `run_retention_purge`
+  tylko przy `RETENTION_MODE=dry-run|apply` (`src/lib/retention/mode.ts`; dry-run = podtransakcja
+  wycofana, apply = kolejne partie po 200 dopóki `fullBatches` > 0, najwyżej 10). Kolejka
+  storage: dead-letter po 20 próbach, `requeue_storage_dead_letters`, `ops_metrics().storageDeletion`
+  + czujki `storage_deletion_age` (> 24 h) i `storage_deletion_dead_letter`. Dowód: `rls.sql`
+  sekcja RV574 (kontrole ujemne), unit `guest-apply-maintenance`, `ops-sensors`,
+  `retention-warning-email`. **Otwarte (#574):** włączenie `RETENTION_MODE` (właściciel), minimum
+  rejestru usunięć po RET-09/RET-10, zadania dla zgód/audytu/`auth.email_outbox`/e-maili,
+  kopie liczone w dniach (`backup.sh`), konto pracodawcy, język gościa na aplikacji (#546).
 - [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
   portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
   `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne

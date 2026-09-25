@@ -133,7 +133,7 @@ test('nieudany zapis nie kasuje danych: walidacja pól i odrzucenie w bazie bez 
   }
   // „Zakończ” bez zgody na regulamin — odrzucone przed zapisem (dostępność nie trafia do bazy).
   expect(await saveStep(candidate, 6, STEP6, { finish: true }))
-    .toMatchObject({ ok: false, issues: ['candidate.error.termsRequired'] });
+    .toMatchObject({ ok: false, issues: ['candidate.error.termsRequired', 'candidate.error.privacyNoticeRequired'] });
   expect(await loadWizard(candidate)).toEqual(before);
 
   // Obejście walidacji klienta — baza sama odrzuca i cofa CAŁY krok (jedna transakcja, #142).
