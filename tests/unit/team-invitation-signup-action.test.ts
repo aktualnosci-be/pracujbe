@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * 0108 — rejestracja pracodawcy z linku zaproszenia do zespołu. Konto powstaje tylko dla
+ * 0109 — rejestracja pracodawcy z linku zaproszenia do zespołu. Konto powstaje tylko dla
  * ważnego, niezużytego tokenu i adresu zaproszenia, bez nazwy firmy w metadanych (brak
  * bootstrapu firmy — zaproszenie czeka w panelu), a token jest zużywany po rejestracji.
  */
@@ -35,6 +35,7 @@ const input = {
   lastName: 'Nowak',
   locale: 'fr' as const,
   agreeTerms: true as const,
+  privacyNoticeAck: true as const,
 };
 const valid = {
   status: 'valid' as const,

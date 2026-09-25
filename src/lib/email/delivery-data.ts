@@ -149,7 +149,7 @@ export function deliveryJobMatchJobs(
 
 /**
  * Szablony z linkiem niosącym jednorazowy token, którego nie ma w bazie: gość (#98) i
- * zaproszenie do zespołu dla adresu bez konta (0108).
+ * zaproszenie do zespołu dla adresu bez konta (0109).
  */
 export const GUEST_TOKEN_TEMPLATES: ReadonlySet<string> = new Set([
   'guestApplicationConfirm',

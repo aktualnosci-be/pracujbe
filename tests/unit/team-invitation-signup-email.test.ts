@@ -7,7 +7,7 @@ import { guestDeliveryToken } from '@/lib/email/guest-delivery';
 import { hashTeamInviteToken, issueTeamInviteToken } from '@/lib/team/invite-token';
 
 /**
- * 0108 — zaproszenie do zespołu dla adresu bez konta: e-mail w języku zaproszenia (kolumna
+ * 0109 — zaproszenie do zespołu dla adresu bez konta: e-mail w języku zaproszenia (kolumna
  * `locale`, wybranej przez zapraszającego), link do rejestracji pracodawcy z tokenem we
  * fragmencie `#` odtworzonym z nonce (w bazie tylko hash), bez nonce w treści.
  */

@@ -6,7 +6,7 @@ import { captureError } from '@/lib/sentry';
 import { readTeamInvitationSignup, type TeamInvitationSignupPreview } from '@/lib/team/invite-signup';
 
 /**
- * Podgląd zaproszenia z linku rejestracji (0108): strona `/rejestracja-pracodawca` czyta token
+ * Podgląd zaproszenia z linku rejestracji (0109): strona `/rejestracja-pracodawca` czyta token
  * z fragmentu `#token=` (nie trafia do serwera w adresie ani do logów) i wysyła go tu POST-em.
  * Wynik: dane zaproszenia (firma, rola, adres) albo `used`/`invalid` — bez powodu nieważności.
  * Awaria bazy = `invalid` z wpisem w Sentry (formularz pokazuje zwykłą rejestrację).

@@ -11,7 +11,7 @@ import { previewTeamInvitationSignup } from '@/lib/actions/team-invite-signup';
 import type { TeamInvitationSignupPreview } from '@/lib/team/invite-signup';
 
 /**
- * Wejście do rejestracji pracodawcy (0108). Zwykły adres → zwykły formularz (także bez JS).
+ * Wejście do rejestracji pracodawcy (0109). Zwykły adres → zwykły formularz (także bez JS).
  * Link z e-maila zaproszenia do zespołu (`#token=…`, token usuwany z adresu przez
  * `useLinkToken`) → podgląd zaproszenia (Server Action, token tylko w pamięci) i formularz
  * bez nazwy firmy, z adresem z zaproszenia. Link zużyty/nieważny → komunikat i zwykła

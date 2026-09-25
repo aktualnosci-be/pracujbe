@@ -11,7 +11,7 @@ import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
 
 /**
- * 0108 — UI zaproszenia dla adresu bez konta: wybór języka zaproszenia (domyślnie język
+ * 0109 — UI zaproszenia dla adresu bez konta: wybór języka zaproszenia (domyślnie język
  * strony zapraszającego) i rejestracja z linku (`#token=`) bez nazwy firmy, z adresem
  * zaproszenia. Token usuwany z paska adresu, nie trafia do URL-a żądania.
  */

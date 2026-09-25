@@ -26,7 +26,7 @@ const SQL = readdirSync(MIGRATIONS)
   .filter((f) => f.endsWith('.sql'))
   .map((f) => readFileSync(resolve(MIGRATIONS, f), 'utf8'))
   .join('\n');
-const AUTH_SOURCE = readFileSync(resolve(ROOT, 'src/lib/email/auth-email.ts'), 'utf8');
+const AUTH_SOURCE = readFileSync(resolve(ROOT, 'src/lib/auth/email-outbox.ts'), 'utf8');
 
 /** Czy w SQL jest wywołanie `enqueue_email(...)`, którego argumenty zawierają `'type'`. */
 function enqueuedIn(sql: string, type: string): boolean {
@@ -55,7 +55,7 @@ describe('#295: pokrycie szablonów e-mail zdarzeniami', () => {
     expect(enqueuedIn(SQL, type)).toBe(true);
   });
 
-  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres bez konta (0095/0108)', (type) => {
+  it.each(GUEST_EMAIL_TYPES)('%s jest kolejkowany na adres bez konta (0095/0109)', (type) => {
     expect(guestEnqueuedIn(SQL, type)).toBe(true);
     // Nie przez enqueue_email: gość nie ma profilu, z którego enqueue_email bierze adres.
     expect(enqueuedIn(SQL, type)).toBe(false);

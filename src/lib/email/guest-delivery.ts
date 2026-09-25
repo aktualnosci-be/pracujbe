@@ -6,7 +6,7 @@ import { teamInviteTokenFromNonce } from '@/lib/team/invite-token';
 /**
  * Token do linku w e-mailu gościa (#98). Baza trzyma w payloadzie tylko `nonce`; token
  * odtwarzamy sekretem serwera (`@/lib/guest-apply/token`). Zaproszenie do zespołu dla adresu
- * bez konta (0108) — ten sam schemat, cel `team-invite`. Inne szablony → `undefined`.
+ * bez konta (0109) — ten sam schemat, cel `team-invite`. Inne szablony → `undefined`.
  */
 const PURPOSE: Record<string, GuestTokenPurpose> = {
   guestApplicationConfirm: 'confirm',

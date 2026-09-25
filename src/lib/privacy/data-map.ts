@@ -97,13 +97,13 @@ export interface Activity {
 }
 
 /** Wspólne dla każdej czynności: hosting aplikacji i bazy. */
-const HOSTING: ProcessorId[] = ['railway', 'supabase'];
+const HOSTING: ProcessorId[] = ['railway'];
 
 export const ACTIVITIES: Record<ActivityId, Activity> = {
   account: {
     name: 'Konto i uwierzytelnianie',
     inCode: 'Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta.',
-    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile).',
   },
@@ -123,38 +123,38 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   applications: {
     name: 'Aplikacje na oferty',
     inCode: 'Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: null,
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
     inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
-    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
       'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',
   },
   'matching-search': {
     name: 'Dopasowanie i zapisane wyszukiwania',
     inCode: 'Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: null,
   },
   'employer-contact': {
     name: 'Kontakt pracodawca–kandydat',
     inCode: 'Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: 'Propozycje wygasają (expires_at), dane nie są usuwane.',
   },
   companies: {
     name: 'Konta firm, zespół i weryfikacja',
     inCode: 'Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy.',
-    processors: [...HOSTING, 'resend', 'vies'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'vies'],
     retentionInCode: 'Zaproszenia wygasają po 14 dniach (status), nie są usuwane.',
   },
   'email-notifications': {
     name: 'E-maile i powiadomienia',
     inCode: 'Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach.',
-    processors: [...HOSTING, 'resend'],
+    processors: [...HOSTING, 'resend', 'emaillabs'],
     retentionInCode: 'email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md).',
   },
   consents: {
@@ -166,7 +166,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   'dsa-moderation': {
     name: 'Zgłoszenia treści (DSA) i moderacja',
     inCode: 'Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron.',
-    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode: null,
   },
   'security-audit': {
@@ -422,7 +422,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w buckecie (Supabase Storage), w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------
@@ -571,7 +571,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       signup_token_hash: 'credentials',
       signup_token_used_at: 'credentials',
     },
-    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0108); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0109); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],
@@ -663,6 +663,9 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: {
       profile_id: 'reference',
+      // #493 (0108): rodzaj elementu (regulamin / informacja o prywatności / dawny wspólny) i kanał.
+      kind: 'consent',
+      source: 'consent',
       document_version: 'consent',
       accepted_at: 'consent',
       ip_address: 'technical',

@@ -42,16 +42,13 @@ export const QUEUED_EMAIL_TYPES = [
 export const GUEST_EMAIL_TYPES = [
   'guestApplicationConfirm', // submit_guest_application
   'guestApplicationSent', // confirm_guest_application
-  'teamInvitationSignup', // invite_company_member (0108) — adres bez konta, język zaproszenia
+  'teamInvitationSignup', // invite_company_member (0109) — adres bez konta, język zaproszenia
 ] as const satisfies readonly EmailType[];
 
-/** E-maile konta — wysyłane przez warstwę Auth (`src/lib/email/auth-email.ts`). */
+/** E-maile konta — kolejka Better Auth (`src/lib/auth/email-outbox.ts`, worker `email-worker.ts`). */
 export const AUTH_EMAIL_TYPES = [
   'accountConfirmation',
   'passwordReset',
-  'magicLink',
-  'emailChange',
-  'invite',
 ] as const satisfies readonly EmailType[];
 
 /**
@@ -66,4 +63,8 @@ export const UNWIRED_EMAIL_TYPES = {
   payment: 'Płatności wyłączone w bezpłatnym MVP (#51).',
   invoice: 'Płatności wyłączone w bezpłatnym MVP (#51).',
   supportContact: 'Strona kontaktu nie ma formularza; brak zgłoszeń do obsłużenia.',
+  // #27: wysyłał je tylko Supabase Auth (GoTrue); Better Auth nie ma tych przepływów.
+  magicLink: 'Logowanie linkiem nie jest włączone w Better Auth (#24).',
+  emailChange: 'Zmiana adresu e-mail konta nie jest dostępna w Better Auth (#24).',
+  invite: 'Zaproszenie do konta nie istnieje; zaproszenia do zespołu wysyła teamInvitation.',
 } as const satisfies Partial<Record<EmailType, string>>;

@@ -1,7 +1,7 @@
 import { registerEmployerSchema } from './auth';
 
 /**
- * Rejestracja pracodawcy z linku zaproszenia do zespołu (0108). Te same pola i reguły co
+ * Rejestracja pracodawcy z linku zaproszenia do zespołu (0109). Te same pola i reguły co
  * `registerEmployerSchema`, ale bez nazwy firmy: osoba dołącza do istniejącej firmy
  * (zaproszenie czeka w panelu po potwierdzeniu adresu), więc nie zakładamy jej własnej.
  * Schemat pochodny — zmiany pól rejestracji pracodawcy przechodzą tu automatycznie.

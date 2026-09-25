@@ -13,8 +13,8 @@ type ToConfirm = typeof TO_CONFIRM;
 
 export type ProcessorId =
   | 'railway'
-  | 'supabase'
   | 'resend'
+  | 'emaillabs'
   | 'sentry'
   | 'cloudflare-turnstile'
   | 'anthropic'
@@ -65,23 +65,9 @@ export const PROCESSORS: readonly Processor[] = [
     activation: 'Produkcja wdrażana na Railway (docs/railway/README.md); połączenia DB przez DATABASE_APP_URL / DATABASE_SERVICE_URL / DATABASE_AUTH_URL / DATABASE_OPS_URL.',
     codeRefs: ['docs/railway/README.md', 'docs/railway/OPERATIONS.md', 'src/lib/db/pool.ts', 'src/lib/db/portal.ts', 'scripts/railway-cron-call.mjs'],
     notes: [
-      'Adapter bucketa S3 (src/lib/storage/railway-bucket.ts) istnieje, ale obecny kod plików CV korzysta z Supabase Storage (src/lib/storage.ts).',
+      'Pliki CV w prywatnym buckecie S3 Railway (src/lib/storage/railway-bucket.ts, #26); pobranie tylko krótkim linkiem HMAC przez /api/files/cv.',
+      'Limiter (src/lib/rate-limit.ts): przy loginie DATABASE_RATE_LIMIT_URL klucz HMAC akcji i adresu IP; przejściowa ścieżka przez pulę service zapisuje klucz z adresem IP bez haszowania.',
       'Kopie zapasowe: scripts/db/backup.sh szyfruje zrzut kluczem age i zapisuje w BACKUP_DIR; miejsce przechowywania kopii nie wynika z repozytorium.',
-    ],
-    ...UNKNOWN,
-  },
-  {
-    id: 'supabase',
-    name: 'Supabase',
-    purpose:
-      'Warstwa przejściowa: sesje i trasy logowania Supabase Auth (do przepięcia w #24, usunięcie SDK w #27). Panele, Server Actions i limiter korzystają z PostgreSQL Railway (#25).',
-    dataCategories: ['Konto i sesja logowania (e-mail, identyfikator)'],
-    dataSubjects: ['Kandydaci', 'Pracodawcy i członkowie firm', 'Administratorzy'],
-    activation: 'NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (+ SUPABASE_SERVICE_ROLE_KEY po stronie serwera).',
-    codeRefs: ['src/lib/supabase/server.ts', 'src/lib/actions/auth.ts', 'src/middleware.ts'],
-    notes: [
-      'CLAUDE.md opisuje Supabase jako przejściowe; docelowa baza to PostgreSQL na Railway.',
-      'Limiter (src/lib/rate-limit.ts) zapisuje w PostgreSQL Railway klucz z akcji i adresu IP bez haszowania (pula service); wariant z HMAC (src/lib/db/rate-limit.ts) czeka na podłączenie.',
     ],
     ...UNKNOWN,
   },
@@ -97,11 +83,39 @@ export const PROCESSORS: readonly Processor[] = [
       'Identyfikator wysyłki (idempotency key = id wiersza email_deliveries)',
     ],
     dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści'],
-    activation: 'RESEND_API_KEY (bez klucza worker pomija wysyłkę); webhook wymaga RESEND_WEBHOOK_SECRET.',
-    codeRefs: ['src/lib/email/outbox.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/app/api/auth/email-hook/route.ts', 'src/emails/wiring.ts'],
+    activation: 'EMAIL_PROVIDER=resend albo brak EMAIL_PROVIDER bez kompletu kluczy EmailLabs, przy RESEND_API_KEY; webhook wymaga RESEND_WEBHOOK_SECRET.',
+    codeRefs: ['src/lib/email/transport/resend.ts', 'src/lib/email/outbox.ts', 'src/lib/auth/email-worker.ts', 'src/app/api/email/webhook/resend/route.ts', 'src/emails/wiring.ts'],
     notes: [
       'Wywołanie resend.emails.send przekazuje from, to, subject, html i opcjonalnie nagłówki wypisania; kod nie ustawia opcji śledzenia otwarć/kliknięć — stan tych ustawień na koncie do sprawdzenia.',
       'Payloady kolejki nie zawierają treści wiadomości czatu ani odpowiedzi screeningowych (sekcja e-maili w mapie jest generowana z migracji).',
+    ],
+    ...UNKNOWN,
+  },
+  {
+    id: 'emaillabs',
+    name: 'EmailLabs',
+    purpose:
+      'Wysyłka e-maili transakcyjnych z kolejki email_deliveries i e-maili konta (auth.email_outbox), gdy EMAIL_PROVIDER wybiera EmailLabs; odbiór raportów doręczeń (odbicia, opóźnienia) przez webhook.',
+    dataCategories: [
+      'Adres e-mail odbiorcy',
+      'Temat, treść HTML i tekstowa wyrenderowanego szablonu (pola payloadu — patrz sekcja e-maili w mapie)',
+      'Nagłówki List-Unsubscribe z tokenem wypisania',
+      'Identyfikator wiadomości (messageId = id wiersza kolejki + domena nadawcy)',
+      'Linki z tokenem potwierdzenia adresu / resetu hasła w e-mailach konta',
+    ],
+    dataSubjects: ['Kandydaci', 'Aplikujący bez konta', 'Pracodawcy i członkowie firm', 'Zgłaszający treści'],
+    activation:
+      'EMAIL_PROVIDER=emaillabs albo brak EMAIL_PROVIDER przy komplecie EMAILLABS_APP_KEY, EMAILLABS_SECRET_KEY, EMAILLABS_SMTP_ACCOUNT; webhook wymaga EMAILLABS_WEBHOOK_SECRET.',
+    codeRefs: [
+      'src/lib/email/transport/emaillabs.ts',
+      'src/lib/email/outbox.ts',
+      'src/lib/auth/email-worker.ts',
+      'src/app/api/email/webhook/emaillabs/route.ts',
+    ],
+    notes: [
+      'Każde wywołanie wysyłki ma nagłówek X-TRACKING-OFF: 1 (bez przekierowań linków); open tracking jest ustawieniem konta SMTP — do wyłączenia w panelu (docs/EMAILLABS_SETUP.md).',
+      'Przed wysyłką kod odpytuje statusy po messageId (deduplikacja ponowień) — klucz API potrzebuje prawa odczytu statusów.',
+      'Webhook przekazuje adres odbiorcy i status doręczenia; kod zapisuje tylko status, czas i ewentualną blokadę adresu.',
     ],
     ...UNKNOWN,
   },
