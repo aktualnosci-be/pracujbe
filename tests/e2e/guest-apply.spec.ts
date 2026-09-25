@@ -180,20 +180,23 @@ test('link potwierdzenia: prywatne nagłówki, bez tokenu w URL, zły token → 
   await expect(page.getByRole('button', { name: t.guestApply.confirmButton })).toHaveCount(0);
 });
 
-test('stary link przejęcia bez sesji: logowanie wraca na czystą stronę', async ({ page }) => {
+test('stary link przejęcia z ?token= jest odrzucany: czysty URL, bez cookie, komunikat (#505)', async ({ page }) => {
   const t = msgs('en');
   const token = 'A'.repeat(43);
+  const requests: string[] = [];
+  page.on('request', (request) => requests.push(request.url()));
   const response = await page.goto(`/en/aplikacja/przejmij?token=${token}`);
   expect(response?.headers()['cache-control']).toContain('no-store');
   expect(response?.headers()['referrer-policy']).toBe('no-referrer');
-  expect(page.url()).not.toContain(token);
+  expect(page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.getByRole('heading', { level: 1, name: t.guestApply.claimTitle })).toBeVisible();
-  const login = page.getByRole('link', { name: t.guestApply.claimLogin });
-  const href = new URL((await login.getAttribute('href')) ?? '', 'http://localhost');
-  expect(href.pathname).toBe('/en/logowanie');
-  expect(href.searchParams.get('next')).toBe('/en/aplikacja/przejmij');
-  expect(href.href).not.toContain(token);
+  await expect(page.getByRole('heading', { name: t.guestApply.invalidTitle })).toBeVisible();
+  await expect(page.getByRole('link', { name: t.guestApply.claimLogin })).toHaveCount(0);
+  const cookies = await page.context().cookies();
+  expect(cookies.find((cookie) => cookie.name === 'pb_guest_claim')).toBeUndefined();
+  // Tylko pierwsze żądanie (to z e-maila) niesie token; przekierowanie i dalsze już nie.
+  expect(requests.slice(1).every((url) => !url.includes(token))).toBe(true);
 });
 
 test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie HttpOnly', async ({ page }) => {

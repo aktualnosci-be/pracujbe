@@ -60,6 +60,8 @@ export async function GET(request: Request): Promise<Response> {
       {
         status,
         mode: env.appMode,
+        // Wersja artefaktu (`0.YYYYMMDD.M+SHA`) — test wdrożeniowy porównuje SHA (#12).
+        version: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
         checks: {
           ...readinessChecks(),
           ...(database === null ? {} : { databaseReachable: database }),

@@ -236,6 +236,38 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(bobPage.items.map((i) => i.id)).not.toContain(aliceApp);
   });
 
+  it('pytania screeningowe (#101): licznik na karcie i snapshot odpowiedzi tylko dla autora zgłoszenia', async () => {
+    const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
+    await db().admin.query(`INSERT INTO public.application_screening_answers
+        (application_id, position, type, required, prompt, options, answer_boolean, answer_text)
+      VALUES ($1, 1, 'single_choice', true, '{"pl":"Zmiana?","en":"Shift?"}',
+              '[{"id":"o1","label":{"pl":"Dzienna"}},{"id":"o2","label":{"pl":"Nocna"}}]', NULL, 'o2'),
+             ($1, 0, 'yes_no', true, '{"pl":"Prawo jazdy?"}', '[]', true, NULL),
+             ($2, 0, 'short_text', false, '{"pl":"Cudze pytanie"}', '[]', NULL, 'cudza odpowiedź')`,
+      [aliceApp, bobApp]);
+
+    actAs({ id: alice, role: 'candidate' });
+    const page = await candidateData.getMyApplicationsPage('pl');
+    expect(page.items.find((item) => item.id === aliceApp)?.screeningCount).toBe(2);
+    expect(page.items.filter((item) => item.id !== aliceApp).every((item) => item.screeningCount === 0)).toBe(true);
+    const answers = await candidateData.getMyApplicationScreeningAnswers(aliceApp);
+    expect(answers.map((a) => [a.position, a.type, a.answerBoolean, a.answerText])).toEqual([
+      [0, 'yes_no', true, null],
+      [1, 'single_choice', null, 'o2'],
+    ]);
+    expect(answers[1]!.prompt).toEqual({ pl: 'Zmiana?', en: 'Shift?' });
+    expect(answers[1]!.options.map((o) => o.id)).toEqual(['o1', 'o2']);
+    // Cudze zgłoszenie: pusta lista (bez błędu, bez treści).
+    expect(await candidateData.getMyApplicationScreeningAnswers(bobApp)).toEqual([]);
+
+    // Druga strona: Bob widzi tylko własną odpowiedź, a pracodawca nie czyta odpowiedzi ścieżką kandydata.
+    actAs({ id: bob, role: 'candidate' });
+    expect((await candidateData.getMyApplicationsPage('pl')).items[0]?.screeningCount).toBe(1);
+    expect(await candidateData.getMyApplicationScreeningAnswers(aliceApp)).toEqual([]);
+    actAs({ id: employer, role: 'employer' });
+    expect(await candidateData.getMyApplicationScreeningAnswers(aliceApp)).toEqual([]);
+  });
+
   it('pulpit: liczniki z bazy dla właściciela sesji', async () => {
     actAs({ id: alice, role: 'candidate' });
     const overview = await candidateData.getCandidateOverview();

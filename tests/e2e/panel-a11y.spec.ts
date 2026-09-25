@@ -64,7 +64,7 @@ const ROUTES = [
 ] as const;
 
 type Copy = {
-  dashboard: { statusMenuTrigger: string };
+  dashboard: { statusMenuTrigger: string; applicationAnswersToggle: string; applicationAnswersHeading: string };
   notifications: { title: string };
   messages: { composerLabel: string };
 };
@@ -161,6 +161,24 @@ for (const locale of ['pl', 'en'] as const) {
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
     expect(await audit(page), `/${locale}/employer/aplikacje z otwartym menu statusu`).toEqual([]);
   });
+
+  // #101: rozwinięte odpowiedzi na pytania screeningowe w historii zgłoszeń kandydata.
+  for (const width of [1280, 320] as const) {
+    test(`panele a11y: rozwinięte odpowiedzi na pytania zgłoszenia (${locale}, ${width} px)`, async ({ page }) => {
+      const m = copy(locale);
+      await page.setViewportSize({ width, height: 900 });
+      await storeConsent(page);
+      await page.goto(`/${locale}/candidate/aplikacje`);
+      await waitForPanel(page);
+      const prefix = m.dashboard.applicationAnswersToggle.split('{count}')[0];
+      const toggle = page.getByRole('main').getByRole('button', { name: new RegExp(`^${escapeRegExp(prefix)}`) });
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByRole('region', { name: m.dashboard.applicationAnswersHeading }).getByRole('term')).toHaveCount(4);
+      await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+      expect(await audit(page), `/${locale}/candidate/aplikacje z rozwiniętymi odpowiedziami`).toEqual([]);
+    });
+  }
 
   for (const role of ['candidate', 'employer'] as const) {
     test(`panele a11y: otwarte centrum powiadomień i kompozytor (${role}, ${locale})`, async ({ page }) => {

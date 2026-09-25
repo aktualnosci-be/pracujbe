@@ -13,6 +13,7 @@ import { listEmailSuppressions } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
+import { filterTabClass } from '@/components/admin/admin-styles';
 import {
   AdminPageHeader,
   AdminPager,
@@ -102,12 +103,7 @@ export default async function AdminEmailSuppressionsPage({
               key={value}
               href={{ pathname: BASE_PATH, query }}
               aria-current={isActive ? 'true' : undefined}
-              className={cn(
-                'inline-flex min-h-11 items-center rounded-full border px-3 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground hover:bg-soft hover:text-foreground',
-              )}
+              className={filterTabClass(isActive)}
             >
               {t(FILTER_LABEL[value] ?? 'filterAll')}
             </Link>
