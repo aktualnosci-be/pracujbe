@@ -118,9 +118,6 @@ const TITLE_KEY_BY_ENTITY: Record<string, string> = {
   job_terms: 'itemJobTermsChanged',
 };
 
-/** Slug oferty z `data` powiadomienia — tylko bezpieczny format (bez ścieżek i query). */
-const JOB_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 export function titleKeyForType(type: string, data?: unknown, entityType = ''): string {
   if (type === 'system' && SYSTEM_TITLE_KEY_BY_ENTITY[entityType]) {
     return SYSTEM_TITLE_KEY_BY_ENTITY[entityType]!;
@@ -175,15 +172,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * bezpiecznym stanem tej strony (lista roli), nigdy cudzymi danymi. `entity_id` trafia do
  * URL tylko jako zweryfikowany UUID (rozmowa → `?c=`); nieznany typ → pulpit roli.
  */
-export function resolveHref(entityType: string, role: string, entityId = '', data?: unknown): string {
+export function resolveHref(entityType: string, role: string, entityId = ''): string {
   const employer = role === 'employer';
   switch (entityType) {
-    case 'job_terms': {
-      // 0144: link do publicznej strony oferty; slug spoza formatu → historia zgłoszeń.
-      const slug = asStr(asRecord(data)['slug']);
-      if (employer) return '/employer/oferty';
-      return slug.length <= 200 && JOB_SLUG_RE.test(slug) ? `/oferty-pracy/${slug}` : '/candidate/aplikacje';
-    }
+    case 'job_terms':
+      // 0144: historia zgłoszeń — oferta wstrzymana/zamknięta/wygasła nie ma publicznej strony
+      // (link do /oferty-pracy/{slug} dawałby 404), a zgłoszenie z nową treścią oferty jest tam zawsze.
+      return employer ? '/employer/oferty' : '/candidate/aplikacje';
     case 'conversation': {
       const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
       return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
@@ -299,7 +294,7 @@ export async function getNotifications(
         title: t(titleKeyForType(type, r['data'], asStr(r['entity_type']))),
         meta: formatRelativeTime(asStr(r['created_at']), resolvedLocale),
         unread: r['read_at'] == null,
-        href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id']), r['data']),
+        href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id'])),
       };
     });
 
@@ -424,7 +419,7 @@ export async function getNotificationsPage(
         title: t(titleKeyForType(type, r['data'], asStr(r['entity_type']))),
         meta: formatRelativeTime(createdAt, resolvedLocale),
         unread: r['read_at'] == null,
-        href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id']), r['data']),
+        href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id'])),
         createdAt,
         dateLabel: formatDate(createdAt),
       };

@@ -12773,35 +12773,82 @@ select pg_temp.assert(
   'JT6b rekruter nie czyta powiadomień kandydata (RLS)');
 reset role; reset app.current_uid;
 
--- JT7 KONTROLA UJEMNA: bez pola miasta na liście zmiana miasta przechodzi bez powiadomienia,
--- a bez filtra stanu aplikacji dostaje je także wycofany kandydat — oba asercje wyżej łapią regresję.
+-- JT7: bezpośredni UPDATE (service_role/migracja danych, bez update_published_job) nie powiadamia;
+-- kontrola ujemna: ten sam UPDATE ze znacznikiem RPC powiadamia — to znacznik jest bramką.
+update public.jobs set salary_max = 20 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT7 bezpośredni UPDATE warunków (bez update_published_job) nie tworzy powiadomień');
+savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', :'JTJOB', true);
+update public.jobs set salary_max = 21 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT7b KONTROLA UJEMNA: ze znacznikiem RPC ten sam UPDATE powiadamia (JT7 łapie brak bramki)');
+rollback to savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', '', true);
+update public.jobs set salary_max = 18 where id = :'JTJOB';
+
+-- JT8: sama wielkość liter/diakrytyki miasta (search_fold) nie jest zmianą warunków.
+select set_config('pb.jt_now', jsonb_set(jsonb_set(jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'), '{job,working_hours}', '"38 h"'),
+  '{job,salary_min}', '16')::text, true);
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"ANTWERPIA"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT8 zmiana wielkości liter miasta nie powiadamia (search_fold)');
+savepoint jt_fold;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'city', j.city,
+    'contract_type', j.contract_type, 'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, current_setting('pb.jt_now')::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT8b KONTROLA UJEMNA: przy surowym porównaniu miasta sama wielkość liter powiadamia (JT8 łapie regresję)');
+rollback to savepoint jt_fold;
+
+-- JT9 KONTROLA UJEMNA: bez miasta na liście pól zmiana miasta przez RPC przechodzi bez
+-- powiadomienia, a bez filtra stanu aplikacji dostaje je wycofany kandydat — JT3 i JT2b łapią regresję.
 savepoint jt_neg;
-update public.jobs set status = 'active' where id = :'JTJOB';
 create or replace function public.job_material_terms(j public.jobs)
 returns jsonb language sql immutable set search_path = public, pg_temp as $$
   select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
     'period', j.salary_period, 'currency', j.currency), 'contract_type', j.contract_type,
     'working_hours', j.working_hours)
 $$;
-update public.jobs set city = 'Brugia' where id = :'JTJOB';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"Brugia"'));
+reset role; reset app.current_uid;
 select pg_temp.assert(
   (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
-  'JT7 KONTROLA UJEMNA: bez miasta w job_material_terms zmiana miasta nie powiadamia (JT3 byłby czerwony)');
+  'JT9 KONTROLA UJEMNA: bez miasta w job_material_terms zmiana miasta nie powiadamia (JT3 byłby czerwony)');
 rollback to savepoint jt_neg;
 savepoint jt_neg2;
 create or replace function public.notify_job_terms_changed()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 begin
+  if coalesce(current_setting('pracujbe.job_terms_notify', true), '') <> new.id::text then return null; end if;
   insert into public.notifications (profile_id, type, data, entity_type, entity_id)
   select a.candidate_id, 'system', '{}'::jsonb, 'job_terms', new.id
     from public.applications a where a.job_id = new.id and a.candidate_id is not null;
   return null;
 end $$;
-update public.jobs set status = 'active' where id = :'JTJOB';
-update public.jobs set salary_max = 20 where id = :'JTJOB';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
 select pg_temp.assert(
   exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
-  'JT7b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
+  'JT9b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
 rollback to savepoint jt_neg2;
 rollback;
 

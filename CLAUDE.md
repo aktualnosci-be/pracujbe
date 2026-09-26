@@ -839,17 +839,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`JOB_NOT_EDITABLE`). Baza blokuje bezpośredni zapis treści i relacji oferty innej niż szkic
   (strażniki + `set_job_*` tylko dla szkicu). „Zobacz ofertę” dla aktywnej. Dowód: `rls.sql`
   sekcja RR.
-  Powiadomienie o zmianie warunków (migracja `0144` — numer tymczasowy): gdy
-  `update_published_job` zmienia wynagrodzenie (kwoty, okres, waluta), miasto, typ umowy albo
+  Powiadomienie o zmianie warunków (migracja `0144`): gdy `update_published_job` zmienia
+  wynagrodzenie (kwoty, okres, waluta), miasto (porównanie przez `search_fold`), typ umowy albo
   godziny pracy — lista pól w jednym miejscu, `job_material_terms(jobs)` — trigger AFTER UPDATE
-  na `jobs` (tylko oferta aktywna/wstrzymana bez zmiany statusu; ta sama transakcja, odrzucona
-  rewizja nie zostawia powiadomienia) tworzy powiadomienie in-app (`system`, `entity_type=
-  'job_terms'`, `data` = rodzaj, slug, nazwy pól — bez kwot) dla kandydatów z AKTYWNĄ aplikacją
-  (submitted/viewed/shortlisted/interview/offer_sent/offer_accepted; bez gości, szkiców i stanów
-  końcowych; preferencja `in_app_enabled` jak zawsze). Tytuł `notifications.itemJobTermsChanged`
-  w języku panelu odbiorcy (Invariant #1), link do `/oferty-pracy/{slug}` (slug spoza formatu →
-  historia zgłoszeń). Bez e-maila (bezpieczny wariant). Dowód: `rls.sql` sekcja JT144 (kontrole
-  ujemne: pole spoza listy, brak filtra stanu aplikacji), unit `job-terms-notification`.
+  na `jobs` tworzy powiadomienie in-app. Trigger reaguje WYŁĄCZNIE na zapis z tego RPC (lokalny
+  znacznik `pracujbe.job_terms_notify` = id oferty, ustawiany tuż przed UPDATE i czyszczony po
+  nim; bezpośredni UPDATE service_role/migracji i zmiany statusu nie powiadamiają); ta sama
+  transakcja, odrzucona rewizja nie zostawia powiadomienia. Odbiorcy: kandydaci z AKTYWNĄ
+  aplikacją (submitted/viewed/shortlisted/interview/offer_sent/offer_accepted; bez gości, szkiców
+  i stanów końcowych; preferencja `in_app_enabled` jak zawsze). `system`, `entity_type=
+  'job_terms'`, `data` = rodzaj, slug, nazwy pól (bez kwot). Tytuł
+  `notifications.itemJobTermsChanged` w języku panelu odbiorcy (Invariant #1), link do
+  `/candidate/aplikacje` (oferta wstrzymana/zamknięta/wygasła nie ma publicznej strony). Bez
+  e-maila (bezpieczny wariant). Dowód: `rls.sql` sekcja JT144 (kontrole ujemne: pole spoza listy,
+  brak filtra stanu aplikacji, bramka znacznika, surowe porównanie miasta), unit
+  `job-terms-notification`.
   **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
   zmieniło.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu

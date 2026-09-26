@@ -15,7 +15,7 @@ vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 /**
  * 0144: powiadomienie o istotnej zmianie warunków oferty, na którą kandydat aplikował.
- * Baza zapisuje tylko `data` (rodzaj, slug, pola); tytuł i link składa aplikacja.
+ * Baza zapisuje tylko `data` (rodzaj, slug, pola); tytuł i link (historia zgłoszeń) składa aplikacja.
  */
 
 const JOB = '9b2f4c1e-7d3a-4f5b-8c6d-1e2f3a4b5c6d';
@@ -35,23 +35,16 @@ describe('powiadomienie job_terms (0144)', () => {
     }
   });
 
-  it('kandydat: link do publicznej oferty po slugu', () => {
-    expect(resolveHref('job_terms', 'candidate', JOB, DATA)).toBe('/oferty-pracy/magazynier-gent-1');
-  });
-
-  it.each(['../candidate', '//evil.example', 'a?b=1', 'Magazynier', '', 'a'.repeat(201)])(
-    'slug spoza formatu (%j) → historia zgłoszeń, nie dowolny adres',
-    (slug) => {
-      expect(resolveHref('job_terms', 'candidate', JOB, { ...DATA, slug })).toBe('/candidate/aplikacje');
-    },
-  );
-
-  it('bez data (kontrola ujemna) → historia zgłoszeń; pracodawca → lista ofert', () => {
+  it('kandydat: link do historii zgłoszeń (także dla oferty wstrzymanej/zamkniętej/wygasłej)', () => {
     expect(resolveHref('job_terms', 'candidate', JOB)).toBe('/candidate/aplikacje');
-    expect(resolveHref('job_terms', 'employer', JOB, DATA)).toBe('/employer/oferty');
   });
 
-  it('pełna lista przekazuje data z bazy do linku', async () => {
+  it('kontrola ujemna: nie prowadzi pod publiczny adres oferty (404 dla oferty nieaktywnej); pracodawca → lista ofert', () => {
+    expect(resolveHref('job_terms', 'candidate', JOB)).not.toMatch(/^\/oferty-pracy\//);
+    expect(resolveHref('job_terms', 'employer', JOB)).toBe('/employer/oferty');
+  });
+
+  it('pełna lista: tytuł z klucza i link do historii zgłoszeń', async () => {
     resetFakeDb({ id: '11111111-1111-4111-8111-111111111111', role: 'candidate' } as PortalIdentity);
     fakeDb
       .rows('notifications.page', () => [{
@@ -63,7 +56,7 @@ describe('powiadomienie job_terms (0144)', () => {
     if (result.status !== 'ready') throw new Error('page');
     expect(result.page.items[0]).toMatchObject({
       title: 'itemJobTermsChanged',
-      href: '/oferty-pracy/magazynier-gent-1',
+      href: '/candidate/aplikacje',
     });
   });
 });
