@@ -13925,4 +13925,146 @@ select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- MRO. Wynik zgłoszenia wiadomości/rozmowy dla zgłaszającego (0208): admin_resolve_report
+--      na resolved/dismissed → powiadomienie in-app + e-mail w języku ZGŁASZAJĄCEGO (nie
+--      admina), tylko wynik (bez dowodu i opisu), idempotentnie po (zgłoszenie, status);
+--      druga strona rozmowy nie dostaje niczego. Kontrola ujemna: admin_resolve_report
+--      z 0081 (bez powiadomienia) — asercje MRO wykrywają regresję.
+--      Fikstury z sekcji MR (CANDMR pl, RECMR nl, ADMIN en; mr_r1 rozstrzygnięte w MR11).
+-- ============================================================================
+reset role; reset app.current_uid;
+
+-- MRO1: mr_r1 (wiadomość, CANDMR) rozstrzygnięte w MR11 → e-mail pl i powiadomienie in-app.
+select pg_temp.assert(
+  (select count(*) = 1 from public.email_deliveries d
+    where d.idempotency_key = 'message-report-outcome-' || :'mr_r1' || '-resolved'
+      and d.profile_id = :'CANDMR' and d.template = 'messageReportResolved' and d.locale = 'pl'
+      and d.entity_type = 'report' and d.entity_id = :'mr_r1'
+      and d.payload = jsonb_build_object('panel', 'candidate', 'targetType', 'message',
+                                         'conversationId', :'conv_mr'::uuid)),
+  'MRO1 e-mail wyniku w języku zgłaszającej (pl, nie en admina), tylko wynik i CTA');
+select pg_temp.assert(
+  (select count(*) = 1 from public.notifications n
+    where n.profile_id = :'CANDMR' and n.type = 'system' and n.title = 'message_report_outcome'
+      and n.entity_type = 'conversation' and n.entity_id = :'conv_mr'
+      and n.data = jsonb_build_object('kind', 'message_report', 'outcome', 'resolved',
+                                      'targetType', 'message', 'reportId', :'mr_r1'::uuid)),
+  'MRO1b powiadomienie in-app z wynikiem, bez dowodu');
+select pg_temp.assert(
+  (select count(*) = 0 from public.email_deliveries d
+    where d.entity_type = 'report' and d.entity_id = :'mr_r1'
+      and (d.payload::text like '%PIN%' or d.payload::text like '%Prośba%' or d.payload ? 'category'))
+  and (select count(*) = 0 from public.notifications n
+    where n.data ->> 'reportId' = :'mr_r1' and n.data::text like '%PIN%'),
+  'MRO1c ani e-mail, ani powiadomienie nie niosą treści dowodu i opisu');
+-- Druga strona rozmowy (RECMR) nie dowiaduje się o zgłoszeniu.
+select pg_temp.assert(
+  (select count(*) = 0 from public.notifications n
+    where n.profile_id = :'RECMR' and n.data ->> 'reportId' = :'mr_r1')
+  and (select count(*) = 0 from public.email_deliveries d
+    where d.profile_id = :'RECMR' and d.entity_id = :'mr_r1'),
+  'MRO1d druga strona rozmowy nic nie dostaje');
+
+-- MRO2: rozmowa zgłoszona przez RECMR (nl, strona firmy) → oddalona → nl, panel employer.
+select id::text as mro_rec from public.reports where idempotency_key = :'MRKEY5' \gset
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mro_rec', 'dismissed', 'open');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.email_deliveries d
+    where d.idempotency_key = 'message-report-outcome-' || :'mro_rec' || '-dismissed'
+      and d.profile_id = :'RECMR' and d.template = 'messageReportDismissed' and d.locale = 'nl'
+      and d.payload ->> 'panel' = 'employer' and d.payload ->> 'targetType' = 'conversation'),
+  'MRO2 oddalenie: e-mail nl do strony firmy, CTA do panelu pracodawcy');
+select pg_temp.assert(
+  (select count(*) = 1 from public.notifications n
+    where n.profile_id = :'RECMR' and n.data ->> 'reportId' = :'mro_rec'
+      and n.data ->> 'outcome' = 'dismissed')
+  and (select count(*) = 0 from public.notifications n
+    where n.profile_id = :'CANDMR' and n.data ->> 'reportId' = :'mro_rec'),
+  'MRO2b powiadomienie tylko dla zgłaszającego');
+
+-- MRO3: ponowne otwarcie i to samo rozstrzygnięcie → bez drugiego listu i powiadomienia;
+--       zmiana wyniku → nowa informacja.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mro_rec', 'reviewing', 'dismissed');
+select public.admin_resolve_report(:'mro_rec', 'dismissed', 'reviewing');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.email_deliveries d where d.entity_id = :'mro_rec' and d.entity_type = 'report')
+  and (select count(*) = 1 from public.notifications n where n.data ->> 'reportId' = :'mro_rec'),
+  'MRO3 to samo rozstrzygnięcie ponownie: jeden e-mail, jedno powiadomienie');
+select pg_temp.assert(
+  (select count(*) = 0 from public.email_deliveries d
+    where d.entity_id = :'mro_rec' and d.idempotency_key like '%-reviewing'),
+  'MRO3b przejście do analizy (reviewing) nic nie wysyła');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mro_rec', 'reviewing', 'dismissed');
+select public.admin_resolve_report(:'mro_rec', 'resolved', 'reviewing');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 2 from public.email_deliveries d where d.entity_id = :'mro_rec' and d.entity_type = 'report')
+  and (select count(*) = 1 from public.email_deliveries d
+        where d.entity_id = :'mro_rec' and d.template = 'messageReportResolved' and d.locale = 'nl')
+  and (select count(*) = 2 from public.notifications n where n.data ->> 'reportId' = :'mro_rec'),
+  'MRO3c zmiana wyniku (dismissed → resolved) = nowa informacja');
+
+-- MRO4: język z profilu ZGŁASZAJĄCEJ w chwili rozstrzygnięcia (preferred_locale fr).
+update public.profiles set preferred_locale = 'fr' where id = :'CANDMR';
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mr_c1', 'resolved', 'open');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.email_deliveries d
+    where d.idempotency_key = 'message-report-outcome-' || :'mr_c1' || '-resolved'
+      and d.locale = 'fr' and d.payload ->> 'targetType' = 'conversation'
+      and d.payload ->> 'panel' = 'candidate'),
+  'MRO4 język odbiorcy wg resolve_recipient_locale (fr)');
+update public.profiles set preferred_locale = 'pl' where id = :'CANDMR';
+
+-- MRO5: zgłaszający bez konta (FK → null) — rozstrzygnięcie przechodzi, nic nie wychodzi.
+begin;
+select id::text as mro_open from public.reports
+  where kind = 'message_report' and reporter_id = :'CANDMR' and status = 'open' limit 1 \gset
+update public.reports set reporter_id = null where id = :'mro_open';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mro_open', 'resolved', 'open');
+reset role;
+select pg_temp.assert(
+  (select count(*) = 0 from public.email_deliveries where entity_id = :'mro_open')
+  and (select count(*) = 0 from public.notifications where data ->> 'reportId' = :'mro_open'),
+  'MRO5 zgłaszający bez konta: brak e-maila i powiadomienia, bez błędu');
+rollback;
+
+-- MRO6: helper niedostępny dla klienta.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.notify_message_report_outcome(uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.notify_message_report_outcome(uuid)', 'EXECUTE'),
+  'MRO6 notify_message_report_outcome bez EXECUTE dla klienta');
+
+-- MRO7 (kontrola ujemna): admin_resolve_report z 0081 (bez powiadomienia) nie wysyła niczego —
+-- asercje MRO1/MRO2 wykrywają taką regresję.
+begin;
+create or replace function public.admin_resolve_report(
+  p_report_id uuid, p_status text, p_expected_status text default null
+) returns void language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  update public.reports
+    set status = p_status::public.report_status,
+        resolved_by = auth.uid(), resolved_at = now(), updated_at = now()
+    where id = p_report_id;
+end $$;
+select id::text as mro_neg from public.reports
+  where kind = 'message_report' and reporter_id = :'CANDMR' and status = 'open' limit 1 \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_resolve_report(:'mro_neg', 'resolved', 'open');
+reset role;
+select pg_temp.assert(
+  (select count(*) = 0 from public.email_deliveries where entity_id = :'mro_neg')
+  and (select count(*) = 0 from public.notifications where data ->> 'reportId' = :'mro_neg'),
+  'MRO7 kontrola ujemna: bez 0208 zgłaszający nie dostaje wyniku');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

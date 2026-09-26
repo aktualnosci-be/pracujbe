@@ -118,6 +118,12 @@ const TITLE_KEY_BY_ENTITY: Record<string, string> = {
   job_terms: 'itemJobTermsChanged',
 };
 
+/** Wynik zgłoszenia wiadomości/rozmowy (0208): `system` z `data.kind = 'message_report'`. */
+const MESSAGE_REPORT_TITLE_KEY: Record<string, string> = {
+  resolved: 'itemMessageReportResolved',
+  dismissed: 'itemMessageReportDismissed',
+};
+
 export function titleKeyForType(type: string, data?: unknown, entityType = ''): string {
   if (type === 'system' && SYSTEM_TITLE_KEY_BY_ENTITY[entityType]) {
     return SYSTEM_TITLE_KEY_BY_ENTITY[entityType]!;
@@ -130,6 +136,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   }
   if (d['kind'] === 'screening_review') {
     const key = SCREENING_REVIEW_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'message_report') {
+    const key = MESSAGE_REPORT_TITLE_KEY[asStr(d['outcome'])];
     if (key) return key;
   }
   if (d['kind'] === 'moderation') {

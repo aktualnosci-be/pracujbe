@@ -1221,9 +1221,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   20/dobę w bazie, niezmienność każdej roli (`reports_message_report_immutable`). Admin:
   `/admin/zgloszenia?kind=message_report` (dowód, strony, data), rozstrzyga `admin_resolve_report`.
   Dowód: `rls.sql` sekcja MR (kontrole ujemne: obca rozmowa, powtórka, stara polityka),
-  unit `message-reports`, `thread-message-list`, E2E `message-report.spec`. **Otwarte:**
-  treść prawna i retencja dowodu (#40/#486 — dowód zostaje po usunięciu konta nadawcy),
-  powiadomienie zgłaszającego o wyniku, zgłoszenie jako sprawa DSA.
+  unit `message-reports`, `thread-message-list`, E2E `message-report.spec`.
+  Wynik dla zgłaszającego (migracja `0208` — numer tymczasowy): `admin_resolve_report` na
+  `resolved`/`dismissed` woła w tej samej transakcji `notify_message_report_outcome` (tylko
+  `kind='message_report'`, bez EXECUTE dla klienta) — powiadomienie in-app (`system`,
+  `data.kind='message_report'` + `outcome`, encja = rozmowa → link do wątku; tytuły
+  `notifications.itemMessageReportResolved/Dismissed`) i e-mail `messageReportResolved`/
+  `messageReportDismissed` przez `enqueue_email` w języku ZGŁASZAJĄCEGO (Invariant #1, nie
+  admina). Tylko wynik: payload `panel` (strona z dowodu w bazie), `targetType`,
+  `conversationId` (CTA do `/{panel}/wiadomosci?c=`), bez dowodu, opisu i kategorii. Klucz
+  e-maila = `message-report-outcome-<id>-<status>`, powiadomienie raz na (zgłoszenie, wynik):
+  ponowne otwarcie i to samo rozstrzygnięcie nic nie dubluje, zmiana wyniku = nowa informacja;
+  zgłaszający bez konta — nic; druga strona rozmowy — nic. Bez tekstów prawnych. Dowód:
+  `rls.sql` sekcja MRO (kontrola ujemna: `admin_resolve_report` z 0081), unit
+  `message-report-outcome` (4 języki, kanarki dowodu, kontrola ujemna payloadu).
+  **Otwarte:** treść prawna i retencja dowodu (#40/#486 — dowód zostaje po usunięciu konta
+  nadawcy), zgłoszenie jako sprawa DSA.
   Załączniki (migracja `0119`): PDF/DOC/DOCX/JPG/PNG ≤ 5 MB, najwyżej 3 na
   wiadomość (`src/lib/validation/message-attachment.ts` — przeglądarka i akcja; magic bytes
   i OOXML w `src/lib/files/message-attachments.ts`). „Dołącz plik” wgrywa plik od razu
@@ -1367,7 +1380,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
   0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
   (`process_saved_search_alerts`, 0092, #100), supportContact/contactMessageAdmin (`submit_contact_message`,
-  0125, #61); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
+  0125, #61), messageReportResolved/Dismissed (`admin_resolve_report` → `notify_message_report_outcome`, 0208); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
   (#51). Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
