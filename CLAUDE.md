@@ -15,8 +15,9 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
-Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: migracja 0137, brak
-usług cron, tryb demo za bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
+Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: produkcja na migracji 0144,
+`main` ma 0145, brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
+bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
@@ -651,8 +652,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
-  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486), linki Pomoc/Prywatność
-  w stopce e-maili (#6). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Linki Pomoc/Prywatność
+  w stopce e-maili (#6) są w `src/emails/_components.tsx` (język odbiorcy). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
   (test `faq-redirect`).
 
 ### Etap 3 — kandydat
@@ -662,6 +663,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `internalAdapter.findUserById`, nigdy z URL/formularza) wypełniają `CompanyOnboarding` w
   `/employer/firma` i w layoucie panelu; błąd odczytu → formularz pusty (nie blokuje zakładania
   firmy).
+  Wysyłka e-maili konta bez czekania na harmonogram (bloker startu W1, `docs/LAUNCH_CHECKLIST.md`
+  K10, bez migracji): `registerCandidate`/`registerEmployer`/`registerInvitedEmployer`,
+  `requestPasswordReset` (zawsze — wynik neutralny) i `signIn` z `AUTH_EMAIL_NOT_CONFIRMED`
+  (`sendOnSignIn`) planują `kickAuthEmailQueue()` (`src/lib/auth/email-kick.ts`): po odpowiedzi
+  (`after()` z `next/server`) jedna paczka `processAuthEmailQueue(5)` — ten sam claim z dzierżawą,
+  budżet puli `auth` i klucz idempotencji dostawcy co cron, więc równoległy cron nie wyśle drugiego
+  listu. Awaria planowania/workera nie zmienia wyniku akcji (zlecenie czeka na harmonogram).
+  Wyłącznik `AUTH_EMAIL_IMMEDIATE_SEND=off`. Ponowienia i `email_deliveries` nadal wymagają crona.
+  Test: `auth-email-kick` (kontrole ujemne: limit, walidacja, nieudana rejestracja, złe hasło,
+  udane logowanie, wyłącznik).
   Rozdzielenie zgód (#493, migracja `0108`): rejestracja kandydata/pracodawcy
   i krok 6 onboardingu mają osobne, niezaznaczone pola — akceptacja regulaminu (wymagana),
   potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda) i zgoda
