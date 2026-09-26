@@ -268,6 +268,11 @@ describe('/api/maintenance', () => {
     const statuses = await db().admin.query(`SELECT id, status::text FROM public.jobs WHERE id = ANY($1::uuid[])`, [[due, jobId]]);
     const byId = Object.fromEntries(statuses.rows.map((r) => [r.id, r.status]));
     expect(byId).toEqual({ [due]: 'expired', [jobId]: 'active' });
+    // 0213: przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
+    const run = await db().admin.query(
+      `SELECT last_ok, last_failed_task, last_duration_ms >= 0 AS timed FROM public.ops_job_runs WHERE job = 'maintenance'`,
+    );
+    expect(run.rows).toEqual([{ last_ok: true, last_failed_task: null, timed: true }]);
   });
 });
 
@@ -406,6 +411,11 @@ describe('zgłoszenie treści (DSA) przez service_role', () => {
 describe('ops_metrics przez pulę service (bez DATABASE_OPS_URL)', () => {
   it('zwraca liczniki w oczekiwanym kształcie', async () => {
     delete process.env.DATABASE_OPS_URL;
-    expect(await readOpsMetrics()).toMatchObject({ kind: 'ok' });
+    const result = await readOpsMetrics();
+    expect(result).toMatchObject({ kind: 'ok' });
+    // 0213: ostatni przebieg maintenance (zapisany w teście /api/maintenance wyżej).
+    if (result.kind !== 'ok') throw new Error('oczekiwano ok');
+    expect(result.maintenanceRun).toMatchObject({ ok: true, failedTask: null });
+    expect(result.maintenanceRun?.ageSeconds).toBeLessThan(600);
   });
 });

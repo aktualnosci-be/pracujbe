@@ -1697,6 +1697,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  Panel `/admin/operacje` (migracja `0213` — numer tymczasowy): strona tylko do odczytu (noindex,
+  `requireAdmin` → 404 dla innej roli, bez dzwonka, link „Stan operacyjny” w nawigacji) z tymi
+  samymi liczbami i stanami co `/api/health/ops` — wspólny odczyt `readOpsStatus`
+  (`src/lib/ops/status.ts`: pula `ops`, zapasowo service-role), wiersze z `src/lib/ops/dashboard.ts`
+  (wartość, próg, stan słowem; stan WYŁĄCZNIE z `alerts`/`warnings` czujek, brak sekcji = „brak
+  danych”, nigdy „OK”): kolejki e-mail/auth (wiek najstarszego, dzierżawy, nieudane), webhooki,
+  maintenance, kolejka storage (dead-letter), poczta, budżet AI, połączenia/pula, kopia. Ostatni
+  przebieg maintenance: `/api/maintenance` na końcu (także nieudanego) woła `record_ops_job_run`
+  (service_role) → `ops_job_runs` (jeden wiersz, czas/wynik/czas trwania/stała nazwa zadania
+  z błędem), odczyt `ops_last_maintenance_run()` (`pracujbe_ops`/service_role) → czujki
+  `maintenance_run_stale` (alarm > 2 h), `maintenance_run_missing`/`_failed`/`_unavailable`
+  (ostrzeżenia; brak przebiegu nie daje stałego 503), pole `maintenanceRun` w `/api/health/ops`.
+  Bez danych osobowych i sekretów; tryb demo = przykładowy stan oznaczony. Dowód: `rls.sql` sekcja
+  OPSM (kontrola ujemna bez GRANT), unit `admin-ops-dashboard` (każdy sygnał ma wiersz — z kontrolą
+  ujemną; nie-admin → 404 przed odczytem), `job-expiry`, `ops-health-route`, integracja
+  `portal-service`, E2E `admin-operations` (4 języki, axe 320 px/200%), `admin-a11y`. Opis:
+  `docs/railway/OPERATIONS.md` §1.
   Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry

@@ -53,6 +53,8 @@ const ROUTES = [
   // Dane polowe Core Web Vitals z Cloudflare Web Analytics (tryb demo: raport przykładowy).
   '/admin/wydajnosc',
   '/admin/wydajnosc?dni=7',
+  // Stan operacyjny (#47) — czujki kolejek i crona, tylko odczyt.
+  '/admin/operacje',
   // Próg wieku kandydatów (#492) — bieżące ustawienie + formularz zmiany.
   '/admin/ustawienia',
 ];

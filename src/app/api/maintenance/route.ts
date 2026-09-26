@@ -96,6 +96,26 @@ function retentionCounters(value: unknown): Record<string, number> {
   );
 }
 
+/**
+ * 0213: ostatni przebieg dla czujek (`ops_last_maintenance_run`, panel `/admin/operacje`).
+ * Tylko czas, wynik i stała nazwa zadania z błędem. Awaria zapisu nie zmienia wyniku przebiegu
+ * (baza sprzed 0213 = brak funkcji) — tylko kanał błędów.
+ */
+async function recordRun(durationMs: number, failedTask: string | null): Promise<void> {
+  try {
+    await withServiceRole((tx) =>
+      rpc(tx, 'record_ops_job_run', {
+        p_job: 'maintenance',
+        p_ok: failedTask === null,
+        p_duration_ms: Math.max(0, Math.round(durationMs)),
+        p_failed_task: failedTask,
+      }),
+    );
+  } catch (error) {
+    captureError(error, { area: 'maintenance.record_run' });
+  }
+}
+
 async function run(request: Request): Promise<Response> {
   if (!isCronAuthorized(request, 'maintenance')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -106,6 +126,7 @@ async function run(request: Request): Promise<Response> {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
+  const startedAt = Date.now();
   type Task =
     | 'discounts'
     | 'checkouts'
@@ -232,6 +253,7 @@ async function run(request: Request): Promise<Response> {
   }
 
   const [first] = failures;
+  await recordRun(Date.now() - startedAt, first?.task ?? null);
   if (first) {
     captureError(first.error, { area: 'maintenance.gc', task: first.task });
     return NextResponse.json({ error: 'gc failed' }, { status: 503 });

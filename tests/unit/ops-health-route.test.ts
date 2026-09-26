@@ -82,6 +82,20 @@ describe('GET /api/health/ops (#47)', () => {
     expect(await res.json()).toMatchObject({ status: 'alert', alerts: ['ai_budget_exhausted'], aiBudget });
   });
 
+  it('0213: stary ostatni przebieg maintenance → 503 alert; brak przebiegu = tylko ostrzeżenie (200)', async () => {
+    const run = { finishedAt: '2026-09-26T05:00:00Z', ageSeconds: 7201, ok: true, durationMs: 900, failedTask: null };
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics, aiBudget: null, maintenanceRun: run });
+    let res = await call(SECRET);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ status: 'alert', alerts: ['maintenance_run_stale'], maintenanceRun: run });
+
+    const never = { finishedAt: null, ageSeconds: null, ok: null, durationMs: null, failedTask: null };
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics, maintenanceRun: never });
+    res = await call(SECRET);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: 'ok', alerts: [], warnings: ['maintenance_run_missing'] });
+  });
+
   it.each([
     ['error', 'unavailable'],
     ['unconfigured', 'unconfigured'],

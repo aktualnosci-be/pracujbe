@@ -36,6 +36,10 @@ identyfikatorów ani konfiguracji.
 | `auth_email_lease_abandoned` | alarm | dzierżawa `leased` po `lease_expires_at` | worker auth padł |
 | `webhook_stuck` | alarm | webhook `processing` > 15 min | awaria w trakcie przetwarzania (0038) |
 | `maintenance_lag` | alarm | aktywna oferta > 2 h po `expires_at`, rezerwacja kodu > 26 h, checkout `pending` > 150 min | cron `/api/maintenance` nie działa |
+| `maintenance_run_stale` | alarm | ostatni zapisany przebieg `/api/maintenance` starszy niż 2 h (0213) | cron maintenance przestał działać |
+| `maintenance_run_missing` | ostrzeżenie | baza nie zna żadnego przebiegu maintenance (0213) | cron jeszcze nie uruchomiony — celowo ostrzeżenie, nie alarm, żeby świeża baza nie dawała stale 503 |
+| `maintenance_run_failed` | ostrzeżenie | ostatni przebieg zakończył się błędem zadania (nazwa zadania w wierszu panelu) | awaria jednego zadania; szczegół: kod na webhooku błędów |
+| `maintenance_run_unavailable` | ostrzeżenie | nie da się odczytać `ops_last_maintenance_run()` | brak uprawnień `pracujbe_ops`; baza sprzed 0213 = czujka milczy |
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
@@ -74,6 +78,44 @@ gotowego wiersza obu kolejek (`email_deliveries`, `auth.email_outbox`) to istnie
 zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Dowód:
 `rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
 z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
+
+### Ostatni przebieg maintenance (migracja `0213` — numer tymczasowy)
+
+`ops_metrics()` widzi pominięty maintenance tylko pośrednio (oferty po terminie,
+porzucone rezerwacje). Przy małym ruchu nic nie rośnie, więc brak crona był
+niewidoczny. Od `0213` `/api/maintenance` na końcu każdego przebiegu (także
+nieudanego) woła `record_ops_job_run` (tylko `service_role`): tabela
+`ops_job_runs` trzyma JEDEN wiersz na zadanie — czas zakończenia, wynik, czas
+trwania i stałą nazwę pierwszego zadania z błędem (np. `jobExpiry`). Bez danych
+osobowych, bez treści błędu, bez historii do retencji. Odczyt:
+`ops_last_maintenance_run()` (`pracujbe_ops` i `service_role`), w odpowiedzi
+`/api/health/ops` pole `maintenanceRun`. Awaria zapisu nie zmienia wyniku przebiegu
+(tylko kod w kanale błędów). Dowód: `rls.sql` sekcja OPSM (kontrola ujemna bez
+GRANT), `tests/integration/portal-service.test.ts` (przebieg → wiersz → odczyt),
+`tests/unit/job-expiry.test.ts`, `tests/unit/ops-health-route.test.ts`.
+
+### Panel `/admin/operacje`
+
+Właściciel widzi te same liczby i stany bez tokenu monitoringu: strona tylko do
+odczytu w panelu administratora (noindex, rola `admin`, bez dzwonka, link „Stan
+operacyjny” w nawigacji). Odczyt `getOpsDashboard` (`src/lib/data/admin-ops.ts`)
+najpierw woła `requireAdmin` (inna rola → 404), potem ten sam
+`readOpsStatus` (`src/lib/ops/status.ts`) co `/api/health/ops` — pula `ops`
+z `DATABASE_OPS_URL`, zapasowo service-role. Wiersze buduje
+`src/lib/ops/dashboard.ts`: wartość, próg i stan słowem (`OK` / ostrzeżenie /
+alarm / brak danych). Stan wynika WYŁĄCZNIE z list `alerts`/`warnings` czujek —
+panel nie liczy progów drugi raz, więc alarm w panelu = alarm w monitoringu.
+Brak sekcji w metrykach (baza sprzed migracji) = „brak danych”, nigdy „OK”.
+Wiersze: najstarszy e-mail w kolejkach domenowej i auth (z liczbą gotowych),
+porzucone dzierżawy, nieudane wysyłki, zawieszone/nieudane webhooki, czas od
+ostatniego przebiegu maintenance i jego zaległości, kolejka usuwania storage
+(wiek, dead-letter), poczta (odbicia, skargi, blokady), budżet AI (doba, miesiąc,
+nierozliczone rezerwacje), połączenia bazy i pula procesu, wiek kopii. Strona
+nie pokazuje adresów, treści, identyfikatorów ani konfiguracji. Bez bazy (tryb
+demo) — przykładowy stan oznaczony na stronie. Testy:
+`tests/unit/admin-ops-dashboard.test.ts` (mapowanie, każdy sygnał ma wiersz —
+z kontrolą ujemną, nie-admin → 404 przed odczytem), E2E
+`tests/e2e/admin-operations.spec.ts` i `admin-a11y.spec.ts`.
 
 Źródło metryk ustala `src/lib/ops/metrics-source.ts`. Pierwszeństwo ma
 `DATABASE_OPS_URL` (PostgreSQL Railway, osobny login, jedna sesja na proces),

@@ -909,6 +909,12 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: {},
     note: 'Identyfikatory zdarzeń webhooków do deduplikacji — bez danych osobowych.',
   },
+  'public.ops_job_runs': {
+    activities: ['security-audit'],
+    subjects: [],
+    columns: {},
+    note: 'Ostatni przebieg zadań utrzymaniowych (0213, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych.',
+  },
 
   // --- Statystyki ofert (bez danych osobowych z założenia #99) --------------------------------
   'public.job_funnel_daily': {
