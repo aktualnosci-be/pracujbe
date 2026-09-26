@@ -29,11 +29,11 @@ rankingu ani screeningu. Ewentualne użycie do oceny kandydatów wymaga osobnej 
 
 | Plik | Rola |
 |---|---|
-| `src/lib/cv-import/config.ts` | flaga, dostawca (`ANTHROPIC_API_KEY` albo atrapa poza produkcją), model |
+| `src/lib/cv-import/config.ts` | flaga, dostawca (`OPENAI_API_KEY` albo atrapa poza produkcją), model (`AI_CV_IMPORT_MODEL` → `AI_MODEL` → `gpt-6-luna`) |
 | `src/lib/cv-import/text.ts` | tekst z PDF (`unpdf` = pdf.js 5, bez `eval`, bez XFA i sieci, ≤ 10 stron, 10 s) i DOCX (własny odczyt ZIP, tylko `word/document.xml`, limit 4 MB po dekompresji). DOC i skany → komunikat „wypełnij ręcznie” |
 | `src/lib/cv-import/minimize.ts` | minimalizacja przed modelem (niżej) |
 | `src/lib/cv-import/proposals.ts` | schemat structured output i walidacja odpowiedzi |
-| `src/lib/cv-import/extract.ts` | wywołanie Claude (instrukcje w `system`, CV w `<cv>`, bez narzędzi) i atrapa `FixtureCvExtractor` |
+| `src/lib/cv-import/extract.ts` | wywołanie modelu OpenAI przez wspólnego klienta `src/lib/ai/openai.ts` (instrukcje w `instructions`, CV w `<cv>`, strict structured output, `store: false`, bez narzędzi) i atrapa `FixtureCvExtractor` |
 | `src/lib/cv-import/run.ts` | etapy „podgląd” i „propozycje” bez autoryzacji |
 | `src/lib/actions/cv-import.ts` | akcje: konto kandydata, limity, zapis zatwierdzonych |
 | `src/components/candidate/CvImportPanel.tsx` | UI (styl panelu kandydata, `panel-styles.ts`) |
@@ -99,10 +99,10 @@ Numer migracji jest tymczasowy — koordynator może go zmienić przy scalaniu.
 | Plik | 5 MB, PDF/DOCX po sygnaturze; ≤ 10 stron PDF; tekst ≤ 30 000 znaków |
 | Parsowanie lokalne | 20 / godz. na konto |
 | Wywołania modelu | 5 / godz. i 10 / dobę na konto (bez IP), fail-closed |
-| API | timeout 60 s, 1 ponowienie, `max_tokens` 6000, effort `low` |
+| API | timeout 60 s, 1 ponowienie, `max_output_tokens` 6000, `reasoning.effort` `low` |
 
-Szacunek na wywołanie (Opus 5, ceny z `docs/AI_JOB_IMPORT.md`): ~3–9 tys. tokenów wejścia,
-~1–3 tys. wyjścia → ok. 0,04–0,12 USD. Globalny budżet — #36.
+Szacunek na wywołanie (GPT-6 Luna, ceny z `docs/AI_JOB_IMPORT.md`): ~3–9 tys. tokenów wejścia,
+~1–3 tys. wyjścia (z rozumowaniem) → ok. 0,001–0,003 USD. Globalny budżet — #36.
 
 ## Telemetria
 
