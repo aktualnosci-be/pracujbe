@@ -226,9 +226,13 @@ async function measure(browser, path, withConsent) {
 // Zapis oferty w CI nie ma sesji kandydata (build bez bazy: przycisk „niedostępne”, wyłączony).
 // Odpowiedź akcji odczytu stanu (`getPublicSavedJobs`) podmieniamy na „kandydat bez zapisanych”
 // — mierzymy tylko tapnięcie: optymistyczne przełączenie i render kart, nie zapis w bazie.
-// Brak podmiany = błąd pomiaru, nie cichy zielony wynik.
+// Odpowiedź akcji zapisu (`toggleSavedJob(id, desired)`) podmieniamy na sukces z `saved =
+// desired`: oferty demo mają identyfikatory spoza UUID, więc akcja zawsze zwraca
+// VALIDATION_FAILED, a wyspa cofa optymistyczny stan — `aria-pressed="true"` trwało wtedy tylko
+// do odpowiedzi i sonda łapała je albo nie (niestabilny krok). Brak podmiany = błąd pomiaru,
+// nie cichy zielony wynik.
 async function fakeCandidateViewer(context) {
-  const state = { rewrites: 0 };
+  const state = { rewrites: 0, toggles: 0, toggleRewrites: 0 };
   await context.route(
     (url) => url.origin === new URL(base).origin,
     async (route) => {
@@ -244,15 +248,40 @@ async function fakeCandidateViewer(context) {
         // Kontekst zamknięty po pomiarze (akcja zapisu jeszcze w drodze) — nic do podmiany.
         return route.abort().catch(() => {});
       }
-      const rewritten = body.replace(
+      let rewritten = body.replace(
         '{"status":"unavailable"}',
         '{"status":"candidate","savedIds":[]}',
       );
       if (rewritten !== body) state.rewrites += 1;
+      const desired = toggleDesired(request.postData());
+      if (desired !== null) {
+        state.toggles += 1;
+        const before = rewritten;
+        rewritten = rewritten.replace(
+          /\{"ok":false,"error":"[A-Z_]+"\}/,
+          JSON.stringify({ ok: true, saved: desired }),
+        );
+        if (rewritten !== before) state.toggleRewrites += 1;
+      }
       return route.fulfill({ response, body: rewritten }).catch(() => {});
     },
   );
   return state;
+}
+
+// Argumenty `toggleSavedJob` w ciele akcji: `["<id>", true|false]`; inaczej `null`.
+function toggleDesired(postData) {
+  try {
+    const args = JSON.parse(postData ?? "");
+    return Array.isArray(args) &&
+      args.length === 2 &&
+      typeof args[0] === "string" &&
+      typeof args[1] === "boolean"
+      ? args[1]
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 async function measureInteraction(browser, scenario) {
@@ -321,6 +350,35 @@ async function measureInteraction(browser, scenario) {
       )
         break;
       await sleep(100);
+    }
+    // Stan po interakcji ma trwać: zapis oferty nie może zostać cofnięty po odpowiedzi akcji
+    // (`toggleSavedJob`; przycisk jest wyłączony, dopóki akcja trwa) — inaczej wynik zależałby
+    // od tego, czy sonda zdążyła przed cofnięciem.
+    if (scenario.fakeCandidate) {
+      const settleBy = Date.now() + 10_000;
+      while ((await trigger.isDisabled()) && Date.now() < settleBy) await sleep(50);
+      if (await trigger.isDisabled())
+        throw new Error(`${scenario.name}: akcja zapisu nie zakończyła się w 10 s`);
+      if ((await trigger.getAttribute("aria-pressed")) !== "true")
+        throw new Error(
+          `${scenario.name}: zapis cofnięty po odpowiedzi akcji na ${scenario.path}`,
+        );
+    }
+    // Stan po interakcji ma trwać: zapis nie może zostać cofnięty po odpowiedzi akcji
+    // (przycisk jest wyłączony, dopóki akcja trwa).
+    if (scenario.fakeCandidate) {
+      const settleBy = Date.now() + 10_000;
+      while ((await trigger.isDisabled()) && Date.now() < settleBy) await sleep(50);
+      if (fake.toggles === 0 || (await trigger.isDisabled()))
+        throw new Error(`${scenario.name}: akcja zapisu nie zakończyła się w 10 s`);
+      if (fake.toggleRewrites !== fake.toggles)
+        throw new Error(
+          `${scenario.name}: odpowiedź toggleSavedJob nie została podmieniona`,
+        );
+      if ((await trigger.getAttribute("aria-pressed")) !== "true")
+        throw new Error(
+          `${scenario.name}: zapis cofnięty po odpowiedzi akcji na ${scenario.path}`,
+        );
     }
     if (process.env.PERF_LAB_DEBUG)
       console.log(scenario.name, JSON.stringify(entries));
