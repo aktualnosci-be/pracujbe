@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { expect, test, type APIResponse } from "@playwright/test";
 
-import { E2E_GA_MEASUREMENT_ID, E2E_META_PIXEL_ID } from "./fixtures/trackers";
+import { E2E_CF_ANALYTICS_TOKEN } from "./fixtures/trackers";
 
 /**
  * Regresja #298: strony publiczne bez danych per użytkownik są statyczne/ISR — dostają
@@ -98,11 +98,10 @@ test("HTML z cache nie zależy od cookies sesji ani zgód i nie zawiera tracker�
     expect(withCookies.headers()["x-nextjs-cache"]).toBe("HIT");
     const html = await withCookies.text();
     expect(html).toBe(await anonymous.text());
-    // Invariant #7: nawet przy zapisanej zgodzie serwer nie wstawia skryptów GA/Meta.
-    expect(html).not.toContain("googletagmanager.com");
-    expect(html).not.toContain("connect.facebook.net");
-    expect(html).not.toContain(E2E_META_PIXEL_ID);
-    expect(html).not.toMatch(new RegExp(`<script[^>]*${E2E_GA_MEASUREMENT_ID}`));
+    // Invariant #7: nawet przy zapisanej zgodzie serwer nie wstawia beaconu Cloudflare Web
+    // Analytics (renderowany wyłącznie po stronie klienta, po odczycie zgody).
+    expect(html).not.toContain("cloudflareinsights.com");
+    expect(html).not.toContain(E2E_CF_ANALYTICS_TOKEN);
   }
 });
 

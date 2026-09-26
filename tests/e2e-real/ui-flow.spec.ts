@@ -200,7 +200,8 @@ test('onboarding kandydata w kreatorze: 6 kroków, walidacja pola, „Terminer�
   // Krok 6: dostępność, rodzaj umowy, zgoda → „Terminer et publier”.
   await chooseOption(page, page.locator('#onb-availability-trigger'), t('availImmediate'));
   await page.getByRole('button', { name: msg('fr', 'contractTypes.permanent'), exact: true }).click();
-  await page.getByRole('checkbox', { name: richLabel(t('agreeTermsLinks')) }).check();
+  await page.getByRole('checkbox', { name: richLabel(t('termsAcceptLinks')) }).check();
+  await page.getByRole('checkbox', { name: richLabel(t('privacyNoticeAckLinks')) }).check();
   await page.getByRole('button', { name: t('finish'), exact: true }).click();
   await page.waitForURL(/\/fr\/candidate$/);
 
@@ -240,7 +241,8 @@ test('aplikowanie przez ApplyModal: podwójne kliknięcie = jedno zgłoszenie (I
     await chooseOption(page, dialog.getByRole('combobox', { name: t('dialCode') }), 'BE +32');
     await dialog.locator('#apply-phone').fill('470123456');
     await dialog.getByLabel(t('message'), { exact: true }).fill('Bonjour, je conduis un chariot élévateur depuis 5 ans.');
-    await dialog.getByRole('checkbox', { name: t('consent') }).check();
+    // #493: potwierdzenie informacji o prywatności (nie „zgoda”).
+    await dialog.getByRole('checkbox', { name: richLabel(t('privacyNoticeAck')) }).check();
     return dialog;
   };
   const dialog = await openAndFill();

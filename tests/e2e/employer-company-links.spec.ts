@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 /**
  * Strona WWW i logo firmy (#112) — panel pracodawcy w trybie demo (bez bazy). Realny zapis,
  * autoryzację owner/admin, CHECK https i brak wpływu na weryfikację dowodzi
- * `supabase/tests/rls.sql` (sekcja CL162); tu: formularz, walidacja pól, fokus, a11y.
+ * `supabase/tests/rls.sql` (sekcja CL141); tu: formularz, walidacja pól, fokus, a11y.
  */
 
 const pl = JSON.parse(

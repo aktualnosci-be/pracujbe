@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { z } from 'zod/v3';
 
 import { registerCandidateSchema, registerEmployerSchema } from '../../src/lib/validation/auth';
 
@@ -11,7 +12,8 @@ import { registerCandidateSchema, registerEmployerSchema } from '../../src/lib/v
 const options = { fields: {}, shouldUseNativeValidation: false, criteriaMode: 'firstError' as const };
 
 async function fieldMessages(
-  schema: typeof registerCandidateSchema | typeof registerEmployerSchema,
+  // Oba schematy mają różne pola (#492: deklaracja wieku tylko u kandydata) — jak w AuthForm.
+  schema: z.ZodTypeAny,
   values: Record<string, unknown>,
 ): Promise<Record<string, string | undefined>> {
   // Wartości celowo nie spełniają typu wyjściowego schematu (puste pola, zgoda false).
@@ -29,6 +31,9 @@ const emptyForm = {
   passwordConfirm: '',
   agreeTerms: false,
   privacyNoticeAck: false,
+  // #492: formularz kandydata startuje z niezaznaczoną deklaracją i progiem z serwera.
+  ageConfirmed: false,
+  minAge: 18,
 };
 
 describe('pusty formularz rejestracji', () => {
@@ -41,6 +46,7 @@ describe('pusty formularz rejestracji', () => {
       passwordConfirm: 'auth.error.passwordConfirmRequired',
       agreeTerms: 'auth.error.termsRequired',
       privacyNoticeAck: 'auth.error.privacyNoticeRequired',
+      ageConfirmed: 'auth.error.ageConfirmRequired',
     });
   });
 
@@ -71,6 +77,8 @@ describe('niezgodność haseł w tej samej rundzie co inne błędy', () => {
     password: 'abcdefgh1',
     passwordConfirm: 'x',
     agreeTerms: false,
+    ageConfirmed: false,
+    minAge: 18,
   };
 
   it.each([
@@ -81,6 +89,8 @@ describe('niezgodność haseł w tej samej rundzie co inne błędy', () => {
     expect(messages.email).toBe('auth.error.emailInvalid');
     expect(messages.agreeTerms).toBe('auth.error.termsRequired');
     expect(messages.passwordConfirm).toBe('auth.error.passwordMismatch');
+    // #492: deklaracja wieku tylko w formularzu kandydata, w tej samej rundzie błędów.
+    expect(messages.ageConfirmed).toBe(schema === registerCandidateSchema ? 'auth.error.ageConfirmRequired' : undefined);
   });
 
   it('poprawny formularz przechodzi i zachowuje zgodę jako true', async () => {
@@ -91,6 +101,7 @@ describe('niezgodność haseł w tej samej rundzie co inne błędy', () => {
       passwordConfirm: 'abcdefgh1',
       agreeTerms: true,
       privacyNoticeAck: true,
+      ageConfirmed: true,
     });
     expect(result.success).toBe(true);
     expect(result.success && result.data.agreeTerms).toBe(true);

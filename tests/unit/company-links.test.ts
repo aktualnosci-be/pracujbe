@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isPublicHttpsUrl, sameOriginHost } from '@/lib/company-links';
 
 /**
- * Lustro reguły `public.public_https_url` (0114/0162) — ta sama reguła musi obowiązywać
+ * Lustro reguły `public.public_https_url` (0114/0141) — ta sama reguła musi obowiązywać
  * w formularzu (Zod) i w bazie (CHECK), inaczej formularz przepuści to, co baza odrzuci
  * (albo odwrotnie, dając mylący błąd zapisu po przejściu walidacji klienta).
  */

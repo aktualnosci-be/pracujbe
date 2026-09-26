@@ -12,7 +12,7 @@ import { COMPANY_URL_MAX_LENGTH, isPublicHttpsUrl } from '@/lib/company-links';
  * Strona WWW i logo (`companyLinksSchema`, #112) — osobny, mniejszy formularz w tym samym
  * panelu: adres bezwzględny https, ta sama reguła co w bazie (`isPublicHttpsUrl`, lustro
  * `public_https_url`); zmiana tych pól NIE cofa weryfikacji firmy (w przeciwieństwie do
- * nazwy/VAT — patrz `protect_company_verification`, 0072/0162).
+ * nazwy/VAT — patrz `protect_company_verification`, 0072/0141).
  *
  * Komunikaty błędów to klucze i18n (namespace `company.error.*`) — tłumaczone w formularzu.
  */

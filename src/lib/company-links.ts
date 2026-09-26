@@ -1,6 +1,6 @@
 /**
  * Adres publiczny firmy (strona WWW / logo) — lustro reguły SQL `public.public_https_url`
- * (migracja `0114_public_job_company_links.sql`, twardy CHECK w `0162_company_links_edit.sql`).
+ * (migracja `0114_public_job_company_links.sql`, twardy CHECK w `0141_company_links_edit.sql`).
  *
  * Reguła: bezwzględny `https://`, nazwa hosta z co najmniej jedną kropką, bez spacji/cudzysłowów/
  * nawiasów kątowych, najwyżej 2048 znaków po przycięciu białych znaków. Pusty tekst = brak

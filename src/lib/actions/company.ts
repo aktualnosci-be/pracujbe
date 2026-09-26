@@ -371,7 +371,7 @@ export async function updateCompany(
  * to gwarantuje (`protect_company_verification` reaguje tylko na `name`/`vat_number`, 0072),
  * tu więc bez odczytu/porównania statusu przed i po. Ta sama ścieżka zapisu co `updateCompany`
  * (UPDATE pod RLS `companies_update_member`: tylko owner/admin, 0040); baza waliduje adres
- * drugi raz (CHECK `public_https_url`, 0162) i audytuje zmianę (`company.links_changed`).
+ * drugi raz (CHECK `public_https_url`, 0141) i audytuje zmianę (`company.links_changed`).
  */
 export async function updateCompanyLinks(
   input: CompanyLinksUpdateInput,
@@ -411,7 +411,7 @@ export async function updateCompanyLinks(
       }
 
       // RLS `companies_update_member` (owner/admin) + CHECK `companies_website_https`/
-      // `companies_logo_url_https` (0162) — status/weryfikacja bez zmian (trigger nie reaguje).
+      // `companies_logo_url_https` (0141) — status/weryfikacja bez zmian (trigger nie reaguje).
       const { rows } = await execute(tx, 'company.update-links',
         `UPDATE public.companies
             SET website  = CASE WHEN $2 THEN $3 ELSE website  END,

@@ -231,7 +231,9 @@ export default async function JobsListPage({
   };
   // Strona spoza zakresu (np. ?page=999) przy niepustym wyniku → ostatnia istniejąca strona
   // z tymi samymi filtrami (#228). Pusty wynik zostaje pod adresem (stan pusty jest spójny).
-  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // #593: `maxPage` jest ostatnią OSIĄGALNĄ stroną — nigdy więcej niż ceil(total/PAGE_SIZE),
+  // więc redirect nigdy nie prowadzi na stronę, która zduplikowałaby poprzednią.
+  const lastPage = results.maxPage;
   if (total > 0 && page > lastPage) {
     redirect({
       href: hrefFrom(
@@ -597,6 +599,7 @@ export default async function JobsListPage({
             total={total}
             pageSize={PAGE_SIZE}
             filters={activeParams}
+            maxPage={results.maxPage}
           />
         </div>
       </div>

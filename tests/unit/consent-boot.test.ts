@@ -21,7 +21,7 @@ function runBoot(): string | null {
 
 const valid = {
   v: CONSENT_POLICY_VERSION,
-  categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+  categories: { necessary: true, preferences: false, analytics: false },
   ts: '2026-01-01T00:00:00.000Z',
   id: 'boot-test',
 };

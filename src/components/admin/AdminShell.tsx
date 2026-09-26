@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Building2, Coins, Flag, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Building2, Coins, Flag, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -35,6 +35,7 @@ const HREF = {
   breaches: '/admin/naruszenia',
   contact: '/admin/kontakt',
   aiCosts: '/admin/koszty-ai',
+  settings: '/admin/ustawienia',
 } as const;
 
 /** Inicjały z nazwy (maks. 2 znaki). */
@@ -66,6 +67,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.campaigns, label: t('navCampaigns'), icon: <Megaphone /> },
     { href: HREF.breaches, label: t('navBreaches'), icon: <ShieldAlert /> },
     { href: HREF.aiCosts, label: t('navAiCosts'), icon: <Coins /> },
+    { href: HREF.settings, label: t('navSettings'), icon: <Settings /> },
     { href: HREF.audit, label: t('navAudit'), icon: <History /> },
   ];
 

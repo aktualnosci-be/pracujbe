@@ -29,7 +29,7 @@ vi.mock('@/lib/env', async (importOriginal) => ({
 const SITE = 'https://pracuj.be';
 
 function row(id: string, template: EmailType, locale: string, payload: Record<string, unknown>) {
-  return { id, profile_id: null, to_email: `${id}@example.test`, template, locale, payload, attempts: 0 };
+  return { id, profile_id: null, to_email: `${id}@example.test`, template, locale, payload, attempts: 0, lock_token: `lock-${id}` };
 }
 
 
@@ -102,7 +102,7 @@ describe('processEmailQueue — język odbiorcy z email_deliveries.locale', () =
     mockClaim({ data: [row('d1', 'jobOffer', 'nl', { companyName: 'Acme', jobTitle: 'X' })] });
     await processEmailQueue();
     const [mark] = fakeDb.callsTo('email.outbox.mark-sent');
-    expect(mark).toMatchObject({ as: 'service', values: ['d1', 'provider-1', 1, 'resend'] });
+    expect(mark).toMatchObject({ as: 'service', values: ['d1', 'provider-1', 1, 'resend', 'lock-d1'] });
     // Claim → (wysyłka HTTP) → zapis wyniku: claim to osobna transakcja przed wysyłką.
     expect(fakeDb.calls.map((c) => c.name)).toEqual(['claim_email_batch', 'email_delivery_send_check', 'take_email_send_budget', 'email.outbox.mark-sent']);
   });

@@ -57,6 +57,8 @@ export const EMAIL_TYPES = [
   'appealUpheld',
   'appealReversed',
   'breachNotice',
+  'inactiveCvWarning',
+  'inactiveAccountWarning',
 ] as const;
 
 export type EmailType = (typeof EMAIL_TYPES)[number];
@@ -101,6 +103,17 @@ export const jobMatchAlertOffLabel: Record<Locale, string> = {
   nl: 'Alleen deze melding uitzetten',
   fr: 'Désactiver uniquement cette alerte',
   en: 'Turn off only this alert',
+};
+
+/**
+ * #503: e-mail `newMessage` mówi tylko, ILE plików dołączono (bez nazw) — pliki odbiorca
+ * otwiera w wątku po zalogowaniu. Forma „Załączniki: N” omija odmianę liczebnika.
+ */
+export const newMessageAttachmentsLabel: Record<Locale, string> = {
+  pl: 'Załączniki w wiadomości: {count}. Pliki otworzysz w panelu.',
+  nl: 'Bijlagen bij het bericht: {count}. Je opent de bestanden in je dashboard.',
+  fr: 'Pièces jointes au message : {count}. Vous pouvez les ouvrir depuis votre tableau de bord.',
+  en: 'Attachments in this message: {count}. Open them in your dashboard.',
 };
 
 export const greetings: Record<Locale, string> = {
@@ -1240,6 +1253,78 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       cta: 'Link application to my account',
       highlight: '{jobTitle}',
       outro: 'The link is valid for 30 days and works for one account with this email address.',
+    },
+  },
+
+  // #574: ostrzeżenie przed usunięciem z powodu braku aktywności (retention_purge_batch, 0127).
+  // Treść do akceptacji właściciela przed włączeniem harmonogramu (RETENTION_MODE).
+  inactiveCvWarning: {
+    pl: {
+      subject: 'Twoje CV w Pracuj.be zostanie usunięte {deletionDate}',
+      preview: 'Zaloguj się przed tą datą, jeśli chcesz zachować plik CV.',
+      heading: 'Twoje CV zostanie usunięte',
+      body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Plik CV dodany do profilu zostanie usunięty {deletionDate}.\n\nJeśli chcesz go zachować, zaloguj się przed tą datą. Konto i pozostałe dane profilu zostają bez zmian.',
+      cta: 'Zaloguj się',
+      highlight: '{deletionDate}',
+    },
+    nl: {
+      subject: 'Je cv op Pracuj.be wordt verwijderd op {deletionDate}',
+      preview: 'Log vóór die datum in als je je cv wilt behouden.',
+      heading: 'Je cv wordt verwijderd',
+      body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het cv-bestand in je profiel wordt verwijderd op {deletionDate}.\n\nWil je het behouden, log dan vóór die datum in. Je account en de overige profielgegevens blijven ongewijzigd.',
+      cta: 'Inloggen',
+      highlight: '{deletionDate}',
+    },
+    fr: {
+      subject: 'Votre CV sur Pracuj.be sera supprimé le {deletionDate}',
+      preview: 'Connectez-vous avant cette date si vous souhaitez conserver votre CV.',
+      heading: 'Votre CV sera supprimé',
+      body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le fichier CV ajouté à votre profil sera supprimé le {deletionDate}.\n\nPour le conserver, connectez-vous avant cette date. Votre compte et les autres données du profil restent inchangés.',
+      cta: 'Se connecter',
+      highlight: '{deletionDate}',
+    },
+    en: {
+      subject: 'Your CV on Pracuj.be will be deleted on {deletionDate}',
+      preview: 'Sign in before that date if you want to keep your CV.',
+      heading: 'Your CV will be deleted',
+      body: 'There has been no activity on your Pracuj.be account for a long time. The CV file added to your profile will be deleted on {deletionDate}.\n\nTo keep it, sign in before that date. Your account and the rest of your profile stay unchanged.',
+      cta: 'Sign in',
+      highlight: '{deletionDate}',
+    },
+  },
+
+  inactiveAccountWarning: {
+    pl: {
+      subject: 'Twoje konto w Pracuj.be zostanie usunięte {deletionDate}',
+      preview: 'Zaloguj się przed tą datą, jeśli chcesz zachować konto.',
+      heading: 'Twoje konto zostanie usunięte',
+      body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z profilem, zgłoszeniami, propozycjami i wiadomościami.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
+      cta: 'Zaloguj się',
+      highlight: '{deletionDate}',
+    },
+    nl: {
+      subject: 'Je account op Pracuj.be wordt verwijderd op {deletionDate}',
+      preview: 'Log vóór die datum in als je je account wilt behouden.',
+      heading: 'Je account wordt verwijderd',
+      body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met je profiel, sollicitaties, voorstellen en berichten.\n\nWil je het behouden, log dan vóór die datum in.',
+      cta: 'Inloggen',
+      highlight: '{deletionDate}',
+    },
+    fr: {
+      subject: 'Votre compte Pracuj.be sera supprimé le {deletionDate}',
+      preview: 'Connectez-vous avant cette date si vous souhaitez conserver votre compte.',
+      heading: 'Votre compte sera supprimé',
+      body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec votre profil, vos candidatures, vos propositions et vos messages.\n\nPour le conserver, connectez-vous avant cette date.',
+      cta: 'Se connecter',
+      highlight: '{deletionDate}',
+    },
+    en: {
+      subject: 'Your Pracuj.be account will be deleted on {deletionDate}',
+      preview: 'Sign in before that date if you want to keep your account.',
+      heading: 'Your account will be deleted',
+      body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with your profile, applications, job offers and messages.\n\nTo keep it, sign in before that date.',
+      cta: 'Sign in',
+      highlight: '{deletionDate}',
     },
   },
 

@@ -29,9 +29,17 @@ import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { isAgeAttestationError } from '@/lib/age-policy/constants';
 import { roleFromProfileRead, type ProfileRole } from '@/lib/auth/profile-role';
 import { getAuthRuntime } from '@/lib/auth/runtime';
-import { withCandidateSignup, withEmployerSignup, withInvitedEmployerSignup } from '@/lib/auth/signup-context';
+import {
+  signupEvidenceFrom,
+  withCandidateSignup,
+  withEmployerSignup,
+  withInvitedEmployerSignup,
+  type SignupEvidence,
+} from '@/lib/auth/signup-context';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { getDomainPool } from '@/lib/db/runtime';
 import { withUserTransaction } from '@/lib/db/transaction';
 import { env, isPortalAuthConfigured } from '@/lib/env';
@@ -270,6 +278,16 @@ async function rememberVerifyNext(next: string | null): Promise<void> {
   });
 }
 
+/** Komunikat błędu bazy (także opakowany przez SDK w `cause`) o braku ważnej deklaracji wieku. */
+function isAgeAttestationMessage(error: unknown): boolean {
+  for (let e: unknown = error, depth = 0; e && depth < 4; depth += 1) {
+    const message = (e as { message?: unknown }).message;
+    if (typeof message === 'string' && isAgeAttestationError(message)) return true;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 /**
  * Wspólna ścieżka rejestracji. Profil, preferowany język i receipty akceptacji regulaminu
  * i polityki prywatności zapisują triggery 0008/0059 w TEJ SAMEJ transakcji co konto; zlecenie
@@ -277,13 +295,23 @@ async function rememberVerifyNext(next: string | null): Promise<void> {
  * adres daje ten sam wynik co nowy (SDK zwraca neutralny sukces, bez zmiany istniejącego konta).
  */
 async function signUp(
-  run: (action: (body: { email: string; password: string; name: string }) => Promise<unknown>) => Promise<unknown>,
+  run: (
+    action: (body: { email: string; password: string; name: string }) => Promise<unknown>,
+    evidence: SignupEvidence,
+  ) => Promise<unknown>,
 ): Promise<void> {
   const auth = await portalAuth();
   const requestHeaders = await headers();
+  // Dowód akceptacji w receipcie: adres tylko z zaufanego nagłówka proxy (nigdy X-Forwarded-For).
+  const evidence = signupEvidenceFrom(requestHeaders, trustedClientIp(requestHeaders));
   try {
-    await run((body) => auth.api.signUpEmail({ body, headers: requestHeaders }));
+    await run((body) => auth.api.signUpEmail({ body, headers: requestHeaders }), evidence);
   } catch (error) {
+    // #492: trigger 0059/0126 odrzuca deklarację wieku poniżej BIEŻĄCEGO progu (zmieniony po
+    // wyświetleniu formularza) — własny kod zamiast INTERNAL.
+    if (isAgeAttestationMessage(error)) {
+      throw new AppError('AGE_ATTESTATION_REQUIRED', { cause: error, context: { reason: 'signup_age_policy' } });
+    }
     throw mapAuthError(error);
   }
 }
@@ -312,7 +340,7 @@ export async function registerCandidate(
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
-    await signUp((action) => withCandidateSignup(parsed.data, locale, action));
+    await signUp((action, evidence) => withCandidateSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(safeNextPath(next));
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
@@ -341,7 +369,7 @@ export async function registerEmployer(
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
-    await signUp((action) => withEmployerSignup(parsed.data, locale, action));
+    await signUp((action, evidence) => withEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
@@ -380,7 +408,7 @@ export async function registerInvitedEmployer(
     if (invitation.status !== 'valid' || invitation.email.toLowerCase() !== email) {
       return { ok: false, error: 'AUTH_LINK_INVALID' };
     }
-    await signUp((action) => withInvitedEmployerSignup(parsed.data, locale, action));
+    await signUp((action, evidence) => withInvitedEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
     // Konto już powstało; nieudane zużycie (np. równoległe wysłanie) nie cofa rejestracji —
     // zaproszenie i tak przyjmuje tylko właściciel zweryfikowanego adresu.

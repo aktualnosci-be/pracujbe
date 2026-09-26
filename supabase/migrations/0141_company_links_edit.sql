@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0162_company_links_edit.sql — panel pracodawcy: edycja strony WWW i logo firmy.
+-- 0141_company_links_edit.sql — panel pracodawcy: edycja strony WWW i logo firmy.
 --
 -- `companies.website`/`logo_url` istniały od 0002, ale nie miały walidacji formatu ani
 -- ścieżki edycji w panelu (CLAUDE.md, „Otwarte: edycja strony i logo firmy w panelu
@@ -14,7 +14,7 @@
 -- Zapis idzie przez ISTNIEJĄCĄ ścieżkę edycji firmy (`updateCompany`/`companies_update_member`,
 -- 0040: tylko owner/admin firmy, RLS). W przeciwieństwie do nazwy/VAT zmiana website/logo_url
 -- NIE cofa weryfikacji — `protect_company_verification` (0072) reaguje wyłącznie na `name`/
--- `vat_number`, tu bez zmian (dowód: `rls.sql` sekcja CL162).
+-- `vat_number`, tu bez zmian (dowód: `rls.sql` sekcja CL141).
 --
 -- Rollback:
 --   alter table public.companies drop constraint if exists companies_website_https;

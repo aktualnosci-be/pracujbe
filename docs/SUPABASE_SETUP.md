@@ -1,6 +1,6 @@
 # Supabase — konfiguracja (ARCHIWALNE)
 
-> **Nieaktualne od #27.** Aplikacja nie korzysta z Supabase: konta i sesje — Better Auth na PostgreSQL
+> **ARCHIWALNE — stan sprzed migracji na Railway (#27).** Aplikacja nie korzysta z Supabase: konta i sesje — Better Auth na PostgreSQL
 > Railway (#24), dane — `src/lib/db/*` (#25), pliki — bucket Railway (#26). Dokument zostaje jako zapis
 > historyczny; bieżąca konfiguracja: `docs/railway/README.md`, `docs/railway/STATUS.md`.
 

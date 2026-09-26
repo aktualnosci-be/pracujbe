@@ -586,8 +586,8 @@ async function main() {
   const context = await browser.newContext({ deviceScaleFactor: 1, locale: "pl-PL" });
   // Zgoda „tylko niezbędne” zapisana z góry — baner nie zasłania zrzutów aplikacji.
   const consent = {
-    v: "1.0",
-    categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+    v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? "2.0",
+    categories: { necessary: true, preferences: false, analytics: false },
     ts: new Date().toISOString(),
     id: "00000000-0000-4000-8000-000000000000",
   };
