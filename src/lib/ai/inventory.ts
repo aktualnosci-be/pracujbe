@@ -86,14 +86,14 @@ export const AI_FEATURES: readonly AiFeature[] = [
   },
   {
     id: 'content_translation',
-    issues: ['#31', '#32', '#514'],
+    issues: ['#31', '#32', '#33', '#514'],
     status: 'behind_flag',
     callSites: ['src/lib/ai/openai.ts', 'src/lib/translation/openai-provider.ts'],
     enableFlag: 'AI_TRANSLATION_ENABLED',
     provider: 'openai',
     inputs: ['job_offer_text', 'candidate_profile_text'],
     output:
-      'Tłumaczenie pól tekstowych na inne języki portalu; przed zapisem walidacja faktów (liczby, kwoty, certyfikaty).',
+      'Tłumaczenie pól tekstowych na inne języki portalu; przed zapisem walidacja faktów (liczby, kwoty, certyfikaty). Oferty (#33): kolejkę zasilają odroczone triggery po każdej zatwierdzonej zmianie treści publicznej oferty (migracja job_translation_sync), worker `/api/translation/process` (src/lib/translation/run.ts) zapisuje wynik do translation_documents; widok publiczny przekładów = osobny krok (UI/SEO).',
     humanInTheLoop: false,
     humanStep:
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
