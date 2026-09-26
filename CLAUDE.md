@@ -1951,6 +1951,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   wdrożenia, tag `v1.0.0`, `CHANGELOG.md`) w `docs/RELEASE_1_0.md`. Build zostaje `0.YYYYMMDD.M+SHA`
   do jawnego `PRACUJBE_RELEASE_VERSION=1.0.0` (→ `1.0.0+SHA`); inna wartość przerywa build
   (`scripts/build-version.mjs`, `build-version.test.ts`).
+  Strażnik zmiennych środowiska (`tests/unit/production-config-checklist.test.ts`): każda
+  zmienna czytana w `src/`, `scripts/` (`.ts/.tsx/.mjs/.py`: `process.env.X`, `env.X`/`source.X`,
+  destrukturyzacja, `helper(env, 'X')`, literały przy dynamicznym `env[name]`) i `next.config.mjs`
+  musi mieć wpis z komentarzem w `.env.example` i w `docs/railway/KONFIGURACJA_PRODUKCJI.md`
+  (skrypty operatora i usługi pomocnicze = sekcja 2E, zakomentowane w przykładzie); zmienne
+  platformy/testów/CI (`E2E_PG*`, `VIES_LIVE_SMOKE`, `GITHUB_*`…) na allow-liście z uzasadnieniem;
+  kontrola ujemna: zmienna tylko w kodzie = czerwony. Skrypty `*.sh` nie są skanowane.
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 
 ---
