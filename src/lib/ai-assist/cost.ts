@@ -1,9 +1,8 @@
-import { ASSIST_SYSTEM_PROMPT } from '@/lib/ai-assist/assist';
+import { ASSIST_SYSTEM_PROMPT, JOB_ASSIST_MAX_TOKENS } from '@/lib/ai-assist/assist';
 import { ASSIST_JSON_SCHEMA, type AssistRequest } from '@/lib/ai-assist/schema';
 import { estimateMicroUsd, textTokenUpperBound } from '@/lib/ai/pricing';
 
-/** Limit tokenów odpowiedzi asystenta — jak `max_tokens` w `AnthropicJobAssistor`. */
-export const JOB_ASSIST_MAX_TOKENS = 6000;
+export { JOB_ASSIST_MAX_TOKENS };
 
 const PROMPT_OVERHEAD_TOKENS =
   textTokenUpperBound(ASSIST_SYSTEM_PROMPT) + textTokenUpperBound(JSON.stringify(ASSIST_JSON_SCHEMA)) + 500;

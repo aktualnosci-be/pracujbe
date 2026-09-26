@@ -1,16 +1,36 @@
 import { NextResponse } from 'next/server';
 
+import { dsaCsvStream } from '@/lib/admin/dsa-csv-stream';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
-import { getStatementsExport, getTransparencyReport, toCsv } from '@/lib/data/admin-dsa';
+import {
+  csvHeader,
+  csvRows,
+  decodeDsaExportCursor,
+  DSA_EXPORT_PAGE_SIZE,
+  getStatementsExport,
+  getTransparencyReport,
+} from '@/lib/data/admin-dsa';
 
 /**
  * Eksport danych do raportu przejrzystości DSA (#43) — tylko administrator (`requireAdmin`
  * w warstwie danych; inna sesja → 404, bez ujawniania trasy).
  *
  *   - `format=csv` — wiersz na decyzję (`dsa_statements_export`), bez danych osobowych i faktów;
- *   - `format=json` — agregaty (`dsa_transparency_report`) + te same wiersze.
+ *   - `format=json` — agregaty (`dsa_transparency_report`) + JEDNA strona tych samych wierszy.
  *
- * Okres: `od`/`do` (`YYYY-MM-DD`, Europe/Brussels, `do` włącznie). Odpowiedź bez cache.
+ * Okres: `od`/`do` (`YYYY-MM-DD`, Europe/Brussels, `do` włącznie), do 5 lat (`parseDsaReportRange`).
+ *
+ * Stronicowanie (#606): zapytanie do bazy (`dsa_statements_export`) i budowanie odpowiedzi
+ * idą po `DSA_EXPORT_PAGE_SIZE` wierszy naraz zamiast materializować cały zakres w jednym
+ * zapytaniu i jednej odpowiedzi w pamięci procesu.
+ *   - CSV: odpowiedź jest STRUMIENIOWANA — kolejne strony dociągane i wysyłane w miarę
+ *     generowania pliku, do `DSA_EXPORT_MAX_PAGES` stron (bezpiecznik przed nieskończoną pętlą
+ *     przy uszkodzonym kursorze/danych); po jego osiągnięciu przy niepustym kursorze strumień
+ *     kończy się błędem — obcięty plik nie udaje kompletnego (`dsaCsvStream`).
+ *   - JSON: odpowiedź niesie JEDNĄ stronę + `nextCursor` — wywołujący dociąga kolejne strony
+ *     parametrem `cursor` (opaque token z poprzedniej odpowiedzi), zamiast całego zakresu naraz.
+ *     Zniekształcony `cursor` → 400 `invalid_cursor` (nie cicho pierwsza strona — wywołujący
+ *     iterujący po `nextCursor` nie zapętli się na tych samych wierszach).
  */
 
 export const dynamic = 'force-dynamic';
@@ -18,33 +38,58 @@ export const runtime = 'nodejs';
 
 const HEADERS = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex' } as const;
 
+/** Bezpiecznik CSV: `DSA_EXPORT_MAX_PAGES * DSA_EXPORT_PAGE_SIZE` = najwyżej pół miliona wierszy. */
+const DSA_EXPORT_MAX_PAGES = 250;
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const range = parseDsaReportRange(url.searchParams.get('od'), url.searchParams.get('do'));
   if (!range.ok) return NextResponse.json({ error: 'invalid_range' }, { status: 400, headers: HEADERS });
   const format = url.searchParams.get('format') === 'json' ? 'json' : 'csv';
   const name = `dsa-${range.fromYmd}_${range.toYmd}`;
-
-  const rows = await getStatementsExport(range.from, range.to);
-  if (rows.status === 'error') return NextResponse.json({ error: 'unavailable' }, { status: 503, headers: HEADERS });
-
-  if (format === 'csv') {
-    return new Response(toCsv(rows.rows), {
-      headers: {
-        ...HEADERS,
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${name}.csv"`,
-      },
-    });
+  const cursorParam = url.searchParams.get('cursor');
+  if (format === 'json' && cursorParam !== null && !decodeDsaExportCursor(cursorParam)) {
+    return NextResponse.json({ error: 'invalid_cursor' }, { status: 400, headers: HEADERS });
   }
 
-  const report = await getTransparencyReport(range.from, range.to);
-  if (report.status === 'error') return NextResponse.json({ error: 'unavailable' }, { status: 503, headers: HEADERS });
-  return new Response(JSON.stringify({ report: report.report, statements: rows.rows }, null, 2), {
+  // Pierwsza strona jest pobrana PRZED utworzeniem strumienia — dopiero po niej wiadomo, czy
+  // sesja ma dostęp (`requireAdmin` w warstwie danych) i czy zakres jest w ogóle dostępny;
+  // błąd zgłoszony wewnątrz `ReadableStream` nie mógłby już zmienić nagłówków odpowiedzi.
+  const first = await getStatementsExport(range.from, range.to, format === 'json' ? cursorParam : null);
+  if (first.status === 'error') return NextResponse.json({ error: 'unavailable' }, { status: 503, headers: HEADERS });
+
+  if (format === 'json') {
+    const report = await getTransparencyReport(range.from, range.to);
+    if (report.status === 'error') return NextResponse.json({ error: 'unavailable' }, { status: 503, headers: HEADERS });
+    return new Response(
+      JSON.stringify(
+        { report: report.report, statements: first.rows, nextCursor: first.nextCursor, pageSize: DSA_EXPORT_PAGE_SIZE },
+        null,
+        2,
+      ),
+      {
+        headers: {
+          ...HEADERS,
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${name}.json"`,
+        },
+      },
+    );
+  }
+
+  const stream = dsaCsvStream({
+    header: csvHeader(),
+    first,
+    toCsv: csvRows,
+    fetchPage: (cursor) => getStatementsExport(range.from, range.to, cursor),
+    maxPages: DSA_EXPORT_MAX_PAGES,
+  });
+
+  return new Response(stream, {
     headers: {
       ...HEADERS,
-      'Content-Type': 'application/json; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${name}.json"`,
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${name}.csv"`,
     },
   });
 }

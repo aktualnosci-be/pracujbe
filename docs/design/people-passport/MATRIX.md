@@ -42,8 +42,7 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | public | `home` | `/pl/dla-pracodawcow` | — | — | 85% | 87% | ~ | Brak ekranu; układ hero strony głównej (#339). H1 mniejszy niż hero prototypu — strona treściowa, nie strona główna. ([#484](https://github.com/aktualnosci-be/pracujbe/pull/484)) |
 | public | `jobs` | `/pl/poradniki` | — | — | 94% | 90% | ✓ | Brak ekranu; `.pp-page-title` (ten PR). |
 | public | `jobs` | `/pl/poradniki/[slug]` | — | — | 90% | 90% | ✓ | jw. |
-| public | `jobs` | `/pl/faq` | — | — | 94% | 90% | ✓ | Strony informacyjne (`_legal/legal-page.tsx`): `.pp-page-title` (ten PR). Treść prawna = placeholder (#40). |
-| public | `jobs` | `/pl/o-nas` | — | — | 94% | 90% | ✓ | jw. |
+| public | `jobs` | `/pl/o-nas` | — | — | 94% | 90% | ✓ | Strony informacyjne (`_legal/legal-page.tsx`): `.pp-page-title`. Treść = placeholder (#40). Dawne `/pl/faq` → 308 na `/pl/pomoc`. |
 | public | `jobs` | `/pl/kontakt` | — | — | 94% | 90% | ✓ | jw. |
 | public | `jobs` | `/pl/pomoc` | — | — | 94% | 90% | ✓ | jw. |
 | public | `jobs` | `/pl/regulamin` | — | — | 94% | 90% | ✓ | jw. |

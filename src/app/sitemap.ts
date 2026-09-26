@@ -29,6 +29,11 @@ import { getAllGuideSlugs } from '@/lib/guides/guides';
  * Każdy wpis ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
  * celowo pominięte (patrz `robots.ts`). Działa bez env (dane demonstracyjne z `getJobs`).
  *
+ * Profile firm (#591) trafiają do partii ofert: jeden wpis na `companySlug` zebrany przy tej
+ * samej iteracji po ofertach partii (bez osobnego zapytania). Firma z ofertami w dwóch partiach
+ * pojawi się w obu (dopuszczalny duplikat URL-a między plikami; dopiero powyżej 5000 ofert).
+ * Dane demonstracyjne nie mają `companySlug`, więc profili firm tam nie ma.
+ *
  * TODO(i18n-slugs): segment listy ofert jest wspólny (`oferty-pracy`) — po wdrożeniu
  * lokalizowanych slugów zaktualizować ścieżki per język.
  */
@@ -66,6 +71,7 @@ export async function generateSitemaps(): Promise<{ id: number }[]> {
 }
 
 const JOBS_PATH = '/oferty-pracy';
+const COMPANIES_PATH = '/pracodawcy';
 const HUB_PATH = '/praca';
 const GUIDES_PATH = '/poradniki';
 const EMPLOYERS_PATH = '/dla-pracodawcow';
@@ -253,10 +259,16 @@ async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitem
   const pagesPerShard = JOBS_PER_SITEMAP_SHARD / SITEMAP_JOBS_PAGE;
   const firstPage = shardIndex * pagesPerShard + 1;
   const lastPage = firstPage + pagesPerShard - 1;
+  // #591: profile firm zbierane PRZY OKAZJI tej samej iteracji (bez osobnego zapytania) —
+  // `job.companySlug` jest już w wyniku (0140). Jeden wpis na firmę w partii.
+  const companySlugs = new Set<string>();
 
   for (let page = firstPage; page <= lastPage; page += 1) {
     const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE });
     if (result.jobs.length === 0) break;
+    for (const job of result.jobs) {
+      if (job.companySlug) companySlugs.add(job.companySlug);
+    }
     // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
     const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
     for (const job of result.jobs) {
@@ -277,6 +289,21 @@ async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitem
       }
     }
     if (result.jobs.length < SITEMAP_JOBS_PAGE) break; // ostatnia strona całej listy
+  }
+
+  // --- Profile firm (#591) — jeden wpis na slug, komplet języków (treść nie zależy od
+  // tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
+  for (const slug of companySlugs) {
+    const path = `${COMPANIES_PATH}/${slug}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+        alternates: { languages },
+      });
+    }
   }
 
   return entries;

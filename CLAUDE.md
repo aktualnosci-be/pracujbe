@@ -15,6 +15,8 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
+Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: migracja 0137, brak
+usług cron, tryb demo za bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
@@ -528,7 +530,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
-- [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
+- [x] shadcn/ui — zestaw komponentów w `src/components/ui` (API shadcn, styl „Ludzie i praca”, tokeny,
+  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select),
+  card, badge (`success` = `success-text` na `success/10`, AA), toast, light-dialog (#393) +
+  confirm-dialog, stepper, status-pill, match-bar, stat-card oraz **skeleton**, **table**
+  (domyślne klasy = `TH`/`TD`/`TD_WRAP` z `panel-styles.ts`, `TableRowHeader` = `<th scope="row">`),
+  **pagination** (nav + lista, bez `Slot` — zostaje serwerowy) i **alert** (baza `NOTICE`, warianty
+  note/error/success, `error` = `role="alert"`). Podmienione ręczne odpowiedniki bez zmiany wyglądu:
+  tabele `/admin/uzytkownicy` i `/admin/firmy`, `AdminPager`, szkielet `MessagesLoading`, błędy
+  zespołu (`TeamMembers`/`TeamInvite`/`MyTeamInvitations`), `RecruiterOnlyNote`. Test `ui-kit`
+  (klasy identyczne z kalką, kontrole ujemne) + strażnik: surowy `<table>` tylko w `ui/table.tsx`.
+  Świadomie BEZ nowych pakietów Radix (budżet JS #395, INP #393): natywne `<select>`/radio w formularzach
+  GET i server actions (działają bez JS, strony admina serwerowe), własne menu z pełnym ARIA
+  (`ApplicationActions` #341, `ApplicationStatusMenu`, `LocaleSwitcher` na stronach publicznych),
+  dialogi na `LightDialog`; tabs/tooltip/dropdown-menu dodawać dopiero z realnym użyciem (tooltip na
+  dotyku = ryzyko a11y). Publiczne `Pagination` (lista ofert) zostaje osobne.
 
 ### Redesign wg makiet — HISTORYCZNE (`docs/DESIGN_SCREENS.md`), zastąpione „Ludzie i praca”
 > Obowiązujący wygląd = kalka prototypu `docs/design/people-passport/prototype` („04 Ludzie i praca”,
@@ -582,8 +598,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `hiringOrganization.sameAs`/`logo` (migracja `0114`): `get_public_job` zwraca `company_website`/
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
-  bez walidacji / bez bramki weryfikacji link wycieka). **Otwarte:** edycja strony i logo firmy
-  w panelu pracodawcy (dziś pola tylko w schemacie).
+  bez walidacji / bez bramki weryfikacji link wycieka).
+  Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
+  (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
+  ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
+  `companies_logo_url_https`, ta sama reguła co `public_https_url`) waliduje w bazie niezależnie
+  od Zod (lustro `src/lib/company-links.ts`). W przeciwieństwie do nazwy/VAT zmiana NIE cofa
+  weryfikacji (`protect_company_verification` reaguje tylko na `name`/`vat_number`); audyt
+  `company.links_changed`. Podgląd logo przez `next/image` tylko gdy adres wskazuje na własny
+  host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
+  rozszerzania CSP. Dowód: `rls.sql` sekcja CL141 (member/recruiter bez dostępu, http:// i adres
+  nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -591,6 +616,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
   `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
   „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
+- [x] Profil publiczny firmy `/pracodawcy/<slug>` (#591, migracja `0140`): zastępuje CTA
+  „Dowiedz się więcej o firmie”, które prowadziło do wyszukiwarki po nazwie firmy
+  (`?keyword=<nazwa>` — mogło zwrócić oferty innej firmy albo nic). Adres jest stabilny:
+  `companies.slug` (unikalny, ustawiany raz przy zakładaniu firmy, NIE zmienia się przy zmianie
+  wyświetlanej nazwy — `src/lib/actions/company.ts`). `get_public_company`/`get_public_company_jobs`
+  (nowe RPC) i `get_public_job`/`get_public_jobs` (+ `company_slug`) zwracają WYŁĄCZNIE
+  zweryfikowaną, nieusuniętą firmę; zła firma/zły slug = brak wiersza → strona 404 (Invariant #8).
+  CTA na szczególe oferty (`job.companySlug`) jest ukryte, gdy profil nie istnieje (demo/bezpiecznik),
+  zamiast linkować donikąd. Strona indeksowalna (canonical, hreflang), sitemap dodaje jeden wpis na
+  firmę zebrany PRZY OKAZJI iteracji po ofertach (bez osobnego zapytania). Dowód: `rls.sql` sekcja
+  CP591; unit `company-profile`, `jobs-postgres` (#591), `sitemap-robots` (#591, z kontrolą ujemną).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
@@ -606,7 +642,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
   `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486), linki Pomoc/Prywatność
-  w stopce e-maili (#6), `/faq` (atrapa, poza nawigacją).
+  w stopce e-maili (#6). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  (test `faq-redirect`).
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Domyślna nazwa
@@ -774,7 +811,7 @@ profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts
 (`minimize.ts`: NISS/BIS/dokument → odmowa; sekcje referencji i danych osobowych, linie o
 osobach trzecich, dane osobowe, kategorie art. 9/10, kontakty i linki usunięte; kontakt poza
 nagłówkiem dokumentu → bezpieczne zatrzymanie) → PODGLĄD tekstu dla kandydata → po
-potwierdzeniu ponowna redakcja na serwerze i Claude (structured output, tylko zawody/
+potwierdzeniu ponowna redakcja na serwerze i model OpenAI (structured output, tylko zawody/
 umiejętności/języki/certyfikaty/lata) → PROPOZYCJE ze źródłem i niepewnością, domyślnie
 niezaznaczone → zapis wyłącznie zaznaczonych RPC `apply_candidate_cv_proposals` (dopisanie,
 `FOR UPDATE`, limity kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
@@ -799,6 +836,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
   (#99), „brak danych” tylko bez uprawnień rekrutera — bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
   200% tekstu (#318). Przełącznik firmy: nazwa w etykiecie, `aria-current`, komunikat błędu (#322).
+  Realne statystyki (audyt P1-14, bez migracji): liczniki rekrutacyjne (nowe zgłoszenia,
+  dopasowani, do odpowiedzi, liczniki przy ofertach, lejek, top dopasowani) tylko dla recruiter+
+  aktywnej firmy — zwykły `member` widzi „brak danych” (`null` → `StatValue`: „—” + tekst dla
+  czytnika) i wyjaśnienie zamiast zer z RLS; lejek `denied`, top dopasowani `denied`/`unverified`/
+  `error` (`getTopMatchedCandidatesLoad`). Dopasowani = DISTINCT kandydaci (nie wiersze `matches`),
+  dopiero po weryfikacji firmy; „do odpowiedzi” = rozmowy AKTYWNEJ firmy, w których ostatnia
+  nieusunięta wiadomość jest spoza firmy (dawniej nieprzeczytane powiadomienia użytkownika ze
+  wszystkich firm). Wspólne `EmployerOverviewStats`/`EmployerFunnelSection` na pulpicie
+  i `/employer/statystyki`. Dowód: `portal-employer` (PG16: member, firma niezweryfikowana, cudza
+  firma, powiadomienia ≠ licznik), unit `employer-stats-load`, `employer-candidates-load`,
+  `employer-offers-preview` (kontrole ujemne).
   Wygląd panelu i kreatora oferty = kalka prototypu „04 Ludzie i praca” (#5/#6): klasy w
   `src/components/dashboard/panel-styles.ts` (wspólne z adminem), sidebar `.side-item`, opis
   odstępstw w `docs/design/people-passport/README.md`.
@@ -861,17 +909,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/rejestracja-pracodawca` z sesją pracodawcy → panel. Chrome panelu: `getEmployerShellData`
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
   Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
-  **Otwarte:** orientacyjny czas weryfikacji (decyzja produktowa).
+  Czas weryfikacji (decyzja właściciela 26.09.2026): baner dla `unverified`/`pending` we wszystkich
+  wariantach (pulpit, kreator, `/employer/firma`) dodaje `company.bannerEta` („Zwykle do 2 dni
+  roboczych”) — bez innych obietnic; test `company-status-banner-reason` (kontrola ujemna).
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
-  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Claude
-  (`claude-opus-5`, structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
+  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Model
+  OpenAI (`gpt-6-luna`, strict structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
   schematami kroków (`map.ts`), pola niepewne na liście „do sprawdzenia” w kroku; poprawne kroki
   do szkicu jednym `save_job_draft`, nigdy publikacja. Akcja `importJobListing`: recruiter+
   aktywnej firmy, limit per firma 10/h i 30/dobę (fail-closed). Podejrzenie prompt injection =
-  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`,
-  opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
+  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `OPENAI_API_KEY`,
+  opcjonalnie `AI_JOB_IMPORT_MODEL`/`AI_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
+  Dostawca AI (decyzja właściciela 2026-09-26): wyłącznie OpenAI „GPT-6 Luna” (`gpt-6-luna`,
+  0,10/0,50 USD za 1 mln tokenów wejścia/wyjścia) — jeden klient `src/lib/ai/openai.ts`
+  (Responses API, `strict` JSON Schema, `store: false`, timeout 60 s, bez logowania treści),
+  model z `src/lib/ai/model-config.ts` (`AI_*_MODEL` → `AI_MODEL` → `gpt-6-luna`), klucz
+  `OPENAI_API_KEY` tylko na serwerze; SDK Anthropic usunięte. Strażnik `ai-inventory`: SDK
+  `openai` importuje tylko ten plik, import klienta = wywołanie modelu, `@anthropic-ai/*`
+  w `src/`/`scripts/` = czerwony (kontrole ujemne); test `ai-openai-client`.
   Globalny budżet AI (#36, migracja `0120`, `docs/AI_BUDGET.md`): każde wywołanie modelu przez
   `withAiBudget` (`src/lib/ai/budget.ts`) — rezerwacja górnej granicy kosztu PRZED API
   (`ai_budget_reserve`, blokada doradcza, limit doby i miesiąca w Europe/Brussels), rozliczenie
@@ -901,8 +958,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
   domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
   (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
-  i 60/dobę fail-closed, globalny budżet AI #36 przez `src/lib/ai-assist/budget.ts`) → Claude
-  (`claude-opus-5-5`, `AI_JOB_ASSIST_MODEL`, structured output) → propozycja brzmienia opisu,
+  i 60/dobę fail-closed, globalny budżet AI #36 przez `src/lib/ai-assist/budget.ts`) → model
+  OpenAI (`gpt-6-luna`, `AI_JOB_ASSIST_MODEL`/`AI_MODEL`, strict structured output) → propozycja brzmienia opisu,
   obowiązków i wymagań w języku oferty. Wejście ścisłe (tylko tekst oferty — bez danych
   kandydatów), e-maile/telefony/identyfikatory usuwane przed wysłaniem, polecenia dla AI
   (wzorce PL/NL/FR/EN + flaga modelu) = brak propozycji; propozycja z nową liczbą/linkiem albo
@@ -1173,6 +1230,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
   statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
+  (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
+  semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;
+  test `cloudflare-cron-worker` z kontrolą bramki hasła).
   Wypisanie i budżety (#45, etap 1, migracja `0087`): token HMAC (`src/lib/email/unsubscribe-token.ts`,
   `EMAIL_UNSUBSCRIBE_SECRET`; UUID konta + kategoria + 180 dni, bez e-maila w URL), link w stopce
   → `/{locale}/wypisz` (noindex, zapis dopiero po kliknięciu), nagłówki `List-Unsubscribe` +
@@ -1504,15 +1565,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
-- [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
-  connect/img/font, Cloudflare Web Analytics od #570 (zamiast GA/Meta, usunięte); bez Sentry od #571).
-  Wariant nonce/strict-dynamic = follow-up (E2E). Analiza (#585, bez zmiany polityki):
-  `docs/CSP_NONCE_ANALYSIS.md` — inwentarz inline skryptów/stylów z buildu (pomiar Report-Only
-  `scripts/security/csp-inline-inventory.mjs`, poza CI; test `csp-inline-inventory`): blokują
-  chunki i ładunek RSC Next.js (nonce tylko per żądanie — koniec ISR, hash niemożliwy), skrypt
-  banera zgód (hash albo nonce), atrybuty `style` (next/image, paski postępu) i `<noscript><style>`;
-  JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile) nie blokują. Warianty A–D
-  do decyzji właściciela.
+- [~] CSP (P2-01, #585) — `next.config.mjs` (default/object/frame-ancestors/base/form-action +
+  zawężone connect/img/font, Cloudflare Web Analytics od #570 (zamiast GA/Meta, usunięte); bez
+  Sentry od #571). Analiza: `docs/CSP_NONCE_ANALYSIS.md` — inwentarz inline skryptów/stylów z
+  buildu (pomiar Report-Only `scripts/security/csp-inline-inventory.mjs`, poza CI; test
+  `csp-inline-inventory`): blokują chunki i ładunek RSC Next.js (nonce tylko per żądanie — koniec
+  ISR, hash niemożliwy), skrypt banera zgód (hash albo nonce), atrybuty `style` (next/image, paski
+  postępu) i `<noscript><style>`; JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile)
+  nie blokują. **Próba usunięcia `'unsafe-inline'` ze `script-src` zweryfikowana i COFNIĘTA** po
+  realnym buildzie (`next build` + `next start`, Chromium): bez niego skrypty RSC są blokowane
+  i hydracja każdej strony się psuje. Enforced `script-src` ZOSTAJE z `'unsafe-inline'` (bez
+  regresji); produkcja dostaje RÓWNOLEGŁY `Content-Security-Policy-Report-Only` z tą samą
+  dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptu banera zgód w `<head>` (jedno źródło
+  treści: `src/lib/security/csp-inline-scripts.mjs`; beacon CF jest zewnętrzny, bez treści
+  inline) — obserwowalny krok, nie pełne zamknięcie #585. Report-Only raportuje do osobnej grupy
+  `csp-report-only` (`/api/csp-report?policy=report-only`) z własnymi limitami (10 żądań/min
+  z adresu, 60 wpisów/min na proces; wpis `disposition=report` zawsze w tym budżecie), więc
+  szum skryptów RSC nie wypiera raportów egzekwowanej polityki (test `csp-report`). Dowód:
+  `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
+  ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
+  na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
   Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
   zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna
@@ -1736,7 +1808,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
   (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
   `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
-  **Otwarte:** link do baneru w panelu admina (admin ma dostęp tylko przez adres endpointu).
+  Link do baneru w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy linkuje
+  do `GET /api/employer/jobs/[id]/banner` (endpoint dopuszcza admina, `/employer/oferty/[id]/baner`
+  jest zablokowana layoutem panelu pracodawcy dla konta bez firmy) — otwiera się w nowej karcie.
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
@@ -1757,7 +1831,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `check-ci-workflows.mjs`. INP-proxy w tym samym kroku: tapnięcie „Filtry”, zapis oferty
   (odpowiedź `getPublicSavedJobs` podmieniona na kandydata — CI bez sesji) i „Aplikuj teraz”,
   Event Timing (najdłuższy wpis interakcji), CPU 4×, mediana 3 prób vs `inpMs` (200 ms);
-  kontrola ujemna `--inject-click-delay-ms 300` → czerwony. **Do zrobienia:** dane polowe CWV.
+  kontrola ujemna `--inject-click-delay-ms 300` → czerwony.
+  Dane polowe CWV — Cloudflare Web Analytics zamiast własnej zbiórki: beacon z #570/#635 (tylko
+  po zgodzie `analytics`, tylko trasy publiczne, bez cookies) sam mierzy LCP/INP/CLS. Podgląd
+  `/admin/wydajnosc?dni=7|28` (tylko admin, `requireAdmin`): p75 serwisu + 20 najczęstszych
+  ścieżek z oceną słowną wg progów, boty pominięte, liczby próbkowane — odczyt z serwera przez
+  GraphQL Analytics API (`src/lib/web-vitals/field-report.ts` czysty parser, `cloudflare-client.ts`
+  server-only, token tylko w nagłówku, timeout 8 s, błąd = sam kod; env `CF_ANALYTICS_ACCOUNT_ID`,
+  `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN`). Bez konfiguracji: instrukcja (z bazą)
+  albo raport przykładowy oznaczony demo (bez bazy). Bez migracji i bez endpointu `/api/web-vitals`.
+  Testy: unit `web-vitals-field` (kontrole ujemne: brak konfiguracji = zero żądań, token poza
+  treścią/adresem, z bazą nigdy demo), E2E `admin-web-vitals` (4 języki, brak żądań do Cloudflare
+  z przeglądarki), `admin-a11y`; zgody beaconu — istniejące `cookie-consent-categories`. **Do
+  zrobienia (właściciel):** token beaconu i token API w Railway; TTFB i próg alarmu w czujkach.
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi

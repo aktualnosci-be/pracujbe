@@ -18,7 +18,7 @@ export type ProcessorId =
   | 'discord-webhook'
   | 'cloudflare-turnstile'
   | 'cloudflare-r2'
-  | 'anthropic'
+  | 'openai'
   | 'stripe'
   | 'cloudflare-web-analytics'
   | 'vies';
@@ -175,20 +175,41 @@ export const PROCESSORS: readonly Processor[] = [
     ...UNKNOWN,
   },
   {
-    id: 'anthropic',
-    name: 'Anthropic (Claude API)',
-    purpose: 'Import ogłoszenia o pracę do szkicu oferty (zrzut ekranu albo treść strony pobranej z linku).',
+    id: 'openai',
+    name: 'OpenAI (Responses API, model GPT-6 Luna)',
+    purpose:
+      'Funkcje AI za flagami (decyzja właściciela 2026-09-26: wyłącznie model OpenAI „GPT-6 Luna”): import ogłoszenia o pracę do szkicu oferty, asystent redagowania treści oferty i import CV do propozycji pól profilu kandydata.',
     dataCategories: [
-      'Tekst strony z ogłoszeniem po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła',
-      'Albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia',
+      'Import ogłoszenia: tekst strony po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła',
+      'Import ogłoszenia: albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia',
+      'Asystent treści: tytuł, opis, obowiązki i wymagania oferty napisane przez pracodawcę (e-maile, telefony i identyfikatory usunięte przed wysyłką)',
+      'Import CV: tekst CV kandydata po lokalnej minimalizacji (bez pliku, nazwy pliku, kontaktów, referencji i danych szczególnych)',
     ],
-    dataSubjects: ['Osoby wymienione w importowanym ogłoszeniu', 'Pracodawca wykonujący import (pośrednio)'],
-    activation: 'AI_JOB_IMPORT_ENABLED=1/true + ANTHROPIC_API_KEY; domyślnie wyłączone. Model: DEFAULT_JOB_IMPORT_MODEL albo AI_JOB_IMPORT_MODEL.',
-    codeRefs: ['src/lib/ai-import/extract.ts', 'src/lib/ai-import/minimize.ts', 'src/lib/ai-import/run-import.ts', 'src/lib/ai-import/config.ts', 'docs/AI_JOB_IMPORT.md'],
+    dataSubjects: [
+      'Osoby wymienione w importowanym ogłoszeniu',
+      'Pracodawca wykonujący import lub redakcję (pośrednio)',
+      'Kandydat importujący własne CV',
+    ],
+    activation:
+      'OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.',
+    codeRefs: [
+      'src/lib/ai/openai.ts',
+      'src/lib/ai/model-config.ts',
+      'src/lib/ai-import/extract.ts',
+      'src/lib/ai-import/minimize.ts',
+      'src/lib/ai-assist/assist.ts',
+      'src/lib/ai-assist/guard.ts',
+      'src/lib/cv-import/extract.ts',
+      'src/lib/cv-import/minimize.ts',
+      'docs/AI_JOB_IMPORT.md',
+      'docs/AI_JOB_ASSIST.md',
+      'docs/AI_CV_IMPORT.md',
+    ],
     notes: [
-      'Kod nie wysyła do modelu danych kandydatów, profili ani CV.',
-      'Tekst: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.',
-      'Kod nie ustawia parametru inference_geo ani innych ustawień regionu.',
+      'Wszystkie wywołania idą przez jednego klienta (src/lib/ai/openai.ts): structured output (strict), bez narzędzi, store: false, bez logowania treści.',
+      'Import ogłoszeń i asystent nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.',
+      'Tekst ogłoszenia: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.',
+      'Kod nie ustawia regionu przetwarzania (data residency) ani projektu z ograniczoną retencją — do decyzji właściciela.',
     ],
     ...UNKNOWN,
   },
@@ -208,13 +229,22 @@ export const PROCESSORS: readonly Processor[] = [
     name: 'Cloudflare Web Analytics',
     purpose:
       'Analityka ruchu — wyłącznie po zgodzie w kategorii analytics (#570, decyzja właściciela 2026-09-25: zamiast Google Analytics i Meta Pixel — usunięte).',
-    dataCategories: ['Wyświetlenia stron; beacon bezcookie\'owy — bez identyfikatorów i bez cookies trackera'],
+    dataCategories: [
+      'Wyświetlenia stron; beacon bezcookie\'owy — bez identyfikatorów i bez cookies trackera',
+      'Core Web Vitals (LCP, INP, CLS) mierzone przez ten sam beacon; panel admina czyta wyłącznie agregaty p75 per ścieżka',
+    ],
     dataSubjects: ['Odwiedzający, którzy wyrazili zgodę'],
     activation: 'NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.',
-    codeRefs: ['src/components/cookies/Analytics.tsx', 'src/lib/consent-store.ts'],
+    codeRefs: [
+      'src/components/cookies/Analytics.tsx',
+      'src/lib/consent-store.ts',
+      'src/lib/web-vitals/cloudflare-client.ts',
+      'src/lib/web-vitals/field-report.ts',
+    ],
     notes: [
       'Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0130).',
       'Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.',
+      'Dane polowe CWV: /admin/wydajnosc czyta z serwera GraphQL Analytics API (CF_ANALYTICS_ACCOUNT_ID, CF_WEB_ANALYTICS_SITE_TAG, CF_ANALYTICS_API_TOKEN — tylko odczyt); portal nie ma własnego endpointu zbiórki metryk.',
     ],
     ...UNKNOWN,
   },
