@@ -322,6 +322,19 @@ async function measureInteraction(browser, scenario) {
         break;
       await sleep(100);
     }
+    // Stan po interakcji ma trwać: zapis oferty nie może zostać cofnięty po odpowiedzi akcji
+    // (`toggleSavedJob`; przycisk jest wyłączony, dopóki akcja trwa) — inaczej wynik zależałby
+    // od tego, czy sonda zdążyła przed cofnięciem.
+    if (scenario.fakeCandidate) {
+      const settleBy = Date.now() + 10_000;
+      while ((await trigger.isDisabled()) && Date.now() < settleBy) await sleep(50);
+      if (await trigger.isDisabled())
+        throw new Error(`${scenario.name}: akcja zapisu nie zakończyła się w 10 s`);
+      if ((await trigger.getAttribute("aria-pressed")) !== "true")
+        throw new Error(
+          `${scenario.name}: zapis cofnięty po odpowiedzi akcji na ${scenario.path}`,
+        );
+    }
     if (process.env.PERF_LAB_DEBUG)
       console.log(scenario.name, JSON.stringify(entries));
     return { inp: inpFromEventEntries(entries), events: entries.length };
