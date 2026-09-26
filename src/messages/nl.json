@@ -1233,6 +1233,7 @@
     "itemCompanySuspended": "Je bedrijf is opgeschort",
     "itemTeamInvitation": "Uitnodiging voor een bedrijfsteam",
     "itemSavedSearch": "Nieuwe vacatures voor een opgeslagen zoekopdracht",
+    "itemJobTermsChanged": "De voorwaarden van een vacature waarop je solliciteerde zijn gewijzigd",
     "itemModerationJobRemoved": "Vacature ingetrokken na een moderatiebeslissing",
     "itemModerationCompanySuspended": "Bedrijf geschorst na een moderatiebeslissing",
     "itemModerationRestored": "De beperking van de inhoud is opgeheven",

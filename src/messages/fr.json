@@ -1233,6 +1233,7 @@
     "itemCompanySuspended": "Votre entreprise a été suspendue",
     "itemTeamInvitation": "Invitation à rejoindre une équipe",
     "itemSavedSearch": "Nouvelles offres pour une recherche enregistrée",
+    "itemJobTermsChanged": "Les conditions d’une offre à laquelle vous avez postulé ont changé",
     "itemModerationJobRemoved": "Offre retirée par une décision de modération",
     "itemModerationCompanySuspended": "Entreprise suspendue par une décision de modération",
     "itemModerationRestored": "La restriction du contenu a été levée",

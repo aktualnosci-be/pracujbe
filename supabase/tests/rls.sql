@@ -12943,6 +12943,195 @@ reset role;
 delete from auth.users where id in (:'SCA', :'SCE');
 
 -- ============================================================================
+-- JT144 (0144, numer tymczasowy): istotna zmiana warunków opublikowanej oferty →
+--       powiadomienie in-app dla kandydatów z AKTYWNĄ aplikacją; lista pól w
+--       job_material_terms(), porównanie w transakcji update_published_job
+-- ============================================================================
+\set JTJOB 'e8000000-0000-0000-0000-000000144a01'
+\set JTAPPA 'e8000000-0000-0000-0000-000000144b01'
+\set JTAPPB 'e8000000-0000-0000-0000-000000144b02'
+\set JTAPPG 'e8000000-0000-0000-0000-000000144b03'
+reset role; reset app.current_uid;
+begin;
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status,
+                        default_locale, published_at, salary_min, salary_max, salary_period, working_hours)
+  values (:'JTJOB', :'COMPA', 'jt144-magazynier', 'Magazynier JT144', 'warehouse', 'temporary', 'Gandawa',
+          'Flandria', 'active', 'pl', now() - interval '1 day', 16, 18, 'hour', '40 h');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'JTJOB', 'pl', 'Magazynier JT144', 'Opis', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'JTJOB', 'pl', 'mandatory', 0, 'Praca w nocy');
+-- Aplikacje wstawiane bez triggerów integralności (fixture): aktywna, wycofana i gościa.
+set local session_replication_role = replica;
+insert into public.applications(id, candidate_id, job_id, status, submitted_at, guest_name, guest_email) values
+  (:'JTAPPA', :'CANDA', :'JTJOB', 'shortlisted', now(), null, null),
+  (:'JTAPPB', :'CANDB', :'JTJOB', 'withdrawn', now(), null, null),
+  (:'JTAPPG', null, :'JTJOB', 'submitted', now(), 'Gość JT144', 'gosc-jt144@example.invalid');
+set local session_replication_role = origin;
+-- CANDB ma in-app wyłączone od sekcji S (SEC-16); tu włączone, żeby JT2b sprawdzał filtr stanu
+-- aplikacji, a nie preferencję (w transakcji — cofane na końcu sekcji).
+update public.notification_preferences set in_app_enabled = true where profile_id = :'CANDB';
+
+-- Treść edycji = aktualne warunki (kształt z akcji updatePublishedJob, jak w RR).
+select set_config('pb.jt_base', jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.rr_ok')::jsonb,
+  '{job,title}', '"Magazynier JT144"'), '{job,city}', '"Gandawa"'), '{job,contract_type}', '"temporary"'),
+  '{job,salary_min}', '16'), '{job,salary_max}', '18'), '{job,working_hours}', '"40 h"')::text, true);
+select count(*) as jt_mail0 from public.email_deliveries where profile_id in (:'CANDA', :'CANDB') \gset
+
+-- JT1: zmiana samego tytułu i opisu (nieistotne pola) — brak powiadomień.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,title}', '"Magazynier JT144 (nocna)"'), '{translation,description}', '"Nowy opis"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 0,
+  'JT1 zmiana tytułu i opisu nie jest istotną zmianą warunków');
+
+-- JT2: zmiana wynagrodzenia → jedno powiadomienie dla aktywnej aplikacji.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_base')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 1
+  and exists (select 1 from public.notifications
+               where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA'
+                 and type::text = 'system' and read_at is null
+                 and data = '{"kind": "job_terms_changed", "slug": "jt144-magazynier", "fields": ["salary"]}'::jsonb),
+  'JT2 zmiana wynagrodzenia → powiadomienie in-app kandydata z aktywną aplikacją (slug i pole)');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
+  'JT2b wycofana aplikacja (stan końcowy) bez powiadomienia; gość bez konta pominięty');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id in (:'CANDA', :'CANDB')) = :'jt_mail0'::int,
+  'JT2c bez e-maila (wariant in-app)');
+
+-- JT3: kilka pól naraz → jedna pozycja na kandydata z posortowaną listą pól.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.jt_base')::jsonb, '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'),
+  '{job,working_hours}', '"38 h"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+           where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA'
+             and data->'fields' = '["city", "contract_type", "salary", "working_hours"]'::jsonb)
+  and (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT3 miasto, typ umowy i godziny (i wynagrodzenie wobec treści z JT2) w jednym powiadomieniu');
+
+-- JT4: odrzucona rewizja (niekompletna treść) cofa też powiadomienie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JTJOB',
+    jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb, '{job,salary_min}', '18'),
+              '{requirements_mandatory}', '[]')),
+  'VALIDATION_FAILED', 'JT4 niekompletna rewizja odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT4b odrzucona rewizja nie zostawia powiadomienia (ta sama transakcja)');
+
+-- JT5: zmiana statusu (pauza) i zapis bez zmiany warunków → brak powiadomień.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JTJOB'::uuid, 'pause');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT5 wstrzymanie oferty nie jest zmianą warunków');
+
+-- JT6: kandydat czyta własne powiadomienie; rekruter nie widzi powiadomień kandydata.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 2,
+  'JT6 kandydat widzi swoje powiadomienia o zmianie warunków');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 0,
+  'JT6b rekruter nie czyta powiadomień kandydata (RLS)');
+reset role; reset app.current_uid;
+
+-- JT7: bezpośredni UPDATE (service_role/migracja danych, bez update_published_job) nie powiadamia;
+-- kontrola ujemna: ten sam UPDATE ze znacznikiem RPC powiadamia — to znacznik jest bramką.
+update public.jobs set salary_max = 20 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT7 bezpośredni UPDATE warunków (bez update_published_job) nie tworzy powiadomień');
+savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', :'JTJOB', true);
+update public.jobs set salary_max = 21 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT7b KONTROLA UJEMNA: ze znacznikiem RPC ten sam UPDATE powiadamia (JT7 łapie brak bramki)');
+rollback to savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', '', true);
+update public.jobs set salary_max = 18 where id = :'JTJOB';
+
+-- JT8: sama wielkość liter/diakrytyki miasta (search_fold) nie jest zmianą warunków.
+select set_config('pb.jt_now', jsonb_set(jsonb_set(jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'), '{job,working_hours}', '"38 h"'),
+  '{job,salary_min}', '16')::text, true);
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"ANTWERPIA"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT8 zmiana wielkości liter miasta nie powiadamia (search_fold)');
+savepoint jt_fold;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'city', j.city,
+    'contract_type', j.contract_type, 'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, current_setting('pb.jt_now')::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT8b KONTROLA UJEMNA: przy surowym porównaniu miasta sama wielkość liter powiadamia (JT8 łapie regresję)');
+rollback to savepoint jt_fold;
+
+-- JT9 KONTROLA UJEMNA: bez miasta na liście pól zmiana miasta przez RPC przechodzi bez
+-- powiadomienia, a bez filtra stanu aplikacji dostaje je wycofany kandydat — JT3 i JT2b łapią regresję.
+savepoint jt_neg;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'contract_type', j.contract_type,
+    'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"Brugia"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT9 KONTROLA UJEMNA: bez miasta w job_material_terms zmiana miasta nie powiadamia (JT3 byłby czerwony)');
+rollback to savepoint jt_neg;
+savepoint jt_neg2;
+create or replace function public.notify_job_terms_changed()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('pracujbe.job_terms_notify', true), '') <> new.id::text then return null; end if;
+  insert into public.notifications (profile_id, type, data, entity_type, entity_id)
+  select a.candidate_id, 'system', '{}'::jsonb, 'job_terms', new.id
+    from public.applications a where a.job_id = new.id and a.candidate_id is not null;
+  return null;
+end $$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
+  'JT9b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
+rollback to savepoint jt_neg2;
+rollback;
+
+-- ============================================================================
 -- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).
 --         `get_public_jobs` sortuje po kluczu wynagrodzenia (opcjonalnie) i `published_at`,
 --         ale bez unikalnego tie-breakera oferty z remisem mogły wrócić w innej kolejności
