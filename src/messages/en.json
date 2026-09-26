@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "The appeal deadline starts once you receive the notice of the decision.",
     "appealStatusLabel": "Appeal {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Jobs at {name}",
+    "metaDescription": "See the active job openings from {name} on Pracuj.be.",
+    "noDescription": "This company has not added a description yet.",
+    "jobsHeading": "Active jobs from this company",
+    "empty": "This company has no active job openings right now.",
+    "backToJobs": "See all job listings"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Loading...",
