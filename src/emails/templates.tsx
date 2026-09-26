@@ -35,6 +35,7 @@ import {
   greetings,
   interpolate,
   jobMatchAlertOffLabel,
+  newMessageAttachmentsLabel,
   jobOfferPassportCopy,
   layoutCopy,
   moderationLabels,
@@ -78,6 +79,8 @@ export interface EmailDataMap {
     senderName?: string | null;
     preview?: string;
     messageUrl: string;
+    /** Liczba plików w wiadomości (0135, #503) — bez nazw; 0/brak = bez wiersza. */
+    attachmentCount?: number | string | null;
   };
   jobOffer: {
     firstName?: string;
@@ -326,6 +329,8 @@ function EmailShell(props: {
   highlight?: string;
   /** Własny blok treści renderowany zamiast standardowego wyróżnienia. */
   detail?: ReactElement;
+  /** Dodatkowy akapit pod wyróżnieniem (np. liczba załączników wiadomości). */
+  note?: string;
 }): ReactElement {
   const { locale, type, ctaHref, greetingName, quote } = props;
   const vars = prepareVars(type, locale, props.vars);
@@ -370,6 +375,7 @@ function EmailShell(props: {
       ))}
       {props.detail ??
         (showHighlight ? <EmailHighlight>{resolvedHighlight}</EmailHighlight> : null)}
+      {props.note ? <EmailText>{props.note}</EmailText> : null}
       {showQuote ? <EmailQuote>{trimmedQuote}</EmailQuote> : null}
       <EmailButton href={ctaHref}>{copy.cta}</EmailButton>
       <EmailText muted>{lc.buttonFallback}</EmailText>
@@ -515,7 +521,14 @@ export function ContactInvitationEmail(props: EmailProps<'contactInvitation'>): 
   );
 }
 
+/** Liczba załączników z payloadu: tylko całkowita 1–3 (limit `send_message`), inaczej brak. */
+export function messageAttachmentCount(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return Number.isInteger(n) && n >= 1 && n <= 3 ? n : null;
+}
+
 export function NewMessageEmail(props: EmailProps<'newMessage'>): ReactElement {
+  const attachments = messageAttachmentCount(props.attachmentCount);
   return (
     <EmailShell
       locale={props.locale}
@@ -524,6 +537,11 @@ export function NewMessageEmail(props: EmailProps<'newMessage'>): ReactElement {
       ctaHref={props.messageUrl}
       greetingName={props.firstName}
       quote={props.preview}
+      note={
+        attachments
+          ? interpolate(newMessageAttachmentsLabel[props.locale], { count: String(attachments) })
+          : undefined
+      }
     />
   );
 }

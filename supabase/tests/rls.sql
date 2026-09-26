@@ -10880,6 +10880,42 @@ select pg_temp.assert(:mapurged >= 1
   and (select count(*) from public.storage_deletion_queue where path = :'mapath2') = 1,
   'MA10b porzucony plik usunięty i zakolejkowany, wysłany (kontrola ujemna) zostaje');
 
+-- MN135 (0135, numer tymczasowy): e-mail newMessage niesie tylko LICZBĘ załączników
+-- (#503: bez nazw plików); firma zablokowana przez kandydata-nadawcę (#97) dostaje 0.
+select pg_temp.assert(
+  (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mamsg1' and profile_id = :'MAE') = 1
+  and (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mamsg4' and profile_id = :'MAC') = 1,
+  'MN135-1 e-mail o wiadomości z plikiem niesie liczbę załączników (obie strony)');
+select pg_temp.assert(
+  not exists (select 1 from public.email_deliveries
+    where template = 'newMessage' and entity_id in (:'mamsg1', :'mamsg4')
+      and (payload::text like '%CV Ma%' or payload::text like '%umowa.jpg%' or payload ? 'fileName')),
+  'MN135-2 payload bez nazw plików');
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'maconv'::uuid, 'Bez pliku', gen_random_uuid()) as mnmsg0 \gset
+select attachment_id as mnatt from public.stage_message_attachment(
+  :'maconv'::uuid, gen_random_uuid(), :'maconv' || '/att-' || gen_random_uuid()::text || '.png',
+  'skan.png', 'image/png', 500, :'masha') \gset
+select public.set_company_block(:'MAF'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'maconv'::uuid, 'Po blokadzie', gen_random_uuid(), array[:'mnatt'::uuid]) as mnmsgb \gset
+select public.set_company_block(:'MAF'::uuid, false);
+reset role;
+select pg_temp.assert(
+  (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mnmsg0' and profile_id = :'MAE') = 0,
+  'MN135-3 wiadomość bez pliku: attachmentCount = 0');
+-- Kontrola ujemna do MN135-1: ta sama firma, ten sam typ pliku — różnica tylko w blokadzie.
+select pg_temp.assert(
+  coalesce((select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mnmsgb' and profile_id = :'MAE'), 0) = 0,
+  'MN135-4 firma zablokowana przez nadawcę nie dostaje liczby jego plików');
+
 -- MA11: usunięcie rozmowy (np. usunięcie konta #486) kasuje pliki obu stron i kolejkuje obiekty.
 delete from public.conversations where id = :'maconv';
 select pg_temp.assert(

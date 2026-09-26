@@ -1650,7 +1650,8 @@
     "reportSent": "Signalement reçu",
     "reportAlreadyOpen": "Déjà signalé — en attente d’examen",
     "reportedBadge": "Signalé",
-    "reportNetworkError": "Le signalement n’a pas pu être envoyé. Vérifiez votre connexion et réessayez."
+    "reportNetworkError": "Le signalement n’a pas pu être envoyé. Vérifiez votre connexion et réessayez.",
+    "attachmentPreviewAlt": "Aperçu de l’image {name}"
   },
   "files": {
     "cvTitle": "Votre CV / documents",

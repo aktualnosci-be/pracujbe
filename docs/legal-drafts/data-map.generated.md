@@ -1142,7 +1142,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | — | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | — | `moderation_restore_core` |
 | `newApplication` | `candidateName`, `jobTitle` | — | `apply_to_job`, `confirm_guest_application` |
-| `newMessage` | `conversationId`, `panel`, `senderName` | — | `send_message` |
+| `newMessage` | `attachmentCount`, `conversationId`, `panel`, `senderName` | — | `send_message` |
 | `offerAccepted` | `candidateName`, `jobTitle` | — | `respond_to_offer` |
 | `offerDeclined` | `candidateName`, `jobTitle` | — | `respond_to_offer` |
 | `reportDecisionActioned` | `caseNumber`, `recipientName`, `targetType` | — | `admin_decide_report` |
