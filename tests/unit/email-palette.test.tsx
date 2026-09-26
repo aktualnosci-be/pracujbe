@@ -115,7 +115,7 @@ describe('paleta e-maili = prototyp „Ludzie i praca”', () => {
 
   it('kontrola ujemna: kolor spoza palety (np. dawny granat #0F2A47) jest wykrywany', async () => {
     const html = await render(
-      <EmailLayout locale="pl" preview="Podgląd">
+      <EmailLayout locale="pl" preview="Podgląd" title="Temat">
         <EmailText>Treść</EmailText>
         <p style={{ color: '#0F2A47', backgroundColor: 'rgb(37, 99, 235)' }}>Obcy kolor</p>
       </EmailLayout>,

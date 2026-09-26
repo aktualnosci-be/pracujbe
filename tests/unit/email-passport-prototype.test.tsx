@@ -85,7 +85,7 @@ function appTypography(html: string): PassportTypography {
 
 async function renderPassport(): Promise<string> {
   return render(
-    <EmailLayout locale="pl" preview="Podgląd">
+    <EmailLayout locale="pl" preview="Podgląd" title="Temat">
       <EmailPassport
         eyebrow="Paszport pracy"
         title="Operator wózka widłowego"

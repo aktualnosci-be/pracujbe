@@ -343,6 +343,8 @@ function EmailShell(props: {
   const lc = layoutCopy[locale];
 
   const preview = interpolate(copy.preview, vars);
+  // Ten sam temat co w `renderEmail` (Subject) — trafia do `<title>` (a11y).
+  const subject = interpolate(copy.subject, vars);
   const heading = interpolate(copy.heading, vars);
   const paragraphs = interpolate(copy.body, vars)
     .split('\n\n')
@@ -369,6 +371,7 @@ function EmailShell(props: {
     <EmailLayout
       locale={locale}
       preview={preview}
+      title={subject}
       unsubscribeUrl={unsubscribeUrl}
       footerNote={copy.footerNote}
       sender={sender}
