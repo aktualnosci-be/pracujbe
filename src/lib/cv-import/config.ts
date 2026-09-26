@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { DEFAULT_JOB_IMPORT_MODEL } from '@/lib/ai-import/config';
+import { isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
 /**
@@ -11,11 +11,11 @@ import { isProductionMode } from '@/lib/env';
  *
  * Funkcja jest WIDOCZNA tylko gdy:
  *   - `AI_CV_IMPORT_ENABLED` = `1`/`true` (domyślnie wyłączona, także w produkcji), ORAZ
- *   - jest dostawca: `ANTHROPIC_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
+ *   - jest dostawca: `OPENAI_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
  *     `AI_CV_IMPORT_PROVIDER=fixture` (E2E i lokalny UX bez kosztów i bez sieci).
  */
 
-export type CvImportProvider = 'anthropic' | 'fixture';
+export type CvImportProvider = 'openai' | 'fixture';
 
 function flagOn(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
@@ -27,7 +27,7 @@ export function cvImportProvider(): CvImportProvider | null {
   if (process.env.AI_CV_IMPORT_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }
-  return process.env.ANTHROPIC_API_KEY ? 'anthropic' : null;
+  return isOpenAiConfigured() ? 'openai' : null;
 }
 
 /** Czy import CV ma być widoczny w panelu kandydata. */
@@ -35,8 +35,7 @@ export function isCvImportEnabled(): boolean {
   return cvImportProvider() !== null;
 }
 
-/** Model Claude (nadpisywalny przez `AI_CV_IMPORT_MODEL`); domyślnie ten sam co import ogłoszeń. */
+/** Model OpenAI: `AI_CV_IMPORT_MODEL` → `AI_MODEL` → `gpt-6-luna` (`resolveAiModel`). */
 export function cvImportModel(): string {
-  const m = process.env.AI_CV_IMPORT_MODEL?.trim();
-  return m && /^[a-z0-9][a-z0-9.-]{2,63}$/.test(m) ? m : DEFAULT_JOB_IMPORT_MODEL;
+  return resolveAiModel(process.env.AI_CV_IMPORT_MODEL);
 }
