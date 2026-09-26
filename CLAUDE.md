@@ -651,12 +651,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
-  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486), link do Polityki
-  prywatności w stopce e-maili (po zatwierdzeniu treści). Stopka e-maili (#6/#61,
-  `EmailLayout`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` w języku odbiorcy (etykieta
-  `layoutCopy.help` = `footer.faq` strony, znacznik `data-email-help`); link do placeholdera
-  Polityki prywatności usunięty (noindex — decyzja właściciela/prawnika). Test
-  `email-brand-layout` (kontrole ujemne: język nadawcy, brak linku, link do prywatności). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
+  `EmailLayout`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
+  `footer.faq` strony, `data-email-help`) i link „Prywatność” → `/{locale}/polityka-prywatnosci`
+  (`data-email-privacy`; zostaje — decyzja właściciela 26.09.2026), oba w języku odbiorcy. Test
+  `email-brand-layout` (kontrole ujemne: język nadawcy, brak któregoś linku). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
   (test `faq-redirect`).
 
 ### Etap 3 — kandydat

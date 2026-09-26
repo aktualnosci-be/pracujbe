@@ -141,10 +141,11 @@ export interface LayoutCopy {
   rights: string;
   /**
    * Etykieta linku do `/{locale}/pomoc` (pytania i odpowiedzi, #61) — to samo brzmienie co
-   * `footer.faq` w stopce strony (test `email-brand-layout`). Stopka nie linkuje do polityki
-   * prywatności: treść jest placeholderem z `noindex` (decyzja właściciela/prawnika, #40).
+   * `footer.faq` w stopce strony (test `email-brand-layout`).
    */
   help: string;
+  /** Etykieta linku do polityki prywatności (decyzja właściciela: link zostaje w stopce). */
+  privacy: string;
   /** Link wypisania z kategorii tej wiadomości (#45); tylko gdy mail ma kategorię preferencji. */
   unsubscribe: string;
   /** Etykiety tożsamości nadawcy w stopce (#45; wartości z konfiguracji, nie z kodu). */
@@ -160,6 +161,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     footerNote: 'Otrzymujesz tę wiadomość, ponieważ masz konto w serwisie Pracuj.be.',
     rights: '© {year} Pracuj.be. Wszelkie prawa zastrzeżone.',
     help: 'Pytania i odpowiedzi',
+    privacy: 'Prywatność',
     unsubscribe: 'Wypisz się z tych e-maili',
     sender: 'Nadawca',
     postalAddress: 'Adres pocztowy',
@@ -170,6 +172,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     footerNote: 'Je ontvangt dit bericht omdat je een account hebt op Pracuj.be.',
     rights: '© {year} Pracuj.be. Alle rechten voorbehouden.',
     help: 'Veelgestelde vragen',
+    privacy: 'Privacy',
     unsubscribe: 'Afmelden voor deze e-mails',
     sender: 'Afzender',
     postalAddress: 'Postadres',
@@ -180,6 +183,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     footerNote: 'Vous recevez ce message car vous avez un compte sur Pracuj.be.',
     rights: '© {year} Pracuj.be. Tous droits réservés.',
     help: 'Questions fréquentes',
+    privacy: 'Confidentialité',
     unsubscribe: 'Se désinscrire de ces e-mails',
     sender: 'Expéditeur',
     postalAddress: 'Adresse postale',
@@ -190,6 +194,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     footerNote: 'You are receiving this email because you have an account on Pracuj.be.',
     rights: '© {year} Pracuj.be. All rights reserved.',
     help: 'FAQ',
+    privacy: 'Privacy',
     unsubscribe: 'Unsubscribe from these emails',
     sender: 'Sender',
     postalAddress: 'Postal address',
