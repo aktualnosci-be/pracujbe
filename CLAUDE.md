@@ -509,7 +509,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
 > grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
-> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata),
+> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata — strona kandydata zrobiona: szczegół
+> zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
@@ -686,6 +687,17 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
+migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
+nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym
+`candidate_id = me` (RLS 0039 wpuszcza też rekrutera firmy — kontrola ujemna w
+`portal-candidate.test.ts`): dane wysłane do firmy (wiadomość, telefon, dostępność), odpowiedzi
+ze snapshotu #101, historia statusów bez notatek firmy (`note`), stronicowana po 50 kursorem
+`created_at` + `id` (`ApplicationHistoryList` z prop `loadMore` →
+`loadMoreMyApplicationHistory`, własność sprawdzana ponownie), link do powiązanej rozmowy,
+wycofanie (`ApplicationActions`). Cudze/usunięte/nieistniejące = 404, awaria = komunikat
+z ponowieniem, demo oznaczone. Testy: unit `candidate-application-detail`,
+`candidate-applications-list`; E2E `candidate-application-detail` (4 języki), `panel-a11y`.
 Metadane ofert (#184, 0113): `get_applied_jobs_display(p_locale, p_job_ids)` filtruje oferty
 bieżącej strony WEWNĄTRZ funkcji (SECURITY DEFINER nie jest inline'owana), więc baza nie liczy
 całej historii; ≤ 100 identyfikatorów, tylko własne aplikacje. Ten sam filtr dla propozycji
