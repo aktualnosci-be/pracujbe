@@ -1191,6 +1191,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
   statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
+  (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
+  semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;
+  test `cloudflare-cron-worker` z kontrolą bramki hasła).
   Wypisanie i budżety (#45, etap 1, migracja `0087`): token HMAC (`src/lib/email/unsubscribe-token.ts`,
   `EMAIL_UNSUBSCRIBE_SECRET`; UUID konta + kategoria + 180 dni, bez e-maila w URL), link w stopce
   → `/{locale}/wypisz` (noindex, zapis dopiero po kliknięciu), nagłówki `List-Unsubscribe` +
