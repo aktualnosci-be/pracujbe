@@ -3,7 +3,7 @@ import { Scale } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
-import { AdminEmptyState, AdminPageHeader } from '@/components/admin/AdminListControls';
+import { AdminEmptyState, AdminPageHeader, AdminPager } from '@/components/admin/AdminListControls';
 import { AppealDecisionActions } from '@/components/admin/AppealDecisionActions';
 import {
   ICON_BOX,
@@ -46,6 +46,12 @@ const DECISION_LABEL: Record<string, string> = {
   company_suspended: 'decisionCompanySuspended',
 };
 
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -56,11 +62,19 @@ export async function generateMetadata({
   return { title: t('appealsTitle'), robots: { index: false, follow: false } };
 }
 
-export default async function AdminAppealsPage({ params }: { params: Promise<{ locale: string }> }) {
+export default async function AdminAppealsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'admin' });
-  const result = await listAppeals();
+  const sp = await searchParams;
+  const cursor = firstValue(sp['cursor']) ?? null;
+  const result = await listAppeals({ cursor });
   const formatDate = createAppDateFormatter(locale, { withTime: true });
   // Termin liczony w chwili renderu (strona force-dynamic).
   const now = Date.now();
@@ -166,6 +180,13 @@ export default async function AdminAppealsPage({ params }: { params: Promise<{ l
               <ul>{result.pending.map(renderRow)}</ul>
             )}
           </section>
+          <AdminPager
+            pathname={BASE_PATH}
+            query={{}}
+            nextCursor={result.pendingNextCursor}
+            hasCursor={Boolean(cursor)}
+            count={result.pending.length}
+          />
           <section className={PANEL} aria-labelledby="appeals-decided-title">
             <div className={SECTION_HEAD}>
               <h2 id="appeals-decided-title" className={PANEL_H2}>

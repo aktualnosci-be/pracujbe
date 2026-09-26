@@ -90,6 +90,23 @@ function cityAliasRedirect(request: NextRequest): NextResponse | null {
   return NextResponse.redirect(url, 308);
 }
 
+const FAQ_RE = /^\/([a-z]{2})\/faq\/?$/;
+
+/**
+ * Dawna atrapa `/faq` (treść placeholder) → 308 na `/pomoc` — pytania i odpowiedzi z faktów
+ * produktu (#61). W middleware, nie w stronie: przekierowanie z renderu ISR dublowało
+ * `Location` (#298). Query zostaje.
+ */
+function faqRedirect(request: NextRequest): NextResponse | null {
+  const match = FAQ_RE.exec(request.nextUrl.pathname);
+  const locale = match?.[1];
+  const supported: readonly string[] = routing.locales;
+  if (!locale || !supported.includes(locale)) return null;
+  // Nowy URL, nie `nextUrl.clone()` — klon zachowuje końcowy ukośnik z żądania.
+  const url = new URL(`/${locale}/pomoc${request.nextUrl.search}`, request.url);
+  return NextResponse.redirect(url, 308);
+}
+
 /**
  * Bramka „w przygotowaniu” (`SITE_ACCESS_PASSWORD`): bez ważnego cookie każda strona zwraca
  * formularz hasła (503 + noindex). Sprawdzana przed wszystkim innym — także przed SEC-19.
@@ -137,7 +154,7 @@ export default async function middleware(request: NextRequest) {
     }));
   }
 
-  const cityRedirect = cityAliasRedirect(request);
+  const cityRedirect = cityAliasRedirect(request) ?? faqRedirect(request);
   if (cityRedirect) return cityRedirect;
 
   // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale).

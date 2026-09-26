@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "Le délai de recours commencera à courir dès réception de la notification de la décision.",
     "appealStatusLabel": "Recours {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Offres d'emploi chez {name}",
+    "metaDescription": "Découvrez les offres d'emploi actives de {name} sur Pracuj.be.",
+    "noDescription": "Cette entreprise n'a pas encore ajouté de description.",
+    "jobsHeading": "Offres actives de cette entreprise",
+    "empty": "Cette entreprise n'a actuellement aucune offre active.",
+    "backToJobs": "Voir toutes les offres d'emploi"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Chargement...",
@@ -962,6 +970,10 @@
     "employerApplicationNoProfile": "Le profil professionnel du candidat n’est pas disponible.",
     "employerApplicationHistory": "Historique des statuts",
     "employerApplicationNoHistory": "Aucun changement de statut enregistré.",
+    "employerApplicationHistoryMore": "Afficher plus",
+    "employerApplicationHistoryLoading": "Chargement…",
+    "employerApplicationHistoryMoreError": "Impossible de charger d'autres changements de statut. Réessayez.",
+    "employerApplicationHistoryRetry": "Réessayer",
     "employerApplicationMessage": "Écrire un message",
     "employerApplicationMessageLabel": "Écrire un message à : {name}",
     "employerApplicationView": "Voir la candidature",
@@ -993,7 +1005,13 @@
     "applicationStepReview": "L’employeur examine",
     "applicationStepInterview": "Entretien",
     "applicationStepDecision": "Décision",
-    "employerPlaceEyebrow": "Votre recrutement"
+    "employerPlaceEyebrow": "Votre recrutement",
+    "statRecruiterOnly": "Visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise",
+    "statAfterVerification": "Disponible après la vérification de l’entreprise",
+    "funnelDenied": "L’entonnoir de recrutement est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
+    "topMatchedDenied": "Les candidats correspondants sont visibles par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
+    "topMatchedUnverified": "Les candidats correspondants apparaîtront après la vérification de l’entreprise.",
+    "topMatchedLoadError": "Impossible de charger les candidats correspondants."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1330,7 +1348,6 @@
     "privacyTitle": "Politique de confidentialité",
     "cookiePolicyTitle": "Politique en matière de cookies",
     "aboutTitle": "À propos",
-    "faqTitle": "Questions fréquentes",
     "contactTitle": "Contact",
     "helpTitle": "Aide",
     "intro": "Vous trouverez ci-dessous les informations essentielles. Cette section est en cours de préparation.",
