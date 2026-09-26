@@ -510,9 +510,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
 > grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
 > draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata),
-> P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-12 (JSON-LD:
-> `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
-> `get_public_job`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
+> P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
@@ -520,6 +518,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
 > P2-06 i P4-* (atomowy lease inboxa, alerty/CWV; P2-13 zarządzanie zespołem zamknięte w #403); P2-04 (paginacja
 > admina) zamknięte w #418.
+> P1-12 (JSON-LD `validThrough` z `expires_at`, `baseSalary.value.unitText` z `salary_period`) —
+> zamknięte: `get_public_job` zwraca obie kolumny od 0114, JSON-LD #313/#22; dowód `rls.sql` sekcja JP12
+> (kontrola ujemna: definicja bez `expires_at`) i `jobs-postgres.test` (wiersz → JSON-LD).
 
 ### Etap 1 — fundament
 - [x] Architektura, stack, konfiguracja projektu (Next 15, TS strict, Tailwind)
@@ -627,6 +628,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   zamiast linkować donikąd. Strona indeksowalna (canonical, hreflang), sitemap dodaje jeden wpis na
   firmę zebrany PRZY OKAZJI iteracji po ofertach (bez osobnego zapytania). Dowód: `rls.sql` sekcja
   CP591; unit `company-profile`, `jobs-postgres` (#591), `sitemap-robots` (#591, z kontrolą ujemną).
+  SEO i kandydat (#591, bez migracji): nazwa firmy na karcie oferty (`JobCard`, link nad nakładką
+  tytułu) i w nagłówku szczegółu linkuje do profilu, gdy `companySlug` istnieje (tylko `verified`);
+  profil ma Organization JSON-LD (`buildOrganizationJsonLd`: nazwa, adres profilu, opis, adres
+  pocztowy; `sameAs`/`logo` tylko https — edycja w panelu to #632); profil bez aktywnych ofert =
+  `noindex, follow` bez canonical/hreflang (jak pusty landing #299), sitemap zbiera profile tylko
+  z aktywnych ofert. Serwer fixture E2E ma profile firm zweryfikowanych i jedną firmę bez ofert
+  (`src/lib/company-fixture.ts`). Dowód: unit `company-profile-seo` (kontrole ujemne), E2E
+  `company-profile` (linki, JSON-LD, noindex, 404 niezweryfikowanej, axe 320/1280 px w 4 językach).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
@@ -1300,7 +1309,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Minimalizacja treści (#503, migracja `0123`): worker przekazuje do
   szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
   poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
-  (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
+  (`jobOffer.message`; od 26.09.2026 tylko oczyszczony cytat `messageExcerpt`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
   odbiorcę firmowego (`email_recipient_authorized`: aplikacja/propozycja/wiadomość →
   `company_recipient_ok`; brak obiektu = fail-closed) → `suppressed_recipient_unauthorized`.
   Mapa danych: kolumna „Odrzucane przez workera”. Dowód: `rls.sql` sekcja ES503 (kontrola
@@ -1325,7 +1334,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i kwoty oferty (#293, #22), `newMessage` — `conversationId` (CTA do wątku, #290); dowód
   `rls.sql` sekcja PL109 (kontrole ujemne), `email-payload-followups.test`. Treść wiadomości
   rekrutera świadomie poza payloadem (tekst wolny = korespondencja, #503; worker odrzuca pole `message`) — kandydat czyta ją
-  w panelu. **Otwarte (#503, właściciel):** czy cytat wiadomości rekrutera może trafić do e-maila.
+  w panelu. Krótki cytat (decyzja właściciela 26.09.2026, bez migracji): worker czyta
+  `offers.message` w chwili wysyłki i przekazuje do szablonu tylko `messageExcerpt`
+  (`src/lib/email/message-excerpt.ts`: e-maile, telefony, NISS/BIS/PESEL, numery kart
+  i dokumentów — detektory `src/lib/privacy/sensitive-data.ts` — oraz URL-e → `[…]`, potem
+  obcięcie do 200 znaków; po redakcji coś wykryte albo `@` → brak cytatu). `delivery-data`
+  oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
+  `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
+  `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
@@ -1783,8 +1799,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   odświeżeniu zero żądań; stara wersja polityki (także cookie 1.0 z marketingiem) / uszkodzone cookie → baner z serwera
   nieukryty przed hydratacją; cookie na 180 dni; wywołanie `recordConsent` z kategoriami
   i źródłem (centrum = `cookie_settings`). Kontrakt parametrów `recordConsent` ↔
-  `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
-  polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
+  `record_consent` z migracji (`consent-action.test`).
+  Wersja polityki w receipcie (#349, migracja `0142`): `record_consent` przyjmuje opcjonalny
+  `p_version` (= `ConsentRecord.v` z cookie klienta, `src/lib/consent.ts`) i zapisuje w
+  receipcie DOKŁADNIE tę wersję dokumentu 'cookies', którą użytkownik faktycznie widział —
+  ale TYLKO gdy istnieje jako OPUBLIKOWANY wiersz `consent_versions` (`published_at` ustawione
+  i ≤ now(); nie musi być `is_current`, bo polityka mogła się zmienić już PO zgodzie). Wartość
+  `NEXT_PUBLIC_CONSENT_POLICY_VERSION` musi być równa `consent_versions.version` dokumentu
+  `cookies` (`docs/LAUNCH_CHECKLIST.md` §3). Nieznana/nieopublikowana/brak wersji → cichy fallback do bieżącej (jak
+  przed 0142); best-effort, log zgód nie blokuje UX (Invariant #8). Kategorie jak w `0130`
+  (bez `marketing`). Stara 5-argumentowa sygnatura RPC jest zastąpiona (jedyny wołający,
+  `recordConsent`, zaktualizowany w tym samym PR). Dowód: `rls.sql` sekcja CVR142 (kontrole
+  ujemne: nieistniejąca wersja nie trafia do receiptu, wersja nieopublikowana — przyszła lub szkic — też nie,
+  authenticated nie dopisuje/nie nadpisuje receiptu cudzego konta).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
   Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta

@@ -8,7 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildOrganizationJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { getCompanyProfile } from '@/lib/companies';
 import { JobCard } from '@/components/public/JobCard';
 
@@ -70,10 +70,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
   languages['x-default'] = `${base}/${routing.defaultLocale}${path}`;
 
+  // Profil bez aktywnych ofert nie wnosi treści dla kandydata (sama nazwa i opis): `noindex,
+  // follow` i bez canonical/hreflang — jak pusty landing (#299). Sitemap i tak go pomija (profile
+  // zbierane z ofert). Wraca do indeksu przy pierwszej aktywnej ofercie (ISR, revalidate 60 s).
+  const indexable = result.company.activeJobsCount > 0;
+
   return {
     title: { absolute: title },
     description,
-    alternates: { canonical: url, languages },
+    ...(indexable
+      ? { alternates: { canonical: url, languages } }
+      : { robots: { index: false, follow: true } }),
     openGraph: {
       title,
       description,
@@ -97,6 +104,19 @@ export default async function CompanyProfilePage({ params }: PageProps) {
   }
   const { company, jobs } = result;
 
+  const profileUrl = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
+  const organizationJsonLd = buildOrganizationJsonLd(
+    {
+      name: company.name,
+      description: company.description,
+      city: company.city,
+      region: company.region,
+      website: company.website,
+      logoUrl: company.logoUrl,
+    },
+    profileUrl,
+  );
+
   const [t, tJob, tJobs, tCommon] = await Promise.all([
     getTranslations('companyProfile'),
     getTranslations('job'),
@@ -106,6 +126,11 @@ export default async function CompanyProfilePage({ params }: PageProps) {
 
   return (
     <PublicSavedJobsProvider key={JSON.stringify(jobs.map((job) => job.id))} jobIds={jobs.map((job) => job.id)}>
+      {/* Organization (#591): strona istnieje tylko dla firmy zweryfikowanej. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
+      />
       <div className="container py-6 md:py-10">
         <Breadcrumbs
           ariaLabel={tCommon('breadcrumb')}

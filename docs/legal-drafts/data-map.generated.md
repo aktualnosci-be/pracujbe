@@ -1118,6 +1118,8 @@ z `profiles`, link do panelu i stopkę wypisania (`src/lib/email/delivery-data.t
 
 Minimalizacja (#503): do szablonu — a więc do dostawcy poczty — trafiają tylko pola z listy
 `src/lib/email/payload-fields.ts`; resztę payloadu worker odrzuca przed renderem (zostaje w bazie).
+Wyjątek spoza SQL: `jobOffer.messageExcerpt` — worker czyta `offers.message` przy wysyłce i przekazuje
+wyłącznie cytat ≤ 200 znaków bez e-maili, telefonów, URL-i i identyfikatorów (`src/lib/email/message-excerpt.ts`).
 Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal ma uprawnienie
 (`email_recipient_authorized` w `claim_email_batch`).
 
