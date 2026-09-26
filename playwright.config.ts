@@ -78,36 +78,59 @@ function buildHasTrackerIds(): boolean {
 
 // CI buduje w osobnym kroku (PLAYWRIGHT_SKIP_BUILD=1). Jeśli ten build nie ma testowych ID
 // trackerów, przebudowujemy go tutaj — inaczej test zgód przechodziłby zawsze (issue #234).
+const BROWSER = {
+  ...devices['Desktop Chrome'],
+  ...(CHROMIUM_PATH ? { launchOptions: { executablePath: CHROMIUM_PATH } } : {}),
+};
+
 const reuseBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1' && buildHasTrackerIds();
+
+/**
+ * Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
+ * na danych demo zawsze by padły.
+ */
+const FIXTURE_ONLY_SPECS = [
+  '**/candidate-applications-pagination.spec.ts',
+  '**/candidate-applications-error.spec.ts',
+  '**/candidate-proposals-pagination.spec.ts',
+  '**/candidate-dashboard-read-errors.spec.ts',
+  '**/public-read-failures.spec.ts',
+  // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
+  // nich komunikat, więc testujemy je na serwerze fixture.
+  '**/apply-modal-a11y.spec.ts',
+  '**/apply-network-error.spec.ts',
+  '**/apply-phone-validation.spec.ts',
+  '**/apply-screening.spec.ts',
+  '**/guest-apply.spec.ts',
+  '**/job-posting-fixture.spec.ts',
+  // Profil firmy (#591) — w demo profili nie ma (404); linki, JSON-LD, noindex i axe na fixture.
+  '**/company-profile.spec.ts',
+  '**/offer-message-login.spec.ts',
+  // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
+  '**/content-report-form.spec.ts',
+  '**/job-funnel-no-storage.spec.ts',
+  '**/job-funnel-minor-marker.spec.ts',
+  // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
+  '**/contact-form.spec.ts',
+];
+
+/**
+ * Speci z asercją czasu (INP otwarcia dialogu przy CPU 4×, #393). Mierzą czas interakcji, więc
+ * biegną w osobnym projekcie na jednym workerze i dopiero PO reszcie zestawu — równoległe
+ * karty nie zabierają im CPU. Pozostałe testy nie mierzą czasu i biegną równolegle.
+ */
+const TIMING_SPECS = ['**/dialog-open-inp.spec.ts'];
+
+/**
+ * Równoległość w CI: hostowany runner `ubuntu-latest` ma 4 vCPU; jeden rdzeń zostaje dla
+ * serwera `next start`. Na jednym workerze sam krok „Run E2E” trwał ~25 min.
+ */
+const CI_WORKERS = 3;
 
 export default defineConfig({
   testDir: './tests/e2e',
   // Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
   // na danych demo zawsze by padły.
-  testIgnore: [
-    '**/candidate-applications-pagination.spec.ts',
-    '**/candidate-applications-error.spec.ts',
-    '**/candidate-proposals-pagination.spec.ts',
-    '**/candidate-dashboard-read-errors.spec.ts',
-    '**/public-read-failures.spec.ts',
-    // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
-    // nich komunikat, więc testujemy je na serwerze fixture.
-    '**/apply-modal-a11y.spec.ts',
-    '**/apply-network-error.spec.ts',
-    '**/apply-phone-validation.spec.ts',
-    '**/apply-screening.spec.ts',
-    '**/guest-apply.spec.ts',
-    '**/job-posting-fixture.spec.ts',
-    // Profil firmy (#591) — w demo profili nie ma (404); linki, JSON-LD, noindex i axe na fixture.
-    '**/company-profile.spec.ts',
-    '**/offer-message-login.spec.ts',
-    // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
-    '**/content-report-form.spec.ts',
-    '**/job-funnel-no-storage.spec.ts',
-    '**/job-funnel-minor-marker.spec.ts',
-    // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
-    '**/contact-form.spec.ts',
-  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // Niestabilność ma być widoczna (#375). Jedno ponowienie odróżnia test niestabilny
@@ -117,7 +140,7 @@ export default defineConfig({
   // podsumowanie joba, plik flaky-tests.json); reporter `github` dodaje adnotacje.
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? CI_WORKERS : undefined,
   reporter: process.env.CI
     ? [
         ['line'],
@@ -138,10 +161,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        ...(CHROMIUM_PATH ? { launchOptions: { executablePath: CHROMIUM_PATH } } : {}),
-      },
+      testIgnore: [...FIXTURE_ONLY_SPECS, ...TIMING_SPECS],
+      use: BROWSER,
+    },
+    {
+      name: 'chromium-timing',
+      testMatch: TIMING_SPECS,
+      // Jeden worker i start po zakończeniu projektu `chromium` = pomiar bez konkurencji o CPU.
+      workers: 1,
+      dependencies: ['chromium'],
+      use: BROWSER,
     },
   ],
   webServer: {

@@ -35,6 +35,7 @@ const COVERED_AT_320 = new Set([
 const ROUTES = [
   'candidate',
   'candidate/aplikacje',
+  'candidate/aplikacje/demo-app-0',
   'candidate/oferty-polecane',
   'candidate/powiadomienia',
   'candidate/powiadomienia?nieprzeczytane=1',
