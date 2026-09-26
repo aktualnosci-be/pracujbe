@@ -1567,6 +1567,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
+  Eksport CSV/JSON (bez migracji): przyciski „Eksport CSV/JSON” (`AuditExportButton`, klucze
+  `admin.auditExport*`) → `POST /api/admin/audit-export?format=&entity=&action=&actor=&from=&to=&id=`
+  — te same filtry i walidacja co lista (wspólny odczyt `readAuditRows` w `src/lib/data/admin.ts`),
+  od najnowszego, najwyżej `AUDIT_EXPORT_LIMIT` = 10 000 wierszy (obcięcie: nagłówek
+  `X-Export-Truncated`, w CSV ostatni wiersz `#truncated,10000`, w JSON `truncated`, komunikat
+  w UI). Rola admina sprawdzana w `exportAuditLogs` (brak sesji/inna rola/demo → 404), `Origin` tej
+  witryny (inaczej 403), `no-store`, `GET` = 405. Kolumny = to, co pokazuje lista (czas w
+  Europe/Brussels z przesunięciem, akcja, obiekt, statusy, uzasadnienie, aktor jako nazwa albo
+  „System”; bez e-maili i id aktorów), komórki przez `csvCell` (neutralizacja `= + - @`) —
+  `src/lib/admin/audit-export.ts`. Każdy eksport w tej samej transakcji zapisuje wpis
+  `audit_log.exported` (aktor = admin; tylko format, liczba wierszy, obcięcie i rodzaj filtrów —
+  bez frazy aktora i treści wpisów); awaria zapisu = brak eksportu. Test: `admin-audit-export`
+  (kontrole ujemne: nie-admin 404, GET 405, obcy Origin 403, formuła w CSV, limit bez obcięcia).
 - [~] Retencja i prawa kandydata (#486, migracja `0105`, `docs/DATA_RETENTION.md`):
   okresy jako dane (`retention_policies`, null = kategoria wyłączona; zmiana tylko
   `admin_set_retention_policy` z audytem, rejestr usunięć ≥ 400 dni). `/api/maintenance` woła

@@ -44,7 +44,7 @@ import {
 import { appDayStartUtc } from '@/lib/datetime';
 import { demoJobs } from '@/lib/data/demo';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
-import { attempt, queryCount, queryOne, queryRows } from '@/lib/db/sql';
+import { attempt, execute, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
 import {
@@ -1147,6 +1147,134 @@ function statusOf(value: unknown): string | null {
   return asNullableString(asRecord(value)['status']);
 }
 
+interface AuditFilters {
+  entity: string | null;
+  action: string | null;
+  entityId: string | null;
+  actorQuery: string | null;
+  fromIso: string | null;
+  toIso: string | null;
+}
+
+/**
+ * Odczyt wpisów dziennika (service role) z filtrami listy — wspólny dla `/admin/dziennik`
+ * i eksportu (`exportAuditLogs`). Zwraca najwyżej `limit` wierszy (`created_at desc, id desc`).
+ */
+async function readAuditRows(
+  tx: TransactionQuery,
+  filters: AuditFilters,
+  limit: number,
+  cursor: string | null | undefined,
+): Promise<AdminAuditRow[]> {
+  const { entity, action, entityId, actorQuery, fromIso, toIso } = filters;
+  const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
+  // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
+  let actorIdsFilter: string[] | null = null;
+  if (actorQuery && !systemActor) {
+    const actorParams = new SqlParams();
+    const actors = await queryRows(tx, 'admin.audit-actor-search',
+      `SELECT id FROM public.profiles
+        ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
+        LIMIT 100`, actorParams.values);
+    actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
+    if (actorIdsFilter.length === 0) return [];
+  }
+
+  const params = new SqlParams();
+  const where = whereOf([
+    entity && `entity_type = ${params.add(entity)}`,
+    action && `action = ${params.add(action)}`,
+    entityId && `entity_id = ${params.add(entityId)}::uuid`,
+    fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
+    toIso && `created_at < ${params.add(toIso)}::timestamptz`,
+    systemActor && 'actor_id IS NULL',
+    actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
+    cursorCondition(params, cursor),
+  ]);
+  const limitParam = params.add(limit);
+  const rows = asRows(
+    await queryRows(tx, 'admin.audit-logs',
+      `SELECT id, actor_id, action, entity_type, entity_id, before_data, after_data, created_at
+         FROM public.audit_logs
+         ${where}
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${limitParam}`, params.values),
+  );
+
+  const actorIds = uniqueIds(rows.map((r) => asString(r['actor_id'])));
+  const companyIds = uniqueIds(
+    rows.filter((r) => asString(r['entity_type']) === 'company').map((r) => asString(r['entity_id'])),
+  );
+  const actorRows = asRows(await readProfileNames(tx, 'admin.audit-actors', actorIds));
+  const companyRows = companyIds.length
+    ? asRows(await queryRows(tx, 'admin.audit-companies',
+        'SELECT id, name, deleted_at FROM public.companies WHERE id = ANY($1::uuid[])', [companyIds]))
+    : [];
+
+  const actorName = new Map<string, string | null>();
+  for (const p of actorRows) {
+    const name = fullName(p);
+    actorName.set(asString(p['id']), name.length > 0 ? name : asNullableString(p['email']));
+  }
+  const companyName = new Map<string, { name: string | null; deleted: boolean }>();
+  for (const c of companyRows) {
+    companyName.set(asString(c['id']), {
+      name: asNullableString(c['name']),
+      deleted: Boolean(asNullableString(c['deleted_at'])),
+    });
+  }
+  return rows.map((row) => {
+    const entityType = asNullableString(row['entity_type']);
+    const id = asNullableString(row['entity_id']);
+    const actorId = asNullableString(row['actor_id']);
+    let entityLabel: string | null = null;
+    let entityHref: AdminHref | null = null;
+    if (entityType === 'company' && id) {
+      const company = companyName.get(id);
+      entityLabel = company?.name ?? null;
+      if (company?.name && !company.deleted) {
+        const uuid = parseUuid(id);
+        // Szczegół firmy (#310); identyfikator spoza formatu UUID → wyszukiwanie po nazwie.
+        entityHref = uuid
+          ? { pathname: `/admin/firmy/${uuid}` }
+          : { pathname: '/admin/firmy', query: { q: company.name } };
+      }
+    } else if (entityType === 'report') {
+      entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
+    } else if (entityType === 'email_suppression') {
+      entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
+    } else if (entityType === 'screening_question_review') {
+      entityHref = { pathname: '/admin/pytania', query: { status: 'all' } };
+    } else if (entityType === 'breach_incident' && id) {
+      const uuid = parseUuid(id);
+      entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
+    } else if (entityType === 'email_campaign' && id) {
+      const uuid = parseUuid(id);
+      entityHref = uuid ? { pathname: `/admin/kampanie/${uuid}` } : null;
+    }
+    return {
+      id: asString(row['id']),
+      action: asString(row['action']),
+      entityType,
+      entityId: id,
+      entityLabel,
+      entityHref,
+      statusBefore: statusOf(row['before_data']),
+      statusAfter: statusOf(row['after_data']),
+      reason:
+        entityType === 'company' ||
+        entityType === 'email_suppression' ||
+        entityType === 'screening_question_review' ||
+        asString(row['action']) === 'moderation.restored'
+          ? asNullableString(asRecord(row['after_data'])['reason'])
+          : null,
+      actorId,
+      actorName: actorId ? (actorName.get(actorId) ?? null) : null,
+      createdAt: asNullableString(row['created_at']),
+    };
+  });
+}
+
 /**
  * Dziennik zdarzeń: filtry typu obiektu, akcji, obiektu, aktora i zakresu dat; stronicowanie
  * kursorem (`created_at`, `id`). Nazwy aktorów i firm — batchowe odczyty. Bez env → DEMO.
@@ -1177,124 +1305,82 @@ export async function listAuditLogs(
   await requireAdmin();
 
   try {
-    const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
-    const page = await withServiceRole(async (tx) => {
-      // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
-      let actorIdsFilter: string[] | null = null;
-      if (actorQuery && !systemActor) {
-        const actorParams = new SqlParams();
-        const actors = await queryRows(tx, 'admin.audit-actor-search',
-          `SELECT id FROM public.profiles
-            ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
-            LIMIT 100`, actorParams.values);
-        actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
-        if (actorIdsFilter.length === 0) return null;
-      }
-
-      const params = new SqlParams();
-      const where = whereOf([
-        entity && `entity_type = ${params.add(entity)}`,
-        action && `action = ${params.add(action)}`,
-        entityId && `entity_id = ${params.add(entityId)}::uuid`,
-        fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
-        toIso && `created_at < ${params.add(toIso)}::timestamptz`,
-        systemActor && 'actor_id IS NULL',
-        actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
-        cursorCondition(params, query.cursor),
-      ]);
-      const limit = params.add(ADMIN_PAGE_SIZE + 1);
-      const rows = asRows(
-        await queryRows(tx, 'admin.audit-logs',
-          `SELECT id, actor_id, action, entity_type, entity_id, before_data, after_data, created_at
-             FROM public.audit_logs
-             ${where}
-            ORDER BY created_at DESC, id DESC
-            LIMIT ${limit}`, params.values),
-      );
-
-      const actorIds = uniqueIds(rows.map((r) => asString(r['actor_id'])));
-      const companyIds = uniqueIds(
-        rows.filter((r) => asString(r['entity_type']) === 'company').map((r) => asString(r['entity_id'])),
-      );
-      const actors = await readProfileNames(tx, 'admin.audit-actors', actorIds);
-      const companies = companyIds.length
-        ? await queryRows(tx, 'admin.audit-companies',
-            'SELECT id, name, deleted_at FROM public.companies WHERE id = ANY($1::uuid[])', [companyIds])
-        : [];
-      return { rows, actors: asRows(actors), companies: asRows(companies) };
-    });
-    if (!page) return { status: 'ok', rows: [], nextCursor: null };
-
-    const actorName = new Map<string, string | null>();
-    for (const p of page.actors) {
-      const name = fullName(p);
-      actorName.set(asString(p['id']), name.length > 0 ? name : asNullableString(p['email']));
-    }
-    const companyName = new Map<string, { name: string | null; deleted: boolean }>();
-    for (const c of page.companies) {
-      companyName.set(asString(c['id']), {
-        name: asNullableString(c['name']),
-        deleted: Boolean(asNullableString(c['deleted_at'])),
-      });
-    }
-
-    return toPage(
-      page.rows.map((row) => {
-        const entityType = asNullableString(row['entity_type']);
-        const id = asNullableString(row['entity_id']);
-        const actorId = asNullableString(row['actor_id']);
-        let entityLabel: string | null = null;
-        let entityHref: AdminHref | null = null;
-        if (entityType === 'company' && id) {
-          const company = companyName.get(id);
-          entityLabel = company?.name ?? null;
-          if (company?.name && !company.deleted) {
-            const uuid = parseUuid(id);
-            // Szczegół firmy (#310); identyfikator spoza formatu UUID → wyszukiwanie po nazwie.
-            entityHref = uuid
-              ? { pathname: `/admin/firmy/${uuid}` }
-              : { pathname: '/admin/firmy', query: { q: company.name } };
-          }
-        } else if (entityType === 'report') {
-          entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
-        } else if (entityType === 'email_suppression') {
-          entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
-        } else if (entityType === 'screening_question_review') {
-          entityHref = { pathname: '/admin/pytania', query: { status: 'all' } };
-        } else if (entityType === 'breach_incident' && id) {
-          const uuid = parseUuid(id);
-          entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;
-        } else if (entityType === 'email_campaign' && id) {
-          const uuid = parseUuid(id);
-          entityHref = uuid ? { pathname: `/admin/kampanie/${uuid}` } : null;
-        }
-        return {
-          id: asString(row['id']),
-          action: asString(row['action']),
-          entityType,
-          entityId: id,
-          entityLabel,
-          entityHref,
-          statusBefore: statusOf(row['before_data']),
-          statusAfter: statusOf(row['after_data']),
-          reason:
-            entityType === 'company' ||
-            entityType === 'email_suppression' ||
-            entityType === 'screening_question_review' ||
-            asString(row['action']) === 'moderation.restored'
-              ? asNullableString(asRecord(row['after_data'])['reason'])
-              : null,
-          actorId,
-          actorName: actorId ? (actorName.get(actorId) ?? null) : null,
-          createdAt: asNullableString(row['created_at']),
-        };
-      }),
-      (row) => row.createdAt,
+    const page = await withServiceRole((tx) =>
+      readAuditRows(tx, { entity, action, entityId, actorQuery, fromIso, toIso }, ADMIN_PAGE_SIZE + 1, query.cursor),
     );
+    return toPage(page, (row) => row.createdAt);
   } catch (error) {
     captureError(error, { area: 'admin.listAuditLogs' });
     return { status: 'error' };
   }
+}
+
+/** Górna granica wierszy jednego eksportu dziennika (reszta = `truncated`). */
+export const AUDIT_EXPORT_LIMIT = 10_000;
+
+/** Akcja wpisu audytu zapisywanego przy każdym eksporcie dziennika. */
+export const AUDIT_EXPORT_ACTION = 'audit_log.exported';
+
+export interface AdminAuditExport {
+  rows: AdminAuditRow[];
+  /** Filtr zwrócił więcej niż `limit` wierszy — eksport zawiera tylko najnowsze. */
+  truncated: boolean;
+  limit: number;
+}
+
+/**
+ * Eksport dziennika (`POST /api/admin/audit-export`) z tymi samymi filtrami co lista (bez
+ * kursora — od najnowszego). Sama potwierdza rolę admina sesji (`getPortalIdentity()`); brak
+ * sesji/inna rola → `null` (trasa odpowiada 404, bez `notFound()` w route handlerze). W TEJ SAMEJ transakcji zapisuje wpis `audit_log.exported`
+ * z aktorem = admin: tylko format, liczba wierszy, obcięcie i RODZAJ filtrów (bez frazy aktora
+ * i bez treści wpisów). Awaria zapisu wpisu = brak eksportu.
+ */
+export async function exportAuditLogs(
+  query: AdminAuditQuery,
+  format: 'csv' | 'json',
+  limit = AUDIT_EXPORT_LIMIT,
+): Promise<AdminAuditExport | null> {
+  const admin = await getPortalIdentity();
+  if (admin?.role !== 'admin') return null;
+  const entity = parseAuditEntity(query.entity);
+  const action = parseAuditAction(query.action);
+  const entityId = parseUuid(query.entityId);
+  const actorQuery = normalizeAdminSearch(query.actor);
+  const from = parseYmd(query.from);
+  const to = parseYmd(query.to);
+  const fromIso = appDayStartUtc(from);
+  const toIso = appDayStartUtc(to, true);
+
+  return withServiceRole(async (tx) => {
+    const fetched = await readAuditRows(
+      tx,
+      { entity, action, entityId, actorQuery, fromIso, toIso },
+      limit + 1,
+      null,
+    );
+    const truncated = fetched.length > limit;
+    const rows = truncated ? fetched.slice(0, limit) : fetched;
+    const actorFilter = !actorQuery
+      ? null
+      : actorQuery.toLowerCase() === AUDIT_ACTOR_SYSTEM
+        ? 'system'
+        : 'search';
+    await execute(tx, 'admin.audit-export-log',
+      `INSERT INTO public.audit_logs (actor_id, action, entity_type, entity_id, before_data, after_data)
+       VALUES ($1::uuid, $2, NULL, NULL, NULL, $3::jsonb)`,
+      [
+        admin.id,
+        AUDIT_EXPORT_ACTION,
+        JSON.stringify({
+          format,
+          rowCount: rows.length,
+          truncated,
+          limit,
+          filters: { entity, action, entityId: Boolean(entityId), actor: actorFilter, from, to },
+        }),
+      ]);
+    return { rows, truncated, limit };
+  });
 }
 
 /* ---------------------------------------------------------------------------
