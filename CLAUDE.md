@@ -1666,8 +1666,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   z przeglądarki, wiersz `matches` wstawia operator (pipeline P1-03). Mutacje UI:
   `respond-offer-noop|transition-noop` (czerwone są też `finish-onboarding-noop` i
   `recipient-locale-en`; `rls-applications-off` łapie tylko critical-flow — panel sam filtruje
-  po aktywnej firmie). **Otwarte:** wpięcie w CI (job z usługą `postgres:16`) — gotowy
-  fragment `ci.yml` w opisie PR; kreator oferty (9 kroków) w tym przebiegu.
+  po aktywnej firmie). Kreator oferty (`tests/e2e-real/job-wizard.spec.ts`): 9 kroków klikanych
+  w przeglądarce (nl) pod sesją Better Auth; błąd pola w kroku 1 nie tworzy oferty, po każdym
+  „Dalej” odczyt szkicu w bazie (kolumny `jobs`, tłumaczenie, wymagania, umiejętności, języki
+  z poziomem, certyfikaty); publikacja przy firmie niezweryfikowanej = komunikat i nadal `draft`
+  (bez e-maila `jobPublished`), po weryfikacji przez admina ta sama sesja publikuje (`active`,
+  slug publiczny, e-mail w języku publikującego, strona oferty dla gościa). Mutacje:
+  `wizard-draft-noop|publish-unverified`. **Otwarte:** wpięcie w CI (job z usługą `postgres:16`)
+  — gotowy fragment `ci.yml` w opisie PR.
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
