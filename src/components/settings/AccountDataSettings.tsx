@@ -12,7 +12,11 @@ import { deleteMyAccountAction, type DeleteAccountError } from '@/lib/actions/ac
 import { Link } from '@/i18n/navigation';
 
 /**
- * AccountDataSettings — pobranie danych (JSON) i usunięcie konta kandydata (#486).
+ * AccountDataSettings — pobranie danych (JSON) i usunięcie konta kandydata albo pracodawcy (#486).
+ *
+ * `variant` zmienia wyłącznie opisy (zakres eksportu/usunięcia); trasa i akcja same wybierają
+ * funkcję bazy po roli sesji (`export_my_employer_data` / `request_employer_account_erasure`,
+ * 0209). Pracodawca będący ostatnim właścicielem firmy dostaje `deleteLastOwner`.
  *
  * Eksport: `fetch` POST `/api/account/export` (ta sama witryna, sesja w cookies) → plik
  * z odpowiedzi; status błędu → przetłumaczony komunikat, nigdy surowa odpowiedź (Invariant #8).
@@ -32,11 +36,14 @@ const EXPORT_MESSAGES = {
   error: 'exportError',
 } as const;
 
-const DELETE_ERRORS: Record<DeleteAccountError, 'mismatch' | 'deleteDenied' | 'deleteError'> = {
+const DELETE_ERRORS: Record<DeleteAccountError, 'mismatch' | 'deleteDenied' | 'deleteLastOwner' | 'deleteError'> = {
   mismatch: 'mismatch',
   denied: 'deleteDenied',
+  lastOwner: 'deleteLastOwner',
   failed: 'deleteError',
 };
+
+export type AccountDataVariant = 'candidate' | 'employer';
 
 function exportFailure(status: number): ExportState {
   if (status === 429) return 'rateLimited';
@@ -60,7 +67,11 @@ function fileNameFrom(disposition: string | null): string {
   return match?.[1] ?? 'pracujbe-dane.json';
 }
 
-export function AccountDataSettings(): React.JSX.Element {
+export function AccountDataSettings({
+  variant = 'candidate',
+}: {
+  variant?: AccountDataVariant;
+} = {}): React.JSX.Element {
   const t = useTranslations('accountData');
   const [exportState, setExportState] = React.useState<ExportState>('idle');
   const [confirming, setConfirming] = React.useState(false);
@@ -145,7 +156,7 @@ export function AccountDataSettings(): React.JSX.Element {
       <div className="mt-5">
         <h3 className="text-base font-semibold text-foreground">{t('exportTitle')}</h3>
         <p id="account-export-description" className="mt-1 text-sm text-muted-foreground">
-          {t('exportDescription')}
+          {variant === 'employer' ? t('exportDescriptionEmployer') : t('exportDescription')}
         </p>
         <Button
           type="button"
@@ -206,7 +217,7 @@ export function AccountDataSettings(): React.JSX.Element {
         ) : (
           <>
             <p id="account-delete-description" className="mt-1 text-sm text-muted-foreground">
-              {t('deleteDescription')}
+              {variant === 'employer' ? t('deleteDescriptionEmployer') : t('deleteDescription')}
             </p>
             {confirming ? (
               <form className="mt-3" noValidate onSubmit={(event) => void deleteAccount(event)}>

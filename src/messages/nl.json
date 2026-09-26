@@ -2651,6 +2651,7 @@
     "sectionDescription": "Download een kopie van de gegevens in je account of verwijder je account.",
     "exportTitle": "Gegevens downloaden",
     "exportDescription": "Een JSON-bestand met je profiel, cv (bestandsnaam en grootte), sollicitaties, voorstellen, berichten en opgeslagen matchresultaten.",
+    "exportDescriptionEmployer": "Een JSON-bestand met je profiel, lidmaatschappen van bedrijven, verstuurde uitnodigingen, aangemaakte vacatures en de geschiedenis van je acties in het dashboard. Zonder gegevens van kandidaten.",
     "exportButton": "Mijn gegevens downloaden (JSON)",
     "exporting": "Bestand wordt voorbereid…",
     "exportSuccess": "Het bestand met je gegevens is gedownload.",
@@ -2660,6 +2661,7 @@
     "exportError": "Het bestand kon niet worden voorbereid. Probeer het opnieuw.",
     "deleteTitle": "Account verwijderen",
     "deleteDescription": "Verwijdert je profiel, cv, sollicitaties, voorstellen en berichten op de site. Dit kan niet ongedaan worden gemaakt.",
+    "deleteDescriptionEmployer": "Verwijdert je profiel, lidmaatschappen van bedrijven en toegang tot het dashboard. Bedrijven, vacatures, sollicitaties en gesprekken blijven bij het bedrijf. Dit kan niet ongedaan worden gemaakt.",
     "deleteStart": "Account verwijderen…",
     "confirmLabel": "Typ het e-mailadres van je account ter bevestiging",
     "confirmButton": "Account definitief verwijderen",
@@ -2668,6 +2670,7 @@
     "mismatch": "Dit adres komt niet overeen met het adres van je account.",
     "deleteDenied": "Deze actie is niet beschikbaar voor dit account.",
     "deleteError": "Je account kon niet worden verwijderd. Probeer het opnieuw.",
+    "deleteLastOwner": "Je bent de enige eigenaar van een bedrijf. Draag eerst de rol van eigenaar over aan iemand anders of sluit het bedrijf.",
     "deleted": "Je account is verwijderd.",
     "deletedDemo": "Demomodus: er is niets verwijderd.",
     "homeLink": "Naar de startpagina"

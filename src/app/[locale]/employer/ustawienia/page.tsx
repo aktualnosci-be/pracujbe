@@ -4,10 +4,11 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { loadNotificationPreferences } from '@/lib/data/notification-preferences';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
+import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
 import { EYEBROW, H1_EXTENDED, INTRO, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
- * Panel pracodawcy — Ustawienia (preferencje powiadomień, Etap 6).
+ * Panel pracodawcy — Ustawienia (preferencje powiadomień, Etap 6; „Twoje dane i konto” #486).
  *
  * Formularz przełączników preferencji (`notification_preferences`), dane pod sesją/RLS z
  * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
@@ -57,6 +58,9 @@ export default async function EmployerSettingsPage({
           <NotificationPreferencesLoadError />
         )}
       </section>
+
+      {/* #486 (0209): eksport danych konta pracodawcy i usunięcie konta. */}
+      <AccountDataSettings variant="employer" />
     </div>
   );
 }

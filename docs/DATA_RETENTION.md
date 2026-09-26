@@ -7,7 +7,8 @@ zatwierdza administrator danych; roboczy projekt dla prawnika jest w
 
 Migracje: `supabase/migrations/0105_data_retention_rights.sql` (mechanizm) i
 `supabase/migrations/0127_retention_values.sql` (#574 — wartości z opracowania 2026-09-25,
-brakujące zadania, dead-letter kolejki storage).
+brakujące zadania, dead-letter kolejki storage), `supabase/migrations/0209_employer_account_rights.sql`
+(eksport i usunięcie konta pracodawcy — §5a; numer tymczasowy).
 
 > **Harmonogram jest WYŁĄCZONY.** Wartości z opracowania (#573, decyzja właściciela
 > 25.09.2026) są w bazie, ale `/api/maintenance` woła `run_retention_purge` dopiero przy
@@ -159,7 +160,8 @@ indywidualnie — eksport automatyczny pomija tylko identyfikatory, nie treść 
 Limit: 10 eksportów na dobę (`RATE_LIMITED`). Każdy eksport = wiersz
 `data_rights_requests` (`kind='access'`) i `data.exported` w `audit_logs`.
 
-Eksport dotyczy tylko roli `candidate`; pracodawca i admin dostają `PERMISSION_DENIED`.
+`export_my_data()` dotyczy tylko roli `candidate`; pracodawca i admin dostają
+`PERMISSION_DENIED`. Pracodawca ma własny eksport (§5a), admin — brak.
 
 ## 5. Usunięcie konta
 
@@ -189,6 +191,50 @@ Poprawki w 0105 wymagane przez usunięcie: `report_events_append_only` i `report
 przepuszczają wyłącznie odwołanie FK → `null` (wcześniej usunięcie autora zgłoszenia
 DSA się wywracało; kontrole ujemne DR486-5/5b).
 
+## 5a. Konto pracodawcy — eksport i usunięcie (migracja 0209, numer tymczasowy)
+
+UI: `/employer/ustawienia` → sekcja „Twoje dane i konto” (ten sam komponent
+`AccountDataSettings`, `variant="employer"` — inne opisy zakresu). Trasa
+`POST /api/account/export` i akcja `deleteMyAccountAction` wybierają funkcję bazy po roli
+sesji; każda funkcja i tak sprawdza rolę (`PERMISSION_DENIED` dla innej).
+
+**Eksport** `export_my_employer_data()` (`format: pracujbe-export/1`, `accountType: employer`):
+konto, profil, profil pracodawcy, członkostwa (firma, rola, aktywność, daty), zaproszenia
+**wysłane** przez tę osobę (adres zaproszonego, rola, status, daty — bez hasha tokenu),
+zaproszenia otrzymane na jej adres, oferty utworzone przez nią (tytuł, status, firma, daty),
+akcje audytowe, w których jest aktorem, preferencje, powiadomienia, zgody, dowody zgód
+e-mail, akceptacje dokumentów, e-maile (bez treści), historia wniosków. **Bez danych
+kandydatów:** z audytu tylko akcja, typ obiektu i czas — identyfikator wyłącznie dla
+obiektów firmowych (`company`/`job`/`company_member`/`company_invitation`), nigdy
+`before_data`/`after_data`; powiadomienia bez tytułu, treści i `data`. Limit i ślad jak
+u kandydata (10/dobę wspólnie z `kind='access'`, `data.exported`).
+
+**Usunięcie** `request_employer_account_erasure(email)` → `erase_employer_subject`:
+
+1. Blokuje członkostwa firm osoby i sprawdza, czy jest **ostatnim aktywnym właścicielem**
+   którejkolwiek firmy (nieaktywny współwłaściciel się nie liczy). Jeśli tak —
+   `VALIDATION_FAILED: COMPANY_LAST_OWNER` i nic się nie zmienia (komunikat
+   `accountData.deleteLastOwner`: najpierw przekaż rolę albo zamknij firmę). Ta sama reguła
+   jest w triggerze `enforce_owner_invariants`, ale funkcja definer bywa zaufaną rolą, więc
+   kontrola w funkcji jest wymagana (kontrola ujemna ER209-4d).
+2. Usuwa członkostwa, e-maile do osoby (`email_deliveries.profile_id`), jej pliki poza
+   załącznikami rozmów firmy (obiekty → kolejka storage), zeruje IP/UA w audycie, usuwa
+   weryfikacje Better Auth.
+3. Usuwa `auth.users` → kaskada: profil, profil pracodawcy, sesje, członkostwa w rozmowach,
+   powiadomienia, preferencje, zgody.
+4. Tombstone + `account.erased` (`after_data.role = 'employer'`).
+
+**Zostają** (dane firmy, FK → `null`): firmy, oferty (`created_by`), propozycje
+(`sender_id`), wiadomości (`sender_id`), zgłoszenia i historia statusów, zaproszenia
+(`invited_by`), załączniki rozmów, dziennik audytu (`actor_id = null`, bez IP/UA).
+
+Poprawka wymagana przez usunięcie: `enforce_offer_integrity` przepuszcza wyłącznie
+`offers.sender_id → null` (zmiana nadawcy na inną osobę nadal odrzucana; kontrole ER209-4f/4h).
+
+Restore: `apply_erasure_tombstones` wybiera `erase_employer_subject` dla profilu pracodawcy.
+Jeśli w odtworzonej kopii osoba jest ostatnim właścicielem firmy, wywołanie kończy się
+`COMPANY_LAST_OWNER` — operator decyduje (przekazanie roli/zamknięcie firmy), potem ponawia.
+
 ## 6. Rejestr usunięć i odtworzenie kopii
 
 `erasure_tombstones(subject_id, channel, erased_at, reapplied_at)` — tylko UUID.
@@ -211,6 +257,12 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
   bez triggera i starej reguły bez `hired`), `last_seen_at` z sesji, ostrzeżenie przed
   usunięciem (kontrola ujemna: bez ostrzeżenia nic nie znika), ślad gościa, dry-run bez
   zmian, 601 rekordów w partiach, dead-letter (kontrola ujemna: stary `complete`).
+- `supabase/tests/rls.sql` sekcja **ER209** (0209) — konto pracodawcy: odmowy dla anon/
+  kandydata/bez EXECUTE, zakres eksportu bez danych kandydata i innego pracodawcy, limit,
+  potwierdzenie adresem (cudzy adres = nic nie znika), ostatni właściciel (także przy
+  nieaktywnym współwłaścicielu), pełne usunięcie z danymi firmy i audytem z aktorem `null`,
+  restore. Kontrole ujemne: bez kontroli ostatniego właściciela firma zostaje bez właściciela
+  (4d), stara reguła propozycji wywraca usunięcie (4f).
 - Unit: `account-data`, `storage-deletion`, `guest-apply-maintenance` (flaga `RETENTION_MODE`,
   partie), `ops-sensors`, `retention-warning-email`, `job-expiry`.
 - E2E (demo): `candidate-account-data.spec.ts`.
@@ -224,14 +276,16 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
 - Brak zadań: dowody zgód 1095 dni, audyt 365 dni, `auth.email_outbox`, e-maile 30/90 dni,
   zaproszenia do zespołu, przegląd starych otwartych aplikacji (180 dni), rozmowy niezależne
   od aplikacji; `scripts/db/backup.sh` liczy kopie, nie dni.
-- Konto pracodawcy bez aktywności (dziś tylko kandydat).
+- Konto pracodawcy bez aktywności (dziś tylko kandydat); retencja `deleted_profile` dotyczy
+  tylko kandydatów.
+- Pracodawca bez aktywnego członkostwa nie wejdzie do `/employer/ustawienia` (layout
+  pokazuje formularz firmy) — usunięcie takiego konta dziś przez kontakt.
+- Zamknięcie firmy przez właściciela (samoobsługowo) — brak; dziś przez administratora.
 - E-mail o zmianie statusu dla gościa (#546) korzysta ze zgłoszenia `confirmed`; po 30 dniach
   (`confirmed_guest_request`) zgłoszenie znika — język gościa trzeba przenieść na aplikację.
 - Informacja dla kandydatów (#61) — projekt w `legal-drafts/`.
 - Harmonogram `/api/maintenance` i eksportu rejestru usunięć (infrastruktura, #13).
 - Sprostowanie: edycja profilu istnieje; brak formularza wniosku o sprostowanie danych
   pochodnych (`matches`) i o ograniczenie/sprzeciw — dziś kanał kontaktu (#61).
-- Eksport i usunięcie konta pracodawcy (firmy, członkostwa, ostatni owner) — osobny
-  przepływ.
 - Potwierdzenie usunięcia linkiem e-mail (dziś: sesja + wpisany adres) i powiadomienie
   firmy o wycofaniu danych kandydata.

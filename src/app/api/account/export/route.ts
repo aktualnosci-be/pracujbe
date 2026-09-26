@@ -7,7 +7,8 @@ import { env } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
 
 /**
- * Eksport danych kandydata (#486, prawo dostępu) — plik JSON do pobrania.
+ * Eksport danych konta (#486, prawo dostępu) — plik JSON do pobrania: kandydat
+ * (`export_my_data`, 0105) albo pracodawca (`export_my_employer_data`, 0209).
  *
  * Tylko POST z formularza tej samej witryny: cookies sesji są `SameSite=Lax`, więc obca strona
  * nie wyśle żądania z sesją; dodatkowo `Origin` musi wskazywać ten serwis. Dane buduje RPC
@@ -67,7 +68,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const me = await getPortalIdentity();
     if (!me) return failure('unauthorized', 401);
-    const data = await withPortalTransaction(me, (tx) => rpc(tx, 'export_my_data'));
+    // Zakres zależy od roli konta: pracodawca → export_my_employer_data (0209, bez danych
+    // kandydatów), pozostali → export_my_data (0105). Rolę i tak sprawdza każda z funkcji.
+    const fn = me.role === 'employer' ? 'export_my_employer_data' : 'export_my_data';
+    const data = await withPortalTransaction(me, (tx) => rpc(tx, fn));
     if (typeof data !== 'object' || data === null) return failure('unavailable', 503);
     return download(data);
   } catch (error) {

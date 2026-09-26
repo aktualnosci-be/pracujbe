@@ -2651,6 +2651,7 @@
     "sectionDescription": "Download a copy of the data stored in your account or delete your account.",
     "exportTitle": "Download data",
     "exportDescription": "A JSON file with your profile, CV (file name and size), applications, offers, messages and saved match results.",
+    "exportDescriptionEmployer": "A JSON file with your profile, company memberships, invitations you sent, job offers you created and the history of your actions in the dashboard. No candidate data.",
     "exportButton": "Download my data (JSON)",
     "exporting": "Preparing the file…",
     "exportSuccess": "Your data file has been downloaded.",
@@ -2660,6 +2661,7 @@
     "exportError": "We could not prepare the file. Please try again.",
     "deleteTitle": "Delete account",
     "deleteDescription": "Deletes your profile, CV, applications, offers and messages on the site. This cannot be undone.",
+    "deleteDescriptionEmployer": "Deletes your profile, company memberships and dashboard access. Companies, job offers, applications and conversations stay with the company. This cannot be undone.",
     "deleteStart": "Delete account…",
     "confirmLabel": "Type your account email address to confirm",
     "confirmButton": "Delete account permanently",
@@ -2668,6 +2670,7 @@
     "mismatch": "This address does not match your account address.",
     "deleteDenied": "This action is not available for this account.",
     "deleteError": "We could not delete your account. Please try again.",
+    "deleteLastOwner": "You are the only owner of a company. First transfer the owner role to someone else or close the company.",
     "deleted": "Your account has been deleted.",
     "deletedDemo": "Demo mode: nothing has been deleted.",
     "homeLink": "Go to the home page"

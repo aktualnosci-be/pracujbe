@@ -513,7 +513,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
-> techniczna dla kandydata zrobiona w #486, patrz Etap 7),
+> techniczna dla kandydata zrobiona w #486, dla pracodawcy w 0209, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
@@ -1590,8 +1590,25 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
   `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
   dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13),
-  sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
-  potwierdzenie linkiem e-mail.
+  sprostowanie/ograniczenie/sprzeciw, potwierdzenie linkiem e-mail.
+  Konto pracodawcy (migracja `0209` — numer tymczasowy, `docs/DATA_RETENTION.md` §5a): sekcja
+  „Twoje dane i konto” w `/employer/ustawienia` (ten sam `AccountDataSettings`,
+  `variant="employer"`; trasa `/api/account/export` i `deleteMyAccountAction` wybierają RPC po
+  roli sesji). Eksport `export_my_employer_data` (konto, profil, profil pracodawcy, członkostwa,
+  zaproszenia wysłane i otrzymane, utworzone oferty, akcje audytowe jako aktor — bez
+  `before/after_data`, identyfikator tylko obiektów firmowych; powiadomienia bez treści; bez
+  danych kandydatów; limit i ślad wspólne z kandydatem). Usunięcie
+  `request_employer_account_erasure` (potwierdzenie adresem) → `erase_employer_subject`:
+  ostatni AKTYWNY właściciel którejkolwiek firmy → `COMPANY_LAST_OWNER` (komunikat
+  `accountData.deleteLastOwner`: najpierw przekaż rolę albo zamknij firmę) i nic się nie
+  zmienia; inaczej członkostwa, e-maile do osoby, jej pliki (poza załącznikami rozmów),
+  sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
+  z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
+  wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
+  Dowód: `rls.sql` sekcja ER209 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
+  właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
+  `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
+  samoobsługowe zamknięcie firmy, retencja nieaktywnych kont pracodawców.
   Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
   `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
   rozmowy 180 dni od niezmiennego `applications.closed_at` — każdy stan końcowy, także `hired`;
