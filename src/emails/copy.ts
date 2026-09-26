@@ -109,6 +109,14 @@ export const jobMatchAlertOffLabel: Record<Locale, string> = {
  * #503: e-mail `newMessage` mówi tylko, ILE plików dołączono (bez nazw) — pliki odbiorca
  * otwiera w wątku po zalogowaniu. Forma „Załączniki: N” omija odmianę liczebnika.
  */
+/** Podpis cytatu w e-mailu propozycji (#503, decyzja 26.09.2026) — w języku odbiorcy. */
+export const jobOfferExcerptLabel: Record<Locale, string> = {
+  pl: 'Fragment wiadomości od firmy. Całą wiadomość przeczytasz w panelu.',
+  nl: 'Fragment uit het bericht van het bedrijf. Het volledige bericht lees je in je dashboard.',
+  fr: 'Extrait du message de l’entreprise. Vous pouvez lire le message complet dans votre tableau de bord.',
+  en: 'Excerpt from the company’s message. Read the full message in your dashboard.',
+};
+
 export const newMessageAttachmentsLabel: Record<Locale, string> = {
   pl: 'Załączniki w wiadomości: {count}. Pliki otworzysz w panelu.',
   nl: 'Bijlagen bij het bericht: {count}. Je opent de bestanden in je dashboard.',

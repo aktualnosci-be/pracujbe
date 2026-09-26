@@ -1295,7 +1295,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Minimalizacja treści (#503, migracja `0123`): worker przekazuje do
   szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
   poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
-  (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
+  (`jobOffer.message`; od 26.09.2026 tylko oczyszczony cytat `messageExcerpt`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
   odbiorcę firmowego (`email_recipient_authorized`: aplikacja/propozycja/wiadomość →
   `company_recipient_ok`; brak obiektu = fail-closed) → `suppressed_recipient_unauthorized`.
   Mapa danych: kolumna „Odrzucane przez workera”. Dowód: `rls.sql` sekcja ES503 (kontrola
@@ -1320,7 +1320,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i kwoty oferty (#293, #22), `newMessage` — `conversationId` (CTA do wątku, #290); dowód
   `rls.sql` sekcja PL109 (kontrole ujemne), `email-payload-followups.test`. Treść wiadomości
   rekrutera świadomie poza payloadem (tekst wolny = korespondencja, #503; worker odrzuca pole `message`) — kandydat czyta ją
-  w panelu. **Otwarte (#503, właściciel):** czy cytat wiadomości rekrutera może trafić do e-maila.
+  w panelu. Krótki cytat (decyzja właściciela 26.09.2026, bez migracji): worker czyta
+  `offers.message` w chwili wysyłki i przekazuje do szablonu tylko `messageExcerpt`
+  (`src/lib/email/message-excerpt.ts`: e-maile, telefony, NISS/BIS/PESEL, numery kart
+  i dokumentów — detektory `src/lib/privacy/sensitive-data.ts` — oraz URL-e → `[…]`, potem
+  obcięcie do 200 znaków; po redakcji coś wykryte albo `@` → brak cytatu). `delivery-data`
+  oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
+  `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
+  `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
