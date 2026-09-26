@@ -80,6 +80,15 @@ const MUTATIONS = {
   // UI (#351): zmiana statusu zgłoszenia z panelu pracodawcy bez zapisu i historii.
   'transition-noop': `CREATE OR REPLACE FUNCTION public.transition_application(p_application_id uuid, p_target text)
     RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
+  // Kreator oferty (Etap 8): zapis kroku zwraca sukces bez zmian w bazie (pozorny zapis szkicu).
+  'wizard-draft-noop': `CREATE OR REPLACE FUNCTION public.save_job_draft(p_job_id uuid, p_content jsonb)
+    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
+  // Kreator oferty (Etap 8): publikacja bez sprawdzenia weryfikacji firmy (reszta publish_job bez zmian).
+  'publish-unverified': `DO $mut$ DECLARE d text; BEGIN
+      d := pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure);
+      IF position($q$v_cstatus <> 'verified'$q$ IN d) = 0 THEN RAISE EXCEPTION 'mutacja: brak warunku weryfikacji'; END IF;
+      EXECUTE replace(d, $q$v_cstatus <> 'verified'$q$, 'false');
+    END $mut$`,
   'retry-new-key': null,
 };
 if (mutation && !Object.hasOwn(MUTATIONS, mutation)) {
