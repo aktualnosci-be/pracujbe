@@ -1645,6 +1645,8 @@
     "composerLabel": "Wiadomość do: {name}",
     "composerCounter": "{count} / {max} znaków",
     "composerTooLong": "Wiadomość może mieć najwyżej {max} znaków. Skróć ją i wyślij ponownie.",
+    "composerSensitiveId": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie wysyłaj go w wiadomości.",
+    "composerSensitiveIdHint": "Nie wpisuj numeru NISS/BIS, PESEL ani numeru dokumentu tożsamości — nie jest potrzebny w rozmowie.",
     "loadOlder": "Wczytaj starsze wiadomości",
     "loadingOlder": "Wczytuję starsze wiadomości…",
     "loadOlderError": "Nie udało się wczytać starszych wiadomości. Spróbuj ponownie.",

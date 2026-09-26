@@ -1133,8 +1133,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
   w akcjach + refine w Zod; detektor `src/lib/privacy/sensitive-data.ts`). Podpowiedź pod polem
-  wiadomości. Test: `sensitive-data`, `apply-sensitive-id`. **Otwarte:** ocena prawna, treść
-  poradnika i formularza CV (#495), import CV (#487), wiadomości w rozmowach.
+  wiadomości. Test: `sensitive-data`, `apply-sensitive-id`. Wiadomości w rozmowach: ten sam
+  detektor w `sendMessage` (przed trybem demo i limitem → `VALIDATION_FAILED` + `field: 'body'`,
+  `reason: 'sensitiveId'`, bez RPC) i w `MessageComposer` (błąd przy polu
+  `messages.composerSensitiveId`, treść zostaje, podpowiedź `composerSensitiveIdHint`
+  w `aria-describedby`); bez migracji (RPC `send_message` woła tylko serwer). Test:
+  `messages-sensitive-id` (kontrola ujemna). **Otwarte:** ocena prawna, treść poradnika
+  i formularza CV (#495), import CV (#487), nazwy załączników w rozmowach.
   Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
   (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
   opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →

@@ -39,7 +39,9 @@ describe('MessageComposer (#335, #358)', () => {
     const m = translations[locale].messages;
     const field = screen.getByRole('textbox', { name: fill(m.composerLabel, { name: 'Anna Nowak' }) });
     expect(field).toHaveAttribute('maxLength', String(MESSAGE_BODY_MAX_LENGTH));
-    expect(field).toHaveAccessibleDescription(fill(m.composerCounter, { count: 0, max: 4000 }));
+    expect(field).toHaveAccessibleDescription(
+      `${fill(m.composerCounter, { count: 0, max: 4000 })} ${m.composerSensitiveIdHint}`,
+    );
   });
 
   it('limit odpowiada CHECK (length(body) <= 4000) w bazie', () => {
@@ -50,7 +52,9 @@ describe('MessageComposer (#335, #358)', () => {
     renderComposer();
     const field = screen.getByRole('textbox');
     fireEvent.change(field, { target: { value: 'Dzień dobry' } });
-    expect(field).toHaveAccessibleDescription(fill(pl.messages.composerCounter, { count: 11, max: 4000 }));
+    expect(field).toHaveAccessibleDescription(
+      `${fill(pl.messages.composerCounter, { count: 11, max: 4000 })} ${pl.messages.composerSensitiveIdHint}`,
+    );
   });
 
   it('za długa treść: błąd przy polu z i18n, bez wysyłki, treść zostaje', () => {

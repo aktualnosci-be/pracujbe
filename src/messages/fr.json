@@ -1645,6 +1645,8 @@
     "composerLabel": "Message à {name}",
     "composerCounter": "{count} / {max} caractères",
     "composerTooLong": "Un message peut contenir au maximum {max} caractères. Raccourcissez-le et renvoyez-le.",
+    "composerSensitiveId": "Supprimez le numéro de registre national, le numéro BIS, le PESEL ou le numéro de document d’identité — ne l’envoyez pas dans un message.",
+    "composerSensitiveIdHint": "N’indiquez pas de numéro de registre national, de numéro BIS, de PESEL ni de numéro de document d’identité — ce n’est pas nécessaire dans cette conversation.",
     "loadOlder": "Charger les messages plus anciens",
     "loadingOlder": "Chargement des messages plus anciens…",
     "loadOlderError": "Impossible de charger les messages plus anciens. Réessayez.",
