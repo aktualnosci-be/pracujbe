@@ -16,6 +16,8 @@
 export const CRON_TASKS = Object.freeze({
   '*/5 * * * *': Object.freeze({ name: 'emailQueue', path: '/api/email/process', secret: 'EMAIL_QUEUE_SECRET' }),
   '0 * * * *': Object.freeze({ name: 'maintenance', path: '/api/maintenance', secret: 'MAINTENANCE_SECRET' }),
+  // Worker tłumaczeń (#33, docs/AI_TRANSLATION.md): bez AI_TRANSLATION_ENABLED odpowiada `skipped`.
+  '*/10 * * * *': Object.freeze({ name: 'translation', path: '/api/translation/process', secret: 'MAINTENANCE_SECRET' }),
 });
 
 export const DEFAULT_TIMEOUT_SECONDS = 120;

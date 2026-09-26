@@ -57,6 +57,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | opcjonalnie; oba albo żaden — gdy ustawione, webhook wymaga też Basic auth |
 | `EMAIL_QUEUE_SECRET` | cron `/api/email/process` bez autoryzacji (401) |
 | `MAINTENANCE_SECRET` | cron `/api/maintenance` bez autoryzacji |
+| `AUTH_EMAIL_IMMEDIATE_SEND` | opcjonalnie; puste = e-maile konta wychodzą zaraz po rejestracji/resecie (paczka workera po odpowiedzi), `off` = tylko z harmonogramu |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | w produkcji rejestracja, reset hasła, zgłoszenia treści i aplikacja bez konta są odrzucane (fail-closed); logowanie działa |
 | `TURNSTILE_ALLOWED_HOSTNAMES` | opcjonalnie; domyślnie host `NEXT_PUBLIC_SITE_URL` |
 | `GUEST_APPLY_SECRET` | aplikacja bez konta wyłączona (#98) |
@@ -114,6 +115,7 @@ cronów (także poza Railway).
 |---|---|---|---|
 | `cron-email` | `http://<prywatna domena web>:<PORT>/api/email/process` | = `EMAIL_QUEUE_SECRET` | co 5 min |
 | `cron-maintenance` | `http://<prywatna domena web>:<PORT>/api/maintenance` | = `MAINTENANCE_SECRET` | `0 * * * *` |
+| `cron-translation` (tylko po włączeniu `AI_TRANSLATION_ENABLED`, #33) | `http://<prywatna domena web>:<PORT>/api/translation/process` | = `MAINTENANCE_SECRET` | co 5 min |
 
 Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne). Usługa
 `backup` (#569) buduje się z `docker/backup/Dockerfile` i wysyła kopie do Cloudflare R2

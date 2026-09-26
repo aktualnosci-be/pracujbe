@@ -115,3 +115,13 @@ AI (funkcje wyłączone flagami), kopia R2 odłożona. Smoke bez hasła: health 
 strony za bramką. Poprawiony smoke: sitemap to indeks `/sitemap/<id>.xml` (#599),
 `/sitemap.xml` = 404. Blokery startu (właściciel/infra/prawnik vs kod):
 [`../LAUNCH_CHECKLIST.md`](../LAUNCH_CHECKLIST.md) §1.
+
+## E-maile konta bez harmonogramu — 26 września 2026
+
+Produkcja: migracje zastosowane do `0144`, `main` zawiera `0145`. Bez usług cron e-mail
+potwierdzający konto i link resetu hasła nie wychodziły wcale. Od tej zmiany akcje rejestracji,
+resetu hasła i logowania niepotwierdzonego konta uruchamiają po odpowiedzi jedną paczkę workera
+`auth.email_outbox` (`src/lib/auth/email-kick.ts`; ten sam claim z dzierżawą, budżet i klucz
+idempotencji co cron). Wyłącznik: `AUTH_EMAIL_IMMEDIATE_SEND=off`. Harmonogram (W1/W2) nadal jest
+potrzebny do ponowień, kolejki `email_deliveries` i `/api/maintenance` — gotowy Worker Cloudflare
+(#690) czeka na wdrożenie przez właściciela. Bez migracji i bez zmian w Railway.

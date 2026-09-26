@@ -3201,7 +3201,7 @@
     "cancel": "Annuleren",
     "busyHint": "We bereiden voorstellen voor. Dit kan tot een minuut duren.",
     "reviewTitle": "Kies wat je aan je profiel toevoegt",
-    "reviewIntro": "Vink alleen de voorstellen aan die kloppen. Niet-aangevinkte worden niet opgeslagen. Bestaande profielgegevens veranderen niet.",
+    "reviewIntro": "Vink alleen de voorstellen aan die kloppen. Niet-aangevinkte worden niet opgeslagen. Bestaande profielgegevens veranderen niet. Voor het opslaan kun je elke waarde aanpassen.",
     "suspiciousTitle": "Controleer de voorstellen zorgvuldig",
     "suspiciousText": "Het cv bevatte tekst die op instructies voor AI leek. We hebben die niet uitgevoerd en alle voorstellen gemarkeerd om te controleren.",
     "kindOccupation": "Beroepen",
@@ -3229,6 +3229,14 @@
     "errorFileType": "We ondersteunen PDF- en DOCX-bestanden.",
     "errorFileDoc": "DOC-bestanden kunnen we niet lezen. Sla je cv op als PDF of DOCX, of vul je profiel handmatig in.",
     "errorNothingSelected": "Selecteer minstens één voorstel of weiger alles.",
-    "errorNetwork": "Kan geen verbinding maken met de server. Controleer je verbinding en probeer opnieuw."
+    "errorNetwork": "Kan geen verbinding maken met de server. Controleer je verbinding en probeer opnieuw.",
+    "editLabel": "Waarde aanpassen: {value}",
+    "experienceEditLabel": "Jaren ervaring",
+    "errorValueRequired": "Vul een waarde in of vink dit voorstel uit.",
+    "errorValueTooLong": "De waarde is te lang. Maximaal {max} tekens.",
+    "errorValueDisallowed": "Verwijder contactgegevens, links, gegevens van andere personen en gevoelige informatie.",
+    "errorLanguageInvalid": "De naam van de taal moet 2 tot 40 tekens lang zijn.",
+    "errorExperienceInvalid": "Vul een aantal jaren van 0 tot 60 in.",
+    "errorFieldsInvalid": "Pas de gemarkeerde velden aan voordat je opslaat."
   }
 }

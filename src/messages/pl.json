@@ -3201,7 +3201,7 @@
     "cancel": "Anuluj",
     "busyHint": "Przygotowujemy propozycje. To może potrwać do minuty.",
     "reviewTitle": "Wybierz, co dodać do profilu",
-    "reviewIntro": "Zaznacz tylko te propozycje, które są prawdziwe. Niezaznaczone nie zostaną zapisane. Istniejące dane profilu się nie zmienią.",
+    "reviewIntro": "Zaznacz tylko te propozycje, które są prawdziwe. Niezaznaczone nie zostaną zapisane. Istniejące dane profilu się nie zmienią. Przed zapisem możesz poprawić każdą wartość.",
     "suspiciousTitle": "Sprawdź dokładnie propozycje",
     "suspiciousText": "CV zawierało tekst, który wyglądał na polecenia dla AI. Nie wykonaliśmy ich, a wszystkie propozycje oznaczyliśmy do sprawdzenia.",
     "kindOccupation": "Zawody",
@@ -3229,6 +3229,14 @@
     "errorFileType": "Obsługujemy pliki PDF i DOCX.",
     "errorFileDoc": "Pliku DOC nie odczytamy. Zapisz CV jako PDF lub DOCX albo wypełnij profil ręcznie.",
     "errorNothingSelected": "Zaznacz co najmniej jedną propozycję albo odrzuć wszystkie.",
-    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "editLabel": "Popraw wartość: {value}",
+    "experienceEditLabel": "Lata doświadczenia",
+    "errorValueRequired": "Wpisz wartość albo odznacz tę propozycję.",
+    "errorValueTooLong": "Za długa wartość. Maksymalnie {max} znaków.",
+    "errorValueDisallowed": "Usuń dane kontaktowe, linki, dane innych osób i informacje wrażliwe.",
+    "errorLanguageInvalid": "Nazwa języka musi mieć od 2 do 40 znaków.",
+    "errorExperienceInvalid": "Podaj liczbę lat od 0 do 60.",
+    "errorFieldsInvalid": "Popraw zaznaczone pola przed zapisem."
   }
 }
