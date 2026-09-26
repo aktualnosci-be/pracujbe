@@ -459,8 +459,9 @@ export function EmailLayout({
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
   const rights = interpolate(lc.rights, { year });
+  // Pomoc w języku odbiorcy (strona publiczna i indeksowalna, #61). Bez linku do polityki
+  // prywatności, dopóki jej treść jest placeholderem z `noindex` (decyzja właściciela, #40).
   const helpHref = `${env.siteUrl}/${locale}/pomoc`;
-  const privacyHref = `${env.siteUrl}/${locale}/polityka-prywatnosci`;
 
   return (
     <Html lang={locale}>
@@ -478,12 +479,8 @@ export function EmailLayout({
             <Text style={styles.footerStrong}>{lc.tagline}</Text>
             <Text style={styles.footerText}>{footerNote ?? lc.footerNote}</Text>
             <Text style={styles.footerText}>
-              <Link href={helpHref} style={styles.footerLink}>
+              <Link href={helpHref} style={styles.footerLink} data-email-help="">
                 {lc.help}
-              </Link>
-              {'  ·  '}
-              <Link href={privacyHref} style={styles.footerLink}>
-                {lc.privacy}
               </Link>
               {unsubscribeUrl ? (
                 <>

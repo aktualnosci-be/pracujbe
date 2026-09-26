@@ -139,10 +139,12 @@ export interface LayoutCopy {
   footerNote: string;
   /** Nota o prawach autorskich (zawiera token `{year}`). */
   rights: string;
-  /** Etykieta linku do pomocy. */
+  /**
+   * Etykieta linku do `/{locale}/pomoc` (pytania i odpowiedzi, #61) — to samo brzmienie co
+   * `footer.faq` w stopce strony (test `email-brand-layout`). Stopka nie linkuje do polityki
+   * prywatności: treść jest placeholderem z `noindex` (decyzja właściciela/prawnika, #40).
+   */
   help: string;
-  /** Etykieta linku do polityki prywatności. */
-  privacy: string;
   /** Link wypisania z kategorii tej wiadomości (#45); tylko gdy mail ma kategorię preferencji. */
   unsubscribe: string;
   /** Etykiety tożsamości nadawcy w stopce (#45; wartości z konfiguracji, nie z kodu). */
@@ -157,8 +159,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Praca w Belgii bez CV i barier językowych.',
     footerNote: 'Otrzymujesz tę wiadomość, ponieważ masz konto w serwisie Pracuj.be.',
     rights: '© {year} Pracuj.be. Wszelkie prawa zastrzeżone.',
-    help: 'Pomoc',
-    privacy: 'Prywatność',
+    help: 'Pytania i odpowiedzi',
     unsubscribe: 'Wypisz się z tych e-maili',
     sender: 'Nadawca',
     postalAddress: 'Adres pocztowy',
@@ -168,8 +169,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Werk in België zonder cv en zonder taaldrempels.',
     footerNote: 'Je ontvangt dit bericht omdat je een account hebt op Pracuj.be.',
     rights: '© {year} Pracuj.be. Alle rechten voorbehouden.',
-    help: 'Help',
-    privacy: 'Privacy',
+    help: 'Veelgestelde vragen',
     unsubscribe: 'Afmelden voor deze e-mails',
     sender: 'Afzender',
     postalAddress: 'Postadres',
@@ -179,8 +179,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Du travail en Belgique sans CV ni barrière de langue.',
     footerNote: 'Vous recevez ce message car vous avez un compte sur Pracuj.be.',
     rights: '© {year} Pracuj.be. Tous droits réservés.',
-    help: 'Aide',
-    privacy: 'Confidentialité',
+    help: 'Questions fréquentes',
     unsubscribe: 'Se désinscrire de ces e-mails',
     sender: 'Expéditeur',
     postalAddress: 'Adresse postale',
@@ -190,8 +189,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Work in Belgium without a CV or language barriers.',
     footerNote: 'You are receiving this email because you have an account on Pracuj.be.',
     rights: '© {year} Pracuj.be. All rights reserved.',
-    help: 'Help',
-    privacy: 'Privacy',
+    help: 'FAQ',
     unsubscribe: 'Unsubscribe from these emails',
     sender: 'Sender',
     postalAddress: 'Postal address',

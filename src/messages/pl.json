@@ -1657,6 +1657,7 @@
     "attachmentUploading": "Wgrywanie…",
     "attachmentUploadError": "Nie udało się dodać pliku. Spróbuj ponownie.",
     "attachmentErrorType": "Dozwolone formaty: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentSensitiveId": "Nazwa pliku zawiera numer identyfikacyjny (np. NISS, PESEL, numer dowodu lub paszportu). Zmień nazwę pliku i dodaj go ponownie.",
     "attachmentLimit": "Do jednej wiadomości możesz dołączyć najwyżej {max} pliki.",
     "attachmentRemove": "Usuń plik {name}",
     "attachmentDownload": "Pobierz {name} ({size})",

@@ -1657,6 +1657,7 @@
     "attachmentUploading": "Uploaden…",
     "attachmentUploadError": "Het bestand kon niet worden toegevoegd. Probeer het opnieuw.",
     "attachmentErrorType": "Toegestane formaten: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentSensitiveId": "De bestandsnaam bevat een identificatienummer (bv. rijksregisternummer, PESEL, nummer van identiteitskaart of paspoort). Wijzig de bestandsnaam en voeg het bestand opnieuw toe.",
     "attachmentLimit": "Je kunt hoogstens {max} bestanden aan één bericht toevoegen.",
     "attachmentRemove": "Bestand {name} verwijderen",
     "attachmentDownload": "{name} downloaden ({size})",
