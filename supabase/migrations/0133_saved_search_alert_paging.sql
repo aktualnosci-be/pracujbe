@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0136 (numer tymczasowy — ostateczny nada integrator) — alerty zapisanych
+-- 0133 (numer tymczasowy — ostateczny nada integrator; kolejka: 0133 #618, 0134 #622, 0135 #653) — alerty zapisanych
 -- wyszukiwań bez limitu 100 ofert na przebieg (#100).
 --
 -- Problem (0092): process_saved_search_alerts wołał get_public_jobs raz, z p_limit => 100
@@ -105,7 +105,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     (case when p_sort = 'salary' then public.job_salary_sort_key(
       j.salary_min, j.salary_max, j.salary_period, p_salary_unit) end) desc nulls last,
     j.published_at desc,
-    j.id desc  -- 0136: remis published_at rozstrzygany stale (stronicowanie bez dziur i dubli)
+    j.id desc  -- 0133: remis published_at rozstrzygany stale (stronicowanie bez dziur i dubli)
   limit least(greatest(coalesce(p_limit, 20), 1), 100)
   offset least(greatest(coalesce(p_offset, 0), 0), 10000);
 $$;
@@ -203,7 +203,7 @@ begin
     v_f := v_search.filters;
     v_key := 'saved-search:' || v_search.id::text || ':' || (extract(epoch from v_run_at) * 1000000)::bigint::text;
 
-    -- 0136: wszystkie strony (nie tylko 100 najnowszych), jeden snapshot.
+    -- 0133: wszystkie strony (nie tylko 100 najnowszych), jeden snapshot.
     with found as (
       select m.id
       from public.saved_search_matching_jobs(

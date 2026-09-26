@@ -12458,7 +12458,7 @@ select pg_temp.assert(
 
 
 -- ============================================================================
--- SC100. Alerty zapisanych wyszukiwań bez limitu 100 ofert na przebieg (0136, #100):
+-- SC100. Alerty zapisanych wyszukiwań bez limitu 100 ofert na przebieg (0133, #100):
 -- worker zbiera wszystkie strony get_public_jobs w jednym zapytaniu, remisy
 -- published_at rozstrzygane stale (j.id), digest nadal ≤ 5 ofert, jedna wysyłka na
 -- przebieg, para (wyszukiwanie, oferta) nie wraca. Kontrola ujemna: jedna strona jak
