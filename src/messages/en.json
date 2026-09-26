@@ -86,6 +86,7 @@
     "verificationNote": "Posting jobs and sending offers requires the “verified” status, granted by an administrator.",
     "bannerPendingTitle": "Your company is awaiting verification",
     "bannerPendingDesc": "Your company details are in the queue to be checked by a Pracuj.be administrator. You can publish jobs and send offers once they are approved.",
+    "bannerEta": "Usually within 2 business days.",
     "bannerVerifiedTitle": "Company verified",
     "bannerVerifiedDesc": "You can post jobs and send offers to candidates.",
     "bannerRejectedTitle": "Verification rejected",

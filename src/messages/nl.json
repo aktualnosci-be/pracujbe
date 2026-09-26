@@ -86,6 +86,7 @@
     "verificationNote": "Vacatures plaatsen en voorstellen versturen vereist de status ‘geverifieerd’, die door een beheerder wordt toegekend.",
     "bannerPendingTitle": "Je bedrijf wacht op verificatie",
     "bannerPendingDesc": "De bedrijfsgegevens staan in de wachtrij om door een beheerder van Pracuj.be te worden gecontroleerd. Na goedkeuring kun je vacatures publiceren en voorstellen versturen.",
+    "bannerEta": "Meestal binnen 2 werkdagen.",
     "bannerVerifiedTitle": "Bedrijf geverifieerd",
     "bannerVerifiedDesc": "Je kunt vacatures plaatsen en voorstellen naar kandidaten sturen.",
     "bannerRejectedTitle": "Verificatie geweigerd",
