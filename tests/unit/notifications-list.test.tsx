@@ -89,6 +89,8 @@ describe('NotificationsList (#148)', () => {
     renderList(page([item(1, true), item(2, true)], 2));
     fireEvent.click(screen.getByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 2` }));
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    // Stan listy zatwierdza się dopiero po zakończeniu przejścia — czekamy na komunikat statusu.
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.markedRead));
     expect(markNotificationsRead).toHaveBeenCalledExactlyOnceWith([item(2, true).id]);
     expect(screen.queryByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 2` })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 1` })).toBeInTheDocument();
@@ -111,6 +113,8 @@ describe('NotificationsList (#148)', () => {
     renderList(page([item(1, true), item(2, true)], 5));
     fireEvent.click(screen.getByRole('button', { name: t.markAllRead }));
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    // Po zakończeniu przejścia przycisk wraca z „Zapisywanie…” do swojej etykiety.
+    await waitFor(() => expect(screen.getByRole('button', { name: t.markAllRead })).toBeDisabled());
     expect(markNotificationsRead).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.queryAllByRole('button', { name: /Oznacz jako przeczytane:/ })).toHaveLength(0);
     expect(screen.getByText('Brak nieprzeczytanych')).toBeInTheDocument();
