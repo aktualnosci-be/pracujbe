@@ -5,7 +5,7 @@ pracodawcy (redakcja oferty): `docs/AI_JOB_ASSIST.md`. Import CV (#487): `docs/A
 
 Kandydat bez CV otwiera `/candidate/profil/asystent` (link „Uzupełnij z pomocą AI” na
 `/candidate/profil`, tylko z flagą) i odpowiada własnymi słowami na cztery pytania: ostatnia
-praca, umiejętności/maszyny, języki, uprawnienia. Serwer prosi Claude o **propozycje wpisów
+praca, umiejętności/maszyny, języki, uprawnienia. Serwer prosi model OpenAI (`gpt-6-luna`, wspólny klient `src/lib/ai/openai.ts`) o **propozycje wpisów
 profilu** (zawody, umiejętności, języki z poziomem, certyfikaty, lata doświadczenia). Każda
 propozycja ma źródło — cytat z odpowiedzi — albo oznaczenie „Do sprawdzenia”.
 
@@ -29,7 +29,7 @@ komponentu w 4 językach i E2E (320 px, axe). Kwalifikacja prawna: szkic
 | `src/lib/profile-assist/questions.ts` | pytania, limity, ścisły schemat wejścia |
 | `src/lib/profile-assist/prepare.ts` | minimalizacja przed modelem (czysta, deterministyczna) |
 | `src/lib/profile-assist/schema.ts` | structured output (pola jak import CV, `aboutWork` zamiast `isCv`) |
-| `src/lib/profile-assist/extract.ts` | wywołanie Messages API (jedyne miejsce), prompt, atrapa |
+| `src/lib/profile-assist/extract.ts` | wywołanie przez wspólny klient Responses API (`createStructuredResponse`), prompt, atrapa |
 | `src/lib/profile-assist/run.ts` | rdzeń bez autoryzacji; walidacja `mapCvExtraction` |
 | `src/lib/profile-assist/cost.ts` | szacunek kosztu do rezerwacji budżetu |
 | `src/lib/actions/profile-assist.ts` | akcje `proposeProfileFromAnswers`, `applyProfileAssistProposals` |
@@ -63,15 +63,15 @@ komponentu w 4 językach i E2E (320 px, axe). Kwalifikacja prawna: szkic
 | Wywołania na konto | 10 / godz., 30 / dobę (bez IP) | `src/lib/actions/profile-assist.ts` |
 | Awaria limitera | fail-closed (`profile-assist`, `profile-assist-day`) | `src/lib/rate-limit.ts` |
 | Budżet globalny | rezerwacja przed wywołaniem (`profile_answers_assist`), rozliczenie tokenami | `docs/AI_BUDGET.md`, migracja 0147 |
-| Wyjście modelu | `max_tokens` 4000, effort `low`, timeout 60 s, 1 ponowienie | `extract.ts` |
+| Wyjście modelu | `max_output_tokens` 4000, effort `low`, `store: false`, timeout 60 s, 1 ponowienie (klient) | `extract.ts` |
 
 Przekroczony albo niedostępny budżet = `AI_BUDGET_EXCEEDED` bez wywołania modelu.
 
 ## Włączenie (właściciel)
 
-1. Decyzja o koszcie i dostawcy (#36), DPA/region/retencja Anthropic.
+1. Decyzja o koszcie i dostawcy (#36), DPA/region/retencja OpenAI.
 2. Ocena prawna informacji o AI (art. 50 AI Act) i wiersza A5 szkicu DPIA.
-3. `AI_PROFILE_ASSIST_ENABLED=1` (+ istniejący `ANTHROPIC_API_KEY`), opcjonalnie
+3. `AI_PROFILE_ASSIST_ENABLED=1` (+ istniejący `OPENAI_API_KEY`), opcjonalnie
    `AI_PROFILE_ASSIST_MODEL`.
 
 ## Testy

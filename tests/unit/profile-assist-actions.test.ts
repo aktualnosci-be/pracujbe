@@ -27,7 +27,7 @@ vi.mock('@/lib/profile-assist/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/profile-assist/extract')>();
   return {
     ...real,
-    AnthropicProfileAssistor: class {
+    OpenAiProfileAssistor: class {
       extract = extract;
     },
   };
@@ -55,7 +55,7 @@ const MODEL_OK = {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AI_PROFILE_ASSIST_ENABLED = '1';
-  process.env.ANTHROPIC_API_KEY = 'test-key-not-real';
+  process.env.OPENAI_API_KEY = 'test-key-not-real';
   delete process.env.AI_PROFILE_ASSIST_PROVIDER;
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
@@ -89,7 +89,7 @@ describe('flaga i dostawca', () => {
   });
 
   it('atrapa dostawcy nie działa w trybie produkcyjnym', () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     process.env.AI_PROFILE_ASSIST_PROVIDER = 'fixture';
     expect(isProfileAssistEnabled()).toBe(false);
     vi.mocked(isProductionMode).mockReturnValue(false);

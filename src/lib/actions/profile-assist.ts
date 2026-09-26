@@ -12,7 +12,7 @@ import type { CvRedactionCounts } from '@/lib/cv-import/minimize';
 import type { CvProposal } from '@/lib/cv-import/types';
 import { profileAssistModel, profileAssistProvider } from '@/lib/profile-assist/config';
 import { estimateProfileAssistCost } from '@/lib/profile-assist/cost';
-import { AnthropicProfileAssistor, FixtureProfileAssistor, type ProfileAssistor } from '@/lib/profile-assist/extract';
+import { OpenAiProfileAssistor, FixtureProfileAssistor, type ProfileAssistor } from '@/lib/profile-assist/extract';
 import { checkProfileAnswers, proposeFromAnswers } from '@/lib/profile-assist/run';
 
 /**
@@ -41,7 +41,7 @@ const PROPOSE_DAILY_MAX = 30;
 
 type Gate = { ok: true; userId: string | null } | { ok: false; error: ErrorCode };
 
-async function requireCandidate(provider: 'anthropic' | 'fixture'): Promise<Gate> {
+async function requireCandidate(provider: 'openai' | 'fixture'): Promise<Gate> {
   if (!isPortalDataConfigured()) {
     return provider === 'fixture' ? { ok: true, userId: null } : { ok: false, error: 'DEMO_UNAVAILABLE' };
   }
@@ -79,7 +79,7 @@ export async function proposeProfileFromAnswers(answers: unknown): Promise<Propo
       }
     }
 
-    const base = provider === 'fixture' ? new FixtureProfileAssistor() : new AnthropicProfileAssistor();
+    const base = provider === 'fixture' ? new FixtureProfileAssistor() : new OpenAiProfileAssistor();
     const model = provider === 'fixture' ? 'fixture' : profileAssistModel();
     // Log użycia bez treści i PII (#489): wynik, rodzaj wejścia, model, czas.
     const logged: ProfileAssistor = {

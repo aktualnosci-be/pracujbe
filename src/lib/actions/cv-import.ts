@@ -13,7 +13,7 @@ import { withAiUsageLog, type AiUsageOutcome } from '@/lib/ai/usage-log';
 import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
 import { cvImportModel, cvImportProvider } from '@/lib/cv-import/config';
 import { estimateCvImportCost } from '@/lib/cv-import/cost';
-import { AnthropicCvExtractor, FixtureCvExtractor } from '@/lib/cv-import/extract';
+import { OpenAiCvExtractor, FixtureCvExtractor } from '@/lib/cv-import/extract';
 import { applyApprovedProposals, type ApplyCvProposalsResult } from '@/lib/cv-import/apply';
 import { prepareCvImport, proposeFromCv } from '@/lib/cv-import/run';
 import type { CvTextProblem } from '@/lib/cv-import/text';
@@ -56,7 +56,7 @@ const PROPOSE_DAILY_MAX = 10;
 type Gate = { ok: true; userId: string | null } | { ok: false; error: ErrorCode };
 
 /** Konto kandydata z sesji; w trybie demo (bez backendu) tylko z atrapą dostawcy. */
-async function requireCandidate(provider: 'anthropic' | 'fixture'): Promise<Gate> {
+async function requireCandidate(provider: 'openai' | 'fixture'): Promise<Gate> {
   if (!isPortalDataConfigured()) {
     return provider === 'fixture' ? { ok: true, userId: null } : { ok: false, error: 'DEMO_UNAVAILABLE' };
   }
@@ -109,7 +109,7 @@ export async function proposeFromCvAction(text: unknown): Promise<ProposeFromCvR
       }
     }
     // Log użycia bez treści i PII (#489, src/lib/ai/usage-log.ts): wynik, rodzaj wejścia, model, czas.
-    const base = provider === 'fixture' ? new FixtureCvExtractor() : new AnthropicCvExtractor();
+    const base = provider === 'fixture' ? new FixtureCvExtractor() : new OpenAiCvExtractor();
     const model = provider === 'fixture' ? 'fixture' : cvImportModel();
     const classify = (r: { ok: true } | { ok: false; error: unknown }): AiUsageOutcome =>
       r.ok

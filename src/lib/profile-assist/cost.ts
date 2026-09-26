@@ -7,7 +7,7 @@ const PROMPT_OVERHEAD_TOKENS =
 
 /**
  * Górna granica kosztu jednego wywołania asystenta profilu (mikro-USD) — kwota rezerwacji
- * w globalnym budżecie AI (#36): prompt + schemat + przygotowane odpowiedzi + pełne `max_tokens`.
+ * w globalnym budżecie AI (#36): prompt + schemat + przygotowane odpowiedzi + pełne `max_output_tokens`.
  */
 export function estimateProfileAssistCost(preparedText: string, model: string): number {
   return estimateMicroUsd(model, {

@@ -15,6 +15,8 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
+Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: migracja 0137, brak
+usług cron, tryb demo za bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
@@ -528,7 +530,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
-- [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
+- [x] shadcn/ui — zestaw komponentów w `src/components/ui` (API shadcn, styl „Ludzie i praca”, tokeny,
+  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select),
+  card, badge (`success` = `success-text` na `success/10`, AA), toast, light-dialog (#393) +
+  confirm-dialog, stepper, status-pill, match-bar, stat-card oraz **skeleton**, **table**
+  (domyślne klasy = `TH`/`TD`/`TD_WRAP` z `panel-styles.ts`, `TableRowHeader` = `<th scope="row">`),
+  **pagination** (nav + lista, bez `Slot` — zostaje serwerowy) i **alert** (baza `NOTICE`, warianty
+  note/error/success, `error` = `role="alert"`). Podmienione ręczne odpowiedniki bez zmiany wyglądu:
+  tabele `/admin/uzytkownicy` i `/admin/firmy`, `AdminPager`, szkielet `MessagesLoading`, błędy
+  zespołu (`TeamMembers`/`TeamInvite`/`MyTeamInvitations`), `RecruiterOnlyNote`. Test `ui-kit`
+  (klasy identyczne z kalką, kontrole ujemne) + strażnik: surowy `<table>` tylko w `ui/table.tsx`.
+  Świadomie BEZ nowych pakietów Radix (budżet JS #395, INP #393): natywne `<select>`/radio w formularzach
+  GET i server actions (działają bez JS, strony admina serwerowe), własne menu z pełnym ARIA
+  (`ApplicationActions` #341, `ApplicationStatusMenu`, `LocaleSwitcher` na stronach publicznych),
+  dialogi na `LightDialog`; tabs/tooltip/dropdown-menu dodawać dopiero z realnym użyciem (tooltip na
+  dotyku = ryzyko a11y). Publiczne `Pagination` (lista ofert) zostaje osobne.
 
 ### Redesign wg makiet — HISTORYCZNE (`docs/DESIGN_SCREENS.md`), zastąpione „Ludzie i praca”
 > Obowiązujący wygląd = kalka prototypu `docs/design/people-passport/prototype` („04 Ludzie i praca”,
@@ -609,7 +625,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w stopce e-maili (#6), `/faq` (atrapa, poza nawigacją).
 
 ### Etap 3 — kandydat
-- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. **Otwarte:** budżet wysyłki puli `auth` w workerze PostgreSQL, domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
+- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). **Otwarte:** domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
   Rozdzielenie zgód (#493, migracja `0108`): rejestracja kandydata/pracodawcy
   i krok 6 onboardingu mają osobne, niezaznaczone pola — akceptacja regulaminu (wymagana),
   potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda) i zgoda
@@ -754,7 +770,13 @@ wskazuje `POST /api/email/unsubscribe-alert?t=&l=` z tym samym tokenem alertu co
 service_role, idempotentnie), GET = 303 na stronę potwierdzenia; inne maile i `jobMatch` bez
 wyszukiwania zachowują nagłówek kategorii, stopka nadal ma wypisanie z kategorii. Dowód: unit
 `saved-search-followups` (kontrola ujemna: token kategorii w nagłówku/trasie), E2E `saved-search.spec`.
-**Otwarte:** na przebieg najwyżej 100 najnowszych pasujących ofert.
+Bez limitu 100 ofert na przebieg (migracja `0138`): worker bierze nowe oferty z
+`saved_search_matching_jobs` — kolejne strony `get_public_jobs` po 100 w jednym zapytaniu (jeden
+snapshot); remis `published_at` rozstrzyga `id` w `get_public_jobs` (0136, #594), więc strony
+są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najwyżej raz
+na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
+kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
+na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
@@ -763,7 +785,7 @@ profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts
 (`minimize.ts`: NISS/BIS/dokument → odmowa; sekcje referencji i danych osobowych, linie o
 osobach trzecich, dane osobowe, kategorie art. 9/10, kontakty i linki usunięte; kontakt poza
 nagłówkiem dokumentu → bezpieczne zatrzymanie) → PODGLĄD tekstu dla kandydata → po
-potwierdzeniu ponowna redakcja na serwerze i Claude (structured output, tylko zawody/
+potwierdzeniu ponowna redakcja na serwerze i model OpenAI (structured output, tylko zawody/
 umiejętności/języki/certyfikaty/lata) → PROPOZYCJE ze źródłem i niepewnością, domyślnie
 niezaznaczone → zapis wyłącznie zaznaczonych RPC `apply_candidate_cv_proposals` (dopisanie,
 `FOR UPDATE`, limity kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
@@ -782,7 +804,7 @@ uprawnienia; ≤ 1000 znaków) → informacja o AI przed pierwszym użyciem (art
 z przyciskiem) → minimalizacja jak przy CV (`src/lib/profile-assist/prepare.ts`: NISS → odmowa,
 osoby trzecie/dane osobowe/art. 9–10 usunięte, kontakty → znaczniki, polecenia dla AI → odmowa)
 → limit 10/h i 30/dobę na konto (fail-closed) → globalny budżet AI (`profile_answers_assist`) →
-Claude (structured output, pola jak import CV) → propozycje z cytatem z odpowiedzi, domyślnie
+model OpenAI `gpt-6-luna` przez `src/lib/ai/openai.ts` (structured output strict, pola jak import CV) → propozycje z cytatem z odpowiedzi, domyślnie
 niezaznaczone → zapis wyłącznie zaznaczonych tym samym RPC co import CV
 (`apply_candidate_cv_proposals`, wspólny rdzeń `src/lib/cv-import/apply.ts`, lista
 `ProposalChecklist`). Odpowiedzi nie są zapisywane; wynik nie wpływa na dopasowanie, status ani
@@ -870,14 +892,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Otwarte:** orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
-  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Claude
-  (`claude-opus-5`, structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
+  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Model
+  OpenAI (`gpt-6-luna`, strict structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
   schematami kroków (`map.ts`), pola niepewne na liście „do sprawdzenia” w kroku; poprawne kroki
   do szkicu jednym `save_job_draft`, nigdy publikacja. Akcja `importJobListing`: recruiter+
   aktywnej firmy, limit per firma 10/h i 30/dobę (fail-closed). Podejrzenie prompt injection =
-  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`,
-  opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
+  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `OPENAI_API_KEY`,
+  opcjonalnie `AI_JOB_IMPORT_MODEL`/`AI_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
+  Dostawca AI (decyzja właściciela 2026-09-26): wyłącznie OpenAI „GPT-6 Luna” (`gpt-6-luna`,
+  0,10/0,50 USD za 1 mln tokenów wejścia/wyjścia) — jeden klient `src/lib/ai/openai.ts`
+  (Responses API, `strict` JSON Schema, `store: false`, timeout 60 s, bez logowania treści),
+  model z `src/lib/ai/model-config.ts` (`AI_*_MODEL` → `AI_MODEL` → `gpt-6-luna`), klucz
+  `OPENAI_API_KEY` tylko na serwerze; SDK Anthropic usunięte. Strażnik `ai-inventory`: SDK
+  `openai` importuje tylko ten plik, import klienta = wywołanie modelu, `@anthropic-ai/*`
+  w `src/`/`scripts/` = czerwony (kontrole ujemne); test `ai-openai-client`.
   Globalny budżet AI (#36, migracja `0120`, `docs/AI_BUDGET.md`): każde wywołanie modelu przez
   `withAiBudget` (`src/lib/ai/budget.ts`) — rezerwacja górnej granicy kosztu PRZED API
   (`ai_budget_reserve`, blokada doradcza, limit doby i miesiąca w Europe/Brussels), rozliczenie
@@ -907,8 +936,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
   domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
   (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
-  i 60/dobę fail-closed, globalny budżet AI #36 przez `src/lib/ai-assist/budget.ts`) → Claude
-  (`claude-opus-5-5`, `AI_JOB_ASSIST_MODEL`, structured output) → propozycja brzmienia opisu,
+  i 60/dobę fail-closed, globalny budżet AI #36 przez `src/lib/ai-assist/budget.ts`) → model
+  OpenAI (`gpt-6-luna`, `AI_JOB_ASSIST_MODEL`/`AI_MODEL`, strict structured output) → propozycja brzmienia opisu,
   obowiązków i wymagań w języku oferty. Wejście ścisłe (tylko tekst oferty — bez danych
   kandydatów), e-maile/telefony/identyfikatory usuwane przed wysłaniem, polecenia dla AI
   (wzorce PL/NL/FR/EN + flaga modelu) = brak propozycji; propozycja z nową liczbą/linkiem albo
@@ -1683,8 +1712,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   z przeglądarki, wiersz `matches` wstawia operator (pipeline P1-03). Mutacje UI:
   `respond-offer-noop|transition-noop` (czerwone są też `finish-onboarding-noop` i
   `recipient-locale-en`; `rls-applications-off` łapie tylko critical-flow — panel sam filtruje
-  po aktywnej firmie). **Otwarte:** wpięcie w CI (job z usługą `postgres:16`) — gotowy
-  fragment `ci.yml` w opisie PR; kreator oferty (9 kroków) w tym przebiegu.
+  po aktywnej firmie). Kreator oferty (`tests/e2e-real/job-wizard.spec.ts`): 9 kroków klikanych
+  w przeglądarce (nl) pod sesją Better Auth; błąd pola w kroku 1 nie tworzy oferty, po każdym
+  „Dalej” odczyt szkicu w bazie (kolumny `jobs`, tłumaczenie, wymagania, umiejętności, języki
+  z poziomem, certyfikaty); publikacja przy firmie niezweryfikowanej = komunikat i nadal `draft`
+  (bez e-maila `jobPublished`), po weryfikacji przez admina ta sama sesja publikuje (`active`,
+  slug publiczny, e-mail w języku publikującego, strona oferty dla gościa). Mutacje:
+  `wizard-draft-noop|publish-unverified`. **Otwarte:** wpięcie w CI (job z usługą `postgres:16`)
+  — gotowy fragment `ci.yml` w opisie PR.
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);

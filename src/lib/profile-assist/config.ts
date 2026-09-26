@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { DEFAULT_JOB_IMPORT_MODEL } from '@/lib/ai-import/config';
+import { isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
 /**
@@ -10,11 +10,11 @@ import { isProductionMode } from '@/lib/env';
  *
  * Funkcja jest WIDOCZNA tylko gdy:
  *   - `AI_PROFILE_ASSIST_ENABLED` = `1`/`true` (domyślnie wyłączona, także w produkcji), ORAZ
- *   - jest dostawca: `ANTHROPIC_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
+ *   - jest dostawca: `OPENAI_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
  *     `AI_PROFILE_ASSIST_PROVIDER=fixture` (E2E i lokalny UX bez kosztów i bez sieci).
  */
 
-export type ProfileAssistProvider = 'anthropic' | 'fixture';
+export type ProfileAssistProvider = 'openai' | 'fixture';
 
 function flagOn(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
@@ -25,15 +25,14 @@ export function profileAssistProvider(): ProfileAssistProvider | null {
   if (process.env.AI_PROFILE_ASSIST_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }
-  return process.env.ANTHROPIC_API_KEY ? 'anthropic' : null;
+  return isOpenAiConfigured() ? 'openai' : null;
 }
 
 export function isProfileAssistEnabled(): boolean {
   return profileAssistProvider() !== null;
 }
 
-/** Model Claude (nadpisywalny przez `AI_PROFILE_ASSIST_MODEL`); domyślnie jak import CV. */
+/** Model OpenAI: `AI_PROFILE_ASSIST_MODEL` → `AI_MODEL` → `gpt-6-luna` (`resolveAiModel`). */
 export function profileAssistModel(): string {
-  const m = process.env.AI_PROFILE_ASSIST_MODEL?.trim();
-  return m && /^[a-z0-9][a-z0-9.-]{2,63}$/.test(m) ? m : DEFAULT_JOB_IMPORT_MODEL;
+  return resolveAiModel(process.env.AI_PROFILE_ASSIST_MODEL);
 }

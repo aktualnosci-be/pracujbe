@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 /**
  * Smoke test produkcji (#16, #18) — uruchamiany ręcznie przez operatora, POZA CI.
  *
- * Sprawdza trasy publiczne i auth w czterech językach, `/`, `/robots.txt`, `/sitemap.xml`
+ * Sprawdza trasy publiczne i auth w czterech językach, `/`, `/robots.txt`, `/sitemap/0.xml`
  * oraz `/api/health`: oczekiwany kod odpowiedzi, brak 5xx, limit czasu każdego żądania.
  * Tylko GET na stronach, które nie zmieniają danych — nie zakłada kont, nie aplikuje,
  * nie wysyła e-maili (testy niszczące dane wyłącznie w izolowanej bazie, #16).
@@ -49,6 +49,8 @@ const SITE_ACCESS_PATH = '/api/site-access';
 const SITE_ACCESS_COOKIE = 'pb_site_access';
 const GATE_MARKER = `action="${SITE_ACCESS_PATH}"`;
 const DEFAULT_BASE_URL = 'https://pracuj.be';
+/** Identyfikator pliku ze stronami statycznymi w indeksie sitemap (`sitemap.ts`, #599). */
+export const SITEMAP_STATIC_ID = 0;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const CONCURRENCY = 4;
 const USER_AGENT = 'pracujbe-prod-smoke/1.0';
@@ -64,7 +66,9 @@ export function buildChecks() {
     { path: '/api/health', expect: [200], health: true },
     { path: '/', expect: [307, 308], redirectToLocale: true },
     { path: '/robots.txt', expect: [200] },
-    { path: '/sitemap.xml', expect: [200] },
+    // Sitemap index (#599): `src/app/sitemap.ts` ma `generateSitemaps()`, więc Next.js serwuje
+    // `/sitemap/<id>.xml` (0 = strony statyczne, 1..N = oferty), a `/sitemap.xml` daje 404.
+    { path: `/sitemap/${SITEMAP_STATIC_ID}.xml`, expect: [200] },
   ];
   for (const locale of LOCALES) {
     for (const page of LOCALIZED_PAGES) checks.push({ path: `/${locale}${page}`, expect: [200] });

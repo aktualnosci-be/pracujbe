@@ -3,15 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ExtractorError } from '@/lib/ai-import/extract';
 import {
-  AnthropicCvExtractor,
   CV_EXTRACTION_SYSTEM_PROMPT,
   FixtureCvExtractor,
+  OpenAiCvExtractor,
   wrapCvText,
   type CvExtractor,
 } from '@/lib/cv-import/extract';
 import { mapCvExtraction } from '@/lib/cv-import/proposals';
 import { prepareCvImport, proposeFromCv } from '@/lib/cv-import/run';
 import { buildDocx, CANDIDATE_CONTACT, CV_WITH_REFEREES, DOCX_TYPE, REFEREES } from '../helpers/cv-fixtures';
+import { callParams, fakeOpenAiClient } from '../helpers/fake-openai';
 import { PII } from '../helpers/privacy-fixtures';
 
 /**
@@ -72,20 +73,26 @@ describe('payload do modelu', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('AnthropicCvExtractor: instrukcje tylko w system, CV w znaczniku <cv>, bez narzędzi, structured output', async () => {
-    const create = vi.fn(async () => ({
-      stop_reason: 'end_turn',
-      content: [{ type: 'text', text: JSON.stringify({ isCv: true }) }],
-    }));
-    const extractor = new AnthropicCvExtractor({ messages: { create } } as never);
+  it('OpenAiCvExtractor: instrukcje tylko w instructions, CV w znaczniku <cv>, bez narzędzi, strict structured output', async () => {
+    const { client, create } = fakeOpenAiClient({ text: JSON.stringify({ isCv: true }) });
+    const extractor = new OpenAiCvExtractor(client);
     const text = await preview();
-    await extractor.extract(text);
-    const body = (create.mock.calls[0] as unknown as [Record<string, unknown>])[0];
-    expect(body.system).toBe(CV_EXTRACTION_SYSTEM_PROMPT);
+    await expect(extractor.extract(text)).resolves.toEqual({ isCv: true });
+    const body = callParams(create);
+    expect(body.instructions).toBe(CV_EXTRACTION_SYSTEM_PROMPT);
     expect(body).not.toHaveProperty('tools');
-    expect(JSON.stringify(body.messages)).toContain('<cv>');
-    expect((body.output_config as { format: { type: string } }).format.type).toBe('json_schema');
+    expect(body.store).toBe(false);
+    expect(JSON.stringify(body.input)).toContain('<cv>');
+    expect(JSON.stringify(body.input)).not.toContain('You help a job seeker');
+    expect(body.text?.format).toMatchObject({ type: 'json_schema', strict: true, name: 'cv_profile_proposals' });
     expectNoThirdParty(JSON.stringify(body));
+  });
+
+  it('OpenAiCvExtractor: odmowa → refused, zużycie zgłoszone także przy odmowie', async () => {
+    const { client } = fakeOpenAiClient({ refusal: 'no', text: null, usage: { input_tokens: 50, output_tokens: 5 } });
+    const onUsage = vi.fn();
+    await expect(new OpenAiCvExtractor(client).extract('Magazynier', { onUsage })).rejects.toMatchObject({ reason: 'refused' });
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 50, outputTokens: 5 }));
   });
 
   it('próba zamknięcia znacznika <cv> w treści jest neutralizowana', () => {

@@ -1,8 +1,7 @@
 import 'server-only';
 
-import Anthropic from '@anthropic-ai/sdk';
-
-import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
+import { toExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
+import { createStructuredResponse, type ResponsesClient } from '@/lib/ai/openai';
 import { profileAssistModel } from '@/lib/profile-assist/config';
 import { PROFILE_QUESTION_IDS, PROFILE_QUESTION_TOPICS } from '@/lib/profile-assist/questions';
 import { PROFILE_ASSIST_JSON_SCHEMA } from '@/lib/profile-assist/schema';
@@ -12,7 +11,7 @@ import { PROFILE_ASSIST_JSON_SCHEMA } from '@/lib/profile-assist/schema';
  * Granice jak przy imporcie CV (`src/lib/cv-import/extract.ts`):
  *   - do modelu trafiają WYŁĄCZNIE odpowiedzi kandydata po `prepareProfileAnswers`
  *     (bez identyfikatora konta, imienia, kontaktu i danych osób trzecich);
- *   - odpowiedzi to niezaufany materiał w znacznikach `<answer>`, instrukcje tylko w `system`;
+ *   - odpowiedzi to niezaufany materiał w znacznikach `<answer>`, instrukcje tylko w `instructions`;
  *     model bez narzędzi, wynik ograniczony schematem i ponownie walidowany;
  *   - wynik to propozycje pól profilu, które kandydat zatwierdza pozycja po pozycji — nie ocena,
  *     nie ranking i nie wejście do `scoreMatch`.
@@ -23,7 +22,10 @@ export interface ProfileAssistor {
   extract(preparedText: string, hooks?: ExtractionHooks): Promise<unknown>;
 }
 
-/** Limit tokenów odpowiedzi — także górna granica wyjścia w rezerwacji budżetu AI (#36). */
+/**
+ * Limit tokenów odpowiedzi (`max_output_tokens`, u OpenAI także tokeny rozumowania) — także
+ * górna granica wyjścia w rezerwacji budżetu AI (#36).
+ */
 export const PROFILE_ASSIST_MAX_TOKENS = 4000;
 
 export const PROFILE_ASSIST_SYSTEM_PROMPT = [
@@ -51,51 +53,27 @@ export function wrapAnswers(preparedText: string): string {
   return `<answers>\n${preparedText}\n</answers>\n\nPropose profile entries from the answers above in the required JSON structure.`;
 }
 
-/** Produkcyjny dostawca: Messages API + structured output. */
-export class AnthropicProfileAssistor implements ProfileAssistor {
-  private readonly client: Anthropic;
-
-  constructor(client?: Anthropic) {
-    this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 1 });
-  }
+/** Produkcyjny dostawca: OpenAI Responses API + structured output (`src/lib/ai/openai.ts`). */
+export class OpenAiProfileAssistor implements ProfileAssistor {
+  constructor(private readonly client?: ResponsesClient) {}
 
   async extract(preparedText: string, hooks?: ExtractionHooks): Promise<unknown> {
-    let response: Anthropic.Message;
+    // #36: zużycie naliczane także przy odmowie — klient zgłasza je przed oceną odpowiedzi.
+    // Bez `usage` budżet rozlicza pełną kwotę rezerwacji (zachowawczo).
     try {
-      response = await this.client.messages.create({
-        model: profileAssistModel(),
-        max_tokens: PROFILE_ASSIST_MAX_TOKENS,
-        system: PROFILE_ASSIST_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: [{ type: 'text', text: wrapAnswers(preparedText) }] }],
-        output_config: {
-          effort: 'low',
-          format: { type: 'json_schema', schema: PROFILE_ASSIST_JSON_SCHEMA as unknown as Record<string, unknown> },
+      return await createStructuredResponse(
+        {
+          model: profileAssistModel(),
+          instructions: PROFILE_ASSIST_SYSTEM_PROMPT,
+          input: [{ kind: 'text', text: wrapAnswers(preparedText) }],
+          schemaName: 'profile_assist_proposals',
+          schema: PROFILE_ASSIST_JSON_SCHEMA as unknown as Record<string, unknown>,
+          maxOutputTokens: PROFILE_ASSIST_MAX_TOKENS,
         },
-      });
+        { onUsage: hooks?.onUsage, client: this.client },
+      );
     } catch (e) {
-      if (e instanceof Anthropic.RateLimitError) throw new ExtractorError('rateLimited');
-      throw new ExtractorError('failed');
-    }
-    // #36: zużycie naliczane także przy odmowie — zgłaszamy je przed oceną odpowiedzi.
-    const usage = response.usage as Anthropic.Usage | undefined;
-    if (usage) {
-      hooks?.onUsage?.({
-        inputTokens: usage.input_tokens,
-        outputTokens: usage.output_tokens,
-        cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
-        cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
-      });
-    }
-    if (response.stop_reason === 'refusal') throw new ExtractorError('refused');
-    if (response.stop_reason !== 'end_turn') throw new ExtractorError('failed');
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      throw new ExtractorError('failed');
+      throw toExtractorError(e);
     }
   }
 }

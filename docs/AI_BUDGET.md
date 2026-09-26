@@ -11,10 +11,14 @@ z inwentarza (`src/lib/ai/inventory.ts`). Migracja `0120_ai_budget.sql`.
    przekroczyłaby którykolwiek limit (`AI_BUDGET_EXCEEDED`). Równoległe żądania nie
    przekroczą limitu razem.
 2. **Szacunek = górna granica.** Wejście: prompt + schemat + materiał (tekst: 1 token na
-   2 znaki, obraz: 6000 tokenów), wyjście: pełne `max_tokens`. Stawki w
-   `src/lib/ai/pricing.ts`; nieznany model = najwyższa stawka z tabeli.
+   2 znaki, obraz: 12 000 tokenów), wyjście: pełne `max_output_tokens` (u OpenAI obejmuje
+   tokeny rozumowania). Wejście w rezerwacji po wyższej ze stawek: zwykłej albo zapisu do
+   cache. Stawki w `src/lib/ai/pricing.ts`; nieznany model = najwyższa stawka z tabeli
+   (także długiego kontekstu).
 3. **Rozliczenie.** Po odpowiedzi `ai_budget_settle` zapisuje tokeny z `usage` dostawcy
-   i rzeczywisty koszt (także przy odmowie modelu — tokeny są naliczane). Bez `usage`
+   i rzeczywisty koszt (mapowanie `usageFromOpenAi` w `src/lib/ai/openai.ts`: `input_tokens`
+   minus `input_tokens_details.cached_tokens` i `cache_write_tokens` po stawce wejścia, odczyt
+   i zapis cache po własnych stawkach, `output_tokens` — z rozumowaniem — po stawce wyjścia) (także przy odmowie modelu — tokeny są naliczane). Bez `usage`
    (przerwane połączenie, błąd) koszt = kwota rezerwacji. Rezerwacja nigdy nierozliczona
    liczy się dalej w całości.
 4. **Fail-closed.** Przekroczony limit, limit `0`, brak wiersza limitu, brak bazy zadań
@@ -23,6 +27,17 @@ z inwentarza (`src/lib/ai/inventory.ts`). Migracja `0120_ai_budget.sql`.
 
 Doba i miesiąc liczone w Europe/Brussels. Kwoty w mikro-USD (1 USD = 1 000 000) — koszt
 dostawcy jest naliczany w USD.
+
+## Dostawca i cennik
+
+Decyzja właściciela 26.09.2026: wszystkie funkcje AI używają wyłącznie modelu OpenAI
+„GPT-6 Luna” (`gpt-6-luna`) przez wspólnego klienta `src/lib/ai/openai.ts`. Cennik
+(https://developers.openai.com/api/docs/pricing, tier Standard, stan 26.09.2026) za 1 mln
+tokenów: wejście 0,10 USD, wejście z cache 0,01 USD, zapis do cache 0,125 USD, wyjście
+0,50 USD; długi kontekst 0,20 / 0,02 / 0,25 / 0,75 USD. **Do potwierdzenia:** próg długiego
+kontekstu (strona cennika go nie podaje; w kodzie 272 000 tokenów wejścia wg źródeł wtórnych)
+— nasze wejścia są ucinane daleko poniżej. W tabeli są też `gpt-6-sol` i `gpt-6-astra`, żeby
+błędne `AI_MODEL` nie zaniżało kosztu. Zmiana cennika = zmiana `MODEL_PRICING`.
 
 ## Limity
 
@@ -79,7 +94,7 @@ rozliczają tego samego wiersza dwukrotnie.
 - Asystent treści oferty (#37): bramka `src/lib/ai-assist/budget.ts` (rezerwacja → bilet →
   rozliczenie), szacunek `src/lib/ai-assist/cost.ts`.
 - Import CV kandydata (#487, #498): `withAiBudget` w `src/lib/actions/cv-import.ts`, szacunek
-  `src/lib/cv-import/cost.ts` (prompt + schemat + zminimalizowany tekst + `max_tokens`).
+  `src/lib/cv-import/cost.ts` (prompt + schemat + zminimalizowany tekst + `max_output_tokens`).
 - Asystent profilu kandydata (#37): `withAiBudget` w `src/lib/actions/profile-assist.ts`,
   szacunek `src/lib/profile-assist/cost.ts` (funkcja `profile_answers_assist`, migracja 0147).
 - Tłumaczenia (#514): jeszcze nie — hook poniżej.

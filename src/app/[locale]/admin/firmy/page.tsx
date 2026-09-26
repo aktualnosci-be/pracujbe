@@ -21,12 +21,18 @@ import {
   ROW_META,
   ROW_TITLE,
   TABLE_WRAP,
-  TD,
-  TD_WRAP,
   TEXT_LINK,
-  TH,
 } from '@/components/admin/admin-styles';
 import { cn } from '@/lib/utils';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableRowHeader,
+} from '@/components/ui/table';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 
@@ -193,42 +199,38 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
             <>
               {/* Desktop: tabela (`.table-wrap table`) */}
               <div className={cn(TABLE_WRAP, 'hidden md:block')}>
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th scope="col" className={TH}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
                         {t('colName')}
-                      </th>
-                      <th scope="col" className={TH}>
+                      </TableHead>
+                      <TableHead>
                         {t('colStatus')}
-                      </th>
-                      <th scope="col" className={TH}>
+                      </TableHead>
+                      <TableHead>
                         {t('colCreated')}
-                      </th>
-                      <th scope="col" className={cn(TH, 'pr-0 text-right')}>
+                      </TableHead>
+                      <TableHead className="pr-0 text-right">
                         {t('colActions')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {companies.map((company) => (
-                      <tr key={company.id}>
-                        <th
-                          scope="row"
+                      <TableRow key={company.id}>
+                        <TableRowHeader
                           tabIndex={-1}
                           data-admin-focus={companyFocusKey(company.id)}
-                          className={cn(
-                            TD_WRAP,
-                            'text-left font-normal focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                          )}
+                          className="focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         >
                           <CompanyDetailLink id={company.id} name={company.name} />
-                        </th>
-                        <td className={TD}>
+                        </TableRowHeader>
+                        <TableCell>
                           <AdminStatusBadge kind="company" status={company.status} />
-                        </td>
-                        <td className={TD}>{formatDate(company.createdAt)}</td>
-                        <td className={cn(TD, 'pr-0 text-right')}>
+                        </TableCell>
+                        <TableCell>{formatDate(company.createdAt)}</TableCell>
+                        <TableCell className="pr-0 text-right">
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <CompanyHistoryLink id={company.id} label={t('auditHistoryLink')} />
                             <CompanyStatusActions
@@ -237,11 +239,11 @@ export default async function AdminCompaniesPage({ params, searchParams }: PageP
                               className="justify-end"
                             />
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               {/* Mobile: wiersze (`.panel .job`) */}
