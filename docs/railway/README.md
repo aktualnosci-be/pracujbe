@@ -24,6 +24,9 @@ Opcjonalnie `CRON_TIMEOUT_SECONDS` (1–600, domyślnie 120). Najpierw jedno wyw
 każdej usługi, potem harmonogram. Nie uruchamiaj jednocześnie harmonogramów Vercel
 (`vercel.json`) i Railway.
 
+**Bez usług cron w Railway** (plan darmowy): ten sam harmonogram prowadzi Cloudflare Worker
+z Cron Triggers — `infra/cloudflare-cron/`, opis i wdrożenie w `docs/CLOUDFLARE_CRON.md`.
+
 **Caller** (`scripts/railway-cron-call.mjs`, test `tests/unit/railway-cron.test.ts`): jedno
 żądanie POST, bez przekierowań, przerwane po czasie. Adres musi wskazywać jedno z dwóch
 zadań powyżej, bez query i fragmentu; zwykłe HTTP tylko dla `*.railway.internal` i
