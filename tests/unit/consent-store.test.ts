@@ -130,6 +130,7 @@ describe('saveConsent / updateConsent', () => {
     expect(recordConsent).toHaveBeenCalledWith(
       { necessary: true, preferences: false, analytics: false },
       'cookie_settings',
+      '2.0',
     );
   });
 
