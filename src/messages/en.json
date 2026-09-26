@@ -1650,7 +1650,8 @@
     "reportSent": "Report received",
     "reportAlreadyOpen": "Already reported — awaiting review",
     "reportedBadge": "Reported",
-    "reportNetworkError": "The report could not be sent. Check your connection and try again."
+    "reportNetworkError": "The report could not be sent. Check your connection and try again.",
+    "attachmentPreviewAlt": "Image preview: {name}"
   },
   "files": {
     "cvTitle": "Your CV / documents",
