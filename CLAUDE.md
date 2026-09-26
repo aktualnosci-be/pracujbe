@@ -610,6 +610,19 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
   rozszerzania CSP. Dowód: `rls.sql` sekcja CL141 (member/recruiter bez dostępu, http:// i adres
   nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
+  Linki do zatwierdzenia (decyzja właściciela 26.09.2026, migracja `0144` — numer tymczasowy):
+  nowy adres od firmy trafia do `website_pending`/`logo_url_pending` (ten sam CHECK https),
+  publiczne `website`/`logo_url` (czytane przez `get_public_job`/`get_public_company`) zmienia
+  WYŁĄCZNIE `admin_review_company_link` (is_admin, CAS po zgłoszonym adresie → `STALE_STATE`,
+  odrzucenie z uzasadnieniem ≤ 1000, audyt `company.link_reviewed`). Strażnik
+  `protect_company_links` (każda ścieżka zapisu pod sesją): niepusty nowy adres = zgłoszenie,
+  wyczyszczenie pola = natychmiastowe usunięcie linku i zgłoszenia, uzasadnienie odrzucenia
+  ustala tylko admin; adresy sprzed 0144 zostają publiczne. Firma nadal `verified`. UI:
+  `/employer/firma` pokazuje zgłoszenie „czeka na akceptację”, adres publiczny i powód
+  odrzucenia; `/admin/firmy/[id]` — sekcja „Linki do akceptacji” (`CompanyLinkReviewActions`,
+  akcja `reviewCompanyLink`). Dowód: `rls.sql` sekcja CL144 (kontrola ujemna: bez strażnika
+  niezatwierdzony link wycieka do `get_public_company`), unit `company-link-review`,
+  `company-links-update`, `company-load`.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,

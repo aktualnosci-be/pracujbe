@@ -23,6 +23,10 @@ export function appealFocusKey(id: string): string {
   return `appeal-${id}`;
 }
 
+export function companyLinkFocusKey(companyId: string, field: string): string {
+  return `company-link-${companyId}-${field}`;
+}
+
 export function screeningReviewFocusKey(id: string): string {
   return `screening-review-${id}`;
 }

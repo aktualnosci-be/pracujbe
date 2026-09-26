@@ -1,5 +1,12 @@
 'use server';
 
+import {
+  companyLinkReasonError,
+  isCompanyLinkDecision,
+  isCompanyLinkField,
+  type CompanyLinkDecision,
+  type CompanyLinkField,
+} from '@/lib/admin/company-link-review';
 import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/company-review';
 import { emailLiftReasonError } from '@/lib/admin/email-suppression';
 import {
@@ -41,6 +48,9 @@ import { companyVatSource } from '@/lib/vies/state';
  *   - `decideScreeningReview` — decyzja o pytaniu screeningowym oznaczonym przez detektor
  *     (#497) przez RPC `admin_decide_screening_review` (0103: tylko oczekujące, odrzucenie
  *     z uzasadnieniem, audyt, powiadomienie firmy). Akceptacja nie publikuje oferty.
+ *   - `reviewCompanyLink` — zatwierdzenie/odrzucenie strony WWW albo logo firmy czekającego na
+ *     akceptację (0144) przez RPC `admin_review_company_link` (CAS po zgłoszonym adresie,
+ *     odrzucenie z uzasadnieniem, audyt `company.link_reviewed`).
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
  *
@@ -403,6 +413,59 @@ export async function decideScreeningReview(
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.decideScreeningReview' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/**
+ * Decyzja o linku firmy czekającym na akceptację (0144). `expectedValue` = adres widziany przez
+ * admina; gdy firma zmieniła zgłoszenie w międzyczasie, baza zwraca `STALE_STATE`.
+ */
+export async function reviewCompanyLink(
+  companyId: string,
+  field: CompanyLinkField,
+  decision: CompanyLinkDecision,
+  expectedValue: string,
+  reason: string,
+): Promise<AdminActionResult> {
+  if (!isCompanyLinkField(field) || !isCompanyLinkDecision(decision)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (typeof expectedValue !== 'string' || expectedValue.length === 0) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  const reasonError = companyLinkReasonError(decision, typeof reason === 'string' ? reason : '');
+  if (reasonError) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
+  }
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const trimmed = typeof reason === 'string' ? reason.trim() : '';
+    const call = await callAdminRpc('admin_review_company_link', {
+      p_company_id: companyId,
+      p_field: field,
+      p_decision: decision,
+      p_expected_value: expectedValue,
+      p_reason: trimmed.length > 0 ? trimmed : null,
+    });
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
+      if (message.includes('REASON_REQUIRED')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
+      }
+      if (message.includes('REASON_TOO_LONG')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
+      }
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.reviewCompanyLink' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

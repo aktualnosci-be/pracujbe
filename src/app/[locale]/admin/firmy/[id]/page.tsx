@@ -29,6 +29,8 @@ import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
+import { CompanyLinkReviewActions } from '@/components/admin/CompanyLinkReviewActions';
+import { companyLinkFocusKey } from '@/lib/admin/focus';
 
 /**
  * Panel administratora — szczegół firmy (#310).
@@ -205,6 +207,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           <Field label={t('detailEmail')} value={company.email ?? dash} />
           <Field label={t('detailPhone')} value={company.phone ?? dash} />
           <Field label={t('detailWebsite')} value={company.website ?? dash} />
+          <Field label={t('detailLogo')} value={company.logoUrl ?? dash} />
           <Field label={t('detailAddress')} value={address ?? dash} />
           <Field label={t('detailRegion')} value={company.region ?? dash} />
           <Field label={t('detailCountry')} value={company.country ?? dash} />
@@ -216,6 +219,52 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           </dl>
         ) : null}
       </section>
+
+      {/* Linki czekające na akceptację (0144) */}
+      {company.linkReviews.length > 0 ? (
+        <section aria-labelledby="company-links-review-heading" className={PANEL}>
+          <div className={SECTION_HEAD}>
+            <h2 id="company-links-review-heading" className={PANEL_H2}>
+              {t('sectionCompanyLinkReviews')}
+            </h2>
+          </div>
+          <p className={PANEL_P}>{t('companyLinkReviewsHint')}</p>
+          <ul className="mt-4 space-y-4">
+            {company.linkReviews.map((review) => {
+              const fieldLabel = t(review.field === 'website' ? 'detailWebsite' : 'detailLogo');
+              return (
+                <li key={review.field} className="min-w-0 border-t border-border pt-4">
+                  <h3
+                    tabIndex={-1}
+                    data-admin-focus={companyLinkFocusKey(company.id, review.field)}
+                    className="text-sm font-semibold text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {fieldLabel}
+                  </h3>
+                  <dl className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <Field label={t('companyLinkColValue')} value={<span className="break-all">{review.value}</span>} />
+                    <Field
+                      label={t('companyLinkColPublished')}
+                      value={review.published ? <span className="break-all">{review.published}</span> : dash}
+                    />
+                    <Field
+                      label={t('companyLinkColSubmitted')}
+                      value={review.submittedAt ? formatDate(review.submittedAt) : dash}
+                    />
+                  </dl>
+                  <CompanyLinkReviewActions
+                    companyId={company.id}
+                    field={review.field}
+                    value={review.value}
+                    fieldLabel={fieldLabel}
+                    className="mt-3"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {/* Weryfikacja VAT w VIES (#92) */}
       <CompanyViesCheck companyId={company.id} initial={company.vies} />

@@ -106,4 +106,20 @@ describe('company links update authorization', () => {
     } as never);
     expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({ ok: true });
   });
+
+  it('reports pendingReview when the database moved the new address to review (0144)', async () => {
+    db([{ id: 'company-1', website_pending: 'https://acme.example', logo_url_pending: null }]);
+    expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({
+      ok: true,
+      pendingReview: true,
+    });
+    // Wpis adresu zeruje też zgłoszenie (adres równy zatwierdzonemu = anulowanie zgłoszenia).
+    expect(fakeDb.callsTo('company.update-links')[0]?.text).toMatch(/website_pending\s*=\s*CASE WHEN \$2 THEN NULL/);
+  });
+
+  it('does not report pendingReview for a field the user did not submit (negative control)', async () => {
+    // Zaległe zgłoszenie strony WWW nie dotyczy zapisu samego logo.
+    db([{ id: 'company-1', website_pending: 'https://old.example', logo_url_pending: null }]);
+    expect(await updateCompanyLinks({ logoUrl: '' })).toEqual({ ok: true });
+  });
 });

@@ -1326,8 +1326,22 @@ export interface AdminCompanyJob {
   createdAt: string | null;
 }
 
+/** Link firmy czekający na akceptację admina (0144, „linki do zatwierdzenia”). */
+export interface AdminCompanyLinkReview {
+  field: 'website' | 'logo_url';
+  /** Zgłoszony adres (CAS przy decyzji). */
+  value: string;
+  /** Adres widoczny teraz publicznie (zatwierdzony) albo null. */
+  published: string | null;
+  submittedAt: string | null;
+}
+
 export interface AdminCompanyDetail extends AdminCompanyRow {
   website: string | null;
+  /** Zatwierdzone logo (publiczne). */
+  logoUrl: string | null;
+  /** Zgłoszenia linków do akceptacji (0144); puste = nic nie czeka. */
+  linkReviews: AdminCompanyLinkReview[];
   phone: string | null;
   address: string | null;
   postalCode: string | null;
@@ -1351,6 +1365,29 @@ export type AdminCompanyDetailResult =
   | { status: 'not_found' }
   | { status: 'error' };
 
+function companyLinkReviews(c: Record<string, unknown>): AdminCompanyLinkReview[] {
+  const reviews: AdminCompanyLinkReview[] = [];
+  const website = asNullableString(c['website_pending']);
+  if (website) {
+    reviews.push({
+      field: 'website',
+      value: website,
+      published: asNullableString(c['website']),
+      submittedAt: asNullableString(c['website_pending_at']),
+    });
+  }
+  const logo = asNullableString(c['logo_url_pending']);
+  if (logo) {
+    reviews.push({
+      field: 'logo_url',
+      value: logo,
+      published: asNullableString(c['logo_url']),
+      submittedAt: asNullableString(c['logo_url_pending_at']),
+    });
+  }
+  return reviews;
+}
+
 function demoCompanyDetail(id: string): AdminCompanyDetailResult {
   const row = DEMO_COMPANIES.find((c) => c.id === id);
   if (!row) return { status: 'not_found' };
@@ -1366,6 +1403,8 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
     company: {
       ...row,
       website: null,
+      logoUrl: null,
+      linkReviews: [],
       phone: null,
       address: null,
       postalCode: null,
@@ -1449,7 +1488,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
       const company = await queryOne(tx, 'admin.company-detail',
         `SELECT id, name, status, status_reason, created_at, verified_at, vat_number,
                 registration_number, email, phone, website, address, postal_code, city, region,
-                country, industry, description
+                country, industry, description, logo_url, website_pending, logo_url_pending,
+                website_pending_at, logo_url_pending_at
            FROM public.companies
           WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
       if (!company) return null;
@@ -1504,6 +1544,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         email: asNullableString(c['email']),
         city: asNullableString(c['city']),
         website: asNullableString(c['website']),
+        logoUrl: asNullableString(c['logo_url']),
+        linkReviews: companyLinkReviews(c),
         phone: asNullableString(c['phone']),
         address: asNullableString(c['address']),
         postalCode: asNullableString(c['postal_code']),
