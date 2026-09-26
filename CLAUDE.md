@@ -92,7 +92,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 - **Bezpieczeństwo danych:** **Row Level Security** na każdej tabeli. Operacje wrażliwe = Server Actions/Route Handlers.
 - **Formularze:** React Hook Form + Zod resolver. Server Actions do zapisu.
 - **E-mail:** **Resend** + **React Email** (szablony w `src/emails`), wysyłka przez kolejkę (`email_deliveries`).
-- **Błędy/monitoring:** webhook Discorda `ERROR_WEBHOOK_URL` (#571, `src/lib/error-webhook`, tylko serwer; Sentry usunięte). Centralny system błędów `src/lib/errors`, `captureError` w `src/lib/error-report.ts`.
+- **Błędy/monitoring:** webhook Discorda `ERROR_WEBHOOK_URL` (#571, `src/lib/error-webhook`, tylko serwer; Sentry usunięte; błędy przeglądarki przez `POST /api/client-error`). Centralny system błędów `src/lib/errors`, `captureError` w `src/lib/error-report.ts`.
 - **Testy:** **Vitest** (unit/integration) + **Playwright** (e2e). Patrz `tests/`.
 - **Hosting:** **Railway**, jedna produkcja z `main`; natywne `Wait for CI` blokuje wdrożenie do zielonego CI. Migracje SQL są wersjonowane w repozytorium.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
@@ -1717,8 +1717,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   allowed_mentions:{parse:[]}}`, z końcówką `/slack` → `{text}`; https i host `discord.com`/
   `discordapp.com`, inny adres = brak wysyłki). `src/lib/error-webhook/` (url, message, send)
   rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
-  `captureError` (`src/lib/error-report.ts`, izomorficzny, w przeglądarce no-op) przekazuje
-  tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
+  `captureError` (`src/lib/error-report.ts`, izomorficzny) przekazuje tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
   query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
   ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
   awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
@@ -1728,9 +1727,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `installConsoleRedaction()` (`register()`, poza `next dev`). Dowód: `privacy-redaction`,
   `error-webhook` (oba formaty, brak wysyłki bez zmiennej, payload bez PII z kontrolą ujemną,
   limit, deduplikacja, 429, timeout, strażnik bundla klienta). Opis: `docs/TELEMETRY_PRIVACY.md`.
+  Błędy przeglądarki: `POST /api/client-error` (`src/app/api/client-error/route.ts`) — tylko ta
+  sama witryna (`Origin`/`Sec-Fetch-Site`, inaczej 403), body ≤ 4 KB, wyłącznie pola `code`
+  (spoza `ErrorCodes` → `INTERNAL`), `route` (`safeRoute`) i `release`; każde inne pole (np.
+  `message`/`stack`) = 400 bez wysyłki (`src/lib/client-error/payload.ts`); limiter w pamięci
+  10/min po HMAC adresu (jak lejek ofert); bez `ERROR_WEBHOOK_URL` = 204 bez wysyłki. Klient
+  (`src/lib/client-error/reporter.ts`, `ClientErrorReporter` w `[locale]/layout`, jawnie w
+  `global-error`): nasłuch `error` (tylko skrypty własnej witryny) i `unhandledrejection` + granice
+  błędów przez `captureError`; wysyła tylko kod, ścieżkę i wydanie (`credentials: 'omit'`,
+  deduplikacja w karcie, ≤ 10 na załadowanie), pomija błędy z `digest` (zgłoszone już przez
+  `onRequestError`). Bez zgody cookies (diagnostyka bez identyfikatorów). Wiadomość „błąd w
+  przeglądarce”, osobne okno deduplikacji. Dowód: `client-error` (kontrole ujemne: payload z PII,
+  obcy Origin, strażnik grafu importów klienta), `client-error-capture`.
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
-  logi Railway (retencja/dostęp), rejestr (#485). Błędy w przeglądarce nie są zgłaszane
-  (brak endpointu klienta).
+  logi Railway (retencja/dostęp), rejestr (#485).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`

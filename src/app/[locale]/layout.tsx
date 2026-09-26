@@ -10,6 +10,7 @@ import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
 import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
+import { ClientErrorReporter } from '@/components/errors/ClientErrorReporter';
 import { dmSans } from '../fonts';
 
 /**
@@ -113,6 +114,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
           <CookieConsent />
           {children}
           <ServiceWorkerRegister />
+          <ClientErrorReporter />
         </NextIntlClientProvider>
       </body>
     </html>
