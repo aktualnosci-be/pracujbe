@@ -2,6 +2,7 @@
 
 > **Od 2026-09-23 CI działa na GitHub-hosted `ubuntu-latest`** (decyzja właściciela).
 > Ten dokument opisuje poprzednią konfigurację i przydaje się tylko przy ewentualnym powrocie.
+> Wzmianki o sekretach i projekcie Supabase są **ARCHIWALNE — stan sprzed migracji na Railway (#27)**.
 
 CI (`.github/workflows/ci.yml`) działa na **self-hosted runnerach**. Wdrożenie
 produkcji obsługuje natywna integracja Railway po zielonym CI. Poniżej jak

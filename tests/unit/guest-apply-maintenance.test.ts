@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
@@ -15,11 +15,13 @@ const { captureError } = await import('@/lib/error-report');
 const MAINTENANCE_RPCS = [
   'release_stale_discount_reservations',
   'release_stale_checkout_intents',
+  'ai_budget_release_stale_reservations',
   'expire_due_jobs',
   'purge_guest_application_requests',
   'process_saved_search_alerts',
   'process_email_campaigns',
   'run_retention_purge',
+  'purge_job_funnel_data',
   'purge_stale_message_attachments',
   'claim_storage_deletions',
 ];
@@ -71,15 +73,27 @@ describe('maintenance: guest application retention', () => {
 });
 
 describe('maintenance: retencja danych i kolejka storage (#486)', () => {
+  const env = process.env.RETENTION_MODE;
+  beforeEach(() => {
+    process.env.RETENTION_MODE = 'apply';
+  });
+  afterEach(() => {
+    if (env === undefined) delete process.env.RETENTION_MODE;
+    else process.env.RETENTION_MODE = env;
+  });
+
   it('zwraca liczniki retencji i kolejki storage', async () => {
     fakeDb
       .rpc('run_retention_purge', { deletedFiles: 2, erasedProfiles: 1, note: 'x' })
       .rpc('claim_storage_deletions', []);
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect(fakeDb.callsTo('run_retention_purge')[0]).toMatchObject({ args: { p_limit: 200 }, as: 'service' });
+    expect(fakeDb.callsTo('run_retention_purge')[0]).toMatchObject({
+      args: { p_limit: 200, p_dry_run: false },
+      as: 'service',
+    });
     expect(await res.json()).toMatchObject({
-      retention: { deletedFiles: 2, erasedProfiles: 1 },
+      retention: { mode: 'apply', batches: 1, deletedFiles: 2, erasedProfiles: 1 },
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
   });
@@ -173,5 +187,71 @@ describe('maintenance: czyszczenie spraw DSA za jawną flagą (#43)', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('maintenance: harmonogram retencji za jawną flagą (#574)', () => {
+  const env = process.env.RETENTION_MODE;
+  afterEach(() => {
+    if (env === undefined) delete process.env.RETENTION_MODE;
+    else process.env.RETENTION_MODE = env;
+  });
+
+  it('domyślnie wyłączone: bez zmiennej i przy nieznanej wartości baza nie jest wołana', async () => {
+    for (const value of [undefined, '', 'true', 'APPLY', 'on', ' apply']) {
+      if (value === undefined) delete process.env.RETENTION_MODE;
+      else process.env.RETENTION_MODE = value;
+      resetFakeDb(null);
+      for (const fn of MAINTENANCE_RPCS) fakeDb.rpc(fn, 0);
+      const res = await POST(request());
+      expect(res.status).toBe(200);
+      expect(fakeDb.callsTo('run_retention_purge')).toHaveLength(0);
+      expect((await res.json()).retention).toEqual({ mode: 'off', batches: 0 });
+      // Fizyczne usuwanie obiektów (także po usunięciu konta na wniosek) działa niezależnie.
+      expect(fakeDb.callsTo('claim_storage_deletions')).toHaveLength(1);
+    }
+  });
+
+  it('dry-run: jedna partia z p_dry_run = true, nawet gdy kategorie są pełne', async () => {
+    process.env.RETENTION_MODE = 'dry-run';
+    fakeDb.rpc('run_retention_purge', { deletedFiles: 200, fullBatches: 1, dryRun: 1 });
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    const calls = fakeDb.callsTo('run_retention_purge');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args).toEqual({ p_limit: 200, p_dry_run: true });
+    expect((await res.json()).retention).toEqual({
+      mode: 'dry-run', batches: 1, deletedFiles: 200, fullBatches: 1, dryRun: 1,
+    });
+  });
+
+  it('apply: kolejne partie, dopóki któraś kategoria wyczerpuje limit (601 rekordów = 4 partie)', async () => {
+    process.env.RETENTION_MODE = 'apply';
+    const batches = [
+      { closedApplications: 200, fullBatches: 1 },
+      { closedApplications: 200, fullBatches: 1 },
+      { closedApplications: 200, fullBatches: 1 },
+      { closedApplications: 1, fullBatches: 0 },
+    ];
+    let i = 0;
+    fakeDb.rpc('run_retention_purge', () => batches[i++] ?? { fullBatches: 0 });
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    expect(fakeDb.callsTo('run_retention_purge')).toHaveLength(4);
+    expect((await res.json()).retention).toEqual({
+      mode: 'apply', batches: 4, closedApplications: 601, fullBatches: 0,
+    });
+  });
+
+  it('apply: najwyżej RETENTION_MAX_BATCHES partii w jednym przebiegu', async () => {
+    process.env.RETENTION_MODE = 'apply';
+    const { RETENTION_MAX_BATCHES } = await import('@/lib/retention/mode');
+    fakeDb.rpc('run_retention_purge', { deletedFiles: 200, fullBatches: 1 });
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    expect(fakeDb.callsTo('run_retention_purge')).toHaveLength(RETENTION_MAX_BATCHES);
+    expect((await res.json()).retention).toMatchObject({
+      batches: RETENTION_MAX_BATCHES, deletedFiles: 200 * RETENTION_MAX_BATCHES, fullBatches: 1,
+    });
   });
 });

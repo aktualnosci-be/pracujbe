@@ -11,6 +11,7 @@
 export const CLIENT_MESSAGE_NAMESPACES = [
   'accountData',
   'admin',
+  'ageAttestation',
   'application',
   'apply',
   'auth',

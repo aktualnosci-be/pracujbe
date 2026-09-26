@@ -513,8 +513,6 @@
     "preferencesDesc": "Onthouden je keuzes, zoals taal en instellingen.",
     "analyticsName": "Analytisch",
     "analyticsDesc": "Helpen ons begrijpen hoe je het platform gebruikt.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Maken het mogelijk om relevantere advertenties te tonen.",
     "alwaysOn": "Altijd aan",
     "cookieSettings": "Cookie-instellingen"
   },
@@ -595,7 +593,8 @@
       "privacyNoticeRequired": "Bevestig dat je de privacy-informatie hebt gelezen.",
       "companyNameRequired": "Vul de bedrijfsnaam in.",
       "companyNameTooShort": "De bedrijfsnaam is te kort.",
-      "companyNameTooLong": "De bedrijfsnaam is te lang."
+      "companyNameTooLong": "De bedrijfsnaam is te lang.",
+      "ageConfirmRequired": "Kies je leeftijdscategorie."
     },
     "botCheckLabel": "Beveiligingscontrole",
     "botCheckLoading": "Beveiligingscontrole wordt geladen…",
@@ -603,6 +602,11 @@
     "botCheckExpired": "De controle is verlopen. Bevestig ze opnieuw.",
     "botCheckLoadFailed": "De beveiligingscontrole kon niet worden geladen. Controleer je verbinding of schakel inhoudsblokkering voor deze site uit en probeer het opnieuw.",
     "botCheckRetry": "Controle opnieuw laden",
+    "ageBandLegend": "Je leeftijd",
+    "ageBandMinor": "Ik ben {min}–{max} jaar",
+    "ageBandAdult": "Ik ben {age} jaar of ouder",
+    "ageBandMinorHint": "Met deze leeftijd is je profiel niet zichtbaar voor bedrijven in de kandidatenzoekfunctie. Je kunt wel zelf solliciteren op vacatures.",
+    "ageConfirmHint": "We vragen niet naar je geboortedatum of een identiteitsdocument.",
     "confirmEmailTitle": "Account activeren",
     "confirmEmailIntro": "Klik op de knop om je e-mailadres te bevestigen en naar je account te gaan.",
     "confirmEmailSubmit": "E-mailadres bevestigen",
@@ -656,12 +660,15 @@
     "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen.",
     "moderationLocked": "Deze inhoud is beperkt door een moderatiebeslissing, dus de status kan niet worden gewijzigd.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
+    "siteAccessUnavailable": "De toegang tot de website is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
     "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
     "appealExists": "Er is al bezwaar gemaakt tegen deze beslissing.",
     "appealWindowClosed": "De termijn om bezwaar te maken tegen deze beslissing is verstreken.",
     "reviewerConflict": "Het bezwaar wordt behandeld door een andere beheerder dan de auteur van de beslissing.",
     "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in.",
+    "ageAttestationRequired": "Bevestig om verder te gaan dat je minstens de vereiste leeftijd hebt. Stond het formulier lang open, vernieuw dan de pagina.",
+    "ageAdultRequired": "Alleen meerderjarigen kunnen deze functie inschakelen.",
     "screeningReviewRequired": "De vacature bevat een vraag die het team van het portaal vóór publicatie moet controleren. Je kunt ze publiceren zodra de vraag is goedgekeurd of nadat je ze hebt aangepast.",
     "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren.",
     "jobAssistEmpty": "Schrijf eerst een tekst. De assistent verbetert je tekst, maar schrijft geen vacature vanaf nul.",
@@ -1197,7 +1204,20 @@
     "itemModerationAppealUpheld": "Bezwaar behandeld: beslissing gehandhaafd",
     "itemModerationAppealReversed": "Bezwaar gegrond: beslissing gewijzigd",
     "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
-    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd"
+    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd",
+    "listIntro": "Alle meldingen van je account, nieuwste eerst.",
+    "filterLabel": "Meldingenfilter",
+    "filterAll": "Alle",
+    "filterUnread": "Ongelezen",
+    "markRead": "Markeren als gelezen",
+    "markReadItem": "Markeren als gelezen: {title}",
+    "markedRead": "Melding gemarkeerd als gelezen.",
+    "emptyUnread": "Je hebt geen ongelezen meldingen.",
+    "unreadCount": "{count, plural, =0 {Geen ongelezen} one {1 ongelezen} other {# ongelezen}}",
+    "loadMore": "Meer tonen",
+    "loadingMore": "Laden…",
+    "listEnd": "Dat zijn al je meldingen.",
+    "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw."
   },
   "pricing": {
     "standard": "Standaard",
@@ -1250,7 +1270,9 @@
     "screeningYes": "Ja",
     "screeningNo": "Nee",
     "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
-    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
+    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
+    "ageRequired": "Bevestig je leeftijd in je accountinstellingen voordat je solliciteert.",
+    "ageRequiredLink": "Naar instellingen"
   },
   "guestApply": {
     "subtitle": "Solliciteer zonder account of log in om je profiel te gebruiken. Een cv is niet nodig.",
@@ -1303,7 +1325,8 @@
       "messageTooLong": "Het bericht mag maximaal 500 tekens hebben.",
       "privacyNoticeRequired": "Bevestig dat je de privacy-informatie hebt gelezen om te solliciteren.",
       "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw.",
-      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
+      "ageConfirmRequired": "Kies je leeftijdscategorie."
     }
   },
   "legal": {
@@ -1945,6 +1968,7 @@
     "caseFlag": "Automatisch signaal: {flag}",
     "auditActionModerationDecided": "Moderatiebeslissing",
     "auditActionModerationRestored": "Beperking opgeheven",
+    "auditActionAgePolicyUpdated": "Leeftijdsgrens kandidaten gewijzigd",
     "navAppeals": "Bezwaren",
     "navDsaReport": "DSA-rapport",
     "appealsTitle": "Bezwaren tegen moderatiebeslissingen",
@@ -2180,6 +2204,8 @@
     "breachExportJson": "Export JSON",
     "breachExportCsv": "Export CSV",
     "breachExportHint": "De export bevat de registerregel en de geschiedenis, zonder adressen van ontvangers. Elke export blijft in de geschiedenis.",
+    "breachExportPending": "Bezig met exporteren…",
+    "breachExportError": "Exporteren is mislukt. Probeer het opnieuw.",
     "breachActionClose": "Registerregel afsluiten",
     "breachActionReopen": "Heropenen",
     "breachCloseTitle": "Registerregel afsluiten?",
@@ -2309,6 +2335,7 @@
     "auditActionCampaignActivated": "Activering van campagnerevisie",
     "auditActionCampaignCancelled": "Campagnerevisie gestopt",
     "entityEmailCampaign": "E-mailcampagne",
+    "entityAgePolicy": "Leeftijdsdrempel kandidaten",
     "appealTargetRestoration": "Tegen opheffen van beperking",
     "appealRestorationSummary": "Beperking opgeheven op {date}: {reason}",
     "navAiCosts": "AI-kosten",
@@ -2332,7 +2359,42 @@
     "aiCostsFeatureJobImport": "Vacature importeren",
     "aiCostsFeatureTranslation": "Inhoud vertalen",
     "aiCostsFeatureAssist": "Assistent voor vacaturetekst",
-    "aiCostsFeatureCvImport": "Cv importeren"
+    "aiCostsFeatureCvImport": "Cv importeren",
+    "navSettings": "Instellingen",
+    "agePolicyTitle": "Leeftijdsdrempel kandidaten",
+    "agePolicySubtitle": "Minimumleeftijd voor een kandidaataccount en voor de vindbaarheid van het profiel voor bedrijven.",
+    "agePolicyCurrentTitle": "Huidige instelling",
+    "agePolicyCurrentLabel": "Huidige drempel",
+    "agePolicyNewLabel": "Nieuwe drempel",
+    "agePolicyOption16": "16 jaar",
+    "agePolicyOption18": "18 jaar",
+    "agePolicyConfirmedField": "Bevestigd door de eigenaar",
+    "agePolicyConfirmedYes": "Bevestigd",
+    "agePolicyConfirmedNo": "Voorlopige waarde (niet bevestigd)",
+    "agePolicyConfirmedHint": "Een voorlopige waarde betekent dat de drempel nog geen definitieve beslissing van de eigenaar is.",
+    "agePolicyLastChangeTitle": "Laatste wijziging",
+    "agePolicyLastChangeNone": "Geen wijziging vastgelegd in het activiteitenlogboek — de startwaarde geldt.",
+    "agePolicyLastChangeTransition": "Wijziging van drempel",
+    "agePolicyTransitionValue": "{from} → {to}",
+    "agePolicyLastChangeAt": "Datum wijziging",
+    "agePolicyLastChangeBy": "Gewijzigd door",
+    "agePolicyLastChangeHidden": "Verborgen profielen",
+    "agePolicyFormTitle": "Drempel wijzigen",
+    "agePolicyFormHint": "Een hogere drempel verbergt meteen de profielen van kandidaten met een lagere leeftijdsverklaring uit de zoekresultaten. Een lagere drempel toont niets opnieuw.",
+    "agePolicyFieldLegend": "Nieuwe accountdrempel",
+    "agePolicyReasonLabel": "Motivering (verplicht)",
+    "agePolicyReasonHint": "Komt in het activiteitenlogboek. Maximaal {max} tekens.",
+    "agePolicySubmit": "Drempel opslaan",
+    "agePolicyConfirmTitle": "Leeftijdsdrempel voor kandidaten wijzigen?",
+    "agePolicyConfirmDescription": "De drempel verandert van „{from}” naar „{to}”.",
+    "agePolicySuccess": "De leeftijdsdrempel voor kandidaten is opgeslagen.",
+    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten.",
+    "reportsSortLabel": "Volgorde",
+    "reportsSortNewest": "Nieuwste",
+    "reportsSortPriority": "Prioriteit en termijn",
+    "reportsFlaggedLabel": "Markering",
+    "reportsFlaggedAll": "Alle zaken",
+    "reportsFlaggedOnly": "Gemarkeerd voor controle"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -2448,7 +2510,9 @@
     "lead": "De website is nog niet openbaar. Heb je een toegangswachtwoord, vul het dan hieronder in.",
     "passwordLabel": "Toegangswachtwoord",
     "submit": "Doorgaan",
-    "error": "Onjuist wachtwoord. Probeer het opnieuw."
+    "error": "Onjuist wachtwoord. Probeer het opnieuw.",
+    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
+    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",
@@ -2561,7 +2625,9 @@
     "savedOn": "Je profiel is nu zichtbaar voor geverifieerde bedrijven.",
     "savedOff": "Je profiel is nu verborgen voor zoekopdrachten van bedrijven.",
     "saveError": "De wijziging kon niet worden opgeslagen. De instelling is niet veranderd — probeer het opnieuw.",
-    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen."
+    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen.",
+    "requiresAge": "Bevestig eerst je leeftijd in het onderdeel „Leeftijd” om je profiel met bedrijven te delen.",
+    "requiresAdult": "Je profiel kan pas vanaf 18 jaar zichtbaar zijn voor bedrijven. Bevestig dit in het onderdeel ‘Leeftijd’ zodra je 18 bent."
   },
   "team": {
     "title": "Team",
@@ -2684,6 +2750,7 @@
   "jobFunnel": {
     "title": "Vacaturetrechter",
     "range": "Periode: {from} – {to} (tijd in Brussel)",
+    "consentNote": "Verschijningen in zoekresultaten, weergaven en gestarte sollicitaties tellen we alleen bij mensen die analytische cookies hebben geaccepteerd. Alle verzonden sollicitaties tellen we mee.",
     "rangeLabel": "Periode van de vacaturetrechter",
     "rangeDays": "{count, plural, one {# dag} other {# dagen}}",
     "searchAppearances": "Vertoningen in zoekresultaten",
@@ -2848,6 +2915,18 @@
     "restorationAppealIntro": "Ben je het niet eens met het opheffen? Dan kun je bezwaar maken. De auteur van de gemelde inhoud krijgt je gegevens niet te zien.",
     "restorationAppealDeadlineNotStarted": "De bezwaartermijn gaat in zodra je de e-mail over het opheffen van de beperking ontvangt.",
     "restorationAppealWindowClosed": "De termijn voor bezwaar tegen het opheffen van de beperking is verstreken."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Leeftijd",
+    "sectionDescription": "Een kandidatenaccount kan vanaf {age} jaar, een profiel dat zichtbaar is voor bedrijven vanaf {adultAge} jaar. We bewaren alleen de gekozen leeftijdscategorie en de datum van bevestiging — geen geboortedatum.",
+    "stateAdult": "Bevestigd: je bent {age} jaar of ouder.",
+    "stateMinor": "Bevestigd: je bent jonger dan {adultAge} jaar. Je kunt solliciteren op vacatures, maar je profiel is niet zichtbaar voor bedrijven. Bevestig hieronder zodra je {adultAge} bent.",
+    "stateMissing": "Geen bevestiging. Zonder bevestiging kun je niet solliciteren en je profiel niet met bedrijven delen.",
+    "submit": "Bevestigen",
+    "saving": "Opslaan…",
+    "saved": "Leeftijdsbevestiging opgeslagen.",
+    "saveError": "De bevestiging kon niet worden opgeslagen. Probeer het opnieuw.",
+    "loadError": "De informatie over je leeftijdsbevestiging kon niet worden geladen."
   },
   "campaignBanner": {
     "eyebrow": "Vacature in België",
