@@ -1724,8 +1724,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   odświeżeniu zero żądań; stara wersja polityki (także cookie 1.0 z marketingiem) / uszkodzone cookie → baner z serwera
   nieukryty przed hydratacją; cookie na 180 dni; wywołanie `recordConsent` z kategoriami
   i źródłem (centrum = `cookie_settings`). Kontrakt parametrów `recordConsent` ↔
-  `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
-  polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
+  `record_consent` z migracji (`consent-action.test`). Wersja polityki w receipcie (migracja `0194` —
+  numer tymczasowy): `consents.policy_version` = `CONSENT_POLICY_VERSION` (jak w cookie), spoza wzorca
+  = NULL; dowód `rls.sql` sekcja CPV194 (kontrola ujemna), integracja `portal-messages-settings`.
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
   Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta

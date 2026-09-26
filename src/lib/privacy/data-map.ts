@@ -686,6 +686,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       visitor_id: 'technical',
       category: 'consent',
       granted: 'consent',
+      policy_version: 'consent',
       ip_address: 'technical',
       user_agent: 'technical',
     },

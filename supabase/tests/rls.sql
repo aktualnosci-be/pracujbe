@@ -12944,4 +12944,57 @@ select pg_temp.assert(
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- CPV194. Wersja polityki cookies w receipcie zgody (K6, migracja 0194 — numer tymczasowy).
+--         record_consent zapisuje wersję banera (jak w cookie) na każdym wierszu; wartość
+--         spoza wzorca = NULL, zgoda i tak zapisana; wywołanie bez wersji (poprzednia
+--         aplikacja w trakcie rolloutu) działa; klient nadal nie pisze wprost do consents.
+-- ============================================================================
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'cpv194-ok', null, null, '2.0');
+select public.record_consent('{"analytics":false}'::jsonb, 'cookie_banner', 'cpv194-bad', null, null, '2.0; drop table x');
+select public.record_consent('{"analytics":false}'::jsonb, 'cookie_banner', 'cpv194-old');
+select pg_temp.expect_error(
+  'insert into public.consents(category, granted, policy_version) values (''analytics'', true, ''9.9'')',
+  'permission denied', 'CPV194-4 anon nie wstawi receiptu z dowolną wersją wprost');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.consents where visitor_id = 'cpv194-ok' and policy_version = '2.0') = 3,
+  'CPV194-1 każdy wiersz receiptu (3 kategorie) ma wersję polityki z aplikacji');
+select pg_temp.assert(
+  (select count(*) from public.consents where visitor_id = 'cpv194-bad' and policy_version is null) = 3,
+  'CPV194-2 wersja spoza wzorca = NULL, zgoda zapisana');
+select pg_temp.assert(
+  (select count(*) from public.consents where visitor_id = 'cpv194-old' and policy_version is null) = 3,
+  'CPV194-3 wywołanie bez wersji (5 argumentów) działa');
+select pg_temp.expect_error(
+  'insert into public.consents(category, granted, policy_version) values (''analytics'', true, ''zła wersja'')',
+  'consents_policy_version_format', 'CPV194-5 CHECK formatu wersji także dla ścieżek uprzywilejowanych');
+
+-- KONTROLA UJEMNA: definicja z 0130 (bez parametru wersji) — receipt nie ma wersji, choć
+-- aplikacja ją zna; wywołanie z wersją nie istnieje.
+begin;
+drop function public.record_consent(jsonb, text, text, text, text, text);
+create function public.record_consent(p_categories jsonb, p_source text, p_visitor_id text default null,
+  p_ip text default null, p_user_agent text default null)
+returns void language plpgsql security definer set search_path = public, pg_temp as $cpvneg$
+declare cat text;
+begin
+  foreach cat in array array['necessary', 'preferences', 'analytics'] loop
+    insert into public.consents(profile_id, visitor_id, category, granted, source)
+    values (auth.uid(), p_visitor_id, cat::public.consent_category,
+            case when cat = 'necessary' then true else coalesce((p_categories ->> cat)::boolean, false) end,
+            p_source);
+  end loop;
+end $cpvneg$;
+select pg_temp.expect_error(
+  'select public.record_consent(''{}''::jsonb, ''cookie_banner'', ''cpv194-neg'', null, null, ''2.0'')',
+  'does not exist', 'CPV194-N1 bez 0194 aplikacja nie przekaże wersji polityki');
+select public.record_consent('{}'::jsonb, 'cookie_banner', 'cpv194-neg');
+select pg_temp.assert(
+  (select count(*) from public.consents where visitor_id = 'cpv194-neg' and policy_version is not null) = 0,
+  'CPV194-N2 receipt z definicji 0130 nie ma wersji polityki');
+rollback;
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

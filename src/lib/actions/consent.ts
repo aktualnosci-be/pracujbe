@@ -7,6 +7,7 @@ import { jsonArg, rpc } from '@/lib/db/sql';
 import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
 import type { ConsentCategories, ConsentCategory, ConsentSource } from '@/lib/consent';
+import { CONSENT_POLICY_VERSION } from '@/lib/consent-cookie';
 
 /**
  * Serwerowy log zgód (RODO art. 7 ust. 1 — rozliczalność).
@@ -49,7 +50,8 @@ function loggedCategories(categories: ConsentCategories | null | undefined): Con
  * Utrwala NIEZMIENNY receipt zgody po stronie serwera (RODO art. 7 — rozliczalność), przez
  * zaufane RPC `record_consent` (RPC-only: klient nie pisze wprost do `consents`). Zapisuje
  * profile_id (auth.uid()/null), visitor_id (cookie), per-kategoria granted, wersję dokumentu
- * (RPC dobiera aktualną), źródło, IP i user-agent. Best-effort: awaria nie blokuje UX (cookie
+ * (RPC dobiera aktualną), wersję polityki banera (`CONSENT_POLICY_VERSION`, jak w cookie — 0194),
+ * źródło, IP i user-agent. Best-effort: awaria nie blokuje UX (cookie
  * pozostaje dowodem w przeglądarce), bez ujawniania technikaliów (Invariant #8).
  */
 export async function recordConsent(
@@ -76,6 +78,8 @@ export async function recordConsent(
         p_visitor_id: visitorId,
         p_ip: trustedClientIp(hdrs),
         p_user_agent: hdrs.get('user-agent') ?? null,
+        // K6 (0194): ta sama wersja polityki, którą baner zapisuje w cookie zgody.
+        p_policy_version: CONSENT_POLICY_VERSION,
       }),
     );
     return { ok: true };

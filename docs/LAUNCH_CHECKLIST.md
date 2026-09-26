@@ -64,8 +64,8 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K2 | P1 | GC tabel technicznych w `/api/maintenance`: `email_deliveries_gc` (istnieje od `0022`, nie jest wołane), `processed_webhooks`, `rate_limit` (#17) | za flagą jak `RETENTION_MODE` |
 | K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
 | K4 | P2 | `/faq` to placeholder obok realnej `/pomoc` (#61) — przekierowanie 308 na `/pomoc` albo usunięcie trasy (dotyka E2E a11y/cache, `check-next-build`, smoke) | poza nawigacją, `noindex` |
-| K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |
-| K6 | P2 | Wersja polityki z cookie w receipcie zgody (`record_consent` bierze `consent_versions`) | wymaga migracji |
+| K5 | ~~P2~~ | **Zrobione wcześniej:** stopka e-maili ma linki Pomoc i Prywatność (`src/emails/_components.tsx`) | — |
+| K6 | ~~P2~~ | **Zrobione:** `consents.policy_version` — receipt zgody ma wersję polityki z cookie (migracja `0194`, numer tymczasowy) | `rls.sql` CPV194 |
 | K7 | P2 | Domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | znane braki #24/#25 |
 | K8 | P2 | `npm run test:e2e:real` poza CI (gotowy fragment `ci.yml` — issues #351, #66) | decyzja o minutach CI |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |

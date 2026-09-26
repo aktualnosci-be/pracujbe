@@ -31,6 +31,7 @@ const blocksActions = await import('../../src/lib/actions/company-blocks');
 const visibilityData = await import('../../src/lib/data/profile-visibility');
 const visibilityActions = await import('../../src/lib/actions/profile-visibility');
 const { recordConsent } = await import('../../src/lib/actions/consent');
+const { CONSENT_POLICY_VERSION } = await import('../../src/lib/consent-cookie');
 
 // #25: wiadomości (obie strony) i ustawienia kandydata na PostgreSQL 16 pod RLS —
 // widoczność tylko dla stron rozmowy (kandydat + aktywny recruiter+), idempotentne
@@ -290,7 +291,7 @@ describe('receipt zgód (record_consent)', () => {
     actAs(anna);
     expect(await recordConsent(categories, 'cookie_settings')).toEqual({ ok: true });
     const rows = (await pg().admin.query(
-      `SELECT profile_id, source, category::text AS category, granted, host(ip_address) AS ip, visitor_id
+      `SELECT profile_id, source, category::text AS category, granted, host(ip_address) AS ip, visitor_id, policy_version
          FROM public.consents WHERE visitor_id = 'visitor-it' ORDER BY created_at, category`)).rows;
     expect(rows).toHaveLength(6);
     const guest = rows.filter((r) => r.profile_id === null);
@@ -300,5 +301,7 @@ describe('receipt zgód (record_consent)', () => {
     expect(own.find((r) => r.category === 'analytics')?.granted).toBe(true);
     expect(rows.some((r) => r.category === 'marketing')).toBe(false);
     expect(own[0]!.ip).toBe('203.0.113.9');
+    // K6 (0194): wersja polityki banera (jak w cookie) na każdym wierszu receiptu.
+    expect(new Set(rows.map((r) => r.policy_version))).toEqual(new Set([CONSENT_POLICY_VERSION]));
   });
 });

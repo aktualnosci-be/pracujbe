@@ -562,6 +562,7 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 | `visitor_id` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `category` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0007_misc.sql` |
 | `granted` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0007_misc.sql` |
+| `policy_version` | Dowody zgód i akceptacji dokumentów | `supabase/migrations/0194_consent_policy_version.sql` |
 | `ip_address` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `user_agent` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 

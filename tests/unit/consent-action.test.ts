@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalIdentity } from '@/lib/auth/session';
 import { recordConsent } from '@/lib/actions/consent';
-import { CONSENT_CATEGORIES } from '@/lib/consent';
+import { CONSENT_CATEGORIES, CONSENT_POLICY_VERSION } from '@/lib/consent';
 import * as portal from '@/lib/db/portal';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
@@ -57,6 +57,7 @@ describe('recordConsent', () => {
       p_visitor_id: 'visitor-1',
       p_ip: '203.0.113.7',
       p_user_agent: 'Mozilla/5.0 test',
+      p_policy_version: CONSENT_POLICY_VERSION,
     });
     // Zalogowany: transakcja sesji (auth.uid() = konto), jsonb jako JSON.
     expect(fakeDb.callsTo('record_consent')[0]!.as).toBe(USER);
@@ -161,6 +162,21 @@ function recordConsentCategories(files?: string[]): string[] {
   if (!cats) throw new Error('brak listy kategorii record_consent w supabase/migrations');
   return cats;
 }
+
+describe('wersja polityki w receipcie (K6, 0194)', () => {
+  it('receipt dostaje tę samą wersję, którą baner zapisuje w cookie zgody', async () => {
+    await recordConsent(CATEGORIES, 'cookie_banner');
+    expect(sentArgs().p_policy_version).toBe(CONSENT_POLICY_VERSION);
+    // Wersja musi przejść wzorzec z bazy, inaczej RPC zapisze NULL (receipt bez wersji).
+    expect(String(CONSENT_POLICY_VERSION)).toMatch(/^[0-9A-Za-z._-]{1,32}$/);
+  });
+
+  it('kontrola ujemna: definicja z 0130 nie ma parametru wersji', () => {
+    const sql = readFileSync(join(process.cwd(), 'supabase', 'migrations', '0130_consent_without_marketing.sql'), 'utf-8');
+    expect(sql).not.toContain('p_policy_version');
+    expect(recordConsentParams()).toContain('p_policy_version');
+  });
+});
 
 describe('kategorie logu zgód = kategorie banera (#570)', () => {
   it('najnowsze record_consent zapisuje dokładnie CONSENT_CATEGORIES (bez marketing)', () => {
