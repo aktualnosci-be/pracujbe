@@ -8693,6 +8693,69 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
+-- PG606. Eksport decyzji DSA — stronicowanie zamiast całego zakresu naraz (0139, #606): panel
+-- administratora pobierał WSZYSTKIE decyzje z okresu (do 1830 dni) w jednym wywołaniu; teraz
+-- kursor po (`decided_at`, `reference`) + `p_limit` (domyślnie 2000, twardy sufit 5000).
+-- Wykorzystujemy decyzje już utworzone we wcześniejszych sekcjach DSA tego pliku (okno
+-- „teraz ± 1 dzień”, jak APL43-11) — bez tworzenia nowych wierszy wprost z pominięciem
+-- `admin_decide_report`/`admin_decide_appeal` (skutek/status sprawy egzekwuje trigger).
+-- ============================================================================
+\echo '--- PG606 stronicowanie eksportu DSA ---'
+set role service_role;
+select count(*) as pg606_total from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day') \gset
+select pg_temp.assert(:pg606_total >= 2,
+  'PG606-0 wystarczająco decyzji z wcześniejszych sekcji do testu stronicowania (>= 2)');
+
+-- Rekonstrukcja CAŁEGO wyniku przez powtarzane strony o rozmiarze 1 (kursor = ostatni wiersz
+-- poprzedniej strony) musi dać dokładnie ten sam zbiór i tę samą kolejność co jedno wywołanie
+-- bez kursora — bez pominięć i bez duplikatów.
+select pg_temp.assert(
+  (
+    with recursive full_set as (
+      select decision_reference, decided_at
+        from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day')
+    ),
+    paged as (
+      ( select e.decision_reference, e.decided_at, 1 as n
+          from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day', 1, null, null) e )
+      union all
+      ( select e.decision_reference, e.decided_at, p.n + 1
+          from paged p,
+               lateral public.dsa_statements_export(
+                 now() - interval '1 day', now() + interval '1 day', 1, p.decided_at, p.decision_reference) e
+         where p.n < 1000 )
+    )
+    select (select count(*) from full_set) = (select count(*) from paged)
+      and not exists (select decision_reference from full_set except select decision_reference from paged)
+      and not exists (select decision_reference from paged except select decision_reference from full_set)
+  ),
+  'PG606-1 strony po 1 wierszu (kursor = ostatni wiersz poprzedniej) odtwarzają cały zbiór 1:1');
+
+-- Bezpiecznik rozmiaru strony: p_limit <= 0 → domyślne 2000 (nie 0 wierszy).
+select count(*) as pg606_zero_limit from public.dsa_statements_export(
+  now() - interval '1 day', now() + interval '1 day', 0, null, null) \gset
+select pg_temp.assert(:pg606_zero_limit = :pg606_total,
+  'PG606-2 p_limit <= 0 → domyślny rozmiar strony (bezpiecznik), nie zero wierszy');
+
+-- Kontrola ujemna: stary dwuargumentowy podpis jest USUNIĘTY, nie przeciążony — wywołanie
+-- z dwoma argumentami trafia jednoznacznie w nową funkcję (żadnej niejednoznaczności overloadu)
+-- z domyślnym `p_limit` = 2000 (pierwsza strona). W tym fixture wierszy jest mniej niż limit, więc
+-- wynik = cały zakres (APL43-11b sprawdza to inaczej); większy zakres wymaga kursora.
+select count(*) as pg606_legacy_call from public.dsa_statements_export(
+  now() - interval '1 day', now() + interval '1 day') \gset
+select pg_temp.assert(:pg606_legacy_call = :pg606_total,
+  'PG606-3 wywołanie dwuargumentowe (bez przeciążenia) działa z domyślnym limitem 2000 — tu cały zakres, bo wierszy jest mniej niż limit');
+
+select pg_temp.assert(
+  not has_function_privilege('anon',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE')
+  and not has_function_privilege('authenticated',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE')
+  and has_function_privilege('service_role',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE'),
+  'PG606-4 uprawnienia niezmienione: tylko service_role wykonuje eksport');
+reset role;
+-- ============================================================================
 -- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0109, #43): ręczne cofnięcie
 -- informuje zgłaszającego w jego języku; termin od poinformowania; od cofnięcia po odwołaniu
 -- autora odwołanie nie przysługuje; rozpatruje ktoś inny niż osoba, która cofnęła;
@@ -12662,6 +12725,134 @@ delete from auth.users where id in (:'RIPC1', :'RIPC2');
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id in (:'RIPC1', :'RIPC2')) = 0,
   'RIP-4c kaskada usunięcia konta nadal usuwa receipty');
+
+
+-- ============================================================================
+-- SC100. Alerty zapisanych wyszukiwań bez limitu 100 ofert na przebieg (0138, #100):
+-- worker zbiera wszystkie strony get_public_jobs w jednym zapytaniu, remisy
+-- published_at rozstrzygane stale (j.id, 0136), digest nadal ≤ 5 ofert, jedna wysyłka na
+-- przebieg, para (wyszukiwanie, oferta) nie wraca. Kontrola ujemna: jedna strona jak
+-- w 0092 gubi ofertę 101.
+-- ============================================================================
+\set SCA 'e9c10000-0000-0000-0000-0000000000a1'
+\set SCE 'e9c10000-0000-0000-0000-0000000000b1'
+\set SCC 'e9c10000-0000-0000-0000-0000000000c1'
+\set SCOLD 'e9c10000-0000-0000-0000-0000000000d0'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SCA','sca@test.be','Sam A','{"role":"candidate","first_name":"Sam","last_name":"A","locale":"nl"}'),
+  (:'SCE','sce@test.be','Eva E','{"role":"employer","first_name":"Eva","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'SCC','Firma SC100','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'SCC',:'SCE','owner',true);
+
+set role authenticated; set app.current_uid = :'SCA'; select pg_temp.assert_client_role();
+select saved_search_id as sc1 from public.save_saved_search(
+  'Magazyn SC100', 'pl', '{"keyword":"Magazynier SC100X"}', '?keyword=Magazynier+SC100X') \gset
+reset role; reset app.current_uid;
+
+-- 104 oferty z JEDNYM published_at (remis przez granicę strony 100) + jedna starsza
+-- (SCOLD — w sorcie „najnowsze” 105., czyli poza pierwszą setką).
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+select gen_random_uuid(), :'SCC', 'sc100-' || n, 'Magazynier SC100X ' || n, 'warehouse', 'permanent',
+       'Liège', 'Wallonie', 'active', 'pl', date_trunc('second', now()) - interval '2 hours'
+from generate_series(1, 104) n;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+values (:'SCOLD', :'SCC', 'sc100-old', 'Magazynier SC100X najstarszy', 'warehouse', 'permanent',
+        'Liège', 'Wallonie', 'active', 'pl', now() - interval '3 hours');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days' where id = :'sc1';
+select filters as sc_filters from public.saved_searches where id = :'sc1' \gset
+
+-- SC100-1: stały porządek remisów — strony 0 i 100 rozłączne, razem wszystkie 105.
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_job_page(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 0)) = 100
+  and (select count(*) from public.saved_search_job_page(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 100)) = 5
+  and (select count(distinct x) from (
+         select public.saved_search_job_page(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 0) x
+         union all
+         select public.saved_search_job_page(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 100)) u) = 105,
+  'SC100-1 strony get_public_jobs bez dziur i dubli przy remisie published_at');
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days')) = 105,
+  'SC100-1b saved_search_matching_jobs zwraca wszystkie 105 ofert');
+
+-- SC100-2: worker rejestruje wszystkie 105 (także SCOLD), jeden digest ≤ 5 ofert z count = 105.
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sc1') = 105
+  and exists (select 1 from public.saved_search_alerts where saved_search_id = :'sc1' and job_id = :'SCOLD'),
+  'SC100-2 wszystkie 105 ofert zarejestrowane, oferta spoza pierwszej setki też');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SCA' and template = 'jobMatch') = 1
+  and (select (payload ->> 'count')::integer from public.email_deliveries
+         where profile_id = :'SCA' and template = 'jobMatch') = 105
+  and (select jsonb_array_length(payload -> 'jobs') from public.email_deliveries
+         where profile_id = :'SCA' and template = 'jobMatch') = 5
+  and (select locale from public.email_deliveries where profile_id = :'SCA' and template = 'jobMatch') = 'nl',
+  'SC100-2b jeden e-mail jobMatch (nl): count 105, w treści najwyżej 5 ofert');
+select pg_temp.assert(
+  (select count(*) from public.notifications
+     where profile_id = :'SCA' and type = 'job_match' and entity_id = :'sc1') = 1
+  and (select next_run_at > now() + interval '23 hours' from public.saved_searches where id = :'sc1'),
+  'SC100-2c jedno in-app, kolejny przebieg za dobę');
+
+-- SC100-3: wymuszony ponowny przebieg — ta sama para nie wraca, brak drugiego digestu.
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day' where id = :'sc1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sc1') = 105
+  and (select count(*) from public.email_deliveries where profile_id = :'SCA' and template = 'jobMatch') = 1
+  and (select count(*) from public.notifications
+         where profile_id = :'SCA' and type = 'job_match' and entity_id = :'sc1') = 1,
+  'SC100-3 ponowny przebieg bez ponownej wysyłki tych samych par');
+
+-- SC100-4 (KONTROLA UJEMNA): jedna strona (100 najnowszych) jak w 0092 gubi ofertę 101.
+begin;
+delete from public.saved_search_alerts where saved_search_id = :'sc1';
+delete from public.email_deliveries where profile_id = :'SCA' and template = 'jobMatch';
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day' where id = :'sc1';
+create or replace function public.saved_search_matching_jobs(
+  p_filters jsonb, p_locale text, p_since timestamptz, p_max_pages integer default 101
+) returns setof uuid language sql stable security definer set search_path = public, pg_temp as $$
+  select public.saved_search_job_page(p_filters, p_locale, p_since, 0);
+$$;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sc1') = 100
+  and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'sc1' and job_id = :'SCOLD'),
+  'SC100-4 KONTROLA UJEMNA: jedna strona rejestruje 100 ofert, oferta 101+ przepada');
+rollback;
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 100,
+  'SC100-4b KONTROLA UJEMNA: limit jednej strony obcina wynik do 100');
+reset role;
+
+-- SC100-5 (KONTROLE UJEMNE): funkcje stron tylko dla service_role.
+set role authenticated; set app.current_uid = :'SCA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_matching_jobs(''{}''::jsonb, ''pl'', now())',
+  'permission denied', 'SC100-5 klient nie wywoła saved_search_matching_jobs');
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_job_page(''{}''::jsonb, ''pl'', now(), 0)',
+  'permission denied', 'SC100-5b klient nie wywoła saved_search_job_page');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_matching_jobs(''{}''::jsonb, ''pl'', now())',
+  'permission denied', 'SC100-5c anon bez EXECUTE');
+reset role;
+delete from auth.users where id in (:'SCA', :'SCE');
 
 -- ============================================================================
 -- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).

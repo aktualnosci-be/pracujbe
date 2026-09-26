@@ -189,11 +189,13 @@ test('lejek ofert (#99): wyświetlenie, „Aplikuj” i wyniki listy liczone ser
       expect(beacon.cookie).toBeUndefined();
       expect(Object.keys(beacon.body).sort()).toEqual(['event', 'jobIds', 'nonce']);
     }
-    // Endpoint lejka nie ustawia cookies (jedyne cookie kontekstu to język strony z next-intl).
+    // Endpoint lejka nie ustawia cookies. W kontekście zostają tylko język strony (next-intl)
+    // i zgoda, którą test zapisał sam na początku (#575).
     for (const response of [await view, await started, await refreshed, await listed]) {
       expect(await response.headerValue('set-cookie')).toBeNull();
     }
-    expect((await context.cookies()).map((cookie) => cookie.name).filter((name) => name !== 'NEXT_LOCALE')).toEqual([]);
+    expect((await context.cookies()).map((cookie) => cookie.name)
+      .filter((name) => name !== 'NEXT_LOCALE' && name !== 'pracujbe_consent')).toEqual([]);
   } finally {
     await context.close();
   }
