@@ -710,7 +710,9 @@ nie wysyła; potwierdzenie 18+ zdejmuje znacznik. Formularze pokazują przedzia�
 `candidate_min_age()` (błąd odczytu → tylko 18+). Dowód: `rls.sql` sekcja AGE492 (kontrole ujemne:
 bez triggera aplikacja/gość bez deklaracji przechodzą, konto 16–17 staje się wyszukiwalne — AGE11n);
 unit `age-policy` (lejek z kontrolą ujemną), `profile-visibility`, `guest-apply-form`; E2E
-`auth-age-declaration`, `guest-apply`. Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
+`auth-age-declaration`, `guest-apply`, `job-funnel-minor-marker` (PRIV-01: przy znaczniku zero żądań
+`/api/job-funnel` mimo zgody — strony, „Aplikuj”, zamknięcie karty, druga karta, znacznik zapisany w
+drugiej karcie; kontrole ujemne bez znacznika i z inną wartością, mutacja bramki = czerwony). Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
 UI zmiany progu w panelu admina (#492): `/admin/ustawienia` — bieżący próg, status zatwierdzenia
 i ostatnia zmiana z dziennika (`getAgePolicySettings`, odczyt service-rolem po `requireAdmin`),
 formularz wyboru 16/18 + uzasadnienie (zawsze wymagane, jak przy statusie firmy) + dialog
@@ -718,7 +720,7 @@ potwierdzenia (`AgePolicyForm`, `AdminConfirmDialog`), zapis przez `setCandidate
 (`admin_set_candidate_min_age` pod sesją admina). Bez treści prawnej — same etykiety funkcji.
 **Otwarte (właściciel/prawnik):** treść informacji o wieku (`07-wiek.md`) po akceptacji, kontakt
 osób poniżej 16 lat z udziałem opiekuna, oznaczenie ofert dla młodocianych, procedura dla
-wykrytego konta poniżej progu, test sieciowy lejka PRIV-01 (unload, dwie karty) dla znacznika.
+wykrytego konta poniżej progu.
 
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
@@ -872,6 +874,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
   `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
   poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
+  Porzucone rezerwacje (#609, migracja `0134`): jeśli proces pada między rezerwacją a
+  rozliczeniem, rezerwacja nie może blokować limitu bezterminowo. `/api/maintenance` woła co
+  godzinę `ai_budget_release_stale_reservations` (service_role, idempotentne, `FOR UPDATE SKIP
+  LOCKED`) — rezerwacja starsza niż 60 minut i wciąż `reserved` jest rozliczana jako
+  `outcome='failed'`, koszt 0 (ślad w rejestrze zostaje, limit doby/miesiąca wraca do użycia).
+  TTL dłuższy niż próg ostrzeżenia `staleReservations` (15 min) w `ai_budget_status`, więc
+  trwające jeszcze wywołanie nie jest zwalniane przedwcześnie. Dowód: `rls.sql` sekcja AIB609.
   Minimalizacja (#500): przed modelem tylko `<main>`/`<article>` i `JobPosting` z listy pól
   (`src/lib/ai-import/minimize.ts`), e-maile/telefony/NISS/numery dokumentów zastąpione
   znacznikiem, w prompcie sam host; `contactEmail` poza schematem (ręcznie w kroku 9). Wyjście:
@@ -1109,7 +1118,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (także konta #486) usuwa `files` → `storage_deletion_queue`; niewysłane pliki > 24 h sprząta
   `purge_stale_message_attachments` w `/api/maintenance`. Dowód: `rls.sql` sekcja MA (kontrola
   ujemna: bez strażnika `files` ścieżka zostaje podmieniona); unit `message-attachments-*`.
-  **Otwarte:** AV (jak CV), podgląd obrazów w wątku, e-mail `newMessage` bez informacji o pliku.
+  Podgląd i e-mail (migracja `0135` — numer tymczasowy): JPG/PNG dopuszczone do pobrania mają
+  miniaturę pod nazwą pliku (`MessageAttachmentList` → `AttachmentPreview`): link HMAC 60 s
+  z `prepareMessageAttachmentDownload` wystawiany dopiero po wejściu w widok
+  (IntersectionObserver), `<img loading="lazy">`, alt `messages.attachmentPreviewAlt` z nazwą;
+  kwarantanna, inne typy i błąd linku/obrazu = brak miniatury (nazwa i pobranie zostają).
+  `send_message` dokłada do payloadu `newMessage` tylko `attachmentCount` (bez nazw, #503;
+  `payload-fields.ts`, mapa danych), strona firmowa zablokowana przez kandydata-nadawcę (#97)
+  dostaje 0; e-mail pokazuje „Załączniki w wiadomości: N” (`newMessageAttachmentsLabel`, 1–3).
+  Dowód: `rls.sql` sekcja MN135 (kontrola ujemna: bez warunku blokady MN135-4 czerwony), unit
+  `message-attachment-preview` (kontrole ujemne: kwarantanna, pole spoza listy workera).
+  **Otwarte:** AV (jak CV), podgląd w trybie demo (brak załączników demo).
   Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
   `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
   zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`
@@ -1484,6 +1503,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile) nie blokują. Warianty A–D
   do decyzji właściciela.
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+  Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
+  zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna
+  konfiguracja wywołania i każda awaria (połączenie/transakcja/`SET LOCAL ROLE`/RPC/COMMIT)
+  rzuca `RateLimitUnavailableError` zamiast być cicho zamienianą na „przekroczono limit”.
+  `checkRateLimit` (`src/lib/rate-limit.ts`) łapie ten wyjątek i stosuje politykę per akcję
+  (wzorem `src/lib/turnstile/policy.ts`): `FAIL_SAFE_ACTIONS` (auth, płatne API, publiczne
+  formularze wysyłające e-maile) blokuje; pozostałe akcje przechodzą (fail-open) — awaria/
+  rotacja loginu osobnej bazy limitera nie odcina już zwykłych akcji (wiadomości, ustawienia,
+  edycja firmy) dla wszystkich użytkowników. Testy: `rate-limit-postgres` (jednostkowy,
+  atrapa rzuca), `rate-limit` integracyjny (PG16 w Dockerze: pula zwykłej roli, odebrane
+  `EXECUTE`, zamknięta pula i błędne parametry → wyjątek, nie `false`).
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
   `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
