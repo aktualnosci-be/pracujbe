@@ -101,3 +101,104 @@ test('admin kampanie: filtr „Zamknięte” i rewizje tego samego sluga', async
   await expect(page).toHaveURL(/\/pl\/admin\/kampanie\/demo-k2$/);
   await expect(page.getByRole('button', { name: t.campaignActionCancel })).toBeVisible();
 });
+
+/* ---------------------------------------------------------------------------
+ * Edytor rewizji (#45, 0202) — tryb DEMO: walidacja i podgląd w przeglądarce, zapis bez bazy.
+ * ------------------------------------------------------------------------- */
+
+const LOCALE_NAMES: Record<string, string> = { pl: 'Polski', nl: 'Nederlands', fr: 'Français', en: 'English' };
+
+async function fillJob(page: Page, t: AdminMessages, locale: string, title: string) {
+  const section = page.getByRole('region', { name: LOCALE_NAMES[locale]!, exact: true });
+  await section.getByRole('textbox', { name: t.campaignEditorJobSlug }).fill(`magazynier-${locale}`);
+  await section.getByRole('textbox', { name: t.campaignEditorJobTitle }).fill(title);
+  await section.getByRole('textbox', { name: t.campaignEditorJobCity }).fill('Gent');
+}
+
+for (const locale of ['pl', 'en'] as const) {
+  test(`admin kampanie (${locale}): nowa kampania — brak języka = błąd przy polu, podgląd, zapis`, async ({ page }) => {
+    const t = admin(locale);
+    await page.goto(`/${locale}/admin/kampanie`);
+    await rejectOptionalCookies(page, locale);
+    await page.getByRole('link', { name: t.campaignNewTitle }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/admin/kampanie/nowa$`));
+    await expect(page.getByRole('heading', { level: 1, name: t.campaignNewTitle })).toBeVisible();
+    // Brak nadawcy marketingu: ten sam komunikat (szkic można zapisać, aktywować — nie).
+    await expect(page.getByRole('note').filter({ hasText: t.campaignSenderMissingTitle! })).toBeVisible();
+
+    await page.getByRole('textbox', { name: t.campaignEditorSlug }).fill('newsletter-test');
+    await fillJob(page, t, 'pl', 'Magazynier');
+    await fillJob(page, t, 'nl', 'Magazijnier');
+    await fillJob(page, t, 'fr', 'Magasinier');
+    // Angielski pusty → błąd przy polu, fokus na pierwszym błędzie, dane zostają.
+    await page.getByRole('button', { name: t.campaignEditorSave }).click();
+    await expect(page.getByRole('alert').filter({ hasText: t.campaignEditorHasErrors! })).toBeVisible();
+    const english = page.getByRole('region', { name: 'English', exact: true });
+    const enSlug = english.getByRole('textbox', { name: t.campaignEditorJobSlug });
+    await expect(enSlug).toBeFocused();
+    await expect(enSlug).toHaveAttribute('aria-invalid', 'true');
+    await expect(enSlug).toHaveAccessibleDescription(t.campaignEditorErrorRequired!);
+    await expect(english.getByRole('textbox', { name: t.campaignEditorJobTitle })).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    await expect(
+      page.getByRole('region', { name: 'Polski', exact: true }).getByRole('textbox', { name: t.campaignEditorJobTitle }),
+    ).toHaveValue('Magazynier');
+
+    // Podgląd przełączany językiem: angielski niepoprawny, polski z wpisaną treścią.
+    const previewLocales = page.getByRole('group', { name: t.campaignEditorPreviewLocales });
+    await previewLocales.getByRole('button', { name: 'English' }).click();
+    await expect(previewLocales.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText(t.campaignPreviewInvalid!, { exact: true })).toBeVisible();
+    await previewLocales.getByRole('button', { name: 'Polski' }).click();
+    await expect(page.getByText('Magazynier', { exact: true })).toBeVisible();
+    expect(await blockingViolations(page)).toEqual([]);
+
+    await fillJob(page, t, 'en', 'Warehouse worker');
+    await expect(enSlug).not.toHaveAttribute('aria-invalid', 'true');
+    await previewLocales.getByRole('button', { name: 'English' }).click();
+    await expect(page.getByText('Warehouse worker', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: t.campaignEditorSave }).click();
+    // Tryb demo: nic nie jest zapisywane, jasny komunikat, formularz zostaje.
+    await expect(page.getByRole('status').filter({ hasText: t.campaignEditorDemoNotSaved! })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: t.campaignEditorHasErrors! })).toHaveCount(0);
+  });
+}
+
+test('admin kampanie: nowa rewizja — formularz wypełniony treścią rewizji, slug stały', async ({ page }) => {
+  const t = admin('pl');
+  await page.goto('/pl/admin/kampanie/demo-k3');
+  await rejectOptionalCookies(page, 'pl');
+  await page.getByRole('link', { name: t.campaignNewRevisionTitle }).click();
+  await expect(page).toHaveURL(/\/pl\/admin\/kampanie\/demo-k3\/nowa-rewizja$/);
+  await expect(page.getByRole('heading', { level: 1, name: t.campaignNewRevisionTitle })).toBeVisible();
+
+  const slug = page.getByRole('textbox', { name: t.campaignEditorSlug });
+  await expect(slug).toHaveValue('newsletter-pazdziernik');
+  await expect(slug).toHaveAttribute('readonly', '');
+  for (const [locale, title] of [
+    ['pl', 'Magazynier'],
+    ['nl', 'Magazijnier'],
+    ['fr', 'Magasinier'],
+    ['en', 'Warehouse worker'],
+  ] as const) {
+    await expect(
+      page.getByRole('region', { name: LOCALE_NAMES[locale]!, exact: true }).getByRole('textbox', {
+        name: t.campaignEditorJobTitle,
+      }),
+    ).toHaveValue(title);
+  }
+  // Usunięcie treści w jednym języku → błąd przy polu tego języka.
+  const dutchTitle = page
+    .getByRole('region', { name: 'Nederlands', exact: true })
+    .getByRole('textbox', { name: t.campaignEditorJobTitle });
+  await dutchTitle.fill('');
+  await page.getByRole('button', { name: t.campaignEditorSave }).click();
+  await expect(dutchTitle).toBeFocused();
+  await expect(dutchTitle).toHaveAccessibleDescription(t.campaignEditorErrorRequired!);
+  await dutchTitle.fill('Magazijnier');
+  await page.getByRole('button', { name: t.campaignEditorSave }).click();
+  await expect(page.getByRole('status').filter({ hasText: t.campaignEditorDemoNotSaved! })).toBeVisible();
+  expect(await blockingViolations(page)).toEqual([]);
+});

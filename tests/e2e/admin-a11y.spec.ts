@@ -37,6 +37,9 @@ const ROUTES = [
   '/admin/kampanie',
   '/admin/kampanie/demo-k3',
   '/admin/kampanie/demo-k2',
+  // Edytor kampanii (#45, 0202): nowa kampania i nowa rewizja istniejącego sluga.
+  '/admin/kampanie/nowa',
+  '/admin/kampanie/demo-k3/nowa-rewizja',
   // Rejestr naruszeń (#490): lista, nowy wpis, wpis demonstracyjny.
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',

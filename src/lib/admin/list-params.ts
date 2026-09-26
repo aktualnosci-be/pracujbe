@@ -318,6 +318,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'screening_question.reviewed': 'auditActionScreeningReviewed',
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
+  'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {

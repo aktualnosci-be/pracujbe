@@ -1270,7 +1270,6 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
   **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
-  tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
   prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
   Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
   (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
@@ -1283,6 +1282,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
   AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
   E2E `admin-email-campaigns`, `admin-a11y`.
+  Edytor rewizji (#45, migracja `0202` — numer tymczasowy): „Nowa kampania” na liście →
+  `/admin/kampanie/nowa`, „Nowa rewizja” w szczególe → `/admin/kampanie/[id]/nowa-rewizja`
+  (formularz wypełniony treścią tej rewizji, slug stały). `EmailCampaignEditor`: w każdym języku
+  serwisu 1–3 oferty (slug, tytuł, miasto, stawka opcjonalnie), treść w kształcie workera
+  (`isDemo: false`); walidacja `campaignEditorErrors` (`src/lib/admin/campaign-editor.ts`) =
+  reguły pól workera (`src/lib/email/newsletter-rules.ts`, wspólne z `assertRenderableJobs`
+  i podglądem `campaignPreview`) + limity długości; brak treści w języku = błąd przy polu, fokus
+  na pierwszym błędzie, przełączany podgląd języka (`CampaignPreviewCard`, jak w szczególe),
+  jeden klucz idempotencji na operację. Zapis `createEmailCampaignRevision` → RPC
+  `admin_create_email_campaign_revision(client_key, slug, content)` (is_admin, `email_campaigns.client_key`
+  — ten sam klucz = ta sama rewizja, `email_campaign_jobs_renderable` = lustro reguł workera,
+  skutek = `create_email_campaign_revision` z 0101, audyt `email_campaign.revision_created` bez
+  treści). Nowa rewizja = szkic; aktywacja i bramka nadawcy bez zmian. Dowód: `rls.sql` sekcja
+  AC202 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
+  `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
+  (edytor), `admin-a11y` (nowe trasy).
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń

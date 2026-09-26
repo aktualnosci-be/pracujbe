@@ -13097,6 +13097,132 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- AC202. Edytor rewizji kampanii e-mail (#45, 0202): admin_create_email_campaign_revision —
+--        tylko admin (is_admin), idempotencja po kluczu klienta (retry = ta sama rewizja),
+--        komplet języków i treść, którą worker wyrenderuje, nowa rewizja = szkic,
+--        audyt `email_campaign.revision_created` bez treści.
+-- ============================================================================
+\set AC202K1 'a2020000-0000-4000-8000-000000000001'
+\set AC202K2 'a2020000-0000-4000-8000-000000000002'
+reset role; reset app.current_uid;
+
+-- AC202-1: anon bez EXECUTE; kandydat i pracodawca → PERMISSION_DENIED, bez wiersza.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-news'', %L::jsonb)',
+  :'AC202K1', :'CMJOBS'), 'permission denied', 'AC202-1 anon nie wywoła edytora');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-news'', %L::jsonb)',
+  :'AC202K1', :'CMJOBS'), 'PERMISSION_DENIED', 'AC202-1b kandydat nie tworzy rewizji');
+select pg_temp.expect_error(format('select public.create_email_campaign_revision(''ac202-news'', %L::jsonb)', :'CMJOBS'),
+  'permission denied', 'AC202-1c kandydat nie wywoła RPC service_role z 0101');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-news'', %L::jsonb)',
+  :'AC202K1', :'CMJOBS'), 'PERMISSION_DENIED', 'AC202-1d pracodawca nie tworzy rewizji');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.email_campaigns where slug = 'ac202-news'),
+  'AC202-1e odmowy nie utworzyły rewizji');
+
+-- AC202-2: admin tworzy szkic; ponowienie tym samym kluczem = ta sama rewizja (bez duplikatu);
+--          ten sam klucz z innym slugiem → VALIDATION_FAILED; nowy klucz = kolejna rewizja.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(:'AC202K1', 'ac202-news', :'CMJOBS'::jsonb) as ac202_rev1 \gset
+select public.admin_create_email_campaign_revision(:'AC202K1', 'ac202-news', :'CMJOBS'::jsonb) as ac202_retry \gset
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-other'', %L::jsonb)',
+  :'AC202K1', :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-2 ten sam klucz z innym slugiem odrzucony');
+select public.admin_create_email_campaign_revision(:'AC202K2', 'ac202-news', :'CMJOBS'::jsonb) as ac202_rev2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ac202_rev1' = :'ac202_retry', 'AC202-2b ponowienie tym samym kluczem zwraca tę samą rewizję');
+select pg_temp.assert(
+  (select string_agg(revision || ':' || status, ',' order by revision) from public.email_campaigns
+    where slug = 'ac202-news') = '1:draft,2:draft'
+  and not exists (select 1 from public.email_campaigns where slug = 'ac202-other')
+  and (select client_key from public.email_campaigns where id = :'ac202_rev1') = :'AC202K1'::uuid,
+  'AC202-2c dwie rewizje (szkice, bez duplikatu), klucz zapisany przy rewizji');
+
+-- AC202-3: audyt — po jednym wpisie na rewizję (ponowienie bez wpisu), aktor = admin,
+--          tylko status/slug/rewizja, bez treści.
+select pg_temp.assert(
+  (select count(*) = 2
+          and bool_and(actor_id = :'ADMIN'::uuid and entity_type = 'email_campaign' and before_data is null
+                       and after_data ->> 'status' = 'draft' and after_data ->> 'slug' = 'ac202-news'
+                       and (after_data - 'status' - 'slug' - 'revision') = '{}'::jsonb
+                       and not (after_data::text like '%Magazynier%'))
+     from public.audit_logs
+    where action = 'email_campaign.revision_created'
+      and entity_id in (:'ac202_rev1'::uuid, :'ac202_rev2'::uuid)),
+  'AC202-3 audyt: jeden wpis na rewizję, admin, bez treści');
+
+-- AC202-4: treść, której worker nie wyrenderuje, i brak języka → VALIDATION_FAILED, bez zapisu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-bad'', (%L::jsonb - ''en''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-4 brak języka (en) odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-bad'', jsonb_set(%L::jsonb, ''{pl,jobs,0,isDemo}'', ''true''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-4b oferta demonstracyjna odrzucona');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-bad'', jsonb_set(%L::jsonb, ''{fr,jobs,0,locale}'', ''"pl"''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-4c język oferty ≠ język wpisu odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-bad'', jsonb_set(%L::jsonb, ''{nl,jobs,0,title}'', ''"Hej {{imie}}"''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-4d placeholder odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac202-bad'', jsonb_set(%L::jsonb, ''{en,jobs,0,city}'', ''"  "''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-4e puste miasto odrzucone');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''Zły Slug'', %L::jsonb)',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED: slug', 'AC202-4f zły slug kampanii odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(null, ''ac202-bad'', %L::jsonb)',
+  :'CMJOBS'), 'VALIDATION_FAILED', 'AC202-4g brak klucza odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.email_campaigns where slug in ('ac202-bad', 'Zły Slug'))
+  and not exists (select 1 from public.audit_logs where action = 'email_campaign.revision_created'
+                   and after_data ->> 'slug' = 'ac202-bad'),
+  'AC202-4h odrzucenia bez rewizji i bez audytu');
+
+-- AC202-5: nowa rewizja nie jest aktywowana — aktywacja to osobny krok (0111).
+select pg_temp.assert(
+  (select activated_at is null from public.email_campaigns where id = :'ac202_rev2'),
+  'AC202-5 nowa rewizja bez aktywacji');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac202_rev2', 'draft');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac202_rev2') = 'active'
+  and (select status from public.email_campaigns where id = :'ac202_rev1') = 'superseded',
+  'AC202-5b aktywacja osobnym krokiem działa na rewizji z edytora');
+
+-- AC202-6: KONTROLA UJEMNA — wariant bez idempotencji (samo opakowanie 0101) przy ponowieniu
+--          tworzy duplikat (asercje AC202-2b/2c wykrywają brak klucza).
+begin;
+create or replace function public.admin_create_email_campaign_revision(p_client_key uuid, p_slug text, p_content jsonb)
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception 'PERMISSION_DENIED' using errcode = '42501'; end if;
+  return public.create_email_campaign_revision(p_slug, p_content);
+end $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(:'AC202K1', 'ac202-neg', :'CMJOBS'::jsonb) as ac202_neg1 \gset
+select public.admin_create_email_campaign_revision(:'AC202K1', 'ac202-neg', :'CMJOBS'::jsonb) as ac202_neg2 \gset
+reset role;
+select pg_temp.assert(:'ac202_neg1' <> :'ac202_neg2'
+  and (select count(*) from public.email_campaigns where slug = 'ac202-neg') = 2,
+  'AC202-6 bez idempotencji ponowienie tworzy duplikat — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- AC202-7: KONTROLA UJEMNA — bez reguł workera (tylko kontrola kształtu z 0101) rewizja
+--          z ofertą demonstracyjną przeszłaby (asercja AC202-4b wykrywa brak reguł).
+begin;
+create or replace function public.email_campaign_jobs_renderable(p_content jsonb)
+returns boolean language sql immutable as $$ select true $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'ac202-neg-demo',
+  jsonb_set(:'CMJOBS'::jsonb, '{pl,jobs,0,isDemo}', 'true'));
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_campaigns where slug = 'ac202-neg-demo'),
+  'AC202-7 bez reguł workera oferta demo trafia do rewizji — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
 --       expires_at i salary_period oferty — źródło `validThrough` i
 --       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
