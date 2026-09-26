@@ -997,7 +997,13 @@
     "applicationStepReview": "Pracodawca przegląda",
     "applicationStepInterview": "Rozmowa",
     "applicationStepDecision": "Decyzja",
-    "employerPlaceEyebrow": "Twoja rekrutacja"
+    "employerPlaceEyebrow": "Twoja rekrutacja",
+    "statRecruiterOnly": "Widzą właściciel, administrator i rekruterzy firmy",
+    "statAfterVerification": "Dostępne po weryfikacji firmy",
+    "funnelDenied": "Lejek rekrutacyjny widzą właściciel, administrator i rekruterzy firmy.",
+    "topMatchedDenied": "Dopasowanych kandydatów widzą właściciel, administrator i rekruterzy firmy.",
+    "topMatchedUnverified": "Dopasowani kandydaci pojawią się po weryfikacji firmy.",
+    "topMatchedLoadError": "Nie udało się wczytać dopasowanych kandydatów."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",

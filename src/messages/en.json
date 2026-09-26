@@ -997,7 +997,13 @@
     "applicationStepReview": "Employer reviewing",
     "applicationStepInterview": "Interview",
     "applicationStepDecision": "Decision",
-    "employerPlaceEyebrow": "Your recruitment"
+    "employerPlaceEyebrow": "Your recruitment",
+    "statRecruiterOnly": "Visible to the company owner, administrators and recruiters",
+    "statAfterVerification": "Available once the company is verified",
+    "funnelDenied": "The recruitment funnel is visible to the company owner, administrators and recruiters.",
+    "topMatchedDenied": "Matched candidates are visible to the company owner, administrators and recruiters.",
+    "topMatchedUnverified": "Matched candidates will appear once the company is verified.",
+    "topMatchedLoadError": "We could not load matched candidates."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
