@@ -17,3 +17,16 @@ decyzji właściciela oraz osobnego wdrożenia i testów.
 
 Docelowym środowiskiem uruchomieniowym aplikacji i PostgreSQL jest Railway. Migracja techniczna
 jest prowadzona osobno; ten wpis opisuje kierunek produktu, a nie potwierdza zakończenia migracji.
+
+## 2026-09-26: weryfikacja VAT w VIES przy zakładaniu firmy
+
+Po założeniu firmy serwer automatycznie sprawdza jej belgijski numer VAT (albo KBO) w VIES.
+Robi to po wysłaniu odpowiedzi, więc zakładanie firmy nie czeka na VIES. Zapisywany jest tylko
+wynik rozstrzygający („ważny” / „nieważny”). Awaria lub limit VIES niczego nie blokują, nie są
+zapisywane i nie zmieniają statusu firmy. Status weryfikacji zmienia wyłącznie administrator,
+który widzi wynik w szczególe firmy w panelu admina. Wynik automatyczny nie nadpisuje
+wcześniejszego sprawdzenia administratora.
+
+**Odznaki „zweryfikowano w VIES” nie pokazujemy kandydatom** — wynik VIES jest informacją
+wyłącznie dla administratora. Kandydaci widzą, jak dotąd, tylko oznaczenie firmy zweryfikowanej
+przez administratora.

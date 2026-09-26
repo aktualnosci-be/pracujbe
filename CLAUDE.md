@@ -1365,8 +1365,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
   sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
-  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
-  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+  `VIES_LIVE_SMOKE=1`. Automatyczne sprawdzenie przy zakładaniu firmy (decyzja właściciela
+  26.09.2026, migracja `0197` — numer tymczasowy): po `create_first_company` /
+  `create_additional_company` / `create_company_with_owner` serwer planuje (`after`, po odpowiedzi)
+  `runCompanyViesAutoCheck` (`src/lib/vies/auto-check.ts`: bieżący VAT/KBO → ten sam adapter VIES →
+  zapis tylko `valid`/`invalid` przez `record_company_vies_check_auto` — EXECUTE tylko
+  service_role, bez nadpisywania istniejącego wyniku, tylko dla bieżącego numeru, `checked_by`
+  null, audyt `company.vies_checked` z `source: auto`). Awaria VIES/bazy nie blokuje założenia
+  i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
+  NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA197
+  (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
