@@ -15,6 +15,8 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
+Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: migracja 0137, brak
+usług cron, tryb demo za bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
@@ -528,7 +530,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
-- [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
+- [x] shadcn/ui — zestaw komponentów w `src/components/ui` (API shadcn, styl „Ludzie i praca”, tokeny,
+  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select),
+  card, badge (`success` = `success-text` na `success/10`, AA), toast, light-dialog (#393) +
+  confirm-dialog, stepper, status-pill, match-bar, stat-card oraz **skeleton**, **table**
+  (domyślne klasy = `TH`/`TD`/`TD_WRAP` z `panel-styles.ts`, `TableRowHeader` = `<th scope="row">`),
+  **pagination** (nav + lista, bez `Slot` — zostaje serwerowy) i **alert** (baza `NOTICE`, warianty
+  note/error/success, `error` = `role="alert"`). Podmienione ręczne odpowiedniki bez zmiany wyglądu:
+  tabele `/admin/uzytkownicy` i `/admin/firmy`, `AdminPager`, szkielet `MessagesLoading`, błędy
+  zespołu (`TeamMembers`/`TeamInvite`/`MyTeamInvitations`), `RecruiterOnlyNote`. Test `ui-kit`
+  (klasy identyczne z kalką, kontrole ujemne) + strażnik: surowy `<table>` tylko w `ui/table.tsx`.
+  Świadomie BEZ nowych pakietów Radix (budżet JS #395, INP #393): natywne `<select>`/radio w formularzach
+  GET i server actions (działają bez JS, strony admina serwerowe), własne menu z pełnym ARIA
+  (`ApplicationActions` #341, `ApplicationStatusMenu`, `LocaleSwitcher` na stronach publicznych),
+  dialogi na `LightDialog`; tabs/tooltip/dropdown-menu dodawać dopiero z realnym użyciem (tooltip na
+  dotyku = ryzyko a11y). Publiczne `Pagination` (lista ofert) zostaje osobne.
 
 ### Redesign wg makiet — HISTORYCZNE (`docs/DESIGN_SCREENS.md`), zastąpione „Ludzie i praca”
 > Obowiązujący wygląd = kalka prototypu `docs/design/people-passport/prototype` („04 Ludzie i praca”,
@@ -769,7 +785,7 @@ profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts
 (`minimize.ts`: NISS/BIS/dokument → odmowa; sekcje referencji i danych osobowych, linie o
 osobach trzecich, dane osobowe, kategorie art. 9/10, kontakty i linki usunięte; kontakt poza
 nagłówkiem dokumentu → bezpieczne zatrzymanie) → PODGLĄD tekstu dla kandydata → po
-potwierdzeniu ponowna redakcja na serwerze i Claude (structured output, tylko zawody/
+potwierdzeniu ponowna redakcja na serwerze i model OpenAI (structured output, tylko zawody/
 umiejętności/języki/certyfikaty/lata) → PROPOZYCJE ze źródłem i niepewnością, domyślnie
 niezaznaczone → zapis wyłącznie zaznaczonych RPC `apply_candidate_cv_proposals` (dopisanie,
 `FOR UPDATE`, limity kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
@@ -859,14 +875,21 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Otwarte:** orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
-  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Claude
-  (`claude-opus-5`, structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
+  albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Model
+  OpenAI (`gpt-6-luna`, strict structured output, `src/lib/ai-import/extract.ts`) → mapowanie tymi samymi
   schematami kroków (`map.ts`), pola niepewne na liście „do sprawdzenia” w kroku; poprawne kroki
   do szkicu jednym `save_job_draft`, nigdy publikacja. Akcja `importJobListing`: recruiter+
   aktywnej firmy, limit per firma 10/h i 30/dobę (fail-closed). Podejrzenie prompt injection =
-  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`,
-  opcjonalnie `AI_JOB_IMPORT_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
+  wszystko do sprawdzenia, bez zapisu. Env: `AI_JOB_IMPORT_ENABLED`, `OPENAI_API_KEY`,
+  opcjonalnie `AI_JOB_IMPORT_MODEL`/`AI_MODEL`; atrapa `AI_JOB_IMPORT_PROVIDER=fixture` tylko poza
   produkcją (E2E `job-import.spec`). Research, koszty, prywatność: `docs/AI_JOB_IMPORT.md`.
+  Dostawca AI (decyzja właściciela 2026-09-26): wyłącznie OpenAI „GPT-6 Luna” (`gpt-6-luna`,
+  0,10/0,50 USD za 1 mln tokenów wejścia/wyjścia) — jeden klient `src/lib/ai/openai.ts`
+  (Responses API, `strict` JSON Schema, `store: false`, timeout 60 s, bez logowania treści),
+  model z `src/lib/ai/model-config.ts` (`AI_*_MODEL` → `AI_MODEL` → `gpt-6-luna`), klucz
+  `OPENAI_API_KEY` tylko na serwerze; SDK Anthropic usunięte. Strażnik `ai-inventory`: SDK
+  `openai` importuje tylko ten plik, import klienta = wywołanie modelu, `@anthropic-ai/*`
+  w `src/`/`scripts/` = czerwony (kontrole ujemne); test `ai-openai-client`.
   Globalny budżet AI (#36, migracja `0120`, `docs/AI_BUDGET.md`): każde wywołanie modelu przez
   `withAiBudget` (`src/lib/ai/budget.ts`) — rezerwacja górnej granicy kosztu PRZED API
   (`ai_budget_reserve`, blokada doradcza, limit doby i miesiąca w Europe/Brussels), rozliczenie
@@ -896,8 +919,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 - [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
   domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
   (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
-  i 60/dobę fail-closed, globalny budżet AI #36 przez `src/lib/ai-assist/budget.ts`) → Claude
-  (`claude-opus-5-5`, `AI_JOB_ASSIST_MODEL`, structured output) → propozycja brzmienia opisu,
+  i 60/dobę fail-closed, globalny budżet AI #36 przez `src/lib/ai-assist/budget.ts`) → model
+  OpenAI (`gpt-6-luna`, `AI_JOB_ASSIST_MODEL`/`AI_MODEL`, strict structured output) → propozycja brzmienia opisu,
   obowiązków i wymagań w języku oferty. Wejście ścisłe (tylko tekst oferty — bez danych
   kandydatów), e-maile/telefony/identyfikatory usuwane przed wysłaniem, polecenia dla AI
   (wzorce PL/NL/FR/EN + flaga modelu) = brak propozycji; propozycja z nową liczbą/linkiem albo

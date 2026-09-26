@@ -1,20 +1,24 @@
 import 'server-only';
 
-import Anthropic from '@anthropic-ai/sdk';
-
 import { jobImportModel } from '@/lib/ai-import/config';
+import {
+  AiProviderError,
+  createStructuredResponse,
+  type ResponsesClient,
+  type StructuredInputPart,
+} from '@/lib/ai/openai';
 import type { AiTokenUsage } from '@/lib/ai/pricing';
 import { JOB_EXTRACTION_JSON_SCHEMA } from '@/lib/ai-import/schema';
 import { CATEGORY_KEYS, CONTRACT_TYPES } from '@/lib/validation/candidate';
 
 /**
- * Ekstrakcja danych ogłoszenia przez Claude (#465).
+ * Ekstrakcja danych ogłoszenia przez model OpenAI (#465, domyślnie `gpt-6-luna`).
  *
  * Granica zaufania: zrzut ekranu i tekst strony pochodzą od osób trzecich. Traktujemy je jako
  * DANE do analizy, nigdy jako instrukcje:
- *   - instrukcje systemowe są wyłącznie w `system`; materiał trafia do wiadomości `user`
+ *   - instrukcje systemowe są wyłącznie w `instructions`; materiał trafia do wiadomości `user`
  *     w znaczniku `<listing>` (próby jego zamknięcia są neutralizowane);
- *   - odpowiedź jest ograniczona schematem structured output (`output_config.format`) —
+ *   - odpowiedź jest ograniczona schematem structured output (`text.format`, `strict`) —
  *     model nie ma narzędzi, nie może niczego wykonać ani opublikować; jedynym skutkiem jest
  *     obiekt JSON, który serwer i tak waliduje schematami kreatora;
  *   - model zgłasza podejrzane instrukcje (`suspiciousInstructions`) — wtedy UI oznacza
@@ -82,71 +86,44 @@ export function wrapUntrustedText(text: string, source: string): string {
   return `<listing source="${safeSource}">\n${safe}\n</listing>\n\nExtract the job advertisement above into the required JSON structure.`;
 }
 
-/** Wiadomość użytkownika dla danego wejścia (osobno testowalna). */
-export function buildUserContent(input: ExtractionInput): Anthropic.ContentBlockParam[] {
+/** Treść wiadomości użytkownika dla danego wejścia (osobno testowalna). */
+export function buildUserContent(input: ExtractionInput): StructuredInputPart[] {
   if (input.kind === 'image') {
     return [
-      { type: 'image', source: { type: 'base64', media_type: input.mediaType, data: input.base64 } },
+      { kind: 'image', mediaType: input.mediaType, base64: input.base64 },
       {
-        type: 'text',
+        kind: 'text',
         text: 'The image above is a screenshot of a job advertisement (untrusted material). Extract it into the required JSON structure.',
       },
     ];
   }
-  return [{ type: 'text', text: wrapUntrustedText(input.text, input.source) }];
+  return [{ kind: 'text', text: wrapUntrustedText(input.text, input.source) }];
 }
 
-/** Produkcyjny ekstraktor: Messages API + structured output. */
-export class AnthropicJobExtractor implements JobExtractor {
-  private readonly client: Anthropic;
+/** Błąd wspólnego klienta → błąd ekstraktora (ten sam powód; bez treści dostawcy). */
+export function toExtractorError(e: unknown): ExtractorError {
+  return new ExtractorError(e instanceof AiProviderError ? e.reason : 'failed');
+}
 
-  constructor(client?: Anthropic) {
-    // Klucz czytany przez SDK z `ANTHROPIC_API_KEY` (tylko serwer). Krótki timeout i jedna
-    // ponowna próba — użytkownik czeka na wynik w kreatorze.
-    this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 1 });
-  }
+/** Produkcyjny ekstraktor: OpenAI Responses API + structured output (`src/lib/ai/openai.ts`). */
+export class OpenAiJobExtractor implements JobExtractor {
+  constructor(private readonly client?: ResponsesClient) {}
 
   async extract(input: ExtractionInput, hooks?: ExtractionHooks): Promise<unknown> {
-    let response: Anthropic.Message;
     try {
-      response = await this.client.messages.create({
-        model: jobImportModel(),
-        max_tokens: JOB_EXTRACTION_MAX_TOKENS,
-        system: EXTRACTION_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: buildUserContent(input) }],
-        output_config: {
-          // Ekstrakcja z jednego dokumentu — niski effort wystarcza i obniża koszt/czas.
-          effort: 'low',
-          format: { type: 'json_schema', schema: JOB_EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown> },
+      return await createStructuredResponse(
+        {
+          model: jobImportModel(),
+          instructions: EXTRACTION_SYSTEM_PROMPT,
+          input: buildUserContent(input),
+          schemaName: 'job_listing_extraction',
+          schema: JOB_EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown>,
+          maxOutputTokens: JOB_EXTRACTION_MAX_TOKENS,
         },
-      });
+        { onUsage: hooks?.onUsage, client: this.client },
+      );
     } catch (e) {
-      if (e instanceof Anthropic.RateLimitError) throw new ExtractorError('rateLimited');
-      throw new ExtractorError('failed');
-    }
-
-    // Zużycie jest naliczane także przy odmowie — zgłaszamy je przed oceną odpowiedzi. Bez
-    // `usage` nic nie zgłaszamy: budżet rozliczy wtedy pełną kwotę rezerwacji (zachowawczo).
-    const usage = response.usage as Anthropic.Usage | undefined;
-    if (usage) {
-      hooks?.onUsage?.({
-        inputTokens: usage.input_tokens,
-        outputTokens: usage.output_tokens,
-        cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
-        cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
-      });
-    }
-
-    if (response.stop_reason === 'refusal') throw new ExtractorError('refused');
-    if (response.stop_reason !== 'end_turn') throw new ExtractorError('failed');
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      throw new ExtractorError('failed');
+      throw toExtractorError(e);
     }
   }
 }

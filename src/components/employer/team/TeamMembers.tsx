@@ -22,6 +22,7 @@ import {
   ROW_TITLE,
   TAG,
 } from '@/components/dashboard/panel-styles';
+import { Alert } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 /**
@@ -101,9 +102,9 @@ export function TeamMembers({
         {feedback?.kind === 'ok' ? feedback.text : ''}
       </p>
       {feedback?.kind === 'error' ? (
-        <p role="alert" className={cn(NOTICE, 'my-0 border-error/30 bg-error/10 text-error-text')}>
+        <Alert variant="error">
           {feedback.text}
-        </p>
+        </Alert>
       ) : null}
 
       <ul aria-label={t('membersTitle')}>

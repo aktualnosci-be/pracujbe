@@ -1265,7 +1265,10 @@ export interface EmployerApplicationDetail {
     languages: { label: string; level: string }[];
     certificates: string[];
   } | null;
-  history: { toStatus: string; at: string }[];
+  /** Pierwsza strona (najstarsze najpierw) — #604, kolejne przez `getEmployerApplicationHistoryPage`. */
+  history: ApplicationHistoryEntry[];
+  /** Kursor kolejnej strony historii statusów (#604) — null = to wszystkie zmiany. */
+  historyNextCursor: ApplicationHistoryCursor | null;
   /** #101: odpowiedzi na pytania oferty (snapshot z chwili aplikowania); pusta = brak pytań. */
   screeningAnswers: ScreeningAnswer[];
 }
@@ -1280,12 +1283,49 @@ export type EmployerApplicationDetailLoad =
   | { status: 'not_found' }
   | { status: 'error' };
 
-const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status' | 'isGuest' | 'guestEmail' | 'screeningAnswers'> & { screeningAnswers?: ScreeningAnswer[] }> = {
+/** Kursor historii statusów (`created_at` + `id`, stronicowanie rosnące — #604). */
+export interface ApplicationHistoryCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface ApplicationHistoryEntry {
+  id: string;
+  toStatus: string;
+  at: string;
+}
+
+export interface ApplicationHistoryPage {
+  items: ApplicationHistoryEntry[];
+  nextCursor: ApplicationHistoryCursor | null;
+}
+
+/** Rozmiar strony historii statusów aplikacji (#604) — dawny sztywny `LIMIT 50` bez paginacji. */
+const APPLICATION_HISTORY_PAGE_SIZE = 50;
+
+/**
+ * Wiersze `id, to_status, created_at` (posortowane rosnąco, pobrane w liczbie
+ * `APPLICATION_HISTORY_PAGE_SIZE + 1`) → strona + kursor kolejnej (#604).
+ */
+function pageHistoryRows(rows: unknown): ApplicationHistoryPage {
+  const all = asRows(rows).map((r) => ({
+    id: asString(r['id']),
+    toStatus: asString(r['to_status']),
+    at: asString(r['created_at']),
+  }));
+  const items = all.slice(0, APPLICATION_HISTORY_PAGE_SIZE);
+  const last = items[items.length - 1];
+  const nextCursor =
+    all.length > APPLICATION_HISTORY_PAGE_SIZE && last ? { createdAt: last.at, id: last.id } : null;
+  return { items, nextCursor };
+}
+
+const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, 'id' | 'candidateName' | 'jobTitle' | 'status' | 'isGuest' | 'guestEmail' | 'screeningAnswers' | 'historyNextCursor'> & { screeningAnswers?: ScreeningAnswer[] }> = {
   'demo-app-1': {
     candidateId: 'demo-c-1', jobId: '12343', message: 'Mam 6 lat doświadczenia w utrzymaniu ruchu i uprawnienia SEP. Mogę zacząć od zaraz.',
     phone: '+32 470 12 34 56', availability: 'immediate', submittedAt: '2026-09-20T08:30:00Z', matchScore: 92,
     profile: { headline: 'Elektryk przemysłowy', city: 'Charleroi', experienceYears: 6, hasDrivingLicense: true, skills: ['Instalacje przemysłowe', 'Automatyka PLC'], languages: [{ label: 'Polski', level: 'native' }, { label: 'Francuski', level: 'intermediate' }], certificates: ['VCA Basis'] },
-    history: [{ toStatus: 'submitted', at: '2026-09-20T08:30:00Z' }],
+    history: [{ id: 'demo-h-1', toStatus: 'submitted', at: '2026-09-20T08:30:00Z' }],
     screeningAnswers: [
       { position: 0, type: 'yes_no', required: true, prompt: { pl: 'Czy masz uprawnienia SEP?', en: 'Do you hold an SEP certificate?' }, options: [], answerBoolean: true, answerDate: null, answerText: null },
       { position: 1, type: 'single_choice', required: true, prompt: { pl: 'Jak dojedziesz do pracy?', en: 'How will you get to work?' }, options: [{ id: 'o1', label: { pl: 'Własnym samochodem', en: 'Own car' } }, { id: 'o2', label: { pl: 'Komunikacją publiczną', en: 'Public transport' } }], answerBoolean: null, answerDate: null, answerText: 'o1' },
@@ -1297,19 +1337,19 @@ const DEMO_APPLICATION_DETAILS: Record<string, Omit<EmployerApplicationDetail, '
     candidateId: 'demo-c-2', jobId: '12345', message: '',
     phone: '+32 471 98 76 54', availability: 'within_month', submittedAt: '2026-09-19T10:00:00Z', matchScore: 88,
     profile: { headline: 'Operator wózka widłowego', city: 'Liège', experienceYears: 4, hasDrivingLicense: true, skills: ['Wózek widłowy'], languages: [{ label: 'Polski', level: 'native' }], certificates: [] },
-    history: [{ toStatus: 'submitted', at: '2026-09-19T10:00:00Z' }, { toStatus: 'viewed', at: '2026-09-19T14:00:00Z' }],
+    history: [{ id: 'demo-h-2a', toStatus: 'submitted', at: '2026-09-19T10:00:00Z' }, { id: 'demo-h-2b', toStatus: 'viewed', at: '2026-09-19T14:00:00Z' }],
   },
   'demo-app-3': {
     candidateId: 'demo-c-3', jobId: '12344', message: 'Pracowałem 3 lata w magazynie w Antwerpii.',
     phone: '+32 472 11 22 33', availability: 'flexible', submittedAt: '2026-09-17T09:00:00Z', matchScore: 85,
     profile: null,
-    history: [{ toStatus: 'submitted', at: '2026-09-17T09:00:00Z' }, { toStatus: 'viewed', at: '2026-09-17T12:00:00Z' }, { toStatus: 'shortlisted', at: '2026-09-18T09:00:00Z' }],
+    history: [{ id: 'demo-h-3a', toStatus: 'submitted', at: '2026-09-17T09:00:00Z' }, { id: 'demo-h-3b', toStatus: 'viewed', at: '2026-09-17T12:00:00Z' }, { id: 'demo-h-3c', toStatus: 'shortlisted', at: '2026-09-18T09:00:00Z' }],
   },
   'demo-app-4': {
     candidateId: 'demo-c-4', jobId: '12341', message: '',
     phone: '', availability: '', submittedAt: '2026-09-15T09:00:00Z', matchScore: null,
     profile: null,
-    history: [{ toStatus: 'submitted', at: '2026-09-15T09:00:00Z' }, { toStatus: 'interview', at: '2026-09-16T09:00:00Z' }],
+    history: [{ id: 'demo-h-4a', toStatus: 'submitted', at: '2026-09-15T09:00:00Z' }, { id: 'demo-h-4b', toStatus: 'interview', at: '2026-09-16T09:00:00Z' }],
   },
 };
 
@@ -1318,7 +1358,18 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
     const base = DEMO_APPLICATIONS.find((application) => application.id === id);
     const extra = DEMO_APPLICATION_DETAILS[id];
     if (!base || !extra) return { status: 'not_found' };
-    return { status: 'ok', isDemo: true, application: { ...base, ...extra, isGuest: false, guestEmail: '', screeningAnswers: extra.screeningAnswers ?? [] } };
+    return {
+      status: 'ok',
+      isDemo: true,
+      application: {
+        ...base,
+        ...extra,
+        isGuest: false,
+        guestEmail: '',
+        historyNextCursor: null,
+        screeningAnswers: extra.screeningAnswers ?? [],
+      },
+    };
   }
 
   if (!UUID_RE.test(id)) return { status: 'not_found' };
@@ -1347,9 +1398,12 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
       // #98: aplikacja bez konta nie ma profilu ani dopasowania — nie pytamy o nie bazy.
       const withAccount = !candidate.isGuest && candidateId.length > 0;
 
+      // #604: pobieramy jedną nadmiarową pozycję, aby wiedzieć, czy jest kolejna strona,
+      // zamiast cicho obcinać historię do pierwszych 50 zmian bez sygnału i paginacji.
       const historyData = await queryRows(tx, 'employer.application-detail-history',
-        `SELECT to_status, created_at FROM public.application_status_history
-          WHERE application_id = $1 ORDER BY created_at ASC LIMIT 50`, [id]);
+        `SELECT id, to_status, created_at FROM public.application_status_history
+          WHERE application_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2`,
+        [id, APPLICATION_HISTORY_PAGE_SIZE + 1]);
       // candidate_profiles_select_company (0009 + company_can_view_candidate recruiter+, 0033).
       const cpData = withAccount
         ? await queryOne(tx, 'employer.application-detail-profile',
@@ -1384,6 +1438,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
     if (!loaded) return { status: 'not_found' };
     const { row, candidateId, jobId, candidate, historyData, cpData, matchData, answerData, relations } = loaded;
     const job = asEmbeddedRecord(row['jobs']);
+    const historyPage = pageHistoryRows(historyData);
 
     let profile: EmployerApplicationDetail['profile'] = null;
     if (cpData && relations) {
@@ -1424,7 +1479,8 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         submittedAt: asString(row['submitted_at']) || null,
         matchScore,
         profile,
-        history: asRows(historyData).map((r) => ({ toStatus: asString(r['to_status']), at: asString(r['created_at']) })),
+        history: historyPage.items,
+        historyNextCursor: historyPage.nextCursor,
         screeningAnswers: parseScreeningAnswers(answerData),
       },
     };
@@ -1593,5 +1649,44 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerCandidateDetail' });
     return { status: 'error' };
+  }
+}
+
+/**
+ * Kolejna strona historii statusów zgłoszenia (#604, „Pokaż więcej") — odczyt pod sesją i RLS,
+ * ponownie zawężony do AKTYWNEJ firmy (nie ufamy samemu `applicationId` z klienta, jak w
+ * `getEmployerApplicationDetail`). Obca/usunięta aplikacja → pusta strona bez ujawniania istnienia.
+ */
+export async function getEmployerApplicationHistoryPage(
+  applicationId: string,
+  cursor: ApplicationHistoryCursor | null = null,
+): Promise<ApplicationHistoryPage> {
+  const empty: ApplicationHistoryPage = { items: [], nextCursor: null };
+  if (!UUID_RE.test(applicationId)) return empty;
+  if (!isPortalDataConfigured()) return empty;
+
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return empty;
+    const { me, companyId } = ctx;
+
+    return await withPortalTransaction(me, async (tx) => {
+      const owner = await queryOne(tx, 'employer.application-history-owner',
+        `SELECT 1 FROM public.applications WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+        [applicationId, companyId]);
+      if (!owner) return empty;
+
+      const rows = await queryRows(tx, 'employer.application-history-page',
+        `SELECT id, to_status, created_at FROM public.application_status_history
+          WHERE application_id = $1
+            AND ($2::timestamptz IS NULL OR (created_at, id) > ($2::timestamptz, $3::uuid))
+          ORDER BY created_at ASC, id ASC
+          LIMIT $4`,
+        [applicationId, cursor?.createdAt ?? null, cursor?.id ?? null, APPLICATION_HISTORY_PAGE_SIZE + 1]);
+      return pageHistoryRows(rows);
+    });
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerApplicationHistoryPage' });
+    return empty;
   }
 }

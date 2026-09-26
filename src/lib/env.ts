@@ -231,6 +231,12 @@ export function readinessChecks(): Record<string, boolean> {
     // #26: prywatny bucket Railway (endpoint/region/bucket/klucze) + sekret linków pobrania CV.
     fileBucket: fileBucketConfig() !== null,
     fileDownloadSecret: fileDownloadSecret() !== null,
+    // Sekrety bez własnego wskaźnika w health (odbiór startu 26.09): aplikacja gościa i
+    // zaproszenia bez konta (`guest-apply/token.ts`) oraz linki wypisania z e-maili
+    // (`unsubscribe-token.ts`), oba ≥ 32 znaki. Bez importu tych modułów: używają
+    // `node:crypto`, a `env.ts` trafia też do bundla klienta (test pilnuje zgodności progów).
+    guestApplySecret: (process.env.GUEST_APPLY_SECRET ?? '').length >= 32,
+    unsubscribeSecret: (process.env.EMAIL_UNSUBSCRIBE_SECRET ?? '').length >= 32,
   };
 }
 

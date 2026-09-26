@@ -19,6 +19,7 @@ import {
   ROW,
   ROW_META,
 } from '@/components/dashboard/panel-styles';
+import { Alert } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 /**
@@ -80,9 +81,9 @@ export function MyTeamInvitations({
         {notice ?? ''}
       </p>
       {error ? (
-        <p role="alert" className={cn(NOTICE, 'my-0 border-error/30 bg-error/10 text-error-text')}>
+        <Alert variant="error">
           {tRoot(teamErrorKey(error, toUserMessageKey))}
-        </p>
+        </Alert>
       ) : null}
       <ul>
         {invitations.map((inv) => {

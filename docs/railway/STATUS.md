@@ -103,3 +103,15 @@ więc tego przypadku nie wykryje sam build w CI — pilnuje go ten test.
 ## Cron caller i rozdział sekretów (#13) — 24 września 2026
 
 Caller `scripts/railway-cron-call.mjs` wysyła sekret wyłącznie pod `/api/email/process` albo `/api/maintenance` (bez query; HTTP tylko w `*.railway.internal`/`localhost`), czas `CRON_TIMEOUT_SECONDS` 1–600 (domyślnie 120), kody wyjścia 0/1/2. Endpointy używają wspólnego `src/lib/cron/secrets.ts`: sekret jednego zadania nie otwiera drugiego, wspólna wartość obu zmiennych nie otwiera żadnego, `CRON_SECRET` działa przejściowo dla obu (rollback = ponowne ustawienie zmiennej). `/api/health` raportuje `maintenanceSecret`, `cronSecretsSeparate`, `legacyCronSecret`. Harmonogram i kolejność usunięcia `CRON_SECRET`: README, sekcja „Cron”. Testy: `railway-cron`, `cron-secrets` (z kontrolą ujemną), `cron-docs`. Zmiennych Railway nie ustawiono; konfiguracja usług cron i ręczne wywołania pozostają do odbioru (#14, #16).
+
+## Gotowość do startu — 26 września 2026
+
+Odczyt produkcji (bez zmian w Railway): baza na migracji `0137`, `/api/health` 200 w trybie
+`demo` (bramka `SITE_ACCESS_PASSWORD` aktywna, `APP_MODE` nieustawione), gotowe PostgreSQL,
+Better Auth, limiter, Turnstile, bucket CV, webhook błędów i EmailLabs; brak
+`EMAILLABS_WEBHOOK_SECRET`. **Brak usług cron** (limit darmowego planu): `/api/email/process`
+(także e-maile potwierdzenia konta i resetu) i `/api/maintenance` nie są wywoływane. Brak klucza
+AI (funkcje wyłączone flagami), kopia R2 odłożona. Smoke bez hasła: health i `robots.txt` OK,
+strony za bramką. Poprawiony smoke: sitemap to indeks `/sitemap/<id>.xml` (#599),
+`/sitemap.xml` = 404. Blokery startu (właściciel/infra/prawnik vs kod):
+[`../LAUNCH_CHECKLIST.md`](../LAUNCH_CHECKLIST.md) §1.
