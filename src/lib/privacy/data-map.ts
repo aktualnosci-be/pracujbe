@@ -192,13 +192,13 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   'ai-job-import': {
     name: 'Import ogłoszenia przez AI',
     inCode: 'Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone.',
-    processors: [...HOSTING, 'anthropic'],
+    processors: [...HOSTING, 'openai'],
     retentionInCode: 'Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty.',
   },
   'ai-translation': {
     name: 'Tłumaczenia AI (rdzeń)',
     inCode: 'Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0145). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone.',
-    processors: [...HOSTING, 'anthropic'],
+    processors: [...HOSTING, 'openai'],
     retentionInCode:
       'deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej).',
   },

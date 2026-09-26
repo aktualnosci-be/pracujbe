@@ -43,7 +43,7 @@ function provider(output: unknown | Error): TranslationProvider {
   return {
     translate: vi.fn(async () => {
       if (output instanceof Error) throw output;
-      return { output, model: 'claude-opus-5', inputTokens: 10, outputTokens: 5 };
+      return { output, model: 'gpt-6-luna', inputTokens: 10, outputTokens: 5 };
     }),
   };
 }
@@ -56,7 +56,7 @@ describe('processTranslationBatch', () => {
     const r = await processTranslationBatch({ store: s, provider: provider(GOOD) });
     expect(r).toMatchObject({ claimed: 1, applied: 1, failed: 0 });
     expect(s.complete).toHaveBeenCalledWith(expect.objectContaining({ job_id: 'job-1' }), GOOD, {
-      model: 'claude-opus-5',
+      model: 'gpt-6-luna',
       inputTokens: 10,
       outputTokens: 5,
     });

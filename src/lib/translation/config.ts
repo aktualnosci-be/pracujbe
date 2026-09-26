@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
 /**
@@ -8,17 +9,13 @@ import { isProductionMode } from '@/lib/env';
  *
  * Worker tłumaczeń działa tylko gdy:
  *   - `AI_TRANSLATION_ENABLED` = `1`/`true` (domyślnie wyłączony, także w produkcji), ORAZ
- *   - jest dostawca: `ANTHROPIC_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
- *     `AI_TRANSLATION_PROVIDER=fixture` (lokalnie, bez sieci i bez kosztów).
+ *   - jest dostawca: `OPENAI_API_KEY` (wspólny klient `src/lib/ai/openai.ts`) albo — tylko poza
+ *     trybem produkcyjnym — atrapa `AI_TRANSLATION_PROVIDER=fixture` (lokalnie, bez sieci i bez kosztów).
  *
  * Wyłączenie flagi zatrzymuje worker; źródła, rewizje i korekty ręczne zostają w bazie.
  */
 
-/** Domyślny model (docs/AI_TRANSLATION.md); wybór docelowy po benchmarku #30. */
-export const DEFAULT_TRANSLATION_MODEL = 'claude-opus-5';
-
-export type TranslationProviderKind = 'anthropic' | 'fixture';
-export type TranslationEffort = 'low' | 'medium' | 'high';
+export type TranslationProviderKind = 'openai' | 'fixture';
 
 function flagOn(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
@@ -30,21 +27,14 @@ export function translationProvider(): TranslationProviderKind | null {
   if (process.env.AI_TRANSLATION_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }
-  return process.env.ANTHROPIC_API_KEY ? 'anthropic' : null;
+  return isOpenAiConfigured() ? 'openai' : null;
 }
 
 export function isTranslationEnabled(): boolean {
   return translationProvider() !== null;
 }
 
-/** Model Claude (nadpisywalny przez `AI_TRANSLATION_MODEL`). */
+/** Model: `AI_TRANSLATION_MODEL` → `AI_MODEL` → `gpt-6-luna` (`src/lib/ai/model-config.ts`). */
 export function translationModel(): string {
-  const m = process.env.AI_TRANSLATION_MODEL?.trim();
-  return m && /^[a-z0-9][a-z0-9.-]{2,63}$/.test(m) ? m : DEFAULT_TRANSLATION_MODEL;
-}
-
-/** Effort (`AI_TRANSLATION_EFFORT`: low/medium/high; domyślnie low — do potwierdzenia w #30). */
-export function translationEffort(): TranslationEffort {
-  const e = process.env.AI_TRANSLATION_EFFORT?.trim().toLowerCase();
-  return e === 'medium' || e === 'high' ? e : 'low';
+  return resolveAiModel(process.env.AI_TRANSLATION_MODEL);
 }
