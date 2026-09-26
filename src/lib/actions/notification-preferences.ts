@@ -8,14 +8,17 @@ import { jsonArg, rpc } from '@/lib/db/sql';
 import { routing } from '@/i18n/routing';
 import { emailConsentWordingVersion } from '@/lib/email/consent-wording';
 import type { ErrorCode } from '@/lib/errors';
+import type { NotificationPreferencesRole } from '@/lib/settings/email-preference-fields';
 
 /**
  * Server Action preferencji powiadomień — zapis POD SESJĄ użytkownika (nie service-role).
  *
- * `updateNotificationPreferences` waliduje wejście schematem Zod (bool per pole, język strony,
- * rola formularza) i woła RPC `set_notification_preferences` (0101), które zapisuje własny
- * wiersz (`auth.uid()`) i dowód każdej zmiany zgody e-mail: źródło `settings`, język strony
- * i wersję pokazanej treści (`emailConsentWordingVersion`, #45).
+ * `updateNotificationPreferences` waliduje wejście schematem Zod (bool per pole, język strony)
+ * i woła RPC `set_notification_preferences` (0101), które zapisuje własny wiersz (`auth.uid()`)
+ * i dowód każdej zmiany zgody e-mail: źródło `settings`, język strony i wersję pokazanej treści
+ * (`emailConsentWordingVersion`, #45). Rola użyta do wyliczenia tej wersji pochodzi WYŁĄCZNIE
+ * z `getPortalIdentity()` (rola profilu z sesji) — formularz nie przekazuje roli jako
+ * zaufanego wejścia, bo klient mógłby podpisać dowód treścią przeznaczoną dla innej roli (#605).
  *
  * #25: RPC w transakcji sesji (`withPortalTransaction`, rola authenticated + `app.current_uid`).
  *
@@ -33,7 +36,6 @@ const preferencesSchema = z.object({
   pushEnabled: z.boolean(),
   inAppEnabled: z.boolean(),
   locale: z.enum(routing.locales),
-  role: z.enum(['candidate', 'employer']).default('candidate'),
 });
 
 export type UpdateNotificationPreferencesResult =
@@ -56,7 +58,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 /**
  * Zapisuje (UPSERT) preferencje powiadomień zalogowanego użytkownika.
  *
- * @param input surowe dane (walidowane `preferencesSchema` — 7 pól bool + język i rola)
+ * @param input surowe dane (walidowane `preferencesSchema` — 7 pól bool + język strony)
  */
 export async function updateNotificationPreferences(
   input: unknown,
@@ -74,6 +76,12 @@ export async function updateNotificationPreferences(
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
+    // Rola dla dowodu zgody (#605): WYŁĄCZNIE z profilu sesji, nigdy z formularza klienta.
+    // Ten ekran ustawień istnieje tylko dla kandydata i pracodawcy — admin go nie ma.
+    const role: NotificationPreferencesRole | null =
+      me.role === 'candidate' || me.role === 'employer' ? me.role : null;
+    if (!role) return { ok: false, error: 'PERMISSION_DENIED' };
+
     // 4) RPC: upsert własnego wiersza + dowód zmiany zgody (0101).
     await withPortalTransaction(me, (tx) =>
       rpc(tx, 'set_notification_preferences', {
@@ -87,7 +95,7 @@ export async function updateNotificationPreferences(
           in_app_enabled: prefs.inAppEnabled,
         }),
         p_locale: prefs.locale,
-        p_wording_version: emailConsentWordingVersion(prefs.locale, prefs.role),
+        p_wording_version: emailConsentWordingVersion(prefs.locale, role),
       }),
     );
     return { ok: true };

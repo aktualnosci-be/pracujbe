@@ -5,44 +5,90 @@ zatwierdza administrator danych; roboczy projekt dla prawnika jest w
 [legal-drafts/retencja-i-prawa-kandydata.md](legal-drafts/retencja-i-prawa-kandydata.md)
 (nieopublikowany). W interfejsie są tylko neutralne etykiety funkcji (`accountData.*`).
 
-Migracja: `supabase/migrations/0105_data_retention_rights.sql`.
+Migracje: `supabase/migrations/0105_data_retention_rights.sql` (mechanizm) i
+`supabase/migrations/0127_retention_values.sql` (#574 — wartości z opracowania 2026-09-25,
+brakujące zadania, dead-letter kolejki storage).
+
+> **Harmonogram jest WYŁĄCZONY.** Wartości z opracowania (#573, decyzja właściciela
+> 25.09.2026) są w bazie, ale `/api/maintenance` woła `run_retention_purge` dopiero przy
+> jawnym `RETENTION_MODE=dry-run` albo `apply` (`src/lib/retention/mode.ts`). Brak zmiennej
+> albo inna wartość = żadne zadanie retencji nie działa — także sprzątanie plików i profili
+> oznaczonych do usunięcia. Harmonogram włącza właściciel po akceptacji testów RET-01…RET-13
+> (`legal-drafts/opracowanie-2026-09-25/wdrozenie/checklista-odbioru.md`) i danych operatora.
+> Kolejka fizycznego usuwania obiektów storage działa niezależnie od flagi (obsługuje też
+> usunięcie konta na wniosek).
 
 ## 1. Okresy retencji jako dane
 
 `public.retention_policies` — klucz kategorii → `period` (`interval`, 1–3650 dni) albo
-`null` (zadanie wyłączone). Zmiana tylko przez `admin_set_retention_policy(key, days)`
-(`is_admin()`, wpis `retention.policy_changed` w `audit_logs`). Rejestru usunięć nie da
-się skrócić poniżej 400 dni (musi przeżyć najstarszą kopię). Tabela jest niedostępna
-dla ról klienta.
+`null` (zadanie wyłączone), `warning_period` (ostrzeżenie przed usunięciem albo próg alarmu)
+i `enforcement` (kto egzekwuje: `job` = `run_retention_purge`, `monitoring` = czujka
+`ops_metrics`, `infrastructure` = poza bazą, `none` = brak zadania). Zmiana tylko przez
+`admin_set_retention_policy(key, days)` (`is_admin()`, wpis `retention.policy_changed` w
+`audit_logs`); wartości z 0127 zapisał wpis `retention.policies_seeded`. Rejestru usunięć
+nie da się skrócić poniżej 400 dni (musi przeżyć najstarszą kopię) — zmiana tego minimum
+dopiero po RET-09/RET-10, osobnym krokiem. Tabela jest niedostępna dla ról klienta.
 
-| Klucz | Domyślnie | Co robi zadanie po upływie okresu |
-|---|---|---|
-| `deleted_file` | 30 dni | usuwa wiersz `files` z `deleted_at`; obiekt storage trafia do kolejki |
-| `deleted_profile` | 30 dni | pełne usunięcie kandydata z `profiles.deleted_at` (np. oznaczonego przez admina) |
-| `closed_application` | wyłączone | usuwa aplikacje `rejected`/`withdrawn`/`offer_declined` (od `updated_at`) wraz z powiadomieniami i e-mailami o nich; ślad zgłoszenia gościa zostaje (FK → `null`) |
-| `inactive_candidate_cv` | wyłączone | oznacza CV kandydata bez aktywności (`last_seen_at`) jako usunięte → potem `deleted_file` |
-| `confirmed_guest_request` | do decyzji właściciela | **brak zadania** — tylko wartość konfigurowalna; cel i okres minimalnego śladu ustala właściciel |
-| `data_rights_request_log` | wyłączone | usuwa ślad obsługi wniosku |
-| `erasure_tombstone` | wyłączone (bez limitu) | usuwa wpis rejestru usunięć |
+| Klucz | Wartość (0127) | Egzekwuje | Co robi zadanie |
+|---|---|---|---|
+| `deleted_file` | 7 dni | job | wiersz `files` z `deleted_at` usuwany o `storage_physical_deletion` wcześniej (po 4 dniach), obiekt z kolejki — razem ≤ 7 dni |
+| `deleted_profile` | 7 dni | job | pełne usunięcie kandydata z `profiles.deleted_at` (jak wyżej, 4 dni + kolejka) |
+| `closed_application` | 180 dni | job | aplikacja w **każdym** stanie końcowym (`rejected`, `withdrawn`, `hired`, `offer_accepted`, `offer_declined`) od `closed_at`, razem z rozmowami tej aplikacji (wiadomości), powiadomieniami i e-mailami; ślad gościa traci powiązanie |
+| `inactive_candidate_cv` | 365 dni, ostrzeżenie 30 | job | e-mail `inactiveCvWarning`, po terminie usunięcie pliku CV (obiekt → kolejka) |
+| `inactive_candidate_account` | 730 dni, ostrzeżenie 30 | job | e-mail `inactiveAccountWarning`, po terminie `erase_candidate_subject` (kanał `retention`) |
+| `inactive_searchable_profile` | 180 dni | job | ukrycie profilu w wyszukiwarce firm (`is_searchable = false`, wpis `candidate_visibility_events`) |
+| `confirmed_guest_request` | 30 dni | job | usuwa potwierdzone zgłoszenie bez konta (bufor, nie aplikacja) od `confirmed_at` z jego e-mailami; aplikacja zostaje ze snapshotem gościa |
+| `unconfirmed_guest_request` | 7 dni | job | niepotwierdzone zgłoszenie usuwane 7 dni od **pierwszego** wysłania (`created_at`) — ponowny link nie przedłuża |
+| `guest_ip_user_agent` | 7 dni | job | zeruje IP i user-agent zgody gościa |
+| `acceptance_ip_user_agent` | 7 dni | job | zeruje IP i user-agent receiptu akceptacji przy rejestracji (0132, krok `retention_purge_receipts_batch`); receipt zostaje |
+| `data_rights_request_log` | 1095 dni | job | usuwa ślad obsługi wniosku |
+| `erasure_tombstone` | wyłączone (bez limitu) | job | usuwa wpis rejestru usunięć — **bez zmian** do RET-09/RET-10 |
+| `storage_physical_deletion` | 3 dni (72 h), alarm 1 dzień | monitoring | cel fizycznego usunięcia obiektu; czujka `storage_deletion_age` po 24 h |
+| `consent_evidence` | 1095 dni | none | dowody zgód i akceptacji — brak zadania (receipty niezmienne), osobny krok |
+| `audit_log` | 365 dni | none | zminimalizowany audyt — brak zadania (uzasadnienia DSA), osobny krok |
+| `security_log` | 30 dni | infrastructure | surowe logi Railway — ustawienie dostawcy |
+| `database_backup` | 14 dni kalendarzowych | infrastructure | kopie i eksporty (`scripts/db/backup.sh` liczy dziś kopie, nie dni — RET-09) |
 
-Zgłoszenia bez konta: tokeny i linki czyści `purge_guest_application_requests` (0095,
-wygasłe linki potwierdzenia — osobna zmiana #522). Ta zmiana nie dotyka tokenów gościa i nie
-usuwa automatycznie potwierdzonych zgłoszeń. Wyjątek: samoobsługowe usunięcie konta kasuje
-zgłoszenia przejęte przez to konto lub powiązane z jego aplikacjami (wniosek osoby).
+Zadania dla `job` działają dopiero przy `RETENTION_MODE=apply` (patrz ramka wyżej).
 
-Domyślne wartości dotyczą wyłącznie danych już oznaczonych jako usunięte. Kategorie,
-których okres wymaga decyzji administratora danych, startują wyłączone. `last_seen_at`
-nie jest dziś aktualizowany przy logowaniu — przed włączeniem `inactive_candidate_cv`
-trzeba to dołożyć (inaczej kryterium to data rejestracji).
+### 1a. Niezmienny `closed_at` aplikacji (RET-06)
+
+`applications.closed_at` ustawia trigger `trg_applications_closed_at` przy wejściu w stan
+końcowy. Zmiana w obrębie stanów końcowych, odczyt, powiadomienie, `updated_at` ani zapis
+wprost go nie przesuwają. Wyjście ze stanu końcowego (dziś niedozwolone przez
+`transition_application`) zeruje go i jest audytowane (`application.status_changed`, 0017).
+Istniejące aplikacje dostały czas wejścia w bieżący status z historii (inaczej `updated_at`).
+
+### 1b. Aktywność i ostrzeżenia (RET-05)
+
+`profiles.last_seen_at` ustawia trigger na `auth.sessions`: utworzenie sesji Better Auth
+(logowanie) i jej odświeżenie przy używaniu (`expires_at`), najwyżej raz na godzinę. Zadania
+tła (service_role) nie dotykają sesji, więc nie przedłużają aktywności; brak zgody na
+telemetrię nie ma znaczenia (to nie telemetria).
+
+Przed usunięciem CV albo konta zadanie zapisuje `retention_warnings` (kandydat, kategoria,
+aktywność, termin = później z `aktywność + okres` i `teraz + 30 dni`) i kolejkuje e-mail
+w języku odbiorcy (Invariant #1) z datą usunięcia. Usunięcie następuje dopiero po terminie
+z ostrzeżenia; nowa aktywność unieważnia ostrzeżenie (wiersz znika, następne dopiero po
+kolejnym okresie). Treść e-maili (`src/emails/copy.ts`) do akceptacji właściciela.
 
 ## 2. Zadanie w `/api/maintenance`
 
-Po dotychczasowych zadaniach: `run_retention_purge(200)` (service_role; partie z
-limitem, `FOR UPDATE SKIP LOCKED`, liczniki na kategorię), potem
-`processStorageDeletions` (`src/lib/storage-deletion.ts`). Odpowiedź zawiera same
-liczniki (`retention`, `storageDeletions`). Błąd RPC = 503. Nieudane usunięcie obiektu
-nie jest błędem przebiegu — wiersz kolejki wraca z backoffem (1 min · 2^n, maks. 1
-doba, maks. 20 prób; `last_error` = kod, bez ścieżki).
+Po dotychczasowych zadaniach, tylko przy `RETENTION_MODE`:
+
+- `apply` — `run_retention_purge(200, false)` (service_role; partie z limitem 200 na
+  kategorię, profile 50, `FOR UPDATE SKIP LOCKED`, liczniki na kategorię). Licznik
+  `fullBatches` = kategorie, które wyczerpały partię; worker woła kolejne partie (każda
+  w osobnej transakcji), aż zaległość zniknie, najwyżej 10 w jednym przebiegu (RET-08:
+  601 rekordów = 200/200/200/1).
+- `dry-run` — `run_retention_purge(200, true)`: ta sama partia w podtransakcji wycofanej
+  na końcu — liczniki bez zmian danych, bez ostrzeżeń i e-maili (`dryRun: 1`).
+- `off` (domyślnie) — baza nie jest wołana; odpowiedź `retention: { mode: 'off', batches: 0 }`.
+
+Potem zawsze `processStorageDeletions` (`src/lib/storage-deletion.ts`). Odpowiedź zawiera
+same liczniki (`retention`, `storageDeletions`). Błąd RPC = 503. Nieudane usunięcie obiektu
+nie jest błędem przebiegu — wiersz kolejki wraca z backoffem (1 min · 2^n, maks. 1 doba);
+po 20 próbach wiersz trafia do dead-letter (sekcja 3).
 
 **Warunek operacyjny:** zadanie działa dopiero z usługą cron wywołującą
 `/api/maintenance` (#13) i skonfigurowanym backendem. Sam kod i testy nie dowodzą
@@ -53,9 +99,17 @@ wykonania na produkcji.
 `storage_deletion_queue (bucket, path)` wypełnia trigger `AFTER DELETE` na `files` —
 każda ścieżka usunięcia (akcja kandydata, usunięcie konta, retencja, ponowne usunięcie
 po restore) zostawia zadanie usunięcia obiektu. Worker: `claim_storage_deletions`
-(dzierżawa 5 min) → usunięcie obiektu (prywatny bucket Railway z #26, gdy skonfigurowany;
-inaczej Supabase Storage) → `complete_storage_deletion`. Brak obiektu =
+(dzierżawa 5 min) → usunięcie obiektu z prywatnego bucketu Railway (#26; bez bucketu
+`STORAGE_UNCONFIGURED` i ponowienie, #27) → `complete_storage_deletion`. Brak obiektu =
 sukces. Ścieżka, która znów ma wiersz `files`, wypada z kolejki bez usuwania.
+
+**Dead-letter (RET-04, 0127).** 20. nieudana próba (albo porzucona dzierżawa po niej)
+ustawia `dead_lettered_at`: wiersz nie jest już pobierany, ale zostaje i podnosi alarm —
+`ops_metrics().storageDeletion` (`pending`, `oldestPendingAgeSeconds`, `deadLetters`),
+czujki `storage_deletion_dead_letter` (każdy wiersz) i `storage_deletion_age` (obiekt czeka
+> 24 h; cel 72 h) w `/api/health/ops`. Po usunięciu przyczyny:
+`requeue_storage_dead_letters(ids | null)` (service_role, audyt `storage.dead_letters_requeued`
+z samą liczbą) zeruje licznik prób.
 
 ### 3a. GC bucketu CV (#17, migracja 0117)
 
@@ -153,13 +207,27 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
   triggera kolejki (7f), dane z kopii bez rejestru (9).
 - `npm run test:backup` — kopia → usunięcie → odtworzenie bez rejestru (dane wracają)
   i z rejestrem (usunięte, CV w kolejce), zły rejestr = odmowa.
-- Unit: `account-data`, `storage-deletion`, `guest-apply-maintenance`, `job-expiry`.
+- `supabase/tests/rls.sql` sekcja **RV574** (0127) — wartości, `closed_at` (kontrola ujemna
+  bez triggera i starej reguły bez `hired`), `last_seen_at` z sesji, ostrzeżenie przed
+  usunięciem (kontrola ujemna: bez ostrzeżenia nic nie znika), ślad gościa, dry-run bez
+  zmian, 601 rekordów w partiach, dead-letter (kontrola ujemna: stary `complete`).
+- Unit: `account-data`, `storage-deletion`, `guest-apply-maintenance` (flaga `RETENTION_MODE`,
+  partie), `ops-sensors`, `retention-warning-email`, `job-expiry`.
 - E2E (demo): `candidate-account-data.spec.ts`.
 
 ## 8. Otwarte
 
-- Decyzje administratora danych: okresy kategorii wyłączonych, retencja kopii i
-  rejestru, informacja dla kandydatów (#61) — projekt w `legal-drafts/`.
+- Włączenie harmonogramu (`RETENTION_MODE`) — właściciel, po akceptacji testów RET-01…RET-13
+  i danych operatora; najpierw `dry-run` na produkcji i przegląd liczników.
+- Rejestr usunięć: minimum 400 dni i wartość 30 dni dopiero po RET-09/RET-10 (inwentarz kopii
+  ≤ 14 dni kalendarzowych, test odtworzenia z replay rejestru i wycofań zgód).
+- Brak zadań: dowody zgód 1095 dni, audyt 365 dni, `auth.email_outbox`, e-maile 30/90 dni,
+  zaproszenia do zespołu, przegląd starych otwartych aplikacji (180 dni), rozmowy niezależne
+  od aplikacji; `scripts/db/backup.sh` liczy kopie, nie dni.
+- Konto pracodawcy bez aktywności (dziś tylko kandydat).
+- E-mail o zmianie statusu dla gościa (#546) korzysta ze zgłoszenia `confirmed`; po 30 dniach
+  (`confirmed_guest_request`) zgłoszenie znika — język gościa trzeba przenieść na aplikację.
+- Informacja dla kandydatów (#61) — projekt w `legal-drafts/`.
 - Harmonogram `/api/maintenance` i eksportu rejestru usunięć (infrastruktura, #13).
 - Sprostowanie: edycja profilu istnieje; brak formularza wniosku o sprostowanie danych
   pochodnych (`matches`) i o ograniczenie/sprzeciw — dziś kanał kontaktu (#61).
@@ -167,5 +235,3 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
   przepływ.
 - Potwierdzenie usunięcia linkiem e-mail (dziś: sesja + wpisany adres) i powiadomienie
   firmy o wycofaniu danych kandydata.
-- Panele i akcje nadal na kliencie Supabase; po #24/#25 te same RPC pod
-  `withUserTransaction`.

@@ -1,9 +1,9 @@
 -- =============================================================================
--- 0164_consent_receipt_version.sql  (numer tymczasowy — integrator nada ostateczny)
+-- 0142_consent_receipt_version.sql
 -- Dokończenie #349: receipt zgody cookies ma zapisywać wersję polityki, którą
 -- użytkownik FAKTYCZNIE widział (z cookie klienta), a nie zawsze bieżącą.
 --
--- Problem: `record_consent` (0043) zawsze dobierał AKTUALNĄ wersję dokumentu 'cookies'
+-- Problem: `record_consent` (0043, ciało z 0130) zawsze dobierał AKTUALNĄ wersję dokumentu 'cookies'
 -- (is_current = true) — jeśli polityka zmieniła się MIĘDZY wyświetleniem baneru a wysyłką
 -- (albo klient miał starszy cookie), receipt kłamał o tym, co użytkownik naprawdę widział.
 --
@@ -15,7 +15,7 @@
 --    zmienić już po tym, jak użytkownik ją zaakceptował, a receipt ma mówić prawdę o momencie
 --    zgody, nie o stanie bieżącym);
 --  - gdy wersja nieznana/brak parametru → CICHY FALLBACK do bieżącej wersji 'cookies'
---    (dokładnie jak w 0043) — NIE odrzucamy całego receiptu (log zgód jest best-effort,
+--    (dokładnie jak w 0043/0130) — NIE odrzucamy całego receiptu (log zgód jest best-effort,
 --    Invariant #8: awaria pomocniczego logu nie może zaburzyć zapisu zgody w przeglądarce)
 --    i NIE dodajemy nowej kolumny/flagi do `consents` — kolumna `consent_version_id` i tak
 --    wskazuje realny wiersz `consent_versions`, więc audytor odróżni „wersja z klienta"
@@ -25,6 +25,9 @@
 -- starą sygnaturę (5 argumentów) nową (6. argument `p_version`, DOMYŚLNIE null) i aktualizujemy
 -- tego jedynego wołającego w tym samym PR. Stara sygnatura jest jawnie usuwana (DROP), żeby
 -- w bazie nie zostały dwa przeciążenia tej samej funkcji.
+--
+-- Kategorie jak w 0130 (#570): necessary/preferences/analytics — klucz `marketing`
+-- ze starego klienta jest ignorowany.
 -- =============================================================================
 
 drop function if exists public.record_consent(jsonb, text, text, text, text);
@@ -44,14 +47,14 @@ declare
   v_src text;
   v_ip inet;
   cat text;
-  cats text[] := array['necessary', 'preferences', 'analytics', 'marketing'];
+  cats text[] := array['necessary', 'preferences', 'analytics'];
 begin
   -- Źródło z allow-listy (nieznane → baner).
   v_src := case when p_source in ('cookie_banner', 'cookie_settings', 'footer', 'onboarding')
                 then p_source else 'cookie_banner' end;
 
   -- Wersja z klienta (obcięta, pusta = brak) — przyjmujemy TYLKO, jeśli realnie istnieje
-  -- jako wiersz dokumentu 'cookies'; inaczej cichy fallback do bieżącej (jak w 0043).
+  -- jako wiersz dokumentu 'cookies'; inaczej cichy fallback do bieżącej (jak w 0043/0130).
   v_version_wanted := nullif(btrim(coalesce(left(p_version, 64), '')), '');
   if v_version_wanted is not null then
     select id into v_version from public.consent_versions

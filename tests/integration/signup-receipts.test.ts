@@ -93,6 +93,36 @@ describe('Atomowe receipty rejestracji', () => {
     expect(age.rows).toEqual([{ min_age: 18, source: 'signup' }]);
   });
 
+  // 0132: dowód akceptacji (zaufany adres + user-agent) trafia do receiptów, nie zostaje w koncie.
+  it.each([1, 2])('v%i: IP i user-agent w receiptach, usunięte z metadanych konta', async version => {
+    const id = await insert({
+      role: 'employer', locale: 'fr', agree_terms: true, signup_receipt_version: version,
+      ...(version === 2 ? { privacy_notice_ack: true, optional_consents: {}, consent_wording: {} } : {}),
+      company_name: 'Firma', receipt_ip: '203.0.113.9', receipt_user_agent: 'Mozilla/5.0 (test)',
+    });
+    const receipts = await admin!.query(
+      'SELECT host(ip_address) AS ip, user_agent FROM public.document_acceptances WHERE profile_id=$1', [id]);
+    expect(receipts.rows).toEqual([
+      { ip: '203.0.113.9', user_agent: 'Mozilla/5.0 (test)' },
+      { ip: '203.0.113.9', user_agent: 'Mozilla/5.0 (test)' },
+    ]);
+    const meta = (await admin!.query('SELECT raw_user_meta_data AS m FROM auth.users WHERE id=$1', [id])).rows[0].m;
+    expect(meta).not.toHaveProperty('receipt_ip');
+    expect(meta).not.toHaveProperty('receipt_user_agent');
+    // Pozostałe metadane (np. nazwa firmy do bootstrapu) zostają.
+    expect(meta).toMatchObject({ company_name: 'Firma', locale: 'fr' });
+  });
+
+  it('niepoprawny adres → receipt bez IP; user-agent obcięty do 512 znaków', async () => {
+    const id = await insert({
+      role: 'employer', locale: 'pl', agree_terms: true, signup_receipt_version: 1,
+      receipt_ip: 'nie-adres', receipt_user_agent: 'U'.repeat(900),
+    });
+    const receipts = await admin!.query(
+      'SELECT ip_address, char_length(user_agent) AS ua FROM public.document_acceptances WHERE profile_id=$1', [id]);
+    expect(receipts.rows).toEqual([{ ip_address: null, ua: 512 }, { ip_address: null, ua: 512 }]);
+  });
+
   // Nieznany język odrzuca klucz obcy profiles → supported_locales (0069, 23503) zanim
   // walidacja receiptów zdąży rzucić 23514; w obu przypadkach bez częściowego konta.
   it.each([
