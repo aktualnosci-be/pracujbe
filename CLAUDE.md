@@ -608,6 +608,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
   `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
   „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
+- [x] Profil publiczny firmy `/pracodawcy/<slug>` (#591, migracja `0140`): zastępuje CTA
+  „Dowiedz się więcej o firmie”, które prowadziło do wyszukiwarki po nazwie firmy
+  (`?keyword=<nazwa>` — mogło zwrócić oferty innej firmy albo nic). Adres jest stabilny:
+  `companies.slug` (unikalny, ustawiany raz przy zakładaniu firmy, NIE zmienia się przy zmianie
+  wyświetlanej nazwy — `src/lib/actions/company.ts`). `get_public_company`/`get_public_company_jobs`
+  (nowe RPC) i `get_public_job`/`get_public_jobs` (+ `company_slug`) zwracają WYŁĄCZNIE
+  zweryfikowaną, nieusuniętą firmę; zła firma/zły slug = brak wiersza → strona 404 (Invariant #8).
+  CTA na szczególe oferty (`job.companySlug`) jest ukryte, gdy profil nie istnieje (demo/bezpiecznik),
+  zamiast linkować donikąd. Strona indeksowalna (canonical, hreflang), sitemap dodaje jeden wpis na
+  firmę zebrany PRZY OKAZJI iteracji po ofertach (bez osobnego zapytania). Dowód: `rls.sql` sekcja
+  CP591; unit `company-profile`, `jobs-postgres` (#591), `sitemap-robots` (#591, z kontrolą ujemną).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
@@ -1527,15 +1538,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
-- [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
-  connect/img/font, Cloudflare Web Analytics od #570 (zamiast GA/Meta, usunięte); bez Sentry od #571).
-  Wariant nonce/strict-dynamic = follow-up (E2E). Analiza (#585, bez zmiany polityki):
-  `docs/CSP_NONCE_ANALYSIS.md` — inwentarz inline skryptów/stylów z buildu (pomiar Report-Only
-  `scripts/security/csp-inline-inventory.mjs`, poza CI; test `csp-inline-inventory`): blokują
-  chunki i ładunek RSC Next.js (nonce tylko per żądanie — koniec ISR, hash niemożliwy), skrypt
-  banera zgód (hash albo nonce), atrybuty `style` (next/image, paski postępu) i `<noscript><style>`;
-  JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile) nie blokują. Warianty A–D
-  do decyzji właściciela.
+- [~] CSP (P2-01, #585) — `next.config.mjs` (default/object/frame-ancestors/base/form-action +
+  zawężone connect/img/font, Cloudflare Web Analytics od #570 (zamiast GA/Meta, usunięte); bez
+  Sentry od #571). Analiza: `docs/CSP_NONCE_ANALYSIS.md` — inwentarz inline skryptów/stylów z
+  buildu (pomiar Report-Only `scripts/security/csp-inline-inventory.mjs`, poza CI; test
+  `csp-inline-inventory`): blokują chunki i ładunek RSC Next.js (nonce tylko per żądanie — koniec
+  ISR, hash niemożliwy), skrypt banera zgód (hash albo nonce), atrybuty `style` (next/image, paski
+  postępu) i `<noscript><style>`; JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile)
+  nie blokują. **Próba usunięcia `'unsafe-inline'` ze `script-src` zweryfikowana i COFNIĘTA** po
+  realnym buildzie (`next build` + `next start`, Chromium): bez niego skrypty RSC są blokowane
+  i hydracja każdej strony się psuje. Enforced `script-src` ZOSTAJE z `'unsafe-inline'` (bez
+  regresji); produkcja dostaje RÓWNOLEGŁY `Content-Security-Policy-Report-Only` z tą samą
+  dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptu banera zgód w `<head>` (jedno źródło
+  treści: `src/lib/security/csp-inline-scripts.mjs`; beacon CF jest zewnętrzny, bez treści
+  inline) — obserwowalny krok, nie pełne zamknięcie #585. Report-Only raportuje do osobnej grupy
+  `csp-report-only` (`/api/csp-report?policy=report-only`) z własnymi limitami (10 żądań/min
+  z adresu, 60 wpisów/min na proces; wpis `disposition=report` zawsze w tym budżecie), więc
+  szum skryptów RSC nie wypiera raportów egzekwowanej polityki (test `csp-report`). Dowód:
+  `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
+  ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
+  na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
   Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
   zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna

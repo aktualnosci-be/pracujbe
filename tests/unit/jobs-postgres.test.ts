@@ -157,6 +157,29 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
       expect(camel).not.toHaveProperty('validThrough');
     });
   });
+  it('#591: mapuje company_slug (link do profilu firmy), brak = CTA ukryte', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', company_slug: 'firma-x' }],
+      total: 1, page: 1, pageSize: 12,
+    });
+    const result = await getJobs({ locale: 'pl' });
+    expect(result.jobs[0]).toMatchObject({ companySlug: 'firma-x' });
+
+    adapters.detail.mockResolvedValue({ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', company_slug: 'firma-x' });
+    adapters.translations.mockResolvedValue([]);
+    const detail = await getJobBySlug('oferta', 'pl');
+    expect(detail).toMatchObject({ companySlug: 'firma-x' });
+  });
+  it('#591 kontrola ujemna: bez company_slug w wierszu pole zostaje puste (CTA profilu ukryte)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z' }],
+      total: 1, page: 1, pageSize: 12,
+    });
+    const result = await getJobs({ locale: 'pl' });
+    expect(result.jobs[0]).not.toHaveProperty('companySlug');
+  });
   it('brak oferty w bazie pozostaje brakiem oferty', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.detail.mockResolvedValue(null);
