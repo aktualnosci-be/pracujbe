@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
+Tabele w migracjach: 104; z danymi osobowymi: 68; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -26,6 +26,7 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 | Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, OpenAI (Responses API, model GPT-6 Luna) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
+| Tłumaczenia AI (rdzeń) (`ai-translation`) | Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0145). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone. | `public.translation_documents`, `public.translation_jobs`, `public.translation_source_revisions`, `public.translation_sources` | Railway, OpenAI (Responses API, model GPT-6 Luna) | deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej). |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575). | — | Railway | job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance). |
 | Analityka po zgodzie (`analytics-marketing`) | Beacon Cloudflare Web Analytics ładowany dopiero po zgodzie w kategorii analytics (#570: zamiast Google Analytics i Meta Pixel — usunięte); bezcookie'owy. | — | Cloudflare Web Analytics | Cookie zgody ważne 180 dni. |
 | Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.retention_warnings`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies (wartości #574, 0127); harmonogram WYŁĄCZONY do jawnego RETENTION_MODE=dry-run\|apply. Ślad wniosków 1095 dni; rejestr usunięć bez usuwania (minimum 400 dni do zmiany po RET-09/RET-10). |
@@ -131,11 +132,11 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 
 ### OpenAI (Responses API, model GPT-6 Luna) (`openai`)
 
-- **Cel w portalu:** Funkcje AI za flagami (decyzja właściciela 2026-09-26: wyłącznie model OpenAI „GPT-6 Luna”): import ogłoszenia o pracę do szkicu oferty, asystent redagowania treści oferty i import CV do propozycji pól profilu kandydata.
-- **Kategorie danych:** Import ogłoszenia: tekst strony po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła; Import ogłoszenia: albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia; Asystent treści: tytuł, opis, obowiązki i wymagania oferty napisane przez pracodawcę (e-maile, telefony i identyfikatory usunięte przed wysyłką); Import CV: tekst CV kandydata po lokalnej minimalizacji (bez pliku, nazwy pliku, kontaktów, referencji i danych szczególnych)
+- **Cel w portalu:** Funkcje AI za flagami (decyzja właściciela 2026-09-26: wyłącznie model OpenAI „GPT-6 Luna”): import ogłoszenia o pracę do szkicu oferty, asystent redagowania treści oferty, import CV do propozycji pól profilu kandydata i tłumaczenie pól tekstowych ofert/profili (#31/#32).
+- **Kategorie danych:** Import ogłoszenia: tekst strony po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła; Import ogłoszenia: albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia; Asystent treści: tytuł, opis, obowiązki i wymagania oferty napisane przez pracodawcę (e-maile, telefony i identyfikatory usunięte przed wysyłką); Import CV: tekst CV kandydata po lokalnej minimalizacji (bez pliku, nazwy pliku, kontaktów, referencji i danych szczególnych); Tłumaczenia: pola tekstowe oferty albo profilu w języku źródła (treść jak w portalu, bez maskowania kontaktów — #33/#34)
 - **Osoby:** Osoby wymienione w importowanym ogłoszeniu, Pracodawca wykonujący import lub redakcję (pośrednio), Kandydat importujący własne CV
-- **Aktywacja:** OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.
-- **Kod:** `src/lib/ai/openai.ts`, `src/lib/ai/model-config.ts`, `src/lib/ai-import/extract.ts`, `src/lib/ai-import/minimize.ts`, `src/lib/ai-assist/assist.ts`, `src/lib/ai-assist/guard.ts`, `src/lib/cv-import/extract.ts`, `src/lib/cv-import/minimize.ts`, `docs/AI_JOB_IMPORT.md`, `docs/AI_JOB_ASSIST.md`, `docs/AI_CV_IMPORT.md`
+- **Aktywacja:** OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED, AI_TRANSLATION_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.
+- **Kod:** `src/lib/ai/openai.ts`, `src/lib/ai/model-config.ts`, `src/lib/ai-import/extract.ts`, `src/lib/ai-import/minimize.ts`, `src/lib/ai-assist/assist.ts`, `src/lib/translation/openai-provider.ts`, `src/lib/ai-assist/guard.ts`, `src/lib/cv-import/extract.ts`, `src/lib/cv-import/minimize.ts`, `docs/AI_JOB_IMPORT.md`, `docs/AI_JOB_ASSIST.md`, `docs/AI_CV_IMPORT.md`
 - **Uwaga:** Wszystkie wywołania idą przez jednego klienta (src/lib/ai/openai.ts): structured output (strict), bez narzędzi, store: false, bez logowania treści.
 - **Uwaga:** Import ogłoszeń i asystent nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.
 - **Uwaga:** Tekst ogłoszenia: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.
@@ -1108,6 +1109,56 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 |---|---|---|
 | `message` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
 | `context` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0007_misc.sql` |
+
+### `public.translation_documents`
+
+- **Migracja:** `supabase/migrations/0145_translation_queue.sql`
+- **Czynności:** Tłumaczenia AI (rdzeń)
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Aktualny przekład per język; korekta ręczna z autorem i wersją.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0145_translation_queue.sql` |
+| `fields` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0145_translation_queue.sql` |
+| `manual_author` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0145_translation_queue.sql` |
+
+### `public.translation_jobs`
+
+- **Migracja:** `supabase/migrations/0145_translation_queue.sql`
+- **Czynności:** Tłumaczenia AI (rdzeń)
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Zadania kolejki; `result` tylko jako propozycja przy zablokowanej korekcie ręcznej.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0145_translation_queue.sql` |
+| `result` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0145_translation_queue.sql` |
+| `last_error_code` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0145_translation_queue.sql` |
+
+### `public.translation_source_revisions`
+
+- **Migracja:** `supabase/migrations/0145_translation_queue.sql`
+- **Czynności:** Tłumaczenia AI (rdzeń)
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Niezmienne kopie pól źródła (treść oferty albo profilu — wolny tekst może zawierać dane osobowe).
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0145_translation_queue.sql` |
+| `fields` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0145_translation_queue.sql` |
+| `content_hash` | nie dotyczy: SHA-256 kanonicznej treści do wykrywania braku zmian, nie sekret. | — |
+
+### `public.translation_sources`
+
+- **Migracja:** `supabase/migrations/0145_translation_queue.sql`
+- **Czynności:** Tłumaczenia AI (rdzeń)
+- **Osoby:** Kandydaci (konto), Pracodawcy i członkowie firm
+- **Uwaga:** Głowa encji tłumaczonej (oferta albo profil kandydata): bieżąca rewizja i aktywność.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `entity_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0145_translation_queue.sql` |
 
 ## 4. Treść e-maili (payload kolejki → dostawca poczty)
 

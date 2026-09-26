@@ -119,7 +119,8 @@ describe('NotificationsList (#148)', () => {
     expect(markNotificationsRead).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.queryAllByRole('button', { name: /Oznacz jako przeczytane:/ })).toHaveLength(0);
     expect(screen.getByText('Brak nieprzeczytanych')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: t.markAllRead })).toBeDisabled();
+    // Status bywa ogłoszony, zanim przycisk wyjdzie ze stanu „Zapisywanie…” — czekamy i na niego.
+    await waitFor(() => expect(screen.getByRole('button', { name: t.markAllRead })).toBeDisabled());
   });
 
   it('otwarcie nieprzeczytanej pozycji oznacza tylko ją; przeczytanej — nic', async () => {
