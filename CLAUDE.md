@@ -834,14 +834,19 @@ osobach trzecich, dane osobowe, kategorie art. 9/10, kontakty i linki usunięte;
 nagłówkiem dokumentu → bezpieczne zatrzymanie) → PODGLĄD tekstu dla kandydata → po
 potwierdzeniu ponowna redakcja na serwerze i model OpenAI (structured output, tylko zawody/
 umiejętności/języki/certyfikaty/lata) → PROPOZYCJE ze źródłem i niepewnością, domyślnie
-niezaznaczone → zapis wyłącznie zaznaczonych RPC `apply_candidate_cv_proposals` (dopisanie,
-`FOR UPDATE`, limity kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
+niezaznaczone → kandydat może poprawić wartość każdej propozycji (nazwa, poziom języka, lata;
+bez wywołania modelu) — `src/lib/cv-import/approved.ts` = elementy `step2/3/5Schema` kreatora
+(`CANDIDATE_ITEM_LIMITS`), błąd przy polu i fokus na pierwszym błędnym polu → zapis wyłącznie
+zaznaczonych RPC `apply_candidate_cv_proposals` (akcja waliduje ponownie tym samym schematem —
+wartość spoza limitu po edycji = `VALIDATION_FAILED` bez bazy; dopisanie, `FOR UPDATE`, limity
+kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
 propozycji nie zapisujemy; CV nie trafia do firm, wynik nie wpływa na `scoreMatch`. Limit 5/h
 i 10/dobę na konto (fail-closed). Dowód: `rls.sql` sekcja CV487 (kontrola ujemna replace-all);
-unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimalizacji); E2E
-`cv-import.spec` (atrapa). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
+unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimalizacji;
+`cv-import-approved`/`-actions`: edycja za długa = odrzucenie na serwerze, kontrola ujemna
+schematu bez limitu); E2E `cv-import.spec` (atrapa, edycja z błędem pola). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
 `docs/legal-drafts/cv-ai-osoby-trzecie.md` (#485/#486/#488/#61) przed włączeniem, AV i izolacja
-parsera, edycja wartości propozycji.
+parsera.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).

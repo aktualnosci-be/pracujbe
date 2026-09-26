@@ -1,7 +1,5 @@
 'use server';
 
-import { z } from 'zod/v3';
-
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
@@ -19,12 +17,10 @@ import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
 import { cvImportModel, cvImportProvider } from '@/lib/cv-import/config';
 import { estimateCvImportCost } from '@/lib/cv-import/cost';
 import { OpenAiCvExtractor, FixtureCvExtractor } from '@/lib/cv-import/extract';
-import { isDisallowedProposalText } from '@/lib/cv-import/minimize';
-import { CV_PROPOSAL_LIMITS } from '@/lib/cv-import/proposals';
+import { cvApprovedProposalsSchema } from '@/lib/cv-import/approved';
 import { prepareCvImport, proposeFromCv } from '@/lib/cv-import/run';
 import type { CvTextProblem } from '@/lib/cv-import/text';
 import type { CvApprovedProposals, CvProposal, CvRedactionSummary } from '@/lib/cv-import/types';
-import { CANDIDATE_ITEM_LIMITS, candidateLanguageSchema } from '@/lib/validation/candidate';
 import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
 
 /**
@@ -35,8 +31,9 @@ import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
  *      zredagowany tekst i liczniki usuniętych fragmentów do podglądu.
  *   2. `proposeFromCvAction` — po potwierdzeniu zakresu przez kandydata: ponowna redakcja na
  *      serwerze, wywołanie modelu, walidacja → PROPOZYCJE (nic nie jest zapisywane).
- *   3. `applyCvProposals` — wyłącznie pozycje zaznaczone przez kandydata → jedno RPC
- *      `apply_candidate_cv_proposals` (0115: dopisanie w jednej transakcji, limity).
+ *   3. `applyCvProposals` — wyłącznie pozycje zaznaczone (i ewentualnie poprawione) przez
+ *      kandydata → walidacja schematami kroków kreatora (`cvApprovedProposalsSchema`) → jedno
+ *      RPC `apply_candidate_cv_proposals` (0115: dopisanie w jednej transakcji, limity).
  *
  * Autoryzacja: zalogowane konto KANDYDATA z sesji serwera (`getPortalIdentity`, rola z bazy);
  * zapis pod RLS jako ten użytkownik (`withPortalTransaction`) — import dotyczy wyłącznie
@@ -162,28 +159,6 @@ export async function proposeFromCvAction(text: unknown): Promise<ProposeFromCvR
   }
 }
 
-const itemLine = (max: number) =>
-  z
-    .string()
-    .trim()
-    .min(1)
-    .max(max)
-    .refine((v) => !isDisallowedProposalText(v));
-
-/** Zatwierdzone pozycje — te same limity co kreator onboardingu i RPC 0115. */
-const approvedSchema = z
-  .object({
-    occupations: z.array(itemLine(CANDIDATE_ITEM_LIMITS.occupation)).max(CV_PROPOSAL_LIMITS.occupations).default([]),
-    skills: z.array(itemLine(CANDIDATE_ITEM_LIMITS.skill)).max(CV_PROPOSAL_LIMITS.skills).default([]),
-    languages: z
-      .array(candidateLanguageSchema.refine((l) => !isDisallowedProposalText(l.language)))
-      .max(CV_PROPOSAL_LIMITS.languages)
-      .default([]),
-    certificates: z.array(itemLine(CANDIDATE_ITEM_LIMITS.certificate)).max(CV_PROPOSAL_LIMITS.certificates).default([]),
-    experienceYears: z.number().int().min(0).max(60).nullable().default(null),
-  })
-  .strict();
-
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
@@ -194,7 +169,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 export async function applyCvProposals(input: unknown): Promise<ApplyCvProposalsResult> {
   const provider = cvImportProvider();
   if (!provider) return { ok: false, error: 'NOT_FOUND' };
-  const parsed = approvedSchema.safeParse(input);
+  const parsed = cvApprovedProposalsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v: CvApprovedProposals = parsed.data;
   const total = v.occupations.length + v.skills.length + v.languages.length + v.certificates.length;
