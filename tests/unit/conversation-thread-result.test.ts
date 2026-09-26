@@ -13,34 +13,37 @@ import * as portal from '@/lib/db/portal';
 
 const ME = '11111111-1111-4111-8111-111111111111';
 
-type Stage = 'auth' | 'conversation' | 'messages' | 'members' | 'profiles' | 'companies' | 'team';
+type Stage = 'auth' | 'conversation' | 'messages' | 'members' | 'profiles' | 'companyName' | 'team';
 
-const QUERY: Record<Exclude<Stage, 'auth'>, string> = {
+const ROW_QUERY: Record<Exclude<Stage, 'auth' | 'companyName'>, string> = {
   conversation: 'messages.conversation',
   messages: 'messages.thread-page',
   members: 'messages.thread-other-members',
   profiles: 'messages.profile-names',
-  companies: 'messages.company-names',
   team: 'messages.company-members',
 };
 
 function setup(failing?: Stage, missing = false) {
   resetFakeDb({ id: ME, role: 'candidate' } as PortalIdentity);
   const failure = pgError('XX000', 'private database detail');
-  const rows: Record<Exclude<Stage, 'auth'>, unknown[]> = {
+  const rows: Record<Exclude<Stage, 'auth' | 'companyName'>, unknown[]> = {
     conversation: missing ? [] : [{ id: 'thread-1', subject: 'Praca', company_id: 'company-1' }],
     messages: [{ id: 'message-1', body: 'Dzień dobry', sender_id: 'other', is_system: false, created_at: '2026-09-23T00:00:00Z' }],
     members: [{ profile_id: 'other' }],
     profiles: [{ id: 'other', first_name: 'Anna', last_name: 'Nowak' }],
-    companies: [{ id: 'company-1', name: 'Firma' }],
     team: [],
   };
-  for (const [stage, name] of Object.entries(QUERY) as Array<[Exclude<Stage, 'auth'>, string]>) {
+  for (const [stage, name] of Object.entries(ROW_QUERY) as Array<[Exclude<Stage, 'auth' | 'companyName'>, string]>) {
     fakeDb.rows(name, () => {
       if (failing === stage) throw failure;
       return rows[stage];
     });
   }
+  // Nazwa firmy (0143) — RPC gejtowane `is_conversation_member`, nie odczyt tabeli `companies`.
+  fakeDb.rpc('get_conversation_company_name', () => {
+    if (failing === 'companyName') throw failure;
+    return 'Firma';
+  });
   fakeDb.rpc('get_message_attachments', []);
   const spy = failing === 'auth' ? vi.spyOn(portal, 'getPortalIdentity').mockRejectedValueOnce(failure) : null;
   return { failure, spy };
@@ -63,7 +66,7 @@ describe('odczyt wątku rozmowy', () => {
     expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it.each<Stage>(['auth', 'conversation', 'messages', 'members', 'profiles', 'companies', 'team'])(
+  it.each<Stage>(['auth', 'conversation', 'messages', 'members', 'profiles', 'companyName', 'team'])(
     'zwraca jawny błąd etapu %s bez ujawniania szczegółów', async (stage) => {
       const { failure, spy } = setup(stage);
       expect(await getConversationThread('thread-1')).toEqual({ status: 'error' });
