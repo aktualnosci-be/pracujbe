@@ -1,0 +1,24 @@
+# Cloudflare Worker z Cron Triggers — zastępczy harmonogram zadań pracuj.be (bez usługi cron
+# w Railway). Opis, sekrety i wdrożenie: docs/CLOUDFLARE_CRON.md. Plik NIE zawiera sekretów:
+# EMAIL_QUEUE_SECRET i MAINTENANCE_SECRET ustawia się wyłącznie `wrangler secret put`.
+name = "pracujbe-cron"
+main = "src/worker.mjs"
+compatibility_date = "2026-09-01"
+
+# Worker nie obsługuje żądań HTTP (tylko `scheduled`) — bez adresu *.workers.dev i bez tras.
+workers_dev = false
+preview_urls = false
+
+[triggers]
+# Czas UTC. Kolejka e-mail co 5 minut, maintenance co godzinę — jak scripts/railway-cron-call.mjs
+# (docs/railway/README.md). Zmiana harmonogramu = zmiana CRON_TASKS w src/worker.mjs.
+crons = ["*/5 * * * *", "0 * * * *"]
+
+[vars]
+# Adres produkcji (tylko https, bez ścieżki). Zadania są stałe w kodzie workera.
+CRON_BASE_URL = "https://pracuj.be"
+# Limit czasu jednego wywołania w sekundach (1–600; brak = 120).
+CRON_TIMEOUT_SECONDS = "120"
+
+[observability]
+enabled = true

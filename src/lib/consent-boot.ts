@@ -1,4 +1,5 @@
 import { CONSENT_COOKIE_NAME, CONSENT_POLICY_VERSION } from '@/lib/consent';
+import { buildConsentBootScript } from '@/lib/security/csp-inline-scripts.mjs';
 
 /**
  * Atrybut na <html>, który przed pierwszym malowaniem ukrywa baner zgód renderowany
@@ -18,19 +19,16 @@ export const NOSCRIPT_HIDE_BANNER = '<style>#cookie-banner{display:none}</style>
  *
  * Skrypt tylko CZYTA cookie — nic nie zapisuje i niczego nie ładuje (Invariant #7). O zgodzie
  * dalej decyduje `CookieConsent` po hydratacji (usuwa atrybut, gdy `getConsent()` go nie
- * potwierdzi). CSP: `script-src` dopuszcza dziś `'unsafe-inline'`; przy przejściu na nonce
- * ten skrypt musi dostać nonce.
+ * potwierdzi). CSP (#585): egzekwowany `script-src` nadal ma `'unsafe-inline'` (wymagają go
+ * wbudowane skrypty RSC Next.js); hash sha256 tego skryptu (`next.config.mjs` liczy go z tej
+ * samej `buildConsentBootScript`) jest tylko w równoległym `Content-Security-Policy-Report-Only`.
+ * Zmiana treści bez przeliczenia hasha dałaby fałszywe raporty (strażnik:
+ * tests/unit/csp-inline-scripts.test.ts).
  */
 export function consentBootScript(): string {
-  const name = JSON.stringify(`${CONSENT_COOKIE_NAME}=`);
-  const version = JSON.stringify(CONSENT_POLICY_VERSION);
-  const attribute = JSON.stringify(CONSENT_BOOT_ATTRIBUTE);
-  return (
-    `(function(){try{var p=${name},c=document.cookie?document.cookie.split('; '):[];` +
-    `for(var i=0;i<c.length;i++){if(c[i].indexOf(p)!==0)continue;` +
-    `var r=JSON.parse(decodeURIComponent(c[i].slice(p.length)));` +
-    `if(r&&typeof r==='object'&&r.v===${version}&&typeof r.ts==='string'&&typeof r.id==='string'` +
-    `&&r.categories&&typeof r.categories==='object')` +
-    `document.documentElement.setAttribute(${attribute},'set');return}}catch(e){}})();`
-  );
+  return buildConsentBootScript({
+    cookieName: CONSENT_COOKIE_NAME,
+    policyVersion: CONSENT_POLICY_VERSION,
+    attribute: CONSENT_BOOT_ATTRIBUTE,
+  });
 }

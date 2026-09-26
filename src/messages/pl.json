@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "Termin na odwołanie zacznie biec, gdy otrzymasz powiadomienie o decyzji.",
     "appealStatusLabel": "Odwołanie {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Oferty pracy w firmie {name}",
+    "metaDescription": "Zobacz aktywne oferty pracy firmy {name} na Pracuj.be.",
+    "noDescription": "Ta firma nie dodała jeszcze opisu.",
+    "jobsHeading": "Aktywne oferty tej firmy",
+    "empty": "Ta firma nie ma teraz żadnych aktywnych ofert.",
+    "backToJobs": "Zobacz wszystkie oferty pracy"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Ładowanie...",
