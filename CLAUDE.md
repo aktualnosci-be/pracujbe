@@ -1696,7 +1696,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
-  cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  cron kopii/odtworzenia), odmiana i aliasy miast w SQL.
+  Blokada sieci w testach Vitest (#47): `tests/setup.ts` (setupFiles obu projektów, także
+  `chromium`) instaluje `tests/helpers/network-guard.ts` — `net.Socket#connect` (http/https/tls/
+  undici/`fetch`/`pg`) i `globalThis.fetch` do hosta spoza localhost/127.0.0.0/8/::1 i
+  `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
+  dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
+  po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
+  Chromium z Playwrighta to osobny proces (poza blokadą). Integracja PG (`vitest.integration.config.ts`)
+  bez zmian. Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
   Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
