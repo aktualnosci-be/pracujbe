@@ -39,7 +39,7 @@ function setup(failing?: Stage, missing = false) {
       return rows[stage];
     });
   }
-  // Nazwa firmy (0166) — RPC gejtowane `is_conversation_member`, nie odczyt tabeli `companies`.
+  // Nazwa firmy (0143) — RPC gejtowane `is_conversation_member`, nie odczyt tabeli `companies`.
   fakeDb.rpc('get_conversation_company_name', () => {
     if (failing === 'companyName') throw failure;
     return 'Firma';

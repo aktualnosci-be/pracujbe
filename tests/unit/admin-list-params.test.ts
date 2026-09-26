@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  decodeAdminPriorityCursor,
+  encodeAdminPriorityCursor,
+  parseReportFlagged,
+  parseReportSort,
   decodeAdminCursor,
   encodeAdminCursor,
   normalizeAdminSearch,
@@ -134,5 +138,44 @@ describe('granice dnia w Europe/Brussels (#417)', () => {
     expect(appDayStartUtc('2025-2-1')).toBeNull();
     expect(appDayStartUtc("2025-01-01' or 1=1")).toBeNull();
     expect(appDayStartUtc(undefined)).toBeNull();
+  });
+});
+
+describe('kolejka przeglądu DSA (#42): kolejność, filtr, kursor', () => {
+  it('domyślna kolejność: priorytet dla kolejki DSA, najnowsze dla reszty; jawna wartość wygrywa', () => {
+    expect(parseReportSort(undefined, 'dsa_notice')).toBe('priority');
+    expect(parseReportSort(undefined, 'all')).toBe('newest');
+    expect(parseReportSort('newest', 'dsa_notice')).toBe('newest');
+    expect(parseReportSort('priority', 'quality')).toBe('priority');
+    expect(parseReportSort('evil', 'all')).toBe('newest');
+  });
+
+  it('filtr oflagowanych tylko dla dokładnego „1”', () => {
+    expect(parseReportFlagged('1')).toBe(true);
+    for (const raw of [undefined, null, '', '0', 'true', '11']) expect(parseReportFlagged(raw)).toBe(false);
+  });
+
+  it('kursor kolejki: pełna precyzja czasu, termin pusty, odrzucenie śmieci i kursora „najnowsze”', () => {
+    const cursor = {
+      priority: 3,
+      dueAt: '2026-10-01T09:00:00.123456+00:00',
+      createdAt: '2026-09-20T10:00:00.654321+00:00',
+      id: '5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d',
+    };
+    expect(decodeAdminPriorityCursor(encodeAdminPriorityCursor(cursor))).toEqual(cursor);
+    const noDue = { ...cursor, priority: 0, dueAt: null };
+    expect(decodeAdminPriorityCursor(encodeAdminPriorityCursor(noDue))).toEqual(noDue);
+    const b64 = (raw: string) => Buffer.from(raw, 'utf8').toString('base64url');
+    for (const bad of [
+      b64(`p1|4|-|${cursor.createdAt}|${cursor.id}`),
+      b64(`p1|1|jutro|${cursor.createdAt}|${cursor.id}`),
+      b64(`p1|1|-|${cursor.createdAt}|x' or 1=1`),
+      b64(`p2|1|-|${cursor.createdAt}|${cursor.id}`),
+      encodeAdminCursor({ createdAt: cursor.createdAt, id: cursor.id }),
+      'not base64!',
+      null,
+    ]) {
+      expect(decodeAdminPriorityCursor(bad)).toBeNull();
+    }
   });
 });

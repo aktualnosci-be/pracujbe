@@ -162,6 +162,7 @@ export function EmployerShell({
       notificationError={notificationError}
       notifItems={mode === 'demo' ? notifItems : (notifItems ?? [])}
       unreadMessages={unreadMessages}
+      notificationsHref="/employer/powiadomienia"
     >
       {mode === 'error' ? <ShellLoadError /> : null}
       {children}

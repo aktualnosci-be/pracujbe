@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-/** Test IDs are injected by playwright.config.ts; all tracker requests are intercepted. */
-const TRACKER_URL = /^https:\/\/(www\.googletagmanager\.com|[a-z0-9.-]*google-analytics\.com|connect\.facebook\.net|www\.facebook\.com)\//;
+/** Test token is injected by playwright.config.ts; all tracker requests are intercepted. */
+const TRACKER_URL = /^https:\/\/([a-z0-9.-]*\.)?cloudflareinsights\.com\//;
 const SECRET = 'B'.repeat(43);
 
-test('jednorazowe linki nie uruchamiają GA ani Meta po wcześniejszej zgodzie', async ({ page, context, baseURL }) => {
+test('jednorazowe linki nie uruchamiają beaconu Cloudflare Web Analytics po wcześniejszej zgodzie', async ({ page, context, baseURL }) => {
   const consent = {
-    v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
+    v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
     categories: { necessary: true, preferences: true, analytics: true, marketing: true },
     ts: new Date().toISOString(),
     id: 'one-time-link-tracking-e2e',

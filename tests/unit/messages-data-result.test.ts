@@ -46,7 +46,7 @@ describe('wynik wczytania listy rozmów', () => {
     expect(fakeDb.callsTo('messages.my-memberships').at(-1)).toMatchObject({ values: [ME], as: ME });
   });
 
-  it('składa listę: druga strona pod RLS, podsumowanie z RPC (w tym nazwa firmy, #25/0166)', async () => {
+  it('składa listę: druga strona pod RLS, podsumowanie z RPC (w tym nazwa firmy, #25/0143)', async () => {
     fakeDb
       .rows('messages.my-memberships', [{ conversation_id: 'c1', last_read_at: null }, { conversation_id: 'c2', last_read_at: null }])
       .rows('messages.conversations', [

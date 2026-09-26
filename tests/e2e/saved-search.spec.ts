@@ -51,8 +51,8 @@ async function acceptNecessaryCookies(page: Page): Promise<void> {
     {
       name: 'pracujbe_consent',
       value: JSON.stringify({
-        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
-        categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+        categories: { necessary: true, preferences: false, analytics: false },
         ts: '2026-01-01T00:00:00.000Z',
         id: 'saved-search-e2e',
       }),
@@ -178,4 +178,22 @@ test('/wypisz-alert bez naruszeń WCAG A/AA (critical/serious) przy 320 px', asy
   const blocking = await blockingViolations(page);
   expect(blocking, blocking.join('\n')).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
+test('one-click alertu (RFC 8058): GET tylko 303 na /wypisz-alert, POST bez bazy → 503, token kategorii → 400', async ({ request }) => {
+  const token = alertToken();
+  const get = await request.get(`/api/email/unsubscribe-alert?t=${encodeURIComponent(token)}&l=fr`, { maxRedirects: 0 });
+  expect(get.status()).toBe(303);
+  const redirect = new URL(get.headers()['location']!);
+  expect(redirect.pathname).toBe('/fr/wypisz-alert');
+  expect(redirect.search).toBe('');
+  expect(redirect.hash).toBe(`#t=${encodeURIComponent(token)}`);
+
+  const form = { headers: { 'content-type': 'application/x-www-form-urlencoded' }, data: 'List-Unsubscribe=One-Click' };
+  const post = await request.post(`/api/email/unsubscribe-alert?t=${encodeURIComponent(token)}&l=fr`, form);
+  expect(post.status()).toBe(503);
+  // Kontrola ujemna: token wypisania z całej kategorii nie wyłącza alertu tą drogą.
+  const category = createUnsubscribeToken({ profileId: ALERT_PROFILE, category: 'job_matches' }, E2E_UNSUBSCRIBE_SECRET);
+  const bad = await request.post(`/api/email/unsubscribe-alert?t=${encodeURIComponent(category)}`, form);
+  expect(bad.status()).toBe(400);
 });

@@ -14,6 +14,7 @@ import {
 } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
@@ -95,11 +96,7 @@ function isGuestApplyFixture(): boolean {
 
 async function requestMeta(): Promise<{ ip: string | null; userAgent: string | null }> {
   const store = await headers();
-  const ip =
-    store.get('x-real-ip')?.trim() ||
-    store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
-    null;
-  return { ip, userAgent: store.get('user-agent') };
+  return { ip: trustedClientIp(store), userAgent: store.get('user-agent') };
 }
 
 function fieldFromIssuePath(path: ReadonlyArray<string | number>): GuestApplyField | undefined {

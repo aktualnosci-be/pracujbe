@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0166_conversation_company_name.sql
+-- 0143_conversation_company_name.sql
 -- Etap 7 hardening (#25), otwarty punkt: „nazwa firmy w wiadomościach kandydata (od 0014)".
 --
 -- Od 0014 `companies` jest czytelne pod RLS tylko dla członków firmy

@@ -22,12 +22,14 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 ## 2. Zmienne środowiskowe (Production)
 
 - [ ] Wszystkie zmienne ustawione w Railway (`production`) — patrz [`DEPLOYMENT.md`](./DEPLOYMENT.md).
-- [ ] **`APP_MODE=production`** (SEC-19, fail-closed) ustawione jawnie w Railway — inaczej brak konfiguracji Supabase
-      cicho degraduje do trybu demo. W trybie production brak konfiguracji → **503 maintenance**
+- [ ] **`APP_MODE=production`** (SEC-19, fail-closed) ustawione jawnie w Railway — inaczej brak konfiguracji bazy
+      (PostgreSQL + Better Auth) cicho degraduje do trybu demo. W trybie production brak konfiguracji → **503 maintenance**
       (middleware) oraz `GET /api/health` → 503. Zweryfikuj `GET /api/health` = `{status:"ok"}`
       po wdrożeniu (readiness dla load-balancera/monitoringu).
-- [ ] `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `EMAIL_QUEUE_SECRET`,
-      `SENTRY_AUTH_TOKEN` jako **sekrety** (nie `NEXT_PUBLIC_*`).
+- [ ] `DATABASE_*`, `BETTER_AUTH_SECRET`, klucze dostawcy poczty (`EMAILLABS_*` albo
+      `RESEND_API_KEY`), `EMAIL_QUEUE_SECRET`, `FILE_DOWNLOAD_SECRET`, `ERROR_WEBHOOK_URL`
+      jako **sekrety** (nie `NEXT_PUBLIC_*`) — pełna lista:
+      [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODUKCJI.md).
 - [ ] Użyte są wyłącznie produkcyjne klucze i sekrety.
 - [ ] Turnstile (#46): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (dostępny przy buildzie) i sekret
       `TURNSTILE_SECRET_KEY`. Bez nich w produkcji rejestracja i reset hasła są odrzucane —
@@ -36,10 +38,11 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
       produkcji formularz gościa zwraca „chwilowo niedostępne” — patrz [`GUEST_APPLY.md`](./GUEST_APPLY.md).
 - [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
 
-## 3. Baza danych (Supabase produkcja)
+## 3. Baza danych (PostgreSQL Railway, produkcja)
 
-- [ ] Projekt `pracujbe-prod` (region EU), plan Pro (backupy/PITR).
-- [ ] Wszystkie migracje zastosowane (`supabase db push`), zgodne ze staging.
+- [ ] Usługa PostgreSQL Railway w regionie EU; osobne loginy ról (`npm run db:logins`).
+- [ ] Wszystkie migracje zastosowane (`npm run db:migrate:production`,
+      [`railway/MIGRACJE_POSTGRESQL.md`](./railway/MIGRACJE_POSTGRESQL.md)).
 - [ ] RLS enabled i zweryfikowane (patrz [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) §1).
 - [ ] **Seed OFF** — brak danych `is_demo = true` na produkcji:
       ```sql
@@ -47,7 +50,8 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
       select count(*) from companies where is_demo;    -- oczekiwane 0
       ```
 - [ ] Konta demo (`@pracuj.be` z seedu, hasło `DemoPass123!`) **nie istnieją** na produkcji.
-- [ ] Backupy włączone i przetestowany restore (przynajmniej próbny).
+- [ ] Backupy włączone i przetestowany restore (przynajmniej próbny) —
+      [`railway/BACKUP_RESTORE.md`](./railway/BACKUP_RESTORE.md).
 
 ## 4. Auth
 
@@ -69,7 +73,7 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 
 ## 6. Przepływy krytyczne (real, nie mock)
 
-- [ ] Rejestracja + logowanie + reset (Supabase Auth) w każdym języku.
+- [ ] Rejestracja + logowanie + reset (Better Auth) w każdym języku.
 - [ ] Onboarding kandydata (zapis per krok).
 - [ ] Aplikacja na ofertę — idempotentna (`UNIQUE candidate_id, job_id`).
 - [ ] Zmiany statusu aplikacji → historia + powiadomienie/e-mail do kandydata.
@@ -106,8 +110,9 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
 
 ## 10. Monitoring i obserwowalność
 
-- [ ] Sentry (client + server + edge) odbiera zdarzenia z produkcji; source maps uploadowane.
-- [ ] Alerty Sentry na wzrost błędów krytycznych.
+- [ ] Webhook błędów Discorda (`ERROR_WEBHOOK_URL`, #571; Sentry usunięte) odbiera zdarzenia z produkcji
+      (`/api/health` → `checks.errorWebhook`).
+- [ ] Czujki `/api/health/ops` podłączone do monitoringu (`docs/railway/OPERATIONS.md`).
 - [ ] Web Vitals są mierzone wybranym mechanizmem produkcyjnym.
 - [ ] `system_events` / `audit_logs` zapisują operacje wrażliwe.
 - [ ] Logi dispatchera kolejki e-mail obserwowane (brak narastającego `queued`/`failed`).
@@ -181,7 +186,7 @@ automatycznym `0.YYYYMMDD.M+SHA`.
 
 ## Po starcie (pierwsze 48 h)
 
-- [ ] Monitoruj Sentry i kolejkę e-mail.
+- [ ] Monitoruj kanał błędów (webhook Discorda) i kolejkę e-mail.
 - [ ] Sprawdź indeksowanie w Search Console (brak paneli/staging w indeksie).
 - [ ] Zweryfikuj dostarczalność e-maili (brak masowego spamu/bounce).
 - [ ] Potwierdź CWV z danych polowych.
@@ -194,5 +199,6 @@ automatycznym `0.YYYYMMDD.M+SHA`.
   [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md) ·
   [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) ·
   [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md) ·
-  [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) · [`RESEND_SETUP.md`](./RESEND_SETUP.md).
+  [`railway/README.md`](./railway/README.md) · [`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md) ·
+  [`RESEND_SETUP.md`](./RESEND_SETUP.md).
 </content>

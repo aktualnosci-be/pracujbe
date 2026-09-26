@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -19,11 +19,11 @@ import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminEmptyState, AdminPageHeader } from '@/components/admin/AdminListControls';
 import { BreachDeadlineBadge } from '@/components/admin/BreachDeadlineBadge';
+import { BreachExportButton } from '@/components/admin/BreachExportButton';
 import { BreachIncidentForm } from '@/components/admin/BreachIncidentForm';
 import { BreachNoticeForm } from '@/components/admin/BreachNoticeForm';
 import { BreachStatusActions } from '@/components/admin/BreachStatusActions';
 import {
-  BTN_SECONDARY,
   PANEL,
   PANEL_H2,
   PANEL_P,
@@ -150,20 +150,20 @@ export default async function AdminBreachDetailPage({ params }: PageProps) {
           />
           {exportable ? (
             <>
-              <a
-                href={`/api/admin/breaches/${exportId}/export?format=json`}
-                className={BTN_SECONDARY}
-              >
-                <Download className="size-4" aria-hidden="true" />
-                {t('breachExportJson')}
-              </a>
-              <a
-                href={`/api/admin/breaches/${exportId}/export?format=csv`}
-                className={BTN_SECONDARY}
-              >
-                <Download className="size-4" aria-hidden="true" />
-                {t('breachExportCsv')}
-              </a>
+              <BreachExportButton
+                id={exportId!}
+                format="json"
+                label={t('breachExportJson')}
+                pendingLabel={t('breachExportPending')}
+                errorLabel={t('breachExportError')}
+              />
+              <BreachExportButton
+                id={exportId!}
+                format="csv"
+                label={t('breachExportCsv')}
+                pendingLabel={t('breachExportPending')}
+                errorLabel={t('breachExportError')}
+              />
             </>
           ) : null}
         </div>

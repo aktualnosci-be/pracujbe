@@ -139,7 +139,7 @@ async function fetchProfileNames(
 }
 
 /**
- * Nazwa firmy KONWERSACJI (0166, #25) — `companies` jest czytelne pod RLS tylko dla członków
+ * Nazwa firmy KONWERSACJI (0143, #25) — `companies` jest czytelne pod RLS tylko dla członków
  * firmy (0014), więc kandydat nie widzi go wprost. RPC `get_conversation_company_name` gejtuje
  * po `is_conversation_member` (jak `get_conversation_summaries`, 0039) i zwraca WYŁĄCZNIE nazwę
  * firmy — nigdy imienia/nazwiska rekrutera (decyzja 0023).
@@ -496,7 +496,7 @@ export async function getConversationsResult(locale?: string): Promise<Conversat
         allOtherIds.add(pid);
       }
 
-      // 4) Nazwy stron (profile widoczne pod RLS) + PODSUMOWANIA konwersacji (0021/0039/0166,
+      // 4) Nazwy stron (profile widoczne pod RLS) + PODSUMOWANIA konwersacji (0021/0039/0143,
       // RPC gejtowane bieżącym dostępem `is_conversation_member`): ostatnia wiadomość, licznik
       // nieprzeczytanych i nazwa firmy konwersacji — bez pobierania WSZYSTKICH wiadomości
       // (P2#10) i bez odczytu `companies` wprost (0014 ogranicza go do członków firmy, więc

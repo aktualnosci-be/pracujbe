@@ -1,5 +1,7 @@
 # Remediacja audytu z 2026-07-23
 
+> **ARCHIWALNE — stan sprzed migracji na Railway (#27).** Zapis remediacji z lipca 2026 na stosie Supabase; bieżąca architektura: [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`railway/README.md`](./railway/README.md).
+
 Odpowiedź na `docs/audit/audyt-2026-07-23.md`. Status: **fixed** = naprawione i zweryfikowane,
 **partial** = częściowo (reszta w roadmapie), **deferred** = świadomie odłożone (budowa funkcji, nie luka).
 
