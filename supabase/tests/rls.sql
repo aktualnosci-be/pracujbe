@@ -10562,6 +10562,103 @@ select pg_temp.assert(
 rollback;
 
 -- ============================================================================
+-- TI610. Kontrakt stanu „used” linku rejestracji zaproszenia (0121/0133, #403): zużycie
+--        tokenu ustawia WYŁĄCZNIE `signup_token_used_at` — zaproszenie zostaje `pending`
+--        (czeka w panelu na odpowiedź), więc podgląd musi rozróżnić „zużyty” od „nieznany/
+--        wygasły/rozstrzygnięty” (oba dają dziś ten sam ogólny wynik bez tego rozróżnienia).
+--        Sekwencja preview → consume → preview, w izolacji od reszty sekcji TI403.
+-- ============================================================================
+\set TI610H '4802a5a392c15e002945132d8dc0aae0096930da591498eb7be1baf2b0432145'
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as ti610inv
+  from public.invite_company_member(:'TICA', 'kontrakt@ti.test', 'member', 'en', :'TI610H', 'nonce-ti610-0000000001') \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert((select outcome from public.team_invitation_signup_preview(:'TI610H')) = 'valid',
+  'TI610-1 przed zużyciem: podgląd ważny');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt@ti.test') = 'consumed',
+  'TI610-2 zużycie tokenu przez adres zaproszenia');
+reset role;
+select pg_temp.assert((select status from public.company_invitations where id = :'ti610inv') = 'pending',
+  'TI610-3 zużycie NIE zmienia statusu zaproszenia — nadal czeka w panelu');
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TI610H')) = 'used'
+  and (select company_name from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select role from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select email from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select locale from public.team_invitation_signup_preview(:'TI610H')) = 'en',
+  'TI610-4 po zużyciu: podgląd „used” jednoznacznie, bez danych zaproszenia');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt@ti.test') = 'used',
+  'TI610-5 ponowne zużycie tego samego tokenu → „used”, idempotentnie');
+reset role;
+
+-- ============================================================================
+-- TI611. Atomowy limit e-maili `teamInvitationSignup` na adres (0121/0133, #403): COUNT
+--        i INSERT w jednej sekcji krytycznej (advisory lock per adres) — limit trzyma się
+--        także wobec RÓWNOLEGŁYCH zaproszeń z różnych firm dla tego samego adresu bez konta.
+--        Fixture'y zatwierdza osobna sesja (jak PP/CO28) — dblink musi je widzieć niezależnie
+--        od tego, czy cały skrypt działa w owijającej transakcji BEGIN…ROLLBACK.
+-- ============================================================================
+\set TIL_H1 '17104f4ec0274b72592952ef5d3c800fd5d87a3414282c25317958a1500065cc'
+\set TIL_H2 '42721d9fafa7473a399b09158c61d748a27227d9e721cd4a2d62b4f1540ec38a'
+\set TIL_H3 '1ad1d255da034eb33c27c6f0dd2fff70b884e2c5941968727e6b220ce27cf213'
+\set TIL_H4 '3c1c27f78287451fada6bc547f150077698c0804e9ae39c694a0db34c5f23ceb'
+reset role; reset app.current_uid;
+select pg_temp.remote_connect('til_setup');
+select dbl.dblink_exec('til_setup', $fx$
+  insert into public.company_invitations(id, company_id, email, role, invited_by, locale, signup_token_hash) values
+    ('e6110000-0000-0000-0000-0000000000b1', 'e8800000-0000-0000-0000-0000000000f1',
+     'wyscig@ti.test', 'member', 'e8800000-0000-0000-0000-0000000000a1', 'pl',
+     '17104f4ec0274b72592952ef5d3c800fd5d87a3414282c25317958a1500065cc'),
+    ('e6110000-0000-0000-0000-0000000000b2', 'e8800000-0000-0000-0000-0000000000f2',
+     'wyscig@ti.test', 'member', 'e8800000-0000-0000-0000-0000000000a1', 'pl',
+     '42721d9fafa7473a399b09158c61d748a27227d9e721cd4a2d62b4f1540ec38a');
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts) values
+    (null, 'wyscig@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+     'company_invitation', 'e6110000-0000-0000-0000-0000000000b1', 'ti611-fixture-1', '{}'::jsonb,
+     now(), now(), 0),
+    (null, 'wyscig@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+     'company_invitation', 'e6110000-0000-0000-0000-0000000000b2', 'ti611-fixture-2', '{}'::jsonb,
+     now(), now(), 0);
+$fx$);
+select dbl.dblink_disconnect('til_setup');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'wyscig@ti.test') = 2,
+  'TI611-0 dwa wcześniejsze zaproszenia z różnych firm — dwa e-maile już w kolejce (2 z 3)');
+
+-- Dwie RÓWNOLEGŁE „odświeżenia” istniejących, oczekujących zaproszeń (firmy A i B, ten sam
+-- adres) — trzeci, ostatni wolny e-mail z limitu. Bez atomowej blokady obie transakcje
+-- mogłyby odczytać COUNT=2 i obie wstawić e-mail (4 zamiast najwyżej 3 na adres).
+select pg_temp.remote_begin('til_a', :'TIO') as til_pid_a \gset
+select pg_temp.remote_begin('til_b', :'TIO') as til_pid_b \gset
+select t.v as til_a_res from dbl.dblink('til_a',
+  'select (invitation_id::text || '':'' || created::text) from public.invite_company_member(''' || :'TICA' || ''', ''wyscig@ti.test'', ''member'', ''pl'', ''' || :'TIL_H3' || ''', ''nonce-ti611-0000000003'')')
+  as t(v text) \gset
+select dbl.dblink_send_query('til_b',
+  'select (invitation_id::text || '':'' || created::text) from public.invite_company_member(''' || :'TICB' || ''', ''wyscig@ti.test'', ''member'', ''pl'', ''' || :'TIL_H4' || ''', ''nonce-ti611-0000000004'')');
+select pg_temp.wait_blocked(:til_pid_b, 'TI611');
+select dbl.dblink_exec('til_a', 'commit');
+select pg_temp.remote_result('til_b') as til_b_res \gset
+select dbl.dblink_exec('til_b', 'commit');
+select dbl.dblink_disconnect('til_a'); select dbl.dblink_disconnect('til_b');
+select pg_temp.assert(
+  :'til_a_res' = 'e6110000-0000-0000-0000-0000000000b1:false'
+  and :'til_b_res' = 'e6110000-0000-0000-0000-0000000000b2:false',
+  'TI611-1 obie „odświeżenia” kończą się normalnie (limit e-maili nie wpływa na odpowiedź RPC)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'wyscig@ti.test') = 3,
+  'TI611-2 mimo równoległości: najwyżej 3 e-maile na adres (limit egzekwowany atomowo)');
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b1') = :'TIL_H3'
+  and (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b2') = :'TIL_H4',
+  'TI611-3 oba tokeny odświeżone niezależnie od tego, czy e-mail się zmieścił w limicie');
+
+-- ============================================================================
 -- MA (0119): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją
 -- send_message (idempotencja client_message_id i client_upload_id), dostęp tylko dla
 -- bieżących uczestników, kwarantanna scan_status, blokada firmy (#97), metadane plików

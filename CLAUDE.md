@@ -930,6 +930,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consume_team_invitation_signup`, raz, tylko ten adres). Konto powstaje bez firmy, a
   zaproszenie czeka w panelu po weryfikacji adresu. Wynik RPC niezależny od konta. Dowód:
   `rls.sql` sekcja TI403 (kontrole ujemne), unit `team-invitation-signup-*`, E2E `employer-team`.
+  Utwardzenie (#611/#610, migracja `0133`): limit „najwyżej 3 e-maile `teamInvitationSignup`
+  na adres / 24 h” jest teraz atomowy — advisory lock kluczowany adresem serializuje odczyt
+  licznika i wstawienie w `enqueue_team_invitation_signup_email` (jak `begin_checkout`, 0050),
+  więc równoległe zaproszenia z różnych firm dla tego samego adresu nie omijają limitu.
+  Doprecyzowany i przetestowany kontrakt stanu `used` w `team_invitation_signup_preview`
+  (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
+  TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
+  unit `team-invitation-signup-preview`.
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
