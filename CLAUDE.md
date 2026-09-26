@@ -15,6 +15,8 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
+Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: migracja 0137, brak
+usług cron, tryb demo za bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.

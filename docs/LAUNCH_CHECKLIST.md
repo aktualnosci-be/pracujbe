@@ -1,204 +1,186 @@
 # Checklista uruchomienia produkcyjnego
 
-Kompletna lista kontrolna przed startem `pracuj.be` w produkcji. Przejdź w kolejności;
-nie oznaczaj `[x]`, dopóki nie zweryfikowano na środowisku produkcyjnym.
-Powiązane: [`DEPLOYMENT.md`](./DEPLOYMENT.md),
-[`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md), [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md),
-[`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md).
+Lista kontrolna przed startem `pracuj.be` na Railway. Stan opisany na **26 września 2026**.
+Punkt oznaczamy `[x]` dopiero po sprawdzeniu na produkcji (odczyt, smoke, własne konto
+testowe operatora) — zielony test w CI nie jest odbiorem.
 
-Migracja backendu do Railway jest w toku. Ta lista opisuje warunki przyszłego
-odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
+Stack docelowy (bez alternatyw historycznych): jedna usługa web `pracujbe` na Railway z `main`
+(`Wait for CI`), PostgreSQL Railway + Better Auth (Supabase usunięte z runtime, #27), prywatny
+bucket Railway na CV, poczta **EmailLabs** (Resend tylko jako alternatywa), webhook błędów
+Discorda, analityka **Cloudflare Web Analytics** wyłącznie po zgodzie, **bezpłatny MVP** bez
+płatności (#51). Powiązane: [`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER_ROLLBACK.md)
+(kolejność włączania i rollback), [`railway/STATUS.md`](./railway/STATUS.md),
+[`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODUKCJI.md),
+[`RELEASE_1_0.md`](./RELEASE_1_0.md), [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md),
+[`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md).
 
 ---
 
-## 1. Domena i DNS
+## 0. Stan produkcji — 26 września 2026
 
-- [ ] Domena `pracuj.be` dodana w Railway i zweryfikowana (patrz [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)).
-- [ ] Rekordy DNS wskazują na domenę Railway; propagacja zakończona.
-- [ ] Przekierowanie `www.pracuj.be` → `pracuj.be` (lub odwrotnie) — jedna wersja kanoniczna.
-- [ ] SSL aktywny (certyfikat wystawiony), HTTP→HTTPS wymuszone, HSTS.
-- [ ] `NEXT_PUBLIC_SITE_URL=https://pracuj.be` w środowisku Production.
+| Obszar | Stan |
+|---|---|
+| Baza | migracje zastosowane do `0137` (usługa `db-migrator`) |
+| Tryb | `mode: "demo"` — `APP_MODE=production` **nieustawione** (decyzja właściciela) |
+| Bramka | `SITE_ACCESS_PASSWORD` aktywna: strony = 503 z formularzem hasła, `robots.txt` = `Disallow: /` |
+| `/api/health` | 200 `ok`; `databaseReachable`, `auth`, `authMail`, `rateLimit`, `turnstile`, `fileBucket`, `errorWebhook`, `emailProviderReady` (EmailLabs), `queueSecret`, `maintenanceSecret`, `cronSecretsSeparate` = `true` |
+| Braki w health | `emaillabsWebhook: false` (brak `EMAILLABS_WEBHOOK_SECRET`) |
+| Cron | **brak usług cron** (limit darmowego planu Railway) — `/api/email/process` i `/api/maintenance` nie są wywoływane |
+| AI | brak `ANTHROPIC_API_KEY`; funkcje AI za flagami, domyślnie wyłączone |
+| Kopia poza Railwayem | R2 (#569) odłożone — brak zaszyfrowanej kopii poza Railwayem |
+| Smoke | `node scripts/railway/prod-smoke.mjs` bez hasła: health i `robots.txt` OK, strony za bramką (oczekiwane) |
 
-## 2. Zmienne środowiskowe (Production)
+---
 
-- [ ] Wszystkie zmienne ustawione w Railway (`production`) — patrz [`DEPLOYMENT.md`](./DEPLOYMENT.md).
-- [ ] **`APP_MODE=production`** (SEC-19, fail-closed) ustawione jawnie w Railway — inaczej brak konfiguracji bazy
-      (PostgreSQL + Better Auth) cicho degraduje do trybu demo. W trybie production brak konfiguracji → **503 maintenance**
-      (middleware) oraz `GET /api/health` → 503. Zweryfikuj `GET /api/health` = `{status:"ok"}`
-      po wdrożeniu (readiness dla load-balancera/monitoringu).
-- [ ] `DATABASE_*`, `BETTER_AUTH_SECRET`, klucze dostawcy poczty (`EMAILLABS_*` albo
-      `RESEND_API_KEY`), `EMAIL_QUEUE_SECRET`, `FILE_DOWNLOAD_SECRET`, `ERROR_WEBHOOK_URL`
-      jako **sekrety** (nie `NEXT_PUBLIC_*`) — pełna lista:
-      [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODUKCJI.md).
-- [ ] Użyte są wyłącznie produkcyjne klucze i sekrety.
-- [ ] Turnstile (#46): `NEXT_PUBLIC_TURNSTILE_SITE_KEY` (dostępny przy buildzie) i sekret
-      `TURNSTILE_SECRET_KEY`. Bez nich w produkcji rejestracja i reset hasła są odrzucane —
-      patrz [`TURNSTILE.md`](./TURNSTILE.md).
-- [ ] Aplikacja bez konta (#98): sekret `GUEST_APPLY_SECRET` (≥ 32 znaki). Bez niego w
-      produkcji formularz gościa zwraca „chwilowo niedostępne” — patrz [`GUEST_APPLY.md`](./GUEST_APPLY.md).
-- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
+## 1. Blokery startu
 
-## 3. Baza danych (PostgreSQL Railway, produkcja)
+Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” blokuje start.
 
-- [ ] Usługa PostgreSQL Railway w regionie EU; osobne loginy ról (`npm run db:logins`).
-- [ ] Wszystkie migracje zastosowane (`npm run db:migrate:production`,
-      [`railway/MIGRACJE_POSTGRESQL.md`](./railway/MIGRACJE_POSTGRESQL.md)).
-- [ ] RLS enabled i zweryfikowane (patrz [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) §1).
-- [ ] **Seed OFF** — brak danych `is_demo = true` na produkcji:
+### 1a. Właściciel / infrastruktura / prawnik
+
+| # | Priorytet | Bloker | Skutek, gdy zostanie |
+|---|---|---|---|
+| W1 | **P0** | **Wywoływanie `/api/email/process`** (cron co 1–5 min). Dziś brak usługi cron. Opcje: płatny plan Railway z usługą cron (`docs/railway/README.md` §Cron), albo zewnętrzny harmonogram wołający publiczny HTTPS z sekretem (np. Cloudflare Workers Cron Triggers; endpoint odpowiada 401 bez sekretu) | **Brak e-maili potwierdzających konto i resetu hasła** (`auth.email_outbox` obsługuje ten sam worker) → nowy użytkownik nie zaloguje się; brak e-maili o aplikacjach, statusach, propozycjach, wiadomościach |
+| W2 | **P0** | **Wywoływanie `/api/maintenance`** co godzinę (inny sekret: `MAINTENANCE_SECRET`) | nie działa: wygaszanie ofert (`expire_due_jobs`; publiczna lista i tak ukrywa oferty po terminie), alerty zapisanych wyszukiwań, zwalnianie rezerwacji budżetu AI, czyszczenie tokenów gościa, kolejka usuwania plików, kampanie, retencja |
+| W3 | **P0** | Domena: CNAME `pracuj.be` → domena Railway w Cloudflare, SSL, jedna wersja kanoniczna (`www` → apex), `NEXT_PUBLIC_SITE_URL`/`BETTER_AUTH_URL` = `https://pracuj.be` ([`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)) | serwis niedostępny pod docelowym adresem |
+| W4 | **P0** | EmailLabs: domena nadawcy (SPF/DKIM/DMARC), konto SMTP z wyłączonym open trackingiem, webhook + `EMAILLABS_WEBHOOK_SECRET`, statusy „OK” włączone u wsparcia ([`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md)) | poczta w spamie; brak blokad po twardych odbiciach (#44) |
+| W5 | **P0** | Treść prawna: regulamin, polityka prywatności, polityka cookies, informacja o wieku, zgody (szkice w `docs/legal-drafts/`, nieopublikowane). Dziś strony są placeholderem z `noindex` | start bez podstawy prawnej przetwarzania i akceptacji regulaminu |
+| W6 | **P0** | Dane podmiotu (impressum, „O nas”), działający adres kontaktowy i `dmarc@` | brak wymaganej informacji o usługodawcy (DSA/e-commerce) |
+| W7 | **P0** | Kopia zapasowa: przed startem co najmniej potwierdzona kopia Railway i jeden próbny restore; R2 poza Railwayem (#569) świadomie odłożone — decyzja do zapisania ([`railway/BACKUP_RESTORE.md`](./railway/BACKUP_RESTORE.md)) | utrata danych bez drogi odtworzenia |
+| W8 | **P0** | Decyzje trybu: `APP_MODE=production` (krok 4 runbooka), potem zdjęcie `SITE_ACCESS_PASSWORD` | — (to jest sam start) |
+| W9 | P1 | Konto administratora: `profiles.role = 'admin'` dla właściciela (ręcznie w bazie) | brak weryfikacji firm → żadna oferta nie zostanie opublikowana |
+| W10 | P1 | Monitoring: `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL`, uptime na `/api/health` i `/api/health/ops` ([`railway/OPERATIONS.md`](./railway/OPERATIONS.md)) | awarie kolejek/bazy niewidoczne |
+| W11 | P1 | DPA i transfery dostawców (Railway, EmailLabs, Cloudflare, Discord; Anthropic dopiero przy włączeniu AI) — mapa: `docs/legal-drafts/dostawcy-i-transfery.md` | ryzyko RODO |
+| W12 | P1 | Okresy retencji i DSA (#40, #574): zatwierdzenie wartości, potem `RETENTION_MODE`, `DSA_RETENTION_MODE`, `STORAGE_GC_MODE` (dziś wyłączone/dry-run) — wymaga też W2 | dane trzymane bez terminu |
+| W13 | P2 | Cloudflare Web Analytics: `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (opcjonalne; bez niego beacon się nie ładuje) | brak statystyk ruchu |
+| W14 | P2 | AI: `ANTHROPIC_API_KEY` + DPA + ocena AI Act; do tego czasu **nie** ustawiaj `AI_JOB_IMPORT_ENABLED`, `AI_JOB_ASSIST_ENABLED`, `AI_CV_IMPORT_ENABLED` | — (funkcje wyłączone, nie blokuje startu) |
+| W15 | P2 | Google Search Console: domena, zgłoszenie plików `/sitemap/0.xml`, `/sitemap/1.xml` … (wypisane w produkcyjnym `robots.txt`; pojedynczego `/sitemap.xml` nie ma — #599) | wolniejsze indeksowanie |
+
+### 1b. Kod (do zrobienia przez sesje)
+
+| # | Priorytet | Luka | Uwagi |
+|---|---|---|---|
+| K1 | P1 | Harmonogram zastępczy dla W1/W2 bez płatnego planu Railway (np. Worker z Cron Trigger wołający `scripts/railway-cron-call.mjs`-owy kontrakt: POST, sekret w nagłówku, timeout) + dokumentacja | tylko po wyborze opcji przez właściciela; bez zmian w `.github/workflows` (minuty Actions) |
+| K2 | P1 | GC tabel technicznych w `/api/maintenance`: `email_deliveries_gc` (istnieje od `0022`, nie jest wołane), `processed_webhooks`, `rate_limit` (#17) | za flagą jak `RETENTION_MODE` |
+| K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
+| K4 | P2 | `/faq` to placeholder obok realnej `/pomoc` (#61) — przekierowanie 308 na `/pomoc` albo usunięcie trasy (dotyka E2E a11y/cache, `check-next-build`, smoke) | poza nawigacją, `noindex` |
+| K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |
+| K6 | P2 | Wersja polityki z cookie w receipcie zgody (`record_consent` bierze `consent_versions`) | wymaga migracji |
+| K7 | P2 | Domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | znane braki #24/#25 |
+| K8 | P2 | `npm run test:e2e:real` poza CI (gotowy fragment `ci.yml` — issues #351, #66) | decyzja o minutach CI |
+| K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
+
+---
+
+## 2. Domena i DNS
+
+- [ ] Domena `pracuj.be` w Railway zweryfikowana (CNAME w Cloudflare, [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)).
+- [ ] Jedna wersja kanoniczna (`www` → apex), SSL, HTTP→HTTPS, HSTS.
+- [ ] `NEXT_PUBLIC_SITE_URL=https://pracuj.be` (build), `BETTER_AUTH_URL` = ten sam origin.
+
+## 3. Zmienne środowiskowe (usługa `pracujbe`)
+
+Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODUKCJI.md).
+
+- [x] PostgreSQL + Better Auth + limiter: `DATABASE_APP_URL`, `DATABASE_SERVICE_URL`,
+      `DATABASE_AUTH_URL`, `DATABASE_AUTH_MAIL_URL`, `DATABASE_RATE_LIMIT_URL`,
+      `RATE_LIMIT_KEY_SECRET`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (health 26.09).
+- [x] Sekrety cron rozdzielone: `EMAIL_QUEUE_SECRET` ≠ `MAINTENANCE_SECRET`, bez `CRON_SECRET` (health 26.09).
+- [x] Turnstile (`NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`) — [`TURNSTILE.md`](./TURNSTILE.md) (health 26.09).
+- [x] Bucket CV (preset „AWS SDK”) + `FILE_DOWNLOAD_SECRET` (health 26.09).
+- [x] `ERROR_WEBHOOK_URL` (Discord, #571) (health 26.09).
+- [x] EmailLabs: `EMAILLABS_APP_KEY`, `EMAILLABS_SECRET_KEY`, `EMAILLABS_SMTP_ACCOUNT`, `EMAIL_FROM` (health `emailProviderReady` 26.09).
+- [ ] `EMAILLABS_WEBHOOK_SECRET` (health `emaillabsWebhook: false`) — W4.
+- [ ] `GUEST_APPLY_SECRET` (≥ 32 znaki) i `EMAIL_UNSUBSCRIBE_SECRET` ustawione (health ich nie raportuje — sprawdź listę nazw zmiennych).
+- [ ] `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL` — W10.
+- [ ] **`APP_MODE=production`** dopiero po decyzji właściciela (W8). W trybie produkcyjnym brak
+      konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
+- [ ] Nieustawione: `BILLING_ENABLED`, `STRIPE_*`, `AI_*_ENABLED`, zmienne Supabase, `CRON_SECRET`.
+- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` pusta (domyślnie `2.0`) albo zgodna z opublikowaną polityką.
+
+## 4. Baza danych
+
+- [x] PostgreSQL Railway, migracje do `0137` (`db-migrator`, `MIGRATION_MODE=status` po `apply`).
+- [ ] Loginy runtime po `verify` ([`railway/LOGINY_POSTGRESQL_ONE_OFF.md`](./railway/LOGINY_POSTGRESQL_ONE_OFF.md)).
+- [ ] Brak danych demonstracyjnych (seed nigdy nieuruchomiony na produkcji):
       ```sql
       select count(*) from jobs where is_demo;        -- oczekiwane 0
       select count(*) from companies where is_demo;    -- oczekiwane 0
       ```
-- [ ] Konta demo (`@pracuj.be` z seedu, hasło `DemoPass123!`) **nie istnieją** na produkcji.
-- [ ] Backupy włączone i przetestowany restore (przynajmniej próbny) —
-      [`railway/BACKUP_RESTORE.md`](./railway/BACKUP_RESTORE.md).
+- [ ] Kopia i próbny restore — W7.
 
-## 4. Auth
+## 5. Konta (Better Auth)
 
-- [ ] Konta Better Auth na PostgreSQL Railway (#24): `DATABASE_AUTH_URL`, `BETTER_AUTH_SECRET`,
-      `BETTER_AUTH_URL` = `https://pracuj.be`; `/api/health` z tokenem pokazuje `auth`/`authUrl` = true.
-- [ ] E-maile kont (potwierdzenie/reset) z kolejki `auth.email_outbox`: `DATABASE_AUTH_MAIL_URL` +
-      `RESEND_API_KEY` + cron `/api/email/process`; mail przychodzi w JĘZYKU ODBIORCY (Invariant #1).
-- [ ] Rate limits i (opcjonalnie) CAPTCHA włączone.
-- [ ] Reset hasła nie ujawnia istnienia konta.
+- [ ] Rejestracja kandydata i pracodawcy, potwierdzenie adresu, logowanie, reset w PL/NL/FR/EN
+      — **wymaga W1** (e-maile z `auth.email_outbox` wychodzą tylko przez `/api/email/process`).
+- [ ] Mail potwierdzający w języku odbiorcy (Invariant #1).
+- [ ] Reset hasła nie ujawnia istnienia konta; limiter i Turnstile aktywne.
 
-## 5. E-mail (Resend)
+## 6. E-mail (EmailLabs)
 
-- [ ] Domena wysyłkowa zweryfikowana (SPF/DKIM/DMARC) — [`RESEND_SETUP.md`](./RESEND_SETUP.md).
-- [ ] `EMAIL_FROM` na zweryfikowanej domenie; `EMAIL_REPLY_TO` działa.
-- [ ] Dispatcher kolejki (cron) skonfigurowany i chroniony `EMAIL_QUEUE_SECRET`.
-- [ ] Webhook Resend podłączony (delivered/opened/bounced/complained) z weryfikacją podpisu.
-- [ ] Test end-to-end: aplikacja/propozycja → `email_deliveries` `queued → sent` →
-      e-mail dociera w języku **odbiorcy**.
+- [ ] Domena nadawcy zweryfikowana, tracking wyłączony — W4, [`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md).
+- [ ] Harmonogram `/api/email/process` — W1; pierwsze wywołanie ręczne (kod 0).
+- [ ] Webhook `/api/email/webhook/emaillabs` z podpisem — W4.
+- [ ] Test end-to-end: aplikacja/propozycja → `email_deliveries` `queued → sent` → e-mail w języku **odbiorcy**.
+- [ ] Wypisanie z kategorii (`/wypisz`, nagłówek one-click) działa na odebranym mailu.
 
-## 6. Przepływy krytyczne (real, nie mock)
+## 7. Przepływy krytyczne (na produkcji, kontem testowym operatora)
 
-- [ ] Rejestracja + logowanie + reset (Better Auth) w każdym języku.
 - [ ] Onboarding kandydata (zapis per krok).
-- [ ] Aplikacja na ofertę — idempotentna (`UNIQUE candidate_id, job_id`).
-- [ ] Zmiany statusu aplikacji → historia + powiadomienie/e-mail do kandydata.
-- [ ] Propozycja pracy — idempotentna (`idempotency_key`), kolejka e-mail.
-- [ ] Wiadomości / powiadomienia in-app.
-- [ ] Język komunikacji = język odbiorcy we wszystkich powiadomieniach (Invariant #1).
+- [ ] Firma → weryfikacja przez admina (W9) → publikacja oferty.
+- [ ] Aplikacja idempotentna; zmiana statusu → historia + powiadomienie/e-mail.
+- [ ] Propozycja idempotentna; akceptacja/odrzucenie.
+- [ ] Wiadomości i powiadomienia in-app; upload i pobranie CV (link 60 s).
+- [ ] Aplikacja bez konta (gość) — potwierdzenie linkiem, wymaga W1.
 
-## 7. SEO
+## 8. SEO
 
-- [ ] `sitemap.xml` generuje tylko strony publiczne (bez paneli/staging).
-- [ ] `robots.txt` produkcyjny zezwala na indeksowanie stron publicznych; panele `noindex`.
-- [ ] `hreflang` + kanoniczne linki per język poprawne.
-- [ ] `JobPosting` JSON-LD na ofertach; `Article` na poradnikach.
-- [ ] Metadane (title/description/OG) uzupełnione; favicon i OG image z logo.
-- [ ] Google Search Console: domena zweryfikowana, sitemap zgłoszona.
+- [ ] Produkcyjny `robots.txt` wskazuje `/sitemap/<id>.xml`; w sitemap tylko strony publiczne.
+- [ ] `hreflang` + canonical per język; `JobPosting` na ofertach, `Article` na poradnikach.
+- [ ] Strony prawne indeksowalne dopiero po zatwierdzeniu treści (K3).
+- [ ] Search Console — W15.
 
-## 8. Wydajność i dostępność
+## 9. Prywatność / cookies
 
-- [ ] Lighthouse (mobile) spełnia cele — [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md).
-- [ ] Core Web Vitals w normie na kluczowych stronach.
-- [ ] Kontrast WCAG 2.2 AA, nawigacja klawiaturą.
+- [x] Baner i centrum zgód: kategorie necessary/preferences/analytics (marketing usunięty, #570).
+- [ ] Zero trackingu przed zgodą na produkcji: beacon Cloudflare dopiero po zgodzie `analytics`,
+      lejek ofert (#575) bez żądań przed zgodą (Invariant #7).
+- [ ] Polityki opublikowane (PL/NL/FR/EN) — W5; wersja w `consent_versions` (`is_current`).
+- [ ] Eksport i usunięcie konta kandydata (`/candidate/ustawienia`) sprawdzone kontem testowym.
+- [ ] Retencja — W12, K2.
 
-## 9. Prywatność / RODO / cookies
+## 10. Monitoring
 
-- [ ] Baner cookies + centrum ustawień (necessary/preferences/analytics/marketing).
-- [ ] **Zero trackingu przed zgodą** (GA/Pixel ładowane po zgodzie) — Invariant #7.
-- [ ] Polityka prywatności, regulamin, polityka cookies opublikowane (PL/NL/FR/EN),
-      wersjonowane w `consent_versions` (`is_current`).
-- [ ] Mechanizm eksportu/usunięcia danych na żądanie.
-- [ ] Minimalizacja danych; retencja zdefiniowana. **Retencja e-maili:** zaplanuj dzienny cron
-      wywołujący RPC `email_deliveries_gc(90)` (usuwa zakończone dostawy > 90 dni — adresy/treści;
-      RODO). Dane demo są oznaczone `is_demo=true` na tabelach procesowych (0022) — łatwe do
-      odfiltrowania/usunięcia (Invariant #12).
-
-## 10. Monitoring i obserwowalność
-
-- [ ] Webhook błędów Discorda (`ERROR_WEBHOOK_URL`, #571; Sentry usunięte) odbiera zdarzenia z produkcji
-      (`/api/health` → `checks.errorWebhook`).
-- [ ] Czujki `/api/health/ops` podłączone do monitoringu (`docs/railway/OPERATIONS.md`).
-- [ ] Web Vitals są mierzone wybranym mechanizmem produkcyjnym.
-- [ ] `system_events` / `audit_logs` zapisują operacje wrażliwe.
-- [ ] Logi dispatchera kolejki e-mail obserwowane (brak narastającego `queued`/`failed`).
+- [ ] Kanał Discorda odbiera błędy z produkcji.
+- [ ] `/api/health/ops` podłączone do monitoringu, bez alarmów kolejek po włączeniu W1/W2.
+- [ ] Logi Railway: retencja i dostęp ustalone.
 
 ## 11. CI/CD
 
-- [ ] `ci.yml` zielony na `main` (lint/typecheck/unit/migrations/sca/rls/build/e2e) na `ubuntu-latest`.
-- [ ] Railway śledzi `main`, a `Wait for CI` jest włączone.
-- [ ] Udane CI i wdrożenie Railway wskazują ten sam SHA.
+- [ ] `ci.yml` zielony na `main` (9 jobów, `ubuntu-latest`); `Wait for CI` włączone.
+- [ ] Wdrożony SHA (stopka / `version` w `/api/health`) = SHA z zielonego CI.
 
 ## 12. Bezpieczeństwo (skrót)
 
-- [ ] Pełna [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) przejrzana.
-- [ ] Service role key nieobecny w bundlu klienta.
-- [ ] Pliki wrażliwe tylko przez signed URLs.
-- [ ] Rate limiting / brute force / anty-bot aktywne.
-- [ ] Nagłówki bezpieczeństwa (CSP, HSTS, nosniff, referrer-policy).
+- [ ] [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) przejrzana dla Railway.
+- [ ] Nagłówki (CSP, HSTS, nosniff, referrer-policy, frame-ancestors) na domenie produkcyjnej.
+- [ ] Brak kluczy uprzywilejowanych w bundlu klienta; pliki tylko przez podpisane linki.
 
-## 13. Prawne / operacyjne
+## 13. Moduły
 
-- [ ] Dane kontaktowe i informacje o podmiocie (impressum) na stronie.
-- [ ] Adres `dmarc@pracuj.be` / `kontakt@pracuj.be` odbiera pocztę.
-- [ ] Zgłoszenia treści (`reports`) trafiają do moderacji.
-- [ ] Plan wsparcia / kontaktu na wypadek incydentu. Rejestr naruszeń w panelu (`/admin/naruszenia`, #490) gotowy; procedura to szkic do weryfikacji prawnika (`docs/legal-drafts/procedura-naruszen.md`).
+- [ ] **Płatności wyłączone (#51):** brak cennika/CTA zakupu w 4 językach,
+      `POST /api/stripe/webhook` → 404, `/pl/employer/platnosci` → `/pl/employer`.
+- [ ] **Moderacja:** zgłoszenia DSA (`/zglos-tresc`) i wiadomości trafiają do `/admin/zgloszenia`.
+- [ ] **Rejestr naruszeń** `/admin/naruszenia` dostępny; procedura to szkic
+      (`docs/legal-drafts/procedura-naruszen.md`).
+- [ ] **audit_logs:** wpisy po testowych operacjach z poprawnym `actor_id`.
 
-## 14. Moduły: firma / admin / płatności / pliki
+## 14. Odbiór wersji 1.0.0
 
-- [ ] **Storage:** migracja `0018_storage.sql` utworzyła prywatny bucket `candidate-files`
-      + polityki `storage.objects` (właściciel operuje tylko na własnym folderze). Bucket
-      **niepubliczny**; dostęp wyłącznie przez signed URLs. Zweryfikuj upload/pobranie CV.
-- [ ] **Admin:** co najmniej jedno konto ma `profiles.role = 'admin'` (nadawane ręcznie w DB,
-      NIE przez self-signup):
-      ```sql
-      update public.profiles set role='admin' where id = '<uuid właściciela>';
-      ```
-      `/admin` dostępny tylko dla admina (inni → 404). Weryfikacja firm (`admin_set_company_status`)
-      i moderacja zgłoszeń (`admin_resolve_report`) zapisują `audit_logs` (actor = admin).
-- [ ] **Firma pracodawcy:** rejestracja pracodawcy → `/employer/firma` (utworzenie firmy,
-      status `unverified`) → admin weryfikuje → dopiero `verified` pozwala publikować oferty
-      i wysyłać propozycje (egzekwowane w DB). Przejdź ten łańcuch end-to-end na produkcji.
-- [ ] **Płatności — wyłączone (bezpłatny MVP, #51):** w Railway NIE ustawiaj `BILLING_ENABLED`
-      (brak = wyłączone) ani `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`; jeśli zostały, usuń je.
-      Sprawdź na produkcji: brak cennika/pakietów/CTA zakupu w PL/NL/FR/EN,
-      `POST /api/stripe/webhook` → 404, `/pl/employer/platnosci` → przekierowanie na `/pl/employer`.
-      Publikacja ofert nie zależy od subskrypcji. Tabele finansowe zostają bez użycia (cleanup
-      osobno). Monetyzacja = nowa decyzja właściciela i osobny projekt.
-- [ ] **audit_logs:** przejrzyj wpisy po testowych operacjach (status aplikacji/oferty,
-      utworzenie/weryfikacja firmy) — obecne z poprawnym `actor_id`.
-
----
-
-## 15. Odbiór wersji 1.0.0
-
-Wykonaj na końcu, po sekcjach 1–14. Kryteria, blokery i kroki opisuje
-[`RELEASE_1_0.md`](./RELEASE_1_0.md). Do tego czasu build zostaje w trybie
-automatycznym `0.YYYYMMDD.M+SHA`.
-
-- [ ] Wszystkie blokery z `RELEASE_1_0.md` §2 zamknięte albo jawnie odłożone przez
-      właściciela w decyzji poniżej.
-- [ ] **Decyzja właściciela** o wydaniu 1.0.0 zapisana (link do komentarza w issue
-      albo `docs/railway/DECYZJE.md`): …
-- [ ] **Zielone CI** dla wydawanego commita na `main` (link do przebiegu): …
-- [ ] **Wdrożony SHA** w Railway `production` = SHA z zielonego CI (link do
-      wdrożenia): …
-- [ ] `PRACUJBE_RELEASE_VERSION=1.0.0` ustawione w Railway, build zakończony,
-      stopka pokazuje `v1.0.0+<pierwsze 8 znaków SHA>`.
-- [ ] Adnotowany tag `v1.0.0` na tym SHA wypchnięty (link do tagu): …
-- [ ] `CHANGELOG.md` ma sekcję `## [1.0.0] — RRRR-MM-DD`.
-
----
+Po sekcjach 1–13, wg [`RELEASE_1_0.md`](./RELEASE_1_0.md): decyzja właściciela, zielone CI,
+wdrożony SHA, `PRACUJBE_RELEASE_VERSION=1.0.0`, tag `v1.0.0`, sekcja w `CHANGELOG.md`.
 
 ## Po starcie (pierwsze 48 h)
 
-- [ ] Monitoruj kanał błędów (webhook Discorda) i kolejkę e-mail.
-- [ ] Sprawdź indeksowanie w Search Console (brak paneli/staging w indeksie).
-- [ ] Zweryfikuj dostarczalność e-maili (brak masowego spamu/bounce).
-- [ ] Potwierdź CWV z danych polowych.
-
----
-
-## Powiązane
-
-- [`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`RELEASE_1_0.md`](./RELEASE_1_0.md) ·
-  [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md) ·
-  [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) ·
-  [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md) ·
-  [`railway/README.md`](./railway/README.md) · [`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md) ·
-  [`RESEND_SETUP.md`](./RESEND_SETUP.md).
-</content>
+Harmonogram obserwacji: [`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER_ROLLBACK.md) §4 —
+smoke, `/api/health/ops`, kolejki e-mail, odbicia, 5xx, Search Console.
