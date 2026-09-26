@@ -1524,11 +1524,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
   APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
-  `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
-  6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
-  bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
-  `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
-  wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
+  `admin-a11y` (nowe trasy). **Zatwierdzone przez właściciela 26.09.2026 (#40):** okno
+  odwołania 6 mies., termin rozpatrzenia 14 dni, retencja 12 mies. (funkcje z 0104, strażnik
+  `dsa-approved-terms` z kontrolą ujemną). **Do ustalenia:** zakres publikacji i przekazywania
+  do bazy DSA, treść prawna o procedurze (prawnik — bez tekstów prawnych w UI). Harmonogram
+  czyszczenia: `/api/maintenance` woła `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE`
+  (`dry-run`/`apply`, domyślnie wyłączone, liczniki w odpowiedzi;
+  `src/lib/admin/dsa-retention-mode.ts`); na produkcji ustawione `DSA_RETENTION_MODE=dry-run`
+  — działa dopiero, gdy cron woła `/api/maintenance`. Odwołanie
   zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
   wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
   `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
