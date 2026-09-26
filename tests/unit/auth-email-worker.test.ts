@@ -42,7 +42,12 @@ function delivery(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function fakePool(rows: unknown[], { completed = true, completeThrows = false } = {}) {
+const RETRY_AT = new Date('2026-09-26T01:00:00Z');
+
+function fakePool(rows: unknown[], {
+  completed = true, completeThrows = false,
+  budget = 'granted' as 'granted' | 'denied' | 'throws',
+} = {}) {
   const calls: { sql: string; params?: unknown[] }[] = [];
   return {
     calls,
@@ -50,6 +55,11 @@ function fakePool(rows: unknown[], { completed = true, completeThrows = false } 
       calls.push({ sql, params });
       if (sql.includes('expire_emails')) return { rows: [{ expired: 0 }] };
       if (sql.includes('claim_emails')) return { rows };
+      if (sql.includes('take_send_budget')) {
+        if (budget === 'throws') throw new Error('function auth.take_send_budget(text) does not exist');
+        return { rows: [budget === 'granted' ? { granted: true, retry_at: null } : { granted: false, retry_at: RETRY_AT }] };
+      }
+      if (sql.includes('defer_email')) return { rows: [{ deferred: true }] };
       if (sql.includes('complete_email')) {
         if (completeThrows) throw new Error('connection terminated: anna@example.com hdr.payload.sig');
         return { rows: [{ completed }] };
@@ -144,6 +154,46 @@ describe('processAuthEmailBatch', () => {
     const pool = fakePool([{ niepoprawny: true }]);
     const result = await processAuthEmailBatch(pool as never, { send }, { baseURL, from: 'x <x@pracuj.be>' });
     expect(result).toMatchObject({ ok: false, skipped: 'claim error' });
+  });
+});
+
+describe('budżet okna dostawcy (pula auth, 0137)', () => {
+  const second = '44444444-4444-4444-8444-444444444444';
+
+  it('pobiera budżet dla szablonu listu tuż przed wysyłką', async () => {
+    const pool = fakePool([delivery(), delivery({ id: second, kind: 'password_reset' })]);
+    const result = await processAuthEmailBatch(pool as never, { send }, { baseURL, from: 'x <x@pracuj.be>' });
+    expect(result).toMatchObject({ sent: 2, deferred: 0, ok: true });
+    expect(pool.calls.filter((c) => c.sql.includes('take_send_budget')).map((c) => c.params?.[0]))
+      .toEqual(['accountConfirmation', 'passwordReset']);
+  });
+
+  it('odmowa budżetu → brak wysyłki, to i pozostałe zlecenia odłożone bez fail_email', async () => {
+    const pool = fakePool([delivery(), delivery({ id: second })], { budget: 'denied' });
+    const result = await processAuthEmailBatch(pool as never, { send }, { baseURL, from: 'x <x@pracuj.be>' });
+    expect(result).toMatchObject({ processed: 2, sent: 0, failed: 0, deferred: 2, ok: true });
+    expect(send).not.toHaveBeenCalled();
+    expect(pool.calls.some((c) => c.sql.includes('fail_email'))).toBe(false);
+    expect(pool.calls.filter((c) => c.sql.includes('defer_email')).map((c) => c.params)).toEqual([
+      ['11111111-1111-4111-8111-111111111111', '33333333-3333-4333-8333-333333333333', RETRY_AT],
+      [second, '33333333-3333-4333-8333-333333333333', RETRY_AT],
+    ]);
+    // Budżet pobierany raz — po odmowie paczka się zatrzymuje.
+    expect(pool.calls.filter((c) => c.sql.includes('take_send_budget'))).toHaveLength(1);
+  });
+
+  it('awaria poboru budżetu → list konta wychodzi (fail-open), błąd w kanale bez sekretów', async () => {
+    const pool = fakePool([delivery()], { budget: 'throws' });
+    const result = await processAuthEmailBatch(pool as never, { send }, { baseURL, from: 'x <x@pracuj.be>' });
+    expect(result).toMatchObject({ sent: 1, deferred: 0, ok: true });
+    expect(vi.mocked(captureError)).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ area: 'auth.email.budget' }));
+    expectNoSecretsInCapturedErrors();
+  });
+
+  it('błąd renderu nie zużywa budżetu', async () => {
+    const pool = fakePool([delivery()]);
+    await processAuthEmailBatch(pool as never, { send }, { baseURL: 'http://pracuj.be', from: 'x <x@pracuj.be>' });
+    expect(pool.calls.some((c) => c.sql.includes('take_send_budget'))).toBe(false);
   });
 });
 
