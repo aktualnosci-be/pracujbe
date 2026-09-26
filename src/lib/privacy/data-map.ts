@@ -973,6 +973,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     note:
       'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
   },
+  'public.job_duplications': {
+    activities: ['companies'],
+    subjects: ['employer'],
+    columns: { created_by: 'reference' },
+    note:
+      'Klucz idempotencji „Kopiuj jako szkic” (0216): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
+  },
 
   // --- Płatności (wyłączone, #51) --------------------------------------------------------------
   'public.subscriptions': BILLING('Martwy schemat billingu; provider_customer_id identyfikuje firmę u dostawcy płatności.'),

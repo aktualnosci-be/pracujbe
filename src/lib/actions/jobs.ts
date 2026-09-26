@@ -53,6 +53,8 @@ import {
  *                          jedno transakcyjne RPC `update_published_job` (kompletność jak przy
  *                          publikacji, firma verified, CAS po `updated_at`); status i zgłoszenia
  *                          bez zmian.
+ *   - `duplicateJobAsDraft` — „Kopiuj jako szkic” (0216): nowy szkic z treścią oferty
+ *                          w dowolnym statusie, jednym RPC `duplicate_job_as_draft`.
  *   - `publishJob`      — ustawia `status = 'active'`, `published_at = now()`. Publikacja wymaga
  *                          firmy `verified` (RLS/with-check); niezweryfikowaną firmę mapujemy
  *                          proaktywnie na `COMPANY_NOT_VERIFIED` (backstop: RLS).
@@ -115,6 +117,7 @@ function asString(value: unknown, fallback = ''): string {
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
+  if (m.includes('COMPANY_SUSPENDED')) return 'COMPANY_SUSPENDED';
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
@@ -228,6 +231,67 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
     if (id === null) return { ok: false, error: 'PERMISSION_DENIED' };
     if (!id) return { ok: false, error: 'INTERNAL' };
     return { ok: true, id };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * duplicateJobAsDraft — „Kopiuj jako szkic”
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Tworzy nowy SZKIC w aktywnej firmie z treścią istniejącej oferty (dowolny status) —
+ * jedno transakcyjne RPC `duplicate_job_as_draft` (0216): recruiter+, firma niezawieszona,
+ * oferta bez decyzji moderacyjnej, idempotentnie po `clientKey` (UUID jednej operacji
+ * w przeglądarce — podwójne kliknięcie i ponowienie zwracają ten sam szkic), audyt
+ * `job.duplicated`. Nie kopiuje statusu, slugu, dat publikacji/wygaśnięcia, zgłoszeń ani
+ * decyzji przeglądu pytań screeningowych.
+ */
+export async function duplicateJobAsDraft(
+  jobId: string,
+  clientKey: string,
+): Promise<CreateDraftResult> {
+  if (typeof clientKey !== 'string' || !UUID_RE.test(clientKey) || typeof jobId !== 'string') {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  // Tryb demo: identyfikatory ofert demonstracyjnych nie są UUID — bez zapisu.
+  if (!isPortalDataConfigured()) return { ok: true, id: DEMO_DRAFT_ID, demo: true };
+  if (!UUID_RE.test(jobId)) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const allowed = await checkRateLimit('job-draft', {
+      identifier: me.id,
+      max: DRAFT_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
+
+    const outcome = await withPortalTransaction(
+      me,
+      async (tx): Promise<{ id: string } | { error: ErrorCode }> => {
+        // Oferta musi należeć do AKTYWNEJ firmy (FUN-07) — lista pokazuje tylko jej oferty.
+        const companyId = await getActiveCompanyId(tx, me.id);
+        if (!companyId) return { error: 'PERMISSION_DENIED' };
+        const job = await queryOne<Record<string, unknown>>(tx, 'jobs.duplicate-source',
+          'SELECT company_id FROM public.jobs WHERE id = $1 AND deleted_at IS NULL', [jobId]);
+        if (asString(job?.['company_id']) !== companyId) return { error: 'NOT_FOUND' };
+        const id = await rpc<string>(tx, 'duplicate_job_as_draft', {
+          p_job_id: jobId,
+          p_client_key: clientKey,
+        });
+        return typeof id === 'string' && id ? { id } : { error: 'INTERNAL' };
+      },
+    );
+    if ('error' in outcome) return { ok: false, error: outcome.error };
+
+    revalidatePath('/employer/oferty');
+    revalidatePath('/employer');
+    return { ok: true, id: outcome.id };
   } catch (error) {
     return { ok: false, error: failureCode(error) };
   }

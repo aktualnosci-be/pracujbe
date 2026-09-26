@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
+import { DuplicateJobButton } from "@/components/employer/DuplicateJobButton";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
@@ -38,6 +39,9 @@ import {
  *
  * #325: aktywną i wstrzymaną ofertę można poprawić („Edytuj" → kreator w trybie edycji,
  * RPC `update_published_job`), a aktywną obejrzeć publicznie („Zobacz ofertę").
+ *
+ * 0216: każdą ofertę (dowolny status) można skopiować jako nowy szkic („Kopiuj jako szkic”,
+ * RPC `duplicate_job_as_draft`) — potem kreator nowego szkicu.
  */
 export const dynamic = "force-dynamic";
 
@@ -207,6 +211,10 @@ export default async function EmployerOffersPage({
                     </div>
                   </dl>
                   <div className="mt-auto flex flex-wrap items-center gap-[9px] pt-[14px]">
+                    {/* 0216: kopia oferty w dowolnym statusie jako nowy szkic (recruiter+). */}
+                    {canRecruitHere ? (
+                      <DuplicateJobButton jobId={offer.id} title={offer.title} />
+                    ) : null}
                     {offer.status === "draft" ? (
                       !canRecruitHere ? null : (
                       <Link className={BTN_SECONDARY} href={`/employer/oferty/${offer.id}/edycja`}>

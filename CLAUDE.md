@@ -936,6 +936,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `job-terms-notification`.
   **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
   zmieniło.
+- [x] Kopiuj jako szkic (migracja `0216` — numer tymczasowy): przycisk „Kopiuj jako szkic” przy
+  każdej ofercie listy `/employer/oferty` (dowolny status, recruiter+; `DuplicateJobButton`,
+  klucz UUID operacji w `useRef` — podwójne kliknięcie/ponowienie po błędzie sieci = ten sam
+  szkic) → akcja `duplicateJobAsDraft` (oferta aktywnej firmy, limiter `job-draft`) → jedno RPC
+  `duplicate_job_as_draft(job, client_key)` → kreator nowego szkicu (`/employer/oferty/<id>/edycja`;
+  demo = pusty kreator). Kopiowane: kolumny `jobs` z listy dozwolonych `save_job_draft` +
+  `default_locale`/`is_demo`, tłumaczenie w języku oferty (bez `meta_*` i innych języków),
+  wymagania, umiejętności, języki, certyfikaty, pytania screeningowe — BEZ decyzji
+  `screening_question_reviews` (trigger 0103 zgłasza nowy przegląd dla nowej oferty). Nie
+  kopiuje: statusu, slugu, `published_at`, `expires_at`, zgłoszeń, liczników, lejka, blokady
+  moderacyjnej. Idempotencja: blokada doradcza + `job_duplications` (unikat konto + klucz,
+  RPC-only; ten sam klucz dla innej oferty = `VALIDATION_FAILED`). Cudza firma = `NOT_FOUND`,
+  member = `PERMISSION_DENIED`, firma zawieszona (status albo blokada) = `COMPANY_SUSPENDED`
+  (`errors.companySuspended`), oferta z decyzją moderacyjną = `MODERATION_LOCKED`
+  (`dashboard.duplicateJobModerationLocked`); audyt `job.duplicated`. Dowód: `rls.sql` sekcja
+  JD216 (kontrole ujemne: bramka recruiter+, wpis klucza), unit `job-duplicate-draft`, E2E
+  `employer-job-duplicate` (demo, 4 języki, axe 320 px).
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”

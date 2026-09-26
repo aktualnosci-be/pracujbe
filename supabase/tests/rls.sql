@@ -13925,4 +13925,185 @@ select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- JD216. „Kopiuj jako szkic” (0216): duplicate_job_as_draft — nowy szkic w tej samej firmie
+--        z treścią, relacjami i pytaniami (bez decyzji przeglądu), bez statusu/slugu/dat;
+--        recruiter+, idempotencja po kluczu klienta, audyt, odmowa dla zawieszonej firmy
+--        i oferty z decyzją moderacyjną; kontrole ujemne.
+-- ============================================================================
+\set OWNJD  'e2160000-0000-0000-0000-0000000000a1'
+\set RECJD  'e2160000-0000-0000-0000-0000000000a2'
+\set MEMJD  'e2160000-0000-0000-0000-0000000000a3'
+\set OUTJD  'e2160000-0000-0000-0000-0000000000a4'
+\set COMPJD 'e2160000-0000-0000-0000-0000000000f1'
+\set COMPJX 'e2160000-0000-0000-0000-0000000000f2'
+\set JOBJD  'e2160000-0000-0000-0000-0000000000b1'
+\set JOBJD2 'e2160000-0000-0000-0000-0000000000b2'
+\set KEYJD  'e2160000-0000-0000-0000-0000000000c1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data)
+  select c.id::uuid, 'jd-' || c.tag || '@test.be', 'JD ' || c.tag,
+         jsonb_build_object('role', 'employer', 'first_name', 'JD', 'last_name', c.tag, 'locale', 'pl')
+  from (values (:'OWNJD','own'), (:'RECJD','rec'), (:'MEMJD','mem'), (:'OUTJD','out')) as c(id, tag);
+insert into public.companies(id,name,status) values
+  (:'COMPJD','Firma JD','verified'), (:'COMPJX','Firma JX','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPJD',:'OWNJD','owner',true), (:'COMPJD',:'RECJD','recruiter',true),
+  (:'COMPJD',:'MEMJD','member',true), (:'COMPJX',:'OUTJD','owner',true);
+-- Źródło budowane jako szkic (pytania zmienia się tylko w szkicu), potem publikowane przez
+-- właściciela tabel po akceptacji przeglądu — jak po realnej decyzji admina.
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region,
+                        status, default_locale, salary_min, salary_max, salary_period, contact_email,
+                        requires_driving_license, is_demo)
+  values (:'JOBJD', :'COMPJD', :'OWNJD', 'draft-jd216', 'Operator JD', 'warehouse', 'temporary', 'Gandawa',
+          'Flandria', 'draft', 'nl', 16, 18, 'hour', 'hr@jd.be', true, false),
+         (:'JOBJD2', :'COMPJD', :'OWNJD', 'draft-jd216-2', 'Kierowca JD', 'transport', 'permanent', 'Gandawa',
+          'Flandria', 'draft', 'pl', null, null, 'month', null, false, false);
+insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits, highlights, meta_title) values
+  (:'JOBJD', 'nl', 'Operator JD', 'Werk in het magazijn.', array['Orderpicking'], array['Nachtpremie'], array['Nachtpremie'], 'SEO JD'),
+  (:'JOBJD', 'pl', 'Operator JD PL', 'Tłumaczenie AI.', array['Kompletacja'], '{}', '{}', null);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'JOBJD', 'nl', 'mandatory', 0, 'Nachtwerk'), (:'JOBJD', 'nl', 'optional', 0, 'Heftruck');
+insert into public.job_skills(job_id, skill_label, is_mandatory) values
+  (:'JOBJD', 'Scanner', true), (:'JOBJD', 'Excel', false);
+insert into public.job_languages(job_id, language_label, level) values (:'JOBJD', 'Nederlands', 'basic');
+insert into public.job_certificates(job_id, certificate_label) values (:'JOBJD', 'VCA');
+insert into public.job_screening_questions(job_id, position, type, required, prompt) values
+  (:'JOBJD', 0, 'yes_no', true, '{"nl": "Heb je een VCA-certificaat?"}'),
+  (:'JOBJD', 1, 'date', false, '{"nl": "Wanneer kun je beginnen?", "fr": "Votre date de naissance ?"}');
+update public.screening_question_reviews set status = 'approved', decided_at = now(), decided_by = :'ADMIN'
+  where job_id = :'JOBJD';
+update public.jobs set status = 'active', slug = 'operator-jd-216', published_at = now() - interval '3 days',
+                       expires_at = now() + interval '20 days', views_count = 42, applications_count = 3
+  where id = :'JOBJD';
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'JOBJD') = 'active'
+  and (select count(*) from public.screening_question_reviews where job_id = :'JOBJD' and status = 'approved') = 1,
+  'JD216-0 źródło: aktywna oferta z zaakceptowanym przeglądem pytania');
+
+-- JD216-1: recruiter kopiuje aktywną ofertę → nowy szkic z treścią, bez statusu/slugu/dat.
+set role authenticated; set app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdnew \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'draft' and slug like 'draft-%' and slug <> 'draft-jd216'
+          and company_id = :'COMPJD'::uuid and created_by = :'RECJD'::uuid
+          and published_at is null and expires_at is null and moderation_decision_id is null
+          and views_count = 0 and applications_count = 0
+          and title = 'Operator JD' and category::text = 'warehouse' and contract_type::text = 'temporary'
+          and default_locale = 'nl' and salary_min = 16 and salary_max = 18 and salary_period::text = 'hour'
+          and contact_email = 'hr@jd.be' and requires_driving_license and not is_demo
+     from public.jobs where id = :'jdnew'),
+  'JD216-1 szkic: kolumny z listy dozwolonych skopiowane, status/slug/daty/liczniki nie');
+select pg_temp.assert(
+  (select count(*) from public.job_translations where job_id = :'jdnew') = 1
+  and (select description = 'Werk in het magazijn.' and responsibilities = array['Orderpicking']
+              and benefits = array['Nachtpremie'] and meta_title is null
+         from public.job_translations where job_id = :'jdnew' and locale = 'nl')
+  and (select array_agg(kind::text || ':' || content order by kind, position) from public.job_requirements where job_id = :'jdnew')
+      = array['mandatory:Nachtwerk', 'optional:Heftruck']
+  and (select array_agg(skill_label || ':' || is_mandatory order by skill_label) from public.job_skills where job_id = :'jdnew')
+      = array['Excel:false', 'Scanner:true']
+  and (select array_agg(language_label || ':' || level) from public.job_languages where job_id = :'jdnew') = array['Nederlands:basic']
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'jdnew') = array['VCA'],
+  'JD216-1b tłumaczenie w języku oferty (bez meta i innych języków) i komplet relacji');
+select pg_temp.assert(
+  (select array_agg(prompt order by position) from public.job_screening_questions where job_id = :'jdnew')
+    = (select array_agg(prompt order by position) from public.job_screening_questions where job_id = :'JOBJD')
+  and (select count(*) from public.screening_question_reviews where job_id = :'jdnew') = 1
+  and (select status from public.screening_question_reviews where job_id = :'jdnew') = 'pending'
+  and (select requested_by from public.screening_question_reviews where job_id = :'jdnew') = :'RECJD'::uuid
+  and (select count(*) from public.screening_question_reviews where job_id = :'JOBJD' and status = 'approved') = 1,
+  'JD216-1c pytania skopiowane, decyzja przeglądu NIE — nowy szkic czeka na przegląd od nowa');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action = 'job.duplicated' and entity_id = :'jdnew'::uuid and actor_id = :'RECJD'::uuid
+       and after_data->>'source_job_id' = :'JOBJD' and after_data->>'company_id' = :'COMPJD') = 1
+  and (select count(*) from public.applications where job_id = :'jdnew') = 0,
+  'JD216-1d audyt job.duplicated, zero zgłoszeń na kopii');
+
+-- JD216-1e: kopia nie przechodzi publikacji bez nowej decyzji przeglądu pytań.
+set role authenticated; set app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.publish_job(%L::uuid, %L)', :'jdnew', 'operator-jd-kopia'),
+  'SCREENING_REVIEW_REQUIRED', 'JD216-1e kopia wymaga ponownego przeglądu pytania przed publikacją');
+
+-- JD216-2: idempotencja — ten sam klucz zwraca ten sam szkic, bez drugiej kopii.
+select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdagain \gset
+select pg_temp.assert(:'jdagain' = :'jdnew', 'JD216-2 ponowienie tym samym kluczem = ten sam szkic');
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, %L::uuid)', :'JOBJD2', :'KEYJD'),
+  'VALIDATION_FAILED', 'JD216-2b ten sam klucz dla innej oferty odrzucony');
+-- Szkic też można skopiować (dowolny status).
+select public.duplicate_job_as_draft(:'JOBJD2'::uuid, gen_random_uuid()) as jdnew2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.jobs where company_id = :'COMPJD') = 4
+  and (select count(*) from public.job_duplications where source_job_id = :'JOBJD') = 1
+  and (select status::text from public.jobs where id = :'jdnew2') = 'draft',
+  'JD216-2c jedna kopia na klucz; szkic też kopiowalny');
+
+-- JD216-3: członek bez roli recruiter+ → PERMISSION_DENIED, bez kopii.
+set role authenticated; set app.current_uid = :'MEMJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'PERMISSION_DENIED', 'JD216-3 member nie kopiuje oferty');
+-- JD216-4: cudza firma → NOT_FOUND (bez ujawniania istnienia oferty).
+set app.current_uid = :'OUTJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'NOT_FOUND', 'JD216-4 właściciel innej firmy nie kopiuje cudzej oferty');
+-- JD216-5: tabela idempotencji niedostępna bezpośrednio (RPC-only).
+select pg_temp.expect_error('select count(*) from public.job_duplications',
+  'permission denied', 'JD216-5 klient nie czyta job_duplications');
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, null)', :'JOBJD'),
+  'VALIDATION_FAILED', 'JD216-5b brak klucza odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.jobs where company_id = :'COMPJD') = 4,
+  'JD216-3b odmowy nie tworzą szkiców');
+
+-- JD216-6: firma zawieszona → COMPANY_SUSPENDED; oferta z decyzją moderacyjną → MODERATION_LOCKED.
+begin;
+update public.companies set status = 'suspended' where id = :'COMPJD';
+set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'COMPANY_SUSPENDED', 'JD216-6 zawieszona firma nie kopiuje ofert');
+rollback;
+begin;
+-- Blokada bez pełnej sprawy DSA (FK i strażnik wyłączone tylko na czas ustawienia znacznika).
+set local session_replication_role = replica;
+update public.jobs set moderation_decision_id = gen_random_uuid(), status = 'closed' where id = :'JOBJD';
+set local session_replication_role = origin;
+set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'MODERATION_LOCKED', 'JD216-6b oferta wycofana decyzją moderacyjną nie odradza się kopią');
+rollback;
+reset role; reset app.current_uid;
+
+-- JD216-7 (kontrola ujemna uprawnień): gdy bramka recruiter+ przepuszcza każdego członka,
+-- member kopiuje ofertę — JD216-3 wykrywa taką regresję.
+begin;
+create or replace function public.can_manage_jobs(p_company_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_company_member(p_company_id);
+$$;
+set local role authenticated; set local app.current_uid = :'MEMJD'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.duplicate_job_as_draft(:'JOBJD'::uuid, gen_random_uuid()) is not null,
+  'JD216-7 kontrola ujemna: bez bramki recruiter+ member kopiuje ofertę');
+rollback;
+reset role; reset app.current_uid;
+
+-- JD216-8 (kontrola ujemna idempotencji): bez wpisu w job_duplications ten sam klucz tworzy
+-- DRUGI szkic — JD216-2 opiera się na tej tabeli.
+begin;
+delete from public.job_duplications where client_key = :'KEYJD'::uuid;
+set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdneg \gset
+select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu klucza powstaje duplikat');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
