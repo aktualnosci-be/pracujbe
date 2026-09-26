@@ -165,7 +165,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Zgody cookies i akceptacja dokumentów',
     inCode: 'Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent.',
     processors: HOSTING,
-    retentionInCode: null,
+    retentionInCode:
+      'Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach ' +
+      '(acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; ' +
+      'w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia.',
   },
   'dsa-moderation': {
     name: 'Zgłoszenia treści (DSA) i moderacja',
@@ -206,9 +209,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     retentionInCode: 'job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance).',
   },
   'analytics-marketing': {
-    name: 'Analityka i marketing po zgodzie',
-    inCode: 'Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies.',
-    processors: ['google-analytics', 'meta-pixel'],
+    name: 'Analityka po zgodzie',
+    inCode:
+      'Beacon Cloudflare Web Analytics ładowany dopiero po zgodzie w kategorii analytics (#570: zamiast Google Analytics i Meta Pixel — usunięte); bezcookie\'owy.',
+    processors: ['cloudflare-web-analytics'],
     retentionInCode: 'Cookie zgody ważne 180 dni.',
   },
   'data-rights': {

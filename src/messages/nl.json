@@ -513,8 +513,6 @@
     "preferencesDesc": "Onthouden je keuzes, zoals taal en instellingen.",
     "analyticsName": "Analytisch",
     "analyticsDesc": "Helpen ons begrijpen hoe je het platform gebruikt.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Maken het mogelijk om relevantere advertenties te tonen.",
     "alwaysOn": "Altijd aan",
     "cookieSettings": "Cookie-instellingen"
   },
@@ -662,6 +660,7 @@
     "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen.",
     "moderationLocked": "Deze inhoud is beperkt door een moderatiebeslissing, dus de status kan niet worden gewijzigd.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
+    "siteAccessUnavailable": "De toegang tot de website is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
     "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
     "appealExists": "Er is al bezwaar gemaakt tegen deze beslissing.",
@@ -1651,7 +1650,8 @@
     "reportSent": "Melding ontvangen",
     "reportAlreadyOpen": "Al gemeld — wacht op controle",
     "reportedBadge": "Gemeld",
-    "reportNetworkError": "De melding kon niet worden verstuurd. Controleer je verbinding en probeer het opnieuw."
+    "reportNetworkError": "De melding kon niet worden verstuurd. Controleer je verbinding en probeer het opnieuw.",
+    "attachmentPreviewAlt": "Voorbeeld van afbeelding {name}"
   },
   "files": {
     "cvTitle": "Je cv / documenten",
@@ -2385,7 +2385,13 @@
     "agePolicyConfirmTitle": "Leeftijdsdrempel voor kandidaten wijzigen?",
     "agePolicyConfirmDescription": "De drempel verandert van „{from}” naar „{to}”.",
     "agePolicySuccess": "De leeftijdsdrempel voor kandidaten is opgeslagen.",
-    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten."
+    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten.",
+    "reportsSortLabel": "Volgorde",
+    "reportsSortNewest": "Nieuwste",
+    "reportsSortPriority": "Prioriteit en termijn",
+    "reportsFlaggedLabel": "Markering",
+    "reportsFlaggedAll": "Alle zaken",
+    "reportsFlaggedOnly": "Gemarkeerd voor controle"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -2502,7 +2508,8 @@
     "passwordLabel": "Toegangswachtwoord",
     "submit": "Doorgaan",
     "error": "Onjuist wachtwoord. Probeer het opnieuw.",
-    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw."
+    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
+    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",

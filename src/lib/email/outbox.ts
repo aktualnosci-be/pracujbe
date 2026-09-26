@@ -25,7 +25,13 @@ import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
 import { captureError } from '@/lib/error-report';
 import { isProductionMode } from '@/lib/env';
-import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib/email/transport';
+import {
+  emailProviderFromEnv,
+  mailTransportFromEnv,
+  MailSendError,
+  type MailMessage,
+  type MailTransport,
+} from '@/lib/email/transport';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
@@ -67,9 +73,67 @@ import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib
  * Jeśli dzierżawa wygaśnie w trakcie (wolny dostawca) i wiersz przejmie inny worker, token się
  * nie zgadza — stary worker dostaje `lease_lost`/`rowCount=0` i NIC nie nadpisuje (wiersz
  * należy już do kogoś innego), więc nie ma podwójnej wysyłki ani wyścigu aktualizacji statusu.
+ *
+ * #621 (dokończenie #615, 0131): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
+ * now()`) TUŻ PRZED wywołaniem `transport.send` poniżej — w TEJ SAMEJ transakcji co kontrola
+ * tokenu/zgody, CAS po `lock_token`. Zamyka to wyścig TOCTOU: bez odnowienia dzierżawa nadal
+ * biegła od czasu claimu CAŁEJ paczki, więc przy wielu wierszach albo wolnym poprzednim
+ * wierszu okno mogło być prawie zużyte w chwili kontroli — worker dostawał zielone światło
+ * tuż przed wygaśnięciem dzierżawy i mógł zdążyć wysłać już PO tym, jak inny worker przejął
+ * wiersz. Po odnowieniu dostawca dostaje pełne, świeże okno dzierżawy (domyślnie 300 s) liczone
+ * od chwili tuż przed wywołaniem. Samo odnowienie nie wystarcza przy zawieszonym dostawcy
+ * (#628): wysyłka ma twardy termin `SEND_DEADLINE_MS` (≤ połowa dzierżawy), a niejednoznaczny
+ * wynik wraca do puli dopiero po pełnej dzierżawie i z tym samym kluczem idempotencji.
  */
 
 const MAX_ATTEMPTS = 5;
+
+/**
+ * #628: dzierżawa wiersza (sekundy) — przekazywana jawnie do `claim_email_batch`; odnawia ją
+ * `email_delivery_send_check` tuż przed wysyłką (#621).
+ */
+export const EMAIL_LEASE_SECONDS = 300;
+
+/**
+ * #628: twardy termin CAŁEJ wysyłki u dostawcy, wyraźnie krótszy niż odnowiona dzierżawa.
+ * Po terminie worker przerywa żądanie (EmailLabs) albo przestaje na nie czekać (Resend — SDK
+ * bez sygnału), zapisuje niejednoznaczny wynik jako ponowienie i nie zwalnia wiersza wcześniej
+ * niż po pełnej dzierżawie. Drugi worker dostaje wiersz dopiero wtedy, gdy pierwsze żądanie
+ * jest już rozstrzygnięte, a ponowienie niesie ten sam klucz idempotencji (Resend:
+ * `Idempotency-Key`, EmailLabs: stały `messageId` sprawdzany przed wysyłką) — bez duplikatu.
+ */
+export const SEND_DEADLINE_MS = 60_000;
+
+/** Wysyłka przerwana terminem — wynik u dostawcy nieznany (ponowienie z tym samym kluczem). */
+export class SendDeadlineError extends MailSendError {
+  constructor() {
+    super('provider_unavailable');
+    this.name = 'SendDeadlineError';
+  }
+}
+
+async function sendWithDeadline(
+  transport: MailTransport,
+  message: MailMessage,
+  idempotencyKey: string,
+): Promise<{ id: string }> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new SendDeadlineError());
+    }, SEND_DEADLINE_MS);
+  });
+  const sending = transport.send(message, { idempotencyKey, signal: controller.signal });
+  // Spóźniony wynik po terminie jest pomijany (bez nieobsłużonego odrzucenia).
+  sending.catch(() => undefined);
+  try {
+    return await Promise.race([sending, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // renderEmail jest generyczne po EmailType; na granicy workera dane pochodzą z jsonb (payload),
 // więc rzutujemy raz w kontrolowany sposób (bez `any`).
@@ -250,7 +314,10 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let queue: DeliveryRow[];
   try {
     queue = await withServiceRole((tx) =>
-      rpcRows<DeliveryRow>(tx, 'claim_email_batch', { p_limit: limit }),
+      rpcRows<DeliveryRow>(tx, 'claim_email_batch', {
+        p_limit: limit,
+        p_lease_seconds: EMAIL_LEASE_SECONDS,
+      }),
     );
   } catch (error) {
     captureError(error, { area: 'email.outbox.claim' });
@@ -381,7 +448,8 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // wiersz wróci do puli, ponowienie nie tworzy drugiego listu (Resend: Idempotency-Key,
       // EmailLabs: stały messageId + sprawdzenie przed wysyłką). Transport potwierdza wysyłkę
       // tylko z identyfikatorem wiadomości od dostawcy.
-      const result = await transport.send(
+      const result = await sendWithDeadline(
+        transport,
         {
           from,
           to: row.to_email,
@@ -390,7 +458,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           text,
           ...(listHeaders ? { headers: listHeaders } : {}),
         },
-        { idempotencyKey: row.id },
+        row.id,
       );
 
       const providerMessageId = result.id;
@@ -434,6 +502,12 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       const attempts = row.attempts + 1;
       const isFinal = attempts >= MAX_ATTEMPTS;
       const backoffMin = Math.min(2 ** attempts, 60);
+      // #628: po przekroczeniu terminu wynik u dostawcy jest nieznany — wiersz wraca do puli
+      // najwcześniej po pełnej dzierżawie (spóźnione żądanie zdąży się rozstrzygnąć).
+      const retryDelayMs = Math.max(
+        backoffMin * 60_000,
+        err instanceof SendDeadlineError ? EMAIL_LEASE_SECONDS * 1000 : 0,
+      );
       // SEC-15: sprawdzamy też błąd zapisu stanu porażki (inaczej rekord utknąłby zablokowany).
       try {
         // #615: jak przy mark-sent — bez CAS worker A mógłby cofnąć status/odblokować wiersz,
@@ -452,7 +526,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
               attempts,
               // Kod błędu dostawcy zamiast jego komunikatu (może zawierać adres odbiorcy).
               err instanceof MailSendError ? err.message : err instanceof Error ? err.message.slice(0, 500) : 'unknown',
-              new Date(Date.now() + backoffMin * 60_000).toISOString(),
+              new Date(Date.now() + retryDelayMs).toISOString(),
               row.lock_token,
             ],
           ),

@@ -88,7 +88,10 @@ describe('NotificationsList (#148)', () => {
     markNotificationsRead.mockResolvedValue({ ok: true, count: 1 });
     renderList(page([item(1, true), item(2, true)], 2));
     fireEvent.click(screen.getByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 2` }));
-    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    // Stan listy zatwierdza się dopiero po zakończeniu przejścia (React 19) — czekamy na komunikat
+    // statusu, a nie na samo wywołanie `refresh`, które pada wcześniej (pod obciążeniem = flak).
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.markedRead));
+    expect(refresh).toHaveBeenCalledOnce();
     expect(markNotificationsRead).toHaveBeenCalledExactlyOnceWith([item(2, true).id]);
     expect(screen.queryByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 2` })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 1` })).toBeInTheDocument();
@@ -110,7 +113,9 @@ describe('NotificationsList (#148)', () => {
     markNotificationsRead.mockResolvedValue({ ok: true, count: 2 });
     renderList(page([item(1, true), item(2, true)], 5));
     fireEvent.click(screen.getByRole('button', { name: t.markAllRead }));
-    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    // Jak wyżej: końcowy stan = komunikat statusu (ustawiany razem z listą i licznikiem).
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(t.markedAllRead));
+    expect(refresh).toHaveBeenCalledOnce();
     expect(markNotificationsRead).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.queryAllByRole('button', { name: /Oznacz jako przeczytane:/ })).toHaveLength(0);
     expect(screen.getByText('Brak nieprzeczytanych')).toBeInTheDocument();

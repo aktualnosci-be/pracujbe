@@ -58,8 +58,8 @@ async function storeConsent(context: BrowserContext, baseURL: string, analytics:
   await context.addCookies([{
     name: CONSENT_COOKIE,
     value: encodeURIComponent(JSON.stringify({
-      v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
-      categories: { necessary: true, preferences: false, analytics, marketing: false },
+      v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+      categories: { necessary: true, preferences: false, analytics },
       ts: '2026-01-01T00:00:00.000Z',
       id: 'job-funnel-e2e',
     })),
@@ -184,6 +184,16 @@ test.beforeEach(async ({ context, baseURL }) => {
   await context.addCookies([{ ...PROBE_COOKIE, url: baseURL! }]);
 });
 
+/**
+ * Asercje czekają na wpis żądania (`captured.push` przed `route.fetch`), a nie na odpowiedź —
+ * test mógł się skończyć z żądaniem lejka w locie (np. drugie `detail_view` po odświeżeniu).
+ * Zamknięcie kontekstu przerywało wtedy `route.fetch` („Test ended”), a błąd callbacku trafiał
+ * do NASTĘPNEGO testu. Każdy przechwycony callback kończy się przed zamknięciem kontekstu.
+ */
+test.afterEach(async ({ context }) => {
+  await context.unrouteAll({ behavior: 'wait' });
+});
+
 for (const locale of LOCALES) {
   const job = `/${locale}/oferty-pracy/${JOB_SLUG}`;
   const list = `/${locale}/oferty-pracy`;
@@ -231,6 +241,7 @@ for (const locale of LOCALES) {
       await settle(tab);
       expect(captured, 'po restarcie z odmową').toEqual([]);
     } finally {
+      await restarted.unrouteAll({ behavior: 'wait' });
       await restarted.close();
     }
   });
@@ -325,6 +336,8 @@ test('po zgodzie: detail_view i apply_started bez cookies i storage (#499)', asy
   await page.reload();
   await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(2);
   expect(captured.filter((c) => c.body.event === 'detail_view')[1]!.body.nonce).not.toBe(view!.body.nonce);
+  // Także żądanie po odświeżeniu: bez cookies w obie strony (i zakończone przed końcem testu).
+  for (const entry of captured) await expectRequestClean(entry);
 });
 
 test('po zgodzie: lista ofert — search_appearance bez cookies i storage (#499)', async ({ page, context, baseURL }) => {

@@ -513,8 +513,6 @@
     "preferencesDesc": "Retiennent vos choix, comme la langue et les paramètres.",
     "analyticsName": "Analytiques",
     "analyticsDesc": "Nous aident à comprendre comment vous utilisez la plateforme.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Permettent d'afficher des publicités plus pertinentes.",
     "alwaysOn": "Toujours actifs",
     "cookieSettings": "Paramètres des cookies"
   },
@@ -662,6 +660,7 @@
     "savedSearchLimitReached": "Vous avez déjà 20 recherches enregistrées. Supprimez-en une pour en ajouter une nouvelle.",
     "moderationLocked": "Ce contenu est restreint par une décision de modération : son statut ne peut pas être modifié.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
+    "siteAccessUnavailable": "L’accès au site est temporairement indisponible. Réessayez plus tard.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
     "claimExpired": "Le lien de rattachement a expiré (il était valable 30 jours).",
     "appealExists": "Un recours contre cette décision a déjà été introduit.",
@@ -1651,7 +1650,8 @@
     "reportSent": "Signalement reçu",
     "reportAlreadyOpen": "Déjà signalé — en attente d’examen",
     "reportedBadge": "Signalé",
-    "reportNetworkError": "Le signalement n’a pas pu être envoyé. Vérifiez votre connexion et réessayez."
+    "reportNetworkError": "Le signalement n’a pas pu être envoyé. Vérifiez votre connexion et réessayez.",
+    "attachmentPreviewAlt": "Aperçu de l’image {name}"
   },
   "files": {
     "cvTitle": "Votre CV / documents",
@@ -2385,7 +2385,13 @@
     "agePolicyConfirmTitle": "Modifier le seuil d'âge des candidats ?",
     "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
     "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
-    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche."
+    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche.",
+    "reportsSortLabel": "Ordre",
+    "reportsSortNewest": "Plus récents",
+    "reportsSortPriority": "Priorité et échéance",
+    "reportsFlaggedLabel": "Signalement",
+    "reportsFlaggedAll": "Tous les dossiers",
+    "reportsFlaggedOnly": "Signalés pour examen"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2502,7 +2508,8 @@
     "passwordLabel": "Mot de passe d’accès",
     "submit": "Entrer",
     "error": "Mot de passe incorrect. Veuillez réessayer.",
-    "rateLimited": "Trop de tentatives. Réessayez dans quelques minutes."
+    "rateLimited": "Trop de tentatives. Réessayez dans quelques minutes.",
+    "unavailable": "L’accès est temporairement indisponible. Réessayez plus tard."
   },
   "offline": {
     "title": "Pas de connexion",

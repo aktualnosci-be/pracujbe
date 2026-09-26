@@ -513,8 +513,6 @@
     "preferencesDesc": "Remember your choices, such as language and settings.",
     "analyticsName": "Analytics",
     "analyticsDesc": "Help us understand how you use the platform.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Allow us to show you more relevant ads.",
     "alwaysOn": "Always on",
     "cookieSettings": "Cookie settings"
   },
@@ -662,6 +660,7 @@
     "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one.",
     "moderationLocked": "This content is restricted by a moderation decision, so its status cannot be changed.",
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
+    "siteAccessUnavailable": "Access to the website is temporarily unavailable. Please try again later.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
     "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
     "appealExists": "An appeal against this decision has already been submitted.",
@@ -1651,7 +1650,8 @@
     "reportSent": "Report received",
     "reportAlreadyOpen": "Already reported — awaiting review",
     "reportedBadge": "Reported",
-    "reportNetworkError": "The report could not be sent. Check your connection and try again."
+    "reportNetworkError": "The report could not be sent. Check your connection and try again.",
+    "attachmentPreviewAlt": "Image preview: {name}"
   },
   "files": {
     "cvTitle": "Your CV / documents",
@@ -2385,7 +2385,13 @@
     "agePolicyConfirmTitle": "Change the candidate age threshold?",
     "agePolicyConfirmDescription": "The threshold will change from “{from}” to “{to}”.",
     "agePolicySuccess": "The candidate age threshold has been saved.",
-    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count} profiles were hidden from search."
+    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count} profiles were hidden from search.",
+    "reportsSortLabel": "Order",
+    "reportsSortNewest": "Newest",
+    "reportsSortPriority": "Priority and deadline",
+    "reportsFlaggedLabel": "Flags",
+    "reportsFlaggedAll": "All cases",
+    "reportsFlaggedOnly": "Flagged for review"
   },
   "settings": {
     "title": "Notification preferences",
@@ -2502,7 +2508,8 @@
     "passwordLabel": "Access password",
     "submit": "Enter",
     "error": "Incorrect password. Please try again.",
-    "rateLimited": "Too many attempts. Please try again in a few minutes."
+    "rateLimited": "Too many attempts. Please try again in a few minutes.",
+    "unavailable": "Access is temporarily unavailable. Please try again later."
   },
   "offline": {
     "title": "No connection",

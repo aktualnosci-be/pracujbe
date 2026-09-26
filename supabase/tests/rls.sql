@@ -1003,20 +1003,24 @@ select pg_temp.expect_error(
   'insert into public.consents(category, granted) values (''analytics'', true)',
   'permission denied', 'Y1 authenticated nie robi bezpośredniego INSERT do consents');
 reset role;
--- Y2: record_consent (anon) zapisuje 4 kategorie z metadanymi receiptu.
+-- Y2: record_consent (anon) zapisuje 3 kategorie z metadanymi receiptu (0130, #570: bez
+-- `marketing` — klucz ze starego klienta jest ignorowany).
 set role anon; reset app.current_uid; select pg_temp.assert_client_role();
-select public.record_consent('{"analytics":true,"marketing":false,"preferences":true}'::jsonb,
+select public.record_consent('{"analytics":true,"marketing":true,"preferences":true}'::jsonb,
   'cookie_banner', 'vis-123', '203.0.113.7', 'UA/1.0');
 reset role;
 select pg_temp.assert(
-  (select count(*) from public.consents where visitor_id = 'vis-123') = 4,
-  'Y2 record_consent zapisuje 4 kategorie (receipt)');
+  (select count(*) from public.consents where visitor_id = 'vis-123') = 3,
+  'Y2 record_consent zapisuje 3 kategorie (receipt)');
 select pg_temp.assert(
   (select granted from public.consents where visitor_id = 'vis-123' and category = 'necessary') = true,
   'Y2b necessary zawsze granted');
 select pg_temp.assert(
-  (select granted from public.consents where visitor_id = 'vis-123' and category = 'marketing') = false,
-  'Y2c marketing=false zapisane w receipcie');
+  not exists (select 1 from public.consents where visitor_id = 'vis-123' and category = 'marketing'),
+  'Y2c brak wiersza marketing w receipcie (0130, #570)');
+select pg_temp.assert(
+  (select granted from public.consents where visitor_id = 'vis-123' and category = 'analytics') = true,
+  'Y2c2 analytics=true zapisane w receipcie');
 select pg_temp.assert(
   (select host(ip_address) from public.consents where visitor_id = 'vis-123' limit 1) = '203.0.113.7',
   'Y2d IP zapisane w receipcie');
@@ -10851,6 +10855,103 @@ select pg_temp.assert(
 rollback;
 
 -- ============================================================================
+-- TI610. Kontrakt stanu „used” linku rejestracji zaproszenia (0121/0133, #403): zużycie
+--        tokenu ustawia WYŁĄCZNIE `signup_token_used_at` — zaproszenie zostaje `pending`
+--        (czeka w panelu na odpowiedź), więc podgląd musi rozróżnić „zużyty” od „nieznany/
+--        wygasły/rozstrzygnięty” (oba dają dziś ten sam ogólny wynik bez tego rozróżnienia).
+--        Sekwencja preview → consume → preview, w izolacji od reszty sekcji TI403.
+-- ============================================================================
+\set TI610H '4802a5a392c15e002945132d8dc0aae0096930da591498eb7be1baf2b0432145'
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as ti610inv
+  from public.invite_company_member(:'TICA', 'kontrakt@ti.test', 'member', 'en', :'TI610H', 'nonce-ti610-0000000001') \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert((select outcome from public.team_invitation_signup_preview(:'TI610H')) = 'valid',
+  'TI610-1 przed zużyciem: podgląd ważny');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt@ti.test') = 'consumed',
+  'TI610-2 zużycie tokenu przez adres zaproszenia');
+reset role;
+select pg_temp.assert((select status from public.company_invitations where id = :'ti610inv') = 'pending',
+  'TI610-3 zużycie NIE zmienia statusu zaproszenia — nadal czeka w panelu');
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TI610H')) = 'used'
+  and (select company_name from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select role from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select email from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select locale from public.team_invitation_signup_preview(:'TI610H')) = 'en',
+  'TI610-4 po zużyciu: podgląd „used” jednoznacznie, bez danych zaproszenia');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt@ti.test') = 'used',
+  'TI610-5 ponowne zużycie tego samego tokenu → „used”, idempotentnie');
+reset role;
+
+-- ============================================================================
+-- TI611. Atomowy limit e-maili `teamInvitationSignup` na adres (0121/0133, #403): COUNT
+--        i INSERT w jednej sekcji krytycznej (advisory lock per adres) — limit trzyma się
+--        także wobec RÓWNOLEGŁYCH zaproszeń z różnych firm dla tego samego adresu bez konta.
+--        Fixture'y zatwierdza osobna sesja (jak PP/CO28) — dblink musi je widzieć niezależnie
+--        od tego, czy cały skrypt działa w owijającej transakcji BEGIN…ROLLBACK.
+-- ============================================================================
+\set TIL_H1 '17104f4ec0274b72592952ef5d3c800fd5d87a3414282c25317958a1500065cc'
+\set TIL_H2 '42721d9fafa7473a399b09158c61d748a27227d9e721cd4a2d62b4f1540ec38a'
+\set TIL_H3 '1ad1d255da034eb33c27c6f0dd2fff70b884e2c5941968727e6b220ce27cf213'
+\set TIL_H4 '3c1c27f78287451fada6bc547f150077698c0804e9ae39c694a0db34c5f23ceb'
+reset role; reset app.current_uid;
+select pg_temp.remote_connect('til_setup');
+select dbl.dblink_exec('til_setup', $fx$
+  insert into public.company_invitations(id, company_id, email, role, invited_by, locale, signup_token_hash) values
+    ('e6110000-0000-0000-0000-0000000000b1', 'e8800000-0000-0000-0000-0000000000f1',
+     'wyscig@ti.test', 'member', 'e8800000-0000-0000-0000-0000000000a1', 'pl',
+     '17104f4ec0274b72592952ef5d3c800fd5d87a3414282c25317958a1500065cc'),
+    ('e6110000-0000-0000-0000-0000000000b2', 'e8800000-0000-0000-0000-0000000000f2',
+     'wyscig@ti.test', 'member', 'e8800000-0000-0000-0000-0000000000a1', 'pl',
+     '42721d9fafa7473a399b09158c61d748a27227d9e721cd4a2d62b4f1540ec38a');
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts) values
+    (null, 'wyscig@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+     'company_invitation', 'e6110000-0000-0000-0000-0000000000b1', 'ti611-fixture-1', '{}'::jsonb,
+     now(), now(), 0),
+    (null, 'wyscig@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+     'company_invitation', 'e6110000-0000-0000-0000-0000000000b2', 'ti611-fixture-2', '{}'::jsonb,
+     now(), now(), 0);
+$fx$);
+select dbl.dblink_disconnect('til_setup');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'wyscig@ti.test') = 2,
+  'TI611-0 dwa wcześniejsze zaproszenia z różnych firm — dwa e-maile już w kolejce (2 z 3)');
+
+-- Dwie RÓWNOLEGŁE „odświeżenia” istniejących, oczekujących zaproszeń (firmy A i B, ten sam
+-- adres) — trzeci, ostatni wolny e-mail z limitu. Bez atomowej blokady obie transakcje
+-- mogłyby odczytać COUNT=2 i obie wstawić e-mail (4 zamiast najwyżej 3 na adres).
+select pg_temp.remote_begin('til_a', :'TIO') as til_pid_a \gset
+select pg_temp.remote_begin('til_b', :'TIO') as til_pid_b \gset
+select t.v as til_a_res from dbl.dblink('til_a',
+  'select (invitation_id::text || '':'' || created::text) from public.invite_company_member(''' || :'TICA' || ''', ''wyscig@ti.test'', ''member'', ''pl'', ''' || :'TIL_H3' || ''', ''nonce-ti611-0000000003'')')
+  as t(v text) \gset
+select dbl.dblink_send_query('til_b',
+  'select (invitation_id::text || '':'' || created::text) from public.invite_company_member(''' || :'TICB' || ''', ''wyscig@ti.test'', ''member'', ''pl'', ''' || :'TIL_H4' || ''', ''nonce-ti611-0000000004'')');
+select pg_temp.wait_blocked(:til_pid_b, 'TI611');
+select dbl.dblink_exec('til_a', 'commit');
+select pg_temp.remote_result('til_b') as til_b_res \gset
+select dbl.dblink_exec('til_b', 'commit');
+select dbl.dblink_disconnect('til_a'); select dbl.dblink_disconnect('til_b');
+select pg_temp.assert(
+  :'til_a_res' = 'e6110000-0000-0000-0000-0000000000b1:false'
+  and :'til_b_res' = 'e6110000-0000-0000-0000-0000000000b2:false',
+  'TI611-1 obie „odświeżenia” kończą się normalnie (limit e-maili nie wpływa na odpowiedź RPC)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'wyscig@ti.test') = 3,
+  'TI611-2 mimo równoległości: najwyżej 3 e-maile na adres (limit egzekwowany atomowo)');
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b1') = :'TIL_H3'
+  and (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b2') = :'TIL_H4',
+  'TI611-3 oba tokeny odświeżone niezależnie od tego, czy e-mail się zmieścił w limicie');
+
+-- ============================================================================
 -- MA (0119): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją
 -- send_message (idempotencja client_message_id i client_upload_id), dostęp tylko dla
 -- bieżących uczestników, kwarantanna scan_status, blokada firmy (#97), metadane plików
@@ -11071,6 +11172,42 @@ select pg_temp.assert(:mapurged >= 1
   and (select count(*) from public.message_attachments where id = :'maatt1') = 1
   and (select count(*) from public.storage_deletion_queue where path = :'mapath2') = 1,
   'MA10b porzucony plik usunięty i zakolejkowany, wysłany (kontrola ujemna) zostaje');
+
+-- MN135 (0135, numer tymczasowy): e-mail newMessage niesie tylko LICZBĘ załączników
+-- (#503: bez nazw plików); firma zablokowana przez kandydata-nadawcę (#97) dostaje 0.
+select pg_temp.assert(
+  (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mamsg1' and profile_id = :'MAE') = 1
+  and (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mamsg4' and profile_id = :'MAC') = 1,
+  'MN135-1 e-mail o wiadomości z plikiem niesie liczbę załączników (obie strony)');
+select pg_temp.assert(
+  not exists (select 1 from public.email_deliveries
+    where template = 'newMessage' and entity_id in (:'mamsg1', :'mamsg4')
+      and (payload::text like '%CV Ma%' or payload::text like '%umowa.jpg%' or payload ? 'fileName')),
+  'MN135-2 payload bez nazw plików');
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'maconv'::uuid, 'Bez pliku', gen_random_uuid()) as mnmsg0 \gset
+select attachment_id as mnatt from public.stage_message_attachment(
+  :'maconv'::uuid, gen_random_uuid(), :'maconv' || '/att-' || gen_random_uuid()::text || '.png',
+  'skan.png', 'image/png', 500, :'masha') \gset
+select public.set_company_block(:'MAF'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'maconv'::uuid, 'Po blokadzie', gen_random_uuid(), array[:'mnatt'::uuid]) as mnmsgb \gset
+select public.set_company_block(:'MAF'::uuid, false);
+reset role;
+select pg_temp.assert(
+  (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mnmsg0' and profile_id = :'MAE') = 0,
+  'MN135-3 wiadomość bez pliku: attachmentCount = 0');
+-- Kontrola ujemna do MN135-1: ta sama firma, ten sam typ pliku — różnica tylko w blokadzie.
+select pg_temp.assert(
+  coalesce((select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mnmsgb' and profile_id = :'MAE'), 0) = 0,
+  'MN135-4 firma zablokowana przez nadawcę nie dostaje liczby jego plików');
 
 -- MA11: usunięcie rozmowy (np. usunięcie konta #486) kasuje pliki obu stron i kolejkuje obiekty.
 delete from public.conversations where id = :'maconv';
@@ -12452,6 +12589,80 @@ rollback to savepoint aib_neg;
 select pg_temp.expect_error(
   'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
+
+-- ============================================================================
+-- AIB609. Porzucone rezerwacje budżetu AI (#609, 0134): GC po TTL rozlicza rezerwację
+--         padłego procesu jako failed/koszt 0 — limit wraca do użycia, ślad audytowy
+--         (wiersz) zostaje. Kontrola ujemna: bez filtra po TTL GC zwolniłoby też
+--         rezerwację wciąż trwającego wywołania.
+-- ============================================================================
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE'),
+  'AIB609-1 tylko service_role woła GC');
+
+-- Sekcja działa pod bieżącą rolą (reset po AIB36-10 = właściciel schematu, jak w AIB36-10) —
+-- wystarczy do wywołań RPC (SECURITY DEFINER), a bezpośrednie UPDATE created_at (poniżej)
+-- wymaga tej samej roli, bo grant na ai_usage_ledger dla service_role obejmuje tylko SELECT.
+-- Limit ustawiamy WZGLĘDEM już wydanego dziś budżetu (wcześniejsze testy AIB36 w tej samej
+-- transakcji już coś zarezerwowały/rozliczyły) — inaczej bezwzględna kwota byłaby przypadkowa.
+select (public.ai_budget_status()->'day'->>'spentMicroUsd')::bigint as aib_base \gset
+update public.ai_budget_limits set limit_micro_usd = :aib_base + 35000 where period = 'day';
+-- Świeża rezerwacja (żywy proces) zostaje nietknięta.
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 10000) as aib_fresh \gset
+-- Rezerwacja porzuconego procesu: cofamy created_at poza TTL bezpośrednio.
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 20000) as aib_abandoned \gset
+-- Limit ma miejsce tylko na obie powyższe (aib_base+30000) — trzecia rezerwacja, choćby mała,
+-- odbija się o sufit, dopóki porzucona rezerwacja liczy się w całości.
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 6000)',
+  'AI_BUDGET_EXCEEDED', 'AIB609-1b porzucona rezerwacja wciąż blokuje limit przed GC');
+update public.ai_usage_ledger set created_at = now() - interval '2 hours' where id = :'aib_abandoned';
+select public.ai_budget_release_stale_reservations(60, 200) as aib_released \gset
+select pg_temp.assert(:aib_released = 1, 'AIB609-2 GC zwalnia dokładnie jedną porzuconą rezerwację');
+select pg_temp.assert(
+  (select status = 'reserved' from public.ai_usage_ledger where id = :'aib_fresh'),
+  'AIB609-3 świeża rezerwacja nietknięta');
+select pg_temp.assert(
+  (select status = 'settled' and outcome = 'failed' and cost_micro_usd = 0 and settled_at is not null
+     from public.ai_usage_ledger where id = :'aib_abandoned'),
+  'AIB609-4 porzucona rezerwacja rozliczona jako failed/koszt 0 — ślad audytowy zostaje');
+-- AIB609-5: idempotentne — drugi przebieg nie znajduje już nic do zwolnienia.
+select pg_temp.assert(public.ai_budget_release_stale_reservations(60, 200) = 0,
+  'AIB609-5 ponowny przebieg GC nie rozlicza nic drugi raz');
+-- AIB609-6: limit budżetu wraca do użycia po GC (rezerwacja przestała liczyć się do wydatku) —
+-- ten sam limit (aib_base+35000) i ta sama kwota (6000), która chwilę wcześniej była odrzucona.
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 6000) is not null,
+  'AIB609-6 po GC ta sama rezerwacja mieści się w limicie, w którym wcześniej się nie mieściła');
+
+-- Kontrola ujemna: GC bez filtra TTL (created_at) zwolniłoby też świeżą, wciąż trwającą rezerwację.
+-- Rezerwacja powstaje PRZED savepointem — rollback niżej cofa tylko wadliwą definicję funkcji
+-- i jej skutek, a nie samo powstanie rezerwacji (inaczej AIB609-7b nie miałoby czego sprawdzić).
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 1000) as aib_live \gset
+savepoint aib609_neg;
+create or replace function public.ai_budget_release_stale_reservations(
+  p_older_than_minutes integer default 60,
+  p_limit integer default 200
+) returns integer language plpgsql security definer set search_path = public, pg_temp as $f$
+declare v_released integer;
+begin
+  update public.ai_usage_ledger set status = 'settled', outcome = 'failed', cost_micro_usd = 0, settled_at = now()
+   where status = 'reserved';
+  get diagnostics v_released = row_count;
+  return v_released;
+end; $f$;
+select public.ai_budget_release_stale_reservations(60, 200);
+select pg_temp.assert(
+  (select status = 'settled' from public.ai_usage_ledger where id = :'aib_live'),
+  'AIB609-7 kontrola ujemna: bez filtra TTL GC zwalnia też świeżą, wciąż trwającą rezerwację (błąd)');
+rollback to savepoint aib609_neg;
+-- Po cofnięciu do savepointu prawdziwa (z migracji) funkcja ponownie nie rusza świeżej rezerwacji.
+select public.ai_budget_release_stale_reservations(60, 200) as aib_after_rollback \gset
+select pg_temp.assert(
+  (select status = 'reserved' from public.ai_usage_ledger where id = :'aib_live'),
+  'AIB609-7b poprawna funkcja (po rollbacku savepointu) zostawia świeżą rezerwację');
+
 rollback;
 
 -- ============================================================================
@@ -12548,5 +12759,354 @@ begin
 end $$;
 select pg_temp.assert(pg_temp.wl615_send_check_0124(:'wl615_a_id'::uuid) is null,
   'WL615-6 KONTROLA UJEMNA: bez tokenu stary worker (A) dostałby zielone światło mimo utraconej dzierżawy');
+
+-- ============================================================================
+-- WL621 (#621): worker poczty — odnowienie dzierżawy w send_check (0131, dokończenie #615/0129).
+--
+-- WL615E83B29 domknęło CAS na `lock_token` (0129), ale `email_delivery_send_check` kończyło
+-- transakcję PRZED wywołaniem dostawcy BEZ odnowienia dzierżawy (`locked_at`) — nadal biegła od
+-- czasu CLAIMU CAŁEJ paczki. Przy wielu wierszach (albo wolnym poprzednim wierszu) okno do
+-- wygaśnięcia dzierżawy TEGO wiersza mogło być prawie zużyte w chwili kontroli: worker A
+-- dostawał zielone światło tuż przed wygaśnięciem, ale zanim zdążył wywołać dostawcę,
+-- `claim_email_batch` mógł uznać dzierżawę za wygasłą i oddać wiersz workerowi B — obaj
+-- wysyłają (CAS na mark-sent z 0129 chronił tylko ZAPIS stanu, nie cofał już wysłanej
+-- wiadomości A — dokładnie luka z #621).
+--
+-- WL621-1..4: PO wywołaniu `send_check` (0131) dzierżawa jest odnowiona (locked_at ~ now(),
+-- token bez zmian) i wytrzymuje PEŁNE kolejne okno (czas trwania wywołania dostawcy), mimo że
+-- przed kontrolą była już prawie wygasła — `claim_email_batch` NIE przejmuje wiersza.
+-- WL621-5/6 (KONTROLA UJEMNA): logika SPRZED tej migracji (0129, bez odnowienia) odtworzona
+-- wprost — w IDENTYCZNYM scenariuszu czasowym `claim_email_batch` PRZEJMUJE wiersz od workera A
+-- (nowy token), zanim ten zdążył wywołać dostawcę.
+-- ============================================================================
+\set WLU2 'e6210000-0000-0000-0000-0000000000a1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'WLU2','wl621@test.be','Wl B','{"role":"candidate","first_name":"Wl","last_name":"B","locale":"pl"}');
+select public.enqueue_email(:'WLU2', 'jobPublished', 'job', gen_random_uuid(), 'wl621-1', '{"jobTitle":"Y"}'::jsonb);
+
+-- Worker A claimuje (limit wysoki: kolejka może nieść zaległe wiersze z wcześniejszych sekcji).
+set role service_role;
+select id, lock_token from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-1' \gset wl621_a_
+reset role;
+select pg_temp.assert(:'wl621_a_id' is not null, 'WL621-1 claim zwraca nasz wiersz');
+
+-- Dzierżawa jest już PRAWIE wygasła (worker przetwarzał wcześniejsze wiersze paczki) — ale
+-- jeszcze NIE minęła (< 300 s), więc kontrola musi dać zielone światło (nie lease_lost).
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-1';
+
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'wl621_a_id'::uuid, :'wl621_a_lock_token'::uuid) is null,
+  'WL621-2 dzierżawa jeszcze ważna tuż przed wygaśnięciem — kontrola daje zielone światło');
+reset role;
+
+-- WL621-3: kontrola ODNAWIA dzierżawę (locked_at świeże, nie sprzed 4:59) — token bez zmian.
+select pg_temp.assert(
+  (select locked_at > now() - interval '10 seconds' and lock_token::text = :'wl621_a_lock_token'
+     from public.email_deliveries where idempotency_key = 'wl621-1'),
+  'WL621-3 send_check odnawia dzierżawę (locked_at świeże) i zachowuje token');
+
+-- Symulujemy czas trwania wywołania dostawcy: znów prawie 5 minut, tym razem liczone od
+-- ODNOWIONEJ dzierżawy (dekrement WZGLĘDEM aktualnej wartości — kumulatywny upływ czasu).
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-1';
+
+-- claim_email_batch NIE przejmuje wiersza — odnowiona dzierżawa jest wciąż ważna.
+set role service_role;
+select count(*) as n from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-1' \gset wl621_reclaim_
+reset role;
+select pg_temp.assert(:'wl621_reclaim_n' = '0',
+  'WL621-4 dzierżawa odnowiona w send_check przetrwała czas trwania wysyłki — brak przejęcia');
+select pg_temp.assert(
+  (select lock_token::text = :'wl621_a_lock_token' from public.email_deliveries where idempotency_key = 'wl621-1'),
+  'WL621-4b token workera A bez zmian po nieudanym przejęciu');
+
+-- WL621-5/6 (KONTROLA UJEMNA): logika 0129 BEZ odnowienia dzierżawy — odtworzona wprost.
+create function pg_temp.wl621_send_check_0129(p_id uuid, p_token uuid) returns text
+language plpgsql as $$
+declare v_row public.email_deliveries%rowtype; v_reason text;
+begin
+  select * into v_row from public.email_deliveries d where d.id = p_id for update;
+  if v_row.id is null or v_row.status <> 'queued' then return 'not_queued'; end if;
+  if v_row.lock_token is distinct from p_token then return 'lease_lost'; end if;
+  v_reason := public.email_delivery_suppression_reason(
+    v_row.profile_id, v_row.template, v_row.to_email::text, v_row.campaign_id,
+    v_row.entity_type, v_row.entity_id);
+  if v_reason is not null then
+    update public.email_deliveries set status = 'failed', suppressed_at = now(),
+      error_message = v_reason, locked_at = null, lock_token = null where id = v_row.id;
+  end if;
+  -- 0129: BRAK odnowienia locked_at tutaj — to jest luka #621.
+  return v_reason;
+end $$;
+
+select public.enqueue_email(:'WLU2', 'jobPublished', 'job', gen_random_uuid(), 'wl621-2', '{"jobTitle":"Z"}'::jsonb);
+set role service_role;
+select id, lock_token from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-2' \gset wl621_c_
+reset role;
+
+-- Identyczny scenariusz czasowy: dzierżawa prawie wygasła w chwili kontroli (< 300 s).
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-2';
+
+set role service_role;
+select pg_temp.assert(
+  pg_temp.wl621_send_check_0129(:'wl621_c_id'::uuid, :'wl621_c_lock_token'::uuid) is null,
+  'WL621-5 stara kontrola (0129, bez odnowienia) też daje zielone światło tuż przed wygaśnięciem');
+reset role;
+
+-- Bez odnowienia dzierżawy: kolejne ~5 minut (czas wywołania dostawcy) — DEKREMENT WZGLĘDNY,
+-- czyli łącznie niemal 10 minut od pierwotnego claimu, znacznie ponad limit 300 s.
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-2';
+
+set role service_role;
+select count(*) as n from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-2' \gset wl621_reclaim2_
+select lock_token from public.email_deliveries where idempotency_key = 'wl621-2' \gset wl621_c2_
+reset role;
+select pg_temp.assert(
+  :'wl621_reclaim2_n' = '1' and :'wl621_c2_lock_token' is distinct from :'wl621_c_lock_token',
+  'WL621-6 KONTROLA UJEMNA: bez odnowienia dzierżawy (0129) worker B PRZEJMUJE wiersz w tym ' ||
+  'samym czasie, w którym A (po zielonym świetle) dopiero woła dostawcę — dokładnie luka #621');
+
+-- ============================================================================
+-- RIP. IP i user-agent w receiptach akceptacji (0132): kategoria retencji
+--      7 dni, receipt niezmienny poza wyzerowaniem IP/UA, krok w run_retention_purge
+--      (dry-run bez zmian, świeże receipty zostają). Kontrole ujemne: dawny strażnik 0108
+--      blokuje minimalizację, sama partia 0127 nie zeruje receiptów.
+-- ============================================================================
+\echo '--- RIP ip/ua receiptów (0132) ---'
+reset role; reset app.current_uid;
+\set RIPC1 'e1300000-0000-4000-8000-0000000000c1'
+\set RIPC2 'e1300000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RIPC1','ripc1@test.be','Rip Jeden','{"role":"employer","first_name":"Rip","last_name":"Jeden","locale":"nl"}'),
+  (:'RIPC2','ripc2@test.be','Rip Dwa','{"role":"employer","first_name":"Rip","last_name":"Dwa","locale":"fr"}');
+select public.record_signup_consents(:'RIPC1', true, true, '{}'::jsonb, 'signup', 'nl', '{}'::jsonb,
+  '198.51.100.4', 'Mozilla/5.0 RIP');
+select public.record_signup_consents(:'RIPC2', true, true, '{}'::jsonb, 'signup', 'fr', '{}'::jsonb,
+  '198.51.100.5', 'Mozilla/5.0 RIP2');
+
+-- RIP-1: kategoria z okresem 7 dni i zadaniem.
+select pg_temp.assert(
+  (select period = interval '7 days' and enforcement = 'job'
+     from public.retention_policies where key = 'acceptance_ip_user_agent'),
+  'RIP-1 acceptance_ip_user_agent = 7 dni, zadanie retencji');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances
+    where profile_id = :'RIPC1' and host(ip_address) = '198.51.100.4' and user_agent = 'Mozilla/5.0 RIP') = 2,
+  'RIP-1b oba receipty rejestracji z adresem i user-agentem');
+
+-- RIP-2: receipt niezmienny poza wyzerowaniem IP/UA.
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = ''192.0.2.1'' where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2 nowy adres odrzucony');
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = null, locale = ''pl'' where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2b wyzerowanie razem ze zmianą innej kolumny odrzucone');
+select pg_temp.expect_error(
+  format('update public.document_acceptances set accepted_at = now() where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2c zmiana czasu akceptacji odrzucona');
+select pg_temp.expect_error(
+  format('delete from public.document_acceptances where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2d usunięcie receiptu poza kaskadą odrzucone');
+set role authenticated; set app.current_uid = :'RIPC1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = null where profile_id = %L', :'RIPC1'),
+  'permission denied', 'RIP-2e właściciel nie zmienia własnego receiptu');
+select pg_temp.expect_error('select public.retention_purge_receipts_batch(10)', 'permission denied',
+  'RIP-2f klient nie woła kroku retencji');
+reset role; reset app.current_uid;
+
+-- RIP-3: receipt RIPC1 sprzed 8 dni; RIPC2 świeży.
+set session_replication_role = replica;
+update public.document_acceptances set accepted_at = now() - interval '8 days' where profile_id = :'RIPC1';
+set session_replication_role = origin;
+
+-- KONTROLA UJEMNA: partia z 0127 (bez kroku 0132) nie dotyka receiptów, a dawny strażnik 0108
+-- odrzuciłby samo wyzerowanie.
+begin;
+select public.retention_purge_batch(200);
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'RIPC1' and ip_address is not null) = 2,
+  'RIP-3 KONTROLA UJEMNA: sama partia 0127 zostawia adres w receiptach');
+drop trigger document_acceptances_immutable on public.document_acceptances;
+create trigger document_acceptances_immutable before update or delete on public.document_acceptances
+  for each row execute function public.forbid_consent_receipt_change();
+select pg_temp.expect_error('select public.retention_purge_receipts_batch(200)', 'CONSENT_RECEIPT_IMMUTABLE',
+  'RIP-3b KONTROLA UJEMNA: ze strażnikiem 0108 minimalizacja jest niemożliwa');
+rollback;
+
+select (public.run_retention_purge(200, true))->>'acceptanceIpCleared' as rip_dry \gset
+select pg_temp.assert(:'rip_dry'::integer >= 2
+  and (select count(*) from public.document_acceptances where profile_id = :'RIPC1' and ip_address is not null) = 2,
+  'RIP-4 dry-run liczy receipty do wyzerowania bez zmiany danych');
+select (public.run_retention_purge(200, false))->>'acceptanceIpCleared' as rip_apply \gset
+select pg_temp.assert(:'rip_apply'::integer >= 2
+  and (select count(*) from public.document_acceptances
+        where profile_id = :'RIPC1' and ip_address is null and user_agent is null
+          and kind in ('terms_acceptance', 'privacy_notice_ack') and source = 'signup' and locale = 'nl') = 2
+  and (select count(*) from public.document_acceptances
+        where profile_id = :'RIPC2' and host(ip_address) = '198.51.100.5' and user_agent = 'Mozilla/5.0 RIP2') = 2,
+  'RIP-4b po 7 dniach IP/UA wyzerowane (receipt zostaje), świeży receipt nietknięty');
+delete from auth.users where id in (:'RIPC1', :'RIPC2');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id in (:'RIPC1', :'RIPC2')) = 0,
+  'RIP-4c kaskada usunięcia konta nadal usuwa receipty');
+
+-- ============================================================================
+-- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).
+--         `get_public_jobs` sortuje po kluczu wynagrodzenia (opcjonalnie) i `published_at`,
+--         ale bez unikalnego tie-breakera oferty z remisem mogły wrócić w innej kolejności
+--         między wywołaniami, tnąc grupę remisową w innym miejscu przy paginacji offsetowej
+--         (pominięcia/duplikaty na sąsiednich stronach). Naprawa: `j.id desc` na końcu
+--         ORDER BY (unikalny PK) — sprawdzone dwoma sposobami: (a) realnym zapytaniem na
+--         trzech ofertach z IDENTYCZNYM `published_at` — podział na strony rozmiaru 1 daje
+--         dokładnie ten sam porządek co jedno zapytanie o wszystkie trzy; (b) obecnością
+--         tie-breakera w definicji funkcji (kontrola ujemna: usunięcie go z definicji
+--         cofa asercję (a) do niedeterminizmu, którego prosty test nie może już wykryć —
+--         stąd introspekcja jako dodatkowa, bezpośrednia bramka).
+-- ============================================================================
+\set JLCO  'f9500000-0000-0000-0000-000000059400'
+\set JLJ1  'f9500000-0000-0000-0000-000000059401'
+\set JLJ2  'f9500000-0000-0000-0000-000000059402'
+\set JLJ3  'f9500000-0000-0000-0000-000000059403'
+-- Fixture trwała (autocommit, jak PL109) — zostaje w bazie do końca przebiegu; słowo kluczowe
+-- unikalne, więc nie wpływa na żadną inną sekcję. Negatywna kontrola niżej ma WŁASną
+-- transakcję (begin/rollback) wokół podmiany funkcji, bez zagnieżdżania w tej fixture.
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values (:'JLCO', 'JLP594 Firma', 'verified');
+-- Identyczny `published_at` na wszystkich trzech ofertach — dawny brak tie-breakera nie
+-- miał żadnej podstawy do stabilnego uporządkowania tej trójki.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'JLJ1',:'JLCO','jlp594-a','Pracownik JLP594','warehouse','permanent','Gent','Flandria','active','pl', '2026-06-01 12:00:00+00'),
+  (:'JLJ2',:'JLCO','jlp594-b','Pracownik JLP594','warehouse','permanent','Gent','Flandria','active','pl', '2026-06-01 12:00:00+00'),
+  (:'JLJ3',:'JLCO','jlp594-c','Pracownik JLP594','warehouse','permanent','Gent','Flandria','active','pl', '2026-06-01 12:00:00+00');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+
+-- Słowo kluczowe unikalne dla tej trójki (zamiast kategorii): filtr WHERE działa PRZED
+-- LIMIT/OFFSET, więc inne aktywne, zweryfikowane oferty tej samej kategorii/daty (z innych
+-- sekcji tego pliku) nie mogą wejść do wyniku i zafałszować testu podziału na strony.
+--
+-- JLP594-1: jedno zapytanie o wszystkie trzy vs. trzy zapytania o jedną stronę (limit 1) —
+-- ten sam porządek, każda oferta dokładnie raz, żadnej pominiętej ani zdublowanej.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'jlp594', p_limit => 3, p_offset => 0))
+  = array[
+      (select slug from public.get_public_jobs('pl', 'jlp594', p_limit => 1, p_offset => 0)),
+      (select slug from public.get_public_jobs('pl', 'jlp594', p_limit => 1, p_offset => 1)),
+      (select slug from public.get_public_jobs('pl', 'jlp594', p_limit => 1, p_offset => 2))
+    ],
+  'JLP594-1 podział na strony rozmiaru 1 daje identyczny porządek co jedno zapytanie o 3 wiersze');
+
+-- JLP594-2: powtórzenie tego samego zapytania (inny plan/inna sesja logiczna w tej samej
+-- transakcji) zwraca ten sam porządek — deterministyczność, nie przypadek jednego wywołania.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'jlp594', p_limit => 3, p_offset => 0))
+  =
+  (select array_agg(slug) from public.get_public_jobs('pl', 'jlp594', p_limit => 3, p_offset => 0)),
+  'JLP594-2 dwa niezależne wywołania tego samego zapytania zgadzają się co do kolejności');
+
+reset role;
+
+-- JLP594-3: definicja funkcji niesie tie-breaker `j.id` bezpośrednio po `published_at desc`
+-- (po kluczu wynagrodzenia), przed `limit`/`offset` — introspekcja niezależna od danych.
+select pg_temp.assert(
+  regexp_replace(pg_get_functiondef(
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)'::regprocedure),
+    '--[^\n]*', '', 'g')
+  ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
+  'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
+
+-- KONTROLA UJEMNA: definicja z 0110 (bez tie-breakera) — introspekcja JLP594-3 wykrywa brak,
+-- a podział na strony (JLP594-1) traci swoją gwarancję (nie ma już czego porównać
+-- deterministycznie: bez unikalnego klucza w ORDER BY sam SQL nie obiecuje stabilnego wyniku).
+begin;
+create or replace function public.get_public_jobs(
+  p_locale         text        default 'pl',
+  p_keyword        text        default null,
+  p_city           text        default null,
+  p_categories     text[]      default null,
+  p_locations      text[]      default null,
+  p_contract_types text[]      default null,
+  p_salary_min     integer     default null,
+  p_salary_max     integer     default null,
+  p_accommodation  boolean     default null,
+  p_immediate      boolean     default null,
+  p_no_language    boolean     default null,
+  p_since          timestamptz default null,
+  p_sort           text        default 'newest',
+  p_limit          integer     default 20,
+  p_offset         integer     default 0,
+  p_salary_unit    text        default 'month'
+)
+returns table (
+  id uuid, slug text, title text, company_name text, company_verified boolean,
+  city text, region text, contract_type text, salary_min integer, salary_max integer,
+  currency text, salary_period text, published_at timestamptz, highlights text[], category text,
+  accommodation boolean, immediate boolean, no_language_required boolean
+)
+language sql stable security definer set search_path = public, pg_temp as $jlneg$
+  select
+    j.id, j.slug,
+    coalesce(t.title, j.title) as title,
+    c.name as company_name,
+    (c.status = 'verified') as company_verified,
+    j.city, j.region, j.contract_type::text,
+    j.salary_min, j.salary_max, coalesce(j.currency, 'EUR') as currency,
+    j.salary_period::text as salary_period,
+    j.published_at,
+    coalesce(t.highlights, '{}'::text[]) as highlights,
+    j.category::text,
+    j.accommodation, j.immediate, j.no_language_required
+  from public.jobs j
+  join public.companies c on c.id = j.company_id
+  left join lateral (
+    select jt.title, jt.highlights
+    from public.job_translations jt
+    where jt.job_id = j.id
+    order by (jt.locale = case when public.is_supported_locale(p_locale) then p_locale else 'pl' end) desc,
+             (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
+    limit 1
+  ) t on true
+  where j.status = 'active' and j.deleted_at is null
+    and (j.expires_at is null or j.expires_at > now())
+    and c.status = 'verified' and c.deleted_at is null
+    and not exists (
+      select 1 from public.candidate_company_blocks b
+      where b.candidate_id = auth.uid() and b.company_id = j.company_id
+    )
+    and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
+    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations))
+    and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
+    and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
+    and (p_keyword is null or j.id in (
+      select public.search_title_candidates(left(p_keyword, 100))))
+    and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
+      like public.search_like_pattern(left(p_keyword, 100)) escape '\')
+    and public.job_salary_in_range(
+      j.salary_min, j.salary_max, j.salary_period, p_salary_min, p_salary_max, p_salary_unit)
+    and (p_accommodation is null or j.accommodation = p_accommodation)
+    and (coalesce(p_immediate, false) = false or j.immediate = true)
+    and (coalesce(p_no_language, false) = false or j.no_language_required = true)
+    and (p_since is null or j.published_at >= p_since)
+  order by
+    (case when p_sort = 'salary' then public.job_salary_sort_key(
+      j.salary_min, j.salary_max, j.salary_period, p_salary_unit) end) desc nulls last,
+    j.published_at desc
+  limit least(greatest(coalesce(p_limit, 20), 1), 100)
+  offset least(greatest(coalesce(p_offset, 0), 0), 10000);
+$jlneg$;
+select pg_temp.assert(
+  not (regexp_replace(pg_get_functiondef(
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)'::regprocedure),
+    '--[^\n]*', '', 'g')
+  ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
+  'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
+rollback;
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -40,6 +40,7 @@ dopiero po RET-09/RET-10, osobnym krokiem. Tabela jest niedostępna dla ról kli
 | `confirmed_guest_request` | 30 dni | job | usuwa potwierdzone zgłoszenie bez konta (bufor, nie aplikacja) od `confirmed_at` z jego e-mailami; aplikacja zostaje ze snapshotem gościa |
 | `unconfirmed_guest_request` | 7 dni | job | niepotwierdzone zgłoszenie usuwane 7 dni od **pierwszego** wysłania (`created_at`) — ponowny link nie przedłuża |
 | `guest_ip_user_agent` | 7 dni | job | zeruje IP i user-agent zgody gościa |
+| `acceptance_ip_user_agent` | 7 dni | job | zeruje IP i user-agent receiptu akceptacji przy rejestracji (0132, krok `retention_purge_receipts_batch`); receipt zostaje |
 | `data_rights_request_log` | 1095 dni | job | usuwa ślad obsługi wniosku |
 | `erasure_tombstone` | wyłączone (bez limitu) | job | usuwa wpis rejestru usunięć — **bez zmian** do RET-09/RET-10 |
 | `storage_physical_deletion` | 3 dni (72 h), alarm 1 dzień | monitoring | cel fizycznego usunięcia obiektu; czujka `storage_deletion_age` po 24 h |
@@ -98,8 +99,8 @@ wykonania na produkcji.
 `storage_deletion_queue (bucket, path)` wypełnia trigger `AFTER DELETE` na `files` —
 każda ścieżka usunięcia (akcja kandydata, usunięcie konta, retencja, ponowne usunięcie
 po restore) zostawia zadanie usunięcia obiektu. Worker: `claim_storage_deletions`
-(dzierżawa 5 min) → usunięcie obiektu (prywatny bucket Railway z #26, gdy skonfigurowany;
-inaczej Supabase Storage) → `complete_storage_deletion`. Brak obiektu =
+(dzierżawa 5 min) → usunięcie obiektu z prywatnego bucketu Railway (#26; bez bucketu
+`STORAGE_UNCONFIGURED` i ponowienie, #27) → `complete_storage_deletion`. Brak obiektu =
 sukces. Ścieżka, która znów ma wiersz `files`, wypada z kolejki bez usuwania.
 
 **Dead-letter (RET-04, 0127).** 20. nieudana próba (albo porzucona dzierżawa po niej)
@@ -234,5 +235,3 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
   przepływ.
 - Potwierdzenie usunięcia linkiem e-mail (dziś: sesja + wpisany adres) i powiadomienie
   firmy o wycofaniu danych kandydata.
-- Panele i akcje nadal na kliencie Supabase; po #24/#25 te same RPC pod
-  `withUserTransaction`.
