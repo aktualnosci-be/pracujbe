@@ -27,6 +27,7 @@ import { z } from 'zod/v3';
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
+import { companyNameFromMetadata } from '@/lib/auth/signup-company-name';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { isAgeAttestationError } from '@/lib/age-policy/constants';
@@ -497,14 +498,6 @@ export async function updatePassword(input: UpdatePasswordInput): Promise<AuthAc
   }
 
   return { ok: true };
-}
-
-/** Nazwa firmy z prywatnych metadanych rejestracji (zapisanych serwerowo przez adapter). */
-function companyNameFromMetadata(user: Record<string, unknown>): string | null {
-  const meta = user['raw_user_meta_data'];
-  if (!meta || typeof meta !== 'object') return null;
-  const name = (meta as Record<string, unknown>)['company_name'];
-  return typeof name === 'string' && name.trim().length > 0 ? name.trim() : null;
 }
 
 /**

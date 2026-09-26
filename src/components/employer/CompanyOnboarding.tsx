@@ -12,7 +12,7 @@ import {
  * Zakładanie firmy przez ZALOGOWANEGO pracodawcę bez członkostwa (#365) — np. gdy bootstrap
  * po potwierdzeniu e-maila się nie udał. Renderowane przez layout panelu zamiast strony
  * (każda podstrona `/employer/*`) oraz przez `/employer/firma`. Nazwa z rejestracji
- * (`user_metadata.company_name`) wypełnia formularz; zapis jest idempotentny
+ * (`auth.users.raw_user_meta_data.company_name`, `readSignupCompanyName` w layoucie) wypełnia formularz; zapis jest idempotentny
  * (`create_first_company`), więc ponowne kliknięcie nie tworzy drugiej firmy.
  * #403: nad formularzem zaproszenia do istniejących zespołów — zamiast zakładać własną firmę
  * można dołączyć do firmy, która zaprosiła ten adres.
