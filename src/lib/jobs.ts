@@ -17,6 +17,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
+import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
 
@@ -191,7 +192,7 @@ function toLocale(locale: string): Locale {
  * fikcyjne zastępują realny backend, więc nie są oznaczane jako demo — tam testujemy
  * formularz aplikowania i JobPosting. Nie działa w buildzie produkcyjnym.
  */
-function isRealJobsFixture(): boolean {
+export function isRealJobsFixture(): boolean {
   return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full';
 }
 
@@ -204,7 +205,10 @@ export function isShowingDemoJobs(): boolean {
 }
 
 function markDemo<T extends JobListItem>(job: T): T {
-  return isRealJobsFixture() ? job : { ...job, isDemo: true };
+  if (!isRealJobsFixture()) return { ...job, isDemo: true };
+  // Serwer fixture: slug profilu firmy jak `company_slug` z bazy (tylko firma zweryfikowana).
+  const companySlug = fixtureCompanySlug(job.companyName, job.companyVerified);
+  return companySlug ? { ...job, companySlug } : job;
 }
 
 function newestFirst(a: JobListItem, b: JobListItem): number {

@@ -618,6 +618,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   zamiast linkować donikąd. Strona indeksowalna (canonical, hreflang), sitemap dodaje jeden wpis na
   firmę zebrany PRZY OKAZJI iteracji po ofertach (bez osobnego zapytania). Dowód: `rls.sql` sekcja
   CP591; unit `company-profile`, `jobs-postgres` (#591), `sitemap-robots` (#591, z kontrolą ujemną).
+  SEO i kandydat (#591, bez migracji): nazwa firmy na karcie oferty (`JobCard`, link nad nakładką
+  tytułu) i w nagłówku szczegółu linkuje do profilu, gdy `companySlug` istnieje (tylko `verified`);
+  profil ma Organization JSON-LD (`buildOrganizationJsonLd`: nazwa, adres profilu, opis, adres
+  pocztowy; `sameAs`/`logo` tylko https — edycja w panelu to #632); profil bez aktywnych ofert =
+  `noindex, follow` bez canonical/hreflang (jak pusty landing #299), sitemap zbiera profile tylko
+  z aktywnych ofert. Serwer fixture E2E ma profile firm zweryfikowanych i jedną firmę bez ofert
+  (`src/lib/company-fixture.ts`). Dowód: unit `company-profile-seo` (kontrole ujemne), E2E
+  `company-profile` (linki, JSON-LD, noindex, 404 niezweryfikowanej, axe 320/1280 px w 4 językach).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
