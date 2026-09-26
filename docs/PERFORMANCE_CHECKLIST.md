@@ -202,8 +202,11 @@ Zapis oferty w CI nie ma sesji kandydata (build bez bazy → przycisk „niedost
 więc skrypt podmienia odpowiedź akcji odczytu stanu (`getPublicSavedJobs`,
 `{"status":"unavailable"}` → kandydat bez zapisanych). Mierzone jest tapnięcie —
 optymistyczne przełączenie i render kart; sam zapis (`toggleSavedJob`) odpowiada później
-i nie wchodzi w czas interakcji. Brak podmiany albo brak skutku tapnięcia = błąd kroku, nie
-zielony wynik.
+i nie wchodzi w czas interakcji. Odpowiedź zapisu też jest podmieniana (sukces z `saved` =
+stan docelowy): oferty demo mają identyfikatory spoza UUID, więc akcja zwraca
+`VALIDATION_FAILED`, a wyspa cofała zapis — `aria-pressed="true"` trwało tylko do odpowiedzi
+i krok był niestabilny. Skrypt czeka na koniec akcji i wymaga, by zapis nie został cofnięty.
+Brak podmiany, brak skutku tapnięcia albo cofnięty zapis = błąd kroku, nie zielony wynik.
 
 Kontrola ujemna: `--inject-click-delay-ms 300` dodaje blokujący listener kliknięcia (faza
 przechwytywania — to samo zadanie co handler Reacta, jak ciężki handler w komponencie).

@@ -1650,7 +1650,8 @@
     "reportSent": "Melding ontvangen",
     "reportAlreadyOpen": "Al gemeld — wacht op controle",
     "reportedBadge": "Gemeld",
-    "reportNetworkError": "De melding kon niet worden verstuurd. Controleer je verbinding en probeer het opnieuw."
+    "reportNetworkError": "De melding kon niet worden verstuurd. Controleer je verbinding en probeer het opnieuw.",
+    "attachmentPreviewAlt": "Voorbeeld van afbeelding {name}"
   },
   "files": {
     "cvTitle": "Je cv / documenten",
