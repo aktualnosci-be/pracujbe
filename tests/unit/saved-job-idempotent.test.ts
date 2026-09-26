@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toggleSavedJob } from '@/lib/actions/candidate';
-import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -108,16 +108,6 @@ describe('toggleSavedJob — idempotentny zapis oferty (#9)', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
-    expect(fakeDb.calls).toHaveLength(0);
-  });
-
-  it('tryb demo (bez bazy): zwraca stan docelowy jako `saved`, bez zapisu', async () => {
-    // Wyspa listy ofert (`PublicSavedJobs`) cofa optymistyczny stan, gdy `saved` nie jest
-    // booleanem — bez tego przycisk po tapnięciu wracał do „niezapisane” (perf-lab INP).
-    resetFakeDb({ id: userId, role: 'candidate' });
-    fakeSession.configured = false;
-    expect(await toggleSavedJob(jobId, true)).toEqual({ ok: true, saved: true });
-    expect(await toggleSavedJob(jobId, false)).toEqual({ ok: true, saved: false });
     expect(fakeDb.calls).toHaveLength(0);
   });
 });

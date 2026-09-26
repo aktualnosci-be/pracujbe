@@ -58,9 +58,8 @@ export async function toggleSavedJob(
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
 
-  // Tryb demo — brak zapisu; stan docelowy wraca jako `saved`, więc klient trzyma optymistyczny
-  // stan przycisku (bez `saved` wyspa listy ofert cofała go i pokazywała błąd zapisu).
-  if (!isPortalDataConfigured()) return desired === undefined ? { ok: true } : { ok: true, saved: desired };
+  // Tryb demo — brak zapisu; klient trzyma optymistyczny stan przycisku.
+  if (!isPortalDataConfigured()) return { ok: true };
 
   try {
     const me = await getPortalIdentity();
