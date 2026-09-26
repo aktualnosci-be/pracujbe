@@ -11807,6 +11807,85 @@ reset role;
 rollback;
 
 -- ============================================================================
+-- SEC191. Części gmin w słowniku (0191, numer tymczasowy): kind = 'section' z gminą
+--         nadrzędną, aliasy PL/NL/FR/EN; nazwa gminy z 0112 wygrywa z nazwą części.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.locations where kind = 'section' and is_demo = false) >= 1500
+  and not exists (select 1 from public.locations s
+                   where s.kind = 'section'
+                     and not exists (select 1 from public.locations p
+                                      where p.id = s.parent_location_id
+                                        and p.kind in ('municipality', 'former_municipality')))
+  and not exists (select 1 from public.locations s
+                   where s.kind = 'section'
+                     and not exists (select 1 from public.location_aliases a where a.location_id = s.id)),
+  'SEC191-1 części gmin z gminą nadrzędną i aliasem');
+select pg_temp.assert(
+  (select p.slug from public.location_aliases a
+     join public.locations s on s.id = a.location_id
+     join public.locations p on p.id = s.parent_location_id
+    where a.alias_key = 'heverlee' and s.kind = 'section') = 'leuven'
+  and (select p.slug from public.location_aliases a
+     join public.locations s on s.id = a.location_id
+     join public.locations p on p.id = s.parent_location_id
+    where a.alias_key = 'haren' and s.kind = 'section') = 'brussels'
+  and (select (latitude, longitude) = (50.891900, 4.418300) from public.locations where slug = 'haren-brussels'),
+  'SEC191-2 Heverlee → Leuven, Haren → Bruksela, współrzędne części (nie gminy)');
+-- Własna nazwa gminy wygrywa: klucze gmin z 0112 nie wskazują części gmin.
+select pg_temp.assert(
+  (select l.kind from public.location_aliases a join public.locations l on l.id = a.location_id
+    where a.alias_key = 'aalst') = 'municipality'
+  and (select l.slug from public.location_aliases a join public.locations l on l.id = a.location_id
+    where a.alias_key = 'saint nicolas') = 'saint-nicolas'
+  and not exists (select 1 from public.location_aliases a join public.locations l on l.id = a.location_id
+                   where l.kind = 'section'
+                     and exists (select 1 from public.locations m
+                                  where m.kind <> 'section' and m.slug = replace(a.alias_key, ' ', '-'))),
+  'SEC191-3 nazwa gminy nie jest przejęta przez część gminy');
+
+-- Zapytanie loadera (src/lib/data/matching.ts) pod rolą klienta i RLS.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select array_agg(format('%s:%s', a.alias_key, l.kind) order by a.alias_key)
+     from public.location_aliases a join public.locations l on l.id = a.location_id
+    where l.is_active = true and a.alias_key = any(array['heverlee', 'kessel lo', 'leuven']))
+  = array['heverlee:section', 'kessel lo:section', 'leuven:municipality'],
+  'SEC191-4 loader widzi część gminy i gminę po kluczu');
+select pg_temp.expect_error('update public.locations set parent_location_id = null',
+  'permission denied', 'SEC191-4b zalogowany nie zmienia powiązania z gminą');
+reset role; reset app.current_uid;
+
+-- Integralność: część wymaga gminy; gminą nadrzędną nie może być inna część.
+select pg_temp.expect_error(
+  'insert into public.locations (slug, name, country, kind) values (''sec191-x'', ''X'', ''BE'', ''section'')',
+  'locations_section_parent_check', 'SEC191-5 część gminy bez gminy nadrzędnej');
+select pg_temp.expect_error(
+  'insert into public.locations (slug, name, country, kind, parent_location_id) select ''sec191-y'', ''Y'', ''BE'', ''section'', id from public.locations where slug = ''heverlee-leuven''',
+  'musi wskazywać gminę', 'SEC191-5b gminą nadrzędną nie jest część gminy');
+begin;
+delete from public.locations where slug = 'leuven';
+select pg_temp.assert(not exists (select 1 from public.location_aliases where alias_key in ('heverlee', 'kessel lo')),
+  'SEC191-6 usunięcie gminy usuwa jej części i ich aliasy');
+rollback;
+
+-- Kontrola ujemna: bez strażnika część wskazuje inną część.
+begin;
+drop trigger locations_section_parent_guard on public.locations;
+insert into public.locations (slug, name, country, kind, parent_location_id)
+  select 'sec191-y', 'Y', 'BE', 'section', id from public.locations where slug = 'heverlee-leuven';
+select pg_temp.assert(exists (select 1 from public.locations where slug = 'sec191-y'),
+  'SEC191-7 kontrola ujemna: bez strażnika część gminy wskazuje część');
+rollback;
+-- Kontrola ujemna: bez danych 0191 nazwa części gminy jest nieznana (brak wiersza loadera).
+begin;
+delete from public.locations where kind = 'section';
+select pg_temp.assert(not exists (select 1 from public.location_aliases where alias_key = 'heverlee'),
+  'SEC191-8 kontrola ujemna: bez części gmin Heverlee nie ma współrzędnych');
+rollback;
+
+-- ============================================================================
 -- AC45. Panel admina kampanii e-mail (#45, 0111): admin_activate/cancel_email_campaign —
 --       tylko admin (is_admin), CAS statusu (STALE_STATE), macierz przejść
 --       (INVALID_TRANSITION), skutek = istniejące RPC z 0101, audyt bez treści i odbiorców.

@@ -16,6 +16,8 @@ select md5(string_agg(concat_ws('|', slug, name, latitude, longitude, sort_order
                 'liege', 'charleroi', 'bruges', 'kortrijk') \gset
 
 begin;
+-- Kolejność wycofania: najpierw późniejsza migracja części gmin (0191), potem 0112.
+\ir ../rollback/0191_locations_be_sections.down.sql
 \ir ../rollback/0112_locations_be_municipalities.down.sql
 select pg_temp.assert(to_regclass('public.location_aliases') is null
   and not exists (select 1 from information_schema.columns

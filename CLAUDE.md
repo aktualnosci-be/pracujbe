@@ -1075,7 +1075,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   z generatorem, lustro TS z bazą (z kontrolą ujemną) i klucze z `cityKey`. Dowód: `rls.sql`
   sekcja LOC194 (kontrola ujemna bez polityki RLS), rollback `supabase/rollback/0112_…down.sql`,
   integracja `portal-candidate` (Puurs–Bornem tylko z bazy; mutacja bez słownika = czerwony).
-  **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
+  Części gmin (migracja `0191` — numer tymczasowy): 2066 deelgemeenten / sections de commune
+  z migawki Wikidata (CC0 1.0, `data/locations/be-sections.wikidata.json`, klasa Q2785216 +
+  kody NIS części) jako `locations.kind = 'section'` z `parent_location_id` (gmina z 0112:
+  obecna z P131, potem następca gminy zniesionej P1366, potem kod NIS; strażnik
+  `locations_section_parent_guard` — rodzicem tylko gmina, usunięcie gminy usuwa części),
+  współrzędne części (brak = gminy), aliasy PL/NL/FR/EN: klucz zajęty w 0112 zostaje przy gminie,
+  nazwa wspólna kilku części (Deurne, Berchem…) pominięta. Matching bez zmian w kodzie — loader
+  czyta te same aliasy (Heverlee–Kessel-Lo w promieniu tylko ze słownika). Ten sam generator
+  (`build-migration.mjs` pisze 0112 i 0191; 0112 bez zmian). Dowód: `rls.sql` sekcja SEC191
+  (kontrole ujemne: bez strażnika, bez danych), `matching-locations` (plik = generator, reguły
+  aliasów z kontrolą ujemną), integracja `portal-candidate` (kontrola ujemna: części nieaktywne),
+  rollback `supabase/rollback/0191_…down.sql` (test w `test-rls.sh`).
+  **Do zrobienia:** geokodowanie miejscowości spoza słownika, nazwy części wspólne dla kilku gmin
+  (dziś pominięte);
   zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez

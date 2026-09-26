@@ -453,6 +453,28 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     }
   });
 
+  it('części gmin ze słownika (0191): Heverlee i Kessel-Lo tylko w bazie, kontrola ujemna', async () => {
+    const setCities = async (candidate: string, job: string) => {
+      await db().admin.query('UPDATE public.candidate_profiles SET city = $2 WHERE profile_id = $1', [alice, candidate]);
+      await db().admin.query('UPDATE public.jobs SET city = $2 WHERE id = $1', [jobIds[0], job]);
+    };
+    actAs({ id: alice, role: 'candidate' });
+    try {
+      // Części gminy Leuven (~5 km), spoza listy w kodzie — współrzędne tylko z wierszy kind = 'section'.
+      await setCities('Heverlee', 'Kessel-Lo');
+      const near = await getMyJobMatch(jobIds[0]!);
+      expect(near.status === 'ok' && near.result.strengths).toContain('withinCommuteRadius');
+      // Kontrola ujemna: bez aktywnych części gmin ta sama para nie ma odległości.
+      await db().admin.query("UPDATE public.locations SET is_active = false WHERE kind = 'section'");
+      const without = await getMyJobMatch(jobIds[0]!);
+      expect(without.status).toBe('ok');
+      expect(without.status === 'ok' && without.result.strengths).not.toContain('withinCommuteRadius');
+    } finally {
+      await db().admin.query("UPDATE public.locations SET is_active = true WHERE kind = 'section'");
+      await setCities('Gent', 'Gent');
+    }
+  });
+
   it('ostatnie wiadomości i licznik nieprzeczytanych rozmów tylko dla członka', async () => {
     const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
       VALUES ($1, 'Rozmowa', now()) RETURNING id`, [companyId]);

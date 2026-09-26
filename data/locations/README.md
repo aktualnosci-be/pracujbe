@@ -10,8 +10,19 @@ etykiety PL/NL/FR/EN (+ `mul`, wspólna etykieta Wikidata, jako zapas).
 Bez usług płatnych i bez geokodowania przez API w działającej aplikacji: dane trafiają do bazy
 migracją `supabase/migrations/0112_locations_be_municipalities.sql`.
 
-- Odświeżenie migawki (ręcznie, poza CI): `node scripts/locations/fetch-wikidata.mjs`
-- Wygenerowanie SQL: `node scripts/locations/build-migration.mjs`
+`be-sections.wikidata.json` — migawka części gmin (deelgemeenten / sections de commune):
+elementy klasy Q2785216 i miejscowości z kodem NIS części gminy (5 cyfr + litera, np. `44011J`),
+z gminą nadrzędną (P131) i następcą gminy zniesionej (P1366). Ta sama licencja CC0 1.0.
+Trafia do bazy migracją `supabase/migrations/0191_locations_be_sections.sql` (numer tymczasowy)
+jako `kind = 'section'` z `parent_location_id`. Nazwa zajęta przez gminę z 0112 zostaje przy
+gminie; nazwa wspólna kilku części (np. Deurne, Berchem) jest pomijana jako niejednoznaczna;
+część bez własnej nazwy (część główna o nazwie gminy) nie trafia do słownika. Brak współrzędnych
+części = współrzędne gminy nadrzędnej.
+
+- Odświeżenie migawek (ręcznie, poza CI): `node scripts/locations/fetch-wikidata.mjs`
+  (`municipalities` albo `sections` — tylko jedna migawka; odświeżenie gmin zmienia wynik
+  generatora 0112, więc po wdrożeniu zmiany idą nową migracją)
+- Wygenerowanie SQL (0112 i 0191): `node scripts/locations/build-migration.mjs`
 
 Lista kanoniczna `src/lib/matching/belgian-cities.ts` ma pierwszeństwo (współrzędne i aliasy).
 Znane poprawki danych w generatorze: wspólny kod NIS przy gminie obecnej i zniesionej zostaje
