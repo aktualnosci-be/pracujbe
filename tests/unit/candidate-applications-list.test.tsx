@@ -39,6 +39,18 @@ describe('candidate application list', () => {
     expect(screen.queryByRole('button', { name: 'applicationsMore' })).not.toBeInTheDocument();
   });
 
+  it('every card links to its application detail, also when the offer has no public page', () => {
+    const noSlug = { ...items[0]!, id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001', slug: null };
+    render(<CandidateApplicationsList locale="pl" initialPage={{ items: [noSlug, items[1]!], nextCursor: null }} />);
+    const details = screen.getAllByRole('link', { name: 'candidateApplicationDetailsLinkLabel' });
+    expect(details.map((a) => a.getAttribute('href'))).toEqual([
+      '/candidate/aplikacje/aaaaaaaa-aaaa-4aaa-8aaa-000000000001',
+      '/candidate/aplikacje/app-2',
+    ]);
+    // Oferta bez publicznego adresu: brak „Zobacz ofertę”, szczegół zgłoszenia zostaje.
+    expect(screen.getAllByRole('link', { name: 'actionView' })).toHaveLength(1);
+  });
+
   it('preserves loaded rows on a failed request and allows a retry', async () => {
     loadMoreApplications.mockResolvedValueOnce({ status: 'error' })
       .mockResolvedValueOnce({ status: 'ready', page: { items: [...items.slice(9, 15)], nextCursor: null } });

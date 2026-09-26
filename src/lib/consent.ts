@@ -86,7 +86,9 @@ export function saveConsent(
   if (typeof document !== 'undefined') {
     writeCookie(CONSENT_COOKIE_NAME, JSON.stringify(record), CONSENT_MAX_AGE_DAYS);
     // Rozliczalność (RODO art. 7 ust. 1): serwerowy log zgody, PER KATEGORIA.
-    void persistConsentToServer(record.categories, source);
+    // `record.v` = wersja polityki FAKTYCZNIE pokazana użytkownikowi (ta w jego cookie) —
+    // serwer ją przyjmie tylko, jeśli istnieje w `consent_versions` (patrz `record_consent`).
+    void persistConsentToServer(record.categories, source, record.v);
   }
 
   return record;
@@ -100,9 +102,10 @@ export function saveConsent(
 async function persistConsentToServer(
   categories: ConsentCategories,
   source: ConsentSource,
+  version: string,
 ): Promise<void> {
   try {
-    await recordConsent(categories, source);
+    await recordConsent(categories, source, version);
   } catch {
     // celowo połknięte — pomocniczy log zgód nie może zaburzyć zapisu w przeglądarce
   }
@@ -137,6 +140,12 @@ function createConsentId(): string {
  *
  * `source` wyprowadza się z kontekstu wywołania (który przycisk / ekran), a nie z cookie —
  * dlatego nie jest częścią minimalnej struktury zapisywanej w przeglądarce.
+ *
+ * `v` (wersja polityki z cookie) jedzie do `recordConsent` jako `version` i trafia do RPC
+ * jako `p_version` (0142) — receipt niesie wersję FAKTYCZNIE pokazaną użytkownikowi, ale
+ * TYLKO gdy istnieje w `consent_versions`; inaczej `record_consent` po cichu wraca do
+ * bieżącej wersji dokumentu 'cookies' (jak przed 0142) — nigdy nie ufamy dowolnemu tekstowi
+ * klienta jako identyfikatorowi wiersza w bazie.
  *
  * Uwaga RODO: pełne IP nie jest zapisywane po stronie klienta; ewentualne wzbogacenie rekordu
  * o IP/User-Agent (z nagłówków żądania) należy robić wyłącznie serwerowo i w formie skrótu.

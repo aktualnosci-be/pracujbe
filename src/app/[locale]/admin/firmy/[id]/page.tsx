@@ -294,6 +294,16 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
                     <span className={cn(TAG, 'mt-1.5')}>
                       {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
                     </span>
+                    {job.status === 'active' ? (
+                      <a
+                        href={`/api/employer/jobs/${job.id}/banner?format=1200x300&locale=${locale}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(TEXT_LINK, 'ml-2 mt-1.5 px-0 text-xs')}
+                      >
+                        {t('jobBannerLink')}
+                      </a>
+                    ) : null}
                   </div>
                 </li>
               ))}
