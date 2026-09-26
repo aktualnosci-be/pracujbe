@@ -1032,7 +1032,10 @@
     "funnelDenied": "L’entonnoir de recrutement est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
     "topMatchedDenied": "Les candidats correspondants sont visibles par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
     "topMatchedUnverified": "Les candidats correspondants apparaîtront après la vérification de l’entreprise.",
-    "topMatchedLoadError": "Impossible de charger les candidats correspondants."
+    "topMatchedLoadError": "Impossible de charger les candidats correspondants.",
+    "jobAvailabilityExpired": "Offre expirée",
+    "jobAvailabilityClosed": "Offre clôturée",
+    "jobAvailabilityUnavailable": "Offre indisponible"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",

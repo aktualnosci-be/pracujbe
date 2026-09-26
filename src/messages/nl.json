@@ -1032,7 +1032,10 @@
     "funnelDenied": "De wervingstrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
     "topMatchedDenied": "Gematchte kandidaten zijn zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
     "topMatchedUnverified": "Gematchte kandidaten verschijnen zodra het bedrijf is geverifieerd.",
-    "topMatchedLoadError": "We konden de gematchte kandidaten niet laden."
+    "topMatchedLoadError": "We konden de gematchte kandidaten niet laden.",
+    "jobAvailabilityExpired": "Vacature verlopen",
+    "jobAvailabilityClosed": "Vacature gesloten",
+    "jobAvailabilityUnavailable": "Vacature niet beschikbaar"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
