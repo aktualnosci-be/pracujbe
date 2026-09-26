@@ -335,7 +335,16 @@ export default async function JobDetailPage({ params }: PageProps) {
               {job.title}
             </h1>
             <p className={cn(INTRO, 'mt-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1')}>
-              <span className="break-words">{job.companyName}</span>
+              {job.companySlug ? (
+                <Link
+                  href={`/pracodawcy/${job.companySlug}`}
+                  className="break-words underline-offset-2 hover:underline"
+                >
+                  {job.companyName}
+                </Link>
+              ) : (
+                <span className="break-words">{job.companyName}</span>
+              )}
               {job.companyVerified && !job.isDemo ? (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                   <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
