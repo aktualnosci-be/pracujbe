@@ -1326,7 +1326,7 @@ export interface AdminCompanyJob {
   createdAt: string | null;
 }
 
-/** Link firmy czekający na akceptację admina (0144, „linki do zatwierdzenia”). */
+/** Link firmy czekający na akceptację admina (0207, „linki do zatwierdzenia”). */
 export interface AdminCompanyLinkReview {
   field: 'website' | 'logo_url';
   /** Zgłoszony adres (CAS przy decyzji). */
@@ -1340,7 +1340,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   website: string | null;
   /** Zatwierdzone logo (publiczne). */
   logoUrl: string | null;
-  /** Zgłoszenia linków do akceptacji (0144); puste = nic nie czeka. */
+  /** Zgłoszenia linków do akceptacji (0207); puste = nic nie czeka. */
   linkReviews: AdminCompanyLinkReview[];
   phone: string | null;
   address: string | null;

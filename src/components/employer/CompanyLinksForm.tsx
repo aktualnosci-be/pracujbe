@@ -33,7 +33,7 @@ import { updateCompanyLinks } from '@/lib/actions/company';
  * puste pole = wyczyszczenie adresu. Realizuje Invariant #11 (blokada przycisku podczas
  * zapisu, błędy przy polach z fokusem na pierwszym, zachowanie danych po błędzie, jasny sukces).
  *
- * Akceptacja (0144): nowy adres trafia do administratora; publicznie widać zatwierdzony. Pod
+ * Akceptacja (0207): nowy adres trafia do administratora; publicznie widać zatwierdzony. Pod
  * polem formularz pokazuje zgłoszenie czekające na akceptację, adres widoczny teraz publicznie
  * i uzasadnienie ostatniego odrzucenia. Wyczyszczenie pola usuwa link od razu.
  *
@@ -42,7 +42,7 @@ import { updateCompanyLinks } from '@/lib/actions/company';
  * każdego innego poprawnego adresu formularz pokazuje sam link zamiast obrazka.
  */
 
-/** Stan jednego linku po stronie bazy (0144). */
+/** Stan jednego linku po stronie bazy (0207). */
 export interface CompanyLinkReviewState {
   /** Adres widoczny publicznie (zatwierdzony) albo null. */
   published: string | null;

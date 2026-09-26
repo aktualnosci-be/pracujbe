@@ -13699,7 +13699,7 @@ select pg_temp.expect_error(
   'companies_website_pending_https', 'CL141-2c spacja w adresie odrzucona');
 reset role; reset app.current_uid;
 
--- CL141-3 (0144, „linki do zatwierdzenia”): owner ustawia OBA adresy → trafiają do
+-- CL141-3 (0207, „linki do zatwierdzenia”): owner ustawia OBA adresy → trafiają do
 -- zgłoszenia (`*_pending`), publiczne kolumny BEZ ZMIAN (nic nie wycieka do get_public_*),
 -- status BEZ ZMIAN (verified), audyt.
 set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
@@ -13835,7 +13835,7 @@ select pg_temp.assert(
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
 -- ============================================================================
--- CL144. Linki firmy do zatwierdzenia (0144, decyzja właściciela 26.09.2026): nowa strona
+-- CL207. Linki firmy do zatwierdzenia (0207, decyzja właściciela 26.09.2026): nowa strona
 --        WWW/logo od firmy czeka w `*_pending`, publiczne odczyty (`get_public_company`,
 --        `get_public_job`) widzą tylko adres zatwierdzony przez admina
 --        (`admin_review_company_link`: is_admin, CAS, audyt). Kontrola ujemna: bez strażnika
@@ -13848,64 +13848,64 @@ reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'OWNLR','ownlr@test.be','Lena LR','{"role":"employer","first_name":"Lena","last_name":"LR","locale":"pl"}');
 insert into public.companies(id,name,slug,status,vat_number,verified_at,website) values
-  (:'COMPLR','Firma LR','cl144-firma-lr','verified','BE0622222222',now(),'https://stara.firma-lr.example');
+  (:'COMPLR','Firma LR','cl207-firma-lr','verified','BE0622222222',now(),'https://stara.firma-lr.example');
 insert into public.company_members(company_id,profile_id,role,is_active) values
   (:'COMPLR',:'OWNLR','owner',true);
 
--- CL144-1: adres sprzed 0144 (zapis backendu) jest publiczny.
+-- CL207-1: adres sprzed 0207 (zapis backendu) jest publiczny.
 select pg_temp.assert(
-  (select website = 'https://stara.firma-lr.example' from public.get_public_company('cl144-firma-lr')),
-  'CL144-1 zatwierdzony (dotychczasowy) adres widoczny w profilu publicznym');
+  (select website = 'https://stara.firma-lr.example' from public.get_public_company('cl207-firma-lr')),
+  'CL207-1 zatwierdzony (dotychczasowy) adres widoczny w profilu publicznym');
 
--- CL144-2: owner zgłasza nowy adres → publicznie nadal stary, nowy tylko w zgłoszeniu.
+-- CL207-2: owner zgłasza nowy adres → publicznie nadal stary, nowy tylko w zgłoszeniu.
 set role authenticated; set app.current_uid = :'OWNLR'; select pg_temp.assert_client_role();
 update public.companies set website = 'https://nowa.firma-lr.example' where id = :'COMPLR';
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select website = 'https://stara.firma-lr.example' and website_pending = 'https://nowa.firma-lr.example'
      from public.companies where id = :'COMPLR'),
-  'CL144-2 nowy adres czeka w zgłoszeniu, publiczny bez zmian');
+  'CL207-2 nowy adres czeka w zgłoszeniu, publiczny bez zmian');
 select pg_temp.assert(
-  (select website = 'https://stara.firma-lr.example' from public.get_public_company('cl144-firma-lr')),
-  'CL144-2b niezatwierdzony link NIE wycieka do get_public_company');
+  (select website = 'https://stara.firma-lr.example' from public.get_public_company('cl207-firma-lr')),
+  'CL207-2b niezatwierdzony link NIE wycieka do get_public_company');
 
--- CL144-3: firma nie ustawi sobie uzasadnienia decyzji ani nie wywoła RPC admina.
+-- CL207-3: firma nie ustawi sobie uzasadnienia decyzji ani nie wywoła RPC admina.
 set role authenticated; set app.current_uid = :'OWNLR'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.companies set website_rejection_reason = ''x'' where id = ''e1440000-0000-0000-0000-0000000000f1''',
-  'PERMISSION_DENIED', 'CL144-3 firma nie ustawia uzasadnienia odrzucenia');
+  'PERMISSION_DENIED', 'CL207-3 firma nie ustawia uzasadnienia odrzucenia');
 select pg_temp.expect_error(
   'select public.admin_review_company_link(''e1440000-0000-0000-0000-0000000000f1''::uuid, ''website'', ''approve'', ''https://nowa.firma-lr.example'')',
-  'PERMISSION_DENIED', 'CL144-3b tylko admin platformy zatwierdza link');
+  'PERMISSION_DENIED', 'CL207-3b tylko admin platformy zatwierdza link');
 reset role; reset app.current_uid;
 
--- CL144-4: CAS — admin widział inną wartość niż bieżące zgłoszenie → STALE_STATE.
+-- CL207-4: CAS — admin widział inną wartość niż bieżące zgłoszenie → STALE_STATE.
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.admin_review_company_link(''e1440000-0000-0000-0000-0000000000f1''::uuid, ''website'', ''approve'', ''https://inna.firma-lr.example'')',
-  'STALE_STATE', 'CL144-4 zatwierdzenie nieaktualnego zgłoszenia odrzucone');
+  'STALE_STATE', 'CL207-4 zatwierdzenie nieaktualnego zgłoszenia odrzucone');
 select pg_temp.expect_error(
   'select public.admin_review_company_link(''e1440000-0000-0000-0000-0000000000f1''::uuid, ''website'', ''reject'', ''https://nowa.firma-lr.example'', ''  '')',
-  'REASON_REQUIRED', 'CL144-4b odrzucenie wymaga uzasadnienia');
+  'REASON_REQUIRED', 'CL207-4b odrzucenie wymaga uzasadnienia');
 
--- CL144-5: admin zatwierdza → adres publiczny, zgłoszenie wyczyszczone, audyt decyzji.
+-- CL207-5: admin zatwierdza → adres publiczny, zgłoszenie wyczyszczone, audyt decyzji.
 select public.admin_review_company_link(:'COMPLR'::uuid, 'website', 'approve', 'https://nowa.firma-lr.example');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select website = 'https://nowa.firma-lr.example' and website_pending is null and website_pending_at is null
      and status::text = 'verified'
      from public.companies where id = :'COMPLR'),
-  'CL144-5 zatwierdzony adres publiczny, zgłoszenie wyczyszczone, status bez zmian');
+  'CL207-5 zatwierdzony adres publiczny, zgłoszenie wyczyszczone, status bez zmian');
 select pg_temp.assert(
-  (select website = 'https://nowa.firma-lr.example' from public.get_public_company('cl144-firma-lr')),
-  'CL144-5b zatwierdzony adres widoczny w profilu publicznym');
+  (select website = 'https://nowa.firma-lr.example' from public.get_public_company('cl207-firma-lr')),
+  'CL207-5b zatwierdzony adres widoczny w profilu publicznym');
 select pg_temp.assert(
   exists (select 1 from public.audit_logs
            where entity_id = :'COMPLR' and action = 'company.link_reviewed' and actor_id = :'ADMIN'
              and after_data->>'decision' = 'approve' and before_data->>'value' = 'https://nowa.firma-lr.example'),
-  'CL144-5c audyt decyzji admina');
+  'CL207-5c audyt decyzji admina');
 
--- CL144-6: zgłoszenie logo odrzucone z uzasadnieniem → logo publiczne puste, powód dla firmy.
+-- CL207-6: zgłoszenie logo odrzucone z uzasadnieniem → logo publiczne puste, powód dla firmy.
 set role authenticated; set app.current_uid = :'OWNLR'; select pg_temp.assert_client_role();
 update public.companies set logo_url = 'https://nowa.firma-lr.example/logo.png' where id = :'COMPLR';
 reset role; reset app.current_uid;
@@ -13917,12 +13917,12 @@ select pg_temp.assert(
   (select logo_url is null and logo_url_pending is null
      and logo_url_rejection_reason = 'Logo nie przedstawia firmy'
      from public.companies where id = :'COMPLR'),
-  'CL144-6 odrzucone logo nie jest publiczne, uzasadnienie zapisane');
+  'CL207-6 odrzucone logo nie jest publiczne, uzasadnienie zapisane');
 select pg_temp.assert(
-  (select logo_url is null from public.get_public_company('cl144-firma-lr')),
-  'CL144-6b odrzucone logo NIE wycieka do get_public_company');
+  (select logo_url is null from public.get_public_company('cl207-firma-lr')),
+  'CL207-6b odrzucone logo NIE wycieka do get_public_company');
 
--- CL144-7: nowe zgłoszenie czyści poprzednie uzasadnienie; wyczyszczenie pola usuwa link od razu.
+-- CL207-7: nowe zgłoszenie czyści poprzednie uzasadnienie; wyczyszczenie pola usuwa link od razu.
 set role authenticated; set app.current_uid = :'OWNLR'; select pg_temp.assert_client_role();
 update public.companies set logo_url = 'https://nowa.firma-lr.example/logo2.png' where id = :'COMPLR';
 update public.companies set website = null where id = :'COMPLR';
@@ -13931,18 +13931,18 @@ select pg_temp.assert(
   (select logo_url_rejection_reason is null and logo_url_pending = 'https://nowa.firma-lr.example/logo2.png'
      and website is null and website_pending is null
      from public.companies where id = :'COMPLR'),
-  'CL144-7 nowe zgłoszenie czyści uzasadnienie; usunięcie strony WWW działa bez akceptacji');
+  'CL207-7 nowe zgłoszenie czyści uzasadnienie; usunięcie strony WWW działa bez akceptacji');
 
--- CL144-N (kontrola ujemna): bez strażnika zgłoszenie firmy od razu trafia do profilu publicznego.
-savepoint cl144_neg;
+-- CL207-N (kontrola ujemna): bez strażnika zgłoszenie firmy od razu trafia do profilu publicznego.
+savepoint cl207_neg;
 alter table public.companies disable trigger companies_protect_links;
 set role authenticated; set app.current_uid = :'OWNLR'; select pg_temp.assert_client_role();
 update public.companies set website = 'https://wyciek.firma-lr.example' where id = :'COMPLR';
 reset role; reset app.current_uid;
 select pg_temp.assert(
-  (select website = 'https://wyciek.firma-lr.example' from public.get_public_company('cl144-firma-lr')),
-  'CL144-N bez strażnika niezatwierdzony link wycieka — CL144-2b wykrywa regresję');
-rollback to savepoint cl144_neg;
+  (select website = 'https://wyciek.firma-lr.example' from public.get_public_company('cl207-firma-lr')),
+  'CL207-N bez strażnika niezatwierdzony link wycieka — CL207-2b wykrywa regresję');
+rollback to savepoint cl207_neg;
 rollback;
 reset role; reset app.current_uid;
 

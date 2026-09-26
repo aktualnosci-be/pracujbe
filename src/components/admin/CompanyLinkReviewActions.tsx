@@ -22,7 +22,7 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 /**
  * CompanyLinkReviewActions — decyzja o stronie WWW albo logo firmy czekającym na akceptację
- * (0144, „linki do zatwierdzenia”). „Zatwierdź” publikuje adres, „Odrzuć” usuwa zgłoszenie;
+ * (0207, „linki do zatwierdzenia”). „Zatwierdź” publikuje adres, „Odrzuć” usuwa zgłoszenie;
  * odrzucenie wymaga uzasadnienia (firma widzi je w `/employer/firma`). Dialog pokazuje
  * zgłoszony adres — ten sam trafia do RPC jako wartość oczekiwana (CAS → `STALE_STATE`).
  */

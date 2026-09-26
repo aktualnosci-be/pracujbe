@@ -34,13 +34,13 @@ export interface MyCompany {
   website: string | null;
   /** Adres logo firmy (#112) — bezwzględny https albo null. */
   logoUrl: string | null;
-  /** Nowa strona WWW czekająca na akceptację administratora (0144) — inaczej null. */
+  /** Nowa strona WWW czekająca na akceptację administratora (0207) — inaczej null. */
   websitePending: string | null;
-  /** Nowe logo czekające na akceptację administratora (0144) — inaczej null. */
+  /** Nowe logo czekające na akceptację administratora (0207) — inaczej null. */
   logoUrlPending: string | null;
-  /** Uzasadnienie ostatniego odrzucenia zgłoszonej strony WWW (0144) — inaczej null. */
+  /** Uzasadnienie ostatniego odrzucenia zgłoszonej strony WWW (0207) — inaczej null. */
   websiteRejectionReason: string | null;
-  /** Uzasadnienie ostatniego odrzucenia zgłoszonego logo (0144) — inaczej null. */
+  /** Uzasadnienie ostatniego odrzucenia zgłoszonego logo (0207) — inaczej null. */
   logoUrlRejectionReason: string | null;
   canEdit: boolean;
 }

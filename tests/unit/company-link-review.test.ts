@@ -9,7 +9,7 @@ import { AUDIT_ACTION_KEY } from '@/lib/admin/list-params';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * 0144 — „linki do zatwierdzenia”: akcja admina `reviewCompanyLink` (walidacja przed bazą,
+ * 0207 — „linki do zatwierdzenia”: akcja admina `reviewCompanyLink` (walidacja przed bazą,
  * CAS po zgłoszonym adresie, mapowanie błędów) i wspólna reguła uzasadnienia.
  */
 

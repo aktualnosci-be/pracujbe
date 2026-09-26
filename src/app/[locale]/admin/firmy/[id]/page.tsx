@@ -220,7 +220,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
         ) : null}
       </section>
 
-      {/* Linki czekające na akceptację (0144) */}
+      {/* Linki czekające na akceptację (0207) */}
       {company.linkReviews.length > 0 ? (
         <section aria-labelledby="company-links-review-heading" className={PANEL}>
           <div className={SECTION_HEAD}>

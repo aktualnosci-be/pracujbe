@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0144_company_links_review.sql — strona WWW i logo firmy publiczne dopiero po akceptacji
+-- 0207_company_links_review.sql — strona WWW i logo firmy publiczne dopiero po akceptacji
 -- administratora (decyzja właściciela 26.09.2026, „linki do zatwierdzenia”).
 --
 -- Numer tymczasowy — ostateczny nada integrator.

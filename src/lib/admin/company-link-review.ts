@@ -1,5 +1,5 @@
 /**
- * Reguły decyzji o linkach firmy czekających na akceptację (0144) — wspólne dla dialogu w
+ * Reguły decyzji o linkach firmy czekających na akceptację (0207) — wspólne dla dialogu w
  * `/admin/firmy/[id]` i akcji `reviewCompanyLink` (te same limity co RPC
  * `admin_review_company_link` i CHECK `companies_link_rejection_len`).
  */

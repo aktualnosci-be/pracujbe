@@ -59,7 +59,7 @@ export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
 export type UpdateCompanyLinksResult =
-  /** `pendingReview` — co najmniej jeden nowy adres czeka na akceptację administratora (0144). */
+  /** `pendingReview` — co najmniej jeden nowy adres czeka na akceptację administratora (0207). */
   { ok: true; demo?: boolean; pendingReview?: true } | { ok: false; error: ErrorCode };
 export type AddCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
@@ -369,7 +369,7 @@ export async function updateCompany(
 /**
  * Zgłasza/czyści stronę WWW i adres logo aktywnej firmy (#112). Nowy niepusty adres trafia
  * do akceptacji administratora (`website_pending`/`logo_url_pending`, strażnik
- * `protect_company_links`, 0144) — publicznie widać go dopiero po zatwierdzeniu; puste pole
+ * `protect_company_links`, 0207) — publicznie widać go dopiero po zatwierdzeniu; puste pole
  * usuwa link od razu. Osobna akcja od
  * `updateCompany`: te pola NIE cofają weryfikacji (w przeciwieństwie do nazwy/VAT) — baza
  * to gwarantuje (`protect_company_verification` reaguje tylko na `name`/`vat_number`, 0072),
@@ -414,8 +414,8 @@ export async function updateCompanyLinks(
         return { error: 'PERMISSION_DENIED' };
       }
 
-      // RLS `companies_update_member` (owner/admin) + CHECK `public_https_url` (0141/0144).
-      // Strażnik `protect_company_links` (0144) przenosi nowy adres do `*_pending`; wyzerowanie
+      // RLS `companies_update_member` (owner/admin) + CHECK `public_https_url` (0141/0207).
+      // Strażnik `protect_company_links` (0207) przenosi nowy adres do `*_pending`; wyzerowanie
       // zgłoszenia obok wpisu oznacza, że adres równy zatwierdzonemu anuluje zgłoszenie.
       // Status/weryfikacja bez zmian.
       const { rows } = await execute(tx, 'company.update-links',

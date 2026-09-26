@@ -49,7 +49,7 @@ import { companyVatSource } from '@/lib/vies/state';
  *     (#497) przez RPC `admin_decide_screening_review` (0103: tylko oczekujące, odrzucenie
  *     z uzasadnieniem, audyt, powiadomienie firmy). Akceptacja nie publikuje oferty.
  *   - `reviewCompanyLink` — zatwierdzenie/odrzucenie strony WWW albo logo firmy czekającego na
- *     akceptację (0144) przez RPC `admin_review_company_link` (CAS po zgłoszonym adresie,
+ *     akceptację (0207) przez RPC `admin_review_company_link` (CAS po zgłoszonym adresie,
  *     odrzucenie z uzasadnieniem, audyt `company.link_reviewed`).
  *   - `checkCompanyVies` — ręczne sprawdzenie numeru VAT firmy w VIES (#92), zapis wyniku
  *     rozstrzygającego przez RPC `admin_record_vies_check` (0088).
@@ -418,7 +418,7 @@ export async function decideScreeningReview(
 }
 
 /**
- * Decyzja o linku firmy czekającym na akceptację (0144). `expectedValue` = adres widziany przez
+ * Decyzja o linku firmy czekającym na akceptację (0207). `expectedValue` = adres widziany przez
  * admina; gdy firma zmieniła zgłoszenie w międzyczasie, baza zwraca `STALE_STATE`.
  */
 export async function reviewCompanyLink(

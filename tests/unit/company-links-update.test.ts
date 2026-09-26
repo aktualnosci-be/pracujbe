@@ -107,7 +107,7 @@ describe('company links update authorization', () => {
     expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({ ok: true });
   });
 
-  it('reports pendingReview when the database moved the new address to review (0144)', async () => {
+  it('reports pendingReview when the database moved the new address to review (0207)', async () => {
     db([{ id: 'company-1', website_pending: 'https://acme.example', logo_url_pending: null }]);
     expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({
       ok: true,
