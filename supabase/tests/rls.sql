@@ -10562,6 +10562,103 @@ select pg_temp.assert(
 rollback;
 
 -- ============================================================================
+-- TI610. Kontrakt stanu „used” linku rejestracji zaproszenia (0121/0133, #403): zużycie
+--        tokenu ustawia WYŁĄCZNIE `signup_token_used_at` — zaproszenie zostaje `pending`
+--        (czeka w panelu na odpowiedź), więc podgląd musi rozróżnić „zużyty” od „nieznany/
+--        wygasły/rozstrzygnięty” (oba dają dziś ten sam ogólny wynik bez tego rozróżnienia).
+--        Sekwencja preview → consume → preview, w izolacji od reszty sekcji TI403.
+-- ============================================================================
+\set TI610H '4802a5a392c15e002945132d8dc0aae0096930da591498eb7be1baf2b0432145'
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as ti610inv
+  from public.invite_company_member(:'TICA', 'kontrakt@ti.test', 'member', 'en', :'TI610H', 'nonce-ti610-0000000001') \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert((select outcome from public.team_invitation_signup_preview(:'TI610H')) = 'valid',
+  'TI610-1 przed zużyciem: podgląd ważny');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt@ti.test') = 'consumed',
+  'TI610-2 zużycie tokenu przez adres zaproszenia');
+reset role;
+select pg_temp.assert((select status from public.company_invitations where id = :'ti610inv') = 'pending',
+  'TI610-3 zużycie NIE zmienia statusu zaproszenia — nadal czeka w panelu');
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.team_invitation_signup_preview(:'TI610H')) = 'used'
+  and (select company_name from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select role from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select email from public.team_invitation_signup_preview(:'TI610H')) is null
+  and (select locale from public.team_invitation_signup_preview(:'TI610H')) = 'en',
+  'TI610-4 po zużyciu: podgląd „used” jednoznacznie, bez danych zaproszenia');
+select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt@ti.test') = 'used',
+  'TI610-5 ponowne zużycie tego samego tokenu → „used”, idempotentnie');
+reset role;
+
+-- ============================================================================
+-- TI611. Atomowy limit e-maili `teamInvitationSignup` na adres (0121/0133, #403): COUNT
+--        i INSERT w jednej sekcji krytycznej (advisory lock per adres) — limit trzyma się
+--        także wobec RÓWNOLEGŁYCH zaproszeń z różnych firm dla tego samego adresu bez konta.
+--        Fixture'y zatwierdza osobna sesja (jak PP/CO28) — dblink musi je widzieć niezależnie
+--        od tego, czy cały skrypt działa w owijającej transakcji BEGIN…ROLLBACK.
+-- ============================================================================
+\set TIL_H1 '17104f4ec0274b72592952ef5d3c800fd5d87a3414282c25317958a1500065cc'
+\set TIL_H2 '42721d9fafa7473a399b09158c61d748a27227d9e721cd4a2d62b4f1540ec38a'
+\set TIL_H3 '1ad1d255da034eb33c27c6f0dd2fff70b884e2c5941968727e6b220ce27cf213'
+\set TIL_H4 '3c1c27f78287451fada6bc547f150077698c0804e9ae39c694a0db34c5f23ceb'
+reset role; reset app.current_uid;
+select pg_temp.remote_connect('til_setup');
+select dbl.dblink_exec('til_setup', $fx$
+  insert into public.company_invitations(id, company_id, email, role, invited_by, locale, signup_token_hash) values
+    ('e6110000-0000-0000-0000-0000000000b1', 'e8800000-0000-0000-0000-0000000000f1',
+     'wyscig@ti.test', 'member', 'e8800000-0000-0000-0000-0000000000a1', 'pl',
+     '17104f4ec0274b72592952ef5d3c800fd5d87a3414282c25317958a1500065cc'),
+    ('e6110000-0000-0000-0000-0000000000b2', 'e8800000-0000-0000-0000-0000000000f2',
+     'wyscig@ti.test', 'member', 'e8800000-0000-0000-0000-0000000000a1', 'pl',
+     '42721d9fafa7473a399b09158c61d748a27227d9e721cd4a2d62b4f1540ec38a');
+  insert into public.email_deliveries
+    (profile_id, to_email, template, locale, subject, status, entity_type, entity_id,
+     idempotency_key, payload, queued_at, next_attempt_at, attempts) values
+    (null, 'wyscig@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+     'company_invitation', 'e6110000-0000-0000-0000-0000000000b1', 'ti611-fixture-1', '{}'::jsonb,
+     now(), now(), 0),
+    (null, 'wyscig@ti.test', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued',
+     'company_invitation', 'e6110000-0000-0000-0000-0000000000b2', 'ti611-fixture-2', '{}'::jsonb,
+     now(), now(), 0);
+$fx$);
+select dbl.dblink_disconnect('til_setup');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'wyscig@ti.test') = 2,
+  'TI611-0 dwa wcześniejsze zaproszenia z różnych firm — dwa e-maile już w kolejce (2 z 3)');
+
+-- Dwie RÓWNOLEGŁE „odświeżenia” istniejących, oczekujących zaproszeń (firmy A i B, ten sam
+-- adres) — trzeci, ostatni wolny e-mail z limitu. Bez atomowej blokady obie transakcje
+-- mogłyby odczytać COUNT=2 i obie wstawić e-mail (4 zamiast najwyżej 3 na adres).
+select pg_temp.remote_begin('til_a', :'TIO') as til_pid_a \gset
+select pg_temp.remote_begin('til_b', :'TIO') as til_pid_b \gset
+select t.v as til_a_res from dbl.dblink('til_a',
+  'select (invitation_id::text || '':'' || created::text) from public.invite_company_member(''' || :'TICA' || ''', ''wyscig@ti.test'', ''member'', ''pl'', ''' || :'TIL_H3' || ''', ''nonce-ti611-0000000003'')')
+  as t(v text) \gset
+select dbl.dblink_send_query('til_b',
+  'select (invitation_id::text || '':'' || created::text) from public.invite_company_member(''' || :'TICB' || ''', ''wyscig@ti.test'', ''member'', ''pl'', ''' || :'TIL_H4' || ''', ''nonce-ti611-0000000004'')');
+select pg_temp.wait_blocked(:til_pid_b, 'TI611');
+select dbl.dblink_exec('til_a', 'commit');
+select pg_temp.remote_result('til_b') as til_b_res \gset
+select dbl.dblink_exec('til_b', 'commit');
+select dbl.dblink_disconnect('til_a'); select dbl.dblink_disconnect('til_b');
+select pg_temp.assert(
+  :'til_a_res' = 'e6110000-0000-0000-0000-0000000000b1:false'
+  and :'til_b_res' = 'e6110000-0000-0000-0000-0000000000b2:false',
+  'TI611-1 obie „odświeżenia” kończą się normalnie (limit e-maili nie wpływa na odpowiedź RPC)');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where template = 'teamInvitationSignup' and to_email = 'wyscig@ti.test') = 3,
+  'TI611-2 mimo równoległości: najwyżej 3 e-maile na adres (limit egzekwowany atomowo)');
+select pg_temp.assert(
+  (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b1') = :'TIL_H3'
+  and (select signup_token_hash from public.company_invitations where id = 'e6110000-0000-0000-0000-0000000000b2') = :'TIL_H4',
+  'TI611-3 oba tokeny odświeżone niezależnie od tego, czy e-mail się zmieścił w limicie');
+
+-- ============================================================================
 -- MA (0119): załączniki w rozmowach — RPC-only, przygotowanie + wysłanie jedną transakcją
 -- send_message (idempotencja client_message_id i client_upload_id), dostęp tylko dla
 -- bieżących uczestników, kwarantanna scan_status, blokada firmy (#97), metadane plików
@@ -12199,6 +12296,80 @@ rollback to savepoint aib_neg;
 select pg_temp.expect_error(
   'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
+
+-- ============================================================================
+-- AIB609. Porzucone rezerwacje budżetu AI (#609, 0134): GC po TTL rozlicza rezerwację
+--         padłego procesu jako failed/koszt 0 — limit wraca do użycia, ślad audytowy
+--         (wiersz) zostaje. Kontrola ujemna: bez filtra po TTL GC zwolniłoby też
+--         rezerwację wciąż trwającego wywołania.
+-- ============================================================================
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE'),
+  'AIB609-1 tylko service_role woła GC');
+
+-- Sekcja działa pod bieżącą rolą (reset po AIB36-10 = właściciel schematu, jak w AIB36-10) —
+-- wystarczy do wywołań RPC (SECURITY DEFINER), a bezpośrednie UPDATE created_at (poniżej)
+-- wymaga tej samej roli, bo grant na ai_usage_ledger dla service_role obejmuje tylko SELECT.
+-- Limit ustawiamy WZGLĘDEM już wydanego dziś budżetu (wcześniejsze testy AIB36 w tej samej
+-- transakcji już coś zarezerwowały/rozliczyły) — inaczej bezwzględna kwota byłaby przypadkowa.
+select (public.ai_budget_status()->'day'->>'spentMicroUsd')::bigint as aib_base \gset
+update public.ai_budget_limits set limit_micro_usd = :aib_base + 35000 where period = 'day';
+-- Świeża rezerwacja (żywy proces) zostaje nietknięta.
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 10000) as aib_fresh \gset
+-- Rezerwacja porzuconego procesu: cofamy created_at poza TTL bezpośrednio.
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 20000) as aib_abandoned \gset
+-- Limit ma miejsce tylko na obie powyższe (aib_base+30000) — trzecia rezerwacja, choćby mała,
+-- odbija się o sufit, dopóki porzucona rezerwacja liczy się w całości.
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 6000)',
+  'AI_BUDGET_EXCEEDED', 'AIB609-1b porzucona rezerwacja wciąż blokuje limit przed GC');
+update public.ai_usage_ledger set created_at = now() - interval '2 hours' where id = :'aib_abandoned';
+select public.ai_budget_release_stale_reservations(60, 200) as aib_released \gset
+select pg_temp.assert(:aib_released = 1, 'AIB609-2 GC zwalnia dokładnie jedną porzuconą rezerwację');
+select pg_temp.assert(
+  (select status = 'reserved' from public.ai_usage_ledger where id = :'aib_fresh'),
+  'AIB609-3 świeża rezerwacja nietknięta');
+select pg_temp.assert(
+  (select status = 'settled' and outcome = 'failed' and cost_micro_usd = 0 and settled_at is not null
+     from public.ai_usage_ledger where id = :'aib_abandoned'),
+  'AIB609-4 porzucona rezerwacja rozliczona jako failed/koszt 0 — ślad audytowy zostaje');
+-- AIB609-5: idempotentne — drugi przebieg nie znajduje już nic do zwolnienia.
+select pg_temp.assert(public.ai_budget_release_stale_reservations(60, 200) = 0,
+  'AIB609-5 ponowny przebieg GC nie rozlicza nic drugi raz');
+-- AIB609-6: limit budżetu wraca do użycia po GC (rezerwacja przestała liczyć się do wydatku) —
+-- ten sam limit (aib_base+35000) i ta sama kwota (6000), która chwilę wcześniej była odrzucona.
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 6000) is not null,
+  'AIB609-6 po GC ta sama rezerwacja mieści się w limicie, w którym wcześniej się nie mieściła');
+
+-- Kontrola ujemna: GC bez filtra TTL (created_at) zwolniłoby też świeżą, wciąż trwającą rezerwację.
+-- Rezerwacja powstaje PRZED savepointem — rollback niżej cofa tylko wadliwą definicję funkcji
+-- i jej skutek, a nie samo powstanie rezerwacji (inaczej AIB609-7b nie miałoby czego sprawdzić).
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 1000) as aib_live \gset
+savepoint aib609_neg;
+create or replace function public.ai_budget_release_stale_reservations(
+  p_older_than_minutes integer default 60,
+  p_limit integer default 200
+) returns integer language plpgsql security definer set search_path = public, pg_temp as $f$
+declare v_released integer;
+begin
+  update public.ai_usage_ledger set status = 'settled', outcome = 'failed', cost_micro_usd = 0, settled_at = now()
+   where status = 'reserved';
+  get diagnostics v_released = row_count;
+  return v_released;
+end; $f$;
+select public.ai_budget_release_stale_reservations(60, 200);
+select pg_temp.assert(
+  (select status = 'settled' from public.ai_usage_ledger where id = :'aib_live'),
+  'AIB609-7 kontrola ujemna: bez filtra TTL GC zwalnia też świeżą, wciąż trwającą rezerwację (błąd)');
+rollback to savepoint aib609_neg;
+-- Po cofnięciu do savepointu prawdziwa (z migracji) funkcja ponownie nie rusza świeżej rezerwacji.
+select public.ai_budget_release_stale_reservations(60, 200) as aib_after_rollback \gset
+select pg_temp.assert(
+  (select status = 'reserved' from public.ai_usage_ledger where id = :'aib_live'),
+  'AIB609-7b poprawna funkcja (po rollbacku savepointu) zostawia świeżą rezerwację');
+
 rollback;
 
 -- ============================================================================
@@ -12406,5 +12577,90 @@ select pg_temp.assert(
   :'wl621_reclaim2_n' = '1' and :'wl621_c2_lock_token' is distinct from :'wl621_c_lock_token',
   'WL621-6 KONTROLA UJEMNA: bez odnowienia dzierżawy (0129) worker B PRZEJMUJE wiersz w tym ' ||
   'samym czasie, w którym A (po zielonym świetle) dopiero woła dostawcę — dokładnie luka #621');
+
+-- ============================================================================
+-- RIP. IP i user-agent w receiptach akceptacji (0132): kategoria retencji
+--      7 dni, receipt niezmienny poza wyzerowaniem IP/UA, krok w run_retention_purge
+--      (dry-run bez zmian, świeże receipty zostają). Kontrole ujemne: dawny strażnik 0108
+--      blokuje minimalizację, sama partia 0127 nie zeruje receiptów.
+-- ============================================================================
+\echo '--- RIP ip/ua receiptów (0132) ---'
+reset role; reset app.current_uid;
+\set RIPC1 'e1300000-0000-4000-8000-0000000000c1'
+\set RIPC2 'e1300000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RIPC1','ripc1@test.be','Rip Jeden','{"role":"employer","first_name":"Rip","last_name":"Jeden","locale":"nl"}'),
+  (:'RIPC2','ripc2@test.be','Rip Dwa','{"role":"employer","first_name":"Rip","last_name":"Dwa","locale":"fr"}');
+select public.record_signup_consents(:'RIPC1', true, true, '{}'::jsonb, 'signup', 'nl', '{}'::jsonb,
+  '198.51.100.4', 'Mozilla/5.0 RIP');
+select public.record_signup_consents(:'RIPC2', true, true, '{}'::jsonb, 'signup', 'fr', '{}'::jsonb,
+  '198.51.100.5', 'Mozilla/5.0 RIP2');
+
+-- RIP-1: kategoria z okresem 7 dni i zadaniem.
+select pg_temp.assert(
+  (select period = interval '7 days' and enforcement = 'job'
+     from public.retention_policies where key = 'acceptance_ip_user_agent'),
+  'RIP-1 acceptance_ip_user_agent = 7 dni, zadanie retencji');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances
+    where profile_id = :'RIPC1' and host(ip_address) = '198.51.100.4' and user_agent = 'Mozilla/5.0 RIP') = 2,
+  'RIP-1b oba receipty rejestracji z adresem i user-agentem');
+
+-- RIP-2: receipt niezmienny poza wyzerowaniem IP/UA.
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = ''192.0.2.1'' where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2 nowy adres odrzucony');
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = null, locale = ''pl'' where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2b wyzerowanie razem ze zmianą innej kolumny odrzucone');
+select pg_temp.expect_error(
+  format('update public.document_acceptances set accepted_at = now() where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2c zmiana czasu akceptacji odrzucona');
+select pg_temp.expect_error(
+  format('delete from public.document_acceptances where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2d usunięcie receiptu poza kaskadą odrzucone');
+set role authenticated; set app.current_uid = :'RIPC1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = null where profile_id = %L', :'RIPC1'),
+  'permission denied', 'RIP-2e właściciel nie zmienia własnego receiptu');
+select pg_temp.expect_error('select public.retention_purge_receipts_batch(10)', 'permission denied',
+  'RIP-2f klient nie woła kroku retencji');
+reset role; reset app.current_uid;
+
+-- RIP-3: receipt RIPC1 sprzed 8 dni; RIPC2 świeży.
+set session_replication_role = replica;
+update public.document_acceptances set accepted_at = now() - interval '8 days' where profile_id = :'RIPC1';
+set session_replication_role = origin;
+
+-- KONTROLA UJEMNA: partia z 0127 (bez kroku 0132) nie dotyka receiptów, a dawny strażnik 0108
+-- odrzuciłby samo wyzerowanie.
+begin;
+select public.retention_purge_batch(200);
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'RIPC1' and ip_address is not null) = 2,
+  'RIP-3 KONTROLA UJEMNA: sama partia 0127 zostawia adres w receiptach');
+drop trigger document_acceptances_immutable on public.document_acceptances;
+create trigger document_acceptances_immutable before update or delete on public.document_acceptances
+  for each row execute function public.forbid_consent_receipt_change();
+select pg_temp.expect_error('select public.retention_purge_receipts_batch(200)', 'CONSENT_RECEIPT_IMMUTABLE',
+  'RIP-3b KONTROLA UJEMNA: ze strażnikiem 0108 minimalizacja jest niemożliwa');
+rollback;
+
+select (public.run_retention_purge(200, true))->>'acceptanceIpCleared' as rip_dry \gset
+select pg_temp.assert(:'rip_dry'::integer >= 2
+  and (select count(*) from public.document_acceptances where profile_id = :'RIPC1' and ip_address is not null) = 2,
+  'RIP-4 dry-run liczy receipty do wyzerowania bez zmiany danych');
+select (public.run_retention_purge(200, false))->>'acceptanceIpCleared' as rip_apply \gset
+select pg_temp.assert(:'rip_apply'::integer >= 2
+  and (select count(*) from public.document_acceptances
+        where profile_id = :'RIPC1' and ip_address is null and user_agent is null
+          and kind in ('terms_acceptance', 'privacy_notice_ack') and source = 'signup' and locale = 'nl') = 2
+  and (select count(*) from public.document_acceptances
+        where profile_id = :'RIPC2' and host(ip_address) = '198.51.100.5' and user_agent = 'Mozilla/5.0 RIP2') = 2,
+  'RIP-4b po 7 dniach IP/UA wyzerowane (receipt zostaje), świeży receipt nietknięty');
+delete from auth.users where id in (:'RIPC1', :'RIPC2');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id in (:'RIPC1', :'RIPC2')) = 0,
+  'RIP-4c kaskada usunięcia konta nadal usuwa receipty');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

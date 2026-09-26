@@ -82,7 +82,7 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 - [ ] `sizes` ustawione poprawnie dla responsywności (nie serwuj obrazu desktop na mobile).
 - [ ] `priority` tylko dla obrazu LCP; reszta lazy (domyślne).
 - [ ] Wymiary (`width`/`height` lub `fill` + kontener) rezerwują miejsce (CLS = 0).
-- [ ] Logotypy firm z Supabase Storage (`*.supabase.co` w `remotePatterns`) —
+- [ ] Obrazy tylko z własnego origin (`images.remotePatterns` bez zewnętrznych hostów od #27);
       rozsądne rozmiary źródłowe.
 
 ## 7. Fonty
@@ -117,7 +117,7 @@ i panelach: ~2,0–2,4 s → 0,64–0,86 s. Strażnik: `tests/e2e/first-visit-lc
       w nazwie); `sw.js` bez długiego cache (#394, `tests/e2e/static-asset-cache.spec.ts`).
       Zmieniony obraz w `public/` = nowa nazwa pliku.
 - [ ] ISR / rewalidacja zamiast odpytywania DB na każde żądanie strony publicznej.
-- [ ] Zapytania do Supabase: selekcja tylko potrzebnych kolumn, użycie indeksów pod filtry
+- [ ] Zapytania do PostgreSQL (`src/lib/db/*`): selekcja tylko potrzebnych kolumn, użycie indeksów pod filtry
       ofert (już zdefiniowane: `idx_jobs_active_feed`, trigramy na tytułach itd.).
 - [ ] Paginacja list ofert (nie ładuj wszystkiego naraz).
 - [ ] Kompresja (Brotli/gzip) — Vercel domyślnie.
@@ -202,8 +202,11 @@ Zapis oferty w CI nie ma sesji kandydata (build bez bazy → przycisk „niedost
 więc skrypt podmienia odpowiedź akcji odczytu stanu (`getPublicSavedJobs`,
 `{"status":"unavailable"}` → kandydat bez zapisanych). Mierzone jest tapnięcie —
 optymistyczne przełączenie i render kart; sam zapis (`toggleSavedJob`) odpowiada później
-i nie wchodzi w czas interakcji. Brak podmiany albo brak skutku tapnięcia = błąd kroku, nie
-zielony wynik.
+i nie wchodzi w czas interakcji. Odpowiedź zapisu też jest podmieniana (sukces z `saved` =
+stan docelowy): oferty demo mają identyfikatory spoza UUID, więc akcja zwraca
+`VALIDATION_FAILED`, a wyspa cofała zapis — `aria-pressed="true"` trwało tylko do odpowiedzi
+i krok był niestabilny. Skrypt czeka na koniec akcji i wymaga, by zapis nie został cofnięty.
+Brak podmiany, brak skutku tapnięcia albo cofnięty zapis = błąd kroku, nie zielony wynik.
 
 Kontrola ujemna: `--inject-click-delay-ms 300` dodaje blokujący listener kliknięcia (faza
 przechwytywania — to samo zadanie co handler Reacta, jak ciężki handler w komponencie).

@@ -29,6 +29,7 @@ const MAINTENANCE_RPCS = [
   'run_retention_purge',
   'purge_job_funnel_data',
   'purge_stale_message_attachments',
+  'ai_budget_release_stale_reservations',
   'claim_storage_deletions',
 ];
 

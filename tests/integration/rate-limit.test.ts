@@ -3,7 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { checkDatabaseRateLimit, type DatabaseRateLimitOptions } from '../../src/lib/db/rate-limit';
+import {
+  checkDatabaseRateLimit,
+  RateLimitUnavailableError,
+  type DatabaseRateLimitOptions,
+} from '../../src/lib/db/rate-limit';
 import { withUserTransaction } from '../../src/lib/db/transaction';
 
 const container = `pracujbe-limiter-test-${randomUUID()}`;
@@ -129,16 +133,20 @@ describe('Limiter PostgreSQL — atomowość i wąska rola', () => {
     expect(JSON.stringify(rows)).not.toContain(input.identifier);
   });
 
-  it('odmawia zwykłej puli, awarii RPC i zamkniętej puli; po przywróceniu działa', async () => {
+  it('#608: pula zwykłej roli, awaria RPC i zamknięta pula rzucają — to niedostępność, nie limit', async () => {
     const input = options();
-    expect(await checkDatabaseRateLimit(domain!, input)).toBe(false);
+    await expect(checkDatabaseRateLimit(domain!, input)).rejects.toBeInstanceOf(RateLimitUnavailableError);
     await admin!.query('REVOKE EXECUTE ON FUNCTION public.rate_limit_hit(text,integer,integer) FROM pracujbe_rate_limit');
-    try { expect(await checkDatabaseRateLimit(limiter!, input)).toBe(false); }
-    finally { await admin!.query('GRANT EXECUTE ON FUNCTION public.rate_limit_hit(text,integer,integer) TO pracujbe_rate_limit'); }
+    try {
+      await expect(checkDatabaseRateLimit(limiter!, input)).rejects.toBeInstanceOf(RateLimitUnavailableError);
+    } finally {
+      await admin!.query('GRANT EXECUTE ON FUNCTION public.rate_limit_hit(text,integer,integer) TO pracujbe_rate_limit');
+    }
+    // Po przywróceniu uprawnień znów działa i zwraca prawdziwą decyzję (nie wyjątek).
     expect(await checkDatabaseRateLimit(limiter!, input)).toBe(true);
     const closed = new Pool({ host: '127.0.0.1', port: 1, database: 'unused', user: 'unused' });
     await closed.end();
-    expect(await checkDatabaseRateLimit(closed, input)).toBe(false);
+    await expect(checkDatabaseRateLimit(closed, input)).rejects.toBeInstanceOf(RateLimitUnavailableError);
   });
 
   it('nie daje roli limitera dostępu do danych auth, domeny, tabeli licznika ani eskalacji', async () => {
@@ -185,7 +193,10 @@ describe('Limiter PostgreSQL — atomowość i wąska rola', () => {
   }, 70_000);
 
   it.each([{ max: 0 }, { windowSeconds: 0 }, { max: 1.5 }, { keySecret: '' }, { keySecret: 'x'.repeat(31) },
-    { trustedClientIp: 'unknown' }, { action: 'client:controlled' }])('odrzuca błędne parametry %j', async (invalid) => {
-      expect(await checkDatabaseRateLimit(limiter!, options(invalid))).toBe(false);
-    });
+    { trustedClientIp: 'unknown' }, { action: 'client:controlled' }])(
+    '#608: błędne parametry wywołania to niedostępność (nie limit) %j',
+    async (invalid) => {
+      await expect(checkDatabaseRateLimit(limiter!, options(invalid))).rejects.toBeInstanceOf(RateLimitUnavailableError);
+    },
+  );
 });
