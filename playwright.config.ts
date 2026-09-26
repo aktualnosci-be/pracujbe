@@ -98,6 +98,8 @@ export default defineConfig({
     '**/apply-screening.spec.ts',
     '**/guest-apply.spec.ts',
     '**/job-posting-fixture.spec.ts',
+    // Profil firmy (#591) — w demo profili nie ma (404); linki, JSON-LD, noindex i axe na fixture.
+    '**/company-profile.spec.ts',
     '**/offer-message-login.spec.ts',
     // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
     '**/content-report-form.spec.ts',

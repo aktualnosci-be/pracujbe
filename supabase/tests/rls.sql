@@ -13097,6 +13097,64 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
+--       expires_at i salary_period oferty — źródło `validThrough` i
+--       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
+--       wiersza to_jsonb → JobDetail w src/lib/jobs.ts). Bez daty = null, bez kwot = brak baseSalary
+--       (JSON-LD pomija pole, bez wymyślonej wartości). Kontrola ujemna: definicja bez kolumny
+--       w transakcji cofanej → asercja JP12-1 pada.
+-- ============================================================================
+\set JPCO 'c1120000-0000-0000-0000-0000000000a1'
+\echo '--- JP12 get_public_job: expires_at + salary_period ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo) values (:'JPCO','JP12 Sp','verified',false);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  ('c1120000-0000-0000-0000-0000000000b1',:'JPCO','jp12-dated','Magazynier JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   15,18,'EUR','hour','2099-10-15 23:59:00+00'),
+  ('c1120000-0000-0000-0000-0000000000b2',:'JPCO','jp12-undated','Kierowca JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month',null);
+
+set role anon; select pg_temp.assert_client_role();
+-- JP12-1: oferta z terminem i okresem — dokładnie te wartości, także w postaci to_jsonb (jak aplikacja).
+select pg_temp.assert(
+  (select expires_at = '2099-10-15 23:59:00+00'::timestamptz and salary_period = 'hour'
+   from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-1 expires_at i salary_period z oferty');
+select pg_temp.assert(
+  (select (to_jsonb(j)->>'expires_at')::timestamptz = '2099-10-15 23:59:00+00'::timestamptz
+      and to_jsonb(j)->>'salary_period' = 'hour'
+   from public.get_public_job('jp12-dated', 'pl') j),
+  'JP12-1b to_jsonb niesie oba pola (odczyt aplikacji)');
+-- JP12-2: brak terminu → null (JSON-LD bez validThrough). Okres jest NOT NULL w jobs; bez kwot
+-- JSON-LD i tak nie ma baseSalary (normalizeSalary), więc unitText nie powstaje.
+select pg_temp.assert(
+  (select expires_at is null and salary_min is null and salary_max is null
+   from public.get_public_job('jp12-undated', 'pl')),
+  'JP12-2 bez daty → expires_at null, bez kwot');
+reset role;
+
+-- JP12-3: kontrola ujemna — definicja bez expires_at (null) daje czerwoną asercję JP12-1.
+begin;
+do $jp$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(E'j.expires_at,' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: JP12-3 fragment j.expires_at nie występuje w get_public_job';
+  end if;
+  execute replace(v_def, E'j.expires_at,', E'null::timestamptz as expires_at,');
+end $jp$;
+select pg_temp.assert(
+  (select expires_at is null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3 mutacja bez expires_at — JP12-1 wykrywa regresję');
+rollback;
+select pg_temp.assert(
+  (select expires_at is not null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3b po cofnięciu definicja wróciła');
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- AIP37. Asystent profilu kandydata (#37, 0147): nowa funkcja AI w budżecie globalnym —
 --        rezerwacja przyjęta, zapis w rejestrze, nadal odmowa dla funkcji spoza listy.
 --        Kontrola ujemna: lista sprzed 0147 odrzuca `profile_answers_assist`.
@@ -13235,5 +13293,85 @@ reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text = 'pending' and verified_at is null from public.companies where id = :'COMPCL'),
   'CL141-6 zmiana nazwy nadal cofa weryfikację — CL141 nie osłabił 0072');
+
+-- ============================================================================
+-- CVR142. Dokończenie #349 (migracja 0142) — record_consent niesie wersję polityki
+-- 'cookies' FAKTYCZNIE pokazaną klientowi (cookie/`p_version`), przyjętą tylko po
+-- weryfikacji w consent_versions; nieznana wersja = cichy fallback do bieżącej.
+-- ============================================================================
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000001', 'cookies', '2026-01', null, true, '2026-01-01'::timestamptz),
+  ('00000000-0000-0000-0000-000142000002', 'cookies', '2024-06', null, false, '2024-06-01'::timestamptz);
+
+-- CVR142-1: p_version zgodna z ISTNIEJĄCYM wierszem (nawet nie-bieżącym) trafia do receiptu —
+-- to jest sedno #349: receipt niesie wersję, którą użytkownik naprawdę widział, nie zawsze bieżącą.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-1', null, null, '2024-06');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-1' limit 1)
+    = '00000000-0000-0000-0000-000142000002'::uuid,
+  'CVR142-1 wersja z klienta (nie-bieżąca, ale istniejąca) trafia do receiptu');
+
+-- CVR142-2 (kontrola ujemna): NIEISTNIEJĄCA wersja z klienta NIE trafia do receiptu wprost —
+-- cichy fallback do bieżącej wersji dokumentu 'cookies' (zachowanie jak przed 0142), nigdy
+-- zapis dowolnego tekstu klienta jako powiązania z wierszem consent_versions.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-2', null, null,
+  'wersja-ktorej-nie-ma-w-bazie');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-2' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-2 nieistniejąca wersja klienta -> fallback do bieżącej, nie zapisana wprost');
+
+-- CVR142-3: brak p_version (stare wywołanie / stary cookie bez `v`) -> też bieżąca wersja.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-3');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-3' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-3 bez p_version -> bieżąca wersja (zgodność z zachowaniem sprzed 0142)');
+
+-- CVR142-5 (kontrola ujemna, bloker integratora): wersja z klienta, która istnieje, ale NIE jest
+-- opublikowana — zaplanowana na przyszłość (published_at = now() + 1 dzień) albo szkic
+-- (published_at NULL) — nie mogła być pokazana użytkownikowi, więc NIE trafia do receiptu;
+-- fallback do bieżącej wersji dokumentu 'cookies'.
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000003', 'cookies', '2027-future', null, false, now() + interval '1 day'),
+  ('00000000-0000-0000-0000-000142000004', 'cookies', '2027-draft', null, false, null);
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5a', null, null, '2027-future');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5b', null, null, '2027-draft');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5a' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5a wersja z published_at w przyszłości -> fallback do bieżącej, nie zapisana wprost');
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5b' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5b szkic (published_at NULL) -> fallback do bieżącej, nie zapisany wprost');
+
+-- CVR142-4 (kontrola ujemna): authenticated (CANDA) nie nadpisze / nie dopisze się pod cudzy
+-- receipt innego konta (CANDB) — record_consent zawsze pisze profile_id = auth.uid() BIEŻĄCEJ
+-- sesji; klient nie ma żadnego parametru wskazującego inne konto (ani p_version go nie daje).
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared') as cvr_b_before \gset
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":false}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared')
+    = :'cvr_b_before',
+  'CVR142-4 authenticated A nie zmienia/nie dopisuje receiptu profile_id=CANDB (izolacja po auth.uid())');
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
+  'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

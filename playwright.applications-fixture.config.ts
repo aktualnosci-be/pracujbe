@@ -23,6 +23,8 @@ export default defineConfig({
         // #98: aplikacja bez konta (gość = cookie fixture, bez bazy).
         '**/guest-apply.spec.ts',
         '**/job-posting-fixture.spec.ts',
+        // Profil publiczny firmy: linki, Organization JSON-LD, noindex bez ofert, axe (#591).
+        '**/company-profile.spec.ts',
         '**/offer-message-login.spec.ts',
         // Formularz zgłoszenia treści (#41).
         '**/content-report-form.spec.ts',
