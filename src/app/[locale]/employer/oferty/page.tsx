@@ -8,6 +8,7 @@ import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
+import { StatValue } from "@/components/dashboard/StatValue";
 import {
   decodeTimeCursor,
   encodeTimeCursor,
@@ -191,7 +192,7 @@ export default async function EmployerOffersPage({
                         {td("employerOffersApplicationsLabel")}
                       </dt>
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        {offer.newApplications}
+                        <StatValue value={offer.newApplications} noDataLabel={td("funnelNoData")} />
                       </dd>
                       {/* P1-05: zgłoszenia tej oferty (recruiter+ — member nie czyta zgłoszeń). */}
                       {shell.status === "ok" && canRecruitHere && offer.status !== "draft" ? (
@@ -211,7 +212,7 @@ export default async function EmployerOffersPage({
                         {td("colMatched")}
                       </dt>
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        {offer.matched}
+                        <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
                       </dd>
                     </div>
                   </dl>

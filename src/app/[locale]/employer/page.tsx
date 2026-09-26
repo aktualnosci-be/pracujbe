@@ -10,19 +10,18 @@ import {
   getEmployerShellData,
   getFunnelStats,
   getRecentApplications,
-  getTopMatchedCandidates,
-  DEMO_OVERVIEW_DELTAS,
+  getTopMatchedCandidatesLoad,
 } from '@/lib/data/employer';
 import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
 import { canRecruit } from '@/lib/team/permissions';
 import { StatusPill } from '@/components/ui/status-pill';
-import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { SendOfferButton } from '@/components/employer/SendOfferButton';
 import { RecentApplicationsError } from '@/components/employer/RecentApplicationsError';
 import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
 import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPreview';
-import { PanelStats } from '@/components/dashboard/PanelStats';
+import { EmployerOverviewStats } from '@/components/employer/EmployerOverviewStats';
+import { EmployerFunnelSection } from '@/components/employer/EmployerFunnelSection';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import {
   BTN_PRIMARY,
@@ -87,11 +86,11 @@ export default async function EmployerDashboardPage({
   const tc = await getTranslations({ locale, namespace: 'common' });
 
   const configured = isPortalDataConfigured();
-  const [overview, jobsLoad, recentApplications, candidates, funnel, shell] = await Promise.all([
+  const [overview, jobsLoad, recentApplications, topMatched, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobsLoad(),
     getRecentApplications(),
-    getTopMatchedCandidates(),
+    getTopMatchedCandidatesLoad(),
     getFunnelStats(),
     getEmployerShellData(),
   ]);
@@ -131,41 +130,13 @@ export default async function EmployerDashboardPage({
         <CompanyStatusBanner status={shell.activeStatus} variant="dashboard" />
       ) : null}
 
-      {/* Statystyki (`.stats` / `.stat`) */}
-      {overview.status === 'error' ? (
-        <EmployerStatsError
-          className="mb-7 mt-[22px]"
-          message={td('employerOverviewLoadError')}
-          retryLabel={tc('retry')}
-        />
-      ) : (
-        <PanelStats
-          items={[
-            {
-              label: td('activeOffers'),
-              value: overview.overview.activeOffersCount,
-              sub: configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.activeOffers }),
-            },
-            {
-              label: td('newApplications'),
-              value: overview.overview.newApplicationsCount,
-              sub: configured
-                ? undefined
-                : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.newApplications }),
-            },
-            {
-              label: td('matchedCandidates'),
-              value: overview.overview.matchedCandidatesCount,
-              sub: configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.matched }),
-            },
-            {
-              label: td('messagesToAnswer'),
-              value: overview.overview.messagesToAnswerCount,
-              sub: configured ? undefined : td('urgent', { count: DEMO_OVERVIEW_DELTAS.urgent }),
-            },
-          ]}
-        />
-      )}
+      {/* Statystyki (`.stats` / `.stat`) — liczniki rekrutacyjne tylko recruiter+ (P1-14) */}
+      <EmployerOverviewStats
+        locale={locale}
+        overview={overview}
+        demo={!configured}
+        className={overview.status === 'error' ? 'mb-7 mt-[22px]' : undefined}
+      />
 
       {/* Twoje aktywne oferty (`.panel`) */}
       <EmployerOffersPreview
@@ -180,6 +151,7 @@ export default async function EmployerDashboardPage({
           retry: td('employerOffersRetry'),
           newApplications: td('employerOffersApplicationsLabel'),
           matched: td('colMatched'),
+          noData: td('funnelNoData'),
         }}
       />
 
@@ -247,20 +219,7 @@ export default async function EmployerDashboardPage({
           </section>
 
           {/* Lejek rekrutacyjny („Rekrutacja w liczbach”) */}
-          {funnel.status === 'error' ? (
-            <EmployerStatsError
-              title={td('funnelTitle')}
-              message={td('employerFunnelLoadError')}
-              retryLabel={tc('retry')}
-            />
-          ) : (
-            <RecruitmentFunnel
-              views={funnel.funnel.views}
-              applications={funnel.funnel.applications}
-              interviews={funnel.funnel.interviews}
-              hired={funnel.funnel.hired}
-            />
-          )}
+          <EmployerFunnelSection locale={locale} funnel={funnel} />
         </div>
 
         {/* Kolumna boczna */}
@@ -274,11 +233,18 @@ export default async function EmployerDashboardPage({
                 <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
-            {candidates.length === 0 ? (
+            {/* Błąd, brak uprawnień i firma przed weryfikacją ≠ pusta lista (P1-14). */}
+            {topMatched.status === 'error' ? (
+              <EmployerStatsError message={td('topMatchedLoadError')} retryLabel={tc('retry')} />
+            ) : topMatched.status === 'denied' ? (
+              <p className={EMPTY}>{td('topMatchedDenied')}</p>
+            ) : topMatched.status === 'unverified' ? (
+              <p className={EMPTY}>{td('topMatchedUnverified')}</p>
+            ) : topMatched.candidates.length === 0 ? (
               <p className={EMPTY}>{td('emptyState')}</p>
             ) : (
               <ul>
-                {candidates.map((candidate) => (
+                {topMatched.candidates.map((candidate) => (
                   <li key={candidate.candidateId} className={cn(ROW, 'flex-wrap items-center')}>
                     <span className={ICON_BOX} aria-hidden="true">
                       {initials(candidate.name || td('candidateFallback'))}

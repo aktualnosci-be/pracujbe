@@ -26,7 +26,7 @@ płatności (#51). Powiązane: [`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER
 | `/api/health` | 200 `ok`; `databaseReachable`, `auth`, `authMail`, `rateLimit`, `turnstile`, `fileBucket`, `errorWebhook`, `emailProviderReady` (EmailLabs), `queueSecret`, `maintenanceSecret`, `cronSecretsSeparate` = `true` |
 | Braki w health | `emaillabsWebhook: false` (brak `EMAILLABS_WEBHOOK_SECRET`) |
 | Cron | **brak usług cron** (limit darmowego planu Railway) — `/api/email/process` i `/api/maintenance` nie są wywoływane |
-| AI | brak `ANTHROPIC_API_KEY`; funkcje AI za flagami, domyślnie wyłączone |
+| AI | dostawca OpenAI (#677); brak `OPENAI_API_KEY`; funkcje AI za flagami, domyślnie wyłączone |
 | Kopia poza Railwayem | R2 (#569) odłożone — brak zaszyfrowanej kopii poza Railwayem |
 | Smoke | `node scripts/railway/prod-smoke.mjs` bez hasła: health i `robots.txt` OK, strony za bramką (oczekiwane) |
 
@@ -50,10 +50,10 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | W8 | **P0** | Decyzje trybu: `APP_MODE=production` (krok 4 runbooka), potem zdjęcie `SITE_ACCESS_PASSWORD` | — (to jest sam start) |
 | W9 | P1 | Konto administratora: `profiles.role = 'admin'` dla właściciela (ręcznie w bazie) | brak weryfikacji firm → żadna oferta nie zostanie opublikowana |
 | W10 | P1 | Monitoring: `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL`, uptime na `/api/health` i `/api/health/ops` ([`railway/OPERATIONS.md`](./railway/OPERATIONS.md)) | awarie kolejek/bazy niewidoczne |
-| W11 | P1 | DPA i transfery dostawców (Railway, EmailLabs, Cloudflare, Discord; Anthropic dopiero przy włączeniu AI) — mapa: `docs/legal-drafts/dostawcy-i-transfery.md` | ryzyko RODO |
+| W11 | P1 | DPA i transfery dostawców (Railway, EmailLabs, Cloudflare, Discord; OpenAI dopiero przy włączeniu AI) — mapa: `docs/legal-drafts/dostawcy-i-transfery.md` | ryzyko RODO |
 | W12 | P1 | Okresy retencji i DSA (#40, #574): zatwierdzenie wartości, potem `RETENTION_MODE`, `DSA_RETENTION_MODE`, `STORAGE_GC_MODE` (dziś wyłączone/dry-run) — wymaga też W2 | dane trzymane bez terminu |
 | W13 | P2 | Cloudflare Web Analytics: `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (opcjonalne; bez niego beacon się nie ładuje) | brak statystyk ruchu |
-| W14 | P2 | AI: `ANTHROPIC_API_KEY` + DPA + ocena AI Act; do tego czasu **nie** ustawiaj `AI_JOB_IMPORT_ENABLED`, `AI_JOB_ASSIST_ENABLED`, `AI_CV_IMPORT_ENABLED` | — (funkcje wyłączone, nie blokuje startu) |
+| W14 | P2 | AI (OpenAI, #677): `OPENAI_API_KEY` jako sekret usługi web (tylko serwer, nigdy `NEXT_PUBLIC_*`) + DPA z OpenAI + ocena AI Act; `ANTHROPIC_API_KEY` nie jest już używany — nie ustawiaj go, a jeśli jest, usuń; do tego czasu **nie** ustawiaj `AI_JOB_IMPORT_ENABLED`, `AI_JOB_ASSIST_ENABLED`, `AI_CV_IMPORT_ENABLED` | — (funkcje wyłączone, nie blokuje startu) |
 | W15 | P2 | Google Search Console: domena, zgłoszenie plików `/sitemap/0.xml`, `/sitemap/1.xml` … (wypisane w produkcyjnym `robots.txt`; pojedynczego `/sitemap.xml` nie ma — #599) | wolniejsze indeksowanie |
 
 ### 1b. Kod (do zrobienia przez sesje)
@@ -63,7 +63,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K1 | P1 | Harmonogram zastępczy dla W1/W2 bez płatnego planu Railway (np. Worker z Cron Trigger wołający `scripts/railway-cron-call.mjs`-owy kontrakt: POST, sekret w nagłówku, timeout) + dokumentacja | tylko po wyborze opcji przez właściciela; bez zmian w `.github/workflows` (minuty Actions) |
 | K2 | P1 | GC tabel technicznych w `/api/maintenance`: `email_deliveries_gc` (istnieje od `0022`, nie jest wołane), `processed_webhooks`, `rate_limit` (#17) | za flagą jak `RETENTION_MODE` |
 | K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
-| K4 | P2 | `/faq` to placeholder obok realnej `/pomoc` (#61) — przekierowanie 308 na `/pomoc` albo usunięcie trasy (dotyka E2E a11y/cache, `check-next-build`, smoke) | poza nawigacją, `noindex` |
+| K4 | ~~P2~~ | **Zrobione:** `/faq` (placeholder) usunięte, middleware daje 308 na `/{locale}/pomoc` (#61) | test `faq-redirect` |
 | K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |
 | K6 | P2 | Wersja polityki z cookie w receipcie zgody (`record_consent` bierze `consent_versions`) | wymaga migracji |
 | K7 | P2 | Domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | znane braki #24/#25 |
@@ -95,7 +95,8 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 - [ ] `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL` — W10.
 - [ ] **`APP_MODE=production`** dopiero po decyzji właściciela (W8). W trybie produkcyjnym brak
       konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
-- [ ] Nieustawione: `BILLING_ENABLED`, `STRIPE_*`, `AI_*_ENABLED`, zmienne Supabase, `CRON_SECRET`.
+- [ ] Nieustawione: `BILLING_ENABLED`, `STRIPE_*`, `AI_*_ENABLED`, `ANTHROPIC_API_KEY` (AI na OpenAI od #677), zmienne Supabase, `CRON_SECRET`.
+- [ ] `OPENAI_API_KEY` dopiero razem z włączeniem funkcji AI (W14); sam klucz niczego nie włącza.
 - [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` pusta (domyślnie `2.0`) albo zgodna z opublikowaną polityką.
 
 ## 4. Baza danych

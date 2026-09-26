@@ -105,6 +105,12 @@ export default async function EmployerCandidatesPage({
               {td("candidatesReadErrorBody")}
             </p>
           </div>
+        ) : result.status === "denied" || result.status === "unverified" ? (
+          <div className={PANEL}>
+            <p className={PANEL_P}>
+              {td(result.status === "denied" ? "topMatchedDenied" : "topMatchedUnverified")}
+            </p>
+          </div>
         ) : candidates.length === 0 && request.cursor ? (
           <div className={PANEL}>
             <h2 className={PANEL_H2}>

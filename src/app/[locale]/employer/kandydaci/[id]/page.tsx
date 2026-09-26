@@ -130,15 +130,17 @@ export default async function EmployerCandidateDetailPage({
                   <p className="break-words font-semibold text-foreground">{match.jobTitle || t('applicationUnknownJob')}</p>
                   <div className="mt-2"><MatchBar value={match.score} showLabel /></div>
                 </div>
-                <SendOfferButton
-                  jobId={match.jobId}
-                  candidateId={candidate.candidateId}
-                  candidateName={name}
-                  jobTitle={match.jobTitle}
-                  jobSlug={match.jobSlug}
-                  offerSentAt={match.offerSentAt}
-                  className="min-h-11 w-full sm:w-auto sm:self-start"
-                />
+                {match.canOffer ? (
+                  <SendOfferButton
+                    jobId={match.jobId}
+                    candidateId={candidate.candidateId}
+                    candidateName={name}
+                    jobTitle={match.jobTitle}
+                    jobSlug={match.jobSlug}
+                    offerSentAt={match.offerSentAt}
+                    className="min-h-11 w-full sm:w-auto sm:self-start"
+                  />
+                ) : null}
               </li>
             ))}
           </ul>

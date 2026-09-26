@@ -15,6 +15,11 @@ import { isCspReportContentType, parseCspReports } from '@/lib/security/csp-repo
  *
  * Limity: body ≤ 16 KB, ≤ 10 raportów w żądaniu, 20 żądań/min z adresu i 300 wpisów/min
  * na proces (zalew raportów nie zapcha logów). Odpowiedź zawsze bez treści i `no-store`.
+ *
+ * Report-Only (#585) ma OSOBNĄ grupę i adres (`?policy=report-only`) oraz osobne, mniejsze
+ * budżety: jego oczekiwany szum (wbudowane skrypty RSC Next.js na każdej stronie) nie może
+ * zjeść limitu raportów polityki egzekwowanej. Wpis z `disposition=report` zawsze liczy się
+ * do budżetu Report-Only, niezależnie od adresu, na który przyszedł.
  */
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +28,12 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' } as const;
 
 const perAddress = createFunnelRateLimiter({ max: 20, windowMs: 60_000 });
 const perProcess = createFunnelRateLimiter({ max: 300, windowMs: 60_000, maxKeys: 1 });
+const reportOnlyPerAddress = createFunnelRateLimiter({ max: 10, windowMs: 60_000 });
+const reportOnlyPerProcess = createFunnelRateLimiter({ max: 60, windowMs: 60_000, maxKeys: 1 });
+
+function isReportOnlyRequest(request: Request): boolean {
+  return new URL(request.url).searchParams.get('policy') === 'report-only';
+}
 
 function empty(status: number): NextResponse {
   return new NextResponse(null, { status, headers: NO_STORE });
@@ -38,7 +49,8 @@ function clientAddress(headers: Headers): string {
 
 export async function POST(request: Request): Promise<NextResponse> {
   if (!isCspReportContentType(request.headers.get('content-type'))) return empty(415);
-  if (!perAddress.hit(clientAddress(request.headers))) return empty(429);
+  const addressLimiter = isReportOnlyRequest(request) ? reportOnlyPerAddress : perAddress;
+  if (!addressLimiter.hit(clientAddress(request.headers))) return empty(429);
 
   const body = await readTextWithLimit(request, MAX_BODY_BYTES);
   if (!body.ok) return empty(413);
@@ -54,7 +66,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   for (const violation of violations) {
     // Po przekroczeniu budżetu procesu raporty są odrzucane po cichu (przeglądarka nie ponawia).
-    if (!perProcess.hit('process')) break;
+    const budget = violation.disposition === 'report' ? reportOnlyPerProcess : perProcess;
+    if (!budget.hit('process')) continue;
     console.warn('[csp-report]', JSON.stringify(violation));
   }
   return empty(204);

@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "De bezwaartermijn begint te lopen zodra je de melding over de beslissing ontvangt.",
     "appealStatusLabel": "Bezwaar {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Vacatures bij {name}",
+    "metaDescription": "Bekijk de actieve vacatures van {name} op Pracuj.be.",
+    "noDescription": "Dit bedrijf heeft nog geen beschrijving toegevoegd.",
+    "jobsHeading": "Actieve vacatures van dit bedrijf",
+    "empty": "Dit bedrijf heeft momenteel geen actieve vacatures.",
+    "backToJobs": "Bekijk alle vacatures"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Laden...",
@@ -1016,7 +1024,13 @@
     "employerCandidateMatches": "Match met de vacatures van het bedrijf",
     "employerCandidateNoMatches": "Er zijn geen matches berekend voor de vacatures van het bedrijf.",
     "employerCandidateApplications": "Sollicitaties op de vacatures van het bedrijf",
-    "employerCandidateNoApplications": "De kandidaat heeft niet gesolliciteerd op de vacatures van het bedrijf."
+    "employerCandidateNoApplications": "De kandidaat heeft niet gesolliciteerd op de vacatures van het bedrijf.",
+    "statRecruiterOnly": "Zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf",
+    "statAfterVerification": "Beschikbaar zodra het bedrijf is geverifieerd",
+    "funnelDenied": "De wervingstrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
+    "topMatchedDenied": "Gematchte kandidaten zijn zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
+    "topMatchedUnverified": "Gematchte kandidaten verschijnen zodra het bedrijf is geverifieerd.",
+    "topMatchedLoadError": "We konden de gematchte kandidaten niet laden."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1353,7 +1367,6 @@
     "privacyTitle": "Privacybeleid",
     "cookiePolicyTitle": "Cookiebeleid",
     "aboutTitle": "Over ons",
-    "faqTitle": "Veelgestelde vragen",
     "contactTitle": "Contact",
     "helpTitle": "Help",
     "intro": "Hieronder vind je de belangrijkste informatie. Deze sectie is in voorbereiding.",

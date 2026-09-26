@@ -32,6 +32,7 @@ import {
   type ScoreCursor,
   type TimeCursor,
 } from '@/lib/employer/list-cursor';
+import { canRecruit } from '@/lib/team/permissions';
 import { captureError } from '@/lib/error-report';
 import {
   parseScreeningAnswers,
@@ -50,11 +51,23 @@ import {
  * Kontrakt (typy zwracane do UI)
  * ------------------------------------------------------------------------- */
 
+/**
+ * Kafelki przeglądowe. `null` = „brak danych” (nie zero): liczniki zgłoszeń, dopasowań
+ * i rozmów czyta wyłącznie recruiter+ (RLS 0039 — zwykły `member` dostałby z bazy 0, które
+ * udawałoby brak aktywności); dopasowani kandydaci są dostępni dopiero dla zweryfikowanej firmy.
+ */
 export interface EmployerOverview {
   activeOffersCount: number;
-  newApplicationsCount: number;
-  matchedCandidatesCount: number;
-  messagesToAnswerCount: number;
+  /** Zgłoszenia w statusie `submitted` (jeszcze nieprzejrzane). */
+  newApplicationsCount: number | null;
+  /** RÓŻNI kandydaci dopasowani do ofert firmy (nie wiersze `matches`) — jak lista „Top dopasowani”. */
+  matchedCandidatesCount: number | null;
+  /** Rozmowy AKTYWNEJ firmy, w których ostatnia wiadomość jest od kandydata (czekają na odpowiedź). */
+  messagesToAnswerCount: number | null;
+  /** Rola recruiter+ w aktywnej firmie — gdy `false`, UI wyjaśnia, dlaczego liczników brak. */
+  recruiterAccess: boolean;
+  /** Firma zweryfikowana — gdy `false`, dopasowani kandydaci czekają na weryfikację. */
+  companyVerified: boolean;
 }
 
 export interface EmployerJob {
@@ -70,8 +83,10 @@ export interface EmployerJob {
   pastExpiry: boolean;
   /** Publiczny adres oferty (link „Zobacz ofertę" dla aktywnej, #325). */
   slug: string;
-  newApplications: number;
-  matched: number;
+  /** `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). */
+  newApplications: number | null;
+  /** `null` = brak uprawnień rekrutera do dopasowań (nie zero). */
+  matched: number | null;
   /** Data utworzenia (ISO) — pokazywana zamiast technicznego identyfikatora (Invariant #8). */
   createdAt: string | null;
 }
@@ -135,6 +150,8 @@ const DEMO_OVERVIEW: EmployerOverview = {
   newApplicationsCount: 42,
   matchedCandidatesCount: 26,
   messagesToAnswerCount: 5,
+  recruiterAccess: true,
+  companyVerified: true,
 };
 
 /** Delty tygodniowe do podpisów StatCard — wyłącznie w trybie DEMO (brak historii w DB path). */
@@ -173,6 +190,8 @@ const EMPTY_OVERVIEW: EmployerOverview = {
   newApplicationsCount: 0,
   matchedCandidatesCount: 0,
   messagesToAnswerCount: 0,
+  recruiterAccess: true,
+  companyVerified: true,
 };
 
 const EMPTY_FUNNEL: FunnelStats = { views: null, applications: 0, interviews: 0, hired: 0 };
@@ -185,9 +204,13 @@ export type EmployerOverviewLoad =
   | { status: 'ok'; overview: EmployerOverview }
   | { status: 'error' };
 
-/** Jawny stan odczytu lejka — błąd bazy nie może udawać pustego lejka (#304). */
+/**
+ * Jawny stan odczytu lejka — błąd bazy nie może udawać pustego lejka (#304), a brak uprawnień
+ * rekrutera (zwykły `member`: RLS ukrywa zgłoszenia) nie może udawać lejka z zerami.
+ */
 export type FunnelStatsLoad =
   | { status: 'ok'; funnel: FunnelStats }
+  | { status: 'denied' }
   | { status: 'error' };
 
 /**
@@ -249,6 +272,8 @@ interface EmployerContext {
   me: PortalIdentity;
   companyId: string;
   companyStatus: string;
+  /** Rola w aktywnej firmie — decyduje, czy liczniki rekrutacyjne są dostępne (recruiter+). */
+  role: string;
 }
 
 /**
@@ -265,7 +290,7 @@ const loadContext = cache(async (): Promise<EmployerContext | null> => {
   const ctx = await withPortalTransaction(me, (tx) => getActiveCompany(tx, me.id));
   if (!ctx.activeId) return null;
 
-  return { me, companyId: ctx.activeId, companyStatus: ctx.activeStatus };
+  return { me, companyId: ctx.activeId, companyStatus: ctx.activeStatus, role: ctx.activeRole };
 });
 
 /** Kolumny listy zgłoszeń: imię kandydata i tytuł oferty jako osadzone rekordy (pod RLS). */
@@ -336,32 +361,74 @@ export const getEmployerShellData = cache(async (): Promise<EmployerShellData> =
  * Publiczne API panelu pracodawcy
  * ------------------------------------------------------------------------- */
 
-/** Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi). */
+/**
+ * Dopasowani kandydaci firmy: RÓŻNI kandydaci (kandydat dopasowany do trzech ofert liczy się raz),
+ * te same warunki co lista `get_company_top_matches` (0079) — nieusunięta oferta firmy, kandydat
+ * widoczny pod RLS, firma zweryfikowana. RLS `matches` dokłada recruiter+, blokadę firmy (#97)
+ * i widoczność profilu (#494).
+ */
+const MATCHED_CANDIDATES_SQL = `SELECT DISTINCT m.candidate_id
+     FROM public.matches m
+     JOIN public.jobs j ON j.id = m.job_id
+    WHERE j.company_id = $1 AND j.deleted_at IS NULL
+      AND EXISTS (SELECT 1 FROM public.candidate_profiles cp WHERE cp.profile_id = m.candidate_id)`;
+
+/**
+ * Rozmowy aktywnej firmy czekające na odpowiedź: ostatnia (nieusunięta) wiadomość wysłał ktoś
+ * spoza firmy, czyli kandydat. Liczone per FIRMA, nie per użytkownik — wcześniejszy licznik
+ * nieprzeczytanych powiadomień `message_received` obejmował też rozmowy innych firm użytkownika
+ * i gasł po otwarciu powiadomienia, choć nikt nie odpisał. Członek firmy (także byłego zespołu,
+ * `is_active = false`) to strona firmowa — jego wiadomość jest odpowiedzią. Odczyt pod RLS
+ * (`is_conversation_member`, 0039): rozmowy firmy, których użytkownik jest uczestnikiem.
+ */
+const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
+     FROM public.conversations c
+     JOIN LATERAL (
+       SELECT m.sender_id FROM public.messages m
+        WHERE m.conversation_id = c.id AND m.deleted_at IS NULL
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT 1
+     ) last ON true
+    WHERE c.company_id = $1 AND c.deleted_at IS NULL
+      AND last.sender_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.company_members cm
+                       WHERE cm.company_id = $1 AND cm.profile_id = last.sender_id)`;
+
+/**
+ * Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi).
+ * Liczniki rekrutacyjne tylko dla recruiter+ — dla zwykłego `member` `null` („brak danych”),
+ * bo RLS zwróciłby 0 udające brak aktywności. Dopasowani: `null` także dla firmy
+ * niezweryfikowanej (dostęp do bazy kandydatów dopiero po weryfikacji).
+ */
 export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
   if (!isPortalDataConfigured()) return { status: 'ok', overview: DEMO_OVERVIEW };
 
   try {
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', overview: EMPTY_OVERVIEW };
-    const { me, companyId } = ctx;
+    const { me, companyId, companyStatus, role } = ctx;
+    const recruiter = canRecruit(role);
 
-    // Cztery liczniki w jednej transakcji: błąd któregokolwiek = stan błędu kafelków (#304).
+    // Liczniki w jednej transakcji: błąd któregokolwiek = stan błędu kafelków (#304).
     const overview = await withPortalTransaction(me, async (tx): Promise<EmployerOverview> => ({
       activeOffersCount: await queryCount(tx, 'employer.overview-active-jobs',
         `SELECT 1 FROM public.jobs
           WHERE company_id = $1 AND status = 'active' AND deleted_at IS NULL
             -- #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance.
             AND (expires_at IS NULL OR expires_at > now())`, [companyId]),
-      newApplicationsCount: await queryCount(tx, 'employer.overview-new-applications',
-        `SELECT 1 FROM public.applications
-          WHERE company_id = $1 AND status = 'submitted' AND deleted_at IS NULL`, [companyId]),
-      matchedCandidatesCount: await queryCount(tx, 'employer.overview-matches',
-        `SELECT 1 FROM public.matches m
-          WHERE m.job_id IN (SELECT j.id FROM public.jobs j
-                              WHERE j.company_id = $1 AND j.deleted_at IS NULL)`, [companyId]),
-      messagesToAnswerCount: await queryCount(tx, 'employer.overview-unread-messages',
-        `SELECT 1 FROM public.notifications
-          WHERE profile_id = $1 AND type = 'message_received' AND read_at IS NULL`, [me.id]),
+      newApplicationsCount: recruiter
+        ? await queryCount(tx, 'employer.overview-new-applications',
+            `SELECT 1 FROM public.applications
+              WHERE company_id = $1 AND status = 'submitted' AND deleted_at IS NULL`, [companyId])
+        : null,
+      matchedCandidatesCount: recruiter && companyStatus === 'verified'
+        ? await queryCount(tx, 'employer.overview-matched-candidates', MATCHED_CANDIDATES_SQL, [companyId])
+        : null,
+      messagesToAnswerCount: recruiter
+        ? await queryCount(tx, 'employer.overview-awaiting-reply', CONVERSATIONS_AWAITING_REPLY_SQL, [companyId])
+        : null,
+      recruiterAccess: recruiter,
+      companyVerified: companyStatus === 'verified',
     }));
 
     return { status: 'ok', overview };
@@ -711,6 +778,9 @@ export async function getCompanyJobsLoad(
     if (!ctx) return { status: 'ok', jobs: [], prevCursor: null, nextCursor: null };
     const { me, companyId } = ctx;
     const prev = request.direction === 'prev';
+    // Liczniki zgłoszeń i dopasowań czyta tylko recruiter+ (RLS 0039); zwykły `member` dostałby
+    // z bazy 0 udające brak zainteresowania — pokazujemy „brak danych” (`null`).
+    const recruiter = canRecruit(ctx.role);
 
     // Strona + znacznik kolejnej w kierunku odczytu. Liczniki liczone w bazie (count pod RLS) —
     // bez przesyłania wierszy aplikacji/dopasowań; błąd licznika = błąd całej listy.
@@ -743,8 +813,8 @@ export async function getCompanyJobsLoad(
           status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
           pastExpiry: isPastExpiry(expiresAt, now),
           slug: asString(r['slug']),
-          newApplications: asNumber(r['new_applications']),
-          matched: asNumber(r['matched']),
+          newApplications: recruiter ? asNumber(r['new_applications']) : null,
+          matched: recruiter ? asNumber(r['matched']) : null,
           createdAt: asString(r['created_at']) || null,
         };
       },
@@ -1006,12 +1076,15 @@ export const EMPLOYER_CANDIDATES_PAGE_SIZE = 10;
 
 export type MatchedCandidatesLoad =
   | ({ status: 'ok' } & ListPage<EmployerMatchedCandidate>)
+  | { status: 'denied' }
+  | { status: 'unverified' }
   | { status: 'error' };
 
 /**
  * Wszyscy dopasowani kandydaci firmy (P1-05) — strony po {@link EMPLOYER_CANDIDATES_PAGE_SIZE}
  * kursorem (wynik, kandydat) w obu kierunkach (`get_company_matches_page`, 0192). Te same
- * reguły co top 5: jeden wiersz na kandydata, RLS wywołującego, tylko firma zweryfikowana.
+ * reguły co top 5: jeden wiersz na kandydata, RLS wywołującego, tylko firma zweryfikowana
+ * (`unverified`) i recruiter+ (`denied`).
  */
 export async function getMatchedCandidatesPage(
   request: ListPageRequest<ScoreCursor> = FIRST_PAGE,
@@ -1025,7 +1098,10 @@ export async function getMatchedCandidatesPage(
     const ctx = await loadContext();
     if (!ctx) return empty;
     const { me, companyId, companyStatus } = ctx;
-    if (companyStatus !== 'verified') return empty;
+    // Jak na pulpicie (P1-14): zwykły `member` i firma przed weryfikacją to jawne stany,
+    // nie pusta lista udająca brak kandydatów.
+    if (!canRecruit(ctx.role)) return { status: 'denied' };
+    if (companyStatus !== 'verified') return { status: 'unverified' };
 
     return await withPortalTransaction(me, async (tx) => {
       const winners = matchWinners(await rpcRows(tx, 'get_company_matches_page', {
@@ -1047,6 +1123,31 @@ export async function getMatchedCandidatesPage(
     });
   } catch (error) {
     captureError(error, { area: 'employer.getMatchedCandidatesPage' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Jawny stan panelu „Top dopasowani” na pulpicie: błąd bazy, brak uprawnień rekrutera i firma
+ * przed weryfikacją to trzy różne sytuacje — żadna nie może wyglądać jak pusta lista
+ * („brak kandydatów”), bo pracodawca wyciągnąłby z niej zły wniosek.
+ */
+export type TopMatchedCandidatesLoad =
+  | { status: 'ok'; candidates: EmployerMatchedCandidate[] }
+  | { status: 'denied' }
+  | { status: 'unverified' }
+  | { status: 'error' };
+
+export async function getTopMatchedCandidatesLoad(): Promise<TopMatchedCandidatesLoad> {
+  if (!isPortalDataConfigured()) return { status: 'ok', candidates: DEMO_CANDIDATES };
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'ok', candidates: [] };
+    if (!canRecruit(ctx.role)) return { status: 'denied' };
+    if (ctx.companyStatus !== 'verified') return { status: 'unverified' };
+    return { status: 'ok', candidates: await getTopMatchedCandidates({ throwOnError: true }) };
+  } catch {
+    // `getTopMatchedCandidates` zgłosił już błąd (captureError) przed ponownym rzuceniem.
     return { status: 'error' };
   }
 }
@@ -1201,6 +1302,9 @@ export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStat
     const ctx = await loadContext();
     if (!ctx) return { status: 'ok', funnel: EMPTY_FUNNEL };
     const { me, companyId } = ctx;
+    // Kohorta zgłoszeń pod RLS jest dla zwykłego `member` pusta (0039) — lejek z zerami
+    // udawałby brak rekrutacji. Jawna odmowa, jak w lejku ofert (#99).
+    if (!canRecruit(ctx.role)) return { status: 'denied' };
     const since = new Date(now.getTime() - FUNNEL_PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     const COHORT = `SELECT 1 FROM public.applications a
@@ -1510,7 +1614,15 @@ export interface EmployerCandidateDetail {
     certificates: string[];
   } | null;
   /** Dopasowania do ofert AKTYWNEJ firmy, od najlepszego (najwyżej 10). */
-  matches: { jobId: string; jobTitle: string; jobSlug: string; score: number; offerSentAt: string | null }[];
+  matches: {
+    jobId: string;
+    jobTitle: string;
+    jobSlug: string;
+    score: number;
+    offerSentAt: string | null;
+    /** Propozycję można wysłać tylko do aktywnej, niewygasłej oferty (`send_offer`). */
+    canOffer: boolean;
+  }[];
   /** Zgłoszenia kandydata do ofert aktywnej firmy, od najnowszego (najwyżej 20). */
   applications: { id: string; jobTitle: string; status: string; submittedAt: string | null }[];
 }
@@ -1541,7 +1653,7 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
           headline: demo.role, city: demo.city, occupations: demo.role ? [demo.role] : [],
           experienceYears: null, availability: '', hasDrivingLicense: false, skills: [], languages: [], certificates: [],
         },
-        matches: [{ jobId: demo.jobId, jobTitle: demo.jobTitle, jobSlug: demo.jobSlug, score: demo.match, offerSentAt: demo.offerSentAt }],
+        matches: [{ jobId: demo.jobId, jobTitle: demo.jobTitle, jobSlug: demo.jobSlug, score: demo.match, offerSentAt: demo.offerSentAt, canOffer: true }],
         applications: [],
       },
     };
@@ -1558,7 +1670,8 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
       // matches (recruiter+, widoczność kandydata) i applications (recruiter+) pod RLS, zawężone
       // do ofert aktywnej firmy.
       const matchRows = await queryRows(tx, 'employer.candidate-detail-matches',
-        `SELECT m.job_id, m.score, j.title, j.slug
+        `SELECT m.job_id, m.score, j.title, j.slug,
+                (j.status = 'active' AND (j.expires_at IS NULL OR j.expires_at > now())) AS can_offer
            FROM public.matches m
            JOIN public.jobs j ON j.id = m.job_id
           WHERE m.candidate_id = $1 AND j.company_id = $2 AND j.deleted_at IS NULL
@@ -1637,6 +1750,7 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
           jobSlug: asString(r['slug']),
           score: asNumber(r['score']),
           offerSentAt: offerMap.get(asString(r['job_id'])) ?? null,
+          canOffer: r['can_offer'] === true,
         })),
         applications: asRows(loaded.applicationRows).map((r) => ({
           id: asString(r['id']),

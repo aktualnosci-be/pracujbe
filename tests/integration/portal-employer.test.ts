@@ -90,11 +90,36 @@ beforeAll(async () => {
     VALUES ($1, 'Operator wózka', 'Gent', 4), ($2, 'Kierowca', 'Liège', 2)`, [candidates[0], candidates[13]]);
   const cp = (await pg.admin.query('SELECT id FROM public.candidate_profiles WHERE profile_id = $1', [candidates[0]])).rows[0].id;
   await pg.admin.query(`INSERT INTO public.candidate_skills(candidate_profile_id, skill_label) VALUES ($1, 'Wózek widłowy')`, [cp]);
-  await pg.admin.query(`INSERT INTO public.matches(candidate_id, job_id, score) VALUES ($1, $2, 91), ($3, $4, 77)`,
-    [candidates[0], ids.jobA, candidates[13], ids.jobB]);
+  // Ten sam kandydat dopasowany do dwóch ofert firmy A = jeden „dopasowany kandydat” (P1-14).
+  await pg.admin.query(`INSERT INTO public.matches(candidate_id, job_id, score) VALUES ($1, $2, 91), ($1, $5, 50), ($3, $4, 77)`,
+    [candidates[0], ids.jobA, candidates[13], ids.jobB, ids.jobAClosed]);
 
+  // Nieprzeczytane powiadomienia o wiadomościach NIE są licznikiem „do odpowiedzi” (P1-14):
+  // gdyby były, owner A miałby 3.
   await pg.admin.query(`INSERT INTO public.notifications(profile_id, type, entity_type) VALUES ($1, 'message_received', 'conversation'),
+    ($1, 'message_received', 'conversation'), ($1, 'message_received', 'conversation'),
     ($2, 'message_received', 'conversation')`, [ownerA.id, ownerB.id]);
+
+  // Rozmowy: A1 czeka na odpowiedź (ostatnia od kandydata), A2 — odpisał owner, A3 — odpisał
+  // member (strona firmowa), A4 — ostatnia wiadomość kandydata usunięta, B — czeka, ale w firmie B.
+  async function conversation(company: string, candidate: string, messages: Array<[string, number, boolean?]>) {
+    const conv = (await pg.admin.query(`INSERT INTO public.conversations(company_id, created_by) VALUES ($1, $2) RETURNING id`,
+      [company, candidate])).rows[0].id;
+    // Uczestnicy jak w `start_conversation` (0016): kandydat + aktywni członkowie firmy.
+    await pg.admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id)
+      SELECT $1::uuid, $2::uuid UNION SELECT $1::uuid, cm.profile_id FROM public.company_members cm WHERE cm.company_id = $3 AND cm.is_active`,
+      [conv, candidate, company]);
+    for (const [sender, minutesAgo, deleted] of messages) {
+      await pg.admin.query(`INSERT INTO public.messages(conversation_id, sender_id, body, created_at, deleted_at)
+        VALUES ($1, $2, 'Treść', now() - ($3 || ' minutes')::interval, CASE WHEN $4 THEN now() END)`,
+        [conv, sender, minutesAgo, deleted ?? false]);
+    }
+  }
+  await conversation(ids.companyA, candidates[0]!, [[candidates[0]!, 5]]);
+  await conversation(ids.companyA, candidates[1]!, [[candidates[1]!, 10], [ownerA.id, 5]]);
+  await conversation(ids.companyA, candidates[2]!, [[candidates[2]!, 10], [memberA.id, 5]]);
+  await conversation(ids.companyA, candidates[3]!, [[ownerA.id, 10], [candidates[3]!, 5, true]]);
+  await conversation(ids.companyB, candidates[13]!, [[candidates[13]!, 5]]);
 
   const sub = (await pg.admin.query(`INSERT INTO public.subscriptions(company_id, plan, status) VALUES ($1, 'standard', 'active') RETURNING id`,
     [ids.companyA])).rows[0].id;
@@ -188,25 +213,54 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     expect(await employer.getRecentApplications()).toEqual({ status: 'ok', applications: [] });
     const jobs = await employer.getCompanyJobsLoad();
     expect(jobs.status === 'ok' && jobs.jobs.length).toBe(12);
+    // P1-14: liczniki zgłoszeń/dopasowań przy ofertach = „brak danych”, nie zero z RLS.
+    expect(jobs.status === 'ok' && jobs.jobs.find((j) => j.id === ids.jobA)).toMatchObject({ newApplications: null, matched: null });
     expect(await employer.getEmployerApplicationDetail(appsA[0]!)).toEqual({ status: 'not_found' });
-    // Lejek ofert tylko dla rekrutera: odmowa ≠ błąd; kohorta pod RLS pusta, wyświetlenia „brak danych".
+    // Lejek ofert i lejek rekrutacyjny tylko dla rekrutera: jawna odmowa ≠ błąd ≠ puste zera.
     expect((await employer.getJobFunnel(30)).status).toBe('denied');
-    expect(await employer.getFunnelStats()).toEqual({
-      status: 'ok', funnel: { views: null, applications: 0, interviews: 0, hired: 0 },
+    expect(await employer.getFunnelStats()).toEqual({ status: 'denied' });
+    expect(await employer.getTopMatchedCandidatesLoad()).toEqual({ status: 'denied' });
+    expect(await employer.getEmployerOverview()).toEqual({
+      status: 'ok',
+      overview: {
+        activeOffersCount: 1, newApplicationsCount: null, matchedCandidatesCount: null, messagesToAnswerCount: null,
+        recruiterAccess: false, companyVerified: true,
+      },
     });
   });
 
-  it('kafelki: aktywne bez przeterminowanych (#72), nowe zgłoszenia, dopasowania, własne wiadomości', async () => {
+  it('kafelki (P1-14): aktywne bez przeterminowanych (#72), nowe zgłoszenia, DISTINCT dopasowani, rozmowy firmy do odpowiedzi', async () => {
     actAs(ownerA);
     expect(await employer.getEmployerOverview()).toEqual({
       status: 'ok',
-      overview: { activeOffersCount: 1, newApplicationsCount: 13, matchedCandidatesCount: 1, messagesToAnswerCount: 1 },
+      overview: {
+        activeOffersCount: 1, newApplicationsCount: 13, matchedCandidatesCount: 1, messagesToAnswerCount: 1,
+        recruiterAccess: true, companyVerified: true,
+      },
     });
+    // Kontrola ujemna (cudza firma): dane firmy A nie wchodzą do liczników firmy B i odwrotnie.
     actAs(ownerB);
     expect(await employer.getEmployerOverview()).toEqual({
       status: 'ok',
-      overview: { activeOffersCount: 1, newApplicationsCount: 1, matchedCandidatesCount: 1, messagesToAnswerCount: 1 },
+      overview: {
+        activeOffersCount: 1, newApplicationsCount: 1, matchedCandidatesCount: 1, messagesToAnswerCount: 1,
+        recruiterAccess: true, companyVerified: true,
+      },
     });
+  });
+
+  it('kafelki (P1-14): firma niezweryfikowana — dopasowani czekają na weryfikację, reszta realna', async () => {
+    await pg.admin.query(`UPDATE public.companies SET status = 'pending' WHERE id = $1`, [ids.companyB]);
+    try {
+      actAs(ownerB);
+      expect(await employer.getEmployerOverview()).toMatchObject({
+        status: 'ok',
+        overview: { newApplicationsCount: 1, matchedCandidatesCount: null, messagesToAnswerCount: 1, companyVerified: false },
+      });
+      expect(await employer.getTopMatchedCandidatesLoad()).toEqual({ status: 'unverified' });
+    } finally {
+      await pg.admin.query(`UPDATE public.companies SET status = 'verified' WHERE id = $1`, [ids.companyB]);
+    }
   });
 
   it('oferty: strony po 12 z licznikami z bazy, status efektywny, bez ofert firmy B', async () => {
@@ -270,7 +324,7 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
       const b = await employer.getMatchedCandidatesPage();
       expect(b.status === 'ok' && b.items.map((c) => c.candidateId)).toEqual([candidates[13]]);
       actAs(memberA);
-      expect(await employer.getMatchedCandidatesPage()).toEqual({ status: 'ok', items: [], prevCursor: null, nextCursor: null });
+      expect(await employer.getMatchedCandidatesPage()).toEqual({ status: 'denied' });
     } finally {
       await pg.admin.query('DELETE FROM public.matches WHERE candidate_id = ANY($1::uuid[])', [extra]);
       await pg.admin.query('DELETE FROM public.candidate_profiles WHERE profile_id = ANY($1::uuid[])', [extra]);
@@ -286,7 +340,11 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     expect(detail.candidate).toMatchObject({
       candidateId: candidates[0], name: 'Kand Nr1',
       profile: { headline: 'Operator wózka', city: 'Gent', experienceYears: 4, skills: ['Wózek widłowy'] },
-      matches: [{ jobId: ids.jobA, jobTitle: 'Oferta a-active', jobSlug: 'a-active', score: 91, offerSentAt: null }],
+      // Dopasowanie do zamkniętej oferty zostaje widoczne, ale bez wysyłki propozycji.
+      matches: [
+        { jobId: ids.jobA, jobTitle: 'Oferta a-active', jobSlug: 'a-active', score: 91, offerSentAt: null, canOffer: true },
+        { jobId: ids.jobAClosed, jobTitle: 'Oferta a-closed', score: 50, canOffer: false },
+      ],
       applications: [{ id: appsA[0], jobTitle: 'Oferta a-active', status: 'submitted' }],
     });
     // Kandydat ze zgłoszeniem, bez profilu i dopasowania — strona istnieje, profil pusty.
