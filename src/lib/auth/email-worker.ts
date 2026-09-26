@@ -39,7 +39,7 @@ export interface AuthEmailProcessResult {
   /** Dostawca przyjął list, a zapis potwierdzenia w bazie zawiódł — alarm dla cronu. */
   ackErrors?: number;
   /**
-   * Okno dostawcy pełne (budżet puli `auth`, 0136): zlecenia wróciły do kolejki bez zużycia
+   * Okno dostawcy pełne (budżet puli `auth`, 0137): zlecenia wróciły do kolejki bez zużycia
    * próby i wyjdą w następnym oknie. To nie jest błąd — `ok` bez zmian.
    */
   deferred?: number;
@@ -110,7 +110,7 @@ export async function processAuthEmailBatch(
       failed += 1;
       continue;
     }
-    // Budżet okna dostawcy (pula `auth`, #45/0136) — po renderze, tuż przed wysyłką. Odmowa:
+    // Budżet okna dostawcy (pula `auth`, #45/0137) — po renderze, tuż przed wysyłką. Odmowa:
     // to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby. Awaria poboru nie
     // blokuje listu konta (fail-open, jak dawny hook): limit dostawcy zostaje ostatnią granicą.
     let budget: AuthSendBudget;

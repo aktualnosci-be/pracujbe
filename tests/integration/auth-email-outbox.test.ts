@@ -371,10 +371,10 @@ describe('Worker wysyłki kolejki auth (#78)', () => {
   });
 
   /**
-   * 0136: budżet okna dostawcy dla puli `auth`. Okno = doba (bez przejścia granicy w teście),
+   * 0137: budżet okna dostawcy dla puli `auth`. Okno = doba (bez przejścia granicy w teście),
    * limit dostawcy = 1; pierwszy pobór przez administratora wyczerpuje okno.
    */
-  describe('budżet puli auth (0136)', () => {
+  describe('budżet puli auth (0137)', () => {
     let saved: { window_seconds: number; provider_limit: number; reserve_auth: number; reserve_transactional: number };
     beforeAll(async () => {
       saved = (await admin.query('SELECT window_seconds, provider_limit, reserve_auth, reserve_transactional FROM public.email_send_budget_config WHERE id')).rows[0];

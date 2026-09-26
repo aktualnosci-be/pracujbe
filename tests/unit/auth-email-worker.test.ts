@@ -157,7 +157,7 @@ describe('processAuthEmailBatch', () => {
   });
 });
 
-describe('budżet okna dostawcy (pula auth, 0136)', () => {
+describe('budżet okna dostawcy (pula auth, 0137)', () => {
   const second = '44444444-4444-4444-8444-444444444444';
 
   it('pobiera budżet dla szablonu listu tuż przed wysyłką', async () => {

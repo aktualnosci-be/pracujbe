@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0136_auth_mail_send_budget.sql (numer tymczasowy — ostateczny nada integrator)
+-- 0137_auth_mail_send_budget.sql
 -- Budżet wysyłki puli `auth` w workerze Better Auth (CLAUDE.md, Etap 3 „Otwarte”).
 --
 -- Worker `auth.email_outbox` (0061, rola `pracujbe_auth_mail`) wysyłał potwierdzenia adresu
