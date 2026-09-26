@@ -130,6 +130,8 @@ describe('/api/maintenance + GC (#17)', () => {
     'run_retention_purge',
     'purge_job_funnel_data',
     'purge_stale_message_attachments',
+    'rate_limit_gc',
+    'processed_webhooks_gc',
   ];
   const request = () => new Request('http://web.internal/api/maintenance', {
     method: 'POST', headers: { authorization: 'Bearer maintenance-secret' },

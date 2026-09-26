@@ -61,7 +61,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | # | Priorytet | Luka | Uwagi |
 |---|---|---|---|
 | K1 | P1 | Harmonogram zastępczy dla W1/W2 bez płatnego planu Railway (np. Worker z Cron Trigger wołający `scripts/railway-cron-call.mjs`-owy kontrakt: POST, sekret w nagłówku, timeout) + dokumentacja | tylko po wyborze opcji przez właściciela; bez zmian w `.github/workflows` (minuty Actions) |
-| K2 | P1 | GC tabel technicznych w `/api/maintenance`: `email_deliveries_gc` (istnieje od `0022`, nie jest wołane), `processed_webhooks`, `rate_limit` (#17) | za flagą jak `RETENTION_MODE` |
+| K2 | P1 | **Zrobione (część techniczna):** `/api/maintenance` czyści `rate_limits` (okna > 1 doby) i rozstrzygnięte wpisy `processed_webhooks` > 30 dni (migracja `0193` — numer tymczasowy — nadaje EXECUTE `service_role`). `email_deliveries_gc` celowo nie — retencja e-maili czeka na decyzję (#574, W12) | działa dopiero z cronem (W2) |
 | K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
 | K4 | ~~P2~~ | **Zrobione:** `/faq` (placeholder) usunięte, middleware daje 308 na `/{locale}/pomoc` (#61) | test `faq-redirect` |
 | K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |

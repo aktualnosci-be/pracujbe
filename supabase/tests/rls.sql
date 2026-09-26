@@ -13346,6 +13346,75 @@ select pg_temp.assert(
   (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
+-- GC193. Sprzątanie tabel technicznych z /api/maintenance (K2, migracja 0193 — numer
+--        tymczasowy). rate_limit_gc i processed_webhooks_gc: EXECUTE tylko service_role;
+--        limiter nie traci trwających okien (dolna granica doby), inbox webhooków nie
+--        traci wpisów `processing` ani świeżych (dolna granica 7 dni).
+-- ============================================================================
+reset role; reset app.current_uid;
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc193:old',   now() - interval '3 days',  5, now() - interval '2 days'),
+  ('gc193:fresh', now() - interval '2 hours', 1, now() - interval '2 hours');
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc193:done-old',   'emaillabs', 'completed',  now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:failed-old', 'emaillabs', 'failed',     now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:proc-old',   'emaillabs', 'processing', now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:done-3d',    'emaillabs', 'completed',  now() - interval '3 days',  now() - interval '3 days');
+
+-- GC193-1: klient bez EXECUTE.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied', 'GC193-1 anon nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30)', 'permission denied', 'GC193-1b anon nie wywoła processed_webhooks_gc');
+reset role;
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied', 'GC193-1c authenticated nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30)', 'permission denied', 'GC193-1d authenticated nie wywoła processed_webhooks_gc');
+reset role;
+
+-- GC193-2: service_role — nawet z argumentem 1 s limiter usuwa tylko wiersz starszy niż doba.
+set role service_role;
+select public.rate_limit_gc(1);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.rate_limits where key = 'gc193:old')
+  and exists (select 1 from public.rate_limits where key = 'gc193:fresh'),
+  'GC193-2 rate_limit_gc usuwa okno sprzed doby, trwające (2 h) zostaje mimo argumentu 1 s');
+
+-- GC193-3: service_role — z argumentem 1 dzień inbox usuwa tylko rozstrzygnięte wpisy > 7 dni.
+set role service_role;
+select public.processed_webhooks_gc(1);
+reset role;
+select pg_temp.assert(
+  (select array_agg(id order by id) from public.processed_webhooks where id like 'gc193:%')
+  = array['gc193:done-3d', 'gc193:proc-old'],
+  'GC193-3 processed_webhooks_gc usuwa completed/failed > 7 dni, zostawia processing i świeże');
+
+-- KONTROLA UJEMNA: definicje sprzed 0193 — bez grantu service_role dostaje permission denied,
+-- a bez dolnej granicy argument 1 s kasuje trwające okno limitera.
+begin;
+revoke execute on function public.rate_limit_gc(integer) from service_role;
+set local role service_role;
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied',
+  'GC193-N1 bez grantu 0193 maintenance dostaje permission denied');
+reset role;
+create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400)
+returns integer language plpgsql security definer set search_path = public as $gcneg$
+declare v_deleted integer;
+begin
+  delete from public.rate_limits
+    where updated_at < now() - make_interval(secs => p_older_than_seconds);
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end $gcneg$;
+select public.rate_limit_gc(1);
+select pg_temp.assert(
+  not exists (select 1 from public.rate_limits where key = 'gc193:fresh'),
+  'GC193-N2 definicja z 0015 (bez dolnej granicy) kasuje trwające okno — granica z 0193 jest potrzebna');
+rollback;
+reset role;
+delete from public.rate_limits where key like 'gc193:%';
+delete from public.processed_webhooks where id like 'gc193:%';
+
 -- ============================================================================
 -- CN143. Nazwa firmy w wiadomościach kandydata (0143, #25): kandydat czyta nazwę firmy
 --        drugiej strony rozmowy przez `get_conversation_summaries`/`get_conversation_company_name`

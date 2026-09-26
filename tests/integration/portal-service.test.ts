@@ -265,6 +265,9 @@ describe('/api/maintenance', () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: true });
     expect(body.expiredJobs).toBeGreaterThanOrEqual(1);
+    // 0193: prawdziwy login service_role ma EXECUTE na GC tabel technicznych (bez grantu = 503).
+    expect(typeof body.purgedRateLimits).toBe('number');
+    expect(typeof body.purgedWebhookInbox).toBe('number');
     const statuses = await db().admin.query(`SELECT id, status::text FROM public.jobs WHERE id = ANY($1::uuid[])`, [[due, jobId]]);
     const byId = Object.fromEntries(statuses.rows.map((r) => [r.id, r.status]));
     expect(byId).toEqual({ [due]: 'expired', [jobId]: 'active' });
