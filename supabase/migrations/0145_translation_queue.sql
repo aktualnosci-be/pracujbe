@@ -1,8 +1,8 @@
 -- =============================================================================
--- 0129_translation_queue.sql — #31: rewizje źródeł i kolejka tłumaczeń AI odporna na
+-- 0145_translation_queue.sql — #31: rewizje źródeł i kolejka tłumaczeń AI odporna na
 -- edycje (fundament; wpięcie ofert #33 i profili #34 to osobne kroki).
 --
--- Numer tymczasowy (koordynator nadaje ostateczny). Języki = public.supported_locales
+-- Numer nadany przez integratora (0145). Języki = public.supported_locales
 -- (obecnie pl/nl/fr/en); zadanie powstaje dla każdego języka portalu poza językiem źródła.
 --
 -- 1. translation_sources — „głowa” encji (typ + id): bieżąca rewizja, aktywność. Wiersz

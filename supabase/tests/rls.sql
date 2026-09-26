@@ -6626,7 +6626,7 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
 -- =============================================================================
--- TR31 (#31, 0129): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
+-- TR31 (#31, 0145): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
