@@ -86,6 +86,7 @@
     "verificationNote": "Publikacja ofert i wysyłka propozycji wymaga statusu „zweryfikowana”, który nadaje administrator.",
     "bannerPendingTitle": "Firma czeka na weryfikację",
     "bannerPendingDesc": "Dane firmy czekają w kolejce na sprawdzenie przez administratora Pracuj.be. Publikacja ofert i wysyłka propozycji będą możliwe po zatwierdzeniu.",
+    "bannerEta": "Zwykle do 2 dni roboczych.",
     "bannerVerifiedTitle": "Firma zweryfikowana",
     "bannerVerifiedDesc": "Możesz publikować oferty i wysyłać propozycje kandydatom.",
     "bannerRejectedTitle": "Weryfikacja odrzucona",

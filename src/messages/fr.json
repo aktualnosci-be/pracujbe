@@ -86,6 +86,7 @@
     "verificationNote": "La publication d'offres et l'envoi de propositions nécessitent le statut « vérifiée », attribué par un administrateur.",
     "bannerPendingTitle": "Votre entreprise attend sa vérification",
     "bannerPendingDesc": "Les données de l’entreprise attendent d’être contrôlées par un administrateur de Pracuj.be. Vous pourrez publier des offres et envoyer des propositions après validation.",
+    "bannerEta": "Généralement sous 2 jours ouvrables.",
     "bannerVerifiedTitle": "Entreprise vérifiée",
     "bannerVerifiedDesc": "Vous pouvez publier des offres et envoyer des propositions aux candidats.",
     "bannerRejectedTitle": "Vérification refusée",
