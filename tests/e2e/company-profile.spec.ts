@@ -72,9 +72,11 @@ test('firma niezweryfikowana nie ma profilu (404)', async ({ page }) => {
 
 for (const locale of LOCALES) {
   for (const width of [320, 1280]) {
-    test(`axe profilu firmy: ${locale}, ${width} px`, async ({ page }) => {
+    test(`axe profilu firmy: ${locale}, ${width} px`, async ({ page, context }) => {
       await page.setViewportSize({ width, height: 800 });
       for (const route of [PROFILE, WITHOUT_JOBS]) {
+        // Baner pojawia się tylko bez zapisanej decyzji — każda trasa zaczyna od czystych cookies.
+        await context.clearCookies();
         await page.goto(`/${locale}${route}`);
         await page.getByRole('main').first().waitFor();
         await rejectOptionalCookies(page, locale);
