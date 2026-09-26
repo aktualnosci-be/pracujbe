@@ -102,7 +102,7 @@ describe('#293: e-mail propozycji — wiadomość i termin', () => {
     const { html } = await renderEmail('jobOffer', locale, {
       companyName: 'Acme',
       jobTitle: 'Magazynier',
-      message: 'Zapraszamy od poniedziałku.',
+      messageExcerpt: 'Zapraszamy od poniedziałku.',
       expiresAt: '2026-10-31T12:00:00Z',
       offerUrl: `${SITE}/${locale}/candidate/propozycje`,
     });

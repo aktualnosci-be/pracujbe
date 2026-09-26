@@ -48,13 +48,18 @@ function loggedCategories(categories: ConsentCategories | null | undefined): Con
 /**
  * Utrwala NIEZMIENNY receipt zgody po stronie serwera (RODO art. 7 — rozliczalność), przez
  * zaufane RPC `record_consent` (RPC-only: klient nie pisze wprost do `consents`). Zapisuje
- * profile_id (auth.uid()/null), visitor_id (cookie), per-kategoria granted, wersję dokumentu
- * (RPC dobiera aktualną), źródło, IP i user-agent. Best-effort: awaria nie blokuje UX (cookie
- * pozostaje dowodem w przeglądarce), bez ujawniania technikaliów (Invariant #8).
+ * profile_id (auth.uid()/null), visitor_id (cookie), per-kategoria granted, wersję dokumentu,
+ * źródło, IP i user-agent. Best-effort: awaria nie blokuje UX (cookie pozostaje dowodem
+ * w przeglądarce), bez ujawniania technikaliów (Invariant #8).
+ *
+ * `version` (opcjonalna, z `ConsentRecord.v` w `src/lib/consent.ts`) to wersja polityki
+ * cookies FAKTYCZNIE pokazana użytkownikowi w przeglądarce. RPC (0142) przyjmie ją tylko,
+ * jeśli istnieje w `consent_versions` — inaczej po cichu użyje bieżącej wersji, jak przed 0142.
  */
 export async function recordConsent(
   categories: ConsentCategories,
   source: string,
+  version?: string,
 ): Promise<{ ok: boolean }> {
   if (!isPortalDataConfigured()) return { ok: false };
 
@@ -76,6 +81,7 @@ export async function recordConsent(
         p_visitor_id: visitorId,
         p_ip: trustedClientIp(hdrs),
         p_user_agent: hdrs.get('user-agent') ?? null,
+        p_version: version ?? null,
       }),
     );
     return { ok: true };

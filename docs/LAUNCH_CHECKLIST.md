@@ -52,7 +52,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | W10 | P1 | Monitoring: `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL`, uptime na `/api/health` i `/api/health/ops` ([`railway/OPERATIONS.md`](./railway/OPERATIONS.md)) | awarie kolejek/bazy niewidoczne |
 | W11 | P1 | DPA i transfery dostawców (Railway, EmailLabs, Cloudflare, Discord; OpenAI dopiero przy włączeniu AI) — mapa: `docs/legal-drafts/dostawcy-i-transfery.md` | ryzyko RODO |
 | W12 | P1 | Okresy retencji i DSA (#40, #574): zatwierdzenie wartości, potem `RETENTION_MODE`, `DSA_RETENTION_MODE`, `STORAGE_GC_MODE` (dziś wyłączone/dry-run) — wymaga też W2 | dane trzymane bez terminu |
-| W13 | P2 | Cloudflare Web Analytics: `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (opcjonalne; bez niego beacon się nie ładuje) | brak statystyk ruchu |
+| W13 | P2 | Cloudflare Web Analytics: `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (opcjonalne; bez niego beacon się nie ładuje) | brak statystyk ruchu i danych polowych CWV; podgląd CWV w `/admin/wydajnosc` wymaga dodatkowo `CF_ANALYTICS_ACCOUNT_ID`, `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN` |
 | W14 | P2 | AI (OpenAI, #677): `OPENAI_API_KEY` jako sekret usługi web (tylko serwer, nigdy `NEXT_PUBLIC_*`) + DPA z OpenAI + ocena AI Act; `ANTHROPIC_API_KEY` nie jest już używany — nie ustawiaj go, a jeśli jest, usuń; do tego czasu **nie** ustawiaj `AI_JOB_IMPORT_ENABLED`, `AI_JOB_ASSIST_ENABLED`, `AI_CV_IMPORT_ENABLED` | — (funkcje wyłączone, nie blokuje startu) |
 | W15 | P2 | Google Search Console: domena, zgłoszenie plików `/sitemap/0.xml`, `/sitemap/1.xml` … (wypisane w produkcyjnym `robots.txt`; pojedynczego `/sitemap.xml` nie ma — #599) | wolniejsze indeksowanie |
 
@@ -65,7 +65,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
 | K4 | ~~P2~~ | **Zrobione:** `/faq` (placeholder) usunięte, middleware daje 308 na `/{locale}/pomoc` (#61) | test `faq-redirect` |
 | K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |
-| K6 | P2 | Wersja polityki z cookie w receipcie zgody (`record_consent` bierze `consent_versions`) | wymaga migracji |
+| K6 | P2 | Wersja polityki z cookie w receipcie zgody | zrobione w #631 (migracja `0142`): receipt niesie wersję z cookie, jeśli jest opublikowana w `consent_versions`; nazewnictwo — pkt w §3 |
 | K7 | P2 | Domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | znane braki #24/#25 |
 | K8 | P2 | `npm run test:e2e:real` poza CI (gotowy fragment `ci.yml` — issues #351, #66) | decyzja o minutach CI |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
@@ -97,7 +97,11 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
       konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
 - [ ] Nieustawione: `BILLING_ENABLED`, `STRIPE_*`, `AI_*_ENABLED`, `ANTHROPIC_API_KEY` (AI na OpenAI od #677), zmienne Supabase, `CRON_SECRET`.
 - [ ] `OPENAI_API_KEY` dopiero razem z włączeniem funkcji AI (W14); sam klucz niczego nie włącza.
-- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` pusta (domyślnie `2.0`) albo zgodna z opublikowaną polityką.
+- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` pusta (domyślnie `2.0`) albo zgodna z opublikowaną polityką
+      i RÓWNA `consent_versions.version` opublikowanego wiersza dokumentu `cookies` (np. oba „2.0”).
+      Receipt zgody (`record_consent`, migracja `0142`) zapisuje wersję z cookie klienta tylko
+      wtedy, gdy taki opublikowany wiersz istnieje (`published_at` ustawione i nie w przyszłości);
+      inna konwencja nazw (np. „2026-01” z danych demo) = receipt wskazuje bieżącą wersję.
 
 ## 4. Baza danych
 
