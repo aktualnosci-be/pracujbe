@@ -8693,6 +8693,69 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
+-- PG606. Eksport decyzji DSA — stronicowanie zamiast całego zakresu naraz (0139, #606): panel
+-- administratora pobierał WSZYSTKIE decyzje z okresu (do 1830 dni) w jednym wywołaniu; teraz
+-- kursor po (`decided_at`, `reference`) + `p_limit` (domyślnie 2000, twardy sufit 5000).
+-- Wykorzystujemy decyzje już utworzone we wcześniejszych sekcjach DSA tego pliku (okno
+-- „teraz ± 1 dzień”, jak APL43-11) — bez tworzenia nowych wierszy wprost z pominięciem
+-- `admin_decide_report`/`admin_decide_appeal` (skutek/status sprawy egzekwuje trigger).
+-- ============================================================================
+\echo '--- PG606 stronicowanie eksportu DSA ---'
+set role service_role;
+select count(*) as pg606_total from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day') \gset
+select pg_temp.assert(:pg606_total >= 2,
+  'PG606-0 wystarczająco decyzji z wcześniejszych sekcji do testu stronicowania (>= 2)');
+
+-- Rekonstrukcja CAŁEGO wyniku przez powtarzane strony o rozmiarze 1 (kursor = ostatni wiersz
+-- poprzedniej strony) musi dać dokładnie ten sam zbiór i tę samą kolejność co jedno wywołanie
+-- bez kursora — bez pominięć i bez duplikatów.
+select pg_temp.assert(
+  (
+    with recursive full_set as (
+      select decision_reference, decided_at
+        from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day')
+    ),
+    paged as (
+      ( select e.decision_reference, e.decided_at, 1 as n
+          from public.dsa_statements_export(now() - interval '1 day', now() + interval '1 day', 1, null, null) e )
+      union all
+      ( select e.decision_reference, e.decided_at, p.n + 1
+          from paged p,
+               lateral public.dsa_statements_export(
+                 now() - interval '1 day', now() + interval '1 day', 1, p.decided_at, p.decision_reference) e
+         where p.n < 1000 )
+    )
+    select (select count(*) from full_set) = (select count(*) from paged)
+      and not exists (select decision_reference from full_set except select decision_reference from paged)
+      and not exists (select decision_reference from paged except select decision_reference from full_set)
+  ),
+  'PG606-1 strony po 1 wierszu (kursor = ostatni wiersz poprzedniej) odtwarzają cały zbiór 1:1');
+
+-- Bezpiecznik rozmiaru strony: p_limit <= 0 → domyślne 2000 (nie 0 wierszy).
+select count(*) as pg606_zero_limit from public.dsa_statements_export(
+  now() - interval '1 day', now() + interval '1 day', 0, null, null) \gset
+select pg_temp.assert(:pg606_zero_limit = :pg606_total,
+  'PG606-2 p_limit <= 0 → domyślny rozmiar strony (bezpiecznik), nie zero wierszy');
+
+-- Kontrola ujemna: stary dwuargumentowy podpis jest USUNIĘTY, nie przeciążony — wywołanie
+-- z dwoma argumentami trafia jednoznacznie w nową funkcję (żadnej niejednoznaczności overloadu)
+-- z domyślnym `p_limit` = 2000 (pierwsza strona). W tym fixture wierszy jest mniej niż limit, więc
+-- wynik = cały zakres (APL43-11b sprawdza to inaczej); większy zakres wymaga kursora.
+select count(*) as pg606_legacy_call from public.dsa_statements_export(
+  now() - interval '1 day', now() + interval '1 day') \gset
+select pg_temp.assert(:pg606_legacy_call = :pg606_total,
+  'PG606-3 wywołanie dwuargumentowe (bez przeciążenia) działa z domyślnym limitem 2000 — tu cały zakres, bo wierszy jest mniej niż limit');
+
+select pg_temp.assert(
+  not has_function_privilege('anon',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE')
+  and not has_function_privilege('authenticated',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE')
+  and has_function_privilege('service_role',
+    'public.dsa_statements_export(timestamptz, timestamptz, integer, timestamptz, text)', 'EXECUTE'),
+  'PG606-4 uprawnienia niezmienione: tylko service_role wykonuje eksport');
+reset role;
+-- ============================================================================
 -- RA43. Odwołanie zgłaszającego od COFNIĘCIA ograniczenia (0109, #43): ręczne cofnięcie
 -- informuje zgłaszającego w jego języku; termin od poinformowania; od cofnięcia po odwołaniu
 -- autora odwołanie nie przysługuje; rozpatruje ktoś inny niż osoba, która cofnęła;
@@ -11149,11 +11212,22 @@ rollback;
 \set OLN 'c1080000-0000-0000-0000-0000000000a4'
 \echo '--- OL112 company links in get_public_job ---'
 reset role; reset app.current_uid;
+-- CL141 (0141) dodał CHECK website/logo_url (bezwzględny https) NA POZIOMIE TABELI — ten test
+-- świadomie wstawia złe/puste adresy (symulacja danych sprzed CHECK-a), żeby sprawdzić DRUGĄ,
+-- niezależną bramkę w samej funkcji (`public_https_url` w `get_public_job`, defense-in-depth,
+-- OL112-2b/2c/3). Zdejmujemy CHECK tylko na czas tego INSERT-u i przywracamy `not valid`
+-- (nowe zapisy nadal walidowane — CL141 niżej to sprawdza — bez skanowania tych wierszy).
+alter table public.companies drop constraint if exists companies_website_https;
+alter table public.companies drop constraint if exists companies_logo_url_https;
 insert into public.companies(id,name,status,is_demo,website,logo_url) values
   (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
   (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
   (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
   (:'OLN','Bez Linków Sp','verified',false,null,'');
+alter table public.companies add constraint companies_website_https
+  check (website is null or public.public_https_url(website) is not null) not valid;
+alter table public.companies add constraint companies_logo_url_https
+  check (logo_url is null or public.public_https_url(logo_url) is not null) not valid;
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
   ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
   ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
@@ -12373,6 +12447,83 @@ select pg_temp.assert(
 rollback;
 
 -- ============================================================================
+-- CP591. Profil firmy (#591, 0140): `get_public_company`/`get_public_company_jobs` —
+--        wyłącznie zweryfikowana, nieusunięta firma po stabilnym slugu (nie po nazwie);
+--        `get_public_job` niesie `company_slug` dla CTA szczegółu oferty. Kontrola ujemna:
+--        firma odrzucona/zawieszona/usunięta albo zły slug = brak wiersza (strona 404).
+-- ============================================================================
+\set CPCOV 'cc590000-0000-0000-0000-000000000001'
+\set CPCOU 'cc590000-0000-0000-0000-000000000002'
+\set CPCOR 'cc590000-0000-0000-0000-000000000003'
+\set CPJ1  'cc590000-0000-0000-0000-000000000011'
+\set CPJ2  'cc590000-0000-0000-0000-000000000012'
+\set CPJ3  'cc590000-0000-0000-0000-000000000013'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, slug, status, description, city, region, industry, website, logo_url) values
+  (:'CPCOV', 'CP591 Firma Zweryfikowana', 'cp591-firma-zweryfikowana', 'verified',
+   'Opis firmy CP591.', 'Antwerpia', 'Flandria', 'logistyka',
+   'https://cp591.example.invalid', 'https://cp591.example.invalid/logo.png'),
+  (:'CPCOU', 'CP591 Firma Niezweryfikowana', 'cp591-firma-niezweryfikowana', 'unverified', 'x', null, null, null, null, null),
+  (:'CPCOR', 'CP591 Firma Odrzucona', 'cp591-firma-odrzucona', 'rejected', 'x', null, null, null, null, null);
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, published_at) values
+  (:'CPJ1', :'CPCOV', 'cp591-oferta-1', 'Magazynier CP591', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl', now() - interval '1 hour'),
+  (:'CPJ2', :'CPCOV', 'cp591-oferta-2', 'Kierowca CP591', 'transport', 'permanent', 'Gent', 'Flandria', 'active', 'pl', now() - interval '2 hours'),
+  (:'CPJ3', :'CPCOU', 'cp591-oferta-3', 'Sprzątanie CP591', 'cleaning', 'permanent', 'Gent', 'Flandria', 'active', 'pl', now() - interval '3 hours');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+
+-- CP591-1: profil zweryfikowanej firmy — dane i liczba aktywnych ofert (2), nie licznik firmy B.
+select pg_temp.assert(
+  (select name = 'CP591 Firma Zweryfikowana' and slug = 'cp591-firma-zweryfikowana'
+      and description = 'Opis firmy CP591.' and city = 'Antwerpia' and region = 'Flandria'
+      and industry = 'logistyka' and website = 'https://cp591.example.invalid'
+      and logo_url = 'https://cp591.example.invalid/logo.png' and active_jobs_count = 2
+     from public.get_public_company('cp591-firma-zweryfikowana')),
+  'CP591-1 profil zweryfikowanej firmy po slugu, z liczbą aktywnych ofert');
+
+-- CP591-2: lista ofert firmy — tylko jej dwie aktywne, posortowane najnowsze pierwsze.
+select pg_temp.assert(
+  (select array_agg(slug order by published_at desc)
+     from public.get_public_company_jobs('cp591-firma-zweryfikowana')) = array['cp591-oferta-1', 'cp591-oferta-2'],
+  'CP591-2 lista ofert firmy — tylko jej aktywne oferty, najnowsze pierwsze');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company_jobs('cp591-firma-zweryfikowana')) = 2,
+  'CP591-2b oferta innej firmy (CPCOU) nie miesza się z wynikiem');
+
+-- CP591-3: firma niezweryfikowana/odrzucona/zły slug → brak wiersza (strona = 404), nie błąd.
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('cp591-firma-niezweryfikowana')) = 0,
+  'CP591-3 firma unverified nie ma publicznego profilu');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('cp591-firma-odrzucona')) = 0,
+  'CP591-3b firma rejected nie ma publicznego profilu');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('nie-taki-slug-CP591')) = 0,
+  'CP591-3c zły slug — brak wiersza');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company_jobs('cp591-firma-niezweryfikowana')) = 0,
+  'CP591-3d oferty firmy niezweryfikowanej nie wychodzą przez profil');
+
+-- CP591-4: get_public_job niesie company_slug (CTA szczegółu oferty linkuje przez slug).
+select pg_temp.assert(
+  (select company_slug = 'cp591-firma-zweryfikowana' from public.get_public_job('cp591-oferta-1')),
+  'CP591-4 get_public_job zwraca company_slug zweryfikowanej firmy');
+
+-- KONTROLA UJEMNA: firma zawieszona po publikacji profilu traci go natychmiast (nie tylko
+-- przy kolejnym imporcie/cache) — polityka czyta status na bieżąco, nie migawkę.
+reset role; reset app.current_uid;
+update public.companies set status = 'suspended' where id = :'CPCOV';
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_company('cp591-firma-zweryfikowana')) = 0,
+  'CP591-5 kontrola ujemna: firma zawieszona natychmiast traci publiczny profil');
+select pg_temp.assert(
+  (select count(*) from public.get_public_company_jobs('cp591-firma-zweryfikowana')) = 0,
+  'CP591-5b kontrola ujemna: jej oferty znikają z listy profilu razem z nim');
+rollback;
+
+-- ============================================================================
 -- WL615E83B29 (#615): worker poczty — CAS na dzierżawie wiersza kolejki (`lock_token`, 0129).
 --
 -- Bez tokenu `email_delivery_send_check(id)` (0124) sprawdzał tylko `status = 'queued'`, więc
@@ -12856,7 +13007,7 @@ select pg_temp.assert(
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
   'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
 
--- KONTROLA UJEMNA: definicja z 0110 (bez tie-breakera) — introspekcja JLP594-3 wykrywa brak,
+-- KONTROLA UJEMNA: definicja z 0110 (bez tie-breakera; typ zwrotny z `company_slug` z 0140) — introspekcja JLP594-3 wykrywa brak,
 -- a podział na strony (JLP594-1) traci swoją gwarancję (nie ma już czego porównać
 -- deterministycznie: bez unikalnego klucza w ORDER BY sam SQL nie obiecuje stabilnego wyniku).
 begin;
@@ -12882,7 +13033,7 @@ returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
   city text, region text, contract_type text, salary_min integer, salary_max integer,
   currency text, salary_period text, published_at timestamptz, highlights text[], category text,
-  accommodation boolean, immediate boolean, no_language_required boolean
+  accommodation boolean, immediate boolean, no_language_required boolean, company_slug text
 )
 language sql stable security definer set search_path = public, pg_temp as $jlneg$
   select
@@ -12896,7 +13047,8 @@ language sql stable security definer set search_path = public, pg_temp as $jlneg
     j.published_at,
     coalesce(t.highlights, '{}'::text[]) as highlights,
     j.category::text,
-    j.accommodation, j.immediate, j.no_language_required
+    j.accommodation, j.immediate, j.no_language_required,
+    c.slug as company_slug
   from public.jobs j
   join public.companies c on c.id = j.company_id
   left join lateral (
@@ -12945,6 +13097,255 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
+--       expires_at i salary_period oferty — źródło `validThrough` i
+--       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
+--       wiersza to_jsonb → JobDetail w src/lib/jobs.ts). Bez daty = null, bez kwot = brak baseSalary
+--       (JSON-LD pomija pole, bez wymyślonej wartości). Kontrola ujemna: definicja bez kolumny
+--       w transakcji cofanej → asercja JP12-1 pada.
+-- ============================================================================
+\set JPCO 'c1120000-0000-0000-0000-0000000000a1'
+\echo '--- JP12 get_public_job: expires_at + salary_period ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo) values (:'JPCO','JP12 Sp','verified',false);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  ('c1120000-0000-0000-0000-0000000000b1',:'JPCO','jp12-dated','Magazynier JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   15,18,'EUR','hour','2099-10-15 23:59:00+00'),
+  ('c1120000-0000-0000-0000-0000000000b2',:'JPCO','jp12-undated','Kierowca JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month',null);
+
+set role anon; select pg_temp.assert_client_role();
+-- JP12-1: oferta z terminem i okresem — dokładnie te wartości, także w postaci to_jsonb (jak aplikacja).
+select pg_temp.assert(
+  (select expires_at = '2099-10-15 23:59:00+00'::timestamptz and salary_period = 'hour'
+   from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-1 expires_at i salary_period z oferty');
+select pg_temp.assert(
+  (select (to_jsonb(j)->>'expires_at')::timestamptz = '2099-10-15 23:59:00+00'::timestamptz
+      and to_jsonb(j)->>'salary_period' = 'hour'
+   from public.get_public_job('jp12-dated', 'pl') j),
+  'JP12-1b to_jsonb niesie oba pola (odczyt aplikacji)');
+-- JP12-2: brak terminu → null (JSON-LD bez validThrough). Okres jest NOT NULL w jobs; bez kwot
+-- JSON-LD i tak nie ma baseSalary (normalizeSalary), więc unitText nie powstaje.
+select pg_temp.assert(
+  (select expires_at is null and salary_min is null and salary_max is null
+   from public.get_public_job('jp12-undated', 'pl')),
+  'JP12-2 bez daty → expires_at null, bez kwot');
+reset role;
+
+-- JP12-3: kontrola ujemna — definicja bez expires_at (null) daje czerwoną asercję JP12-1.
+begin;
+do $jp$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(E'j.expires_at,' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: JP12-3 fragment j.expires_at nie występuje w get_public_job';
+  end if;
+  execute replace(v_def, E'j.expires_at,', E'null::timestamptz as expires_at,');
+end $jp$;
+select pg_temp.assert(
+  (select expires_at is null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3 mutacja bez expires_at — JP12-1 wykrywa regresję');
+rollback;
+select pg_temp.assert(
+  (select expires_at is not null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3b po cofnięciu definicja wróciła');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- CL141. Edycja strony WWW i logo firmy (#112, 0141): tylko owner/admin (jak
+--        nazwa/VAT, 0040); bezwzględny https egzekwowany CHECK-iem
+--        (`companies_website_https`/`companies_logo_url_https`, ta sama reguła co
+--        `public_https_url`, 0114); zmiana NIE cofa weryfikacji (w przeciwieństwie do
+--        nazwy/VAT — `protect_company_verification`, 0072/0141 bez zmian); audyt
+--        `company.links_changed`.
+-- ============================================================================
+\set OWNCL 'e1620000-0000-0000-0000-000000000001'
+\set ADMCL 'e1620000-0000-0000-0000-000000000002'
+\set MEMCL 'e1620000-0000-0000-0000-000000000003'
+\set RECCL 'e1620000-0000-0000-0000-000000000004'
+\set COMPCL 'e1620000-0000-0000-0000-0000000000f1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWNCL','owncl@test.be','Otto CL','{"role":"employer","first_name":"Otto","last_name":"CL","locale":"pl"}'),
+  (:'ADMCL','admcl@test.be','Ada CL','{"role":"employer","first_name":"Ada","last_name":"CL","locale":"pl"}'),
+  (:'MEMCL','memcl@test.be','Mila CL','{"role":"employer","first_name":"Mila","last_name":"CL","locale":"pl"}'),
+  (:'RECCL','reccl@test.be','Rex CL','{"role":"employer","first_name":"Rex","last_name":"CL","locale":"pl"}');
+insert into public.companies(id,name,status,vat_number,verified_at) values
+  (:'COMPCL','Firma CL','verified','BE0611111111',now());
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPCL',:'OWNCL','owner',true),
+  (:'COMPCL',:'ADMCL','admin',true),
+  (:'COMPCL',:'MEMCL','member',true),
+  (:'COMPCL',:'RECCL','recruiter',true);
+
+-- CL141-1 (kontrola ujemna): member/recruiter (bez roli owner/admin) nie edytuje linków —
+-- RLS (`companies_update_member`, USING is_company_admin) filtruje wiersz z UPDATE: brak
+-- wyjątku, ale zero zmienionych wierszy (jak przy bezpośrednim UPDATE nazwy/VAT, 0040).
+set role authenticated; set app.current_uid = :'MEMCL'; select pg_temp.assert_client_role();
+with upd as (
+  update public.companies set website = 'https://member-attempt.example'
+   where id = 'e1620000-0000-0000-0000-0000000000f1' returning id
+)
+select pg_temp.assert((select count(*) = 0 from upd),
+  'CL141-1 member nie edytuje stronę WWW firmy (RLS: zero wierszy)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECCL'; select pg_temp.assert_client_role();
+with upd as (
+  update public.companies set logo_url = 'https://recruiter-attempt.example/logo.png'
+   where id = 'e1620000-0000-0000-0000-0000000000f1' returning id
+)
+select pg_temp.assert((select count(*) = 0 from upd),
+  'CL141-1b recruiter (bez owner/admin) nie edytuje logo firmy (RLS: zero wierszy)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website is null and logo_url is null from public.companies where id = :'COMPCL'),
+  'CL141-1c nieudane próby nie zmieniły danych');
+
+-- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki.
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set website = ''http://owner-attempt.example'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_website_https', 'CL141-2 http:// odrzucone (strona WWW)');
+select pg_temp.expect_error(
+  'update public.companies set logo_url = ''javascript:alert(1)'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_logo_url_https', 'CL141-2b adres bez https:// odrzucony (logo)');
+select pg_temp.expect_error(
+  'update public.companies set website = ''https://exa mple.com'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_website_https', 'CL141-2c spacja w adresie odrzucona');
+reset role; reset app.current_uid;
+
+-- CL141-3: owner ustawia OBA adresy poprawnie → zapis, status BEZ ZMIAN (verified), audyt.
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+update public.companies
+   set website = 'https://www.firma-cl.example', logo_url = 'https://www.firma-cl.example/logo.png'
+ where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-cl.example' and logo_url = 'https://www.firma-cl.example/logo.png'
+     and status::text = 'verified' and verified_at is not null
+     from public.companies where id = :'COMPCL'),
+  'CL141-3 adresy zapisane, weryfikacja NIE cofnięta (w przeciwieństwie do nazwy/VAT)');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPCL' and action = 'company.links_changed' and actor_id = :'OWNCL'
+             and before_data = jsonb_build_object('website', null, 'logo_url', null)
+             and after_data = jsonb_build_object('website', 'https://www.firma-cl.example',
+                                                  'logo_url', 'https://www.firma-cl.example/logo.png')),
+  'CL141-3b audyt zmiany linków z wartościami przed/po');
+select pg_temp.assert(
+  not exists (select 1 from public.audit_logs
+               where entity_id = :'COMPCL' and action = 'company.status_changed'
+                 and after_data->>'status' = 'pending'),
+  'CL141-3c bez wpisu zmiany statusu — zmiana linków nie uruchamia ponownej weryfikacji');
+
+-- CL141-4: admin (nie tylko owner) może edytować; puste pole czyści adres (NULL).
+set role authenticated; set app.current_uid = :'ADMCL'; select pg_temp.assert_client_role();
+update public.companies set logo_url = null where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-cl.example' and logo_url is null and status::text = 'verified'
+     from public.companies where id = :'COMPCL'),
+  'CL141-4 admin czyści logo bez wpływu na stronę WWW ani status');
+
+-- CL141-5: adres nad limitem długości (2048 znaków) odrzucony (SEC-04-style, path-independent).
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.companies set website = ''https://www.firma-cl.example/%s'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+         repeat('a', 2048)),
+  'companies_website_https', 'CL141-5 adres nad limitem długości odrzucony');
+reset role; reset app.current_uid;
+
+-- CL141-6: zmiana nazwy TEJ SAMEJ firmy nadal cofa weryfikację (bez regresji 0072/0141).
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma CL Nowa' where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and verified_at is null from public.companies where id = :'COMPCL'),
+  'CL141-6 zmiana nazwy nadal cofa weryfikację — CL141 nie osłabił 0072');
+
+-- ============================================================================
+-- CVR142. Dokończenie #349 (migracja 0142) — record_consent niesie wersję polityki
+-- 'cookies' FAKTYCZNIE pokazaną klientowi (cookie/`p_version`), przyjętą tylko po
+-- weryfikacji w consent_versions; nieznana wersja = cichy fallback do bieżącej.
+-- ============================================================================
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000001', 'cookies', '2026-01', null, true, '2026-01-01'::timestamptz),
+  ('00000000-0000-0000-0000-000142000002', 'cookies', '2024-06', null, false, '2024-06-01'::timestamptz);
+
+-- CVR142-1: p_version zgodna z ISTNIEJĄCYM wierszem (nawet nie-bieżącym) trafia do receiptu —
+-- to jest sedno #349: receipt niesie wersję, którą użytkownik naprawdę widział, nie zawsze bieżącą.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-1', null, null, '2024-06');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-1' limit 1)
+    = '00000000-0000-0000-0000-000142000002'::uuid,
+  'CVR142-1 wersja z klienta (nie-bieżąca, ale istniejąca) trafia do receiptu');
+
+-- CVR142-2 (kontrola ujemna): NIEISTNIEJĄCA wersja z klienta NIE trafia do receiptu wprost —
+-- cichy fallback do bieżącej wersji dokumentu 'cookies' (zachowanie jak przed 0142), nigdy
+-- zapis dowolnego tekstu klienta jako powiązania z wierszem consent_versions.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-2', null, null,
+  'wersja-ktorej-nie-ma-w-bazie');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-2' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-2 nieistniejąca wersja klienta -> fallback do bieżącej, nie zapisana wprost');
+
+-- CVR142-3: brak p_version (stare wywołanie / stary cookie bez `v`) -> też bieżąca wersja.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-3');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-3' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-3 bez p_version -> bieżąca wersja (zgodność z zachowaniem sprzed 0142)');
+
+-- CVR142-5 (kontrola ujemna, bloker integratora): wersja z klienta, która istnieje, ale NIE jest
+-- opublikowana — zaplanowana na przyszłość (published_at = now() + 1 dzień) albo szkic
+-- (published_at NULL) — nie mogła być pokazana użytkownikowi, więc NIE trafia do receiptu;
+-- fallback do bieżącej wersji dokumentu 'cookies'.
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000003', 'cookies', '2027-future', null, false, now() + interval '1 day'),
+  ('00000000-0000-0000-0000-000142000004', 'cookies', '2027-draft', null, false, null);
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5a', null, null, '2027-future');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5b', null, null, '2027-draft');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5a' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5a wersja z published_at w przyszłości -> fallback do bieżącej, nie zapisana wprost');
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5b' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5b szkic (published_at NULL) -> fallback do bieżącej, nie zapisany wprost');
+
+-- CVR142-4 (kontrola ujemna): authenticated (CANDA) nie nadpisze / nie dopisze się pod cudzy
+-- receipt innego konta (CANDB) — record_consent zawsze pisze profile_id = auth.uid() BIEŻĄCEJ
+-- sesji; klient nie ma żadnego parametru wskazującego inne konto (ani p_version go nie daje).
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared') as cvr_b_before \gset
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":false}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared')
+    = :'cvr_b_before',
+  'CVR142-4 authenticated A nie zmienia/nie dopisuje receiptu profile_id=CANDB (izolacja po auth.uid())');
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
+  'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
+
 -- GC193. Sprzątanie tabel technicznych z /api/maintenance (K2, migracja 0193 — numer
 --        tymczasowy). rate_limit_gc i processed_webhooks_gc: EXECUTE tylko service_role;
 --        limiter nie traci trwających okien (dolna granica doby), inbox webhooków nie
