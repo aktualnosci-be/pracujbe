@@ -111,7 +111,8 @@ Worker: `POST /api/translation/process` (`MAINTENANCE_SECRET`/`CRON_SECRET`), ki
 pustej kolejki albo 20 s (`src/lib/translation/run.ts`); bez flagi odpowiada `skipped` bez
 bazy i dostawcy; `GET` = `405` bez autoryzacji i efektów (#614). Każde wywołanie modelu =
 wiersz logu użycia AI (bez treści) i rezerwacja budżetu AI (#36); odmowa budżetu odracza zadania
-bez zużycia prób (licznik `deferred` w odpowiedzi). Cron: usługa
+bez zużycia prób (licznik `deferred` w odpowiedzi). Cron: Cloudflare
+Worker co 10 min (`docs/CLOUDFLARE_CRON.md`, bez flagi = `skipped`) albo usługa
 `cron-translation` w `docs/railway/KONFIGURACJA_PRODUKCJI.md` — tylko po decyzji o włączeniu.
 
 Dowód: `rls.sql` sekcja TR33 (publikacja, pola wymagań, rollback, stawka bez rewizji, jedna
