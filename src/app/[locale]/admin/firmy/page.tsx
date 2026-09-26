@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { companyFocusKey } from '@/lib/admin/focus';
 import { normalizeAdminSearch, parseUuid } from '@/lib/admin/list-params';
-import { AWAITING_FILTER, listCompanies } from '@/lib/data/admin';
+import { AWAITING_FILTER, LINKS_REVIEW_FILTER, listCompanies } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
@@ -43,7 +43,7 @@ import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
  * (`/admin/firmy/[id]` — dane, członkowie, oferty, #310) + akcje weryfikacji/odrzucenia/
  * zawieszenia (CompanyStatusActions → dialog potwierdzenia z danymi firmy → RPC
  * `admin_set_company_status`, #310). Filtr `awaiting` = kolejka weryfikacji (`unverified` +
- * `pending`, #307). Wyszukiwanie po nazwie/VAT/KBO/e-mailu i stronicowanie kursorem (#418),
+ * `pending`, #307), filtr `links` = strona WWW/logo do zatwierdzenia (0204). Wyszukiwanie po nazwie/VAT/KBO/e-mailu i stronicowanie kursorem (#418),
  * parametry w URL (`?status=&q=&cursor=`). Daty w Europe/Brussels (#421). Po zmianie statusu
  * fokus na nagłówku wiersza albo strony (#415). Błąd odczytu → jawny stan błędu (#311). Odczyt service-rolem
  * po potwierdzeniu roli admina w layoucie. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
@@ -57,6 +57,7 @@ const BASE_PATH = '/admin/firmy';
 const FILTERS = [
   'all',
   AWAITING_FILTER,
+  LINKS_REVIEW_FILTER,
   'unverified',
   'pending',
   'verified',
@@ -68,6 +69,7 @@ const FILTERS = [
 const FILTER_LABEL: Record<string, string> = {
   all: 'filterAll',
   [AWAITING_FILTER]: 'filterAwaiting',
+  [LINKS_REVIEW_FILTER]: 'filterCompanyLinks',
   unverified: 'statusUnverified',
   pending: 'statusPending',
   verified: 'statusVerified',

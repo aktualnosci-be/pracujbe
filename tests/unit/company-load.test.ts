@@ -72,9 +72,37 @@ describe('company read state', () => {
         statusReason: null,
         website: 'https://acme.example',
         logoUrl: null,
+        linksReview: null,
         canEdit: true,
       },
     });
+  });
+
+  it('exposes a pending links proposal separately from the published addresses (0204)', async () => {
+    db([{
+      id: 'company-1', name: 'Acme', status: 'verified', website: 'https://acme.example',
+      website_pending: 'https://nowa.acme.example', logo_url_pending: null,
+      links_review_status: 'pending', links_pending_at: '2026-09-26 10:00:00.123+00',
+      links_review_reason: null,
+    }]);
+    expect(await getMyCompany()).toMatchObject({
+      company: {
+        website: 'https://acme.example',
+        linksReview: {
+          status: 'pending',
+          website: 'https://nowa.acme.example',
+          logoUrl: null,
+          submittedAt: '2026-09-26 10:00:00.123+00',
+          reason: null,
+        },
+      },
+    });
+  });
+
+  it('negative control: an unknown review status is not treated as a proposal', async () => {
+    db([{ id: 'company-1', name: 'Acme', status: 'verified', links_review_status: 'approved',
+          website_pending: 'https://x.example' }]);
+    expect(await getMyCompany()).toMatchObject({ company: { linksReview: null } });
   });
 
   it('shows the admin reason only for rejected/suspended companies', async () => {

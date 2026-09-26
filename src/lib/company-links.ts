@@ -41,3 +41,52 @@ export function sameOriginHost(url: string, ownHost: string): boolean {
     return false;
   }
 }
+
+/**
+ * Propozycja zmiany strony WWW/logo czekająca na decyzję admina portalu (migracja 0204).
+ * Pola publiczne (`website`/`logo_url`) zmienia wyłącznie `admin_decide_company_links`;
+ * `pending` = czeka w kolejce, `rejected` = odrzucona z uzasadnieniem (firma może poprawić).
+ */
+export type CompanyLinksReviewStatus = 'pending' | 'rejected';
+
+export interface CompanyLinksReview {
+  status: CompanyLinksReviewStatus;
+  /** Proponowany stan docelowy (NULL = bez adresu). */
+  website: string | null;
+  logoUrl: string | null;
+  /** Czas zgłoszenia — klucz CAS decyzji admina (`p_expected_pending_at`). */
+  submittedAt: string | null;
+  /** Uzasadnienie odrzucenia (tylko `rejected`). */
+  reason: string | null;
+}
+
+/** Maks. długość uzasadnienia odrzucenia — jak w RPC `admin_decide_company_links` (0204). */
+export const COMPANY_LINKS_REASON_MAX = 1000;
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** Stan propozycji z wiersza `companies` (kolumny 0204); brak propozycji → `null`. */
+export function parseCompanyLinksReview(row: Record<string, unknown>): CompanyLinksReview | null {
+  const status = row['links_review_status'];
+  if (status !== 'pending' && status !== 'rejected') return null;
+  return {
+    status,
+    website: textOrNull(row['website_pending']),
+    logoUrl: textOrNull(row['logo_url_pending']),
+    submittedAt: textOrNull(row['links_pending_at']),
+    reason: status === 'rejected' ? textOrNull(row['links_review_reason']) : null,
+  };
+}
+
+/** Walidacja uzasadnienia decyzji — lustro RPC (odrzucenie wymaga, limit 1000). */
+export function companyLinksReasonError(
+  decision: 'approved' | 'rejected',
+  reason: string,
+): 'required' | 'tooLong' | null {
+  const trimmed = reason.trim();
+  if (decision === 'rejected' && trimmed.length === 0) return 'required';
+  if (trimmed.length > COMPANY_LINKS_REASON_MAX) return 'tooLong';
+  return null;
+}

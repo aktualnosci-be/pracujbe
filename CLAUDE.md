@@ -610,6 +610,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
   rozszerzania CSP. Dowód: `rls.sql` sekcja CL141 (member/recruiter bez dostępu, http:// i adres
   nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
+  Zatwierdzanie przez admina (migracja `0204` — numer tymczasowy): `website`/`logo_url` =
+  wartości ZATWIERDZONE (jedyne publiczne — RPC 0114/0140 bez zmian). Formularz woła RPC
+  `submit_company_links` (owner/admin): nowy adres → propozycja `website_pending`/
+  `logo_url_pending` ze stanem `links_review_status='pending'` (publicznie dalej stare adresy,
+  formularz pokazuje oba), samo usunięcie adresu → od razu (`applied`), propozycja = stan
+  publiczny → wycofanie (`unchanged`). Strażnik `guard_company_links` blokuje bezpośredni
+  zapis tych kolumn przez klienta. Admin: filtr `/admin/firmy?status=links` (kolejka) i sekcja
+  „Strona WWW i logo” w `/admin/firmy/[id]` (`CompanyLinksReviewActions` →
+  `admin_decide_company_links`: CAS po `links_pending_at` → `STALE_STATE`, odrzucenie
+  z uzasadnieniem ≤ 1000 widocznym dla firmy, audyt `company.links_submitted`/`links_reviewed`,
+  powiadomienie in-app właścicieli `system` + `data.kind='company_links'`). Dowód: `rls.sql`
+  sekcja CLR204 (kontrole ujemne: bezpośredni UPDATE, member, obca firma, owner zatwierdzający
+  sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
+  `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
+  opublikowane przed 0204 zostają bez przeglądu.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,

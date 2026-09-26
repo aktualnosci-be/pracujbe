@@ -1,6 +1,7 @@
 'use server';
 
 import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/company-review';
+import { companyLinksReasonError } from '@/lib/company-links';
 import { emailLiftReasonError } from '@/lib/admin/email-suppression';
 import {
   decisionRestricts,
@@ -403,6 +404,59 @@ export async function decideScreeningReview(
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.decideScreeningReview' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+/**
+ * Decyzja admina o proponowanej stronie WWW/logo firmy (0204). Akceptacja przenosi adresy do
+ * danych publicznych (oferty, profil firmy); odrzucenie wymaga uzasadnienia (widzi je firma).
+ * `expectedPendingAt` = czas zgłoszenia z odczytu (CAS): gdy firma w międzyczasie zmieniła
+ * propozycję albo decyzja już zapadła → `STALE_STATE`. Te same reguły egzekwuje RPC.
+ */
+export async function decideCompanyLinks(
+  companyId: string,
+  decision: 'approved' | 'rejected',
+  expectedPendingAt: string,
+  reason: string,
+): Promise<AdminActionResult> {
+  if (decision !== 'approved' && decision !== 'rejected') {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  const reasonError = companyLinksReasonError(decision, typeof reason === 'string' ? reason : '');
+  if (reasonError) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
+  }
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (
+    typeof companyId !== 'string' || !UUID_RE.test(companyId) ||
+    typeof expectedPendingAt !== 'string' || expectedPendingAt.length === 0
+  ) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const trimmed = reason.trim();
+    const call = await callAdminRpc('admin_decide_company_links', {
+      p_company_id: companyId,
+      p_decision: decision,
+      p_expected_pending_at: expectedPendingAt,
+      p_reason: trimmed.length > 0 ? trimmed : null,
+    });
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
+      if (message.includes('REASON_REQUIRED')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
+      }
+      if (message.includes('REASON_TOO_LONG')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
+      }
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.decideCompanyLinks' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

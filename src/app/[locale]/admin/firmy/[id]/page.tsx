@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
+import { CompanyLinksReviewActions } from '@/components/admin/CompanyLinksReviewActions';
 
 /**
  * Panel administratora — szczegół firmy (#310).
@@ -36,7 +37,9 @@ import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
  * Decyzja o weryfikacji nie zapada „na ślepo”: dane rejestrowe (VAT, KBO, kontakt, adres),
  * uzasadnienie ostatniego odrzucenia/zawieszenia, członkowie firmy (rola, aktywny dostęp)
  * i najnowsze oferty. Sekcja VIES (#92): ostatni wynik weryfikacji numeru VAT z datą i ręczne
- * ponowienie — informacja pomocnicza, status firmy zmienia wyłącznie admin. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
+ * ponowienie — informacja pomocnicza, status firmy zmienia wyłącznie admin. Strona WWW i logo
+ * (0204): propozycja firmy czeka tu na decyzję („Zatwierdź” publikuje adresy w ofertach
+ * i profilu firmy, „Odrzuć” wymaga uzasadnienia) — `CompanyLinksReviewActions`. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
  * z wymaganym uzasadnieniem dla odrzucenia/zawieszenia → RPC 0084: powiadomienie i e-mail
  * do właściciela w JEGO języku, wpis w dzienniku). Po decyzji fokus na nagłówku strony (#415).
  *
@@ -214,6 +217,61 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           <dl className="mt-6 border-t border-border pt-5">
             <Field label={t('detailDescription')} value={company.description} />
           </dl>
+        ) : null}
+      </section>
+
+      {/* Strona WWW i logo — propozycja firmy do decyzji (0204) */}
+      <section aria-labelledby="company-links-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-links-heading" className={PANEL_H2}>
+            {t('sectionCompanyLinks')}
+          </h2>
+          {company.linksReview ? (
+            <span
+              className={cn(
+                TAG,
+                company.linksReview.status === 'pending' ? 'bg-warning/10 text-warning-text' : 'bg-error/10 text-error-text',
+              )}
+            >
+              {t(company.linksReview.status === 'pending' ? 'companyLinksStatusPending' : 'companyLinksStatusRejected')}
+            </span>
+          ) : null}
+        </div>
+        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label={t('companyLinksPublishedWebsite')} value={company.website ?? dash} />
+          <Field label={t('companyLinksPublishedLogo')} value={company.logoUrl ?? dash} />
+          {company.linksReview ? (
+            <>
+              <Field
+                label={t('companyLinksProposedWebsite')}
+                value={company.linksReview.website ?? t('companyLinksRemoved')}
+              />
+              <Field
+                label={t('companyLinksProposedLogo')}
+                value={company.linksReview.logoUrl ?? t('companyLinksRemoved')}
+              />
+              <Field
+                label={t('companyLinksSubmittedAt')}
+                value={formatDate(company.linksReview.submittedAt)}
+              />
+              {company.linksReview.reason ? (
+                <Field label={t('statusReasonLabel')} value={company.linksReview.reason} />
+              ) : null}
+            </>
+          ) : null}
+        </dl>
+        {company.linksReview?.status === 'pending' && company.linksReview.submittedAt ? (
+          <div className="mt-6 border-t border-border pt-5">
+            <p className={cn(PANEL_P, 'mb-3')}>{t('companyLinksReviewHint')}</p>
+            <CompanyLinksReviewActions
+              companyId={company.id}
+              submittedAt={company.linksReview.submittedAt}
+              websiteLabel={company.linksReview.website ?? t('companyLinksRemoved')}
+              logoUrlLabel={company.linksReview.logoUrl ?? t('companyLinksRemoved')}
+            />
+          </div>
+        ) : !company.linksReview ? (
+          <p className={cn(PANEL_P, 'mt-4')}>{t('companyLinksNoProposal')}</p>
         ) : null}
       </section>
 

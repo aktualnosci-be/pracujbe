@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
 import { updateCompanyLinks } from '@/lib/actions/company';
+import type { CompanyLinksReview } from '@/lib/company-links';
 import pl from '@/messages/pl.json';
 
 // jsdom nie implementuje scrollIntoView (komponent przewija do komunikatu po sukcesie/błędzie).
@@ -30,10 +31,21 @@ beforeEach(() => {
   vi.mocked(updateCompanyLinks).mockReset();
 });
 
-function renderForm(website = '', logoUrl = '', ownHost = 'pracuj.be') {
+function renderForm(
+  website = '',
+  logoUrl = '',
+  ownHost = 'pracuj.be',
+  review: CompanyLinksReview | null = null,
+  published: { website: string | null; logoUrl: string | null } = { website: null, logoUrl: null },
+) {
   return render(
     <NextIntlClientProvider locale="pl" messages={pl}>
-      <CompanyLinksForm defaultValues={{ website, logoUrl }} ownHost={ownHost} />
+      <CompanyLinksForm
+        defaultValues={{ website, logoUrl }}
+        published={published}
+        review={review}
+        ownHost={ownHost}
+      />
     </NextIntlClientProvider>,
   );
 }
@@ -54,7 +66,7 @@ describe('CompanyLinksForm', () => {
   });
 
   it('saves both fields and shows a clear success message', async () => {
-    vi.mocked(updateCompanyLinks).mockResolvedValue({ ok: true });
+    vi.mocked(updateCompanyLinks).mockResolvedValue({ ok: true, outcome: 'applied' });
     renderForm();
 
     fireEvent.change(screen.getByLabelText(pl.company.website), {
@@ -91,5 +103,51 @@ describe('CompanyLinksForm', () => {
     renderForm('', 'https://cdn.example.com/logo.png');
     expect(screen.queryByRole('img', { name: pl.company.logoPreviewAlt })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'https://cdn.example.com/logo.png' })).toBeInTheDocument();
+  });
+
+  it('a new address awaiting admin approval gets its own success message (0204)', async () => {
+    vi.mocked(updateCompanyLinks).mockResolvedValue({ ok: true, outcome: 'pending' });
+    renderForm();
+    fireEvent.change(screen.getByLabelText(pl.company.website), {
+      target: { value: 'https://acme.example' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: pl.company.linksSubmit }));
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(pl.company.linksSubmittedPending);
+    // Kontrola ujemna: komunikat „zapisane” (od razu publiczne) nie może się pojawić.
+    expect(status).not.toHaveTextContent(pl.company.linksSavedSuccess);
+  });
+
+  it('pending proposal: shows the queue state and the addresses that are public now', () => {
+    renderForm('https://nowa.acme.example', '', 'pracuj.be', {
+      status: 'pending',
+      website: 'https://nowa.acme.example',
+      logoUrl: null,
+      submittedAt: '2026-09-26 10:00:00.123+00',
+      reason: null,
+    }, { website: 'https://acme.example', logoUrl: null });
+    const box = screen.getByTestId('company-links-review');
+    expect(box).toHaveTextContent(pl.company.linksReviewPendingTitle);
+    expect(box).toHaveTextContent('https://acme.example');
+    expect(box).toHaveTextContent(pl.company.linksPublicNone);
+    expect(screen.getByLabelText(pl.company.website)).toHaveValue('https://nowa.acme.example');
+  });
+
+  it('rejected proposal: shows the admin reason', () => {
+    renderForm('https://zla.acme.example', '', 'pracuj.be', {
+      status: 'rejected',
+      website: 'https://zla.acme.example',
+      logoUrl: null,
+      submittedAt: '2026-09-26 10:00:00.123+00',
+      reason: 'Adres prowadzi do innej firmy.',
+    });
+    const box = screen.getByTestId('company-links-review');
+    expect(box).toHaveTextContent(pl.company.linksReviewRejectedTitle);
+    expect(box).toHaveTextContent('Adres prowadzi do innej firmy.');
+  });
+
+  it('no proposal: no review box', () => {
+    renderForm('https://acme.example');
+    expect(screen.queryByTestId('company-links-review')).not.toBeInTheDocument();
   });
 });

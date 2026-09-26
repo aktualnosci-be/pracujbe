@@ -13,6 +13,7 @@
 
 import { isAppealStatus, parseAppealState, type AppealState, type AppealStatus } from '@/lib/admin/appeals';
 import { getActiveCompany } from '@/lib/company-context';
+import { parseCompanyLinksReview, type CompanyLinksReview } from '@/lib/company-links';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
@@ -34,6 +35,11 @@ export interface MyCompany {
   website: string | null;
   /** Adres logo firmy (#112) — bezwzględny https albo null. */
   logoUrl: string | null;
+  /**
+   * Propozycja zmiany strony WWW/logo czekająca na admina albo odrzucona (0204) — `website`/
+   * `logoUrl` powyżej to wartości ZATWIERDZONE (publiczne). Brak propozycji → null.
+   */
+  linksReview: CompanyLinksReview | null;
   canEdit: boolean;
 }
 
@@ -51,6 +57,7 @@ const DEMO_COMPANY: MyCompany = {
   statusReason: null,
   website: 'https://example.com',
   logoUrl: null,
+  linksReview: null,
   canEdit: true,
 };
 
@@ -104,7 +111,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
       // company_members_select + companies_select_member (RLS): tylko własne aktywne członkostwo.
       const company = await queryOne<Record<string, unknown>>(tx, 'company.my-company',
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
-                c.website, c.logo_url
+                c.website, c.logo_url, c.website_pending, c.logo_url_pending,
+                c.links_review_status, c.links_pending_at, c.links_review_reason
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -134,6 +142,7 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
             : null,
         website: asNullableString(company['website']),
         logoUrl: asNullableString(company['logo_url']),
+        linksReview: parseCompanyLinksReview(company),
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };
