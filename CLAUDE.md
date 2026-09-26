@@ -598,8 +598,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `hiringOrganization.sameAs`/`logo` (migracja `0114`): `get_public_job` zwraca `company_website`/
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
-  bez walidacji / bez bramki weryfikacji link wycieka). **Otwarte:** edycja strony i logo firmy
-  w panelu pracodawcy (dziś pola tylko w schemacie).
+  bez walidacji / bez bramki weryfikacji link wycieka).
+  Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
+  (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
+  ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
+  `companies_logo_url_https`, ta sama reguła co `public_https_url`) waliduje w bazie niezależnie
+  od Zod (lustro `src/lib/company-links.ts`). W przeciwieństwie do nazwy/VAT zmiana NIE cofa
+  weryfikacji (`protect_company_verification` reaguje tylko na `name`/`vat_number`); audyt
+  `company.links_changed`. Podgląd logo przez `next/image` tylko gdy adres wskazuje na własny
+  host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
+  rozszerzania CSP. Dowód: `rls.sql` sekcja CL141 (member/recruiter bez dostępu, http:// i adres
+  nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -895,7 +904,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/rejestracja-pracodawca` z sesją pracodawcy → panel. Chrome panelu: `getEmployerShellData`
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
   Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
-  **Otwarte:** orientacyjny czas weryfikacji (decyzja produktowa).
+  Czas weryfikacji (decyzja właściciela 26.09.2026): baner dla `unverified`/`pending` we wszystkich
+  wariantach (pulpit, kreator, `/employer/firma`) dodaje `company.bannerEta` („Zwykle do 2 dni
+  roboczych”) — bez innych obietnic; test `company-status-banner-reason` (kontrola ujemna).
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
   albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Model
@@ -1301,7 +1312,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Minimalizacja treści (#503, migracja `0123`): worker przekazuje do
   szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
   poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
-  (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
+  (`jobOffer.message`; od 26.09.2026 tylko oczyszczony cytat `messageExcerpt`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
   odbiorcę firmowego (`email_recipient_authorized`: aplikacja/propozycja/wiadomość →
   `company_recipient_ok`; brak obiektu = fail-closed) → `suppressed_recipient_unauthorized`.
   Mapa danych: kolumna „Odrzucane przez workera”. Dowód: `rls.sql` sekcja ES503 (kontrola
@@ -1326,7 +1337,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i kwoty oferty (#293, #22), `newMessage` — `conversationId` (CTA do wątku, #290); dowód
   `rls.sql` sekcja PL109 (kontrole ujemne), `email-payload-followups.test`. Treść wiadomości
   rekrutera świadomie poza payloadem (tekst wolny = korespondencja, #503; worker odrzuca pole `message`) — kandydat czyta ją
-  w panelu. **Otwarte (#503, właściciel):** czy cytat wiadomości rekrutera może trafić do e-maila.
+  w panelu. Krótki cytat (decyzja właściciela 26.09.2026, bez migracji): worker czyta
+  `offers.message` w chwili wysyłki i przekazuje do szablonu tylko `messageExcerpt`
+  (`src/lib/email/message-excerpt.ts`: e-maile, telefony, NISS/BIS/PESEL, numery kart
+  i dokumentów — detektory `src/lib/privacy/sensitive-data.ts` — oraz URL-e → `[…]`, potem
+  obcięcie do 200 znaków; po redakcji coś wykryte albo `@` → brak cytatu). `delivery-data`
+  oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
+  `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
+  `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
@@ -1804,7 +1822,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
   (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
   `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
-  **Otwarte:** link do baneru w panelu admina (admin ma dostęp tylko przez adres endpointu).
+  Link do baneru w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy linkuje
+  do `GET /api/employer/jobs/[id]/banner` (endpoint dopuszcza admina, `/employer/oferty/[id]/baner`
+  jest zablokowana layoutem panelu pracodawcy dla konta bez firmy) — otwiera się w nowej karcie.
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
@@ -1825,7 +1845,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `check-ci-workflows.mjs`. INP-proxy w tym samym kroku: tapnięcie „Filtry”, zapis oferty
   (odpowiedź `getPublicSavedJobs` podmieniona na kandydata — CI bez sesji) i „Aplikuj teraz”,
   Event Timing (najdłuższy wpis interakcji), CPU 4×, mediana 3 prób vs `inpMs` (200 ms);
-  kontrola ujemna `--inject-click-delay-ms 300` → czerwony. **Do zrobienia:** dane polowe CWV.
+  kontrola ujemna `--inject-click-delay-ms 300` → czerwony.
+  Dane polowe CWV — Cloudflare Web Analytics zamiast własnej zbiórki: beacon z #570/#635 (tylko
+  po zgodzie `analytics`, tylko trasy publiczne, bez cookies) sam mierzy LCP/INP/CLS. Podgląd
+  `/admin/wydajnosc?dni=7|28` (tylko admin, `requireAdmin`): p75 serwisu + 20 najczęstszych
+  ścieżek z oceną słowną wg progów, boty pominięte, liczby próbkowane — odczyt z serwera przez
+  GraphQL Analytics API (`src/lib/web-vitals/field-report.ts` czysty parser, `cloudflare-client.ts`
+  server-only, token tylko w nagłówku, timeout 8 s, błąd = sam kod; env `CF_ANALYTICS_ACCOUNT_ID`,
+  `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN`). Bez konfiguracji: instrukcja (z bazą)
+  albo raport przykładowy oznaczony demo (bez bazy). Bez migracji i bez endpointu `/api/web-vitals`.
+  Testy: unit `web-vitals-field` (kontrole ujemne: brak konfiguracji = zero żądań, token poza
+  treścią/adresem, z bazą nigdy demo), E2E `admin-web-vitals` (4 języki, brak żądań do Cloudflare
+  z przeglądarki), `admin-a11y`; zgody beaconu — istniejące `cookie-consent-categories`. **Do
+  zrobienia (właściciel):** token beaconu i token API w Railway; TTFB i próg alarmu w czujkach.
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi

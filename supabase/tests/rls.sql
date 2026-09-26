@@ -11212,11 +11212,22 @@ rollback;
 \set OLN 'c1080000-0000-0000-0000-0000000000a4'
 \echo '--- OL112 company links in get_public_job ---'
 reset role; reset app.current_uid;
+-- CL141 (0141) dodał CHECK website/logo_url (bezwzględny https) NA POZIOMIE TABELI — ten test
+-- świadomie wstawia złe/puste adresy (symulacja danych sprzed CHECK-a), żeby sprawdzić DRUGĄ,
+-- niezależną bramkę w samej funkcji (`public_https_url` w `get_public_job`, defense-in-depth,
+-- OL112-2b/2c/3). Zdejmujemy CHECK tylko na czas tego INSERT-u i przywracamy `not valid`
+-- (nowe zapisy nadal walidowane — CL141 niżej to sprawdza — bez skanowania tych wierszy).
+alter table public.companies drop constraint if exists companies_website_https;
+alter table public.companies drop constraint if exists companies_logo_url_https;
 insert into public.companies(id,name,status,is_demo,website,logo_url) values
   (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
   (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
   (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
   (:'OLN','Bez Linków Sp','verified',false,null,'');
+alter table public.companies add constraint companies_website_https
+  check (website is null or public.public_https_url(website) is not null) not valid;
+alter table public.companies add constraint companies_logo_url_https
+  check (logo_url is null or public.public_https_url(logo_url) is not null) not valid;
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
   ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
   ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
@@ -13235,5 +13246,117 @@ delete from public.jobs where company_id in (:'EPC', :'EPD');
 delete from public.companies where id in (:'EPC', :'EPD');
 delete from auth.users where id in (:'EPO', :'EPM', :'EPX', :'EPNEW')
   or id in (select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid from generate_series(1, 25) n);
+
+-- ============================================================================
+-- CL141. Edycja strony WWW i logo firmy (#112, 0141): tylko owner/admin (jak
+--        nazwa/VAT, 0040); bezwzględny https egzekwowany CHECK-iem
+--        (`companies_website_https`/`companies_logo_url_https`, ta sama reguła co
+--        `public_https_url`, 0114); zmiana NIE cofa weryfikacji (w przeciwieństwie do
+--        nazwy/VAT — `protect_company_verification`, 0072/0141 bez zmian); audyt
+--        `company.links_changed`.
+-- ============================================================================
+\set OWNCL 'e1620000-0000-0000-0000-000000000001'
+\set ADMCL 'e1620000-0000-0000-0000-000000000002'
+\set MEMCL 'e1620000-0000-0000-0000-000000000003'
+\set RECCL 'e1620000-0000-0000-0000-000000000004'
+\set COMPCL 'e1620000-0000-0000-0000-0000000000f1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWNCL','owncl@test.be','Otto CL','{"role":"employer","first_name":"Otto","last_name":"CL","locale":"pl"}'),
+  (:'ADMCL','admcl@test.be','Ada CL','{"role":"employer","first_name":"Ada","last_name":"CL","locale":"pl"}'),
+  (:'MEMCL','memcl@test.be','Mila CL','{"role":"employer","first_name":"Mila","last_name":"CL","locale":"pl"}'),
+  (:'RECCL','reccl@test.be','Rex CL','{"role":"employer","first_name":"Rex","last_name":"CL","locale":"pl"}');
+insert into public.companies(id,name,status,vat_number,verified_at) values
+  (:'COMPCL','Firma CL','verified','BE0611111111',now());
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPCL',:'OWNCL','owner',true),
+  (:'COMPCL',:'ADMCL','admin',true),
+  (:'COMPCL',:'MEMCL','member',true),
+  (:'COMPCL',:'RECCL','recruiter',true);
+
+-- CL141-1 (kontrola ujemna): member/recruiter (bez roli owner/admin) nie edytuje linków —
+-- RLS (`companies_update_member`, USING is_company_admin) filtruje wiersz z UPDATE: brak
+-- wyjątku, ale zero zmienionych wierszy (jak przy bezpośrednim UPDATE nazwy/VAT, 0040).
+set role authenticated; set app.current_uid = :'MEMCL'; select pg_temp.assert_client_role();
+with upd as (
+  update public.companies set website = 'https://member-attempt.example'
+   where id = 'e1620000-0000-0000-0000-0000000000f1' returning id
+)
+select pg_temp.assert((select count(*) = 0 from upd),
+  'CL141-1 member nie edytuje stronę WWW firmy (RLS: zero wierszy)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECCL'; select pg_temp.assert_client_role();
+with upd as (
+  update public.companies set logo_url = 'https://recruiter-attempt.example/logo.png'
+   where id = 'e1620000-0000-0000-0000-0000000000f1' returning id
+)
+select pg_temp.assert((select count(*) = 0 from upd),
+  'CL141-1b recruiter (bez owner/admin) nie edytuje logo firmy (RLS: zero wierszy)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website is null and logo_url is null from public.companies where id = :'COMPCL'),
+  'CL141-1c nieudane próby nie zmieniły danych');
+
+-- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki.
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set website = ''http://owner-attempt.example'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_website_https', 'CL141-2 http:// odrzucone (strona WWW)');
+select pg_temp.expect_error(
+  'update public.companies set logo_url = ''javascript:alert(1)'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_logo_url_https', 'CL141-2b adres bez https:// odrzucony (logo)');
+select pg_temp.expect_error(
+  'update public.companies set website = ''https://exa mple.com'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_website_https', 'CL141-2c spacja w adresie odrzucona');
+reset role; reset app.current_uid;
+
+-- CL141-3: owner ustawia OBA adresy poprawnie → zapis, status BEZ ZMIAN (verified), audyt.
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+update public.companies
+   set website = 'https://www.firma-cl.example', logo_url = 'https://www.firma-cl.example/logo.png'
+ where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-cl.example' and logo_url = 'https://www.firma-cl.example/logo.png'
+     and status::text = 'verified' and verified_at is not null
+     from public.companies where id = :'COMPCL'),
+  'CL141-3 adresy zapisane, weryfikacja NIE cofnięta (w przeciwieństwie do nazwy/VAT)');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPCL' and action = 'company.links_changed' and actor_id = :'OWNCL'
+             and before_data = jsonb_build_object('website', null, 'logo_url', null)
+             and after_data = jsonb_build_object('website', 'https://www.firma-cl.example',
+                                                  'logo_url', 'https://www.firma-cl.example/logo.png')),
+  'CL141-3b audyt zmiany linków z wartościami przed/po');
+select pg_temp.assert(
+  not exists (select 1 from public.audit_logs
+               where entity_id = :'COMPCL' and action = 'company.status_changed'
+                 and after_data->>'status' = 'pending'),
+  'CL141-3c bez wpisu zmiany statusu — zmiana linków nie uruchamia ponownej weryfikacji');
+
+-- CL141-4: admin (nie tylko owner) może edytować; puste pole czyści adres (NULL).
+set role authenticated; set app.current_uid = :'ADMCL'; select pg_temp.assert_client_role();
+update public.companies set logo_url = null where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-cl.example' and logo_url is null and status::text = 'verified'
+     from public.companies where id = :'COMPCL'),
+  'CL141-4 admin czyści logo bez wpływu na stronę WWW ani status');
+
+-- CL141-5: adres nad limitem długości (2048 znaków) odrzucony (SEC-04-style, path-independent).
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.companies set website = ''https://www.firma-cl.example/%s'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+         repeat('a', 2048)),
+  'companies_website_https', 'CL141-5 adres nad limitem długości odrzucony');
+reset role; reset app.current_uid;
+
+-- CL141-6: zmiana nazwy TEJ SAMEJ firmy nadal cofa weryfikację (bez regresji 0072/0141).
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma CL Nowa' where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and verified_at is null from public.companies where id = :'COMPCL'),
+  'CL141-6 zmiana nazwy nadal cofa weryfikację — CL141 nie osłabił 0072');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

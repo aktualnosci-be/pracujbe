@@ -240,6 +240,33 @@ describe('worker outboxa: wypisanie i budżet', () => {
     expect(message.html).toContain('Afmelden voor deze e-mails');
   });
 
+  it('jobOffer: cytat z offers.message oczyszczony przez workera, pełna treść nie wychodzi (#503)', async () => {
+    const OFFER = '1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d';
+    const raw = 'Zapraszamy od poniedziałku! Kontakt: canary.hr@acme-example.be, +32 470 12 34 56, https://acme-example.be/x';
+    mockRpc([{ ...row('d1', 'jobOffer'), entity_type: 'offer', entity_id: OFFER }], () => ({ granted: true, retry_at: null }));
+    fakeDb.rows('email.outbox.offer-messages', ({ values }) =>
+      (values[0] as string[]).includes(OFFER) ? [{ id: OFFER, message: raw }] : [],
+    );
+    const { processEmailQueue } = await import('@/lib/email/outbox');
+    expect(await processEmailQueue()).toMatchObject({ sent: 1, ok: true });
+    const [message] = send.mock.calls[0]!;
+    const out = `${message.html}\n${message.text}`;
+    expect(out).toContain('Zapraszamy od poniedziałku!');
+    for (const leak of ['canary.hr@acme-example.be', '+32 470 12 34 56', 'https://acme-example.be/x']) {
+      expect(out, leak).not.toContain(leak);
+    }
+  });
+
+  it('jobOffer: błąd odczytu wiadomości nie blokuje wysyłki (mail bez cytatu)', async () => {
+    const OFFER = '1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d';
+    mockRpc([{ ...row('d1', 'jobOffer'), entity_type: 'offer', entity_id: OFFER }], () => ({ granted: true, retry_at: null }));
+    fakeDb.rows('email.outbox.offer-messages', () => {
+      throw new Error('db down');
+    });
+    const { processEmailQueue } = await import('@/lib/email/outbox');
+    expect(await processEmailQueue()).toMatchObject({ sent: 1, ok: true });
+  });
+
   it('mail bez kategorii (jobPublished) i bez profilu: bez linku i nagłówków', async () => {
     mockRpc([row('d1', 'jobPublished'), row('d2', 'jobOffer', null)], () => ({ granted: true, retry_at: null }));
     const { processEmailQueue } = await import('@/lib/email/outbox');

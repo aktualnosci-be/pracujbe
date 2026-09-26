@@ -229,13 +229,22 @@ export const PROCESSORS: readonly Processor[] = [
     name: 'Cloudflare Web Analytics',
     purpose:
       'Analityka ruchu — wyłącznie po zgodzie w kategorii analytics (#570, decyzja właściciela 2026-09-25: zamiast Google Analytics i Meta Pixel — usunięte).',
-    dataCategories: ['Wyświetlenia stron; beacon bezcookie\'owy — bez identyfikatorów i bez cookies trackera'],
+    dataCategories: [
+      'Wyświetlenia stron; beacon bezcookie\'owy — bez identyfikatorów i bez cookies trackera',
+      'Core Web Vitals (LCP, INP, CLS) mierzone przez ten sam beacon; panel admina czyta wyłącznie agregaty p75 per ścieżka',
+    ],
     dataSubjects: ['Odwiedzający, którzy wyrazili zgodę'],
     activation: 'NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.',
-    codeRefs: ['src/components/cookies/Analytics.tsx', 'src/lib/consent-store.ts'],
+    codeRefs: [
+      'src/components/cookies/Analytics.tsx',
+      'src/lib/consent-store.ts',
+      'src/lib/web-vitals/cloudflare-client.ts',
+      'src/lib/web-vitals/field-report.ts',
+    ],
     notes: [
       'Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0130).',
       'Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.',
+      'Dane polowe CWV: /admin/wydajnosc czyta z serwera GraphQL Analytics API (CF_ANALYTICS_ACCOUNT_ID, CF_WEB_ANALYTICS_SITE_TAG, CF_ANALYTICS_API_TOKEN — tylko odczyt); portal nie ma własnego endpointu zbiórki metryk.',
     ],
     ...UNKNOWN,
   },
