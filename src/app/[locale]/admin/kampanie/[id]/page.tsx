@@ -3,7 +3,6 @@ import { ArrowLeft } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
-import { localeNames } from '@/i18n/routing';
 import {
   CAMPAIGN_RECIPIENT_KEY,
   CAMPAIGN_RECIPIENT_STATUSES,
@@ -18,8 +17,10 @@ import { getEmailCampaign } from '@/lib/data/admin-campaigns';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminPageHeader } from '@/components/admin/AdminListControls';
+import { CampaignPreviewCard } from '@/components/admin/CampaignPreviewCard';
 import { EmailCampaignActions } from '@/components/admin/EmailCampaignActions';
 import {
+  BTN_SECONDARY,
   INLINE_LINK,
   NOTICE,
   NOTICE_TEXT,
@@ -32,7 +33,6 @@ import {
   ROW_TITLE,
   SECTION_HEAD,
   STATUS,
-  TAG,
   TEXT_LINK,
 } from '@/components/admin/admin-styles';
 
@@ -43,6 +43,7 @@ import {
  * serwisu (list idzie w języku odbiorcy — Invariant #1; „niepoprawna treść” = worker jej nie
  * wyrenderuje), rewizje tego sluga oraz aktywacja/zatrzymanie (`EmailCampaignActions`, RPC
  * z CAS i audytem, 0111). Bez konfiguracji nadawcy marketingu — komunikat i brak aktywacji.
+ * „Nowa rewizja” → edytor wstępnie wypełniony treścią tej rewizji (RPC 0202, szkic).
  */
 
 export const dynamic = 'force-dynamic';
@@ -104,6 +105,11 @@ export default async function AdminEmailCampaignPage({ params }: PageProps) {
         title={campaign.slug}
         subtitle={t('campaignDetailSubtitle')}
       />
+      <div className="flex flex-wrap gap-2">
+        <Link href={`${BASE_PATH}/${campaign.id}/nowa-rewizja`} className={BTN_SECONDARY}>
+          {t('campaignNewRevisionTitle')}
+        </Link>
+      </div>
 
       {sendingReady ? null : (
         <div id={SENDER_NOTICE_ID} role="note" className={NOTICE}>
@@ -192,36 +198,13 @@ export default async function AdminEmailCampaignPage({ params }: PageProps) {
         <p className={PANEL_P}>{t('campaignPreviewHint')}</p>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           {preview.map((entry) => (
-            <section
+            <CampaignPreviewCard
               key={entry.locale}
-              aria-labelledby={`campaign-preview-${entry.locale}`}
-              className="min-w-0 rounded-[14px] border border-border p-4"
-            >
-              <h3 id={`campaign-preview-${entry.locale}`} className="text-sm font-semibold text-foreground">
-                {localeNames[entry.locale]}
-              </h3>
-              {entry.status === 'invalid' ? (
-                <p className="mt-2 text-sm font-medium text-error-text">{t('campaignPreviewInvalid')}</p>
-              ) : (
-                <ul lang={entry.locale} className="mt-2 space-y-2">
-                  {entry.jobs.map((job) => (
-                    <li key={job.slug} className="min-w-0">
-                      <p className="break-words text-sm font-semibold text-foreground">{job.title}</p>
-                      <p className={ROW_META}>
-                        {job.city}
-                        {job.salary ? ` · ${job.salary}` : ''}
-                      </p>
-                      <p className={`${ROW_META} break-all`}>
-                        {job.slug}
-                        {job.isDemo ? (
-                          <span className={`${TAG} ml-2`}>{t('campaignPreviewDemo')}</span>
-                        ) : null}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+              entry={entry}
+              idPrefix="campaign-preview"
+              invalidLabel={t('campaignPreviewInvalid')}
+              demoLabel={t('campaignPreviewDemo')}
+            />
           ))}
         </div>
       </section>

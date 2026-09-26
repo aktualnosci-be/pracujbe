@@ -22,6 +22,7 @@ import {
   AdminSearchForm,
 } from '@/components/admin/AdminListControls';
 import {
+  BTN_PRIMARY,
   chipClass,
   INLINE_LINK,
   NOTICE,
@@ -40,7 +41,7 @@ import {
  *
  * Rewizje `email_campaigns` (najnowsze pierwsze) z liczbami odbiorców według statusu
  * (`email_campaign_recipients` — same liczby, bez adresów). Filtr statusu, wyszukiwanie po
- * slugu, stronicowanie kursorem. Aktywacja i zatrzymanie — w szczególe rewizji (podgląd treści
+ * slugu, stronicowanie kursorem. „Nowa kampania” → edytor (`/admin/kampanie/nowa`, RPC 0202). Aktywacja i zatrzymanie — w szczególe rewizji (podgląd treści
  * w każdym języku przed decyzją). Bez konfiguracji nadawcy marketingu jawny komunikat.
  * NOINDEX + `force-dynamic`.
  */
@@ -100,6 +101,11 @@ export default async function AdminEmailCampaignsPage({
   return (
     <div className="min-w-0 space-y-[22px]">
       <AdminPageHeader title={t('campaignTitle')} subtitle={t('campaignSubtitle')} />
+      <div className="flex flex-wrap gap-2">
+        <Link href={`${BASE_PATH}/nowa`} className={BTN_PRIMARY}>
+          {t('campaignNewTitle')}
+        </Link>
+      </div>
 
       {sendingReady ? null : (
         <div role="note" className={NOTICE}>
