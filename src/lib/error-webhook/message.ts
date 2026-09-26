@@ -16,6 +16,8 @@ export interface ErrorWebhookMessage {
   release?: string;
   environment?: string;
   time: Date;
+  /** `client` = błąd z przeglądarki (`/api/client-error`). */
+  source?: 'server' | 'client';
   /** Ile zgłoszeń tego kodu pominięto od poprzedniej wiadomości (deduplikacja). */
   repeated?: number;
 }
@@ -53,7 +55,7 @@ function safeLabel(value: string | undefined): string {
 /** Tekst wiadomości: wyłącznie kod, trasa, wydanie, środowisko i czas — obcięty do limitu. */
 export function buildErrorWebhookText(message: ErrorWebhookMessage): string {
   const lines = [
-    'pracuj.be: błąd serwera',
+    message.source === 'client' ? 'pracuj.be: błąd w przeglądarce' : 'pracuj.be: błąd serwera',
     `Kod: ${safeErrorCode(message.code)}`,
     `Trasa: ${safeRoute(message.route)}`,
     `Wydanie: ${safeLabel(message.release)}`,
