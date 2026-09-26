@@ -150,6 +150,10 @@ test('admin #42: kolejka DSA — domyślnie priorytet i termin, filtr „oflagow
   await expect(main.getByText('DSA-7F3A-19C2-B4E0-5D11')).toHaveCount(0);
   await flagNav.getByRole('link', { name: t.reportsFlaggedAll }).click();
   await expect(main.getByRole('listitem').filter({ hasText: 'DSA-7F3A-19C2-B4E0-5D11' })).toHaveCount(1);
+  // Po nawigacji klienckiej metadane strony dynamicznej (tytuł) są strumieniowane po treści:
+  // lista bywa już widoczna, a <title> jeszcze nie — axe łapał wtedy `document-title`.
+  // Czekamy na stan końcowy (właściwy tytuł), a nie na stan pośredni.
+  await expect(page).toHaveTitle(new RegExp(t.reportsTitle));
   expect(await blockingViolations(page)).toEqual([]);
 });
 

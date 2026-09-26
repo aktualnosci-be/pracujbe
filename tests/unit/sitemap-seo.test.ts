@@ -36,19 +36,25 @@ describe('sitemap', () => {
     jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
     jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['nl'], b: ['pl', 'nl', 'fr', 'en'] });
 
-    const urls = (await sitemap()).map((entry) => entry.url);
-    const byPrefix = (prefix: string) => urls.filter((url) => url.includes(prefix));
+    // id 0 = core (strony statyczne/landingi/poradniki); id 1 = pierwsza (i tu jedyna) partia
+    // ofert (#599: sitemap index zamiast jednego pliku).
+    const core = await sitemap({ id: 0 });
+    const jobsShard = await sitemap({ id: 1 });
+    const byPrefix = (entries: typeof core, prefix: string) =>
+      entries.map((entry) => entry.url).filter((url) => url.includes(prefix));
 
-    expect(byPrefix('/praca/kategoria/')).toEqual(
+    expect(byPrefix(core, '/praca/kategoria/')).toEqual(
       ['pl', 'nl', 'fr', 'en'].map((l) => `https://pracuj.be/${l}/praca/kategoria/construction`),
     );
-    expect(byPrefix('/praca/miasto/')).toEqual(
+    expect(byPrefix(core, '/praca/miasto/')).toEqual(
       ['pl', 'nl', 'fr', 'en'].map((l) => `https://pracuj.be/${l}/praca/miasto/kortrijk`),
     );
-    expect(byPrefix('/oferty-pracy/oferta-a')).toEqual(['https://pracuj.be/nl/oferty-pracy/oferta-a']);
-    expect(byPrefix('/oferty-pracy/oferta-b')).toHaveLength(4);
+    expect(byPrefix(jobsShard, '/oferty-pracy/oferta-a')).toEqual([
+      'https://pracuj.be/nl/oferty-pracy/oferta-a',
+    ]);
+    expect(byPrefix(jobsShard, '/oferty-pracy/oferta-b')).toHaveLength(4);
 
-    const entryA = (await sitemap()).find((entry) => entry.url.endsWith('/oferta-a'));
+    const entryA = jobsShard.find((entry) => entry.url.endsWith('/oferta-a'));
     expect(entryA?.alternates?.languages).toEqual({
       nl: 'https://pracuj.be/nl/oferty-pracy/oferta-a',
       'x-default': 'https://pracuj.be/nl/oferty-pracy/oferta-a',
@@ -57,7 +63,8 @@ describe('sitemap', () => {
 
   it('nieznane języki tłumaczeń (błąd odczytu) = wszystkie wersje, jak dotąd', async () => {
     jobs.getJobsAvailableLocales.mockResolvedValue(null);
-    const urls = (await sitemap()).map((entry) => entry.url).filter((url) => url.includes('/oferta-a'));
+    jobs.getJobs.mockResolvedValue({ jobs: [job('a')], total: 1, page: 1, pageSize: 100 });
+    const urls = (await sitemap({ id: 1 })).map((entry) => entry.url).filter((url) => url.includes('/oferta-a'));
     expect(urls).toHaveLength(4);
   });
 });

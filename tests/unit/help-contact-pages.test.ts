@@ -58,7 +58,7 @@ describe.each([
   });
 
   it('jest w sitemap w każdym języku', async () => {
-    const urls = (await sitemap()).map((entry) => entry.url).filter((url) => url.endsWith(path));
+    const urls = (await sitemap({ id: 0 })).map((entry) => entry.url).filter((url) => url.endsWith(path));
     expect(urls).toEqual(routing.locales.map((locale) => `https://pracuj.be/${locale}${path}`));
   });
 });
@@ -67,7 +67,7 @@ describe('polityka prywatności (bez treści prawnej)', () => {
   it('kontrola ujemna: nadal noindex i poza sitemap', async () => {
     const meta = await privacyPage.generateMetadata(params('pl'));
     expect(meta.robots).toEqual({ index: false, follow: false });
-    const urls = (await sitemap()).map((entry) => entry.url);
+    const urls = (await sitemap({ id: 0 })).map((entry) => entry.url);
     expect(urls.some((url) => url.endsWith('/polityka-prywatnosci'))).toBe(false);
   });
 });
