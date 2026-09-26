@@ -313,12 +313,16 @@ koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
   tylko `service_role`; panel i `GET /api/admin/dsa-report?od=&do=&format=csv|json` po
   `requireAdmin`.
 
-**Wartości tymczasowe (#40):** okno odwołania 6 miesięcy, termin rozpatrzenia 14 dni, retencja
-12 miesięcy; zakres publikacji raportu i przekazywania do bazy DSA. Harmonogram: cron
+**Wartości zatwierdzone przez właściciela 26.09.2026 (#40):** okno odwołania 6 miesięcy, termin
+rozpatrzenia 14 dni, retencja 12 miesięcy (funkcje `dsa_appeal_window`/`dsa_appeal_review_period`/
+`dsa_case_retention` z 0104, strażnik `tests/unit/dsa-approved-terms.test.ts`). Do ustalenia
+nadal: zakres publikacji raportu i przekazywania do bazy DSA oraz treść prawna o procedurze
+(prawnik). Na produkcji ustawione `DSA_RETENTION_MODE=dry-run` (działa dopiero z cronem
+`/api/maintenance`). Harmonogram: cron
 `/api/maintenance` woła `dsa_retention_run` wyłącznie za jawną flagą `DSA_RETENTION_MODE`
 (`dry-run` = podgląd z licznikami, `apply` = anonimizacja; brak/inna wartość = wyłączone,
 bez zapytania do bazy — `src/lib/admin/dsa-retention-mode.ts`). `apply` — dopiero po
-zatwierdzeniu wartości.
+jawnej decyzji właściciela o przełączeniu z `dry-run`.
 
 ### Odwołanie zgłaszającego od cofnięcia ograniczenia (0109)
 
