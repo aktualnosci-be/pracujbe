@@ -10,6 +10,9 @@ vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 
 const employer = await import('../../src/lib/data/employer');
+const { decodeScoreCursor, decodeTimeCursor } = await import('../../src/lib/employer/list-cursor');
+const older = (token: string | null) => ({ cursor: decodeTimeCursor(token), direction: 'next' as const });
+const newer = (token: string | null) => ({ cursor: decodeTimeCursor(token), direction: 'prev' as const });
 const { getBilling } = await import('../../src/lib/data/billing');
 
 // #25: loadery panelu pracodawcy pod RLS na PostgreSQL 16 — izolacja firm, rola member,
@@ -102,19 +105,73 @@ beforeAll(async () => {
 afterAll(async () => { await realSession.db?.stop(); });
 
 describe('panel pracodawcy na PostgreSQL (#25)', () => {
-  it('zgłoszenia: stronicowanie po 12 w kolejności submitted_at, tylko firma A', async () => {
+  it('zgłoszenia: kursor (submitted_at, id) po 12 w obu kierunkach, tylko firma A (P1-05)', async () => {
     actAs(ownerA);
-    const first = await employer.getEmployerApplicationsPage(1);
-    const second = await employer.getEmployerApplicationsPage(2);
-    expect(first).toMatchObject({ status: 'ok', hasMore: true, isDemo: false });
-    expect(second).toMatchObject({ status: 'ok', hasMore: false });
-    if (first.status !== 'ok' || second.status !== 'ok') return;
+    const first = await employer.getEmployerApplicationsPage();
+    expect(first).toMatchObject({ status: 'ok', prevCursor: null, isDemo: false, job: null });
+    if (first.status !== 'ok') return;
+    expect(first.applications).toHaveLength(12);
+    const second = await employer.getEmployerApplicationsPage(older(first.nextCursor));
+    expect(second).toMatchObject({ status: 'ok', nextCursor: null });
+    if (second.status !== 'ok') return;
     expect([...first.applications, ...second.applications].map((a) => a.id)).toEqual(appsA);
     expect(first.applications[0]).toMatchObject({ candidateName: 'Kand Nr1', jobTitle: 'Oferta a-active', status: 'submitted' });
+    // Wstecz z drugiej strony = dokładnie pierwsza strona, bez dalszego „nowsze”.
+    const back = await employer.getEmployerApplicationsPage(newer(second.prevCursor));
+    expect(back.status === 'ok' && back.applications.map((a) => a.id)).toEqual(appsA.slice(0, 12));
+    expect(back.status === 'ok' && back.prevCursor).toBeNull();
 
     actAs(ownerB);
-    const b = await employer.getEmployerApplicationsPage(1);
+    const b = await employer.getEmployerApplicationsPage();
     expect(b.status === 'ok' && b.applications.map((a) => a.id)).toEqual([appB]);
+    // Kursor z firmy A nie otwiera cudzych danych — nadal tylko własne (starsze niż kursor).
+    const bWithCursor = await employer.getEmployerApplicationsPage(older(first.nextCursor));
+    expect(bWithCursor.status === 'ok' && bWithCursor.applications.map((a) => a.id)).not.toContain(appsA[12]);
+  });
+
+  it('zgłoszenia: granica strony przy remisie submitted_at i nowym zgłoszeniu między stronami', async () => {
+    actAs(ownerA);
+    // Remis czasu na granicy strony 12/13: kolejność rozstrzyga id.
+    await pg.admin.query(`UPDATE public.applications SET submitted_at = '2026-09-01T12:00:00Z' WHERE id = ANY($1::uuid[])`,
+      [appsA.slice(10, 13)]);
+    try {
+      const first = await employer.getEmployerApplicationsPage();
+      if (first.status !== 'ok') throw new Error('expected ok');
+      // Nowe zgłoszenie PO odczycie pierwszej strony (jak drugi rekruter w tym czasie).
+      const extraCandidate = candidates[13]!;
+      const extra = (await pg.admin.query(`INSERT INTO public.applications(job_id, candidate_id, company_id, status)
+        VALUES ($1, $2, $3, 'submitted') RETURNING id`, [ids.jobA, extraCandidate, ids.companyA])).rows[0].id as string;
+      try {
+        const second = await employer.getEmployerApplicationsPage(older(first.nextCursor));
+        if (second.status !== 'ok') throw new Error('expected ok');
+        const seen = [...first.applications, ...second.applications].map((a) => a.id);
+        expect(new Set(seen).size).toBe(seen.length);
+        expect(seen).toHaveLength(13);
+        expect(seen).not.toContain(extra);
+        // Kontrola ujemna: dawny OFFSET 12 po wstawieniu powtarza ostatni rekord pierwszej strony.
+        const offset = (await pg.admin.query(`SELECT id FROM public.applications
+            WHERE company_id = $1 AND deleted_at IS NULL ORDER BY submitted_at DESC, id DESC OFFSET 12`, [ids.companyA])).rows
+          .map((r: { id: string }) => r.id);
+        expect(offset).toContain(first.applications[11]!.id);
+      } finally {
+        await pg.admin.query('DELETE FROM public.applications WHERE id = $1', [extra]);
+      }
+    } finally {
+      await pg.admin.query(`UPDATE public.applications SET submitted_at = now() - (array_position($1::uuid[], id) || ' minutes')::interval
+        WHERE id = ANY($1::uuid[])`, [appsA]);
+    }
+  });
+
+  it('zgłoszenia jednej oferty: własna oferta filtruje, cudza oferta = not_found', async () => {
+    actAs(ownerA);
+    const own = await employer.getEmployerApplicationsPage(undefined, ids.jobA);
+    expect(own).toMatchObject({ status: 'ok', job: { id: ids.jobA, title: 'Oferta a-active' } });
+    expect(own.status === 'ok' && own.applications).toHaveLength(12);
+    const closed = await employer.getEmployerApplicationsPage(undefined, ids.jobAClosed);
+    expect(closed).toMatchObject({ status: 'ok', applications: [], nextCursor: null });
+    expect(await employer.getEmployerApplicationsPage(undefined, ids.jobB)).toEqual({ status: 'not_found' });
+    actAs(ownerB);
+    expect(await employer.getEmployerApplicationsPage(undefined, ids.jobA)).toEqual({ status: 'not_found' });
   });
 
   it('najnowsze zgłoszenia: najwyżej 6, bez cudzych', async () => {
@@ -125,9 +182,11 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
 
   it('zwykły member nie widzi zgłoszeń (recruiter+), ale widzi oferty firmy', async () => {
     actAs(memberA);
-    expect(await employer.getEmployerApplicationsPage(1)).toEqual({ status: 'ok', applications: [], hasMore: false, isDemo: false });
+    expect(await employer.getEmployerApplicationsPage()).toEqual({
+      status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+    });
     expect(await employer.getRecentApplications()).toEqual({ status: 'ok', applications: [] });
-    const jobs = await employer.getCompanyJobsLoad(1);
+    const jobs = await employer.getCompanyJobsLoad();
     expect(jobs.status === 'ok' && jobs.jobs.length).toBe(12);
     expect(await employer.getEmployerApplicationDetail(appsA[0]!)).toEqual({ status: 'not_found' });
     // Lejek ofert tylko dla rekrutera: odmowa ≠ błąd; kohorta pod RLS pusta, wyświetlenia „brak danych".
@@ -152,11 +211,15 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
 
   it('oferty: strony po 12 z licznikami z bazy, status efektywny, bez ofert firmy B', async () => {
     actAs(ownerA);
-    const first = await employer.getCompanyJobsLoad(1);
-    const second = await employer.getCompanyJobsLoad(2);
-    if (first.status !== 'ok' || second.status !== 'ok') throw new Error('expected ok');
-    expect(first.hasNext).toBe(true);
-    expect(second).toMatchObject({ hasNext: false });
+    const first = await employer.getCompanyJobsLoad();
+    if (first.status !== 'ok') throw new Error('expected ok');
+    const second = await employer.getCompanyJobsLoad(older(first.nextCursor));
+    if (second.status !== 'ok') throw new Error('expected ok');
+    expect(first).toMatchObject({ prevCursor: null });
+    expect(first.nextCursor).not.toBeNull();
+    expect(second).toMatchObject({ nextCursor: null });
+    const back = await employer.getCompanyJobsLoad(newer(second.prevCursor));
+    expect(back.status === 'ok' && back.jobs.map((j) => j.id)).toEqual(first.jobs.map((j) => j.id));
     const all = [...first.jobs, ...second.jobs];
     expect(all).toHaveLength(14);
     expect(all.map((j) => j.id)).not.toContain(ids.jobB);
@@ -172,6 +235,73 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
       candidateId: candidates[0], jobId: ids.jobA, jobTitle: 'Oferta a-active', jobSlug: 'a-active',
       offerSentAt: null, name: 'Kand Nr1', role: 'Operator wózka', city: 'Gent', match: 91,
     }]);
+  });
+
+  it('dopasowani kandydaci: kursor (wynik, kandydat) po 10 w obu kierunkach, remis na granicy (P1-05)', async () => {
+    // 12 dodatkowych kandydatów firmy A (profile wyszukiwalne): wyniki 80..75 parami — remis
+    // na granicy stron 10/11 rozstrzyga candidate_id.
+    const extra = candidates.slice(1, 13);
+    await pg.admin.query(`INSERT INTO public.candidate_profiles(profile_id, is_searchable, profile_completed)
+      SELECT unnest($1::uuid[]), true, true`, [extra]);
+    await pg.admin.query(`INSERT INTO public.matches(candidate_id, job_id, score)
+      SELECT c, $2::uuid, 80 - (o - 1) / 2 FROM unnest($1::uuid[]) WITH ORDINALITY AS t(c, o)`, [extra, ids.jobA]);
+    try {
+      actAs(ownerA);
+      const first = await employer.getMatchedCandidatesPage();
+      if (first.status !== 'ok') throw new Error('expected ok');
+      expect(first.items).toHaveLength(10);
+      expect(first.prevCursor).toBeNull();
+      expect(first.items[0]).toMatchObject({ candidateId: candidates[0], match: 91, jobTitle: 'Oferta a-active', name: 'Kand Nr1' });
+      const second = await employer.getMatchedCandidatesPage({ cursor: decodeScoreCursor(first.nextCursor), direction: 'next' });
+      if (second.status !== 'ok') throw new Error('expected ok');
+      expect(second.nextCursor).toBeNull();
+      const all = [...first.items, ...second.items];
+      expect(all).toHaveLength(13);
+      expect(new Set(all.map((c) => c.candidateId)).size).toBe(13);
+      // Porządek listy = wynik malejąco, remis → candidate_id rosnąco.
+      const expected = [...all].sort((a, b) => b.match - a.match || (a.candidateId < b.candidateId ? -1 : 1));
+      expect(all.map((c) => c.candidateId)).toEqual(expected.map((c) => c.candidateId));
+      const back = await employer.getMatchedCandidatesPage({ cursor: decodeScoreCursor(second.prevCursor), direction: 'prev' });
+      expect(back.status === 'ok' && back.items.map((c) => c.candidateId)).toEqual(first.items.map((c) => c.candidateId));
+      expect(back.status === 'ok' && back.prevCursor).toBeNull();
+
+      // Izolacja: firma B widzi tylko swoje dopasowanie, member firmy A — nic.
+      actAs(ownerB);
+      const b = await employer.getMatchedCandidatesPage();
+      expect(b.status === 'ok' && b.items.map((c) => c.candidateId)).toEqual([candidates[13]]);
+      actAs(memberA);
+      expect(await employer.getMatchedCandidatesPage()).toEqual({ status: 'ok', items: [], prevCursor: null, nextCursor: null });
+    } finally {
+      await pg.admin.query('DELETE FROM public.matches WHERE candidate_id = ANY($1::uuid[])', [extra]);
+      await pg.admin.query('DELETE FROM public.candidate_profiles WHERE profile_id = ANY($1::uuid[])', [extra]);
+    }
+  });
+
+  it('szczegół kandydata: profil, dopasowania i zgłoszenia firmy; brak relacji / obca firma / member = not_found (P1-06)', async () => {
+    actAs(ownerA);
+    const detail = await employer.getEmployerCandidateDetail(candidates[0]!);
+    expect(detail.status).toBe('ok');
+    if (detail.status !== 'ok') return;
+    expect(detail.isDemo).toBe(false);
+    expect(detail.candidate).toMatchObject({
+      candidateId: candidates[0], name: 'Kand Nr1',
+      profile: { headline: 'Operator wózka', city: 'Gent', experienceYears: 4, skills: ['Wózek widłowy'] },
+      matches: [{ jobId: ids.jobA, jobTitle: 'Oferta a-active', jobSlug: 'a-active', score: 91, offerSentAt: null }],
+      applications: [{ id: appsA[0], jobTitle: 'Oferta a-active', status: 'submitted' }],
+    });
+    // Kandydat ze zgłoszeniem, bez profilu i dopasowania — strona istnieje, profil pusty.
+    const applicant = await employer.getEmployerCandidateDetail(candidates[5]!);
+    expect(applicant).toMatchObject({ status: 'ok', candidate: { name: 'Kand Nr6', profile: null, matches: [] } });
+    // Kandydat firmy B (dopasowanie 77 do oferty B) nie jest kandydatem firmy A.
+    expect(await employer.getEmployerCandidateDetail(candidates[13]!)).toEqual({ status: 'not_found' });
+    expect(await employer.getEmployerCandidateDetail('nie-uuid')).toEqual({ status: 'not_found' });
+
+    actAs(ownerB);
+    expect(await employer.getEmployerCandidateDetail(candidates[0]!)).toEqual({ status: 'not_found' });
+    const own = await employer.getEmployerCandidateDetail(candidates[13]!);
+    expect(own.status === 'ok' && own.candidate.matches.map((m) => m.score)).toEqual([77]);
+    actAs(memberA);
+    expect(await employer.getEmployerCandidateDetail(candidates[0]!)).toEqual({ status: 'not_found' });
   });
 
   it('lejek rekrutacyjny i lejek ofert dla rekrutera', async () => {
@@ -235,10 +365,14 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
 
   it('gość / konto bez firmy nie czyta danych firmy', async () => {
     actAs(null);
-    expect(await employer.getEmployerApplicationsPage(1)).toEqual({ status: 'ok', applications: [], hasMore: false, isDemo: false });
+    expect(await employer.getEmployerApplicationsPage()).toEqual({
+      status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+    });
     expect(await employer.getEmployerShellData()).toEqual({ status: 'error' });
     actAs({ id: candidates[0]!, role: 'candidate' });
-    expect(await employer.getCompanyJobsLoad(1)).toEqual({ status: 'ok', jobs: [], hasNext: false });
+    expect(await employer.getCompanyJobsLoad()).toEqual({ status: 'ok', jobs: [], prevCursor: null, nextCursor: null });
+    expect(await employer.getMatchedCandidatesPage()).toEqual({ status: 'ok', items: [], prevCursor: null, nextCursor: null });
+    expect(await employer.getEmployerCandidateDetail(candidates[0]!)).toEqual({ status: 'not_found' });
     expect(await employer.getEmployerApplicationDetail(appsA[0]!)).toEqual({ status: 'not_found' });
   });
 

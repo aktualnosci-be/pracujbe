@@ -7,6 +7,7 @@ import { getEmployerApplicationDetail } from '@/lib/data/employer';
 import { StatusPill, toCamel } from '@/components/ui/status-pill';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { MessageCandidateButton } from '@/components/employer/MessageCandidateButton';
+import { AVAILABILITY_KEYS, LEVEL_KEYS } from '@/components/employer/candidate-labels';
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
   EYEBROW,
@@ -33,21 +34,6 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   return { title: t('employerApplicationDetailTitle'), robots: { index: false, follow: false } };
 }
-
-const AVAILABILITY_KEYS: Record<string, string> = {
-  immediate: 'availImmediate',
-  within_two_weeks: 'availWithinTwoWeeks',
-  within_month: 'availWithinMonth',
-  within_three_months: 'availWithinThreeMonths',
-  flexible: 'availFlexible',
-};
-
-const LEVEL_KEYS: Record<string, string> = {
-  basic: 'levelBasic',
-  intermediate: 'levelIntermediate',
-  fluent: 'levelFluent',
-  native: 'levelNative',
-};
 
 const LINK_CLASS =
   'inline-flex min-h-12 items-center rounded-xl border border-border px-5 text-sm font-semibold text-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -145,6 +131,12 @@ export default async function EmployerApplicationDetailPage({
           <ApplicationStatusMenu applicationId={application.id} status={application.status} candidateName={name} jobTitle={application.jobTitle} />
           {/* #98: rozmowa wymaga konta kandydata — gość dostaje kontakt e-mailowy niżej. */}
           {application.isGuest ? null : <MessageCandidateButton applicationId={application.id} candidateName={name} />}
+          {/* P1-06: profil kandydata z kontekstem firmy (dopasowania, inne zgłoszenia). */}
+          {application.isGuest || !application.candidateId || isDemo ? null : (
+            <Link href={`/employer/kandydaci/${encodeURIComponent(application.candidateId)}`} className={TEXT_LINK}>
+              {t('employerApplicationViewCandidate')}
+            </Link>
+          )}
         </div>
       </header>
 

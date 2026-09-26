@@ -12789,7 +12789,20 @@ select pg_temp.expect_error(
   'select count(*) from public.saved_search_matching_jobs(''{}''::jsonb, ''pl'', now())',
   'permission denied', 'SC100-5c anon bez EXECUTE');
 reset role;
+-- Sprzątanie (uwaga z recenzji #659): 105 aktywnych ofert zweryfikowanej firmy ze wspólnym
+-- słowem kluczowym nie może zostać w bazie dla kolejnych sekcji (listy/liczniki publiczne).
+-- Kolejność: oferty (kaskadą saved_search_alerts), firma z członkostwem, konta (kaskadą
+-- zapisane wyszukiwanie, powiadomienia i e-maile).
+delete from public.jobs where company_id = :'SCC';
+delete from public.companies where id = :'SCC';
 delete from auth.users where id in (:'SCA', :'SCE');
+select pg_temp.assert(
+  not exists (select 1 from public.jobs where company_id = :'SCC')
+  and not exists (select 1 from public.companies where id = :'SCC')
+  and not exists (select 1 from public.saved_searches where id = :'sc1')
+  and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'sc1')
+  and not exists (select 1 from public.email_deliveries where profile_id in (:'SCA', :'SCE')),
+  'SC100-6 dane testu usunięte (oferty, firma, wyszukiwanie, alerty, e-maile)');
 
 -- ============================================================================
 -- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).
@@ -12943,5 +12956,143 @@ select pg_temp.assert(
   'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
 rollback;
 reset role; reset app.current_uid;
+
+-- ============================================================================
+-- EP05. Stronicowanie kursorem list panelu pracodawcy (audyt P1-05, migracja 0192 — numer
+--       tymczasowy). get_company_matches_page: najlepsze dopasowanie na kandydata w porządku
+--       (score DESC, candidate_id ASC), kursor w obu kierunkach, remis wyniku na granicy strony,
+--       RLS wywołującego (recruiter+ firmy, firma zweryfikowana). Kontrole ujemne: dawny
+--       get_company_top_matches kończy się na 20 kandydatach, a OFFSET po wstawieniu lepszego
+--       dopasowania między stronami powtarza kandydata — kursor nie.
+-- ============================================================================
+\set EPC 'e9c20000-0000-0000-0000-0000000000c1'
+\set EPD 'e9c20000-0000-0000-0000-0000000000c2'
+\set EPO 'e9c20000-0000-0000-0000-0000000000a1'
+\set EPM 'e9c20000-0000-0000-0000-0000000000a2'
+\set EPX 'e9c20000-0000-0000-0000-0000000000a3'
+\set EPJ 'e9c20000-0000-0000-0000-0000000000d1'
+\set EPNEW 'e9c20000-0000-0000-0000-000000000199'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data)
+  select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid, 'ep-' || n || '@test.be', 'EP ' || n,
+         jsonb_build_object('role','candidate','first_name','EP','last_name', n::text,'locale','pl')
+  from generate_series(1, 25) n;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'EPNEW','ep-new@test.be','EP new','{"role":"candidate","first_name":"EP","last_name":"new","locale":"pl"}'),
+  (:'EPO','ep-o@test.be','EP O','{"role":"employer","first_name":"EP","last_name":"O","locale":"pl"}'),
+  (:'EPM','ep-m@test.be','EP M','{"role":"employer","first_name":"EP","last_name":"M","locale":"pl"}'),
+  (:'EPX','ep-x@test.be','EP X','{"role":"employer","first_name":"EP","last_name":"X","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'EPC','Firma EP','verified'), (:'EPD','Firma EP2','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'EPC',:'EPO','owner',true), (:'EPC',:'EPM','member',true), (:'EPD',:'EPX','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
+  values (:'EPJ',:'EPC','ep05-job','Oferta EP05','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed)
+  select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid, true, true from generate_series(1, 25) n;
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'EPNEW', true, true);
+-- 25 kandydatów, wyniki parami równe (90, 90, 89, 89, …): remis przez granicę stron 10/11 i 20/21.
+insert into public.matches(candidate_id, job_id, score)
+  select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid, :'EPJ', 90 - (n - 1) / 2
+  from generate_series(1, 25) n;
+
+-- Strony jako listy „kandydat/wynik” w porządku zwróconym przez RPC (with ordinality) —
+-- rola authenticated nie tworzy tabel tymczasowych, więc wyniki trzymamy w zmiennych psql.
+set role authenticated; set app.current_uid = :'EPO'; select pg_temp.assert_client_role();
+select string_agg(candidate_id::text || '/' || score, ',' order by ord) filter (where ord <= 10) as ep_p1,
+       max(candidate_id::text) filter (where ord = 11) as ep_p1m,
+       max(score) filter (where ord = 10) as ep_s10, max(candidate_id::text) filter (where ord = 10) as ep_c10,
+       count(*) as ep_n1
+  from public.get_company_matches_page(:'EPC'::uuid, 11) with ordinality as t(candidate_id, job_id, score, ord) \gset
+select string_agg(candidate_id::text || '/' || score, ',' order by ord) filter (where ord <= 10) as ep_p2,
+       max(candidate_id::text) filter (where ord = 1) as ep_c11, max(score) filter (where ord = 1) as ep_s11,
+       max(score) filter (where ord = 10) as ep_s20, max(candidate_id::text) filter (where ord = 10) as ep_c20,
+       count(*) as ep_n2
+  from public.get_company_matches_page(:'EPC'::uuid, 11, :ep_s10, :'ep_c10'::uuid, 'next')
+       with ordinality as t(candidate_id, job_id, score, ord) \gset
+select string_agg(candidate_id::text || '/' || score, ',' order by ord) as ep_p3, count(*) as ep_n3
+  from public.get_company_matches_page(:'EPC'::uuid, 11, :ep_s20, :'ep_c20'::uuid, 'next')
+       with ordinality as t(candidate_id, job_id, score, ord) \gset
+select string_agg(candidate_id::text || '/' || score, ',' order by ord desc) as ep_back, count(*) as ep_nb
+  from public.get_company_matches_page(:'EPC'::uuid, 11, :ep_s11, :'ep_c11'::uuid, 'prev')
+       with ordinality as t(candidate_id, job_id, score, ord) \gset
+reset role; reset app.current_uid;
+
+create temp table ep_all as
+  select ord, split_part(e, '/', 1)::uuid as candidate_id, split_part(e, '/', 2)::integer as score
+  from unnest(string_to_array(:'ep_p1' || ',' || :'ep_p2' || ',' || :'ep_p3', ',')) with ordinality as u(e, ord);
+
+-- EP05-1: strony 10 + 10 + 5 (limit 11 = strona + znacznik), razem 25 różnych, bez dubli.
+select pg_temp.assert(
+  :ep_n1 = 11 and :ep_n2 = 11 and :ep_n3 = 5
+  and (select count(*) from ep_all) = 25 and (select count(distinct candidate_id) from ep_all) = 25,
+  'EP05-1 kursor przechodzi wszystkich 25 kandydatów bez dziur i dubli (remis na granicy)');
+-- EP05-1b: porządek = score malejąco, remis → candidate_id rosnąco; znacznik strony 1 = pierwszy strony 2.
+select pg_temp.assert(
+  (select array_agg(candidate_id order by ord) from ep_all)
+    = (select array_agg(candidate_id order by score desc, candidate_id) from ep_all)
+  and :'ep_p1m' = :'ep_c11',
+  'EP05-1b porządek (score DESC, candidate_id ASC); znacznik = początek kolejnej strony');
+-- EP05-2: wstecz od początku strony 2 = strona 1 (baza zwraca od najbliższego kursorowi).
+select pg_temp.assert(:ep_nb = 10 and :'ep_back' = :'ep_p1', 'EP05-2 kierunek prev odtwarza poprzednią stronę');
+
+-- EP05-3 (KONTROLA UJEMNA): dawny odczyt listy kończy się na 20 kandydatach.
+set role authenticated; set app.current_uid = :'EPO'; select pg_temp.assert_client_role();
+select count(*) as ep_old from public.get_company_top_matches(:'EPC'::uuid, 100) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ep_old' = '20', 'EP05-3 KONTROLA UJEMNA: get_company_top_matches obcina do 20 — 5 kandydatów nieosiągalnych');
+
+-- EP05-4: lepsze dopasowanie dodane PO odczycie strony 1 — kursor nie powtarza kandydata,
+-- OFFSET 10 powtarza (KONTROLA UJEMNA).
+insert into public.matches(candidate_id, job_id, score) values (:'EPNEW', :'EPJ', 99);
+set role authenticated; set app.current_uid = :'EPO'; select pg_temp.assert_client_role();
+select count(*) as ep_dup_cursor from public.get_company_matches_page(:'EPC'::uuid, 10, :ep_s10, :'ep_c10'::uuid, 'next') n
+  where n.candidate_id::text = any (select split_part(e, '/', 1) from unnest(string_to_array(:'ep_p1', ',')) e) \gset
+select count(*) as ep_dup_offset from (
+    select * from public.get_company_matches_page(:'EPC'::uuid, 51) offset 10 limit 10) n
+  where n.candidate_id::text = any (select split_part(e, '/', 1) from unnest(string_to_array(:'ep_p1', ',')) e) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ep_dup_cursor' = '0', 'EP05-4 kursor: nowy wiersz między stronami nie dubluje kandydata');
+select pg_temp.assert(:'ep_dup_offset' = '1', 'EP05-4b KONTROLA UJEMNA: OFFSET po wstawieniu powtarza kandydata ze strony 1');
+
+-- EP05-5: izolacja — obca firma, zwykły member, firma niezweryfikowana: pusto.
+set role authenticated; set app.current_uid = :'EPX'; select pg_temp.assert_client_role();
+select count(*) as ep_foreign from public.get_company_matches_page(:'EPC'::uuid, 51) \gset
+reset role;
+set role authenticated; set app.current_uid = :'EPM'; select pg_temp.assert_client_role();
+select count(*) as ep_member from public.get_company_matches_page(:'EPC'::uuid, 51) \gset
+reset role; reset app.current_uid;
+update public.companies set status = 'pending' where id = :'EPC';
+set role authenticated; set app.current_uid = :'EPO'; select pg_temp.assert_client_role();
+select count(*) as ep_pending from public.get_company_matches_page(:'EPC'::uuid, 51) \gset
+select count(*) as ep_cap from public.get_company_matches_page(:'EPC'::uuid, 1000) \gset
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'EPC';
+set role authenticated; set app.current_uid = :'EPO'; select pg_temp.assert_client_role();
+select count(*) as ep_cap from public.get_company_matches_page(:'EPC'::uuid, 1000) \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ep_foreign' = '0', 'EP05-5 obca firma nie widzi dopasowań firmy EP');
+select pg_temp.assert(:'ep_member' = '0', 'EP05-5b zwykły member bez dostępu (recruiter+)');
+select pg_temp.assert(:'ep_pending' = '0', 'EP05-5c firma niezweryfikowana bez wyników');
+select pg_temp.assert(:'ep_cap' = '26', 'EP05-5d limit ograniczony do 51 (26 kandydatów w całości)');
+
+-- EP05-6: anon bez EXECUTE; indeksy kursora list istnieją.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.get_company_matches_page(''e9c20000-0000-0000-0000-0000000000c1''::uuid)',
+  'permission denied', 'EP05-6 anon nie wywoła get_company_matches_page');
+reset role;
+select pg_temp.assert(
+  exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'idx_applications_company_submitted')
+  and exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'idx_jobs_company_created'),
+  'EP05-6b indeksy kursora zgłoszeń i ofert istnieją');
+
+-- Sprzątanie EP05.
+drop table ep_all;
+delete from public.jobs where company_id in (:'EPC', :'EPD');
+delete from public.companies where id in (:'EPC', :'EPD');
+delete from auth.users where id in (:'EPO', :'EPM', :'EPX', :'EPNEW')
+  or id in (select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid from generate_series(1, 25) n);
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

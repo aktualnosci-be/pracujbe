@@ -3,7 +3,12 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
-import { getTopMatchedCandidates } from "@/lib/data/employer";
+import { getMatchedCandidatesPage } from "@/lib/data/employer";
+import {
+  decodeScoreCursor,
+  listPageHref,
+  listPageRequest,
+} from "@/lib/employer/list-cursor";
 import { MatchBar } from "@/components/ui/match-bar";
 import { SendOfferButton } from "@/components/employer/SendOfferButton";
 import {
@@ -20,13 +25,16 @@ import {
   PANEL_H2,
   PANEL_P,
   PROFILE_AVATAR,
+  BTN_SECONDARY,
+  TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
 
 /**
  * Panel pracodawcy — Kandydaci (makieta 05, kolumna „Top dopasowani"), na REALNYCH danych.
  *
- * Lista najlepiej dopasowanych kandydatów (`getTopMatchedCandidates` pod sesją/RLS; tylko dla
- * firmy zweryfikowanej). Każdy wiersz: inicjały, imię/rola/miasto, pasek dopasowania (MatchBar)
+ * Lista dopasowanych kandydatów od najlepszego (`getMatchedCandidatesPage` pod sesją/RLS; tylko
+ * dla firmy zweryfikowanej), strony po 10 kursorem (wynik, kandydat) — P1-05; imię prowadzi do
+ * szczegółu kandydata (P1-06). Każdy wiersz: inicjały, imię/rola/miasto, pasek dopasowania (MatchBar)
  * i idempotentna wysyłka propozycji (SendOfferButton → `sendOffer`). Bez env — dane DEMO.
  * NOINDEX dziedziczone z layoutu panelu.
  */
@@ -54,21 +62,21 @@ function initials(name: string): string {
 
 export default async function EmployerCandidatesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ po?: string | string[]; przed?: string | string[] }>;
 }) {
   const { locale } = await params;
+  const request = listPageRequest(await searchParams, decodeScoreCursor);
   setRequestLocale(locale);
 
   const td = await getTranslations({ locale, namespace: "dashboard" });
 
-  let candidates: Awaited<ReturnType<typeof getTopMatchedCandidates>> = [];
-  let readFailed = false;
-  try {
-    candidates = await getTopMatchedCandidates({ throwOnError: true });
-  } catch {
-    readFailed = true;
-  }
+  const result = await getMatchedCandidatesPage(request);
+  const readFailed = result.status === "error";
+  const candidates = result.status === "ok" ? result.items : [];
+  const base = "/employer/kandydaci";
 
   return (
     <div className="min-w-0">
@@ -97,6 +105,15 @@ export default async function EmployerCandidatesPage({
               {td("candidatesReadErrorBody")}
             </p>
           </div>
+        ) : candidates.length === 0 && request.cursor ? (
+          <div className={PANEL}>
+            <h2 className={PANEL_H2}>
+              {td("candidatesPageEmpty")}
+            </h2>
+            <Link href={base} className={`mt-5 ${BTN_SECONDARY}`}>
+              {td("candidatesFirstPage")}
+            </Link>
+          </div>
         ) : candidates.length === 0 ? (
           <div className={PANEL}>
             <h2 className={PANEL_H2}>
@@ -124,6 +141,13 @@ export default async function EmployerCandidatesPage({
                     <h2 className={H2_EXTENDED}>
                       {candidate.name || td("candidateFallback")}
                     </h2>
+                    <Link
+                      href={`${base}/${encodeURIComponent(candidate.candidateId)}`}
+                      aria-label={td("candidatesViewProfileLabel", { name: candidate.name || td("candidateFallback") })}
+                      className={`mt-2 inline-flex ${TEXT_LINK}`}
+                    >
+                      {td("candidatesViewProfile")}
+                    </Link>
                     {candidate.role ? (
                       <p className={`mt-3 break-words ${P_EXTENDED}`}>
                         {candidate.role}
@@ -179,6 +203,23 @@ export default async function EmployerCandidatesPage({
             ))}
           </ul>
         )}
+        {result.status === "ok" && (result.prevCursor || result.nextCursor) ? (
+          <nav
+            aria-label={td("candidatesPagination")}
+            className="mt-5 flex flex-wrap items-center justify-center gap-3"
+          >
+            {result.prevCursor ? (
+              <Link href={listPageHref(base, "przed", result.prevCursor)} rel="prev" className={BTN_SECONDARY}>
+                {td("candidatesPrevious")}
+              </Link>
+            ) : null}
+            {result.nextCursor ? (
+              <Link href={listPageHref(base, "po", result.nextCursor)} rel="next" className={BTN_SECONDARY}>
+                {td("candidatesNext")}
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
       </section>
     </div>
   );

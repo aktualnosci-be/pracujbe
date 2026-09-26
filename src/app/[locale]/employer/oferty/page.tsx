@@ -9,6 +9,13 @@ import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
 import {
+  decodeTimeCursor,
+  encodeTimeCursor,
+  listPageHref,
+  listPageRequest,
+  listRequestHref,
+} from "@/lib/employer/list-cursor";
+import {
   BTN_PRIMARY,
   BTN_SECONDARY,
   EYEBROW,
@@ -65,30 +72,21 @@ export default async function EmployerOffersPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ po?: string | string[]; przed?: string | string[] }>;
 }) {
   const { locale } = await params;
-  const { page: requestedPage } = await searchParams;
-  const parsedPage =
-    requestedPage && /^[1-9]\d*$/.test(requestedPage)
-      ? Number(requestedPage)
-      : 1;
-  const page =
-    Number.isSafeInteger(parsedPage) &&
-    parsedPage <= Math.floor(Number.MAX_SAFE_INTEGER / 12)
-      ? parsedPage
-      : 1;
+  // P1-05: kursor (created_at, id) w adresie — `?po=` starsze, `?przed=` nowsze.
+  const request = listPageRequest(await searchParams, decodeTimeCursor);
   setRequestLocale(locale);
   const td = await getTranslations("dashboard");
   const tb = await getTranslations("campaignBanner");
   const [result, shell] = await Promise.all([
-    getCompanyJobsLoad(page),
+    getCompanyJobsLoad(request),
     getEmployerShellData(),
   ]);
   // #403: rola member przegląda oferty; tworzenie/edycja/cykl życia wymagają recruiter+.
   const canRecruitHere = shell.status !== "ok" || canRecruit(shell.activeRole);
-  const pageHref = (target: number) =>
-    target === 1 ? "/employer/oferty" : `/employer/oferty?page=${target}`;
+  const base = "/employer/oferty";
 
   return (
     <div className="space-y-7">
@@ -126,19 +124,19 @@ export default async function EmployerOffersPage({
             {td("employerOffersLoadErrorHint")}
           </p>
           <a
-            href={`/${locale}${pageHref(page)}`}
+            href={`/${locale}${listRequestHref(base, request, encodeTimeCursor)}`}
             className={`mt-5 ${BTN_SECONDARY}`}
           >
             {td("employerOffersRetry")}
           </a>
         </section>
-      ) : result.jobs.length === 0 && page > 1 ? (
+      ) : result.jobs.length === 0 && request.cursor ? (
         <section className={PANEL}>
           <h2 className={PANEL_H2}>
             {td("employerOffersPageEmpty")}
           </h2>
           <Link
-            href={pageHref(1)}
+            href={base}
             className={`mt-5 ${BTN_SECONDARY}`}
           >
             {td("employerOffersFirstPage")}
@@ -195,6 +193,18 @@ export default async function EmployerOffersPage({
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
                         {offer.newApplications}
                       </dd>
+                      {/* P1-05: zgłoszenia tej oferty (recruiter+ — member nie czyta zgłoszeń). */}
+                      {shell.status === "ok" && canRecruitHere && offer.status !== "draft" ? (
+                        <dd className="mt-1">
+                          <Link
+                            href={`/employer/aplikacje?oferta=${encodeURIComponent(offer.id)}`}
+                            aria-label={td("employerOffersViewApplicationsLabel", { title: offer.title })}
+                            className={TEXT_LINK}
+                          >
+                            {td("employerOffersViewApplications")}
+                          </Link>
+                        </dd>
+                      ) : null}
                     </div>
                     <div className="min-w-0 border-l border-border pl-4">
                       <dt className={INFO_LABEL}>
@@ -266,29 +276,23 @@ export default async function EmployerOffersPage({
               </li>
             ))}
           </ul>
-          {(page > 1 || result.hasNext) && (
+          {(result.prevCursor || result.nextCursor) && (
             <nav
               aria-label={td("employerOffersPaginationLabel")}
               className="flex flex-wrap items-center justify-center gap-3"
             >
-              {page > 1 && (
+              {result.prevCursor && (
                 <Link
-                  href={pageHref(page - 1)}
+                  href={listPageHref(base, "przed", result.prevCursor)}
                   rel="prev"
                   className={BTN_SECONDARY}
                 >
                   {td("employerOffersPrevious")}
                 </Link>
               )}
-              <span
-                aria-current="page"
-                className="px-2 text-sm text-muted-foreground"
-              >
-                {td("employerOffersPage", { page })}
-              </span>
-              {result.hasNext && (
+              {result.nextCursor && (
                 <Link
-                  href={pageHref(page + 1)}
+                  href={listPageHref(base, "po", result.nextCursor)}
                   rel="next"
                   className={BTN_SECONDARY}
                 >
