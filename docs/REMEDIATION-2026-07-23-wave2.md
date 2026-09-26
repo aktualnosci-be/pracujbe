@@ -1,5 +1,7 @@
 # Remediacja — dwa audyty z 2026-07-23 (fala 2)
 
+> **ARCHIWALNE — stan sprzed migracji na Railway (#27).** Zapis remediacji z lipca 2026 na stosie Supabase; bieżąca architektura: [`ARCHITECTURE.md`](./ARCHITECTURE.md), [`railway/README.md`](./railway/README.md).
+
 Odpowiedź na dwa niezależne audyty (`docs/audit/` — raporty użytkownika). Oba badały stan **sprzed**
 migracji `0012` (RPC procesów) i workera e-mail, więc część ich ustaleń była już częściowo zamknięta.
 Ta fala domyka pozostałe P0/P1. Legenda: **fixed** = zrobione i zweryfikowane · **partial** · **deferred**.
