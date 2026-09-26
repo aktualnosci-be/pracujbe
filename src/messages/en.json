@@ -513,8 +513,6 @@
     "preferencesDesc": "Remember your choices, such as language and settings.",
     "analyticsName": "Analytics",
     "analyticsDesc": "Help us understand how you use the platform.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Allow us to show you more relevant ads.",
     "alwaysOn": "Always on",
     "cookieSettings": "Cookie settings"
   },
@@ -2386,7 +2384,13 @@
     "agePolicyConfirmTitle": "Change the candidate age threshold?",
     "agePolicyConfirmDescription": "The threshold will change from “{from}” to “{to}”.",
     "agePolicySuccess": "The candidate age threshold has been saved.",
-    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count} profiles were hidden from search."
+    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count} profiles were hidden from search.",
+    "reportsSortLabel": "Order",
+    "reportsSortNewest": "Newest",
+    "reportsSortPriority": "Priority and deadline",
+    "reportsFlaggedLabel": "Flags",
+    "reportsFlaggedAll": "All cases",
+    "reportsFlaggedOnly": "Flagged for review"
   },
   "settings": {
     "title": "Notification preferences",

@@ -164,7 +164,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Zgody cookies i akceptacja dokumentów',
     inCode: 'Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent.',
     processors: HOSTING,
-    retentionInCode: null,
+    retentionInCode:
+      'Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach ' +
+      '(acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; ' +
+      'w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia.',
   },
   'dsa-moderation': {
     name: 'Zgłoszenia treści (DSA) i moderacja',

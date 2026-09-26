@@ -513,8 +513,6 @@
     "preferencesDesc": "Retiennent vos choix, comme la langue et les paramètres.",
     "analyticsName": "Analytiques",
     "analyticsDesc": "Nous aident à comprendre comment vous utilisez la plateforme.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Permettent d'afficher des publicités plus pertinentes.",
     "alwaysOn": "Toujours actifs",
     "cookieSettings": "Paramètres des cookies"
   },
@@ -2386,7 +2384,13 @@
     "agePolicyConfirmTitle": "Modifier le seuil d'âge des candidats ?",
     "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
     "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
-    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche."
+    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche.",
+    "reportsSortLabel": "Ordre",
+    "reportsSortNewest": "Plus récents",
+    "reportsSortPriority": "Priorité et échéance",
+    "reportsFlaggedLabel": "Signalement",
+    "reportsFlaggedAll": "Tous les dossiers",
+    "reportsFlaggedOnly": "Signalés pour examen"
   },
   "settings": {
     "title": "Préférences de notification",
