@@ -12371,4 +12371,89 @@ select pg_temp.assert(
   'WL621-6 KONTROLA UJEMNA: bez odnowienia dzierżawy (0129) worker B PRZEJMUJE wiersz w tym ' ||
   'samym czasie, w którym A (po zielonym świetle) dopiero woła dostawcę — dokładnie luka #621');
 
+-- ============================================================================
+-- RIP. IP i user-agent w receiptach akceptacji (0132): kategoria retencji
+--      7 dni, receipt niezmienny poza wyzerowaniem IP/UA, krok w run_retention_purge
+--      (dry-run bez zmian, świeże receipty zostają). Kontrole ujemne: dawny strażnik 0108
+--      blokuje minimalizację, sama partia 0127 nie zeruje receiptów.
+-- ============================================================================
+\echo '--- RIP ip/ua receiptów (0132) ---'
+reset role; reset app.current_uid;
+\set RIPC1 'e1300000-0000-4000-8000-0000000000c1'
+\set RIPC2 'e1300000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RIPC1','ripc1@test.be','Rip Jeden','{"role":"employer","first_name":"Rip","last_name":"Jeden","locale":"nl"}'),
+  (:'RIPC2','ripc2@test.be','Rip Dwa','{"role":"employer","first_name":"Rip","last_name":"Dwa","locale":"fr"}');
+select public.record_signup_consents(:'RIPC1', true, true, '{}'::jsonb, 'signup', 'nl', '{}'::jsonb,
+  '198.51.100.4', 'Mozilla/5.0 RIP');
+select public.record_signup_consents(:'RIPC2', true, true, '{}'::jsonb, 'signup', 'fr', '{}'::jsonb,
+  '198.51.100.5', 'Mozilla/5.0 RIP2');
+
+-- RIP-1: kategoria z okresem 7 dni i zadaniem.
+select pg_temp.assert(
+  (select period = interval '7 days' and enforcement = 'job'
+     from public.retention_policies where key = 'acceptance_ip_user_agent'),
+  'RIP-1 acceptance_ip_user_agent = 7 dni, zadanie retencji');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances
+    where profile_id = :'RIPC1' and host(ip_address) = '198.51.100.4' and user_agent = 'Mozilla/5.0 RIP') = 2,
+  'RIP-1b oba receipty rejestracji z adresem i user-agentem');
+
+-- RIP-2: receipt niezmienny poza wyzerowaniem IP/UA.
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = ''192.0.2.1'' where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2 nowy adres odrzucony');
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = null, locale = ''pl'' where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2b wyzerowanie razem ze zmianą innej kolumny odrzucone');
+select pg_temp.expect_error(
+  format('update public.document_acceptances set accepted_at = now() where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2c zmiana czasu akceptacji odrzucona');
+select pg_temp.expect_error(
+  format('delete from public.document_acceptances where profile_id = %L', :'RIPC1'),
+  'CONSENT_RECEIPT_IMMUTABLE', 'RIP-2d usunięcie receiptu poza kaskadą odrzucone');
+set role authenticated; set app.current_uid = :'RIPC1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.document_acceptances set ip_address = null where profile_id = %L', :'RIPC1'),
+  'permission denied', 'RIP-2e właściciel nie zmienia własnego receiptu');
+select pg_temp.expect_error('select public.retention_purge_receipts_batch(10)', 'permission denied',
+  'RIP-2f klient nie woła kroku retencji');
+reset role; reset app.current_uid;
+
+-- RIP-3: receipt RIPC1 sprzed 8 dni; RIPC2 świeży.
+set session_replication_role = replica;
+update public.document_acceptances set accepted_at = now() - interval '8 days' where profile_id = :'RIPC1';
+set session_replication_role = origin;
+
+-- KONTROLA UJEMNA: partia z 0127 (bez kroku 0132) nie dotyka receiptów, a dawny strażnik 0108
+-- odrzuciłby samo wyzerowanie.
+begin;
+select public.retention_purge_batch(200);
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id = :'RIPC1' and ip_address is not null) = 2,
+  'RIP-3 KONTROLA UJEMNA: sama partia 0127 zostawia adres w receiptach');
+drop trigger document_acceptances_immutable on public.document_acceptances;
+create trigger document_acceptances_immutable before update or delete on public.document_acceptances
+  for each row execute function public.forbid_consent_receipt_change();
+select pg_temp.expect_error('select public.retention_purge_receipts_batch(200)', 'CONSENT_RECEIPT_IMMUTABLE',
+  'RIP-3b KONTROLA UJEMNA: ze strażnikiem 0108 minimalizacja jest niemożliwa');
+rollback;
+
+select (public.run_retention_purge(200, true))->>'acceptanceIpCleared' as rip_dry \gset
+select pg_temp.assert(:'rip_dry'::integer >= 2
+  and (select count(*) from public.document_acceptances where profile_id = :'RIPC1' and ip_address is not null) = 2,
+  'RIP-4 dry-run liczy receipty do wyzerowania bez zmiany danych');
+select (public.run_retention_purge(200, false))->>'acceptanceIpCleared' as rip_apply \gset
+select pg_temp.assert(:'rip_apply'::integer >= 2
+  and (select count(*) from public.document_acceptances
+        where profile_id = :'RIPC1' and ip_address is null and user_agent is null
+          and kind in ('terms_acceptance', 'privacy_notice_ack') and source = 'signup' and locale = 'nl') = 2
+  and (select count(*) from public.document_acceptances
+        where profile_id = :'RIPC2' and host(ip_address) = '198.51.100.5' and user_agent = 'Mozilla/5.0 RIP2') = 2,
+  'RIP-4b po 7 dniach IP/UA wyzerowane (receipt zostaje), świeży receipt nietknięty');
+delete from auth.users where id in (:'RIPC1', :'RIPC2');
+select pg_temp.assert(
+  (select count(*) from public.document_acceptances where profile_id in (:'RIPC1', :'RIPC2')) = 0,
+  'RIP-4c kaskada usunięcia konta nadal usuwa receipty');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

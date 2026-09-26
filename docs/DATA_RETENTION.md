@@ -40,6 +40,7 @@ dopiero po RET-09/RET-10, osobnym krokiem. Tabela jest niedostępna dla ról kli
 | `confirmed_guest_request` | 30 dni | job | usuwa potwierdzone zgłoszenie bez konta (bufor, nie aplikacja) od `confirmed_at` z jego e-mailami; aplikacja zostaje ze snapshotem gościa |
 | `unconfirmed_guest_request` | 7 dni | job | niepotwierdzone zgłoszenie usuwane 7 dni od **pierwszego** wysłania (`created_at`) — ponowny link nie przedłuża |
 | `guest_ip_user_agent` | 7 dni | job | zeruje IP i user-agent zgody gościa |
+| `acceptance_ip_user_agent` | 7 dni | job | zeruje IP i user-agent receiptu akceptacji przy rejestracji (0132, krok `retention_purge_receipts_batch`); receipt zostaje |
 | `data_rights_request_log` | 1095 dni | job | usuwa ślad obsługi wniosku |
 | `erasure_tombstone` | wyłączone (bez limitu) | job | usuwa wpis rejestru usunięć — **bez zmian** do RET-09/RET-10 |
 | `storage_physical_deletion` | 3 dni (72 h), alarm 1 dzień | monitoring | cel fizycznego usunięcia obiektu; czujka `storage_deletion_age` po 24 h |
