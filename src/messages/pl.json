@@ -2386,7 +2386,13 @@
     "agePolicyConfirmTitle": "Zmienić próg wieku kandydatów?",
     "agePolicyConfirmDescription": "Próg zmieni się z „{from}” na „{to}”.",
     "agePolicySuccess": "Próg wieku kandydatów został zapisany.",
-    "agePolicySuccessHidden": "Próg wieku kandydatów został zapisany. Ukryto {count} profili z wyszukiwania."
+    "agePolicySuccessHidden": "Próg wieku kandydatów został zapisany. Ukryto {count} profili z wyszukiwania.",
+    "reportsSortLabel": "Kolejność",
+    "reportsSortNewest": "Najnowsze",
+    "reportsSortPriority": "Priorytet i termin",
+    "reportsFlaggedLabel": "Oflagowanie",
+    "reportsFlaggedAll": "Wszystkie sprawy",
+    "reportsFlaggedOnly": "Oflagowane do przeglądu"
   },
   "settings": {
     "title": "Preferencje powiadomień",

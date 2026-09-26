@@ -2386,7 +2386,13 @@
     "agePolicyConfirmTitle": "Modifier le seuil d'âge des candidats ?",
     "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
     "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
-    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche."
+    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche.",
+    "reportsSortLabel": "Ordre",
+    "reportsSortNewest": "Plus récents",
+    "reportsSortPriority": "Priorité et échéance",
+    "reportsFlaggedLabel": "Signalement",
+    "reportsFlaggedAll": "Tous les dossiers",
+    "reportsFlaggedOnly": "Signalés pour examen"
   },
   "settings": {
     "title": "Préférences de notification",
