@@ -66,6 +66,12 @@ describe('uploadMessageAttachment', () => {
     expect(await uploadMessageAttachment(form(new File([], 'a.png', { type: 'image/png' })))).toMatchObject({ reason: 'empty' });
     expect(await uploadMessageAttachment(form(new File(['x'], 'a.exe', { type: 'application/x-msdownload' })))).toMatchObject({ reason: 'type' });
     expect(await uploadMessageAttachment(form('tekst'))).toMatchObject({ reason: 'empty' });
+    // #495: nazwa pliku z numerem NISS/paszportu — odrzucona przed limitem, sesją i bucketem.
+    for (const name of ['NISS_85.07.30-033.28.png', 'paszport_nr_AB1234567.png']) {
+      expect(await uploadMessageAttachment(form(new File(['x'], name, { type: 'image/png' })))).toEqual({
+        ok: false, error: 'VALIDATION_FAILED', reason: 'sensitiveId',
+      });
+    }
     expect(checkRateLimit).not.toHaveBeenCalled();
     expect(await uploadMessageAttachment(form(undefined, { conversationId: 'x' }))).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(storeMessageAttachment).not.toHaveBeenCalled();

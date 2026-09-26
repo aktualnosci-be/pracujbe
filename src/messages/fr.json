@@ -1657,6 +1657,7 @@
     "attachmentUploading": "Envoi du fichier…",
     "attachmentUploadError": "Impossible d’ajouter le fichier. Veuillez réessayer.",
     "attachmentErrorType": "Formats acceptés : PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentSensitiveId": "Le nom du fichier contient un numéro d’identification (p. ex. numéro de registre national, PESEL, numéro de carte d’identité ou de passeport). Renommez le fichier et ajoutez-le à nouveau.",
     "attachmentLimit": "Vous pouvez joindre au plus {max} fichiers à un message.",
     "attachmentRemove": "Retirer le fichier {name}",
     "attachmentDownload": "Télécharger {name} ({size})",

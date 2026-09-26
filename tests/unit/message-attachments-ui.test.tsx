@@ -108,6 +108,24 @@ describe('MessageComposer — załączniki', () => {
     expect(screen.getByRole('button', { name: pl.messages.send })).toBeEnabled();
   });
 
+  it.each(['pl', 'nl', 'fr', 'en'] as const)(
+    'nazwa pliku z numerem NISS — komunikat przy pliku, bez uploadu (#495): %s',
+    async (locale) => {
+      renderComposer(locale);
+      await choose(png('NISS_85.07.30-033.28.png'));
+      expect(screen.getByRole('alert')).toHaveTextContent(translations[locale].messages.attachmentSensitiveId);
+      expect(uploadMessageAttachment).not.toHaveBeenCalled();
+    },
+  );
+
+  it('błąd serwera sensitiveId → ten sam komunikat przy pliku (kontrola ujemna: zwykła nazwa idzie do uploadu)', async () => {
+    uploadMessageAttachment.mockResolvedValue({ ok: false, error: 'VALIDATION_FAILED', reason: 'sensitiveId' });
+    renderComposer();
+    await choose(png('skan.png'));
+    expect(uploadMessageAttachment).toHaveBeenCalledOnce();
+    expect(screen.getByRole('alert')).toHaveTextContent(pl.messages.attachmentSensitiveId);
+  });
+
   it('ponowienie nieudanego uploadu używa tego samego klucza operacji', async () => {
     uploadMessageAttachment.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({ ok: true, id: 'att-2' });
     renderComposer();

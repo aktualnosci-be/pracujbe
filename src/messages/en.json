@@ -1657,6 +1657,7 @@
     "attachmentUploading": "Uploading…",
     "attachmentUploadError": "The file could not be added. Please try again.",
     "attachmentErrorType": "Allowed formats: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentSensitiveId": "The file name contains an identification number (e.g. national register number, PESEL, ID card or passport number). Rename the file and add it again.",
     "attachmentLimit": "You can attach up to {max} files to one message.",
     "attachmentRemove": "Remove file {name}",
     "attachmentDownload": "Download {name} ({size})",

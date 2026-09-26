@@ -78,6 +78,7 @@ export function MessageComposer({
     if (problem === 'tooLarge') return tRoot('files.errorTooLarge');
     if (problem === 'empty') return tRoot('files.errorEmpty');
     if (problem === 'type') return t('attachmentErrorType');
+    if (problem === 'sensitiveId') return t('attachmentSensitiveId');
     return t('attachmentUploadError');
   }
 

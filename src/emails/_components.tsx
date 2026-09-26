@@ -459,6 +459,8 @@ export function EmailLayout({
   const lc = layoutCopy[locale];
   const year = new Date().getFullYear();
   const rights = interpolate(lc.rights, { year });
+  // Pomoc i polityka prywatności w języku odbiorcy (#61/#6; link do prywatności zostaje —
+  // decyzja właściciela 26.09.2026).
   const helpHref = `${env.siteUrl}/${locale}/pomoc`;
   const privacyHref = `${env.siteUrl}/${locale}/polityka-prywatnosci`;
 
@@ -478,11 +480,11 @@ export function EmailLayout({
             <Text style={styles.footerStrong}>{lc.tagline}</Text>
             <Text style={styles.footerText}>{footerNote ?? lc.footerNote}</Text>
             <Text style={styles.footerText}>
-              <Link href={helpHref} style={styles.footerLink}>
+              <Link href={helpHref} style={styles.footerLink} data-email-help="">
                 {lc.help}
               </Link>
               {'  ·  '}
-              <Link href={privacyHref} style={styles.footerLink}>
+              <Link href={privacyHref} style={styles.footerLink} data-email-privacy="">
                 {lc.privacy}
               </Link>
               {unsubscribeUrl ? (
