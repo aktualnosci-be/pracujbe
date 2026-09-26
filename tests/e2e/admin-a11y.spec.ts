@@ -53,6 +53,9 @@ const ROUTES = [
   '/admin/raport-dsa',
   // Koszty AI (#36) — raport tylko do odczytu.
   '/admin/koszty-ai',
+  // Dane polowe Core Web Vitals z Cloudflare Web Analytics (tryb demo: raport przykładowy).
+  '/admin/wydajnosc',
+  '/admin/wydajnosc?dni=7',
   // Próg wieku kandydatów (#492) — bieżące ustawienie + formularz zmiany.
   '/admin/ustawienia',
 ];
