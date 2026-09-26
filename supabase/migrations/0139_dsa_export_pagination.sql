@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0152 — Stronicowanie eksportu decyzji DSA (#606)
+-- 0139 — Stronicowanie eksportu decyzji DSA (#606)
 -- =============================================================================
 -- Problem: `dsa_statements_export(p_from, p_to)` zwracała WSZYSTKIE decyzje z okresu (do 1830
 -- dni) w jednym wywołaniu — trasa `/api/admin/dsa-report` materializowała cały wynik w pamięci

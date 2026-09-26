@@ -8693,7 +8693,7 @@ select pg_temp.expect_error('select public.dsa_transparency_report(now(), now() 
   'VALIDATION_FAILED', 'APL43-11c zły okres raportu');
 reset role;
 -- ============================================================================
--- PG606. Eksport decyzji DSA — stronicowanie zamiast całego zakresu naraz (0152, #606): panel
+-- PG606. Eksport decyzji DSA — stronicowanie zamiast całego zakresu naraz (0139, #606): panel
 -- administratora pobierał WSZYSTKIE decyzje z okresu (do 1830 dni) w jednym wywołaniu; teraz
 -- kursor po (`decided_at`, `reference`) + `p_limit` (domyślnie 2000, twardy sufit 5000).
 -- Wykorzystujemy decyzje już utworzone we wcześniejszych sekcjach DSA tego pliku (okno
