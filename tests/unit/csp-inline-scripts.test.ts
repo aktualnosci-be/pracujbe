@@ -80,6 +80,19 @@ describe('script-src Report-Only (#585) — hashem, nie blokuje', () => {
     expect(value).not.toContain(sha256(tampered));
   });
 
+  it('raportuje do osobnej grupy i adresu (osobne limity szumu, route.ts)', async () => {
+    const headers = await headersFor({ APP_MODE: 'production', NEXT_PUBLIC_SITE_URL: 'https://pracuj.be' });
+    const value = headers.find((h) => h.key === 'Content-Security-Policy-Report-Only')!.value;
+    expect(value).toContain('report-uri /api/csp-report?policy=report-only');
+    expect(value).toContain('report-to csp-report-only');
+    const enforced = headers.find((h) => h.key === 'Content-Security-Policy')!.value;
+    expect(enforced).toContain('report-to csp-endpoint');
+    expect(enforced).not.toContain('policy=report-only');
+    expect(headers.find((h) => h.key === 'Reporting-Endpoints')!.value).toBe(
+      'csp-endpoint="/api/csp-report", csp-report-only="/api/csp-report?policy=report-only"',
+    );
+  });
+
   it('dev (NODE_ENV≠production): brak nagłówka Report-Only (nie zaśmieca lokalnego devu)', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     const rules = await config.headers!();

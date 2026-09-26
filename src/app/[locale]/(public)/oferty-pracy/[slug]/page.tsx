@@ -66,7 +66,7 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
  * w mapie drogowej (spec 12).
  *
  * „Dowiedz się więcej o firmie” (#591) prowadzi do dedykowanego, stabilnego profilu firmy
- * `/pracodawcy/<slug>` (`job.companySlug`, tylko firma verified — 0126); bez sluga (nie powinno
+ * `/pracodawcy/<slug>` (`job.companySlug`, tylko firma verified — 0140); bez sluga (nie powinno
  * się zdarzyć dla zweryfikowanej firmy, ale bezpiecznik) CTA jest ukryte zamiast linkować do
  * wyszukiwarki po nazwie, która mogła zwrócić oferty innej firmy albo nic.
  */

@@ -181,14 +181,55 @@ describe('POST /api/csp-report', () => {
     expect((await POST(request(body, { 'x-real-ip': '198.51.100.1' }))).status).toBe(204);
   });
 
+  const enforcedApiEntry = {
+    ...reportingApiReport[0],
+    body: { ...reportingApiReport[0]!.body, disposition: 'enforce' },
+  };
+
   it('ogranicza liczbę wpisów w logu na proces (300/min)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { POST } = await route();
-    const batch = JSON.stringify(Array.from({ length: 10 }, () => reportingApiReport[0]));
+    const batch = JSON.stringify(Array.from({ length: 10 }, () => enforcedApiEntry));
     for (let i = 0; i < 40; i += 1) {
       await POST(request(batch, { 'content-type': 'application/reports+json', 'x-real-ip': `198.51.100.${i}` }));
     }
     expect(warn).toHaveBeenCalledTimes(300);
+  });
+
+  it('#585: szum Report-Only ma osobny budżet (60/min) i nie wypiera raportów egzekwowanych', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { POST } = await route();
+    const noise = JSON.stringify(Array.from({ length: 10 }, () => reportingApiReport[0]));
+    for (let i = 0; i < 40; i += 1) {
+      await POST(
+        new Request('http://localhost/api/csp-report?policy=report-only', {
+          method: 'POST',
+          body: noise,
+          headers: { 'content-type': 'application/reports+json', 'x-real-ip': `198.51.100.${i}` },
+        }),
+      );
+    }
+    expect(warn).toHaveBeenCalledTimes(60);
+    // Kontrola ujemna: przy wspólnym budżecie 400 wpisów szumu wyczerpałoby limit 300,
+    // a raport egzekwowanej polityki poniżej byłby odrzucony.
+    const enforced = JSON.stringify([enforcedApiEntry]);
+    const res = await POST(request(enforced, { 'content-type': 'application/reports+json', 'x-real-ip': '192.0.2.1' }));
+    expect(res.status).toBe(204);
+    expect(warn).toHaveBeenCalledTimes(61);
+  });
+
+  it('#585: adres Report-Only ma własny limit żądań (10/min) niezależny od egzekwowanego', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { POST } = await route();
+    const reportOnly = () =>
+      new Request('http://localhost/api/csp-report?policy=report-only', {
+        method: 'POST',
+        body: JSON.stringify(legacyReport),
+        headers: { 'content-type': 'application/csp-report', 'x-real-ip': '203.0.113.7' },
+      });
+    for (let i = 0; i < 10; i += 1) expect((await POST(reportOnly())).status).toBe(204);
+    expect((await POST(reportOnly())).status).toBe(429);
+    expect((await POST(request(JSON.stringify(legacyReport)))).status).toBe(204);
   });
 
   it('GET → 405', async () => {

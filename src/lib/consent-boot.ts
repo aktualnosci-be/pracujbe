@@ -19,9 +19,11 @@ export const NOSCRIPT_HIDE_BANNER = '<style>#cookie-banner{display:none}</style>
  *
  * Skrypt tylko CZYTA cookie — nic nie zapisuje i niczego nie ładuje (Invariant #7). O zgodzie
  * dalej decyduje `CookieConsent` po hydratacji (usuwa atrybut, gdy `getConsent()` go nie
- * potwierdzi). CSP (#585): produkcyjny `script-src` dopuszcza ten skrypt WYŁĄCZNIE hashem
- * sha256 (`next.config.mjs` liczy go z tej samej `buildConsentBootScript`) — treść tej funkcji
- * NIE może się zmienić bez przeliczenia hasha (strażnik: tests/unit/csp-inline-scripts.test.ts).
+ * potwierdzi). CSP (#585): egzekwowany `script-src` nadal ma `'unsafe-inline'` (wymagają go
+ * wbudowane skrypty RSC Next.js); hash sha256 tego skryptu (`next.config.mjs` liczy go z tej
+ * samej `buildConsentBootScript`) jest tylko w równoległym `Content-Security-Policy-Report-Only`.
+ * Zmiana treści bez przeliczenia hasha dałaby fałszywe raporty (strażnik:
+ * tests/unit/csp-inline-scripts.test.ts).
  */
 export function consentBootScript(): string {
   return buildConsentBootScript({

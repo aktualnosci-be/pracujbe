@@ -1517,7 +1517,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   regresji); produkcja dostaje RÓWNOLEGŁY `Content-Security-Policy-Report-Only` z tą samą
   dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptu banera zgód w `<head>` (jedno źródło
   treści: `src/lib/security/csp-inline-scripts.mjs`; beacon CF jest zewnętrzny, bez treści
-  inline) — obserwowalny krok, nie pełne zamknięcie #585. Dowód:
+  inline) — obserwowalny krok, nie pełne zamknięcie #585. Report-Only raportuje do osobnej grupy
+  `csp-report-only` (`/api/csp-report?policy=report-only`) z własnymi limitami (10 żądań/min
+  z adresu, 60 wpisów/min na proces; wpis `disposition=report` zawsze w tym budżecie), więc
+  szum skryptów RSC nie wypiera raportów egzekwowanej polityki (test `csp-report`). Dowód:
   `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
   ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
   na stronach publicznych = regres wydajności, sprzeczne z #298/#395).

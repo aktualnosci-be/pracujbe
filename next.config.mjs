@@ -61,6 +61,10 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 // #47: odbiorca raportów CSP (ścieżka względna — ten sam origin co strona).
 const CSP_REPORT_PATH = '/api/csp-report';
 const CSP_REPORT_GROUP = 'csp-endpoint';
+// #585: Report-Only raportuje osobno (własna grupa i adres → osobne limity w route.ts), żeby
+// oczekiwany szum wbudowanych skryptów Next.js nie zjadał budżetu raportów egzekwowanej polityki.
+const CSP_REPORT_ONLY_PATH = '/api/csp-report?policy=report-only';
+const CSP_REPORT_ONLY_GROUP = 'csp-report-only';
 // #103: wersja 1.0.0 tylko po jawnym PRACUJBE_RELEASE_VERSION=1.0.0; błędna wartość przerywa build.
 const BUILD = createReleaseAwareBuildMetadata(
   new Date(),
@@ -159,8 +163,8 @@ const nextConfig = {
     const scriptSrcReportOnly = !isDev
       ? [
           `script-src 'self' ${scriptHashes().join(' ')} ${scriptSrcHosts}`,
-          `report-uri ${CSP_REPORT_PATH}`,
-          `report-to ${CSP_REPORT_GROUP}`,
+          `report-uri ${CSP_REPORT_ONLY_PATH}`,
+          `report-to ${CSP_REPORT_ONLY_GROUP}`,
         ].join('; ')
       : null;
 
@@ -169,7 +173,12 @@ const nextConfig = {
       ...(scriptSrcReportOnly
         ? [{ key: 'Content-Security-Policy-Report-Only', value: scriptSrcReportOnly }]
         : []),
-      { key: 'Reporting-Endpoints', value: `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"` },
+      {
+        key: 'Reporting-Endpoints',
+        value: scriptSrcReportOnly
+          ? `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}", ${CSP_REPORT_ONLY_GROUP}="${CSP_REPORT_ONLY_PATH}"`
+          : `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"`,
+      },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       // P3-03: spójnie z CSP `frame-ancestors 'none'` (było SAMEORIGIN — konflikt).
       { key: 'X-Frame-Options', value: 'DENY' },
