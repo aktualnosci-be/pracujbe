@@ -50,6 +50,8 @@ export const EMAIL_TYPES = [
   'reportDecisionActioned',
   'reportDecisionNoAction',
   'reportRestored',
+  'messageReportResolved',
+  'messageReportDismissed',
   'moderationJobRemoved',
   'moderationCompanySuspended',
   'moderationRestored',
@@ -1773,6 +1775,69 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       highlight: '{caseNumber}',
       outro: 'If you disagree with this change, you can appeal on your case page using case number {caseNumber} and your access code.',
       footerNote: 'You are receiving this email because a report was sent on Pracuj.be with this email address.',
+    },
+  },
+
+  // 0208: wynik zgłoszenia wiadomości/rozmowy — do zgłaszającego, bez dowodu i danych drugiej strony.
+  messageReportResolved: {
+    pl: {
+      subject: 'Rozpatrzyliśmy Twoje zgłoszenie z rozmowy',
+      preview: 'Uznaliśmy Twoje zgłoszenie za zasadne.',
+      heading: 'Zgłoszenie rozpatrzone',
+      body: 'Rozpatrzyliśmy Twoje zgłoszenie wiadomości lub rozmowy w serwisie Pracuj.be i uznaliśmy je za zasadne.\n\nRozmowę znajdziesz w panelu, w zakładce wiadomości.',
+      cta: 'Przejdź do wiadomości',
+    },
+    nl: {
+      subject: 'We hebben je melding uit een gesprek behandeld',
+      preview: 'We hebben je melding gegrond verklaard.',
+      heading: 'Melding behandeld',
+      body: 'We hebben je melding van een bericht of gesprek op Pracuj.be behandeld en gegrond verklaard.\n\nHet gesprek vind je in je dashboard, bij je berichten.',
+      cta: 'Naar je berichten',
+    },
+    fr: {
+      subject: 'Nous avons traité votre signalement dans une conversation',
+      preview: 'Nous avons jugé votre signalement fondé.',
+      heading: 'Signalement traité',
+      body: 'Nous avons traité votre signalement d’un message ou d’une conversation sur Pracuj.be et l’avons jugé fondé.\n\nVous retrouverez la conversation dans votre tableau de bord, dans vos messages.',
+      cta: 'Voir mes messages',
+    },
+    en: {
+      subject: 'We have handled your report from a conversation',
+      preview: 'We found your report justified.',
+      heading: 'Report handled',
+      body: 'We have handled your report about a message or conversation on Pracuj.be and found it justified.\n\nYou can find the conversation in your dashboard, under messages.',
+      cta: 'Go to messages',
+    },
+  },
+
+  messageReportDismissed: {
+    pl: {
+      subject: 'Rozpatrzyliśmy Twoje zgłoszenie z rozmowy',
+      preview: 'Po analizie nie podjęliśmy dalszych działań.',
+      heading: 'Zgłoszenie rozpatrzone',
+      body: 'Rozpatrzyliśmy Twoje zgłoszenie wiadomości lub rozmowy w serwisie Pracuj.be. Po analizie nie podjęliśmy dalszych działań.\n\nRozmowę znajdziesz w panelu, w zakładce wiadomości. Jeśli pojawią się nowe niepokojące wiadomości, możesz je zgłosić ponownie.',
+      cta: 'Przejdź do wiadomości',
+    },
+    nl: {
+      subject: 'We hebben je melding uit een gesprek behandeld',
+      preview: 'Na onderzoek hebben we geen verdere stappen genomen.',
+      heading: 'Melding behandeld',
+      body: 'We hebben je melding van een bericht of gesprek op Pracuj.be behandeld. Na onderzoek hebben we geen verdere stappen genomen.\n\nHet gesprek vind je in je dashboard, bij je berichten. Krijg je nieuwe verontrustende berichten, dan kun je die opnieuw melden.',
+      cta: 'Naar je berichten',
+    },
+    fr: {
+      subject: 'Nous avons traité votre signalement dans une conversation',
+      preview: 'Après examen, nous n’avons pas pris d’autres mesures.',
+      heading: 'Signalement traité',
+      body: 'Nous avons traité votre signalement d’un message ou d’une conversation sur Pracuj.be. Après examen, nous n’avons pas pris d’autres mesures.\n\nVous retrouverez la conversation dans votre tableau de bord, dans vos messages. Si vous recevez de nouveaux messages préoccupants, vous pouvez les signaler à nouveau.',
+      cta: 'Voir mes messages',
+    },
+    en: {
+      subject: 'We have handled your report from a conversation',
+      preview: 'After review, we took no further action.',
+      heading: 'Report handled',
+      body: 'We have handled your report about a message or conversation on Pracuj.be. After review, we took no further action.\n\nYou can find the conversation in your dashboard, under messages. If you receive new concerning messages, you can report them again.',
+      cta: 'Go to messages',
     },
   },
 

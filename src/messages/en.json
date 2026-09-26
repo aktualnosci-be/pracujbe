@@ -1239,6 +1239,8 @@
     "itemModerationRestored": "The content restriction has been lifted",
     "itemModerationAppealUpheld": "Appeal reviewed: decision upheld",
     "itemModerationAppealReversed": "Appeal granted: decision changed",
+    "itemMessageReportResolved": "Your report from a conversation was handled: found justified",
+    "itemMessageReportDismissed": "Your report from a conversation was handled: no further action",
     "itemScreeningApproved": "A question in your job was approved",
     "itemScreeningRejected": "A question in your job was not approved",
     "listIntro": "All notifications from your account, newest first.",

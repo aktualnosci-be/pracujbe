@@ -1239,6 +1239,8 @@
     "itemModerationRestored": "Ograniczenie treści zostało cofnięte",
     "itemModerationAppealUpheld": "Odwołanie rozpatrzone: decyzja utrzymana",
     "itemModerationAppealReversed": "Odwołanie uwzględnione: decyzja zmieniona",
+    "itemMessageReportResolved": "Rozpatrzyliśmy Twoje zgłoszenie z rozmowy: uznane za zasadne",
+    "itemMessageReportDismissed": "Rozpatrzyliśmy Twoje zgłoszenie z rozmowy: bez dalszych działań",
     "itemScreeningApproved": "Pytanie w Twojej ofercie zostało zaakceptowane",
     "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane",
     "listIntro": "Wszystkie powiadomienia z Twojego konta, od najnowszych.",

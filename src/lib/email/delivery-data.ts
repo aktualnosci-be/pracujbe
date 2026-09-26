@@ -103,7 +103,10 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
     case 'breachNotice':
       // #490: ustawienia konta odbiorcy (panel z roli w payloadzie RPC).
       return payload?.['panel'] === 'employer' ? '/employer/ustawienia' : '/candidate/ustawienia';
-    case 'newMessage': {
+    case 'newMessage':
+    case 'messageReportResolved':
+    case 'messageReportDismissed': {
+      // 0208: wynik zgłoszenia prowadzi do wątku zgłaszającego (panel z dowodu w bazie).
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
       const conversationId = payload?.['conversationId'];
       const query =

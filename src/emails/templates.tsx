@@ -180,6 +180,9 @@ export interface EmailDataMap {
   reportDecisionNoAction: { recipientName?: string | null; caseNumber: string; actionUrl: string };
   /** Cofnięcie ograniczenia — do zgłaszającego (#43, 0109): bez powodu i danych autora. */
   reportRestored: { recipientName?: string | null; caseNumber: string; actionUrl: string };
+  /** Wynik zgłoszenia wiadomości/rozmowy (0208) — do zgłaszającego, tylko wynik; CTA do wątku. */
+  messageReportResolved: { recipientName?: string | null; actionUrl: string };
+  messageReportDismissed: { recipientName?: string | null; actionUrl: string };
   /**
    * Uzasadnienie decyzji moderacyjnej dla autora treści (#42): fakty (cytat), podstawa
    * (`groundType` → etykieta w języku odbiorcy + `groundReference`), udział automatyzacji.
@@ -892,6 +895,30 @@ export function ReportRestoredEmail(props: EmailProps<'reportRestored'>): ReactE
   );
 }
 
+export function MessageReportResolvedEmail(props: EmailProps<'messageReportResolved'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="messageReportResolved"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
+export function MessageReportDismissedEmail(props: EmailProps<'messageReportDismissed'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="messageReportDismissed"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName ?? undefined}
+    />
+  );
+}
+
 /** Etykiety podstawy i automatyzacji w języku odbiorcy (nieznana podstawa → pusta). */
 function moderationVars(locale: Locale, props: ModerationEmailData): Record<string, unknown> {
   const labels = moderationLabels[locale];
@@ -1041,6 +1068,8 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   reportDecisionActioned: ReportDecisionActionedEmail,
   reportDecisionNoAction: ReportDecisionNoActionEmail,
   reportRestored: ReportRestoredEmail,
+  messageReportResolved: MessageReportResolvedEmail,
+  messageReportDismissed: MessageReportDismissedEmail,
   moderationJobRemoved: ModerationJobRemovedEmail,
   moderationCompanySuspended: ModerationCompanySuspendedEmail,
   moderationRestored: ModerationRestoredEmail,

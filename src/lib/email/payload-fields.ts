@@ -39,6 +39,9 @@ export const EMAIL_PAYLOAD_FIELDS = {
   reportDecisionActioned: ['recipientName', 'caseNumber', 'targetType'],
   reportDecisionNoAction: ['recipientName', 'caseNumber', 'targetType'],
   reportRestored: ['recipientName', 'caseNumber'],
+  // 0208: wynik zgłoszenia wiadomości — bez dowodu, opisu i kategorii; `panel`/`conversationId` = CTA.
+  messageReportResolved: ['panel', 'targetType', 'conversationId'],
+  messageReportDismissed: ['panel', 'targetType', 'conversationId'],
   moderationJobRemoved: [
     'companyName',
     'jobTitle',

@@ -1193,6 +1193,8 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `jobMatch` | `count`, `jobs`, `query`, `searchName` | `query` | `process_saved_search_alerts` |
 | `jobOffer` | `companyName`, `currency`, `expiresAt`, `jobTitle`, `salaryMax`, `salaryMin`, `salaryPeriod` | — | `send_offer` |
 | `jobPublished` | `jobTitle` | — | `publish_job` |
+| `messageReportDismissed` | `conversationId`, `panel`, `targetType` | — | `notify_message_report_outcome` |
+| `messageReportResolved` | `conversationId`, `panel`, `targetType` | — | `notify_message_report_outcome` |
 | `moderationCompanySuspended` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | `jobTitle` | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationJobRemoved` | `automatedDetection`, `companyName`, `decisionReference`, `facts`, `groundReference`, `groundType`, `jobTitle` | — | `admin_decide_appeal`, `admin_decide_report` |
 | `moderationRestored` | `companyName`, `decisionReference`, `jobTitle`, `reason` | — | `moderation_restore_core` |

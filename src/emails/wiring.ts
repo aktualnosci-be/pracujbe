@@ -27,6 +27,8 @@ export const QUEUED_EMAIL_TYPES = [
   'reportDecisionActioned', // admin_decide_report (0099) → ograniczenie treści — do zgłaszającego
   'reportDecisionNoAction', // admin_decide_report (0099) → brak działań — do zgłaszającego
   'reportRestored', // admin_restore_moderation (0109) → cofnięcie — do zgłaszającego
+  'messageReportResolved', // admin_resolve_report → notify_message_report_outcome (0208)
+  'messageReportDismissed', // admin_resolve_report → notify_message_report_outcome (0208)
   'moderationJobRemoved', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationCompanySuspended', // admin_decide_report (0099) → uzasadnienie dla właściciela firmy
   'moderationRestored', // admin_restore_moderation (0099)

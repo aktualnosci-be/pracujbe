@@ -1239,6 +1239,8 @@
     "itemModerationRestored": "La restriction du contenu a été levée",
     "itemModerationAppealUpheld": "Recours examiné : décision maintenue",
     "itemModerationAppealReversed": "Recours accueilli : décision modifiée",
+    "itemMessageReportResolved": "Votre signalement dans une conversation a été traité : jugé fondé",
+    "itemMessageReportDismissed": "Votre signalement dans une conversation a été traité : pas d’autres mesures",
     "itemScreeningApproved": "Une question de votre offre a été acceptée",
     "itemScreeningRejected": "Une question de votre offre n’a pas été acceptée",
     "listIntro": "Toutes les notifications de votre compte, des plus récentes aux plus anciennes.",

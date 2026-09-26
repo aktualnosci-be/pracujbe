@@ -1239,6 +1239,8 @@
     "itemModerationRestored": "De beperking van de inhoud is opgeheven",
     "itemModerationAppealUpheld": "Bezwaar behandeld: beslissing gehandhaafd",
     "itemModerationAppealReversed": "Bezwaar gegrond: beslissing gewijzigd",
+    "itemMessageReportResolved": "Je melding uit een gesprek is behandeld: gegrond verklaard",
+    "itemMessageReportDismissed": "Je melding uit een gesprek is behandeld: geen verdere stappen",
     "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
     "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd",
     "listIntro": "Alle meldingen van je account, nieuwste eerst.",
