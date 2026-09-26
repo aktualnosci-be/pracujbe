@@ -3201,7 +3201,7 @@
     "cancel": "Cancel",
     "busyHint": "Preparing suggestions. This can take up to a minute.",
     "reviewTitle": "Choose what to add to your profile",
-    "reviewIntro": "Tick only the suggestions that are correct. Unticked ones will not be saved. Your existing profile data will not change.",
+    "reviewIntro": "Tick only the suggestions that are correct. Unticked ones will not be saved. Your existing profile data will not change. You can correct each value before saving.",
     "suspiciousTitle": "Check the suggestions carefully",
     "suspiciousText": "The CV contained text that looked like instructions for AI. We did not follow them and marked all suggestions for checking.",
     "kindOccupation": "Occupations",
@@ -3229,6 +3229,14 @@
     "errorFileType": "We support PDF and DOCX files.",
     "errorFileDoc": "We cannot read DOC files. Save your CV as PDF or DOCX, or fill in your profile manually.",
     "errorNothingSelected": "Select at least one suggestion or discard all.",
-    "errorNetwork": "Could not connect to the server. Check your connection and try again."
+    "errorNetwork": "Could not connect to the server. Check your connection and try again.",
+    "editLabel": "Correct the value: {value}",
+    "experienceEditLabel": "Years of experience",
+    "errorValueRequired": "Enter a value or untick this suggestion.",
+    "errorValueTooLong": "The value is too long. Maximum {max} characters.",
+    "errorValueDisallowed": "Remove contact details, links, other people's data and sensitive information.",
+    "errorLanguageInvalid": "The language name must be 2 to 40 characters long.",
+    "errorExperienceInvalid": "Enter a number of years from 0 to 60.",
+    "errorFieldsInvalid": "Correct the highlighted fields before saving."
   }
 }
