@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { FileText, MapPin, Pencil } from 'lucide-react';
+import { FileText, MapPin, Pencil, Sparkles } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
@@ -29,6 +29,7 @@ import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import { isCvImportEnabled } from '@/lib/cv-import/config';
+import { isProfileAssistEnabled } from '@/lib/profile-assist/config';
 
 /**
  * Panel kandydata — Profil. Wygląd: `#people/profile` z prototypu „04 Ludzie i praca”
@@ -100,6 +101,13 @@ export default async function CandidateProfilePage({
             <Link href="/candidate/profil/import-cv" className={BTN_SECONDARY}>
               <FileText className="size-4 shrink-0" aria-hidden="true" />
               {tp('importCv')}
+            </Link>
+          ) : null}
+          {/* Asystent profilu z odpowiedzi (#37) — tylko za flagą. */}
+          {isProfileAssistEnabled() ? (
+            <Link href="/candidate/profil/asystent" className={BTN_SECONDARY}>
+              <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+              {tp('profileAssist')}
             </Link>
           ) : null}
           <Link href="/candidate/onboarding" className={BTN_PRIMARY}>

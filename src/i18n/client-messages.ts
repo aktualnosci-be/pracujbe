@@ -44,6 +44,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'offer',
   'offerStatus',
   'onboarding',
+  'profileAssist',
   'profileVisibility',
   'savedSearches',
   'screeningReview',

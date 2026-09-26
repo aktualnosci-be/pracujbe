@@ -53,6 +53,9 @@ const JOB_IMPORT_ENV = {
 const JOB_ASSIST_ENV = {
   AI_JOB_ASSIST_ENABLED: '1',
   AI_JOB_ASSIST_PROVIDER: 'fixture',
+  // Asystent profilu kandydata (#37) — osobna flaga, ta sama zasada atrapy.
+  AI_PROFILE_ASSIST_ENABLED: '1',
+  AI_PROFILE_ASSIST_PROVIDER: 'fixture',
 };
 
 /** Czy gotowy build (.next) ma wklejony testowy token Cloudflare Web Analytics. */

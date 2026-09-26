@@ -5,23 +5,21 @@ import { useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, FileText, Loader2, Sparkles } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
+import { approvedPayload, ProposalChecklist } from '@/components/candidate/ProposalChecklist';
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
-  CHECKBOX,
   FORM_ERROR,
   FORM_FIELD,
   FORM_HINT,
   FORM_INPUT,
   FORM_LABEL_TEXT,
-  FORM_SELECT,
   H2_EXTENDED,
   NOTICE,
   NOTICE_TEXT,
   NOTICE_TITLE,
   P_EXTENDED,
   PAPER,
-  TAG,
 } from '@/components/dashboard/panel-styles';
 import {
   applyCvProposals,
@@ -30,11 +28,10 @@ import {
   type ApplyCvProposalsResult,
   type PrepareCvImportResult,
 } from '@/lib/actions/cv-import';
-import type { CvProposal, CvProposalKind, CvRedactionSummary, LanguageLevel } from '@/lib/cv-import/types';
+import type { CvProposal, CvRedactionSummary, LanguageLevel } from '@/lib/cv-import/types';
 import type { CvTextProblem } from '@/lib/cv-import/text';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { cn } from '@/lib/utils';
-import { LANGUAGE_LEVELS } from '@/lib/validation/candidate';
 import { CV_ALLOWED_TYPES, checkCvFile } from '@/lib/validation/cv-file';
 
 /**
@@ -62,20 +59,6 @@ const PROBLEM_KEY: Partial<Record<CvTextProblem, string>> = {
   unsupported: 'errorFileDoc',
 };
 
-const KIND_ORDER: CvProposalKind[] = ['occupation', 'skill', 'language', 'certificate', 'experienceYears'];
-const KIND_LABEL: Record<CvProposalKind, string> = {
-  occupation: 'kindOccupation',
-  skill: 'kindSkill',
-  language: 'kindLanguage',
-  certificate: 'kindCertificate',
-  experienceYears: 'kindExperience',
-};
-const LEVEL_LABEL: Record<LanguageLevel, string> = {
-  basic: 'levelBasic',
-  intermediate: 'levelIntermediate',
-  fluent: 'levelFluent',
-  native: 'levelNative',
-};
 const SUMMARY_KEYS: (keyof CvRedactionSummary)[] = [
   'referenceSections',
   'thirdPartyLines',
@@ -87,7 +70,6 @@ const SUMMARY_KEYS: (keyof CvRedactionSummary)[] = [
 
 export function CvImportPanel(): React.JSX.Element {
   const t = useTranslations('cvImport');
-  const to = useTranslations('onboarding');
   const tRoot = useTranslations();
   const id = React.useId();
   const [phase, setPhase] = React.useState<Phase>({ step: 'file' });
@@ -165,20 +147,11 @@ export function CvImportPanel(): React.JSX.Element {
   }
 
   function apply(proposals: CvProposal[]): void {
-    const chosen = proposals.filter((p) => selected.has(p.id));
-    if (chosen.length === 0) {
+    if (!proposals.some((p) => selected.has(p.id))) {
       setError(t('errorNothingSelected'));
       return;
     }
-    const of = (kind: CvProposalKind) => chosen.filter((p) => p.kind === kind);
-    const experience = of('experienceYears')[0];
-    const payload = {
-      occupations: of('occupation').map((p) => p.value),
-      skills: of('skill').map((p) => p.value),
-      languages: of('language').map((p) => ({ language: p.value, level: levels[p.id] ?? p.level ?? 'basic' })),
-      certificates: of('certificate').map((p) => p.value),
-      experienceYears: experience ? Number(experience.value) : null,
-    };
+    const payload = approvedPayload(proposals, selected, levels);
     void run(
       () => applyCvProposals(payload),
       (res) => {
@@ -302,68 +275,23 @@ export function CvImportPanel(): React.JSX.Element {
             <p className={NOTICE_TEXT}>{t('suspiciousText')}</p>
           </div>
         ) : null}
-        {KIND_ORDER.map((kind) => {
-          const items = phase.proposals.filter((p) => p.kind === kind);
-          if (items.length === 0) return null;
-          return (
-            <fieldset key={kind} className="mt-6 min-w-0 border-t border-border pt-4">
-              <legend className="float-left mb-2 w-full text-[15px] font-bold text-foreground">{t(KIND_LABEL[kind])}</legend>
-              <ul className="clear-both flex list-none flex-col gap-3 p-0">
-                {items.map((p) => {
-                  const checkboxId = `${id}-${p.id}`;
-                  const sourceId = `${checkboxId}-source`;
-                  return (
-                    <li key={p.id} className="min-w-0 rounded-[11px] border border-border p-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-[9px]">
-                        <input
-                          id={checkboxId}
-                          type="checkbox"
-                          className={CHECKBOX}
-                          checked={selected.has(p.id)}
-                          disabled={busy}
-                          aria-describedby={sourceId}
-                          onChange={(e) =>
-                            setSelected((prev) => {
-                              const next = new Set(prev);
-                              if (e.target.checked) next.add(p.id);
-                              else next.delete(p.id);
-                              return next;
-                            })
-                          }
-                        />
-                        <label htmlFor={checkboxId} className="min-w-0 break-words text-[15px] font-semibold text-foreground">
-                          {kind === 'experienceYears' ? t('experienceValue', { count: Number(p.value) }) : p.value}
-                        </label>
-                        {p.uncertain ? <span className={cn(TAG, 'text-[12px] font-semibold text-warning-text')}>{t('uncertain')}</span> : null}
-                      </div>
-                      <p id={sourceId} className={cn(FORM_HINT, 'mt-1.5 break-words')}>
-                        {p.evidence ? t('source', { quote: p.evidence }) : t('noSource')}
-                      </p>
-                      {kind === 'language' ? (
-                        <div className={cn(FORM_FIELD, 'mt-2 max-w-xs')}>
-                          <label htmlFor={`${checkboxId}-level`} className={FORM_LABEL_TEXT}>
-                            {t('levelLabel', { language: p.value })}
-                          </label>
-                          <select
-                            id={`${checkboxId}-level`}
-                            className={FORM_SELECT}
-                            disabled={busy}
-                            value={levels[p.id] ?? p.level ?? 'basic'}
-                            onChange={(e) => setLevels((prev) => ({ ...prev, [p.id]: e.target.value as LanguageLevel }))}
-                          >
-                            {LANGUAGE_LEVELS.map((lvl) => (
-                              <option key={lvl} value={lvl}>{to(LEVEL_LABEL[lvl])}</option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </fieldset>
-          );
-        })}
+        <ProposalChecklist
+          idPrefix={id}
+          proposals={phase.proposals}
+          selected={selected}
+          onToggle={(pid, checked) =>
+            setSelected((prev) => {
+              const next = new Set(prev);
+              if (checked) next.add(pid);
+              else next.delete(pid);
+              return next;
+            })
+          }
+          levels={levels}
+          onLevel={(pid, level) => setLevels((prev) => ({ ...prev, [pid]: level }))}
+          busy={busy}
+          sourceText={(p) => (p.evidence ? t('source', { quote: p.evidence }) : t('noSource'))}
+        />
         {errorBox}
         <p role="status" className={cn(FORM_HINT, 'mt-5')}>{t('selectedCount', { count })}</p>
         <div className="mt-3 flex flex-wrap gap-3">

@@ -38,8 +38,13 @@ function requestTexts(req: AssistRequest): string[] {
   return [req.title, f.description ?? '', ...(f.responsibilities ?? []), ...(f.requirementsMandatory ?? [])];
 }
 
+/** Czy tekst zawiera polecenie dla AI (wspólne wzorce — także asystent profilu kandydata). */
+export function textHasInjection(text: string): boolean {
+  return INJECTION_PATTERNS.some((p) => p.test(text));
+}
+
 export function detectInjection(req: AssistRequest): boolean {
-  return requestTexts(req).some((text) => INJECTION_PATTERNS.some((p) => p.test(text)));
+  return requestTexts(req).some(textHasInjection);
 }
 
 /** Czy jest co poprawiać — opis co najmniej 30 znaków albo przynajmniej jedna pozycja listy. */

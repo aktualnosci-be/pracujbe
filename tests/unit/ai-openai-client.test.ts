@@ -10,6 +10,7 @@ import { JOB_EXTRACTION_JSON_SCHEMA } from '@/lib/ai-import/schema';
 import { DEFAULT_AI_MODEL, isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { AiProviderError, createStructuredResponse } from '@/lib/ai/openai';
 import { CV_EXTRACTION_JSON_SCHEMA } from '@/lib/cv-import/proposals';
+import { PROFILE_ASSIST_JSON_SCHEMA } from '@/lib/profile-assist/schema';
 
 import { callParams, fakeOpenAiClient } from '../helpers/fake-openai';
 
@@ -159,6 +160,7 @@ describe('schematy structured output spełniają tryb strict OpenAI', () => {
     ['import ogłoszeń', JOB_EXTRACTION_JSON_SCHEMA],
     ['asystent treści', ASSIST_JSON_SCHEMA],
     ['import CV', CV_EXTRACTION_JSON_SCHEMA],
+    ['asystent profilu', PROFILE_ASSIST_JSON_SCHEMA],
   ])('%s', (_name, schema) => {
     expect(strictProblems(schema)).toEqual([]);
   });

@@ -13637,6 +13637,34 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- AIP37. Asystent profilu kandydata (#37, 0147): nowa funkcja AI w budżecie globalnym —
+--        rezerwacja przyjęta, zapis w rejestrze, nadal odmowa dla funkcji spoza listy.
+--        Kontrola ujemna: lista sprzed 0147 odrzuca `profile_answers_assist`.
+-- ============================================================================
+begin;
+set role service_role;
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 50000000 where period = 'month';
+select public.ai_budget_reserve('profile_answers_assist', 'gpt-6-luna', 40000) as aip_r1 \gset
+select pg_temp.assert(
+  (select feature = 'profile_answers_assist' and status = 'reserved' from public.ai_usage_ledger where id = :'aip_r1'),
+  'AIP37-1 rezerwacja asystenta profilu zapisana w rejestrze');
+select pg_temp.assert(public.ai_budget_settle(:'aip_r1', 'ok', 900, 300, 12000), 'AIP37-2 rozliczenie');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''profile_assist'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIP37-3 funkcja spoza inwentarza nadal odrzucona');
+reset role;
+savepoint aip_neg;
+alter table public.ai_usage_ledger drop constraint ai_usage_ledger_feature;
+alter table public.ai_usage_ledger add constraint ai_usage_ledger_feature
+  check (feature in ('job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import')) not valid;
+select pg_temp.expect_error(
+  'insert into public.ai_usage_ledger (feature, model, reserved_micro_usd, usage_day) values (''profile_answers_assist'', ''gpt-6-luna'', 1, current_date)',
+  'ai_usage_ledger_feature', 'AIP37-4 kontrola ujemna: CHECK sprzed 0147 odrzuca nową funkcję');
+rollback to savepoint aip_neg;
+rollback;
+
+-- ============================================================================
 -- CL141. Edycja strony WWW i logo firmy (#112, 0141): tylko owner/admin (jak
 --        nazwa/VAT, 0040); bezwzględny https egzekwowany CHECK-iem
 --        (`companies_website_https`/`companies_logo_url_https`, ta sama reguła co

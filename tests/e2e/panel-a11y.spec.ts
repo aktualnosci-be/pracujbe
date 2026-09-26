@@ -41,6 +41,7 @@ const ROUTES = [
   'candidate/powiadomienia?nieprzeczytane=1',
   'candidate/onboarding',
   'candidate/profil',
+  'candidate/profil/asystent',
   'candidate/profil/import-cv',
   'candidate/propozycje',
   'candidate/ustawienia',

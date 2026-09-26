@@ -843,6 +843,23 @@ unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimal
 `docs/legal-drafts/cv-ai-osoby-trzecie.md` (#485/#486/#488/#61) przed włączeniem, AV i izolacja
 parsera, edycja wartości propozycji.
 
+Asystent budowania profilu z odpowiedzi (#37, część kandydata; za flagą
+`AI_PROFILE_ASSIST_ENABLED`, domyślnie wyłączony; `docs/AI_PROFILE_ASSIST.md`, migracja `0147`):
+`/candidate/profil/asystent` (404 bez flagi, link w profilu tylko
+z flagą). Kandydat bez CV odpowiada własnymi słowami na 4 pytania (praca, umiejętności, języki,
+uprawnienia; ≤ 1000 znaków) → informacja o AI przed pierwszym użyciem (art. 50 ust. 1, powiązana
+z przyciskiem) → minimalizacja jak przy CV (`src/lib/profile-assist/prepare.ts`: NISS → odmowa,
+osoby trzecie/dane osobowe/art. 9–10 usunięte, kontakty → znaczniki, polecenia dla AI → odmowa)
+→ limit 10/h i 30/dobę na konto (fail-closed) → globalny budżet AI (`profile_answers_assist`) →
+model OpenAI `gpt-6-luna` przez `src/lib/ai/openai.ts` (structured output strict, pola jak import CV) → propozycje z cytatem z odpowiedzi, domyślnie
+niezaznaczone → zapis wyłącznie zaznaczonych tym samym RPC co import CV
+(`apply_candidate_cv_proposals`, wspólny rdzeń `src/lib/cv-import/apply.ts`, lista
+`ProposalChecklist`). Odpowiedzi nie są zapisywane; wynik nie wpływa na dopasowanie, status ani
+widoczność (strażnik `ai-inventory`). Dowód: `rls.sql` sekcja AIP37 (kontrola ujemna CHECK), unit
+`profile-assist-*`, E2E `profile-assist.spec` (atrapa, 4 języki, 320 px). **Otwarte:** ocena
+prawna art. 50 i wiersza A5 szkicu DPIA, DPA dostawcy; pozostałe podetapy #37 (wyjaśnienia ofert,
+zapytania wielojęzyczne, tłumaczenie wiadomości).
+
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
@@ -1003,7 +1020,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   zawsze tekst rekrutera i „Przywróć mój tekst”; akcja niczego nie zapisuje i nie publikuje.
   Informacja o AI przed pierwszym użyciem. Atrapa `AI_JOB_ASSIST_PROVIDER=fixture` tylko poza
   produkcją. Testy: `job-assist-guard`, `job-assist-action`, `ai-inventory`, E2E `job-assist`.
-  **Otwarte:** część dla kandydata (#37), ocena prawna art. 50 AI Act,
+  **Otwarte:** część kandydata = asystent profilu (Etap 3, `docs/AI_PROFILE_ASSIST.md`), ocena prawna art. 50 AI Act,
   fakty słowne (bez liczb) wykrywa tylko przegląd rekrutera.
 - [x] Wygaszanie ofert (#72, migracja `0085`): `expire_due_jobs()` (service_role, `SKIP LOCKED`,
   zwraca liczbę) zmienia tylko `active` z `expires_at <= now()` na `expired`; woła je
@@ -1828,7 +1845,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
-  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 29 trasach
+  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 30 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),

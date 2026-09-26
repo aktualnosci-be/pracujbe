@@ -83,6 +83,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `AI_JOB_IMPORT_ENABLED`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony; `OPENAI_API_KEY` |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
+| `AI_PROFILE_ASSIST_ENABLED`, `AI_PROFILE_ASSIST_MODEL` | asystent budowania profilu kandydata z odpowiedzi (#37, `docs/AI_PROFILE_ASSIST.md`), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
 | `AI_TRANSLATION_ENABLED`, `AI_TRANSLATION_MODEL` | tłumaczenia AI — rdzeń kolejki (#31, #32, `docs/AI_TRANSLATION.md`), domyślnie wyłączone; ten sam `OPENAI_API_KEY` |
 | `PRACUJBE_RELEASE_VERSION` | tylko przy wydaniu 1.0.0 (#103) |
 | `TRUSTED_PROXY_HEADER` | domyślnie `x-real-ip` (brzeg Railway); `cf-connecting-ip`, gdy przed Railway stoi Cloudflare proxying ruch — jedyne źródło zaufanego IP klienta dla receiptu zgody, aplikacji bez konta i limitera (#588/#602). Nieznana wartość wraca do domyślnej. Bramka hasła w produkcji odrzuca żądanie bez tego nagłówka (503 + alarm w kanale błędów), zamiast liczyć je we wspólnym limicie (#625) |
@@ -95,7 +96,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry usunięte w #571 (kanał błędów = `ERROR_WEBHOOK_URL`) — jeśli zostały w usłudze, usuń |
 | `SEND_EMAIL_HOOK_SECRET` | hook GoTrue usunięty w #27 (kolejka auth PostgreSQL) |
 | `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | bezpłatne MVP (#51) |
-| `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
+| `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_PROFILE_ASSIST_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
 | `CRON_SECRET` | przestarzały wspólny sekret cronów; używaj `EMAIL_QUEUE_SECRET`/`MAINTENANCE_SECRET` |
 | `CRON_TARGET_URL`, `CRON_AUTH_SECRET` | tylko w usługach cron (sekcja 4), nie w web |
 

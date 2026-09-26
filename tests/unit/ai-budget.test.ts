@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -270,10 +270,24 @@ describe('rezerwacja w bazie (databaseBudgetStore)', () => {
   it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0120', async () => {
     const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0120_ai_budget.sql'), 'utf8');
     const { AI_USAGE_OUTCOMES } = await import('@/lib/ai/usage-log');
-    const { AI_FEATURE_IDS } = await import('@/lib/ai/inventory');
     const list = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
-    expect(sql).toContain(`feature in (${list(AI_FEATURE_IDS)})`);
     expect(sql).toContain(`outcome in (${list(AI_USAGE_OUTCOMES)})`);
+  });
+
+  it('lista funkcji AI w NAJNOWSZEJ definicji CHECK-a rejestru i rezerwacji = AI_FEATURE_IDS', async () => {
+    const { AI_FEATURE_IDS } = await import('@/lib/ai/inventory');
+    const dir = join(__dirname, '..', '..', 'supabase/migrations');
+    const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+    const latest = (marker: string) =>
+      readFileSync(join(dir, [...files].reverse().find((f) => readFileSync(join(dir, f), 'utf8').includes(marker))!), 'utf8');
+    const list = `(${AI_FEATURE_IDS.map((v) => `'${v}'`).join(', ')})`;
+    const constraint = latest('constraint ai_usage_ledger_feature');
+    const reserve = latest('function public.ai_budget_reserve(');
+    expect(constraint).toContain(`feature in ${list}`);
+    expect(reserve).toContain(`p_feature not in ${list}`);
+    // Kontrola ujemna: lista bez ostatniej funkcji (stan sprzed jej migracji) nie przechodzi.
+    const short = `(${AI_FEATURE_IDS.slice(0, -1).map((v) => `'${v}'`).join(', ')})`;
+    expect(constraint).not.toContain(`feature in ${short}`);
   });
 
   it('asystent (#37): szacunek budżetu używa tego samego limitu wyjścia co wywołanie modelu', async () => {

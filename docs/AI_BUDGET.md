@@ -95,6 +95,8 @@ rozliczają tego samego wiersza dwukrotnie.
   rozliczenie), szacunek `src/lib/ai-assist/cost.ts`.
 - Import CV kandydata (#487, #498): `withAiBudget` w `src/lib/actions/cv-import.ts`, szacunek
   `src/lib/cv-import/cost.ts` (prompt + schemat + zminimalizowany tekst + `max_output_tokens`).
+- Asystent profilu kandydata (#37): `withAiBudget` w `src/lib/actions/profile-assist.ts`,
+  szacunek `src/lib/profile-assist/cost.ts` (funkcja `profile_answers_assist`, migracja 0147).
 - Tłumaczenia (#514, #31/#32): `withAiBudget` w `OpenAiTranslationProvider`
   (`src/lib/translation/openai-provider.ts`, wspólny klient `src/lib/ai/openai.ts`), szacunek
   `estimateTranslationCost` (prompt + pola z glosariuszem + schemat + pełne `max_output_tokens`).
