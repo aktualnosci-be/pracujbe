@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "The appeal deadline starts once you receive the notice of the decision.",
     "appealStatusLabel": "Appeal {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Jobs at {name}",
+    "metaDescription": "See the active job openings from {name} on Pracuj.be.",
+    "noDescription": "This company has not added a description yet.",
+    "jobsHeading": "Active jobs from this company",
+    "empty": "This company has no active job openings right now.",
+    "backToJobs": "See all job listings"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Loading...",
@@ -962,6 +970,10 @@
     "employerApplicationNoProfile": "The candidate’s professional profile is not available.",
     "employerApplicationHistory": "Status history",
     "employerApplicationNoHistory": "No status changes recorded.",
+    "employerApplicationHistoryMore": "Show more",
+    "employerApplicationHistoryLoading": "Loading…",
+    "employerApplicationHistoryMoreError": "Could not load more status changes. Try again.",
+    "employerApplicationHistoryRetry": "Try again",
     "employerApplicationMessage": "Write a message",
     "employerApplicationMessageLabel": "Write a message to: {name}",
     "employerApplicationView": "View application",
@@ -993,7 +1005,13 @@
     "applicationStepReview": "Employer reviewing",
     "applicationStepInterview": "Interview",
     "applicationStepDecision": "Decision",
-    "employerPlaceEyebrow": "Your recruitment"
+    "employerPlaceEyebrow": "Your recruitment",
+    "statRecruiterOnly": "Visible to the company owner, administrators and recruiters",
+    "statAfterVerification": "Available once the company is verified",
+    "funnelDenied": "The recruitment funnel is visible to the company owner, administrators and recruiters.",
+    "topMatchedDenied": "Matched candidates are visible to the company owner, administrators and recruiters.",
+    "topMatchedUnverified": "Matched candidates will appear once the company is verified.",
+    "topMatchedLoadError": "We could not load matched candidates."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1330,7 +1348,6 @@
     "privacyTitle": "Privacy Policy",
     "cookiePolicyTitle": "Cookie Policy",
     "aboutTitle": "About us",
-    "faqTitle": "FAQ",
     "contactTitle": "Contact",
     "helpTitle": "Help",
     "intro": "Below you'll find the key information. This section is being prepared.",

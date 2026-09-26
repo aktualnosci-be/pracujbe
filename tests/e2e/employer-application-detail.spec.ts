@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 /**
  * #300: pracodawca otwiera zgłoszenie z listy i z pulpitu; widzi wiadomość, telefon,
@@ -19,20 +19,6 @@ type Messages = {
 
 function load(locale: string): Messages {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf8')) as Messages;
-}
-
-/**
- * Noindex po nawigacji po stronie klienta (wzorzec z #662, notifications-list): Next 15
- * wstawia metadane nowej trasy do `<head>`, a strumieniowane metadane listy w `<body>` przez
- * chwilę zostają — dwa `meta[name="robots"]`. Ścisły lokator rzucał wtedy „strict mode
- * violation” (flaky). Sprawdzamy: co najmniej jeden meta robots, żaden bez `noindex`, a świeży
- * dokument tej trasy sam niesie `noindex`.
- */
-async function expectNoindex(page: Page) {
-  await expect(page.locator('meta[name="robots"]').first()).toBeAttached();
-  await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
-  const html = await (await page.request.get(page.url())).text();
-  expect(html, 'dokument trasy niesie noindex').toMatch(/<meta name="robots" content="[^"]*noindex/);
 }
 
 for (const locale of locales) {
@@ -53,7 +39,13 @@ for (const locale of locales) {
     await expect(main.getByRole('heading', { level: 2, name: m.dashboard.employerApplicationHistory })).toBeVisible();
     await expect(main.getByRole('button', { name: new RegExp(`^${m.dashboard.employerApplicationMessage}`) })).toBeEnabled();
 
-    await expectNoindex(page);
+    // Po nawigacji klienta z listy przez chwilę w DOM są dwa `meta[name="robots"]` (strumieniowany
+    // w `<body>` i nowy w `<head>`) — ścisły lokator bywał niestabilny. Jak w notifications-list.spec:
+    // żaden nie pozwala indeksować, a świeży dokument trasy sam niesie `noindex`.
+    await expect(page.locator('meta[name="robots"]').first()).toBeAttached();
+    await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
+    const html = await (await page.request.get(page.url())).text();
+    expect(html, 'dokument trasy niesie noindex').toMatch(/<meta name="robots" content="[^"]*noindex/);
 
     const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth }));
     expect(width.document).toBeLessThanOrEqual(width.viewport + 1);

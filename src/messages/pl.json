@@ -154,6 +154,14 @@
     "appealDeadlineNotStarted": "Termin na odwołanie zacznie biec, gdy otrzymasz powiadomienie o decyzji.",
     "appealStatusLabel": "Odwołanie {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Oferty pracy w firmie {name}",
+    "metaDescription": "Zobacz aktywne oferty pracy firmy {name} na Pracuj.be.",
+    "noDescription": "Ta firma nie dodała jeszcze opisu.",
+    "jobsHeading": "Aktywne oferty tej firmy",
+    "empty": "Ta firma nie ma teraz żadnych aktywnych ofert.",
+    "backToJobs": "Zobacz wszystkie oferty pracy"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Ładowanie...",
@@ -962,6 +970,10 @@
     "employerApplicationNoProfile": "Profil zawodowy kandydata jest niedostępny.",
     "employerApplicationHistory": "Historia statusów",
     "employerApplicationNoHistory": "Brak zapisanych zmian statusu.",
+    "employerApplicationHistoryMore": "Pokaż więcej",
+    "employerApplicationHistoryLoading": "Wczytywanie…",
+    "employerApplicationHistoryMoreError": "Nie udało się wczytać kolejnych zmian statusu. Spróbuj ponownie.",
+    "employerApplicationHistoryRetry": "Spróbuj ponownie",
     "employerApplicationMessage": "Napisz wiadomość",
     "employerApplicationMessageLabel": "Napisz wiadomość do: {name}",
     "employerApplicationView": "Zobacz zgłoszenie",
@@ -993,7 +1005,13 @@
     "applicationStepReview": "Pracodawca przegląda",
     "applicationStepInterview": "Rozmowa",
     "applicationStepDecision": "Decyzja",
-    "employerPlaceEyebrow": "Twoja rekrutacja"
+    "employerPlaceEyebrow": "Twoja rekrutacja",
+    "statRecruiterOnly": "Widzą właściciel, administrator i rekruterzy firmy",
+    "statAfterVerification": "Dostępne po weryfikacji firmy",
+    "funnelDenied": "Lejek rekrutacyjny widzą właściciel, administrator i rekruterzy firmy.",
+    "topMatchedDenied": "Dopasowanych kandydatów widzą właściciel, administrator i rekruterzy firmy.",
+    "topMatchedUnverified": "Dopasowani kandydaci pojawią się po weryfikacji firmy.",
+    "topMatchedLoadError": "Nie udało się wczytać dopasowanych kandydatów."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1330,7 +1348,6 @@
     "privacyTitle": "Polityka prywatności",
     "cookiePolicyTitle": "Polityka cookie",
     "aboutTitle": "O nas",
-    "faqTitle": "Pytania i odpowiedzi",
     "contactTitle": "Kontakt",
     "helpTitle": "Pomoc",
     "intro": "Poniżej znajdziesz najważniejsze informacje. Ta sekcja jest w trakcie przygotowania.",
