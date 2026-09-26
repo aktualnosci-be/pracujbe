@@ -5,8 +5,9 @@ bez stagingu (decyzja właściciela 21.09). Ten dokument wymienia **nazwy** zmie
 nigdy wartości. Sekretów nie wpisuj do repozytorium, issue, PR ani logów. Odhaczenie pozycji
 wymaga odczytu z Railway (UI/API), a nie samej zmiany w kodzie.
 
-Strażnik: `tests/unit/production-config-checklist.test.ts` — każda zmienna czytana przez
-aplikację musi być na tej liście (albo w wykazie „nie ustawiać”), a każda z listy poza 2D w `.env.example`.
+Strażnik: `tests/unit/production-config-checklist.test.ts` — każda zmienna czytana w `src/`,
+`scripts/` i `next.config.mjs` musi być na tej liście (także 2D/2E) i w `.env.example` z komentarzem
+(poza jawną allow-listą zmiennych platformy/testów/CI w teście), a każda z listy poza 2D w `.env.example`.
 
 ## 1. Ustawienia usługi web (`pracujbe`)
 
@@ -76,6 +77,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
 | `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance` — tylko po decyzji właściciela o terminach (#40) |
 | `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
+| `STORAGE_GC_MODE` | GC bucketu CV w `/api/maintenance` (#17): puste = dry-run (same liczniki), `delete` = sieroty do kolejki usuwania — tylko po zatwierdzeniu właściciela |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
 | `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` | Cloudflare Web Analytics (#570, zamiast Google Analytics i Meta Pixel — usunięte), beacon wyłącznie po zgodzie w kategorii analityka (Invariant #7) |
 | `CF_ANALYTICS_ACCOUNT_ID`, `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN` | Podgląd danych polowych Core Web Vitals w `/admin/wydajnosc` (GraphQL Analytics API, tylko serwer; token z uprawnieniem „Account Analytics: Read”). Opcjonalne — bez nich strona pokazuje instrukcję |
@@ -98,6 +100,35 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
 | `CRON_SECRET` | przestarzały wspólny sekret cronów; używaj `EMAIL_QUEUE_SECRET`/`MAINTENANCE_SECRET` |
 | `CRON_TARGET_URL`, `CRON_AUTH_SECRET` | tylko w usługach cron (sekcja 4), nie w web |
+
+### 2E. Usługi pomocnicze i skrypty operatora (nie w usłudze web)
+
+Czytane wyłącznie przez skrypty z `scripts/` uruchamiane w osobnej usłudze Railway albo
+jednorazowo przez operatora (Railway shell / lokalnie z tymczasowym env). W `.env.example` są
+zakomentowane. Nie ustawiaj ich w usłudze web; hasła i URL-e podawaj tylko na czas wywołania.
+
+| Zmienna | Gdzie i po co |
+|---|---|
+| `CRON_TIMEOUT_SECONDS` | usługi cron (sekcja 4), opcjonalnie: limit czasu wywołania 1–600 s, domyślnie 120 |
+| `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | usługa `backup` (#569): klucz ZAPISU bucketu R2; w usłudze web = alarm `backup_misconfigured` |
+| `BACKUP_S3_MAX_AGE_DAYS` | usługa `backup`, opcjonalnie: usuwanie kopii starszych niż N dni (najnowsza kompletna zostaje) |
+| `BACKUP_SOURCE_URL`, `BACKUP_AGE_RECIPIENTS` | usługa `backup`: login źródłowy bazy i odbiorcy szyfrowania `age` (`BACKUP_RESTORE.md`) |
+| `MIGRATION_DATABASE_URL` | migrator (`WDROZENIE_MIGRACJI.md`) i `npm run db:logins` — login właściciela schematu, nigdy w usłudze web |
+| `MIGRATION_MODE` | `npm run db:migrate:production`: `status` (domyślnie), `dry-run` albo `apply` |
+| `DB_MIGRATIONS_DIR` | `node scripts/db/migrate.mjs`: katalog migracji (`MIGRACJE_POSTGRESQL.md`) |
+| `EXPECTED_DATABASE_NAME`, `EXPECTED_MIGRATION_USER`, `EXPECTED_POSTGRES_MAJOR` | `npm run db:logins`: bezpiecznik — skrypt odmawia pracy na innej bazie/loginie/wersji (`LOGINY_POSTGRESQL_ONE_OFF.md`) |
+| `DB_LOGIN_DRY_RUN` | `npm run db:logins`: `yes`/`no` dla `provision`/`rotate` |
+| `DATABASE_APP_PASSWORD`, `AUTH_DATABASE_PASSWORD`, `RATE_LIMIT_DATABASE_PASSWORD`, `AUTH_MAIL_DATABASE_PASSWORD`, `SERVICE_DATABASE_PASSWORD` | `npm run db:logins provision`: hasła loginów runtime (tylko na czas wywołania) |
+| `DATABASE_APP_NEW_PASSWORD`, `AUTH_DATABASE_NEW_PASSWORD`, `RATE_LIMIT_DATABASE_NEW_PASSWORD`, `AUTH_MAIL_DATABASE_NEW_PASSWORD`, `SERVICE_DATABASE_NEW_PASSWORD` | `npm run db:logins rotate`: nowe hasła przy rotacji |
+| `ESCO_IMPORT_DATABASE_URL` | `npm run esco:import` (#93): login `service_role` do importu taksonomii ESCO |
+| `SMOKE_BASE_URL`, `EXPECTED_SHA` | `node scripts/production-smoke.mjs` (`TEST_WDROZENIOWY.md`): adres artefaktu i oczekiwany SHA (z `HEALTH_CHECK_SECRET`) |
+| `PROD_SMOKE_BASE_URL`, `PROD_SMOKE_TIMEOUT_MS` | `node scripts/railway/prod-smoke.mjs` (`CUTOVER_ROLLBACK.md`): adres (domyślnie `https://pracuj.be`) i limit czasu (domyślnie 15000 ms) |
+| `EML_ALLOWED_HOSTS` | `node scripts/check-received-eml.mjs`: dodatkowe dozwolone hosty linków w odebranym `.eml` (po przecinku) |
+
+Strażnik: `tests/unit/production-config-checklist.test.ts` zbiera zmienne czytane w `src/`,
+`scripts/` (`.ts/.tsx/.mjs/.py`) i `next.config.mjs`; zmienne wyłącznie testowe/CI i platformy
+są na jawnej liście w teście z uzasadnieniem. Skrypty powłoki (`scripts/**/*.sh`) nie są
+skanowane automatycznie — ich zmienne dopisuj ręcznie.
 
 ## 3. Zmienne ustawiane przez platformę (nie ręcznie)
 
