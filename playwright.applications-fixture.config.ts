@@ -14,6 +14,8 @@ export default defineConfig({
     : [
         '**/candidate-applications-pagination.spec.ts',
         '**/candidate-proposals-pagination.spec.ts',
+        // Zapisane oferty bez strony publicznej: stan, brak linku, „Usuń z zapisanych” (0215).
+        '**/candidate-saved-closed.spec.ts',
         // Oferty fikcyjne bez flagi demo (#297): formularz aplikowania i JobPosting.
         '**/apply-modal-a11y.spec.ts',
         '**/apply-network-error.spec.ts',

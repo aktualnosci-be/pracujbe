@@ -13829,6 +13829,134 @@ select pg_temp.assert(
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
 -- ============================================================================
+-- SV215. Zapisane oferty ze stanem oferty (0215): `get_saved_jobs_display` zwraca KAŻDY
+--        własny zapis z `job_availability` (available/closed/expired/paused/unavailable),
+--        `slug` WYŁĄCZNIE dla oferty publicznej (brak linku do 404), tytuł i firmę dla każdego
+--        stanu; kandydat usuwa zapis oferty niedostępnej pod RLS.
+--        Kontrola ujemna: definicja z 0066 (tylko oferty publiczne) gubi 5 z 6 zapisów.
+-- ============================================================================
+begin;
+reset role; reset app.current_uid;
+\set CANDSV  'e2150000-0000-0000-0000-00000000000c'
+\set CANDSV2 'e2150000-0000-0000-0000-00000000000d'
+\set COMPSV  'e2150000-0000-0000-0000-0000000000f1'
+\set COMPSV2 'e2150000-0000-0000-0000-0000000000f2'
+\set JSV1    'e2150000-0000-0000-0000-0000000000b1'
+\set JSV2    'e2150000-0000-0000-0000-0000000000b2'
+\set JSV3    'e2150000-0000-0000-0000-0000000000b3'
+\set JSV4    'e2150000-0000-0000-0000-0000000000b4'
+\set JSV5    'e2150000-0000-0000-0000-0000000000b5'
+\set JSV6    'e2150000-0000-0000-0000-0000000000b6'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDSV','candsv@test.be','Ola S','{"role":"candidate","first_name":"Ola","last_name":"S","locale":"pl"}'),
+  (:'CANDSV2','candsv2@test.be','Ewa S','{"role":"candidate","first_name":"Ewa","last_name":"S","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'COMPSV','Firma SV','verified'),
+  (:'COMPSV2','Firma SV2','verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JSV1',:'COMPSV','sv-otwarta','Otwarta SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV2',:'COMPSV','sv-zamknieta','Zamknięta SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV3',:'COMPSV','sv-po-terminie','Po terminie SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV4',:'COMPSV','sv-wstrzymana','Wstrzymana SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV5',:'COMPSV','sv-usunieta','Usunięta SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV6',:'COMPSV2','sv-firma-zawieszona','Firma zawieszona SV','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- Zapis pod sesją kandydata (RLS saved_jobs_insert_own), gdy wszystkie oferty są publiczne.
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+insert into public.saved_jobs(candidate_id, job_id)
+  select :'CANDSV'::uuid, j from unnest(array[:'JSV1',:'JSV2',:'JSV3',:'JSV4',:'JSV5',:'JSV6']::uuid[]) j;
+reset role; reset app.current_uid;
+
+-- Stany po zapisie (bez crona expire_due_jobs: termin = now()).
+update public.jobs set status = 'closed' where id = :'JSV2';
+update public.jobs set expires_at = now() where id = :'JSV3';
+update public.jobs set status = 'paused' where id = :'JSV4';
+update public.jobs set deleted_at = now() where id = :'JSV5';
+update public.companies set status = 'suspended' where id = :'COMPSV2';
+
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+-- SV1: żaden zapis nie znika.
+select pg_temp.assert(
+  (select count(*) from public.get_saved_jobs_display('pl')) = 6,
+  'SV1 każdy własny zapis wraca, także oferty niedostępne');
+-- SV2: klasyfikacja każdego stanu.
+select pg_temp.assert(
+  (select string_agg(job_availability, ',' order by id) from public.get_saved_jobs_display('pl'))
+    = 'available,closed,expired,paused,closed,unavailable',
+  'SV2 otwarta=available, zamknięta=closed, po terminie=expired, wstrzymana=paused, usunięta=closed, firma zawieszona=unavailable');
+-- SV3: slug tylko dla oferty publicznej; dokładnie wtedy, gdy get_public_job ją pokazuje.
+select pg_temp.assert(
+  (select string_agg(slug, ',') from public.get_saved_jobs_display('pl') where slug is not null) = 'sv-otwarta',
+  'SV3 slug wyłącznie dla oferty publicznej (brak linku do 404)');
+select pg_temp.assert(
+  exists (select 1 from public.get_public_job('sv-otwarta', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-zamknieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-po-terminie', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-wstrzymana', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-usunieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-firma-zawieszona', 'pl')),
+  'SV3b oferty bez slugu nie mają strony publicznej');
+-- SV4: tytuł i firma zostają dla każdego stanu.
+select pg_temp.assert(
+  (select bool_and(title <> '' and company_name like 'Firma SV%') from public.get_saved_jobs_display('pl')),
+  'SV4 tytuł i firma dla każdego stanu');
+reset role; reset app.current_uid;
+
+-- SV5: izolacja — inny kandydat nie widzi cudzych zapisów.
+set role authenticated; set app.current_uid = :'CANDSV2'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_saved_jobs_display('pl')) = 0,
+  'SV5 cudze zapisy niewidoczne');
+-- SV5b: cudzego zapisu nie usunie (RLS saved_jobs_delete_own).
+delete from public.saved_jobs where job_id = :'JSV2';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.saved_jobs where candidate_id = :'CANDSV') = 6,
+  'SV5b inny kandydat nie usuwa cudzego zapisu');
+
+-- SV6: kandydat usuwa zapis oferty zamkniętej pod RLS (akcja „Usuń z zapisanych”).
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+delete from public.saved_jobs where candidate_id = :'CANDSV' and job_id = :'JSV2';
+select pg_temp.assert(
+  not exists (select 1 from public.get_saved_jobs_display('pl') where id = :'JSV2')
+  and (select count(*) from public.get_saved_jobs_display('pl')) = 5,
+  'SV6 usunięty zapis oferty zamkniętej znika z listy');
+reset role; reset app.current_uid;
+
+-- SV7: granty — tylko authenticated.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_saved_jobs_display(text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_saved_jobs_display(text)', 'EXECUTE'),
+  'SV7 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- SV-N (kontrola ujemna): definicja z 0066 (filtr ofert publicznych) — zapisy niedostępnych
+-- ofert znikają bez śladu; SV1 wykrywa regresję.
+savepoint sv_neg;
+drop function public.get_saved_jobs_display(text);
+create function public.get_saved_jobs_display(p_locale text default 'pl')
+returns table (id uuid, slug text, title text, company_name text, city text)
+language sql stable security definer set search_path = public as $$
+  select j.id, j.slug, j.title, c.name, j.city
+  from public.saved_jobs s
+  join public.jobs j on j.id = s.job_id
+  join public.companies c on c.id = j.company_id
+  where s.candidate_id = auth.uid()
+    and j.status = 'active' and j.deleted_at is null
+    and (j.expires_at is null or j.expires_at > now())
+    and c.status = 'verified' and c.deleted_at is null;
+$$;
+grant execute on function public.get_saved_jobs_display(text) to authenticated;
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_saved_jobs_display('pl')) = 1,
+  'SV-N definicja z 0066 gubi zapisy ofert niedostępnych — SV1 wykrywa regresję');
+reset role; reset app.current_uid;
+rollback to savepoint sv_neg;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- CN143. Nazwa firmy w wiadomościach kandydata (0143, #25): kandydat czyta nazwę firmy
 --        drugiej strony rozmowy przez `get_conversation_summaries`/`get_conversation_company_name`
 --        (SECURITY DEFINER, gejtowane `is_conversation_member` jak 0039) — `companies` samo

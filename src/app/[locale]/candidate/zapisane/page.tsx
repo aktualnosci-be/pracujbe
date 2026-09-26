@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { CandidateJobPassport } from '@/components/candidate/CandidateJobPassport';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
+import { SavedJobUnavailableItem } from '@/components/candidate/SavedJobUnavailableItem';
 import { BTN_PRIMARY, BTN_SECONDARY, P_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 import { getSavedJobs } from '@/lib/data/candidate';
@@ -12,8 +13,9 @@ import { getSavedJobs } from '@/lib/data/candidate';
 /**
  * Panel kandydata — Zapisane oferty (makieta 04, nawigacja „Zapisane oferty").
  *
- * Dane realne pod sesją (RLS: własne `saved_jobs`) z `getSavedJobs`, wzbogacone o dane publiczne
- * oferty; bez env dane DEMO. NOINDEX + guard dziedziczone z `candidate/layout.tsx`. Zapis oferty
+ * Dane realne pod sesją (RLS: własne `saved_jobs`) z `getSavedJobs` — każdy zapis ze stanem
+ * oferty (0215); oferta bez strony publicznej = `SavedJobUnavailableItem` (stan, bez linku,
+ * „Usuń z zapisanych”); bez env dane DEMO. NOINDEX + guard dziedziczone z `candidate/layout.tsx`. Zapis oferty
  * przez `SaveJobButton` (odznaczenie usuwa z listy po odświeżeniu); teksty z i18n (`dashboard`).
  */
 
@@ -62,14 +64,19 @@ export default async function CandidateSavedPage({
         </section>
       ) : (
         <ul className="pp-job-grid max-[950px]:grid-cols-1">
-          {saved.jobs.map((job) => (
-            <li key={job.id}>
-              <CandidateJobPassport
-                job={job}
-                labels={{ location: tj('passport.location'), viewOffer: tj('passport.viewOffer') }}
-              />
-            </li>
-          ))}
+          {saved.jobs.map((job) =>
+            job.availability === 'available' ? (
+              <li key={job.id}>
+                <CandidateJobPassport
+                  job={{ ...job, saved: true }}
+                  labels={{ location: tj('passport.location'), viewOffer: tj('passport.viewOffer') }}
+                />
+              </li>
+            ) : (
+              // Oferta bez strony publicznej (0215): stan + „Usuń z zapisanych”, bez martwego linku.
+              <SavedJobUnavailableItem key={job.id} job={job} locationLabel={tj('passport.location')} />
+            ),
+          )}
         </ul>
       )}
     </div>

@@ -26,6 +26,7 @@ import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
+import { demoSavedJobs, savedJobsFixture, toSavedJob, type SavedJob } from '@/lib/saved-job-availability';
 import { customOfferMessage } from '@/lib/offers/default-message';
 import { parseScreeningAnswers, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
@@ -417,20 +418,6 @@ const DEMO_SCREENING_ANSWERS: Record<string, ScreeningAnswer[]> = {
     { position: 3, type: 'short_text', required: false, prompt: { pl: 'Opisz krótko doświadczenie na magazynie', nl: 'Beschrijf kort je magazijnervaring', fr: 'Décrivez brièvement votre expérience en entrepôt', en: 'Briefly describe your warehouse experience' }, options: [], answerBoolean: null, answerDate: null, answerText: null },
   ],
 };
-
-function demoSaved(locale: Locale): RecommendedJob[] {
-  return resolveDemoJobs(locale)
-    .slice(0, 4)
-    .map((job) => ({
-      id: job.id,
-      slug: job.slug,
-      title: job.title,
-      companyName: job.companyName,
-      city: job.city,
-      match: null,
-      saved: true,
-    }));
-}
 
 const DEMO_OFFER_PICKS = [
   { idx: 1, status: 'sent', daysAgo: 1 },
@@ -1042,17 +1029,24 @@ export async function getMyApplicationHistoryPage(
 }
 
 /**
- * Zapisane oferty kandydata przez RPC, które łączy własne `saved_jobs` z aktywnymi,
- * publicznymi ofertami przed sortowaniem. Nie ograniczamy się do najnowszych 100 ofert,
- * bo stara, nadal aktywna oferta również może być zapisana.
+ * Zapisane oferty kandydata przez RPC `get_saved_jobs_display` (0215): KAŻDY własny zapis ze
+ * stanem oferty. Oferta zamknięta, wygasła, wstrzymana, usunięta albo firmy bez weryfikacji nie
+ * znika bez śladu — karta pokazuje stan i „Usuń z zapisanych”, a `slug` (link) jest tylko dla
+ * oferty publicznej (`toSavedJob`). Nie ograniczamy się do najnowszych 100 ofert.
  */
 export type SavedJobsResult =
-  | { status: 'ready'; jobs: RecommendedJob[] }
+  | { status: 'ready'; jobs: SavedJob[] }
   | { status: 'error' };
 
 export async function getSavedJobs(locale: string = routing.defaultLocale): Promise<SavedJobsResult> {
   const resolvedLocale = toLocale(locale);
-  if (!isPortalDataConfigured()) return { status: 'ready', jobs: demoSaved(resolvedLocale) };
+  if (!isPortalDataConfigured()) {
+    // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
+      return { status: 'ready', jobs: savedJobsFixture(resolvedLocale) };
+    }
+    return { status: 'ready', jobs: demoSavedJobs(resolvedLocale) };
+  }
 
   try {
     const me = await getPortalIdentity();
@@ -1060,19 +1054,7 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
 
     const data = await withPortalTransaction(me, (tx) =>
       rpcRows(tx, 'get_saved_jobs_display', { p_locale: resolvedLocale }));
-    const jobs = data.map((row): RecommendedJob => {
-      const item = asRecord(row);
-      return {
-        id: asStr(item['id']),
-        slug: asStr(item['slug']),
-        title: asStr(item['title']),
-        companyName: asStr(item['company_name']),
-        city: asStr(item['city']),
-        match: null,
-        saved: true,
-      };
-    });
-    return { status: 'ready', jobs };
+    return { status: 'ready', jobs: data.map((row) => toSavedJob(asRecord(row))) };
   } catch (error) {
     captureError(error, { area: 'candidate.getSavedJobs' });
     return { status: 'error' };

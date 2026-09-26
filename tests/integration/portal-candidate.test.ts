@@ -398,7 +398,21 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(await toggleSavedJob(jobIds[3]!)).toEqual({ ok: true, saved: false });
     expect(await toggleSavedJob(jobIds[3]!, false)).toEqual({ ok: true, saved: false });
     const saved = await candidateData.getSavedJobs('pl');
-    expect(saved).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', saved: true })] });
+    expect(saved).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', availability: 'available' })] });
+    expect(saved.status === 'ready' && saved.jobs[0]?.slug).toBeTruthy();
+
+    // 0215: zapisana oferta po terminie nie znika — stan `expired`, bez slugu (brak linku do 404),
+    // a kandydat usuwa zapis pod RLS. `expires_at` zamiast statusu: przywrócenie nie omija strażnika publikacji.
+    await db().admin.query('UPDATE public.jobs SET expires_at = now() WHERE id = $1', [jobIds[2]]);
+    try {
+      const expired = await candidateData.getSavedJobs('pl');
+      expect(expired).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', availability: 'expired', slug: null })] });
+      expect(await toggleSavedJob(jobIds[2]!, false)).toEqual({ ok: true, saved: false });
+      expect(await candidateData.getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
+      expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: true, saved: true });
+    } finally {
+      await db().admin.query('UPDATE public.jobs SET expires_at = NULL WHERE id = $1', [jobIds[2]]);
+    }
     expect(await getPublicSavedJobs([jobIds[2]!, jobIds[3]!])).toEqual({ status: 'candidate', savedIds: [jobIds[2]] });
 
     actAs({ id: bob, role: 'candidate' });

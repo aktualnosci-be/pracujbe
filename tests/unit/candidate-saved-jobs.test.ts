@@ -9,10 +9,10 @@ vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const userId = '22222222-2222-4222-8222-222222222222';
 const jobId = '11111111-1111-4111-8111-111111111111';
-const oldSavedJob = { id: jobId, slug: 'stara-praca', title: 'Starsza oferta', company_name: 'Firma', city: 'Gent' };
+const oldSavedJob: Record<string, unknown> = { id: jobId, slug: 'stara-praca', title: 'Starsza oferta', company_name: 'Firma', city: 'Gent', job_availability: 'available' };
 
 function db({ rows = [], readError = false, user = true }: {
-  rows?: typeof oldSavedJob[];
+  rows?: Record<string, unknown>[];
   readError?: boolean;
   user?: boolean;
 } = {}) {
@@ -47,19 +47,36 @@ describe('saved jobs read', () => {
     db({ rows: [oldSavedJob] });
     expect(await getSavedJobs('nl')).toEqual({
       status: 'ready',
-      jobs: [{ id: jobId, slug: 'stara-praca', title: 'Starsza oferta', companyName: 'Firma', city: 'Gent', match: null, saved: true }],
+      jobs: [{ id: jobId, slug: 'stara-praca', title: 'Starsza oferta', companyName: 'Firma', city: 'Gent', availability: 'available' }],
     });
     expect(fakeDb.callsTo('get_saved_jobs_display')[0]!.args).toEqual({ p_locale: 'nl' });
     expect(fakeDb.callsTo('get_public_jobs')).toHaveLength(0);
   });
 
-  it('RPC joins saved rows before sorting and restricts results to the owner and public jobs', () => {
-    const sql = readFileSync('supabase/migrations/0066_saved_jobs_display.sql', 'utf8');
+  it('keeps saved jobs that lost their public page, without a link (0215)', async () => {
+    const closedId = '11111111-1111-4111-8111-111111111112';
+    db({ rows: [
+      oldSavedJob,
+      // Nawet gdyby RPC oddało slug, oferta niepubliczna nie dostaje linku.
+      { id: closedId, slug: 'zamknieta', title: 'Zamknięta', company_name: 'Firma', city: 'Gent', job_availability: 'closed' },
+    ] });
+    const result = await getSavedJobs('pl');
+    expect(result.status === 'ready' && result.jobs.map((j) => [j.id, j.slug, j.availability])).toEqual([
+      [jobId, 'stara-praca', 'available'],
+      [closedId, null, 'closed'],
+    ]);
+  });
+
+  it('RPC 0215 returns every own saved row with availability and slug only for public jobs', () => {
+    const sql = readFileSync('supabase/migrations/0215_saved_jobs_availability.sql', 'utf8');
     expect(sql).toMatch(/from public\.saved_jobs s\s+join public\.jobs j on j\.id = s\.job_id/i);
-    expect(sql).toMatch(/s\.candidate_id = auth\.uid\(\)/i);
-    expect(sql).toMatch(/j\.status = 'active'/i);
-    expect(sql).toMatch(/c\.status = 'verified'/i);
+    expect(sql).toMatch(/where s\.candidate_id = auth\.uid\(\)\s+order by/i);
+    expect(sql).toMatch(/case when v\.availability = 'available' then j\.slug end as slug/i);
+    // Kontrola ujemna: filtr ofert publicznych z 0066 w WHERE ukrywałby zapisy niedostępnych ofert.
+    const where = sql.slice(sql.search(/where s\.candidate_id/i));
+    expect(where).not.toMatch(/j\.status = 'active'/i);
     expect(sql).not.toMatch(/\blimit\s+(?:100|least)\b/i);
+    expect(sql).toMatch(/revoke all on function public\.get_saved_jobs_display\(text\) from public, anon/i);
     expect(sql).toMatch(/grant execute on function public\.get_saved_jobs_display\(text\) to authenticated/i);
   });
 });
