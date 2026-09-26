@@ -1,6 +1,7 @@
 import { Link } from '@/i18n/navigation';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
+import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import type { CandidateSectionLoad, MyApplication } from '@/lib/data/candidate';
 import { ArrowRight } from 'lucide-react';
@@ -68,6 +69,9 @@ export function CandidateApplicationsPreview({
                   ) : (
                     <h3 className={ROW_TITLE}>{app.jobTitle || '—'}</h3>
                   )}
+                  {app.jobAvailability && app.jobAvailability !== 'available' ? (
+                    <JobAvailabilityNote availability={app.jobAvailability} className="mt-1.5" />
+                  ) : null}
                   <p className={ROW_META}>
                     {app.companyName ? (
                       <>

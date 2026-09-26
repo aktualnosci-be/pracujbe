@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote';
 
 import { Link } from '@/i18n/navigation';
 import { ApplicationActions } from '@/components/candidate/ApplicationActions';
@@ -164,7 +165,9 @@ export function CandidateApplicationsList({
                         {t('actionView')}
                         <ArrowRight className="size-3.5" aria-hidden="true" />
                       </Link>
-                    ) : null}
+                    ) : (
+                      <JobAvailabilityNote availability={app.jobAvailability} />
+                    )}
                   </div>
                   <ApplicationActions applicationId={app.id} status={app.status} slug={app.slug} jobTitle={app.jobTitle || undefined} />
                 </div>

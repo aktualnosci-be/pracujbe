@@ -846,6 +846,17 @@ parsera, edycja wartości propozycji.
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
+Stan oferty w historii (migracja `0206` — numer tymczasowy): `get_applied_jobs_display`
+i `get_offered_jobs_display` zwracają `job_availability` (`available`/`expired`/`closed`/
+`unavailable`, klasyfikacja `candidate_job_availability` = warunki `get_public_job`: aktywna,
+nieusunięta, przed terminem, firma `verified`), a `slug` tylko dla `available` — lista zgłoszeń,
+podgląd na pulpicie, szczegół zgłoszenia i propozycje nie linkują do strony publicznej, która
+dałaby 404, tylko pokazują etykietę `JobAvailabilityNote` (`dashboard.jobAvailability*`). Tytuł
+i firma zostają dla każdego stanu, szczegół zgłoszenia zawsze dostępny. E-maile nie linkują do
+strony oferty (statusChanged → panel, guestStatusChanged → lista ofert). Dowód: `rls.sql` sekcja
+AV206 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
+`candidate-job-availability` (kontrola ujemna: oferta publiczna = link bez etykiety).
+
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
   Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła

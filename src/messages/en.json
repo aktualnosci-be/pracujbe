@@ -1032,7 +1032,10 @@
     "funnelDenied": "The recruitment funnel is visible to the company owner, administrators and recruiters.",
     "topMatchedDenied": "Matched candidates are visible to the company owner, administrators and recruiters.",
     "topMatchedUnverified": "Matched candidates will appear once the company is verified.",
-    "topMatchedLoadError": "We could not load matched candidates."
+    "topMatchedLoadError": "We could not load matched candidates.",
+    "jobAvailabilityExpired": "Job offer expired",
+    "jobAvailabilityClosed": "Job offer closed",
+    "jobAvailabilityUnavailable": "Job offer unavailable"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",

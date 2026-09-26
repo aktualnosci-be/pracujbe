@@ -64,11 +64,30 @@ export interface RecommendedJob {
   saved: boolean;
 }
 
+/**
+ * Stan oferty w historii kandydata (0206, `job_availability` z RPC): `available` = strona
+ * publiczna istnieje; pozostałe stany = brak linku i etykieta w panelu. `null` = nieznany.
+ */
+export type JobAvailability = 'available' | 'expired' | 'closed' | 'unavailable';
+
+const JOB_AVAILABILITY_VALUES: readonly JobAvailability[] = ['available', 'expired', 'closed', 'unavailable'];
+
+/** Oferty demo są zawsze publiczne (strony demo istnieją). */
+const DEMO_JOB_AVAILABLE: JobAvailability = 'available';
+
+export function asJobAvailability(value: unknown): JobAvailability | null {
+  return typeof value === 'string' && (JOB_AVAILABILITY_VALUES as readonly string[]).includes(value)
+    ? (value as JobAvailability)
+    : null;
+}
+
 export interface MyApplication {
   id: string;
   jobTitle: string;
   companyName: string;
   slug: string | null;
+  /** Stan oferty (0206) — steruje etykietą „oferta zamknięta/wygasła” zamiast martwego linku. */
+  jobAvailability?: JobAvailability | null;
   /** Data zgłoszenia (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   date: string;
   status: string;
@@ -105,6 +124,8 @@ export interface MyOffer {
   jobTitle: string;
   companyName: string;
   slug: string | null;
+  /** Stan oferty (0206). */
+  jobAvailability?: JobAvailability | null;
   /** Treść propozycji od pracodawcy (może być pusta w danych DEMO). */
   message: string;
   /** Data wysłania propozycji (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
@@ -201,6 +222,8 @@ const PUBLIC_JOBS_LOOKUP_LIMIT = 100;
 interface PublicJobLite {
   id: string;
   slug: string;
+  /** `get_public_jobs` = zawsze publiczna; RPC historii zwracają `job_availability` (0206). */
+  availability: JobAvailability | null;
   title: string;
   companyName: string;
   city: string;
@@ -237,9 +260,15 @@ function toPublicJobsMap(rows: unknown, idField: 'id' | 'job_id'): Map<string, P
       title: asStr(r['title']),
       companyName: asStr(r['company_name']),
       city: asStr(r['city']),
+      availability: 'job_availability' in r ? asJobAvailability(r['job_availability']) : 'available',
     });
   }
   return map;
+}
+
+/** Pola karty polecanej oferty (bez stanu dostępności — polecamy tylko oferty publiczne). */
+function recommendedFields(job: PublicJobLite): Pick<RecommendedJob, 'id' | 'slug' | 'title' | 'companyName' | 'city'> {
+  return { id: job.id, slug: job.slug, title: job.title, companyName: job.companyName, city: job.city };
 }
 
 /** Mapa job_id → bezpieczne dane publiczne najnowszych ofert (RPC `get_public_jobs`). */
@@ -300,7 +329,7 @@ async function fetchAppliedJobsForPage(
   const ids = [...new Set(jobIds.filter((id) => id.length > 0))];
   if (ids.length === 0) return new Map();
   const rows = await queryRows(tx, 'candidate.applied-jobs-page',
-    `SELECT d.job_id, d.slug, d.title, d.company_name, d.city
+    `SELECT d.job_id, d.slug, d.title, d.company_name, d.city, d.job_availability
        FROM public.get_applied_jobs_display(p_locale => $1, p_job_ids => $2::uuid[]) d`, [locale, ids]);
   return toPublicJobsMap(rows, 'job_id');
 }
@@ -397,7 +426,8 @@ function demoApplications(locale: Locale): MyApplication[] {
       id: `demo-app-${index}`,
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
       screeningCount: DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0,
@@ -445,7 +475,8 @@ function demoOffers(locale: Locale): MyOffer[] {
       id: `demo-offer-${index}`,
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       message: '',
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
@@ -659,7 +690,7 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
         const job = jobsById.get(row.jobId);
         if (!job || seen.has(job.id)) continue;
         seen.add(job.id);
-        matched.push({ ...job, match: row.score, saved: savedIds.has(job.id) });
+        matched.push({ ...recommendedFields(job), match: row.score, saved: savedIds.has(job.id) });
         if (matched.length >= RECOMMENDED_LIMIT) break;
       }
       if (matched.length > 0) return matched;
@@ -671,7 +702,7 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
       const latest: RecommendedJob[] = [];
       for (const job of jobsMap.values()) {
         if (!allowed.has(job.id)) continue;
-        latest.push({ ...job, match: null, saved: savedIds.has(job.id) });
+        latest.push({ ...recommendedFields(job), match: null, saved: savedIds.has(job.id) });
         if (latest.length >= RECOMMENDED_LIMIT) break;
       }
       return latest;
@@ -751,7 +782,8 @@ export async function getMyApplicationsPage(
           id: asStr(r['id']),
           jobTitle: job?.title ?? '',
           companyName: job?.companyName ?? '',
-          slug: job?.slug ?? null,
+          slug: job?.slug || null,
+          jobAvailability: job?.availability ?? null,
           date: asStr(r['submitted_at']),
           status: asStr(r['status'], 'submitted'),
           screeningCount: Number(r['screening_count'] ?? 0) || 0,
@@ -775,7 +807,8 @@ function developmentApplicationFixture(locale: Locale, cursor: ApplicationCursor
       id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(15 - index).padStart(12, '0')}`,
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       date: submittedAt,
       status: 'submitted',
       screeningCount: 0,
@@ -866,6 +899,8 @@ export interface MyApplicationDetail {
   city: string;
   /** Slug publicznej oferty — `null`, gdy oferta nie ma już publicznego adresu. */
   slug: string | null;
+  /** Stan oferty (0206). */
+  jobAvailability?: JobAvailability | null;
   /** Data wysłania (ISO) albo `null`, gdy nieznana. */
   submittedAt: string | null;
   message: string;
@@ -922,6 +957,7 @@ function demoApplicationDetail(locale: Locale, id: string): MyApplicationDetailL
       companyName: base.companyName,
       city: job?.city ?? '',
       slug: base.slug,
+      jobAvailability: base.jobAvailability,
       submittedAt: base.date,
       message: '',
       phone: '',
@@ -989,6 +1025,7 @@ export async function getMyApplicationDetail(
         companyName: job?.companyName ?? '',
         city: job?.city ?? '',
         slug: job?.slug || null,
+        jobAvailability: job?.availability ?? null,
         submittedAt: asStr(row['submitted_at']) || null,
         message: asStr(row['message']).trim(),
         phone: asStr(row['phone']).trim(),
@@ -1140,7 +1177,8 @@ export async function getMyOffersPage(
           id: asStr(r['id']),
           jobTitle: job?.title ?? '',
           companyName: job?.companyName ?? '',
-          slug: job?.slug ?? null,
+          slug: job?.slug || null,
+          jobAvailability: job?.availability ?? null,
           // Szablon zapisany w języku nadawcy → '' (UI pokaże zaproszenie w języku kandydata, #289).
           message: customOfferMessage(asStr(r['message'])) ?? '',
           date: sentAt || asStr(r['created_at']),
@@ -1166,7 +1204,8 @@ function developmentOfferFixture(locale: Locale, cursor: OfferCursor | null): My
       id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(21 - index).padStart(12, '0')}`,
       jobTitle: `${job?.title ?? ''} #${21 - index}`,
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       message: '',
       date: createdAt,
       status: index === 20 ? 'accepted' : 'declined',
@@ -1217,7 +1256,8 @@ export async function getLatestActiveOffer(
         id: asStr(row['id']),
         jobTitle: job?.title ?? '',
         companyName: job?.companyName ?? '',
-        slug: job?.slug ?? null,
+        slug: job?.slug || null,
+        jobAvailability: job?.availability ?? null,
         message: customOfferMessage(asStr(row['message'])) ?? '',
         date: asStr(row['sent_at']),
         status: asStr(row['status']),
