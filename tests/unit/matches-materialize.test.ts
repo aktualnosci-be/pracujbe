@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * P1-03 (0190): worker materializacji `matches`. Wynik = `scoreMatch` z tych samych wejść co
+ * P1-03 (0147): worker materializacji `matches`. Wynik = `scoreMatch` z tych samych wejść co
  * szczegół oferty (wspólne `inputs.ts`), zapis tylko przez service_role, same liczniki w wyniku.
  */
 

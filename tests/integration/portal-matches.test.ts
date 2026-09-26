@@ -4,7 +4,7 @@ import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 
 /**
- * P1-03 (0190) — materializacja `matches` na PostgreSQL 16: triggery kolejkują podmioty,
+ * P1-03 (0147) — materializacja `matches` na PostgreSQL 16: triggery kolejkują podmioty,
  * worker (pula service) liczy `scoreMatch` i zapisuje tylko pary, które baza kwalifikuje.
  * Wiersz = ten sam wynik co dopasowanie live na szczególe oferty (jedno źródło prawdy).
  */

@@ -13826,7 +13826,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- MP03. Materializacja dopasowań (P1-03, 0190): triggery kolejkują podmioty, worker
+-- MP03. Materializacja dopasowań (P1-03, 0147): triggery kolejkują podmioty, worker
 -- (service_role) pobiera wejścia tylko dla par kwalifikujących się i zapisuje wynik
 -- `match_recompute_apply`, które sprawdza KAŻDĄ parę ponownie w bazie: profil ukończony
 -- i wyszukiwalny (#494), 18+ (#492), bez blokady firmy (#97), oferta aktywna firmy verified.
@@ -13834,7 +13834,7 @@ reset role; reset app.current_uid;
 -- zapis bez ponownej kontroli par dają wiersz, którego nie powinno być.
 -- Cała sekcja w transakcji cofanej (kolejka i wiersze nie wpływają na inne sekcje).
 -- ============================================================================
-\echo '--- MP03 materializacja matches (0190) ---'
+\echo '--- MP03 materializacja matches (0147) ---'
 \set MPC  'e1903000-0000-0000-0000-000000000001'
 \set MPH  'e1903000-0000-0000-0000-000000000002'
 \set MPM  'e1903000-0000-0000-0000-000000000003'

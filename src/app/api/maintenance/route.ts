@@ -59,7 +59,7 @@ import {
  * rezerwacja starsza niż 60 minut wciąż w stanie `reserved` (proces padł między rezerwacją
  * a rozliczeniem) jest rozliczana jako `failed`/koszt 0; ślad audytowy zostaje, limit doby/
  * miesiąca wraca do użycia. Idempotentne (`FOR UPDATE SKIP LOCKED`, filtr po statusie).
- * P1-03: materializacja dopasowań (`runMatchRecompute`, 0190) — partia podmiotów z kolejki
+ * P1-03: materializacja dopasowań (`runMatchRecompute`, 0147) — partia podmiotów z kolejki
  * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
  * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
  * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.

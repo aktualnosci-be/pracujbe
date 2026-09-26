@@ -509,7 +509,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P3-04 (billing nie połyka błędów DB — INTERNAL vs NOT_FOUND).
 > **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
-> grantów + AV, usługa zewn.), ~~P1-03 (pipeline materializacji `matches`)~~ — zrobione (migracja `0190`, Etap 5), P1-04 (edycja/wznowienie
+> grantów + AV, usługa zewn.), ~~P1-03 (pipeline materializacji `matches`)~~ — zrobione (migracja `0147`, Etap 5), P1-04 (edycja/wznowienie
 > draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata — strona kandydata zrobiona: szczegół
 > zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
@@ -1094,7 +1094,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
   zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
-  Materializacja `matches` (P1-03, migracja `0190` — numer tymczasowy): triggery kolejkują
+  Materializacja `matches` (P1-03, migracja `0147`): triggery kolejkują
   podmiot w `match_recompute_queue` (kind `candidate`/`job`, PK = jeden wiersz, ponowne
   zgłoszenie podbija `version`): oferta aktywna (jobs + relacje), status firmy, profil
   kandydata i relacje, konto (rola/usunięcie), blokada firmy (#97), deklaracja wieku (#492).

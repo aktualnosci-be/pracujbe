@@ -16,7 +16,7 @@ import { referenceDate } from '@/lib/matching/reference-date';
 import { scoreMatch } from '@/lib/matching/score';
 
 /**
- * Materializacja dopasowań `matches` (audyt P1-03, migracja 0190).
+ * Materializacja dopasowań `matches` (audyt P1-03, migracja 0147).
  *
  * Triggery zgłaszają podmiot (kandydat albo oferta) do `match_recompute_queue`; ten worker,
  * wołany z `/api/maintenance`, bierze partię (`match_recompute_claim`, SKIP LOCKED, dzierżawa),

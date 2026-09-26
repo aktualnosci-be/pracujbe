@@ -527,7 +527,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       attempts: 'Licznik prób.',
       locked_until: 'Dzierżawa workera.',
     },
-    note: 'Kolejka przeliczenia dopasowań (P1-03, 0190): sam UUID kandydata albo oferty; wiersz znika po przeliczeniu.',
+    note: 'Kolejka przeliczenia dopasowań (P1-03, 0147): sam UUID kandydata albo oferty; wiersz znika po przeliczeniu.',
   },
   'public.saved_searches': {
     activities: ['matching-search'],

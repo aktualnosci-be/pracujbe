@@ -794,14 +794,14 @@ Tabele w migracjach: 105; z danymi osobowymi: 69; bez danych osobowych: 36.
 
 ### `public.match_recompute_queue`
 
-- **Migracja:** `supabase/migrations/0190_matches_pipeline.sql`
+- **Migracja:** `supabase/migrations/0147_matches_pipeline.sql`
 - **Czynności:** Dopasowanie i zapisane wyszukiwania
 - **Osoby:** Kandydaci (konto)
-- **Uwaga:** Kolejka przeliczenia dopasowań (P1-03, 0190): sam UUID kandydata albo oferty; wiersz znika po przeliczeniu.
+- **Uwaga:** Kolejka przeliczenia dopasowań (P1-03, 0147): sam UUID kandydata albo oferty; wiersz znika po przeliczeniu.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `subject_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0190_matches_pipeline.sql` |
+| `subject_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0147_matches_pipeline.sql` |
 | `kind` | nie dotyczy: Rodzaj podmiotu (kandydat albo oferta). | — |
 | `version` | nie dotyczy: Licznik zgłoszeń. | — |
 | `attempts` | nie dotyczy: Licznik prób. | — |
