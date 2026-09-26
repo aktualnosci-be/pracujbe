@@ -106,17 +106,24 @@ pracujbe/
 ├─ .github/workflows/             # CI na ubuntu-latest (GitHub-hosted)
 │  └─ ci.yml                      # lint · typecheck · unit · e2e · build
 ├─ docs/                          # dokumentacja rozszerzona
-│  ├─ ARCHITECTURE.md
-│  ├─ SELF_HOSTED_RUNNERS.md      # jak postawić i zarejestrować runnery
-│  ├─ SUPABASE_SETUP.md
-│  ├─ RESEND_SETUP.md
-│  ├─ DEPLOYMENT.md
-│  ├─ STAGING.md
-│  ├─ SECURITY_CHECKLIST.md
-│  ├─ PERFORMANCE_CHECKLIST.md
-│  └─ LAUNCH_CHECKLIST.md
-├─ supabase/
-│  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu)
+│  ├─ ARCHITECTURE.md             # architektura, dostęp do danych, role
+│  ├─ DEPLOYMENT.md · DOMAIN_SETUP.md
+│  ├─ railway/                    # PostgreSQL, Better Auth, bucket, migracje, STATUS.md, OPERATIONS.md
+│  ├─ DATABASE.md · DATA_RETENTION.md · GUEST_APPLY.md · JOB_FUNNEL.md · TELEMETRY_PRIVACY.md
+│  ├─ EMAILLABS_SETUP.md · RESEND_SETUP.md · TURNSTILE.md · CSP_NONCE_ANALYSIS.md
+│  ├─ AI_*.md · ESCO.md · PRODUCT_DECISIONS.md · RELEASE_1_0.md
+│  ├─ SECURITY_CHECKLIST.md · PERFORMANCE_CHECKLIST.md · LAUNCH_CHECKLIST.md
+│  ├─ design/people-passport/     # źródło wyglądu (prototyp, MATRIX.md)
+│  ├─ legal-drafts/               # PROJEKTY dokumentów prawnych (nieopublikowane)
+│  ├─ STAGING.md                  # staging wycofany (decyzja 2026-09-21)
+│  └─ ARCHIWALNE: SUPABASE_SETUP.md (stan sprzed #27), SELF_HOSTED_RUNNERS.md (CI przed 2026-09-23),
+│     audit/, REMEDIATION-2026-07-23*.md, DESIGN_SCREENS.md
+├─ database/
+│  ├─ bootstrap/                  # role i tożsamość (stały bootstrap)
+│  └─ auth/                       # schemat Better Auth (`auth.*`)
+├─ supabase/                      # nazwa historyczna — tylko SQL, bez Supabase w runtime (#27)
+│  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu, przeplatane z database/)
+│  ├─ tests/                      # rls.sql, role-guard.sql (npm run test:rls)
 │  ├─ rollback/                   # ręczne skrypty wycofania (np. 0097 ESCO)
 │  └─ seed.sql                    # dane demonstracyjne (oznaczone is_demo=true)
 ├─ src/
@@ -159,7 +166,7 @@ pracujbe/
 
 ---
 
-## 5. Model danych (Postgres / Supabase)
+## 5. Model danych (PostgreSQL Railway)
 
 UUID PK wszędzie, `created_at`/`updated_at` (trigger `set_updated_at`), soft-delete
 (`deleted_at`) tam gdzie potrzebne, FK z kontrolowanym `ON DELETE`, statusy jako enumy/CHECK,
@@ -1553,8 +1560,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `src/lib/email/auth-email.ts` (e-maile kont wysyła worker Better Auth), zmienne `NEXT_PUBLIC_SUPABASE_*`/`SUPABASE_*`/
   `SEND_EMAIL_HOOK_SECRET`, hosty `*.supabase.co` z CSP i `images.remotePatterns`. Kolejka usuwania obiektów bez bucketu →
   `STORAGE_UNCONFIGURED` (ponowienie), bez klienta Storage. Strażnik `no-supabase-runtime.test.ts`. **Otwarte (odbiór #27):**
-  smoke produkcji na Railway (healthcheck, wersja w stopce, ścieżki użytkownika), domena `pracuj.be` w Cloudflare, archiwalne
-  dokumenty Supabase (`docs/SUPABASE_SETUP.md`, `docs/STAGING.md`) i nazwa katalogu `supabase/` (migracje).
+  smoke produkcji na Railway (healthcheck, wersja w stopce, ścieżki użytkownika), domena `pracuj.be` w Cloudflare, nazwa
+  katalogu `supabase/` (migracje — świadomie bez zmiany). Dokumentacja (odbiór #27, część dokumentacyjna): README,
+  `docs/ARCHITECTURE.md`, checklisty bezpieczeństwa/uruchomienia/wydajności, `TURNSTILE.md`, `DATA_RETENTION.md`,
+  `AUDIT_PROMPT.md` opisują stan Railway; `SUPABASE_SETUP.md`, raporty audytu/remediacji z 07.2026 i wzmianki
+  w `SELF_HOSTED_RUNNERS.md` mają nagłówek „ARCHIWALNE — stan sprzed migracji na Railway (#27)”; mapa katalogów §4
+  poprawiona; linki względne w `docs/` sprawdza `tests/unit/docs-links.test.ts`. Szkice prawne (`docs/legal-drafts/`)
+  i dokumenty migracji (`docs/railway/`) wspominają Supabase celowo (dostawca historyczny / źródło migracji).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
 - [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
@@ -1738,7 +1750,8 @@ npm run test           # Vitest (unit)
 npm run test:e2e       # Playwright
 npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
-npm run db:reset       # (supabase CLI) reset + migracje + seed [lokalnie]
+npm run test:rls       # migracje od zera + testy RLS na lokalnym PostgreSQL 16
+npm run db:migrate:production  # migracje na wskazanej bazie (MIGRATION_DATABASE_URL, MIGRATION_MODE)
 ```
 
 ---

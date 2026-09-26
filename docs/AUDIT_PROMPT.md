@@ -17,18 +17,19 @@ ustaleń uszeregowaną wg ważności, z konkretnymi odniesieniami `plik:linia`, 
 
 Pracuj.be to wielojęzyczna (PL/NL/FR/EN) platforma pracy dla Belgii: kandydat tworzy profil zamiast CV,
 pracodawca publikuje oferty i wysyła propozycje. Stack: Next.js 15 (App Router, RSC), TypeScript strict,
-Tailwind + shadcn/ui, Supabase (Postgres/Auth/Storage/RLS), Zod, React Hook Form, Resend + React Email,
-Sentry, Vitest + Playwright, Vercel; CI/CD na self-hosted runnerach.
+Tailwind + shadcn/ui, PostgreSQL Railway (RLS) + Better Auth + prywatny bucket Railway (Supabase usunięte, #27),
+Zod, React Hook Form, EmailLabs/Resend + React Email, webhook błędów Discorda, Vitest + Playwright; hosting Railway
+(jedna produkcja z `main`), CI na GitHub-hosted `ubuntu-latest`.
 
 ## Zanim zaczniesz — orientacja (przeczytaj w tej kolejności)
 
 1. `CLAUDE.md` — mapa i kontrakt projektu (architektura, INVARIANTY, roadmapa/status, konwencje). **Kluczowe.**
 2. `docs/ARCHITECTURE.md` — decyzje i przepływy.
-3. `docs/DESIGN_SCREENS.md` + `docs/design/screens/*.png` — źródło prawdy dla UI (7 makiet, paleta granatowa).
+3. `docs/design/people-passport/README.md` + prototyp w tym katalogu — źródło prawdy dla UI („Ludzie i praca”; `docs/DESIGN_SCREENS.md` i granatowa paleta są historyczne).
 4. `docs/SECURITY_CHECKLIST.md`, `docs/PERFORMANCE_CHECKLIST.md`, `docs/LAUNCH_CHECKLIST.md`.
-5. `supabase/migrations/*.sql` (schemat + RLS) i `supabase/seed.sql`.
-6. Kod: `src/lib/**` (supabase, matching, i18n, errors, validation, email, actions), `src/app/**`, `src/components/**`, `src/messages/*.json`, `src/emails/**`.
-7. `.github/workflows/*.yml` (CI/CD), `docs/SELF_HOSTED_RUNNERS.md`.
+5. `database/bootstrap`, `database/auth`, `supabase/migrations/*.sql` (schemat + RLS; nazwa katalogu `supabase/` historyczna) i `supabase/seed.sql`.
+6. Kod: `src/lib/**` (db, auth, files, matching, i18n, errors, validation, email, actions), `src/app/**`, `src/components/**`, `src/messages/*.json`, `src/emails/**`.
+7. `.github/workflows/*.yml` (CI), `docs/DEPLOYMENT.md`, `docs/railway/README.md`.
 
 **Uruchom i zweryfikuj stan faktyczny (nie zakładaj — sprawdź):**
 ```
@@ -67,13 +68,13 @@ Zanotuj rzeczywiste wyniki (liczby testów, ostrzeżenia, rozmiary bundli z outp
 - **RLS włączone na WSZYSTKICH tabelach** z danymi użytkowników? Przejrzyj `supabase/migrations/*rls*.sql` tabela po tabeli. Domyślnie deny?
 - Czy polityki faktycznie izolują: kandydat widzi tylko swoje dane; **firma A nie widzi danych firmy B**; członek firmy wymaga aktywnego `company_members`; publikacja oferty wymaga `company_status='verified'`.
 - Czy `audit_logs`/`system_events`/`email_deliveries` są niedostępne dla `anon`/`authenticated` (tylko service role)?
-- **Service role key**: czy `src/lib/supabase/admin.ts` NIGDY nie jest importowany w kodzie klienckim (prześledź graf importów)? Czy nie ma `NEXT_PUBLIC_...SERVICE_ROLE`?
+- **Service role**: czy `withServiceRole` (`src/lib/db/portal.ts`, pula `DATABASE_SERVICE_URL`) NIGDY nie trafia do kodu klienckiego (prześledź graf importów)? Czy żadne `DATABASE_*` nie jest `NEXT_PUBLIC_*`?
 - Operacje wrażliwe wyłącznie w Server Actions / route handlers z kontrolą uprawnień? Czy sprawdzają rolę i przynależność, a nie ufają danym z klienta?
 - Rate limiting formularzy/logowania, ochrona anty-bot, ochrona brute-force. Czy istnieją? Gdzie?
 - **Nie ujawniać, czy e-mail istnieje** (reset hasła, rejestracja) — komunikat neutralny.
 - Pliki prywatne przez signed URLs (nie publiczne buckety). Walidacja uploadów (typ/rozmiar).
 - Nagłówki bezpieczeństwa (CSP, HSTS, X-Frame-Options itd.) — czy skonfigurowane?
-- Injection: zapytania budowane bezpiecznie (parametryzacja/Supabase client), brak interpolacji użytkownika do SQL.
+- Injection: zapytania budowane bezpiecznie (parametry `$n` w `src/lib/db/sql.ts`), brak interpolacji użytkownika do SQL.
 
 ### C. INVARIANTY i18n (patrz CLAUDE.md §7) — krytyczne dla tego produktu
 - **Język e-maili/powiadomień = język ODBIORCY** wg fallbacku `preferred_locale → account_locale → signup_locale → 'en'`. Zweryfikuj `src/lib/i18n/recipient-locale.ts` ORAZ **każde miejsce wysyłki** — czy nie użyto języka nadawcy/sesji/serwera/przeglądarki? To był realny błąd poprzedniego produktu — sprawdź szczególnie dokładnie.
@@ -88,7 +89,7 @@ Zanotuj rzeczywiste wyniki (liczby testów, ostrzeżenia, rozmiary bundli z outp
 - Kolejka `email_deliveries`: status/attempts/last_error/provider_id — czy ponawianie działa i nie gubi rekordów?
 
 ### E. Uwierzytelnianie
-- Rejestracja/logowanie/reset/potwierdzenie e-mail — realne (Supabase Auth), nie mock. Callback poprawny.
+- Rejestracja/logowanie/reset/potwierdzenie e-mail — realne (Better Auth na PostgreSQL), nie mock. Linki z tokenem we fragmencie `#token=` poprawne.
 - Sesja/cookies bezpieczne; wylogowanie czyści sesję. Ochrona tras paneli (redirect niezalogowanych).
 - Walidacja Zod po stronie serwera (nie tylko w formularzu).
 
@@ -116,7 +117,7 @@ Zanotuj rzeczywiste wyniki (liczby testów, ostrzeżenia, rozmiary bundli z outp
 
 ### K. Obsługa błędów
 - Centralny system (`src/lib/errors`) z kodami; mapowanie na klucze i18n. **Użytkownik nigdy nie widzi** stack trace/SQL/surowej odpowiedzi API/komunikatu dostawcy.
-- Formularze: blokada przycisku podczas zapisu, brak podwójnego submitu, zachowanie danych po błędzie, błędy przy polach, przewinięcie do pierwszego błędu, jasny sukces. Integracja z Sentry (bez PII).
+- Formularze: blokada przycisku podczas zapisu, brak podwójnego submitu, zachowanie danych po błędzie, błędy przy polach, przewinięcie do pierwszego błędu, jasny sukces. Zgłaszanie błędów przez webhook Discorda (sam kod błędu, bez PII).
 
 ### L. E-maile
 - Szablony PL/NL/FR/EN dla wszystkich typów (spec §22). Renderowanie w języku odbiorcy. Log wysyłki (odbiorca, typ, język, rekord, status, próby, provider_id, last_error, data). Responsywność, jeden CTA, bez ciężkich grafik.
