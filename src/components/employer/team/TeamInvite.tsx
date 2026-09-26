@@ -28,6 +28,7 @@ import {
   ROW_META,
   ROW_TITLE,
 } from '@/components/dashboard/panel-styles';
+import { Alert } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 /**
@@ -127,9 +128,9 @@ export function TeamInvite({
         {notice ?? ''}
       </p>
       {serverError ? (
-        <p role="alert" className={cn(NOTICE, 'my-0 border-error/30 bg-error/10 text-error-text')}>
+        <Alert variant="error">
           {errorText(serverError)}
-        </p>
+        </Alert>
       ) : null}
 
       <form onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,11rem)_auto] sm:items-end">
