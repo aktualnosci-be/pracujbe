@@ -16,7 +16,8 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
     await expect(dialog).toBeVisible();
 
     const switches = dialog.locator('[role="switch"][aria-checked="false"]');
-    await expect(switches).toHaveCount(3);
+    // #570: dwie kategorie opcjonalne (preferencje, analityka) — bez „Marketing”.
+    await expect(switches).toHaveCount(2);
 
     const ratios = await switches.evaluateAll((elements) => {
       type Rgba = [number, number, number, number];

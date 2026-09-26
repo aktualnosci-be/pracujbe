@@ -144,6 +144,9 @@ export interface EmailDataMap {
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
+  /** #574: ostrzeżenie przed usunięciem (brak aktywności); `deletionDate` = ISO 8601, formatowane w locale odbiorcy. */
+  inactiveCvWarning: { recipientName?: string; deletionDate: string; actionUrl: string };
+  inactiveAccountWarning: { recipientName?: string; deletionDate: string; actionUrl: string };
   /** Zmiana statusu aplikacji gościa (0122) — w języku formularza; `status` jak w `statusChanged`. */
   guestStatusChanged: { recipientName?: string; jobTitle: string; companyName: string; status: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
@@ -260,6 +263,9 @@ function prepareVars(
   const vars: Record<string, unknown> = { ...data };
   if (type === 'statusChanged' || type === 'guestStatusChanged') {
     vars.status = applicationStatusLabel(locale, data.status) ?? '';
+  }
+  if (type === 'inactiveCvWarning' || type === 'inactiveAccountWarning') {
+    vars.deletionDate = formatEmailDate(data.deletionDate, locale) ?? '';
   }
   const field = SUBJECT_FIELD[type];
   if (field && isBlank(vars[field])) vars[field] = '';
@@ -669,6 +675,30 @@ export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSen
   );
 }
 
+export function InactiveCvWarningEmail(props: EmailProps<'inactiveCvWarning'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="inactiveCvWarning"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function InactiveAccountWarningEmail(props: EmailProps<'inactiveAccountWarning'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="inactiveAccountWarning"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
 export function GuestStatusChangedEmail(props: EmailProps<'guestStatusChanged'>): ReactElement {
   return (
     <EmailShell
@@ -975,6 +1005,8 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   jobMatch: JobMatchEmail,
   guestApplicationConfirm: GuestApplicationConfirmEmail,
   guestApplicationSent: GuestApplicationSentEmail,
+  inactiveCvWarning: InactiveCvWarningEmail,
+  inactiveAccountWarning: InactiveAccountWarningEmail,
   guestStatusChanged: GuestStatusChangedEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,

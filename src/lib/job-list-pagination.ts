@@ -4,7 +4,7 @@
  * (`oferty-pracy/page.tsx`, `Pagination`). Bez `server-only`: liczby czyste, używane też przy
  * renderze paginacji.
  *
- * `get_public_jobs` (0026, utrzymane w 0150) klampuje `p_offset` do `MAX_JOB_LIST_OFFSET` —
+ * `get_public_jobs` (0026, utrzymane w 0136) klampuje `p_offset` do `MAX_JOB_LIST_OFFSET` —
  * anty-abuse dla dowolnego bezpośredniego wywołania RPC. Strony UI POZA tą granicą nie mogą
  * jednak po prostu odpytać RPC z klampowanym offsetem: różne numery stron zmapowałyby się na
  * TEN SAM klampowany offset i zwróciły identyczny wycinek (duplikat zamiast końca listy).

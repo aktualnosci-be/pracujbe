@@ -35,8 +35,8 @@ test.beforeEach(async ({ context, baseURL }) => {
     {
       name: 'pracujbe_consent',
       value: JSON.stringify({
-        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
-        categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+        categories: { necessary: true, preferences: false, analytics: false },
         ts: '2026-01-01T00:00:00.000Z',
         id: 'contact-form-e2e',
       }),

@@ -11,7 +11,7 @@ z chronionym formularzem, nie czeka na zgodę cookies i nie służy analityce an
 | `src/lib/turnstile/policy.ts` | Nazwy akcji i polityka awarii dostawcy per przepływ (wspólne dla serwera i klienta). |
 | `src/lib/turnstile/verify.ts` | `server-only`: siteverify, sprawdzenie akcji i hostname, `enforceTurnstile()` dla Server Actions. |
 | `src/components/auth/TurnstileWidget.tsx` | Widżet (render explicit), komunikaty ładowania/wygaśnięcia/błędu, ponowne ładowanie. |
-| `src/lib/actions/auth.ts` | `signIn`, `registerCandidate`, `registerEmployer`, `requestPasswordReset` — kolejność: rate limit → Turnstile → walidacja → Supabase Auth. |
+| `src/lib/actions/auth.ts` | `signIn`, `registerCandidate`, `registerEmployer`, `requestPasswordReset` — kolejność: rate limit → Turnstile → walidacja → Better Auth (`auth.api`). |
 
 Testy: `tests/unit/turnstile-verify.test.ts`, `tests/unit/auth-turnstile.test.ts`,
 `tests/unit/auth-form-turnstile.test.tsx`. Żaden test nie łączy się z Cloudflare.
@@ -47,7 +47,7 @@ błędny sekret) oraz braku konfiguracji w produkcji:
 
 | Przepływ | Akcja | Awaria dostawcy | Uzasadnienie |
 |---|---|---|---|
-| logowanie | `login` | **fail-open** | awaria Cloudflare nie odcina istniejących kont; zostaje limit `signin` (fail-safe) i ochrona Supabase Auth |
+| logowanie | `login` | **fail-open** | awaria Cloudflare nie odcina istniejących kont; zostaje limit `signin` (fail-safe) i jednolity komunikat błędnych danych logowania |
 | rejestracja (kandydat, pracodawca) | `register` | **fail-closed** (`BOT_CHECK_UNAVAILABLE`) | masowe zakładanie kont |
 | reset hasła | `password_reset` | **fail-closed** | wysyłka e-maili do cudzych skrzynek |
 | kontakt | `contact` | **fail-closed** | polityka gotowa; publicznego formularza kontaktu jeszcze nie ma |

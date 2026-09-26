@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0150_public_jobs_deterministic_pagination.sql — numer tymczasowy (integrator nada
--- ostateczny). #594: `get_public_jobs` sortuje po `published_at` (i opcjonalnie po kluczu
+-- 0136_public_jobs_deterministic_pagination.sql — numer nadany w kolejce integratora (wcześniej
+-- tymczasowy 0150). #594: `get_public_jobs` sortuje po `published_at` (i opcjonalnie po kluczu
 -- wynagrodzenia), ale bez unikalnego tie-breakera. Oferty z remisem na kolumnie sortowania
 -- mogą wrócić w innej kolejności między kolejnymi wywołaniami (nowy plan, równoległy skan,
 -- zmiana danych), co przy paginacji offsetowej gubi albo dubluje wiersze na sąsiednich

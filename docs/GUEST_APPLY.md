@@ -52,6 +52,16 @@ sekcja GA98 (z kontrolami ujemnymi).
      nie jest publikowany (`is_searchable` bez zmian). Zapis trafia do `audit_logs`
      (`application.guest_claimed`).
 
+## Deklaracja wieku (#492, #576)
+
+Formularz gościa ma wybór przedziału wieku „16–17” / „18 lub więcej” (przedziały od progu
+konta z `candidate_min_age()`, bez daty urodzenia; wybór 16–17 wyłącza lejek ofert na tym
+urządzeniu). Akcja przekazuje `p_age_attested_min`; od migracji `0126`
+`submit_guest_application` to wrapper, który sprawdza deklarację i woła wewnętrzne
+`submit_guest_application_core` (bez EXECUTE dla ról aplikacji). Trigger na
+`guest_application_requests` zapisuje `age_attested_min`/`age_attested_at` i odrzuca
+zgłoszenie bez deklaracji — także przy bezpośrednim wywołaniu funkcji core. Przejęcie
+aplikacji (`claim_guest_application`) wymaga ważnej deklaracji konta kandydata.
 
 ## Format linków (#505)
 
@@ -66,6 +76,7 @@ sekcja GA98 (z kontrolami ujemnymi).
   o ponowne wysłanie aplikacji. Wybraliśmy odrzucenie zamiast wymiany, bo token z query jest już
   w logach pierwszego żądania i nie powinien dawać uprawnień. Test: `guest-legacy-link.test.ts`
   (z kontrolą ujemną), E2E `guest-apply.spec`.
+
 ## Pracodawca
 
 Aplikacja gościa jest na liście, na pulpicie i w szczególe jak zwykła, z oznaczeniem

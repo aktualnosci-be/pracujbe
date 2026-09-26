@@ -1,5 +1,9 @@
 'use server';
 
+import { z } from 'zod';
+
+import { routing } from '@/i18n/routing';
+import { getNotificationsPage, type NotificationsPageResult } from '@/lib/data/notifications';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
@@ -49,4 +53,24 @@ export async function markNotificationsRead(ids?: string[]): Promise<MarkReadRes
     captureError(error, { area: 'notifications.markNotificationsRead' });
     return { ok: false, error: 'INTERNAL' };
   }
+}
+
+const cursorSchema = z.object({
+  createdAt: z.iso.datetime({ offset: true }),
+  id: z.uuid(),
+});
+
+/**
+ * Kolejna strona pełnej listy powiadomień (#148) — serwer czyta ją ponownie pod bieżącą
+ * sesją i RLS; kursor i locale walidowane, filtr tylko jako boolean.
+ */
+export async function loadMoreNotifications(
+  locale: string,
+  cursor: unknown,
+  unreadOnly: unknown,
+): Promise<NotificationsPageResult> {
+  if (!routing.locales.some((available) => available === locale)) return { status: 'error' };
+  const parsed = cursorSchema.safeParse(cursor);
+  if (!parsed.success || typeof unreadOnly !== 'boolean') return { status: 'error' };
+  return getNotificationsPage(locale, { cursor: parsed.data, unreadOnly });
 }
