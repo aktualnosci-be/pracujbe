@@ -17,8 +17,8 @@ z flagą). Bez flagi strona zwraca 404, a profil wypełnia się ręcznie w kreat
 | 1. Plik | PDF/DOCX ≤ 5 MB → tekst lokalnie na serwerze → minimalizacja | nie | nie |
 | 2. Podgląd | kandydat widzi dokładny tekst do wysłania i liczniki usuniętych fragmentów | nie | nie |
 | 3. „Wyślij do analizy” | serwer ponownie minimalizuje tekst, wysyła go do modelu, waliduje odpowiedź | tak | nie |
-| 4. Propozycje | każda pozycja osobno, domyślnie niezaznaczona, ze źródłem w CV i oznaczeniem niepewności | nie | nie |
-| 5. „Dodaj zaznaczone” | tylko zaznaczone pozycje → RPC `apply_candidate_cv_proposals` (0115) | nie | tak |
+| 4. Propozycje | każda pozycja osobno, domyślnie niezaznaczona, ze źródłem w CV i oznaczeniem niepewności; kandydat może poprawić wartość (nazwę, poziom języka, lata) — limity kreatora, błąd przy polu | nie | nie |
+| 5. „Dodaj zaznaczone” | tylko zaznaczone pozycje (z poprawionymi wartościami) → walidacja schematami kreatora → RPC `apply_candidate_cv_proposals` (0115) | nie | tak |
 
 Pliku, tekstu CV ani propozycji nie zapisujemy. Przepływ nie tworzy rekordu `files`, nie
 udostępnia CV firmom i nie zmienia widoczności profilu. Wynik nie trafia do `scoreMatch`,
@@ -33,6 +33,7 @@ rankingu ani screeningu. Ewentualne użycie do oceny kandydatów wymaga osobnej 
 | `src/lib/cv-import/text.ts` | tekst z PDF (`unpdf` = pdf.js 5, bez `eval`, bez XFA i sieci, ≤ 10 stron, 10 s) i DOCX (własny odczyt ZIP, tylko `word/document.xml`, limit 4 MB po dekompresji). DOC i skany → komunikat „wypełnij ręcznie” |
 | `src/lib/cv-import/minimize.ts` | minimalizacja przed modelem (niżej) |
 | `src/lib/cv-import/proposals.ts` | schemat structured output i walidacja odpowiedzi |
+| `src/lib/cv-import/approved.ts` | walidacja zatwierdzonych i poprawionych wartości — elementy `step2/3/5Schema` kreatora onboardingu (`CANDIDATE_ITEM_LIMITS`, język 2–40 znaków, lata 0–60), wspólna dla pola w UI (`proposalValueProblem`) i akcji (`cvApprovedProposalsSchema`) |
 | `src/lib/cv-import/extract.ts` | wywołanie modelu OpenAI przez wspólnego klienta `src/lib/ai/openai.ts` (instrukcje w `instructions`, CV w `<cv>`, strict structured output, `store: false`, bez narzędzi) i atrapa `FixtureCvExtractor` |
 | `src/lib/cv-import/run.ts` | etapy „podgląd” i „propozycje” bez autoryzacji |
 | `src/lib/actions/cv-import.ts` | akcje: konto kandydata, limity, zapis zatwierdzonych |
@@ -80,6 +81,20 @@ wraca z przeglądarki. Redakcja jest idempotentna.
   oznaczenie „do sprawdzenia”. Język bez poziomu → „podstawowy” + „do sprawdzenia”.
 - Podejrzenie prompt injection → ostrzeżenie i wszystkie propozycje „do sprawdzenia”.
 
+## Edycja propozycji przed zapisem
+
+Na ekranie propozycji każda pozycja ma pole z wartością (zawód, umiejętność, certyfikat, język,
+lata doświadczenia); język ma dodatkowo wybór poziomu. Edycja działa lokalnie w przeglądarce —
+nie wywołuje modelu i nie zapisuje niczego. Przy „Dodaj zaznaczone” zaznaczone pozycje są
+sprawdzane `proposalValueProblem` (te same schematy co kroki kreatora): puste pole, za długa
+wartość (z limitem w komunikacie), zła nazwa języka, lata spoza 0–60 albo dane kontaktowe/link/
+osoba trzecia → błąd przy polu (`aria-invalid` + `aria-describedby`), komunikat zbiorczy
+`role="alert"` i fokus na pierwszym błędnym polu (kolejność ekranu); nic nie jest wysyłane.
+Niezaznaczona pozycja nie jest sprawdzana ani zapisywana. Serwer sprawdza wejście ponownie
+(`cvApprovedProposalsSchema`) — wartość spoza limitu po edycji (np. podmieniona poza UI) =
+`VALIDATION_FAILED` bez wywołania bazy, a RPC 0115 egzekwuje te same granice w bazie. Bez
+migracji.
+
 ## Zapis (migracja 0115)
 
 `apply_candidate_cv_proposals(p_occupations, p_skills, p_languages, p_certificates,
@@ -118,11 +133,16 @@ pdf.js działa z `verbosity: 0`. Atrapa i testy używają wyłącznie fikcyjnych
 - `tests/unit/cv-import-run-control.test.ts` — kontrola ujemna: bez minimalizacji ta sama
   asercja wykrywa referentów w payloadzie.
 - `tests/unit/cv-import-actions.test.ts` — flaga, rola, limity; brak zatwierdzenia = brak
-  wywołania bazy; zapis tylko zatwierdzonych.
+  wywołania bazy; zapis tylko zatwierdzonych; poprawiona wartość na granicy limitu trafia do RPC,
+  o znak dłuższa (każda lista, język, lata) → `VALIDATION_FAILED` bez wywołania bazy.
+- `tests/unit/cv-import-approved.test.ts` — limity = kreator onboardingu (granica przechodzi
+  w obu, granica + 1 odpada w obu), kontrola ujemna schematu bez limitu, kody błędów pól.
 - `tests/unit/cv-import-text.test.ts` — PDF/DOCX, zły typ, DOC, skan, „zip bomb”.
 - `tests/unit/cv-import-panel.test.tsx` — propozycje domyślnie niezaznaczone, zapis tylko
-  zaznaczonych.
-- `tests/e2e/cv-import.spec.ts` — atrapa dostawcy, PL/EN, PDF i DOCX, axe, NISS.
+  zaznaczonych; poprawione wartości w zapisie; za długa/pusta wartość = błąd przy polu, fokus
+  na pierwszym błędnym polu, brak zapisu.
+- `tests/e2e/cv-import.spec.ts` — atrapa dostawcy, PL/EN, PDF i DOCX, axe, NISS; edycja
+  wartości (za długa → błąd przy polu i fokus, po poprawce zapis).
 - `supabase/tests/rls.sql` sekcja CV487.
 
 ## Włączenie (decyzja właściciela)
@@ -137,5 +157,3 @@ pdf.js działa z `verbosity: 0`. Atrapa i testy używają wyłącznie fikcyjnych
 - Skan antywirusowy pliku (usługa zewnętrzna, jak P1-22-AV) i izolacja parsera w osobnym
   procesie. Dziś parser działa w procesie serwera z limitem czasu i rozmiaru.
 - OCR skanów — celowo nie: skan bez tekstu kończy się komunikatem „wypełnij ręcznie”.
-- Edycja wartości propozycji przed zatwierdzeniem (dziś: zaznacz/odznacz i poziom języka;
-  poprawki w kreatorze).

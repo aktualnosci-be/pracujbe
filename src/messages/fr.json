@@ -3201,7 +3201,7 @@
     "cancel": "Annuler",
     "busyHint": "Nous préparons les propositions. Cela peut prendre jusqu’à une minute.",
     "reviewTitle": "Choisissez ce que vous ajoutez à votre profil",
-    "reviewIntro": "Cochez uniquement les propositions exactes. Celles qui ne sont pas cochées ne seront pas enregistrées. Les données existantes de votre profil ne changent pas.",
+    "reviewIntro": "Cochez uniquement les propositions exactes. Celles qui ne sont pas cochées ne seront pas enregistrées. Les données existantes de votre profil ne changent pas. Avant l'enregistrement, vous pouvez corriger chaque valeur.",
     "suspiciousTitle": "Vérifiez attentivement les propositions",
     "suspiciousText": "Le CV contenait un texte qui ressemblait à des instructions pour l’IA. Nous ne les avons pas suivies et avons marqué toutes les propositions à vérifier.",
     "kindOccupation": "Métiers",
@@ -3229,6 +3229,14 @@
     "errorFileType": "Nous acceptons les fichiers PDF et DOCX.",
     "errorFileDoc": "Nous ne pouvons pas lire les fichiers DOC. Enregistrez votre CV en PDF ou DOCX, ou remplissez votre profil manuellement.",
     "errorNothingSelected": "Sélectionnez au moins une proposition ou refusez tout.",
-    "errorNetwork": "Impossible de se connecter au serveur. Vérifiez votre connexion et réessayez."
+    "errorNetwork": "Impossible de se connecter au serveur. Vérifiez votre connexion et réessayez.",
+    "editLabel": "Corriger la valeur : {value}",
+    "experienceEditLabel": "Années d'expérience",
+    "errorValueRequired": "Saisissez une valeur ou décochez cette proposition.",
+    "errorValueTooLong": "La valeur est trop longue. {max} caractères maximum.",
+    "errorValueDisallowed": "Supprimez les coordonnées, les liens, les données d'autres personnes et les informations sensibles.",
+    "errorLanguageInvalid": "Le nom de la langue doit comporter entre 2 et 40 caractères.",
+    "errorExperienceInvalid": "Indiquez un nombre d'années entre 0 et 60.",
+    "errorFieldsInvalid": "Corrigez les champs signalés avant d'enregistrer."
   }
 }
