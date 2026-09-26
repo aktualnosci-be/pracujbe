@@ -4337,6 +4337,75 @@ select pg_temp.expect_error('select * from public.company_vies_checks',
 reset role;
 
 -- ============================================================================
+-- VA197. Automatyczne sprawdzenie VIES po założeniu firmy (0197, decyzja 26.09.2026)
+-- Zapis tylko service_role, tylko wynik rozstrzygający, bez nadpisywania istniejącego
+-- wyniku (np. admina), tylko dla bieżącego numeru firmy; status firmy bez zmian.
+-- ============================================================================
+\set COMPVA '00000000-0000-0000-0000-000000000a97'
+insert into public.companies(id, name, status, vat_number)
+  values (:'COMPVA', 'Firma VA', 'unverified', 'BE 0417.497.106');
+
+-- VA197-1: service_role zapisuje wynik ważny; checked_by = null (system); audyt z source=auto.
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0417497106', 'valid', ' NV VA ', date '2026-09-26') as va_saved \gset
+reset role;
+select pg_temp.assert(:'va_saved' = 't', 'VA197-1 wynik zapisany (true)');
+select pg_temp.assert(
+  (select result = 'valid' and vies_name = 'NV VA' and checked_by is null and vat_number = '0417497106'
+     from public.company_vies_checks where company_id = :'COMPVA'),
+  'VA197-1b wynik z nazwą, bez admina (system)');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPVA') = 'unverified',
+  'VA197-1c automatyczny wynik nie zmienia statusu firmy');
+select pg_temp.assert(
+  (select after_data = '{"result":"valid","source":"auto"}'::jsonb and actor_id is null
+     from public.audit_logs
+    where entity_id = :'COMPVA' and action = 'company.vies_checked'
+    order by created_at desc limit 1),
+  'VA197-1d audyt company.vies_checked z source=auto, bez numeru i nazwy');
+
+-- VA197-2: KONTROLA UJEMNA — nie nadpisuje istniejącego wyniku (np. ręcznego sprawdzenia admina).
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0417497106', 'invalid') as va_again \gset
+reset role;
+select pg_temp.assert(:'va_again' = 'f', 'VA197-2 drugi zapis zwraca false');
+select pg_temp.assert(
+  (select result from public.company_vies_checks where company_id = :'COMPVA') = 'valid',
+  'VA197-2b istniejący wynik zostaje');
+
+-- VA197-3: numer inny niż bieżący VAT firmy → brak zapisu (zmiana numeru w trakcie).
+delete from public.company_vies_checks where company_id = :'COMPVA';
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0403170701', 'valid') as va_stale \gset
+reset role;
+select pg_temp.assert(:'va_stale' = 'f'
+  and not exists (select 1 from public.company_vies_checks where company_id = :'COMPVA'),
+  'VA197-3 numer niezgodny z bieżącym VAT firmy nie jest zapisywany');
+
+-- VA197-4: stan nierozstrzygający i zły format odrzucone.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''unavailable'')', :'COMPVA'),
+  'RESULT_NOT_PERSISTABLE', 'VA197-4 awaria VIES nie jest zapisywana');
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0123456789'', ''valid'')', :'COMPVA'),
+  'VAT_FORMAT', 'VA197-4b zła suma kontrolna odrzucona');
+reset role;
+
+-- VA197-5: KONTROLA UJEMNA — pracodawca i anon bez EXECUTE.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''valid'')', :'COMPVA'),
+  'permission denied', 'VA197-5 pracodawca nie zapisze wyniku VIES');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''valid'')', :'COMPVA'),
+  'permission denied', 'VA197-5b anon bez EXECUTE');
+reset role;
+
+
+-- ============================================================================
 -- ML44 (#44, 0098): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
 -- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
 -- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
