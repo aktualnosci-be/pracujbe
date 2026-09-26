@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 
+import { dsaCsvStream } from '@/lib/admin/dsa-csv-stream';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
 import {
   csvHeader,
   csvRows,
+  decodeDsaExportCursor,
   DSA_EXPORT_PAGE_SIZE,
   getStatementsExport,
   getTransparencyReport,
@@ -23,9 +25,12 @@ import {
  * zapytaniu i jednej odpowiedzi w pamięci procesu.
  *   - CSV: odpowiedź jest STRUMIENIOWANA — kolejne strony dociągane i wysyłane w miarę
  *     generowania pliku, do `DSA_EXPORT_MAX_PAGES` stron (bezpiecznik przed nieskończoną pętlą
- *     przy uszkodzonym kursorze/danych); w praktyce pokrywa całość rozsądnego eksportu.
+ *     przy uszkodzonym kursorze/danych); po jego osiągnięciu przy niepustym kursorze strumień
+ *     kończy się błędem — obcięty plik nie udaje kompletnego (`dsaCsvStream`).
  *   - JSON: odpowiedź niesie JEDNĄ stronę + `nextCursor` — wywołujący dociąga kolejne strony
  *     parametrem `cursor` (opaque token z poprzedniej odpowiedzi), zamiast całego zakresu naraz.
+ *     Zniekształcony `cursor` → 400 `invalid_cursor` (nie cicho pierwsza strona — wywołujący
+ *     iterujący po `nextCursor` nie zapętli się na tych samych wierszach).
  */
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +48,9 @@ export async function GET(request: Request): Promise<Response> {
   const format = url.searchParams.get('format') === 'json' ? 'json' : 'csv';
   const name = `dsa-${range.fromYmd}_${range.toYmd}`;
   const cursorParam = url.searchParams.get('cursor');
+  if (format === 'json' && cursorParam !== null && !decodeDsaExportCursor(cursorParam)) {
+    return NextResponse.json({ error: 'invalid_cursor' }, { status: 400, headers: HEADERS });
+  }
 
   // Pierwsza strona jest pobrana PRZED utworzeniem strumienia — dopiero po niej wiadomo, czy
   // sesja ma dostęp (`requireAdmin` w warstwie danych) i czy zakres jest w ogóle dostępny;
@@ -69,33 +77,12 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  const encoder = new TextEncoder();
-  let cursor = first.nextCursor;
-  let page = 1;
-  let headerSent = false;
-  const stream = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      if (!headerSent) {
-        controller.enqueue(encoder.encode(csvHeader()));
-        controller.enqueue(encoder.encode(csvRows(first.rows)));
-        headerSent = true;
-        if (!cursor) controller.close();
-        return;
-      }
-      if (!cursor || page >= DSA_EXPORT_MAX_PAGES) {
-        controller.close();
-        return;
-      }
-      const next = await getStatementsExport(range.from, range.to, cursor);
-      page += 1;
-      if (next.status === 'error') {
-        controller.error(new Error('unavailable'));
-        return;
-      }
-      controller.enqueue(encoder.encode(csvRows(next.rows)));
-      cursor = next.nextCursor;
-      if (!cursor) controller.close();
-    },
+  const stream = dsaCsvStream({
+    header: csvHeader(),
+    first,
+    toCsv: csvRows,
+    fetchPage: (cursor) => getStatementsExport(range.from, range.to, cursor),
+    maxPages: DSA_EXPORT_MAX_PAGES,
   });
 
   return new Response(stream, {

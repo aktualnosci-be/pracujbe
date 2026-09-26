@@ -8739,11 +8739,12 @@ select pg_temp.assert(:pg606_zero_limit = :pg606_total,
 
 -- Kontrola ujemna: stary dwuargumentowy podpis jest USUNIĘTY, nie przeciążony — wywołanie
 -- z dwoma argumentami trafia jednoznacznie w nową funkcję (żadnej niejednoznaczności overloadu)
--- i nadal zwraca cały zakres jak przed migracją (APL43-11b to samo sprawdza inaczej).
+-- z domyślnym `p_limit` = 2000 (pierwsza strona). W tym fixture wierszy jest mniej niż limit, więc
+-- wynik = cały zakres (APL43-11b sprawdza to inaczej); większy zakres wymaga kursora.
 select count(*) as pg606_legacy_call from public.dsa_statements_export(
   now() - interval '1 day', now() + interval '1 day') \gset
 select pg_temp.assert(:pg606_legacy_call = :pg606_total,
-  'PG606-3 wywołanie dwuargumentowe (bez przeciążenia) nadal zwraca cały zakres');
+  'PG606-3 wywołanie dwuargumentowe (bez przeciążenia) działa z domyślnym limitem 2000 — tu cały zakres, bo wierszy jest mniej niż limit');
 
 select pg_temp.assert(
   not has_function_privilege('anon',

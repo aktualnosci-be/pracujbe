@@ -12,6 +12,7 @@ import {
   parseAppealState,
 } from '@/lib/admin/appeals';
 import { ADMIN_PAGE_SIZE } from '@/lib/admin/list-params';
+import { dsaCsvStream } from '@/lib/admin/dsa-csv-stream';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
 import { parseReportCase } from '@/lib/content-reports/case';
 import {
@@ -452,6 +453,54 @@ describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606
     expect(decodeDsaExportCursor('!!! nie base64url ###')).toBeNull();
     // Token bez separatora `|` (np. spreparowany ręcznie) — odrzucony, nie zgłasza wyjątku.
     expect(decodeDsaExportCursor(Buffer.from('brak-separatora', 'utf8').toString('base64url'))).toBeNull();
+  });
+
+  it('trasa JSON: zniekształcony cursor → 400 invalid_cursor, bez zapytania; kontrola ujemna: poprawny → 200', async () => {
+    const { GET } = await import('@/app/api/admin/dsa-report/route');
+    fakeDb.rpc('dsa_statements_export', []).rpc('dsa_transparency_report', {
+      period: { from: '2026-01-01T00:00:00Z', to: '2026-02-01T00:00:00Z' },
+      notices: { total: 0, byCategory: {} },
+      decisions: { total: 0, medianHoursToDecision: null, automatedDecision: 0 },
+      appeals: { total: 0, byStatus: {}, reversedDecisions: 0, medianHoursToDecision: null },
+    });
+    const base = 'https://pracuj.be/api/admin/dsa-report?format=json&od=2026-01-01&do=2026-01-31';
+
+    const bad = await GET(new Request(`${base}&cursor=${encodeURIComponent('!!! nie base64url ###')}`));
+    expect(bad.status).toBe(400);
+    expect(await bad.json()).toEqual({ error: 'invalid_cursor' });
+    expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(0);
+
+    const token = encodeDsaExportCursor('2026-01-20T10:00:00.000Z', 'DEC-ABCD-1234');
+    const ok = await GET(new Request(`${base}&cursor=${token}`));
+    expect(ok.status).toBe(200);
+    expect(fakeDb.callsTo('dsa_statements_export')[0]?.args).toMatchObject({
+      p_cursor_decided_at: '2026-01-20T10:00:00.000Z', p_cursor_reference: 'DEC-ABCD-1234',
+    });
+  });
+
+  it('CSV: bezpiecznik stron przy niepustym kursorze kończy strumień BŁĘDEM, nie cichym obcięciem', async () => {
+    const read = async (stream: ReadableStream<Uint8Array>) => {
+      const reader = stream.getReader();
+      let text = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return text;
+        text += new TextDecoder().decode(value);
+      }
+    };
+    const endless = () => Promise.resolve({ status: 'ok' as const, rows: ['r'], nextCursor: 'next' });
+    const truncated = dsaCsvStream({
+      header: 'h\n', first: { rows: ['r'], nextCursor: 'next' }, toCsv: (rows) => rows.join('\n') + '\n',
+      fetchPage: endless, maxPages: 2,
+    });
+    await expect(read(truncated)).rejects.toThrow('export_truncated');
+
+    // Kontrola ujemna: dane kończą się przed limitem → pełny plik bez błędu.
+    const finite = dsaCsvStream({
+      header: 'h\n', first: { rows: ['a'], nextCursor: 'next' }, toCsv: (rows) => rows.join('\n') + '\n',
+      fetchPage: () => Promise.resolve({ status: 'ok' as const, rows: ['b'], nextCursor: null }), maxPages: 2,
+    });
+    expect(await read(finite)).toBe('h\na\nb\n');
   });
 });
 
