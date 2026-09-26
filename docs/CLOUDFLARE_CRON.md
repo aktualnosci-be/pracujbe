@@ -14,6 +14,7 @@ dodać usług cron (`docs/railway/README.md`, `scripts/railway-cron-call.mjs`). 
 |---|---|---|
 | `*/5 * * * *` (co 5 min) | `POST https://pracuj.be/api/email/process` | `EMAIL_QUEUE_SECRET` |
 | `0 * * * *` (co godzinę) | `POST https://pracuj.be/api/maintenance` | `MAINTENANCE_SECRET` |
+| `*/10 * * * *` (co 10 min) | `POST https://pracuj.be/api/translation/process` (#33; bez `AI_TRANSLATION_ENABLED` = `skipped`) | `MAINTENANCE_SECRET` |
 
 Zasady takie jak w callerze Railway:
 

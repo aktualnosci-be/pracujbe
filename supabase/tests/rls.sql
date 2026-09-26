@@ -6630,6 +6630,12 @@ select pg_temp.assert((select count(*) from public.occupations where source = 'm
 -- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
 -- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
 -- =============================================================================
+-- Encje TR31 to identyfikatory bez wiersza w jobs: od 0133 aktywne oferty z fixture'ów same
+-- trafiają do kolejki (triggery), więc sekcja rdzenia używa własnych encji i wygasza ich zadania.
+\set TRJA 'f0310000-0000-0000-0000-0000000000a1'
+\set TRJB 'f0310000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
 \set TRF1 '{"title":"Magazynier  ","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
 \set TRF1WS '{"title":"  Magazynier","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.  ","requirements.0":"Certyfikat VCA","empty":"   "}'
 \set TRF2 '{"title":"Magazynier (zmiana nocna)","description":"Praca w magazynie od 22:00, stawka 17,00 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
@@ -6644,7 +6650,7 @@ set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_cli
 select pg_temp.expect_error('select count(*) from public.translation_source_revisions', 'permission denied', 'TR31-1c pracodawca bez odczytu rewizji');
 select pg_temp.expect_error('insert into public.translation_sources(entity_type, entity_id) values (''job'', gen_random_uuid())', 'permission denied', 'TR31-1d bez bezpośredniego zapisu');
 select pg_temp.expect_error(
-  'select public.record_translation_source(''job'', ''' || :'JOBA' || ''', ''pl'', ''{"title":"x"}''::jsonb, ''tr-v1'')',
+  'select public.record_translation_source(''job'', ''' || :'TRJA' || ''', ''pl'', ''{"title":"x"}''::jsonb, ''tr-v1'')',
   'permission denied', 'TR31-1e authenticated nie woła record_translation_source');
 select pg_temp.expect_error('select * from public.claim_translation_jobs(10, 300)', 'permission denied', 'TR31-1f authenticated nie woła claim');
 reset role; reset app.current_uid;
@@ -6657,7 +6663,7 @@ select pg_temp.assert(
 
 -- TR31-2: atomowy zapis źródła — rewizja 1 + trzy zadania (bez języka źródła).
 set role service_role;
-select public.record_translation_source('job', :'JOBA', 'pl', :'TRF1'::jsonb, 'tr-v1') as tr_r1 \gset
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF1'::jsonb, 'tr-v1') as tr_r1 \gset
 select pg_temp.assert((:'tr_r1'::jsonb)->>'status' = 'created' and ((:'tr_r1'::jsonb)->>'jobsQueued')::int = 3
   and ((:'tr_r1'::jsonb)->>'revisionNo')::int = 1, 'TR31-2 rewizja 1 i trzy zadania');
 select (:'tr_r1'::jsonb)->>'revisionId' as tr_rev1 \gset
@@ -6670,27 +6676,27 @@ select pg_temp.assert((select fields->>'title' from public.translation_source_re
   'TR31-2c pola kanoniczne (trim)');
 
 -- TR31-3: no-op — ta sama treść (inne białe znaki, puste pole) nie tworzy rewizji ani zadań.
-select public.record_translation_source('job', :'JOBA', 'pl', :'TRF1WS'::jsonb, 'tr-v1') as tr_r1b \gset
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF1WS'::jsonb, 'tr-v1') as tr_r1b \gset
 select pg_temp.assert((:'tr_r1b'::jsonb)->>'status' = 'unchanged' and ((:'tr_r1b'::jsonb)->>'jobsQueued')::int = 0,
   'TR31-3 ta sama treść = unchanged');
-select pg_temp.assert((select count(*) from public.translation_source_revisions where entity_id = :'JOBA') = 1
-  and (select count(*) from public.translation_jobs where entity_id = :'JOBA') = 3, 'TR31-3b brak nowych wierszy');
+select pg_temp.assert((select count(*) from public.translation_source_revisions where entity_id = :'TRJA') = 1
+  and (select count(*) from public.translation_jobs where entity_id = :'TRJA') = 3, 'TR31-3b brak nowych wierszy');
 select pg_temp.expect_error(
-  'select public.record_translation_source(''job'', ''' || :'JOBA' || ''', ''ro'', ''{"title":"x"}''::jsonb, ''tr-v1'')',
+  'select public.record_translation_source(''job'', ''' || :'TRJA' || ''', ''ro'', ''{"title":"x"}''::jsonb, ''tr-v1'')',
   'source_locale', 'TR31-3c język spoza portalu odrzucony');
 select pg_temp.expect_error(
-  'select public.record_translation_source(''job'', ''' || :'JOBA' || ''', ''pl'', ''{"title":{"a":1}}''::jsonb, ''tr-v1'')',
+  'select public.record_translation_source(''job'', ''' || :'TRJA' || ''', ''pl'', ''{"title":{"a":1}}''::jsonb, ''tr-v1'')',
   'field_value', 'TR31-3d pole niebędące tekstem odrzucone');
 reset role;
 
 -- TR31-4: rollback transakcji wywołującego nie zostawia rewizji ani zadań.
 begin;
 set local role service_role;
-select public.record_translation_source('job', :'JOBA', 'pl', :'TRF2'::jsonb, 'tr-v1');
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF2'::jsonb, 'tr-v1');
 rollback;
-select pg_temp.assert((select count(*) from public.translation_source_revisions where entity_id = :'JOBA') = 1
-  and (select count(*) from public.translation_jobs where entity_id = :'JOBA' and status = 'queued') = 3
-  and (select current_revision_no from public.translation_sources where entity_id = :'JOBA') = 1,
+select pg_temp.assert((select count(*) from public.translation_source_revisions where entity_id = :'TRJA') = 1
+  and (select count(*) from public.translation_jobs where entity_id = :'TRJA' and status = 'queued') = 3
+  and (select current_revision_no from public.translation_sources where entity_id = :'TRJA') = 1,
   'TR31-4 rollback: stan jak przed zapisem');
 
 -- TR31-5: claim + lease; drugi claim nie bierze wydzierżawionych zadań.
@@ -6715,12 +6721,12 @@ select pg_temp.expect_error(
 select pg_temp.assert(public.complete_translation_job(:'tr_job_en', :'tr_lease_en', :'TROUT'::jsonb, 'claude-opus-5', 120, 80) = 'applied',
   'TR31-6c poprawny wynik = applied');
 select pg_temp.assert((select revision_no = 1 and origin = 'ai' and not is_stale and fields->>'title' = 'Warehouse worker'
-  from public.translation_documents where entity_id = :'JOBA' and locale = 'en'), 'TR31-6d przekład en aktywny');
+  from public.translation_documents where entity_id = :'TRJA' and locale = 'en'), 'TR31-6d przekład en aktywny');
 select pg_temp.assert(public.complete_translation_job(:'tr_job_en', :'tr_lease_en', :'TROUT'::jsonb) = 'stale_lease',
   'TR31-6e ponowny zapis tym samym lease = stale_lease');
 
 -- TR31-7: v1 kończąca się po v2 — wynik starej rewizji superseded, przekład nie cofnięty.
-select public.record_translation_source('job', :'JOBA', 'pl', :'TRF2'::jsonb, 'tr-v1') as tr_r2 \gset
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF2'::jsonb, 'tr-v1') as tr_r2 \gset
 select (:'tr_r2'::jsonb)->>'revisionId' as tr_rev2 \gset
 select pg_temp.assert((:'tr_r2'::jsonb)->>'status' = 'created' and ((:'tr_r2'::jsonb)->>'revisionNo')::int = 2,
   'TR31-7 rewizja 2');
@@ -6728,9 +6734,9 @@ select pg_temp.assert((select bool_and(status = 'superseded') from public.transl
   where revision_id = :'tr_rev1' and target_locale in ('nl', 'fr')), 'TR31-7b zaległe zadania v1 superseded');
 select pg_temp.assert(public.complete_translation_job(:'tr_job_nl', :'tr_lease_nl', :'TROUT'::jsonb) = 'superseded',
   'TR31-7c spóźniony wynik v1 = superseded');
-select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'JOBA' and locale = 'nl'),
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TRJA' and locale = 'nl'),
   'TR31-7d wynik v1 niczego nie opublikował');
-select pg_temp.assert((select is_stale from public.translation_documents where entity_id = :'JOBA' and locale = 'en'),
+select pg_temp.assert((select is_stale from public.translation_documents where entity_id = :'TRJA' and locale = 'en'),
   'TR31-7e przekład v1 oznaczony jako nieaktualny');
 select pg_temp.assert((select count(*) from public.translation_jobs where revision_id = :'tr_rev2' and status = 'queued') = 3,
   'TR31-7f trzy zadania v2');
@@ -6779,17 +6785,17 @@ select pg_temp.assert((select status = 'failed' and last_error_code = 'lease_exp
 reset role;
 select pg_temp.expect_error(
   'insert into public.translation_jobs(revision_id, entity_type, entity_id, target_locale, pipeline_version) values (''' ||
-  :'tr_rev2' || ''', ''job'', ''' || :'JOBA' || ''', ''nl'', ''tr-v1'')',
+  :'tr_rev2' || ''', ''job'', ''' || :'TRJA' || ''', ''nl'', ''tr-v1'')',
   'translation_jobs_dedup', 'TR31-10 duplikat zadania odrzucony');
 set role service_role;
-select public.record_translation_source('job', :'JOBA', 'pl', :'TRF2'::jsonb, 'tr-v2') as tr_r3 \gset
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF2'::jsonb, 'tr-v2') as tr_r3 \gset
 select pg_temp.assert((:'tr_r3'::jsonb)->>'status' = 'requeued' and ((:'tr_r3'::jsonb)->>'jobsQueued')::int = 3
   and ((:'tr_r3'::jsonb)->>'revisionNo')::int = 2, 'TR31-10b nowa wersja pipeline = requeued bez nowej rewizji');
 select pg_temp.assert((select count(*) from public.translation_jobs where revision_id = :'tr_rev2' and pipeline_version = 'tr-v2') = 3,
   'TR31-10c trzy zadania tr-v2');
 
 -- TR31-11: korekta ręczna — autor i wersja; AI jej nie nadpisuje; reset jest jawny.
-select pg_temp.assert(public.save_manual_translation('job', :'JOBA', 'fr',
+select pg_temp.assert(public.save_manual_translation('job', :'TRJA', 'fr',
   '{"title":"Magasinier (nuit)","description":"Travail en entrepôt dès 22:00, 17,00 EUR/heure. Aucune expérience requise.","requirements.0":"Certificat VCA"}'::jsonb,
   :'EMPA') = 1, 'TR31-11 korekta ręczna wersja 1');
 reset role; drop table tr_claim; set role service_role;
@@ -6800,16 +6806,16 @@ select pg_temp.assert(public.complete_translation_job(:'tr3_fr', :'tr3_fr_lease'
   '{"title":"Magasinier IA","description":"Entrepôt dès 22:00, 17,00 EUR/heure. Aucune expérience requise.","requirements.0":"Certificat VCA"}'::jsonb) = 'proposal',
   'TR31-11b wynik AI przy korekcie = proposal');
 select pg_temp.assert((select origin = 'manual' and is_locked and manual_version = 1 and manual_author = :'EMPA'
-  and fields->>'title' = 'Magasinier (nuit)' from public.translation_documents where entity_id = :'JOBA' and locale = 'fr'),
+  and fields->>'title' = 'Magasinier (nuit)' from public.translation_documents where entity_id = :'TRJA' and locale = 'fr'),
   'TR31-11c korekta nietknięta');
-select pg_temp.assert(public.record_translation_source('job', :'JOBA', 'pl', :'TRF1'::jsonb, 'tr-v2')->>'status' = 'created',
+select pg_temp.assert(public.record_translation_source('job', :'TRJA', 'pl', :'TRF1'::jsonb, 'tr-v2')->>'status' = 'created',
   'TR31-11d zmiana źródła = nowa rewizja');
 select pg_temp.assert((select is_stale and is_locked and fields->>'title' = 'Magasinier (nuit)' from public.translation_documents
-       where entity_id = :'JOBA' and locale = 'fr'),
+       where entity_id = :'TRJA' and locale = 'fr'),
   'TR31-11d2 zmiana źródła: korekta zostaje, oznaczona jako nieaktualna');
-select pg_temp.assert(public.release_manual_translation('job', :'JOBA', 'fr') = 'unlocked',
+select pg_temp.assert(public.release_manual_translation('job', :'TRJA', 'fr') = 'unlocked',
   'TR31-11e jawny reset blokady');
-select pg_temp.assert((select not is_locked and origin = 'manual' from public.translation_documents where entity_id = :'JOBA' and locale = 'fr'),
+select pg_temp.assert((select not is_locked and origin = 'manual' from public.translation_documents where entity_id = :'TRJA' and locale = 'fr'),
   'TR31-11e2 korekta odblokowana (brak propozycji dla bieżącej rewizji)');
 
 -- TR31-12: ukrycie encji (delete race) — spóźniony wynik niczego nie publikuje; ponowna
@@ -6818,25 +6824,25 @@ reset role; drop table tr_claim; set role service_role;
 reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
 grant select on tr_claim to service_role; set role service_role;
 select job_id as tr4_nl, lease_id as tr4_nl_lease from tr_claim where target_locale = 'nl' \gset
-select count(*) as tr4_before from public.translation_documents where entity_id = :'JOBA' \gset
-select pg_temp.assert(public.deactivate_translation_source('job', :'JOBA', false) = 3, 'TR31-12 ukrycie wygasza 3 zadania');
+select count(*) as tr4_before from public.translation_documents where entity_id = :'TRJA' \gset
+select pg_temp.assert(public.deactivate_translation_source('job', :'TRJA', false) = 3, 'TR31-12 ukrycie wygasza 3 zadania');
 select pg_temp.assert(public.complete_translation_job(:'tr4_nl', :'tr4_nl_lease', :'TROUT'::jsonb) = 'superseded',
   'TR31-12b wynik po ukryciu = superseded');
-select pg_temp.assert((select count(*) from public.translation_documents where entity_id = :'JOBA') = :tr4_before
+select pg_temp.assert((select count(*) from public.translation_documents where entity_id = :'TRJA') = :tr4_before
   and (select count(*) from public.claim_translation_jobs(10, 300)) = 0, 'TR31-12c nic nie opublikowano, nic do pobrania');
-select pg_temp.assert(public.record_translation_source('job', :'JOBA', 'pl', :'TRF1'::jsonb, 'tr-v2')->>'status' = 'requeued',
+select pg_temp.assert(public.record_translation_source('job', :'TRJA', 'pl', :'TRF1'::jsonb, 'tr-v2')->>'status' = 'requeued',
   'TR31-12d ponowna aktywacja tej samej treści = requeued');
 reset role; drop table tr_claim; set role service_role;
 reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
 grant select on tr_claim to service_role; set role service_role;
 select job_id as tr5_nl, lease_id as tr5_nl_lease from tr_claim where target_locale = 'nl' \gset
-select pg_temp.assert(public.deactivate_translation_source('job', :'JOBA', true) >= 3, 'TR31-12e purge');
+select pg_temp.assert(public.deactivate_translation_source('job', :'TRJA', true) >= 3, 'TR31-12e purge');
 select pg_temp.assert(public.complete_translation_job(:'tr5_nl', :'tr5_nl_lease', :'TROUT'::jsonb) = 'not_found',
   'TR31-12f wynik po purge = not_found');
-select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'JOBA')
-  and not exists (select 1 from public.translation_source_revisions where entity_id = :'JOBA')
-  and not exists (select 1 from public.translation_jobs where entity_id = :'JOBA')
-  and not exists (select 1 from public.translation_documents where entity_id = :'JOBA'),
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJA')
+  and not exists (select 1 from public.translation_source_revisions where entity_id = :'TRJA')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJA')
+  and not exists (select 1 from public.translation_documents where entity_id = :'TRJA'),
   'TR31-12g purge: brak rewizji, zadań i przekładów');
 reset role; drop table tr_claim; set role service_role;
 reset role;
@@ -6859,15 +6865,15 @@ begin
   return 'applied';
 end $$;
 create temp table trn_claim on commit drop as select * from (
-  select public.record_translation_source('job', :'JOBB', 'pl', :'TRF1'::jsonb, 'tr-v1')) s,
-  lateral public.claim_translation_jobs(10, 300) c where c.entity_id = :'JOBB' and c.target_locale = 'nl';
+  select public.record_translation_source('job', :'TRJB', 'pl', :'TRF1'::jsonb, 'tr-v1')) s,
+  lateral public.claim_translation_jobs(10, 300) c where c.entity_id = :'TRJB' and c.target_locale = 'nl';
 select job_id as trn_job, lease_id as trn_lease from trn_claim \gset
-select public.record_translation_source('job', :'JOBB', 'pl', :'TRF2'::jsonb, 'tr-v1');
+select public.record_translation_source('job', :'TRJB', 'pl', :'TRF2'::jsonb, 'tr-v1');
 select public.complete_translation_job(:'trn_job', :'trn_lease', :'TROUT'::jsonb);
-select pg_temp.assert(exists (select 1 from public.translation_documents where entity_id = :'JOBB' and locale = 'nl' and revision_no = 1),
+select pg_temp.assert(exists (select 1 from public.translation_documents where entity_id = :'TRJB' and locale = 'nl' and revision_no = 1),
   'TR31-N bez kontroli rewizji spóźniony wynik v1 zostałby opublikowany');
 rollback;
-select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'JOBB'),
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJB'),
   'TR31-Nb kontrola ujemna cofnięta');
 select pg_temp.assert((select prosrc like '%current_revision_id is distinct from v_job.revision_id%'
   from pg_proc where proname = 'complete_translation_job'), 'TR31-Nc produkcyjna funkcja przywrócona');
@@ -12029,6 +12035,247 @@ select pg_temp.assert(
   and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
+-- =============================================================================
+-- TR33 (#33, 0146): oferta → kolejka tłumaczeń przy każdej zatwierdzonej zmianie (odroczone
+-- triggery). Źródło w języku oferty (tu nl), wymagania tekstowe w polach, publish/pause/resume/
+-- wygaśnięcie/zawieszenie firmy/usunięcie, rollback, stawka poza tłumaczeniem, dwie sesje
+-- równolegle i kontrola ujemna TR33-N (bez triggera kolejka zostaje przy starej treści).
+-- =============================================================================
+\set TRCO  'f0330000-0000-0000-0000-0000000000c1'
+\set TRJ1  'f0330000-0000-0000-0000-0000000000a1'
+\set TRJ2  'f0330000-0000-0000-0000-0000000000a2'
+\set TRJ3  'f0330000-0000-0000-0000-0000000000a3'
+\set TRJ4  'f0330000-0000-0000-0000-0000000000a4'
+reset role; reset app.current_uid;
+-- Izolacja: zadania ofert z wcześniejszych sekcji nie trafiają do claimów tej sekcji.
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.companies(id, name, status) values (:'TRCO', 'Firma TR33', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale,
+                        salary_min, salary_max, salary_period)
+  values (:'TRJ1', :'TRCO', 'draft-tr33', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl',
+          15, 17, 'hour');
+insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits)
+  values (:'TRJ1', 'nl', 'Magazijnmedewerker', 'Werk in het magazijn vanaf 8:00. Geen ervaring nodig.',
+          array['Orders verzamelen', 'Laden'], array['Parking']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TRJ1', 'nl', 'mandatory', 0, 'VCA-certificaat'),
+  (:'TRJ1', 'nl', 'mandatory', 1, 'Nachtwerk'),
+  (:'TRJ1', 'nl', 'optional', 0, 'Heftruck'),
+  (:'TRJ1', 'pl', 'mandatory', 0, 'Wiersz w innym języku');
+
+-- TR33-1: szkic nie trafia do kolejki (bez kosztu dla kreatora).
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-1 szkic bez źródła tłumaczenia');
+
+-- TR33-2: publikacja → rewizja 1 w języku oferty + zadania pl/fr/en; wymagania tekstowe w polach.
+update public.jobs set status = 'active', published_at = now() where id = :'TRJ1';
+select pg_temp.assert((select current_revision_no = 1 and is_active from public.translation_sources
+  where entity_type = 'job' and entity_id = :'TRJ1'), 'TR33-2 publikacja = rewizja 1');
+select r.id as tr33_rev1, r.fields::text as tr33_f1 from public.translation_source_revisions r
+ where r.entity_id = :'TRJ1' and r.revision_no = 1 \gset
+select pg_temp.assert((select source_locale = 'nl' from public.translation_source_revisions where id = :'tr33_rev1')
+  and (select array_agg(target_locale order by target_locale) from public.translation_jobs where revision_id = :'tr33_rev1')
+      = array['en', 'fr', 'pl'], 'TR33-2b źródło nl, zadania en/fr/pl');
+select pg_temp.assert((:'tr33_f1'::jsonb)->>'requirements_mandatory.0' = 'VCA-certificaat'
+  and (:'tr33_f1'::jsonb)->>'requirements_mandatory.1' = 'Nachtwerk'
+  and (:'tr33_f1'::jsonb)->>'requirements_optional.0' = 'Heftruck'
+  and (:'tr33_f1'::jsonb)->>'responsibilities.1' = 'Laden'
+  and (:'tr33_f1'::jsonb)->>'benefits.0' = 'Parking'
+  and (:'tr33_f1'::jsonb)->>'title' = 'Magazijnmedewerker'
+  and not (:'tr33_f1'::text like '%Wiersz w innym%')
+  and not ((:'tr33_f1'::jsonb) ? 'meta_title'),
+  'TR33-2c pola: tytuł, opis, listy i wymagania w języku oferty (bez pustych, bez innego języka)');
+
+-- TR33-3: rollback edycji nie zostawia śladu w kolejce.
+begin;
+update public.job_translations set description = 'Wycofana zmiana.' where job_id = :'TRJ1' and locale = 'nl';
+rollback;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TRJ1') = 1
+  and (select count(*) from public.translation_source_revisions where entity_id = :'TRJ1') = 1,
+  'TR33-3 rollback: brak nowej rewizji');
+
+-- TR33-4: stawka, miasto i licznik nie są polami tłumaczenia — bez rewizji i bez kosztu;
+-- wartość czytana z jobs jest od razu wspólna dla wszystkich języków.
+update public.jobs set salary_min = 16, salary_max = 18, city = 'Gent-Zuid', views_count = views_count + 1
+ where id = :'TRJ1';
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TRJ1') = 1
+  and (select count(*) from public.translation_jobs where entity_id = :'TRJ1') = 3,
+  'TR33-4 zmiana stawki bez nowej rewizji i zadań');
+
+-- TR33-5: przekład en dla rewizji 1, potem edycja w JEDNEJ transakcji (opis + replace-all wymagań)
+-- = dokładnie jedna nowa rewizja z końcową treścią (bez stanów pośrednich); stare zadania
+-- superseded, przekład en nieaktualny.
+reset role; create temp table tr33_claim as select * from public.claim_translation_jobs(100, 300);
+select job_id as tr33_en, lease_id as tr33_en_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'en' \gset
+select job_id as tr33_fr, lease_id as tr33_fr_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'fr' \gset
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_en', :'tr33_en_lease',
+  replace(replace(replace(replace(replace(replace(replace(replace(:'tr33_f1',
+    'Magazijnmedewerker', 'Warehouse worker'),
+    'Werk in het magazijn vanaf 8:00. Geen ervaring nodig.', 'Warehouse work from 8:00. No experience required.'),
+    'Orders verzamelen', 'Order picking'), 'Laden', 'Loading'), 'VCA-certificaat', 'VCA certificate'),
+    'Nachtwerk', 'Night work'), 'Heftruck', 'Forklift'), 'Parking', 'Parking')::jsonb) = 'applied',
+  'TR33-5 przekład en rewizji 1 zastosowany');
+reset role;
+begin;
+update public.job_translations set description = 'Werk in het magazijn vanaf 22:00. Geen ervaring nodig.'
+ where job_id = :'TRJ1' and locale = 'nl';
+delete from public.job_requirements where job_id = :'TRJ1' and locale = 'nl' and kind = 'mandatory';
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TRJ1', 'nl', 'mandatory', 0, 'VCA-certificaat'),
+  (:'TRJ1', 'nl', 'mandatory', 1, 'Rijbewijs B');
+commit;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TRJ1') = 2
+  and (select count(*) from public.translation_source_revisions where entity_id = :'TRJ1') = 2,
+  'TR33-5b jedna transakcja = jedna nowa rewizja');
+select id as tr33_rev2 from public.translation_source_revisions where entity_id = :'TRJ1' and revision_no = 2 \gset
+select pg_temp.assert((select fields->>'description' like '%22:00%' and fields->>'requirements_mandatory.1' = 'Rijbewijs B'
+  and not (fields ? 'requirements_mandatory.2') from public.translation_source_revisions where id = :'tr33_rev2'),
+  'TR33-5c rewizja 2 = końcowa treść (opis + wymagania)');
+select pg_temp.assert((select bool_and(status = 'superseded') from public.translation_jobs
+  where revision_id = :'tr33_rev1' and target_locale in ('fr', 'pl'))
+  and (select count(*) from public.translation_jobs where revision_id = :'tr33_rev2' and status = 'queued') = 3
+  and (select is_stale and revision_no = 1 from public.translation_documents where entity_id = :'TRJ1' and locale = 'en'),
+  'TR33-5d zadania rewizji 1 superseded, trzy zadania rewizji 2, przekład en nieaktualny');
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_fr', :'tr33_fr_lease', :'tr33_f1'::jsonb) = 'superseded',
+  'TR33-5e spóźniony wynik rewizji 1 po edycji = superseded (bez mieszania rewizji)');
+reset role; drop table tr33_claim;
+
+-- TR33-6: korekta ręczna (fr) przetrwa kolejną edycję — AI jej nie nadpisze (wynik = proposal).
+set role service_role;
+select public.save_manual_translation('job', :'TRJ1', 'fr',
+  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'EMPA') as tr33_manual \gset
+reset role;
+update public.job_translations set title = 'Magazijnmedewerker (nacht)' where job_id = :'TRJ1' and locale = 'nl';
+select id as tr33_rev3, fields::text as tr33_f3 from public.translation_source_revisions
+ where entity_id = :'TRJ1' and revision_no = 3 \gset
+create temp table tr33_claim as select * from public.claim_translation_jobs(100, 300);
+select job_id as tr33_fr3, lease_id as tr33_fr3_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'fr' \gset
+select job_id as tr33_pl3, lease_id as tr33_pl3_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'pl' \gset
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_fr3', :'tr33_fr3_lease', :'tr33_f3'::jsonb) = 'proposal',
+  'TR33-6 wynik AI przy korekcie ręcznej = proposal');
+reset role;
+select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'EMPA'
+  from public.translation_documents where entity_id = :'TRJ1' and locale = 'fr'),
+  'TR33-6b korekta ręczna nietknięta po edycji oferty');
+drop table tr33_claim;
+
+-- TR33-7: wstrzymanie → źródło nieaktywne, zaległe zadania superseded, spóźniony wynik nic nie
+-- publikuje; wznowienie tej samej treści → requeued bez nowej rewizji.
+update public.jobs set status = 'paused' where id = :'TRJ1';
+select pg_temp.assert((select not is_active from public.translation_sources where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ1' and status in ('queued', 'retry', 'leased')),
+  'TR33-7 wstrzymanie: źródło nieaktywne, brak zaległych zadań');
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_pl3', :'tr33_pl3_lease', :'tr33_f3'::jsonb) = 'superseded',
+  'TR33-7b wynik po wstrzymaniu = superseded');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TRJ1' and locale = 'pl'),
+  'TR33-7c nic nie opublikowano');
+update public.jobs set status = 'active' where id = :'TRJ1';
+select pg_temp.assert((select is_active and current_revision_no = 3 from public.translation_sources where entity_id = :'TRJ1')
+  and (select count(*) from public.translation_jobs where revision_id = :'tr33_rev3' and status = 'queued') >= 2,
+  'TR33-7d wznowienie: ta sama rewizja, zadania wracają do kolejki');
+
+-- TR33-8: zawieszenie firmy i wygaśnięcie ukrywają źródło; powrót = ponowna aktywacja.
+update public.companies set status = 'suspended' where id = :'TRCO';
+select pg_temp.assert((select not is_active from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-8 zawieszona firma: źródło nieaktywne');
+update public.companies set status = 'verified' where id = :'TRCO';
+select pg_temp.assert((select is_active from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-8b firma zweryfikowana ponownie: źródło aktywne');
+update public.jobs set expires_at = now() - interval '1 minute' where id = :'TRJ1';
+select pg_temp.assert((select not is_active from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-8c oferta po terminie: źródło nieaktywne');
+update public.jobs set expires_at = null where id = :'TRJ1';
+
+-- TR33-9: dwie sesje równolegle — sesja B edytuje opis (niezatwierdzona), sesja główna zmienia
+-- wymagania i zatwierdza; po commicie B bieżąca rewizja ma OBIE zmiany (kolejka nie gubi edycji).
+select pg_temp.remote_connect('tr33b');
+select dbl.dblink_exec('tr33b', 'begin');
+select dbl.dblink_exec('tr33b', format(
+  'update public.job_translations set description = %L where job_id = %L and locale = ''nl''',
+  'Werk in het magazijn vanaf 6:00. Geen ervaring nodig.', :'TRJ1'));
+update public.job_requirements set content = 'Heftruckcertificaat' where job_id = :'TRJ1' and kind = 'optional';
+select pg_temp.assert((select fields->>'requirements_optional.0' = 'Heftruckcertificaat' and fields->>'description' like '%22:00%'
+  from public.translation_source_revisions r join public.translation_sources s on s.current_revision_id = r.id
+  where s.entity_id = :'TRJ1'), 'TR33-9 commit sesji głównej: rewizja z jej zmianą');
+select dbl.dblink_exec('tr33b', 'commit');
+select dbl.dblink_disconnect('tr33b');
+select pg_temp.assert((select fields->>'requirements_optional.0' = 'Heftruckcertificaat' and fields->>'description' like '%6:00%'
+  from public.translation_source_revisions r join public.translation_sources s on s.current_revision_id = r.id
+  where s.entity_id = :'TRJ1'), 'TR33-9b commit sesji B: bieżąca rewizja ma obie zmiany');
+select pg_temp.assert((select count(*) from public.translation_jobs j join public.translation_sources s
+  on s.entity_id = j.entity_id and s.entity_type = j.entity_type
+  where j.entity_id = :'TRJ1' and j.status in ('queued', 'retry', 'leased') and j.revision_id <> s.current_revision_id) = 0,
+  'TR33-9c brak zaległych zadań starszych rewizji');
+
+-- TR33-10: treść ponad limit pól nie blokuje publikacji — źródło ukryte (skipped).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJ2', :'TRCO', 'draft-tr33-2', 'Oferta duża', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'TRJ2', 'pl', 'Oferta duża', 'Opis.', array(select 'Zadanie ' || g from generate_series(1, 90) g));
+update public.jobs set status = 'active' where id = :'TRJ2';
+select pg_temp.assert((select status::text from public.jobs where id = :'TRJ2') = 'active'
+  and (select public.sync_job_translation_source(:'TRJ2')) = 'skipped'
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ2'),
+  'TR33-10 za dużo pól: oferta aktywna, tłumaczenie pominięte');
+
+-- TR33-11: oferta demonstracyjna nie trafia do kolejki (Invariant #12, bez kosztu AI).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, is_demo)
+  values (:'TRJ3', :'TRCO', 'draft-tr33-3', 'Oferta demo', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl', true);
+insert into public.job_translations(job_id, locale, title, description) values (:'TRJ3', 'pl', 'Oferta demo', 'Opis demo.');
+update public.jobs set status = 'active' where id = :'TRJ3';
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ3'),
+  'TR33-11 oferta demo bez źródła tłumaczenia');
+
+-- TR33-12: usunięcie (soft delete i fizyczne) = purge rewizji, zadań i przekładów (także korekt).
+update public.jobs set deleted_at = now() where id = :'TRJ1';
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_source_revisions where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_documents where entity_id = :'TRJ1'),
+  'TR33-12 soft delete: purge');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJ4', :'TRCO', 'draft-tr33-4', 'Oferta do usunięcia', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'fr');
+insert into public.job_translations(job_id, locale, title, description) values (:'TRJ4', 'fr', 'Magasinier', 'Travail en entrepôt.');
+update public.jobs set status = 'active' where id = :'TRJ4';
+select pg_temp.assert((select source_locale from public.translation_source_revisions where entity_id = :'TRJ4') = 'fr'
+  and (select array_agg(target_locale order by target_locale) from public.translation_jobs where entity_id = :'TRJ4')
+      = array['en', 'nl', 'pl'], 'TR33-12b źródło fr: zadania en/nl/pl');
+delete from public.jobs where id = :'TRJ4';
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ4')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ4'),
+  'TR33-12c usunięcie fizyczne: purge');
+
+-- TR33-13: funkcje synchronizacji niedostępne dla ról klienta.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.sync_job_translation_source(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.sync_job_translation_source(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.job_translation_source_fields(uuid)', 'execute')
+  and public.translation_pipeline_version() ~ '^[a-z0-9][a-z0-9.+_-]{0,63}$',
+  'TR33-13 synchronizacja tylko dla serwera; wersja pipeline zgodna z CHECK');
+
+-- TR33-N (kontrola ujemna): bez triggera na job_translations edycja aktywnej oferty zostawia
+-- kolejkę przy starej treści — to trigger (a nie przypadek) utrzymuje rewizję w zgodzie z ofertą.
+begin;
+alter table public.job_translations disable trigger trg_job_translation_sync_translations;
+update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
+set constraints all immediate;
+select pg_temp.assert((select public.sync_job_translation_source(:'TRJ2')) = 'created', 'TR33-Na ręczna synchronizacja tworzy rewizję');
+rollback;
+begin;
+alter table public.job_translations disable trigger trg_job_translation_sync_translations;
+update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
+set constraints all immediate;
+select pg_temp.assert(not exists (select 1 from public.translation_jobs where entity_id = :'TRJ2'),
+  'TR33-N bez triggera edycja nie trafia do kolejki');
+rollback;
+update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
+select pg_temp.assert((select count(*) from public.translation_jobs where entity_id = :'TRJ2' and status = 'queued') = 3,
+  'TR33-Nb z triggerem ta sama edycja kolejkuje trzy zadania');
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.

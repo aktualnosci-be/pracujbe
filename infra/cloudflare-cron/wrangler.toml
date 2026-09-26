@@ -10,9 +10,10 @@ workers_dev = false
 preview_urls = false
 
 [triggers]
-# Czas UTC. Kolejka e-mail co 5 minut, maintenance co godzinę — jak scripts/railway-cron-call.mjs
+# Czas UTC. Kolejka e-mail co 5 minut, maintenance co godzinę, worker tłumaczeń co 10 minut
+# (bez flagi AI_TRANSLATION_ENABLED odpowiada `skipped`) — jak scripts/railway-cron-call.mjs
 # (docs/railway/README.md). Zmiana harmonogramu = zmiana CRON_TASKS w src/worker.mjs.
-crons = ["*/5 * * * *", "0 * * * *"]
+crons = ["*/5 * * * *", "0 * * * *", "*/10 * * * *"]
 
 [vars]
 # Adres produkcji (tylko https, bez ścieżki). Zadania są stałe w kodzie workera.
