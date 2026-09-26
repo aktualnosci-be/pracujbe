@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { withServiceRole } from '@/lib/db/portal';
-import { execute, queryRows, rpcRows } from '@/lib/db/sql';
+import { execute, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import { renderEmail } from '@/emails/templates';
 import { renderNewsletterEmail } from '@/emails/newsletter';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
@@ -13,6 +13,7 @@ import {
   unsubscribePageUrl,
   unsubscribeSecretFromEnv,
 } from '@/lib/email/unsubscribe-token';
+import { alertOffOneClickUrl, alertOffPageUrl, createAlertOffToken } from '@/lib/email/saved-search-alert-token';
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import {
   emailFromEnv,
@@ -22,9 +23,15 @@ import {
 } from '@/lib/email/sender';
 import type { EmailType } from '@/emails/copy';
 import type { Locale } from '@/i18n/routing';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { isProductionMode } from '@/lib/env';
-import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib/email/transport';
+import {
+  emailProviderFromEnv,
+  mailTransportFromEnv,
+  MailSendError,
+  type MailMessage,
+  type MailTransport,
+} from '@/lib/email/transport';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
@@ -59,9 +66,74 @@ import { emailProviderFromEnv, mailTransportFromEnv, MailSendError } from '@/lib
  * transakcja: claim paczki jest zatwierdzony przed pierwszą wysyłką (dzierżawa widoczna dla
  * innych workerów), a budżet, zapis wyniku i odłożenie wiersza — każde osobno. Żadna
  * transakcja nie jest otwarta podczas wywołania HTTP dostawcy.
+ *
+ * #615: `lock_token` (0129) — nowy token nadawany PRZY KAŻDYM claimie (także ponownym po
+ * wygaśnięciu dzierżawy). Worker niesie go od claimu przez `email_delivery_send_check` do
+ * KAŻDEJ dalszej aktualizacji wiersza (mark-sent/mark-failed/defer, warunek `AND lock_token = …`).
+ * Jeśli dzierżawa wygaśnie w trakcie (wolny dostawca) i wiersz przejmie inny worker, token się
+ * nie zgadza — stary worker dostaje `lease_lost`/`rowCount=0` i NIC nie nadpisuje (wiersz
+ * należy już do kogoś innego), więc nie ma podwójnej wysyłki ani wyścigu aktualizacji statusu.
+ *
+ * #621 (dokończenie #615, 0131): `email_delivery_send_check` odnawia dzierżawę (`locked_at =
+ * now()`) TUŻ PRZED wywołaniem `transport.send` poniżej — w TEJ SAMEJ transakcji co kontrola
+ * tokenu/zgody, CAS po `lock_token`. Zamyka to wyścig TOCTOU: bez odnowienia dzierżawa nadal
+ * biegła od czasu claimu CAŁEJ paczki, więc przy wielu wierszach albo wolnym poprzednim
+ * wierszu okno mogło być prawie zużyte w chwili kontroli — worker dostawał zielone światło
+ * tuż przed wygaśnięciem dzierżawy i mógł zdążyć wysłać już PO tym, jak inny worker przejął
+ * wiersz. Po odnowieniu dostawca dostaje pełne, świeże okno dzierżawy (domyślnie 300 s) liczone
+ * od chwili tuż przed wywołaniem. Samo odnowienie nie wystarcza przy zawieszonym dostawcy
+ * (#628): wysyłka ma twardy termin `SEND_DEADLINE_MS` (≤ połowa dzierżawy), a niejednoznaczny
+ * wynik wraca do puli dopiero po pełnej dzierżawie i z tym samym kluczem idempotencji.
  */
 
 const MAX_ATTEMPTS = 5;
+
+/**
+ * #628: dzierżawa wiersza (sekundy) — przekazywana jawnie do `claim_email_batch`; odnawia ją
+ * `email_delivery_send_check` tuż przed wysyłką (#621).
+ */
+export const EMAIL_LEASE_SECONDS = 300;
+
+/**
+ * #628: twardy termin CAŁEJ wysyłki u dostawcy, wyraźnie krótszy niż odnowiona dzierżawa.
+ * Po terminie worker przerywa żądanie (EmailLabs) albo przestaje na nie czekać (Resend — SDK
+ * bez sygnału), zapisuje niejednoznaczny wynik jako ponowienie i nie zwalnia wiersza wcześniej
+ * niż po pełnej dzierżawie. Drugi worker dostaje wiersz dopiero wtedy, gdy pierwsze żądanie
+ * jest już rozstrzygnięte, a ponowienie niesie ten sam klucz idempotencji (Resend:
+ * `Idempotency-Key`, EmailLabs: stały `messageId` sprawdzany przed wysyłką) — bez duplikatu.
+ */
+export const SEND_DEADLINE_MS = 60_000;
+
+/** Wysyłka przerwana terminem — wynik u dostawcy nieznany (ponowienie z tym samym kluczem). */
+export class SendDeadlineError extends MailSendError {
+  constructor() {
+    super('provider_unavailable');
+    this.name = 'SendDeadlineError';
+  }
+}
+
+async function sendWithDeadline(
+  transport: MailTransport,
+  message: MailMessage,
+  idempotencyKey: string,
+): Promise<{ id: string }> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new SendDeadlineError());
+    }, SEND_DEADLINE_MS);
+  });
+  const sending = transport.send(message, { idempotencyKey, signal: controller.signal });
+  // Spóźniony wynik po terminie jest pomijany (bez nieobsłużonego odrzucenia).
+  sending.catch(() => undefined);
+  try {
+    return await Promise.race([sending, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // renderEmail jest generyczne po EmailType; na granicy workera dane pochodzą z jsonb (payload),
 // więc rzutujemy raz w kontrolowany sposób (bez `any`).
@@ -69,7 +141,7 @@ const renderAny = renderEmail as (
   type: EmailType,
   locale: Locale,
   data: Record<string, unknown>,
-  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity },
+  options?: { unsubscribeUrl?: string; sender?: EmailSenderIdentity; alertOffUrl?: string },
 ) => Promise<{ subject: string; html: string; text: string }>;
 
 export interface RenderedDelivery {
@@ -89,6 +161,8 @@ export async function renderDelivery(
   data: Record<string, unknown>,
   unsubscribeUrl: string | undefined,
   env: Record<string, string | undefined> = process.env,
+  /** #100: link „wyłącz tylko ten alert” (digest `jobMatch`), liczony przez workera. */
+  alertOffUrl?: string,
 ): Promise<RenderedDelivery> {
   const isMarketing = emailPreferenceCategory(row.template) === 'marketing';
   if (isMarketing) {
@@ -111,6 +185,7 @@ export async function renderDelivery(
   const rendered = await renderAny(row.template as EmailType, locale, data, {
     unsubscribeUrl,
     sender: senderIdentityFromEnv(env) ?? undefined,
+    alertOffUrl,
   });
   return { from: emailFromEnv(env), ...rendered };
 }
@@ -134,14 +209,63 @@ export function unsubscribeLinksFor(
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type AlertOffRow = {
+  profile_id: string | null;
+  template: string;
+  entity_type?: string | null;
+  entity_id?: string | null;
+};
+
+/** Token wyłączenia JEDNEGO alertu (digest `jobMatch` zapisanego wyszukiwania) albo `null`. */
+function alertOffTokenFor(row: AlertOffRow, secret: string | null): string | null {
+  if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
+  if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
+  return createAlertOffToken({ profileId: row.profile_id, savedSearchId: row.entity_id }, secret);
+}
+
+/**
+ * #100: link wyłączenia JEDNEGO alertu dla digestu `jobMatch` zapisanego wyszukiwania.
+ * `null` = inny typ maila, brak powiązanego wyszukiwania albo brak sekretu. Token niesie
+ * tylko UUID konta i wyszukiwania (bez e-maila); zapis dopiero po kliknięciu na stronie.
+ */
+export function alertOffLinkFor(row: AlertOffRow, locale: string, site: string, secret: string | null): string | null {
+  const token = alertOffTokenFor(row, secret);
+  return token ? alertOffPageUrl(site, locale, token) : null;
+}
+
+/**
+ * Nagłówki one-click (RFC 8058) digestu alertu: „Wypisz” w kliencie poczty wyłącza TYLKO
+ * ten alert (tym samym tokenem co `/wypisz-alert`), nie całą kategorię `job_matches`.
+ * `null` = mail bez alertu — wtedy obowiązują nagłówki kategorii (`unsubscribeLinksFor`).
+ */
+export function alertOffHeadersFor(
+  row: AlertOffRow,
+  locale: string,
+  site: string,
+  secret: string | null,
+): Record<string, string> | null {
+  const token = alertOffTokenFor(row, secret);
+  if (!token) return null;
+  return {
+    'List-Unsubscribe': `<${alertOffOneClickUrl(site, locale, token)}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+}
+
 interface DeliveryRow {
   id: string;
   profile_id: string | null;
+  entity_type?: string | null;
+  entity_id?: string | null;
   to_email: string;
   template: string;
   locale: string;
   payload: Record<string, unknown> | null;
   attempts: number;
+  /** #615: token dzierżawy nadany przez `claim_email_batch` — CAS na każdej dalszej aktualizacji. */
+  lock_token: string;
 }
 
 export interface ProcessResult {
@@ -151,6 +275,14 @@ export interface ProcessResult {
   /** Wiersze odłożone do następnego okna budżetu (bez zwiększania `attempts`). */
   deferred?: number;
   skipped?: string;
+  /** Wiersze wygaszone tuż przed wysyłką (wypisanie/blokada po claimie, #466 pkt 8). */
+  suppressed?: number;
+  /**
+   * #615: wiersze pominięte, bo dzierżawa TEGO workera wygasła i wiersz przejął inny worker
+   * (`email_delivery_send_check` zwróciło `lease_lost`) — nic nie wysyłamy, nic nie zapisujemy
+   * (wiersz należy już do innego workera, który sam zdecyduje o jego losie).
+   */
+  leaseLost?: number;
   /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
    * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
@@ -182,7 +314,10 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let queue: DeliveryRow[];
   try {
     queue = await withServiceRole((tx) =>
-      rpcRows<DeliveryRow>(tx, 'claim_email_batch', { p_limit: limit }),
+      rpcRows<DeliveryRow>(tx, 'claim_email_batch', {
+        p_limit: limit,
+        p_lease_seconds: EMAIL_LEASE_SECONDS,
+      }),
     );
   } catch (error) {
     captureError(error, { area: 'email.outbox.claim' });
@@ -193,20 +328,25 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let sent = 0;
   let failed = 0;
   let deferred = 0;
+  let suppressed = 0;
+  let leaseLost = 0;
   // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
   const exhausted = new Map<string, string>();
 
   /** Zwalnia dzierżawę i odkłada wiersz; `attempts` bez zmian — outbox pozostaje ponawialny. */
-  async function defer(rowId: string, nextAttemptAt: string): Promise<void> {
+  async function defer(rowId: string, lockToken: string, nextAttemptAt: string): Promise<void> {
     try {
-      await withServiceRole((tx) =>
+      const { rowCount } = await withServiceRole((tx) =>
         execute(
           tx,
           'email.outbox.defer',
-          'UPDATE public.email_deliveries SET locked_at = NULL, next_attempt_at = $2 WHERE id = $1',
-          [rowId, nextAttemptAt],
+          'UPDATE public.email_deliveries SET locked_at = NULL, next_attempt_at = $2 WHERE id = $1 AND lock_token = $3',
+          [rowId, nextAttemptAt, lockToken],
         ),
       );
+      // #615: dzierżawa już utracona (inny worker przejął wiersz) — nic więcej do zrobienia,
+      // NIE licząc się jako awaria (to nie nasz wiersz do odkładania już).
+      if (rowCount === 0) return;
     } catch (deferErr) {
       captureError(deferErr, { area: 'email.outbox.defer', deliveryId: rowId });
     }
@@ -239,7 +379,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     const pool = emailSendPool(row.template);
     const waitUntil = exhausted.get(pool);
     if (waitUntil) {
-      await defer(row.id, waitUntil);
+      await defer(row.id, row.lock_token, waitUntil);
       continue;
     }
 
@@ -258,12 +398,38 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
         // Marketing nigdy nie wychodzi bez działającego wypisania (#45).
         throw new Error('marketing email without unsubscribe link');
       }
+      // Digest alertu: nagłówek one-click wyłącza tylko ten alert; inne maile — kategorię.
+      const listHeaders = unsubscribe
+        ? (alertOffHeadersFor(row, locale, site, unsubscribeSecret) ?? unsubscribe.headers)
+        : null;
       const { from, subject, html, text } = await renderDelivery(
         row,
         locale,
         data,
         unsubscribe?.pageUrl,
+        process.env,
+        alertOffLinkFor(row, locale, site, unsubscribeSecret) ?? undefined,
       );
+
+      // #100 / #466 pkt 8: ponowna kontrola zgody tuż przed wysyłką (kategoria, blokada
+      // adresu, uprawnienie odbiorcy firmowego z 0122, wyłączony alert, kampania). Odbiorca mógł się wypisać po claimie — wtedy
+      // baza wygasza wiersz (ślad zostaje), a my nic nie wysyłamy i nie zużywamy budżetu.
+      // #615: token dzierżawy z claimu — jeśli między claimem a teraz wygasła i wiersz przejął
+      // inny worker, baza zwraca 'lease_lost' i NIE dotyka wiersza (nie jest już nasz).
+      const blockedReason = await withServiceRole((tx) =>
+        rpc<string | null>(tx, 'email_delivery_send_check', {
+          p_delivery_id: row.id,
+          p_lock_token: row.lock_token,
+        }),
+      );
+      if (blockedReason === 'lease_lost') {
+        leaseLost += 1;
+        continue;
+      }
+      if (blockedReason !== null) {
+        suppressed += 1;
+        continue;
+      }
 
       // #45: atomowy budżet puli tuż przed wysyłką (równoległe workery nie przekroczą limitu).
       const [grant] = await withServiceRole((tx) =>
@@ -274,7 +440,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       if (grant?.granted !== true) {
         const retryAt = grant?.retry_at ?? new Date(Date.now() + 60_000).toISOString();
         exhausted.set(pool, retryAt);
-        await defer(row.id, retryAt);
+        await defer(row.id, row.lock_token, retryAt);
         continue;
       }
 
@@ -282,16 +448,17 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // wiersz wróci do puli, ponowienie nie tworzy drugiego listu (Resend: Idempotency-Key,
       // EmailLabs: stały messageId + sprawdzenie przed wysyłką). Transport potwierdza wysyłkę
       // tylko z identyfikatorem wiadomości od dostawcy.
-      const result = await transport.send(
+      const result = await sendWithDeadline(
+        transport,
         {
           from,
           to: row.to_email,
           subject,
           html,
           text,
-          ...(unsubscribe ? { headers: unsubscribe.headers } : {}),
+          ...(listHeaders ? { headers: listHeaders } : {}),
         },
-        { idempotencyKey: row.id },
+        row.id,
       );
 
       const providerMessageId = result.id;
@@ -301,17 +468,28 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // (duplikat). Nie da się tu bezpiecznie ponowić; logujemy z provider_message_id do
       // ręcznej reconciliacji (i liczymy jako wysłany, by nie zawyżać 'failed').
       try {
-        await withServiceRole((tx) =>
+        // #615: CAS na `lock_token` — jeśli dzierżawa wygasła W TRAKCIE wysyłki (wolny
+        // dostawca) i wiersz przejął inny worker, `rowCount` wychodzi 0: NIE nadpisujemy
+        // jego pracy (locked_at=NULL zwolniłoby JEGO dzierżawę). Mail i tak już wyszedł —
+        // logujemy do ręcznej rekoncyliacji (jak przy błędzie zapisu, SEC-15).
+        const { rowCount } = await withServiceRole((tx) =>
           execute(
             tx,
             'email.outbox.mark-sent',
             `UPDATE public.email_deliveries
                 SET status = 'sent', sent_at = now(), provider = $4,
-                    provider_message_id = $2, attempts = $3, locked_at = NULL
-              WHERE id = $1`,
-            [row.id, providerMessageId, row.attempts + 1, transport.provider],
+                    provider_message_id = $2, attempts = $3, locked_at = NULL, lock_token = NULL
+              WHERE id = $1 AND lock_token = $5`,
+            [row.id, providerMessageId, row.attempts + 1, transport.provider, row.lock_token],
           ),
         );
+        if (rowCount === 0) {
+          captureError(new Error('lease lost after send'), {
+            area: 'email.outbox.markSent.leaseLost',
+            deliveryId: row.id,
+            providerMessageId,
+          });
+        }
       } catch (markErr) {
         captureError(markErr, {
           area: 'email.outbox.markSent',
@@ -324,22 +502,32 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       const attempts = row.attempts + 1;
       const isFinal = attempts >= MAX_ATTEMPTS;
       const backoffMin = Math.min(2 ** attempts, 60);
+      // #628: po przekroczeniu terminu wynik u dostawcy jest nieznany — wiersz wraca do puli
+      // najwcześniej po pełnej dzierżawie (spóźnione żądanie zdąży się rozstrzygnąć).
+      const retryDelayMs = Math.max(
+        backoffMin * 60_000,
+        err instanceof SendDeadlineError ? EMAIL_LEASE_SECONDS * 1000 : 0,
+      );
       // SEC-15: sprawdzamy też błąd zapisu stanu porażki (inaczej rekord utknąłby zablokowany).
       try {
+        // #615: jak przy mark-sent — bez CAS worker A mógłby cofnąć status/odblokować wiersz,
+        // który w międzyczasie przejął worker B (i już nad nim pracuje).
         await withServiceRole((tx) =>
           execute(
             tx,
             'email.outbox.mark-failed',
             `UPDATE public.email_deliveries
-                SET status = $2, attempts = $3, error_message = $4, next_attempt_at = $5, locked_at = NULL
-              WHERE id = $1`,
+                SET status = $2, attempts = $3, error_message = $4, next_attempt_at = $5,
+                    locked_at = NULL, lock_token = NULL
+              WHERE id = $1 AND lock_token = $6`,
             [
               row.id,
               isFinal ? 'failed' : 'queued',
               attempts,
               // Kod błędu dostawcy zamiast jego komunikatu (może zawierać adres odbiorcy).
               err instanceof MailSendError ? err.message : err instanceof Error ? err.message.slice(0, 500) : 'unknown',
-              new Date(Date.now() + backoffMin * 60_000).toISOString(),
+              new Date(Date.now() + retryDelayMs).toISOString(),
+              row.lock_token,
             ],
           ),
         );
@@ -351,5 +539,5 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
-  return { processed: queue.length, sent, failed, deferred, ok: true };
+  return { processed: queue.length, sent, failed, deferred, suppressed, leaseLost, ok: true };
 }

@@ -36,6 +36,8 @@ const ROUTES = [
   'candidate',
   'candidate/aplikacje',
   'candidate/oferty-polecane',
+  'candidate/powiadomienia',
+  'candidate/powiadomienia?nieprzeczytane=1',
   'candidate/onboarding',
   'candidate/profil',
   'candidate/profil/asystent',
@@ -57,6 +59,7 @@ const ROUTES = [
   'employer/oferty/12345/edycja',
   'employer/oferty/12345/baner',
   'employer/platnosci',
+  'employer/powiadomienia',
   'employer/statystyki',
   'employer/ustawienia',
   'employer/wiadomosci',
@@ -84,8 +87,8 @@ async function storeConsent(page: Page) {
     {
       name: 'pracujbe_consent',
       value: JSON.stringify({
-        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
-        categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+        categories: { necessary: true, preferences: false, analytics: false },
         ts: '2026-01-01T00:00:00.000Z',
         id: 'panel-a11y-e2e',
       }),

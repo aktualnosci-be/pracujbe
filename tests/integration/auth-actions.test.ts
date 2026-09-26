@@ -68,7 +68,7 @@ vi.mock('@/emails/templates', () => ({
     subject: locale, html: `<a href="${data.confirmationUrl ?? data.resetUrl}">link</a>`, text: 'link',
   }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const container = 'pracujbe-auth-actions-test-' + randomUUID();
 const clusterPassword = randomUUID();
@@ -187,6 +187,8 @@ const tokenOf = (url: URL) => new URLSearchParams(url.hash.slice(1)).get('token'
 const form = (email: string, locale: 'pl' | 'nl' | 'fr' | 'en') => ({
   email, password: PASSWORD, passwordConfirm: PASSWORD, firstName: 'Anna', lastName: 'Nowak',
   agreeTerms: true as const, privacyNoticeAck: true as const, locale,
+  // #492: deklaracja progu wieku (pracodawca ją pomija — schemat usuwa nadmiarowe pola).
+  ageConfirmed: true as const, minAge: 18,
 });
 
 /** Tożsamość, jaką zobaczy serwer przy kolejnym żądaniu z bieżącymi cookies. */

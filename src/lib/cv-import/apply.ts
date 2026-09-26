@@ -6,7 +6,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { isDisallowedProposalText } from '@/lib/cv-import/minimize';
 import { CV_PROPOSAL_LIMITS } from '@/lib/cv-import/proposals';
 import type { CvApprovedProposals } from '@/lib/cv-import/types';

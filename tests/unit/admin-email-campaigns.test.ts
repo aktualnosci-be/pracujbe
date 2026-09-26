@@ -33,7 +33,7 @@ vi.mock('next/navigation', () => ({
     throw new Error('NEXT_NOT_FOUND');
   }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   isProductionMode: vi.fn(() => true),
@@ -293,11 +293,14 @@ describe('/api/maintenance — kolejkowanie kampanii tylko z nadawcą', () => {
   const TASKS = [
     'release_stale_discount_reservations',
     'release_stale_checkout_intents',
+    'ai_budget_release_stale_reservations',
     'expire_due_jobs',
     'purge_guest_application_requests',
     'process_saved_search_alerts',
     'process_email_campaigns',
     'run_retention_purge',
+    'purge_job_funnel_data',
+    'purge_stale_message_attachments',
   ];
   const request = () =>
     new Request('http://web.internal/api/maintenance', {

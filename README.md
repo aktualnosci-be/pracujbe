@@ -14,14 +14,17 @@ propozycje pracy. Interfejs w **PL / NL / FR / EN**.
 ## Stack
 
 Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind CSS + shadcn/ui ·
-Supabase (przejściowo) · PostgreSQL Railway · Zod · React Hook Form · Resend + React Email ·
-Sentry · Vitest + Playwright · Railway.
+PostgreSQL Railway (RLS) · Better Auth · prywatny bucket Railway (CV) · Zod · React Hook Form ·
+EmailLabs/Resend + React Email · webhook błędów (Discord) · Vitest + Playwright · Railway.
+Supabase usunięte z runtime (#27); katalog `supabase/` zawiera już tylko migracje SQL i testy RLS
+(nazwa historyczna).
 
 **CI działa na GitHub-hosted runnerach (`ubuntu-latest`), a produkcję z `main` wdraża Railway po zielonym CI** —
 patrz [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
-Migracja backendu, bazy, logowania i prywatnych plików do Railway nadal trwa.
-Skonfigurowana ścieżka wdrożenia nie oznacza jeszcze gotowości produkcyjnej portalu.
+Kod działa na PostgreSQL Railway, Better Auth i buckecie Railway; stan przełączenia produkcji
+i otwarte kroki właściciela: [`docs/railway/STATUS.md`](./docs/railway/STATUS.md). Skonfigurowana
+ścieżka wdrożenia nie oznacza jeszcze gotowości produkcyjnej portalu.
 
 ## Szybki start
 
@@ -31,18 +34,20 @@ npm install
 
 # 2. Zmienne środowiskowe
 cp .env.example .env.local
-#   uzupełnij klucze Supabase / Resend / Sentry (patrz docs/SUPABASE_SETUP.md, docs/RESEND_SETUP.md)
+#   bez zmiennych bazy działa tryb demo; pełna lista: .env.example,
+#   docs/railway/KONFIGURACJA_PRODUKCJI.md, docs/EMAILLABS_SETUP.md, docs/RESEND_SETUP.md
 
-# 3. Baza (lokalnie, wymaga Supabase CLI)
-#   supabase start
-#   supabase db reset            # zastosuje migracje z supabase/migrations + seed.sql
+# 3. Baza (opcjonalnie, lokalny PostgreSQL 16)
+#   npm run test:rls             # migracje od zera + testy RLS na lokalnym PostgreSQL
+#   migracje na wskazanej bazie: npm run db:migrate:production (docs/railway/MIGRACJE_POSTGRESQL.md)
 
 # 4. Dev
 npm run dev                       # http://localhost:3000  (przekierowuje na /pl)
 ```
 
-Bez skonfigurowanego Supabase aplikacja nadal się buduje i renderuje strony publiczne
-z danymi demonstracyjnymi (fallback) — dzięki temu CI/build przechodzi bez sekretów.
+Bez skonfigurowanej bazy (`DATABASE_*`) aplikacja nadal się buduje i renderuje strony publiczne
+z danymi demonstracyjnymi (fallback) — dzięki temu CI/build przechodzi bez sekretów. W trybie
+`APP_MODE=production` brak konfiguracji daje 503, nie tryb demo.
 
 ## Skrypty
 
@@ -60,17 +65,18 @@ z danymi demonstracyjnymi (fallback) — dzięki temu CI/build przechodzi bez se
 ## Struktura
 
 Patrz [`CLAUDE.md` → „Struktura katalogów"](./CLAUDE.md). Skrótowo:
-`src/app/[locale]` (strony) · `src/lib` (supabase, i18n, matching, email, errors) ·
-`src/messages` (tłumaczenia) · `src/emails` (React Email) · `supabase/migrations` (SQL) ·
+`src/app/[locale]` (strony) · `src/lib` (db, auth, files, i18n, matching, email, errors) ·
+`src/messages` (tłumaczenia) · `src/emails` (React Email) · `supabase/migrations` (SQL; nazwa katalogu historyczna) ·
 `tests` (unit + e2e) · `docs` (setup + checklisty).
 
 ## Dokumentacja
 
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — architektura i decyzje
-- [`docs/SELF_HOSTED_RUNNERS.md`](./docs/SELF_HOSTED_RUNNERS.md) — konfiguracja runnerów CI
-- [`docs/SUPABASE_SETUP.md`](./docs/SUPABASE_SETUP.md) · [`docs/RESEND_SETUP.md`](./docs/RESEND_SETUP.md)
-- [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) · [`docs/railway/README.md`](./docs/railway/README.md)
+- [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) · [`docs/railway/README.md`](./docs/railway/README.md) · [`docs/railway/STATUS.md`](./docs/railway/STATUS.md)
+- [`docs/railway/WARSTWA_DANYCH.md`](./docs/railway/WARSTWA_DANYCH.md) · [`docs/railway/MIGRACJE_POSTGRESQL.md`](./docs/railway/MIGRACJE_POSTGRESQL.md)
+- [`docs/EMAILLABS_SETUP.md`](./docs/EMAILLABS_SETUP.md) · [`docs/RESEND_SETUP.md`](./docs/RESEND_SETUP.md)
 - [`docs/SECURITY_CHECKLIST.md`](./docs/SECURITY_CHECKLIST.md) · [`docs/PERFORMANCE_CHECKLIST.md`](./docs/PERFORMANCE_CHECKLIST.md) · [`docs/LAUNCH_CHECKLIST.md`](./docs/LAUNCH_CHECKLIST.md)
+- Archiwalne: [`docs/SUPABASE_SETUP.md`](./docs/SUPABASE_SETUP.md) (stan sprzed #27), [`docs/SELF_HOSTED_RUNNERS.md`](./docs/SELF_HOSTED_RUNNERS.md) (CI przed 2026-09-23)
 
 ## Licencja
 

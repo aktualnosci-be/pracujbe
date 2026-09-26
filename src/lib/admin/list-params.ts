@@ -122,6 +122,61 @@ export function parseReportKindFilter(raw: string | undefined | null): ReportKin
     : 'all';
 }
 
+/**
+ * Kolejność listy zgłoszeń (#42, kolejka przeglądu): `newest` — od najnowszych (jak dotąd),
+ * `priority` — priorytet z `flag_report_for_review` malejąco, potem termin sprawy rosnąco
+ * (bez terminu na końcu), potem od najnowszych. Domyślnie `priority` dla kolejki DSA,
+ * `newest` dla pozostałych widoków.
+ */
+export const REPORT_SORTS = ['newest', 'priority'] as const;
+export type ReportSort = (typeof REPORT_SORTS)[number];
+
+export function parseReportSort(raw: string | undefined | null, kind: ReportKindFilter): ReportSort {
+  if (raw && (REPORT_SORTS as readonly string[]).includes(raw)) return raw as ReportSort;
+  return kind === 'dsa_notice' ? 'priority' : 'newest';
+}
+
+/** Filtr „oflagowane do przeglądu”: tylko dokładne `?flagged=1`. */
+export function parseReportFlagged(raw: string | undefined | null): boolean {
+  return raw === '1';
+}
+
+/** Kursor kolejki priorytetów: priorytet, termin (`null` = bez terminu), `created_at`, `id`. */
+export interface AdminPriorityCursor {
+  priority: number;
+  dueAt: string | null;
+  createdAt: string;
+  id: string;
+}
+
+const PRIORITY_CURSOR_PREFIX = 'p1';
+
+export function encodeAdminPriorityCursor(cursor: AdminPriorityCursor): string {
+  const due = cursor.dueAt ?? '-';
+  return Buffer.from(
+    `${PRIORITY_CURSOR_PREFIX}|${cursor.priority}|${due}|${cursor.createdAt}|${cursor.id}`,
+    'utf8',
+  ).toString('base64url');
+}
+
+/** Token z URL → kursor kolejki albo null (zły format = pierwsza strona). */
+export function decodeAdminPriorityCursor(token: string | undefined | null): AdminPriorityCursor | null {
+  if (!token || token.length > 300 || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
+  let raw: string;
+  try {
+    raw = Buffer.from(token, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const parts = raw.split('|');
+  if (parts.length !== 5 || parts[0] !== PRIORITY_CURSOR_PREFIX) return null;
+  const [, priorityRaw, due, createdAt, id] = parts as [string, string, string, string, string];
+  if (!/^[0-3]$/.test(priorityRaw)) return null;
+  if (due !== '-' && !TIMESTAMP_RE.test(due)) return null;
+  if (!TIMESTAMP_RE.test(createdAt) || !UUID_RE.test(id)) return null;
+  return { priority: Number(priorityRaw), dueAt: due === '-' ? null : due, createdAt, id };
+}
+
 /** Role, które aplikacja faktycznie nadaje (bez `moderator` — nic go nie obsługuje, #418). */
 export const USER_ROLE_FILTERS = ['candidate', 'employer', 'admin'] as const;
 export type UserRoleFilter = (typeof USER_ROLE_FILTERS)[number];
@@ -221,7 +276,7 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'report',
@@ -231,6 +286,7 @@ export const AUDIT_ENTITY_TYPES = [
   'breach_incident',
   'screening_question_review',
   'email_campaign',
+  'age_policy',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -251,6 +307,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'offer.status_changed': 'auditActionOfferStatus',
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
+  'age_policy.updated': 'auditActionAgePolicyUpdated',
   'breach.created': 'auditActionBreachCreated',
   'breach.updated': 'auditActionBreachUpdated',
   'breach.closed': 'auditActionBreachClosed',
@@ -281,4 +338,14 @@ export function parseUuid(raw: string | undefined | null): string | null {
 /** Data `YYYY-MM-DD` z URL albo null. */
 export function parseYmd(raw: string | undefined | null): string | null {
   return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+/** Filtr wiadomości z formularza kontaktu (#61, `contact_messages.status`); domyślnie nowe. */
+export const CONTACT_MESSAGE_FILTERS = ['new', 'handled', 'all'] as const;
+export type ContactMessageFilter = (typeof CONTACT_MESSAGE_FILTERS)[number];
+
+export function parseContactMessageFilter(raw: string | undefined | null): ContactMessageFilter {
+  return raw && (CONTACT_MESSAGE_FILTERS as readonly string[]).includes(raw)
+    ? (raw as ContactMessageFilter)
+    : 'new';
 }

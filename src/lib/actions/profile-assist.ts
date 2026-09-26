@@ -3,7 +3,7 @@
 import { getPortalIdentity, isPortalDataConfigured, isServiceDatabaseConfigured } from '@/lib/db/portal';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { withAiBudget } from '@/lib/ai/budget';
 import { withAiUsageLog, type AiUsageOutcome } from '@/lib/ai/usage-log';
 import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';

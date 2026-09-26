@@ -5,7 +5,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const userId = '22222222-2222-4222-8222-222222222222';
 const jobId = '11111111-1111-4111-8111-111111111111';

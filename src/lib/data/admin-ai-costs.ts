@@ -10,7 +10,7 @@ import { emptyAiCostReport, parseAiCostReport, type AiCostReport } from '@/lib/a
 import { requireAdmin } from '@/lib/data/admin';
 import { isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 export type AiCostReportResult = { status: 'ok'; report: AiCostReport; demo: boolean } | { status: 'error' };
 

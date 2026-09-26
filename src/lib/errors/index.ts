@@ -19,6 +19,8 @@ export const ErrorCodes = {
   JOB_NOT_ACTIVE: 'JOB_NOT_ACTIVE',
   APPLICATION_ALREADY_EXISTS: 'APPLICATION_ALREADY_EXISTS',
   SCREENING_ANSWER_REQUIRED: 'SCREENING_ANSWER_REQUIRED',
+  AGE_ATTESTATION_REQUIRED: 'AGE_ATTESTATION_REQUIRED',
+  AGE_ADULT_REQUIRED: 'AGE_ADULT_REQUIRED',
   SCREENING_REVIEW_REQUIRED: 'SCREENING_REVIEW_REQUIRED',
   SCREENING_QUESTION_REJECTED: 'SCREENING_QUESTION_REJECTED',
   OFFER_ALREADY_EXISTS: 'OFFER_ALREADY_EXISTS',
@@ -70,6 +72,7 @@ export const ErrorCodes = {
   PROFILE_ASSIST_NO_PROPOSALS: 'PROFILE_ASSIST_NO_PROPOSALS',
   PROFILE_ASSIST_FAILED: 'PROFILE_ASSIST_FAILED',
   GUEST_APPLY_UNAVAILABLE: 'GUEST_APPLY_UNAVAILABLE',
+  SITE_ACCESS_UNAVAILABLE: 'SITE_ACCESS_UNAVAILABLE',
   EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
   CLAIM_EXPIRED: 'CLAIM_EXPIRED',
   NOT_FOUND: 'NOT_FOUND',
@@ -95,6 +98,8 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   JOB_NOT_ACTIVE: 'jobNotActive',
   APPLICATION_ALREADY_EXISTS: 'applicationAlreadyExists',
   SCREENING_ANSWER_REQUIRED: 'screeningAnswerRequired',
+  AGE_ATTESTATION_REQUIRED: 'ageAttestationRequired',
+  AGE_ADULT_REQUIRED: 'ageAdultRequired',
   SCREENING_REVIEW_REQUIRED: 'screeningReviewRequired',
   SCREENING_QUESTION_REJECTED: 'screeningQuestionRejected',
   OFFER_ALREADY_EXISTS: 'offerAlreadyExists',
@@ -146,6 +151,7 @@ const ERROR_MESSAGE_KEYS: Record<ErrorCode, string> = {
   PROFILE_ASSIST_NO_PROPOSALS: 'profileAssistNoProposals',
   PROFILE_ASSIST_FAILED: 'profileAssistFailed',
   GUEST_APPLY_UNAVAILABLE: 'guestApplyUnavailable',
+  SITE_ACCESS_UNAVAILABLE: 'siteAccessUnavailable',
   EMAIL_NOT_VERIFIED: 'emailNotVerified',
   CLAIM_EXPIRED: 'claimExpired',
   NOT_FOUND: 'notFound',
@@ -164,7 +170,7 @@ export function toUserMessageKey(code: ErrorCode): string {
 export interface AppErrorOptions {
   /** Nadpisanie klucza tłumaczenia komunikatu dla użytkownika. Domyślnie `errors.<code>`. */
   userMessageKey?: string;
-  /** Dodatkowy kontekst (do logów/Sentry) — NIGDY nie pokazywany użytkownikowi. */
+  /** Dodatkowy kontekst (do logów/kanału błędów) — NIGDY nie pokazywany użytkownikowi. */
   context?: Record<string, unknown>;
   /** Oryginalny błąd (zachowany jako `cause`). */
   cause?: unknown;

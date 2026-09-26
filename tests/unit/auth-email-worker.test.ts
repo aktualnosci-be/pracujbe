@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * dostawcy = UUID zlecenia. Porażka dostawcy/renderu zapisuje ustalony kod, nie komunikat.
  */
 
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const resendSend = vi.fn();
 vi.mock('resend', () => ({
@@ -20,7 +20,7 @@ import {
   processAuthEmailBatch,
   resendSender,
 } from '@/lib/auth/email-worker';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 const baseURL = 'https://pracuj.be';
 const future = () => new Date(Date.now() + 60_000);
@@ -68,7 +68,7 @@ beforeEach(() => {
   vi.mocked(captureError).mockClear();
 });
 
-/** Nic z tego, co trafia do Sentry, nie może zawierać tokenu ani adresu odbiorcy (#78). */
+/** Nic z tego, co trafia do kanału błędów, nie może zawierać tokenu ani adresu odbiorcy (#78). */
 function expectNoSecretsInCapturedErrors() {
   const captured = JSON.stringify(vi.mocked(captureError).mock.calls.map(([error, context]) => [
     error instanceof Error ? { name: error.name, message: error.message } : error, context,

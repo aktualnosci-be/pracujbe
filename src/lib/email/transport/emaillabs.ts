@@ -103,6 +103,17 @@ function sendErrorFor(status: number): MailSendError {
   return new MailSendError(retryable ? 'provider_unavailable' : 'delivery_failed');
 }
 
+/** Limit pojedynczego żądania albo wcześniejszy termin workera — co nastąpi pierwsze. */
+function requestSignal(deadline?: AbortSignal): AbortSignal {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // Timer nie trzyma procesu przy życiu (worker kończy się po paczce).
+  if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+  deadline?.addEventListener('abort', () => controller.abort(), { once: true });
+  controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  return controller.signal;
+}
+
 export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike = fetch): MailTransport {
   const base = (config.baseUrl ?? EMAILLABS_API_BASE).replace(/\/$/, '');
   const authHeaders = {
@@ -110,13 +121,16 @@ export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike
     Authorization: config.secretKey,
   };
 
-  async function call(url: string, init: RequestInit): Promise<Response> {
+  async function call(url: string, init: RequestInit, deadline?: AbortSignal): Promise<Response> {
+    // #628: termin wysyłki workera przerywa też trwające żądanie (nie tylko limit pojedynczego).
+    if (deadline?.aborted) throw new MailSendError('provider_unavailable');
+    const signal = requestSignal(deadline);
     try {
       return await fetchImpl(url, {
         ...init,
         headers: { ...authHeaders, Accept: 'application/json', ...(init.headers ?? {}) },
         redirect: 'error',
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal,
       });
     } catch {
       // Sieć, timeout, przekierowanie — bez szczegółów (URL i nagłówki zawierają klucze).
@@ -125,9 +139,9 @@ export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike
   }
 
   /** `true` = list o tym identyfikatorze już jest u dostawcy (poprzednia próba przyjęta). */
-  async function alreadyAccepted(messageId: string): Promise<boolean> {
+  async function alreadyAccepted(messageId: string, deadline?: AbortSignal): Promise<boolean> {
     const query = new URLSearchParams({ messageId, smtpAccount: config.smtpAccount, limit: '1' });
-    const response = await call(`${base}/v2.1/email?${query.toString()}`, { method: 'GET' });
+    const response = await call(`${base}/v2.1/email?${query.toString()}`, { method: 'GET' }, deadline);
     // 404 = zapytanie poprawne, brak wyników (kontrakt API EmailLabs).
     if (response.status === 404) return false;
     if (response.status !== 200) throw new MailSendError('provider_unavailable');
@@ -142,13 +156,13 @@ export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike
       const from = parseMailbox(message.from);
       if (!from) throw new MailSendError('delivery_failed');
       const messageId = emailLabsMessageId(options.idempotencyKey, from.email);
-      if (await alreadyAccepted(messageId)) return { id: messageId };
+      if (await alreadyAccepted(messageId, options.signal)) return { id: messageId };
 
       const response = await call(`${base}/v2.1/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(emailLabsPayload(message, messageId, config.smtpAccount)),
-      });
+      }, options.signal);
       // 207 = część elementów odrzucona walidacją — przy jednym odbiorcy to odrzucenie listu.
       if (response.status !== 200) throw sendErrorFor(response.status);
       const body = await readJson(response);

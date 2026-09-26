@@ -10,13 +10,16 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
  */
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 const limiterPool = vi.hoisted(() => vi.fn(async () => {
   throw new Error('pula limitera niedostępna');
 }));
 vi.mock('@/lib/db/runtime', () => ({ getRateLimitPool: limiterPool }));
+// #588/#602: `X-Forwarded-For` jest dopisywany przez KLIENTA i nie może być źródłem klucza —
+// tylko zaufany `X-Real-IP` (ustawiany przez proxy) się liczy.
+const trustedHeaders = vi.hoisted(() => ({ current: new Headers({ 'x-real-ip': '203.0.113.7' }) }));
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-forwarded-for': '198.51.100.9, 203.0.113.7' }),
+  headers: async () => trustedHeaders.current,
 }));
 
 const { checkRateLimit } = await import('@/lib/rate-limit');
@@ -24,6 +27,7 @@ const { checkRateLimit } = await import('@/lib/rate-limit');
 beforeEach(() => {
   resetFakeDb(null);
   vi.unstubAllEnvs();
+  trustedHeaders.current = new Headers({ 'x-real-ip': '203.0.113.7' });
   // Login limitera z #24 nieskonfigurowany → ścieżka przejściowa na puli service.
   vi.stubEnv('DATABASE_RATE_LIMIT_URL', '');
   vi.stubEnv('RATE_LIMIT_KEY_SECRET', '');
@@ -31,7 +35,7 @@ beforeEach(() => {
 });
 
 describe('checkRateLimit', () => {
-  it('w limicie → true; klucz z prawego tokenu XFF, limit i okno z serwera; service_role', async () => {
+  it('w limicie → true; klucz z zaufanego X-Real-IP, limit i okno z serwera; service_role', async () => {
     fakeDb.rpc('rate_limit_hit', true);
     expect(await checkRateLimit('apply', { max: 5, windowSeconds: 120, identifier: 'u1' })).toBe(true);
     const [call] = fakeDb.callsTo('rate_limit_hit');
@@ -39,6 +43,23 @@ describe('checkRateLimit', () => {
       as: 'service',
       args: { p_key: 'apply:203.0.113.7:u1', p_max: 5, p_window_seconds: 120 },
     });
+  });
+
+  it('kontrola ujemna: sfałszowany X-Forwarded-For bez zaufanego nagłówka nie trafia do klucza (#588/#602)', async () => {
+    trustedHeaders.current = new Headers({ 'x-forwarded-for': '203.0.113.7, 198.51.100.9' });
+    fakeDb.rpc('rate_limit_hit', true);
+    await checkRateLimit('apply', { max: 5, windowSeconds: 120 });
+    expect(fakeDb.callsTo('rate_limit_hit')[0]?.args['p_key']).toBe('apply:unknown');
+  });
+
+  it('X-Forwarded-For obok zaufanego X-Real-IP jest ignorowany', async () => {
+    trustedHeaders.current = new Headers({
+      'x-real-ip': '203.0.113.7',
+      'x-forwarded-for': '198.51.100.9',
+    });
+    fakeDb.rpc('rate_limit_hit', true);
+    await checkRateLimit('apply', { max: 5, windowSeconds: 120 });
+    expect(fakeDb.callsTo('rate_limit_hit')[0]?.args['p_key']).toBe('apply:203.0.113.7');
   });
 
   it('przekroczenie (RPC false) → false', async () => {

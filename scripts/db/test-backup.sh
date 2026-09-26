@@ -7,7 +7,10 @@
 # artefakt, zmieniony manifest, zły klucz, niepusty cel, klucz prywatny jako odbiorca,
 # brak odbiorców, zła retencja. #486: kandydat usunięty PO kopii wraca przy zwykłym
 # odtworzeniu (kontrola ujemna), a z rejestrem usunięć (RESTORE_TOMBSTONES_FILE) jest
-# usuwany ponownie; zły rejestr = odmowa. Wymaga: psql/pg_dump/pg_restore, age, age-keygen.
+# usuwany ponownie; zły rejestr = odmowa. #569: ta sama kopia w buckecie S3 (atrapa R2
+# tests/helpers/fake-s3-server.mjs: klucz zapisu i klucz odczytu), retencja w buckecie,
+# odtworzenie z R2 (RESTORE_S3_OBJECT=latest) i kontrole ujemne (klucz odczytu nie wyśle
+# kopii, niepełna konfiguracja R2). Wymaga: psql/pg_dump/pg_restore, age, age-keygen, node.
 # Użycie jak test-rls.sh (PGHOST/PGUSER/PGPASSWORD albo peer auth jako postgres).
 # Nie łączy się z internetem (BACKUP_HEARTBEAT_URL nieustawiony).
 # =============================================================================
@@ -18,7 +21,7 @@ SRC_DB=pracujbe_backup_source_ci
 DST_DB=pracujbe_restore_bk_ci
 unset BACKUP_HEARTBEAT_URL
 
-for bin in age age-keygen pg_dump pg_restore psql; do
+for bin in age age-keygen pg_dump pg_restore psql node; do
   command -v "$bin" >/dev/null || { echo "Brak programu $bin (test wymaga age)."; exit 2; }
 done
 
@@ -39,7 +42,9 @@ url() {
 
 work="$(mktemp -d)"
 recreate() { "${psql_base[@]}" -d postgres -c "drop database if exists $1;" -c "create database $1;" >/dev/null; }
+fake_pid=''
 cleanup() {
+  if [ -n "$fake_pid" ]; then kill "$fake_pid" 2>/dev/null || true; fi
   for db in "$SRC_DB" "$DST_DB"; do "${psql_base[@]}" -d postgres -c "drop database if exists $db;" >/dev/null 2>&1 || true; done
   rm -rf "$work"
 }
@@ -174,5 +179,47 @@ expect_code 2 'brak odbiorców' run_backup BACKUP_AGE_RECIPIENTS_FILE="$work/emp
 expect_code 2 'retencja 0' run_backup BACKUP_RETENTION=0
 [ "$(find "$backups" -maxdepth 1 -name 'pracujbe-*.dump.age' | wc -l)" = 2 ] \
   || { echo 'Nieudane uruchomienia zmieniły katalog kopii'; exit 1; }
+
+echo '>> #569: kopie do bucketu S3 (atrapa R2), retencja 2 w buckecie'
+node "$ROOT/tests/helpers/fake-s3-server.mjs" "$work/s3-endpoint" &
+fake_pid=$!
+for _ in $(seq 50); do [ -s "$work/s3-endpoint" ] && break; sleep 0.1; done
+[ -s "$work/s3-endpoint" ] || { echo 'Atrapa S3 nie wystartowała'; exit 1; }
+s3_common=(BACKUP_S3_ENDPOINT="$(cat "$work/s3-endpoint")" BACKUP_S3_BUCKET=backups BACKUP_S3_PREFIX=ci
+  BACKUP_S3_ALLOW_INSECURE_LOCAL=1)
+s3_write=("${s3_common[@]}" BACKUP_S3_ACCESS_KEY_ID=write-key BACKUP_S3_SECRET_ACCESS_KEY=write-secret)
+s3_read=("${s3_common[@]}" BACKUP_S3_READ_ACCESS_KEY_ID=read-key BACKUP_S3_READ_SECRET_ACCESS_KEY=read-secret)
+s3_list() { env "${s3_read[@]}" node "$ROOT/scripts/db/lib/backup-s3.mjs" list; }
+for i in 1 2 3; do
+  out="$(run_backup "${s3_write[@]}")"
+  printf '%s\n' "$out" | tail -1
+  grep -q '^BACKUP: PASS.*R2: wysłano' <<<"$out" || { echo 'Brak PASS kopii z wysyłką do R2'; exit 1; }
+  [ "$i" = 3 ] || sleep 1.1
+done
+[ "$(s3_list | grep -c '\.dump\.age$')" = 2 ] && [ "$(s3_list | grep -c '\.json$')" = 2 ] \
+  || { echo 'Retencja w R2: oczekiwane 2 kopie (artefakt + manifest)'; exit 1; }
+remote_latest="$(env "${s3_read[@]}" node "$ROOT/scripts/db/lib/backup-s3.mjs" latest)"
+local_latest="$(find "$backups" -maxdepth 1 -name 'pracujbe-*.dump.age' -printf '%f\n' | LC_ALL=C sort | tail -1)"
+[ "$remote_latest" = "$local_latest" ] || { echo 'Najnowsza kopia w R2 różni się od lokalnej'; exit 1; }
+
+echo '>> #569: odtworzenie najnowszej kopii z R2 (klucz odczytu)'
+recreate "$DST_DB"
+out="$(env RESTORE_S3_OBJECT=latest "${s3_read[@]}" RESTORE_AGE_IDENTITY_FILE="$work/identity.txt" \
+  RESTORE_TARGET_URL="$(url "$DST_DB")" bash "$ROOT/scripts/db/restore-backup.sh")"
+printf '%s\n' "$out" | tail -1
+grep -q '^RESTORE: PASS' <<<"$out" || { echo 'Brak PASS odtworzenia z R2'; exit 1; }
+recreate "$DST_DB"
+restore_s3() {
+  env RESTORE_AGE_IDENTITY_FILE="$work/identity.txt" RESTORE_TARGET_URL="$(url "$DST_DB")" "$@" \
+    bash "$ROOT/scripts/db/restore-backup.sh"
+}
+expect_code 2 'R2: odtworzenie kluczem zapisu zamiast odczytu' restore_s3 RESTORE_S3_OBJECT=latest "${s3_write[@]}"
+expect_code 2 'R2: RESTORE_ARCHIVE i RESTORE_S3_OBJECT naraz' restore_s3 RESTORE_S3_OBJECT=latest RESTORE_ARCHIVE="$latest" "${s3_read[@]}"
+before="$(s3_list | wc -l)"
+expect_code 1 'R2: klucz odczytu nie wyśle kopii' run_backup "${s3_common[@]}" \
+  BACKUP_S3_ACCESS_KEY_ID=read-key BACKUP_S3_SECRET_ACCESS_KEY=read-secret
+[ "$(s3_list | wc -l)" = "$before" ] || { echo 'Klucz odczytu zmienił zawartość bucketu'; exit 1; }
+expect_code 2 'R2: niepełna konfiguracja' run_backup BACKUP_S3_BUCKET=backups
+expect_code 2 'R2: endpoint http bez zgody na test lokalny' run_backup "${s3_write[@]}" BACKUP_S3_ALLOW_INSECURE_LOCAL=0
 
 echo 'Backup/restore test: PASS'

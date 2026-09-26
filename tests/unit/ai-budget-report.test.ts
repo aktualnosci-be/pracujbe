@@ -23,6 +23,7 @@ const healthy: OpsMetrics = {
   webhooks: { stuckProcessing: 0, failedLast24h: 0 },
   maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 0, staleCheckoutIntents: 0 },
   connections: { used: 1, max: 100, reserved: 3 },
+  // #44 (0118): metryki doręczeń poza zakresem tego testu.
   mail: null,
 };
 

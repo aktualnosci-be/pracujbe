@@ -21,7 +21,7 @@ const RESERVATION = '66666666-6666-4666-8666-666666666666';
 
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => true) }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/profile-assist/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/profile-assist/extract')>();

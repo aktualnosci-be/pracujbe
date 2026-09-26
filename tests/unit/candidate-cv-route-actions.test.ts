@@ -18,7 +18,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers({ cookie: 'session=fixture' })) }));
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/files/runtime', () => ({ getCvServiceDeps: vi.fn(), readCandidateSession: vi.fn() }));
 vi.mock('@/lib/files/candidate-cv', async (original) => ({
   ...(await original<typeof import('@/lib/files/candidate-cv')>()),

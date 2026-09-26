@@ -6,7 +6,7 @@ import { costMicroUsd, type AiTokenUsage } from '@/lib/ai/pricing';
 import type { AiUsageOutcome } from '@/lib/ai/usage-log';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 /**
  * Globalny budżet kosztów AI (#36, migracja 0120).

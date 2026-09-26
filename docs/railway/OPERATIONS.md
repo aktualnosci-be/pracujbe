@@ -21,7 +21,7 @@ identyfikatorów ani konfiguracji.
 |---|---|---|
 | 200 | `ok` | brak alarmów; po alarmie to **sygnał recovery** |
 | 503 | `alert` | przekroczony próg, kody w `alerts` |
-| 503 | `unavailable` | nie da się odczytać metryk (baza/uprawnienia); szczegół w Sentry `ops.metrics` |
+| 503 | `unavailable` | nie da się odczytać metryk (baza/uprawnienia); szczegół: kod błędu na webhooku błędów (#571) |
 | 503 | `unconfigured` | brak źródła metryk (`DATABASE_OPS_URL` ani service-role) |
 
 `warnings` nie zmieniają kodu HTTP. To sygnały do przeglądu, np. nieudane wysyłki z 24 h.
@@ -41,7 +41,7 @@ identyfikatorów ani konfiguracji.
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
 | `ai_budget_exhausted` | alarm | wydatek AI doby lub miesiąca ≥ limit, limit 0 albo brak limitu (#36) | wyczerpany budżet — funkcje AI zablokowane; decyzja o limicie w `docs/AI_BUDGET.md` |
 | `ai_budget_near_limit` | ostrzeżenie | wydatek AI ≥ 80% limitu doby lub miesiąca | rosnące użycie importu/tłumaczeń |
-| `ai_budget_stale_reservation` | ostrzeżenie | rezerwacja budżetu AI bez rozliczenia > 15 min | proces padł w trakcie wywołania modelu (liczy się w pełnej kwocie) |
+| `ai_budget_stale_reservation` | ostrzeżenie | rezerwacja budżetu AI bez rozliczenia > 15 min | proces padł w trakcie wywołania modelu (liczy się w pełnej kwocie); GC w `/api/maintenance` (#609) rozlicza ją jako failed/koszt 0 po 60 min — ostrzeżenie samo znika, limit wraca do użycia |
 | `ai_budget_unavailable` | ostrzeżenie | nie da się odczytać `ai_budget_status()` | brak migracji 0120 lub uprawnień `pracujbe_ops` |
 | `mail_hard_bounce_rate` | alarm | ≥ 50 listów przyjętych w 24 h i > 5% z nich trwale odbitych | zła lista adresów, import, literówki w formularzu |
 | `mail_hard_bounce_rising` | alarm | odsetek trwałych odbić 24 h > 2% i > 2× odsetka z 7 dób bazowych (≥ 50 listów w obu oknach) | jak wyżej, wcześniejszy sygnał |
@@ -85,9 +85,15 @@ Pełny opis: [BACKUP_RESTORE.md](BACKUP_RESTORE.md). W skrócie:
 
 - `scripts/db/backup.sh` tworzy zaszyfrowany artefakt `age` (klucz publiczny),
   wykonuje pełny odczyt `pg_restore`, zapisuje manifest z rozmiarami i SHA-256,
-  stosuje retencję i opcjonalnie wysyła ping heartbeat;
+  stosuje retencję i opcjonalnie wysyła ping heartbeat; z `BACKUP_S3_*` wysyła kopię
+  i manifest do prywatnego bucketu Cloudflare R2 i przycina retencję w buckecie (#569);
 - `scripts/db/restore-backup.sh` odtwarza artefakt do izolowanej bazy
-  `pracujbe_restore_*` i porównuje wynik z manifestem;
+  `pracujbe_restore_*` i porównuje wynik z manifestem (także prosto z R2:
+  `RESTORE_S3_OBJECT=latest`, klucz tylko do odczytu);
+- czujka `backup` w `GET /api/health/ops`: wiek ostatniej kompletnej kopii w R2 (klucz
+  odczytu `BACKUP_S3_READ_*`); stany `ok`, `stale` (> 26 h), `missing`, `unavailable`,
+  `misconfigured` (np. klucz zapisu w usłudze web) i `unconfigured` — **każdy poza `ok`
+  to alarm** `backup_*` (503), więc brak konfiguracji nie wygląda na „OK”;
 - `scripts/db/test-backup.sh` (`npm run test:backup`) to test obu skryptów na
   PostgreSQL 16 z kontrolami ujemnymi;
 - `scripts/db/verify-restore.sh` to dotychczasowy dowód „zrzut → odtworzenie”
@@ -227,12 +233,24 @@ izolowanego celu i sprawdzić jej zawartość.
    z nagłówkiem `x-health-token`, oczekiwane 200 co 5 min. Alarm po 2 kolejnych
    odpowiedziach innych niż 200, recovery po pierwszym 200. Krytyczna ścieżka
    bez zapisu danych to lista `/pl/oferty-pracy` (odczyt z bazy przez rolę `anon`).
-4. **Kopie:** osobna usługa cron (bez publicznej domeny) z klientem PostgreSQL
-   w wersji ≥ serwera (Railway: 18) i `age`. Potrzebuje zmiennych `BACKUP_*`
-   (patrz BACKUP_RESTORE.md), katalogu artefaktów na wolumenie lub w buckecie
-   poza wolumenem bazy, harmonogramu raz na dobę i `BACKUP_HEARTBEAT_URL` do
-   usługi dead-man’s-switch. Klucz prywatny `age` trzymaj poza Railway (np. w menedżerze haseł właściciela).
-5. **Okresowe odtworzenie:** raz w tygodniu `restore-backup.sh` do tymczasowej
+4. **Kopie (#569 — Cloudflare R2):**
+   1. Cloudflare → R2: nowy bucket (np. `pracujbe-db-backups`), lokalizacja UE;
+      **nie** podłączaj domeny publicznej i **nie** włączaj `r2.dev` (Settings → Public access: disabled).
+   2. R2 → Manage API tokens: token „Object Read & Write” ograniczony do tego bucketu
+      (dla zadania kopii) i token „Object Read only” do tego bucketu (dla usługi web i odtworzenia).
+   3. Railway: nowa usługa `backup` z tego repozytorium, *Dockerfile path*
+      `docker/backup/Dockerfile` (obraz: node 22, `pg_dump` 18, `age`), bez publicznej
+      domeny, restart NEVER, cron raz na dobę (np. `17 3 * * *`). Zmienne:
+      `BACKUP_SOURCE_URL` (login tylko do odczytu), `BACKUP_AGE_RECIPIENTS` (klucz publiczny
+      `age1…`), `BACKUP_RETENTION`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`,
+      opcjonalnie `BACKUP_S3_PREFIX`/`BACKUP_S3_MAX_AGE_DAYS`, `BACKUP_S3_ACCESS_KEY_ID`,
+      `BACKUP_S3_SECRET_ACCESS_KEY`, opcjonalnie `BACKUP_HEARTBEAT_URL`.
+   4. Usługa web: `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, (`BACKUP_S3_PREFIX`),
+      `BACKUP_S3_READ_ACCESS_KEY_ID`, `BACKUP_S3_READ_SECRET_ACCESS_KEY` — **bez** klucza zapisu.
+   5. Pierwsze uruchomienie ręczne → `BACKUP: PASS … R2: wysłano`; `/api/health/ops` → `backup.status = ok`.
+   Klucz prywatny `age` trzymaj poza Railway (np. w menedżerze haseł właściciela).
+5. **Okresowe odtworzenie:** raz w tygodniu `restore-backup.sh` z R2
+   (`RESTORE_S3_OBJECT=latest`, klucz odczytu) do tymczasowej
    bazy na osobnym klastrze, np. jednorazowej usłudze Railway PostgreSQL lub
    lokalnym kontenerze. Wynik `RESTORE: PASS` zanotuj w STATUS.md.
 6. **CI (opcjonalnie, zmiana workflow należy do właściciela):** test kopii

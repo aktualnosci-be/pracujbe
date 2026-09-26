@@ -10,7 +10,7 @@ import { getJobBySlug, getJobs, isShowingDemoJobs } from '@/lib/jobs';
 const adapters = vi.hoisted(() => ({ list: vi.fn(), pool: {} }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
 vi.mock('@/lib/db/public-jobs', () => ({ getPublicJobs: adapters.list }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 afterEach(() => {
   vi.unstubAllEnvs();

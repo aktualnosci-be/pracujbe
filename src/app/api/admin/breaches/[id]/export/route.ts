@@ -5,16 +5,23 @@ import { parseUuid } from '@/lib/admin/list-params';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { env } from '@/lib/env';
+import { captureError } from '@/lib/error-report';
 
 /**
- * Eksport wpisu rejestru naruszeń (#490) — `GET /api/admin/breaches/<id>/export?format=json|csv`.
+ * Eksport wpisu rejestru naruszeń (#490) — `POST /api/admin/breaches/<id>/export?format=json|csv`.
  *
  * Dane do przygotowania zgłoszenia (np. przepisania do formularza organu nadzorczego):
  * wpis, historia zmian i liczniki zawiadomień, bez adresów odbiorców. Odczyt i wpis w
  * historii/dzienniku robi jedno RPC `admin_export_breach_incident` pod SESJĄ administratora
  * (`withPortalTransaction`, `is_admin()`), więc każdy eksport zostaje odnotowany. Brak sesji lub roli → 404 (nie
  * ujawniamy istnienia panelu), jak strony `/admin`. Bez env (DEMO) → 404.
+ *
+ * Wyłącznie `POST` (#603): eksport zapisuje zdarzenie w historii incydentu i w dzienniku
+ * audytowym, więc nie może być dostępny przez bezpieczną metodę GET (prefetch, odświeżenie,
+ * osadzony zasób nie mogą mnożyć zdarzeń). `GET` zwraca `405` bez autoryzacji ani zapisu.
+ * `POST` dodatkowo wymaga zgodnego `Origin` (jak `/api/account/export`) — samo `SameSite=Lax`
+ * na cookie sesji nie chroni każdej nawigacji GET, ale chroni żądanie POST z obcej strony.
  */
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +36,31 @@ function notFound(): Response {
   return new NextResponse(null, { status: 404, headers: HEADERS });
 }
 
-export async function GET(
+function methodNotAllowed(): Response {
+  return new NextResponse(null, { status: 405, headers: { ...HEADERS, Allow: 'POST' } });
+}
+
+function forbidden(): Response {
+  return new NextResponse(null, { status: 403, headers: HEADERS });
+}
+
+function sameOrigin(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  const allowed = new Set<string>([new URL(request.url).origin]);
+  try {
+    allowed.add(new URL(env.siteUrl).origin);
+  } catch {
+    // Nieprawidłowy NEXT_PUBLIC_SITE_URL — zostaje origin żądania.
+  }
+  return allowed.has(origin);
+}
+
+export async function GET(): Promise<Response> {
+  return methodNotAllowed();
+}
+
+export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
@@ -37,6 +68,7 @@ export async function GET(
   const uuid = parseUuid(id);
   const format = new URL(request.url).searchParams.get('format') === 'csv' ? 'csv' : 'json';
   if (!uuid || !isPortalDataConfigured()) return notFound();
+  if (!sameOrigin(request)) return forbidden();
 
   try {
     const me = await getPortalIdentity();

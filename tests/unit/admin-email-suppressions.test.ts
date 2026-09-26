@@ -24,7 +24,7 @@ vi.mock('next/navigation', () => ({
     throw new Error('NEXT_NOT_FOUND');
   }),
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const SUPPRESSION_ID = '5a0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';

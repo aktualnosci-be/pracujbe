@@ -11,7 +11,7 @@
  *   limitera nie jest skonfigurowany.
  * - Brak jakiejkolwiek konfiguracji: tryb demo → `true`; tryb produkcyjny → akcje wrażliwe
  *   (auth, płatne API, publiczne formularze) blokowane, reszta przepuszczana.
- * - Błąd RPC / wyjątek -> akcje wrażliwe blokowane (fail-safe), pozostałe fail-open + Sentry.
+ * - Błąd RPC / wyjątek -> akcje wrażliwe blokowane (fail-safe), pozostałe fail-open + kanał błędów.
  * - Klucz budowany z akcji + IP (+ opcjonalny identyfikator, np. userId).
  *
  * Nigdy nie ujawniamy użytkownikowi technikaliów — warstwa wyżej zamienia przekroczenie
@@ -23,7 +23,8 @@ import { headers } from 'next/headers';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { env, isProductionMode, isRateLimitDatabaseConfigured } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 
 /** Opcje limitu dla pojedynczej akcji. */
 export interface RateLimitOptions {
@@ -71,35 +72,21 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
   'guest-apply',
   'guest-apply-email',
+  // Formularz kontaktu (#61): publiczny formularz wysyłający potwierdzenie na podany adres.
+  'contact',
+  // Bramka SITE_ACCESS_PASSWORD (#584): jedyna zapora przed produkcją — awaria limitera nie
+  // może otwierać nieograniczonego zgadywania hasła.
+  'site-access',
 ]);
 
 /**
- * Adres IP klienta. Głównym źródłem jest `x-real-ip` (ustawiane przez platformę/proxy,
- * niespoofowalne przez klienta). Dopiero w razie jego braku sięgamy po `x-forwarded-for`,
- * ale bierzemy PRAWY (ostatni) token — dopisany przez najbliższe zaufane proxy — a nie
- * lewy, który klient może dowolnie sfałszować. Fallback: `unknown`.
+ * Adres IP klienta z jedynego, jawnie skonfigurowanego, zaufanego nagłówka proxy
+ * (`@/lib/http/trusted-ip`, #588/#602) — nigdy z `X-Forwarded-For`, który klient może dowolnie
+ * ustawić. Fallback: `unknown`.
  */
 async function clientIp(): Promise<string> {
   const store = await headers();
-
-  const realIp = store.get('x-real-ip')?.trim();
-  if (realIp) {
-    return realIp;
-  }
-
-  const forwarded = store.get('x-forwarded-for');
-  if (forwarded) {
-    const parts = forwarded
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean);
-    const last = parts[parts.length - 1];
-    if (last) {
-      return last;
-    }
-  }
-
-  return 'unknown';
+  return trustedClientIp(store) ?? 'unknown';
 }
 
 /**
@@ -121,7 +108,11 @@ async function checkPostgresRateLimit(
   ]);
   const ip = opts?.perIp === false ? UNKNOWN_IP : await clientIp();
   // Nazwa akcji w kluczu HMAC: tylko znaki dozwolone przez helper (np. `job-import-day`).
-  const allowed = await checkDatabaseRateLimit(await getRateLimitPool(), {
+  // checkDatabaseRateLimit zwraca boolean TYLKO dla rzeczywistej decyzji RPC (#608);
+  // każda awaria (połączenie/transakcja/RPC/COMMIT) rzuca RateLimitUnavailableError,
+  // którą łapie wywołujący (checkRateLimit) i stosuje politykę fail-safe/fail-open
+  // per akcja — awaria osobnej bazy limitera nie jest tu cicho zamieniana na „limited”.
+  return await checkDatabaseRateLimit(await getRateLimitPool(), {
     action,
     trustedClientIp: isIP(ip) === 0 ? UNKNOWN_IP : ip,
     ...(opts?.identifier ? { identifier: opts.identifier } : {}),
@@ -129,9 +120,6 @@ async function checkPostgresRateLimit(
     windowSeconds,
     keySecret: env.rateLimitKeySecret ?? '',
   });
-  // Helper zwraca false także przy błędzie bazy — dla akcji zwykłych nie odcinamy ruchu,
-  // ale nie odróżnimy tu awarii od przekroczenia; akcje wrażliwe zostają zablokowane.
-  return allowed;
 }
 
 /**

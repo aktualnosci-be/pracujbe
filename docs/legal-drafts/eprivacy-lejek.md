@@ -38,7 +38,7 @@
 9. Niezależnie od lejka middleware next-intl ustawia sesyjne cookie `NEXT_LOCALE`
    (`Path=/; SameSite=Lax`). Lejek go nie używa.
 10. Poza kodem, nieustalone: logi dostępu Railway/proxy (czy zapisują IP, User-Agent,
-    ścieżkę i jak długo) oraz dane żądania dołączane przez Sentry przy błędzie zapisu.
+    ścieżkę i jak długo) (webhook błędów #571 nie dołącza danych żądania — tylko kod i szablon trasy).
 
 ## 2. Pytania do prawnika — art. 5 ust. 3 dyrektywy ePrivacy
 

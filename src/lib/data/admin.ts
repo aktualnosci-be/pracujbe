@@ -21,27 +21,32 @@ import { cache } from 'react';
 import {
   ADMIN_PAGE_SIZE,
   decodeAdminCursor,
+  decodeAdminPriorityCursor,
   encodeAdminCursor,
+  encodeAdminPriorityCursor,
   matchesSearch,
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
   parseBreachFilter,
+  parseContactMessageFilter,
   parseEmailSuppressionFilter,
   parseReportFilter,
   parseReportKindFilter,
+  parseReportSort,
   parseScreeningReviewFilter,
   parseUserRoleFilter,
   parseUuid,
   parseYmd,
   reportStatusesFor,
+  type ReportSort,
 } from '@/lib/admin/list-params';
 import { appDayStartUtc } from '@/lib/datetime';
 import { demoJobs } from '@/lib/data/demo';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { attempt, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   isScreeningQuestionType,
   toLocalizedText,
@@ -247,6 +252,10 @@ export interface AdminReportsQuery {
   /** Rodzaj zgłoszenia z URL (`all` domyślnie, `dsa_notice`, `quality`). */
   kind?: string | null;
   cursor?: string | null;
+  /** Kolejność (`newest` / `priority`); brak = domyślna dla rodzaju. */
+  sort?: string | null;
+  /** Tylko sprawy oflagowane do przeglądu. */
+  flagged?: boolean;
 }
 
 /** Filtry listy użytkowników. */
@@ -422,6 +431,21 @@ function filterDemoCompanies(filter?: string): AdminCompanyRow[] {
 }
 
 /** Lista DEMO: bez stronicowania (kilka wierszy). */
+/** Sprawa oflagowana do przeglądu (lustro `FLAGGED_CONDITION` dla danych DEMO). */
+function isFlaggedReport(r: AdminReportRow): boolean {
+  return r.dsa !== null && (r.dsa.reviewPriority > 0 || Boolean(r.dsa.reviewFlag));
+}
+
+/** Porządek kolejki priorytetów (lustro `ORDER BY` z `readReportPage`) dla danych DEMO. */
+export function sortByPriority(rows: AdminReportRow[]): AdminReportRow[] {
+  const due = (r: AdminReportRow) => (r.dsa?.dueAt ? Date.parse(r.dsa.dueAt) : Number.POSITIVE_INFINITY);
+  return [...rows].sort((a, b) =>
+    (b.dsa?.reviewPriority ?? 0) - (a.dsa?.reviewPriority ?? 0)
+    || due(a) - due(b)
+    || (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+    || b.id.localeCompare(a.id));
+}
+
 function demoList<T>(rows: T[]): AdminListResult<T> {
   return { status: 'ok', rows, nextCursor: null };
 }
@@ -441,6 +465,14 @@ function toPage<T extends { id: string }>(
     rows.length > ADMIN_PAGE_SIZE && last && lastCreatedAt
       ? encodeAdminCursor({ createdAt: lastCreatedAt, id: last.id })
       : null;
+  return { status: 'ok', rows: page, nextCursor };
+}
+
+/** Jak `toPage`, ale kursor liczy wywołujący (porządek inny niż `created_at desc`). */
+function toPageWith<T>(rows: T[], cursorOf: (row: T) => string | null): AdminListResult<T> {
+  const page = rows.slice(0, ADMIN_PAGE_SIZE);
+  const last = page[page.length - 1];
+  const nextCursor = rows.length > ADMIN_PAGE_SIZE && last ? cursorOf(last) : null;
   return { status: 'ok', rows: page, nextCursor };
 }
 
@@ -762,19 +794,46 @@ interface ReportPageData {
 }
 
 /** Strona zgłoszeń i dane pomocnicze (zgłaszający, historia DSA, decyzje, cele) w jednej transakcji. */
+/**
+ * Warunek kursora kolejki priorytetów — ten sam porządek co `ORDER BY review_priority DESC,
+ * (due_at IS NULL), due_at, created_at DESC, id DESC` (termin pusty na końcu grupy priorytetu).
+ */
+function priorityCursorCondition(params: SqlParams, token: string | null | undefined): string | null {
+  const cursor = decodeAdminPriorityCursor(token);
+  if (!cursor) return null;
+  const p = `${params.add(cursor.priority)}::smallint`;
+  const tail = `(created_at, id) < (${params.add(cursor.createdAt)}::timestamptz, ${params.add(cursor.id)}::uuid)`;
+  if (cursor.dueAt === null) {
+    return `(review_priority < ${p} OR (review_priority = ${p} AND due_at IS NULL AND ${tail}))`;
+  }
+  const d = `${params.add(cursor.dueAt)}::timestamptz`;
+  return `(review_priority < ${p}
+    OR (review_priority = ${p} AND (due_at IS NULL OR due_at > ${d}))
+    OR (review_priority = ${p} AND due_at = ${d} AND ${tail}))`;
+}
+
+/** Oflagowane do przeglądu (#42): automat ustawił priorytet albo opis flagi. */
+const FLAGGED_CONDITION = `(kind = 'dsa_notice' AND (review_priority > 0 OR review_flag IS NOT NULL))`;
+
 async function readReportPage(
   tx: TransactionQuery,
   statuses: string[] | null,
   kind: string,
   cursorToken: string | null | undefined,
+  sort: ReportSort = 'newest',
+  flagged = false,
 ): Promise<ReportPageData> {
   const params = new SqlParams();
   const where = whereOf([
     statuses && `status::text = ANY(${params.add(statuses)}::text[])`,
     kind !== 'all' && `kind = ${params.add(kind)}`,
-    cursorCondition(params, cursorToken),
+    flagged && FLAGGED_CONDITION,
+    sort === 'priority' ? priorityCursorCondition(params, cursorToken) : cursorCondition(params, cursorToken),
   ]);
   const limit = params.add(ADMIN_PAGE_SIZE + 1);
+  const order = sort === 'priority'
+    ? 'review_priority DESC, (due_at IS NULL), due_at, created_at DESC, id DESC'
+    : 'created_at DESC, id DESC';
   const rows = asRows(
     await queryRows(tx, 'admin.reports',
       `SELECT id, reporter_id, target_type, target_id, reason, details, status, created_at, kind,
@@ -782,7 +841,7 @@ async function readReportPage(
               decision_id, review_priority, review_flag
          FROM public.reports
          ${where}
-        ORDER BY created_at DESC, id DESC
+        ORDER BY ${order}
         LIMIT ${limit}`, params.values),
   );
 
@@ -859,26 +918,40 @@ export async function listReports(
 ): Promise<AdminListResult<AdminReportRow>> {
   const statuses = reportStatusesFor(parseReportFilter(query.status));
   const kind = parseReportKindFilter(query.kind);
+  const sort = parseReportSort(query.sort, kind);
+  const flagged = query.flagged === true;
   if (!isPortalDataConfigured()) {
-    return demoList(
-      DEMO_REPORTS.filter(
-        (r) =>
-          (!statuses || statuses.includes(r.status)) &&
-          (kind === 'all' ||
-            (kind === 'dsa_notice' && r.dsa !== null) ||
-            (kind === 'message_report' && Boolean(r.messageReport)) ||
-            (kind === 'quality' && r.dsa === null && !r.messageReport)),
-      ),
+    const demo = DEMO_REPORTS.filter(
+      (r) =>
+        (!statuses || statuses.includes(r.status)) &&
+        (kind === 'all' ||
+          (kind === 'dsa_notice' && r.dsa !== null) ||
+          (kind === 'message_report' && Boolean(r.messageReport)) ||
+          (kind === 'quality' && r.dsa === null && !r.messageReport)) &&
+        (!flagged || isFlaggedReport(r)),
     );
+    return demoList(sort === 'priority' ? sortByPriority(demo) : demo);
   }
   await requireAdmin();
 
   try {
     const { rows, nameById, eventsById, decisionById, targets } = await withServiceRole((tx) =>
-      readReportPage(tx, statuses, kind, query.cursor),
+      readReportPage(tx, statuses, kind, query.cursor, sort, flagged),
+    );
+    // Kursor kolejki priorytetów liczymy z surowego wiersza (termin i priorytet dokładnie z bazy).
+    const priorityCursorById = new Map(
+      rows.map((row) => [
+        asString(row['id']),
+        encodeAdminPriorityCursor({
+          priority: Number(row['review_priority'] ?? 0) || 0,
+          dueAt: asNullableString(row['due_at']),
+          createdAt: asString(row['created_at']),
+          id: asString(row['id']),
+        }),
+      ]),
     );
 
-    return toPage(
+    const mapped =
       rows.map((row) => {
         const id = asString(row['id']);
         const reporterId = asString(row['reporter_id']);
@@ -921,9 +994,10 @@ export async function listReports(
           reporterName: name.length > 0 ? name : null,
           createdAt: asNullableString(row['created_at']),
         };
-      }),
-      (row) => row.createdAt,
-    );
+      });
+    return sort === 'priority'
+      ? toPageWith(mapped, (row) => priorityCursorById.get(row.id) ?? null)
+      : toPage(mapped, (row) => row.createdAt);
   } catch (error) {
     captureError(error, { area: 'admin.listReports' });
     return { status: 'error' };
@@ -1583,6 +1657,121 @@ export async function listEmailSuppressions(
     );
   } catch (error) {
     captureError(error, { area: 'admin.listEmailSuppressions' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Wiadomości z formularza kontaktu (#61, 0125)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminContactMessageRow {
+  id: string;
+  reference: string;
+  /** Temat ze słownika (`CONTACT_TOPICS`) — UI mapuje na etykietę i18n. */
+  topic: string;
+  message: string;
+  senderName: string | null;
+  senderEmail: string;
+  /** Język formularza (w nim nadawca dostał potwierdzenie). */
+  locale: string;
+  status: 'new' | 'handled';
+  createdAt: string | null;
+  handledAt: string | null;
+  handledByName: string | null;
+}
+
+export interface AdminContactMessagesQuery extends AdminListQuery {
+  status?: string | null;
+}
+
+const DEMO_CONTACT_MESSAGES: AdminContactMessageRow[] = [
+  {
+    id: 'demo-cm1',
+    reference: 'KON-0DE0-0001',
+    topic: 'candidate_account',
+    message: 'Przykładowa wiadomość: nie widzę zapisanych umiejętności po powrocie do kreatora profilu.',
+    senderName: 'Przykładowy nadawca',
+    senderEmail: 'nadawca@example.com',
+    locale: 'pl',
+    status: 'new',
+    createdAt: '2025-02-11T09:20:00.000Z',
+    handledAt: null,
+    handledByName: null,
+  },
+];
+
+/**
+ * Lista wiadomości z formularza kontaktu (#61): filtr nowe/obsłużone/wszystkie (domyślnie
+ * nowe), wyszukiwanie po numerze, adresie i imieniu, stronicowanie kursorem. Odczyt
+ * service-rolem po potwierdzeniu roli admina. Bez env → DEMO.
+ */
+export async function listContactMessages(
+  query: AdminContactMessagesQuery = {},
+): Promise<AdminListResult<AdminContactMessageRow>> {
+  const filter = parseContactMessageFilter(query.status);
+  const q = normalizeAdminSearch(query.q);
+  if (!isPortalDataConfigured()) {
+    return demoList(
+      DEMO_CONTACT_MESSAGES.filter(
+        (row) =>
+          (filter === 'all' || row.status === filter) &&
+          matchesSearch([row.reference, row.senderEmail, row.senderName ?? ''], q),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const params = new SqlParams();
+    const where = whereOf([
+      filter === 'new' && "status = 'new'",
+      filter === 'handled' && "status = 'handled'",
+      q && searchCondition(params, ['reference', 'sender_email', 'sender_name'], q),
+      cursorCondition(params, query.cursor),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const { rows, profiles } = await withServiceRole(async (tx) => {
+      const page = asRows(
+        await queryRows(tx, 'admin.contact-messages',
+          `SELECT id, reference, topic, message, sender_name, sender_email, locale, status,
+                  created_at, handled_at, handled_by
+             FROM public.contact_messages
+             ${where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ${limit}`, params.values),
+      );
+      const adminIds = uniqueIds(page.map((r) => asString(r['handled_by'])));
+      return { rows: page, profiles: asRows(await readProfileNames(tx, 'admin.contact-message-admins', adminIds)) };
+    });
+
+    const nameById = new Map<string, string>();
+    for (const profile of profiles) {
+      nameById.set(asString(profile['id']), fullName(profile));
+    }
+
+    return toPage(
+      rows.map((row) => {
+        const handledBy = asString(row['handled_by']);
+        const name = handledBy ? (nameById.get(handledBy) ?? '') : '';
+        return {
+          id: asString(row['id']),
+          reference: asString(row['reference']),
+          topic: asString(row['topic']),
+          message: asString(row['message']),
+          senderName: asNullableString(row['sender_name']),
+          senderEmail: asString(row['sender_email']),
+          locale: asString(row['locale']),
+          status: asString(row['status']) === 'handled' ? ('handled' as const) : ('new' as const),
+          createdAt: asNullableString(row['created_at']),
+          handledAt: asNullableString(row['handled_at']),
+          handledByName: name.length > 0 ? name : null,
+        };
+      }),
+      (row) => row.createdAt,
+    );
+  } catch (error) {
+    captureError(error, { area: 'admin.listContactMessages' });
     return { status: 'error' };
   }
 }

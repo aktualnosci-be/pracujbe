@@ -29,6 +29,7 @@ const ROUTES = [
   // Szczegół firmy (#310) — firma demonstracyjna.
   '/admin/firmy/demo-c2',
   '/admin/zgloszenia',
+  '/admin/zgloszenia?kind=dsa_notice&flagged=1',
   '/admin/uzytkownicy',
   // Blokady adresów e-mail (#44).
   '/admin/poczta',
@@ -40,6 +41,8 @@ const ROUTES = [
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',
   '/admin/naruszenia/demo-b1',
+  // Wiadomości z formularza kontaktu (#61).
+  '/admin/kontakt',
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
   '/admin/dziennik',
@@ -47,6 +50,8 @@ const ROUTES = [
   '/admin/raport-dsa',
   // Koszty AI (#36) — raport tylko do odczytu.
   '/admin/koszty-ai',
+  // Próg wieku kandydatów (#492) — bieżące ustawienie + formularz zmiany.
+  '/admin/ustawienia',
 ];
 
 for (const viewport of [

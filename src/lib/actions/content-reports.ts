@@ -5,7 +5,7 @@ import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   contentReportSchema,
@@ -66,7 +66,7 @@ async function sessionUserId(): Promise<string | null> {
   }
 }
 
-/** Wyjątek bazy → kod użytkowy; nieznany błąd = INTERNAL (+ Sentry). */
+/** Wyjątek bazy → kod użytkowy; nieznany błąd = INTERNAL (+ kanał błędów). */
 function failure(error: unknown, area: string): { ok: false; error: ErrorCode } {
   const code = isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'INTERNAL';
   if (code === 'INTERNAL') captureError(error, { area });

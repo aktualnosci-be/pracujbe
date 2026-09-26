@@ -513,8 +513,6 @@
     "preferencesDesc": "Onthouden je keuzes, zoals taal en instellingen.",
     "analyticsName": "Analytisch",
     "analyticsDesc": "Helpen ons begrijpen hoe je het platform gebruikt.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Maken het mogelijk om relevantere advertenties te tonen.",
     "alwaysOn": "Altijd aan",
     "cookieSettings": "Cookie-instellingen"
   },
@@ -595,7 +593,8 @@
       "privacyNoticeRequired": "Bevestig dat je de privacy-informatie hebt gelezen.",
       "companyNameRequired": "Vul de bedrijfsnaam in.",
       "companyNameTooShort": "De bedrijfsnaam is te kort.",
-      "companyNameTooLong": "De bedrijfsnaam is te lang."
+      "companyNameTooLong": "De bedrijfsnaam is te lang.",
+      "ageConfirmRequired": "Kies je leeftijdscategorie."
     },
     "botCheckLabel": "Beveiligingscontrole",
     "botCheckLoading": "Beveiligingscontrole wordt geladen…",
@@ -603,6 +602,11 @@
     "botCheckExpired": "De controle is verlopen. Bevestig ze opnieuw.",
     "botCheckLoadFailed": "De beveiligingscontrole kon niet worden geladen. Controleer je verbinding of schakel inhoudsblokkering voor deze site uit en probeer het opnieuw.",
     "botCheckRetry": "Controle opnieuw laden",
+    "ageBandLegend": "Je leeftijd",
+    "ageBandMinor": "Ik ben {min}–{max} jaar",
+    "ageBandAdult": "Ik ben {age} jaar of ouder",
+    "ageBandMinorHint": "Met deze leeftijd is je profiel niet zichtbaar voor bedrijven in de kandidatenzoekfunctie. Je kunt wel zelf solliciteren op vacatures.",
+    "ageConfirmHint": "We vragen niet naar je geboortedatum of een identiteitsdocument.",
     "confirmEmailTitle": "Account activeren",
     "confirmEmailIntro": "Klik op de knop om je e-mailadres te bevestigen en naar je account te gaan.",
     "confirmEmailSubmit": "E-mailadres bevestigen",
@@ -656,12 +660,15 @@
     "savedSearchLimitReached": "Je hebt al 20 opgeslagen zoekopdrachten. Verwijder er een om een nieuwe toe te voegen.",
     "moderationLocked": "Deze inhoud is beperkt door een moderatiebeslissing, dus de status kan niet worden gewijzigd.",
     "guestApplyUnavailable": "Solliciteren zonder account is tijdelijk niet beschikbaar. Probeer later opnieuw of log in.",
+    "siteAccessUnavailable": "De toegang tot de website is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "emailNotVerified": "Bevestig eerst het e-mailadres van je account — klik op de link die we bij de registratie stuurden.",
     "claimExpired": "De koppellink is verlopen (hij was 30 dagen geldig).",
     "appealExists": "Er is al bezwaar gemaakt tegen deze beslissing.",
     "appealWindowClosed": "De termijn om bezwaar te maken tegen deze beslissing is verstreken.",
     "reviewerConflict": "Het bezwaar wordt behandeld door een andere beheerder dan de auteur van de beslissing.",
     "jobImportSensitiveData": "De vacature bevat een identificatienummer van een persoon of document, daarom hebben we ze niet geïmporteerd. Vul het formulier handmatig in.",
+    "ageAttestationRequired": "Bevestig om verder te gaan dat je minstens de vereiste leeftijd hebt. Stond het formulier lang open, vernieuw dan de pagina.",
+    "ageAdultRequired": "Alleen meerderjarigen kunnen deze functie inschakelen.",
     "screeningReviewRequired": "De vacature bevat een vraag die het team van het portaal vóór publicatie moet controleren. Je kunt ze publiceren zodra de vraag is goedgekeurd of nadat je ze hebt aangepast.",
     "screeningQuestionRejected": "Een van de vragen is niet goedgekeurd. Pas ze aan of verwijder ze om de vacature te publiceren.",
     "jobAssistEmpty": "Schrijf eerst een tekst. De assistent verbetert je tekst, maar schrijft geen vacature vanaf nul.",
@@ -1201,7 +1208,20 @@
     "itemModerationAppealUpheld": "Bezwaar behandeld: beslissing gehandhaafd",
     "itemModerationAppealReversed": "Bezwaar gegrond: beslissing gewijzigd",
     "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
-    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd"
+    "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd",
+    "listIntro": "Alle meldingen van je account, nieuwste eerst.",
+    "filterLabel": "Meldingenfilter",
+    "filterAll": "Alle",
+    "filterUnread": "Ongelezen",
+    "markRead": "Markeren als gelezen",
+    "markReadItem": "Markeren als gelezen: {title}",
+    "markedRead": "Melding gemarkeerd als gelezen.",
+    "emptyUnread": "Je hebt geen ongelezen meldingen.",
+    "unreadCount": "{count, plural, =0 {Geen ongelezen} one {1 ongelezen} other {# ongelezen}}",
+    "loadMore": "Meer tonen",
+    "loadingMore": "Laden…",
+    "listEnd": "Dat zijn al je meldingen.",
+    "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw."
   },
   "pricing": {
     "standard": "Standaard",
@@ -1254,7 +1274,9 @@
     "screeningYes": "Ja",
     "screeningNo": "Nee",
     "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
-    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
+    "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
+    "ageRequired": "Bevestig je leeftijd in je accountinstellingen voordat je solliciteert.",
+    "ageRequiredLink": "Naar instellingen"
   },
   "guestApply": {
     "subtitle": "Solliciteer zonder account of log in om je profiel te gebruiken. Een cv is niet nodig.",
@@ -1307,7 +1329,8 @@
       "messageTooLong": "Het bericht mag maximaal 500 tekens hebben.",
       "privacyNoticeRequired": "Bevestig dat je de privacy-informatie hebt gelezen om te solliciteren.",
       "idempotencyKeyInvalid": "Vernieuw de pagina en verstuur het formulier opnieuw.",
-      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren."
+      "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
+      "ageConfirmRequired": "Kies je leeftijdscategorie."
     }
   },
   "legal": {
@@ -1597,6 +1620,18 @@
     "threadStart": "Dit is het begin van het gesprek.",
     "senderCompanyFallback": "Werkgever",
     "senderCandidateFallback": "Kandidaat",
+    "attachFile": "Bestand toevoegen",
+    "attachHint": "PDF, DOC, DOCX, JPG of PNG, max. 5 MB, hoogstens {max} bestanden per bericht.",
+    "attachmentsLabel": "Bijlagen",
+    "attachmentUploading": "Uploaden…",
+    "attachmentUploadError": "Het bestand kon niet worden toegevoegd. Probeer het opnieuw.",
+    "attachmentErrorType": "Toegestane formaten: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "Je kunt hoogstens {max} bestanden aan één bericht toevoegen.",
+    "attachmentRemove": "Bestand {name} verwijderen",
+    "attachmentDownload": "{name} downloaden ({size})",
+    "attachmentDownloadError": "Het bestand kon niet worden gedownload. Probeer het opnieuw.",
+    "attachmentUnavailable": "Bestand wordt gecontroleerd — downloaden niet beschikbaar.",
+    "attachmentOnlyPreview": "Bijlage",
     "reportMessage": "Melden",
     "reportMessageLabel": "Bericht melden: {sender}",
     "reportConversation": "Gesprek melden",
@@ -1623,7 +1658,8 @@
     "reportSent": "Melding ontvangen",
     "reportAlreadyOpen": "Al gemeld — wacht op controle",
     "reportedBadge": "Gemeld",
-    "reportNetworkError": "De melding kon niet worden verstuurd. Controleer je verbinding en probeer het opnieuw."
+    "reportNetworkError": "De melding kon niet worden verstuurd. Controleer je verbinding en probeer het opnieuw.",
+    "attachmentPreviewAlt": "Voorbeeld van afbeelding {name}"
   },
   "files": {
     "cvTitle": "Je cv / documenten",
@@ -1937,6 +1973,7 @@
     "caseFlag": "Automatisch signaal: {flag}",
     "auditActionModerationDecided": "Moderatiebeslissing",
     "auditActionModerationRestored": "Beperking opgeheven",
+    "auditActionAgePolicyUpdated": "Leeftijdsgrens kandidaten gewijzigd",
     "navAppeals": "Bezwaren",
     "navDsaReport": "DSA-rapport",
     "appealsTitle": "Bezwaren tegen moderatiebeslissingen",
@@ -2172,6 +2209,8 @@
     "breachExportJson": "Export JSON",
     "breachExportCsv": "Export CSV",
     "breachExportHint": "De export bevat de registerregel en de geschiedenis, zonder adressen van ontvangers. Elke export blijft in de geschiedenis.",
+    "breachExportPending": "Bezig met exporteren…",
+    "breachExportError": "Exporteren is mislukt. Probeer het opnieuw.",
     "breachActionClose": "Registerregel afsluiten",
     "breachActionReopen": "Heropenen",
     "breachCloseTitle": "Registerregel afsluiten?",
@@ -2219,6 +2258,24 @@
     "breachNoticeRecipientsMalformed": "Ongeldig adres of ongeldige ID: {list}.",
     "breachNoticeContentRequired": "Vul onderwerp en tekst in minstens één taal in.",
     "breachNoticeNotAllowed": "Een kennisgeving kan worden verstuurd voor een open inbreuk in verband met persoonsgegevens met de opgeslagen beslissing „we brengen de betrokkenen op de hoogte”.",
+    "navContact": "Contact",
+    "contactTitle": "Berichten via het contactformulier",
+    "contactSubtitle": "Berichten verstuurd via het contactformulier. Antwoord vanuit je eigen mailbox aan de afzender en markeer het bericht daarna als afgehandeld.",
+    "contactFilterLabel": "Berichtenfilter",
+    "contactFilterNew": "Nieuw",
+    "contactFilterHandled": "Afgehandeld",
+    "contactStatusNew": "Nieuw",
+    "contactStatusHandled": "Afgehandeld",
+    "contactSearchLabel": "Berichten zoeken",
+    "contactSearchHint": "Berichtnummer, e-mailadres of voornaam van de afzender.",
+    "contactEmpty": "Geen berichten.",
+    "contactReceivedAt": "Ontvangen:",
+    "contactFormLocale": "Taal van het formulier: {locale}",
+    "contactHandledBy": "Afgehandeld door: {name}",
+    "contactActionHandle": "Markeren als afgehandeld",
+    "contactActionReopen": "Terugzetten naar nieuw",
+    "contactMarkedHandled": "Bericht gemarkeerd als afgehandeld.",
+    "contactReopened": "Bericht teruggezet naar nieuw.",
     "kindMessage": "Berichten",
     "targetConversation": "Gesprek",
     "messageReportScopeMessage": "Bewijs: gemeld bericht (stand op het moment van de melding)",
@@ -2283,6 +2340,7 @@
     "auditActionCampaignActivated": "Activering van campagnerevisie",
     "auditActionCampaignCancelled": "Campagnerevisie gestopt",
     "entityEmailCampaign": "E-mailcampagne",
+    "entityAgePolicy": "Leeftijdsdrempel kandidaten",
     "appealTargetRestoration": "Tegen opheffen van beperking",
     "appealRestorationSummary": "Beperking opgeheven op {date}: {reason}",
     "navAiCosts": "AI-kosten",
@@ -2307,6 +2365,41 @@
     "aiCostsFeatureTranslation": "Inhoud vertalen",
     "aiCostsFeatureAssist": "Assistent voor vacaturetekst",
     "aiCostsFeatureCvImport": "Cv importeren",
+    "navSettings": "Instellingen",
+    "agePolicyTitle": "Leeftijdsdrempel kandidaten",
+    "agePolicySubtitle": "Minimumleeftijd voor een kandidaataccount en voor de vindbaarheid van het profiel voor bedrijven.",
+    "agePolicyCurrentTitle": "Huidige instelling",
+    "agePolicyCurrentLabel": "Huidige drempel",
+    "agePolicyNewLabel": "Nieuwe drempel",
+    "agePolicyOption16": "16 jaar",
+    "agePolicyOption18": "18 jaar",
+    "agePolicyConfirmedField": "Bevestigd door de eigenaar",
+    "agePolicyConfirmedYes": "Bevestigd",
+    "agePolicyConfirmedNo": "Voorlopige waarde (niet bevestigd)",
+    "agePolicyConfirmedHint": "Een voorlopige waarde betekent dat de drempel nog geen definitieve beslissing van de eigenaar is.",
+    "agePolicyLastChangeTitle": "Laatste wijziging",
+    "agePolicyLastChangeNone": "Geen wijziging vastgelegd in het activiteitenlogboek — de startwaarde geldt.",
+    "agePolicyLastChangeTransition": "Wijziging van drempel",
+    "agePolicyTransitionValue": "{from} → {to}",
+    "agePolicyLastChangeAt": "Datum wijziging",
+    "agePolicyLastChangeBy": "Gewijzigd door",
+    "agePolicyLastChangeHidden": "Verborgen profielen",
+    "agePolicyFormTitle": "Drempel wijzigen",
+    "agePolicyFormHint": "Een hogere drempel verbergt meteen de profielen van kandidaten met een lagere leeftijdsverklaring uit de zoekresultaten. Een lagere drempel toont niets opnieuw.",
+    "agePolicyFieldLegend": "Nieuwe accountdrempel",
+    "agePolicyReasonLabel": "Motivering (verplicht)",
+    "agePolicyReasonHint": "Komt in het activiteitenlogboek. Maximaal {max} tekens.",
+    "agePolicySubmit": "Drempel opslaan",
+    "agePolicyConfirmTitle": "Leeftijdsdrempel voor kandidaten wijzigen?",
+    "agePolicyConfirmDescription": "De drempel verandert van „{from}” naar „{to}”.",
+    "agePolicySuccess": "De leeftijdsdrempel voor kandidaten is opgeslagen.",
+    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten.",
+    "reportsSortLabel": "Volgorde",
+    "reportsSortNewest": "Nieuwste",
+    "reportsSortPriority": "Prioriteit en termijn",
+    "reportsFlaggedLabel": "Markering",
+    "reportsFlaggedAll": "Alle zaken",
+    "reportsFlaggedOnly": "Gemarkeerd voor controle",
     "aiCostsFeatureProfileAssist": "Profielassistent kandidaat"
   },
   "settings": {
@@ -2423,7 +2516,9 @@
     "lead": "De website is nog niet openbaar. Heb je een toegangswachtwoord, vul het dan hieronder in.",
     "passwordLabel": "Toegangswachtwoord",
     "submit": "Doorgaan",
-    "error": "Onjuist wachtwoord. Probeer het opnieuw."
+    "error": "Onjuist wachtwoord. Probeer het opnieuw.",
+    "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
+    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",
@@ -2536,7 +2631,9 @@
     "savedOn": "Je profiel is nu zichtbaar voor geverifieerde bedrijven.",
     "savedOff": "Je profiel is nu verborgen voor zoekopdrachten van bedrijven.",
     "saveError": "De wijziging kon niet worden opgeslagen. De instelling is niet veranderd — probeer het opnieuw.",
-    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen."
+    "loadError": "De zichtbaarheid van je profiel kon niet worden geladen. Vernieuw de pagina zo meteen.",
+    "requiresAge": "Bevestig eerst je leeftijd in het onderdeel „Leeftijd” om je profiel met bedrijven te delen.",
+    "requiresAdult": "Je profiel kan pas vanaf 18 jaar zichtbaar zijn voor bedrijven. Bevestig dit in het onderdeel ‘Leeftijd’ zodra je 18 bent."
   },
   "team": {
     "title": "Team",
@@ -2615,7 +2712,19 @@
       "alreadyMember": "Deze persoon zit al in het team.",
       "invitationLimit": "De limiet van 50 openstaande uitnodigingen is bereikt. Trek verouderde uitnodigingen in.",
       "companyLimit": "Je kunt maximaal 5 bedrijven beheren.",
-      "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben."
+      "lastOwner": "Het bedrijf moet minstens één actieve eigenaar hebben.",
+      "localeRequired": "Kies de taal van de uitnodiging."
+    },
+    "localeLabel": "Taal van de uitnodiging",
+    "invitedSent": "Uitnodiging opgeslagen. Deze persoon krijgt een e-mail: met een werkgeversaccount in de taal van dat account, zonder account in de gekozen taal, met een link om te registreren.",
+    "inviteLinkHint": "Iemand zonder account krijgt een e-mail in de gekozen taal met een link om een werkgeversaccount aan te maken (werkt één keer, 14 dagen geldig). Na bevestiging van het adres wacht de uitnodiging in het dashboard. Iemand met een account krijgt de e-mail in de taal van dat account.",
+    "signup": {
+      "checking": "We controleren de uitnodigingslink…",
+      "intro": "Uitnodiging voor het team van {company}. Rol: {role}.",
+      "nextSteps": "Maak een werkgeversaccount aan en bevestig je e-mailadres. De uitnodiging wacht dan in je dashboard, op het tabblad ‘Team’ — daar neem je deel aan het bedrijf of weiger je de uitnodiging.",
+      "emailFixed": "Je maakt het account aan met het adres waarop de uitnodiging binnenkwam.",
+      "used": "Deze uitnodigingslink is al gebruikt. Heb je een account? Log dan in — de uitnodiging wacht in je dashboard.",
+      "invalid": "De uitnodigingslink is ongeldig of verlopen. Vraag het bedrijf om een nieuwe uitnodiging of maak een gewoon werkgeversaccount aan."
     }
   },
   "emailUnsubscribe": {
@@ -2647,6 +2756,7 @@
   "jobFunnel": {
     "title": "Vacaturetrechter",
     "range": "Periode: {from} – {to} (tijd in Brussel)",
+    "consentNote": "Verschijningen in zoekresultaten, weergaven en gestarte sollicitaties tellen we alleen bij mensen die analytische cookies hebben geaccepteerd. Alle verzonden sollicitaties tellen we mee.",
     "rangeLabel": "Periode van de vacaturetrechter",
     "rangeDays": "{count, plural, one {# dag} other {# dagen}}",
     "searchAppearances": "Vertoningen in zoekresultaten",
@@ -2695,7 +2805,13 @@
     "deleteTitle": "Zoekopdracht ‘{name}’ verwijderen?",
     "deleteDescription": "Je krijgt dan geen meldingen meer over nieuwe vacatures met deze filters.",
     "deleted": "We hebben de zoekopdracht verwijderd.",
-    "updated": "We hebben de wijzigingen opgeslagen."
+    "updated": "We hebben de wijzigingen opgeslagen.",
+    "rename": "Naam wijzigen",
+    "renameLabel": "Nieuwe naam van de zoekopdracht",
+    "renameSave": "Naam opslaan",
+    "renameCancel": "Annuleren",
+    "renamed": "We hebben de naam van de zoekopdracht gewijzigd.",
+    "renameHint": "1 tot 80 tekens."
   },
   "contentReport": {
     "metaTitle": "Inhoud melden",
@@ -2806,6 +2922,18 @@
     "restorationAppealDeadlineNotStarted": "De bezwaartermijn gaat in zodra je de e-mail over het opheffen van de beperking ontvangt.",
     "restorationAppealWindowClosed": "De termijn voor bezwaar tegen het opheffen van de beperking is verstreken."
   },
+  "ageAttestation": {
+    "sectionTitle": "Leeftijd",
+    "sectionDescription": "Een kandidatenaccount kan vanaf {age} jaar, een profiel dat zichtbaar is voor bedrijven vanaf {adultAge} jaar. We bewaren alleen de gekozen leeftijdscategorie en de datum van bevestiging — geen geboortedatum.",
+    "stateAdult": "Bevestigd: je bent {age} jaar of ouder.",
+    "stateMinor": "Bevestigd: je bent jonger dan {adultAge} jaar. Je kunt solliciteren op vacatures, maar je profiel is niet zichtbaar voor bedrijven. Bevestig hieronder zodra je {adultAge} bent.",
+    "stateMissing": "Geen bevestiging. Zonder bevestiging kun je niet solliciteren en je profiel niet met bedrijven delen.",
+    "submit": "Bevestigen",
+    "saving": "Opslaan…",
+    "saved": "Leeftijdsbevestiging opgeslagen.",
+    "saveError": "De bevestiging kon niet worden opgeslagen. Probeer het opnieuw.",
+    "loadError": "De informatie over je leeftijdsbevestiging kon niet worden geladen."
+  },
   "campaignBanner": {
     "eyebrow": "Vacature in België",
     "cta": "Nu solliciteren",
@@ -2840,6 +2968,141 @@
     "categoryUnion": "lidmaatschap van een vakbond",
     "categoryPolitical": "politieke overtuiging",
     "categoryCriminal": "strafrechtelijk verleden"
+  },
+  "help": {
+    "metaTitle": "Help — vragen en antwoorden",
+    "metaDescription": "Hoe Pracuj.be werkt: profiel zonder cv, solliciteren, vacaturematching, werkgeversaccount, bedrijfsverificatie en e-mails in jouw taal.",
+    "title": "Help",
+    "intro": "Antwoorden op de meest gestelde vragen over hoe Pracuj.be werkt. Vind je hier geen antwoord, stuur ons dan een bericht via het contactformulier.",
+    "groups": {
+      "candidates": "Voor kandidaten",
+      "employers": "Voor werkgevers",
+      "account": "Account, e-mails en veiligheid"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Heb ik een cv nodig om werk te zoeken?",
+        "a": "Nee. Na je <register>registratie</register> maak je in zes korte stappen een eenvoudig beroepsprofiel — onder meer beroepen, vaardigheden, talen en beschikbaarheid. Een cv-bestand (PDF, DOC of DOCX tot 5 MB) kun je toevoegen, maar het is niet verplicht."
+      },
+      "guestApply": {
+        "q": "Kan ik solliciteren zonder account?",
+        "a": "Ja. In het sollicitatieformulier vul je je voor- en achternaam en e-mailadres in, en je bevestigt je sollicitatie via de link in de e-mail. Later kun je een account aanmaken met hetzelfde adres en de sollicitatie overnemen."
+      },
+      "match": {
+        "q": "Hoe wordt de match met een vacature berekend?",
+        "a": "Het matchpercentage volgt uit vaste criteria: beroep en categorie, vaardigheden, locatie, ervaring, beschikbaarheid, talen, certificaten, rijbewijs en contractvoorwaarden. Het resultaat wordt niet door kunstmatige intelligentie bepaald, en bij de vacature zie je waaraan je voldoet en wat ontbreekt."
+      },
+      "visibility": {
+        "q": "Zien werkgevers mijn profiel?",
+        "a": "Geverifieerde bedrijven kunnen je profiel alleen vinden als je de optie ‘Geverifieerde werkgevers mogen mijn profiel vinden’ in je instellingen aanzet — standaard staat die uit. Een bedrijf waar je solliciteert, ziet je sollicitatie. Bepaalde bedrijven kun je blokkeren in het onderdeel ‘Geblokkeerde bedrijven’."
+      },
+      "alerts": {
+        "q": "Hoe krijg ik meldingen over nieuwe vacatures?",
+        "a": "Stel op de <jobs>vacaturelijst</jobs> filters in en kies ‘Zoekopdracht opslaan’. In het kandidatenpaneel zet je er e-mailmeldingen voor aan — dagelijks of wekelijks."
+      },
+      "data": {
+        "q": "Hoe download ik mijn gegevens of verwijder ik mijn account?",
+        "a": "In de instellingen van het kandidatenpaneel, in het onderdeel ‘Je gegevens en account’, download je je gegevens als JSON-bestand of verwijder je je account."
+      },
+      "free": {
+        "q": "Wat kost het publiceren van vacatures?",
+        "a": "In de huidige fase is Pracuj.be gratis voor werkgevers. Het portaal verkoopt geen pakketten of betaalde vacaturepublicaties."
+      },
+      "verification": {
+        "q": "Waarom moet mijn bedrijf geverifieerd worden?",
+        "a": "Alleen bedrijven die door een beheerder van het portaal zijn geverifieerd, kunnen vacatures publiceren. De verificatiestatus zie je in het werkgeverspaneel. Wordt je bedrijf afgewezen, dan zie je de reden en kun je kiezen voor ‘Opnieuw ter verificatie sturen’."
+      },
+      "drafts": {
+        "q": "Kan ik een vacature voorbereiden vóór de verificatie?",
+        "a": "Ja. De vacaturewizard slaat na elke stap een concept op. Je publiceert het zodra je bedrijf geverifieerd is."
+      },
+      "team": {
+        "q": "Hoe voeg ik collega’s toe?",
+        "a": "De eigenaar of beheerder van het bedrijf nodigt teamleden uit via hun e-mailadres in het werkgeverspaneel en geeft hun een rol."
+      },
+      "applications": {
+        "q": "Hoe neem ik contact op met kandidaten?",
+        "a": "Sollicitaties, berichten en jobaanbiedingen beheer je in het werkgeverspaneel. Meer lees je op de pagina <employer>Voor werkgevers</employer>."
+      },
+      "languages": {
+        "q": "In welke talen is de website beschikbaar?",
+        "a": "De website is beschikbaar in het Pools, Nederlands, Frans en Engels. Je wijzigt de taal in de kop of in de voettekst van de pagina."
+      },
+      "emailLanguage": {
+        "q": "In welke taal ontvang ik e-mails?",
+        "a": "E-mails over je account sturen we in de taal die op je account is ingesteld — ook als het bericht komt van een werkgever die een andere taal gebruikt."
+      },
+      "noEmail": {
+        "q": "Ik ontvang geen e-mails van de website. Wat nu?",
+        "a": "Controleer je spammap en of je e-mailadres klopt. Komt er nog steeds niets aan, stuur ons dan een bericht via het contactformulier."
+      },
+      "suspicious": {
+        "q": "Een vacature lijkt verdacht. Wat moet ik doen?",
+        "a": "Kies op de vacaturepagina ‘Vacature melden’ of ‘Bedrijf melden’. Je kunt een melding ook zonder account versturen en krijgt een dossiernummer waarmee je de status volgt."
+      }
+    },
+    "contactTitle": "Geen antwoord gevonden?",
+    "contactDesc": "Stuur ons een bericht via het contactformulier. We antwoorden op het e-mailadres dat je in het formulier invult.",
+    "contactCta": "Naar het contactformulier"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Stuur het team van Pracuj.be een bericht via het contactformulier — over je kandidatenaccount, werkgeversaccount, vacatures of technische problemen.",
+    "title": "Contact",
+    "intro": "Heb je een vraag over je account, een vacature of de werking van de website? Stuur ons een bericht via het formulier — we antwoorden op het opgegeven e-mailadres.",
+    "formTitle": "Contactformulier",
+    "topicLabel": "Onderwerp",
+    "topicPlaceholder": "Kies een onderwerp",
+    "topicCandidateAccount": "Kandidatenaccount",
+    "topicEmployerAccount": "Werkgeversaccount of bedrijf",
+    "topicJobListing": "Vacature",
+    "topicTechnical": "Technisch probleem",
+    "topicPrivacy": "Mijn persoonsgegevens",
+    "topicOther": "Iets anders",
+    "messageLabel": "Bericht",
+    "messageHint": "Beschrijf je vraag (minstens {min} tekens). Vermeld geen rijksregisternummer, PESEL of documentnummers.",
+    "nameLabel": "Voornaam (optioneel)",
+    "emailLabel": "E-mailadres",
+    "emailHint": "Naar dit adres sturen we de bevestiging en het antwoord.",
+    "submit": "Bericht versturen",
+    "networkError": "Er kon geen verbinding met de server worden gemaakt. Je bericht staat nog in het formulier — probeer het opnieuw.",
+    "successTitle": "Bericht verstuurd",
+    "successBody": "Bedankt. We hebben een bevestiging met het berichtnummer naar het opgegeven adres gestuurd.",
+    "successDuplicate": "Dit bericht was al eerder verstuurd — we hebben het niet nog een keer verstuurd.",
+    "referenceLabel": "Berichtnummer",
+    "referenceHint": "Vermeld dit nummer als je later iets wilt toevoegen.",
+    "backToHelp": "Terug naar de hulppagina",
+    "beforeTitle": "Voordat je schrijft",
+    "beforeHelp": "Antwoorden op de meest gestelde vragen vind je op de pagina <help>Help</help>.",
+    "beforeReport": "Meld een verdachte vacature rechtstreeks op de vacaturepagina (‘Vacature melden’) — je vindt ze in de <jobs>vacaturelijst</jobs>.",
+    "beforeNoIds": "Stuur geen documentnummers of wachtwoorden in je bericht.",
+    "error": {
+      "topicRequired": "Kies een onderwerp.",
+      "messageRequired": "Typ je bericht.",
+      "messageTooShort": "Je bericht is te kort — beschrijf je vraag iets uitgebreider.",
+      "messageTooLong": "Je bericht is te lang.",
+      "nameTooLong": "De voornaam is te lang.",
+      "emailRequired": "Vul je e-mailadres in.",
+      "emailInvalid": "Vul een geldig e-mailadres in.",
+      "sensitiveId": "Verwijder het rijksregisternummer, PESEL of documentnummer — dat is niet nodig om je bericht te beantwoorden."
+    }
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Melding uitzetten",
+    "title": "Deze melding uitzetten?",
+    "confirmText": "We sturen geen e-mails met nieuwe vacatures meer voor deze ene opgeslagen zoekopdracht. Je andere zoekopdrachten en meldingen blijven ongewijzigd.",
+    "confirmButton": "Deze melding uitzetten",
+    "pending": "Opslaan…",
+    "doneTitle": "Melding uitgezet",
+    "doneText": "We sturen je geen meldingen meer voor deze zoekopdracht. De zoekopdracht blijft bewaard — je zet de melding weer aan in je kandidatenpaneel.",
+    "settingsHint": "Opgeslagen zoekopdrachten en meldingen wijzig je nadat je bent ingelogd.",
+    "loginLink": "Inloggen",
+    "invalidTitle": "De link is ongeldig",
+    "invalidText": "Deze link is onvolledig of gewijzigd. Gebruik de link uit de nieuwste e-mail of wijzig de melding nadat je bent ingelogd.",
+    "expiredTitle": "De link is verlopen",
+    "expiredText": "Deze link is niet meer geldig. Gebruik de link uit de nieuwste e-mail of wijzig de melding nadat je bent ingelogd.",
+    "unavailableText": "De melding uitzetten kan nu even niet. Probeer het later opnieuw of wijzig de melding nadat je bent ingelogd.",
+    "errorText": "De wijziging kon niet worden opgeslagen. Probeer het opnieuw."
   },
   "cvImport": {
     "eyebrow": "Je profiel",

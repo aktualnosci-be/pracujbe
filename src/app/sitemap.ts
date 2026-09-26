@@ -10,15 +10,24 @@ import {
   type CategoryKey,
   type LocationKey,
 } from '@/lib/jobs';
+import { MAX_JOB_LIST_OFFSET } from '@/lib/job-list-pagination';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
 
 /**
- * Mapa strony (sitemap.xml) — Pracuj.be.
+ * Mapa strony — Pracuj.be. Sitemap INDEX (#599): id `0` = strony statyczne, landing-page'e
+ * kategorii/lokalizacji i poradniki (jeden plik wystarcza — kilkadziesiąt URL-i); id `1..N` =
+ * kolejne partie szczegółów ofert (`JOBS_PER_SITEMAP_SHARD` na plik), po `generateSitemaps()`
+ * dostępne pod `/sitemap/<id>.xml` (konwencja Next.js — patrz `robots.ts`, który wylicza te
+ * same identyfikatory i wskazuje każdy plik osobno zamiast pojedynczego adresu).
  *
- * Zawiera: publiczne strony statyczne, listę ofert, szczegóły ofert (z `getJobs`)
- * oraz landing-page'e kategorii i lokalizacji (filtrowane widoki listy). Każdy wpis
- * ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
- * celowo pominięte (patrz robots.ts). Działa bez env (dane demonstracyjne z `getJobs`).
+ * Dawny sztywny sufit `SITEMAP_MAX_JOBS = 5000` (jeden plik, bez dalszych partii) ucinał
+ * katalog bezpowrotnie — starsze/dalsze oferty zostawały publiczne, ale poza sitemapem (#599).
+ * Teraz partii przybywa wraz z wolumenem, aż do granicy paginacji publicznej listy ofert
+ * (`MAX_JOB_LIST_OFFSET`, #593) — powyżej niej `get_public_jobs` i tak nie oddaje kolejnych
+ * wyników przez offset (odrębne ograniczenie backendu list, nie tego pliku).
+ *
+ * Każdy wpis ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
+ * celowo pominięte (patrz `robots.ts`). Działa bez env (dane demonstracyjne z `getJobs`).
  *
  * TODO(i18n-slugs): segment listy ofert jest wspólny (`oferty-pracy`) — po wdrożeniu
  * lokalizowanych slugów zaktualizować ścieżki per język.
@@ -33,15 +42,41 @@ import { getAllGuideSlugs } from '@/lib/guides/guides';
  */
 export const dynamic = 'force-dynamic';
 
+/** Ofert szczegółowych na jeden plik sitemap (dużo poniżej limitu protokołu 50 000 URL-i). */
+const JOBS_PER_SITEMAP_SHARD = 5000;
+/** Rozmiar strony przy odpytywaniu `getJobs` wewnątrz jednej partii (jak dotąd). */
+const SITEMAP_JOBS_PAGE = 100;
+
+/**
+ * Liczba partii ofert (id `1..N`) potrzebna dla obecnego wolumenu. Poza produkcją = 0 (sam
+ * core sitemap, #429 — bez odczytu bazy). `getJobs({ pageSize: 1 }).total` jest dokładnym
+ * licznikiem publicznych ofert (P1-12), niezależnym od sufitu paginacji offsetowej.
+ */
+async function jobSitemapShardCount(): Promise<number> {
+  if (!isProductionDeployment()) return 0;
+  const probe = await getJobs({ locale: routing.defaultLocale, page: 1, pageSize: 1 });
+  const reachable = Math.min(probe.total, MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE);
+  return Math.max(0, Math.ceil(reachable / JOBS_PER_SITEMAP_SHARD));
+}
+
+/** Identyfikatory plików sitemap: `0` = core, `1..N` = partie ofert (Next.js: `generateSitemaps`). */
+export async function generateSitemaps(): Promise<{ id: number }[]> {
+  const jobShards = await jobSitemapShardCount();
+  return Array.from({ length: jobShards + 1 }, (_, id) => ({ id }));
+}
+
 const JOBS_PATH = '/oferty-pracy';
 const HUB_PATH = '/praca';
 const GUIDES_PATH = '/poradniki';
 const EMPLOYERS_PATH = '/dla-pracodawcow';
+const HELP_PATH = '/pomoc';
+const CONTACT_PATH = '/kontakt';
 
 /** Publiczne strony statyczne (segment bez prefiksu języka). '' = strona główna.
  *  Tylko trasy zwracające 200 (zweryfikowane smoke) i z REALNĄ treścią.
- *  Strony prawne/informacyjne (regulamin, prywatność, cookies, o-nas, faq, kontakt, pomoc)
- *  mają obecnie treść placeholder → są `noindex` i CELOWO poza sitemap (audyt FUN-09).
+ *  Pomoc i Kontakt (#61) mają realną treść (FAQ z faktów produktu, formularz kontaktu).
+ *  Strony prawne/informacyjne (regulamin, prywatność, cookies, o-nas, faq) mają obecnie treść
+ *  placeholder → są `noindex` i CELOWO poza sitemap (audyt FUN-09).
  *  Po zatwierdzeniu treści dodać je tu z powrotem i zdjąć `noindex` w `_legal/legal-page.tsx`. */
 const STATIC_PATHS: readonly string[] = [
   '',
@@ -49,6 +84,8 @@ const STATIC_PATHS: readonly string[] = [
   HUB_PATH,
   GUIDES_PATH,
   EMPLOYERS_PATH,
+  HELP_PATH,
+  CONTACT_PATH,
 ];
 
 const CATEGORY_KEYS: readonly CategoryKey[] = [
@@ -119,14 +156,22 @@ async function nonEmptyLandingLocales(
   return { categories, cities };
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export default async function sitemap({
+  id,
+}: {
+  id: number;
+}): Promise<MetadataRoute.Sitemap> {
   // Staging/preview/local: pusty sitemap (spójne z robots.ts Disallow:/ i X-Robots-Tag).
   // JEDNO źródło prawdy o środowisku (P1-19): isProductionDeployment().
   if (!isProductionDeployment()) return [];
 
+  return id === 0 ? coreSitemap() : jobsSitemapShard(id - 1);
+}
+
+/** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji i poradniki. */
+async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
   const base = env.siteUrl;
   const locales = routing.locales;
-  const now = new Date();
   const entries: MetadataRoute.Sitemap = [];
 
   // --- Strony statyczne ---
@@ -190,12 +235,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
-  // --- Szczegóły ofert (P1-13: paginacja — get_public_jobs klampuje limit do 100/stronę,
-  // więc iterujemy stronami do rozsądnego sufitu, zamiast brać tylko pierwszą setkę). ---
-  const SITEMAP_PAGE = 100;
-  const SITEMAP_MAX_JOBS = 5000; // sufit anty-abuse; powyżej rozważ sitemap index
-  for (let page = 1; entries.length < SITEMAP_MAX_JOBS * locales.length; page += 1) {
-    const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_PAGE });
+  return entries;
+}
+
+/**
+ * `id=1..N` (parametr 0-indeksowany `shardIndex`): jedna partia (`JOBS_PER_SITEMAP_SHARD`)
+ * szczegółów ofert — koniec sztywnego ucinania katalogu po pierwszych 5000 (#599). Kolejne
+ * partie to kolejne zakresy stron `getJobs` (P1-13: `get_public_jobs` klampuje limit do
+ * 100/stronę, więc iterujemy stronami w obrębie tej partii).
+ */
+async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitemap> {
+  const base = env.siteUrl;
+  const locales = routing.locales;
+  const now = new Date();
+  const entries: MetadataRoute.Sitemap = [];
+
+  const pagesPerShard = JOBS_PER_SITEMAP_SHARD / SITEMAP_JOBS_PAGE;
+  const firstPage = shardIndex * pagesPerShard + 1;
+  const lastPage = firstPage + pagesPerShard - 1;
+
+  for (let page = firstPage; page <= lastPage; page += 1) {
+    const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE });
     if (result.jobs.length === 0) break;
     // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
     const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
@@ -216,8 +276,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         });
       }
     }
-    if (result.jobs.length < SITEMAP_PAGE) break; // ostatnia strona
-    if (page * SITEMAP_PAGE >= SITEMAP_MAX_JOBS) break;
+    if (result.jobs.length < SITEMAP_JOBS_PAGE) break; // ostatnia strona całej listy
   }
 
   return entries;

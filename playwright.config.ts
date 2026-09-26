@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { defineConfig, devices } from '@playwright/test';
-import { E2E_GA_MEASUREMENT_ID, E2E_META_PIXEL_ID } from './tests/e2e/fixtures/trackers';
+import { E2E_CF_ANALYTICS_TOKEN } from './tests/e2e/fixtures/trackers';
 import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
 
 /**
@@ -28,14 +28,13 @@ const BASE_URL = `http://localhost:${PORT}`;
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 /**
- * Testowe identyfikatory trackerów (Invariant #7, issue #234). Bez nich komponent
- * `Analytics` nigdy nie renderuje GA/Meta Pixel i test zgód nie może wykryć regresji.
+ * Testowy token Cloudflare Web Analytics (Invariant #7, issue #234/#570). Bez niego komponent
+ * `Analytics` nigdy nie renderuje beaconu i test zgód nie może wykryć regresji.
  * NEXT_PUBLIC_* są wklejane do bundla w czasie `next build`, więc muszą trafić do builda.
- * Żądania do Google/Meta są w testach przechwytywane (`page.route`) — zero realnego ruchu.
+ * Żądania do cloudflareinsights.com są w testach przechwytywane (`page.route`) — zero realnego ruchu.
  */
 const TRACKER_ENV = {
-  NEXT_PUBLIC_GA_MEASUREMENT_ID: E2E_GA_MEASUREMENT_ID,
-  NEXT_PUBLIC_META_PIXEL_ID: E2E_META_PIXEL_ID,
+  NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: E2E_CF_ANALYTICS_TOKEN,
 };
 
 /**
@@ -59,7 +58,7 @@ const JOB_ASSIST_ENV = {
   AI_PROFILE_ASSIST_PROVIDER: 'fixture',
 };
 
-/** Czy gotowy build (.next) ma wklejone testowe ID trackerów. */
+/** Czy gotowy build (.next) ma wklejony testowy token Cloudflare Web Analytics. */
 function buildHasTrackerIds(): boolean {
   const dir = join(process.cwd(), '.next', 'static', 'chunks');
   if (!existsSync(dir)) return false;
@@ -69,7 +68,7 @@ function buildHasTrackerIds(): boolean {
     for (const name of readdirSync(current)) {
       const file = join(current, name);
       if (statSync(file).isDirectory()) pending.push(file);
-      else if (name.endsWith('.js') && readFileSync(file, 'utf-8').includes(E2E_GA_MEASUREMENT_ID)) {
+      else if (name.endsWith('.js') && readFileSync(file, 'utf-8').includes(E2E_CF_ANALYTICS_TOKEN)) {
         return true;
       }
     }
@@ -103,6 +102,9 @@ export default defineConfig({
     // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
     '**/content-report-form.spec.ts',
     '**/job-funnel-no-storage.spec.ts',
+    '**/job-funnel-minor-marker.spec.ts',
+    // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
+    '**/contact-form.spec.ts',
   ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

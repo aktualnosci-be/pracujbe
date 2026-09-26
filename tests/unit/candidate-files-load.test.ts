@@ -9,7 +9,7 @@ vi.mock('@/lib/env', () => ({ isFileStorageConfigured: vi.fn(), isProductionMode
 vi.mock('next/headers', () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock('@/lib/files/runtime', () => ({ getCvServiceDeps: vi.fn(), readCandidateSession: vi.fn() }));
 vi.mock('@/lib/files/candidate-cv', () => ({ listCandidateCvs: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const deps = { pool: {}, store: {}, downloadSecret: 'x'.repeat(32) } as never;
 const SELF = '11111111-1111-4111-8111-111111111111';

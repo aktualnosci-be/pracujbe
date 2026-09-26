@@ -5,11 +5,18 @@ import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// #588: tylko zaufany X-Real-IP trafia do receiptu — X-Forwarded-For (dopisywany przez klienta)
+// jest tu celowo obecny obok niego i MUSI zostać zignorowany.
 vi.mock('next/headers', () => ({
-  headers: async () => new Headers({ 'x-forwarded-for': '203.0.113.9', 'user-agent': 'vitest-it' }),
+  headers: async () =>
+    new Headers({
+      'x-real-ip': '203.0.113.9',
+      'x-forwarded-for': '198.51.100.66',
+      'user-agent': 'vitest-it',
+    }),
   cookies: async () => ({
     get: (name: string) => (name === 'pracujbe_visitor' ? { value: 'visitor-it' } : undefined),
   }),
@@ -277,7 +284,7 @@ describe('widoczność profilu (#494)', () => {
 
 describe('receipt zgód (record_consent)', () => {
   it('gość zapisuje jako anon (profil NULL), zalogowany z własnym profilem', async () => {
-    const categories = { necessary: true, preferences: false, analytics: true, marketing: false };
+    const categories = { necessary: true, preferences: false, analytics: true };
     actAs(null);
     expect(await recordConsent(categories, 'cookie_banner')).toEqual({ ok: true });
     actAs(anna);
@@ -285,13 +292,13 @@ describe('receipt zgód (record_consent)', () => {
     const rows = (await pg().admin.query(
       `SELECT profile_id, source, category::text AS category, granted, host(ip_address) AS ip, visitor_id
          FROM public.consents WHERE visitor_id = 'visitor-it' ORDER BY created_at, category`)).rows;
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(6);
     const guest = rows.filter((r) => r.profile_id === null);
     const own = rows.filter((r) => r.profile_id === anna.id);
-    expect(guest.map((r) => r.source)).toEqual(Array(4).fill('cookie_banner'));
-    expect(own.map((r) => r.source)).toEqual(Array(4).fill('cookie_settings'));
+    expect(guest.map((r) => r.source)).toEqual(Array(3).fill('cookie_banner'));
+    expect(own.map((r) => r.source)).toEqual(Array(3).fill('cookie_settings'));
     expect(own.find((r) => r.category === 'analytics')?.granted).toBe(true);
-    expect(own.find((r) => r.category === 'marketing')?.granted).toBe(false);
+    expect(rows.some((r) => r.category === 'marketing')).toBe(false);
     expect(own[0]!.ip).toBe('203.0.113.9');
   });
 });

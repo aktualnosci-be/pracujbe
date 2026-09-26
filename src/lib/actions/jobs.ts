@@ -59,7 +59,7 @@ import {
  *
  * Rate limiting (F-05): tworzenie i publikacja przechodzą przez RPC `rate_limit_hit` (klucz
  * per-użytkownik). Przekroczenie limitu → `RATE_LIMITED`. Błąd samego limitera nie blokuje
- * przepływu (fail-open, log do Sentry).
+ * przepływu (fail-open, log do kanału błędów).
  *
  * TRYB DEMO (Invariant: panele działają bez env): gdy backend nie jest skonfigurowany
  * (`isPortalDataConfigured()`),

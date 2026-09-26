@@ -1,5 +1,7 @@
 import { z } from 'zod/v3';
 
+import { routing } from '@/i18n/routing';
+
 /**
  * Walidacja zarządzania zespołem firmy (#403). Te same schematy w formularzu i akcji.
  * Komunikaty to klucze i18n (`team.error.*`).
@@ -22,6 +24,12 @@ export const teamInviteSchema = z.object({
     .max(254, 'team.error.emailInvalid')
     .email('team.error.emailInvalid'),
   role: z.enum(INVITABLE_ROLES, { errorMap: () => ({ message: 'team.error.roleRequired' }) }),
+  /**
+   * Język zaproszenia (0121). Adres bez konta nie ma profilu, więc to jedyny znany język
+   * odbiorcy (Invariant #1); konto z profilem i tak dostaje e-mail w języku z profilu.
+   * Formularz podstawia domyślnie język strony zapraszającego.
+   */
+  locale: z.enum(routing.locales, { errorMap: () => ({ message: 'team.error.localeRequired' }) }),
 });
 
 export type TeamInviteInput = z.infer<typeof teamInviteSchema>;

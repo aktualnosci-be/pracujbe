@@ -79,6 +79,7 @@ export type ActivityId =
   | 'email-notifications'
   | 'consents'
   | 'dsa-moderation'
+  | 'support-contact'
   | 'security-audit'
   | 'ai-job-import'
   | 'job-statistics'
@@ -105,7 +106,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     inCode: 'Rejestracja, logowanie, sesje Better Auth, profil konta i język komunikacji; e-maile konta.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
-      'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure); profil kandydata z deleted_at usuwany po 30 dniach (retention_policies.deleted_profile).',
+      'Sesje i weryfikacje mają expires_at; kandydat może usunąć konto (request_account_erasure). Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): profil z deleted_at usuwany w 7 dni (deleted_profile), konto kandydata bez aktywności (last_seen_at z sesji) 730 dni z ostrzeżeniem 30 dni.',
   },
   'candidate-profile': {
     name: 'Profil zawodowy kandydata',
@@ -118,20 +119,21 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     inCode: 'Upload PDF/DOC/DOCX do prywatnego bucketa, dostęp przez krótkie podpisane URL-e, usuwanie przez właściciela.',
     processors: HOSTING,
     retentionInCode:
-      'Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; wiersze z deleted_at trwale usuwane po 30 dniach (retention_policies.deleted_file), obiekt przez storage_deletion_queue. Retencja CV nieaktywnych kont — wyłączona.',
+      'Usunięcie na żądanie właściciela pliku (src/lib/actions/files.ts) i z kontem; obiekt przez storage_deletion_queue (≤ 72 h, dead-letter po 20 próbach). Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): wiersz z deleted_at i obiekt usunięte w 7 dni (deleted_file), CV bez aktywności 365 dni z ostrzeżeniem 30 dni.',
   },
   applications: {
     name: 'Aplikacje na oferty',
     inCode: 'Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe.',
     processors: [...HOSTING, 'resend', 'emaillabs'],
-    retentionInCode: null,
+    retentionInCode:
+      'Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): aplikacja w stanie końcowym (także hired) usuwana 180 dni od niezmiennego closed_at razem z rozmowami, powiadomieniami i e-mailami.',
   },
   'guest-applications': {
     name: 'Aplikacja bez konta',
-    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, przejęcie przez konto.',
+    inCode: 'Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto.',
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode:
-      'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach.',
+      'purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. Wartości #574 (0127, za RETENTION_MODE): niepotwierdzone 7 dni od pierwszego wysłania, potwierdzone 30 dni od potwierdzenia, IP/UA zgody 7 dni.',
   },
   'matching-search': {
     name: 'Dopasowanie i zapisane wyszukiwania',
@@ -141,9 +143,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'employer-contact': {
     name: 'Kontakt pracodawca–kandydat',
-    inCode: 'Propozycje pracy, rozmowy i wiadomości, blokowanie firm przez kandydata.',
+    inCode: 'Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata.',
     processors: [...HOSTING, 'resend', 'emaillabs'],
-    retentionInCode: 'Propozycje wygasają (expires_at), dane nie są usuwane.',
+    retentionInCode:
+      'Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue.',
   },
   companies: {
     name: 'Konta firm, zespół i weryfikacja',
@@ -161,7 +164,10 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Zgody cookies i akceptacja dokumentów',
     inCode: 'Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent.',
     processors: HOSTING,
-    retentionInCode: null,
+    retentionInCode:
+      'Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach ' +
+      '(acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; ' +
+      'w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia.',
   },
   'dsa-moderation': {
     name: 'Zgłoszenia treści (DSA) i moderacja',
@@ -169,10 +175,17 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     processors: [...HOSTING, 'resend', 'emaillabs', 'cloudflare-turnstile'],
     retentionInCode: null,
   },
+  'support-contact': {
+    name: 'Formularz kontaktu',
+    inCode:
+      'Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt.',
+    processors: [...HOSTING, 'resend', 'cloudflare-turnstile'],
+    retentionInCode: null,
+  },
   'security-audit': {
     name: 'Bezpieczeństwo, audyt i limity',
     inCode: 'Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów.',
-    processors: [...HOSTING, 'sentry', 'cloudflare-turnstile'],
+    processors: [...HOSTING, 'discord-webhook', 'cloudflare-turnstile'],
     retentionInCode: 'Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie.',
   },
   'ai-job-import': {
@@ -183,14 +196,15 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   },
   'job-statistics': {
     name: 'Statystyki ofert (lejek)',
-    inCode: 'Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby.',
+    inCode: 'Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575).',
     processors: HOSTING,
-    retentionInCode: 'job_funnel_receipts (nonce deduplikacji) sprzątane po 2 dniach.',
+    retentionInCode: 'job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance).',
   },
   'analytics-marketing': {
-    name: 'Analityka i marketing po zgodzie',
-    inCode: 'Skrypty GA i Meta Pixel ładowane dopiero po zgodzie w odpowiedniej kategorii; wycofanie usuwa cookies.',
-    processors: ['google-analytics', 'meta-pixel'],
+    name: 'Analityka po zgodzie',
+    inCode:
+      'Beacon Cloudflare Web Analytics ładowany dopiero po zgodzie w kategorii analytics (#570: zamiast Google Analytics i Meta Pixel — usunięte); bezcookie\'owy.',
+    processors: ['cloudflare-web-analytics'],
     retentionInCode: 'Cookie zgody ważne 180 dni.',
   },
   'data-rights': {
@@ -199,13 +213,15 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
       'Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii.',
     processors: HOSTING,
     retentionInCode:
-      'run_retention_purge (/api/maintenance): okresy z retention_policies; domyślnie tylko pliki i profile oznaczone jako usunięte (30 dni), pozostałe kategorie wyłączone. Ślad wniosków i rejestr usunięć bez usuwania do decyzji właściciela.',
+      'run_retention_purge (/api/maintenance): okresy z retention_policies (wartości #574, 0127); harmonogram WYŁĄCZONY do jawnego RETENTION_MODE=dry-run|apply. Ślad wniosków 1095 dni; rejestr usunięć bez usuwania (minimum 400 dni do zmiany po RET-09/RET-10).',
   },
   backups: {
     name: 'Kopie zapasowe bazy',
-    inCode: 'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy.',
-    processors: ['railway'],
-    retentionInCode: 'BACKUP_RETENTION najnowszych kopii (domyślnie 14).',
+    inCode:
+      'scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569).',
+    processors: ['railway', 'cloudflare-r2'],
+    retentionInCode:
+      'BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze).',
   },
   'billing-disabled': {
     name: 'Płatności (wyłączone)',
@@ -410,8 +426,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
 
   // --- Pliki ------------------------------------------------------------------------------
   'public.files': {
-    activities: ['cv-files'],
-    subjects: ['candidate'],
+    activities: ['cv-files', 'employer-contact'],
+    subjects: ['candidate', 'employer'],
     columns: {
       owner_id: 'reference',
       bucket: 'file',
@@ -422,7 +438,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       checksum_sha256: 'file',
       scan_status: 'file',
     },
-    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane.',
+    note: 'Treść pliku leży w prywatnym buckecie Railway, w tabeli są metadane. entity_type: candidate_cv (CV) albo message_attachment (załącznik rozmowy, entity_id = rozmowa).',
   },
 
   // --- Aplikacje ---------------------------------------------------------------------------
@@ -475,6 +491,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       consent_accepted_at: 'consent',
       consent_ip: 'technical',
       consent_user_agent: 'technical',
+      age_attested_min: 'identity',
+      age_attested_at: 'identity',
     },
   },
 
@@ -535,6 +553,17 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'employer'],
     columns: { sender_id: 'reference', body: 'correspondence', read_at: 'technical' },
   },
+  'public.message_attachments': {
+    activities: ['employer-contact'],
+    subjects: ['candidate', 'employer'],
+    columns: { uploader_id: 'reference', file_id: 'reference', message_id: 'reference' },
+    notPersonal: {
+      client_upload_id: 'Losowy klucz idempotencji uploadu.',
+      position: 'Kolejność pliku w wiadomości.',
+      linked_at: 'Czas wysłania z wiadomością.',
+    },
+    note: 'Powiązanie pliku (public.files) z rozmową i wiadomością; treść i nazwa pliku w public.files/buckecie.',
+  },
 
   // --- Firmy -------------------------------------------------------------------------------
   'public.companies': {
@@ -562,7 +591,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.company_invitations': {
     activities: ['companies'],
     subjects: ['invitee', 'employer'],
-    columns: { email: 'contact', role: 'identity', invited_by: 'reference', responded_by: 'reference' },
+    columns: {
+      email: 'contact',
+      role: 'identity',
+      invited_by: 'reference',
+      responded_by: 'reference',
+      locale: 'preferences',
+      signup_token_hash: 'credentials',
+      signup_token_used_at: 'credentials',
+    },
+    note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
   'public.company_vies_checks': {
     activities: ['companies'],
@@ -590,6 +628,9 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       error_message: 'technical',
       provider_message_id: 'technical',
       bounce_type: 'technical',
+    },
+    notPersonal: {
+      lock_token: 'Token dzierżawy workera (0129, #615) — losowy identyfikator do CAS, nie dane osobowe.',
     },
     note: 'Pola payloadu dla każdego szablonu — sekcja „Treść e-maili” (generowana z migracji).',
   },
@@ -649,6 +690,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       user_agent: 'technical',
     },
   },
+  'public.candidate_age_attestations': {
+    activities: ['account', 'candidate-profile'],
+    subjects: ['candidate'],
+    columns: { profile_id: 'reference', min_age: 'identity', source: 'technical', locale: 'preferences', created_at: 'identity' },
+    note: 'Potwierdzenie przedziału wieku 16–17 / 18+ (0126, #492/#576): dolna granica przedziału i czas, bez daty urodzenia; niezmienne.',
+  },
+  'public.age_policy': {
+    activities: ['account', 'security-audit'],
+    subjects: ['admin'],
+    columns: { updated_by: 'reference' },
+    note: 'Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.',
+  },
   'public.document_acceptances': {
     activities: ['consents', 'account'],
     subjects: ['candidate', 'employer'],
@@ -684,6 +737,20 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       // Dowód: stan oferty/firmy (DSA) albo treść zgłoszonej wiadomości i id nadawcy (0116).
       target_snapshot: 'correspondence',
     },
+  },
+  'public.contact_messages': {
+    activities: ['support-contact'],
+    subjects: ['visitor', 'candidate', 'employer', 'admin'],
+    columns: {
+      sender_id: 'reference',
+      sender_name: 'identity',
+      sender_email: 'contact',
+      topic: 'correspondence',
+      message: 'correspondence',
+      locale: 'preferences',
+      handled_by: 'reference',
+    },
+    note: 'Wiadomości z formularza kontaktu (0125). Retencja i powiązanie z eksportem/usunięciem konta — do decyzji właściciela (#486).',
   },
   'public.report_events': {
     activities: ['dsa-moderation'],
@@ -778,6 +845,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { path: 'file' },
     notPersonal: { bucket: 'Nazwa bucketa.' },
     note: 'Klucz obiektu do usunięcia (zawiera UUID właściciela); wiersz znika po usunięciu obiektu.',
+  },
+  'public.retention_warnings': {
+    activities: ['data-rights', 'account', 'cv-files'],
+    subjects: ['candidate'],
+    columns: { profile_id: 'reference' },
+    notPersonal: { policy_key: 'Kategoria retencji.' },
+    note: 'Ostrzeżenie przed usunięciem z powodu braku aktywności (#574): aktywność, czas ostrzeżenia i termin; znika z kontem.',
   },
   'public.storage_gc_sweeps': {
     activities: ['cv-files'],

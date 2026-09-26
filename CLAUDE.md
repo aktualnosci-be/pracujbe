@@ -16,7 +16,7 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 
-1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · Sentry · Vitest + Playwright · Railway.
+1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
 3. **Niezmienne reguły (NIGDY nie łam):** patrz sekcja „Invariants". Najważniejsze: język e-maili = język odbiorcy; wysyłka propozycji idempotentna; brak service-role key w przeglądarce; brak trackingu przed zgodą; RLS na wszystkim; żadnych tekstów UI na sztywno.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
@@ -68,7 +68,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Favicon, ikony PWA i `og.png` (#7) = ten sam znak z konturów DM Sans 800 (`scripts/brand-glyphs.py` → `assets/brand/logo-glyphs.json` → `scripts/generate-icons.mjs`; opis `public/ICONS_README.md`, strażnik `brand-assets.test.ts`).
 
-**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian).
+**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian). Typografię pól paszportu porównuje z prototypem test `email-passport-prototype.test.tsx` (z kontrolą ujemną).
 
 ---
 
@@ -90,7 +90,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 - **Bezpieczeństwo danych:** **Row Level Security** na każdej tabeli. Operacje wrażliwe = Server Actions/Route Handlers.
 - **Formularze:** React Hook Form + Zod resolver. Server Actions do zapisu.
 - **E-mail:** **Resend** + **React Email** (szablony w `src/emails`), wysyłka przez kolejkę (`email_deliveries`).
-- **Błędy/monitoring:** **Sentry** (client + server + edge). Centralny system błędów `src/lib/errors`.
+- **Błędy/monitoring:** webhook Discorda `ERROR_WEBHOOK_URL` (#571, `src/lib/error-webhook`, tylko serwer; Sentry usunięte). Centralny system błędów `src/lib/errors`, `captureError` w `src/lib/error-report.ts`.
 - **Testy:** **Vitest** (unit/integration) + **Playwright** (e2e). Patrz `tests/`.
 - **Hosting:** **Railway**, jedna produkcja z `main`; natywne `Wait for CI` blokuje wdrożenie do zielonego CI. Migracje SQL są wersjonowane w repozytorium.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
@@ -106,17 +106,24 @@ pracujbe/
 ├─ .github/workflows/             # CI na ubuntu-latest (GitHub-hosted)
 │  └─ ci.yml                      # lint · typecheck · unit · e2e · build
 ├─ docs/                          # dokumentacja rozszerzona
-│  ├─ ARCHITECTURE.md
-│  ├─ SELF_HOSTED_RUNNERS.md      # jak postawić i zarejestrować runnery
-│  ├─ SUPABASE_SETUP.md
-│  ├─ RESEND_SETUP.md
-│  ├─ DEPLOYMENT.md
-│  ├─ STAGING.md
-│  ├─ SECURITY_CHECKLIST.md
-│  ├─ PERFORMANCE_CHECKLIST.md
-│  └─ LAUNCH_CHECKLIST.md
-├─ supabase/
-│  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu)
+│  ├─ ARCHITECTURE.md             # architektura, dostęp do danych, role
+│  ├─ DEPLOYMENT.md · DOMAIN_SETUP.md
+│  ├─ railway/                    # PostgreSQL, Better Auth, bucket, migracje, STATUS.md, OPERATIONS.md
+│  ├─ DATABASE.md · DATA_RETENTION.md · GUEST_APPLY.md · JOB_FUNNEL.md · TELEMETRY_PRIVACY.md
+│  ├─ EMAILLABS_SETUP.md · RESEND_SETUP.md · TURNSTILE.md · CSP_NONCE_ANALYSIS.md
+│  ├─ AI_*.md · ESCO.md · PRODUCT_DECISIONS.md · RELEASE_1_0.md
+│  ├─ SECURITY_CHECKLIST.md · PERFORMANCE_CHECKLIST.md · LAUNCH_CHECKLIST.md
+│  ├─ design/people-passport/     # źródło wyglądu (prototyp, MATRIX.md)
+│  ├─ legal-drafts/               # PROJEKTY dokumentów prawnych (nieopublikowane)
+│  ├─ STAGING.md                  # staging wycofany (decyzja 2026-09-21)
+│  └─ ARCHIWALNE: SUPABASE_SETUP.md (stan sprzed #27), SELF_HOSTED_RUNNERS.md (CI przed 2026-09-23),
+│     audit/, REMEDIATION-2026-07-23*.md, DESIGN_SCREENS.md
+├─ database/
+│  ├─ bootstrap/                  # role i tożsamość (stały bootstrap)
+│  └─ auth/                       # schemat Better Auth (`auth.*`)
+├─ supabase/                      # nazwa historyczna — tylko SQL, bez Supabase w runtime (#27)
+│  ├─ migrations/                 # *.sql wersjonowane (kolejność wg prefiksu, przeplatane z database/)
+│  ├─ tests/                      # rls.sql, role-guard.sql (npm run test:rls)
 │  ├─ rollback/                   # ręczne skrypty wycofania (np. 0097 ESCO)
 │  └─ seed.sql                    # dane demonstracyjne (oznaczone is_demo=true)
 ├─ src/
@@ -159,7 +166,7 @@ pracujbe/
 
 ---
 
-## 5. Model danych (Postgres / Supabase)
+## 5. Model danych (PostgreSQL Railway)
 
 UUID PK wszędzie, `created_at`/`updated_at` (trigger `set_updated_at`), soft-delete
 (`deleted_at`) tam gdzie potrzebne, FK z kontrolowanym `ON DELETE`, statusy jako enumy/CHECK,
@@ -217,7 +224,7 @@ Te reguły wynikają wprost ze specyfikacji i z błędów poprzedniego produktu.
 4. **Aplikowanie idempotentne.** Unikat `(candidate_id, job_id)` — jedna aplikacja.
 5. **RLS wszędzie.** Każda tabela z danymi użytkownika ma polityki. Domyślnie deny.
 6. **Uprawnienia service_role tylko na serwerze.** Pula `withServiceRole` (`DATABASE_SERVICE_URL`, `src/lib/db/portal.ts`, `server-only`) nie może trafić do bundle klienta.
-7. **Zero trackingu przed zgodą.** GA/Meta Pixel/remarketing ładują się dopiero po zgodzie w kategoriach cookies.
+7. **Zero trackingu przed zgodą.** Beacon Cloudflare Web Analytics (#570 — zamiast Google Analytics i Meta Pixel, usunięte) ładuje się dopiero po zgodzie w kategorii `analytics` (kategorii `marketing` nie ma).
 8. **Użytkownik nie widzi technikaliów.** Żadnego stack trace/SQL/surowej odpowiedzi API/komunikatu dostawcy.
    Błędy przez centralny system (`src/lib/errors`), user-facing komunikat z klucza tłumaczenia.
 9. **Panele = `noindex`.** `candidate/*`, `employer/*`, `admin/*`, staging — wyłączone z indeksowania i sitemap.
@@ -520,7 +527,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] RLS: polityki bazowe
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
-- [x] Centralny system błędów + kody + Sentry (config)
+- [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
 - [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
 
 ### Redesign wg makiet — HISTORYCZNE (`docs/DESIGN_SCREENS.md`), zastąpione „Ludzie i praca”
@@ -584,9 +591,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   w języku odbiorcy, bezpłatny etap z `docs/PRODUCT_DECISIONS.md`); bez cen i liczb (strażnik
   `tests/unit/employers-page.test.ts`). „Dla pracodawców” w nawigacji i stopce prowadzi tutaj;
   „Dodaj ofertę” i CTA strony — do `/rejestracja-pracodawca`. W bramce a11y (#221).
+- [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
+  wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
+  `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
+  20–5000, imię opcjonalne, e-mail. Akcja `submitContactMessage`: limiter `contact` (fail-safe) →
+  Turnstile `contact` (fail-closed) → Zod (`src/lib/validation/contact.ts`; NISS/PESEL/numer
+  dokumentu → błąd przy polu, #495) → RPC `submit_contact_message` (tylko service_role:
+  idempotencja, 3 wiadomości/adres/24 h, numer `KON-XXXX-XXXX`). W tej samej transakcji
+  potwierdzenie `supportContact` do nadawcy w języku formularza i `contactMessageAdmin` do
+  każdego aktywnego admina w JEGO języku (Invariant #1); w kolejce tylko numer i temat — treść
+  i adres czyta admin w `/admin/kontakt` (filtr nowe/obsłużone, `admin_set_contact_message_status`
+  z CAS i audytem). Obie strony indeksowalne (canonical, hreflang, sitemap), stopka „Pytania
+  i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
+  `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
+  **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486), linki Pomoc/Prywatność
+  w stopce e-maili (#6), `/faq` (atrapa, poza nawigacją).
 
 ### Etap 3 — kandydat
-- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. **Otwarte:** IP/user-agent w receipcie akceptacji, budżet wysyłki puli `auth` w workerze PostgreSQL, domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
+- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. **Otwarte:** budżet wysyłki puli `auth` w workerze PostgreSQL, domyślna nazwa firmy w formularzu po nieudanym bootstrapie.
   Rozdzielenie zgód (#493, migracja `0108`): rejestracja kandydata/pracodawcy
   i krok 6 onboardingu mają osobne, niezaznaczone pola — akceptacja regulaminu (wymagana),
   potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda) i zgoda
@@ -666,6 +689,39 @@ unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:**
 od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
 decyzja produktowo-prawna (#485/#34).
 
+Polityka wieku kandydatów (#492, #576, migracja `0126`). Decyzja właściciela 25.09.2026
+(LAUNCH-1): konto kandydata od 16 lat, widoczność profilu dla firm (#494) tylko 18+, młodsi bez
+konta. Próg konta jako dane (`age_policy`: 16 albo 18, domyślnie 16, `confirmed=true`; zmiana
+tylko `admin_set_candidate_min_age` z uzasadnieniem i audytem `age_policy.updated`). Minimalizacja:
+potwierdzenie PRZEDZIAŁU „16–17” / „18 lub więcej” bez daty urodzenia (`candidate_age_attestations.min_age`
+= 16 albo 18, niezmienne, RPC-only; po ukończeniu 18 lat nowe potwierdzenie 18+). Deklaracja:
+rejestracja kandydata (`AgeDeclarationField` — radiogroup obok zgód #493; Better Auth przez trigger
+`auth.record_signup_receipts` w transakcji konta; poniżej progu → `AGE_ATTESTATION_REQUIRED`; RPC
+service_role `record_candidate_age_attestation` dla kont spoza formularza), formularz gościa
+(`p_age_attested_min` → wrapper `submit_guest_application`), sekcja „Wiek” w `/candidate/ustawienia`
+(`attest_candidate_age`; konto 16–17 widzi ograniczenie i potwierdza 18+). Egzekwowanie w bazie
+triggerami: aplikacja i przejęcie aplikacji gościa, propozycja (neutralny błąd), zgłoszenie gościa;
+włączenie widoczności (`set_candidate_searchable` i każda inna ścieżka) tylko przy 18+
+(`candidate_is_adult`, `AGE_ADULT_REQUIRED` → UI: wyłączony przełącznik z wyjaśnieniem
+`profileVisibility.requiresAdult`); migracja jednorazowo ukrywa profile bez 18+. Lejek ofert
+(#99) dla 16–17 = brak zgody: znacznik urządzenia `pracujbe.funnel.minor` (panel kandydata po
+odczycie z bazy — `FunnelMinorMarker`; rejestracja/gość po wyborze 16–17) → `sendFunnelEvent` nic
+nie wysyła; potwierdzenie 18+ zdejmuje znacznik. Formularze pokazują przedziały od
+`candidate_min_age()` (błąd odczytu → tylko 18+). Dowód: `rls.sql` sekcja AGE492 (kontrole ujemne:
+bez triggera aplikacja/gość bez deklaracji przechodzą, konto 16–17 staje się wyszukiwalne — AGE11n);
+unit `age-policy` (lejek z kontrolą ujemną), `profile-visibility`, `guest-apply-form`; E2E
+`auth-age-declaration`, `guest-apply`, `job-funnel-minor-marker` (PRIV-01: przy znaczniku zero żądań
+`/api/job-funnel` mimo zgody — strony, „Aplikuj”, zamknięcie karty, druga karta, znacznik zapisany w
+drugiej karcie; kontrole ujemne bez znacznika i z inną wartością, mutacja bramki = czerwony). Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
+UI zmiany progu w panelu admina (#492): `/admin/ustawienia` — bieżący próg, status zatwierdzenia
+i ostatnia zmiana z dziennika (`getAgePolicySettings`, odczyt service-rolem po `requireAdmin`),
+formularz wyboru 16/18 + uzasadnienie (zawsze wymagane, jak przy statusie firmy) + dialog
+potwierdzenia (`AgePolicyForm`, `AdminConfirmDialog`), zapis przez `setCandidateMinAge`
+(`admin_set_candidate_min_age` pod sesją admina). Bez treści prawnej — same etykiety funkcji.
+**Otwarte (właściciel/prawnik):** treść informacji o wieku (`07-wiek.md`) po akceptacji, kontakt
+osób poniżej 16 lat z udziałem opiekuna, oznaczenie ofert dla młodocianych, procedura dla
+wykrytego konta poniżej progu.
+
 Zapisane wyszukiwania i alerty (#100, migracja `0092`): „Zapisz wyszukiwanie” na
 `/oferty-pracy` (przy co najmniej jednym filtrze; strona nie czyta sesji — akcja
 `saveSearchAction`) zapisuje KANONICZNE filtry v1 = dokładnie argumenty `get_public_jobs`
@@ -679,9 +735,26 @@ rejestruje parę w `saved_search_alerts` (PK = brak ponownej wysyłki), tworzy j
 (`job_match`, `entity_type='saved_search'`) i jeden e-mail `jobMatch` (digest ≤ 5 ofert,
 język odbiorcy, opt-out `email_job_matches`); digest najwyżej raz na dobę/tydzień. Panel:
 `/candidate/wyszukiwania` (alert, częstotliwość, usunięcie). Dowód: `rls.sql` sekcja SS100;
-unit `saved-search-alerts`; E2E `saved-search.spec`. **Otwarte:** zmiana nazwy wyszukiwania;
-link wypisania i ponowna kontrola zgody tuż przed wysyłką przychodzą z #466 (tam `jobMatch` →
-kategoria `job_matches`); na przebieg najwyżej 100 najnowszych pasujących ofert.
+unit `saved-search-alerts`; E2E `saved-search.spec`.
+Dokończenie (migracja `0124`): zmiana nazwy w `/candidate/wyszukiwania`
+(RPC `rename_saved_search`: tylko własne, 1–80 znaków, bez znaków sterujących; cudze = `NOT_FOUND`).
+E-mail `jobMatch` ma link „Wyłącz tylko ten alert” → `/{locale}/wypisz-alert#t=` (noindex,
+token HMAC `src/lib/email/saved-search-alert-token.ts`: UUID konta + wyszukiwania, osobna
+domena podpisu, sekret `EMAIL_UNSUBSCRIBE_SECRET`, bez e-maila w URL; zapis po kliknięciu przez
+`saved_search_alert_unsubscribe`, tylko service_role, tylko właściciel z tokenu). Link liczy
+worker (payload go nie podmieni). Kolejka: `email_delivery_suppression_reason` (blokada adresu,
+zgoda kategorii, uprawnienie odbiorcy firmowego z 0122 — kontrola `ES503-2b/2c`, wyłączony/usunięty alert, kampania) w `claim_email_batch` i w
+`email_delivery_send_check` — worker woła ją tuż przed budżetem i `send` (#466 pkt 8), wiersz
+niedozwolony jest wygaszany (`suppressed_alert_disabled` / `suppressed_opt_out`…). Dowód:
+`rls.sql` sekcja SS108 (kontrole ujemne), unit `saved-search-followups`,
+`saved-search-rename-ui`, E2E `saved-search.spec` (`/wypisz-alert`).
+Nagłówek one-click digestu alertu (`List-Unsubscribe` + `List-Unsubscribe-Post`, RFC 8058)
+wskazuje `POST /api/email/unsubscribe-alert?t=&l=` z tym samym tokenem alertu co `/wypisz-alert`
+(`alertOffHeadersFor` w `outbox.ts`) — wyłącza tylko ten alert (`saved_search_alert_unsubscribe`,
+service_role, idempotentnie), GET = 303 na stronę potwierdzenia; inne maile i `jobMatch` bez
+wyszukiwania zachowują nagłówek kategorii, stopka nadal ma wypisanie z kategorii. Dowód: unit
+`saved-search-followups` (kontrola ujemna: token kategorii w nagłówku/trasie), E2E `saved-search.spec`.
+**Otwarte:** na przebieg najwyżej 100 najnowszych pasujących ofert.
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
@@ -702,8 +775,8 @@ unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimal
 parsera, edycja wartości propozycji.
 
 Asystent budowania profilu z odpowiedzi (#37, część kandydata; za flagą
-`AI_PROFILE_ASSIST_ENABLED`, domyślnie wyłączony; `docs/AI_PROFILE_ASSIST.md`, migracja `0132` —
-numer tymczasowy, zależy od #552): `/candidate/profil/asystent` (404 bez flagi, link w profilu tylko
+`AI_PROFILE_ASSIST_ENABLED`, domyślnie wyłączony; `docs/AI_PROFILE_ASSIST.md`, migracja `0147`):
+`/candidate/profil/asystent` (404 bez flagi, link w profilu tylko
 z flagą). Kandydat bez CV odpowiada własnymi słowami na 4 pytania (praca, umiejętności, języki,
 uprawnienia; ≤ 1000 znaków) → informacja o AI przed pierwszym użyciem (art. 50 ust. 1, powiązana
 z przyciskiem) → minimalizacja jak przy CV (`src/lib/profile-assist/prepare.ts`: NISS → odmowa,
@@ -745,11 +818,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `JobFunnelBeacon` po załadowaniu (widoczna strona, `credentials: 'omit'`) woła `/api/job-funnel`
   (`src/lib/job-funnel/*`: walidacja, reguła botów/prefetch `request-filter.ts`, limiter w pamięci
   po HMAC adresu). Deduplikacja: losowy nonce jednego załadowania widoku (`job_funnel_receipts`,
-  sprzątane po 2 dniach) — retry nie dubluje, odświeżenie = nowe wyświetlenie. RPC zapisu tylko przez
+  ≤ 48 h, #575) — retry nie dubluje, odświeżenie = nowe wyświetlenie. RPC zapisu tylko przez
   endpoint (bramka `pracujbe.funnel_writer`), tylko oferty publiczne firm `verified`. Panel
   `/employer/statystyki?dni=7|30|90`: zakres dat, definicje metryk, karty per oferta zawijane przy 200% tekstu (recruiter+).
   Dowód: `rls.sql` sekcja FN99, unit `job-funnel*`, E2E `public-cache-headers` (cache nienaruszony)
   i `e2e-real` (licznik rośnie, bot pominięty, mutacja `funnel-no-dedup` = czerwony).
+  Tylko po zgodzie (#575, decyzja właściciela 25.09, migracja `0128` — numer tymczasowy): lejek
+  wysyła zdarzenie WYŁĄCZNIE przy zgodzie w kategorii `analytics` banera (`funnelConsentState`
+  w `src/lib/job-funnel/client.ts`, cookie czytane tuż przed wysyłką — działa też po wycofaniu
+  w innej karcie i po restarcie). Wyświetlenie sprzed decyzji czeka w pamięci karty i wychodzi
+  po zgodzie; odmowa/wycofanie czyści kolejkę, zmiana strony ją anuluje; `apply_started` bez
+  zgody nie jest kolejkowane. Terminy absolutne: `purge_job_funnel_data` w `/api/maintenance` —
+  receipts ≤ 48 h, agregaty = bieżący + 12 poprzednich miesięcy kalendarzowych (Europe/Brussels).
+  Panel statystyk: informacja `jobFunnel.consentNote` (dane tylko od osób ze zgodą). Dowód:
+  unit `job-funnel-consent` (kontrola ujemna bez bramki), `job-funnel-retention`, `rls.sql`
+  sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
+  w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
+  teraz zgody w teście.
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
   Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
   w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają
@@ -782,7 +867,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `/rejestracja-pracodawca` z sesją pracodawcy → panel. Chrome panelu: `getEmployerShellData`
   zwraca `demo`/`ok`/`error`; firma demonstracyjna tylko w trybie demo. Dowód: `rls.sql` sekcja MM.
   Powód odrzucenia/zawieszenia (#310, `0084`): `companies.status_reason` w banerze `/employer/firma`.
-  **Otwarte:** strona kontaktu (#61), orientacyjny czas weryfikacji (decyzja produktowa).
+  **Otwarte:** orientacyjny czas weryfikacji (decyzja produktowa).
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
   albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Claude
@@ -806,6 +891,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
   `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
   poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
+  Porzucone rezerwacje (#609, migracja `0134`): jeśli proces pada między rezerwacją a
+  rozliczeniem, rezerwacja nie może blokować limitu bezterminowo. `/api/maintenance` woła co
+  godzinę `ai_budget_release_stale_reservations` (service_role, idempotentne, `FOR UPDATE SKIP
+  LOCKED`) — rezerwacja starsza niż 60 minut i wciąż `reserved` jest rozliczana jako
+  `outcome='failed'`, koszt 0 (ślad w rejestrze zostaje, limit doby/miesiąca wraca do użycia).
+  TTL dłuższy niż próg ostrzeżenia `staleReservations` (15 min) w `ai_budget_status`, więc
+  trwające jeszcze wywołanie nie jest zwalniane przedwcześnie. Dowód: `rls.sql` sekcja AIB609.
   Minimalizacja (#500): przed modelem tylko `<main>`/`<article>` i `JobPosting` z listy pól
   (`src/lib/ai-import/minimize.ts`), e-maile/telefony/NISS/numery dokumentów zastąpione
   znacznikiem, w prompcie sam host; `contactEmail` poza schematem (ręcznie w kroku 9). Wyjście:
@@ -852,8 +944,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   ≤ 10 min, audyt). Rola `member`: zamiast „Dodaj ofertę”, edycji i cyklu życia ofert —
   wyjaśnienie (`RecruiterOnlyNote`). Każda zmiana → `audit_logs`. Dowód: `rls.sql` sekcja TM403;
   unit `team-actions`, `team-members-ui`; E2E `employer-team.spec`.
-  **Otwarte:** e-mail zaproszenia dla adresu BEZ konta (brak profilu = brak locale odbiorcy
-  wg Invariantu #1; wymaga wyboru języka zaproszenia i linku rejestracji z tokenem).
+  Adres BEZ konta (migracja `0121`): zapraszający wybiera język zaproszenia (PL/NL/FR/EN,
+  domyślnie język strony — decyzja: brak profilu odbiorcy = jedyny znany język, Invariant #1;
+  konto z profilem dostaje e-mail w języku profilu), `company_invitations.locale`. E-mail
+  `teamInvitationSignup` z linkiem `/{locale}/rejestracja-pracodawca#token=` — token =
+  HMAC(`GUEST_APPLY_SECRET`, `team-invite:`+nonce) (`src/lib/team/invite-token.ts`), w bazie
+  tylko hash (czyszczony po rozstrzygnięciu), nonce w payloadzie; odświeżenie zaproszenia
+  wymienia token; najwyżej 3 linki na adres na dobę. Strona rejestracji (`EmployerSignupEntry`)
+  czyta token z fragmentu, podgląd `team_invitation_signup_preview` (service_role) → formularz
+  bez nazwy firmy, adres z zaproszenia; `registerInvitedEmployer` zużywa token
+  (`consume_team_invitation_signup`, raz, tylko ten adres). Konto powstaje bez firmy, a
+  zaproszenie czeka w panelu po weryfikacji adresu. Wynik RPC niezależny od konta. Dowód:
+  `rls.sql` sekcja TI403 (kontrole ujemne), unit `team-invitation-signup-*`, E2E `employer-team`.
+  Utwardzenie (#611/#610, migracja `0133`): limit „najwyżej 3 e-maile `teamInvitationSignup`
+  na adres / 24 h” jest teraz atomowy — advisory lock kluczowany adresem serializuje odczyt
+  licznika i wstawienie w `enqueue_team_invitation_signup_email` (jak `begin_checkout`, 0050),
+  więc równoległe zaproszenia z różnych firm dla tego samego adresu nie omijają limitu.
+  Doprecyzowany i przetestowany kontrakt stanu `used` w `team_invitation_signup_preview`
+  (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
+  TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
+  unit `team-invitation-signup-preview`.
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -978,14 +1088,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Linki (#505): token we fragmencie `#token=` → POST do cookie HttpOnly ścieżki → czysty URL;
   stary format `?token=` odrzucany w middleware (303 bez cookie, „link nieprawidłowy”) —
   `guest-legacy-link.test` z kontrolą ujemną.
-  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture). **Otwarte:** powiadomienie gościa
-  o zmianie statusu (brak profilu odbiorcy); okres retencji do potwierdzenia w polityce
-  prywatności (#40).
+  Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture).
+  Zmiana statusu (0122): `transition_application` → `enqueue_guest_status_email` →
+  `guestStatusChanged` w języku formularza (`guest_application_requests.locale` — jawnie
+  zapisany język odbiorcy bez profilu, Invariant #1), klucz = id wiersza historii, tylko
+  potwierdzone zgłoszenie, nieusunięta aplikacja bez konta, adres bez blokady (#44); wiersz
+  kolejki = encja aplikacji (retencja #486 usuwa go z aplikacją); payload: imię gościa, firma,
+  tytuł, status; CTA lista ofert, bez tokenu i linku wypisania. Dowód: `rls.sql` sekcja GS98
+  (kontrole ujemne), unit `guest-status-email`. **Otwarte:** okres retencji do potwierdzenia
+  w polityce prywatności (#40).
 - [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
-- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16); **do zrobienia:** załączniki
+- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania, zgłoszenia i załączniki gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16)
   Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
   strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
   (powód ze słownika `MESSAGE_REPORT_CATEGORIES`, opis ≤ 1000, znacznik treści prawnej „do
@@ -1003,6 +1119,33 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   unit `message-reports`, `thread-message-list`, E2E `message-report.spec`. **Otwarte:**
   treść prawna i retencja dowodu (#40/#486 — dowód zostaje po usunięciu konta nadawcy),
   powiadomienie zgłaszającego o wyniku, zgłoszenie jako sprawa DSA.
+  Załączniki (migracja `0119`): PDF/DOC/DOCX/JPG/PNG ≤ 5 MB, najwyżej 3 na
+  wiadomość (`src/lib/validation/message-attachment.ts` — przeglądarka i akcja; magic bytes
+  i OOXML w `src/lib/files/message-attachments.ts`). „Dołącz plik” wgrywa plik od razu
+  (`uploadMessageAttachment`: `can_attach_in_conversation` → PUT do prywatnego bucketu pod
+  `<rozmowa>/att-<uuid>` → `stage_message_attachment`, idempotentnie po `client_upload_id`),
+  `send_message(…, p_attachment_ids)` łączy pliki z wiadomością w tej samej transakcji
+  (`client_message_id` jak #147; pusta treść tylko z plikiem). Lista w wątku
+  (`get_message_attachments`) i pobranie (`get_message_attachment_download`) tylko dla bieżących
+  uczestników i wysłanych wiadomości; pobranie = link HMAC 60 s `/api/files/message/<id>?t=`
+  (klucz pochodny od `FILE_DOWNLOAD_SECRET`, trasa ponownie sprawdza sesję, dostęp i
+  `scan_status`; kwarantanna = brak pobrania). Blokada firmy (#97): strona firmowa nie wgrywa
+  plików i nie widzi plików kandydata. Tabela `message_attachments` bez grantów (RPC-only),
+  klient nie tworzy/zmienia wierszy `files` załączników (trigger). Usunięcie wiadomości/rozmowy
+  (także konta #486) usuwa `files` → `storage_deletion_queue`; niewysłane pliki > 24 h sprząta
+  `purge_stale_message_attachments` w `/api/maintenance`. Dowód: `rls.sql` sekcja MA (kontrola
+  ujemna: bez strażnika `files` ścieżka zostaje podmieniona); unit `message-attachments-*`.
+  Podgląd i e-mail (migracja `0135` — numer tymczasowy): JPG/PNG dopuszczone do pobrania mają
+  miniaturę pod nazwą pliku (`MessageAttachmentList` → `AttachmentPreview`): link HMAC 60 s
+  z `prepareMessageAttachmentDownload` wystawiany dopiero po wejściu w widok
+  (IntersectionObserver), `<img loading="lazy">`, alt `messages.attachmentPreviewAlt` z nazwą;
+  kwarantanna, inne typy i błąd linku/obrazu = brak miniatury (nazwa i pobranie zostają).
+  `send_message` dokłada do payloadu `newMessage` tylko `attachmentCount` (bez nazw, #503;
+  `payload-fields.ts`, mapa danych), strona firmowa zablokowana przez kandydata-nadawcę (#97)
+  dostaje 0; e-mail pokazuje „Załączniki w wiadomości: N” (`newMessageAttachmentsLabel`, 1–3).
+  Dowód: `rls.sql` sekcja MN135 (kontrola ujemna: bez warunku blokady MN135-4 czerwony), unit
+  `message-attachment-preview` (kontrole ujemne: kwarantanna, pole spoza listy workera).
+  **Otwarte:** AV (jak CV), podgląd w trybie demo (brak załączników demo).
   Wysyłka idempotentna (0075, #147): `send_message(conversation, body, client_message_id)` —
   `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
   zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`
@@ -1099,13 +1242,25 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   istniejące `email_queue_age`/`auth_email_queue_age`. Opis `docs/railway/OPERATIONS.md`;
   dowód `rls.sql` OPS44, `ops-metrics` (PG16), `ops-sensors`. **Do zrobienia (#44):**
   kalibracja progów na ruchu produkcyjnym, adapter drugiego dostawcy.
+  Minimalizacja treści (#503, migracja `0123`): worker przekazuje do
+  szablonu tylko pola z `src/lib/email/payload-fields.ts` (reszta payloadu zostaje w bazie);
+  poza listą m.in. podgląd rozmowy (`newMessage.preview`) i wiadomość do propozycji
+  (`jobOffer.message`) — e-mail prowadzi do panelu. `claim_email_batch` ponownie sprawdza
+  odbiorcę firmowego (`email_recipient_authorized`: aplikacja/propozycja/wiadomość →
+  `company_recipient_ok`; brak obiektu = fail-closed) → `suppressed_recipient_unauthorized`.
+  Mapa danych: kolumna „Odrzucane przez workera”. Dowód: `rls.sql` sekcja ES503 (kontrola
+  ujemna), unit `email-payload-minimization` (kanarki w 4 językach, kontrola ujemna). Szkic:
+  `docs/legal-drafts/poczta-transfer-resend.md`. **Otwarte (właściciel/prawnik):** DPA,
+  podprocesorzy, transfer, retencja u dostawcy, tracking na koncie, nazwisko kandydata w
+  e-mailu do firmy, bramka konfiguracji dla nieocenionego dostawcy.
 - [~] Szablony React Email PL/NL/FR/EN — komplet typów w `src/emails`; pokrycie zdarzeniami w rejestrze
   `src/emails/wiring.ts` (test `email-wiring.test.ts`, #295): kolejka — newApplication, applicationViewed
   (`viewed`), statusChanged, jobOffer, offerAccepted/Declined, newMessage, jobPublished (`publish_job`,
   0073), companyVerified/Rejected/Suspended (`admin_set_company_status`, 0084), jobMatch
-  (`process_saved_search_alerts`, 0092, #100); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
+  (`process_saved_search_alerts`, 0092, #100), supportContact/contactMessageAdmin (`submit_contact_message`,
+  0125, #61); Auth (kolejka Better Auth, #24) — accountConfirmation/passwordReset; magicLink/emailChange/invite wysyłał tylko GoTrue (#27). **Świadomie nieużywane** (brak
   zdarzenia): welcome, contactInvitation, jobExpiring (kreator nie ustawia `expires_at`), payment/invoice
-  (#51), supportContact. Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
+  (#51). Klucz e-maila zmiany statusu = id wiersza historii (0073, #292) — powrót do
   statusu wysyła kolejny e-mail, retry nie. Dowód: `rls.sql` sekcja NN.
   Status aplikacji w mailu = etykieta `status.*` z `src/messages` (nie enum); neutralne warianty
   treści przy braku nazwy nadawcy (`EmailCopy.anonymous`); CTA do sekcji panelu w locale odbiorcy
@@ -1114,12 +1269,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   e-maila/zaproszenie. Payloady (0113): `jobOffer` niesie `expiresAt` (= `offers.expires_at`)
   i kwoty oferty (#293, #22), `newMessage` — `conversationId` (CTA do wątku, #290); dowód
   `rls.sql` sekcja PL109 (kontrole ujemne), `email-payload-followups.test`. Treść wiadomości
-  rekrutera świadomie poza payloadem (tekst wolny = korespondencja, #503) — kandydat czyta ją
+  rekrutera świadomie poza payloadem (tekst wolny = korespondencja, #503; worker odrzuca pole `message`) — kandydat czyta ją
   w panelu. **Otwarte (#503, właściciel):** czy cytat wiadomości rekrutera może trafić do e-maila.
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
-  tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” ukryte do czasu
-  dedykowanej listy (#148).
+  tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
+  pełnej listy (#148).
+  Pełna lista (#148): `/candidate/powiadomienia` i `/employer/powiadomienia` (noindex, guard
+  layoutu) — `getNotificationsPage` pod sesją/RLS, po 20 kursorem `created_at` + `id`
+  (`loadMoreNotifications`, kursor/locale/filtr walidowane), filtr `?nieprzeczytane=1`
+  (nawigacja z `aria-current`), oznaczanie pojedynczo i wszystkich (`mark_notifications_read`,
+  fokus na tytule/nagłówku, błąd z kodu), cele i tytuły z tych samych `resolveHref`/
+  `titleKeyForType` co dropdown, data w Europe/Brussels + czas względny; kalka `panel-styles.ts`.
+  Wczytane strony zostają po oznaczeniu i po błędzie kolejnej strony. Bez migracji (indeks
+  `idx_notifications_profile`). Dowód: `portal-notifications.test.ts` (PG16: równy
+  `created_at` na granicy strony, filtr, obcy kursor; mutacja kursora = czerwony), unit
+  `notifications-page`, `notifications-list` (kontrola ujemna bez listy), E2E
+  `notifications-list` (4 języki, obie role), `panel-a11y` (nowe trasy).
   Dzwonek (#353): nazwa z liczbą nieprzeczytanych (ICU `notifications.bellLabel`), panel = region
   nazwany tytułem, „Nieprzeczytane” dla czytnika; Escape zamyka i wraca fokusem na dzwonek, wyjście
   fokusem poza panel go zamyka. „Oznacz wszystkie” (#354): `aria-busy` + „Zapisywanie…”, jedno
@@ -1130,6 +1296,22 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)
+  Analityka (#570, decyzja właściciela 2026-09-25): Cloudflare Web Analytics (beacon
+  bezcookie'owy, `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN`) zamiast Google Analytics i Meta Pixel —
+  usunięte z kodu, CSP, `.env.example`, CI i dokumentacji. Ładowany wyłącznie po zgodzie
+  w kategorii `analytics` (`src/components/cookies/Analytics.tsx`), CSP: `static.cloudflareinsights.com`
+  (script-src) + `cloudflareinsights.com` (connect-src) — tylko gdy token jest ustawiony; bez
+  tokenu (stan startowy, token doda właściciel) beacon się nie ładuje, a CSP nie ma tych hostów.
+  Kategoria `marketing` usunięta (decyzja właściciela 25.09 — brak trackerów marketingowych):
+  kategorie = necessary/preferences/analytics (`src/lib/consent-cookie.ts`, `CONSENT_CATEGORIES`),
+  domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)
+  jest nieaktualne i baner pyta ponownie. Log zgód: migracja `0130` (numer tymczasowy)
+  — `record_consent` zapisuje 3 kategorie, akcja `recordConsent` odrzuca klucze spoza listy;
+  wartość `marketing` zostaje w enumie dla historycznych wierszy. Nieużywane klucze
+  `cookies.marketingName`/`marketingDesc` usunięte z `src/messages`. Dowód: E2E `cookie-consent-categories.spec`, `smoke.spec`,
+  `one-time-link-tracking.spec`, `public-cache-headers.spec`; unit `consent-store.test`,
+  `consent-action.test` (kategorie RPC = banera, kontrola ujemna 0043), `csp-report.test`
+  (CSP z tokenem i bez), `privacy-data-map.test`; `rls.sql` Y2.
 - [x] Panel administratora — `/admin/**` (guard role='admin'→notFound, noindex): dashboard, firmy
   (weryfikuj/odrzuć/zawieś), zgłoszenia (moderacja), użytkownicy; odczyt service-role, zapis przez RPC (0019)
   Każdy odczyt service-role w `src/lib/data/admin.ts` sam potwierdza rolę admina sesji
@@ -1198,8 +1380,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   UI: dialog decyzji i cofnięcia w `/admin/zgloszenia` (`ModerationDecisionActions`),
   uzasadnienie w `/employer/firma` (`get_company_moderation_decisions`), wynik w
   `/zglos-tresc/sprawa`. Dowód: `rls.sql` sekcja MOD42; unit `moderation-decision*`; E2E
-  `admin-ux` (#42). **Otwarte:** znacznik treści prawnej o środkach odwoławczych w panelu
-  firmy; UI kolejki według priorytetu (lista nadal po dacie).
+  `admin-ux` (#42). Kolejka według priorytetu: `/admin/zgloszenia?sort=priority|newest`
+  (domyślnie `priority` dla `kind=dsa_notice`, `newest` dla reszty) — `review_priority` ↓,
+  termin `due_at` ↑ (bez terminu na końcu), `created_at` ↓, `id` ↓; kursor `p1|priorytet|termin|
+  created_at|id` (`encode/decodeAdminPriorityCursor`, kursor „najnowsze” = pierwsza strona),
+  filtr `?flagged=1` (priorytet > 0 albo opis flagi z `flag_report_for_review`), parametry
+  zachowywane we wszystkich linkach listy. Bez migracji (indeks z 0099). Dowód: integracja
+  `portal-admin-dsa-queue` (PG16, remisy priorytetu/terminu/czasu; mutacja kursora = czerwony),
+  unit `admin-list-params`, E2E `admin-ux`, `admin-a11y`. **Otwarte:** znacznik treści prawnej
+  o środkach odwoławczych w panelu firmy.
   Odwołania, terminy, retencja, raport (#43, migracja `0104`): tabela
   `moderation_appeals` (jedno na decyzję, `APL-…`, niezmienne). Autor (owner/admin firmy)
   odwołuje się od ograniczenia w `/employer/firma` (`submit_moderation_appeal` pod sesją),
@@ -1239,7 +1428,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `breachFormErrors`. Zapis wyłącznie RPC `admin_*_breach_*` (is_admin, CAS `version` →
   `STALE_STATE`, idempotentne `client_key`, audyt bez treści). Historia `breach_incident_events`
   i wpisy niezmienne dla każdej roli (trigger; bez DELETE/TRUNCATE). Eksport JSON/CSV
-  `GET /api/admin/breaches/[id]/export` (RPC zapisuje eksport w historii). Zawiadomienie osób:
+  `POST /api/admin/breaches/[id]/export` (RPC zapisuje eksport w historii; `GET` = 405, wyłącznie
+  odczyt nie mutuje — #603). Zawiadomienie osób:
   `admin_notify_breach_subjects` → outbox `breachNotice` — treść wpisuje admin dla każdego
   języka odbiorców; brak wersji w języku któregoś odbiorcy = nic nie wychodzi (Invariant #1).
   Dowód: `rls.sql` sekcja BR490 (kontrole ujemne), unit `breach-register`, E2E `admin-breaches`.
@@ -1283,9 +1473,25 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `npm run test:backup` (scenariusz #486), unit `account-data`, `storage-deletion`, E2E
   `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
   `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
-  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13), aktualizacja
-  `last_seen_at`, sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
+  dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13),
+  sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
   potwierdzenie linkiem e-mail.
+  Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
+  `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
+  rozmowy 180 dni od niezmiennego `applications.closed_at` — każdy stan końcowy, także `hired`;
+  CV 365 i konto 730 dni bez aktywności z ostrzeżeniem 30 dni — e-maile `inactiveCvWarning`/
+  `inactiveAccountWarning` w języku odbiorcy, `retention_warnings`; ukrycie profilu 180; gość
+  30/7, IP/UA 7; wnioski 1095; wartości bez zadania: zgody 1095, audyt 365, logi 30, kopie 14,
+  kolumna `enforcement`). `last_seen_at` z triggera na `auth.sessions` (logowanie/odświeżenie,
+  raz na godzinę). **Harmonogram WYŁĄCZONY:** `/api/maintenance` woła `run_retention_purge`
+  tylko przy `RETENTION_MODE=dry-run|apply` (`src/lib/retention/mode.ts`; dry-run = podtransakcja
+  wycofana, apply = kolejne partie po 200 dopóki `fullBatches` > 0, najwyżej 10). Kolejka
+  storage: dead-letter po 20 próbach, `requeue_storage_dead_letters`, `ops_metrics().storageDeletion`
+  + czujki `storage_deletion_age` (> 24 h) i `storage_deletion_dead_letter`. Dowód: `rls.sql`
+  sekcja RV574 (kontrole ujemne), unit `guest-apply-maintenance`, `ops-sensors`,
+  `retention-warning-email`. **Otwarte (#574):** włączenie `RETENTION_MODE` (właściciel), minimum
+  rejestru usunięć po RET-09/RET-10, zadania dla zgód/audytu/`auth.email_outbox`/e-maili,
+  kopie liczone w dniach (`backup.sh`), konto pracodawcy, język gościa na aplikacji (#546).
 - [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
   portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
   `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
@@ -1305,24 +1511,42 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
 - [x] CSP (P2-01) — `next.config.mjs` (default/object/frame-ancestors/base/form-action + zawężone
-  connect/img/font, GA/Meta/Supabase/Sentry). Wariant nonce/strict-dynamic = follow-up (E2E).
+  connect/img/font, Cloudflare Web Analytics od #570 (zamiast GA/Meta, usunięte); bez Sentry od #571).
+  Wariant nonce/strict-dynamic = follow-up (E2E). Analiza (#585, bez zmiany polityki):
+  `docs/CSP_NONCE_ANALYSIS.md` — inwentarz inline skryptów/stylów z buildu (pomiar Report-Only
+  `scripts/security/csp-inline-inventory.mjs`, poza CI; test `csp-inline-inventory`): blokują
+  chunki i ładunek RSC Next.js (nonce tylko per żądanie — koniec ISR, hash niemożliwy), skrypt
+  banera zgód (hash albo nonce), atrybuty `style` (next/image, paski postępu) i `<noscript><style>`;
+  JSON-LD i skrypty wstawiane dynamicznie (beacon CF, Turnstile) nie blokują. Warianty A–D
+  do decyzji właściciela.
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
+  Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
+  zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna
+  konfiguracja wywołania i każda awaria (połączenie/transakcja/`SET LOCAL ROLE`/RPC/COMMIT)
+  rzuca `RateLimitUnavailableError` zamiast być cicho zamienianą na „przekroczono limit”.
+  `checkRateLimit` (`src/lib/rate-limit.ts`) łapie ten wyjątek i stosuje politykę per akcję
+  (wzorem `src/lib/turnstile/policy.ts`): `FAIL_SAFE_ACTIONS` (auth, płatne API, publiczne
+  formularze wysyłające e-maile) blokuje; pozostałe akcje przechodzą (fail-open) — awaria/
+  rotacja loginu osobnej bazy limitera nie odcina już zwykłych akcji (wiadomości, ustawienia,
+  edycja firmy) dla wszystkich użytkowników. Testy: `rate-limit-postgres` (jednostkowy,
+  atrapa rzuca), `rate-limit` integracyjny (PG16 w Dockerze: pula zwykłej roli, odebrane
+  `EXECUTE`, zamknięta pula i błędne parametry → wyjątek, nie `false`).
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
   `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
   matchingu/statusu/screeningu nie mogą wołać modelu), log użycia AI bez treści/PII
   (`src/lib/ai/usage-log.ts`, wpięty w import ogłoszeń), dokumentacja lejka `docs/JOB_FUNNEL.md`
-  i E2E `job-funnel-no-storage` (fixture: zero cookies/storage i żądanie bez `Cookie`).
+  i E2E `job-funnel-no-storage` (fixture: bez zgody zero żądań; po zgodzie zero cookies/storage
+  i żądanie bez `Cookie`). Wariant zgody lejka rozstrzygnięty (#575: tylko po zgodzie analitycznej).
   Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
-  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wariant zgody lejka
-  (dziś wysyłka niezależna od banera), twardy termin retencji `job_funnel_receipts`, wpis
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wpis
   tłumaczeń (#514) do logu użycia.
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
   Bez kluczy poza produkcją = wyłączony; w produkcji brak kluczy = fail-closed rejestracji/resetu.
   CSP: `challenges.cloudflare.com` (script/frame). Opis: `docs/TURNSTILE.md`. Polityka `report`
-  chroni formularz zgłoszenia treści (#41). **Do zrobienia:** formularz kontaktu (`contact`).
+  chroni formularz zgłoszenia treści (#41), polityka `contact` — formularz kontaktu (#61).
 - [~] Operacje #47 (część kodowa, migracja `0096`): czujki `GET /api/health/ops` — tylko z
   `HEALTH_CHECK_SECRET` (inaczej 404), same liczby z `ops_metrics()` (rola `pracujbe_ops` bez praw
   do tabel; login `DATABASE_OPS_URL`, pula `ops` w `pool.ts`, fallback service-role), progi w
@@ -1330,6 +1554,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   opóźnienie maintenance, 80% połączeń) → 503 `alert` / 200 = recovery. Kopia zaszyfrowana `age`
   z manifestem i retencją (`scripts/db/backup.sh`) + odtworzenie z porównaniem sum
   (`restore-backup.sh`), test `npm run test:backup` (PG16, 8 kontroli ujemnych; nie w CI).
+  Kopia poza Railwayem (#569): `backup.sh` z `BACKUP_S3_*` wysyła artefakt, potem manifest do
+  prywatnego bucketu Cloudflare R2 (API S3, region `auto`; `scripts/db/lib/backup-s3.mjs` + czysta
+  logika `backup-s3-core.mjs`; odmowa, gdy wskazuje bucket/klucz CV `AWS_*`) i przycina retencję
+  w buckecie (`BACKUP_RETENTION`, opcjonalnie `BACKUP_S3_MAX_AGE_DAYS`; najnowsza kompletna
+  zostaje). `restore-backup.sh` z `RESTORE_S3_OBJECT=latest` pobiera kluczem odczytu. Czujka
+  `backup` w `/api/health/ops` (`src/lib/ops/backup-freshness.ts`, klucz odczytu
+  `BACKUP_S3_READ_*`): każdy stan poza `ok` — też `unconfigured` i klucz zapisu w usłudze web
+  (`misconfigured`) — to alarm `backup_*`. Obraz usługi cron `docker/backup/Dockerfile` (node 22,
+  pg 18, `age`). Dowód: `backup-r2.test` (atrapa S3 `tests/helpers/fake-s3-server.mjs`, klucz
+  odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
+  `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
+  dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
@@ -1348,17 +1584,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   obserwacja 48 h) + smoke `node scripts/railway/prod-smoke.mjs` (poza CI; bramka hasła z env,
   4 języki + health, kod ≠ 0 przy błędzie; test `railway-prod-smoke` z atrapą serwera).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
-- [x] Telemetria bez danych kandydata (#502, część kodowa): Sentry — #508
-  (`src/lib/sentry-egress.ts`: `beforeSend` buduje nowe zdarzenie z samym kodem błędu,
-  `captureError` wysyła tylko kod, tracing wyłączony). Logi serwera — wspólne reguły redakcji
+- [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
+  Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
+  `ERROR_WEBHOOK_URL` (tylko serwer; postać natywna `…/api/webhooks/<id>/<token>` → `{content,
+  allowed_mentions:{parse:[]}}`, z końcówką `/slack` → `{text}`; https i host `discord.com`/
+  `discordapp.com`, inny adres = brak wysyłki). `src/lib/error-webhook/` (url, message, send)
+  rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
+  `captureError` (`src/lib/error-report.ts`, izomorficzny, w przeglądarce no-op) przekazuje
+  tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
+  query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
+  ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
+  awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
+  Logi serwera — wspólne reguły redakcji
   `src/lib/privacy/redact.ts` (e-mail, telefon, NISS/BIS, IBAN, tokeny/JWT, query i fragment URL,
   nazwy plików dokumentów, wiersze błędów Postgresa; pola wrażliwe po nazwie; `cause`)
   w `installConsoleRedaction()` (`register()`, poza `next dev`). Dowód: `privacy-redaction`,
-  `privacy-sentry-sdk` (payload z SDK z opcjami jak w configach) + kontrola ujemna
-  `privacy-sentry-sdk-control`, `sentry-egress`, `sentry-capture`. Opis: `docs/TELEMETRY_PRIVACY.md`.
-  **Otwarte (właściciel):** region/retencja/DPA/dostęp Sentry i logów Railway, rejestr (#485),
-  usuwanie danych już wysłanych (#486); do tego czasu Sentry bez DSN. Sentry w przeglądarce nie
-  jest wpięte (brak `instrumentation-client`).
+  `error-webhook` (oba formaty, brak wysyłki bez zmiennej, payload bez PII z kontrolą ujemną,
+  limit, deduplikacja, 429, timeout, strażnik bundla klienta). Opis: `docs/TELEMETRY_PRIVACY.md`.
+  **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
+  logi Railway (retencja/dostęp), rejestr (#485). Błędy w przeglądarce nie są zgłaszane
+  (brak endpointu klienta).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
@@ -1370,11 +1615,16 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `src/lib/email/auth-email.ts` (e-maile kont wysyła worker Better Auth), zmienne `NEXT_PUBLIC_SUPABASE_*`/`SUPABASE_*`/
   `SEND_EMAIL_HOOK_SECRET`, hosty `*.supabase.co` z CSP i `images.remotePatterns`. Kolejka usuwania obiektów bez bucketu →
   `STORAGE_UNCONFIGURED` (ponowienie), bez klienta Storage. Strażnik `no-supabase-runtime.test.ts`. **Otwarte (odbiór #27):**
-  smoke produkcji na Railway (healthcheck, wersja w stopce, ścieżki użytkownika), domena `pracuj.be` w Cloudflare, archiwalne
-  dokumenty Supabase (`docs/SUPABASE_SETUP.md`, `docs/STAGING.md`) i nazwa katalogu `supabase/` (migracje).
+  smoke produkcji na Railway (healthcheck, wersja w stopce, ścieżki użytkownika), domena `pracuj.be` w Cloudflare, nazwa
+  katalogu `supabase/` (migracje — świadomie bez zmiany). Dokumentacja (odbiór #27, część dokumentacyjna): README,
+  `docs/ARCHITECTURE.md`, checklisty bezpieczeństwa/uruchomienia/wydajności, `TURNSTILE.md`, `DATA_RETENTION.md`,
+  `AUDIT_PROMPT.md` opisują stan Railway; `SUPABASE_SETUP.md`, raporty audytu/remediacji z 07.2026 i wzmianki
+  w `SELF_HOSTED_RUNNERS.md` mają nagłówek „ARCHIWALNE — stan sprzed migracji na Railway (#27)”; mapa katalogów §4
+  poprawiona; linki względne w `docs/` sprawdza `tests/unit/docs-links.test.ts`. Szkice prawne (`docs/legal-drafts/`)
+  i dokumenty migracji (`docs/railway/`) wspominają Supabase celowo (dostawca historyczny / źródło migracji).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
-- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + @sentry/nextjs v10 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
+- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline DM Sans; wcześniej Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
   Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
   Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
@@ -1440,7 +1690,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
   E2E noindex każdej strony paneli i auth z systemu plików (`panel-noindex`) i axe na wszystkich
   trasach publicznych, 4 języki, 320/1280 px, z banerem i po jego zamknięciu (`a11y-public-routes`).
-  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 27 trasach
+  Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 30 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),
@@ -1448,13 +1698,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   render (#348, `email-recipient-locale-e2e`): kontrakt najnowszych `resolve_recipient_locale`/
   `enqueue_email` z migracji (kolejność preferred → account → signup → `en`, locale z
   `p_profile_id`), zgodność z TS, nadawca i odbiorca w różnych językach, kontrola ujemna.
-  Zgody cookies (#349, `cookie-consent-categories.spec`, 4 języki): „Tylko niezbędne”, sama
-  analityka (GA bez Meta), sam marketing (Meta bez GA), wycofanie ze stopki (`ga-disable`,
-  `fbq('consent','revoke')`, usunięcie `_ga*`/`_fbp`/`_fbc`, po odświeżeniu zero żądań), stara
-  wersja polityki / uszkodzone cookie → baner z serwera nieukryty przed hydratacją; cookie na
-  180 dni; wywołanie `recordConsent` z kategoriami i źródłem (centrum = `cookie_settings`).
-  Ponowna zgoda na marketing po wycofaniu woła `fbq('consent','grant')`. Kontrakt parametrów
-  `recordConsent` ↔ `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
+  Zgody cookies (#349/#570, `cookie-consent-categories.spec`, 4 języki): „Tylko niezbędne”,
+  zgoda na analitykę → beacon Cloudflare Web Analytics (#570: zamiast Google Analytics i Meta
+  Pixel — usunięte; bezcookie'owy, więc bez `_ga*`/`_fbp`/`_fbc` i bez `ga-disable`/
+  `fbq('consent', …)`), same preferencje → beacon się nie ładuje, centrum zgód bez
+  przełącznika „Marketing” (usunięty — decyzja właściciela 25.09), wycofanie ze stopki usuwa render beaconu natychmiast i po
+  odświeżeniu zero żądań; stara wersja polityki (także cookie 1.0 z marketingiem) / uszkodzone cookie → baner z serwera
+  nieukryty przed hydratacją; cookie na 180 dni; wywołanie `recordConsent` z kategoriami
+  i źródłem (centrum = `cookie_settings`). Kontrakt parametrów `recordConsent` ↔
+  `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
   polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
@@ -1553,7 +1805,8 @@ npm run test           # Vitest (unit)
 npm run test:e2e       # Playwright
 npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
-npm run db:reset       # (supabase CLI) reset + migracje + seed [lokalnie]
+npm run test:rls       # migracje od zera + testy RLS na lokalnym PostgreSQL 16
+npm run db:migrate:production  # migracje na wskazanej bazie (MIGRATION_DATABASE_URL, MIGRATION_MODE)
 ```
 
 ---

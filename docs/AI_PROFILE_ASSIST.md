@@ -62,7 +62,7 @@ komponentu w 4 językach i E2E (320 px, axe). Kwalifikacja prawna: szkic
 |---|---|---|
 | Wywołania na konto | 10 / godz., 30 / dobę (bez IP) | `src/lib/actions/profile-assist.ts` |
 | Awaria limitera | fail-closed (`profile-assist`, `profile-assist-day`) | `src/lib/rate-limit.ts` |
-| Budżet globalny | rezerwacja przed wywołaniem (`profile_answers_assist`), rozliczenie tokenami | `docs/AI_BUDGET.md`, migracja 0132 |
+| Budżet globalny | rezerwacja przed wywołaniem (`profile_answers_assist`), rozliczenie tokenami | `docs/AI_BUDGET.md`, migracja 0147 |
 | Wyjście modelu | `max_tokens` 4000, effort `low`, timeout 60 s, 1 ponowienie | `extract.ts` |
 
 Przekroczony albo niedostępny budżet = `AI_BUDGET_EXCEEDED` bez wywołania modelu.

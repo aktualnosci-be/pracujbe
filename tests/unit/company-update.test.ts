@@ -10,7 +10,7 @@ vi.mock('@/lib/company-context', () => ({
   getActiveCompany: vi.fn(),
 }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const USER = '11111111-1111-4111-8111-111111111111';
 

@@ -13,7 +13,7 @@ import {
 import { execute, jsonArg, rpc } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { consentWordingVersions } from '@/lib/signup-consents';
 import type { Locale } from '@/i18n/routing';
 import {
@@ -226,7 +226,7 @@ function validateStep(
  * zapoznania się z informacją o prywatności jako OSOBNE wiersze (kanał `onboarding`).
  * Krok 6 nie pokazuje zgód opcjonalnych, więc nie powstaje żaden dowód zgody na inne cele.
  * Kluczowane po zweryfikowanym UUID z sesji (RPC tylko service_role → `withServiceRole`). Best-effort jak
- * dotąd: awaria receiptu nie cofa zapisanego profilu, ale trafia do Sentry (rozliczalność).
+ * dotąd: awaria receiptu nie cofa zapisanego profilu, ale trafia do kanału błędów (rozliczalność).
  */
 async function recordTermsAcceptance(profileId: string): Promise<void> {
   try {

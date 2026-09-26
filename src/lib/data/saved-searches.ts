@@ -1,13 +1,13 @@
 /**
  * Zapisane wyszukiwania kandydata (#100) — odczyt POD SESJĄ (`withPortalTransaction`, RLS
  * `saved_searches_select_own`, 0092; nigdy service-role). Błąd odczytu = jawny `error` (bez udawania pustej listy);
- * technikalia wyłącznie do Sentry (Invariant #8). Tryb demo: pusta lista z `demo: true` —
+ * technikalia wyłącznie do kanału błędów (Invariant #8). Tryb demo: pusta lista z `demo: true` —
  * zapis wymaga bazy, więc nie pokazujemy zmyślonych wyszukiwań.
  */
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 
 export type SavedSearchFrequency = 'daily' | 'weekly';
 

@@ -1,10 +1,10 @@
-import { isLocale, routing, type Locale } from '@/i18n/routing';
-import { safeNextPath } from '@/lib/auth/next-path';
+import { isLocale, routing, type Locale } from "@/i18n/routing";
+import { safeNextPath } from "@/lib/auth/next-path";
 
-import en from '@/messages/en.json';
-import fr from '@/messages/fr.json';
-import nl from '@/messages/nl.json';
-import pl from '@/messages/pl.json';
+import en from "@/messages/en.json";
+import fr from "@/messages/fr.json";
+import nl from "@/messages/nl.json";
+import pl from "@/messages/pl.json";
 
 /**
  * Bramka dostępu do całego serwisu (tryb „w przygotowaniu”).
@@ -18,12 +18,12 @@ import pl from '@/messages/pl.json';
  * Kod działa w runtime edge (middleware) i node (route handler) — tylko Web Crypto.
  */
 
-export const SITE_ACCESS_COOKIE = 'pb_site_access';
+export const SITE_ACCESS_COOKIE = "pb_site_access";
 export const SITE_ACCESS_MAX_AGE = 60 * 60 * 24 * 30;
 /** Parametr zapytania, którym route handler sygnalizuje błędne hasło. */
-export const SITE_ACCESS_DENIED_PARAM = 'pb_access';
+export const SITE_ACCESS_DENIED_PARAM = "pb_access";
 
-const TOKEN_CONTEXT = 'pracujbe-site-access-v1';
+const TOKEN_CONTEXT = "pracujbe-site-access-v1";
 
 type SiteAccessCopy = typeof pl.siteAccess;
 const COPY: Record<Locale, SiteAccessCopy> = {
@@ -40,27 +40,32 @@ export function getSiteAccessPassword(): string | undefined {
 }
 
 function toHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer), (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(buffer), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 /** Wartość cookie dla danego hasła: HMAC-SHA256(klucz = hasło, kontekst stały). */
 export async function siteAccessToken(password: string): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     enc.encode(password),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign'],
+    ["sign"],
   );
-  return toHex(await crypto.subtle.sign('HMAC', key, enc.encode(TOKEN_CONTEXT)));
+  return toHex(
+    await crypto.subtle.sign("HMAC", key, enc.encode(TOKEN_CONTEXT)),
+  );
 }
 
 /** Porównanie w stałym czasie (dla równej długości). */
 export function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < a.length; i += 1)
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
@@ -73,28 +78,34 @@ export async function hasSiteAccess(
 }
 
 /** Język strony bramki: prefiks ścieżki → Accept-Language → język domyślny. */
-export function pickGateLocale(pathname: string, acceptLanguage: string | null): Locale {
-  const first = pathname.split('/')[1];
+export function pickGateLocale(
+  pathname: string,
+  acceptLanguage: string | null,
+): Locale {
+  const first = pathname.split("/")[1];
   if (isLocale(first)) return first;
-  for (const part of (acceptLanguage ?? '').split(',')) {
-    const tag = part.split(';')[0]?.trim().slice(0, 2).toLowerCase();
+  for (const part of (acceptLanguage ?? "").split(",")) {
+    const tag = part.split(";")[0]?.trim().slice(0, 2).toLowerCase();
     if (isLocale(tag)) return tag;
   }
   return routing.defaultLocale;
 }
 
 /** Bezpieczny cel powrotu po podaniu hasła (tylko ścieżki `/{locale}/…` z tej domeny). */
-export function siteAccessReturnPath(next: string | null | undefined, locale: Locale): string {
+export function siteAccessReturnPath(
+  next: string | null | undefined,
+  locale: Locale,
+): string {
   return safeNextPath(next ?? null) ?? `/${locale}`;
 }
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
@@ -105,13 +116,26 @@ export function renderSiteAccessPage(opts: {
   locale: Locale;
   next: string;
   error: boolean;
+  /** Limit prób przekroczony (#584) — komunikat zamiast „nieprawidłowe hasło”. */
+  rateLimited?: boolean;
+  /** Wejście chwilowo niedostępne (#625: brak zaufanego adresu klienta w produkcji). */
+  unavailable?: boolean;
 }): string {
   const t = COPY[opts.locale];
   const next = escapeHtml(opts.next);
-  const error = opts.error
-    ? `<p id="pb-access-error" role="alert" style="margin:0 0 1rem;color:#B42318;font-weight:600">${escapeHtml(t.error)}</p>`
-    : '';
-  const describedBy = opts.error ? ' aria-describedby="pb-access-error" aria-invalid="true"' : '';
+  const message = opts.unavailable
+    ? t.unavailable
+    : opts.rateLimited
+      ? t.rateLimited
+      : opts.error
+        ? t.error
+        : null;
+  const error = message
+    ? `<p id="pb-access-error" role="alert" style="margin:0 0 1rem;color:#B42318;font-weight:600">${escapeHtml(message)}</p>`
+    : "";
+  const describedBy = message
+    ? ' aria-describedby="pb-access-error" aria-invalid="true"'
+    : "";
   return (
     `<!doctype html><html lang="${opts.locale}"><head><meta charset="utf-8">` +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -131,6 +155,6 @@ export function renderSiteAccessPage(opts: {
     `<input id="pb-access-password" name="password" type="password" required autocomplete="current-password" autofocus${describedBy} ` +
     'style="box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1px solid #71717A;border-radius:12px;font-size:1rem">' +
     `<button type="submit" style="margin-top:1rem;width:100%;min-height:48px;border:0;border-radius:12px;background:#D92932;color:#FFFFFF;font-size:1rem;font-weight:700;cursor:pointer">${escapeHtml(t.submit)}</button>` +
-    '</form></main></body></html>'
+    "</form></main></body></html>"
   );
 }

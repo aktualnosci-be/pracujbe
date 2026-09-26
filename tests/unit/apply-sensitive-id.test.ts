@@ -18,7 +18,7 @@ vi.mock('next/headers', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/turnstile/verify', () => ({ enforceTurnstile: vi.fn(async () => null) }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => false) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
@@ -39,6 +39,8 @@ const guestInput = {
   email: 'anna@example.com',
   locale: 'pl' as const,
   agreeTerms: true as const,
+  ageConfirmed: true as const,
+  minAge: 18,
   idempotencyKey: '22222222-2222-4222-8222-222222222222',
 };
 

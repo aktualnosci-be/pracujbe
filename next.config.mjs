@@ -58,29 +58,34 @@ const nextConfig = {
 
     // --- Content-Security-Policy (P2-01) -------------------------------------
     // Świadomie BEZ nonce/strict-dynamic: strony renderują dane strukturalne JSON-LD
-    // (SEO) oraz — PO zgodzie — inline'owe skrypty GA/Meta Pixel; strict-dynamic bez
-    // pełnego wpięcia nonce do każdego <script> zablokowałby je i popsuł produkt.
-    // 'unsafe-inline' dla script-src jest słabsze niż nonce, ale NIE łamie działania;
-    // twarda migracja do nonce wymaga testów przeglądarkowych (E2E) — patrz roadmapa.
-    // Poza tym pełne, restrykcyjne dyrektywy: object/base/frame-ancestors/form-action
-    // oraz zawężone connect/img/font (Supabase, Sentry, GA/Meta tylko tam, gdzie trzeba).
+    // (SEO); strict-dynamic bez pełnego wpięcia nonce do każdego <script> zablokowałby
+    // je i popsuł produkt. 'unsafe-inline' dla script-src jest słabsze niż nonce, ale
+    // NIE łamie działania; twarda migracja do nonce wymaga testów przeglądarkowych
+    // (E2E) — patrz roadmapa. Poza tym pełne, restrykcyjne dyrektywy: object/base/
+    // frame-ancestors/form-action oraz zawężone connect/img/font.
+    // #570: Cloudflare Web Analytics (beacon, PO zgodzie w kategorii analytics) zamiast
+    // Google Analytics i Meta Pixel — usunięte. Bez tokenu beacon się nie ładuje
+    // (`Analytics.tsx`), więc CSP nie dopuszcza wtedy hostów Cloudflare Insights.
+    const cfAnalytics = Boolean(process.env.NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN?.trim());
+    const cfScript = cfAnalytics ? ' https://static.cloudflareinsights.com' : '';
+    const cfConnect = cfAnalytics ? ' https://cloudflareinsights.com' : '';
     const csp = [
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      // Skrypty: własne + inline (JSON-LD, gtag/fbq po zgodzie) + hosty trackerów + Turnstile (#46).
+      // Skrypty: własne + inline (JSON-LD) + beacon Cloudflare Web Analytics (po zgodzie) + Turnstile (#46).
       // Dev dokłada 'unsafe-eval' (React Refresh/HMR Next dev).
-      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.googletagmanager.com https://connect.facebook.net https://challenges.cloudflare.com`,
+      `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://challenges.cloudflare.com${cfScript}`,
       "style-src 'self' 'unsafe-inline'",
-      // P3-02: obrazy z własnego origin, data:/blob: i piksele trackerów (po zgodzie).
-      "img-src 'self' data: blob: https://www.google-analytics.com https://www.facebook.com",
+      // P3-02: obrazy wyłącznie z własnego origin, data:/blob:.
+      "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      // XHR/fetch: API własne, Sentry ingest, GA/Meta.
-      `connect-src 'self' https://*.sentry.io https://www.google-analytics.com https://*.google-analytics.com https://connect.facebook.net${isDev ? ' ws: http://localhost:*' : ''}`,
-      // Ramki: Meta Pixel (fallback) i Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
-      "frame-src 'self' https://www.facebook.com https://challenges.cloudflare.com",
+      // XHR/fetch: API własne, beacon Cloudflare Web Analytics (webhook błędów #571 idzie z serwera — bez hosta w CSP).
+      `connect-src 'self'${cfConnect}${isDev ? ' ws: http://localhost:*' : ''}`,
+      // Ramki: tylko Cloudflare Turnstile (#46, ochrona formularzy), reszta zablokowana.
+      "frame-src 'self' https://challenges.cloudflare.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
       // #47: raporty naruszeń (bez zmiany egzekwowanej polityki). `report-uri` dla przeglądarek

@@ -513,8 +513,6 @@
     "preferencesDesc": "Remember your choices, such as language and settings.",
     "analyticsName": "Analytics",
     "analyticsDesc": "Help us understand how you use the platform.",
-    "marketingName": "Marketing",
-    "marketingDesc": "Allow us to show you more relevant ads.",
     "alwaysOn": "Always on",
     "cookieSettings": "Cookie settings"
   },
@@ -595,7 +593,8 @@
       "privacyNoticeRequired": "Confirm that you have read the privacy information.",
       "companyNameRequired": "Enter the company name.",
       "companyNameTooShort": "The company name is too short.",
-      "companyNameTooLong": "The company name is too long."
+      "companyNameTooLong": "The company name is too long.",
+      "ageConfirmRequired": "Choose your age range."
     },
     "botCheckLabel": "Security check",
     "botCheckLoading": "Loading the security check…",
@@ -603,6 +602,11 @@
     "botCheckExpired": "The check has expired. Please confirm it again.",
     "botCheckLoadFailed": "The security check couldn't load. Check your connection or turn off content blocking for this site, then try again.",
     "botCheckRetry": "Reload the security check",
+    "ageBandLegend": "Your age",
+    "ageBandMinor": "I am {min}–{max} years old",
+    "ageBandAdult": "I am {age} or older",
+    "ageBandMinorHint": "In this age range your profile will not be visible to companies in the candidate search. You can still apply for jobs yourself.",
+    "ageConfirmHint": "We do not ask for your date of birth or an identity document.",
     "confirmEmailTitle": "Activate your account",
     "confirmEmailIntro": "Click the button to confirm your email address and go to your account.",
     "confirmEmailSubmit": "Confirm email address",
@@ -656,12 +660,15 @@
     "savedSearchLimitReached": "You already have 20 saved searches. Delete one to add a new one.",
     "moderationLocked": "This content is restricted by a moderation decision, so its status cannot be changed.",
     "guestApplyUnavailable": "Applying without an account is temporarily unavailable. Try again later or log in.",
+    "siteAccessUnavailable": "Access to the website is temporarily unavailable. Please try again later.",
     "emailNotVerified": "First confirm your account’s email address — click the link we sent when you registered.",
     "claimExpired": "The link to link the application has expired (it was valid for 30 days).",
     "appealExists": "An appeal against this decision has already been submitted.",
     "appealWindowClosed": "The deadline to appeal this decision has passed.",
     "reviewerConflict": "The appeal must be reviewed by an administrator other than the one who made the decision.",
     "jobImportSensitiveData": "The listing contains a personal or document identification number, so we did not import it. Please fill in the form manually.",
+    "ageAttestationRequired": "To continue, confirm that you are at least the required age. If the form was open for a long time, refresh the page.",
+    "ageAdultRequired": "Only adults can turn on this feature.",
     "screeningReviewRequired": "The job has a question that the portal team must check before publication. You can publish it once the question is approved or after you change it.",
     "screeningQuestionRejected": "One of the questions was not approved. Change or remove it to publish the job.",
     "jobAssistEmpty": "Write some text first. The assistant improves your text, but doesn't write the offer from scratch.",
@@ -1201,7 +1208,20 @@
     "itemModerationAppealUpheld": "Appeal reviewed: decision upheld",
     "itemModerationAppealReversed": "Appeal granted: decision changed",
     "itemScreeningApproved": "A question in your job was approved",
-    "itemScreeningRejected": "A question in your job was not approved"
+    "itemScreeningRejected": "A question in your job was not approved",
+    "listIntro": "All notifications from your account, newest first.",
+    "filterLabel": "Notification filter",
+    "filterAll": "All",
+    "filterUnread": "Unread",
+    "markRead": "Mark as read",
+    "markReadItem": "Mark as read: {title}",
+    "markedRead": "Notification marked as read.",
+    "emptyUnread": "You have no unread notifications.",
+    "unreadCount": "{count, plural, =0 {No unread} one {1 unread} other {# unread}}",
+    "loadMore": "Show more",
+    "loadingMore": "Loading…",
+    "listEnd": "That's all your notifications.",
+    "moreError": "Could not load more notifications. Please try again."
   },
   "pricing": {
     "standard": "Standard",
@@ -1254,7 +1274,9 @@
     "screeningYes": "Yes",
     "screeningNo": "No",
     "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
-    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
+    "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
+    "ageRequired": "Before applying, confirm your age in your account settings.",
+    "ageRequiredLink": "Go to settings"
   },
   "guestApply": {
     "subtitle": "Apply without creating an account, or log in to use your profile. No CV needed.",
@@ -1307,7 +1329,8 @@
       "messageTooLong": "The message can have at most 500 characters.",
       "privacyNoticeRequired": "Confirm that you have read the privacy information to send the application.",
       "idempotencyKeyInvalid": "Refresh the page and send the form again.",
-      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply."
+      "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
+      "ageConfirmRequired": "Choose your age range."
     }
   },
   "legal": {
@@ -1597,6 +1620,18 @@
     "threadStart": "This is the start of the conversation.",
     "senderCompanyFallback": "Employer",
     "senderCandidateFallback": "Candidate",
+    "attachFile": "Attach file",
+    "attachHint": "PDF, DOC, DOCX, JPG or PNG, max. 5 MB, up to {max} files per message.",
+    "attachmentsLabel": "Attachments",
+    "attachmentUploading": "Uploading…",
+    "attachmentUploadError": "The file could not be added. Please try again.",
+    "attachmentErrorType": "Allowed formats: PDF, DOC, DOCX, JPG, PNG.",
+    "attachmentLimit": "You can attach up to {max} files to one message.",
+    "attachmentRemove": "Remove file {name}",
+    "attachmentDownload": "Download {name} ({size})",
+    "attachmentDownloadError": "The file could not be downloaded. Please try again.",
+    "attachmentUnavailable": "File is being checked — download unavailable.",
+    "attachmentOnlyPreview": "Attachment",
     "reportMessage": "Report",
     "reportMessageLabel": "Report message: {sender}",
     "reportConversation": "Report conversation",
@@ -1623,7 +1658,8 @@
     "reportSent": "Report received",
     "reportAlreadyOpen": "Already reported — awaiting review",
     "reportedBadge": "Reported",
-    "reportNetworkError": "The report could not be sent. Check your connection and try again."
+    "reportNetworkError": "The report could not be sent. Check your connection and try again.",
+    "attachmentPreviewAlt": "Image preview: {name}"
   },
   "files": {
     "cvTitle": "Your CV / documents",
@@ -1937,6 +1973,7 @@
     "caseFlag": "Automated signal: {flag}",
     "auditActionModerationDecided": "Moderation decision",
     "auditActionModerationRestored": "Restriction lifted",
+    "auditActionAgePolicyUpdated": "Candidate age threshold changed",
     "navAppeals": "Appeals",
     "navDsaReport": "DSA report",
     "appealsTitle": "Appeals against moderation decisions",
@@ -2172,6 +2209,8 @@
     "breachExportJson": "Export JSON",
     "breachExportCsv": "Export CSV",
     "breachExportHint": "The export contains the entry and its history, without notice recipients’ addresses. Every export stays in the history.",
+    "breachExportPending": "Exporting…",
+    "breachExportError": "The export failed. Try again.",
     "breachActionClose": "Close entry",
     "breachActionReopen": "Reopen",
     "breachCloseTitle": "Close this entry?",
@@ -2219,6 +2258,24 @@
     "breachNoticeRecipientsMalformed": "Invalid address or ID: {list}.",
     "breachNoticeContentRequired": "Enter a subject and text in at least one language.",
     "breachNoticeNotAllowed": "A notice can be sent for an open personal data breach with the saved decision “we notify the people affected”.",
+    "navContact": "Contact",
+    "contactTitle": "Contact form messages",
+    "contactSubtitle": "Messages sent through the contact form. Reply from your own mailbox to the sender’s address, then mark the message as handled.",
+    "contactFilterLabel": "Message filter",
+    "contactFilterNew": "New",
+    "contactFilterHandled": "Handled",
+    "contactStatusNew": "New",
+    "contactStatusHandled": "Handled",
+    "contactSearchLabel": "Search messages",
+    "contactSearchHint": "Message number, email address or sender’s first name.",
+    "contactEmpty": "No messages.",
+    "contactReceivedAt": "Received:",
+    "contactFormLocale": "Form language: {locale}",
+    "contactHandledBy": "Handled by: {name}",
+    "contactActionHandle": "Mark as handled",
+    "contactActionReopen": "Move back to new",
+    "contactMarkedHandled": "Message marked as handled.",
+    "contactReopened": "Message moved back to new.",
     "kindMessage": "Messages",
     "targetConversation": "Conversation",
     "messageReportScopeMessage": "Evidence: reported message (as at the time of the report)",
@@ -2283,6 +2340,7 @@
     "auditActionCampaignActivated": "Campaign revision activated",
     "auditActionCampaignCancelled": "Campaign revision stopped",
     "entityEmailCampaign": "Email campaign",
+    "entityAgePolicy": "Candidate age threshold",
     "appealTargetRestoration": "Against lifting a restriction",
     "appealRestorationSummary": "Restriction lifted on {date}: {reason}",
     "navAiCosts": "AI costs",
@@ -2307,6 +2365,41 @@
     "aiCostsFeatureTranslation": "Content translation",
     "aiCostsFeatureAssist": "Job text assistant",
     "aiCostsFeatureCvImport": "CV import",
+    "navSettings": "Settings",
+    "agePolicyTitle": "Candidate age threshold",
+    "agePolicySubtitle": "Minimum age for a candidate account and for profile searchability by companies.",
+    "agePolicyCurrentTitle": "Current setting",
+    "agePolicyCurrentLabel": "Current threshold",
+    "agePolicyNewLabel": "New threshold",
+    "agePolicyOption16": "16 years",
+    "agePolicyOption18": "18 years",
+    "agePolicyConfirmedField": "Approved by the owner",
+    "agePolicyConfirmedYes": "Approved",
+    "agePolicyConfirmedNo": "Draft value (not approved)",
+    "agePolicyConfirmedHint": "A draft value means the threshold is not yet a final decision by the owner.",
+    "agePolicyLastChangeTitle": "Last change",
+    "agePolicyLastChangeNone": "No change recorded in the audit log — the starting value applies.",
+    "agePolicyLastChangeTransition": "Threshold change",
+    "agePolicyTransitionValue": "{from} → {to}",
+    "agePolicyLastChangeAt": "Date of change",
+    "agePolicyLastChangeBy": "Changed by",
+    "agePolicyLastChangeHidden": "Hidden profiles",
+    "agePolicyFormTitle": "Change threshold",
+    "agePolicyFormHint": "Raising the threshold immediately hides from search the profiles of candidates whose age declaration is lower. Lowering it does not reveal anything.",
+    "agePolicyFieldLegend": "New account threshold",
+    "agePolicyReasonLabel": "Reason (required)",
+    "agePolicyReasonHint": "Goes into the audit log. At most {max} characters.",
+    "agePolicySubmit": "Save threshold",
+    "agePolicyConfirmTitle": "Change the candidate age threshold?",
+    "agePolicyConfirmDescription": "The threshold will change from “{from}” to “{to}”.",
+    "agePolicySuccess": "The candidate age threshold has been saved.",
+    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count} profiles were hidden from search.",
+    "reportsSortLabel": "Order",
+    "reportsSortNewest": "Newest",
+    "reportsSortPriority": "Priority and deadline",
+    "reportsFlaggedLabel": "Flags",
+    "reportsFlaggedAll": "All cases",
+    "reportsFlaggedOnly": "Flagged for review",
     "aiCostsFeatureProfileAssist": "Candidate profile assistant"
   },
   "settings": {
@@ -2423,7 +2516,9 @@
     "lead": "The website is not open to the public yet. If you have an access password, enter it below.",
     "passwordLabel": "Access password",
     "submit": "Enter",
-    "error": "Incorrect password. Please try again."
+    "error": "Incorrect password. Please try again.",
+    "rateLimited": "Too many attempts. Please try again in a few minutes.",
+    "unavailable": "Access is temporarily unavailable. Please try again later."
   },
   "offline": {
     "title": "No connection",
@@ -2536,7 +2631,9 @@
     "savedOn": "Your profile is now visible to verified companies.",
     "savedOff": "Your profile is now hidden from company searches.",
     "saveError": "We couldn’t save the change. The setting has not changed — please try again.",
-    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment."
+    "loadError": "We couldn’t load your profile visibility setting. Refresh the page in a moment.",
+    "requiresAge": "To share your profile with companies, first confirm your age in the “Age” section.",
+    "requiresAdult": "Your profile can be visible to companies only from age 18. Once you turn 18, confirm it in the “Age” section."
   },
   "team": {
     "title": "Team",
@@ -2615,7 +2712,19 @@
       "alreadyMember": "This person is already on the team.",
       "invitationLimit": "You have reached the limit of 50 pending invitations. Revoke outdated invitations.",
       "companyLimit": "You can manage up to 5 companies.",
-      "lastOwner": "The company must have at least one active owner."
+      "lastOwner": "The company must have at least one active owner.",
+      "localeRequired": "Choose the invitation language."
+    },
+    "localeLabel": "Invitation language",
+    "invitedSent": "Invitation saved. This person will get an email: with an employer account, in that account’s language; without an account, in the chosen language, with a sign-up link.",
+    "inviteLinkHint": "Someone without an account gets an email in the chosen language with a link to create an employer account (works once, valid for 14 days). After confirming the address, the invitation waits in their dashboard. Someone with an account gets the email in their account’s language.",
+    "signup": {
+      "checking": "Checking the invitation link…",
+      "intro": "Invitation to join the {company} team. Role: {role}.",
+      "nextSteps": "Create an employer account and confirm your email address. The invitation will wait in your dashboard, on the “Team” tab — there you can join the company or decline it.",
+      "emailFixed": "The account is created with the address that received the invitation.",
+      "used": "This invitation link has already been used. If you have an account, log in — the invitation is waiting in your dashboard.",
+      "invalid": "The invitation link is invalid or has expired. Ask the company for a new invitation or create a regular employer account."
     }
   },
   "emailUnsubscribe": {
@@ -2647,6 +2756,7 @@
   "jobFunnel": {
     "title": "Job funnel",
     "range": "Period: {from} – {to} (Brussels time)",
+    "consentNote": "Search appearances, views and started applications are counted only for people who accepted analytics cookies. All submitted applications are counted.",
     "rangeLabel": "Job funnel date range",
     "rangeDays": "{count, plural, one {# day} other {# days}}",
     "searchAppearances": "Search result appearances",
@@ -2695,7 +2805,13 @@
     "deleteTitle": "Delete the search “{name}”?",
     "deleteDescription": "You will stop receiving alerts about new jobs matching these filters.",
     "deleted": "We deleted the search.",
-    "updated": "We saved your changes."
+    "updated": "We saved your changes.",
+    "rename": "Rename",
+    "renameLabel": "New search name",
+    "renameSave": "Save name",
+    "renameCancel": "Cancel",
+    "renamed": "We renamed the search.",
+    "renameHint": "1 to 80 characters."
   },
   "contentReport": {
     "metaTitle": "Report content",
@@ -2806,6 +2922,18 @@
     "restorationAppealDeadlineNotStarted": "The appeal period starts when you receive the email about the restriction being lifted.",
     "restorationAppealWindowClosed": "The period for appealing against the restriction being lifted has ended."
   },
+  "ageAttestation": {
+    "sectionTitle": "Age",
+    "sectionDescription": "You can have a candidate account from age {age}, and a profile visible to companies from age {adultAge}. We only store the age range you chose and the date you confirmed it — no date of birth.",
+    "stateAdult": "Confirmed: you are {age} or older.",
+    "stateMinor": "Confirmed: you are under {adultAge}. You can apply for jobs, but your profile is not visible to companies. Once you turn {adultAge}, confirm it below.",
+    "stateMissing": "Not confirmed. Without it you cannot apply or share your profile with companies.",
+    "submit": "Confirm",
+    "saving": "Saving…",
+    "saved": "Age confirmation saved.",
+    "saveError": "The confirmation could not be saved. Please try again.",
+    "loadError": "Your age confirmation information could not be loaded."
+  },
   "campaignBanner": {
     "eyebrow": "Job in Belgium",
     "cta": "Apply now",
@@ -2840,6 +2968,141 @@
     "categoryUnion": "trade union membership",
     "categoryPolitical": "political opinions",
     "categoryCriminal": "criminal record"
+  },
+  "help": {
+    "metaTitle": "Help — questions and answers",
+    "metaDescription": "How Pracuj.be works: a profile without a CV, applying, job matching, employer accounts, company verification and emails in your language.",
+    "title": "Help",
+    "intro": "Answers to the most common questions about how Pracuj.be works. If you can’t find an answer here, write to us through the contact form.",
+    "groups": {
+      "candidates": "For candidates",
+      "employers": "For employers",
+      "account": "Account, emails and safety"
+    },
+    "faq": {
+      "noCv": {
+        "q": "Do I need a CV to look for work?",
+        "a": "No. After you <register>sign up</register>, you create a simple professional profile in six short steps — including occupations, skills, languages and availability. You can add a CV file (PDF, DOC or DOCX up to 5 MB), but it is not required."
+      },
+      "guestApply": {
+        "q": "Can I apply without creating an account?",
+        "a": "Yes. In the application form you enter your full name and email address, then confirm the application with the link in the email. Later you can create an account with the same address and take over the application."
+      },
+      "match": {
+        "q": "How is the match with a job calculated?",
+        "a": "The match percentage is based on fixed criteria: occupation and category, skills, location, experience, availability, languages, certificates, driving licence and contract terms. The result is not decided by artificial intelligence, and the job page shows what you meet and what is missing."
+      },
+      "visibility": {
+        "q": "Can employers see my profile?",
+        "a": "Verified companies can only find your profile if you turn on “Let verified employers find my profile” in your settings — it is off by default. A company you apply to sees your application. You can block specific companies in the “Blocked companies” section."
+      },
+      "alerts": {
+        "q": "How do I get alerts about new jobs?",
+        "a": "On the <jobs>job list</jobs>, set your filters and choose “Save search”. In the candidate panel you turn on email alerts for it — daily or weekly."
+      },
+      "data": {
+        "q": "How do I download my data or delete my account?",
+        "a": "In the candidate panel settings, in the “Your data and account” section, you can download your data as a JSON file or delete your account."
+      },
+      "free": {
+        "q": "How much does it cost to publish jobs?",
+        "a": "At this stage Pracuj.be is free for employers. The portal does not sell packages or paid job postings."
+      },
+      "verification": {
+        "q": "Why does my company need to be verified?",
+        "a": "Only companies verified by a portal administrator can publish jobs. You see the verification status in the employer panel. If the company is rejected, you see the reason and can choose “Send for verification again”."
+      },
+      "drafts": {
+        "q": "Can I prepare a job before verification?",
+        "a": "Yes. The job wizard saves a draft after each step. You publish it once your company is verified."
+      },
+      "team": {
+        "q": "How do I add colleagues?",
+        "a": "The company owner or admin invites team members by email address in the employer panel and gives them a role."
+      },
+      "applications": {
+        "q": "How do I contact candidates?",
+        "a": "You handle applications, messages and job offers in the employer panel. Read more on the <employer>For employers</employer> page."
+      },
+      "languages": {
+        "q": "Which languages is the site available in?",
+        "a": "The site is available in Polish, Dutch, French and English. You can change the language in the header or the footer."
+      },
+      "emailLanguage": {
+        "q": "In which language will I receive emails?",
+        "a": "Emails about your account are sent in the language set on your account — even when the message comes from an employer who uses a different language."
+      },
+      "noEmail": {
+        "q": "I am not receiving emails from the site. What should I do?",
+        "a": "Check your spam folder and that your email address is correct. If the message still doesn’t arrive, write to us through the contact form."
+      },
+      "suspicious": {
+        "q": "A job looks suspicious. What should I do?",
+        "a": "On the job page, choose “Report this job” or “Report this company”. You can send a report without an account and you get a case number to check its status."
+      }
+    },
+    "contactTitle": "Didn’t find an answer?",
+    "contactDesc": "Write to us through the contact form. We will reply to the email address you enter in the form.",
+    "contactCta": "Go to the contact form"
+  },
+  "contact": {
+    "metaTitle": "Contact",
+    "metaDescription": "Write to the Pracuj.be team through the contact form — about your candidate account, employer account, job listings or technical problems.",
+    "title": "Contact",
+    "intro": "Have a question about your account, a job or how the site works? Write to us through the form — we will reply to the email address you enter.",
+    "formTitle": "Contact form",
+    "topicLabel": "Topic",
+    "topicPlaceholder": "Choose a topic",
+    "topicCandidateAccount": "Candidate account",
+    "topicEmployerAccount": "Employer account or company",
+    "topicJobListing": "Job listing",
+    "topicTechnical": "Technical problem",
+    "topicPrivacy": "My personal data",
+    "topicOther": "Something else",
+    "messageLabel": "Message",
+    "messageHint": "Describe your request (at least {min} characters). Do not include a national register number, PESEL or document numbers.",
+    "nameLabel": "First name (optional)",
+    "emailLabel": "Email address",
+    "emailHint": "We will send the confirmation and our reply to this address.",
+    "submit": "Send message",
+    "networkError": "We couldn’t reach the server. Your message is still in the form — please try again.",
+    "successTitle": "Message sent",
+    "successBody": "Thank you. We have sent a confirmation with the message number to the address you entered.",
+    "successDuplicate": "This message had already been sent — we did not send it a second time.",
+    "referenceLabel": "Message number",
+    "referenceHint": "Mention this number if you want to add something later.",
+    "backToHelp": "Back to the help page",
+    "beforeTitle": "Before you write",
+    "beforeHelp": "You will find answers to the most common questions on the <help>Help</help> page.",
+    "beforeReport": "Report a suspicious job directly on its page (“Report this job”) — you will find it on the <jobs>job list</jobs>.",
+    "beforeNoIds": "Do not send document numbers or passwords in your message.",
+    "error": {
+      "topicRequired": "Choose a topic.",
+      "messageRequired": "Enter your message.",
+      "messageTooShort": "Your message is too short — please describe your request in a bit more detail.",
+      "messageTooLong": "Your message is too long.",
+      "nameTooLong": "The first name is too long.",
+      "emailRequired": "Enter your email address.",
+      "emailInvalid": "Enter a valid email address.",
+      "sensitiveId": "Remove the national register number, PESEL or document number — it is not needed to reply to your message."
+    }
+  },
+  "savedSearchAlertOff": {
+    "metaTitle": "Turn off alert",
+    "title": "Turn off this alert?",
+    "confirmText": "We will stop sending emails with new jobs for this one saved search. Your other searches and notifications stay as they are.",
+    "confirmButton": "Turn off this alert",
+    "pending": "Saving…",
+    "doneTitle": "Alert turned off",
+    "doneText": "We will no longer send you alerts for this search. The search stays saved — you can turn the alert back on in your candidate panel.",
+    "settingsHint": "You can change your saved searches and alerts after logging in.",
+    "loginLink": "Log in",
+    "invalidTitle": "The link is not valid",
+    "invalidText": "This link is incomplete or has been changed. Use the link from the latest email or change the alert after logging in.",
+    "expiredTitle": "The link has expired",
+    "expiredText": "This link is no longer valid. Use the link from the latest email or change the alert after logging in.",
+    "unavailableText": "Turning off the alert is temporarily unavailable. Try again later or change the alert after logging in.",
+    "errorText": "We could not save the change. Please try again."
   },
   "cvImport": {
     "eyebrow": "Your profile",

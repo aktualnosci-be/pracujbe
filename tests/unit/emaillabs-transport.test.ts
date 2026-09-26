@@ -19,7 +19,7 @@ import { fakeDb, resetFakeDb } from '../helpers/fake-db';
  */
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   isProductionMode: () => true,
@@ -137,6 +137,46 @@ describe('ACK i błędy', () => {
   });
 });
 
+describe('#628 — termin wysyłki workera', () => {
+  it('przerwanie terminu w trakcie POST przerywa żądanie HTTP → provider_unavailable', async () => {
+    const deadline = new AbortController();
+    const seen: AbortSignal[] = [];
+    const fn = vi.fn((_url: string, init: RequestInit) => {
+      if (init.method === 'GET') return Promise.resolve(jsonResponse(404, { meta: {} }));
+      seen.push(init.signal!);
+      return new Promise<Response>((_, reject) => {
+        init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+    const sending = emailLabsTransport(CONFIG, fn).send(MESSAGE, { idempotencyKey: KEY, signal: deadline.signal });
+    await vi.waitFor(() => expect(seen).toHaveLength(1));
+    deadline.abort();
+    const error = await sending.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(MailSendError);
+    expect((error as MailSendError).code).toBe('provider_unavailable');
+    expect(seen[0]!.aborted).toBe(true);
+  });
+
+  it('termin minął po sprawdzeniu messageId → brak POST', async () => {
+    const deadline = new AbortController();
+    const http = fakeFetch({ lookup: () => { deadline.abort(); return jsonResponse(404, { meta: {} }); } });
+    const error = await emailLabsTransport(CONFIG, http.fn)
+      .send(MESSAGE, { idempotencyKey: KEY, signal: deadline.signal })
+      .catch((e: unknown) => e);
+    expect((error as MailSendError).code).toBe('provider_unavailable');
+    expect(http.posts()).toHaveLength(0);
+  });
+
+  it('KONTROLA UJEMNA: bez przerwania terminu ten sam przebieg wysyła list', async () => {
+    const deadline = new AbortController();
+    const http = fakeFetch({});
+    await expect(
+      emailLabsTransport(CONFIG, http.fn).send(MESSAGE, { idempotencyKey: KEY, signal: deadline.signal }),
+    ).resolves.toEqual({ id: MESSAGE_ID });
+    expect(http.posts()).toHaveLength(1);
+  });
+});
+
 describe('idempotencja (EmailLabs nie ma Idempotency-Key)', () => {
   it('list o tym messageId już jest u dostawcy → ACK bez drugiej wysyłki', async () => {
     const http = fakeFetch({ lookup: () => jsonResponse(200, accepted(MESSAGE_ID)) });
@@ -217,7 +257,9 @@ describe('worker kolejki domenowej przez EmailLabs', () => {
     fakeDb.rpc('claim_email_batch', [{
       id: KEY, profile_id: null, to_email: 'kandydat@example.test', template: 'jobOffer',
       locale: 'nl', payload: { companyName: 'Acme', jobTitle: 'Magazijnier' }, attempts: 0,
+      lock_token: 'lock-emaillabs',
     }]);
+    fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
     process.env.EMAIL_PROVIDER = 'emaillabs';
     process.env.EMAILLABS_APP_KEY = CONFIG.appKey;
@@ -239,7 +281,7 @@ describe('worker kolejki domenowej przez EmailLabs', () => {
     expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0, ok: true });
     expect(bodyOf(http.posts()[0])).toMatchObject({ to: [{ email: 'kandydat@example.test', messageId: MESSAGE_ID }] });
     const [mark] = fakeDb.callsTo('email.outbox.mark-sent');
-    expect(mark).toMatchObject({ as: 'service', values: [KEY, MESSAGE_ID, 1, 'emaillabs'] });
+    expect(mark).toMatchObject({ as: 'service', values: [KEY, MESSAGE_ID, 1, 'emaillabs', 'lock-emaillabs'] });
   });
 
   it('odrzucenie przez EmailLabs: wiersz wraca z kodem błędu (bez komunikatu dostawcy)', async () => {

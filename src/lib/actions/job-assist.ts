@@ -4,7 +4,7 @@ import { getActiveCompany } from '@/lib/company-context';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { AnthropicJobAssistor, FixtureJobAssistor } from '@/lib/ai-assist/assist';
 import { aiBudgetGate } from '@/lib/ai-assist/budget';
 import { estimateJobAssistCost } from '@/lib/ai-assist/cost';

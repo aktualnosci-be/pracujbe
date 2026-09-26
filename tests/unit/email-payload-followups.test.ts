@@ -18,7 +18,12 @@ import { loadMigrationFiles } from '../../scripts/privacy/schema.mjs';
 
 const ROOT = resolve(__dirname, '../..');
 const files = loadMigrationFiles(ROOT);
-const withoutFollowup = files.filter((f) => !/0113_email_payload_followups\.sql$/.test(f.path));
+// Stan sprzed 0113: późniejsze migracje (np. 0119, załączniki) przenoszą klucze dalej,
+// więc kontrola ujemna bierze migracje o numerze < 0113.
+const withoutFollowup = files.filter((f) => {
+  const m = /(\d{4})_[^/]*\.sql$/.exec(f.path);
+  return m !== null && Number(m[1]) < 113;
+});
 const SITE = 'https://pracuj.be';
 const CONVERSATION = '6f1c2a4e-1b2c-4d5e-8f90-123456789abc';
 const OFFER_KEYS = ['expiresAt', 'salaryMin', 'salaryMax', 'salaryPeriod', 'currency'];
