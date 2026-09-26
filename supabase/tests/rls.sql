@@ -12857,6 +12857,27 @@ select pg_temp.assert(
     = '00000000-0000-0000-0000-000142000001'::uuid,
   'CVR142-3 bez p_version -> bieżąca wersja (zgodność z zachowaniem sprzed 0142)');
 
+-- CVR142-5 (kontrola ujemna, bloker integratora): wersja z klienta, która istnieje, ale NIE jest
+-- opublikowana — zaplanowana na przyszłość (published_at = now() + 1 dzień) albo szkic
+-- (published_at NULL) — nie mogła być pokazana użytkownikowi, więc NIE trafia do receiptu;
+-- fallback do bieżącej wersji dokumentu 'cookies'.
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000003', 'cookies', '2027-future', null, false, now() + interval '1 day'),
+  ('00000000-0000-0000-0000-000142000004', 'cookies', '2027-draft', null, false, null);
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5a', null, null, '2027-future');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5b', null, null, '2027-draft');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5a' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5a wersja z published_at w przyszłości -> fallback do bieżącej, nie zapisana wprost');
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5b' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5b szkic (published_at NULL) -> fallback do bieżącej, nie zapisany wprost');
+
 -- CVR142-4 (kontrola ujemna): authenticated (CANDA) nie nadpisze / nie dopisze się pod cudzy
 -- receipt innego konta (CANDB) — record_consent zawsze pisze profile_id = auth.uid() BIEŻĄCEJ
 -- sesji; klient nie ma żadnego parametru wskazującego inne konto (ani p_version go nie daje).

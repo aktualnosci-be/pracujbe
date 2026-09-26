@@ -10,8 +10,9 @@
 -- Naprawa (bezpiecznie — bez ufania klientowi na ślepo):
 --  - `record_consent` przyjmuje nowy, OPCJONALNY parametr `p_version` (tekst wersji z cookie
 --    klienta, `ConsentRecord.v` w `src/lib/consent.ts`);
---  - serwer PRZYJMUJE tę wersję TYLKO, jeśli istnieje jako wiersz `consent_versions` dla
---    document='cookies' (dowolne `locale`, niekoniecznie `is_current` — polityka mogła się
+--  - serwer PRZYJMUJE tę wersję TYLKO, jeśli istnieje jako OPUBLIKOWANY wiersz
+--    `consent_versions` dla document='cookies' (`published_at` ustawione i ≤ now(); szkic/wersja
+--    przyszła = fallback), dowolne `locale`, niekoniecznie `is_current` — polityka mogła się
 --    zmienić już po tym, jak użytkownik ją zaakceptował, a receipt ma mówić prawdę o momencie
 --    zgody, nie o stanie bieżącym);
 --  - gdy wersja nieznana/brak parametru → CICHY FALLBACK do bieżącej wersji 'cookies'
@@ -20,6 +21,10 @@
 --    i NIE dodajemy nowej kolumny/flagi do `consents` — kolumna `consent_version_id` i tak
 --    wskazuje realny wiersz `consent_versions`, więc audytor odróżni „wersja z klienta"
 --    od „fallback na bieżącą" przez proste porównanie z `is_current`/`published_at` tego wiersza.
+--
+-- Nazewnictwo: klient wysyła `NEXT_PUBLIC_CONSENT_POLICY_VERSION` (domyślnie „2.0”). Żeby receipt
+-- niósł wersję z klienta, `consent_versions.version` dokumentu 'cookies' musi mieć DOKŁADNIE tę
+-- wartość (np. „2.0”); inna konwencja (np. „2026-01” z seeda demo) = fallback do bieżącej.
 --
 -- Zgodność: JEDYNY wołający to `recordConsent` (src/lib/actions/consent.ts) — zastępujemy
 -- starą sygnaturę (5 argumentów) nową (6. argument `p_version`, DOMYŚLNIE null) i aktualizujemy
@@ -54,11 +59,14 @@ begin
                 then p_source else 'cookie_banner' end;
 
   -- Wersja z klienta (obcięta, pusta = brak) — przyjmujemy TYLKO, jeśli realnie istnieje
-  -- jako wiersz dokumentu 'cookies'; inaczej cichy fallback do bieżącej (jak w 0043/0130).
+  -- jako OPUBLIKOWANY wiersz dokumentu 'cookies' (published_at ustawione i nie w przyszłości:
+  -- szkic albo wersja zaplanowana na później nie mogła być pokazana użytkownikowi);
+  -- inaczej cichy fallback do bieżącej (jak w 0043/0130).
   v_version_wanted := nullif(btrim(coalesce(left(p_version, 64), '')), '');
   if v_version_wanted is not null then
     select id into v_version from public.consent_versions
       where document = 'cookies' and version = v_version_wanted
+        and published_at is not null and published_at <= now()
       order by is_current desc, published_at desc nulls last, created_at desc
       limit 1;
   end if;

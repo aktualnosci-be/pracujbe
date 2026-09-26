@@ -36,7 +36,11 @@ odbioru; obecność usługi i bramki CI nie potwierdza gotowości produkcyjnej.
       patrz [`TURNSTILE.md`](./TURNSTILE.md).
 - [ ] Aplikacja bez konta (#98): sekret `GUEST_APPLY_SECRET` (≥ 32 znaki). Bez niego w
       produkcji formularz gościa zwraca „chwilowo niedostępne” — patrz [`GUEST_APPLY.md`](./GUEST_APPLY.md).
-- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką.
+- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` zgodny z aktualną polityką i RÓWNY
+      `consent_versions.version` opublikowanego wiersza dokumentu `cookies` (np. oba „2.0”).
+      Receipt zgody (`record_consent`, migracja `0142`) zapisuje wersję z cookie klienta tylko
+      wtedy, gdy taki opublikowany wiersz istnieje (`published_at` ustawione i nie w przyszłości);
+      inna konwencja nazw (np. „2026-01” z danych demo) = receipt wskazuje bieżącą wersję.
 
 ## 3. Baza danych (PostgreSQL Railway, produkcja)
 
