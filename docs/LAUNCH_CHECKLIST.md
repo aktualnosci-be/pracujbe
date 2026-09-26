@@ -91,7 +91,7 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 - [x] `ERROR_WEBHOOK_URL` (Discord, #571) (health 26.09).
 - [x] EmailLabs: `EMAILLABS_APP_KEY`, `EMAILLABS_SECRET_KEY`, `EMAILLABS_SMTP_ACCOUNT`, `EMAIL_FROM` (health `emailProviderReady` 26.09).
 - [ ] `EMAILLABS_WEBHOOK_SECRET` (health `emaillabsWebhook: false`) — W4.
-- [ ] `GUEST_APPLY_SECRET` (≥ 32 znaki) i `EMAIL_UNSUBSCRIBE_SECRET` ustawione (health ich nie raportuje — sprawdź listę nazw zmiennych).
+- [ ] `GUEST_APPLY_SECRET` i `EMAIL_UNSUBSCRIBE_SECRET` (≥ 32 znaki) — health `checks.guestApplySecret`/`checks.unsubscribeSecret` = `true` (od tego PR).
 - [ ] `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL` — W10.
 - [ ] **`APP_MODE=production`** dopiero po decyzji właściciela (W8). W trybie produkcyjnym brak
       konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
