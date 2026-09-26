@@ -23,6 +23,8 @@ const MAINTENANCE_RPCS = [
   'run_retention_purge',
   'purge_job_funnel_data',
   'purge_stale_message_attachments',
+  'rate_limit_gc',
+  'processed_webhooks_gc',
   'claim_storage_deletions',
 ];
 
@@ -253,5 +255,30 @@ describe('maintenance: harmonogram retencji za jawną flagą (#574)', () => {
     expect((await res.json()).retention).toMatchObject({
       batches: RETENTION_MAX_BATCHES, deletedFiles: 200 * RETENTION_MAX_BATCHES, fullBatches: 1,
     });
+  });
+});
+
+describe('maintenance: tabele techniczne (K2, 0193)', () => {
+  it('woła rate_limit_gc i processed_webhooks_gc jako service_role i zwraca same liczniki', async () => {
+    fakeDb.rpc('rate_limit_gc', 7).rpc('processed_webhooks_gc', 3);
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    expect(fakeDb.callsTo('rate_limit_gc')[0]).toMatchObject({ args: { p_older_than_seconds: 86_400 }, as: 'service' });
+    expect(fakeDb.callsTo('processed_webhooks_gc')[0]).toMatchObject({ args: { p_older_than_days: 30 }, as: 'service' });
+    expect(await res.json()).toMatchObject({ ok: true, purgedRateLimits: 7, purgedWebhookInbox: 3 });
+  });
+
+  it('kontrola ujemna: brak EXECUTE (stan sprzed 0193) → 503, nie cichy sukces', async () => {
+    fakeDb.rpc('processed_webhooks_gc', () => {
+      throw pgError('42501', 'permission denied for function processed_webhooks_gc');
+    });
+    const res = await POST(request());
+    expect(res.status).toBe(503);
+    expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'webhookInbox' });
+  });
+
+  it('nie czyści e-maili — okres przechowywania czeka na decyzję (#574)', async () => {
+    await POST(request());
+    expect(fakeDb.callsTo('email_deliveries_gc')).toEqual([]);
   });
 });
