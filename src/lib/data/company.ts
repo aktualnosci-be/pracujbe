@@ -34,6 +34,14 @@ export interface MyCompany {
   website: string | null;
   /** Adres logo firmy (#112) — bezwzględny https albo null. */
   logoUrl: string | null;
+  /** Nowa strona WWW czekająca na akceptację administratora (0207) — inaczej null. */
+  websitePending: string | null;
+  /** Nowe logo czekające na akceptację administratora (0207) — inaczej null. */
+  logoUrlPending: string | null;
+  /** Uzasadnienie ostatniego odrzucenia zgłoszonej strony WWW (0207) — inaczej null. */
+  websiteRejectionReason: string | null;
+  /** Uzasadnienie ostatniego odrzucenia zgłoszonego logo (0207) — inaczej null. */
+  logoUrlRejectionReason: string | null;
   canEdit: boolean;
 }
 
@@ -51,6 +59,10 @@ const DEMO_COMPANY: MyCompany = {
   statusReason: null,
   website: 'https://example.com',
   logoUrl: null,
+  websitePending: null,
+  logoUrlPending: null,
+  websiteRejectionReason: null,
+  logoUrlRejectionReason: null,
   canEdit: true,
 };
 
@@ -104,7 +116,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
       // company_members_select + companies_select_member (RLS): tylko własne aktywne członkostwo.
       const company = await queryOne<Record<string, unknown>>(tx, 'company.my-company',
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
-                c.website, c.logo_url
+                c.website, c.logo_url, c.website_pending, c.logo_url_pending,
+                c.website_rejection_reason, c.logo_url_rejection_reason
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -134,6 +147,10 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
             : null,
         website: asNullableString(company['website']),
         logoUrl: asNullableString(company['logo_url']),
+        websitePending: asNullableString(company['website_pending']),
+        logoUrlPending: asNullableString(company['logo_url_pending']),
+        websiteRejectionReason: asNullableString(company['website_rejection_reason']),
+        logoUrlRejectionReason: asNullableString(company['logo_url_rejection_reason']),
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };

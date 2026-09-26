@@ -58,6 +58,10 @@ describe('company read state', () => {
         verified_at: null,
         website: 'https://acme.example',
         logo_url: null,
+        website_pending: null,
+        logo_url_pending: 'https://acme.example/logo.png',
+        logo_url_rejection_reason: null,
+        website_rejection_reason: 'Adres nie prowadzi do firmy',
       },
     ]);
     expect(await getMyCompany()).toEqual({
@@ -72,6 +76,10 @@ describe('company read state', () => {
         statusReason: null,
         website: 'https://acme.example',
         logoUrl: null,
+        websitePending: null,
+        logoUrlPending: 'https://acme.example/logo.png',
+        websiteRejectionReason: 'Adres nie prowadzi do firmy',
+        logoUrlRejectionReason: null,
         canEdit: true,
       },
     });

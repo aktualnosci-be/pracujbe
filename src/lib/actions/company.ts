@@ -59,7 +59,8 @@ export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
 export type UpdateCompanyLinksResult =
-  { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+  /** `pendingReview` — co najmniej jeden nowy adres czeka na akceptację administratora (0207). */
+  { ok: true; demo?: boolean; pendingReview?: true } | { ok: false; error: ErrorCode };
 export type AddCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
 export type ReverificationResult =
@@ -366,7 +367,10 @@ export async function updateCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Ustawia/czyści stronę WWW i adres logo aktywnej firmy (#112). Osobna akcja od
+ * Zgłasza/czyści stronę WWW i adres logo aktywnej firmy (#112). Nowy niepusty adres trafia
+ * do akceptacji administratora (`website_pending`/`logo_url_pending`, strażnik
+ * `protect_company_links`, 0207) — publicznie widać go dopiero po zatwierdzeniu; puste pole
+ * usuwa link od razu. Osobna akcja od
  * `updateCompany`: te pola NIE cofają weryfikacji (w przeciwieństwie do nazwy/VAT) — baza
  * to gwarantuje (`protect_company_verification` reaguje tylko na `name`/`vat_number`, 0072),
  * tu więc bez odczytu/porównania statusu przed i po. Ta sama ścieżka zapisu co `updateCompany`
@@ -410,14 +414,18 @@ export async function updateCompanyLinks(
         return { error: 'PERMISSION_DENIED' };
       }
 
-      // RLS `companies_update_member` (owner/admin) + CHECK `companies_website_https`/
-      // `companies_logo_url_https` (0141) — status/weryfikacja bez zmian (trigger nie reaguje).
+      // RLS `companies_update_member` (owner/admin) + CHECK `public_https_url` (0141/0207).
+      // Strażnik `protect_company_links` (0207) przenosi nowy adres do `*_pending`; wyzerowanie
+      // zgłoszenia obok wpisu oznacza, że adres równy zatwierdzonemu anuluje zgłoszenie.
+      // Status/weryfikacja bez zmian.
       const { rows } = await execute(tx, 'company.update-links',
         `UPDATE public.companies
-            SET website  = CASE WHEN $2 THEN $3 ELSE website  END,
-                logo_url = CASE WHEN $4 THEN $5 ELSE logo_url END
+            SET website          = CASE WHEN $2 THEN $3   ELSE website          END,
+                website_pending  = CASE WHEN $2 THEN NULL ELSE website_pending  END,
+                logo_url         = CASE WHEN $4 THEN $5   ELSE logo_url         END,
+                logo_url_pending = CASE WHEN $4 THEN NULL ELSE logo_url_pending END
           WHERE id = $1
-          RETURNING id`,
+          RETURNING id, website_pending, logo_url_pending`,
         [
           companyId,
           setWebsite, setWebsite ? nullIfEmpty(v.website) : null,
@@ -428,10 +436,14 @@ export async function updateCompanyLinks(
     if (outcome.error !== null) return { ok: false, error: outcome.error };
 
     // RLS przepuszcza UPDATE bez wiersza (0 rows) — to nie jest sukces.
-    if (outcome.rows.length !== 1 || asString(asRecord(outcome.rows[0])['id']) !== outcome.companyId) {
+    const row = asRecord(outcome.rows[0]);
+    if (outcome.rows.length !== 1 || asString(row['id']) !== outcome.companyId) {
       return { ok: false, error: 'PERMISSION_DENIED' };
     }
-    return { ok: true };
+    const pendingReview =
+      (setWebsite && asString(row['website_pending']) !== '') ||
+      (setLogoUrl && asString(row['logo_url_pending']) !== '');
+    return pendingReview ? { ok: true, pendingReview: true } : { ok: true };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.updateCompanyLinks') };
   }

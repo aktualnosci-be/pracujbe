@@ -199,6 +199,18 @@ export default async function EmployerCompanyPage({
                       website: company.website ?? '',
                       logoUrl: company.logoUrl ?? '',
                     }}
+                    review={{
+                      website: {
+                        published: company.website,
+                        pending: company.websitePending,
+                        rejectionReason: company.websiteRejectionReason,
+                      },
+                      logoUrl: {
+                        published: company.logoUrl,
+                        pending: company.logoUrlPending,
+                        rejectionReason: company.logoUrlRejectionReason,
+                      },
+                    }}
                     ownHost={ownHost}
                   />
                 </div>

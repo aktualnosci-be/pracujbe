@@ -294,6 +294,8 @@ export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.created': 'auditActionCompanyCreated',
   'company.status_changed': 'auditActionCompanyStatus',
+  'company.links_changed': 'auditActionCompanyLinks',
+  'company.link_reviewed': 'auditActionCompanyLinkReviewed',
   'company.reverification_requested': 'auditActionCompanyReverification',
   'company.vies_checked': 'auditActionCompanyVies',
   'report.resolved': 'auditActionReportStatus',
