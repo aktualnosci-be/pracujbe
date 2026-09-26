@@ -36,6 +36,7 @@ import {
   interpolate,
   jobMatchAlertOffLabel,
   newMessageAttachmentsLabel,
+  jobOfferExcerptLabel,
   jobOfferPassportCopy,
   layoutCopy,
   moderationLabels,
@@ -87,8 +88,12 @@ export interface EmailDataMap {
     companyName: string;
     jobTitle: string;
     salary?: string;
-    /** Wiadomość od pracodawcy — renderowana jako cytat (#293). */
-    message?: string | null;
+    /**
+     * Krótki cytat wiadomości pracodawcy (#503, decyzja 26.09.2026): ≤ 200 znaków, bez danych
+     * kontaktowych i identyfikatorów (`buildMessageExcerpt`). Pełnej wiadomości szablon nie
+     * przyjmuje — odbiorca czyta ją w panelu.
+     */
+    messageExcerpt?: string | null;
     /** Termin odpowiedzi (ISO 8601) — formatowany w locale odbiorcy (#293). */
     expiresAt?: string | null;
     offerUrl: string;
@@ -554,7 +559,8 @@ export function JobOfferEmail(props: EmailProps<'jobOffer'>): ReactElement {
       vars={props}
       ctaHref={props.offerUrl}
       greetingName={props.firstName}
-      quote={props.message ?? undefined}
+      quote={props.messageExcerpt ?? undefined}
+      note={props.messageExcerpt?.trim() ? jobOfferExcerptLabel[props.locale] : undefined}
       detail={<JobOfferPassport {...props} />}
     />
   );
