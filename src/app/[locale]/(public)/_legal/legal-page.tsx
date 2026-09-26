@@ -7,7 +7,7 @@ import { env } from '@/lib/env';
 
 /**
  * Wspólny szkielet stron prawnych/informacyjnych z treścią placeholder (regulamin, prywatność,
- * cookies, o nas, FAQ). Pomoc i Kontakt (#61) mają realną treść — `_info/info-metadata.ts`.
+ * cookies, o nas). Pomoc i Kontakt (#61) mają realną treść — `_info/info-metadata.ts`.
  *
  * Strony mają obecnie treść PLACEHOLDER (i18n namespace `legal`: nagłówek + wprowadzenie +
  * informacja o przygotowaniu + data). Dopóki treść nie jest zatwierdzona prawnie, są `noindex`
@@ -28,8 +28,7 @@ export type LegalTitleKey =
   | 'termsTitle'
   | 'privacyTitle'
   | 'cookiePolicyTitle'
-  | 'aboutTitle'
-  | 'faqTitle';
+  | 'aboutTitle';
 
 // Data ostatniej aktualizacji placeholdera — stała, aby nie zmieniała się przy każdym buildzie.
 const LAST_UPDATED_ISO = '2026-07-23';

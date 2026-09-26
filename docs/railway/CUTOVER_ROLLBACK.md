@@ -135,7 +135,7 @@ Alternatywa dla błędu w kodzie: `git revert` na `main` → CI → `Wait for CI
 ### 4.1 Smoke test (`scripts/railway/prod-smoke.mjs`)
 
 Uruchamiany ręcznie przez operatora, poza CI. Sprawdza `/api/health` (200 i
-`status: ok`), `/` (przekierowanie na `/{język}`), `robots.txt`, `sitemap.xml` oraz
+`status: ok`), `/` (przekierowanie na `/{język}`), `robots.txt`, `sitemap/0.xml` (indeks partii, #599) oraz
 strony publiczne i auth w PL/NL/FR/EN: oczekiwany kod, brak 5xx, limit czasu każdego
 żądania. Tylko GET — nie tworzy danych.
 

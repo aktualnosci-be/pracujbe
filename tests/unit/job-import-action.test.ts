@@ -31,7 +31,7 @@ vi.mock('@/lib/ai-import/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/ai-import/extract')>();
   return {
     ...real,
-    AnthropicJobExtractor: class {
+    OpenAiJobExtractor: class {
       extract = extract;
     },
   };
@@ -98,7 +98,7 @@ function urlForm(url: string): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AI_JOB_IMPORT_ENABLED = '1';
-  process.env.ANTHROPIC_API_KEY = 'test-key-not-real';
+  process.env.OPENAI_API_KEY = 'test-key-not-real';
   delete process.env.AI_JOB_IMPORT_PROVIDER;
   resetFakeDb({ id: USER, role: 'employer' });
   saveResult = () => null;
@@ -126,14 +126,14 @@ describe('flaga i dostawca', () => {
     expect(await importJobListing(imageForm())).toEqual({ ok: false, error: 'NOT_FOUND' });
 
     process.env.AI_JOB_IMPORT_ENABLED = '1';
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     expect(isJobImportEnabled()).toBe(false);
     expect(await importJobListing(imageForm())).toEqual({ ok: false, error: 'NOT_FOUND' });
     expect(extract).not.toHaveBeenCalled();
   });
 
   it('atrapa dostawcy nie działa w trybie produkcyjnym', () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     process.env.AI_JOB_IMPORT_PROVIDER = 'fixture';
     expect(isJobImportEnabled()).toBe(false);
     vi.mocked(isProductionMode).mockReturnValue(false);
@@ -291,7 +291,7 @@ describe('globalny budżet AI (#36)', () => {
     expect(names.indexOf('ai_budget_settle')).toBeGreaterThan(names.indexOf('ai_budget_reserve'));
     const reserve = fakeDb.calls.find((c) => c.name === 'ai_budget_reserve')!;
     expect(reserve.as).toBe('service');
-    expect(reserve.args).toMatchObject({ p_feature: 'job_listing_import', p_model: 'claude-opus-5' });
+    expect(reserve.args).toMatchObject({ p_feature: 'job_listing_import', p_model: 'gpt-6-luna' });
     expect(Object.keys(reserve.args).sort()).toEqual(['p_estimate_micro_usd', 'p_feature', 'p_model']);
   });
 

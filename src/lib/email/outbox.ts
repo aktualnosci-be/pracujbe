@@ -5,6 +5,7 @@ import { execute, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import { renderEmail } from '@/emails/templates';
 import { renderNewsletterEmail } from '@/emails/newsletter';
 import { buildDeliveryData } from '@/lib/email/delivery-data';
+import { buildMessageExcerpt } from '@/lib/email/message-excerpt';
 import { guestDeliveryToken } from '@/lib/email/guest-delivery';
 import { emailPreferenceCategory, emailSendPool } from '@/lib/email/categories';
 import {
@@ -375,6 +376,36 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
+  // #503 (decyzja 26.09.2026): krótki cytat wiadomości rekrutera w `jobOffer`. Pełna treść
+  // czytana tu (nie z payloadu kolejki) i od razu zamieniana na oczyszczony cytat — do szablonu
+  // trafia wyłącznie `messageExcerpt`. Best-effort: błąd odczytu = e-mail bez cytatu.
+  const offerExcerpts = new Map<string, string>();
+  const offerIds = [
+    ...new Set(
+      queue
+        .filter((r) => r.template === 'jobOffer' && r.entity_type === 'offer' && r.entity_id && UUID_RE.test(r.entity_id))
+        .map((r) => r.entity_id as string),
+    ),
+  ];
+  if (offerIds.length > 0) {
+    try {
+      const offers = await withServiceRole((tx) =>
+        queryRows<{ id: string; message: string | null }>(
+          tx,
+          'email.outbox.offer-messages',
+          'SELECT id, message FROM public.offers WHERE id = ANY($1::uuid[])',
+          [offerIds],
+        ),
+      );
+      for (const o of offers) {
+        const excerpt = buildMessageExcerpt(o.message);
+        if (excerpt) offerExcerpts.set(o.id, excerpt);
+      }
+    } catch (offersErr) {
+      captureError(offersErr, { area: 'email.outbox.offerExcerpts' });
+    }
+  }
+
   for (const row of queue) {
     const pool = emailSendPool(row.template);
     const waitUntil = exhausted.get(pool);
@@ -387,8 +418,9 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // #290: CTA do właściwej sekcji panelu, w locale odbiorcy (kolumna `locale`).
       // #98: e-mail do gościa dostaje link z tokenem liczonym tutaj (w bazie tylko hash);
       // brak tokenu = błąd tego wiersza (ponowienie), nie przerwanie paczki.
+      const excerpt = row.template === 'jobOffer' && row.entity_id ? offerExcerpts.get(row.entity_id) : undefined;
       const { locale, data } = buildDeliveryData(
-        row,
+        excerpt ? { ...row, payload: { ...row.payload, messageExcerpt: excerpt } } : row,
         site,
         row.profile_id ? firstNames.get(row.profile_id) : undefined,
         guestDeliveryToken(row.template, row.payload),

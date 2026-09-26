@@ -2,6 +2,7 @@ import { isLocale, type Locale } from '@/i18n/routing';
 import { formatSalaryRange, type SalaryInput } from '@/lib/salary';
 import { ACCESS_CODE_RE, CASE_NUMBER_RE } from '@/lib/validation/content-report';
 import { salaryLabelsFor } from '@/lib/salary-labels';
+import { buildMessageExcerpt } from '@/lib/email/message-excerpt';
 import { minimizeEmailPayload } from '@/lib/email/payload-fields';
 
 /**
@@ -188,6 +189,13 @@ export function buildDeliveryData(
   // #503: do szablonu (i dostawcy poczty) trafiają tylko pola z listy dozwolonych dla typu;
   // `nonce` gościa nigdy (token liczy worker osobno).
   const payload = minimizeEmailPayload(row.template, row.payload);
+  // #503 (decyzja 26.09.2026): cytat wiadomości rekrutera — zawsze ponownie oczyszczony i
+  // obcięty, niezależnie od tego, kto go dołożył (worker z `offers.message` albo payload).
+  if (Object.hasOwn(payload, 'messageExcerpt')) {
+    const excerpt = buildMessageExcerpt(payload['messageExcerpt']);
+    if (excerpt) payload['messageExcerpt'] = excerpt;
+    else delete payload['messageExcerpt'];
+  }
   const isGuest = GUEST_TOKEN_TEMPLATES.has(row.template);
   if (isGuest && !guestToken) throw new Error('guest_token_unavailable');
   // Fragment stays out of HTTP request targets and proxy logs. The landing page clears it

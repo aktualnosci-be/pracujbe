@@ -2,6 +2,7 @@ import { ArrowRight, MapPin } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { StatusPill } from '@/components/ui/status-pill';
+import { StatValue } from '@/components/dashboard/StatValue';
 import type { CompanyJobsLoad } from '@/lib/data/employer';
 import {
   BTN_SECONDARY,
@@ -22,6 +23,8 @@ interface Labels {
   retry: string;
   newApplications: string;
   matched: string;
+  /** „brak danych” — liczniki `null` dla roli bez uprawnień rekrutera. */
+  noData: string;
 }
 
 /**
@@ -84,7 +87,7 @@ export function EmployerOffersPreview({
                       {labels.newApplications}
                     </dt>
                     <dd className="mt-1 text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                      {offer.newApplications}
+                      <StatValue value={offer.newApplications} noDataLabel={labels.noData} />
                     </dd>
                   </div>
                   <div className="min-w-0 border-l border-border pl-4">
@@ -92,7 +95,7 @@ export function EmployerOffersPreview({
                       {labels.matched}
                     </dt>
                     <dd className="mt-1 text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                      {offer.matched}
+                      <StatValue value={offer.matched} noDataLabel={labels.noData} />
                     </dd>
                   </div>
                 </dl>

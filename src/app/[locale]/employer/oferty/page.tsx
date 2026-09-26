@@ -8,6 +8,7 @@ import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
+import { StatValue } from "@/components/dashboard/StatValue";
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -193,7 +194,7 @@ export default async function EmployerOffersPage({
                         {td("employerOffersApplicationsLabel")}
                       </dt>
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        {offer.newApplications}
+                        <StatValue value={offer.newApplications} noDataLabel={td("funnelNoData")} />
                       </dd>
                     </div>
                     <div className="min-w-0 border-l border-border pl-4">
@@ -201,7 +202,7 @@ export default async function EmployerOffersPage({
                         {td("colMatched")}
                       </dt>
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        {offer.matched}
+                        <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
                       </dd>
                     </div>
                   </dl>
