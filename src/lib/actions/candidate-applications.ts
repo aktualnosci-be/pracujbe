@@ -4,8 +4,10 @@ import { z } from 'zod';
 
 import { routing } from '@/i18n/routing';
 import {
+  getMyApplicationHistoryPage,
   getMyApplicationScreeningAnswers,
   getMyApplicationsPage,
+  type MyApplicationHistoryPage,
   type MyApplicationsPage,
 } from '@/lib/data/candidate';
 import type { ScreeningAnswer } from '@/lib/screening/questions';
@@ -46,6 +48,35 @@ export async function loadApplicationScreeningAnswers(applicationId: unknown): P
 
   try {
     return { status: 'ready', answers: await getMyApplicationScreeningAnswers(parsed.data) };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+const historyCursorSchema = z.object({
+  createdAt: z.iso.datetime({ offset: true }),
+  id: z.uuid(),
+});
+
+export type MoreMyApplicationHistoryResult =
+  | { status: 'ready'; page: MyApplicationHistoryPage }
+  | { status: 'error' };
+
+/**
+ * Kolejna strona historii statusów własnego zgłoszenia („Pokaż więcej" w szczególe).
+ * `applicationId` i kursor z klienta są niezaufane: walidacja Zod, potem odczyt pod bieżącą
+ * sesją z ponownym sprawdzeniem własności zgłoszenia.
+ */
+export async function loadMoreMyApplicationHistory(
+  applicationId: unknown,
+  cursor: unknown,
+): Promise<MoreMyApplicationHistoryResult> {
+  const parsedId = z.uuid().safeParse(applicationId);
+  const parsedCursor = historyCursorSchema.safeParse(cursor);
+  if (!parsedId.success || !parsedCursor.success) return { status: 'error' };
+
+  try {
+    return { status: 'ready', page: await getMyApplicationHistoryPage(parsedId.data, parsedCursor.data) };
   } catch {
     return { status: 'error' };
   }
