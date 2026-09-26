@@ -1780,8 +1780,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   odświeżeniu zero żądań; stara wersja polityki (także cookie 1.0 z marketingiem) / uszkodzone cookie → baner z serwera
   nieukryty przed hydratacją; cookie na 180 dni; wywołanie `recordConsent` z kategoriami
   i źródłem (centrum = `cookie_settings`). Kontrakt parametrów `recordConsent` ↔
-  `record_consent` z migracji (`consent-action.test`). **Otwarte:** wersja
-  polityki z cookie nie trafia do receiptu (RPC bierze `consent_versions` — wymaga migracji).
+  `record_consent` z migracji (`consent-action.test`).
+  Wersja polityki w receipcie (#349, migracja `0142`): `record_consent` przyjmuje opcjonalny
+  `p_version` (= `ConsentRecord.v` z cookie klienta, `src/lib/consent.ts`) i zapisuje w
+  receipcie DOKŁADNIE tę wersję dokumentu 'cookies', którą użytkownik faktycznie widział —
+  ale TYLKO gdy istnieje jako OPUBLIKOWANY wiersz `consent_versions` (`published_at` ustawione
+  i ≤ now(); nie musi być `is_current`, bo polityka mogła się zmienić już PO zgodzie). Wartość
+  `NEXT_PUBLIC_CONSENT_POLICY_VERSION` musi być równa `consent_versions.version` dokumentu
+  `cookies` (`docs/LAUNCH_CHECKLIST.md` §3). Nieznana/nieopublikowana/brak wersji → cichy fallback do bieżącej (jak
+  przed 0142); best-effort, log zgód nie blokuje UX (Invariant #8). Kategorie jak w `0130`
+  (bez `marketing`). Stara 5-argumentowa sygnatura RPC jest zastąpiona (jedyny wołający,
+  `recordConsent`, zaktualizowany w tym samym PR). Dowód: `rls.sql` sekcja CVR142 (kontrole
+  ujemne: nieistniejąca wersja nie trafia do receiptu, wersja nieopublikowana — przyszła lub szkic — też nie,
+  authenticated nie dopisuje/nie nadpisuje receiptu cudzego konta).
   Invariant #1 na żywej bazie (#348): `rls.sql` sekcja LOC348 — `email_deliveries.locale` dla
   newApplication, applicationViewed, statusChanged, jobOffer (+ `offers.locale`), offerAccepted/
   Declined, newMessage (obie strony), companyVerified, teamInvitation; nadawca, odbiorca i oferta

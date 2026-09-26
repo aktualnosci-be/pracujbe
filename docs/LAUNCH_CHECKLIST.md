@@ -65,7 +65,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
 | K4 | ~~P2~~ | **Zrobione:** `/faq` (placeholder) usunięte, middleware daje 308 na `/{locale}/pomoc` (#61) | test `faq-redirect` |
 | K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |
-| K6 | P2 | Wersja polityki z cookie w receipcie zgody (`record_consent` bierze `consent_versions`) | wymaga migracji |
+| K6 | P2 | Wersja polityki z cookie w receipcie zgody | zrobione w #631 (migracja `0142`): receipt niesie wersję z cookie, jeśli jest opublikowana w `consent_versions`; nazewnictwo — pkt w §3 |
 | K7 | P2 | Domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | znane braki #24/#25 |
 | K8 | P2 | `npm run test:e2e:real` poza CI (gotowy fragment `ci.yml` — issues #351, #66) | decyzja o minutach CI |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
@@ -97,7 +97,11 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
       konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
 - [ ] Nieustawione: `BILLING_ENABLED`, `STRIPE_*`, `AI_*_ENABLED`, `ANTHROPIC_API_KEY` (AI na OpenAI od #677), zmienne Supabase, `CRON_SECRET`.
 - [ ] `OPENAI_API_KEY` dopiero razem z włączeniem funkcji AI (W14); sam klucz niczego nie włącza.
-- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` pusta (domyślnie `2.0`) albo zgodna z opublikowaną polityką.
+- [ ] `NEXT_PUBLIC_CONSENT_POLICY_VERSION` pusta (domyślnie `2.0`) albo zgodna z opublikowaną polityką
+      i RÓWNA `consent_versions.version` opublikowanego wiersza dokumentu `cookies` (np. oba „2.0”).
+      Receipt zgody (`record_consent`, migracja `0142`) zapisuje wersję z cookie klienta tylko
+      wtedy, gdy taki opublikowany wiersz istnieje (`published_at` ustawione i nie w przyszłości);
+      inna konwencja nazw (np. „2026-01” z danych demo) = receipt wskazuje bieżącą wersję.
 
 ## 4. Baza danych
 
