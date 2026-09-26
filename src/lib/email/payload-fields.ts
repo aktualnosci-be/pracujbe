@@ -7,7 +7,8 @@ import type { GUEST_EMAIL_TYPES, QUEUED_EMAIL_TYPES } from '@/emails/wiring';
  * Wszystko spoza listy worker odrzuca przed renderem (`minimizeEmailPayload` w
  * `delivery-data.ts`), nawet jeśli funkcja SQL dołoży nowe pole. Celowo POZA listą:
  * - treść korespondencji: `preview` (podgląd wiadomości) i `message` (wiadomość do propozycji)
- *   — e-mail prowadzi do panelu, gdzie odbiorca czyta ją po zalogowaniu;
+ *   — e-mail prowadzi do panelu, gdzie odbiorca czyta ją po zalogowaniu; propozycja niesie
+ *   tylko oczyszczony, krótki `messageExcerpt` (`src/lib/email/message-excerpt.ts`);
  * - pola, których szablon nie pokazuje (np. `query` zapisanego wyszukiwania, `reason` przy
  *   weryfikacji firmy, `companyName` i `appealTarget` w odwołaniu, `jobTitle` przy zawieszeniu firmy).
  * CV, odpowiedzi screeningowe, telefon i dane kontaktowe osób trzecich nie mają tu miejsca —
@@ -22,7 +23,9 @@ export const EMAIL_PAYLOAD_FIELDS = {
   newApplication: ['candidateName', 'jobTitle'],
   applicationViewed: ['companyName', 'jobTitle'],
   statusChanged: ['companyName', 'jobTitle', 'status'],
-  jobOffer: ['companyName', 'jobTitle', 'salaryMin', 'salaryMax', 'salaryPeriod', 'currency', 'expiresAt'],
+  // `messageExcerpt` (decyzja 26.09.2026): ≤ 200 znaków wiadomości rekrutera bez danych
+  // kontaktowych i identyfikatorów — liczy worker (`message-excerpt.ts`); pełny `message` odrzucany.
+  jobOffer: ['companyName', 'jobTitle', 'salaryMin', 'salaryMax', 'salaryPeriod', 'currency', 'expiresAt', 'messageExcerpt'],
   offerAccepted: ['candidateName', 'jobTitle'],
   offerDeclined: ['candidateName', 'jobTitle'],
   newMessage: ['senderName', 'panel', 'conversationId', 'attachmentCount'],

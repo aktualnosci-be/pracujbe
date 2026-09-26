@@ -44,7 +44,7 @@ const expectedStatic = [
   "/pl/praca/miasto/brussels",
   "/pl/dla-pracodawcow",
   "/pl/regulamin",
-  "/en/faq",
+  "/en/o-nas",
 ];
 const buildHasDatabase = Boolean(process.env.DATABASE_APP_URL);
 const notPrerendered = buildHasDatabase ? [] : expectedStatic.filter((route) => !prerendered[route]);

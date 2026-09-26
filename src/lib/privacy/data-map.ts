@@ -191,7 +191,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   'ai-job-import': {
     name: 'Import ogłoszenia przez AI',
     inCode: 'Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone.',
-    processors: [...HOSTING, 'anthropic'],
+    processors: [...HOSTING, 'openai'],
     retentionInCode: 'Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty.',
   },
   'job-statistics': {
