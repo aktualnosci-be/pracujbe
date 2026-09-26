@@ -54,6 +54,7 @@ const ROUTES = [
   'employer/firma',
   'employer/firma/nowa',
   'employer/kandydaci',
+  'employer/kandydaci/demo-c-1',
   'employer/oferty',
   'employer/oferty/nowa',
   'employer/oferty/12345/edycja',

@@ -509,8 +509,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
 > grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
-> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata — strona kandydata zrobiona: szczegół
-> zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
+> draftu + cykl życia oferty), ~~P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata)~~ — zamknięte: kandydat
+> (szczegół zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana) i pracodawca (Etap 4, migracja `0192`),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
@@ -1014,6 +1014,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
+- [x] Stronicowanie kursorem i szczegół kandydata (audyt P1-05/P1-06, migracja `0192` — numer
+  tymczasowy): `/employer/oferty` (created_at, id), `/employer/aplikacje` (submitted_at, id) i
+  `/employer/kandydaci` (wynik, kandydat) zamiast OFFSET/top 5 — kursor w adresie w obu
+  kierunkach (`?po=` starsze/dalsze, `?przed=` nowsze), zły token = pierwsza strona
+  (`src/lib/employer/list-cursor.ts`); indeksy częściowe firmy pod kursor, RPC
+  `get_company_matches_page` (SECURITY INVOKER, reguły jak `get_company_top_matches`: jeden
+  wiersz na kandydata, recruiter+, firma zweryfikowana; limit 1–51; `member`/firma niezweryfikowana =
+  jawne stany jak na pulpicie, P1-14). Zgłoszenia jednej oferty
+  `?oferta=` (link „Zobacz zgłoszenia” na karcie oferty, recruiter+; oferta spoza firmy = 404).
+  Szczegół kandydata `/employer/kandydaci/[id]` (`getEmployerCandidateDetail`, pod RLS, tylko
+  przy dopasowaniu albo zgłoszeniu do ofert AKTYWNEJ firmy; inaczej 404): profil zawodowy,
+  dopasowania z wysyłką propozycji (tylko do aktywnej oferty), zgłoszenia z linkami; link z listy kandydatów i ze szczegółu
+  zgłoszenia. Dowód: `rls.sql` sekcja EP05 (remis wyniku na granicy, oba kierunki, izolacja;
+  kontrole ujemne: stary odczyt obcina do 20, OFFSET dubluje po wstawieniu), integracja
+  `portal-employer` (granica strony z remisem i nowym zgłoszeniem, cudza firma/member = pusto
+  albo 404), unit `employer-list-cursor`, `employer-*-load`, E2E `employer-candidate-detail`,
+  `panel-a11y` (nowa trasa).
 - [x] Zespół firmy i kolejna firma (#403, migracja `0086`): `/employer/zespol` — lista członków
   (owner/admin; RPC `get_company_team`), zmiana roli (`set_company_member_role`), odebranie/
   przywrócenie dostępu (`set_company_member_active`, z potwierdzeniem), zaproszenie po e-mailu
