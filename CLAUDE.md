@@ -822,6 +822,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
   (#99), „brak danych” tylko bez uprawnień rekrutera — bez fałszywej konwersji 0%. Kafelki/lejek/kolumny zawijają się przy
   200% tekstu (#318). Przełącznik firmy: nazwa w etykiecie, `aria-current`, komunikat błędu (#322).
+  Realne statystyki (audyt P1-14, bez migracji): liczniki rekrutacyjne (nowe zgłoszenia,
+  dopasowani, do odpowiedzi, liczniki przy ofertach, lejek, top dopasowani) tylko dla recruiter+
+  aktywnej firmy — zwykły `member` widzi „brak danych” (`null` → `StatValue`: „—” + tekst dla
+  czytnika) i wyjaśnienie zamiast zer z RLS; lejek `denied`, top dopasowani `denied`/`unverified`/
+  `error` (`getTopMatchedCandidatesLoad`). Dopasowani = DISTINCT kandydaci (nie wiersze `matches`),
+  dopiero po weryfikacji firmy; „do odpowiedzi” = rozmowy AKTYWNEJ firmy, w których ostatnia
+  nieusunięta wiadomość jest spoza firmy (dawniej nieprzeczytane powiadomienia użytkownika ze
+  wszystkich firm). Wspólne `EmployerOverviewStats`/`EmployerFunnelSection` na pulpicie
+  i `/employer/statystyki`. Dowód: `portal-employer` (PG16: member, firma niezweryfikowana, cudza
+  firma, powiadomienia ≠ licznik), unit `employer-stats-load`, `employer-candidates-load`,
+  `employer-offers-preview` (kontrole ujemne).
   Wygląd panelu i kreatora oferty = kalka prototypu „04 Ludzie i praca” (#5/#6): klasy w
   `src/components/dashboard/panel-styles.ts` (wspólne z adminem), sidebar `.side-item`, opis
   odstępstw w `docs/design/people-passport/README.md`.

@@ -1005,7 +1005,13 @@
     "applicationStepReview": "Werkgever bekijkt",
     "applicationStepInterview": "Gesprek",
     "applicationStepDecision": "Beslissing",
-    "employerPlaceEyebrow": "Jouw werving"
+    "employerPlaceEyebrow": "Jouw werving",
+    "statRecruiterOnly": "Zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf",
+    "statAfterVerification": "Beschikbaar zodra het bedrijf is geverifieerd",
+    "funnelDenied": "De wervingstrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
+    "topMatchedDenied": "Gematchte kandidaten zijn zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
+    "topMatchedUnverified": "Gematchte kandidaten verschijnen zodra het bedrijf is geverifieerd.",
+    "topMatchedLoadError": "We konden de gematchte kandidaten niet laden."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
