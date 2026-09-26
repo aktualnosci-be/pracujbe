@@ -10,7 +10,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const input = {
   jobId: '11111111-1111-4111-8111-111111111111',
@@ -86,5 +86,12 @@ describe('applyToJob — błędy RPC (#361)', () => {
   it('przekazuje klucz idempotencji klienta do RPC (retry = ta sama próba)', async () => {
     await applyToJob(valid);
     expect(fakeDb.callsTo('apply_to_job')[0]!.args).toMatchObject({ p_idempotency_key: input.idempotencyKey });
+  });
+});
+
+describe('applyToJob — polityka wieku (#492)', () => {
+  it('odmowa bazy bez ważnej deklaracji wieku ma własny kod (komunikat z linkiem do ustawień)', async () => {
+    fakeDb.rpc('apply_to_job', () => { throw pgError('P0001', 'AGE_ATTESTATION_REQUIRED'); });
+    expect(await applyToJob(input)).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED' });
   });
 });

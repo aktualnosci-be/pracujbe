@@ -1,9 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AiBudgetError, type AiBudgetStore } from '@/lib/ai/budget';
+import type { AiUsageLine } from '@/lib/ai/usage-log';
 import {
   AnthropicTranslationProvider,
+  estimateTranslationCost,
   mapProviderError,
+  TRANSLATION_MAX_TOKENS,
   TRANSLATION_SYSTEM_PROMPT,
   translationJsonSchema,
   wrapSourceFields,
@@ -32,6 +36,20 @@ function fakeClient(response: Partial<Anthropic.Message> | Error) {
   return { client: { messages: { create } } as unknown as Anthropic, create };
 }
 
+/** Atrapa budżetu (#36): rezerwacje i rozliczenia w pamięci; `refuse` = odmowa rezerwacji. */
+function fakeBudget(refuse?: 'exceeded' | 'unavailable') {
+  const reserve = vi.fn<AiBudgetStore['reserve']>(async () => {
+    if (refuse) throw new AiBudgetError(refuse);
+    return 'res-1';
+  });
+  const settle = vi.fn<AiBudgetStore['settle']>(async () => {});
+  return { store: { reserve, settle } satisfies AiBudgetStore, reserve, settle };
+}
+
+function budgetOptions(budget = fakeBudget(), lines: AiUsageLine[] = []) {
+  return { budgetStore: budget.store, usageSink: (line: AiUsageLine) => lines.push(line) };
+}
+
 const REQUEST = {
   sourceLocale: 'pl' as const,
   targetLocale: 'nl' as const,
@@ -39,6 +57,7 @@ const REQUEST = {
 };
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   delete process.env.AI_TRANSLATION_MODEL;
   delete process.env.AI_TRANSLATION_EFFORT;
 });
@@ -48,7 +67,7 @@ describe('AnthropicTranslationProvider', () => {
     const { client, create } = fakeClient({
       content: [{ type: 'text', text: '{"title":"Magazijnier","description":"x"}', citations: null }],
     });
-    const out = await new AnthropicTranslationProvider(client).translate(REQUEST);
+    const out = await new AnthropicTranslationProvider(client, budgetOptions()).translate(REQUEST);
     expect(out).toEqual({
       output: { title: 'Magazijnier', description: 'x' },
       model: DEFAULT_TRANSLATION_MODEL,
@@ -75,7 +94,7 @@ describe('AnthropicTranslationProvider', () => {
     process.env.AI_TRANSLATION_MODEL = 'claude-sonnet-5';
     process.env.AI_TRANSLATION_EFFORT = 'medium';
     const { client, create } = fakeClient({ content: [{ type: 'text', text: '{}', citations: null }] });
-    await new AnthropicTranslationProvider(client).translate(REQUEST);
+    await new AnthropicTranslationProvider(client, budgetOptions()).translate(REQUEST);
     const params = (create.mock.calls[0] as unknown as [Record<string, any>])[0];
     expect(params.model).toBe('claude-sonnet-5');
     expect(params.output_config.effort).toBe('medium');
@@ -87,7 +106,7 @@ describe('AnthropicTranslationProvider', () => {
     ['zły JSON', { content: [{ type: 'text' as const, text: '{"title":', citations: null }] }, 'invalid_json', false],
   ])('%s → %s', async (_n, response, reason, retryable) => {
     const { client } = fakeClient(response);
-    const err = await new AnthropicTranslationProvider(client).translate(REQUEST).catch((e: unknown) => e);
+    const err = await new AnthropicTranslationProvider(client, budgetOptions()).translate(REQUEST).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(TranslationProviderError);
     expect((err as TranslationProviderError).reason).toBe(reason);
     expect((err as TranslationProviderError).retryable).toBe(retryable);
@@ -117,7 +136,7 @@ describe('AnthropicTranslationProvider', () => {
 
   it('błąd SDK z treścią nie przenosi komunikatu dostawcy', async () => {
     const { client } = fakeClient(new Anthropic.BadRequestError(400, undefined, 'Magazynier leaked', new Headers()));
-    const err = (await new AnthropicTranslationProvider(client).translate(REQUEST).catch((e: unknown) => e)) as Error;
+    const err = (await new AnthropicTranslationProvider(client, budgetOptions()).translate(REQUEST).catch((e: unknown) => e)) as Error;
     expect(err.message).toBe('bad_request');
   });
 
@@ -126,5 +145,75 @@ describe('AnthropicTranslationProvider', () => {
     expect(text).toContain('maaltijdcheques');
     expect(text).toContain('Logistiek Noord');
     expect(text).toContain('VCA');
+  });
+
+  describe('budżet AI (#36) i log użycia (#489)', () => {
+    it('rezerwacja PRZED wywołaniem, rozliczenie tokenami z odpowiedzi, jeden wiersz logu bez treści', async () => {
+      const { client, create } = fakeClient({ content: [{ type: 'text', text: '{"title":"a","description":"b"}', citations: null }] });
+      const budget = fakeBudget();
+      const lines: AiUsageLine[] = [];
+      budget.reserve.mockImplementation(async () => {
+        expect(create).not.toHaveBeenCalled();
+        return 'res-1';
+      });
+      await new AnthropicTranslationProvider(client, budgetOptions(budget, lines)).translate(REQUEST);
+      expect(budget.reserve).toHaveBeenCalledWith('content_translation', DEFAULT_TRANSLATION_MODEL, estimateTranslationCost(REQUEST, DEFAULT_TRANSLATION_MODEL));
+      expect(budget.settle).toHaveBeenCalledWith('res-1', expect.objectContaining({
+        outcome: 'ok',
+        usage: { inputTokens: 100, outputTokens: 40 },
+      }));
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatchObject({ feature: 'content_translation', outcome: 'ok', inputKind: 'text' });
+      expect(JSON.stringify(lines)).not.toMatch(/Magazynier|Magazijnier/);
+    });
+
+    it.each([
+      ['exceeded', 'budget_exceeded'],
+      ['unavailable', 'budget_unavailable'],
+    ] as const)('odmowa budżetu (%s) → %s, model NIE wołany, odroczenie', async (refuse, reason) => {
+      const { client, create } = fakeClient({ content: [{ type: 'text', text: '{}', citations: null }] });
+      const budget = fakeBudget(refuse);
+      const lines: AiUsageLine[] = [];
+      const err = await new AnthropicTranslationProvider(client, budgetOptions(budget, lines))
+        .translate(REQUEST)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(TranslationProviderError);
+      expect((err as TranslationProviderError).reason).toBe(reason);
+      expect((err as TranslationProviderError).deferred).toBe(true);
+      expect(create).not.toHaveBeenCalled();
+      expect(budget.settle).not.toHaveBeenCalled();
+      expect(lines).toHaveLength(0);
+    });
+
+    it('odmowa modelu jest rozliczona tokenami (koszt poniesiony), wynik refused', async () => {
+      const { client } = fakeClient({ stop_reason: 'refusal' });
+      const budget = fakeBudget();
+      await new AnthropicTranslationProvider(client, budgetOptions(budget)).translate(REQUEST).catch(() => undefined);
+      expect(budget.settle).toHaveBeenCalledWith('res-1', expect.objectContaining({
+        outcome: 'refused',
+        usage: { inputTokens: 100, outputTokens: 40 },
+      }));
+    });
+
+    it('szacunek = górna granica: pełne max_tokens wyjścia i dłuższe pola = wyższa rezerwacja', () => {
+      const small = estimateTranslationCost(REQUEST, DEFAULT_TRANSLATION_MODEL);
+      const big = estimateTranslationCost(
+        { ...REQUEST, fields: { ...REQUEST.fields, description: 'x'.repeat(20000) } },
+        DEFAULT_TRANSLATION_MODEL,
+      );
+      expect(big).toBeGreaterThan(small);
+      // Samo wyjście przy stawce 25 USD/MTok (claude-opus-5) = 16000 × 25 mikro-USD.
+      expect(small).toBeGreaterThanOrEqual(TRANSLATION_MAX_TOKENS * 25);
+    });
+
+    it('kontrola ujemna: bez atrapy budżetu i bez bazy rezerwacja odmawia (fail-closed), model nie jest wołany', async () => {
+      vi.stubEnv('DATABASE_SERVICE_URL', '');
+      const { client, create } = fakeClient({ content: [{ type: 'text', text: '{}', citations: null }] });
+      const err = await new AnthropicTranslationProvider(client, { usageSink: () => {} })
+        .translate(REQUEST)
+        .catch((e: unknown) => e);
+      expect((err as TranslationProviderError).reason).toBe('budget_unavailable');
+      expect(create).not.toHaveBeenCalled();
+    });
   });
 });

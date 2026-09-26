@@ -59,8 +59,12 @@ describe('/api/email/process', () => {
     expect(processAuthEmailQueue).toHaveBeenCalledTimes(1);
   });
 
-  it('GET działa tak samo (ręczne wywołanie)', async () => {
-    expect((await GET(request('GET', `Bearer ${SECRET}`))).status).toBe(200);
+  it('GET (#583) jest bezpieczne — 405 bez autoryzacji ani wywołania workerów', async () => {
+    const response = await GET();
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('POST');
+    expect(processEmailQueue).not.toHaveBeenCalled();
+    expect(processAuthEmailQueue).not.toHaveBeenCalled();
   });
 
   it('kolejka auth nieskonfigurowana w produkcji → 503, nawet gdy domenowa jest zdrowa', async () => {

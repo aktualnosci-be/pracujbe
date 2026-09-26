@@ -1,7 +1,7 @@
 import { redactError, redactString, redactValue } from './redact';
 
 /**
- * Redakcja logów serwera (Railway zbiera stdout/stderr) tymi samymi regułami co Sentry.
+ * Redakcja logów serwera (Railway zbiera stdout/stderr) tymi samymi regułami co webhook błędów (#571).
  * Next.js i biblioteki logują błędy przez `console.*` — owijamy te metody raz, w
  * `src/instrumentation.ts`, zanim wystartuje obsługa żądań.
  */

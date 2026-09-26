@@ -21,7 +21,7 @@ const { send } = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('resend', () => ({ Resend: class { emails = { send }; } }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/env', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/env')>()),
   isProductionMode: () => true,
@@ -132,6 +132,7 @@ describe('renderDelivery — marketing tylko z tożsamością, wypisaniem i text
 describe('worker: newsletter z kampanii', () => {
   function mockQueue(rows: unknown[]) {
     fakeDb.rpc('claim_email_batch', rows);
+    fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
   }
   const queued = {
@@ -142,6 +143,7 @@ describe('worker: newsletter z kampanii', () => {
     locale: 'nl',
     payload: { campaignId: 'c1', jobs: NL_JOBS },
     attempts: 0,
+    lock_token: 'lock-n1',
   };
 
   it('wysyła HTML + text/plain, nagłówki RFC 8058 i From z konfiguracji', async () => {
@@ -243,6 +245,29 @@ describe('ustawienia: zapis z dowodem zgody', () => {
       p_locale: 'nl',
       p_wording_version: emailConsentWordingVersion('nl', 'employer'),
     });
+  });
+
+  it('kontrola ujemna (#605): rola z formularza jest ignorowana, liczy się rola profilu sesji', async () => {
+    // Sesja kandydata, ale formularz podszywa się pod pracodawcę — dowód MUSI użyć roli sesji.
+    resetFakeDb({ id: PROFILE, role: 'candidate' }).rpc('set_notification_preferences', null);
+    const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
+    const { emailConsentWordingVersion } = await import('@/lib/email/consent-wording');
+    expect(
+      await updateNotificationPreferences({ ...values, locale: 'nl', role: 'employer' }),
+    ).toEqual({ ok: true });
+    const [call] = fakeDb.callsTo('set_notification_preferences');
+    expect(call?.args['p_wording_version']).toBe(emailConsentWordingVersion('nl', 'candidate'));
+    expect(call?.args['p_wording_version']).not.toBe(emailConsentWordingVersion('nl', 'employer'));
+  });
+
+  it('admin nie ma tego ekranu ustawień → PERMISSION_DENIED bez zapisu', async () => {
+    resetFakeDb({ id: PROFILE, role: 'admin' });
+    const { updateNotificationPreferences } = await import('@/lib/actions/notification-preferences');
+    expect(await updateNotificationPreferences({ ...values, locale: 'pl' })).toEqual({
+      ok: false,
+      error: 'PERMISSION_DENIED',
+    });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('gość → PERMISSION_DENIED bez zapisu; odmowa bazy → PERMISSION_DENIED, inny błąd → INTERNAL', async () => {

@@ -64,6 +64,9 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `FILE_DOWNLOAD_SECRET` | brak linków pobrania CV |
 | `HEALTH_CHECK_SECRET` | brak szczegółów `/api/health` i czujek `/api/health/ops` (#47) |
 | `DATABASE_OPS_URL` | czujki używają puli service (#47) |
+| `ERROR_WEBHOOK_URL` | brak powiadomień o błędach serwera na Discordzie (#571; `…/api/webhooks/<id>/<token>` albo z końcówką `/slack`; tylko serwer, nie jako zmienna publiczna); `/api/health` `checks.errorWebhook=false` |
+| `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_READ_ACCESS_KEY_ID`, `BACKUP_S3_READ_SECRET_ACCESS_KEY` | czujka wieku kopii w R2 (#569) zgłasza `backup_unconfigured` (503 `/api/health/ops`); tylko klucz ODCZYTU — klucz zapisu `BACKUP_S3_ACCESS_KEY_ID`/`BACKUP_S3_SECRET_ACCESS_KEY` wyłącznie w usłudze `backup` |
+| `BACKUP_S3_PREFIX`, `BACKUP_S3_REGION` | opcjonalnie; prefiks jak w usłudze `backup`, region domyślnie `auto` |
 | `SITE_ACCESS_PASSWORD` | bramka „w przygotowaniu” wyłączona — **zostaje do decyzji właściciela** |
 
 ### 2C. Opcjonalne
@@ -72,20 +75,22 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 |---|---|
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
 | `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance` — tylko po decyzji właściciela o terminach (#40) |
+| `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
-| `NEXT_PUBLIC_GA_MEASUREMENT_ID`, `NEXT_PUBLIC_META_PIXEL_ID` | tracking wyłącznie po zgodzie (Invariant #7) |
-| `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry bez DSN do decyzji o DPA/regionie (#502) |
+| `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` | Cloudflare Web Analytics (#570, zamiast Google Analytics i Meta Pixel — usunięte), beacon wyłącznie po zgodzie w kategorii analityka (Invariant #7) |
 | `AI_JOB_IMPORT_ENABLED`, `ANTHROPIC_API_KEY`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `ANTHROPIC_API_KEY` |
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `ANTHROPIC_API_KEY` |
 | `AI_TRANSLATION_ENABLED`, `AI_TRANSLATION_MODEL`, `AI_TRANSLATION_EFFORT` | tłumaczenia AI — rdzeń kolejki (#31, #32, `docs/AI_TRANSLATION.md`), domyślnie wyłączone; ten sam `ANTHROPIC_API_KEY` |
 | `PRACUJBE_RELEASE_VERSION` | tylko przy wydaniu 1.0.0 (#103) |
+| `TRUSTED_PROXY_HEADER` | domyślnie `x-real-ip` (brzeg Railway); `cf-connecting-ip`, gdy przed Railway stoi Cloudflare proxying ruch — jedyne źródło zaufanego IP klienta dla receiptu zgody, aplikacji bez konta i limitera (#588/#602). Nieznana wartość wraca do domyślnej. Bramka hasła w produkcji odrzuca żądanie bez tego nagłówka (503 + alarm w kanale błędów), zamiast liczyć je we wspólnym limicie (#625) |
 
 ### 2D. Nie ustawiać w produkcji
 
 | Zmienna | Powód |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` | kod ich nie czyta od #27 — jeśli zostały w usłudze, usuń |
+| `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry usunięte w #571 (kanał błędów = `ERROR_WEBHOOK_URL`) — jeśli zostały w usłudze, usuń |
 | `SEND_EMAIL_HOOK_SECRET` | hook GoTrue usunięty w #27 (kolejka auth PostgreSQL) |
 | `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | bezpłatne MVP (#51) |
 | `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
@@ -109,7 +114,9 @@ cronów (także poza Railway).
 | `cron-maintenance` | `http://<prywatna domena web>:<PORT>/api/maintenance` | = `MAINTENANCE_SECRET` | `0 * * * *` |
 | `cron-translation` (tylko po włączeniu `AI_TRANSLATION_ENABLED`, #33) | `http://<prywatna domena web>:<PORT>/api/translation/process` | = `MAINTENANCE_SECRET` | co 5 min |
 
-Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne).
+Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne). Usługa
+`backup` (#569) buduje się z `docker/backup/Dockerfile` i wysyła kopie do Cloudflare R2
+(`BACKUP_RESTORE.md`, „Kopia poza Railwayem”).
 
 ## 5. Odbiór
 

@@ -9,11 +9,11 @@ import {
   failAuthEmail, prepareAuthEmail,
 } from '../../src/lib/auth/email-outbox';
 import { AuthMailSendError, processAuthEmailBatch, type MailSender } from '../../src/lib/auth/email-worker';
-import { captureError } from '../../src/lib/sentry';
+import { captureError } from '../../src/lib/error-report';
 import { loadProductionMigrations } from '../../scripts/db/production-migrations.mjs';
 import { applyMigrations } from '../../scripts/db/migrate.mjs';
 
-vi.mock('../../src/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('../../src/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const baseURL = 'https://auth.example.invalid';
 const secret = 'auth-email-queue-test-not-for-production-0123456789';
@@ -73,7 +73,8 @@ afterAll(async () => {
 
 async function signup(instance = auth, locale = 'fr') {
   const input = { email: `${randomUUID()}@example.invalid`, firstName: 'Anna', lastName: 'Nowak', locale,
-    password: 'SignupPassword123', passwordConfirm: 'SignupPassword123', agreeTerms: true, privacyNoticeAck: true };
+    password: 'SignupPassword123', passwordConfirm: 'SignupPassword123', agreeTerms: true, privacyNoticeAck: true,
+    ageConfirmed: true, minAge: 18 };
   return withCandidateSignup(input, 'en', body => instance.api.signUpEmail({ body }));
 }
 

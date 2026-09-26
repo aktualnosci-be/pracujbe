@@ -72,6 +72,8 @@ export function JobImportPanel({
 
   function errorText(code: ErrorCode, reason?: ImportImageProblem): string {
     if (code === 'JOB_IMPORT_INVALID_FILE' && reason) return t(PROBLEM_KEY[reason]);
+    // Wspólny kod budżetu AI (#36) — komunikat właściwy dla importu (wypełnij ręcznie).
+    if (code === 'AI_BUDGET_EXCEEDED') return t('errorBudget');
     return tRoot(toUserMessageKey(code));
   }
 

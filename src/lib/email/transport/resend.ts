@@ -26,6 +26,11 @@ export function resendTransport(apiKey: string): MailTransport {
   return {
     provider: 'resend',
     async send(message, options) {
+      // #628: SDK nie przyjmuje sygnału przerwania — po terminie nie zaczynamy żądania, a
+      // trwające może się jeszcze zakończyć u dostawcy. Ponowienie z tym samym
+      // `Idempotency-Key` nie tworzy wtedy drugiego listu (Resend zwraca pierwszy wynik albo
+      // `concurrent_idempotent_requests`, który ponawiamy).
+      if (options.signal?.aborted) throw new MailSendError('provider_unavailable');
       const { headers, ...rest } = message;
       const result = await resend.emails.send(
         { ...rest, ...(headers && Object.keys(headers).length > 0 ? { headers } : {}) },

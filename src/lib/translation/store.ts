@@ -5,7 +5,7 @@ import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { TranslationFields } from '@/lib/translation/validate';
 
 /**
- * Dostęp workera do kolejki tłumaczeń (0127). Każda metoda = jedno wywołanie RPC (osobna,
+ * Dostęp workera do kolejki tłumaczeń (0145). Każda metoda = jedno wywołanie RPC (osobna,
  * krótka transakcja w bazie) — wywołanie dostawcy odbywa się pomiędzy nimi, nigdy wewnątrz
  * transakcji. Interfejs pozwala testować worker bez bazy.
  */
@@ -27,6 +27,7 @@ export interface ClaimedTranslationJob {
 
 export type CompleteOutcome = 'applied' | 'proposal' | 'superseded' | 'stale_lease' | 'not_found';
 export type FailOutcome = 'retry' | 'failed' | 'superseded' | 'stale_lease' | 'not_found';
+export type DeferOutcome = 'deferred' | 'superseded' | 'stale_lease' | 'not_found';
 
 export interface TranslationQueueStore {
   claim(limit: number, leaseSeconds: number): Promise<ClaimedTranslationJob[]>;
@@ -41,6 +42,8 @@ export interface TranslationQueueStore {
     retryable: boolean,
     retryAfterSeconds: number | null,
   ): Promise<FailOutcome>;
+  /** Odroczenie bez zużycia próby — model nie został wywołany (budżet AI, #36). */
+  defer(job: ClaimedTranslationJob, code: string, delaySeconds: number): Promise<DeferOutcome>;
 }
 
 /**
@@ -92,6 +95,21 @@ export function serviceTranslationStore(): TranslationQueueStore {
         return out ?? 'not_found';
       } catch {
         throw new Error('translation_fail_failed');
+      }
+    },
+    async defer(job, code, delaySeconds) {
+      try {
+        const out = await withServiceRole((tx) =>
+          rpc<DeferOutcome>(tx, 'defer_translation_job', {
+            p_job_id: job.job_id,
+            p_lease_id: job.lease_id,
+            p_error_code: code,
+            p_delay_seconds: delaySeconds,
+          }),
+        );
+        return out ?? 'not_found';
+      } catch {
+        throw new Error('translation_defer_failed');
       }
     },
   };

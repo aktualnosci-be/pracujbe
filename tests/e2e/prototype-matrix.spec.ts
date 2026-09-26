@@ -19,16 +19,21 @@ import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
  * - Z4: strony auth = nagłówek witryny `.pp-nav` + `.extended h1` (40/30 px, 750) + karta
  *   `.paper` (promień 22 px) z przyciskiem `.people .btn`.
  *
+ * - Przyciski paneli (#5): każdy przycisk o geometrii `.btn` w panelach kandydata, pracodawcy
+ *   i admina ma interlinię `normal` jak prototyp (który jej nie ustawia) — nie 20 px z `text-sm`.
+ *
  * Kontrola ujemna: te same asercje na wstrzykniętej pigułce (dawny `rounded-full`, 44 px)
  * muszą zwrócić rozbieżności — inaczej test niczego by nie pilnował.
  */
 
-type Expected = Partial<Record<'fontSize' | 'fontWeight' | 'letterSpacing' | 'borderRadius' | 'minHeight' | 'textTransform', string>>;
+type Expected = Partial<
+  Record<'fontSize' | 'fontWeight' | 'letterSpacing' | 'borderRadius' | 'minHeight' | 'textTransform' | 'lineHeight', string>
+>;
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
-/** `.people .btn` — geometria przycisku prototypu. */
-const BTN: Expected = { fontSize: '14px', fontWeight: '650', borderRadius: '11px', minHeight: '49px' };
+/** `.people .btn` — geometria przycisku prototypu (interlinia dziedziczona = `normal`). */
+const BTN: Expected = { fontSize: '14px', fontWeight: '650', borderRadius: '11px', minHeight: '49px', lineHeight: 'normal' };
 
 async function styleMismatches(locator: Locator, expected: Expected): Promise<string[]> {
   const actual = await locator.evaluate((el) => {
@@ -40,6 +45,7 @@ async function styleMismatches(locator: Locator, expected: Expected): Promise<st
       borderRadius: s.borderTopLeftRadius,
       minHeight: s.minHeight,
       textTransform: s.textTransform,
+      lineHeight: s.lineHeight,
     };
   });
   const out: string[] = [];
@@ -210,6 +216,48 @@ for (const locale of ['pl', 'en'] as const) {
   });
 }
 
+/** Trasy paneli (tryb demo) z przyciskami `.btn` prototypu. */
+const PANEL_BUTTON_ROUTES = [
+  '/candidate/profil',
+  '/candidate/onboarding',
+  '/employer',
+  '/employer/oferty/nowa',
+  '/employer/firma',
+  '/employer/zespol',
+  '/admin/firmy',
+];
+
+for (const locale of ['pl', 'fr'] as const) {
+  test(`#5: przyciski paneli = .people .btn z interlinią normal (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    let checked = 0;
+    const failures: string[] = [];
+    for (const route of PANEL_BUTTON_ROUTES) {
+      await page.goto(`/${locale}${route}`);
+      // Baner zgód tylko przy pierwszym wejściu (potem zapisana zgoda).
+      if (route === PANEL_BUTTON_ROUTES[0]) await rejectOptionalCookies(page, locale);
+      // Przyciski o geometrii `.btn` (min. 49 px, promień 11 px) w treści panelu.
+      const buttons = page.locator('main a, main button').filter({ visible: true });
+      const all = await buttons.all();
+      let onRoute = 0;
+      for (const el of all) {
+        const isBtn = await el.evaluate((node) => {
+          const s = getComputedStyle(node);
+          return s.minHeight === '49px' && s.borderTopLeftRadius === '11px';
+        });
+        if (!isBtn) continue;
+        onRoute += 1;
+        const mismatches = await styleMismatches(el, { lineHeight: 'normal', fontWeight: '650' });
+        if (mismatches.length) failures.push(`${route} „${(await el.innerText()).trim().slice(0, 40)}”: ${mismatches.join(', ')}`);
+      }
+      expect(onRoute, `${route}: brak przycisku .btn`).toBeGreaterThan(0);
+      checked += onRoute;
+    }
+    expect(failures).toEqual([]);
+    expect(checked).toBeGreaterThan(PANEL_BUTTON_ROUTES.length);
+  });
+}
+
 test('kontrola ujemna: pigułka (rounded-full, 44 px, 500) nie przechodzi asercji .btn', async ({ page }) => {
   await page.goto('/pl/nie-ma-takiej-strony-z5');
   // Po hydratacji — inaczej React usuwa dopisany węzeł z drzewa `main`.
@@ -228,6 +276,7 @@ test('kontrola ujemna: pigułka (rounded-full, 44 px, 500) nie przechodzi asercj
       expect.stringMatching(/^borderRadius/),
       expect.stringMatching(/^minHeight/),
       expect.stringMatching(/^fontWeight/),
+      expect.stringMatching(/^lineHeight/),
     ]),
   );
 });

@@ -12,6 +12,9 @@ import { validateTranslation } from '@/lib/translation/validate';
  *   3. walidacja kształtu i faktów — niepoprawny wynik nigdy nie jest zapisywany,
  *   4. `complete` (CAS po lease + kontrola bieżącej rewizji w bazie) albo `fail` z kodem.
  *
+ * Odmowa globalnego budżetu AI (#36) = model nie został wywołany: zadanie jest odraczane
+ * (`defer`) bez zużycia próby — przekroczony limit dzienny nie zamienia kolejki w trwałe błędy.
+ *
  * Log i monitoring dostają wyłącznie kody i liczniki — nigdy treści pól, promptu ani
  * komunikatów dostawcy.
  */
@@ -22,6 +25,8 @@ export interface TranslationBatchResult {
   proposals: number;
   superseded: number;
   retried: number;
+  /** Odroczone bez zużycia próby (budżet AI odmówił, model nie wołany). */
+  deferred: number;
   failed: number;
   /** Zadania, których wyniku nie zapisano (utracona dzierżawa albo błąd zapisu). */
   dropped: number;
@@ -36,7 +41,10 @@ export interface TranslationWorkerDeps {
   onEvent?: (event: { jobId: string; outcome: string; code?: string }) => void;
 }
 
-type JobOutcome = 'applied' | 'proposal' | 'superseded' | 'retry' | 'failed' | 'dropped';
+type JobOutcome = 'applied' | 'proposal' | 'superseded' | 'retry' | 'deferred' | 'failed' | 'dropped';
+
+/** Opóźnienie odroczenia: przekroczony limit — 1 h; budżet nieczytelny — 5 min. */
+export const BUDGET_DEFER_SECONDS = { budget_exceeded: 3600, budget_unavailable: 300 } as const;
 
 async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDeps): Promise<{ outcome: JobOutcome; code?: string }> {
   const { store, provider } = deps;
@@ -48,6 +56,16 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
       return { outcome: 'dropped' as const, code };
     } catch {
       // Dzierżawa wygaśnie, zadanie wróci do puli.
+      return { outcome: 'dropped' as const, code: 'store_error' };
+    }
+  }
+
+  async function defer(code: keyof typeof BUDGET_DEFER_SECONDS) {
+    try {
+      const r = await store.defer(job, code, BUDGET_DEFER_SECONDS[code]);
+      if (r === 'deferred' || r === 'superseded') return { outcome: r, code };
+      return { outcome: 'dropped' as const, code };
+    } catch {
       return { outcome: 'dropped' as const, code: 'store_error' };
     }
   }
@@ -64,6 +82,9 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
       fields: job.fields,
     });
   } catch (e) {
+    if (e instanceof TranslationProviderError && e.deferred && (e.reason === 'budget_exceeded' || e.reason === 'budget_unavailable')) {
+      return defer(e.reason);
+    }
     if (e instanceof TranslationProviderError) return fail(e.reason, e.retryable, e.retryAfterSeconds);
     return fail('provider_error', true);
   }
@@ -99,6 +120,7 @@ export async function processTranslationBatch(deps: TranslationWorkerDeps): Prom
     proposals: 0,
     superseded: 0,
     retried: 0,
+    deferred: 0,
     failed: 0,
     dropped: 0,
   };
@@ -109,6 +131,7 @@ export async function processTranslationBatch(deps: TranslationWorkerDeps): Prom
     else if (outcome === 'proposal') result.proposals++;
     else if (outcome === 'superseded') result.superseded++;
     else if (outcome === 'retry') result.retried++;
+    else if (outcome === 'deferred') result.deferred++;
     else if (outcome === 'failed') result.failed++;
     else result.dropped++;
   });

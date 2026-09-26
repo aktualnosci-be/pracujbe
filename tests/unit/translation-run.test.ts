@@ -40,6 +40,7 @@ function store(batches: number[]): TranslationQueueStore & { claims: number } {
     },
     complete: vi.fn(async () => 'applied' as const),
     fail: vi.fn(async () => 'failed' as const),
+    defer: vi.fn(async () => 'deferred' as const),
   };
   return s;
 }
@@ -77,6 +78,35 @@ describe('runTranslationQueue', () => {
     const r = await runTranslationQueue({ store: s, provider: bad });
     expect(r.failed).toBe(1);
     expect(s.complete).not.toHaveBeenCalled();
+  });
+
+  it('odmowa budżetu AI (#36) → zadania odroczone i zliczone w przebiegu, bez fail', async () => {
+    const s = store([2, 0]);
+    const refused: TranslationProvider = {
+      async translate() {
+        throw new TranslationProviderError('budget_exceeded');
+      },
+    };
+    const r = await runTranslationQueue({ store: s, provider: refused });
+    expect(r).toMatchObject({ claimed: 2, deferred: 2, failed: 0, retried: 0 });
+    expect(s.fail).not.toHaveBeenCalled();
+    expect(s.defer).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('createTranslationProvider', () => {
+  it('adapter Anthropic bez drugiego logu użycia (loguje i budżetuje sam, #36)', async () => {
+    vi.stubEnv('AI_TRANSLATION_ENABLED', '1');
+    vi.stubEnv('AI_TRANSLATION_PROVIDER', '');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    const { createTranslationProvider } = await import('@/lib/translation/run');
+    const { AnthropicTranslationProvider } = await import('@/lib/translation/anthropic-provider');
+    expect(createTranslationProvider()).toBeInstanceOf(AnthropicTranslationProvider);
+    // Kontrola ujemna: atrapa jest owinięta logiem (nie jest samą klasą atrapy).
+    vi.stubEnv('AI_TRANSLATION_PROVIDER', 'fixture');
+    const { FixtureTranslationProvider } = await import('@/lib/translation/provider');
+    expect(createTranslationProvider()).not.toBeInstanceOf(FixtureTranslationProvider);
+    vi.unstubAllEnvs();
   });
 });
 

@@ -23,7 +23,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { attempt, queryCount, queryOne, queryRows, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { effectiveJobStatus, isPastExpiry } from '@/lib/job-expiry';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import {
   parseScreeningAnswers,
   parseScreeningQuestions,

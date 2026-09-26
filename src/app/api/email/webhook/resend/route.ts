@@ -3,7 +3,7 @@ import { rpc } from '@/lib/db/sql';
 import { normalizeResendEvent } from '@/lib/email/provider-events';
 import { isProductionMode } from '@/lib/env';
 import { readTextWithLimit } from '@/lib/http/read-limited';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { verifyStandardWebhook } from '@/lib/webhooks';
 
 /**
@@ -105,7 +105,7 @@ export async function POST(request: Request): Promise<Response> {
       }),
     );
   } catch {
-    // Treść błędu bazy może zawierać adres — do Sentry idzie tylko rodzaj zdarzenia.
+    // Treść błędu bazy może zawierać adres — do kanału błędów idzie tylko rodzaj zdarzenia.
     captureError(new Error('record_email_event failed'), {
       area: 'email.webhook.record',
       kind: event.kind,

@@ -29,15 +29,23 @@ import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
+import { isAgeAttestationError } from '@/lib/age-policy/constants';
 import { roleFromProfileRead, type ProfileRole } from '@/lib/auth/profile-role';
 import { getAuthRuntime } from '@/lib/auth/runtime';
-import { withCandidateSignup, withEmployerSignup } from '@/lib/auth/signup-context';
+import {
+  signupEvidenceFrom,
+  withCandidateSignup,
+  withEmployerSignup,
+  withInvitedEmployerSignup,
+  type SignupEvidence,
+} from '@/lib/auth/signup-context';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { getDomainPool } from '@/lib/db/runtime';
 import { withUserTransaction } from '@/lib/db/transaction';
 import { env, isPortalAuthConfigured } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   loginSchema,
@@ -50,6 +58,11 @@ import {
   type RegisterEmployerInput,
   type ResetInput,
 } from '@/lib/validation/auth';
+import {
+  registerInvitedEmployerSchema,
+  type RegisterInvitedEmployerInput,
+} from '@/lib/validation/team-invite-signup';
+import { consumeTeamInvitationSignup, readTeamInvitationSignup } from '@/lib/team/invite-signup';
 
 /** Token resetu Better Auth: losowy identyfikator URL-safe (bez kropek i ukośników). */
 const resetTokenSchema = z.string().min(16).max(256).regex(/^[A-Za-z0-9_-]+$/);
@@ -166,7 +179,7 @@ async function sessionCookieNames(auth: AuthRuntime): Promise<string[]> {
 
 /**
  * Cofa świeżo wydaną sesję (np. brak znanej roli po logowaniu): usuwa ją z bazy i kasuje cookie
- * z odpowiedzi. Best-effort — błąd trafia do Sentry, a użytkownik i tak dostaje błąd, nie panel.
+ * z odpowiedzi. Best-effort — błąd trafia do kanału błędów, a użytkownik i tak dostaje błąd, nie panel.
  */
 async function discardSession(
   auth: AuthRuntime,
@@ -265,6 +278,16 @@ async function rememberVerifyNext(next: string | null): Promise<void> {
   });
 }
 
+/** Komunikat błędu bazy (także opakowany przez SDK w `cause`) o braku ważnej deklaracji wieku. */
+function isAgeAttestationMessage(error: unknown): boolean {
+  for (let e: unknown = error, depth = 0; e && depth < 4; depth += 1) {
+    const message = (e as { message?: unknown }).message;
+    if (typeof message === 'string' && isAgeAttestationError(message)) return true;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 /**
  * Wspólna ścieżka rejestracji. Profil, preferowany język i receipty akceptacji regulaminu
  * i polityki prywatności zapisują triggery 0008/0059 w TEJ SAMEJ transakcji co konto; zlecenie
@@ -272,13 +295,23 @@ async function rememberVerifyNext(next: string | null): Promise<void> {
  * adres daje ten sam wynik co nowy (SDK zwraca neutralny sukces, bez zmiany istniejącego konta).
  */
 async function signUp(
-  run: (action: (body: { email: string; password: string; name: string }) => Promise<unknown>) => Promise<unknown>,
+  run: (
+    action: (body: { email: string; password: string; name: string }) => Promise<unknown>,
+    evidence: SignupEvidence,
+  ) => Promise<unknown>,
 ): Promise<void> {
   const auth = await portalAuth();
   const requestHeaders = await headers();
+  // Dowód akceptacji w receipcie: adres tylko z zaufanego nagłówka proxy (nigdy X-Forwarded-For).
+  const evidence = signupEvidenceFrom(requestHeaders, trustedClientIp(requestHeaders));
   try {
-    await run((body) => auth.api.signUpEmail({ body, headers: requestHeaders }));
+    await run((body) => auth.api.signUpEmail({ body, headers: requestHeaders }), evidence);
   } catch (error) {
+    // #492: trigger 0059/0126 odrzuca deklarację wieku poniżej BIEŻĄCEGO progu (zmieniony po
+    // wyświetleniu formularza) — własny kod zamiast INTERNAL.
+    if (isAgeAttestationMessage(error)) {
+      throw new AppError('AGE_ATTESTATION_REQUIRED', { cause: error, context: { reason: 'signup_age_policy' } });
+    }
     throw mapAuthError(error);
   }
 }
@@ -307,7 +340,7 @@ export async function registerCandidate(
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
-    await signUp((action) => withCandidateSignup(parsed.data, locale, action));
+    await signUp((action, evidence) => withCandidateSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(safeNextPath(next));
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
@@ -336,7 +369,7 @@ export async function registerEmployer(
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
-    await signUp((action) => withEmployerSignup(parsed.data, locale, action));
+    await signUp((action, evidence) => withEmployerSignup(parsed.data, locale, action, evidence));
     await rememberVerifyNext(null);
   } catch (e) {
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
@@ -346,8 +379,54 @@ export async function registerEmployer(
 }
 
 /**
+ * Rejestracja pracodawcy z linku zaproszenia do zespołu (0121). Token z fragmentu `#token=`
+ * musi wskazywać oczekujące, niezużyte zaproszenie dla TEGO adresu — inaczej `AUTH_LINK_INVALID`
+ * (formularz nie zmienia adresu, więc inny adres = manipulacja). Konto powstaje bez firmy
+ * (bez `company_name` w metadanych), a token zostaje zużyty. Zaproszenie przyjmuje się w panelu
+ * po potwierdzeniu adresu (`get_my_company_invitations` wymaga zweryfikowanego e-maila).
+ */
+export async function registerInvitedEmployer(
+  input: RegisterInvitedEmployerInput,
+  inviteToken: string,
+  botCheckToken?: string | null,
+): Promise<AuthActionResult> {
+  if (!(await checkRateLimit('register', { max: 5, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  const botCheck = await enforceTurnstile('register', botCheckToken);
+  if (botCheck) return { ok: false, error: botCheck };
+
+  const parsed = registerInvitedEmployerSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  const locale = parsed.data.locale ?? (await currentLocale());
+  const email = parsed.data.email.toLowerCase();
+
+  try {
+    const invitation = await readTeamInvitationSignup(inviteToken);
+    if (invitation.status !== 'valid' || invitation.email.toLowerCase() !== email) {
+      return { ok: false, error: 'AUTH_LINK_INVALID' };
+    }
+    await signUp((action, evidence) => withInvitedEmployerSignup(parsed.data, locale, action, evidence));
+    await rememberVerifyNext(null);
+    // Konto już powstało; nieudane zużycie (np. równoległe wysłanie) nie cofa rejestracji —
+    // zaproszenie i tak przyjmuje tylko właściciel zweryfikowanego adresu.
+    try {
+      await consumeTeamInvitationSignup(inviteToken, email);
+    } catch (e) {
+      captureError(e, { area: 'auth.registerInvitedEmployer.consume' });
+    }
+  } catch (e) {
+    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+  }
+
+  return redirect({ href: '/potwierdzenie', locale });
+}
+
+/**
  * Zamawia link resetu hasła. Odpowiedź jest ZAWSZE neutralna (nie ujawnia, czy konto istnieje):
- * także awaria zapisu zlecenia dla istniejącego konta daje ten sam wynik (błąd trafia do Sentry).
+ * także awaria zapisu zlecenia dla istniejącego konta daje ten sam wynik (błąd trafia do kanału błędów).
  * Wyjątki: limit prób, bot-check, walidacja i brak konfiguracji kont (INTERNAL).
  * Język wiadomości i docelowej strony wynika z profilu ODBIORCY (kolejka 0061), nie z formularza.
  */
@@ -513,7 +592,7 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
 
 /**
  * Wylogowanie: unieważnia sesję w bazie i usuwa cookie. Awaria bazy nie jest raportowana jako
- * globalne wylogowanie — cookie tej przeglądarki i tak znika, błąd trafia do Sentry.
+ * globalne wylogowanie — cookie tej przeglądarki i tak znika, błąd trafia do kanału błędów.
  * Zawsze przekierowuje na stronę logowania.
  */
 export async function signOut(): Promise<void> {

@@ -5,7 +5,7 @@ wpięcie ofert (#33, sekcja „Oferty” niżej). Profile — #34. Domyślnie wy
 Języki: tylko pl/nl/fr/en (decyzja właściciela; bez ro/uk z #29/#38). Plan całości:
 `docs/AI_MULTILINGUAL_PLAN.md`.
 
-## Kolejka i rewizje (migracja 0127)
+## Kolejka i rewizje (migracja 0145)
 
 | Tabela | Rola |
 |---|---|
@@ -32,6 +32,17 @@ Funkcje wyłącznie dla `service_role`:
   `superseded`, `stale_lease`, `not_found`.
 - `fail_translation_job(job, lease, kod, ponawialny, retry_after_s)` — backoff 30 s·2ⁿ⁻¹
   (max 1 h, jitter ±20%, Retry-After jako dolna granica) albo `failed`. Kod bez treści.
+- `defer_translation_job(job, lease, kod, opóźnienie_s)` — globalny budżet AI (#36) odmówił,
+  model nie został wywołany: zadanie wraca po opóźnieniu (1 s–1 h) i oddaje próbę z claim.
+  Worker: `budget_exceeded` → 1 h, `budget_unavailable` → 5 min.
+
+## Koszt (#36)
+
+Adapter Anthropic woła model wyłącznie przez `withAiBudget` (`src/lib/ai/budget.ts`):
+rezerwacja górnej granicy (`estimateTranslationCost`: prompt, pola z glosariuszem, schemat,
+pełne `max_tokens` = 16000) przed API, rozliczenie tokenami z `usage` (także przy odmowie
+modelu). Brak bazy zadań albo błąd rezerwacji = brak wywołania (fail-closed). Każde wywołanie
+= jeden wiersz logu użycia bez treści (`ai_usage`, #489).
 - `deactivate_translation_source(typ, id, purge)` — ukrycie (zaległe zadania `superseded`,
   spóźniony wynik niczego nie publikuje) albo purge (usunięcie konta/oferty: rewizje, zadania,
   przekłady i korekty; opóźniony worker dostaje `not_found`).
@@ -69,7 +80,7 @@ ujemną TR31-N (bez kontroli rewizji spóźniony wynik v1 zostałby opublikowany
 Logi/monitoring dostają tylko kody i liczniki (`TranslationBatchResult`, `onEvent`) — nigdy
 treść pól, promptu ani komunikatu dostawcy.
 
-## Oferty (#33, migracja 0133)
+## Oferty (#33, migracja 0146)
 
 Kolejka oferty jest skutkiem ZATWIERDZONEGO stanu oferty, nie osobnym wywołaniem w każdej
 ścieżce zapisu. Odroczone triggery (`constraint trigger … initially deferred`) na `jobs`,
@@ -97,7 +108,9 @@ limit rdzenia (80 pól / 60 000 znaków) publikuje się normalnie, tłumaczenie 
 
 Worker: `POST /api/translation/process` (`MAINTENANCE_SECRET`/`CRON_SECRET`), kilka paczek do
 pustej kolejki albo 20 s (`src/lib/translation/run.ts`); bez flagi odpowiada `skipped` bez
-bazy i dostawcy. Każde wywołanie modelu = wiersz logu użycia AI (bez treści). Cron: usługa
+bazy i dostawcy; `GET` = `405` bez autoryzacji i efektów (#614). Każde wywołanie modelu =
+wiersz logu użycia AI (bez treści) i rezerwacja budżetu AI (#36); odmowa budżetu odracza zadania
+bez zużycia prób (licznik `deferred` w odpowiedzi). Cron: usługa
 `cron-translation` w `docs/railway/KONFIGURACJA_PRODUKCJI.md` — tylko po decyzji o włączeniu.
 
 Dowód: `rls.sql` sekcja TR33 (publikacja, pola wymagań, rollback, stawka bez rewizji, jedna
@@ -124,6 +137,6 @@ scaleniu: `costBudgeted: true` w inwentarzu i rezerwacja budżetu przed wywołan
 
 ## Otwarte (poza tym krokiem)
 
-Wpięcie profili (#34), budżet i raport kosztów (#36),
+Wpięcie profili (#34),
 benchmark i wybór modelu/effortu (#30), UI stanu tłumaczenia i SEO, bramka prywatności
 przed prawdziwymi profilami (umowa powierzenia, retencja dostawcy — decyzja właściciela).

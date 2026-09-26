@@ -137,7 +137,7 @@ Repo PUBLICZNE — nie publikuj szczegółów luk. Tylko PL/NL/FR/EN, teksty w s
 ani APP_MODE. Zachowaj SITE_ACCESS_PASSWORD. Bez zmian w .github/workflows.
 Migracja → tymczasowy numer „ostatni w main + 1”, ostateczny nada integrator.
 Test + kontrola ujemna dla każdej zmiany zachowania. Przed pushem: npm run verify,
-build (NEXT_PUBLIC_GA_MEASUREMENT_ID=G-TEST000000 NEXT_PUBLIC_META_PIXEL_ID=000000000000000),
+build (NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN=e2e-cf-test-token),
 dotknięte E2E (PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium CI=1 PLAYWRIGHT_SKIP_BUILD=1).
 Sama otwórz PR do main, obserwuj go i doprowadź CI do 9/9. NIE scalaj — scala integrator.
 ```

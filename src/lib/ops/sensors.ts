@@ -1,5 +1,7 @@
 import { z } from 'zod/v3';
 
+import { aiBudgetLevel, type AiBudgetStatus } from '@/lib/admin/ai-costs';
+
 /**
  * Czujki operacyjne (#47). Baza zwraca same liczby (`public.ops_metrics()`, 0096);
  * tutaj — walidacja kształtu i progi alarmowe. Moduł jest czysty (bez I/O), więc
@@ -28,6 +30,10 @@ export const opsMetricsSchema = z.object({
     staleCheckoutIntents: count,
   }),
   connections: z.object({ used: count, max: count, reserved: count }),
+  /** #574 (0127): kolejka fizycznego usuwania obiektów storage; brak = baza sprzed 0127. */
+  storageDeletion: z
+    .object({ pending: count, oldestPendingAgeSeconds: count, deadLetters: count })
+    .optional(),
   // #44 (0118). Brak sekcji = baza sprzed migracji: czujki poczty milczą zamiast 503.
   mail: z.object({
     sentLast24h: count,
@@ -57,6 +63,11 @@ export const OPS_THRESHOLDS = {
   authEmailOldestReadySeconds: 5 * 60,
   /** Udział połączeń PostgreSQL dostępnych dla aplikacji (max − zarezerwowane). */
   connectionsRatio: 0.8,
+  /**
+   * #574: obiekt storage czeka na fizyczne usunięcie dłużej niż 24 h (cel ≤ 72 h,
+   * `retention_policies.storage_physical_deletion`) — alarm, zanim termin minie.
+   */
+  storageDeletionOldestSeconds: 24 * 60 * 60,
   /** #44: poniżej tej liczby listów w oknie odsetek to szum (1 odbicie na 10 = 10%). */
   mailMinSample: 50,
   /** Odsetek trwałych odbić kohorty 24 h — ponad 5% dostawcy zaczynają ograniczać wysyłkę. */
@@ -85,6 +96,12 @@ export type OpsSignal =
   | 'maintenance_lag'
   | 'db_connections'
   | 'app_pool_waiting'
+  | 'storage_deletion_age'
+  | 'storage_deletion_dead_letter'
+  | 'ai_budget_exhausted'
+  | 'ai_budget_near_limit'
+  | 'ai_budget_stale_reservation'
+  | 'ai_budget_unavailable'
   | 'mail_hard_bounce_rate'
   | 'mail_hard_bounce_rising'
   | 'mail_complaint_rate'
@@ -103,7 +120,15 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
   return parsed.success ? parsed.data : null;
 }
 
-export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = null): OpsEvaluation {
+/**
+ * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0120): `null` = odczyt się nie
+ *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
+ */
+export function evaluateOps(
+  metrics: OpsMetrics,
+  pool: AppPoolStats | null = null,
+  aiBudget?: AiBudgetStatus | null,
+): OpsEvaluation {
   const alerts: OpsSignal[] = [];
   const warnings: OpsSignal[] = [];
 
@@ -133,8 +158,28 @@ export function evaluateOps(metrics: OpsMetrics, pool: AppPoolStats | null = nul
 
   if (metrics.mail) evaluateMail(metrics.mail, alerts, warnings);
 
+  // #574: 20 nieudanych prób = dead-letter (obiekt CV został w storage) — zawsze alarm.
+  const storage = metrics.storageDeletion;
+  if (storage) {
+    if (storage.oldestPendingAgeSeconds > OPS_THRESHOLDS.storageDeletionOldestSeconds) {
+      alerts.push('storage_deletion_age');
+    }
+    if (storage.deadLetters > 0) alerts.push('storage_deletion_dead_letter');
+  }
+
   // Żądania czekające na połączenie puli procesu = pula za mała albo zablokowane zapytania.
   if (pool && pool.waiting > 0) warnings.push('app_pool_waiting');
+
+  // Budżet AI (#36): wyczerpany limit (albo limit 0 / brak limitu) = funkcje AI zablokowane →
+  // alarm; ≥ 80% limitu i rezerwacje bez rozliczenia = ostrzeżenia.
+  if (aiBudget === null) {
+    warnings.push('ai_budget_unavailable');
+  } else if (aiBudget) {
+    const levels = [aiBudgetLevel(aiBudget.day), aiBudgetLevel(aiBudget.month)];
+    if (levels.includes('exhausted')) alerts.push('ai_budget_exhausted');
+    else if (levels.includes('warning')) warnings.push('ai_budget_near_limit');
+    if (aiBudget.staleReservations > 0) warnings.push('ai_budget_stale_reservation');
+  }
 
   return { status: alerts.length > 0 ? 'alert' : 'ok', alerts, warnings };
 }

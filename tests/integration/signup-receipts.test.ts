@@ -74,6 +74,7 @@ describe('Atomowe receipty rejestracji', () => {
   it.each(['pl', 'nl', 'fr', 'en'])('v2 (#493): osobne receipty i zgoda opcjonalna dla %s', async locale => {
     const id = await insert({
       role: 'candidate', locale, agree_terms: true, privacy_notice_ack: true, signup_receipt_version: 2,
+      age_min_attested: 18,
       optional_consents: { email_marketing: locale === 'fr' },
       consent_wording: { terms: `sha256:${'a'.repeat(64)}`, privacy: `sha256:${'b'.repeat(64)}`, email_marketing: `sha256:${'c'.repeat(64)}` },
     });
@@ -87,7 +88,39 @@ describe('Atomowe receipty rejestracji', () => {
     const events = await admin!.query('SELECT category, granted, source, locale, wording_version FROM public.email_consent_events WHERE profile_id=$1', [id]);
     expect(events.rows).toEqual(locale === 'fr'
       ? [{ category: 'marketing', granted: true, source: 'signup', locale, wording_version: `sha256:${'c'.repeat(64)}` }]
-      : []);
+      : []);    // #492: 0126 redefiniuje ten sam trigger — ścieżka v2 zapisuje też deklarację wieku.
+    const age = await admin!.query('SELECT min_age, source FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
+    expect(age.rows).toEqual([{ min_age: 18, source: 'signup' }]);
+  });
+
+  // 0132: dowód akceptacji (zaufany adres + user-agent) trafia do receiptów, nie zostaje w koncie.
+  it.each([1, 2])('v%i: IP i user-agent w receiptach, usunięte z metadanych konta', async version => {
+    const id = await insert({
+      role: 'employer', locale: 'fr', agree_terms: true, signup_receipt_version: version,
+      ...(version === 2 ? { privacy_notice_ack: true, optional_consents: {}, consent_wording: {} } : {}),
+      company_name: 'Firma', receipt_ip: '203.0.113.9', receipt_user_agent: 'Mozilla/5.0 (test)',
+    });
+    const receipts = await admin!.query(
+      'SELECT host(ip_address) AS ip, user_agent FROM public.document_acceptances WHERE profile_id=$1', [id]);
+    expect(receipts.rows).toEqual([
+      { ip: '203.0.113.9', user_agent: 'Mozilla/5.0 (test)' },
+      { ip: '203.0.113.9', user_agent: 'Mozilla/5.0 (test)' },
+    ]);
+    const meta = (await admin!.query('SELECT raw_user_meta_data AS m FROM auth.users WHERE id=$1', [id])).rows[0].m;
+    expect(meta).not.toHaveProperty('receipt_ip');
+    expect(meta).not.toHaveProperty('receipt_user_agent');
+    // Pozostałe metadane (np. nazwa firmy do bootstrapu) zostają.
+    expect(meta).toMatchObject({ company_name: 'Firma', locale: 'fr' });
+  });
+
+  it('niepoprawny adres → receipt bez IP; user-agent obcięty do 512 znaków', async () => {
+    const id = await insert({
+      role: 'employer', locale: 'pl', agree_terms: true, signup_receipt_version: 1,
+      receipt_ip: 'nie-adres', receipt_user_agent: 'U'.repeat(900),
+    });
+    const receipts = await admin!.query(
+      'SELECT ip_address, char_length(user_agent) AS ua FROM public.document_acceptances WHERE profile_id=$1', [id]);
+    expect(receipts.rows).toEqual([{ ip_address: null, ua: 512 }, { ip_address: null, ua: 512 }]);
   });
 
   // Nieznany język odrzuca klucz obcy profiles → supported_locales (0069, 23503) zanim
@@ -107,6 +140,28 @@ describe('Atomowe receipty rejestracji', () => {
       expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
     });
 
+  // #492 (0126): kandydat deklaruje próg wieku w tej samej transakcji co konto.
+  it('zapisuje deklarację progu wieku kandydata (bez daty urodzenia)', async () => {
+    const id = await insert({ role: 'candidate', locale: 'nl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 });
+    const rows = await admin!.query('SELECT min_age, source, locale FROM public.candidate_age_attestations WHERE profile_id=$1', [id]);
+    expect(rows.rows).toEqual([{ min_age: 18, source: 'signup', locale: 'nl' }]);
+  });
+
+  it.each([
+    [{}], [{ age_min_attested: 15 }], [{ age_min_attested: '18' }],
+    // v2 (#493) bez deklaracji — ta sama odmowa.
+    [{ signup_receipt_version: 2, privacy_notice_ack: true }],
+  ] as const)(
+    'odrzuca rejestrację kandydata bez ważnej deklaracji wieku: %j', async (age) => {
+      const id = randomUUID();
+      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, ...age }, id))
+        .rejects.toMatchObject({ message: expect.stringContaining('AGE_ATTESTATION_REQUIRED') });
+      for (const table of ['auth.users', 'public.profiles']) {
+        expect((await admin!.query(`SELECT id FROM ${table} WHERE id=$1`, [id])).rows).toHaveLength(0);
+      }
+      expect((await admin!.query('SELECT id FROM public.candidate_age_attestations WHERE profile_id=$1', [id])).rows).toHaveLength(0);
+    });
+
   it('nie przypisuje fikcyjnej akceptacji kontu technicznemu bez markera', async () => {
     const id = await insert({ role: 'candidate', locale: 'pl' });
     expect((await admin!.query('SELECT id FROM public.document_acceptances WHERE profile_id=$1', [id])).rows).toHaveLength(0);
@@ -118,7 +173,8 @@ describe('Atomowe receipty rejestracji', () => {
       CREATE TRIGGER fail_receipt_test BEFORE INSERT ON public.document_acceptances FOR EACH ROW EXECUTE FUNCTION public.fail_receipt_test();`);
     const id = randomUUID();
     try {
-      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1 }, id)).rejects.toThrow('kontrolowana awaria receiptu');
+      await expect(insert({ role: 'candidate', locale: 'pl', agree_terms: true, signup_receipt_version: 1, age_min_attested: 18 }, id))
+        .rejects.toThrow('kontrolowana awaria receiptu');
       expect((await admin!.query('SELECT id FROM auth.users WHERE id=$1', [id])).rows).toHaveLength(0);
       expect((await admin!.query('SELECT id FROM public.profiles WHERE id=$1', [id])).rows).toHaveLength(0);
     } finally {

@@ -20,7 +20,7 @@ vi.mock('@/lib/db/transaction', async () => (await import('../helpers/auth-porta
 vi.mock('@/lib/auth/bootstrap-company', () => ({ bootstrapCompany: mocks.bootstrap }));
 vi.mock('better-auth/crypto', () => ({ verifyJWT: mocks.verifyJWT }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 import {
   SESSION_COOKIE,

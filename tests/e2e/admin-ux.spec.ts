@@ -130,6 +130,33 @@ test('admin #416: filtr „Rozwiązane” i kafelek otwartych zgłoszeń', async
   await expect(page.getByRole('main').getByText(t.reportsEmpty)).toBeVisible();
 });
 
+test('admin #42: kolejka DSA — domyślnie priorytet i termin, filtr „oflagowane”', async ({ page }) => {
+  const t = admin('pl');
+  await page.goto('/pl/admin/zgloszenia?kind=dsa_notice');
+  await rejectOptionalCookies(page, 'pl');
+  const main = page.getByRole('main');
+  const sortNav = main.getByRole('navigation', { name: t.reportsSortLabel });
+  await expect(sortNav.getByRole('link', { name: t.reportsSortPriority })).toHaveAttribute('aria-current', 'true');
+  await sortNav.getByRole('link', { name: t.reportsSortNewest }).click();
+  await expect(page).toHaveURL(/\/pl\/admin\/zgloszenia\?kind=dsa_notice&sort=newest$/);
+  await expect(sortNav.getByRole('link', { name: t.reportsSortNewest })).toHaveAttribute('aria-current', 'true');
+
+  // Sprawa demo nie jest oflagowana: filtr ją ukrywa, „Wszystkie sprawy” pokazuje (kontrola ujemna).
+  const flagNav = main.getByRole('navigation', { name: t.reportsFlaggedLabel });
+  await flagNav.getByRole('link', { name: t.reportsFlaggedOnly }).click();
+  await expect(page).toHaveURL(/flagged=1/);
+  await expect(page).toHaveURL(/sort=newest/);
+  await expect(main.getByText(t.reportsEmpty)).toBeVisible();
+  await expect(main.getByText('DSA-7F3A-19C2-B4E0-5D11')).toHaveCount(0);
+  await flagNav.getByRole('link', { name: t.reportsFlaggedAll }).click();
+  await expect(main.getByRole('listitem').filter({ hasText: 'DSA-7F3A-19C2-B4E0-5D11' })).toHaveCount(1);
+  // Po nawigacji klienckiej metadane strony dynamicznej (tytuł) są strumieniowane po treści:
+  // lista bywa już widoczna, a <title> jeszcze nie — axe łapał wtedy `document-title`.
+  // Czekamy na stan końcowy (właściwy tytuł), a nie na stan pośredni.
+  await expect(page).toHaveTitle(new RegExp(t.reportsTitle));
+  expect(await blockingViolations(page)).toEqual([]);
+});
+
 test('admin #42: sprawę DSA rozstrzyga decyzja z uzasadnieniem, nie sama zmiana statusu', async ({
   page,
 }) => {

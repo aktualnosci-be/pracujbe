@@ -6,7 +6,7 @@ import { getActiveCompany } from '@/lib/company-context';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { canManageTeam } from '@/lib/team/permissions';
 
 /**

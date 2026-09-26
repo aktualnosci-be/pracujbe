@@ -44,7 +44,7 @@ vi.mock('@/lib/rate-limit', () => ({
     return state.allowed;
   },
 }));
-vi.mock('@/lib/sentry', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/campaign-banner/font', () => ({ bannerFontBase64: async () => undefined }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale, namespace }: { locale: string; namespace: string }) => {

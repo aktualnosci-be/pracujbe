@@ -1,7 +1,8 @@
 import { z } from 'zod/v3';
 
+import { minAgeSchema } from '@/lib/age-policy';
 import { GUEST_EMAIL_MAX, GUEST_MESSAGE_MAX, GUEST_NAME_MAX } from '@/lib/guest-apply/limits';
-import { localeSchema } from '@/lib/validation/auth';
+import { localeSchema } from '@/lib/validation/locale';
 import {
   APPLICATION_AVAILABILITY_VALUES,
   screeningAnswersSchema,
@@ -36,6 +37,9 @@ export const guestApplicationSchema = z.object({
   ),
   locale: localeSchema,
   agreeTerms: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.privacyNoticeRequired' }) }),
+  /** #492: deklaracja „mam co najmniej {minAge} lat” — bez daty urodzenia (baza porównuje próg). */
+  ageConfirmed: z.literal(true, { errorMap: () => ({ message: 'guestApply.error.ageConfirmRequired' }) }),
+  minAge: minAgeSchema,
   idempotencyKey: z.string().uuid('guestApply.error.idempotencyKeyInvalid'),
   /**
    * #101: odpowiedzi na pytania oferty — ten sam kształt co w zwykłej aplikacji. Wymagalność,

@@ -11,7 +11,7 @@
  * czas przez `Intl.RelativeTimeFormat` w języku odbiorcy. Zwracamy ścieżki BEZ prefiksu
  * locale — prefiks dołoży `Link`/nawigacja z `@/i18n/navigation`.
  *
- * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do Sentry
+ * Błędy warstwy danych NIE pokazują technikaliów (Invariant #8): logujemy do kanału błędów
  * i zwracamy osobny stan błędu, bez niepewnego licznika i linków.
  */
 
@@ -19,7 +19,8 @@ import { getTranslations } from 'next-intl/server';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryCount, queryRows } from '@/lib/db/sql';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
+import { createAppDateFormatter } from '@/lib/datetime';
 import { routing, type Locale } from '@/i18n/routing';
 
 /* ---------------------------------------------------------------------------
@@ -244,7 +245,7 @@ function demoNotifications(
 
 /**
  * Ostatnie powiadomienia bieżącego użytkownika (created_at desc, limit 20) + licznik
- * nieprzeczytanych. Bez env → 3 pozycje DEMO (linki wg `demoRole`). Błąd → Sentry + stan błędu.
+ * nieprzeczytanych. Bez env → 3 pozycje DEMO (linki wg `demoRole`). Błąd → kanał błędów + stan błędu.
  */
 export async function getNotifications(
   locale: string,
@@ -294,6 +295,136 @@ export async function getNotifications(
     return { status: 'ready', items, unread };
   } catch (error) {
     captureError(error, { area: 'notifications.getNotifications' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Pełna lista powiadomień (#148): `/candidate/powiadomienia`, `/employer/powiadomienia`
+ * ------------------------------------------------------------------------- */
+
+export const NOTIFICATION_PAGE_SIZE = 20;
+
+/** Filtr z URL listy: tylko dokładne `?nieprzeczytane=1` włącza widok nieprzeczytanych. */
+export function parseUnreadFilter(value: string | string[] | undefined): boolean {
+  return value === '1';
+}
+
+/** Kursor strony: `created_at` + UUID ostatniej pozycji (stabilny przy równym czasie). */
+export interface NotificationCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface NotificationListItem extends NotificationView {
+  /** Czas utworzenia (ISO) — kursor i atrybut `dateTime`. */
+  createdAt: string;
+  /** Data i godzina w Europe/Brussels w języku odbiorcy (obok czasu względnego). */
+  dateLabel: string;
+}
+
+export interface NotificationsPage {
+  items: NotificationListItem[];
+  nextCursor: NotificationCursor | null;
+  /** Wszystkie nieprzeczytane (osobny count, niezależny od strony i filtra). */
+  unread: number;
+}
+
+export type NotificationsPageResult =
+  | { status: 'ready'; page: NotificationsPage }
+  | { status: 'error' };
+
+export interface NotificationsPageOptions {
+  /** Tylko nieprzeczytane (`read_at is null`). */
+  unreadOnly?: boolean;
+  cursor?: NotificationCursor | null;
+  /** Panel dla danych DEMO (bez sesji). */
+  demoRole?: DemoRole;
+}
+
+/**
+ * Strona powiadomień bieżącego użytkownika (created_at desc, id desc; po 20). Odczyt pod
+ * sesją/RLS (`notifications_select_own`) — to samo źródło tytułów i celów (`resolveHref`) co
+ * dropdown. Kursor = porównanie krotek, walidowany Zodem w Server Action. Bez env → pozycje
+ * DEMO (bez kolejnych stron). Błąd → kanał błędów + stan błędu (Invariant #8).
+ */
+export async function getNotificationsPage(
+  locale: string,
+  { unreadOnly = false, cursor = null, demoRole = 'candidate' }: NotificationsPageOptions = {},
+): Promise<NotificationsPageResult> {
+  const resolvedLocale = toLocale(locale);
+  const t = await getTranslations({ locale: resolvedLocale, namespace: 'notifications' });
+  const formatDate = createAppDateFormatter(resolvedLocale, { withTime: true, fallback: '' });
+
+  if (!isPortalDataConfigured()) {
+    if (cursor) return { status: 'ready', page: { items: [], nextCursor: null, unread: 0 } };
+    const now = Date.now();
+    const all = DEMO_SEEDS.map((seed): NotificationListItem => {
+      const createdAt = new Date(now - seed.minutesAgo * MINUTE).toISOString();
+      return {
+        id: seed.id,
+        title: t(titleKeyForType(seed.type)),
+        meta: formatRelativeTime(createdAt, resolvedLocale),
+        unread: seed.unread,
+        href: resolveHref(seed.entityType, demoRole),
+        createdAt,
+        dateLabel: formatDate(createdAt),
+      };
+    });
+    return {
+      status: 'ready',
+      page: {
+        items: unreadOnly ? all.filter((item) => item.unread) : all,
+        nextCursor: null,
+        unread: all.filter((item) => item.unread).length,
+      },
+    };
+  }
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'ready', page: { items: [], nextCursor: null, unread: 0 } };
+    const role = me.role;
+    if (role !== 'candidate' && role !== 'employer') {
+      throw new Error('Notification profile role unavailable');
+    }
+
+    const { rows, unread } = await withPortalTransaction(me, async (tx) => ({
+      rows: await queryRows(tx, 'notifications.page',
+        `SELECT id, type, data, entity_type, entity_id, read_at, created_at
+           FROM public.notifications
+          WHERE profile_id = $1
+            AND ($2::boolean = false OR read_at IS NULL)
+            AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
+          ORDER BY created_at DESC, id DESC
+          LIMIT $5`,
+        [me.id, unreadOnly, cursor?.createdAt ?? null, cursor?.id ?? null, NOTIFICATION_PAGE_SIZE + 1]),
+      unread: await queryCount(tx, 'notifications.unread',
+        'SELECT 1 FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL', [me.id]),
+    }));
+
+    const visible = asArr(rows).slice(0, NOTIFICATION_PAGE_SIZE);
+    const items = visible.map((row): NotificationListItem => {
+      const r = asRecord(row);
+      const type = asStr(r['type'], 'system');
+      const createdAt = asStr(r['created_at']);
+      return {
+        id: asStr(r['id']),
+        title: t(titleKeyForType(type, r['data'], asStr(r['entity_type']))),
+        meta: formatRelativeTime(createdAt, resolvedLocale),
+        unread: r['read_at'] == null,
+        href: resolveHref(asStr(r['entity_type']), role, asStr(r['entity_id'])),
+        createdAt,
+        dateLabel: formatDate(createdAt),
+      };
+    });
+    const last = items[items.length - 1];
+    const nextCursor = rows.length > NOTIFICATION_PAGE_SIZE && last
+      ? { createdAt: last.createdAt, id: last.id }
+      : null;
+    return { status: 'ready', page: { items, nextCursor, unread } };
+  } catch (error) {
+    captureError(error, { area: 'notifications.getNotificationsPage' });
     return { status: 'error' };
   }
 }

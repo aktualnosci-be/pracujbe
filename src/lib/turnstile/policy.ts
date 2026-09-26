@@ -38,7 +38,7 @@ export type ProviderFailurePolicy = 'open' | 'closed';
  * - register / password_reset: `closed` — masowe zakładanie kont i wysyłka e-maili resetu
  *   to główny cel botów; chwilowa niedostępność jest mniejszym kosztem.
  * - contact / report: `closed` — formularze bez konta (spam do moderacji). `report` chroni
- *   publiczny formularz zgłoszenia treści (#41); formularza kontaktu jeszcze nie ma.
+ *   publiczny formularz zgłoszenia treści (#41), `contact` — formularz kontaktu (#61).
  *
  * - guest_apply: `closed` — aplikacja bez konta (#98) wysyła e-mail na podany adres.
  *

@@ -24,7 +24,7 @@ describe('/api/translation/process', () => {
     vi.stubEnv('CRON_SECRET', '');
     vi.stubEnv('APP_MODE', '');
     vi.stubEnv('ANTHROPIC_API_KEY', '');
-    runQueue.mockReset().mockResolvedValue({ batches: 1, claimed: 0, applied: 0, proposals: 0, superseded: 0, retried: 0, failed: 0, dropped: 0 });
+    runQueue.mockReset().mockResolvedValue({ batches: 1, claimed: 0, applied: 0, proposals: 0, superseded: 0, retried: 0, deferred: 0, failed: 0, dropped: 0 });
   });
   afterEach(() => vi.unstubAllEnvs());
 
@@ -61,5 +61,18 @@ describe('/api/translation/process', () => {
     const res = await POST(req(`Bearer ${SECRET}`));
     expect(res.status).toBe(503);
     expect(JSON.stringify(await res.json())).not.toContain('claim');
+  });
+
+  it('GET (#614) jest bezpieczne — 405 z Allow: POST, bez sekretu, bez kolejki i dostawcy', async () => {
+    vi.stubEnv('AI_TRANSLATION_ENABLED', '1');
+    vi.stubEnv('AI_TRANSLATION_PROVIDER', 'fixture');
+    const route = await import('@/app/api/translation/process/route');
+    const res = await (route.GET as () => Promise<Response>)();
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('POST');
+    expect(runQueue).not.toHaveBeenCalled();
+    // Kontrola ujemna: ta sama konfiguracja przez POST z sekretem uruchamia worker.
+    expect((await route.POST(req(`Bearer ${SECRET}`))).status).toBe(200);
+    expect(runQueue).toHaveBeenCalledTimes(1);
   });
 });

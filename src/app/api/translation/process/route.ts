@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { isCronAuthorized } from '@/lib/cron/auth';
 import { isServiceDatabaseConfigured } from '@/lib/db/portal';
 import { isProductionMode } from '@/lib/env';
-import { captureError } from '@/lib/sentry';
+import { captureError } from '@/lib/error-report';
 import { isTranslationEnabled } from '@/lib/translation/config';
 import { createTranslationProvider, runTranslationQueue } from '@/lib/translation/run';
 import { serviceTranslationStore } from '@/lib/translation/store';
@@ -16,6 +16,10 @@ import { serviceTranslationStore } from '@/lib/translation/store';
  *
  * Bez flagi `AI_TRANSLATION_ENABLED` (domyślnie) nic nie robi — nie łączy się z bazą ani
  * z dostawcą. Odpowiedź i log zawierają tylko liczniki i kody (bez treści ofert).
+ *
+ * Wyłącznie `POST` (#614, jak #581/#583): `GET` jest metodą bezpieczną (RFC 9110 §9.2.1)
+ * i zwraca `405` bez autoryzacji, dostępu do bazy ani wywołania dostawcy — prefetch, crawler
+ * czy podgląd linku nie uruchomi płatnych wywołań modelu.
  */
 
 export const dynamic = 'force-dynamic';
@@ -44,8 +48,9 @@ async function run(request: Request): Promise<Response> {
   }
 }
 
-export async function GET(request: Request): Promise<Response> {
-  return run(request);
+/** GET jest bezpieczne — 405 bez autoryzacji ani dostępu do kolejki (#614). */
+export async function GET(): Promise<Response> {
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405, headers: { Allow: 'POST' } });
 }
 export async function POST(request: Request): Promise<Response> {
   return run(request);

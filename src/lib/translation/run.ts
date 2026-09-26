@@ -2,7 +2,7 @@ import 'server-only';
 
 import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
 import { AnthropicTranslationProvider } from '@/lib/translation/anthropic-provider';
-import { translationModel, translationProvider } from '@/lib/translation/config';
+import { translationProvider } from '@/lib/translation/config';
 import {
   FixtureTranslationProvider,
   TranslationProviderError,
@@ -14,7 +14,7 @@ import { processTranslationBatch, type TranslationBatchResult } from '@/lib/tran
 /**
  * Przebieg kolejki tłumaczeń ofert (#33) — wołany przez `/api/translation/process` (cron).
  *
- * Kolejkę zasilają odroczone triggery ofert (migracja 0133): każda zatwierdzona zmiana treści
+ * Kolejkę zasilają odroczone triggery ofert (migracja 0146): każda zatwierdzona zmiana treści
  * publicznej oferty = nowa rewizja i zadania dla pozostałych języków portalu. Ten moduł tylko
  * je przetwarza: kilka paczek `processTranslationBatch`, dopóki są zadania i nie minął budżet
  * czasu. Za flagą `AI_TRANSLATION_ENABLED` (domyślnie wyłączone) — bez niej nic nie woła bazy
@@ -54,9 +54,9 @@ export function withTranslationUsageLog(
 export function createTranslationProvider(): TranslationProvider | null {
   const kind = translationProvider();
   if (kind === 'fixture') return withTranslationUsageLog(new FixtureTranslationProvider(), 'fixture');
-  if (kind === 'anthropic') {
-    return withTranslationUsageLog(new AnthropicTranslationProvider(), translationModel());
-  }
+  // Adapter Anthropic sam loguje użycie i rezerwuje budżet AI (#36, `withAiBudget`) — bez
+  // drugiego wiersza logu tutaj.
+  if (kind === 'anthropic') return new AnthropicTranslationProvider();
   return null;
 }
 
@@ -88,6 +88,7 @@ export async function runTranslationQueue(deps: TranslationRunDeps): Promise<Tra
     proposals: 0,
     superseded: 0,
     retried: 0,
+    deferred: 0,
     failed: 0,
     dropped: 0,
   };
@@ -103,6 +104,7 @@ export async function runTranslationQueue(deps: TranslationRunDeps): Promise<Tra
     total.proposals += r.proposals;
     total.superseded += r.superseded;
     total.retried += r.retried;
+    total.deferred += r.deferred;
     total.failed += r.failed;
     total.dropped += r.dropped;
     if (r.claimed === 0) break;
