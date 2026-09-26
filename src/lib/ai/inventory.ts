@@ -38,10 +38,9 @@ export interface AiFeature {
   enableFlag: string;
   /**
    * Dostawca modelu. Decyzja właściciela 2026-09-26: funkcje AI używają wyłącznie OpenAI
-   * (GPT-6 Luna) przez wspólnego klienta `src/lib/ai/openai.ts`. `anthropic` zostaje tylko dla
-   * pozycji `in_progress` z otwartego PR (do przełączenia po scaleniu).
+   * (GPT-6 Luna) przez wspólnego klienta `src/lib/ai/openai.ts`.
    */
-  provider: 'openai' | 'anthropic';
+  provider: 'openai';
   inputs: readonly AiInputSubject[];
   /** Co model zwraca i gdzie to trafia. */
   output: string;
@@ -94,11 +93,10 @@ export const AI_FEATURES: readonly AiFeature[] = [
   {
     id: 'content_translation',
     issues: ['#31', '#32', '#514'],
-    status: 'in_progress',
-    callSites: ['src/lib/translation/anthropic-provider.ts'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/translation/openai-provider.ts'],
     enableFlag: 'AI_TRANSLATION_ENABLED',
-    // TODO(#514): po scaleniu PR tłumaczeń przełączyć na wspólnego klienta OpenAI.
-    provider: 'anthropic',
+    provider: 'openai',
     inputs: ['job_offer_text', 'candidate_profile_text'],
     output:
       'Tłumaczenie pól tekstowych na inne języki portalu; przed zapisem walidacja faktów (liczby, kwoty, certyfikaty).',
@@ -106,9 +104,10 @@ export const AI_FEATURES: readonly AiFeature[] = [
     humanStep:
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
     decidesAboutPerson: false,
-    usageLogged: false,
-    // Hook gotowy: `withAiBudget({ feature: 'content_translation', … })` (docs/AI_BUDGET.md).
-    costBudgeted: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/translation/openai-provider.ts (#36): rezerwacja przed
+    // wywołaniem modelu; odmowa budżetu = odroczenie zadania bez zużycia próby.
+    costBudgeted: true,
   },
   {
     id: 'job_offer_assist',

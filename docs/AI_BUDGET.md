@@ -97,9 +97,14 @@ rozliczają tego samego wiersza dwukrotnie.
   `src/lib/cv-import/cost.ts` (prompt + schemat + zminimalizowany tekst + `max_output_tokens`).
 - Asystent profilu kandydata (#37): `withAiBudget` w `src/lib/actions/profile-assist.ts`,
   szacunek `src/lib/profile-assist/cost.ts` (funkcja `profile_answers_assist`, migracja 0147).
-- Tłumaczenia (#514): jeszcze nie — hook poniżej.
+- Tłumaczenia (#514, #31/#32): `withAiBudget` w `OpenAiTranslationProvider`
+  (`src/lib/translation/openai-provider.ts`, wspólny klient `src/lib/ai/openai.ts`), szacunek
+  `estimateTranslationCost` (prompt + pola z glosariuszem + schemat + pełne `max_output_tokens`).
+  Odmowa budżetu = `budget_exceeded`/`budget_unavailable` → worker woła `defer_translation_job`
+  (zadanie wraca po 1 h / 5 min bez zużycia próby), więc wyczerpany limit dnia nie zamienia
+  kolejki w trwałe błędy.
 
-## Nowa funkcja AI (hook, np. tłumaczenia #514)
+## Nowa funkcja AI (hook)
 
 ```ts
 import { withAiBudget } from '@/lib/ai/budget';
