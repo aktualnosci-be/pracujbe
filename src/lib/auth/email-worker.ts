@@ -16,10 +16,13 @@ import { resendTransport } from '@/lib/email/transport/resend';
 import {
   claimAuthEmails,
   completeAuthEmail,
+  deferAuthEmail,
   expireAuthEmails,
   failAuthEmail,
   prepareAuthEmail,
+  takeAuthSendBudget,
   type AuthEmailDelivery,
+  type AuthSendBudget,
 } from './email-outbox';
 
 export interface AuthEmailProcessResult {
@@ -35,6 +38,11 @@ export interface AuthEmailProcessResult {
   stale?: number;
   /** Dostawca przyjął list, a zapis potwierdzenia w bazie zawiódł — alarm dla cronu. */
   ackErrors?: number;
+  /**
+   * Okno dostawcy pełne (budżet puli `auth`, 0137): zlecenia wróciły do kolejki bez zużycia
+   * próby i wyjdą w następnym oknie. To nie jest błąd — `ok` bez zmian.
+   */
+  deferred?: number;
   skipped?: string;
   /** `false` = realny problem (brak konfiguracji w produkcji, błąd claimu/ACK) → 503 dla cronu. */
   ok: boolean;
@@ -89,7 +97,8 @@ export async function processAuthEmailBatch(
   let failed = 0;
   let stale = 0;
   let ackErrors = 0;
-  for (const delivery of queue) {
+  let deferred = 0;
+  for (const [index, delivery] of queue.entries()) {
     let message: { subject: string; html: string; text: string };
     let prepared: ReturnType<typeof prepareAuthEmail>;
     try {
@@ -100,6 +109,22 @@ export async function processAuthEmailBatch(
       await failAuthEmail(pool, delivery, 'render_failed').catch(() => false);
       failed += 1;
       continue;
+    }
+    // Budżet okna dostawcy (pula `auth`, #45/0137) — po renderze, tuż przed wysyłką. Odmowa:
+    // to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby. Awaria poboru nie
+    // blokuje listu konta (fail-open, jak dawny hook): limit dostawcy zostaje ostatnią granicą.
+    let budget: AuthSendBudget;
+    try {
+      budget = await takeAuthSendBudget(pool, prepared.template);
+    } catch (error) {
+      captureError(error, { area: 'auth.email.budget', kind: delivery.kind });
+      budget = { granted: true };
+    }
+    if (!budget.granted) {
+      for (const pending of queue.slice(index)) {
+        if (await deferAuthEmail(pool, pending, budget.retryAt).catch(() => false)) deferred += 1;
+      }
+      break;
     }
     let providerMessageId: string;
     try {
@@ -127,7 +152,7 @@ export async function processAuthEmailBatch(
       ackErrors += 1;
     }
   }
-  return { processed: queue.length, sent, failed, expired, stale, ackErrors, ok: ackErrors === 0 };
+  return { processed: queue.length, sent, failed, expired, stale, ackErrors, deferred, ok: ackErrors === 0 };
 }
 
 /**

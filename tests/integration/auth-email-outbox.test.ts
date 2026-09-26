@@ -369,4 +369,64 @@ describe('Worker wysyłki kolejki auth (#78)', () => {
     expect(sent).toHaveLength(0);
     expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'queued', error_code: 'render_failed' });
   });
+
+  /**
+   * 0137: budżet okna dostawcy dla puli `auth`. Okno = doba (bez przejścia granicy w teście),
+   * limit dostawcy = 1; pierwszy pobór przez administratora wyczerpuje okno.
+   */
+  describe('budżet puli auth (0137)', () => {
+    let saved: { window_seconds: number; provider_limit: number; reserve_auth: number; reserve_transactional: number };
+    beforeAll(async () => {
+      saved = (await admin.query('SELECT window_seconds, provider_limit, reserve_auth, reserve_transactional FROM public.email_send_budget_config WHERE id')).rows[0];
+    });
+    beforeEach(async () => {
+      await admin.query('DELETE FROM public.email_send_windows');
+      await admin.query('UPDATE public.email_send_budget_config SET window_seconds=86400, provider_limit=1, reserve_auth=0, reserve_transactional=0 WHERE id');
+    });
+    afterAll(async () => {
+      await admin.query('DELETE FROM public.email_send_windows');
+      await admin.query('UPDATE public.email_send_budget_config SET window_seconds=$1, provider_limit=$2, reserve_auth=$3, reserve_transactional=$4 WHERE id',
+        [saved.window_seconds, saved.provider_limit, saved.reserve_auth, saved.reserve_transactional]);
+    });
+
+    it('wolne okno: list wychodzi i zużywa budżet puli auth', async () => {
+      const account = await signup(auth, 'nl');
+      const { sender, sent } = stubSender();
+      const result = await processAuthEmailBatch(mail, sender, { baseURL, from });
+      expect(result).toMatchObject({ sent: 1, deferred: 0, ok: true });
+      expect(sent).toHaveLength(1);
+      expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'sent' });
+      expect((await admin.query('SELECT sum(auth_used)::int AS n FROM public.email_send_windows')).rows[0].n).toBe(1);
+    });
+
+    it('pełne okno: brak wysyłki, zlecenie wraca do kolejki bez zużycia próby, termin = następne okno', async () => {
+      const account = await signup(auth, 'fr');
+      await admin.query("SELECT * FROM public.take_email_send_budget('passwordReset')");
+      const { sender, sent } = stubSender();
+      const result = await processAuthEmailBatch(mail, sender, { baseURL, from });
+      expect(result).toMatchObject({ processed: 1, sent: 0, failed: 0, deferred: 1, ok: true });
+      expect(sent).toHaveLength(0);
+      const deferred = await row(account.user.id, 'verification');
+      expect(deferred).toMatchObject({ status: 'queued', attempts: 0, lease_id: null, error_code: null, token: expect.any(String) });
+      expect(deferred.next_attempt_at.getTime()).toBeGreaterThan(Date.now());
+      expect(deferred.next_attempt_at.getTime()).toBeLessThanOrEqual(Date.now() + 3_600_000 + 5_000);
+    });
+
+    it('kontrola ujemna: porażka wysyłki (fail_email) zużywa próbę — odłożenie nie', async () => {
+      const account = await signup(auth, 'pl');
+      const { sender } = stubSender(() => { throw new AuthMailSendError('provider_unavailable'); });
+      await processAuthEmailBatch(mail, sender, { baseURL, from });
+      expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'queued', attempts: 1 });
+    });
+
+    it('rola workera: tylko szablony kolejki auth, bez bezpośredniego dostępu do budżetu public, odłożenie wymaga dzierżawy', async () => {
+      await expect(mail.query("SELECT * FROM auth.take_send_budget('newsletter')")).rejects.toMatchObject({ code: '23514' });
+      await expect(mail.query("SELECT * FROM public.take_email_send_budget('accountConfirmation')")).rejects.toMatchObject({ code: '42501' });
+      const account = await signup(auth, 'en');
+      const [delivery] = await claimAuthEmails(mail);
+      expect((await mail.query('SELECT auth.defer_email($1, gen_random_uuid(), now()) AS ok', [delivery!.id])).rows[0].ok).toBe(false);
+      expect(await row(account.user.id, 'verification')).toMatchObject({ status: 'leased', attempts: 1 });
+      await expect(pool.query('SELECT auth.defer_email($1,$2,now())', [delivery!.id, delivery!.lease_id])).rejects.toMatchObject({ code: '42501' });
+    });
+  });
 });
