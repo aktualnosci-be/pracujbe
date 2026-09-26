@@ -42,6 +42,7 @@ import {
   type ReportSort,
 } from '@/lib/admin/list-params';
 import { appDayStartUtc } from '@/lib/datetime';
+import { parseCompanyLinksReview, type CompanyLinksReview } from '@/lib/company-links';
 import { demoJobs } from '@/lib/data/demo';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { attempt, queryCount, queryOne, queryRows } from '@/lib/db/sql';
@@ -120,6 +121,9 @@ export const AWAITING_COMPANY_STATUSES = ['unverified', 'pending'] as const;
 
 /** Wartość filtra listy firm dla kolejki weryfikacji (`?status=awaiting`). */
 export const AWAITING_FILTER = 'awaiting';
+
+/** Wartość filtra listy firm dla kolejki zatwierdzania strony WWW/logo (`?status=links`, 0204). */
+export const LINKS_REVIEW_FILTER = 'links';
 
 /** Link w panelu (ścieżka bez prefiksu locale — dokłada go next-intl `Link`). */
 export interface AdminHref {
@@ -427,6 +431,8 @@ function filterDemoCompanies(filter?: string): AdminCompanyRow[] {
       (AWAITING_COMPANY_STATUSES as readonly string[]).includes(c.status),
     );
   }
+  // Firmy demonstracyjne nie mają propozycji linków (zapis wymaga bazy).
+  if (filter === LINKS_REVIEW_FILTER) return [];
   return DEMO_COMPANIES.filter((c) => c.status === filter);
 }
 
@@ -605,15 +611,17 @@ export async function listCompanies(
 
   try {
     const params = new SqlParams();
+    const linksQueue = filter === LINKS_REVIEW_FILTER;
     const statuses =
       filter === AWAITING_FILTER
         ? [...AWAITING_COMPANY_STATUSES]
-        : filter && filter !== 'all'
+        : filter && filter !== 'all' && !linksQueue
           ? [filter]
           : null;
     const where = whereOf([
       'deleted_at IS NULL',
       statuses && `status::text = ANY(${params.add(statuses)}::text[])`,
+      linksQueue && "links_review_status = 'pending'",
       q && searchCondition(params, ['name', 'vat_number', 'registration_number', 'email'], q),
       cursorCondition(params, query.cursor),
     ]);
@@ -1327,7 +1335,11 @@ export interface AdminCompanyJob {
 }
 
 export interface AdminCompanyDetail extends AdminCompanyRow {
+  /** Zatwierdzone (publiczne) adresy firmy. */
   website: string | null;
+  logoUrl: string | null;
+  /** Propozycja zmiany strony WWW/logo do decyzji admina albo odrzucona (0204). */
+  linksReview: CompanyLinksReview | null;
   phone: string | null;
   address: string | null;
   postalCode: string | null;
@@ -1366,6 +1378,8 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
     company: {
       ...row,
       website: null,
+      logoUrl: null,
+      linksReview: null,
       phone: null,
       address: null,
       postalCode: null,
@@ -1449,7 +1463,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
       const company = await queryOne(tx, 'admin.company-detail',
         `SELECT id, name, status, status_reason, created_at, verified_at, vat_number,
                 registration_number, email, phone, website, address, postal_code, city, region,
-                country, industry, description
+                country, industry, description, logo_url, website_pending, logo_url_pending,
+                links_review_status, links_pending_at, links_review_reason
            FROM public.companies
           WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
       if (!company) return null;
@@ -1504,6 +1519,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         email: asNullableString(c['email']),
         city: asNullableString(c['city']),
         website: asNullableString(c['website']),
+        logoUrl: asNullableString(c['logo_url']),
+        linksReview: parseCompanyLinksReview(c),
         phone: asNullableString(c['phone']),
         address: asNullableString(c['address']),
         postalCode: asNullableString(c['postal_code']),

@@ -179,16 +179,22 @@ export default async function EmployerCompanyPage({
                 </div>
               </section>
 
-              {/* Strona WWW i logo (#112) — nie cofa weryfikacji, więc bez ostrzeżenia CompanyForm. */}
+              {/* Strona WWW i logo (#112) — nie cofa weryfikacji; nowy adres zatwierdza admin portalu (0204). */}
               <section className={PAPER}>
                 <h2 className={H2_EXTENDED}>{t('linksTitle')}</h2>
                 <p className={INTRO}>{t('linksSubtitle')}</p>
                 <div className="mt-4">
                   <CompanyLinksForm
-                    defaultValues={{
-                      website: company.website ?? '',
-                      logoUrl: company.logoUrl ?? '',
-                    }}
+                    defaultValues={
+                      company.linksReview
+                        ? {
+                            website: company.linksReview.website ?? '',
+                            logoUrl: company.linksReview.logoUrl ?? '',
+                          }
+                        : { website: company.website ?? '', logoUrl: company.logoUrl ?? '' }
+                    }
+                    published={{ website: company.website, logoUrl: company.logoUrl }}
+                    review={company.linksReview}
                     ownHost={ownHost}
                   />
                 </div>

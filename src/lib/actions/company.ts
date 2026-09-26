@@ -38,8 +38,8 @@ import {
  *                        `companies_update_member`: tylko owner/admin, 0040).
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
- *   - `updateCompanyLinks` — ustawia/czyści stronę WWW i adres logo (#112); ta sama ścieżka
- *                        zapisu, ale NIE cofa weryfikacji (baza reaguje tylko na nazwę/VAT).
+ *   - `updateCompanyLinks` — zgłasza stronę WWW i adres logo (#112); nowy adres czeka na
+ *                        decyzję admina (RPC `submit_company_links`, 0204), NIE cofa weryfikacji.
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
  *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
  *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
@@ -58,8 +58,11 @@ export type CreateCompanyResult =
 export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
+/** Wynik zgłoszenia linków firmy (0204): czeka na admina / weszło od razu / bez zmian. */
+export type CompanyLinksOutcome = 'pending' | 'applied' | 'unchanged';
 export type UpdateCompanyLinksResult =
-  { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+  | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
+  | { ok: false; error: ErrorCode };
 export type AddCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
 export type ReverificationResult =
@@ -366,12 +369,15 @@ export async function updateCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Ustawia/czyści stronę WWW i adres logo aktywnej firmy (#112). Osobna akcja od
- * `updateCompany`: te pola NIE cofają weryfikacji (w przeciwieństwie do nazwy/VAT) — baza
- * to gwarantuje (`protect_company_verification` reaguje tylko na `name`/`vat_number`, 0072),
- * tu więc bez odczytu/porównania statusu przed i po. Ta sama ścieżka zapisu co `updateCompany`
- * (UPDATE pod RLS `companies_update_member`: tylko owner/admin, 0040); baza waliduje adres
- * drugi raz (CHECK `public_https_url`, 0141) i audytuje zmianę (`company.links_changed`).
+ * Zgłasza stronę WWW i adres logo aktywnej firmy (#112) — od 0204 z zatwierdzaniem przez admina
+ * portalu. Osobna akcja od `updateCompany`: te pola NIE cofają weryfikacji firmy (w
+ * przeciwieństwie do nazwy/VAT — `protect_company_verification`, 0072). Tylko owner/admin firmy;
+ * RPC `submit_company_links` (pod sesją, SECURITY DEFINER) sprawdza rolę drugi raz, waliduje
+ * adresy (`public_https_url`) i decyduje o wyniku:
+ *   - `pending`   — nowy adres czeka na decyzję admina; pola publiczne bez zmian,
+ *   - `applied`   — propozycja tylko usuwa adres (nic nowego nie publikuje) — wchodzi od razu,
+ *   - `unchanged` — propozycja = zatwierdzony stan (wycofuje ewentualną propozycję).
+ * Bezpośredni zapis kolumn przez klienta blokuje w bazie strażnik `guard_company_links`.
  */
 export async function updateCompanyLinks(
   input: CompanyLinksUpdateInput,
@@ -382,9 +388,9 @@ export async function updateCompanyLinks(
 
   const setWebsite = v.website !== undefined;
   const setLogoUrl = v.logoUrl !== undefined;
-  if (!setWebsite && !setLogoUrl) return { ok: true }; // nic do zapisania
+  if (!setWebsite && !setLogoUrl) return { ok: true, outcome: 'unchanged' }; // nic do zapisania
 
-  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true, outcome: 'unchanged' };
 
   if (
     !(await checkRateLimit('company-update', {
@@ -399,9 +405,7 @@ export async function updateCompanyLinks(
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    type Outcome =
-      | { error: ErrorCode }
-      | { error: null; companyId: string; rows: Record<string, unknown>[] };
+    type Outcome = { error: ErrorCode } | { error: null; result: unknown };
     const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
       const active = await getActiveCompany(tx, me.id);
       const companyId = active.activeId;
@@ -409,29 +413,26 @@ export async function updateCompanyLinks(
       if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
         return { error: 'PERMISSION_DENIED' };
       }
-
-      // RLS `companies_update_member` (owner/admin) + CHECK `companies_website_https`/
-      // `companies_logo_url_https` (0141) — status/weryfikacja bez zmian (trigger nie reaguje).
-      const { rows } = await execute(tx, 'company.update-links',
-        `UPDATE public.companies
-            SET website  = CASE WHEN $2 THEN $3 ELSE website  END,
-                logo_url = CASE WHEN $4 THEN $5 ELSE logo_url END
-          WHERE id = $1
-          RETURNING id`,
-        [
-          companyId,
-          setWebsite, setWebsite ? nullIfEmpty(v.website) : null,
-          setLogoUrl, setLogoUrl ? nullIfEmpty(v.logoUrl) : null,
-        ]);
-      return { error: null, companyId, rows };
+      const result = await rpc(tx, 'submit_company_links', {
+        p_company_id: companyId,
+        p_set_website: setWebsite,
+        p_website: setWebsite ? (nullIfEmpty(v.website) ?? '') : null,
+        p_set_logo_url: setLogoUrl,
+        p_logo_url: setLogoUrl ? (nullIfEmpty(v.logoUrl) ?? '') : null,
+      });
+      return { error: null, result };
     });
     if (outcome.error !== null) return { ok: false, error: outcome.error };
 
-    // RLS przepuszcza UPDATE bez wiersza (0 rows) — to nie jest sukces.
-    if (outcome.rows.length !== 1 || asString(asRecord(outcome.rows[0])['id']) !== outcome.companyId) {
-      return { ok: false, error: 'PERMISSION_DENIED' };
+    const result = outcome.result;
+    if (result !== 'pending' && result !== 'applied' && result !== 'unchanged') {
+      captureError(new Error('submit_company_links: unexpected result'), {
+        area: 'company.updateCompanyLinks',
+      });
+      return { ok: false, error: 'INTERNAL' };
     }
-    return { ok: true };
+    revalidatePath('/employer', 'layout');
+    return { ok: true, outcome: result };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.updateCompanyLinks') };
   }
