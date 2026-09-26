@@ -509,7 +509,8 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
 > grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
-> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata),
+> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata — strona kandydata zrobiona: szczegół
+> zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
@@ -704,6 +705,17 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
+migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
+nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym
+`candidate_id = me` (RLS 0039 wpuszcza też rekrutera firmy — kontrola ujemna w
+`portal-candidate.test.ts`): dane wysłane do firmy (wiadomość, telefon, dostępność), odpowiedzi
+ze snapshotu #101, historia statusów bez notatek firmy (`note`), stronicowana po 50 kursorem
+`created_at` + `id` (`ApplicationHistoryList` z prop `loadMore` →
+`loadMoreMyApplicationHistory`, własność sprawdzana ponownie), link do powiązanej rozmowy,
+wycofanie (`ApplicationActions`). Cudze/usunięte/nieistniejące = 404, awaria = komunikat
+z ponowieniem, demo oznaczone. Testy: unit `candidate-application-detail`,
+`candidate-applications-list`; E2E `candidate-application-detail` (4 języki), `panel-a11y`.
 Metadane ofert (#184, 0113): `get_applied_jobs_display(p_locale, p_job_ids)` filtruje oferty
 bieżącej strony WEWNĄTRZ funkcji (SECURITY DEFINER nie jest inline'owana), więc baza nie liczy
 całej historii; ≤ 100 identyfikatorów, tylko własne aplikacje. Ten sam filtr dla propozycji
@@ -919,8 +931,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `published_at` i zgłoszenia bez zmian; zamknięta/wygasła → najpierw „Otwórz ponownie”
   (`JOB_NOT_EDITABLE`). Baza blokuje bezpośredni zapis treści i relacji oferty innej niż szkic
   (strażniki + `set_job_*` tylko dla szkicu). „Zobacz ofertę” dla aktywnej. Dowód: `rls.sql`
-  sekcja RR. **Otwarte:** powiadomienie kandydatów, którzy już aplikowali, o istotnej zmianie
-  warunków (decyzja produktowa).
+  sekcja RR.
+  Powiadomienie o zmianie warunków (migracja `0144`): gdy `update_published_job` zmienia
+  wynagrodzenie (kwoty, okres, waluta), miasto (porównanie przez `search_fold`), typ umowy albo
+  godziny pracy — lista pól w jednym miejscu, `job_material_terms(jobs)` — trigger AFTER UPDATE
+  na `jobs` tworzy powiadomienie in-app. Trigger reaguje WYŁĄCZNIE na zapis z tego RPC (lokalny
+  znacznik `pracujbe.job_terms_notify` = id oferty, ustawiany tuż przed UPDATE i czyszczony po
+  nim; bezpośredni UPDATE service_role/migracji i zmiany statusu nie powiadamiają); ta sama
+  transakcja, odrzucona rewizja nie zostawia powiadomienia. Odbiorcy: kandydaci z AKTYWNĄ
+  aplikacją (submitted/viewed/shortlisted/interview/offer_sent/offer_accepted; bez gości, szkiców
+  i stanów końcowych; preferencja `in_app_enabled` jak zawsze). `system`, `entity_type=
+  'job_terms'`, `data` = rodzaj, slug, nazwy pól (bez kwot). Tytuł
+  `notifications.itemJobTermsChanged` w języku panelu odbiorcy (Invariant #1), link do
+  `/candidate/aplikacje` (oferta wstrzymana/zamknięta/wygasła nie ma publicznej strony). Bez
+  e-maila (bezpieczny wariant). Dowód: `rls.sql` sekcja JT144 (kontrole ujemne: pole spoza listy,
+  brak filtra stanu aplikacji, bramka znacznika, surowe porównanie miasta), unit
+  `job-terms-notification`.
+  **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
+  zmieniło.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
@@ -959,11 +987,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   startowe 10 USD/dobę i 100 USD/miesiąc (`ai_budget_limits`, zmiana tylko w bazie). Rejestr
   `ai_usage_ledger` bez treści i identyfikatorów osób/firm. Raport tylko do odczytu
   `/admin/koszty-ai`; czujki `ai_budget_*` w `/api/health/ops`. Strażnik: funkcja `behind_flag`
-  w inwentarzu musi mieć `costBudgeted: true` — import ogłoszeń, asystent treści i import CV
-  (#487, `src/lib/cv-import/cost.ts`). Hook dla tłumaczeń (#514) opisany w
-  `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
+  w inwentarzu musi mieć `costBudgeted: true` — import ogłoszeń, asystent treści, import CV
+  (#487, `src/lib/cv-import/cost.ts`) i tłumaczenia (#514, `estimateTranslationCost`). Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
   `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
-  poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
+  poza limiterem importu.
   Porzucone rezerwacje (#609, migracja `0134`): jeśli proces pada między rezerwacją a
   rozliczeniem, rezerwacja nie może blokować limitu bezterminowo. `/api/maintenance` woła co
   godzinę `ai_budget_release_stale_reservations` (service_role, idempotentne, `FOR UPDATE SKIP
@@ -1088,6 +1115,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
   zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
   na ESCO = osobne issues.
+- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0145`, `docs/AI_TRANSLATION.md`), tylko
+  pl/nl/fr/en, domyślnie wyłączone (`AI_TRANSLATION_ENABLED`). Kolejka: niezmienne rewizje
+  źródła (kanoniczne pola + SHA-256, ta sama treść = no-op), zadania per język docelowy i wersję
+  pipeline (unikat = deduplikacja), `claim_translation_jobs` (SKIP LOCKED + lease, restart =
+  przejęcie wygasłej dzierżawy), `complete_translation_job` (CAS po lease + kontrola bieżącej
+  rewizji — wynik v1 po v2 = `superseded`), `fail_translation_job` (backoff/jitter/Retry-After),
+  ukrycie/purge encji, korekta ręczna z autorem i wersją (AI jej nie nadpisuje). Wszystko RPC
+  service_role, tabele deny. Adapter `src/lib/translation/`: interfejs dostawcy + OpenAI
+  (`openai-provider.ts` na wspólnym kliencie `src/lib/ai/openai.ts`, `gpt-6-luna`, structured
+  output `strict`, bez narzędzi, `store: false`, dane w `<source_fields>`), walidacja
+  kształtu i niezmienności faktów pole po polu (`facts.ts`: liczby, kwoty, waluty, daty,
+  godziny, e-maile/URL/telefony, jednostki, brutto/netto, okres stawki, kwalifikacje, nazwy
+  własne, negacja) — niepoprawny wynik nigdy nie trafia do bazy; logi tylko kody. Worker
+  `processTranslationBatch` (dostawca poza transakcją). Budżet AI (#36): adapter przez
+  `withAiBudget` (rezerwacja przed API, rozliczenie tokenami, log użycia bez treści); odmowa
+  budżetu → `defer_translation_job` (zadanie wraca po 1 h / 5 min bez zużycia próby). Dowód:
+  `rls.sql` sekcja TR31 z kontrolami ujemnymi TR31-N i TR31-13N; unit `translation-*`.
+  **Do zrobienia:** wpięcie ofert (#33) i profili (#34), trasa/cron workera, benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -1634,8 +1679,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i E2E `job-funnel-no-storage` (fixture: bez zgody zero żądań; po zgodzie zero cookies/storage
   i żądanie bez `Cookie`). Wariant zgody lejka rozstrzygnięty (#575: tylko po zgodzie analitycznej).
   Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
-  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wpis
-  tłumaczeń (#514) do logu użycia.
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie (tłumaczenia #514 są
+  już w logu użycia i inwentarzu).
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.

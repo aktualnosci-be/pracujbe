@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { loadApplicationScreeningAnswers } from '@/lib/actions/candidate-applications';
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
+import { screeningAnswerText } from '@/lib/screening/answer-text';
 import { BTN_SMALL, INFO_LABEL, INFO_VALUE, PANEL_P } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
@@ -63,23 +64,12 @@ export function ApplicationScreeningAnswers({
     if (next && state.status !== 'ready') load();
   };
 
-  const answerText = (answer: ScreeningAnswer): string => {
-    if (answer.type === 'yes_no' && answer.answerBoolean !== null) {
-      return answer.answerBoolean ? t('employerApplicationYes') : t('employerApplicationNo');
-    }
-    if (answer.type === 'date' && answer.answerDate) {
-      const ts = Date.parse(`${answer.answerDate}T12:00:00Z`);
-      if (!Number.isNaN(ts)) {
-        return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(ts);
-      }
-    }
-    if (answer.type === 'single_choice' && answer.answerText) {
-      const option = answer.options.find((o) => o.id === answer.answerText);
-      return option ? localizedText(option.label, locale) : answer.answerText;
-    }
-    if (answer.type === 'short_text' && answer.answerText) return answer.answerText;
-    return t('employerApplicationScreeningNoAnswer');
-  };
+  const answerText = (answer: ScreeningAnswer): string =>
+    screeningAnswerText(answer, locale, {
+      yes: t('employerApplicationYes'),
+      no: t('employerApplicationNo'),
+      noAnswer: t('employerApplicationScreeningNoAnswer'),
+    });
 
   return (
     <div className="mb-5 min-w-0">
