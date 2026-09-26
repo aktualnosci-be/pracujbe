@@ -15,6 +15,8 @@ import { expect, test, type Page } from '@playwright/test';
  * - pytania screeningowe (#101, oferta 1003): wymagane bez odpowiedzi blokują wysyłkę gościa
  *   przy pytaniu, po odpowiedzi zgłoszenie wychodzi.
  * - #495: NISS w wiadomości → błąd serwera przy polu, fokus, treść zostaje, brak sukcesu.
+ * - #492: deklaracja „mam co najmniej {age} lat” (próg z serwera, bez bazy = 18) — bez niej
+ *   nic nie wychodzi, fokus na deklaracji; akcja dostaje sam próg, bez daty urodzenia.
  * Kontrola ujemna (lokalnie): bez `GuestApplyForm` w ApplyModal test „formularz gościa” pada.
  */
 
@@ -28,6 +30,7 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
 type Messages = {
+  auth: { ageBandAdult: string };
   jobs: { applyNow: string };
   apply: { submit: string; privacyNoticeAck: string; message: string; sensitiveIdHint: string };
   guestApply: {
@@ -39,7 +42,13 @@ type Messages = {
     invalidTitle: string;
     claimTitle: string;
     claimLogin: string;
-    error: { nameRequired: string; emailRequired: string; privacyNoticeRequired: string; sensitiveIdNotAllowed: string };
+    error: {
+      nameRequired: string;
+      emailRequired: string;
+      privacyNoticeRequired: string;
+      sensitiveIdNotAllowed: string;
+      ageConfirmRequired: string;
+    };
   };
 };
 
@@ -58,8 +67,8 @@ test.beforeEach(async ({ context, baseURL }) => {
     {
       name: 'pracujbe_consent',
       value: JSON.stringify({
-        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '1.0',
-        categories: { necessary: true, preferences: false, analytics: false, marketing: false },
+        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+        categories: { necessary: true, preferences: false, analytics: false },
         ts: '2026-01-01T00:00:00.000Z',
         id: 'guest-apply-e2e',
       }),
@@ -69,6 +78,11 @@ test.beforeEach(async ({ context, baseURL }) => {
     { name: 'pb_e2e_viewer', value: 'anonymous', url: baseURL!, sameSite: 'Lax' },
   ]);
 });
+
+/** #492: etykieta deklaracji wieku; serwer fixture nie ma bazy → próg awaryjny 18. */
+function ageLabel(t: Messages): string {
+  return t.auth.ageBandAdult.replace('{age}', '18');
+}
 
 async function openGuestForm(page: Page, locale: Locale, width: number, slug = JOB_SLUG) {
   const t = msgs(locale);
@@ -92,8 +106,12 @@ for (const locale of LOCALES) {
     const submit = form.getByRole('button', { name: t.apply.submit });
 
     const actions: string[] = [];
+    const bodies: string[] = [];
     page.on('request', (request) => {
-      if (request.headers()['next-action'] && (request.postData() ?? '').includes('"fullName"')) actions.push(request.url());
+      if (request.headers()['next-action'] && (request.postData() ?? '').includes('"fullName"')) {
+        actions.push(request.url());
+        bodies.push(request.postData() ?? '');
+      }
     });
 
     await submit.click();
@@ -104,10 +122,14 @@ for (const locale of LOCALES) {
     await expect(form.getByRole('checkbox', { name: privacyAckName(t) })).toHaveAccessibleDescription(
       t.guestApply.error.privacyNoticeRequired,
     );
+    await expect(form.getByRole('radio', { name: ageLabel(t) })).toHaveAccessibleDescription(
+      new RegExp(t.guestApply.error.ageConfirmRequired),
+    );
     expect(actions).toHaveLength(0);
 
     await name.fill('Anna Nowak');
     await email.fill('anna@example.com');
+    await form.getByRole('radio', { name: ageLabel(t) }).click();
     await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
     await submit.click();
 
@@ -116,13 +138,42 @@ for (const locale of LOCALES) {
     await expect(sent.getByRole('heading', { name: t.guestApply.sentTitle })).toBeFocused();
     await expect(sent).toContainText('anna@example.com');
     expect(actions).toHaveLength(1);
+    // #492: do serwera idzie sama deklaracja progu — bez daty ani roku urodzenia.
+    expect(bodies[0]).toContain('"ageConfirmed":true');
+    expect(bodies[0]).toContain('"minAge":18');
+    expect(bodies[0]).not.toMatch(/birth/i);
   });
 }
+
+test('#492: bez deklaracji wieku zgłoszenie nie wychodzi, fokus na deklaracji', async ({ page }) => {
+  const { t, dialog, form } = await openGuestForm(page, 'nl', 1280);
+  const actions: string[] = [];
+  page.on('request', (request) => {
+    if (request.headers()['next-action'] && (request.postData() ?? '').includes('"fullName"')) actions.push(request.url());
+  });
+  await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
+  await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
+  await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+
+  // #576: dwa przedziały (16–17 / 18+) — błąd na grupie, fokus na pierwszej opcji grupy.
+  const ageGroup = form.getByRole('radiogroup', { name: t.auth.ageBandLegend });
+  await expect(ageGroup).toHaveAttribute('aria-invalid', 'true');
+  await expect(form.locator('input[name="guest-apply-age"]:focus')).toHaveCount(1);
+  const age = form.getByRole('radio', { name: ageLabel(t) });
+  await expect(dialog.getByTestId('guest-apply-sent')).toHaveCount(0);
+  expect(actions).toHaveLength(0);
+
+  await age.click();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+  await expect(dialog.getByTestId('guest-apply-sent')).toBeVisible();
+});
 
 test('pytania screeningowe (#101): gość musi odpowiedzieć na wymagane, potem zgłoszenie wychodzi', async ({ page }) => {
   const { t, dialog, form } = await openGuestForm(page, 'pl', 1280, SCREENING_JOB_SLUG);
   await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
   await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
+  await form.getByRole('radio', { name: ageLabel(t) }).click();
   await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 
@@ -142,6 +193,7 @@ test('#495: NISS w wiadomości gościa — błąd przy polu, bez wysłania zgło
   const message = form.getByRole('textbox', { name: t.apply.message });
   // Syntetyczny numer z poprawną sumą kontrolną.
   await message.fill('Mój NISS: 85.07.30-033.28');
+  await form.getByRole('radio', { name: ageLabel(t) }).click();
   await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
   await form.getByRole('button', { name: t.apply.submit }).click();
 

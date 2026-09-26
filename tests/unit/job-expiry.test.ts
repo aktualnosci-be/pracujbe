@@ -62,6 +62,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'process_saved_search_alerts',
     'process_email_campaigns',
     'run_retention_purge',
+    'purge_job_funnel_data',
     'purge_stale_message_attachments',
     'claim_storage_deletions',
   ];
@@ -93,7 +94,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     expect(res.status).toBe(200);
     expect(fakeDb.callsTo('expire_due_jobs')).toEqual([expect.objectContaining({ args: {}, as: 'service' })]);
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
-    expect(fakeDb.calls.map((c) => c.name)).toEqual(TASKS);
+    // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(TASKS.filter((t) => t !== 'run_retention_purge'));
     expect(await res.json()).toEqual({
       ok: true,
       releasedDiscounts: 0,
@@ -103,7 +105,9 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       savedSearchDigests: 0,
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,
-      retention: {},
+      retention: { mode: 'off', batches: 0 },
+      // #575: terminy lejka ofert (0128).
+      jobFunnel: {},
       purgedMessageAttachments: 0,
       // #17: bez bucketu Railway GC bucketu pominięty.
       storageGc: null,

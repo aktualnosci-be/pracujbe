@@ -6,10 +6,13 @@ import { Link } from '@/i18n/navigation';
 import { reportFocusKey } from '@/lib/admin/focus';
 import {
   parseReportFilter,
+  parseReportFlagged,
   parseReportKindFilter,
+  parseReportSort,
   REPORT_ACTIVE_FILTER,
   REPORT_FILTERS,
   REPORT_KIND_FILTERS,
+  REPORT_SORTS,
   reportReasonView,
 } from '@/lib/admin/list-params';
 import { listReports, type AdminReportRow } from '@/lib/data/admin';
@@ -77,6 +80,12 @@ const KIND_LABEL: Record<string, string> = {
   dsa_notice: 'kindDsa',
   message_report: 'kindMessage',
   quality: 'kindQuality',
+};
+
+/** Etykieta kolejności listy (kolejka przeglądu DSA, #42). */
+const SORT_LABEL: Record<string, string> = {
+  newest: 'reportsSortNewest',
+  priority: 'reportsSortPriority',
 };
 
 /** Rozstrzygnięcie decyzji moderacyjnej (#42). */
@@ -151,19 +160,29 @@ export default async function AdminReportsPage({
   const filter = parseReportFilter(firstValue(sp['status']));
   const kind = parseReportKindFilter(firstValue(sp['kind']));
   const cursor = firstValue(sp['cursor']) ?? null;
+  const sortParam = firstValue(sp['sort']);
+  const sort = parseReportSort(sortParam, kind);
+  const flagged = parseReportFlagged(firstValue(sp['flagged']));
   const statusQuery = filter === REPORT_ACTIVE_FILTER ? null : filter;
   const kindQuery = kind === 'all' ? null : kind;
+  // Jawna kolejność zostaje w URL tylko, gdy użytkownik ją wybrał (domyślna zależy od rodzaju).
+  const sortQuery = sortParam && sortParam === sort ? sort : null;
+  const flaggedQuery = flagged ? '1' : null;
+  /** Wspólne parametry linków listy (bez kursora — zmiana filtra/kolejności = pierwsza strona). */
+  const listQuery = (over: Record<string, string | null> = {}): Record<string, string> =>
+    Object.fromEntries(
+      Object.entries({ status: statusQuery, kind: kindQuery, sort: sortQuery, flagged: flaggedQuery, ...over })
+        .filter((e): e is [string, string] => Boolean(e[1])),
+    );
 
-  const result = await listReports({ status: filter, kind, cursor });
+  const result = await listReports({ status: filter, kind, cursor, sort, flagged });
   // Termin sprawy liczony w chwili renderu (strona force-dynamic).
   const now = Date.now();
   const reports = result.status === 'ok' ? result.rows : [];
   const formatDate = createAppDateFormatter(locale, { withTime: true });
 
   const retryParams = new URLSearchParams(
-    Object.entries({ status: statusQuery, kind: kindQuery, cursor }).filter((e): e is [string, string] =>
-      Boolean(e[1]),
-    ),
+    { ...listQuery(), ...(cursor ? { cursor } : {}) },
   ).toString();
 
   /** Tekst celu do dialogu potwierdzenia. */
@@ -189,10 +208,7 @@ export default async function AdminReportsPage({
               key={value}
               href={{
                 pathname: BASE_PATH,
-                query: {
-                  ...(value === REPORT_ACTIVE_FILTER ? {} : { status: value }),
-                  ...(kindQuery ? { kind: kindQuery } : {}),
-                },
+                query: listQuery({ status: value === REPORT_ACTIVE_FILTER ? null : value }),
               }}
               aria-current={isActive ? 'true' : undefined}
               className={filterTabClass(isActive)}
@@ -212,10 +228,7 @@ export default async function AdminReportsPage({
               key={value}
               href={{
                 pathname: BASE_PATH,
-                query: {
-                  ...(statusQuery ? { status: statusQuery } : {}),
-                  ...(value === 'all' ? {} : { kind: value }),
-                },
+                query: listQuery({ kind: value === 'all' ? null : value }),
               }}
               aria-current={isActive ? 'true' : undefined}
               className={filterTabClass(isActive)}
@@ -224,6 +237,36 @@ export default async function AdminReportsPage({
             </Link>
           );
         })}
+      </nav>
+
+      {/* Kolejka przeglądu (#42): priorytet z flag_report_for_review i termin sprawy. */}
+      <nav aria-label={t('reportsSortLabel')} className="flex flex-wrap gap-2">
+        {REPORT_SORTS.map((value) => {
+          const isActive = value === sort;
+          return (
+            <Link
+              key={value}
+              href={{ pathname: BASE_PATH, query: listQuery({ sort: value }) }}
+              aria-current={isActive ? 'true' : undefined}
+              className={filterTabClass(isActive)}
+            >
+              {t(SORT_LABEL[value] ?? 'reportsSortNewest')}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <nav aria-label={t('reportsFlaggedLabel')} className="flex flex-wrap gap-2">
+        {([false, true] as const).map((value) => (
+          <Link
+            key={String(value)}
+            href={{ pathname: BASE_PATH, query: listQuery({ flagged: value ? '1' : null }) }}
+            aria-current={value === flagged ? 'true' : undefined}
+            className={filterTabClass(value === flagged)}
+          >
+            {t(value ? 'reportsFlaggedOnly' : 'reportsFlaggedAll')}
+          </Link>
+        ))}
       </nav>
 
       {result.status === 'error' ? (
@@ -489,7 +532,7 @@ export default async function AdminReportsPage({
       {result.status === 'ok' ? (
         <AdminPager
           pathname={BASE_PATH}
-          query={{ status: statusQuery, kind: kindQuery }}
+          query={listQuery()}
           nextCursor={result.nextCursor}
           hasCursor={Boolean(cursor)}
           count={reports.length}

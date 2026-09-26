@@ -4,8 +4,9 @@ import { cookies, headers } from 'next/headers';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { ConsentCategories, ConsentSource } from '@/lib/consent';
+import type { ConsentCategories, ConsentCategory, ConsentSource } from '@/lib/consent';
 
 /**
  * Serwerowy log zgód (RODO art. 7 ust. 1 — rozliczalność).
@@ -13,7 +14,7 @@ import type { ConsentCategories, ConsentSource } from '@/lib/consent';
  * Cookie `pracujbe_consent` jest głównym dowodem zgody w przeglądarce; ten log dubluje go
  * w tabeli `consents` (append-only), aby dało się wykazać, KTO, KIEDY i NA CO wyraził zgodę.
  *
- * Zapis jest PER KATEGORIA — jeden wiersz na kategorię (necessary/preferences/analytics/marketing),
+ * Zapis jest PER KATEGORIA — jeden wiersz na kategorię (necessary/preferences/analytics; bez `marketing` od #570),
  * zgodnie ze schematem `consents` (0007_misc.sql): profile_id (nullable), category, granted, source.
  * Zapis wyłącznie przez RPC `record_consent` (0043, EXECUTE dla anon i authenticated), wołane
  * w transakcji sesji (`withPortalTransaction`, #25): zalogowany → `auth.uid()`, gość → anon.
@@ -30,14 +31,18 @@ const KNOWN_SOURCES: readonly ConsentSource[] = [
   'onboarding',
 ];
 
-/** Pierwszy adres z X-Forwarded-For (klient), fallback X-Real-IP. */
-function clientIp(h: Headers): string | null {
-  const xff = h.get('x-forwarded-for');
-  if (xff) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  return h.get('x-real-ip');
+/**
+ * Kategorie wysyłane do RPC — te same co `CONSENT_CATEGORIES` (`@/lib/consent`; tu kopia, bo
+ * moduł zgód importuje tę akcję). Klucz spoza listy (np. `marketing` ze starego klienta, #570)
+ * nie trafia do bazy.
+ */
+const LOGGED_CATEGORIES: readonly ConsentCategory[] = ['necessary', 'preferences', 'analytics'];
+
+function loggedCategories(categories: ConsentCategories | null | undefined): ConsentCategories {
+  const source = (categories ?? {}) as Partial<Record<string, unknown>>;
+  return Object.fromEntries(
+    LOGGED_CATEGORIES.map((key) => [key, key === 'necessary' || source[key] === true]),
+  ) as ConsentCategories;
 }
 
 /**
@@ -66,10 +71,10 @@ export async function recordConsent(
     // Gość (me = null) → rola anon; RPC zapisuje wtedy profile_id = NULL.
     await withPortalTransaction(me, (tx) =>
       rpc(tx, 'record_consent', {
-        p_categories: jsonArg(categories ?? {}),
+        p_categories: jsonArg(loggedCategories(categories)),
         p_source: src,
         p_visitor_id: visitorId,
-        p_ip: clientIp(hdrs),
+        p_ip: trustedClientIp(hdrs),
         p_user_agent: hdrs.get('user-agent') ?? null,
       }),
     );

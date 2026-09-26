@@ -63,6 +63,8 @@ const candidate = {
   lastName: ' Nowak ',
   agreeTerms: true,
   privacyNoticeAck: true,
+  ageConfirmed: true,
+  minAge: 18,
 };
 
 describe('Serwerowy kontekst rejestracji', () => {
@@ -72,6 +74,10 @@ describe('Serwerowy kontekst rejestracji', () => {
     { privacyNoticeAck: false },
     { privacyNoticeAck: undefined },
     { marketingOptIn: 'true' },
+    // #492: bez deklaracji progu wieku kandydat nie przechodzi do SDK.
+    { ageConfirmed: false },
+    { minAge: undefined },
+    { minAge: 12 },
     { passwordConfirm: 'DifferentPassword123' },
     { password: 'abcdefgh', passwordConfirm: 'abcdefgh' },
     { locale: 'de' },
@@ -105,7 +111,7 @@ describe('Serwerowy kontekst rejestracji', () => {
           privacy: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
           email_marketing: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
         },
-        role: 'candidate', locale: 'fr', first_name: 'Anna', last_name: 'Nowak',
+        role: 'candidate', locale: 'fr', first_name: 'Anna', last_name: 'Nowak', age_min_attested: 18,
       });
     });
   });
