@@ -1,8 +1,5 @@
-import { domainPoolStats } from '@/lib/db/runtime';
-import { backupAlerts, readBackupFreshness } from '@/lib/ops/backup-freshness';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
-import { readOpsMetrics } from '@/lib/ops/metrics-source';
-import { evaluateOps } from '@/lib/ops/sensors';
+import { readOpsStatus } from '@/lib/ops/status';
 
 /**
  * Czujki operacyjne (#47) — wyłącznie dla monitoringu wewnętrznego.
@@ -19,6 +16,9 @@ import { evaluateOps } from '@/lib/ops/sensors';
  *
  * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
  * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
+ *
+ * 0213: `maintenanceRun` = ostatni przebieg `/api/maintenance` (brak = ostrzeżenie, > 2 h = alarm).
+ * Ten sam odczyt (`readOpsStatus`) pokazuje panel `/admin/operacje`.
  */
 
 export const runtime = 'nodejs';
@@ -32,18 +32,14 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const checkedAt = new Date().toISOString();
-  const [result, backup] = await Promise.all([readOpsMetrics(), readBackupFreshness()]);
+  const result = await readOpsStatus();
   if (result.kind !== 'ok') {
-    const status = result.kind === 'unconfigured' ? 'unconfigured' : 'unavailable';
-    return Response.json({ status, checkedAt, backup }, { status: 503, headers });
+    return Response.json({ status: result.kind, checkedAt, backup: result.backup }, { status: 503, headers });
   }
 
-  const appPool = domainPoolStats();
-  const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget);
-  const alerts = [...evaluation.alerts, ...backupAlerts(backup)];
-  const status = alerts.length ? 'alert' : 'ok';
+  const { status, alerts, warnings, metrics, appPool, aiBudget, maintenanceRun, backup } = result;
   return Response.json(
-    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null, backup },
+    { status, alerts, warnings, checkedAt, metrics, appPool, aiBudget, maintenanceRun: maintenanceRun ?? null, backup },
     { status: status === 'ok' ? 200 : 503, headers },
   );
 }

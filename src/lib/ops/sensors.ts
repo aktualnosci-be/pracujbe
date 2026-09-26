@@ -49,6 +49,26 @@ export const opsMetricsSchema = z.object({
 
 export type OpsMetrics = z.infer<typeof opsMetricsSchema>;
 
+/**
+ * Ostatni przebieg `/api/maintenance` (0213, `ops_last_maintenance_run()`). `ageSeconds = null`
+ * = baza nie zna żadnego przebiegu (cron jeszcze nie działa). Same liczby i stały identyfikator
+ * zadania z kodu (`failedTask`) — bez treści i danych osobowych.
+ */
+export const maintenanceRunSchema = z.object({
+  finishedAt: z.string().datetime().nullable(),
+  ageSeconds: count.nullable(),
+  ok: z.boolean().nullable(),
+  durationMs: count.nullable(),
+  failedTask: z.string().regex(/^[A-Za-z]{1,40}$/).nullable(),
+});
+
+export type MaintenanceRun = z.infer<typeof maintenanceRunSchema>;
+
+export function parseMaintenanceRun(raw: unknown): MaintenanceRun | null {
+  const parsed = maintenanceRunSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
 export interface AppPoolStats {
   total: number;
   idle: number;
@@ -61,6 +81,8 @@ export const OPS_THRESHOLDS = {
   emailOldestReadySeconds: 15 * 60,
   /** E-maile auth (weryfikacja, reset hasła) — użytkownik czeka na nie od razu. */
   authEmailOldestReadySeconds: 5 * 60,
+  /** Cron maintenance co godzinę: brak udanego przebiegu przez 2 h = co najmniej jeden pominięty. */
+  maintenanceRunMaxAgeSeconds: 2 * 60 * 60,
   /** Udział połączeń PostgreSQL dostępnych dla aplikacji (max − zarezerwowane). */
   connectionsRatio: 0.8,
   /**
@@ -94,6 +116,10 @@ export type OpsSignal =
   | 'webhook_stuck'
   | 'webhook_failed'
   | 'maintenance_lag'
+  | 'maintenance_run_stale'
+  | 'maintenance_run_failed'
+  | 'maintenance_run_missing'
+  | 'maintenance_run_unavailable'
   | 'db_connections'
   | 'app_pool_waiting'
   | 'storage_deletion_age'
@@ -123,11 +149,14 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
 /**
  * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0120): `null` = odczyt się nie
  *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
+ * @param maintenanceRun ostatni przebieg maintenance (0213): `null` = odczyt się nie udał
+ *   (ostrzeżenie), `undefined` = nie mierzono (baza sprzed 0213 — bez sygnału).
  */
 export function evaluateOps(
   metrics: OpsMetrics,
   pool: AppPoolStats | null = null,
   aiBudget?: AiBudgetStatus | null,
+  maintenanceRun?: MaintenanceRun | null,
 ): OpsEvaluation {
   const alerts: OpsSignal[] = [];
   const warnings: OpsSignal[] = [];
@@ -149,6 +178,19 @@ export function evaluateOps(
   const m = metrics.maintenance;
   if (m.overdueActiveJobs > 0 || m.staleDiscountReservations > 0 || m.staleCheckoutIntents > 0) {
     alerts.push('maintenance_lag');
+  }
+
+  // 0213: brak jakiegokolwiek przebiegu (cron jeszcze nie działa) = ostrzeżenie, nie alarm —
+  // świeża baza nie może stale zwracać 503. Stary ostatni przebieg = alarm; nieudany = ostrzeżenie
+  // (cron i tak dostał 503 z nazwą zadania w kanale błędów).
+  if (maintenanceRun === null) {
+    warnings.push('maintenance_run_unavailable');
+  } else if (maintenanceRun) {
+    if (maintenanceRun.ageSeconds === null) warnings.push('maintenance_run_missing');
+    else {
+      if (maintenanceRun.ageSeconds > OPS_THRESHOLDS.maintenanceRunMaxAgeSeconds) alerts.push('maintenance_run_stale');
+      if (maintenanceRun.ok === false) warnings.push('maintenance_run_failed');
+    }
   }
 
   const available = metrics.connections.max - metrics.connections.reserved;

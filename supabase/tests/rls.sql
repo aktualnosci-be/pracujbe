@@ -13925,4 +13925,64 @@ select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
 rollback;
 reset role; reset app.current_uid;
 
+-- =============================================================================
+-- OPSM — ostatni przebieg maintenance (0213, #47): zapis tylko service_role, odczyt
+-- pracujbe_ops/service_role, same liczby i stały identyfikator zadania; „nigdy” = null.
+-- =============================================================================
+\echo '--- OPSM ops_last_maintenance_run ---'
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied', 'OPSM-1 anon bez EXECUTE odczytu');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied', 'OPSM-1b anon bez zapisu');
+reset role;
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied', 'OPSM-1c authenticated bez odczytu');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied', 'OPSM-1d authenticated bez zapisu');
+select pg_temp.expect_error('select count(*) from public.ops_job_runs', 'permission denied', 'OPSM-1e authenticated nie czyta tabeli');
+reset role; reset app.current_uid;
+
+begin;
+delete from public.ops_job_runs;
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (select public.ops_last_maintenance_run() -> 'ageSeconds') = 'null'::jsonb,
+  'OPSM-2 brak przebiegu = ageSeconds null');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied',
+  'OPSM-2b pracujbe_ops nie zapisuje przebiegów');
+select pg_temp.expect_error('select count(*) from public.ops_job_runs', 'permission denied',
+  'OPSM-2c pracujbe_ops nie czyta tabeli');
+reset role;
+set local role service_role;
+select public.record_ops_job_run('maintenance', false, 1500, 'jobExpiry');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', false, 10, 'x y@z')$q$, 'VALIDATION_FAILED',
+  'OPSM-3 nazwa zadania tylko jako stały identyfikator');
+select pg_temp.expect_error($q$select public.record_ops_job_run('inne', true, 10)$q$, 'VALIDATION_FAILED',
+  'OPSM-3b nieznane zadanie odrzucone');
+reset role;
+update public.ops_job_runs set last_finished_at = now() - interval '3 hours';
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (select (r ->> 'ageSeconds')::int >= 10800 and (r ->> 'ok')::boolean = false
+      and r ->> 'failedTask' = 'jobExpiry' and (r ->> 'durationMs')::int = 1500
+     from public.ops_last_maintenance_run() r),
+  'OPSM-4 odczyt: wiek, wynik, czas trwania, zadanie z błędem');
+reset role;
+set local role service_role;
+select public.record_ops_job_run('maintenance', true, 20);
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 from public.ops_job_runs)
+  and (select (r ->> 'ageSeconds')::int < 60 and (r ->> 'ok')::boolean and r -> 'failedTask' = 'null'::jsonb
+         from public.ops_last_maintenance_run() r),
+  'OPSM-5 kolejny przebieg nadpisuje jeden wiersz (brak historii do retencji)');
+rollback;
+
+-- Kontrola ujemna: bez GRANT dla pracujbe_ops odczyt jest odrzucany (grant jest jedyną ścieżką).
+begin;
+revoke execute on function public.ops_last_maintenance_run() from pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied',
+  'OPSM-6 kontrola ujemna: bez GRANT odmowa');
+rollback;
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

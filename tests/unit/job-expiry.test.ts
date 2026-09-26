@@ -95,7 +95,17 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     expect(fakeDb.callsTo('expire_due_jobs')).toEqual([expect.objectContaining({ args: {}, as: 'service' })]);
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
     // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
-    expect(fakeDb.calls.map((c) => c.name)).toEqual(TASKS.filter((t) => t !== 'run_retention_purge'));
+    // 0213: na końcu przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
+    expect(fakeDb.calls.map((c) => c.name)).toEqual([
+      ...TASKS.filter((t) => t !== 'run_retention_purge'),
+      'record_ops_job_run',
+    ]);
+    expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
+      expect.objectContaining({
+        args: expect.objectContaining({ p_job: 'maintenance', p_ok: true, p_failed_task: null }),
+        as: 'service',
+      }),
+    ]);
     expect(await res.json()).toEqual({
       ok: true,
       releasedDiscounts: 0,
@@ -126,6 +136,10 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // Bez wygaszenia nie wysyłamy alertów; pozostałe zadania idą dalej (osobne transakcje).
     expect(fakeDb.callsTo('process_saved_search_alerts')).toHaveLength(0);
     expect(fakeDb.callsTo('process_email_campaigns')).toHaveLength(1);
+    // 0213: nieudany przebieg też jest zapisany — z samą nazwą zadania (bez treści błędu).
+    expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
+      expect.objectContaining({ args: expect.objectContaining({ p_ok: false, p_failed_task: 'jobExpiry' }) }),
+    ]);
     const body = await res.json();
     expect(body).toEqual({ error: 'gc failed' });
     expect(JSON.stringify(body)).not.toContain('maintenance-secret');
