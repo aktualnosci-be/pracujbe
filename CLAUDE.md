@@ -1819,7 +1819,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `check-ci-workflows.mjs`. INP-proxy w tym samym kroku: tapnięcie „Filtry”, zapis oferty
   (odpowiedź `getPublicSavedJobs` podmieniona na kandydata — CI bez sesji) i „Aplikuj teraz”,
   Event Timing (najdłuższy wpis interakcji), CPU 4×, mediana 3 prób vs `inpMs` (200 ms);
-  kontrola ujemna `--inject-click-delay-ms 300` → czerwony. **Do zrobienia:** dane polowe CWV.
+  kontrola ujemna `--inject-click-delay-ms 300` → czerwony.
+  Dane polowe CWV — Cloudflare Web Analytics zamiast własnej zbiórki: beacon z #570/#635 (tylko
+  po zgodzie `analytics`, tylko trasy publiczne, bez cookies) sam mierzy LCP/INP/CLS. Podgląd
+  `/admin/wydajnosc?dni=7|28` (tylko admin, `requireAdmin`): p75 serwisu + 20 najczęstszych
+  ścieżek z oceną słowną wg progów, boty pominięte, liczby próbkowane — odczyt z serwera przez
+  GraphQL Analytics API (`src/lib/web-vitals/field-report.ts` czysty parser, `cloudflare-client.ts`
+  server-only, token tylko w nagłówku, timeout 8 s, błąd = sam kod; env `CF_ANALYTICS_ACCOUNT_ID`,
+  `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN`). Bez konfiguracji: instrukcja (z bazą)
+  albo raport przykładowy oznaczony demo (bez bazy). Bez migracji i bez endpointu `/api/web-vitals`.
+  Testy: unit `web-vitals-field` (kontrole ujemne: brak konfiguracji = zero żądań, token poza
+  treścią/adresem, z bazą nigdy demo), E2E `admin-web-vitals` (4 języki, brak żądań do Cloudflare
+  z przeglądarki), `admin-a11y`; zgody beaconu — istniejące `cookie-consent-categories`. **Do
+  zrobienia (właściciel):** token beaconu i token API w Railway; TTFB i próg alarmu w czujkach.
   Poprawki kodu z researchu wydajności: `JobCard` jako komponent serwerowy (#391; jedyna
   wyspa = przycisk zapisu z `jobId`; względna data na serwerze po dniu kalendarzowym w
   Brukseli — `src/lib/relative-date.ts`, zmienia się tylko o północy, zgodna z ISR), dialogi
