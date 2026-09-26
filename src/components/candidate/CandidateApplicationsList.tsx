@@ -149,12 +149,23 @@ export function CandidateApplicationsList({
                   <ApplicationScreeningAnswers applicationId={app.id} count={app.screeningCount} locale={locale} />
                 ) : null}
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                  {app.slug ? (
-                    <Link href={`/oferty-pracy/${app.slug}`} className={TEXT_LINK}>
-                      {t('actionView')}
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+                    {/* Demo bez bazy: szczegół też działa (dane przykładowe), więc link zawsze jest. */}
+                    <Link
+                      href={`/candidate/aplikacje/${encodeURIComponent(app.id)}`}
+                      className={TEXT_LINK}
+                      aria-label={t('candidateApplicationDetailsLinkLabel', { job: app.jobTitle || t('applicationUnknownJob') })}
+                    >
+                      {t('candidateApplicationDetailsLink')}
                       <ArrowRight className="size-3.5" aria-hidden="true" />
                     </Link>
-                  ) : <span />}
+                    {app.slug ? (
+                      <Link href={`/oferty-pracy/${app.slug}`} className={TEXT_LINK}>
+                        {t('actionView')}
+                        <ArrowRight className="size-3.5" aria-hidden="true" />
+                      </Link>
+                    ) : null}
+                  </div>
                   <ApplicationActions applicationId={app.id} status={app.status} slug={app.slug} jobTitle={app.jobTitle || undefined} />
                 </div>
               </article>
