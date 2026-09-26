@@ -12261,6 +12261,117 @@ select pg_temp.assert(pg_temp.wl615_send_check_0124(:'wl615_a_id'::uuid) is null
   'WL615-6 KONTROLA UJEMNA: bez tokenu stary worker (A) dostałby zielone światło mimo utraconej dzierżawy');
 
 -- ============================================================================
+-- WL621 (#621): worker poczty — odnowienie dzierżawy w send_check (0131, dokończenie #615/0129).
+--
+-- WL615E83B29 domknęło CAS na `lock_token` (0129), ale `email_delivery_send_check` kończyło
+-- transakcję PRZED wywołaniem dostawcy BEZ odnowienia dzierżawy (`locked_at`) — nadal biegła od
+-- czasu CLAIMU CAŁEJ paczki. Przy wielu wierszach (albo wolnym poprzednim wierszu) okno do
+-- wygaśnięcia dzierżawy TEGO wiersza mogło być prawie zużyte w chwili kontroli: worker A
+-- dostawał zielone światło tuż przed wygaśnięciem, ale zanim zdążył wywołać dostawcę,
+-- `claim_email_batch` mógł uznać dzierżawę za wygasłą i oddać wiersz workerowi B — obaj
+-- wysyłają (CAS na mark-sent z 0129 chronił tylko ZAPIS stanu, nie cofał już wysłanej
+-- wiadomości A — dokładnie luka z #621).
+--
+-- WL621-1..4: PO wywołaniu `send_check` (0131) dzierżawa jest odnowiona (locked_at ~ now(),
+-- token bez zmian) i wytrzymuje PEŁNE kolejne okno (czas trwania wywołania dostawcy), mimo że
+-- przed kontrolą była już prawie wygasła — `claim_email_batch` NIE przejmuje wiersza.
+-- WL621-5/6 (KONTROLA UJEMNA): logika SPRZED tej migracji (0129, bez odnowienia) odtworzona
+-- wprost — w IDENTYCZNYM scenariuszu czasowym `claim_email_batch` PRZEJMUJE wiersz od workera A
+-- (nowy token), zanim ten zdążył wywołać dostawcę.
+-- ============================================================================
+\set WLU2 'e6210000-0000-0000-0000-0000000000a1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'WLU2','wl621@test.be','Wl B','{"role":"candidate","first_name":"Wl","last_name":"B","locale":"pl"}');
+select public.enqueue_email(:'WLU2', 'jobPublished', 'job', gen_random_uuid(), 'wl621-1', '{"jobTitle":"Y"}'::jsonb);
+
+-- Worker A claimuje (limit wysoki: kolejka może nieść zaległe wiersze z wcześniejszych sekcji).
+set role service_role;
+select id, lock_token from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-1' \gset wl621_a_
+reset role;
+select pg_temp.assert(:'wl621_a_id' is not null, 'WL621-1 claim zwraca nasz wiersz');
+
+-- Dzierżawa jest już PRAWIE wygasła (worker przetwarzał wcześniejsze wiersze paczki) — ale
+-- jeszcze NIE minęła (< 300 s), więc kontrola musi dać zielone światło (nie lease_lost).
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-1';
+
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'wl621_a_id'::uuid, :'wl621_a_lock_token'::uuid) is null,
+  'WL621-2 dzierżawa jeszcze ważna tuż przed wygaśnięciem — kontrola daje zielone światło');
+reset role;
+
+-- WL621-3: kontrola ODNAWIA dzierżawę (locked_at świeże, nie sprzed 4:59) — token bez zmian.
+select pg_temp.assert(
+  (select locked_at > now() - interval '10 seconds' and lock_token::text = :'wl621_a_lock_token'
+     from public.email_deliveries where idempotency_key = 'wl621-1'),
+  'WL621-3 send_check odnawia dzierżawę (locked_at świeże) i zachowuje token');
+
+-- Symulujemy czas trwania wywołania dostawcy: znów prawie 5 minut, tym razem liczone od
+-- ODNOWIONEJ dzierżawy (dekrement WZGLĘDEM aktualnej wartości — kumulatywny upływ czasu).
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-1';
+
+-- claim_email_batch NIE przejmuje wiersza — odnowiona dzierżawa jest wciąż ważna.
+set role service_role;
+select count(*) as n from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-1' \gset wl621_reclaim_
+reset role;
+select pg_temp.assert(:'wl621_reclaim_n' = '0',
+  'WL621-4 dzierżawa odnowiona w send_check przetrwała czas trwania wysyłki — brak przejęcia');
+select pg_temp.assert(
+  (select lock_token::text = :'wl621_a_lock_token' from public.email_deliveries where idempotency_key = 'wl621-1'),
+  'WL621-4b token workera A bez zmian po nieudanym przejęciu');
+
+-- WL621-5/6 (KONTROLA UJEMNA): logika 0129 BEZ odnowienia dzierżawy — odtworzona wprost.
+create function pg_temp.wl621_send_check_0129(p_id uuid, p_token uuid) returns text
+language plpgsql as $$
+declare v_row public.email_deliveries%rowtype; v_reason text;
+begin
+  select * into v_row from public.email_deliveries d where d.id = p_id for update;
+  if v_row.id is null or v_row.status <> 'queued' then return 'not_queued'; end if;
+  if v_row.lock_token is distinct from p_token then return 'lease_lost'; end if;
+  v_reason := public.email_delivery_suppression_reason(
+    v_row.profile_id, v_row.template, v_row.to_email::text, v_row.campaign_id,
+    v_row.entity_type, v_row.entity_id);
+  if v_reason is not null then
+    update public.email_deliveries set status = 'failed', suppressed_at = now(),
+      error_message = v_reason, locked_at = null, lock_token = null where id = v_row.id;
+  end if;
+  -- 0129: BRAK odnowienia locked_at tutaj — to jest luka #621.
+  return v_reason;
+end $$;
+
+select public.enqueue_email(:'WLU2', 'jobPublished', 'job', gen_random_uuid(), 'wl621-2', '{"jobTitle":"Z"}'::jsonb);
+set role service_role;
+select id, lock_token from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-2' \gset wl621_c_
+reset role;
+
+-- Identyczny scenariusz czasowy: dzierżawa prawie wygasła w chwili kontroli (< 300 s).
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-2';
+
+set role service_role;
+select pg_temp.assert(
+  pg_temp.wl621_send_check_0129(:'wl621_c_id'::uuid, :'wl621_c_lock_token'::uuid) is null,
+  'WL621-5 stara kontrola (0129, bez odnowienia) też daje zielone światło tuż przed wygaśnięciem');
+reset role;
+
+-- Bez odnowienia dzierżawy: kolejne ~5 minut (czas wywołania dostawcy) — DEKREMENT WZGLĘDNY,
+-- czyli łącznie niemal 10 minut od pierwotnego claimu, znacznie ponad limit 300 s.
+update public.email_deliveries set locked_at = locked_at - interval '4 minutes 59 seconds'
+ where idempotency_key = 'wl621-2';
+
+set role service_role;
+select count(*) as n from public.claim_email_batch(100000, 300) where idempotency_key = 'wl621-2' \gset wl621_reclaim2_
+select lock_token from public.email_deliveries where idempotency_key = 'wl621-2' \gset wl621_c2_
+reset role;
+select pg_temp.assert(
+  :'wl621_reclaim2_n' = '1' and :'wl621_c2_lock_token' is distinct from :'wl621_c_lock_token',
+  'WL621-6 KONTROLA UJEMNA: bez odnowienia dzierżawy (0129) worker B PRZEJMUJE wiersz w tym ' ||
+  'samym czasie, w którym A (po zielonym świetle) dopiero woła dostawcę — dokładnie luka #621');
+
+-- ============================================================================
 -- RIP. IP i user-agent w receiptach akceptacji (0132): kategoria retencji
 --      7 dni, receipt niezmienny poza wyzerowaniem IP/UA, krok w run_retention_purge
 --      (dry-run bez zmian, świeże receipty zostają). Kontrole ujemne: dawny strażnik 0108
