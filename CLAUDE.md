@@ -822,8 +822,16 @@ Bez limitu 100 ofert na przebieg (migracja `0138`): worker bierze nowe oferty z
 snapshot); remis `published_at` rozstrzyga `id` w `get_public_jobs` (0136, #594), więc strony
 są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najwyżej raz
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
-kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
-na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
+kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101).
+Bez górnej granicy 10 100 ofert (migracja `0211` — numer tymczasowy): `saved_search_matching_jobs`
+stronicuje kursorem (`published_at`, `id`) po 1000 (`saved_search_keyset_page` →
+`saved_search_jobs_after`, tylko service_role) zamiast offsetu `get_public_jobs` (clamp 10 000),
+nadal w jednym zapytaniu (jeden snapshot); `p_max_pages` = strony kursora, domyślnie bez limitu.
+Filtry = blok FROM … WHERE skopiowany 1:1 z najnowszej definicji `get_public_jobs` (kontrakt listy
+ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontrolą ujemną). Worker
+bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
+SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
+za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
