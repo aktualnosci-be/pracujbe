@@ -1,90 +1,98 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import OpenAI from 'openai';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  AnthropicJobExtractor,
   buildUserContent,
   EXTRACTION_SYSTEM_PROMPT,
   ExtractorError,
   FixtureJobExtractor,
+  OpenAiJobExtractor,
   wrapUntrustedText,
 } from '@/lib/ai-import/extract';
-import { DEFAULT_JOB_IMPORT_MODEL } from '@/lib/ai-import/config';
 import { IMPORTABLE_FIELDS, JOB_EXTRACTION_JSON_SCHEMA } from '@/lib/ai-import/schema';
+
+import { callParams, fakeOpenAiClient } from '../helpers/fake-openai';
 
 /**
  * #465 — klient AI jest atrapą: żaden test nie wykonuje prawdziwego wywołania API. Sprawdzamy
  * kształt żądania (model, structured output, granica zaufania) i obsługę odpowiedzi.
  */
 
-function fakeClient(response: Partial<Anthropic.Message> | Error) {
-  const create = vi.fn(async () => {
-    if (response instanceof Error) throw response;
-    return {
-      id: 'msg_test',
-      type: 'message',
-      role: 'assistant',
-      model: DEFAULT_JOB_IMPORT_MODEL,
-      stop_reason: 'end_turn',
-      content: [],
-      ...response,
-    };
-  });
-  return { client: { messages: { create } } as unknown as Anthropic, create };
-}
-
 const TEXT_INPUT = { kind: 'text' as const, text: 'Magazynier, Antwerpia', source: 'jobs.example' };
 
 afterEach(() => {
   delete process.env.AI_JOB_IMPORT_MODEL;
+  delete process.env.AI_MODEL;
 });
 
-describe('AnthropicJobExtractor', () => {
-  it('wysyła structured output z JSON Schema, niski effort i materiał tylko w wiadomości user', async () => {
-    const { client, create } = fakeClient({
-      content: [{ type: 'text', text: '{"isJobListing":true}', citations: null }],
-    });
-    const out = await new AnthropicJobExtractor(client).extract(TEXT_INPUT);
+describe('OpenAiJobExtractor', () => {
+  it('wysyła structured output (strict JSON Schema), niski effort i materiał tylko w wiadomości user', async () => {
+    const { client, create } = fakeOpenAiClient({ text: '{"isJobListing":true}' });
+    const out = await new OpenAiJobExtractor(client).extract(TEXT_INPUT);
     expect(out).toEqual({ isJobListing: true });
 
-    const params = (create.mock.calls[0] as unknown as [Record<string, any>])[0];
-    expect(params.model).toBe('claude-opus-5');
-    expect(params.system).toBe(EXTRACTION_SYSTEM_PROMPT);
-    expect(params.output_config).toEqual({
-      effort: 'low',
-      format: { type: 'json_schema', schema: JOB_EXTRACTION_JSON_SCHEMA },
+    const params = callParams(create);
+    expect(params.model).toBe('gpt-6-luna');
+    expect(params.instructions).toBe(EXTRACTION_SYSTEM_PROMPT);
+    expect(params.text?.format).toEqual({
+      type: 'json_schema',
+      name: 'job_listing_extraction',
+      schema: JOB_EXTRACTION_JSON_SCHEMA,
+      strict: true,
     });
+    expect(params.reasoning).toEqual({ effort: 'low' });
+    expect(params.store).toBe(false);
     expect(params.tools).toBeUndefined(); // model nie ma żadnych narzędzi
-    expect(params.messages).toHaveLength(1);
-    expect(params.messages[0].role).toBe('user');
-    expect(params.messages[0].content[0].text).toContain('<listing source="jobs.example">');
+    const input = params.input as Array<{ role: string; content: Array<{ type: string; text?: string }> }>;
+    expect(input).toHaveLength(1);
+    expect(input[0]!.role).toBe('user');
+    expect(input[0]!.content[0]!.text).toContain('<listing source="jobs.example">');
+    // Instrukcje systemowe nie trafiają do wiadomości użytkownika.
+    expect(JSON.stringify(input)).not.toContain('You extract structured data');
   });
 
-  it('model nadpisywalny zmienną środowiskową (z walidacją formatu)', async () => {
-    process.env.AI_JOB_IMPORT_MODEL = 'claude-sonnet-5';
-    const { client, create } = fakeClient({ content: [{ type: 'text', text: '{}', citations: null }] });
-    await new AnthropicJobExtractor(client).extract(TEXT_INPUT);
-    expect((create.mock.calls[0] as unknown as [{ model: string }])[0].model).toBe('claude-sonnet-5');
+  it('model nadpisywalny zmienną środowiskową (z walidacją formatu), potem AI_MODEL', async () => {
+    const { client, create } = fakeOpenAiClient({ text: '{}' });
+    process.env.AI_JOB_IMPORT_MODEL = 'gpt-6-sol';
+    await new OpenAiJobExtractor(client).extract(TEXT_INPUT);
+    expect(callParams(create, 0).model).toBe('gpt-6-sol');
 
     process.env.AI_JOB_IMPORT_MODEL = 'zły model; drop';
-    await new AnthropicJobExtractor(client).extract(TEXT_INPUT);
-    expect((create.mock.calls[1] as unknown as [{ model: string }])[0].model).toBe('claude-opus-5');
+    await new OpenAiJobExtractor(client).extract(TEXT_INPUT);
+    expect(callParams(create, 1).model).toBe('gpt-6-luna');
+
+    process.env.AI_MODEL = 'gpt-6-luna-2026-09-22';
+    await new OpenAiJobExtractor(client).extract(TEXT_INPUT);
+    expect(callParams(create, 2).model).toBe('gpt-6-luna-2026-09-22');
   });
 
   it('odmowa modelu, ucięta odpowiedź i niepoprawny JSON → ExtractorError', async () => {
-    for (const response of [
-      { stop_reason: 'refusal' as const, content: [] },
-      { stop_reason: 'max_tokens' as const, content: [{ type: 'text' as const, text: '{"a":', citations: null }] },
-      { content: [{ type: 'text' as const, text: 'nie json', citations: null }] },
-    ]) {
-      const { client } = fakeClient(response);
-      await expect(new AnthropicJobExtractor(client).extract(TEXT_INPUT)).rejects.toBeInstanceOf(ExtractorError);
+    const cases = [
+      { spec: { refusal: 'I cannot help with that.', text: null }, reason: 'refused' },
+      { spec: { incompleteReason: 'content_filter' as const, text: null }, reason: 'refused' },
+      { spec: { incompleteReason: 'max_output_tokens' as const, text: '{"a":' }, reason: 'failed' },
+      { spec: { status: 'failed' as const, text: '{}' }, reason: 'failed' },
+      { spec: { text: 'nie json' }, reason: 'failed' },
+    ];
+    for (const { spec, reason } of cases) {
+      const { client } = fakeOpenAiClient(spec);
+      const err = await new OpenAiJobExtractor(client).extract(TEXT_INPUT).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ExtractorError);
+      expect(err).toMatchObject({ reason });
     }
   });
 
   it('błąd sieci/API nie wycieka jako surowy komunikat dostawcy', async () => {
-    const { client } = fakeClient(new Error('upstream 500: secret details'));
-    await expect(new AnthropicJobExtractor(client).extract(TEXT_INPUT)).rejects.toMatchObject({ reason: 'failed' });
+    const { client } = fakeOpenAiClient(new Error('upstream 500: secret details'));
+    const err = await new OpenAiJobExtractor(client).extract(TEXT_INPUT).catch((e: unknown) => e);
+    expect(err).toMatchObject({ reason: 'failed' });
+    expect(String((err as Error).message)).not.toContain('secret');
+  });
+
+  it('limit zapytań dostawcy (429) → rateLimited', async () => {
+    const rate = new OpenAI.RateLimitError(429, { message: 'slow down' }, 'slow down', new Headers());
+    const { client } = fakeOpenAiClient(rate);
+    await expect(new OpenAiJobExtractor(client).extract(TEXT_INPUT)).rejects.toMatchObject({ reason: 'rateLimited' });
   });
 });
 
@@ -108,10 +116,16 @@ describe('granica zaufania (prompt injection)', () => {
     expect(wrapped.trim().endsWith('Extract the job advertisement above into the required JSON structure.')).toBe(true);
   });
 
-  it('obraz trafia jako blok image base64 z krótką instrukcją', () => {
+  it('obraz trafia jako input_image (data URL, detail high) z krótką instrukcją', async () => {
     const content = buildUserContent({ kind: 'image', mediaType: 'image/png', base64: 'AAAA' });
-    expect(content[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } });
-    expect(content[1]).toMatchObject({ type: 'text' });
+    expect(content[0]).toEqual({ kind: 'image', mediaType: 'image/png', base64: 'AAAA' });
+    expect(content[1]).toMatchObject({ kind: 'text' });
+
+    const { client, create } = fakeOpenAiClient({ text: '{}' });
+    await new OpenAiJobExtractor(client).extract({ kind: 'image', mediaType: 'image/png', base64: 'AAAA' });
+    const input = callParams(create).input as Array<{ content: unknown[] }>;
+    expect(input[0]!.content[0]).toEqual({ type: 'input_image', detail: 'high', image_url: 'data:image/png;base64,AAAA' });
+    expect(input[0]!.content[1]).toMatchObject({ type: 'input_text' });
   });
 });
 
@@ -136,7 +150,7 @@ describe('JOB_EXTRACTION_JSON_SCHEMA', () => {
     return problems;
   }
 
-  it('spełnia ograniczenia structured output', () => {
+  it('spełnia ograniczenia structured output (tryb strict OpenAI)', () => {
     expect(walk(JOB_EXTRACTION_JSON_SCHEMA)).toEqual([]);
   });
 

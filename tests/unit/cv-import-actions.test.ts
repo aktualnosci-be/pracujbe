@@ -28,7 +28,7 @@ vi.mock('@/lib/cv-import/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/cv-import/extract')>();
   return {
     ...real,
-    AnthropicCvExtractor: class {
+    OpenAiCvExtractor: class {
       extract = extract;
     },
   };
@@ -51,7 +51,7 @@ function docxForm(): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AI_CV_IMPORT_ENABLED = '1';
-  process.env.ANTHROPIC_API_KEY = 'test-key-not-real';
+  process.env.OPENAI_API_KEY = 'test-key-not-real';
   delete process.env.AI_CV_IMPORT_PROVIDER;
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
@@ -85,7 +85,7 @@ describe('flaga i dostawca', () => {
     expect(await applyCvProposals(APPROVED)).toEqual({ ok: false, error: 'NOT_FOUND' });
 
     process.env.AI_CV_IMPORT_ENABLED = '1';
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     expect(isCvImportEnabled()).toBe(false);
     // Flaga importu ogłoszeń nie włącza importu CV.
     process.env.AI_JOB_IMPORT_ENABLED = '1';
@@ -96,7 +96,7 @@ describe('flaga i dostawca', () => {
   });
 
   it('atrapa dostawcy nie działa w trybie produkcyjnym', () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     process.env.AI_CV_IMPORT_PROVIDER = 'fixture';
     expect(isCvImportEnabled()).toBe(false);
     vi.mocked(isProductionMode).mockReturnValue(false);
