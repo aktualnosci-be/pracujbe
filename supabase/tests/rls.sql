@@ -12260,6 +12260,80 @@ rollback to savepoint aib_neg;
 select pg_temp.expect_error(
   'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 60000)',
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
+
+-- ============================================================================
+-- AIB609. Porzucone rezerwacje budżetu AI (#609, 0134): GC po TTL rozlicza rezerwację
+--         padłego procesu jako failed/koszt 0 — limit wraca do użycia, ślad audytowy
+--         (wiersz) zostaje. Kontrola ujemna: bez filtra po TTL GC zwolniłoby też
+--         rezerwację wciąż trwającego wywołania.
+-- ============================================================================
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE')
+  and not has_function_privilege('pracujbe_ops', 'public.ai_budget_release_stale_reservations(integer, integer)', 'EXECUTE'),
+  'AIB609-1 tylko service_role woła GC');
+
+-- Sekcja działa pod bieżącą rolą (reset po AIB36-10 = właściciel schematu, jak w AIB36-10) —
+-- wystarczy do wywołań RPC (SECURITY DEFINER), a bezpośrednie UPDATE created_at (poniżej)
+-- wymaga tej samej roli, bo grant na ai_usage_ledger dla service_role obejmuje tylko SELECT.
+-- Limit ustawiamy WZGLĘDEM już wydanego dziś budżetu (wcześniejsze testy AIB36 w tej samej
+-- transakcji już coś zarezerwowały/rozliczyły) — inaczej bezwzględna kwota byłaby przypadkowa.
+select (public.ai_budget_status()->'day'->>'spentMicroUsd')::bigint as aib_base \gset
+update public.ai_budget_limits set limit_micro_usd = :aib_base + 35000 where period = 'day';
+-- Świeża rezerwacja (żywy proces) zostaje nietknięta.
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 10000) as aib_fresh \gset
+-- Rezerwacja porzuconego procesu: cofamy created_at poza TTL bezpośrednio.
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 20000) as aib_abandoned \gset
+-- Limit ma miejsce tylko na obie powyższe (aib_base+30000) — trzecia rezerwacja, choćby mała,
+-- odbija się o sufit, dopóki porzucona rezerwacja liczy się w całości.
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_listing_import'', ''claude-opus-5'', 6000)',
+  'AI_BUDGET_EXCEEDED', 'AIB609-1b porzucona rezerwacja wciąż blokuje limit przed GC');
+update public.ai_usage_ledger set created_at = now() - interval '2 hours' where id = :'aib_abandoned';
+select public.ai_budget_release_stale_reservations(60, 200) as aib_released \gset
+select pg_temp.assert(:aib_released = 1, 'AIB609-2 GC zwalnia dokładnie jedną porzuconą rezerwację');
+select pg_temp.assert(
+  (select status = 'reserved' from public.ai_usage_ledger where id = :'aib_fresh'),
+  'AIB609-3 świeża rezerwacja nietknięta');
+select pg_temp.assert(
+  (select status = 'settled' and outcome = 'failed' and cost_micro_usd = 0 and settled_at is not null
+     from public.ai_usage_ledger where id = :'aib_abandoned'),
+  'AIB609-4 porzucona rezerwacja rozliczona jako failed/koszt 0 — ślad audytowy zostaje');
+-- AIB609-5: idempotentne — drugi przebieg nie znajduje już nic do zwolnienia.
+select pg_temp.assert(public.ai_budget_release_stale_reservations(60, 200) = 0,
+  'AIB609-5 ponowny przebieg GC nie rozlicza nic drugi raz');
+-- AIB609-6: limit budżetu wraca do użycia po GC (rezerwacja przestała liczyć się do wydatku) —
+-- ten sam limit (aib_base+35000) i ta sama kwota (6000), która chwilę wcześniej była odrzucona.
+select pg_temp.assert(public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 6000) is not null,
+  'AIB609-6 po GC ta sama rezerwacja mieści się w limicie, w którym wcześniej się nie mieściła');
+
+-- Kontrola ujemna: GC bez filtra TTL (created_at) zwolniłoby też świeżą, wciąż trwającą rezerwację.
+-- Rezerwacja powstaje PRZED savepointem — rollback niżej cofa tylko wadliwą definicję funkcji
+-- i jej skutek, a nie samo powstanie rezerwacji (inaczej AIB609-7b nie miałoby czego sprawdzić).
+select public.ai_budget_reserve('job_listing_import', 'claude-opus-5', 1000) as aib_live \gset
+savepoint aib609_neg;
+create or replace function public.ai_budget_release_stale_reservations(
+  p_older_than_minutes integer default 60,
+  p_limit integer default 200
+) returns integer language plpgsql security definer set search_path = public, pg_temp as $f$
+declare v_released integer;
+begin
+  update public.ai_usage_ledger set status = 'settled', outcome = 'failed', cost_micro_usd = 0, settled_at = now()
+   where status = 'reserved';
+  get diagnostics v_released = row_count;
+  return v_released;
+end; $f$;
+select public.ai_budget_release_stale_reservations(60, 200);
+select pg_temp.assert(
+  (select status = 'settled' from public.ai_usage_ledger where id = :'aib_live'),
+  'AIB609-7 kontrola ujemna: bez filtra TTL GC zwalnia też świeżą, wciąż trwającą rezerwację (błąd)');
+rollback to savepoint aib609_neg;
+-- Po cofnięciu do savepointu prawdziwa (z migracji) funkcja ponownie nie rusza świeżej rezerwacji.
+select public.ai_budget_release_stale_reservations(60, 200) as aib_after_rollback \gset
+select pg_temp.assert(
+  (select status = 'reserved' from public.ai_usage_ledger where id = :'aib_live'),
+  'AIB609-7b poprawna funkcja (po rollbacku savepointu) zostawia świeżą rezerwację');
+
 rollback;
 
 -- ============================================================================
