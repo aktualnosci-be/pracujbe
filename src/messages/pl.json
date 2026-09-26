@@ -1464,6 +1464,8 @@
     "startDateLabel": "Data rozpoczęcia",
     "cityLabel": "Miasto",
     "cityPlaceholder": "np. Antwerpia",
+    "cityRecognized": "Rozpoznana miejscowość: {name}. Oferta trafi do filtra tego miasta niezależnie od pisowni.",
+    "cityNotRecognized": "Nie ma tej nazwy w słowniku miejscowości. Oferta pokaże wpisaną nazwę, ale filtr miasta znajdzie ją tylko po tej samej pisowni.",
     "regionLabel": "Region",
     "regionPlaceholder": "np. Flandria",
     "addressLabel": "Adres",

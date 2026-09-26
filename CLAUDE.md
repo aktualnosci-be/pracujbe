@@ -511,7 +511,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
 > draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata — strona kandydata zrobiona: szczegół
 > zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
-> P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
+> P1-10 (kanoniczny model miast — zrobione: `jobs.location_id`, migracja 0200, patrz Etap 2), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
@@ -584,6 +584,23 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   brak kwoty = brak pola, okres tylko z danych. Testy: `salary.test.ts`, E2E `job-detail-salary`.
   E-mail propozycji (0113): `send_offer` kolejkuje kwoty oferty (`salaryMin`/`salaryMax`/
   `salaryPeriod`/`currency`), tekst składa worker w locale odbiorcy (`email-payload-followups.test`).
+  Kanoniczne miasto oferty (audyt P1-10, migracja `0200` — numer tymczasowy): `jobs.city` zostaje
+  tekstem wpisanym w kreatorze, a `jobs.location_id` (→ `locations`, 0112) ustawia WYŁĄCZNIE
+  trigger `trg_jobs_resolve_location` przy każdym zapisie miasta (kreator, edycja opublikowanej,
+  import, DML) — po aliasie `location_aliases` i kluczu `city_key` (lustro `cityKey` z TS: bez
+  diakrytyków, wielkości liter, spacji/myślników). Nowe aliasy w słowniku dowiązują oferty bez
+  miejscowości (`trg_location_aliases_relink_jobs`); backfill bez podbicia `updated_at` (CAS #325).
+  Filtr `p_locations` w `get_public_jobs`/`_count`/facetach dopasowuje tekst ALBO miejscowość
+  (`location_filter_ids`), facet miasta = jedna pozycja na miejscowość (`locations.name`),
+  wyszukiwanie tekstowe miasta dokłada miejscowość rozpoznaną z wpisu. Landingi miast, licznik
+  huba i zapisane wyszukiwania korzystają z tych RPC bez zmian w kodzie. Kreator: podpowiedź pod
+  polem miasta (rozpoznana miejscowość albo informacja o braku w słowniku) + `datalist` propozycji
+  (`jobCityAssist`, odczyt słownika pod RLS, niczego nie zapisuje; `src/lib/locations/job-city.ts`).
+  Dowód: `rls.sql` sekcja LC200 (kontrole ujemne: bez `location_id` / bez triggera), unit
+  `job-location` (parzystość klucza, 10 miast landingów → jedna miejscowość, facet),
+  `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
+  `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy
+  (dopasowanie po `parent_location_id`), matching nadal liczy odległość z tekstu (`cityKey`).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner

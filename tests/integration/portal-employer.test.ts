@@ -11,6 +11,7 @@ vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined })
 
 const employer = await import('../../src/lib/data/employer');
 const { getBilling } = await import('../../src/lib/data/billing');
+const { jobCityAssist } = await import('../../src/lib/actions/job-location');
 
 // #25: loadery panelu pracodawcy pod RLS na PostgreSQL 16 — izolacja firm, rola member,
 // stronicowanie, liczniki, szczegół zgłoszenia i kreator.
@@ -305,5 +306,21 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     expect(await getBilling()).toMatchObject({ subscription: null, invoices: [] });
     actAs(ownerB);
     expect(await getBilling()).toMatchObject({ subscription: null, invoices: [] });
+  });
+
+  it('kanoniczne miasto (P1-10): podpowiedź kreatora ze słownika pod RLS i location_id ofert', async () => {
+    actAs(ownerA);
+    expect(await jobCityAssist({ city: 'anvers', locale: 'nl' })).toMatchObject({
+      status: 'ok', match: { slug: 'antwerp', name: 'Antwerpen' },
+    });
+    const prefix = await jobCityAssist({ city: 'Charl', locale: 'pl' });
+    expect(prefix.status === 'ok' && prefix.suggestions).toContain('Charleroi');
+    // Znaki LIKE we wpisie nie działają jak wzorzec.
+    expect(await jobCityAssist({ city: '%', locale: 'pl' })).toEqual({ status: 'ok', match: null, suggestions: [] });
+    expect(await jobCityAssist({ city: 'Nieznanowo', locale: 'pl' })).toMatchObject({ status: 'ok', match: null });
+    // Oferty fixture'u zapisane jako „Antwerp” mają miejscowość ze słownika (trigger 0200).
+    const { rows } = await pg.admin.query(`SELECT count(*)::int AS n FROM public.jobs j
+      JOIN public.locations l ON l.id = j.location_id WHERE j.company_id = $1 AND l.slug = 'antwerp'`, [ids.companyA]);
+    expect(rows[0].n).toBe(14);
   });
 });

@@ -1464,6 +1464,8 @@
     "startDateLabel": "Date de début",
     "cityLabel": "Ville",
     "cityPlaceholder": "ex. Anvers",
+    "cityRecognized": "Lieu reconnu : {name}. L’offre apparaîtra dans le filtre de cette ville, quelle que soit l’orthographe.",
+    "cityNotRecognized": "Ce nom ne figure pas dans notre liste de lieux. L’offre affichera le nom saisi, mais le filtre par ville ne la trouvera qu’avec la même orthographe.",
     "regionLabel": "Région",
     "regionPlaceholder": "ex. Flandre",
     "addressLabel": "Adresse",
