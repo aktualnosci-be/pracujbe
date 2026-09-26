@@ -99,6 +99,7 @@ export default defineConfig({
     // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
     '**/content-report-form.spec.ts',
     '**/job-funnel-no-storage.spec.ts',
+    '**/job-funnel-minor-marker.spec.ts',
     // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
     '**/contact-form.spec.ts',
   ],

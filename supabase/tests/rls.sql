@@ -10942,6 +10942,42 @@ select pg_temp.assert(:mapurged >= 1
   and (select count(*) from public.storage_deletion_queue where path = :'mapath2') = 1,
   'MA10b porzucony plik usunięty i zakolejkowany, wysłany (kontrola ujemna) zostaje');
 
+-- MN135 (0135, numer tymczasowy): e-mail newMessage niesie tylko LICZBĘ załączników
+-- (#503: bez nazw plików); firma zablokowana przez kandydata-nadawcę (#97) dostaje 0.
+select pg_temp.assert(
+  (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mamsg1' and profile_id = :'MAE') = 1
+  and (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mamsg4' and profile_id = :'MAC') = 1,
+  'MN135-1 e-mail o wiadomości z plikiem niesie liczbę załączników (obie strony)');
+select pg_temp.assert(
+  not exists (select 1 from public.email_deliveries
+    where template = 'newMessage' and entity_id in (:'mamsg1', :'mamsg4')
+      and (payload::text like '%CV Ma%' or payload::text like '%umowa.jpg%' or payload ? 'fileName')),
+  'MN135-2 payload bez nazw plików');
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'maconv'::uuid, 'Bez pliku', gen_random_uuid()) as mnmsg0 \gset
+select attachment_id as mnatt from public.stage_message_attachment(
+  :'maconv'::uuid, gen_random_uuid(), :'maconv' || '/att-' || gen_random_uuid()::text || '.png',
+  'skan.png', 'image/png', 500, :'masha') \gset
+select public.set_company_block(:'MAF'::uuid, true);
+reset role;
+select set_config('app.current_uid', :'MAC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.send_message(:'maconv'::uuid, 'Po blokadzie', gen_random_uuid(), array[:'mnatt'::uuid]) as mnmsgb \gset
+select public.set_company_block(:'MAF'::uuid, false);
+reset role;
+select pg_temp.assert(
+  (select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mnmsg0' and profile_id = :'MAE') = 0,
+  'MN135-3 wiadomość bez pliku: attachmentCount = 0');
+-- Kontrola ujemna do MN135-1: ta sama firma, ten sam typ pliku — różnica tylko w blokadzie.
+select pg_temp.assert(
+  coalesce((select (payload->>'attachmentCount')::int from public.email_deliveries
+     where template = 'newMessage' and entity_id = :'mnmsgb' and profile_id = :'MAE'), 0) = 0,
+  'MN135-4 firma zablokowana przez nadawcę nie dostaje liczby jego plików');
+
 -- MA11: usunięcie rozmowy (np. usunięcie konta #486) kasuje pliki obu stron i kolejkuje obiekty.
 delete from public.conversations where id = :'maconv';
 select pg_temp.assert(
@@ -12688,5 +12724,158 @@ delete from auth.users where id in (:'RIPC1', :'RIPC2');
 select pg_temp.assert(
   (select count(*) from public.document_acceptances where profile_id in (:'RIPC1', :'RIPC2')) = 0,
   'RIP-4c kaskada usunięcia konta nadal usuwa receipty');
+
+-- ============================================================================
+-- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).
+--         `get_public_jobs` sortuje po kluczu wynagrodzenia (opcjonalnie) i `published_at`,
+--         ale bez unikalnego tie-breakera oferty z remisem mogły wrócić w innej kolejności
+--         między wywołaniami, tnąc grupę remisową w innym miejscu przy paginacji offsetowej
+--         (pominięcia/duplikaty na sąsiednich stronach). Naprawa: `j.id desc` na końcu
+--         ORDER BY (unikalny PK) — sprawdzone dwoma sposobami: (a) realnym zapytaniem na
+--         trzech ofertach z IDENTYCZNYM `published_at` — podział na strony rozmiaru 1 daje
+--         dokładnie ten sam porządek co jedno zapytanie o wszystkie trzy; (b) obecnością
+--         tie-breakera w definicji funkcji (kontrola ujemna: usunięcie go z definicji
+--         cofa asercję (a) do niedeterminizmu, którego prosty test nie może już wykryć —
+--         stąd introspekcja jako dodatkowa, bezpośrednia bramka).
+-- ============================================================================
+\set JLCO  'f9500000-0000-0000-0000-000000059400'
+\set JLJ1  'f9500000-0000-0000-0000-000000059401'
+\set JLJ2  'f9500000-0000-0000-0000-000000059402'
+\set JLJ3  'f9500000-0000-0000-0000-000000059403'
+-- Fixture trwała (autocommit, jak PL109) — zostaje w bazie do końca przebiegu; słowo kluczowe
+-- unikalne, więc nie wpływa na żadną inną sekcję. Negatywna kontrola niżej ma WŁASną
+-- transakcję (begin/rollback) wokół podmiany funkcji, bez zagnieżdżania w tej fixture.
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values (:'JLCO', 'JLP594 Firma', 'verified');
+-- Identyczny `published_at` na wszystkich trzech ofertach — dawny brak tie-breakera nie
+-- miał żadnej podstawy do stabilnego uporządkowania tej trójki.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'JLJ1',:'JLCO','jlp594-a','Pracownik JLP594','warehouse','permanent','Gent','Flandria','active','pl', '2026-06-01 12:00:00+00'),
+  (:'JLJ2',:'JLCO','jlp594-b','Pracownik JLP594','warehouse','permanent','Gent','Flandria','active','pl', '2026-06-01 12:00:00+00'),
+  (:'JLJ3',:'JLCO','jlp594-c','Pracownik JLP594','warehouse','permanent','Gent','Flandria','active','pl', '2026-06-01 12:00:00+00');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+
+-- Słowo kluczowe unikalne dla tej trójki (zamiast kategorii): filtr WHERE działa PRZED
+-- LIMIT/OFFSET, więc inne aktywne, zweryfikowane oferty tej samej kategorii/daty (z innych
+-- sekcji tego pliku) nie mogą wejść do wyniku i zafałszować testu podziału na strony.
+--
+-- JLP594-1: jedno zapytanie o wszystkie trzy vs. trzy zapytania o jedną stronę (limit 1) —
+-- ten sam porządek, każda oferta dokładnie raz, żadnej pominiętej ani zdublowanej.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'jlp594', p_limit => 3, p_offset => 0))
+  = array[
+      (select slug from public.get_public_jobs('pl', 'jlp594', p_limit => 1, p_offset => 0)),
+      (select slug from public.get_public_jobs('pl', 'jlp594', p_limit => 1, p_offset => 1)),
+      (select slug from public.get_public_jobs('pl', 'jlp594', p_limit => 1, p_offset => 2))
+    ],
+  'JLP594-1 podział na strony rozmiaru 1 daje identyczny porządek co jedno zapytanie o 3 wiersze');
+
+-- JLP594-2: powtórzenie tego samego zapytania (inny plan/inna sesja logiczna w tej samej
+-- transakcji) zwraca ten sam porządek — deterministyczność, nie przypadek jednego wywołania.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'jlp594', p_limit => 3, p_offset => 0))
+  =
+  (select array_agg(slug) from public.get_public_jobs('pl', 'jlp594', p_limit => 3, p_offset => 0)),
+  'JLP594-2 dwa niezależne wywołania tego samego zapytania zgadzają się co do kolejności');
+
+reset role;
+
+-- JLP594-3: definicja funkcji niesie tie-breaker `j.id` bezpośrednio po `published_at desc`
+-- (po kluczu wynagrodzenia), przed `limit`/`offset` — introspekcja niezależna od danych.
+select pg_temp.assert(
+  regexp_replace(pg_get_functiondef(
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)'::regprocedure),
+    '--[^\n]*', '', 'g')
+  ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
+  'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
+
+-- KONTROLA UJEMNA: definicja z 0110 (bez tie-breakera) — introspekcja JLP594-3 wykrywa brak,
+-- a podział na strony (JLP594-1) traci swoją gwarancję (nie ma już czego porównać
+-- deterministycznie: bez unikalnego klucza w ORDER BY sam SQL nie obiecuje stabilnego wyniku).
+begin;
+create or replace function public.get_public_jobs(
+  p_locale         text        default 'pl',
+  p_keyword        text        default null,
+  p_city           text        default null,
+  p_categories     text[]      default null,
+  p_locations      text[]      default null,
+  p_contract_types text[]      default null,
+  p_salary_min     integer     default null,
+  p_salary_max     integer     default null,
+  p_accommodation  boolean     default null,
+  p_immediate      boolean     default null,
+  p_no_language    boolean     default null,
+  p_since          timestamptz default null,
+  p_sort           text        default 'newest',
+  p_limit          integer     default 20,
+  p_offset         integer     default 0,
+  p_salary_unit    text        default 'month'
+)
+returns table (
+  id uuid, slug text, title text, company_name text, company_verified boolean,
+  city text, region text, contract_type text, salary_min integer, salary_max integer,
+  currency text, salary_period text, published_at timestamptz, highlights text[], category text,
+  accommodation boolean, immediate boolean, no_language_required boolean
+)
+language sql stable security definer set search_path = public, pg_temp as $jlneg$
+  select
+    j.id, j.slug,
+    coalesce(t.title, j.title) as title,
+    c.name as company_name,
+    (c.status = 'verified') as company_verified,
+    j.city, j.region, j.contract_type::text,
+    j.salary_min, j.salary_max, coalesce(j.currency, 'EUR') as currency,
+    j.salary_period::text as salary_period,
+    j.published_at,
+    coalesce(t.highlights, '{}'::text[]) as highlights,
+    j.category::text,
+    j.accommodation, j.immediate, j.no_language_required
+  from public.jobs j
+  join public.companies c on c.id = j.company_id
+  left join lateral (
+    select jt.title, jt.highlights
+    from public.job_translations jt
+    where jt.job_id = j.id
+    order by (jt.locale = case when public.is_supported_locale(p_locale) then p_locale else 'pl' end) desc,
+             (jt.locale = j.default_locale) desc, (jt.locale = 'en') desc
+    limit 1
+  ) t on true
+  where j.status = 'active' and j.deleted_at is null
+    and (j.expires_at is null or j.expires_at > now())
+    and c.status = 'verified' and c.deleted_at is null
+    and not exists (
+      select 1 from public.candidate_company_blocks b
+      where b.candidate_id = auth.uid() and b.company_id = j.company_id
+    )
+    and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
+    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations))
+    and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
+    and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
+    and (p_keyword is null or j.id in (
+      select public.search_title_candidates(left(p_keyword, 100))))
+    and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
+      like public.search_like_pattern(left(p_keyword, 100)) escape '\')
+    and public.job_salary_in_range(
+      j.salary_min, j.salary_max, j.salary_period, p_salary_min, p_salary_max, p_salary_unit)
+    and (p_accommodation is null or j.accommodation = p_accommodation)
+    and (coalesce(p_immediate, false) = false or j.immediate = true)
+    and (coalesce(p_no_language, false) = false or j.no_language_required = true)
+    and (p_since is null or j.published_at >= p_since)
+  order by
+    (case when p_sort = 'salary' then public.job_salary_sort_key(
+      j.salary_min, j.salary_max, j.salary_period, p_salary_unit) end) desc nulls last,
+    j.published_at desc
+  limit least(greatest(coalesce(p_limit, 20), 1), 100)
+  offset least(greatest(coalesce(p_offset, 0), 0), 10000);
+$jlneg$;
+select pg_temp.assert(
+  not (regexp_replace(pg_get_functiondef(
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text)'::regprocedure),
+    '--[^\n]*', '', 'g')
+  ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
+  'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
+rollback;
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

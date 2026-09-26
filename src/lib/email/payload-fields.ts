@@ -25,7 +25,7 @@ export const EMAIL_PAYLOAD_FIELDS = {
   jobOffer: ['companyName', 'jobTitle', 'salaryMin', 'salaryMax', 'salaryPeriod', 'currency', 'expiresAt'],
   offerAccepted: ['candidateName', 'jobTitle'],
   offerDeclined: ['candidateName', 'jobTitle'],
-  newMessage: ['senderName', 'panel', 'conversationId'],
+  newMessage: ['senderName', 'panel', 'conversationId', 'attachmentCount'],
   jobPublished: ['jobTitle'],
   companyVerified: ['companyName'],
   companyRejected: ['companyName', 'reason'],
