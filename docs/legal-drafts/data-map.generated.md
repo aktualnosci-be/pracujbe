@@ -163,12 +163,13 @@ Tabele w migracjach: 100; z danymi osobowymi: 64; bez danych osobowych: 36.
 ### Cloudflare Web Analytics (`cloudflare-web-analytics`)
 
 - **Cel w portalu:** Analityka ruchu — wyłącznie po zgodzie w kategorii analytics (#570, decyzja właściciela 2026-09-25: zamiast Google Analytics i Meta Pixel — usunięte).
-- **Kategorie danych:** Wyświetlenia stron; beacon bezcookie'owy — bez identyfikatorów i bez cookies trackera
+- **Kategorie danych:** Wyświetlenia stron; beacon bezcookie'owy — bez identyfikatorów i bez cookies trackera; Core Web Vitals (LCP, INP, CLS) mierzone przez ten sam beacon; panel admina czyta wyłącznie agregaty p75 per ścieżka
 - **Osoby:** Odwiedzający, którzy wyrazili zgodę
 - **Aktywacja:** NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN + zgoda analytics w banerze cookies.
-- **Kod:** `src/components/cookies/Analytics.tsx`, `src/lib/consent-store.ts`
+- **Kod:** `src/components/cookies/Analytics.tsx`, `src/lib/consent-store.ts`, `src/lib/web-vitals/cloudflare-client.ts`, `src/lib/web-vitals/field-report.ts`
 - **Uwaga:** Kategorii marketing nie ma w banerze ani w logu zgód (decyzja właściciela 2026-09-25; wersja polityki cookies 2.0, migracja 0130).
 - **Uwaga:** Bez tokenu beacon się nie ładuje, a CSP nie dopuszcza hostów cloudflareinsights.com.
+- **Uwaga:** Dane polowe CWV: /admin/wydajnosc czyta z serwera GraphQL Analytics API (CF_ANALYTICS_ACCOUNT_ID, CF_WEB_ANALYTICS_SITE_TAG, CF_ANALYTICS_API_TOKEN — tylko odczyt); portal nie ma własnego endpointu zbiórki metryk.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
