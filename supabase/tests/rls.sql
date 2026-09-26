@@ -13097,6 +13097,64 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
+--       expires_at i salary_period oferty — źródło `validThrough` i
+--       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
+--       wiersza to_jsonb → JobDetail w src/lib/jobs.ts). Bez daty = null, bez kwot = brak baseSalary
+--       (JSON-LD pomija pole, bez wymyślonej wartości). Kontrola ujemna: definicja bez kolumny
+--       w transakcji cofanej → asercja JP12-1 pada.
+-- ============================================================================
+\set JPCO 'c1120000-0000-0000-0000-0000000000a1'
+\echo '--- JP12 get_public_job: expires_at + salary_period ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo) values (:'JPCO','JP12 Sp','verified',false);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  ('c1120000-0000-0000-0000-0000000000b1',:'JPCO','jp12-dated','Magazynier JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   15,18,'EUR','hour','2099-10-15 23:59:00+00'),
+  ('c1120000-0000-0000-0000-0000000000b2',:'JPCO','jp12-undated','Kierowca JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month',null);
+
+set role anon; select pg_temp.assert_client_role();
+-- JP12-1: oferta z terminem i okresem — dokładnie te wartości, także w postaci to_jsonb (jak aplikacja).
+select pg_temp.assert(
+  (select expires_at = '2099-10-15 23:59:00+00'::timestamptz and salary_period = 'hour'
+   from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-1 expires_at i salary_period z oferty');
+select pg_temp.assert(
+  (select (to_jsonb(j)->>'expires_at')::timestamptz = '2099-10-15 23:59:00+00'::timestamptz
+      and to_jsonb(j)->>'salary_period' = 'hour'
+   from public.get_public_job('jp12-dated', 'pl') j),
+  'JP12-1b to_jsonb niesie oba pola (odczyt aplikacji)');
+-- JP12-2: brak terminu → null (JSON-LD bez validThrough). Okres jest NOT NULL w jobs; bez kwot
+-- JSON-LD i tak nie ma baseSalary (normalizeSalary), więc unitText nie powstaje.
+select pg_temp.assert(
+  (select expires_at is null and salary_min is null and salary_max is null
+   from public.get_public_job('jp12-undated', 'pl')),
+  'JP12-2 bez daty → expires_at null, bez kwot');
+reset role;
+
+-- JP12-3: kontrola ujemna — definicja bez expires_at (null) daje czerwoną asercję JP12-1.
+begin;
+do $jp$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(E'j.expires_at,' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: JP12-3 fragment j.expires_at nie występuje w get_public_job';
+  end if;
+  execute replace(v_def, E'j.expires_at,', E'null::timestamptz as expires_at,');
+end $jp$;
+select pg_temp.assert(
+  (select expires_at is null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3 mutacja bez expires_at — JP12-1 wykrywa regresję');
+rollback;
+select pg_temp.assert(
+  (select expires_at is not null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3b po cofnięciu definicja wróciła');
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- CL141. Edycja strony WWW i logo firmy (#112, 0141): tylko owner/admin (jak
 --        nazwa/VAT, 0040); bezwzględny https egzekwowany CHECK-iem
 --        (`companies_website_https`/`companies_logo_url_https`, ta sama reguła co
