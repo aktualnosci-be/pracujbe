@@ -11,6 +11,7 @@ import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
 import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
 
@@ -26,6 +27,13 @@ import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
  */
 
 export type MsgResult = { ok: true; id: string } | { ok: false; error: ErrorCode };
+/**
+ * Wynik wysyłki: jak `MsgResult`, a przy numerze identyfikacyjnym w treści (#495) także
+ * pole (`body`) i powód (`sensitiveId`) — UI pokazuje błąd przy polu i zachowuje treść.
+ */
+export type SendMessageResult =
+  | { ok: true; id: string }
+  | { ok: false; error: ErrorCode; field?: 'body'; reason?: 'sensitiveId' };
 export type OkResult = { ok: true } | { ok: false; error: ErrorCode };
 
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
@@ -106,7 +114,12 @@ export async function sendMessage(
   body: string,
   clientMessageId: string,
   attachmentIds: string[] = [],
-): Promise<MsgResult> {
+): Promise<SendMessageResult> {
+  // #495: NISS/BIS, PESEL ani numer dokumentu nie są potrzebne w rozmowie z firmą — odmowa
+  // przy polu, zanim cokolwiek trafi do bazy (także w trybie demo i przed limitem).
+  if (typeof body === 'string' && containsPersonalIdentifier(body)) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'body', reason: 'sensitiveId' };
+  }
   const parsed = sendInputSchema.safeParse({ body, attachmentIds });
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   if (!clientMessageIdSchema.safeParse(clientMessageId).success) {

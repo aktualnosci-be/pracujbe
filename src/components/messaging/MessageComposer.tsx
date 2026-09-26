@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import { discardMessageAttachment, uploadMessageAttachment } from '@/lib/actions/message-attachments';
 import { sendMessage } from '@/lib/actions/messages';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
+import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 import { cn } from '@/lib/utils';
 import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
 import {
@@ -27,6 +28,8 @@ import { BTN_PRIMARY, BTN_SMALL, FORM_CONTROL } from '@/components/dashboard/pan
  * czyszczenie pola, fokus zostaje w polu, `router.refresh()` (odświeża wątek RSC).
  * Limit długości = `MESSAGE_BODY_MAX_LENGTH` (CHECK w bazie), z licznikiem powiązanym przez
  * `aria-describedby`. Błąd przy polu z klucza i18n wg kodu (Invariant #8), treść zostaje.
+ * Numer NISS/BIS, PESEL, eID albo „paszport nr…” w treści (#495) = błąd przy polu bez
+ * wysyłki (te same reguły co akcja, która i tak odmawia) + stała podpowiedź pod polem.
  * Enter = wyślij, Shift+Enter = nowa linia. Etykieta: „Wiadomość do {rozmówca}" (#358).
  * Klucz idempotencji (#147): jeden UUID na operację wysyłki danej treści; ponowienie tej
  * samej treści po błędzie używa tego samego klucza (retry po utracie odpowiedzi nie dubluje
@@ -62,6 +65,7 @@ export function MessageComposer({
   const fieldId = React.useId();
   const counterId = `${fieldId}-counter`;
   const errorId = `${fieldId}-error`;
+  const sensitiveHintId = `${fieldId}-sensitive-hint`;
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -73,6 +77,7 @@ export function MessageComposer({
   const [attachNotice, setAttachNotice] = React.useState<string | null>(null);
 
   const tooLongMessage = t('composerTooLong', { max: MESSAGE_BODY_MAX_LENGTH });
+  const sensitiveIdMessage = t('composerSensitiveId');
 
   function problemMessage(problem: AttachmentFileProblem | undefined): string {
     if (problem === 'tooLarge') return tRoot('files.errorTooLarge');
@@ -163,6 +168,11 @@ export function MessageComposer({
       textareaRef.current?.focus();
       return;
     }
+    if (containsPersonalIdentifier(body)) {
+      setError(sensitiveIdMessage);
+      textareaRef.current?.focus();
+      return;
+    }
     setError(null);
     // Jedna operacja = ta sama treść i te same pliki; zmiana któregokolwiek = nowy klucz.
     const signature = `${body}\u0000${readyIds.join(',')}`;
@@ -183,6 +193,8 @@ export function MessageComposer({
           setDrafts([]);
           setAttachNotice(null);
           router.refresh();
+        } else if (result.reason === 'sensitiveId') {
+          setError(sensitiveIdMessage);
         } else {
           setError(errorMessage(result.error, body.length));
         }
@@ -225,7 +237,9 @@ export function MessageComposer({
           readOnly={pending}
           aria-busy={pending}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${errorId} ${counterId}` : counterId}
+          aria-describedby={
+            error ? `${errorId} ${counterId} ${sensitiveHintId}` : `${counterId} ${sensitiveHintId}`
+          }
           placeholder={t('composerPlaceholder')}
           className={cn(FORM_CONTROL, 'min-w-[12rem] flex-1 basis-60 resize-y read-only:opacity-60')}
         />
@@ -309,6 +323,9 @@ export function MessageComposer({
       ) : null}
       <p id={counterId} className="mt-1 text-xs text-muted-foreground">
         {t('composerCounter', { count: value.length, max: MESSAGE_BODY_MAX_LENGTH })}
+      </p>
+      <p id={sensitiveHintId} className="mt-0.5 text-xs text-muted-foreground">
+        {t('composerSensitiveIdHint')}
       </p>
       <p id={attachHintId} className="mt-0.5 text-xs text-muted-foreground">
         {t('attachHint', { max: MESSAGE_ATTACHMENTS_MAX })}

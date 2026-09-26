@@ -1645,6 +1645,8 @@
     "composerLabel": "Bericht aan {name}",
     "composerCounter": "{count} / {max} tekens",
     "composerTooLong": "Een bericht mag maximaal {max} tekens bevatten. Maak het korter en verstuur het opnieuw.",
+    "composerSensitiveId": "Verwijder het rijksregisternummer, BIS-nummer, PESEL of het nummer van een identiteitsdocument — verstuur het niet in een bericht.",
+    "composerSensitiveIdHint": "Vul geen rijksregisternummer, BIS-nummer, PESEL of nummer van een identiteitsdocument in — dat is niet nodig in dit gesprek.",
     "loadOlder": "Oudere berichten laden",
     "loadingOlder": "Oudere berichten worden geladen…",
     "loadOlderError": "Oudere berichten konden niet worden geladen. Probeer het opnieuw.",
