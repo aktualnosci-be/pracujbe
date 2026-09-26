@@ -35,6 +35,8 @@ beforeEach(() => {
   resetFakeDb({ id: SELF, role: 'candidate' });
   register('request_account_erasure');
   register('export_my_data');
+  register('request_employer_account_erasure');
+  register('export_my_employer_data');
 });
 
 describe('deleteMyAccountAction', () => {
@@ -72,6 +74,34 @@ describe('deleteMyAccountAction', () => {
     outcome = { error: message };
     expect(await deleteMyAccountAction('ja@test.be')).toEqual({ ok: false, error });
     expect(vi.mocked(captureError).mock.calls.length > 0).toBe(reported);
+  });
+});
+
+describe('deleteMyAccountAction — pracodawca (0209)', () => {
+  beforeEach(() => {
+    fakeSession.identity = { id: SELF, role: 'employer' };
+  });
+
+  it('konto pracodawcy → request_employer_account_erasure (nie ścieżka kandydata)', async () => {
+    outcome = { data: { erased: true } };
+    expect(await deleteMyAccountAction('szef@firma.be')).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith('request_employer_account_erasure', { p_confirm_email: 'szef@firma.be' });
+    expect(fakeDb.callsTo('request_account_erasure')).toHaveLength(0);
+    expect(fakeDb.callsTo('request_employer_account_erasure')[0]?.as).toBe(SELF);
+  });
+
+  it('ostatni właściciel firmy → lastOwner bez zgłoszenia do kanału błędów', async () => {
+    outcome = { error: 'VALIDATION_FAILED: COMPANY_LAST_OWNER' };
+    expect(await deleteMyAccountAction('szef@firma.be')).toEqual({ ok: false, error: 'lastOwner' });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: kandydat nie trafia na ścieżkę pracodawcy', async () => {
+    fakeSession.identity = { id: SELF, role: 'candidate' };
+    outcome = { data: { erased: true } };
+    await deleteMyAccountAction('ja@test.be');
+    expect(fakeDb.callsTo('request_employer_account_erasure')).toHaveLength(0);
+    expect(rpc).toHaveBeenCalledWith('request_account_erasure', { p_confirm_email: 'ja@test.be' });
   });
 });
 
@@ -121,6 +151,16 @@ describe('POST /api/account/export', () => {
     const body = await res.text();
     expect(JSON.parse(body)).toEqual({ error });
     expect(body).not.toContain('db.internal');
+  });
+
+  it('pracodawca → export_my_employer_data (bez eksportu kandydata)', async () => {
+    fakeSession.identity = { id: SELF, role: 'employer' };
+    outcome = { data: { format: 'pracujbe-export/1', accountType: 'employer' } };
+    const res = await exportData(exportRequest('https://pracuj.be'));
+    expect(res.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('export_my_employer_data');
+    expect(fakeDb.callsTo('export_my_data')).toHaveLength(0);
+    expect(await res.json()).toEqual({ format: 'pracujbe-export/1', accountType: 'employer' });
   });
 
   it('bez sesji → 401 bez odczytu danych', async () => {

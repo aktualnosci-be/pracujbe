@@ -2651,6 +2651,7 @@
     "sectionDescription": "Pobierz kopię danych zapisanych na Twoim koncie albo usuń konto.",
     "exportTitle": "Pobierz dane",
     "exportDescription": "Plik JSON z danymi profilu, CV (nazwa i rozmiar pliku), zgłoszeniami, propozycjami, wiadomościami i zapisanymi wynikami dopasowania.",
+    "exportDescriptionEmployer": "Plik JSON z danymi profilu, członkostwami w firmach, wysłanymi zaproszeniami, utworzonymi ofertami i historią Twoich działań w panelu. Bez danych kandydatów.",
     "exportButton": "Pobierz moje dane (JSON)",
     "exporting": "Przygotowywanie pliku…",
     "exportSuccess": "Plik z danymi został pobrany.",
@@ -2660,6 +2661,7 @@
     "exportError": "Nie udało się przygotować pliku. Spróbuj ponownie.",
     "deleteTitle": "Usuń konto",
     "deleteDescription": "Usuwa profil, CV, zgłoszenia, propozycje i wiadomości w serwisie. Tej operacji nie można cofnąć.",
+    "deleteDescriptionEmployer": "Usuwa Twój profil, członkostwa w firmach i dostęp do panelu. Firmy, oferty, zgłoszenia i rozmowy zostają w firmie. Tej operacji nie można cofnąć.",
     "deleteStart": "Usuń konto…",
     "confirmLabel": "Wpisz adres e-mail konta, aby potwierdzić",
     "confirmButton": "Usuń konto na stałe",
@@ -2668,6 +2670,7 @@
     "mismatch": "Adres nie zgadza się z adresem konta.",
     "deleteDenied": "Tej operacji nie można wykonać z tego konta.",
     "deleteError": "Nie udało się usunąć konta. Spróbuj ponownie.",
+    "deleteLastOwner": "Jesteś jedynym właścicielem firmy. Najpierw przekaż rolę właściciela innej osobie albo zamknij firmę.",
     "deleted": "Konto zostało usunięte.",
     "deletedDemo": "Tryb demonstracyjny: nic nie zostało usunięte.",
     "homeLink": "Przejdź do strony głównej"

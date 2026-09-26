@@ -2651,6 +2651,7 @@
     "sectionDescription": "Téléchargez une copie des données enregistrées dans votre compte ou supprimez votre compte.",
     "exportTitle": "Télécharger les données",
     "exportDescription": "Un fichier JSON avec votre profil, votre CV (nom et taille du fichier), vos candidatures, propositions, messages et résultats de compatibilité enregistrés.",
+    "exportDescriptionEmployer": "Un fichier JSON avec votre profil, vos adhésions aux entreprises, les invitations envoyées, les offres créées et l’historique de vos actions dans le tableau de bord. Sans données de candidats.",
     "exportButton": "Télécharger mes données (JSON)",
     "exporting": "Préparation du fichier…",
     "exportSuccess": "Le fichier avec vos données a été téléchargé.",
@@ -2660,6 +2661,7 @@
     "exportError": "Le fichier n’a pas pu être préparé. Veuillez réessayer.",
     "deleteTitle": "Supprimer le compte",
     "deleteDescription": "Supprime votre profil, votre CV, vos candidatures, propositions et messages sur le site. Cette action est irréversible.",
+    "deleteDescriptionEmployer": "Supprime votre profil, vos adhésions aux entreprises et l’accès au tableau de bord. Les entreprises, offres, candidatures et conversations restent dans l’entreprise. Cette opération est irréversible.",
     "deleteStart": "Supprimer le compte…",
     "confirmLabel": "Saisissez l’adresse e-mail du compte pour confirmer",
     "confirmButton": "Supprimer définitivement le compte",
@@ -2668,6 +2670,7 @@
     "mismatch": "Cette adresse ne correspond pas à celle du compte.",
     "deleteDenied": "Cette action n’est pas disponible pour ce compte.",
     "deleteError": "Le compte n’a pas pu être supprimé. Veuillez réessayer.",
+    "deleteLastOwner": "Vous êtes le seul propriétaire d’une entreprise. Transférez d’abord le rôle de propriétaire à une autre personne ou fermez l’entreprise.",
     "deleted": "Votre compte a été supprimé.",
     "deletedDemo": "Mode démo : rien n’a été supprimé.",
     "homeLink": "Aller à la page d’accueil"
