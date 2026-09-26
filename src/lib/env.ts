@@ -11,7 +11,6 @@
 import { isBillingEnabled } from '@/lib/billing/flag';
 import { cronSecretChecks } from '@/lib/cron/secrets';
 import { emailProviderFromEnv, resendApiKeyFromEnv } from '@/lib/email/transport/select';
-import { unsubscribeSecretFromEnv } from '@/lib/email/unsubscribe-token';
 import { errorWebhookFromEnv } from '@/lib/error-webhook/url';
 
 export const env = {
@@ -233,10 +232,11 @@ export function readinessChecks(): Record<string, boolean> {
     fileBucket: fileBucketConfig() !== null,
     fileDownloadSecret: fileDownloadSecret() !== null,
     // Sekrety bez własnego wskaźnika w health (odbiór startu 26.09): aplikacja gościa i
-    // zaproszenia bez konta (`guest-apply/token.ts`, ≥ 32 znaki — bez importu, bo moduł
-    // czyta tryb z tego pliku) oraz linki wypisania z e-maili (`unsubscribe-token.ts`).
+    // zaproszenia bez konta (`guest-apply/token.ts`) oraz linki wypisania z e-maili
+    // (`unsubscribe-token.ts`), oba ≥ 32 znaki. Bez importu tych modułów: używają
+    // `node:crypto`, a `env.ts` trafia też do bundla klienta (test pilnuje zgodności progów).
     guestApplySecret: (process.env.GUEST_APPLY_SECRET ?? '').length >= 32,
-    unsubscribeSecret: unsubscribeSecretFromEnv() !== null,
+    unsubscribeSecret: (process.env.EMAIL_UNSUBSCRIBE_SECRET ?? '').length >= 32,
   };
 }
 

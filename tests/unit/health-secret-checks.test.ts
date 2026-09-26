@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+
+import { unsubscribeSecretFromEnv } from '@/lib/email/unsubscribe-token';
 import { readinessChecks } from '@/lib/env';
 import { guestApplySecret } from '@/lib/guest-apply/token';
 
@@ -36,4 +39,19 @@ describe('readinessChecks — sekrety gościa i wypisania', () => {
       expect(guestApplySecret() !== null).toBe(expected);
     },
   );
+
+  it.each([['u'.repeat(32), true], ['u'.repeat(31), false]] as const)(
+    'zgodne z unsubscribeSecretFromEnv(): %j → %s',
+    (value, expected) => {
+      vi.stubEnv('EMAIL_UNSUBSCRIBE_SECRET', value);
+      expect(readinessChecks().unsubscribeSecret).toBe(expected);
+      expect(unsubscribeSecretFromEnv() !== null).toBe(expected);
+    },
+  );
+
+  it('env.ts nie importuje modułów z node:crypto (trafia do bundla klienta)', () => {
+    const source = readFileSync('src/lib/env.ts', 'utf8');
+    expect(source).not.toMatch(/from '@\/lib\/(email\/unsubscribe-token|guest-apply\/token)'/);
+    expect(source).not.toMatch(/from 'node:/);
+  });
 });
