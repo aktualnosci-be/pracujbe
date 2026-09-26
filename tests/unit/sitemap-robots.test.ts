@@ -163,6 +163,34 @@ describe('sitemap (produkcja)', () => {
     expect(await sitemap({ id: 0 })).toEqual([]);
     expect(jobs.getJobs).not.toHaveBeenCalled();
   });
+
+  it('#591: profil firmy — jeden wpis na companySlug (zebrany z ofert, bez osobnego zapytania)', async () => {
+    jobs.getJobs.mockResolvedValue({
+      jobs: [
+        { ...job('a'), companySlug: 'firma-x' },
+        { ...job('b'), companySlug: 'firma-x' }, // druga oferta tej samej firmy — bez duplikatu wpisu
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 100,
+    });
+    const entries = await sitemap({ id: 1 }); // partia ofert (#599) — profile firm idą z ofertami
+    const companyUrls = entries
+      .filter((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))
+      .map((entry) => entry.url);
+    for (const locale of LOCALES) {
+      expect(companyUrls).toContain(`${SITE}/${locale}/pracodawcy/firma-x`);
+    }
+    // Kontrola ujemna: bez deduplikacji dwie oferty tej samej firmy dałyby 8 wpisów (2 × 4 języki),
+    // nie 4 — ta asercja złapałaby regresję z Set → tablicą.
+    expect(companyUrls).toHaveLength(LOCALES.length);
+  });
+
+  it('#591 kontrola ujemna: oferta demo/bez companySlug nie tworzy profilu firmy', async () => {
+    jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
+    const entries = await sitemap({ id: 1 });
+    expect(entries.some((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))).toBe(false);
+  });
 });
 
 describe('robots', () => {

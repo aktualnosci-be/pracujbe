@@ -80,6 +80,11 @@ export interface JobListItem {
    * i nie pozwala aplikować. Oferty z bazy nigdy nie mają tej flagi.
    */
   isDemo?: true;
+  /**
+   * Stabilny slug profilu firmy (`/pracodawcy/<slug>`, tylko firma verified — 0140, #591).
+   * Brak = brak publicznego profilu (bezpiecznik) — sitemap i CTA go wtedy pomijają.
+   */
+  companySlug?: string;
 }
 
 export interface JobDetail extends JobListItem {
@@ -353,7 +358,9 @@ function computeIsNew(publishedAt: string): boolean {
   return Date.now() - ts <= NEW_DAYS * 24 * 60 * 60 * 1000;
 }
 
-function rowToJobListItem(row: unknown): JobListItem {
+/** Wystawiona dla `@/lib/companies` (#591): profil firmy zwraca oferty w tym samym kształcie
+ *  co `get_public_jobs`, więc mapowanie wiersza na `JobListItem` jest tylko jedno. */
+export function rowToJobListItem(row: unknown): JobListItem {
   const r = asRecord(row);
   const publishedAt = asString(r['published_at'], new Date().toISOString());
   const salaryPeriod = asSalaryPeriod(r['salary_period']);
@@ -377,6 +384,7 @@ function rowToJobListItem(row: unknown): JobListItem {
     accommodation: asBool(r['accommodation']),
     immediate: asBool(r['immediate']),
     noLanguageRequired: asBool(r['no_language_required']),
+    ...(asOptString(r['company_slug']) ? { companySlug: asOptString(r['company_slug']) } : {}),
   };
 }
 
@@ -404,6 +412,7 @@ function rowToJobDetail(row: unknown): JobDetail {
     ...(asOptString(r['company_logo_url'])
       ? { companyLogoUrl: asOptString(r['company_logo_url']) }
       : {}),
+    // companySlug: już zmapowane przez rowToJobListItem (kolumna wspólna z get_public_jobs).
   };
 }
 

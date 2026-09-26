@@ -27,3 +27,31 @@ describe('CompanyStatusBanner — uzasadnienie decyzji admina (#310)', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent('stare');
   });
 });
+
+describe('CompanyStatusBanner — orientacyjny czas weryfikacji (decyzja 26.09.2026)', () => {
+  const variants = ['company', 'dashboard', 'wizard'] as const;
+
+  it.each(variants.flatMap((v) => ['pending', 'unverified'].map((s) => [v, s] as const)))(
+    '%s / %s: pokazuje bannerEta',
+    (variant, status) => {
+      render(<CompanyStatusBanner status={status} variant={variant} />);
+      expect(screen.getByRole('status')).toHaveTextContent('bannerEta');
+    },
+  );
+
+  it.each(['verified', 'rejected', 'suspended'])('kontrola ujemna: %s — bez czasu weryfikacji', (status) => {
+    render(<CompanyStatusBanner status={status} />);
+    expect(screen.getByRole('status')).not.toHaveTextContent('bannerEta');
+  });
+
+  it('treść klucza w 4 językach: tylko „do 2 dni roboczych”, bez innych liczb', async () => {
+    for (const locale of ['pl', 'nl', 'fr', 'en']) {
+      const messages = (await import(`@/messages/${locale}.json`)).default as {
+        company: Record<string, string>;
+      };
+      const eta = messages.company.bannerEta;
+      expect(eta, locale).toBeTruthy();
+      expect(eta?.match(/\d+/g), locale).toEqual(['2']);
+    }
+  });
+});
