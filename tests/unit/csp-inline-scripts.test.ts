@@ -3,12 +3,9 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import config from '../../next.config.mjs';
-import {
-  buildConsentBootScript,
-  buildGaInitScript,
-  buildMetaPixelScript,
-} from '@/lib/security/csp-inline-scripts.mjs';
+import { buildConsentBootScript } from '@/lib/security/csp-inline-scripts.mjs';
 import { consentBootScript } from '@/lib/consent-boot';
+import { CONSENT_POLICY_VERSION } from '@/lib/consent-cookie';
 
 /**
  * CSP script-src (#585). Znalezisko z realnego builda (`next build && next start`, Chromium):
@@ -21,8 +18,8 @@ import { consentBootScript } from '@/lib/consent-boot';
  *
  * Dlatego enforced `script-src` ZOSTAJE z `'unsafe-inline'` (bez regresji — zweryfikowane
  * budową i Chromium). Równolegle produkcja dostaje `Content-Security-Policy-Report-Only` z tą
- * samą dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptów, które kontrolujemy (baner zgód,
- * gtag/fbq po zgodzie) — obserwowalny krok w stronę #585, nic nie blokujący.
+ * samą dyrektywą, ale hashem (bez `unsafe-inline`) dla skryptów, które kontrolujemy (baner zgód;
+ * beacon Cloudflare Web Analytics #570 jest zewnętrzny, bez treści inline) — obserwowalny krok w stronę #585, nic nie blokujący.
  */
 
 function sha256(text: string): string {
@@ -48,14 +45,14 @@ describe('script-src enforced w produkcji (#585) — bez regresji', () => {
     const csp = headers.find((h) => h.key === 'Content-Security-Policy')!.value;
     const scriptSrc = directive(csp, 'script-src');
     expect(scriptSrc).toContain("'unsafe-inline'");
-    expect(scriptSrc).toContain('https://www.googletagmanager.com');
     expect(scriptSrc).toContain('https://challenges.cloudflare.com');
+    expect(scriptSrc).not.toContain('googletagmanager');
     expect(scriptSrc).not.toContain('unsafe-eval');
   });
 });
 
 describe('script-src Report-Only (#585) — hashem, nie blokuje', () => {
-  it('bez GA/Meta: hash skryptu banera zgód, bez unsafe-inline', async () => {
+  it('hash skryptu banera zgód, bez unsafe-inline', async () => {
     const headers = await headersFor({ APP_MODE: 'production', NEXT_PUBLIC_SITE_URL: 'https://pracuj.be' });
     const value = headers.find((h) => h.key === 'Content-Security-Policy-Report-Only')?.value;
     expect(value).toBeTruthy();
@@ -64,17 +61,16 @@ describe('script-src Report-Only (#585) — hashem, nie blokuje', () => {
     expect(scriptSrc).toContain(sha256(consentBootScript()));
   });
 
-  it('z GA i Meta Pixel skonfigurowanymi: hashe obu skryptów', async () => {
+  it('z tokenem Cloudflare Web Analytics: host beaconu, bez dodatkowego hasha (skrypt zewnętrzny)', async () => {
     const headers = await headersFor({
       APP_MODE: 'production',
       NEXT_PUBLIC_SITE_URL: 'https://pracuj.be',
-      NEXT_PUBLIC_GA_MEASUREMENT_ID: 'G-TEST000000',
-      NEXT_PUBLIC_META_PIXEL_ID: '000000000000000',
+      NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: 'test-token',
     });
     const value = headers.find((h) => h.key === 'Content-Security-Policy-Report-Only')!.value;
     const scriptSrc = directive(value, 'script-src');
-    expect(scriptSrc).toContain(sha256(buildGaInitScript('G-TEST000000')));
-    expect(scriptSrc).toContain(sha256(buildMetaPixelScript('000000000000000')));
+    expect(scriptSrc).toContain('https://static.cloudflareinsights.com');
+    expect(scriptSrc.match(/'sha256-/g)).toHaveLength(1);
   });
 
   it('kontrola ujemna: hash innej treści skryptu banera zgód NIE jest w Report-Only', async () => {
@@ -97,7 +93,7 @@ describe('jedno źródło treści skryptu banera zgód', () => {
     const fromComponent = consentBootScript();
     const fromSharedBuilder = buildConsentBootScript({
       cookieName: 'pracujbe_consent',
-      policyVersion: '1.0',
+      policyVersion: CONSENT_POLICY_VERSION,
       attribute: 'data-consent',
     });
     expect(fromComponent).toBe(fromSharedBuilder);

@@ -20,7 +20,7 @@ vi.mock('@/lib/db/transaction', async () => (await import('../helpers/auth-porta
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => true }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
-import { api, authApiError, outcome, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
+import { api, authApiError, outcome, requestHeaderValues, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
 import { registerCandidate, registerEmployer } from '@/lib/actions/auth';
 import { authorizeSignupRequest, signupMetadataForUser } from '@/lib/auth/signup-context';
 
@@ -31,8 +31,12 @@ const candidate = {
   firstName: 'Jan',
   lastName: 'Kowalski',
   locale: 'nl' as const,
+  // #492: deklaracja progu wieku kandydata (bez daty urodzenia).
+  ageConfirmed: true as const,
+  minAge: 18,
 };
-const employer = { ...candidate, companyName: 'Firma Testowa' };
+const { ageConfirmed: _age, minAge: _minAge, ...employerBase } = candidate;
+const employer = { ...employerBase, companyName: 'Firma Testowa' };
 
 /** Metadane, które hook SDK zapisałby przy INSERT użytkownika (dokładnie jak w produkcji). */
 let captured: ReturnType<typeof signupMetadataForUser> | null = null;
@@ -125,5 +129,62 @@ describe('rejestracja ze zgodą', () => {
       ok: false,
       error: 'VALIDATION_FAILED',
     });
+  });
+});
+
+describe('rejestracja kandydata — deklaracja progu wieku (#492)', () => {
+  it.each([
+    ['brak deklaracji', { ageConfirmed: undefined }],
+    ['deklaracja false', { ageConfirmed: false }],
+    ['brak progu', { minAge: undefined }],
+    ['próg poza zakresem', { minAge: 19 }],
+  ])('%s — odrzucone, konto nie powstaje', async (_label, extra) => {
+    const input = { ...candidate, agreeTerms: true, privacyNoticeAck: true, ...extra } as unknown as Parameters<typeof registerCandidate>[0];
+    const result = await outcome(() => registerCandidate(input));
+    expect(result).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(api.signUpEmail).not.toHaveBeenCalled();
+  });
+
+  it('metadane dla triggera zawierają sam próg (bez daty urodzenia)', async () => {
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured).toMatchObject({ role: 'candidate', age_min_attested: 18 });
+    expect(JSON.stringify(captured)).not.toMatch(/birth|urodz/i);
+  });
+
+  it('trigger odrzuca próg (zmieniony w bazie) — kod AGE_ATTESTATION_REQUIRED, bez technikaliów', async () => {
+    api.signUpEmail.mockRejectedValue(
+      new Error('Failed to create user', { cause: new Error('AGE_ATTESTATION_REQUIRED: deklaracja poniżej progu') }),
+    );
+    const result = await outcome(() => registerCandidate({ ...candidate, agreeTerms: true, privacyNoticeAck: true }));
+    expect(result).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED' });
+  });
+
+  it('pracodawca nie składa deklaracji wieku kandydata', async () => {
+    const result = await outcome(() => registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true }));
+    expect(result).toEqual({ redirect: '/nl/potwierdzenie' });
+    expect(captured).not.toHaveProperty('age_min_attested');
+  });
+});
+
+describe('dowód akceptacji: zaufany adres i user-agent (0132)', () => {
+  const valid = { ...candidate, agreeTerms: true, privacyNoticeAck: true } as never;
+
+  it('adres wyłącznie z zaufanego nagłówka proxy, user-agent obcięty do 512 znaków', async () => {
+    requestHeaderValues['x-real-ip'] = '203.0.113.9';
+    requestHeaderValues['x-forwarded-for'] = '10.9.9.9';
+    requestHeaderValues['user-agent'] = `Mozilla/5.0 ${'x'.repeat(600)}`;
+    expect(await outcome(() => registerCandidate(valid))).toMatchObject({ redirect: expect.any(String) });
+    expect(captured?.receipt_ip).toBe('203.0.113.9');
+    expect(captured?.receipt_user_agent).toHaveLength(512);
+  });
+
+  it('kontrola ujemna: bez zaufanego nagłówka X-Forwarded-For NIE trafia do receiptu', async () => {
+    requestHeaderValues['x-forwarded-for'] = '10.9.9.9';
+    expect(await outcome(() => registerEmployer({ ...employer, agreeTerms: true, privacyNoticeAck: true } as never)))
+      .toMatchObject({ redirect: expect.any(String) });
+    expect(captured).not.toBeNull();
+    expect(captured).not.toHaveProperty('receipt_ip');
+    expect(captured?.receipt_user_agent).toBe('vitest');
   });
 });

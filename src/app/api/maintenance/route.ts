@@ -6,6 +6,12 @@ import { isCronAuthorized } from '@/lib/cron/auth';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
+import {
+  mergeRetentionCounters,
+  RETENTION_BATCH_LIMIT,
+  RETENTION_MAX_BATCHES,
+  retentionMode,
+} from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
 import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
@@ -32,6 +38,10 @@ import {
  * (null = kategoria wyłączona), partie z limitem i SKIP LOCKED; potem kolejka usuwania obiektów
  * storage (`processStorageDeletions`) — także obiektów plików usuniętych w tym przebiegu.
  * Nieudane usunięcie obiektu to ponowienie w kolejnym przebiegu, nie błąd zadania.
+ * #574: okresy z opracowania 2026-09-25 (0127) — retencja domyślnie WYŁĄCZONA; włącza ją
+ * `RETENTION_MODE=dry-run|apply` (`src/lib/retention/mode.ts`). `apply` woła kolejne partie,
+ * dopóki któraś kategoria wyczerpuje limit (`fullBatches`), najwyżej RETENTION_MAX_BATCHES.
+ * Kolejka usuwania obiektów działa niezależnie od trybu (usunięcie konta na wniosek).
  * 0119: załączniki wiadomości przygotowane, a niewysłane przez 24 h
  * (`purge_stale_message_attachments`) — wiersz files usunięty, obiekt trafia do kolejki storage.
  * #17: dzienny GC bucketu CV (`runStorageGc`, 0117) — obiekty bez wiersza `files` do kolejki
@@ -39,10 +49,18 @@ import {
  * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
+ * #575: twarde terminy lejka ofert (`purge_job_funnel_data`, 0128) — receipts deduplikacji
+ * najwyżej 48 h, sumy dzienne z bieżącego i 12 poprzednich miesięcy kalendarzowych.
  * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
+ * #609: porzucone rezerwacje budżetu AI (`ai_budget_release_stale_reservations`, 0134) —
+ * rezerwacja starsza niż 60 minut wciąż w stanie `reserved` (proces padł między rezerwacją
+ * a rozliczeniem) jest rozliczana jako `failed`/koszt 0; ślad audytowy zostaje, limit doby/
+ * miesiąca wraca do użycia. Idempotentne (`FOR UPDATE SKIP LOCKED`, filtr po statusie).
  *
+ * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
+ * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
  * Chroniony `MAINTENANCE_SECRET` (`Authorization: Bearer`); przejściowo także `CRON_SECRET`
  * (`src/lib/cron/secrets.ts` — sekret e-mail nie otwiera tego zadania).
  * Wymaga puli service_role (`DATABASE_SERVICE_URL`; RPC są service_role-only). #25: każde
@@ -91,11 +109,13 @@ async function run(request: Request): Promise<Response> {
   type Task =
     | 'discounts'
     | 'checkouts'
+    | 'aiBudgetReservations'
     | 'jobExpiry'
     | 'guestRequests'
     | 'savedSearchAlerts'
     | 'emailCampaigns'
     | 'retention'
+    | 'jobFunnel'
     | 'messageAttachments'
     | 'storageGc'
     | 'dsaRetention'
@@ -119,6 +139,13 @@ async function run(request: Request): Promise<Response> {
   const releasedCheckouts = await task('checkouts', 'release_stale_checkout_intents', {
     p_older_than_minutes: 30,
   });
+  // #609: rezerwacje budżetu AI porzucone po awarii procesu (crash/restart między rezerwacją
+  // i rozliczeniem) — GC po TTL, niezależnie od pozostałych zadań.
+  const releasedAiBudgetReservations = await task(
+    'aiBudgetReservations',
+    'ai_budget_release_stale_reservations',
+    { p_older_than_minutes: 60, p_limit: 200 },
+  );
   const expiredJobs = await task('jobExpiry', 'expire_due_jobs');
   const purgedGuestRequests = await task('guestRequests', 'purge_guest_application_requests');
   // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.
@@ -132,14 +159,40 @@ async function run(request: Request): Promise<Response> {
   const campaignEmailsQueued = campaignSendingReady()
     ? await task('emailCampaigns', 'process_email_campaigns', { p_limit: 500 })
     : 0;
-  // #486: retencja jako dane (0105) — zwraca liczniki per kategoria (jsonb).
-  let retention: Record<string, number> = {};
+  // #486/#574: retencja jako dane (0105, 0127) — tylko za jawną flagą; `off` nie woła bazy.
+  const retentionRunMode = retentionMode();
+  let retention: { mode: typeof retentionRunMode; batches: number } & Record<string, number | string> = {
+    mode: retentionRunMode,
+    batches: 0,
+  };
+  if (retentionRunMode !== 'off') {
+    const dryRun = retentionRunMode === 'dry-run';
+    let counters: Record<string, number> = {};
+    let batches = 0;
+    try {
+      // Każda partia = osobna transakcja; dry-run = jedna partia (dane się nie zmieniają).
+      do {
+        const batch = retentionCounters(
+          await withServiceRole((tx) =>
+            rpc(tx, 'run_retention_purge', { p_limit: RETENTION_BATCH_LIMIT, p_dry_run: dryRun }),
+          ),
+        );
+        counters = mergeRetentionCounters(counters, batch);
+        batches += 1;
+      } while (!dryRun && (counters['fullBatches'] ?? 0) > 0 && batches < RETENTION_MAX_BATCHES);
+    } catch (error) {
+      failures.push({ task: 'retention', error });
+    }
+    retention = { ...counters, mode: retentionRunMode, batches };
+  }
+  // #575: lejek ofert — receipts ≤ 48 h, agregaty ≤ 13 miesięcy kalendarzowych (0128).
+  let jobFunnel: Record<string, number> = {};
   try {
-    retention = retentionCounters(
-      await withServiceRole((tx) => rpc(tx, 'run_retention_purge', { p_limit: 200 })),
+    jobFunnel = retentionCounters(
+      await withServiceRole((tx) => rpc(tx, 'purge_job_funnel_data', { p_limit: 5000 })),
     );
   } catch (error) {
-    failures.push({ task: 'retention', error });
+    failures.push({ task: 'jobFunnel', error });
   }
   // 0119: przygotowane, a niewysłane załączniki wiadomości (> 24 h) → kolejka storage niżej.
   const purgedMessageAttachments = await task('messageAttachments', 'purge_stale_message_attachments', {
@@ -187,11 +240,13 @@ async function run(request: Request): Promise<Response> {
     ok: true,
     releasedDiscounts: releasedDiscounts ?? 0,
     releasedCheckouts: releasedCheckouts ?? 0,
+    releasedAiBudgetReservations: releasedAiBudgetReservations ?? 0,
     expiredJobs: expiredJobs ?? 0,
     purgedGuestRequests: purgedGuestRequests ?? 0,
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
+    jobFunnel,
     purgedMessageAttachments: purgedMessageAttachments ?? 0,
     storageGc,
     dsaRetention,
@@ -199,8 +254,12 @@ async function run(request: Request): Promise<Response> {
   });
 }
 
-export async function GET(request: Request): Promise<Response> {
-  return run(request);
+/**
+ * GET jest metodą bezpieczną (RFC 9110 §9.2.1) i nie może uruchamiać zadań mutujących —
+ * `405` bez autoryzacji, dostępu do bazy ani żadnego efektu ubocznego (#581).
+ */
+export async function GET(): Promise<Response> {
+  return NextResponse.json({ error: 'method_not_allowed' }, { status: 405, headers: { Allow: 'POST' } });
 }
 export async function POST(request: Request): Promise<Response> {
   return run(request);

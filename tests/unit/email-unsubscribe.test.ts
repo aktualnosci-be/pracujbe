@@ -212,7 +212,7 @@ describe('POST/GET /api/email/unsubscribe', () => {
 
 describe('worker outboxa: wypisanie i budżet', () => {
   function row(id: string, template: string, profileId: string | null = PROFILE) {
-    return { id, profile_id: profileId, to_email: `${id}@example.test`, template, locale: 'nl', payload: { companyName: 'Acme', jobTitle: 'Chauffeur' }, attempts: 2 };
+    return { id, profile_id: profileId, to_email: `${id}@example.test`, template, locale: 'nl', payload: { companyName: 'Acme', jobTitle: 'Chauffeur' }, attempts: 2, lock_token: `lock-${id}` };
   }
   function mockRpc(rows: unknown[], budget: (template: string) => { granted: boolean; retry_at: string | null }) {
     fakeDb.rpc('claim_email_batch', rows);
@@ -267,10 +267,12 @@ describe('worker outboxa: wypisanie i budżet', () => {
     expect(fakeDb.callsTo('take_email_send_budget')).toHaveLength(1);
     // Odłożenie = zwolnienie dzierżawy + nowy termin; `attempts` nie jest zapisywane.
     expect(updates()).toEqual([
-      { name: 'email.outbox.defer', values: ['d1', retryAt], as: 'service' },
-      { name: 'email.outbox.defer', values: ['d2', retryAt], as: 'service' },
+      { name: 'email.outbox.defer', values: ['d1', retryAt, 'lock-d1'], as: 'service' },
+      { name: 'email.outbox.defer', values: ['d2', retryAt, 'lock-d2'], as: 'service' },
     ]);
-    expect(fakeDb.callsTo('email.outbox.defer')[0]!.text).toMatch(/SET locked_at = NULL, next_attempt_at = \$2 WHERE id = \$1$/);
+    expect(fakeDb.callsTo('email.outbox.defer')[0]!.text).toMatch(
+      /SET locked_at = NULL, next_attempt_at = \$2 WHERE id = \$1 AND lock_token = \$3$/,
+    );
   });
 
   it('KONTROLA UJEMNA: przyznany budżet → ta sama paczka wychodzi', async () => {

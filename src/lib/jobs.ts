@@ -18,6 +18,7 @@ import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
 import { searchFold } from '@/lib/search-fold';
+import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
 
 export type ContractType =
   | 'permanent'
@@ -80,7 +81,7 @@ export interface JobListItem {
    */
   isDemo?: true;
   /**
-   * Stabilny slug profilu firmy (`/pracodawcy/<slug>`, tylko firma verified — 0156, #591).
+   * Stabilny slug profilu firmy (`/pracodawcy/<slug>`, tylko firma verified — 0140, #591).
    * Brak = brak publicznego profilu (bezpiecznik) — sitemap i CTA go wtedy pomijają.
    */
   companySlug?: string;
@@ -145,6 +146,8 @@ export interface GetJobsResult {
   total: number;
   page: number;
   pageSize: number;
+  /** Ostatnia osiągalna strona (#593) — patrz `src/lib/job-list-pagination.ts`. */
+  maxPage: number;
 }
 
 const DEFAULT_PAGE_SIZE = 12;
@@ -285,9 +288,11 @@ function getJobsFromDemo(
   );
   const total = sorted.length;
   const start = (page - 1) * pageSize;
-  const paged = sorted.slice(start, start + pageSize);
+  const paged = isJobListPageBeyondLimit(page, pageSize)
+    ? []
+    : sorted.slice(start, start + pageSize);
 
-  return { jobs: paged, total, page, pageSize };
+  return { jobs: paged, total, page, pageSize, maxPage: jobListLastPage(total, pageSize) };
 }
 
 /* ---------------------------------------------------------------------------
@@ -431,6 +436,7 @@ async function getJobsFromDb(
     total: result.total,
     page: result.page,
     pageSize: result.pageSize,
+    maxPage: result.maxPage,
   };
 }
 
@@ -505,7 +511,7 @@ export async function getJobs(
   );
 
   if (isDatabaseConfigured()) {
-    if (isBuildPhase()) return { jobs: [], total: 0, page, pageSize };
+    if (isBuildPhase()) return { jobs: [], total: 0, page, pageSize, maxPage: 1 };
     try {
       return await getJobsFromDb(params, page, pageSize, viewer?.candidateId ?? null);
     } catch (error) {

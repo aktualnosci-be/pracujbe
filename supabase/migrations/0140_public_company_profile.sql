@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0156_public_company_profile.sql — #591: stabilna, publiczna strona profilu firmy.
+-- 0140_public_company_profile.sql — #591: stabilna, publiczna strona profilu firmy.
 --
 -- Dotąd CTA „Dowiedz się więcej o firmie” na szczególe oferty prowadziło do wyszukiwarki
 -- ofert po nazwie firmy (`?keyword=<companyName>`) — dopasowanie tekstowe mogło zwrócić
@@ -267,7 +267,11 @@ language sql stable security definer set search_path = public, pg_temp as $$
   order by
     (case when p_sort = 'salary' then public.job_salary_sort_key(
       j.salary_min, j.salary_max, j.salary_period, p_salary_unit) end) desc nulls last,
-    j.published_at desc
+    j.published_at desc,
+    -- #594 (0136): tie-breaker deterministyczny (PK, unikalny) — bez niego remis na kluczu
+    -- wynagrodzenia/dacie publikacji może zmieniać kolejność między wywołaniami i ciąć
+    -- grupę remisową w innym miejscu przy offsetowej paginacji (pominięcia/duplikaty).
+    j.id desc
   limit least(greatest(coalesce(p_limit, 20), 1), 100)
   offset least(greatest(coalesce(p_offset, 0), 0), 10000);
 $$;

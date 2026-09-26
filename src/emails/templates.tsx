@@ -35,6 +35,7 @@ import {
   greetings,
   interpolate,
   jobMatchAlertOffLabel,
+  newMessageAttachmentsLabel,
   jobOfferPassportCopy,
   layoutCopy,
   moderationLabels,
@@ -78,6 +79,8 @@ export interface EmailDataMap {
     senderName?: string | null;
     preview?: string;
     messageUrl: string;
+    /** Liczba plików w wiadomości (0135, #503) — bez nazw; 0/brak = bez wiersza. */
+    attachmentCount?: number | string | null;
   };
   jobOffer: {
     firstName?: string;
@@ -144,6 +147,9 @@ export interface EmailDataMap {
   /** Aplikacja bez konta (#98) — do gościa, w języku formularza (brak profilu odbiorcy). */
   guestApplicationConfirm: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
   guestApplicationSent: { recipientName?: string; jobTitle: string; companyName: string; actionUrl: string };
+  /** #574: ostrzeżenie przed usunięciem (brak aktywności); `deletionDate` = ISO 8601, formatowane w locale odbiorcy. */
+  inactiveCvWarning: { recipientName?: string; deletionDate: string; actionUrl: string };
+  inactiveAccountWarning: { recipientName?: string; deletionDate: string; actionUrl: string };
   /** Zmiana statusu aplikacji gościa (0122) — w języku formularza; `status` jak w `statusChanged`. */
   guestStatusChanged: { recipientName?: string; jobTitle: string; companyName: string; status: string; actionUrl: string };
   jobExpiring: { recipientName?: string; jobTitle: string; expiryDate?: string; renewUrl: string };
@@ -261,6 +267,9 @@ function prepareVars(
   if (type === 'statusChanged' || type === 'guestStatusChanged') {
     vars.status = applicationStatusLabel(locale, data.status) ?? '';
   }
+  if (type === 'inactiveCvWarning' || type === 'inactiveAccountWarning') {
+    vars.deletionDate = formatEmailDate(data.deletionDate, locale) ?? '';
+  }
   const field = SUBJECT_FIELD[type];
   if (field && isBlank(vars[field])) vars[field] = '';
   return vars;
@@ -320,6 +329,8 @@ function EmailShell(props: {
   highlight?: string;
   /** Własny blok treści renderowany zamiast standardowego wyróżnienia. */
   detail?: ReactElement;
+  /** Dodatkowy akapit pod wyróżnieniem (np. liczba załączników wiadomości). */
+  note?: string;
 }): ReactElement {
   const { locale, type, ctaHref, greetingName, quote } = props;
   const vars = prepareVars(type, locale, props.vars);
@@ -364,6 +375,7 @@ function EmailShell(props: {
       ))}
       {props.detail ??
         (showHighlight ? <EmailHighlight>{resolvedHighlight}</EmailHighlight> : null)}
+      {props.note ? <EmailText>{props.note}</EmailText> : null}
       {showQuote ? <EmailQuote>{trimmedQuote}</EmailQuote> : null}
       <EmailButton href={ctaHref}>{copy.cta}</EmailButton>
       <EmailText muted>{lc.buttonFallback}</EmailText>
@@ -509,7 +521,14 @@ export function ContactInvitationEmail(props: EmailProps<'contactInvitation'>): 
   );
 }
 
+/** Liczba załączników z payloadu: tylko całkowita 1–3 (limit `send_message`), inaczej brak. */
+export function messageAttachmentCount(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return Number.isInteger(n) && n >= 1 && n <= 3 ? n : null;
+}
+
 export function NewMessageEmail(props: EmailProps<'newMessage'>): ReactElement {
+  const attachments = messageAttachmentCount(props.attachmentCount);
   return (
     <EmailShell
       locale={props.locale}
@@ -518,6 +537,11 @@ export function NewMessageEmail(props: EmailProps<'newMessage'>): ReactElement {
       ctaHref={props.messageUrl}
       greetingName={props.firstName}
       quote={props.preview}
+      note={
+        attachments
+          ? interpolate(newMessageAttachmentsLabel[props.locale], { count: String(attachments) })
+          : undefined
+      }
     />
   );
 }
@@ -662,6 +686,30 @@ export function GuestApplicationSentEmail(props: EmailProps<'guestApplicationSen
     <EmailShell
       locale={props.locale}
       type="guestApplicationSent"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function InactiveCvWarningEmail(props: EmailProps<'inactiveCvWarning'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="inactiveCvWarning"
+      vars={props}
+      ctaHref={props.actionUrl}
+      greetingName={props.recipientName}
+    />
+  );
+}
+
+export function InactiveAccountWarningEmail(props: EmailProps<'inactiveAccountWarning'>): ReactElement {
+  return (
+    <EmailShell
+      locale={props.locale}
+      type="inactiveAccountWarning"
       vars={props}
       ctaHref={props.actionUrl}
       greetingName={props.recipientName}
@@ -975,6 +1023,8 @@ const templates: { [K in EmailType]: EmailComponent<K> } = {
   jobMatch: JobMatchEmail,
   guestApplicationConfirm: GuestApplicationConfirmEmail,
   guestApplicationSent: GuestApplicationSentEmail,
+  inactiveCvWarning: InactiveCvWarningEmail,
+  inactiveAccountWarning: InactiveAccountWarningEmail,
   guestStatusChanged: GuestStatusChangedEmail,
   jobExpiring: JobExpiringEmail,
   payment: PaymentEmail,

@@ -521,8 +521,6 @@
     "preferencesDesc": "Zapamiętują Twoje wybory, np. język i ustawienia.",
     "analyticsName": "Analityczne",
     "analyticsDesc": "Pomagają nam zrozumieć, jak korzystasz z serwisu.",
-    "marketingName": "Marketingowe",
-    "marketingDesc": "Pozwalają pokazywać Ci trafniejsze reklamy.",
     "alwaysOn": "Zawsze włączone",
     "cookieSettings": "Ustawienia cookie"
   },
@@ -603,7 +601,8 @@
       "privacyNoticeRequired": "Potwierdź, że zapoznałeś(-aś) się z informacją o prywatności.",
       "companyNameRequired": "Podaj nazwę firmy.",
       "companyNameTooShort": "Nazwa firmy jest za krótka.",
-      "companyNameTooLong": "Nazwa firmy jest za długa."
+      "companyNameTooLong": "Nazwa firmy jest za długa.",
+      "ageConfirmRequired": "Wybierz swój przedział wieku."
     },
     "botCheckLabel": "Weryfikacja bezpieczeństwa",
     "botCheckLoading": "Ładowanie weryfikacji bezpieczeństwa…",
@@ -611,6 +610,11 @@
     "botCheckExpired": "Weryfikacja wygasła. Potwierdź ją ponownie.",
     "botCheckLoadFailed": "Nie udało się załadować weryfikacji bezpieczeństwa. Sprawdź połączenie lub wyłącz blokowanie treści dla tej strony i spróbuj ponownie.",
     "botCheckRetry": "Załaduj weryfikację ponownie",
+    "ageBandLegend": "Twój wiek",
+    "ageBandMinor": "Mam {min}–{max} lat",
+    "ageBandAdult": "Mam {age} lat lub więcej",
+    "ageBandMinorHint": "Przy tym przedziale Twój profil nie będzie widoczny dla firm w wyszukiwarce kandydatów. Nadal możesz sam aplikować na oferty.",
+    "ageConfirmHint": "Nie pytamy o datę urodzenia ani o dokument tożsamości.",
     "confirmEmailTitle": "Aktywuj konto",
     "confirmEmailIntro": "Kliknij przycisk, aby potwierdzić adres e-mail i przejść do swojego konta.",
     "confirmEmailSubmit": "Potwierdź adres e-mail",
@@ -664,12 +668,15 @@
     "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe.",
     "moderationLocked": "Ta treść jest ograniczona decyzją moderacyjną, więc nie można zmienić jej statusu.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
+    "siteAccessUnavailable": "Wejście do serwisu jest chwilowo niedostępne. Spróbuj ponownie później.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
     "claimExpired": "Link do przypisania aplikacji wygasł (był ważny 30 dni).",
     "appealExists": "Odwołanie od tej decyzji zostało już złożone.",
     "appealWindowClosed": "Termin na odwołanie od tej decyzji upłynął.",
     "reviewerConflict": "Odwołanie rozpatruje inny administrator niż autor decyzji.",
     "jobImportSensitiveData": "Ogłoszenie zawiera numer identyfikacyjny osoby lub dokumentu, więc go nie zaimportowaliśmy. Wypełnij formularz ręcznie.",
+    "ageAttestationRequired": "Aby kontynuować, potwierdź, że masz co najmniej wymagany wiek. Jeśli formularz był otwarty dłużej, odśwież stronę.",
+    "ageAdultRequired": "Tę funkcję mogą włączyć tylko osoby pełnoletnie.",
     "screeningReviewRequired": "Oferta ma pytanie, które przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji pytania albo po jego zmianie.",
     "screeningQuestionRejected": "Jedno z pytań nie zostało zaakceptowane. Zmień je albo usuń, aby opublikować ofertę.",
     "jobAssistEmpty": "Najpierw wpisz treść. Asystent poprawia Twój tekst, ale nie pisze oferty od zera.",
@@ -1201,7 +1208,20 @@
     "itemModerationAppealUpheld": "Odwołanie rozpatrzone: decyzja utrzymana",
     "itemModerationAppealReversed": "Odwołanie uwzględnione: decyzja zmieniona",
     "itemScreeningApproved": "Pytanie w Twojej ofercie zostało zaakceptowane",
-    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane"
+    "itemScreeningRejected": "Pytanie w Twojej ofercie nie zostało zaakceptowane",
+    "listIntro": "Wszystkie powiadomienia z Twojego konta, od najnowszych.",
+    "filterLabel": "Filtr powiadomień",
+    "filterAll": "Wszystkie",
+    "filterUnread": "Nieprzeczytane",
+    "markRead": "Oznacz jako przeczytane",
+    "markReadItem": "Oznacz jako przeczytane: {title}",
+    "markedRead": "Oznaczono powiadomienie jako przeczytane.",
+    "emptyUnread": "Nie masz nieprzeczytanych powiadomień.",
+    "unreadCount": "{count, plural, =0 {Brak nieprzeczytanych} one {1 nieprzeczytane} few {# nieprzeczytane} many {# nieprzeczytanych} other {# nieprzeczytanych}}",
+    "loadMore": "Pokaż więcej",
+    "loadingMore": "Wczytywanie…",
+    "listEnd": "To wszystkie powiadomienia.",
+    "moreError": "Nie udało się wczytać kolejnych powiadomień. Spróbuj ponownie."
   },
   "pricing": {
     "standard": "Standard",
@@ -1254,7 +1274,9 @@
     "screeningYes": "Tak",
     "screeningNo": "Nie",
     "sensitiveIdHint": "Do aplikowania nie jest potrzebny numer NISS/BIS ani numer dokumentu tożsamości — nie wpisuj ich.",
-    "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
+    "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
+    "ageRequired": "Przed aplikowaniem potwierdź swój wiek w ustawieniach konta.",
+    "ageRequiredLink": "Przejdź do ustawień"
   },
   "guestApply": {
     "subtitle": "Aplikuj bez zakładania konta albo zaloguj się, aby użyć profilu. CV nie jest potrzebne.",
@@ -1307,7 +1329,8 @@
       "messageTooLong": "Wiadomość może mieć najwyżej 500 znaków.",
       "privacyNoticeRequired": "Potwierdź zapoznanie się z informacją o prywatności, aby wysłać zgłoszenie.",
       "idempotencyKeyInvalid": "Odśwież stronę i wyślij formularz ponownie.",
-      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania."
+      "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
+      "ageConfirmRequired": "Wybierz swój przedział wieku."
     }
   },
   "legal": {
@@ -1635,7 +1658,8 @@
     "reportSent": "Zgłoszenie przyjęte",
     "reportAlreadyOpen": "Już zgłoszono — czeka na sprawdzenie",
     "reportedBadge": "Zgłoszono",
-    "reportNetworkError": "Nie udało się wysłać zgłoszenia. Sprawdź połączenie i spróbuj ponownie."
+    "reportNetworkError": "Nie udało się wysłać zgłoszenia. Sprawdź połączenie i spróbuj ponownie.",
+    "attachmentPreviewAlt": "Podgląd obrazu {name}"
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",
@@ -1949,6 +1973,7 @@
     "caseFlag": "Sygnał automatu: {flag}",
     "auditActionModerationDecided": "Decyzja moderacyjna",
     "auditActionModerationRestored": "Cofnięcie ograniczenia",
+    "auditActionAgePolicyUpdated": "Zmiana progu wieku kandydatów",
     "navAppeals": "Odwołania",
     "navDsaReport": "Raport DSA",
     "appealsTitle": "Odwołania od decyzji moderacyjnych",
@@ -2184,6 +2209,8 @@
     "breachExportJson": "Eksport JSON",
     "breachExportCsv": "Eksport CSV",
     "breachExportHint": "Eksport zawiera wpis i historię zmian, bez adresów odbiorców zawiadomień. Każdy eksport zostaje w historii.",
+    "breachExportPending": "Eksportowanie…",
+    "breachExportError": "Nie udało się pobrać eksportu. Spróbuj ponownie.",
     "breachActionClose": "Zamknij wpis",
     "breachActionReopen": "Otwórz ponownie",
     "breachCloseTitle": "Zamknąć wpis?",
@@ -2313,6 +2340,7 @@
     "auditActionCampaignActivated": "Aktywacja rewizji kampanii",
     "auditActionCampaignCancelled": "Zatrzymanie rewizji kampanii",
     "entityEmailCampaign": "Kampania e-mail",
+    "entityAgePolicy": "Próg wieku kandydatów",
     "appealTargetRestoration": "Od cofnięcia ograniczenia",
     "appealRestorationSummary": "Ograniczenie cofnięte {date}: {reason}",
     "navAiCosts": "Koszty AI",
@@ -2336,7 +2364,42 @@
     "aiCostsFeatureJobImport": "Import ogłoszenia",
     "aiCostsFeatureTranslation": "Tłumaczenie treści",
     "aiCostsFeatureAssist": "Asystent treści oferty",
-    "aiCostsFeatureCvImport": "Import CV"
+    "aiCostsFeatureCvImport": "Import CV",
+    "navSettings": "Ustawienia",
+    "agePolicyTitle": "Próg wieku kandydatów",
+    "agePolicySubtitle": "Minimalny wiek konta kandydata i wyszukiwalności profilu dla firm.",
+    "agePolicyCurrentTitle": "Bieżące ustawienie",
+    "agePolicyCurrentLabel": "Obecny próg",
+    "agePolicyNewLabel": "Nowy próg",
+    "agePolicyOption16": "16 lat",
+    "agePolicyOption18": "18 lat",
+    "agePolicyConfirmedField": "Zatwierdzone przez właściciela",
+    "agePolicyConfirmedYes": "Zatwierdzone",
+    "agePolicyConfirmedNo": "Wartość robocza (niezatwierdzona)",
+    "agePolicyConfirmedHint": "Wartość robocza oznacza, że próg nie jest jeszcze ostateczną decyzją właściciela.",
+    "agePolicyLastChangeTitle": "Ostatnia zmiana",
+    "agePolicyLastChangeNone": "Brak zapisanej zmiany w dzienniku zdarzeń — obowiązuje wartość startowa.",
+    "agePolicyLastChangeTransition": "Zmiana progu",
+    "agePolicyTransitionValue": "{from} → {to}",
+    "agePolicyLastChangeAt": "Data zmiany",
+    "agePolicyLastChangeBy": "Zmienił(a)",
+    "agePolicyLastChangeHidden": "Ukryte profile",
+    "agePolicyFormTitle": "Zmień próg",
+    "agePolicyFormHint": "Podniesienie progu od razu ukrywa z wyszukiwania profile kandydatów, których deklaracja wieku jest niższa. Obniżenie niczego nie odsłania.",
+    "agePolicyFieldLegend": "Nowy próg konta",
+    "agePolicyReasonLabel": "Uzasadnienie (wymagane)",
+    "agePolicyReasonHint": "Trafi do dziennika zdarzeń. Najwyżej {max} znaków.",
+    "agePolicySubmit": "Zapisz próg",
+    "agePolicyConfirmTitle": "Zmienić próg wieku kandydatów?",
+    "agePolicyConfirmDescription": "Próg zmieni się z „{from}” na „{to}”.",
+    "agePolicySuccess": "Próg wieku kandydatów został zapisany.",
+    "agePolicySuccessHidden": "Próg wieku kandydatów został zapisany. Ukryto {count} profili z wyszukiwania.",
+    "reportsSortLabel": "Kolejność",
+    "reportsSortNewest": "Najnowsze",
+    "reportsSortPriority": "Priorytet i termin",
+    "reportsFlaggedLabel": "Oflagowanie",
+    "reportsFlaggedAll": "Wszystkie sprawy",
+    "reportsFlaggedOnly": "Oflagowane do przeglądu"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2452,7 +2515,9 @@
     "lead": "Serwis nie jest jeszcze publicznie dostępny. Jeśli masz hasło dostępu, wpisz je poniżej.",
     "passwordLabel": "Hasło dostępu",
     "submit": "Wejdź",
-    "error": "Nieprawidłowe hasło. Spróbuj ponownie."
+    "error": "Nieprawidłowe hasło. Spróbuj ponownie.",
+    "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
+    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później."
   },
   "offline": {
     "title": "Brak połączenia",
@@ -2565,7 +2630,9 @@
     "savedOn": "Twój profil jest teraz widoczny dla zweryfikowanych firm.",
     "savedOff": "Twój profil jest teraz ukryty przed wyszukiwaniem firm.",
     "saveError": "Nie udało się zapisać zmiany. Ustawienie pozostało bez zmian — spróbuj ponownie.",
-    "loadError": "Nie udało się wczytać ustawienia widoczności profilu. Odśwież stronę za chwilę."
+    "loadError": "Nie udało się wczytać ustawienia widoczności profilu. Odśwież stronę za chwilę.",
+    "requiresAge": "Aby udostępnić profil firmom, najpierw potwierdź swój wiek w sekcji „Wiek”.",
+    "requiresAdult": "Profil może być widoczny dla firm dopiero od 18 lat. Gdy skończysz 18 lat, potwierdź to w sekcji „Wiek”."
   },
   "team": {
     "title": "Zespół",
@@ -2688,6 +2755,7 @@
   "jobFunnel": {
     "title": "Lejek ofert",
     "range": "Zakres: {from} – {to} (czas Brukseli)",
+    "consentNote": "Pojawienia w wynikach, wyświetlenia i rozpoczęte aplikowanie liczymy tylko u osób, które zgodziły się na cookies analityczne. Wysłane aplikacje liczymy wszystkie.",
     "rangeLabel": "Zakres dat lejka ofert",
     "rangeDays": "{count, plural, one {# dzień} few {# dni} many {# dni} other {# dni}}",
     "searchAppearances": "Pojawienia w wynikach",
@@ -2852,6 +2920,18 @@
     "restorationAppealIntro": "Jeśli nie zgadzasz się z cofnięciem, możesz się odwołać. Autor zgłoszonej treści nie pozna Twoich danych.",
     "restorationAppealDeadlineNotStarted": "Termin na odwołanie zacznie biec, gdy otrzymasz e-mail o cofnięciu ograniczenia.",
     "restorationAppealWindowClosed": "Termin na odwołanie od cofnięcia ograniczenia upłynął."
+  },
+  "ageAttestation": {
+    "sectionTitle": "Wiek",
+    "sectionDescription": "Konto kandydata możesz mieć od {age} lat, a profil widoczny dla firm — od {adultAge} lat. Zapisujemy tylko wybrany przedział wieku i datę potwierdzenia — bez daty urodzenia.",
+    "stateAdult": "Potwierdzone: masz {age} lat lub więcej.",
+    "stateMinor": "Potwierdzone: masz mniej niż {adultAge} lat. Możesz aplikować na oferty, ale Twój profil nie jest widoczny dla firm. Gdy skończysz {adultAge} lat, potwierdź to poniżej.",
+    "stateMissing": "Brak potwierdzenia. Bez niego nie możesz aplikować ani udostępniać profilu firmom.",
+    "submit": "Potwierdź",
+    "saving": "Zapisywanie…",
+    "saved": "Zapisano potwierdzenie wieku.",
+    "saveError": "Nie udało się zapisać potwierdzenia. Spróbuj ponownie.",
+    "loadError": "Nie udało się wczytać informacji o potwierdzeniu wieku."
   },
   "campaignBanner": {
     "eyebrow": "Oferta pracy w Belgii",

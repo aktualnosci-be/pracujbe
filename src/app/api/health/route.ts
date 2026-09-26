@@ -1,3 +1,4 @@
+import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import { env, isAppReady, isDatabaseConfigured, isProductionMode, readinessChecks } from '@/lib/env';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
 import { emailProviderFromEnv } from '@/lib/email/transport/select';
@@ -26,9 +27,23 @@ export const dynamic = 'force-dynamic';
 /** Limit czasu sprawdzenia bazy: healthcheck nie może wisieć na zablokowanej puli. */
 const DATABASE_PING_TIMEOUT_MS = 2_000;
 
-/** `true` = baza odpowiedziała; `false` = błąd/timeout; `null` = nie sprawdzano (brak konfiguracji). */
-async function pingDatabase(): Promise<boolean | null> {
-  if (!isDatabaseConfigured()) return null;
+/**
+ * `ttlMs: 0` — celowo BEZ ponownego użycia rozstrzygniętego wyniku (healthcheck ma odzwierciedlać
+ * realny, BIEŻĄCY stan bazy na każde odrębne żądanie — patrz komentarz na górze pliku). Cache
+ * chroni wyłącznie przed RÓWNOLEGŁYMI żądaniami (#600): dopóki jedno `pool.query('SELECT 1')`
+ * trwa, kolejne żądania (nawet setki naraz) czekają na TEN SAM wynik zamiast otwierać nowe
+ * zapytanie — to jest właściwa ochrona przed zalewem. Gdy zapytanie się zakończy, następne,
+ * odrębne żądanie zawsze sprawdza bazę od nowa.
+ */
+const DATABASE_PING_CACHE_KEY = 'ping';
+
+const pingCache = createTtlSingleFlightCache<boolean>({
+  ttlMs: 0,
+  maxEntries: 1,
+});
+
+/** `true` = baza odpowiedziała; `false` = błąd/timeout. Wołane tylko, gdy baza jest skonfigurowana. */
+async function pingDatabaseOnce(): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<false>((resolve) => {
     timer = setTimeout(() => resolve(false), DATABASE_PING_TIMEOUT_MS);
@@ -44,6 +59,19 @@ async function pingDatabase(): Promise<boolean | null> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Single-flight dla całego procesu (#600): dowolna liczba RÓWNOLEGŁYCH publicznych żądań
+ * `GET /api/health` dzieli NAJWYŻEJ jedno trwające `pool.query('SELECT 1')` — reszta czeka na
+ * ten sam wynik zamiast otwierać nowe zapytanie. Timeout lokalny nie anuluje zapytania po
+ * stronie bazy, ale bez deduplikacji zalew żądań (zwłaszcza przy wolnej/niedostępnej bazie,
+ * gdy każde czeka pełne `DATABASE_PING_TIMEOUT_MS`) mnożyłby zapytania i zajęte połączenia puli
+ * bez ograniczenia — to właśnie jest tu ograniczane.
+ */
+async function pingDatabase(): Promise<boolean | null> {
+  if (!isDatabaseConfigured()) return null;
+  return pingCache.run(DATABASE_PING_CACHE_KEY, pingDatabaseOnce);
 }
 
 export async function GET(request: Request): Promise<Response> {

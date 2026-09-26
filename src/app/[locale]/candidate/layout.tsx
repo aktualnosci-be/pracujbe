@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
 import { CandidateShell } from '@/components/candidate/CandidateShell';
+import { FunnelMinorMarker } from '@/components/candidate/FunnelMinorMarker';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
@@ -9,6 +10,7 @@ import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/au
 import { isPortalAuthConfigured } from '@/lib/env';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
+import { loadMyAgeAttestation } from '@/lib/data/age-policy';
 
 /**
  * Layout panelu kandydata (grupa tras `/candidate/*`).
@@ -46,6 +48,8 @@ export default async function CandidateLayout({
   let notificationError = false;
   let unreadMessages: number | undefined;
   let userName: string | undefined;
+  // #576: konto 16–17 → lejek ofert wyłączony na tym urządzeniu; nieznany stan → bez zmian.
+  let knownMinor: boolean | undefined;
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
@@ -65,10 +69,14 @@ export default async function CandidateLayout({
     userName = displayName(await readOwnProfileSummary(identity));
 
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
-    const [notif, unread] = await Promise.all([
+    const [notif, unread, age] = await Promise.all([
       getNotifications(locale),
       getUnreadConversationsCount(),
+      loadMyAgeAttestation().catch(() => null),
     ]);
+    if (age?.status === 'ready' && !age.demo && age.attestedMinAge !== null) {
+      knownMinor = !age.isAdult;
+    }
     notificationError = notif.status === 'error';
     notifItems = (notif.status === 'ready' ? notif.items : []).map((item) => ({
       id: item.id,
@@ -97,6 +105,7 @@ export default async function CandidateLayout({
       unreadMessages={unreadMessages}
       userName={userName}
     >
+      {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}
     </CandidateShell>
   );

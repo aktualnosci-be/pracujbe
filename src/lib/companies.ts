@@ -1,5 +1,5 @@
 /**
- * Warstwa dostępu do publicznego profilu firmy (#591, migracja 0156).
+ * Warstwa dostępu do publicznego profilu firmy (#591, migracja 0140).
  *
  * Stabilny, publiczny adres `/pracodawcy/<slug>` — tylko zweryfikowana, nieusunięta firma.
  * Bez konfiguracji DB (demo/build) profil zawsze „nie znaleziono": zestaw demonstracyjny

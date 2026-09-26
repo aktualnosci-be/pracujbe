@@ -4,25 +4,32 @@ import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { getConsent, type ConsentRecord } from '@/lib/consent';
-import { subscribeConsent, syncTrackers } from '@/lib/consent-store';
+import { subscribeConsent } from '@/lib/consent-store';
 import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
-import { buildGaInitScript, buildMetaPixelScript } from '@/lib/security/csp-inline-scripts.mjs';
 
 /**
- * Ładowanie skryptów analityki/marketingu — WYŁĄCZNIE po świadomej zgodzie.
+ * Ładowanie skryptu analityki — WYŁĄCZNIE po świadomej zgodzie (#570: Cloudflare Web Analytics
+ * zamiast Google Analytics i Meta Pixel — decyzja właściciela 2026-09-25).
  *
- * ZERO trackingu przed zgodą: dopóki użytkownik nie zaakceptuje danej kategorii, żaden
- * <Script> nie jest renderowany, więc GA / Meta Pixel się nie ładują. Komponent czyta
- * bieżącą zgodę przy montażu i reaguje na jej zmiany przez consent-store (bez reloadu).
+ * ZERO trackingu przed zgodą: dopóki użytkownik nie zaakceptuje kategorii `analytics`, beacon
+ * się nie renderuje. Komponent czyta bieżącą zgodę przy montażu i reaguje na jej zmiany przez
+ * consent-store (bez reloadu) — wycofanie zgody zatrzymuje KOLEJNE wstawienia beaconu od razu
+ * i gwarantuje brak beaconu po odświeżeniu (`getConsent()` znów zwróci `null`/`analytics:false`).
  *
- * - kategoria `analytics`  → Google Analytics (gtag), z anonimizacją IP,
- * - kategoria `marketing`  → Meta Pixel.
+ * Cloudflare Web Analytics jest bezcookie'owe (beacon nie ustawia żadnych cookies) i nie ma
+ * API do „odwołania" zgody w locie jak `ga-disable`/`fbq('consent','revoke')`; `next/script`
+ * wstawia znacznik `<script>` bezpośrednio do DOM i nie usuwa go przy odmontowaniu komponentu —
+ * dlatego, tak jak zapowiada Invariant #7, gwarancją jest brak ładowania PRZED zgodą i PO
+ * odświeżeniu strony, a nie natychmiastowe zniknięcie już wstawionego znacznika w tej samej sesji.
  *
- * Identyfikatory pochodzą z env NEXT_PUBLIC_*; brak identyfikatora = nic się nie ładuje.
+ * Kategorii `marketing` nie ma (decyzja właściciela 2026-09-25): portal nie używa trackerów
+ * marketingowych, a wersja polityki cookies poszła w górę (`CONSENT_POLICY_VERSION`).
+ *
+ * Token pochodzi z env `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN`; brak tokenu = nic się nie ładuje.
  */
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+// Pusty/biały znak = brak tokenu (spójnie z CSP w next.config.mjs).
+const CF_ANALYTICS_TOKEN = process.env.NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN?.trim() || undefined;
 
 export function Analytics() {
   const [record, setRecord] = useState<ConsentRecord | null>(null);
@@ -36,34 +43,15 @@ export function Analytics() {
   }, []);
 
   const analyticsGranted = routeAllowed && record?.categories.analytics === true;
-  const marketingGranted = routeAllowed && record?.categories.marketing === true;
 
-  // Egzekwuj stan trackerów przy każdej zmianie zgody: skuteczne WYCOFANIE (ga-disable / fbq
-  // revoke + czyszczenie cookies), a przy ponownej zgodzie zdjęcie blokady. Uzupełnia (nie
-  // zastępuje) warunkowego renderowania <Script> — Invariant #7 (zero trackingu przed zgodą).
-  useEffect(() => {
-    syncTrackers({ analytics: analyticsGranted, marketing: marketingGranted });
-  }, [analyticsGranted, marketingGranted]);
+  if (!analyticsGranted || !CF_ANALYTICS_TOKEN) return null;
 
   return (
-    <>
-      {analyticsGranted && GA_ID ? (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga-init" strategy="afterInteractive">
-            {buildGaInitScript(GA_ID)}
-          </Script>
-        </>
-      ) : null}
-
-      {marketingGranted && META_PIXEL_ID ? (
-        <Script id="meta-pixel" strategy="afterInteractive">
-          {buildMetaPixelScript(META_PIXEL_ID)}
-        </Script>
-      ) : null}
-    </>
+    <Script
+      id="cf-web-analytics"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon={JSON.stringify({ token: CF_ANALYTICS_TOKEN })}
+      strategy="afterInteractive"
+    />
   );
 }

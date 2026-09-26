@@ -211,4 +211,27 @@ describe('nagłówki bezpieczeństwa (next.config.mjs)', () => {
     expect(all.some((header) => header.key === 'Content-Security-Policy-Report-Only')).toBe(false);
     expect(csp).toContain("default-src 'self'");
   });
+
+  async function cspWith(token: string | undefined): Promise<string> {
+    vi.stubEnv('NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN', token ?? '');
+    try {
+      const rules = await config.headers!();
+      const all = rules.find((rule) => rule.source === '/:path*')!.headers;
+      return all.find((header) => header.key === 'Content-Security-Policy')!.value;
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  it('#570: bez tokenu Cloudflare Web Analytics CSP nie dopuszcza hostów beaconu', async () => {
+    for (const token of [undefined, '', '   ']) {
+      expect(await cspWith(token)).not.toContain('cloudflareinsights.com');
+    }
+  });
+
+  it('#570: z tokenem CSP dopuszcza skrypt beaconu i jego endpoint (kontrola ujemna)', async () => {
+    const csp = await cspWith('test-token');
+    expect(csp).toMatch(/script-src [^;]*https:\/\/static\.cloudflareinsights\.com/);
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/cloudflareinsights\.com/);
+  });
 });

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getCompanyProfile } from '@/lib/companies';
 
 /**
- * Profil publiczny firmy (#591, migracja 0156): `null` = firma nie istnieje / nie jest
+ * Profil publiczny firmy (#591, migracja 0140): `null` = firma nie istnieje / nie jest
  * zweryfikowana / usunięta — strona wywołująca renderuje 404, nigdy technikaliów (Invariant #8).
  * Skonfigurowana baza NIGDY nie degraduje po cichu do braku profilu przy błędzie odczytu.
  */

@@ -41,7 +41,7 @@ identyfikatorów ani konfiguracji.
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
 | `ai_budget_exhausted` | alarm | wydatek AI doby lub miesiąca ≥ limit, limit 0 albo brak limitu (#36) | wyczerpany budżet — funkcje AI zablokowane; decyzja o limicie w `docs/AI_BUDGET.md` |
 | `ai_budget_near_limit` | ostrzeżenie | wydatek AI ≥ 80% limitu doby lub miesiąca | rosnące użycie importu/tłumaczeń |
-| `ai_budget_stale_reservation` | ostrzeżenie | rezerwacja budżetu AI bez rozliczenia > 15 min | proces padł w trakcie wywołania modelu (liczy się w pełnej kwocie) |
+| `ai_budget_stale_reservation` | ostrzeżenie | rezerwacja budżetu AI bez rozliczenia > 15 min | proces padł w trakcie wywołania modelu (liczy się w pełnej kwocie); GC w `/api/maintenance` (#609) rozlicza ją jako failed/koszt 0 po 60 min — ostrzeżenie samo znika, limit wraca do użycia |
 | `ai_budget_unavailable` | ostrzeżenie | nie da się odczytać `ai_budget_status()` | brak migracji 0120 lub uprawnień `pracujbe_ops` |
 | `mail_hard_bounce_rate` | alarm | ≥ 50 listów przyjętych w 24 h i > 5% z nich trwale odbitych | zła lista adresów, import, literówki w formularzu |
 | `mail_hard_bounce_rising` | alarm | odsetek trwałych odbić 24 h > 2% i > 2× odsetka z 7 dób bazowych (≥ 50 listów w obu oknach) | jak wyżej, wcześniejszy sygnał |
