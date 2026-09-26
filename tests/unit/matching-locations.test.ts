@@ -8,8 +8,11 @@ import { locationLookupKeys, resolveCoordinates, type LocationAliasRow } from '@
 import { distanceKm, scoreMatch, type MatchCandidate, type MatchJob } from '@/lib/matching/score';
 import {
   MIGRATION_FILE,
+  SECTIONS_MIGRATION_FILE,
   SEEDED_0010,
+  buildSections,
   generate,
+  generateSections,
   parseCuratedCities,
 } from '../../scripts/locations/build-migration.mjs';
 import { cityKey as scriptCityKey } from '../../scripts/locations/city-key.mjs';
@@ -171,6 +174,111 @@ describe('słownik locations w bazie (#194, migracja 0112)', () => {
 
   it('dane rzeczywiste: migracja nie oznacza wierszy jako demo i nie woła sieci', () => {
     expect(migrationSql).toContain("'BE', v.latitude, v.longitude, v.sort_order, true, false, v.kind, v.refnis");
+    expect(migrationSql).not.toMatch(/https?:\/\/(?!www\.wikidata\.org|creativecommons\.org)/);
+  });
+});
+
+type SectionRow = GeneratedRow & { parentSlug: string; region: string };
+
+describe('części gmin w słowniku (migracja 0191)', () => {
+  const sections = generateSections();
+  const migrationSql = readFileSync(join(process.cwd(), SECTIONS_MIGRATION_FILE), 'utf8');
+  const bySlug = new Map(sections.rows.map((r: SectionRow) => [r.slug, r]));
+  const owner = (name: string) => sections.aliases.find((a: GeneratedAlias) => a.key === cityKey(name))?.slug;
+
+  it('migracja = wynik generatora (migawka części gmin + słownik 0112)', () => {
+    expect(migrationSql).toBe(sections.sql);
+  });
+
+  it('kontrola ujemna: zmieniona współrzędna części w pliku migracji nie przechodzi porównania', () => {
+    const tampered = migrationSql.replace('50.860000, 4.690000', '50.860000, 4.690001');
+    expect(tampered).not.toBe(migrationSql);
+    expect(tampered).not.toBe(sections.sql);
+  });
+
+  it('0112 bez zmian: generator części gmin nie zmienia migracji gmin', () => {
+    expect(readFileSync(join(process.cwd(), MIGRATION_FILE), 'utf8')).toBe(generate().sql);
+  });
+
+  it('każda część ma gminę z 0112, region gminy, alias i współrzędne w Belgii', () => {
+    const municipalities = new Map(sections.municipalities.rows.map((r: GeneratedRow & { region: string }) => [r.slug, r]));
+    expect(sections.rows.length).toBeGreaterThanOrEqual(1500);
+    for (const row of sections.rows as SectionRow[]) {
+      const parent = municipalities.get(row.parentSlug);
+      expect(parent, row.slug).toBeDefined();
+      expect(['municipality', 'former_municipality'], row.slug).toContain(parent!.kind);
+      expect(row.region, row.slug).toBe(parent!.region);
+      expect(row.kind).toBe('section');
+      expect(sections.aliases.some((a: GeneratedAlias) => a.slug === row.slug), row.slug).toBe(true);
+      expect(row.lat, row.slug).toBeGreaterThan(49.49);
+      expect(row.lat, row.slug).toBeLessThan(51.51);
+      expect(row.lng, row.slug).toBeGreaterThan(2.54);
+      expect(row.lng, row.slug).toBeLessThan(6.41);
+    }
+    const slugs = [...sections.rows, ...sections.municipalities.rows].map((r: GeneratedRow) => r.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    const refnis = [...sections.rows, ...sections.municipalities.rows].map((r: GeneratedRow) => r.refnis).filter(Boolean);
+    expect(new Set(refnis).size).toBe(refnis.length);
+  });
+
+  it('własna nazwa gminy wygrywa: klucze z 0112 nie trafiają do części gmin', () => {
+    const reserved = sections.municipalities.reservedKeys as Set<string>;
+    const keys = new Set<string>();
+    for (const alias of sections.aliases as GeneratedAlias[]) {
+      expect(alias.key, alias.alias).toBe(cityKey(alias.alias));
+      expect(reserved.has(alias.key), alias.key).toBe(false);
+      expect(keys.has(alias.key), alias.key).toBe(false);
+      keys.add(alias.key);
+    }
+    expect(owner('Aalst')).toBeUndefined();
+    expect(owner('Leuven')).toBeUndefined();
+    expect(bySlug.get(owner('Heverlee')!)?.parentSlug).toBe('leuven');
+    expect(bySlug.get(owner('Kessel-Lo')!)?.parentSlug).toBe('leuven');
+    expect(bySlug.get(owner('Marcinelle')!)?.parentSlug).toBe('charleroi');
+    expect(bySlug.get(owner('Haren')!)?.parentSlug).toBe('brussels');
+  });
+
+  it('kontrola ujemna reguł: część o nazwie gminy nie dostaje aliasu, dwie części o tej samej nazwie — żadna', () => {
+    const municipalities = sections.municipalities;
+    const leuven = municipalities.snapshot.items.find((i: { refnis: string }) => i.refnis === '24062')!;
+    const aalst = municipalities.snapshot.items.find((i: { refnis: string }) => i.refnis === '41002')!;
+    const item = (qid: string, name: string, parent: string, lat: number | null = 50.9) =>
+      ({ qid, nis: null, parents: [parent], successors: [], lat, lng: lat == null ? null : 4.7, labels: { nl: name } });
+    const built = buildSections({
+      municipalities,
+      snapshot: municipalities.snapshot,
+      sections: {
+        items: [
+          item('Q900001', 'Leuven', leuven.qid),
+          item('Q900002', 'Testdorp', leuven.qid),
+          item('Q900003', 'Testdorp', aalst.qid),
+          item('Q900004', 'Eigen Naam', leuven.qid, null),
+          item('Q900005', 'Wees', 'Q1'),
+        ],
+      },
+    });
+    expect(built.rows.map((r: SectionRow) => r.slug)).toEqual(['eigen-naam-leuven']);
+    expect(built.skipped.ambiguous).toEqual([expect.stringContaining('testdorp')]);
+    expect(built.skipped.parent).toEqual(['Q900005']);
+    // Brak współrzędnych części → współrzędne gminy nadrzędnej.
+    const parent = municipalities.rows.find((r: GeneratedRow) => r.slug === 'leuven')!;
+    expect([built.rows[0]!.lat, built.rows[0]!.lng]).toEqual([parent.lat, parent.lng]);
+  });
+
+  it('matching: część gminy spoza listy w kodzie ma współrzędne tylko ze słownika', () => {
+    const rows: LocationAliasRow[] = sections.aliases
+      .filter((a: GeneratedAlias) => ['heverlee', 'kessel lo'].includes(a.key))
+      .map((a: GeneratedAlias) => ({ aliasKey: a.key, latitude: bySlug.get(a.slug)!.lat, longitude: bySlug.get(a.slug)!.lng }));
+    const heverlee = resolveCoordinates('Heverlee', rows);
+    const kesselLo = resolveCoordinates('Kessel-Lo', rows);
+    expect(heverlee && kesselLo && distanceKm(heverlee, kesselLo)).toBeLessThan(10);
+    // Kontrola ujemna: bez wierszy słownika nazwa części gminy jest nieznana.
+    expect(resolveCoordinates('Heverlee', [])).toBeUndefined();
+  });
+
+  it('dane rzeczywiste: bez demo i bez sieci; atrybucja Wikidata CC0', () => {
+    expect(migrationSql).toContain("true, false, 'section', v.refnis, p.id");
+    expect(migrationSql).toContain('CC0-1.0');
     expect(migrationSql).not.toMatch(/https?:\/\/(?!www\.wikidata\.org|creativecommons\.org)/);
   });
 });
