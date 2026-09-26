@@ -80,7 +80,7 @@ export interface JobListItem {
    */
   isDemo?: true;
   /**
-   * Stabilny slug profilu firmy (`/pracodawcy/<slug>`, tylko firma verified — 0156, #591).
+   * Stabilny slug profilu firmy (`/pracodawcy/<slug>`, tylko firma verified — 0140, #591).
    * Brak = brak publicznego profilu (bezpiecznik) — sitemap i CTA go wtedy pomijają.
    */
   companySlug?: string;

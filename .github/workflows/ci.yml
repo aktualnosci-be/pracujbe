@@ -40,8 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -50,7 +50,7 @@ jobs:
       # a artefakty node_modules zjadały cały miesięczny limit storage organizacji.
       - name: Cache node_modules
         id: node-modules
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -65,13 +65,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -88,13 +88,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -110,8 +110,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -120,7 +120,7 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -153,8 +153,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       - run: bash scripts/sca-audit.sh
@@ -166,26 +166,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
       - name: Install dependencies (cache miss)
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
-      # Ten sam build służy jobowi e2e (#127) — dlatego z testowymi ID trackerów
-      # (tests/e2e/fixtures/trackers.ts), inaczej playwright.config.ts przebuduje go (#234).
+      # Ten sam build służy jobowi e2e (#127) — dlatego z testowym tokenem Cloudflare Web
+      # Analytics (tests/e2e/fixtures/trackers.ts), inaczej playwright.config.ts przebuduje go (#234).
       # Artefakt nie trafia na produkcję: Railway buduje sam ze źródeł i własnych zmiennych.
       - name: Build application
         env:
-          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
-          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
+          NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
         run: npm run build
       - name: Verify build output
         run: node scripts/check-next-build.mjs
@@ -196,7 +195,7 @@ jobs:
       # Cache Actions, NIE artefakt: nie zjada płatnego storage organizacji.
       # Bez .next/cache (cache kompilatora nie jest potrzebny do `next start`).
       - name: Save build for E2E
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             .next
@@ -227,7 +226,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Prepare isolated database tests
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
@@ -300,11 +299,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         id: node-modules
         with:
           path: node_modules
@@ -338,13 +337,13 @@ jobs:
     # minuty hostowanych runnerów nie są limitem.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -352,7 +351,7 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -362,7 +361,7 @@ jobs:
       # Build z jobu `build` tego przebiegu (#127). restore-keys łapie też build
       # z wcześniejszej próby, gdy ponawiany jest sam e2e.
       - name: Restore build from build job
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             .next
@@ -373,14 +372,13 @@ jobs:
         id: next-build
         continue-on-error: true
         run: node scripts/check-next-build.mjs
-      # Fallback: brak lub niekompletny build → budujemy tutaj. Testowe ID trackerów
-      # muszą trafić do builda, inaczej playwright.config.ts przebuduje aplikację (#234).
+      # Fallback: brak lub niekompletny build → budujemy tutaj. Testowy token Cloudflare
+      # Web Analytics musi trafić do builda, inaczej playwright.config.ts przebuduje aplikację (#234).
       - name: Build application for E2E (fallback)
         if: steps.next-build.outcome != 'success'
         timeout-minutes: 15
         env:
-          NEXT_PUBLIC_GA_MEASUREMENT_ID: G-TEST000000
-          NEXT_PUBLIC_META_PIXEL_ID: '000000000000000'
+          NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
         run: rm -rf .next && npm run build
       - name: Run E2E
         env:
@@ -398,7 +396,7 @@ jobs:
           TEST_APPLICATIONS_FIXTURE=full npx playwright test --config playwright.applications-fixture.config.ts
           TEST_APPLICATIONS_FIXTURE=error npx playwright test --config playwright.applications-fixture.config.ts
       # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report

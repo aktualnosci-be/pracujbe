@@ -25,6 +25,7 @@ import { env } from '@/lib/env';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
+import { getCandidateMinAge } from '@/lib/data/age-policy';
 import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { cn } from '@/lib/utils';
 import {
@@ -197,7 +198,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, format] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -206,6 +207,8 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('apply'),
     getTranslations('contentReport'),
     getFormatter(),
+    // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
+    job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
 
   const passportFields = buildJobDetailPassportFields(job, locale, {
@@ -603,6 +606,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 demo={job.isDemo}
                 screeningQuestions={job.screeningQuestions}
                 contentLocale={job.contentLocale}
+                candidateMinAge={candidateMinAge}
                 triggerLabel={applyLabel}
                 triggerSize="passport"
                 triggerClassName="mt-3 w-full"
@@ -709,6 +713,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           demo={job.isDemo}
           screeningQuestions={job.screeningQuestions}
           contentLocale={job.contentLocale}
+          candidateMinAge={candidateMinAge}
           triggerLabel={applyLabel}
           triggerSize="passport"
           triggerClassName="min-w-0 flex-1"

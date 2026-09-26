@@ -203,7 +203,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const SITEMAP_PAGE = 100;
   const SITEMAP_MAX_JOBS = 5000; // sufit anty-abuse; powyżej rozważ sitemap index
   // #591: profile firm zbierane PRZY OKAZJI tej samej iteracji (bez osobnego zapytania) —
-  // `job.companySlug` jest już w wyniku (0156). Jeden wpis na firmę, niezależnie od liczby ofert.
+  // `job.companySlug` jest już w wyniku (0140). Jeden wpis na firmę, niezależnie od liczby ofert.
   const companySlugs = new Set<string>();
   for (let page = 1; entries.length < SITEMAP_MAX_JOBS * locales.length; page += 1) {
     const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_PAGE });

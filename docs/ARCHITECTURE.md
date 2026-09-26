@@ -16,19 +16,20 @@ przegląda aplikacje i wysyła proaktywne propozycje pracy.
 |---|---|---|
 | Framework | Next.js 15 (App Router, RSC) | SSR/SSG dla SEO ofert, minimalny JS na stronach publicznych |
 | Język | TypeScript `strict` + `noUncheckedIndexedAccess` | jedno źródło typów; wychwytywanie błędów w kompilacji |
-| Baza / Auth / Storage | Supabase (Postgres + Auth + Storage + RLS) | RLS jako główna granica bezpieczeństwa danych |
+| Baza / Auth / Storage | PostgreSQL Railway (RLS) + Better Auth + prywatny bucket Railway (#24–#27; Supabase usunięte) | RLS jako główna granica bezpieczeństwa danych |
 | Walidacja | Zod (`z.infer`) | walidacja I/O + generowanie typów |
 | UI | Tailwind + shadcn/ui (Radix) | dostępność, spójne tokeny kolorów |
-| E-mail | Resend + React Email, przez kolejkę `email_deliveries` | wysyłka rozłączna z zapisem w DB, ponawialna |
+| E-mail | EmailLabs (domyślnie) lub Resend + React Email, przez kolejkę `email_deliveries` | wysyłka rozłączna z zapisem w DB, ponawialna |
 | i18n | next-intl, routing z prefiksem `/{locale}` | teksty w `src/messages/*.json`, hreflang |
-| Błędy | centralny `AppError` (`src/lib/errors`) + Sentry | użytkownik nie widzi technikaliów |
+| Błędy | centralny `AppError` (`src/lib/errors`) + webhook Discorda (#571, zamiast Sentry) | użytkownik nie widzi technikaliów |
 | Hosting | Railway (jedna produkcja z `main`) | natywna integracja GitHub z `Wait for CI` |
-| CI/CD | GitHub Actions na **self-hosted** runnerach + Railway | CI w Actions, wdrożenie produkcji po zielonym CI |
+| CI/CD | GitHub Actions na `ubuntu-latest` (od 2026-09-23) + Railway | CI w Actions, wdrożenie produkcji po zielonym CI |
 
 **Zasada nadrzędna:** aplikacja MUSI się budować i renderować strony publiczne **bez
-żadnych zmiennych środowiskowych**. Gdy `isSupabaseConfigured()` zwraca `false`, warstwa
-danych (`@/lib/jobs`) czyta z `@/lib/data/demo`. Klienci Supabase czytają env leniwie
-(dopiero przy użyciu), więc import modułu nigdy nie rzuca.
+żadnych zmiennych środowiskowych**. Gdy baza nie jest skonfigurowana (`isDatabaseConfigured()`
+w `@/lib/env` zwraca `false`) i nie działa `APP_MODE=production`, warstwa danych (`@/lib/jobs`)
+czyta z `@/lib/data/demo`. Pule PostgreSQL czytają env leniwie (dopiero przy użyciu), więc
+import modułu nigdy nie rzuca. W `APP_MODE=production` brak konfiguracji = 503, nie demo.
 
 ### Warstwy renderowania
 
@@ -45,14 +46,20 @@ danych (`@/lib/jobs`) czyta z `@/lib/data/demo`. Klienci Supabase czytają env l
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Trzej klienci Supabase (rozłączne zastosowania)
+### Dostęp do danych (#25, bez PostgREST)
 
-- `@/lib/supabase/server` — RSC, Server Actions, Route Handlers. Sesja użytkownika
-  z cookies. Podlega RLS jako `authenticated`/`anon`.
-- `@/lib/supabase/client` — komponenty klienckie (`"use client"`). Anon key. Podlega RLS.
-- `@/lib/supabase/admin` — **service role**, omija RLS (`BYPASSRLS`). WYŁĄCZNIE kod
-  serwerowy zaufany (webhooki, kolejka e-mail, admin). NIGDY nie importować w komponencie
-  klienckim — inaczej klucz trafi do bundle'a (Invariant #6).
+Szczegóły i konwencje: [`railway/WARSTWA_DANYCH.md`](./railway/WARSTWA_DANYCH.md).
+
+- `getPortalIdentity()` (`@/lib/db/portal`) — tożsamość z sesji Better Auth (`src/lib/auth/*`).
+- `withPortalTransaction(identity, fn)` — RSC, Server Actions, Route Handlers: transakcja
+  z `SET LOCAL ROLE` (`authenticated`/`anon`) i `app.current_uid`, więc RLS działa w bazie
+  jak dla użytkownika.
+- `withServiceRole(fn)` — osobna pula `DATABASE_SERVICE_URL`, omija RLS. WYŁĄCZNIE kod
+  serwerowy zaufany (worker e-mail, webhooki, cron, odczyty admina po `requireAdmin`).
+  Moduł jest `server-only` — nie trafi do bundle'a klienta (Invariant #6).
+- Komponenty klienckie nie łączą się z bazą; dane dostają z RSC albo Server Actions.
+- Pliki CV i załączniki: prywatny bucket Railway (`src/lib/files/*`), pobranie tylko przez
+  krótki link HMAC sprawdzany po stronie serwera (Invariant #10).
 
 ---
 
@@ -245,7 +252,7 @@ UUID PK wszędzie, `created_at`/`updated_at` (trigger `set_updated_at`), soft-de
 ### Grupy tabel i relacje
 
 ```
-auth.users (Supabase Auth)
+auth.users (Better Auth, schemat `auth` — database/auth)
    └─1:1─ profiles (role, *_locale)                        [trigger handle_new_user]
             ├─1:1─ candidate_profiles ──1:N─ candidate_skills / candidate_languages
             │                                / candidate_certificates
@@ -300,13 +307,16 @@ Egzekwowane **dwuwarstwowo**: Row Level Security w Postgres (granica twarda) + w
 w Server Actions (UX, komunikaty błędów). Domyślnie **deny** — tabela bez pasującej
 polityki jest niedostępna dla `anon`/`authenticated`.
 
-### Poziomy dostępu Supabase
+### Role bazy danych
+
+Te same nazwy ról co w dawnym Supabase; tożsamość ustawia warstwa `@/lib/db/portal`
+(`SET LOCAL ROLE` + `app.current_uid`, odczytywane przez `auth.uid()`).
 
 | rola | opis | zakres |
 |---|---|---|
 | `anon` | niezalogowany | tylko dane publiczne (aktywne oferty, słowniki) |
-| `authenticated` | zalogowany (`auth.uid()`) | własne dane + publiczne |
-| `service_role` | backend (admin client) | omija RLS (`BYPASSRLS`) |
+| `authenticated` | zalogowany (`auth.uid()` = konto z sesji Better Auth) | własne dane + publiczne |
+| `service_role` | backend (`withServiceRole`, login `pracujbe_service_runtime`) | omija RLS (`BYPASSRLS`) |
 
 ### Role aplikacyjne (`profiles.role`, enum `user_role`)
 
@@ -355,17 +365,22 @@ brak polityk = deny dla anon/authenticated; backend czyta przez service role.
   `COMPANY_NOT_VERIFIED`, `NOT_FOUND`, `INTERNAL`.
 - Użytkownik **nigdy** nie widzi stack trace / SQL / surowej odpowiedzi dostawcy
   (Invariant #8) — tylko komunikat z klucza tłumaczenia.
-- Sentry: client + server + edge (`@/lib/sentry`), source maps uploadowane w CI
-  (`SENTRY_AUTH_TOKEN`).
+- Kanał błędów: webhook Discorda `ERROR_WEBHOOK_URL` (#571, tylko serwer, `src/lib/error-webhook`;
+  Sentry usunięte) — sam kod błędu i trasa bez danych osobowych; opis w
+  [`TELEMETRY_PRIVACY.md`](./TELEMETRY_PRIVACY.md).
 
 ---
 
 ## 11. Powiązane dokumenty
 
-- [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) — projekt, klucze, migracje, Storage, Auth, RLS.
-- [`RESEND_SETUP.md`](./RESEND_SETUP.md) — domena/DNS, kolejka e-mail, ponawianie.
-- [`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`STAGING.md`](./STAGING.md) · [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md).
+- [`railway/README.md`](./railway/README.md) · [`railway/STATUS.md`](./railway/STATUS.md) — PostgreSQL,
+  Better Auth, bucket, migracje i stan przełączenia produkcji.
+- [`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md) · [`RESEND_SETUP.md`](./RESEND_SETUP.md) — domena/DNS,
+  kolejka e-mail, ponawianie.
+- [`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md) ·
+  [`STAGING.md`](./STAGING.md) (staging wycofany).
 - [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) · [`PERFORMANCE_CHECKLIST.md`](./PERFORMANCE_CHECKLIST.md) · [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md).
-- [`SELF_HOSTED_RUNNERS.md`](./SELF_HOSTED_RUNNERS.md) — CI/CD.
+- Archiwalne: [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) (stan sprzed #27),
+  [`SELF_HOSTED_RUNNERS.md`](./SELF_HOSTED_RUNNERS.md) (CI przed 2026-09-23).
 </content>
 </invoke>

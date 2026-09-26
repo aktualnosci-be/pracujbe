@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0156_public_company_profile.sql — #591: stabilna, publiczna strona profilu firmy.
+-- 0140_public_company_profile.sql (numer nadany w kolejce integratora, wcześniej 0156) — #591: stabilna, publiczna strona profilu firmy.
 --
 -- Dotąd CTA „Dowiedz się więcej o firmie” na szczególe oferty prowadziło do wyszukiwarki
 -- ofert po nazwie firmy (`?keyword=<companyName>`) — dopasowanie tekstowe mogło zwrócić
@@ -18,7 +18,8 @@
 --      `get_public_jobs`, filtrowane po firmie (ten sam warunek co profil: verified + aktywna
 --      + niewygasła oferta), limit/offset clamp jak w 0091.
 --   3. `get_public_job` i `get_public_jobs` zwracają dodatkowo `company_slug` (na końcu listy
---      kolumn, jak `0114` dodało `company_website`/`company_logo_url``) — CTA na szczególe
+--      kolumn, jak `0114` dodało `company_website`/`company_logo_url``; `get_public_jobs` bazuje
+--      na 0136 — zachowuje tie-breaker `j.id desc` z #594) — CTA na szczególe
 --      oferty linkuje przez slug zamiast budować zapytanie do wyszukiwarki, a sitemap (#591)
 --      dodaje profile firm bez osobnego zapytania (zbiera sluga przy iteracji po ofertach, którą
 --      już robi). Bez sluga (nie powinno się zdarzyć dla zweryfikowanej firmy, ale bezpiecznik na
@@ -27,7 +28,7 @@
 -- Rollback: NOWA migracja naprawcza —
 --   drop function if exists public.get_public_company(text);
 --   drop function if exists public.get_public_company_jobs(text, text, integer, integer);
---   odtworzyć get_public_job z 0114 i get_public_jobs z 0110 (drop + create, bez company_slug).
+--   odtworzyć get_public_job z 0114 i get_public_jobs z 0136 (drop + create, bez company_slug).
 -- Migracja nie zmienia danych.
 -- =============================================================================
 
@@ -267,7 +268,10 @@ language sql stable security definer set search_path = public, pg_temp as $$
   order by
     (case when p_sort = 'salary' then public.job_salary_sort_key(
       j.salary_min, j.salary_max, j.salary_period, p_salary_unit) end) desc nulls last,
-    j.published_at desc
+    j.published_at desc,
+    -- #594 (0136): deterministyczny tie-breaker zachowany przy redefinicji — bez niego ta
+    -- migracja cofnęłaby poprawkę paginacji.
+    j.id desc
   limit least(greatest(coalesce(p_limit, 20), 1), 100)
   offset least(greatest(coalesce(p_offset, 0), 0), 10000);
 $$;

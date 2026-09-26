@@ -14,6 +14,7 @@ import {
 } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
@@ -46,7 +47,7 @@ import {
  * (`withPortalTransaction`: auth.uid() + zweryfikowany e-mail).
  */
 
-export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'message' | 'consent';
+export type GuestApplyField = 'fullName' | 'email' | 'phone' | 'message' | 'consent' | 'age';
 export type GuestApplyResult =
   | { ok: true }
   | {
@@ -95,11 +96,7 @@ function isGuestApplyFixture(): boolean {
 
 async function requestMeta(): Promise<{ ip: string | null; userAgent: string | null }> {
   const store = await headers();
-  const ip =
-    store.get('x-real-ip')?.trim() ||
-    store.get('x-forwarded-for')?.split(',').map((p) => p.trim()).filter(Boolean).pop() ||
-    null;
-  return { ip, userAgent: store.get('user-agent') };
+  return { ip: trustedClientIp(store), userAgent: store.get('user-agent') };
 }
 
 function fieldFromIssuePath(path: ReadonlyArray<string | number>): GuestApplyField | undefined {
@@ -112,6 +109,9 @@ function fieldFromIssuePath(path: ReadonlyArray<string | number>): GuestApplyFie
       return 'message';
     case 'agreeTerms':
       return 'consent';
+    case 'ageConfirmed':
+    case 'minAge':
+      return 'age';
     default:
       return undefined;
   }
@@ -179,12 +179,17 @@ export async function submitGuestApplication(
       p_user_agent: meta.userAgent,
       // #101: odpowiedzi walidowane w bazie tymi samymi regułami co apply_to_job.
       p_answers: v.answers && Object.keys(v.answers).length > 0 ? jsonArg(v.answers) : null,
+      // #492: zadeklarowany próg wieku (bez daty urodzenia); baza porównuje z bieżącym progiem.
+      p_age_attested_min: v.minAge,
     }));
     return { ok: true };
   } catch (e) {
     if (isDatabaseError(e)) {
       const message = databaseErrorMessage(e);
       if (message.includes('JOB_NOT_ACTIVE')) return { ok: false, error: 'JOB_NOT_ACTIVE' };
+      if (message.includes('AGE_ATTESTATION_REQUIRED')) {
+        return { ok: false, error: 'AGE_ATTESTATION_REQUIRED', field: 'age' };
+      }
       const questionId = SCREENING_REQUIRED_RE.exec(message)?.[1];
       if (questionId) return { ok: false, error: 'SCREENING_ANSWER_REQUIRED', questionId };
       if (message.includes('VALIDATION_FAILED')) return { ok: false, error: 'VALIDATION_FAILED' };
@@ -256,6 +261,8 @@ export async function claimGuestApplication(locale: string): Promise<GuestClaimR
       if (message.includes('EMAIL_NOT_VERIFIED')) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
       if (message.includes('CLAIM_EXPIRED')) return { ok: false, error: 'CLAIM_EXPIRED' };
       if (message.includes('APPLICATION_ALREADY_EXISTS')) return { ok: false, error: 'APPLICATION_ALREADY_EXISTS' };
+      // 0126 (#492): konto przejmujące bez ważnej deklaracji progu wieku.
+      if (message.includes('AGE_ATTESTATION_REQUIRED')) return { ok: false, error: 'AGE_ATTESTATION_REQUIRED' };
       if (message.includes('PERMISSION_DENIED')) return { ok: false, error: 'PERMISSION_DENIED' };
       if (message.includes('NOT_FOUND')) return { ok: false, error: 'NOT_FOUND' };
     }
