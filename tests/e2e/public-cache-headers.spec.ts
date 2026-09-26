@@ -23,7 +23,7 @@ const STATIC_PAGES: Array<{ path: string; maxAge: number }> = [
   { path: "/en/poradniki/umowa-interim-co-warto-wiedziec", maxAge: 3600 },
   { path: "/pl/dla-pracodawcow", maxAge: 3600 },
   { path: "/pl/regulamin", maxAge: 3600 },
-  { path: "/nl/faq", maxAge: 3600 },
+  { path: "/nl/o-nas", maxAge: 3600 },
 ];
 
 const PER_REQUEST_PAGES = ["/pl/oferty-pracy", "/pl/logowanie", "/pl/candidate", "/pl/employer"];
