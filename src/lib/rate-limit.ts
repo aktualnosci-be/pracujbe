@@ -105,7 +105,11 @@ async function checkPostgresRateLimit(
   ]);
   const ip = opts?.perIp === false ? UNKNOWN_IP : await clientIp();
   // Nazwa akcji w kluczu HMAC: tylko znaki dozwolone przez helper (np. `job-import-day`).
-  const allowed = await checkDatabaseRateLimit(await getRateLimitPool(), {
+  // checkDatabaseRateLimit zwraca boolean TYLKO dla rzeczywistej decyzji RPC (#608);
+  // każda awaria (połączenie/transakcja/RPC/COMMIT) rzuca RateLimitUnavailableError,
+  // którą łapie wywołujący (checkRateLimit) i stosuje politykę fail-safe/fail-open
+  // per akcja — awaria osobnej bazy limitera nie jest tu cicho zamieniana na „limited”.
+  return await checkDatabaseRateLimit(await getRateLimitPool(), {
     action,
     trustedClientIp: isIP(ip) === 0 ? UNKNOWN_IP : ip,
     ...(opts?.identifier ? { identifier: opts.identifier } : {}),
@@ -113,9 +117,6 @@ async function checkPostgresRateLimit(
     windowSeconds,
     keySecret: env.rateLimitKeySecret ?? '',
   });
-  // Helper zwraca false także przy błędzie bazy — dla akcji zwykłych nie odcinamy ruchu,
-  // ale nie odróżnimy tu awarii od przekroczenia; akcje wrażliwe zostają zablokowane.
-  return allowed;
 }
 
 /**

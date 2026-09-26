@@ -54,6 +54,10 @@ import {
  * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
+ * #609: porzucone rezerwacje budżetu AI (`ai_budget_release_stale_reservations`, 0134) —
+ * rezerwacja starsza niż 60 minut wciąż w stanie `reserved` (proces padł między rezerwacją
+ * a rozliczeniem) jest rozliczana jako `failed`/koszt 0; ślad audytowy zostaje, limit doby/
+ * miesiąca wraca do użycia. Idempotentne (`FOR UPDATE SKIP LOCKED`, filtr po statusie).
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -105,6 +109,7 @@ async function run(request: Request): Promise<Response> {
   type Task =
     | 'discounts'
     | 'checkouts'
+    | 'aiBudgetReservations'
     | 'jobExpiry'
     | 'guestRequests'
     | 'savedSearchAlerts'
@@ -134,6 +139,13 @@ async function run(request: Request): Promise<Response> {
   const releasedCheckouts = await task('checkouts', 'release_stale_checkout_intents', {
     p_older_than_minutes: 30,
   });
+  // #609: rezerwacje budżetu AI porzucone po awarii procesu (crash/restart między rezerwacją
+  // i rozliczeniem) — GC po TTL, niezależnie od pozostałych zadań.
+  const releasedAiBudgetReservations = await task(
+    'aiBudgetReservations',
+    'ai_budget_release_stale_reservations',
+    { p_older_than_minutes: 60, p_limit: 200 },
+  );
   const expiredJobs = await task('jobExpiry', 'expire_due_jobs');
   const purgedGuestRequests = await task('guestRequests', 'purge_guest_application_requests');
   // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.
@@ -228,6 +240,7 @@ async function run(request: Request): Promise<Response> {
     ok: true,
     releasedDiscounts: releasedDiscounts ?? 0,
     releasedCheckouts: releasedCheckouts ?? 0,
+    releasedAiBudgetReservations: releasedAiBudgetReservations ?? 0,
     expiredJobs: expiredJobs ?? 0,
     purgedGuestRequests: purgedGuestRequests ?? 0,
     savedSearchDigests: savedSearchDigests ?? 0,
