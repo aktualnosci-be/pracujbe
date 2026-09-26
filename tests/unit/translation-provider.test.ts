@@ -67,7 +67,12 @@ describe('OpenAiTranslationProvider', () => {
       inputTokens: 100,
       outputTokens: 40,
     });
-    const params = callParams(create) as Record<string, any>;
+    // Typ SDK to unia wariantów (format tekstu, elementy wejścia), więc zawężamy go jawnie
+    // do kształtu, który test sprawdza, zamiast `any`.
+    const params = callParams(create) as ReturnType<typeof callParams> & {
+      text: { format: { schema: { additionalProperties: unknown } } };
+      input: Array<{ content: Array<{ text: string }> }>;
+    };
     expect(params.model).toBe('gpt-6-luna');
     expect(params.instructions).toBe(TRANSLATION_SYSTEM_PROMPT);
     expect(params.tools).toBeUndefined();
@@ -80,7 +85,7 @@ describe('OpenAiTranslationProvider', () => {
       strict: true,
     });
     expect(params.text.format.schema.additionalProperties).toBe(false);
-    const text = params.input[0].content[0].text as string;
+    const text = params.input[0]!.content[0]!.text;
     // Próba zamknięcia znacznika w danych jest zneutralizowana — jeden prawdziwy znacznik.
     expect(text.match(/<\/source_fields>/g)).toHaveLength(1);
     expect(text).toContain('[tag removed]');

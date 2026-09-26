@@ -105,6 +105,15 @@ describe('sitemap (produkcja)', () => {
     }
   });
 
+  it('#691: brak dawnej atrapy /faq (308 na /pomoc), /pomoc jest w każdym języku', async () => {
+    const paths = (await allSitemapEntries()).map((entry) => new URL(entry.url).pathname);
+    // Strona usunięta z systemu plików nie trafia już do FORBIDDEN_SEGMENTS, więc tylko ta
+    // asercja łapie powrót `/faq` do STATIC_PATHS (kontrola ujemna: dopisanie '/faq' = czerwony).
+    expect(FORBIDDEN_SEGMENTS).not.toContain('faq');
+    for (const path of paths) expect(path, path).not.toMatch(/^\/[a-z]{2}\/faq(\/|$)/);
+    for (const locale of LOCALES) expect(paths).toContain(`/${locale}/pomoc`);
+  });
+
   it('brak duplikatów; każdy URL ma alternates dla 4 języków i x-default', async () => {
     const entries = await allSitemapEntries();
     const urls = entries.map((entry) => entry.url);
