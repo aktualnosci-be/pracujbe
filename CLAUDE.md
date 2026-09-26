@@ -528,7 +528,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] Role i routing paneli (candidate/employer/admin, noindex)
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
-- [ ] shadcn/ui — pełny zestaw komponentów (na razie podstawowe)
+- [x] shadcn/ui — zestaw komponentów w `src/components/ui` (API shadcn, styl „Ludzie i praca”, tokeny,
+  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select),
+  card, badge (`success` = `success-text` na `success/10`, AA), toast, light-dialog (#393) +
+  confirm-dialog, stepper, status-pill, match-bar, stat-card oraz **skeleton**, **table**
+  (domyślne klasy = `TH`/`TD`/`TD_WRAP` z `panel-styles.ts`, `TableRowHeader` = `<th scope="row">`),
+  **pagination** (nav + lista, bez `Slot` — zostaje serwerowy) i **alert** (baza `NOTICE`, warianty
+  note/error/success, `error` = `role="alert"`). Podmienione ręczne odpowiedniki bez zmiany wyglądu:
+  tabele `/admin/uzytkownicy` i `/admin/firmy`, `AdminPager`, szkielet `MessagesLoading`, błędy
+  zespołu (`TeamMembers`/`TeamInvite`/`MyTeamInvitations`), `RecruiterOnlyNote`. Test `ui-kit`
+  (klasy identyczne z kalką, kontrole ujemne) + strażnik: surowy `<table>` tylko w `ui/table.tsx`.
+  Świadomie BEZ nowych pakietów Radix (budżet JS #395, INP #393): natywne `<select>`/radio w formularzach
+  GET i server actions (działają bez JS, strony admina serwerowe), własne menu z pełnym ARIA
+  (`ApplicationActions` #341, `ApplicationStatusMenu`, `LocaleSwitcher` na stronach publicznych),
+  dialogi na `LightDialog`; tabs/tooltip/dropdown-menu dodawać dopiero z realnym użyciem (tooltip na
+  dotyku = ryzyko a11y). Publiczne `Pagination` (lista ofert) zostaje osobne.
 
 ### Redesign wg makiet — HISTORYCZNE (`docs/DESIGN_SCREENS.md`), zastąpione „Ludzie i praca”
 > Obowiązujący wygląd = kalka prototypu `docs/design/people-passport/prototype` („04 Ludzie i praca”,
