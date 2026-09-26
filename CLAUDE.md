@@ -765,7 +765,13 @@ wskazuje `POST /api/email/unsubscribe-alert?t=&l=` z tym samym tokenem alertu co
 service_role, idempotentnie), GET = 303 na stronę potwierdzenia; inne maile i `jobMatch` bez
 wyszukiwania zachowują nagłówek kategorii, stopka nadal ma wypisanie z kategorii. Dowód: unit
 `saved-search-followups` (kontrola ujemna: token kategorii w nagłówku/trasie), E2E `saved-search.spec`.
-**Otwarte:** na przebieg najwyżej 100 najnowszych pasujących ofert.
+Bez limitu 100 ofert na przebieg (migracja `0138`): worker bierze nowe oferty z
+`saved_search_matching_jobs` — kolejne strony `get_public_jobs` po 100 w jednym zapytaniu (jeden
+snapshot); remis `published_at` rozstrzyga `id` w `get_public_jobs` (0136, #594), więc strony
+są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najwyżej raz
+na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
+kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
+na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
