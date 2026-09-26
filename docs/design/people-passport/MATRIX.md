@@ -1,6 +1,6 @@
 # Matryca zgodności z prototypem „04 Ludzie i praca” (#7)
 
-Pomiar: 2026-09-24, `main` + zmiany z PR #7, build produkcyjny w trybie demo (bez Supabase),
+Pomiar: 2026-09-24, `main` + zmiany z PR #7, build produkcyjny w trybie demo (bez bazy danych),
 Chromium, `deviceScaleFactor 1`, zgoda cookies „tylko niezbędne” zapisana z góry. Prototyp
 `docs/design/people-passport/prototype` (motyw `people`, widok przez `view=…; render()`),
 witryna `#site` na pełną szerokość okna, ten sam plik DM Sans co aplikacja (Google Fonts podmienione

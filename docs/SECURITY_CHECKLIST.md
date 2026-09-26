@@ -22,26 +22,31 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
       `applications`/`offers`/`messages`/`candidate_profiles`.
 - [ ] Firma A nie widzi danych firmy B (test cross-tenant).
 
-## 2. Service role key
+## 2. Uprawnienia service role
 
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` **nigdy** jako `NEXT_PUBLIC_*`.
-- [ ] `@/lib/supabase/admin` nie jest importowany w żadnym komponencie klienckim
-      (`"use client"`) ani w kodzie trafiającym do bundle'a przeglądarki (Invariant #6).
-- [ ] Użycie admin clienta ograniczone do: webhooki, kolejka e-mail, operacje admina.
-- [ ] Grep w buildzie: klucz service role nie występuje w `.next/static`.
+- [ ] `DATABASE_SERVICE_URL` (i pozostałe `DATABASE_*`, `BETTER_AUTH_SECRET`) **nigdy** jako
+      `NEXT_PUBLIC_*`.
+- [ ] `withServiceRole` (`@/lib/db/portal`, `server-only`) nie jest importowany w żadnym
+      komponencie klienckim (`"use client"`) ani w kodzie trafiającym do bundle'a
+      przeglądarki (Invariant #6).
+- [ ] Użycie puli service ograniczone do: worker e-mail, webhooki, cron `/api/maintenance`,
+      odczyty admina po `requireAdmin`.
+- [ ] Grep w buildzie: adresy i hasła baz nie występują w `.next/static`.
 
 ## 3. Signed URLs / pliki prywatne
 
-- [ ] Buckety z danymi wrażliwymi (`cv`/`documents`, `attachments`, `invoices`) są
-      **prywatne** (Invariant #10).
-- [ ] Dostęp do plików prywatnych wyłącznie przez `createSignedUrl` generowany
-      **serwerowo** po sprawdzeniu uprawnień; krótki TTL (60–300 s).
+- [ ] Bucket Railway z CV i załącznikami wiadomości jest **prywatny** (Invariant #10,
+      [`railway/STORAGE_ADAPTER_CONTRACT.md`](./railway/STORAGE_ADAPTER_CONTRACT.md)).
+- [ ] Dostęp do plików prywatnych wyłącznie przez krótki (60 s) link HMAC
+      (`/api/files/cv/<id>?t=`, `/api/files/message/<id>?t=`) wystawiany **serwerowo**;
+      trasa ponownie sprawdza sesję, uprawnienia i `scan_status`, adres S3 nie trafia do klienta.
 - [ ] Brak publicznych linków do dokumentów kandydatów.
-- [ ] Polityki `storage.objects` wiążą ścieżkę z właścicielem; upload tylko dla właściciela.
+- [ ] Wiersz `files` wiąże ścieżkę z właścicielem; zapis tylko przez akcje serwerowe/RPC.
 
 ## 4. Rate limiting
 
-- [ ] Logowanie / rejestracja / reset hasła — limit prób (Supabase Auth Rate Limits).
+- [ ] Logowanie / rejestracja / reset hasła — limit prób (limiter PostgreSQL `rate_limit_hit`,
+      `src/lib/rate-limit`, w akcjach `src/lib/actions/auth.ts`).
 - [ ] Wysyłka e-maili (Auth i transakcyjnych) — limit na użytkownika/adres.
 - [ ] Aplikowanie / wysyłka propozycji / wiadomości — limit per użytkownik (kod `RATE_LIMITED`).
 - [ ] Endpoint kolejki e-mail i webhooki — limit + autoryzacja.
@@ -50,14 +55,14 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 
 - [ ] Blokada/opóźnienie po serii nieudanych logowań.
 - [ ] Silna polityka haseł (min. długość, złożoność).
-- [ ] Sesje: bezpieczne cookies (HttpOnly, Secure, SameSite) — zarządzane przez Supabase SSR.
+- [ ] Sesje: bezpieczne cookies (HttpOnly, Secure, SameSite) — zarządzane przez Better Auth
+      (`src/lib/auth/*`); `/api/auth/[...all]` wystawia tylko `GET /get-session`.
 - [ ] Potwierdzenie e-mail wymagane przed pełnym dostępem (Confirm email ON).
 
 ## 6. Anty-bot
 
 - [ ] Formularze publiczne (rejestracja, kontakt, aplikacja) chronione (honeypot i/lub
-      CAPTCHA — Supabase Auth wspiera hCaptcha/Turnstile; włącz na produkcji).
-      Logowanie, rejestracja i reset hasła: Cloudflare Turnstile z weryfikacją serwerową
+      CAPTCHA). Logowanie, rejestracja i reset hasła: Cloudflare Turnstile z weryfikacją serwerową
       (#46, [`TURNSTILE.md`](./TURNSTILE.md)) — ustaw klucze w produkcji.
 - [ ] Rate limiting jako druga warstwa anty-bot.
 
@@ -92,18 +97,21 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 
 - [ ] Użytkownik nie widzi stack trace / SQL / surowej odpowiedzi dostawcy (Invariant #8).
 - [ ] Wszystkie błędy przez `AppError` (`@/lib/errors`) → komunikat z klucza tłumaczenia.
-- [ ] Szczegóły techniczne trafiają wyłącznie do Sentry / `system_events`, nie do UI.
+- [ ] Szczegóły techniczne trafiają wyłącznie do logów serwera (z redakcją), webhooka błędów
+      (sam kod) / `system_events`, nie do UI.
 
 ## 11. Sekrety i konfiguracja
 
-- [ ] Sekrety tylko w Vercel/GitHub Secrets — nie w repo (`.env.local` w `.gitignore`).
-- [ ] Osobne klucze Supabase/Resend dla prod i staging.
+- [ ] Sekrety tylko w zmiennych Railway / GitHub Secrets — nie w repo (`.env.local` w `.gitignore`).
+- [ ] Osobne loginy PostgreSQL per rola (`npm run db:logins`,
+      [`railway/LOGINY_POSTGRESQL_ONE_OFF.md`](./railway/LOGINY_POSTGRESQL_ONE_OFF.md)); klucze
+      dostawcy poczty tylko dla produkcji (stagingu nie ma).
 - [ ] `EMAIL_QUEUE_SECRET` chroni endpoint dispatchera; webhooki weryfikują podpis.
 - [ ] Rotacja kluczy przy podejrzeniu wycieku; least privilege dla tokenów CI.
 
 ## 12. Nagłówki i transport
 
-- [ ] HTTPS wymuszony (HSTS), przekierowanie HTTP→HTTPS (Vercel).
+- [ ] HTTPS wymuszony (HSTS), przekierowanie HTTP→HTTPS (Railway / Cloudflare).
 - [ ] Bezpieczne nagłówki: CSP (na tyle restrykcyjne, na ile pozwala aplikacja),
       `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `X-Frame-Options`/frame-ancestors.
 - [ ] `poweredByHeader` wyłączony (ustawione w `next.config.mjs`).
@@ -130,6 +138,6 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 
 ## Powiązane
 
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) · [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) ·
-  [`RESEND_SETUP.md`](./RESEND_SETUP.md) · [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md).
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) · [`railway/README.md`](./railway/README.md) ·
+  [`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md) · [`RESEND_SETUP.md`](./RESEND_SETUP.md) · [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md).
 </content>
