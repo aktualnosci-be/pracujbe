@@ -12262,7 +12262,7 @@ select pg_temp.expect_error(
   'AI_BUDGET_EXCEEDED', 'AIB36-10b poprawna suma znów odrzuca');
 
 -- ============================================================================
--- AIB609. Porzucone rezerwacje budżetu AI (#609, 0144): GC po TTL rozlicza rezerwację
+-- AIB609. Porzucone rezerwacje budżetu AI (#609, 0134): GC po TTL rozlicza rezerwację
 --         padłego procesu jako failed/koszt 0 — limit wraca do użycia, ślad audytowy
 --         (wiersz) zostaje. Kontrola ujemna: bez filtra po TTL GC zwolniłoby też
 --         rezerwację wciąż trwającego wywołania.

@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0144_ai_budget_gc.sql — #609: porzucone rezerwacje budżetu AI mają TTL i nie blokują
+-- 0134_ai_budget_gc.sql — #609: porzucone rezerwacje budżetu AI mają TTL i nie blokują
 -- limitów na stałe.
 --
 -- Numer migracji tymczasowy (sesja potomna) — koordynator nadaje ostateczny.

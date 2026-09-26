@@ -54,7 +54,7 @@ import {
  * #43: czyszczenie spraw DSA (`dsa_retention_run`, 0104) — domyślnie WYŁĄCZONE (terminy czekają
  * na decyzję właściciela, #40); `DSA_RETENTION_MODE=dry-run` = podgląd, `apply` = anonimizacja
  * (`src/lib/admin/dsa-retention-mode.ts`). Odpowiedź: tryb + liczniki przebiegu.
- * #609: porzucone rezerwacje budżetu AI (`ai_budget_release_stale_reservations`, 0144) —
+ * #609: porzucone rezerwacje budżetu AI (`ai_budget_release_stale_reservations`, 0134) —
  * rezerwacja starsza niż 60 minut wciąż w stanie `reserved` (proces padł między rezerwacją
  * a rozliczeniem) jest rozliczana jako `failed`/koszt 0; ślad audytowy zostaje, limit doby/
  * miesiąca wraca do użycia. Idempotentne (`FOR UPDATE SKIP LOCKED`, filtr po statusie).

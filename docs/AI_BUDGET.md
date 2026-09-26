@@ -51,7 +51,7 @@ raport czyta ostatnie 31 dni i 12 miesięcy.
 
 Jeśli proces kończy się MIĘDZY rezerwacją a rozliczeniem (crash, restart, redeploy,
 timeout), wiersz zostaje w stanie `reserved` i bez GC liczyłby się do budżetu bezterminowo.
-`/api/maintenance` woła co godzinę `ai_budget_release_stale_reservations` (0144,
+`/api/maintenance` woła co godzinę `ai_budget_release_stale_reservations` (0134,
 service_role): rezerwacja starsza niż 60 minut, wciąż `reserved`, jest rozliczana jako
 `outcome='failed'`, `cost_micro_usd=0` — wiersz (ślad audytowy) zostaje w rejestrze, ale
 przestaje liczyć się do wydanego budżetu, więc limit doby/miesiąca wraca do użycia. TTL

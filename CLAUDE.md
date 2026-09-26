@@ -872,7 +872,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
   `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
   poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
-  Porzucone rezerwacje (#609, migracja `0144`): jeśli proces pada między rezerwacją a
+  Porzucone rezerwacje (#609, migracja `0134`): jeśli proces pada między rezerwacją a
   rozliczeniem, rezerwacja nie może blokować limitu bezterminowo. `/api/maintenance` woła co
   godzinę `ai_budget_release_stale_reservations` (service_role, idempotentne, `FOR UPDATE SKIP
   LOCKED`) — rezerwacja starsza niż 60 minut i wciąż `reserved` jest rozliczana jako
