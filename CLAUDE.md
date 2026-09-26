@@ -985,11 +985,10 @@ AV206 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
   startowe 10 USD/dobę i 100 USD/miesiąc (`ai_budget_limits`, zmiana tylko w bazie). Rejestr
   `ai_usage_ledger` bez treści i identyfikatorów osób/firm. Raport tylko do odczytu
   `/admin/koszty-ai`; czujki `ai_budget_*` w `/api/health/ops`. Strażnik: funkcja `behind_flag`
-  w inwentarzu musi mieć `costBudgeted: true` — import ogłoszeń, asystent treści i import CV
-  (#487, `src/lib/cv-import/cost.ts`). Hook dla tłumaczeń (#514) opisany w
-  `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
+  w inwentarzu musi mieć `costBudgeted: true` — import ogłoszeń, asystent treści, import CV
+  (#487, `src/lib/cv-import/cost.ts`) i tłumaczenia (#514, `estimateTranslationCost`). Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
   `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
-  poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
+  poza limiterem importu.
   Porzucone rezerwacje (#609, migracja `0134`): jeśli proces pada między rezerwacją a
   rozliczeniem, rezerwacja nie może blokować limitu bezterminowo. `/api/maintenance` woła co
   godzinę `ai_budget_release_stale_reservations` (service_role, idempotentne, `FOR UPDATE SKIP
@@ -1114,6 +1113,24 @@ AV206 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
   **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
   zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
   na ESCO = osobne issues.
+- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0145`, `docs/AI_TRANSLATION.md`), tylko
+  pl/nl/fr/en, domyślnie wyłączone (`AI_TRANSLATION_ENABLED`). Kolejka: niezmienne rewizje
+  źródła (kanoniczne pola + SHA-256, ta sama treść = no-op), zadania per język docelowy i wersję
+  pipeline (unikat = deduplikacja), `claim_translation_jobs` (SKIP LOCKED + lease, restart =
+  przejęcie wygasłej dzierżawy), `complete_translation_job` (CAS po lease + kontrola bieżącej
+  rewizji — wynik v1 po v2 = `superseded`), `fail_translation_job` (backoff/jitter/Retry-After),
+  ukrycie/purge encji, korekta ręczna z autorem i wersją (AI jej nie nadpisuje). Wszystko RPC
+  service_role, tabele deny. Adapter `src/lib/translation/`: interfejs dostawcy + OpenAI
+  (`openai-provider.ts` na wspólnym kliencie `src/lib/ai/openai.ts`, `gpt-6-luna`, structured
+  output `strict`, bez narzędzi, `store: false`, dane w `<source_fields>`), walidacja
+  kształtu i niezmienności faktów pole po polu (`facts.ts`: liczby, kwoty, waluty, daty,
+  godziny, e-maile/URL/telefony, jednostki, brutto/netto, okres stawki, kwalifikacje, nazwy
+  własne, negacja) — niepoprawny wynik nigdy nie trafia do bazy; logi tylko kody. Worker
+  `processTranslationBatch` (dostawca poza transakcją). Budżet AI (#36): adapter przez
+  `withAiBudget` (rezerwacja przed API, rozliczenie tokenami, log użycia bez treści); odmowa
+  budżetu → `defer_translation_job` (zadanie wraca po 1 h / 5 min bez zużycia próby). Dowód:
+  `rls.sql` sekcja TR31 z kontrolami ujemnymi TR31-N i TR31-13N; unit `translation-*`.
+  **Do zrobienia:** wpięcie ofert (#33) i profili (#34), trasa/cron workera, benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -1660,8 +1677,8 @@ AV206 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
   i E2E `job-funnel-no-storage` (fixture: bez zgody zero żądań; po zgodzie zero cookies/storage
   i żądanie bez `Cookie`). Wariant zgody lejka rozstrzygnięty (#575: tylko po zgodzie analitycznej).
   Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
-  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wpis
-  tłumaczeń (#514) do logu użycia.
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie (tłumaczenia #514 są
+  już w logu użycia i inwentarzu).
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
