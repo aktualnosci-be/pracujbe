@@ -8,6 +8,8 @@ vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).r
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// Aktywna firma szczegółu zgłoszenia (#497): bez cookie → pierwsze członkostwo.
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock('next/navigation', () => ({
   notFound: vi.fn(() => {
     throw new Error('NEXT_NOT_FOUND');
@@ -18,6 +20,8 @@ const adminData = await import('../../src/lib/data/admin');
 const adminActions = await import('../../src/lib/actions/admin');
 const jobs = await import('../../src/lib/actions/jobs');
 const banner = await import('../../src/lib/campaign-banner/source');
+const employerData = await import('../../src/lib/data/employer');
+const { getPublicJobScreeningQuestions } = await import('../../src/lib/db/public-jobs');
 
 // #25 po scaleniu #497 i #175: przegląd pytań screeningowych (publikacja zablokowana do decyzji,
 // kolejka admina przez service_role po roli, decyzja pod sesją admina) oraz baner kampanii
@@ -83,6 +87,48 @@ describe('przegląd pytań screeningowych (#497) na nowej warstwie danych', () =
 
     actAs(owner);
     expect(await jobs.publishJob(jobId)).toEqual({ ok: true });
+  });
+});
+
+describe('pytanie odrzucone po publikacji jest ukrywane (#497, 0201)', () => {
+  it('oferta aktywna, pytanie znika z formularza, firma nie widzi odpowiedzi, powiadomienie recruiter+', async () => {
+    const pg = realSession.db!;
+    const company = (await pg.admin.query(`SELECT company_id FROM public.jobs WHERE id = $1`, [jobId])).rows[0].company_id;
+    const activeJob = (await pg.admin.query(`INSERT INTO public.jobs(company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
+      VALUES ($1, $2, 'it-sh497', 'Kierowca IT', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl') RETURNING id`, [company, owner.id])).rows[0].id;
+    await pg.admin.query(`INSERT INTO public.job_translations(job_id, locale, title) VALUES ($1, 'pl', 'Kierowca IT')`, [activeJob]);
+    await pg.admin.query(`INSERT INTO public.job_screening_questions(job_id, position, type, required, prompt) VALUES
+      ($1, 0, 'yes_no', true, '{"pl": "Czy masz prawo jazdy C+E?"}'), ($1, 1, 'yes_no', true, '{"pl": "Czy jesteś w ciąży?"}')`, [activeJob]);
+    // Oferta opublikowana przed przeglądem (stan jak po 0103): aktywna, pytanie w kolejce.
+    await pg.admin.query(`ALTER TABLE public.jobs DISABLE TRIGGER trg_enforce_screening_review`);
+    await pg.admin.query(`UPDATE public.jobs SET status = 'active', published_at = now() WHERE id = $1`, [activeJob]);
+    await pg.admin.query(`ALTER TABLE public.jobs ENABLE TRIGGER trg_enforce_screening_review`);
+    const questions = (await pg.admin.query(`SELECT id, position FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [activeJob])).rows;
+    const [visible, risky] = questions.map((q: { id: string }) => q.id);
+    const applied = (await withUserTransaction(pg.web, candidate.id, (tx) => tx.query(
+      `SELECT public.apply_to_job($1::uuid, 'it-sh497-1', null, null, null, $2::jsonb) AS id`,
+      [activeJob, JSON.stringify({ [visible!]: true, [risky!]: false })]))) as { rows: { id: string }[] };
+    const applicationId = applied.rows[0]!.id;
+
+    actAs(owner);
+    const before = await employerData.getEmployerApplicationDetail(applicationId);
+    expect(before.status === 'ok' ? before.application.screeningAnswers?.length : -1).toBe(2);
+    expect((await getPublicJobScreeningQuestions(pg.web, activeJob)).map((q) => q.id)).toEqual([visible, risky]);
+
+    actAs(admin);
+    const list = await adminData.listScreeningReviews();
+    const row = list.status === 'ok' ? list.rows.find((r) => r.jobId === activeJob) : undefined;
+    expect(await adminActions.decideScreeningReview(row!.id, 'rejected', 'Pytanie o ciążę.')).toEqual({ ok: true });
+
+    expect((await pg.admin.query(`SELECT status FROM public.jobs WHERE id = $1`, [activeJob])).rows[0].status).toBe('active');
+    expect((await getPublicJobScreeningQuestions(pg.web, activeJob)).map((q) => q.id)).toEqual([visible]);
+    actAs(owner);
+    const after = await employerData.getEmployerApplicationDetail(applicationId);
+    expect(after.status === 'ok' ? after.application.screeningAnswers?.length : -1).toBe(1);
+    // Wiersz odpowiedzi zostaje w bazie; powiadomienie z prośbą o poprawkę dla ownera.
+    expect((await pg.admin.query(`SELECT count(*)::int AS n FROM public.application_screening_answers WHERE application_id = $1`, [applicationId])).rows[0].n).toBe(2);
+    const notes = (await pg.admin.query(`SELECT data FROM public.notifications WHERE profile_id = $1 AND entity_id = $2`, [owner.id, activeJob])).rows;
+    expect(notes.map((n) => n.data)).toEqual([expect.objectContaining({ kind: 'screening_review', status: 'hidden' })]);
   });
 });
 

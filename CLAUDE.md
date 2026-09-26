@@ -713,9 +713,9 @@ dane zawodowe profilu i relacje; imię/kontakt (`profiles`) i CV — nie. Wyłą
 dla wyszukiwania i `matches` (polityka wymaga widoczności kandydata, także po znanym ID);
 relacja z aplikacji/propozycji (`company_can_view_candidate`) zostaje — zatrzymuje ją blokada
 firmy. Dowód: `rls.sql` sekcja VIS494 (kontrole ujemne: polityka `matches` z 0078, guard z 0029);
-unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. **Otwarte:** propozycja
-od firmy odsłania jej imię i kontakt z konta (`company_can_view_candidate` po `offers`) —
-decyzja produktowo-prawna (#485/#34).
+unit `profile-visibility`; E2E `candidate-profile-visibility.spec`. Propozycja od firmy nadal
+odsłania jej rekruterom imię i kontakt kandydata z konta (`company_can_view_candidate` po
+`offers`) — zachowanie bez zmian, decyzja właściciela 26.09.2026 (`docs/PRODUCT_DECISIONS.md`).
 
 Polityka wieku kandydatów (#492, #576, migracja `0126`). Decyzja właściciela 25.09.2026
 (LAUNCH-1): konto kandydata od 16 lat, widoczność profilu dla firm (#494) tylko 18+, młodsi bez
@@ -1100,11 +1100,25 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `screening_question.reviewed`, powiadomienie in-app dla zapisującego). Dowód: `rls.sql` sekcja
   SR497 (kontrola ujemna: bez strażnika oferta się publikuje); unit `screening-risk`,
   `screening-review`, `screening-review-editor`; E2E `admin-screening-review`,
-  `job-wizard-screening`. Teksty komunikatów do akceptacji właściciela. **Otwarte (#497):**
-  katalog dopuszczalnych wzorców i wyjątków art. 9/10 (właściciel + prawnik), wstrzymanie
-  zbierania odpowiedzi dla ofert JUŻ aktywnych z pytaniem odrzuconym po publikacji i los
-  zapisanych odpowiedzi, zgłoszenie pytania przez kandydata (dziś ogólne zgłoszenie oferty DSA
-  #41), e-mail o decyzji, informacja dla kandydata (#61), rejestr (#485), retencja (#486).
+  `job-wizard-screening`. Teksty komunikatów do akceptacji właściciela.
+  Odrzucenie po publikacji (decyzja właściciela 26.09.2026, migracja `0201` — numer tymczasowy):
+  przegląd `rejected` bieżącej treści pytania oferty poza szkicem = pytanie UKRYTE, oferta
+  zostaje aktywna. `get_public_job_screening_questions` go pomija (ApplyModal i gość; strona
+  ISR odświeża się w oknie `revalidate`), `record_screening_answers` po cichu pomija odpowiedź
+  na nie (ukryte wymagane nie jest wymagane; klucz spoza oferty nadal `VALIDATION_FAILED`),
+  polityka `application_screening_answers_select` ukrywa przed firmą odpowiedzi na treść
+  odrzuconą (`screening_answer_hidden` porównuje odcisk snapshotu; kandydat widzi swoje, wiersze
+  zostają). Strażnik aktywacji: odrzucone pytanie blokuje tylko publikację szkicu, nie
+  wznowienie/ponowne otwarcie. `admin_decide_screening_review` dla oferty poza szkicem: audyt
+  `screening_question.hidden` (bez treści) i powiadomienie `system` (`status='hidden'`, tytuł
+  `itemScreeningHidden` z prośbą o poprawkę) dla każdego aktywnego recruiter+ firmy. Dowód:
+  `rls.sql` sekcja SH497 (kontrole ujemne: polityka 0093, pytanie bez decyzji), integracja
+  `portal-screening-banner` (PG16), unit `screening-review`, E2E `tests/e2e-real/screening-hidden`
+  (mutacja `screening-hidden-off` = czerwony). **Otwarte (#497):** katalog dopuszczalnych wzorców
+  i wyjątków art. 9/10 (właściciel + prawnik), los zapisanych odpowiedzi na ukryte pytania
+  (retencja #486), ścieżka poprawienia pytania w opublikowanej ofercie (dziś pytania zmienia
+  się tylko w szkicu), zgłoszenie pytania przez kandydata (dziś ogólne zgłoszenie oferty DSA
+  #41), e-mail o decyzji, informacja dla kandydata (#61), rejestr (#485).
   Aplikacja bez konta (#98, migracja `0095`, `docs/GUEST_APPLY.md`): gość w ApplyModal
   (`GuestApplyForm`: imię i nazwisko, e-mail, zgoda; reszta opcjonalna) → Turnstile
   `guest_apply` + limity IP/adres → `submit_guest_application` (service_role, zgłoszenie
@@ -1688,7 +1702,9 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `list` w adapterze) — obiekt bez wiersza `files` po 24 h → `storage_deletion_queue`, wiersz bez
   obiektu → tylko licznik; partie z kursorem (`storage_gc_sweeps`), dry-run domyślnie
   (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.
-  **Otwarte:** utworzenie bucketu (właściciel), zatwierdzenie trybu `delete` na produkcji, GC
+  Tryb na produkcji: `dry-run` do obserwacji liczników (decyzja właściciela 26.09.2026,
+  `docs/PRODUCT_DECISIONS.md`); `delete` dopiero po nowej decyzji.
+  **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany

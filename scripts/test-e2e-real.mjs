@@ -71,6 +71,12 @@ const MUTATIONS = {
   // Język e-maila nie z profilu odbiorcy (Invariant #1).
   'recipient-locale-en': `CREATE OR REPLACE FUNCTION public.resolve_recipient_locale(p_profile_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT 'en'::text $$`,
+  // #497 (0201): pytanie odrzucone po publikacji wraca do formularza aplikowania.
+  'screening-hidden-off': `CREATE OR REPLACE FUNCTION public.get_public_job_screening_questions(p_job_id uuid)
+    RETURNS TABLE (id uuid, "position" smallint, type text, required boolean, prompt jsonb, options jsonb)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT q.id, q.position, q.type, q.required, q.prompt, q.options FROM public.job_screening_questions q
+     WHERE q.job_id = p_job_id AND public.job_is_public(p_job_id) ORDER BY q.position $$`,
   // Lejek ofert bez deduplikacji po nonce: ponowienie tego samego zgłoszenia liczy się dwa razy (#99).
   'funnel-no-dedup': 'ALTER TABLE public.job_funnel_receipts DROP CONSTRAINT job_funnel_receipts_pkey',
   // UI (#351): odpowiedź na propozycję zwraca sukces bez zmiany stanu — panel pokazuje
