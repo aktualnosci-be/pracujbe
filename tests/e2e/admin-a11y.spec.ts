@@ -65,6 +65,9 @@ for (const viewport of [
     test(`admin a11y: trasy /admin/* (${locale}, ${viewport.width} px) — brak naruszeń`, async ({
       page,
     }) => {
+      // Jeden test przechodzi wszystkie trasy — limit rośnie z ich liczbą (jak w
+      // a11y-public-routes). Stałe 30 s mieściło się tylko przy jednym workerze.
+      test.setTimeout(ROUTES.length * 10_000);
       await page.setViewportSize(viewport);
       for (const route of ROUTES) {
         await page.goto(`/${locale}${route}`);
