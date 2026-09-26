@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -31,6 +31,22 @@ function copy(locale: string): Copy {
   return JSON.parse(readFileSync(resolve('src/messages', `${locale}.json`), 'utf8')) as Copy;
 }
 
+/**
+ * Noindex strony po nawigacji po stronie klienta. Next 15 strumieniuje metadane w `<body>`
+ * (pierwsze wczytanie), a po nawigacji wstawia metadane nowej trasy do `<head>` — przez
+ * chwilę w DOM są oba `meta[name="robots"]` (stary z `<body>` i nowy z `<head>`). Ścisły
+ * lokator rzucał wtedy od razu „strict mode violation” (bez ponawiania) — niestabilny test.
+ * Sprawdzamy więc: żaden `meta[name="robots"]` w dokumencie nie pozwala indeksować, co
+ * najmniej jeden jest obecny, a świeży dokument tej trasy (nie pozostałość poprzedniej) sam
+ * niesie `noindex`.
+ */
+async function expectNoindex(page: Page) {
+  await expect(page.locator('meta[name="robots"]').first()).toBeAttached();
+  await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
+  const html = await (await page.request.get(page.url())).text();
+  expect(html, 'dokument trasy niesie noindex').toMatch(/<meta name="robots" content="[^"]*noindex/);
+}
+
 for (const locale of LOCALES) {
   for (const role of ['candidate', 'employer'] as const) {
     test(`lista powiadomień z dzwonka, filtr i noindex (#148) — ${role}, ${locale}`, async ({ page }) => {
@@ -47,7 +63,7 @@ for (const locale of LOCALES) {
 
       const main = page.getByRole('main');
       await expect(main.getByRole('heading', { level: 1, name: c.title })).toBeVisible();
-      await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+      await expectNoindex(page);
       await expect(main.getByRole('link', { name: new RegExp(c.itemMessageReceived) })).toBeVisible();
 
       const filter = main.getByRole('navigation', { name: c.filterLabel });
