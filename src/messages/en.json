@@ -3014,6 +3014,8 @@
     "unavailableTitle": "Banner unavailable",
     "unavailableHint": "A banner can only be prepared for an active, unexpired job of a verified company, with recruiter rights for that company.",
     "backToOffers": "Back to jobs",
+    "backToCompany": "Back to the company",
+    "unavailableHintAdmin": "A banner can only be prepared for an active, unexpired job of a verified company.",
     "openBanner": "Campaign banner",
     "openBannerLabel": "Campaign banner: {title}",
     "loadError": "The job could not be loaded",

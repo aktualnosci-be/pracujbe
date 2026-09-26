@@ -3014,6 +3014,8 @@
     "unavailableTitle": "Baner niedostępny",
     "unavailableHint": "Baner można przygotować tylko dla aktywnej, niewygasłej oferty zweryfikowanej firmy, z uprawnieniami rekrutera tej firmy.",
     "backToOffers": "Wróć do ofert",
+    "backToCompany": "Wróć do firmy",
+    "unavailableHintAdmin": "Baner można przygotować tylko dla aktywnej, niewygasłej oferty zweryfikowanej firmy.",
     "openBanner": "Baner kampanii",
     "openBannerLabel": "Baner kampanii: {title}",
     "loadError": "Nie udało się wczytać oferty",

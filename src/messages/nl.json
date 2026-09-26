@@ -3014,6 +3014,8 @@
     "unavailableTitle": "Banner niet beschikbaar",
     "unavailableHint": "Een banner kan alleen worden gemaakt voor een actieve, niet-verlopen vacature van een geverifieerd bedrijf, met recruiterrechten voor dat bedrijf.",
     "backToOffers": "Terug naar vacatures",
+    "backToCompany": "Terug naar het bedrijf",
+    "unavailableHintAdmin": "Een banner kan alleen worden gemaakt voor een actieve, niet-verlopen vacature van een geverifieerd bedrijf.",
     "openBanner": "Campagnebanner",
     "openBannerLabel": "Campagnebanner: {title}",
     "loadError": "De vacature kon niet worden geladen",

@@ -1880,9 +1880,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
   (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
   `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
-  Link do baneru w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy linkuje
-  do `GET /api/employer/jobs/[id]/banner` (endpoint dopuszcza admina, `/employer/oferty/[id]/baner`
-  jest zablokowana layoutem panelu pracodawcy dla konta bez firmy) — otwiera się w nowej karcie.
+  Baner w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy ma link „Baner
+  kampanii” (`adminBannerHref`, `src/lib/admin/campaign-banner-link.ts`; nazwa dostępna z tytułem
+  oferty) do generatora `/admin/oferty/[id]/baner?firma=<id>` — `/employer/oferty/[id]/baner` jest
+  zablokowana layoutem panelu pracodawcy dla konta bez firmy. Obie strony renderuje wspólny
+  `CampaignBannerView` (`src/components/employer/`), podgląd i pobranie idą przez ten sam
+  endpoint (admina dopuszcza `get_managed_campaign_job`, 0102). Strona admina: noindex,
+  `requireAdmin()` przed odczytem (nie-admin → 404 niezależnie od layoutu), powrót do firmy
+  (parametr `firma` tylko jako bezpieczny segment), demo = „niedostępny”. Bez migracji. Testy:
+  unit `admin-campaign-banner` (kontrola ujemna: pracodawca/bez sesji → 404 bez odczytu; mutacja
+  bez `requireAdmin` = czerwony), E2E `admin-campaign-banner` (4 języki, link tylko przy aktywnej,
+  axe), trasa w `admin-a11y`.
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami

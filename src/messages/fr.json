@@ -3014,6 +3014,8 @@
     "unavailableTitle": "Bannière indisponible",
     "unavailableHint": "Une bannière ne peut être préparée que pour une offre active et non expirée d’une entreprise vérifiée, avec les droits de recruteur de cette entreprise.",
     "backToOffers": "Retour aux offres",
+    "backToCompany": "Retour à l’entreprise",
+    "unavailableHintAdmin": "Une bannière ne peut être préparée que pour une offre active et non expirée d’une entreprise vérifiée.",
     "openBanner": "Bannière de campagne",
     "openBannerLabel": "Bannière de campagne : {title}",
     "loadError": "Impossible de charger l’offre",
