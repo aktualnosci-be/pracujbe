@@ -21,6 +21,9 @@ import { INLINE_LINK, NOTICE, NOTICE_TEXT, NOTICE_TITLE } from '@/components/das
  *     i link do danych firmy; `verified` → brak baneru (bez szumu).
  *   - `wizard` — nad kreatorem oferty: szkic teraz, publikacja po weryfikacji; `verified` → brak.
  *
+ * Czas weryfikacji (decyzja właściciela 26.09.2026): dla unverified/pending każdy wariant
+ * pokazuje `bannerEta` („Zwykle do 2 dni roboczych”) — bez innych obietnic.
+ *
  * Komponent serwerowy (bez interakcji) — `useTranslations` działa w RSC. Kolory wyłącznie
  * klasami tokenów (bez hexów), zgodnie z systemem wizualnym.
  */
@@ -107,6 +110,11 @@ export function CompanyStatusBanner({
           <p className={cn(NOTICE_TEXT, 'mb-0')}>
             {variant === 'wizard' ? t('wizardNotice') : t(config.descKey)}
           </p>
+          {awaiting ? (
+            <p className={cn(NOTICE_TEXT, 'mb-0')} data-company-status-eta="">
+              {t('bannerEta')}
+            </p>
+          ) : null}
         </div>
 
         {variant === 'dashboard' && awaiting ? (

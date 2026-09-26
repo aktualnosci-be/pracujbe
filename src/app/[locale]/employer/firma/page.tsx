@@ -1,9 +1,14 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { getCurrentIdentity } from '@/lib/auth/current';
+import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
+import { isPortalAuthConfigured } from '@/lib/env';
 import { getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
 import { CompanyModerationDecisions } from '@/components/employer/CompanyModerationDecisions';
 import { CompanyForm } from '@/components/employer/CompanyForm';
+import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
+import { env } from '@/lib/env';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
 import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
@@ -72,7 +77,14 @@ export default async function EmployerCompanyPage({
   const t = await getTranslations({ locale, namespace: 'company' });
   const companyLoad = await getMyCompany();
   const company = companyLoad.status === 'ok' ? companyLoad.company : null;
-  if (companyLoad.status === 'ok' && !company) return <CompanyOnboarding />;
+  if (companyLoad.status === 'ok' && !company) {
+    // #365: nazwa firmy z rejestracji (metadane konta) wypełnia formularz domyślnie.
+    // `!company` tylko gdy konta są skonfigurowane (bez env `getMyCompany` zwraca demo) —
+    // sesja jest więc już zagwarantowana przez guard w `employer/layout.tsx`.
+    const identity = isPortalAuthConfigured() ? await getCurrentIdentity() : null;
+    const defaultName = identity ? await readSignupCompanyName(identity) : '';
+    return <CompanyOnboarding defaultName={defaultName} />;
+  }
   // Decyzje moderacyjne (#42) — uzasadnienie widzi owner/admin firmy (RPC zwraca pustą listę innym).
   const moderation =
     company && company.canEdit ? await getCompanyModerationDecisions(company.id) : null;
@@ -87,6 +99,14 @@ export default async function EmployerCompanyPage({
           new Date(company.verifiedAt),
         )
       : null;
+  // Host własnej witryny — jedyny dozwolony podgląd logo przez next/image (CompanyLinksForm).
+  const ownHost = (() => {
+    try {
+      return new URL(env.siteUrl).host;
+    } catch {
+      return '';
+    }
+  })();
 
   return (
     <div className="min-w-0 max-w-4xl space-y-[22px]">
@@ -154,19 +174,36 @@ export default async function EmployerCompanyPage({
 
           {/* Edycja danych podstawowych (nazwa, VAT) — status pozostaje po stronie admina. */}
           {company.canEdit ? (
-            <section className={PAPER}>
-              <h2 className={H2_EXTENDED}>{t('editTitle')}</h2>
-              <div className="mt-4">
-                <CompanyForm
-                  mode="edit"
-                  verified={company.status === 'verified'}
-                  defaultValues={{
-                    name: company.name,
-                    vatNumber: company.vatNumber ?? '',
-                  }}
-                />
-              </div>
-            </section>
+            <>
+              <section className={PAPER}>
+                <h2 className={H2_EXTENDED}>{t('editTitle')}</h2>
+                <div className="mt-4">
+                  <CompanyForm
+                    mode="edit"
+                    verified={company.status === 'verified'}
+                    defaultValues={{
+                      name: company.name,
+                      vatNumber: company.vatNumber ?? '',
+                    }}
+                  />
+                </div>
+              </section>
+
+              {/* Strona WWW i logo (#112) — nie cofa weryfikacji, więc bez ostrzeżenia CompanyForm. */}
+              <section className={PAPER}>
+                <h2 className={H2_EXTENDED}>{t('linksTitle')}</h2>
+                <p className={INTRO}>{t('linksSubtitle')}</p>
+                <div className="mt-4">
+                  <CompanyLinksForm
+                    defaultValues={{
+                      website: company.website ?? '',
+                      logoUrl: company.logoUrl ?? '',
+                    }}
+                    ownHost={ownHost}
+                  />
+                </div>
+              </section>
+            </>
           ) : (
             <p className={cn(PANEL, 'text-sm text-muted-foreground')}>{t('editOwnerOnly')}</p>
           )}

@@ -11511,11 +11511,22 @@ rollback;
 \set OLN 'c1080000-0000-0000-0000-0000000000a4'
 \echo '--- OL112 company links in get_public_job ---'
 reset role; reset app.current_uid;
+-- CL141 (0141) dodał CHECK website/logo_url (bezwzględny https) NA POZIOMIE TABELI — ten test
+-- świadomie wstawia złe/puste adresy (symulacja danych sprzed CHECK-a), żeby sprawdzić DRUGĄ,
+-- niezależną bramkę w samej funkcji (`public_https_url` w `get_public_job`, defense-in-depth,
+-- OL112-2b/2c/3). Zdejmujemy CHECK tylko na czas tego INSERT-u i przywracamy `not valid`
+-- (nowe zapisy nadal walidowane — CL141 niżej to sprawdza — bez skanowania tych wierszy).
+alter table public.companies drop constraint if exists companies_website_https;
+alter table public.companies drop constraint if exists companies_logo_url_https;
 insert into public.companies(id,name,status,is_demo,website,logo_url) values
   (:'OLV','Linki Sp','verified',false,' https://www.linki.example/o-nas?x=1 ','https://cdn.linki.example/logo.png'),
   (:'OLB','Złe Linki Sp','verified',false,'http://zle.example','javascript:alert(1)'),
   (:'OLU','Bez Weryfikacji Sp','unverified',false,'https://bez.example','https://bez.example/logo.png'),
   (:'OLN','Bez Linków Sp','verified',false,null,'');
+alter table public.companies add constraint companies_website_https
+  check (website is null or public.public_https_url(website) is not null) not valid;
+alter table public.companies add constraint companies_logo_url_https
+  check (logo_url is null or public.public_https_url(logo_url) is not null) not valid;
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
   ('c1080000-0000-0000-0000-0000000000b1',:'OLV','ol-ok','Magazynier linki','warehouse','permanent','Gent','Flandria','active','pl'),
   ('c1080000-0000-0000-0000-0000000000b2',:'OLB','ol-bad','Magazynier złe linki','warehouse','permanent','Gent','Flandria','active','pl'),
@@ -13472,6 +13483,195 @@ reset role;
 delete from auth.users where id in (:'SCA', :'SCE');
 
 -- ============================================================================
+-- JT144 (0144, numer tymczasowy): istotna zmiana warunków opublikowanej oferty →
+--       powiadomienie in-app dla kandydatów z AKTYWNĄ aplikacją; lista pól w
+--       job_material_terms(), porównanie w transakcji update_published_job
+-- ============================================================================
+\set JTJOB 'e8000000-0000-0000-0000-000000144a01'
+\set JTAPPA 'e8000000-0000-0000-0000-000000144b01'
+\set JTAPPB 'e8000000-0000-0000-0000-000000144b02'
+\set JTAPPG 'e8000000-0000-0000-0000-000000144b03'
+reset role; reset app.current_uid;
+begin;
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status,
+                        default_locale, published_at, salary_min, salary_max, salary_period, working_hours)
+  values (:'JTJOB', :'COMPA', 'jt144-magazynier', 'Magazynier JT144', 'warehouse', 'temporary', 'Gandawa',
+          'Flandria', 'active', 'pl', now() - interval '1 day', 16, 18, 'hour', '40 h');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'JTJOB', 'pl', 'Magazynier JT144', 'Opis', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'JTJOB', 'pl', 'mandatory', 0, 'Praca w nocy');
+-- Aplikacje wstawiane bez triggerów integralności (fixture): aktywna, wycofana i gościa.
+set local session_replication_role = replica;
+insert into public.applications(id, candidate_id, job_id, status, submitted_at, guest_name, guest_email) values
+  (:'JTAPPA', :'CANDA', :'JTJOB', 'shortlisted', now(), null, null),
+  (:'JTAPPB', :'CANDB', :'JTJOB', 'withdrawn', now(), null, null),
+  (:'JTAPPG', null, :'JTJOB', 'submitted', now(), 'Gość JT144', 'gosc-jt144@example.invalid');
+set local session_replication_role = origin;
+-- CANDB ma in-app wyłączone od sekcji S (SEC-16); tu włączone, żeby JT2b sprawdzał filtr stanu
+-- aplikacji, a nie preferencję (w transakcji — cofane na końcu sekcji).
+update public.notification_preferences set in_app_enabled = true where profile_id = :'CANDB';
+
+-- Treść edycji = aktualne warunki (kształt z akcji updatePublishedJob, jak w RR).
+select set_config('pb.jt_base', jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.rr_ok')::jsonb,
+  '{job,title}', '"Magazynier JT144"'), '{job,city}', '"Gandawa"'), '{job,contract_type}', '"temporary"'),
+  '{job,salary_min}', '16'), '{job,salary_max}', '18'), '{job,working_hours}', '"40 h"')::text, true);
+select count(*) as jt_mail0 from public.email_deliveries where profile_id in (:'CANDA', :'CANDB') \gset
+
+-- JT1: zmiana samego tytułu i opisu (nieistotne pola) — brak powiadomień.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,title}', '"Magazynier JT144 (nocna)"'), '{translation,description}', '"Nowy opis"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 0,
+  'JT1 zmiana tytułu i opisu nie jest istotną zmianą warunków');
+
+-- JT2: zmiana wynagrodzenia → jedno powiadomienie dla aktywnej aplikacji.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_base')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 1
+  and exists (select 1 from public.notifications
+               where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA'
+                 and type::text = 'system' and read_at is null
+                 and data = '{"kind": "job_terms_changed", "slug": "jt144-magazynier", "fields": ["salary"]}'::jsonb),
+  'JT2 zmiana wynagrodzenia → powiadomienie in-app kandydata z aktywną aplikacją (slug i pole)');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
+  'JT2b wycofana aplikacja (stan końcowy) bez powiadomienia; gość bez konta pominięty');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id in (:'CANDA', :'CANDB')) = :'jt_mail0'::int,
+  'JT2c bez e-maila (wariant in-app)');
+
+-- JT3: kilka pól naraz → jedna pozycja na kandydata z posortowaną listą pól.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.jt_base')::jsonb, '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'),
+  '{job,working_hours}', '"38 h"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+           where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA'
+             and data->'fields' = '["city", "contract_type", "salary", "working_hours"]'::jsonb)
+  and (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT3 miasto, typ umowy i godziny (i wynagrodzenie wobec treści z JT2) w jednym powiadomieniu');
+
+-- JT4: odrzucona rewizja (niekompletna treść) cofa też powiadomienie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JTJOB',
+    jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb, '{job,salary_min}', '18'),
+              '{requirements_mandatory}', '[]')),
+  'VALIDATION_FAILED', 'JT4 niekompletna rewizja odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT4b odrzucona rewizja nie zostawia powiadomienia (ta sama transakcja)');
+
+-- JT5: zmiana statusu (pauza) i zapis bez zmiany warunków → brak powiadomień.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JTJOB'::uuid, 'pause');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT5 wstrzymanie oferty nie jest zmianą warunków');
+
+-- JT6: kandydat czyta własne powiadomienie; rekruter nie widzi powiadomień kandydata.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 2,
+  'JT6 kandydat widzi swoje powiadomienia o zmianie warunków');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 0,
+  'JT6b rekruter nie czyta powiadomień kandydata (RLS)');
+reset role; reset app.current_uid;
+
+-- JT7: bezpośredni UPDATE (service_role/migracja danych, bez update_published_job) nie powiadamia;
+-- kontrola ujemna: ten sam UPDATE ze znacznikiem RPC powiadamia — to znacznik jest bramką.
+update public.jobs set salary_max = 20 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT7 bezpośredni UPDATE warunków (bez update_published_job) nie tworzy powiadomień');
+savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', :'JTJOB', true);
+update public.jobs set salary_max = 21 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT7b KONTROLA UJEMNA: ze znacznikiem RPC ten sam UPDATE powiadamia (JT7 łapie brak bramki)');
+rollback to savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', '', true);
+update public.jobs set salary_max = 18 where id = :'JTJOB';
+
+-- JT8: sama wielkość liter/diakrytyki miasta (search_fold) nie jest zmianą warunków.
+select set_config('pb.jt_now', jsonb_set(jsonb_set(jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'), '{job,working_hours}', '"38 h"'),
+  '{job,salary_min}', '16')::text, true);
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"ANTWERPIA"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT8 zmiana wielkości liter miasta nie powiadamia (search_fold)');
+savepoint jt_fold;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'city', j.city,
+    'contract_type', j.contract_type, 'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, current_setting('pb.jt_now')::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT8b KONTROLA UJEMNA: przy surowym porównaniu miasta sama wielkość liter powiadamia (JT8 łapie regresję)');
+rollback to savepoint jt_fold;
+
+-- JT9 KONTROLA UJEMNA: bez miasta na liście pól zmiana miasta przez RPC przechodzi bez
+-- powiadomienia, a bez filtra stanu aplikacji dostaje je wycofany kandydat — JT3 i JT2b łapią regresję.
+savepoint jt_neg;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'contract_type', j.contract_type,
+    'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"Brugia"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT9 KONTROLA UJEMNA: bez miasta w job_material_terms zmiana miasta nie powiadamia (JT3 byłby czerwony)');
+rollback to savepoint jt_neg;
+savepoint jt_neg2;
+create or replace function public.notify_job_terms_changed()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('pracujbe.job_terms_notify', true), '') <> new.id::text then return null; end if;
+  insert into public.notifications (profile_id, type, data, entity_type, entity_id)
+  select a.candidate_id, 'system', '{}'::jsonb, 'job_terms', new.id
+    from public.applications a where a.job_id = new.id and a.candidate_id is not null;
+  return null;
+end $$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
+  'JT9b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
+rollback to savepoint jt_neg2;
+rollback;
+
+-- ============================================================================
 -- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).
 --         `get_public_jobs` sortuje po kluczu wynagrodzenia (opcjonalnie) i `published_at`,
 --         ale bez unikalnego tie-breakera oferty z remisem mogły wrócić w innej kolejności
@@ -13622,6 +13822,353 @@ select pg_temp.assert(
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
   'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
+--       expires_at i salary_period oferty — źródło `validThrough` i
+--       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
+--       wiersza to_jsonb → JobDetail w src/lib/jobs.ts). Bez daty = null, bez kwot = brak baseSalary
+--       (JSON-LD pomija pole, bez wymyślonej wartości). Kontrola ujemna: definicja bez kolumny
+--       w transakcji cofanej → asercja JP12-1 pada.
+-- ============================================================================
+\set JPCO 'c1120000-0000-0000-0000-0000000000a1'
+\echo '--- JP12 get_public_job: expires_at + salary_period ---'
+reset role; reset app.current_uid;
+insert into public.companies(id,name,status,is_demo) values (:'JPCO','JP12 Sp','verified',false);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        salary_min,salary_max,currency,salary_period,expires_at) values
+  ('c1120000-0000-0000-0000-0000000000b1',:'JPCO','jp12-dated','Magazynier JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   15,18,'EUR','hour','2099-10-15 23:59:00+00'),
+  ('c1120000-0000-0000-0000-0000000000b2',:'JPCO','jp12-undated','Kierowca JP12','warehouse','permanent','Gent','Flandria','active','pl',
+   null,null,'EUR','month',null);
+
+set role anon; select pg_temp.assert_client_role();
+-- JP12-1: oferta z terminem i okresem — dokładnie te wartości, także w postaci to_jsonb (jak aplikacja).
+select pg_temp.assert(
+  (select expires_at = '2099-10-15 23:59:00+00'::timestamptz and salary_period = 'hour'
+   from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-1 expires_at i salary_period z oferty');
+select pg_temp.assert(
+  (select (to_jsonb(j)->>'expires_at')::timestamptz = '2099-10-15 23:59:00+00'::timestamptz
+      and to_jsonb(j)->>'salary_period' = 'hour'
+   from public.get_public_job('jp12-dated', 'pl') j),
+  'JP12-1b to_jsonb niesie oba pola (odczyt aplikacji)');
+-- JP12-2: brak terminu → null (JSON-LD bez validThrough). Okres jest NOT NULL w jobs; bez kwot
+-- JSON-LD i tak nie ma baseSalary (normalizeSalary), więc unitText nie powstaje.
+select pg_temp.assert(
+  (select expires_at is null and salary_min is null and salary_max is null
+   from public.get_public_job('jp12-undated', 'pl')),
+  'JP12-2 bez daty → expires_at null, bez kwot');
+reset role;
+
+-- JP12-3: kontrola ujemna — definicja bez expires_at (null) daje czerwoną asercję JP12-1.
+begin;
+do $jp$
+declare
+  v_def text := pg_get_functiondef('public.get_public_job(text, text)'::regprocedure);
+begin
+  if position(E'j.expires_at,' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: JP12-3 fragment j.expires_at nie występuje w get_public_job';
+  end if;
+  execute replace(v_def, E'j.expires_at,', E'null::timestamptz as expires_at,');
+end $jp$;
+select pg_temp.assert(
+  (select expires_at is null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3 mutacja bez expires_at — JP12-1 wykrywa regresję');
+rollback;
+select pg_temp.assert(
+  (select expires_at is not null from public.get_public_job('jp12-dated', 'pl')),
+  'JP12-3b po cofnięciu definicja wróciła');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- CL141. Edycja strony WWW i logo firmy (#112, 0141): tylko owner/admin (jak
+--        nazwa/VAT, 0040); bezwzględny https egzekwowany CHECK-iem
+--        (`companies_website_https`/`companies_logo_url_https`, ta sama reguła co
+--        `public_https_url`, 0114); zmiana NIE cofa weryfikacji (w przeciwieństwie do
+--        nazwy/VAT — `protect_company_verification`, 0072/0141 bez zmian); audyt
+--        `company.links_changed`.
+-- ============================================================================
+\set OWNCL 'e1620000-0000-0000-0000-000000000001'
+\set ADMCL 'e1620000-0000-0000-0000-000000000002'
+\set MEMCL 'e1620000-0000-0000-0000-000000000003'
+\set RECCL 'e1620000-0000-0000-0000-000000000004'
+\set COMPCL 'e1620000-0000-0000-0000-0000000000f1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWNCL','owncl@test.be','Otto CL','{"role":"employer","first_name":"Otto","last_name":"CL","locale":"pl"}'),
+  (:'ADMCL','admcl@test.be','Ada CL','{"role":"employer","first_name":"Ada","last_name":"CL","locale":"pl"}'),
+  (:'MEMCL','memcl@test.be','Mila CL','{"role":"employer","first_name":"Mila","last_name":"CL","locale":"pl"}'),
+  (:'RECCL','reccl@test.be','Rex CL','{"role":"employer","first_name":"Rex","last_name":"CL","locale":"pl"}');
+insert into public.companies(id,name,status,vat_number,verified_at) values
+  (:'COMPCL','Firma CL','verified','BE0611111111',now());
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPCL',:'OWNCL','owner',true),
+  (:'COMPCL',:'ADMCL','admin',true),
+  (:'COMPCL',:'MEMCL','member',true),
+  (:'COMPCL',:'RECCL','recruiter',true);
+
+-- CL141-1 (kontrola ujemna): member/recruiter (bez roli owner/admin) nie edytuje linków —
+-- RLS (`companies_update_member`, USING is_company_admin) filtruje wiersz z UPDATE: brak
+-- wyjątku, ale zero zmienionych wierszy (jak przy bezpośrednim UPDATE nazwy/VAT, 0040).
+set role authenticated; set app.current_uid = :'MEMCL'; select pg_temp.assert_client_role();
+with upd as (
+  update public.companies set website = 'https://member-attempt.example'
+   where id = 'e1620000-0000-0000-0000-0000000000f1' returning id
+)
+select pg_temp.assert((select count(*) = 0 from upd),
+  'CL141-1 member nie edytuje stronę WWW firmy (RLS: zero wierszy)');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECCL'; select pg_temp.assert_client_role();
+with upd as (
+  update public.companies set logo_url = 'https://recruiter-attempt.example/logo.png'
+   where id = 'e1620000-0000-0000-0000-0000000000f1' returning id
+)
+select pg_temp.assert((select count(*) = 0 from upd),
+  'CL141-1b recruiter (bez owner/admin) nie edytuje logo firmy (RLS: zero wierszy)');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website is null and logo_url is null from public.companies where id = :'COMPCL'),
+  'CL141-1c nieudane próby nie zmieniły danych');
+
+-- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki.
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set website = ''http://owner-attempt.example'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_website_https', 'CL141-2 http:// odrzucone (strona WWW)');
+select pg_temp.expect_error(
+  'update public.companies set logo_url = ''javascript:alert(1)'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_logo_url_https', 'CL141-2b adres bez https:// odrzucony (logo)');
+select pg_temp.expect_error(
+  'update public.companies set website = ''https://exa mple.com'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+  'companies_website_https', 'CL141-2c spacja w adresie odrzucona');
+reset role; reset app.current_uid;
+
+-- CL141-3: owner ustawia OBA adresy poprawnie → zapis, status BEZ ZMIAN (verified), audyt.
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+update public.companies
+   set website = 'https://www.firma-cl.example', logo_url = 'https://www.firma-cl.example/logo.png'
+ where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-cl.example' and logo_url = 'https://www.firma-cl.example/logo.png'
+     and status::text = 'verified' and verified_at is not null
+     from public.companies where id = :'COMPCL'),
+  'CL141-3 adresy zapisane, weryfikacja NIE cofnięta (w przeciwieństwie do nazwy/VAT)');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPCL' and action = 'company.links_changed' and actor_id = :'OWNCL'
+             and before_data = jsonb_build_object('website', null, 'logo_url', null)
+             and after_data = jsonb_build_object('website', 'https://www.firma-cl.example',
+                                                  'logo_url', 'https://www.firma-cl.example/logo.png')),
+  'CL141-3b audyt zmiany linków z wartościami przed/po');
+select pg_temp.assert(
+  not exists (select 1 from public.audit_logs
+               where entity_id = :'COMPCL' and action = 'company.status_changed'
+                 and after_data->>'status' = 'pending'),
+  'CL141-3c bez wpisu zmiany statusu — zmiana linków nie uruchamia ponownej weryfikacji');
+
+-- CL141-4: admin (nie tylko owner) może edytować; puste pole czyści adres (NULL).
+set role authenticated; set app.current_uid = :'ADMCL'; select pg_temp.assert_client_role();
+update public.companies set logo_url = null where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-cl.example' and logo_url is null and status::text = 'verified'
+     from public.companies where id = :'COMPCL'),
+  'CL141-4 admin czyści logo bez wpływu na stronę WWW ani status');
+
+-- CL141-5: adres nad limitem długości (2048 znaków) odrzucony (SEC-04-style, path-independent).
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.companies set website = ''https://www.firma-cl.example/%s'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
+         repeat('a', 2048)),
+  'companies_website_https', 'CL141-5 adres nad limitem długości odrzucony');
+reset role; reset app.current_uid;
+
+-- CL141-6: zmiana nazwy TEJ SAMEJ firmy nadal cofa weryfikację (bez regresji 0072/0141).
+set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+update public.companies set name = 'Firma CL Nowa' where id = :'COMPCL';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'pending' and verified_at is null from public.companies where id = :'COMPCL'),
+  'CL141-6 zmiana nazwy nadal cofa weryfikację — CL141 nie osłabił 0072');
+
+-- ============================================================================
+-- CVR142. Dokończenie #349 (migracja 0142) — record_consent niesie wersję polityki
+-- 'cookies' FAKTYCZNIE pokazaną klientowi (cookie/`p_version`), przyjętą tylko po
+-- weryfikacji w consent_versions; nieznana wersja = cichy fallback do bieżącej.
+-- ============================================================================
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000001', 'cookies', '2026-01', null, true, '2026-01-01'::timestamptz),
+  ('00000000-0000-0000-0000-000142000002', 'cookies', '2024-06', null, false, '2024-06-01'::timestamptz);
+
+-- CVR142-1: p_version zgodna z ISTNIEJĄCYM wierszem (nawet nie-bieżącym) trafia do receiptu —
+-- to jest sedno #349: receipt niesie wersję, którą użytkownik naprawdę widział, nie zawsze bieżącą.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-1', null, null, '2024-06');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-1' limit 1)
+    = '00000000-0000-0000-0000-000142000002'::uuid,
+  'CVR142-1 wersja z klienta (nie-bieżąca, ale istniejąca) trafia do receiptu');
+
+-- CVR142-2 (kontrola ujemna): NIEISTNIEJĄCA wersja z klienta NIE trafia do receiptu wprost —
+-- cichy fallback do bieżącej wersji dokumentu 'cookies' (zachowanie jak przed 0142), nigdy
+-- zapis dowolnego tekstu klienta jako powiązania z wierszem consent_versions.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-2', null, null,
+  'wersja-ktorej-nie-ma-w-bazie');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-2' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-2 nieistniejąca wersja klienta -> fallback do bieżącej, nie zapisana wprost');
+
+-- CVR142-3: brak p_version (stare wywołanie / stary cookie bez `v`) -> też bieżąca wersja.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-3');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-3' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-3 bez p_version -> bieżąca wersja (zgodność z zachowaniem sprzed 0142)');
+
+-- CVR142-5 (kontrola ujemna, bloker integratora): wersja z klienta, która istnieje, ale NIE jest
+-- opublikowana — zaplanowana na przyszłość (published_at = now() + 1 dzień) albo szkic
+-- (published_at NULL) — nie mogła być pokazana użytkownikowi, więc NIE trafia do receiptu;
+-- fallback do bieżącej wersji dokumentu 'cookies'.
+reset role;
+insert into public.consent_versions (id, document, version, locale, is_current, published_at) values
+  ('00000000-0000-0000-0000-000142000003', 'cookies', '2027-future', null, false, now() + interval '1 day'),
+  ('00000000-0000-0000-0000-000142000004', 'cookies', '2027-draft', null, false, null);
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5a', null, null, '2027-future');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvr-5b', null, null, '2027-draft');
+reset role;
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5a' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5a wersja z published_at w przyszłości -> fallback do bieżącej, nie zapisana wprost');
+select pg_temp.assert(
+  (select consent_version_id from public.consents where visitor_id = 'vis-cvr-5b' limit 1)
+    = '00000000-0000-0000-0000-000142000001'::uuid,
+  'CVR142-5b szkic (published_at NULL) -> fallback do bieżącej, nie zapisany wprost');
+
+-- CVR142-4 (kontrola ujemna): authenticated (CANDA) nie nadpisze / nie dopisze się pod cudzy
+-- receipt innego konta (CANDB) — record_consent zawsze pisze profile_id = auth.uid() BIEŻĄCEJ
+-- sesji; klient nie ma żadnego parametru wskazującego inne konto (ani p_version go nie daje).
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared') as cvr_b_before \gset
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":false}'::jsonb, 'cookie_settings', 'vis-cvr-shared', null, null, '2026-01');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDB' and visitor_id = 'vis-cvr-shared')
+    = :'cvr_b_before',
+  'CVR142-4 authenticated A nie zmienia/nie dopisuje receiptu profile_id=CANDB (izolacja po auth.uid())');
+select pg_temp.assert(
+  (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
+  'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
+
+-- ============================================================================
+-- CN143. Nazwa firmy w wiadomościach kandydata (0143, #25): kandydat czyta nazwę firmy
+--        drugiej strony rozmowy przez `get_conversation_summaries`/`get_conversation_company_name`
+--        (SECURITY DEFINER, gejtowane `is_conversation_member` jak 0039) — `companies` samo
+--        w sobie jest czytelne pod RLS tylko dla członków firmy (0014), więc bez tych funkcji
+--        kandydat dostaje zero wierszy. Obie funkcje zwracają WYŁĄCZNIE `companies.name`,
+--        nigdy profilu rekrutera (decyzja 0023). Kontrole ujemne: kandydat bez rozmowy z firmą,
+--        obcy kandydat cudzej rozmowy, `anon` bez EXECUTE.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set CANDCN 'e1660000-0000-0000-0000-00000000000c'
+\set CANDCX 'e1660000-0000-0000-0000-00000000000d'
+\set RECCN  'e1660000-0000-0000-0000-0000000000a1'
+\set COMPCN 'e1660000-0000-0000-0000-0000000000f1'
+\set JOBCN  'e1660000-0000-0000-0000-0000000000b1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDCN','candcn@test.be','Cora N','{"role":"candidate","first_name":"Cora","last_name":"N","locale":"pl"}'),
+  (:'CANDCX','candcx@test.be','Xara N','{"role":"candidate","first_name":"Xara","last_name":"N","locale":"pl"}'),
+  (:'RECCN','reccn@test.be','Remi N','{"role":"employer","first_name":"Remi","last_name":"N","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'COMPCN','Firma CN','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPCN',:'RECCN','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBCN',:'COMPCN','job-cn1','Magazynier CN','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDCN', false), (:'CANDCX', false);
+
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBCN'::uuid, 'cn-app-1', null, null, null)::text as app_cn \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECCN'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app_cn'::uuid, null)::text as conv_cn \gset
+select public.send_message(:'conv_cn'::uuid, 'Dzień dobry, dziękujemy za zgłoszenie', gen_random_uuid())::text as msg_cn1 \gset
+reset role; reset app.current_uid;
+
+-- CN1: anon bez EXECUTE, authenticated z EXECUTE.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_conversation_company_name(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_conversation_company_name(uuid)', 'EXECUTE'),
+  'CN1 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- CN2: `companies` samo w sobie NIE jest czytelne dla kandydata (0014) — RPC jest naprawą.
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.companies where id = :'COMPCN'),
+  'CN2 kandydat nie czyta wprost tabeli companies (0014)');
+
+-- CN3: kandydat czyta nazwę firmy SWOJEJ rozmowy przez obie funkcje.
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') = 'Firma CN',
+  'CN3 get_conversation_company_name zwraca nazwę firmy własnej rozmowy');
+select pg_temp.assert(
+  (select company_name = 'Firma CN' from public.get_conversation_summaries() where conversation_id = :'conv_cn'),
+  'CN3b get_conversation_summaries niesie company_name');
+-- Rekrutera nie ujawniamy: żadna z funkcji nie zwraca imienia/nazwiska ani id profilu.
+select pg_temp.assert(
+  (select not exists (
+      select 1 from public.get_conversation_summaries() s
+      where s.conversation_id = :'conv_cn' and s::text like '%Remi%'
+   )),
+  'CN3c bez imienia rekrutera w podsumowaniu (0023)');
+reset role; reset app.current_uid;
+
+-- CN4 (kontrola ujemna — obcy): kandydat bez rozmowy z tą firmą i cudzy kandydat → brak nazwy.
+set role authenticated; set app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN4 obcy kandydat nie dostaje nazwy cudzej rozmowy');
+select pg_temp.assert(
+  (select count(*) = 0 from public.get_conversation_summaries() where conversation_id = :'conv_cn'),
+  'CN4b obcy kandydat nie widzi cudzej rozmowy w podsumowaniach');
+reset role; reset app.current_uid;
+
+-- CN5: rozmowa bez firmy (company_id null) → nazwa null, bez błędu.
+update public.conversations set company_id = null where id = :'conv_cn';
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN5 rozmowa bez firmy: nazwa null');
+reset role; reset app.current_uid;
+update public.conversations set company_id = :'COMPCN' where id = :'conv_cn';
+
+-- CN6 (kontrola ujemna): bez `is_conversation_member` w treści funkcji, dowolna rozmowa
+-- z firmą wyciekłaby nazwę obcemu kandydatowi — CN4 wykrywa taką regresję.
+begin;
+savepoint cn_neg;
+create or replace function public.get_conversation_company_name(p_conversation_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select comp.name from public.conversations c
+  join public.companies comp on comp.id = c.company_id
+  where c.id = p_conversation_id and c.deleted_at is null and c.company_id is not null;
+$$;
+set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') = 'Firma CN',
+  'CN6 kontrola ujemna: bez is_conversation_member obcy kandydat czyta nazwę firmy');
+rollback to savepoint cn_neg;
+set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN6b poprawna funkcja znów odmawia obcemu');
 rollback;
 reset role; reset app.current_uid;
 

@@ -78,6 +78,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
 | `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` | Cloudflare Web Analytics (#570, zamiast Google Analytics i Meta Pixel — usunięte), beacon wyłącznie po zgodzie w kategorii analityka (Invariant #7) |
+| `CF_ANALYTICS_ACCOUNT_ID`, `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN` | Podgląd danych polowych Core Web Vitals w `/admin/wydajnosc` (GraphQL Analytics API, tylko serwer; token z uprawnieniem „Account Analytics: Read”). Opcjonalne — bez nich strona pokazuje instrukcję |
 | `OPENAI_API_KEY`, `AI_MODEL` | wspólny klucz i domyślny model funkcji AI (OpenAI, domyślnie `gpt-6-luna` — decyzja właściciela 2026-09-26) |
 | `AI_JOB_IMPORT_ENABLED`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony; `OPENAI_API_KEY` |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |

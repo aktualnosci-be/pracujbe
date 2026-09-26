@@ -503,6 +503,14 @@ type CompanyId = keyof typeof COMPANY_MAP;
 /** Lista firm demonstracyjnych. */
 export const demoCompanies: DemoCompany[] = Object.values(COMPANY_MAP);
 
+/** Miasto i region siedziby firmy demonstracyjnej w wybranym języku. */
+export function demoCompanyLocation(company: DemoCompany, locale: Locale): { city: string; region: string } {
+  return {
+    city: CITY[company.locationKey][locale],
+    region: REGION[REGION_OF[company.locationKey]][locale],
+  };
+}
+
 /* ---------------------------------------------------------------------------
  * Oferty (demonstracyjne) — definicje surowe, składane per język
  * ------------------------------------------------------------------------- */
