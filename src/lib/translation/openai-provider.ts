@@ -1,12 +1,11 @@
 import 'server-only';
 
-import Anthropic from '@anthropic-ai/sdk';
-
 import { localeNames, type Locale } from '@/i18n/routing';
-import { AiBudgetError, withAiBudget, type AiBudgetStore } from '@/lib/ai/budget';
-import { estimateMicroUsd, textTokenUpperBound } from '@/lib/ai/pricing';
+import { AiBudgetError, withAiBudget, type AiBudgetStore, type ReportUsage } from '@/lib/ai/budget';
+import { AiProviderError, createStructuredResponse, type ResponsesClient } from '@/lib/ai/openai';
+import { estimateMicroUsd, textTokenUpperBound, totalInputTokens, type AiTokenUsage } from '@/lib/ai/pricing';
 import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
-import { translationEffort, translationModel } from '@/lib/translation/config';
+import { translationModel } from '@/lib/translation/config';
 import { DO_NOT_TRANSLATE, glossaryFor } from '@/lib/translation/glossary';
 import {
   TranslationProviderError,
@@ -16,14 +15,16 @@ import {
 } from '@/lib/translation/provider';
 
 /**
- * Adapter Anthropic (Messages API + structured output) dla tłumaczeń (#32).
+ * Adapter OpenAI dla tłumaczeń (#32): wspólny klient `src/lib/ai/openai.ts` (Responses API,
+ * structured output `strict`, `store: false`, bez narzędzi) — decyzja właściciela 2026-09-26.
  *
  * Granica zaufania: pola źródła pisze użytkownik (pracodawca/kandydat). Są DANYMI:
- *   - reguły wyłącznie w `system`; pola w wiadomości `user` jako JSON w znaczniku
+ *   - reguły wyłącznie w `instructions`; pola w wejściu użytkownika jako JSON w znaczniku
  *     `<source_fields>` (próby jego zamknięcia neutralizowane),
  *   - odpowiedź ograniczona schematem JSON z dokładnie tymi kluczami; model nie ma narzędzi,
  *   - wynik i tak przechodzi walidację faktów przed zapisem.
- * SDK nie ponawia (`maxRetries: 0`) — ponowienia z backoffem prowadzi kolejka w bazie.
+ * Klient robi najwyżej jedną szybką ponowną próbę; dalsze ponowienia z backoffem prowadzi
+ * kolejka w bazie.
  *
  * Koszt (#36): każde wywołanie przechodzi przez globalny budżet AI (`withAiBudget`,
  * rezerwacja górnej granicy PRZED API, rozliczenie tokenami z `usage`). Odmowa budżetu =
@@ -87,27 +88,17 @@ export function translationJsonSchema(keys: readonly string[]): Record<string, u
   };
 }
 
-function retryAfter(headers: Headers | undefined): number | null {
-  const raw = headers?.get('retry-after');
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? Math.min(Math.ceil(n), 3600) : null;
-}
-
-/** Mapuje błąd SDK na powód bez treści (komunikat dostawcy nie wychodzi poza ten moduł). */
+/**
+ * Mapuje błąd wspólnego klienta na powód bez treści (komunikat dostawcy nie wychodzi poza
+ * `src/lib/ai/openai.ts`). Klient rozróżnia odmowę, limit dostawcy i każdą inną awarię
+ * (sieć, timeout, 5xx, ucięta odpowiedź, zły JSON) — ta ostatnia jest ponawiana z backoffem
+ * kolejki w granicy `max_attempts`.
+ */
 export function mapProviderError(e: unknown): TranslationProviderError {
   if (e instanceof TranslationProviderError) return e;
-  if (e instanceof Anthropic.APIConnectionTimeoutError) return new TranslationProviderError('timeout');
-  if (e instanceof Anthropic.APIConnectionError) return new TranslationProviderError('provider_unavailable');
-  if (e instanceof Anthropic.RateLimitError) return new TranslationProviderError('rate_limited', retryAfter(e.headers));
-  if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
-    return new TranslationProviderError('provider_auth');
-  }
-  if (e instanceof Anthropic.APIError) {
-    const status = e.status ?? 0;
-    if (status === 408) return new TranslationProviderError('timeout');
-    if (status >= 500) return new TranslationProviderError('provider_unavailable', retryAfter(e.headers));
-    return new TranslationProviderError('bad_request');
+  if (e instanceof AiProviderError) {
+    if (e.reason === 'refused') return new TranslationProviderError('refused');
+    if (e.reason === 'rateLimited') return new TranslationProviderError('rate_limited');
   }
   return new TranslationProviderError('provider_unavailable');
 }
@@ -116,7 +107,8 @@ const PROMPT_OVERHEAD_TOKENS = textTokenUpperBound(TRANSLATION_SYSTEM_PROMPT) + 
 
 /**
  * Górna granica kosztu jednego tłumaczenia (mikro-USD) — kwota rezerwacji w budżecie AI (#36):
- * prompt systemowy + cała wiadomość z polami, glosariuszem i schematem + pełne `max_tokens`.
+ * instrukcje + całe wejście z polami, glosariuszem i schematem + pełne `max_output_tokens`
+ * (u OpenAI obejmuje też tokeny rozumowania).
  */
 export function estimateTranslationCost(request: TranslationRequest, model: string): number {
   const schema = JSON.stringify(translationJsonSchema(Object.keys(request.fields)));
@@ -136,22 +128,17 @@ export function classifyTranslation(result: { ok: true } | { ok: false; error: u
   return 'failed';
 }
 
-export interface AnthropicTranslationOptions {
+export interface OpenAiTranslationOptions {
+  /** Klient Responses API (testy: `tests/helpers/fake-openai.ts`); domyślnie wspólny klient. */
+  client?: ResponsesClient;
   /** Magazyn budżetu (#36); domyślnie PostgreSQL (pula service-role). */
   budgetStore?: AiBudgetStore;
   /** Odbiorca logu użycia (#489); domyślnie `console.info`. */
   usageSink?: AiUsageSink;
 }
 
-export class AnthropicTranslationProvider implements TranslationProvider {
-  private readonly client: Anthropic;
-  private readonly options: AnthropicTranslationOptions;
-
-  constructor(client?: Anthropic, options: AnthropicTranslationOptions = {}) {
-    // Klucz czytany przez SDK z `ANTHROPIC_API_KEY` (tylko serwer).
-    this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 0 });
-    this.options = options;
-  }
+export class OpenAiTranslationProvider implements TranslationProvider {
+  constructor(private readonly options: OpenAiTranslationOptions = {}) {}
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
     const model = translationModel();
@@ -176,47 +163,32 @@ export class AnthropicTranslationProvider implements TranslationProvider {
     }
   }
 
-  private async call(
-    request: TranslationRequest,
-    model: string,
-    reportUsage: (usage: { inputTokens: number; outputTokens: number }) => void,
-  ): Promise<TranslationResponse> {
-    const keys = Object.keys(request.fields);
-    let response: Anthropic.Message;
+  private async call(request: TranslationRequest, model: string, reportUsage: ReportUsage): Promise<TranslationResponse> {
+    let usage: AiTokenUsage = { inputTokens: 0, outputTokens: 0 };
+    let output: unknown;
     try {
-      response = await this.client.messages.create({
-        model,
-        max_tokens: TRANSLATION_MAX_TOKENS,
-        system: TRANSLATION_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: wrapSourceFields(request) }],
-        output_config: {
-          effort: translationEffort(),
-          format: { type: 'json_schema', schema: translationJsonSchema(keys) },
+      // Zużycie zgłaszane przez klienta przed oceną odpowiedzi — odmowa i ucięta odpowiedź
+      // też kosztują; bez `usage` budżet rozlicza pełną rezerwację.
+      output = await createStructuredResponse(
+        {
+          model,
+          instructions: TRANSLATION_SYSTEM_PROMPT,
+          input: [{ kind: 'text', text: wrapSourceFields(request) }],
+          schemaName: 'translation_fields',
+          schema: translationJsonSchema(Object.keys(request.fields)),
+          maxOutputTokens: TRANSLATION_MAX_TOKENS,
         },
-      });
+        {
+          client: this.options.client,
+          onUsage: (u) => {
+            usage = u;
+            reportUsage(u);
+          },
+        },
+      );
     } catch (e) {
       throw mapProviderError(e);
     }
-    // Zużycie zgłaszane przed oceną odpowiedzi — odmowa i ucięta odpowiedź też kosztują.
-    reportUsage({ inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 });
-
-    if (response.stop_reason === 'refusal') throw new TranslationProviderError('refused');
-    if (response.stop_reason !== 'end_turn') throw new TranslationProviderError('incomplete');
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    let output: unknown;
-    try {
-      output = JSON.parse(text) as unknown;
-    } catch {
-      throw new TranslationProviderError('invalid_json');
-    }
-    return {
-      output,
-      model: response.model,
-      inputTokens: response.usage?.input_tokens ?? 0,
-      outputTokens: response.usage?.output_tokens ?? 0,
-    };
+    return { output, model, inputTokens: totalInputTokens(usage), outputTokens: usage.outputTokens };
   }
 }

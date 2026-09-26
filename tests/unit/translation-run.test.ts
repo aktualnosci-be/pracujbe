@@ -95,13 +95,13 @@ describe('runTranslationQueue', () => {
 });
 
 describe('createTranslationProvider', () => {
-  it('adapter Anthropic bez drugiego logu użycia (loguje i budżetuje sam, #36)', async () => {
+  it('adapter OpenAI bez drugiego logu użycia (loguje i budżetuje sam, #36)', async () => {
     vi.stubEnv('AI_TRANSLATION_ENABLED', '1');
     vi.stubEnv('AI_TRANSLATION_PROVIDER', '');
-    vi.stubEnv('ANTHROPIC_API_KEY', 'test-key');
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
     const { createTranslationProvider } = await import('@/lib/translation/run');
-    const { AnthropicTranslationProvider } = await import('@/lib/translation/anthropic-provider');
-    expect(createTranslationProvider()).toBeInstanceOf(AnthropicTranslationProvider);
+    const { OpenAiTranslationProvider } = await import('@/lib/translation/openai-provider');
+    expect(createTranslationProvider()).toBeInstanceOf(OpenAiTranslationProvider);
     // Kontrola ujemna: atrapa jest owinięta logiem (nie jest samą klasą atrapy).
     vi.stubEnv('AI_TRANSLATION_PROVIDER', 'fixture');
     const { FixtureTranslationProvider } = await import('@/lib/translation/provider');
@@ -113,10 +113,10 @@ describe('createTranslationProvider', () => {
 describe('log użycia tłumaczeń', () => {
   it('jeden wiersz na wywołanie, bez treści pól', async () => {
     const lines: AiUsageLine[] = [];
-    const logged = withTranslationUsageLog(echo, 'claude-opus-5', (l) => lines.push(l));
+    const logged = withTranslationUsageLog(echo, 'gpt-6-luna', (l) => lines.push(l));
     await logged.translate({ sourceLocale: 'pl', targetLocale: 'en', fields: { title: 'Tajny tekst oferty' } });
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ feature: 'content_translation', outcome: 'ok', inputKind: 'text', model: 'claude-opus-5' });
+    expect(lines[0]).toMatchObject({ feature: 'content_translation', outcome: 'ok', inputKind: 'text', model: 'gpt-6-luna' });
     expect(Object.keys(lines[0]!).sort()).toEqual([...AI_USAGE_FIELDS].sort());
     expect(JSON.stringify(lines)).not.toContain('Tajny');
   });

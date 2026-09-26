@@ -38,9 +38,9 @@ Funkcje wyłącznie dla `service_role`:
 
 ## Koszt (#36)
 
-Adapter Anthropic woła model wyłącznie przez `withAiBudget` (`src/lib/ai/budget.ts`):
+Adapter OpenAI (`openai-provider.ts`) woła model wyłącznie przez `withAiBudget` (`src/lib/ai/budget.ts`):
 rezerwacja górnej granicy (`estimateTranslationCost`: prompt, pola z glosariuszem, schemat,
-pełne `max_tokens` = 16000) przed API, rozliczenie tokenami z `usage` (także przy odmowie
+pełne `max_output_tokens` = 16000) przed API, rozliczenie tokenami z `usage` (także przy odmowie
 modelu). Brak bazy zadań albo błąd rezerwacji = brak wywołania (fail-closed). Każde wywołanie
 = jeden wiersz logu użycia bez treści (`ai_usage`, #489).
 - `deactivate_translation_source(typ, id, purge)` — ukrycie (zaległe zadania `superseded`,
@@ -60,13 +60,14 @@ ujemną TR31-N (bez kontroli rewizji spóźniony wynik v1 zostałby opublikowany
 
 - `provider.ts` — interfejs `TranslationProvider` (surowa odpowiedź), błędy
   `TranslationProviderError` z powodem i flagą ponowienia, atrapa `FixtureTranslationProvider`.
-- `anthropic-provider.ts` — Messages API (`@anthropic-ai/sdk`), structured output ze schematem
-  o dokładnie tych kluczach co źródło, bez narzędzi, pola w `<source_fields>` (próby zamknięcia
-  znacznika neutralizowane), glosariusz pary języków. SDK bez własnych ponowień
-  (`maxRetries: 0`, timeout 60 s) — ponawia kolejka. Mapowanie: 429 (z Retry-After), 5xx/529,
-  timeout, błąd połączenia → ponawialne; odmowa, `max_tokens`, zły JSON, 400, 401/403 → trwałe.
-  Mechanizm serwerowego fallbacku modelu (beta) nie jest włączony — jak w imporcie (#465),
-  decyzja po benchmarku #30.
+- `openai-provider.ts` — wspólny klient `src/lib/ai/openai.ts` (Responses API, model
+  `gpt-6-luna` — decyzja właściciela 2026-09-26), structured output `strict` ze schematem
+  o dokładnie tych kluczach co źródło, bez narzędzi, `store: false`, pola w `<source_fields>`
+  (próby zamknięcia znacznika neutralizowane), glosariusz pary języków. Klient: timeout 60 s,
+  jedna szybka ponowna próba; dalej ponawia kolejka. Mapowanie: odmowa i filtr treści → trwałe
+  (`refused`); limit dostawcy → `rate_limited`; każda inna awaria (sieć, 5xx, ucięta
+  odpowiedź, zły JSON) → `provider_unavailable`, ponawiane w granicy `max_attempts`. Klient
+  nie przekazuje komunikatu dostawcy ani `Retry-After`.
 - `validate.ts` + `facts.ts` — wynik zapisywany tylko po przejściu wszystkich kontroli:
   kształt i klucze, puste pola, długość, znaczniki i znaki sterujące spoza źródła, echo granicy
   promptu, niezmienność faktów pole po polu: e-maile, URL/domeny, daty, godziny (8:00 = 8h00 =
@@ -130,13 +131,12 @@ scaleniu: `costBudgeted: true` w inwentarzu i rezerwacja budżetu przed wywołan
 | Zmienna | Znaczenie |
 |---|---|
 | `AI_TRANSLATION_ENABLED` | `1`/`true` włącza; domyślnie wyłączone (także w produkcji) |
-| `ANTHROPIC_API_KEY` | wspólny z importem ogłoszeń; tylko serwer |
-| `AI_TRANSLATION_MODEL` | domyślnie `claude-opus-5` |
-| `AI_TRANSLATION_EFFORT` | `low` (domyślnie) / `medium` / `high` |
+| `OPENAI_API_KEY` | wspólny z pozostałymi funkcjami AI; tylko serwer |
+| `AI_TRANSLATION_MODEL` | opcjonalnie; inaczej `AI_MODEL`, domyślnie `gpt-6-luna` |
 | `AI_TRANSLATION_PROVIDER=fixture` | atrapa bez sieci; ignorowana przy `APP_MODE=production` |
 
 ## Otwarte (poza tym krokiem)
 
 Wpięcie profili (#34),
-benchmark i wybór modelu/effortu (#30), UI stanu tłumaczenia i SEO, bramka prywatności
+benchmark i wybór modelu (#30), UI stanu tłumaczenia i SEO, bramka prywatności
 przed prawdziwymi profilami (umowa powierzenia, retencja dostawcy — decyzja właściciela).

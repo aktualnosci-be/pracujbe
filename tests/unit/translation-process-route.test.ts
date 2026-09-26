@@ -23,7 +23,7 @@ describe('/api/translation/process', () => {
     vi.stubEnv('MAINTENANCE_SECRET', SECRET);
     vi.stubEnv('CRON_SECRET', '');
     vi.stubEnv('APP_MODE', '');
-    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    vi.stubEnv('OPENAI_API_KEY', '');
     runQueue.mockReset().mockResolvedValue({ batches: 1, claimed: 0, applied: 0, proposals: 0, superseded: 0, retried: 0, deferred: 0, failed: 0, dropped: 0 });
   });
   afterEach(() => vi.unstubAllEnvs());

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
-import { AnthropicTranslationProvider } from '@/lib/translation/anthropic-provider';
+import { OpenAiTranslationProvider } from '@/lib/translation/openai-provider';
 import { translationProvider } from '@/lib/translation/config';
 import {
   FixtureTranslationProvider,
@@ -54,9 +54,9 @@ export function withTranslationUsageLog(
 export function createTranslationProvider(): TranslationProvider | null {
   const kind = translationProvider();
   if (kind === 'fixture') return withTranslationUsageLog(new FixtureTranslationProvider(), 'fixture');
-  // Adapter Anthropic sam loguje użycie i rezerwuje budżet AI (#36, `withAiBudget`) — bez
+  // Adapter OpenAI sam loguje użycie i rezerwuje budżet AI (#36, `withAiBudget`) — bez
   // drugiego wiersza logu tutaj.
-  if (kind === 'anthropic') return new AnthropicTranslationProvider();
+  if (kind === 'openai') return new OpenAiTranslationProvider();
   return null;
 }
 

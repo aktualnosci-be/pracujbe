@@ -53,9 +53,9 @@ describe('import z linku — payload dostawcy bez danych osób trzecich', () => 
     );
 
     expect(extractor.inputs).toHaveLength(1);
-    // Dokładnie ten tekst trafia do wiadomości `user` w Messages API.
+    // Dokładnie ten tekst trafia do wiadomości `user` w Responses API (`src/lib/ai/openai.ts`).
     const payload = buildUserContent(extractor.inputs[0]!)
-      .map((block) => (block.type === 'text' ? block.text : JSON.stringify(block)))
+      .map((block) => (block.kind === 'text' ? block.text : JSON.stringify(block)))
       .join('\n');
     for (const leaked of [
       'SECRET-TOKEN-123',

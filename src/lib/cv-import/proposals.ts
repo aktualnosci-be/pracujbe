@@ -8,7 +8,7 @@ import { CANDIDATE_ITEM_LIMITS, LANGUAGE_LEVELS } from '@/lib/validation/candida
 /**
  * Kształt odpowiedzi modelu przy imporcie CV (#487) i jej walidacja.
  *
- *   1. `CV_EXTRACTION_JSON_SCHEMA` — structured output API Claude: wyłącznie pola profilu
+ *   1. `CV_EXTRACTION_JSON_SCHEMA` — structured output OpenAI (`text.format`, `strict: true`): wyłącznie pola profilu
  *      zawodowego (zawody, umiejętności, języki, certyfikaty, lata doświadczenia). Nie ma
  *      pól na imię, kontakt, adres, datę urodzenia, zdjęcie, referencje ani dane szczególne —
  *      model nie ma gdzie ich zwrócić. Każda pozycja ma źródło (`evidence`) i niepewność.

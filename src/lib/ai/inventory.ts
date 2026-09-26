@@ -36,7 +36,11 @@ export interface AiFeature {
   callSites: readonly string[];
   /** Zmienna, bez której funkcja nie działa (domyślnie wyłączona). */
   enableFlag: string;
-  provider: 'anthropic';
+  /**
+   * Dostawca modelu. Decyzja właściciela 2026-09-26: funkcje AI używają wyłącznie OpenAI
+   * (GPT-6 Luna) przez wspólnego klienta `src/lib/ai/openai.ts`.
+   */
+  provider: 'openai';
   inputs: readonly AiInputSubject[];
   /** Co model zwraca i gdzie to trafia. */
   output: string;
@@ -67,9 +71,9 @@ export const AI_FEATURES: readonly AiFeature[] = [
     id: 'job_listing_import',
     issues: ['#465', '#469'],
     status: 'behind_flag',
-    callSites: ['src/lib/ai-import/extract.ts'],
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/ai-import/extract.ts'],
     enableFlag: 'AI_JOB_IMPORT_ENABLED',
-    provider: 'anthropic',
+    provider: 'openai',
     inputs: ['third_party_listing'],
     output:
       'Pola kreatora oferty (JSON ze schematu) + lista pól do sprawdzenia; zapis wyłącznie do szkicu oferty przez save_job_draft.',
@@ -83,10 +87,10 @@ export const AI_FEATURES: readonly AiFeature[] = [
   {
     id: 'content_translation',
     issues: ['#31', '#32', '#33', '#514'],
-    status: 'in_progress',
-    callSites: ['src/lib/translation/anthropic-provider.ts'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/translation/openai-provider.ts'],
     enableFlag: 'AI_TRANSLATION_ENABLED',
-    provider: 'anthropic',
+    provider: 'openai',
     inputs: ['job_offer_text', 'candidate_profile_text'],
     output:
       'Tłumaczenie pól tekstowych na inne języki portalu; przed zapisem walidacja faktów (liczby, kwoty, certyfikaty). Oferty (#33): kolejkę zasilają odroczone triggery po każdej zatwierdzonej zmianie treści publicznej oferty (migracja job_translation_sync), worker `/api/translation/process` (src/lib/translation/run.ts) zapisuje wynik do translation_documents; widok publiczny przekładów = osobny krok (UI/SEO).',
@@ -95,7 +99,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
     decidesAboutPerson: false,
     usageLogged: true,
-    // `withAiBudget` w src/lib/translation/anthropic-provider.ts (#36): rezerwacja przed
+    // `withAiBudget` w src/lib/translation/openai-provider.ts (#36): rezerwacja przed
     // wywołaniem modelu; odmowa budżetu = odroczenie zadania bez zużycia próby.
     costBudgeted: true,
   },
@@ -103,9 +107,9 @@ export const AI_FEATURES: readonly AiFeature[] = [
     id: 'job_offer_assist',
     issues: ['#37'],
     status: 'behind_flag',
-    callSites: ['src/lib/ai-assist/assist.ts'],
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/ai-assist/assist.ts'],
     enableFlag: 'AI_JOB_ASSIST_ENABLED',
-    provider: 'anthropic',
+    provider: 'openai',
     inputs: ['job_offer_text'],
     output:
       'Propozycja nowego brzmienia opisu, obowiązków i wymagań oferty (JSON ze schematu) w języku oferty; propozycje z nowymi liczbami/linkami albo danymi kontaktowymi są odrzucane przez serwer.',
@@ -121,9 +125,9 @@ export const AI_FEATURES: readonly AiFeature[] = [
     id: 'cv_profile_import',
     issues: ['#487', '#498'],
     status: 'behind_flag',
-    callSites: ['src/lib/cv-import/extract.ts'],
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/cv-import/extract.ts'],
     enableFlag: 'AI_CV_IMPORT_ENABLED',
-    provider: 'anthropic',
+    provider: 'openai',
     inputs: ['candidate_cv_text'],
     output:
       'Propozycje pól profilu (zawody, umiejętności, języki, certyfikaty, lata doświadczenia) ze źródłem i niepewnością; nic nie jest zapisywane bez zatwierdzenia.',
@@ -189,7 +193,14 @@ export const MODEL_CALL_PATTERNS: readonly RegExp[] = [
   /from\s+['"]@anthropic-ai\/[^'"]+['"]/,
   /require\(\s*['"]@anthropic-ai\/[^'"]+['"]\s*\)/,
   /import\(\s*['"]@anthropic-ai\/[^'"]+['"]\s*\)/,
-  /from\s+['"](openai|@openai\/[^'"]+|@google\/gen(erative-)?ai|@google-cloud\/vertexai|@mistralai\/[^'"]+|cohere-ai|ollama|groq-sdk|@aws-sdk\/client-bedrock[^'"]*|@huggingface\/[^'"]+|ai|@ai-sdk\/[^'"]+|langchain|@langchain\/[^'"]+)['"]/,
+  // SDK OpenAI (także podścieżki `openai/...`), import statyczny, `require` i dynamiczny.
+  /from\s+['"]openai(?:\/[^'"]*)?['"]/,
+  /require\(\s*['"]openai(?:\/[^'"]*)?['"]\s*\)/,
+  /import\(\s*['"]openai(?:\/[^'"]*)?['"]\s*\)/,
+  // Wspólny klient modelu — każdy plik, który go importuje, woła model.
+  /from\s+['"](?:@\/lib\/ai|(?:\.{1,2}\/)+(?:ai\/)?)\/?openai['"]/,
+  /import\(\s*['"](?:@\/lib\/ai|(?:\.{1,2}\/)+(?:ai\/)?)\/?openai['"]\s*\)/,
+  /from\s+['"](@openai\/[^'"]+|@google\/gen(erative-)?ai|@google-cloud\/vertexai|@mistralai\/[^'"]+|cohere-ai|ollama|groq-sdk|@aws-sdk\/client-bedrock[^'"]*|@huggingface\/[^'"]+|ai|@ai-sdk\/[^'"]+|langchain|@langchain\/[^'"]+)['"]/,
   /api\.anthropic\.com|api\.openai\.com|generativelanguage\.googleapis\.com|api\.mistral\.ai|api\.cohere\.(ai|com)|bedrock-runtime\./,
 ];
 
