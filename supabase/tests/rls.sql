@@ -10562,7 +10562,7 @@ select pg_temp.assert(
 rollback;
 
 -- ============================================================================
--- TI610. Kontrakt stanu „used” linku rejestracji zaproszenia (0121/0142, #403): zużycie
+-- TI610. Kontrakt stanu „used” linku rejestracji zaproszenia (0121/0133, #403): zużycie
 --        tokenu ustawia WYŁĄCZNIE `signup_token_used_at` — zaproszenie zostaje `pending`
 --        (czeka w panelu na odpowiedź), więc podgląd musi rozróżnić „zużyty” od „nieznany/
 --        wygasły/rozstrzygnięty” (oba dają dziś ten sam ogólny wynik bez tego rozróżnienia).
@@ -10594,7 +10594,7 @@ select pg_temp.assert(public.consume_team_invitation_signup(:'TI610H', 'kontrakt
 reset role;
 
 -- ============================================================================
--- TI611. Atomowy limit e-maili `teamInvitationSignup` na adres (0121/0142, #403): COUNT
+-- TI611. Atomowy limit e-maili `teamInvitationSignup` na adres (0121/0133, #403): COUNT
 --        i INSERT w jednej sekcji krytycznej (advisory lock per adres) — limit trzyma się
 --        także wobec RÓWNOLEGŁYCH zaproszeń z różnych firm dla tego samego adresu bez konta.
 --        Fixture'y zatwierdza osobna sesja (jak PP/CO28) — dblink musi je widzieć niezależnie

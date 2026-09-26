@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * #610 — kontrakt stanu `used` linku rejestracji zaproszenia (0121/0142): zużycie tokenu nie
+ * #610 — kontrakt stanu `used` linku rejestracji zaproszenia (0121/0133): zużycie tokenu nie
  * zmienia statusu zaproszenia (zostaje `pending`, czeka w panelu), więc `team_invitation_signup_preview`
  * rozróżnia „zużyty” od „nieznany/wygasły/rozstrzygnięty” — oba dawałyby ten sam ogólny wynik
  * bez tego rozróżnienia. Tu: mapowanie wiersza z bazy (`outcome`) na `TeamInvitationSignupPreview`

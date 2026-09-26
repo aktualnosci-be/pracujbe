@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0142 — utwardzenie limitu e-maili `teamInvitationSignup` na adres (#403, 0121).
+-- 0133 — utwardzenie limitu e-maili `teamInvitationSignup` na adres (#403, 0121).
 --
 -- `enqueue_team_invitation_signup_email` sprawdzał limit „najwyżej 3 e-maile na adres
 -- w 24 h” osobnym `COUNT(*)` przed `INSERT`-em — dwa równoległe wywołania (np. zaproszenia

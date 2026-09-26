@@ -923,7 +923,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`consume_team_invitation_signup`, raz, tylko ten adres). Konto powstaje bez firmy, a
   zaproszenie czeka w panelu po weryfikacji adresu. Wynik RPC niezależny od konta. Dowód:
   `rls.sql` sekcja TI403 (kontrole ujemne), unit `team-invitation-signup-*`, E2E `employer-team`.
-  Utwardzenie (#611/#610, migracja `0142`): limit „najwyżej 3 e-maile `teamInvitationSignup`
+  Utwardzenie (#611/#610, migracja `0133`): limit „najwyżej 3 e-maile `teamInvitationSignup`
   na adres / 24 h” jest teraz atomowy — advisory lock kluczowany adresem serializuje odczyt
   licznika i wstawienie w `enqueue_team_invitation_signup_email` (jak `begin_checkout`, 0050),
   więc równoległe zaproszenia z różnych firm dla tego samego adresu nie omijają limitu.
