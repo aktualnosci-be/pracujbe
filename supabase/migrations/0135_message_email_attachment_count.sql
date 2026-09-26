@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0132_message_email_attachment_count.sql — e-mail `newMessage` z liczbą załączników.
+-- 0135_message_email_attachment_count.sql — e-mail `newMessage` z liczbą załączników.
 -- (Numer tymczasowy — ostateczny nada integrator.)
 --
 -- send_message (podpis bez zmian z 0119): payload `newMessage` dostaje `attachmentCount` =

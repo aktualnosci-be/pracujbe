@@ -79,7 +79,7 @@ export interface EmailDataMap {
     senderName?: string | null;
     preview?: string;
     messageUrl: string;
-    /** Liczba plików w wiadomości (0132, #503) — bez nazw; 0/brak = bez wiersza. */
+    /** Liczba plików w wiadomości (0135, #503) — bez nazw; 0/brak = bez wiersza. */
     attachmentCount?: number | string | null;
   };
   jobOffer: {
