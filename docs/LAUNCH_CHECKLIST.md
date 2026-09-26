@@ -20,12 +20,12 @@ płatności (#51). Powiązane: [`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER
 
 | Obszar | Stan |
 |---|---|
-| Baza | migracje zastosowane do `0137` (usługa `db-migrator`) |
+| Baza | migracje zastosowane do `0144` (usługa `db-migrator`); `main` ma już `0145` (do zastosowania) |
 | Tryb | `mode: "demo"` — `APP_MODE=production` **nieustawione** (decyzja właściciela) |
 | Bramka | `SITE_ACCESS_PASSWORD` aktywna: strony = 503 z formularzem hasła, `robots.txt` = `Disallow: /` |
 | `/api/health` | 200 `ok`; `databaseReachable`, `auth`, `authMail`, `rateLimit`, `turnstile`, `fileBucket`, `errorWebhook`, `emailProviderReady` (EmailLabs), `queueSecret`, `maintenanceSecret`, `cronSecretsSeparate` = `true` |
 | Braki w health | `emaillabsWebhook: false` (brak `EMAILLABS_WEBHOOK_SECRET`) |
-| Cron | **brak usług cron** (limit darmowego planu Railway) — `/api/email/process` i `/api/maintenance` nie są wywoływane |
+| Cron | **brak usług cron** (limit darmowego planu Railway) — `/api/email/process` i `/api/maintenance` nie są wywoływane; harmonogram zastępczy Cloudflare Worker gotowy w repo, niewdrożony (#690, [`CLOUDFLARE_CRON.md`](./CLOUDFLARE_CRON.md)). E-maile konta wychodzą od razu po akcji (K10), bez harmonogramu |
 | AI | dostawca OpenAI (#677); brak `OPENAI_API_KEY`; funkcje AI za flagami, domyślnie wyłączone |
 | Kopia poza Railwayem | R2 (#569) odłożone — brak zaszyfrowanej kopii poza Railwayem |
 | Smoke | `node scripts/railway/prod-smoke.mjs` bez hasła: health i `robots.txt` OK, strony za bramką (oczekiwane) |
@@ -40,7 +40,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 
 | # | Priorytet | Bloker | Skutek, gdy zostanie |
 |---|---|---|---|
-| W1 | **P0** | **Wywoływanie `/api/email/process`** (cron co 1–5 min). Dziś brak usługi cron. Opcje: płatny plan Railway z usługą cron (`docs/railway/README.md` §Cron), albo zewnętrzny harmonogram wołający publiczny HTTPS z sekretem (np. Cloudflare Workers Cron Triggers; endpoint odpowiada 401 bez sekretu) | **Brak e-maili potwierdzających konto i resetu hasła** (`auth.email_outbox` obsługuje ten sam worker) → nowy użytkownik nie zaloguje się; brak e-maili o aplikacjach, statusach, propozycjach, wiadomościach |
+| W1 | **P0** | **Wywoływanie `/api/email/process`** (cron co 1–5 min). Dziś brak usługi cron. Opcje: płatny plan Railway z usługą cron (`docs/railway/README.md` §Cron), albo zewnętrzny harmonogram wołający publiczny HTTPS z sekretem (np. Cloudflare Workers Cron Triggers; endpoint odpowiada 401 bez sekretu) brak e-maili o aplikacjach, statusach, propozycjach, wiadomościach (`email_deliveries`) i brak **ponowień** e-maili konta. Pierwsza próba potwierdzenia adresu i resetu hasła wychodzi już bez harmonogramu (K10) — ale nieudana wysyłka czeka na harmonogram. Najprostsza opcja bez płatnego planu: Worker z `infra/cloudflare-cron/` (#690, kroki w [`CLOUDFLARE_CRON.md`](./CLOUDFLARE_CRON.md)) |
 | W2 | **P0** | **Wywoływanie `/api/maintenance`** co godzinę (inny sekret: `MAINTENANCE_SECRET`) | nie działa: wygaszanie ofert (`expire_due_jobs`; publiczna lista i tak ukrywa oferty po terminie), alerty zapisanych wyszukiwań, zwalnianie rezerwacji budżetu AI, czyszczenie tokenów gościa, kolejka usuwania plików, kampanie, retencja |
 | W3 | **P0** | Domena: CNAME `pracuj.be` → domena Railway w Cloudflare, SSL, jedna wersja kanoniczna (`www` → apex), `NEXT_PUBLIC_SITE_URL`/`BETTER_AUTH_URL` = `https://pracuj.be` ([`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)) | serwis niedostępny pod docelowym adresem |
 | W4 | **P0** | EmailLabs: domena nadawcy (SPF/DKIM/DMARC), konto SMTP z wyłączonym open trackingiem, webhook + `EMAILLABS_WEBHOOK_SECRET`, statusy „OK” włączone u wsparcia ([`EMAILLABS_SETUP.md`](./EMAILLABS_SETUP.md)) | poczta w spamie; brak blokad po twardych odbiciach (#44) |
@@ -60,15 +60,16 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 
 | # | Priorytet | Luka | Uwagi |
 |---|---|---|---|
-| K1 | P1 | Harmonogram zastępczy dla W1/W2 bez płatnego planu Railway (np. Worker z Cron Trigger wołający `scripts/railway-cron-call.mjs`-owy kontrakt: POST, sekret w nagłówku, timeout) + dokumentacja | tylko po wyborze opcji przez właściciela; bez zmian w `.github/workflows` (minuty Actions) |
-| K2 | P1 | GC tabel technicznych w `/api/maintenance`: `email_deliveries_gc` (istnieje od `0022`, nie jest wołane), `processed_webhooks`, `rate_limit` (#17) | za flagą jak `RETENTION_MODE` |
+| K1 | ~~P1~~ | **Zrobione (#690):** Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/` (kontrakt callera Railway, test `cloudflare-cron-worker`) | wdrożenie i sekrety = właściciel (W1/W2), [`CLOUDFLARE_CRON.md`](./CLOUDFLARE_CRON.md) |
+| K2 | P1 | GC tabel technicznych w `/api/maintenance`: `email_deliveries_gc` (istnieje od `0022`, nie jest wołane), `processed_webhooks`, `rate_limit` (#17) | `rate_limits` i `processed_webhooks` w otwartym PR #693; `email_deliveries` czeka na decyzję o retencji (#574, W12) |
 | K3 | P1 | Po zatwierdzeniu treści prawnej: zdjęcie `noindex` z `_legal/legal-page.tsx` i dodanie stron do sitemap (FUN-09) | czeka na W5 |
 | K4 | ~~P2~~ | **Zrobione:** `/faq` (placeholder) usunięte, middleware daje 308 na `/{locale}/pomoc` (#61) | test `faq-redirect` |
-| K5 | P2 | Linki Pomoc/Prywatność w stopce e-maili (#6) | |
+| K5 | ~~P2~~ | **Zrobione:** stopka każdego e-maila (`src/emails/_components.tsx`) linkuje `/{locale}/pomoc` i `/{locale}/polityka-prywatnosci` w języku odbiorcy | treść polityki = W5 |
 | K6 | P2 | Wersja polityki z cookie w receipcie zgody | zrobione w #631 (migracja `0142`): receipt niesie wersję z cookie, jeśli jest opublikowana w `consent_versions`; nazewnictwo — pkt w §3 |
-| K7 | P2 | Domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | znane braki #24/#25 |
+| K7 | ~~P2~~ | **Zrobione (#633, migracja `0143`):** domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | |
 | K8 | P2 | `npm run test:e2e:real` poza CI (gotowy fragment `ci.yml` — issues #351, #66) | decyzja o minutach CI |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
+| K10 | ~~P0~~ | **Zrobione:** e-maile konta (potwierdzenie adresu, reset hasła, nowy link przy logowaniu niepotwierdzonego konta) wychodzą zaraz po akcji — jedna paczka workera `auth.email_outbox` po odpowiedzi (`after()`, `src/lib/auth/email-kick.ts`), ten sam claim z dzierżawą, budżet i klucz idempotencji co cron. Wyłącznik: `AUTH_EMAIL_IMMEDIATE_SEND=off` | ponowienia i `email_deliveries` nadal wymagają W1; test `auth-email-kick` (kontrole ujemne) |
 
 ---
 
@@ -91,7 +92,7 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 - [x] `ERROR_WEBHOOK_URL` (Discord, #571) (health 26.09).
 - [x] EmailLabs: `EMAILLABS_APP_KEY`, `EMAILLABS_SECRET_KEY`, `EMAILLABS_SMTP_ACCOUNT`, `EMAIL_FROM` (health `emailProviderReady` 26.09).
 - [ ] `EMAILLABS_WEBHOOK_SECRET` (health `emaillabsWebhook: false`) — W4.
-- [ ] `GUEST_APPLY_SECRET` i `EMAIL_UNSUBSCRIBE_SECRET` (≥ 32 znaki) — health `checks.guestApplySecret`/`checks.unsubscribeSecret` = `true` (od tego PR).
+- [ ] `GUEST_APPLY_SECRET` i `EMAIL_UNSUBSCRIBE_SECRET` (≥ 32 znaki) — health `checks.guestApplySecret`/`checks.unsubscribeSecret` = `true` (#674).
 - [ ] `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL` — W10.
 - [ ] **`APP_MODE=production`** dopiero po decyzji właściciela (W8). W trybie produkcyjnym brak
       konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
@@ -105,7 +106,8 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 
 ## 4. Baza danych
 
-- [x] PostgreSQL Railway, migracje do `0137` (`db-migrator`, `MIGRATION_MODE=status` po `apply`).
+- [x] PostgreSQL Railway, migracje do `0144` (`db-migrator`, `MIGRATION_MODE=status` po `apply`).
+- [ ] `0145` (kolejka tłumaczeń AI, #514 — funkcja za flagą) zastosowana po wdrożeniu `main`.
 - [ ] Loginy runtime po `verify` ([`railway/LOGINY_POSTGRESQL_ONE_OFF.md`](./railway/LOGINY_POSTGRESQL_ONE_OFF.md)).
 - [ ] Brak danych demonstracyjnych (seed nigdy nieuruchomiony na produkcji):
       ```sql
@@ -117,7 +119,7 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 ## 5. Konta (Better Auth)
 
 - [ ] Rejestracja kandydata i pracodawcy, potwierdzenie adresu, logowanie, reset w PL/NL/FR/EN
-      — **wymaga W1** (e-maile z `auth.email_outbox` wychodzą tylko przez `/api/email/process`).
+      — pierwsza wysyłka idzie od razu po akcji (K10); ponowienia po błędzie dostawcy wymagają W1.
 - [ ] Mail potwierdzający w języku odbiorcy (Invariant #1).
 - [ ] Reset hasła nie ujawnia istnienia konta; limiter i Turnstile aktywne.
 
