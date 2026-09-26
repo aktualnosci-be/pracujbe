@@ -1658,7 +1658,8 @@
     "reportSent": "Zgłoszenie przyjęte",
     "reportAlreadyOpen": "Już zgłoszono — czeka na sprawdzenie",
     "reportedBadge": "Zgłoszono",
-    "reportNetworkError": "Nie udało się wysłać zgłoszenia. Sprawdź połączenie i spróbuj ponownie."
+    "reportNetworkError": "Nie udało się wysłać zgłoszenia. Sprawdź połączenie i spróbuj ponownie.",
+    "attachmentPreviewAlt": "Podgląd obrazu {name}"
   },
   "files": {
     "cvTitle": "Twoje CV / dokumenty",

@@ -22,6 +22,10 @@ export interface PaginationProps {
   pageSize: number;
   /** Aktywne filtry do zachowania w linkach (bez `page`). */
   filters?: Record<string, string | undefined>;
+  /** Ostatnia OSIĄGALNA strona (#593, `jobListLastPage`) — gdy mniejsza niż `ceil(total /
+   *  pageSize)`, nawigacja jawnie kończy się tutaj zamiast oferować strony, które zduplikowałyby
+   *  poprzedni, klampowany wycinek. Domyślnie bez ograniczenia (inne listy niż oferty). */
+  maxPage?: number;
 }
 
 /** Buduje listę pozycji do wyświetlenia (numery stron + wielokropki). */
@@ -52,8 +56,12 @@ export async function Pagination({
   total,
   pageSize,
   filters = {},
+  maxPage,
 }: PaginationProps): Promise<React.JSX.Element | null> {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages = Math.min(
+    Math.max(1, Math.ceil(total / pageSize)),
+    maxPage ?? Number.POSITIVE_INFINITY,
+  );
   if (totalPages <= 1) return null;
 
   const t = await getTranslations('jobs');

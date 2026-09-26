@@ -38,7 +38,8 @@ describe('strona dla pracodawców', () => {
   });
 
   it('jest w sitemap w każdym języku z pełnym hreflang', async () => {
-    const entries = (await sitemap()).filter((entry) => entry.url.endsWith(PATH));
+    // #599: strony statyczne żyją w id 0 (core sitemap) — patrz `src/app/sitemap.ts`.
+    const entries = (await sitemap({ id: 0 })).filter((entry) => entry.url.endsWith(PATH));
     expect(entries.map((entry) => entry.url)).toEqual(
       routing.locales.map((locale) => `https://pracuj.be/${locale}${PATH}`),
     );

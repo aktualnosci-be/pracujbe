@@ -30,6 +30,8 @@ export default defineConfig({
         '**/contact-form.spec.ts',
         // Lejek ofert bez cookies/storage przed zgodą (#499).
         '**/job-funnel-no-storage.spec.ts',
+        // Lejek wyłączony na urządzeniu osoby 16–17 (#492/#576, PRIV-01).
+        '**/job-funnel-minor-marker.spec.ts',
       ],
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
