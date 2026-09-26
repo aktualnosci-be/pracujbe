@@ -12816,4 +12816,227 @@ select pg_temp.assert(
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- MP03. Materializacja dopasowań (P1-03, 0190): triggery kolejkują podmioty, worker
+-- (service_role) pobiera wejścia tylko dla par kwalifikujących się i zapisuje wynik
+-- `match_recompute_apply`, które sprawdza KAŻDĄ parę ponownie w bazie: profil ukończony
+-- i wyszukiwalny (#494), 18+ (#492), bez blokady firmy (#97), oferta aktywna firmy verified.
+-- Kontrole ujemne: kwalifikacja bez warunku widoczności / wieku / blokady / verified oraz
+-- zapis bez ponownej kontroli par dają wiersz, którego nie powinno być.
+-- Cała sekcja w transakcji cofanej (kolejka i wiersze nie wpływają na inne sekcje).
+-- ============================================================================
+\echo '--- MP03 materializacja matches (0190) ---'
+\set MPC  'e1903000-0000-0000-0000-000000000001'
+\set MPH  'e1903000-0000-0000-0000-000000000002'
+\set MPM  'e1903000-0000-0000-0000-000000000003'
+\set MPE  'e1903000-0000-0000-0000-000000000004'
+\set MPF1 'e1903000-0000-0000-0000-0000000000f1'
+\set MPF2 'e1903000-0000-0000-0000-0000000000f2'
+\set MPFU 'e1903000-0000-0000-0000-0000000000f3'
+\set MPJ1 'e1903000-0000-0000-0000-0000000000a1'
+\set MPJ2 'e1903000-0000-0000-0000-0000000000a2'
+\set MPJU 'e1903000-0000-0000-0000-0000000000a3'
+\set MPJD 'e1903000-0000-0000-0000-0000000000a4'
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'MPC','mpc@test.be','Mp C','{"role":"candidate","first_name":"Mia","last_name":"Match","locale":"pl"}'),
+  (:'MPH','mph@test.be','Mp H','{"role":"candidate","first_name":"Hugo","last_name":"Hidden","locale":"nl"}'),
+  (:'MPM','mpm@test.be','Mp M','{"role":"candidate","first_name":"Mila","last_name":"Minor","locale":"fr"}'),
+  (:'MPE','mpe@test.be','Mp E','{"role":"employer","first_name":"Rek","last_name":"Mp","locale":"en"}');
+-- MPM deklaruje przedział 16–17 (przed fixture, który dopisuje 18+ pozostałym).
+insert into public.candidate_age_attestations (profile_id, min_age, source) values (:'MPM', 16, 'signup');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'MPF1','Firma Mp 1','verified'), (:'MPF2','Firma Mp 2','verified'), (:'MPFU','Firma Mp U','unverified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'MPF1',:'MPE','owner',true);
+delete from public.match_recompute_queue;
+
+-- MP1: publikacja oferty (insert active) i szkic.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,occupation,published_at) values
+  (:'MPJ1',:'MPF1','job-mp-1','Magazynier MP','warehouse','permanent','Antwerpia','Flandria','active','pl','magazynier', now()),
+  (:'MPJ2',:'MPF2','job-mp-2','Magazynier MP2','warehouse','permanent','Antwerpia','Flandria','active','pl','magazynier', now()),
+  (:'MPJU',:'MPFU','job-mp-u','Magazynier MPU','warehouse','permanent','Antwerpia','Flandria','active','pl','magazynier', now()),
+  (:'MPJD',:'MPF1','job-mp-d','Szkic MP','warehouse','permanent','Antwerpia','Flandria','draft','pl','magazynier', null);
+select pg_temp.assert(
+  (select count(*) from public.match_recompute_queue where kind = 'job' and subject_id in (:'MPJ1', :'MPJ2', :'MPJU')) = 3
+  and not exists (select 1 from public.match_recompute_queue where subject_id = :'MPJD'),
+  'MP1 aktywna oferta trafia do kolejki, szkic nie');
+
+-- Profile: MPC kwalifikuje się; MPH ukończony, ale niewyszukiwalny; MPM 16–17 (wyszukiwalny
+-- tylko z pominięciem triggera wieku — stan, którego 0126 nie dopuszcza, dla kontroli bazy).
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed, occupations, categories, city, region, availability)
+values (:'MPC', true, true, array['magazynier'], array['warehouse']::public.job_category[], 'Antwerpia', 'Flandria', 'immediate'),
+       (:'MPH', false, true, array['magazynier'], array['warehouse']::public.job_category[], 'Antwerpia', 'Flandria', 'immediate');
+set local session_replication_role = replica;
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed, occupations, categories, city, region, availability)
+values (:'MPM', true, true, array['magazynier'], array['warehouse']::public.job_category[], 'Antwerpia', 'Flandria', 'immediate');
+set local session_replication_role = origin;
+insert into public.candidate_skills(candidate_profile_id, skill_label)
+  select id, 'wózek widłowy' from public.candidate_profiles where profile_id = :'MPC';
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'MPC', :'MPF2');
+select pg_temp.assert(
+  (select count(*) from public.match_recompute_queue where kind = 'candidate' and subject_id in (:'MPC', :'MPH')) = 2,
+  'MP1b zmiana profilu/relacji/blokady kolejkuje kandydata (jeden wiersz na podmiot)');
+select pg_temp.assert(
+  (select version from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPC') >= 3,
+  'MP1c kolejne zgłoszenia podbijają wersję zamiast dublować wiersz');
+
+-- MP2: kwalifikacja w bazie.
+select pg_temp.assert(public.match_pair_eligible(:'MPC', :'MPJ1'), 'MP2 kandydat wyszukiwalny 18+ × oferta verified');
+select pg_temp.assert(not public.match_pair_eligible(:'MPH', :'MPJ1'), 'MP2b niewyszukiwalny profil (#494) → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPM', :'MPJ1'), 'MP2c kandydat 16–17 (#492) → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPC', :'MPJ2'), 'MP2d blokada firmy (#97) → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPC', :'MPJU'), 'MP2e firma niezweryfikowana → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPC', :'MPJD'), 'MP2f szkic → brak pary');
+
+-- MP3: wejścia dla kandydata = tylko oferty kwalifikujące się; bez imienia i kontaktu.
+set role service_role;
+select pg_temp.assert(
+  (select (i ->> 'eligible')::boolean
+      and jsonb_array_length(i -> 'candidates') = 1
+      and (select array_agg(j ->> 'job_id') from jsonb_array_elements(i -> 'jobs') j) @> array[:'MPJ1']
+      and not (i -> 'jobs')::text like '%' || :'MPJ2' || '%'
+      and not (i -> 'jobs')::text like '%' || :'MPJU' || '%'
+      and (i -> 'candidates' -> 0 -> 'skills') @> '[{"skill_label":"wózek widłowy"}]'
+      and not (i::text ~* 'mpc@test|Mia|Match')
+   from (select public.match_recompute_inputs('candidate', :'MPC'::uuid, 500) i) x),
+  'MP3 inputs kandydata: tylko pary kwalifikujące się, dane zawodowe bez PII');
+select pg_temp.assert(
+  (select (public.match_recompute_inputs('candidate', :'MPH'::uuid, 500) ->> 'eligible')::boolean) is false
+  and (select (public.match_recompute_inputs('candidate', :'MPM'::uuid, 500) ->> 'eligible')::boolean) is false
+  and (select (public.match_recompute_inputs('job', :'MPJU'::uuid, 500) ->> 'eligible')::boolean) is false,
+  'MP3b niewidoczny / 16–17 / oferta firmy niezweryfikowanej → eligible=false');
+select pg_temp.assert(
+  (select not (i -> 'candidates')::text like '%' || :'MPH' || '%'
+      and not (i -> 'candidates')::text like '%' || :'MPM' || '%'
+   from (select public.match_recompute_inputs('job', :'MPJ1'::uuid, 1000) i) x),
+  'MP3c inputs oferty nie zawierają niewidocznego ani niepełnoletniego kandydata');
+
+-- MP4: apply ponownie kwalifikuje każdą parę — worker podający niedozwolone pary nic nie zapisze.
+select pg_temp.assert(
+  (select r = '{"upserted": 1, "skipped": 2, "deleted": 0}'::jsonb
+   from public.match_recompute_apply('candidate', :'MPC'::uuid, 0,
+     jsonb_build_array(:'MPJ1', :'MPJ2', :'MPJU'),
+     jsonb_build_array(
+       jsonb_build_object('other_id', :'MPJ1', 'score', 81, 'matched', jsonb_build_array('magazynier'),
+                          'missing', '[]'::jsonb, 'strengths', '[]'::jsonb, 'mandatory_met', 0,
+                          'mandatory_total', 0, 'summary_key', 'good'),
+       jsonb_build_object('other_id', :'MPJ2', 'score', 81, 'summary_key', 'good'),
+       jsonb_build_object('other_id', :'MPJU', 'score', 81, 'summary_key', 'good'))) r),
+  'MP4 apply: zapis tylko pary kwalifikującej się (blokada i firma niezweryfikowana pominięte)');
+select pg_temp.assert(
+  (select count(*) from public.matches where candidate_id = :'MPC') = 1
+  and (select score = 81 and summary_key = 'good' and matched = array['magazynier'] and not is_demo
+       from public.matches where candidate_id = :'MPC' and job_id = :'MPJ1'),
+  'MP4b wiersz z wynikiem workera');
+select pg_temp.assert(
+  (select count(*) from public.matches where candidate_id in (:'MPH', :'MPM')) = 0,
+  'MP4c brak wierszy niewidocznego i niepełnoletniego');
+-- Wersja 0 ≠ bieżąca: podmiot zostaje w kolejce, dzierżawa zwolniona.
+select pg_temp.assert(
+  (select locked_until is null from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPC'),
+  'MP4d nieaktualna wersja nie zdejmuje podmiotu z kolejki');
+select pg_temp.expect_error(format(
+  'select public.match_recompute_apply(''job'', %L::uuid, 0, jsonb_build_array(%L), jsonb_build_array(jsonb_build_object(''other_id'', %L, ''score'', 101, ''summary_key'', ''good'')))',
+  :'MPJ1', :'MPH', :'MPH'), 'VALIDATION_FAILED', 'MP4e wynik spoza 0–100 odrzucony');
+select pg_temp.expect_error(format(
+  'select public.match_recompute_apply(''job'', %L::uuid, 0, ''[]''::jsonb, jsonb_build_array(jsonb_build_object(''other_id'', %L, ''score'', 50, ''summary_key'', ''partial'')))',
+  :'MPJ1', :'MPC'), 'VALIDATION_FAILED', 'MP4f para spoza rozważonych odrzucona');
+reset role;
+
+-- MP5: wiersz sprzed zmiany (np. seed/operator) znika przy przeliczeniu niekwalifikującego się.
+insert into public.matches(candidate_id, job_id, score) values (:'MPH', :'MPJ1', 70);
+set role service_role;
+select pg_temp.assert(
+  (select (r ->> 'deleted')::int = 1
+   from public.match_recompute_apply('candidate', :'MPH'::uuid,
+     (select version from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPH'),
+     '[]'::jsonb, '[]'::jsonb) r),
+  'MP5 niewidoczny kandydat: przeliczenie usuwa jego wiersz');
+-- Osobne zapytania: migawka instrukcji z apply nie widzi jeszcze jego zmian.
+select pg_temp.assert(
+  (select count(*) from public.matches where candidate_id = :'MPH') = 0
+  and not exists (select 1 from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPH'),
+  'MP5b brak wiersza; podmiot zdjęty z kolejki (bieżąca wersja)');
+reset role;
+
+-- MP6: blokada firmy po zapisie → przeliczenie kandydata usuwa wiersz tej firmy.
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'MPC', :'MPF1');
+set role service_role;
+select pg_temp.assert(
+  (select (r ->> 'deleted')::int = 1
+   from public.match_recompute_apply('candidate', :'MPC'::uuid, 0, '[]'::jsonb, '[]'::jsonb) r),
+  'MP6 blokada firmy (#97): przeliczenie usuwa wiersz jej oferty');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'MPC') = 0,
+  'MP6b brak wiersza dopasowania do oferty zablokowanej firmy');
+reset role;
+delete from public.candidate_company_blocks where candidate_id = :'MPC' and company_id = :'MPF1';
+
+-- MP7: claim — SKIP LOCKED + dzierżawa; drugi claim nie bierze tych samych podmiotów.
+set role service_role;
+select coalesce(string_agg(kind || ':' || subject_id, ','), '') as mp_claimed, count(*) as mp_claimed_n
+  from public.match_recompute_claim(50) \gset
+select pg_temp.assert(:mp_claimed_n > 0, 'MP7 claim zwraca podmioty');
+select pg_temp.assert(
+  (select locked_until > now() and attempts = 1 from public.match_recompute_queue
+    where kind || ':' || subject_id = split_part(:'mp_claimed', ',', 1)),
+  'MP7a claim ustawia dzierżawę i licznik prób');
+select pg_temp.assert(
+  not exists (select 1 from public.match_recompute_claim(50) c
+              where c.kind || ':' || c.subject_id = any(string_to_array(:'mp_claimed', ','))),
+  'MP7b dzierżawa: drugi claim nie bierze tych samych podmiotów');
+select pg_temp.assert((select count(*) from public.match_recompute_claim(1000)) <= 50,
+  'MP7c limit claimu ≤ 50');
+reset role;
+
+-- MP8: uprawnienia — klient nie ma kolejki ani RPC workera.
+select set_config('app.current_uid', :'MPE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.match_recompute_queue', 'permission denied', 'MP8 authenticated nie czyta kolejki');
+select pg_temp.expect_error('select * from public.match_recompute_claim(1)', 'permission denied', 'MP8b authenticated nie woła claim');
+select pg_temp.expect_error(format('select public.match_recompute_inputs(''candidate'', %L::uuid, 1)', :'MPC'),
+  'permission denied', 'MP8c authenticated nie czyta wejść (profil kandydata)');
+select pg_temp.expect_error(format('select public.match_recompute_apply(''candidate'', %L::uuid, 0, ''[]''::jsonb, ''[]''::jsonb)', :'MPC'),
+  'permission denied', 'MP8d authenticated nie zapisuje dopasowań');
+select pg_temp.expect_error(format('insert into public.matches(candidate_id, job_id, score) values (%L, %L, 99)', :'MPC', :'MPJ1'),
+  'permission denied', 'MP8e bezpośredni INSERT do matches odrzucony');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.match_recompute_claim(1)', 'permission denied', 'MP8f anon nie woła claim');
+reset role;
+
+-- MP9 (kontrole ujemne): osłabiona kwalifikacja przepuszcza pary, których nie powinno być.
+savepoint mp_neg;
+create or replace function public.match_candidate_eligible(p_candidate uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from public.candidate_profiles cp where cp.profile_id = p_candidate
+                 and cp.deleted_at is null and cp.profile_completed);
+$$;
+select pg_temp.assert(public.match_pair_eligible(:'MPH', :'MPJ1') and public.match_pair_eligible(:'MPM', :'MPJ1'),
+  'MP9-N1 bez warunku widoczności i wieku para niewidocznego / 16–17 przeszłaby — MP2b/MP2c to wykrywają');
+rollback to savepoint mp_neg;
+create or replace function public.match_pair_eligible(p_candidate uuid, p_job uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select public.match_candidate_eligible(p_candidate) and exists (
+    select 1 from public.jobs j where j.id = p_job and j.status = 'active');
+$$;
+select pg_temp.assert(public.match_pair_eligible(:'MPC', :'MPJ2') and public.match_pair_eligible(:'MPC', :'MPJU'),
+  'MP9-N2 bez blokady i verified para przeszłaby — MP2d/MP2e to wykrywają');
+rollback to savepoint mp_neg;
+-- Zapis bez ponownej kontroli par (naiwny upsert) zostawiłby wiersz firmy zablokowanej.
+insert into public.matches(candidate_id, job_id, score) values (:'MPC', :'MPJ2', 81);
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'MPC' and job_id = :'MPJ2') = 1,
+  'MP9-N3 naiwny zapis tworzy wiersz zablokowanej firmy — apply (MP4) go pomija');
+set role service_role;
+select pg_temp.assert(
+  (select (r ->> 'deleted')::int >= 1
+   from public.match_recompute_apply('candidate', :'MPC'::uuid, 0, '[]'::jsonb, '[]'::jsonb) r),
+  'MP9b przeliczenie sprząta wiersz zablokowanej firmy');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'MPC' and job_id = :'MPJ2') = 0,
+  'MP9c wiersz zablokowanej firmy usunięty');
+reset role;
+release savepoint mp_neg;
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

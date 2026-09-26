@@ -506,7 +506,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P3-04 (billing nie połyka błędów DB — INTERNAL vs NOT_FOUND).
 > **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
-> grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
+> grantów + AV, usługa zewn.), ~~P1-03 (pipeline materializacji `matches`)~~ — zrobione (migracja `0190`, Etap 5), P1-04 (edycja/wznowienie
 > draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-12 (JSON-LD:
 > `validThrough` z `expires_at` + `unitText` z `salary_period` — wymaga rozszerzenia zwrotu
@@ -974,6 +974,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
   zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
+  Materializacja `matches` (P1-03, migracja `0190` — numer tymczasowy): triggery kolejkują
+  podmiot w `match_recompute_queue` (kind `candidate`/`job`, PK = jeden wiersz, ponowne
+  zgłoszenie podbija `version`): oferta aktywna (jobs + relacje), status firmy, profil
+  kandydata i relacje, konto (rola/usunięcie), blokada firmy (#97), deklaracja wieku (#492).
+  Worker `runMatchRecompute` (`src/lib/matching/materialize.ts`) w `/api/maintenance` po
+  `expire_due_jobs`: `match_recompute_claim` (SKIP LOCKED, dzierżawa 10 min, ≤ 50, po 5 próbach
+  czeka na nowe zgłoszenie; na przebieg ≤ 100 podmiotów) → `match_recompute_inputs` (tylko pary
+  kwalifikujące się, ≤ 500 stron przeciwnych; oferta = `get_job_match_profile`) → `scoreMatch`
+  przez wspólne mapowanie `src/lib/matching/inputs.ts` (to samo co `getMyJobMatch`, bez AI) →
+  `match_recompute_apply` (service_role; każda para ponownie `match_pair_eligible`: profil
+  ukończony i wyszukiwalny #494, 18+ #492, bez blokady firmy #97, oferta active/niewygasła
+  firmy verified; wiersze niekwalifikujące się i rozważone poniżej progu 40 usuwane; kolejka
+  zdejmowana tylko przy niezmienionej wersji). Do przebiegu workera firmom wiersze ukrywa RLS
+  (0100). Backfill w migracji. Odczyt live: data ważności certyfikatu jako tekst (sterownik pg
+  zwracał `Date`, więc wygaśnięcie było pomijane). Dowód: `rls.sql` sekcja MP03 (kontrole
+  ujemne: kwalifikacja bez widoczności/wieku/blokady/verified, naiwny zapis), unit
+  `matches-materialize`, integracja `portal-matches` (PG16: wiersz = wynik live).
+  **Otwarte:** kandydat niewyszukiwalny nie ma wierszy (polecane oferty tylko po opt-in),
+  okresowe przeliczenie przy upływie ważności certyfikatu (dziś tylko przy zmianie danych),
+  prefiltr regionu/kategorii przy dużej liczbie ofert.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
   oznaczenie „Wygasł”); `scoreMatch(…, { today })` nie liczy certyfikatu z `expires_at` < dziś

@@ -13,6 +13,7 @@ import {
   retentionMode,
 } from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
+import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
 import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
@@ -58,6 +59,10 @@ import {
  * rezerwacja starsza niż 60 minut wciąż w stanie `reserved` (proces padł między rezerwacją
  * a rozliczeniem) jest rozliczana jako `failed`/koszt 0; ślad audytowy zostaje, limit doby/
  * miesiąca wraca do użycia. Idempotentne (`FOR UPDATE SKIP LOCKED`, filtr po statusie).
+ * P1-03: materializacja dopasowań (`runMatchRecompute`, 0190) — partia podmiotów z kolejki
+ * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
+ * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
+ * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -111,6 +116,7 @@ async function run(request: Request): Promise<Response> {
     | 'checkouts'
     | 'aiBudgetReservations'
     | 'jobExpiry'
+    | 'matches'
     | 'guestRequests'
     | 'savedSearchAlerts'
     | 'emailCampaigns'
@@ -147,6 +153,13 @@ async function run(request: Request): Promise<Response> {
     { p_older_than_minutes: 60, p_limit: 200 },
   );
   const expiredJobs = await task('jobExpiry', 'expire_due_jobs');
+  // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
+  let matches: MatchRecomputeRun | null = null;
+  try {
+    matches = await runMatchRecompute();
+  } catch (error) {
+    failures.push({ task: 'matches', error });
+  }
   const purgedGuestRequests = await task('guestRequests', 'purge_guest_application_requests');
   // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.
   const savedSearchDigests =
@@ -242,6 +255,7 @@ async function run(request: Request): Promise<Response> {
     releasedCheckouts: releasedCheckouts ?? 0,
     releasedAiBudgetReservations: releasedAiBudgetReservations ?? 0,
     expiredJobs: expiredJobs ?? 0,
+    matches,
     purgedGuestRequests: purgedGuestRequests ?? 0,
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
