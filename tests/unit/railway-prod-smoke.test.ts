@@ -1,8 +1,16 @@
 // @vitest-environment node
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LOCALES, LOCALIZED_PAGES, buildChecks, readConfig, runSmoke } from '../../scripts/railway/prod-smoke.mjs';
+import {
+  LOCALES,
+  LOCALIZED_PAGES,
+  SITEMAP_STATIC_ID,
+  buildChecks,
+  readConfig,
+  runSmoke,
+} from '../../scripts/railway/prod-smoke.mjs';
 
 const PASSWORD = 'smoke-test-password-value';
 const COOKIE_VALUE = 'cookie-token-value-0123456789';
@@ -38,9 +46,14 @@ function startFakeSite(options: { gate?: boolean; faults?: Record<string, Fault>
         res.writeHead(status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
         return res.end(JSON.stringify({ status }));
       }
-      if (path === '/robots.txt' || path === '/sitemap.xml') {
+      if (path === '/robots.txt' || path === '/sitemap/0.xml') {
         res.writeHead(200);
         return res.end('ok');
+      }
+      // Jak Next.js przy `generateSitemaps()` (#599): pojedynczego `/sitemap.xml` nie ma.
+      if (path === '/sitemap.xml') {
+        res.writeHead(404);
+        return res.end('not found');
       }
       const gated = gate && !(req.headers.cookie ?? '').includes(`pb_site_access=${COOKIE_VALUE}`);
       if (gated) {
@@ -83,7 +96,8 @@ describe('prod smoke — lista sprawdzeń', () => {
   it('obejmuje health, robots, sitemap, / i trasy publiczne oraz auth w 4 językach', () => {
     const paths = buildChecks().map((check) => check.path);
     expect(LOCALES).toEqual(['pl', 'nl', 'fr', 'en']);
-    for (const path of ['/api/health', '/', '/robots.txt', '/sitemap.xml']) expect(paths).toContain(path);
+    for (const path of ['/api/health', '/', '/robots.txt', '/sitemap/0.xml']) expect(paths).toContain(path);
+    expect(paths).not.toContain('/sitemap.xml');
     for (const locale of LOCALES) {
       for (const page of ['', '/oferty-pracy', '/logowanie', '/rejestracja', '/reset-hasla']) {
         expect(paths).toContain(`/${locale}${page}`);
@@ -91,6 +105,17 @@ describe('prod smoke — lista sprawdzeń', () => {
     }
     expect(paths).toHaveLength(4 + LOCALES.length * LOCALIZED_PAGES.length);
     expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  it('sitemap: ta sama ścieżka co indeks z `sitemap.ts`/`robots.ts` (#599)', () => {
+    // `generateSitemaps()` → Next.js serwuje `/sitemap/<id>.xml`, a `/sitemap.xml` = 404
+    // (produkcja 26.09.2026). Jeśli ktoś wróci do jednego pliku, ten test wymusi zmianę smoke.
+    const sitemap = readFileSync('src/app/sitemap.ts', 'utf8');
+    const robots = readFileSync('src/app/robots.ts', 'utf8');
+    expect(sitemap).toMatch(/export async function generateSitemaps\(/);
+    expect(robots).toContain('/sitemap/${id}.xml');
+    expect(sitemap).toContain(`id \`${SITEMAP_STATIC_ID}\` = strony statyczne`);
+    expect(buildChecks().map((check) => check.path)).toContain(`/sitemap/${SITEMAP_STATIC_ID}.xml`);
   });
 
   it('nie sprawdza paneli ani tras zmieniających dane', () => {
@@ -136,6 +161,13 @@ describe('prod smoke — atrapa serwera', () => {
     expect(text).not.toContain(PASSWORD);
     expect(text).not.toContain(COOKIE_VALUE);
     expect(logs.error).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: brak pliku sitemap ze stronami statycznymi = błąd', async () => {
+    site = await startFakeSite({ faults: { '/sitemap/0.xml': { status: 404 } } });
+    const logs = logger();
+    expect(await runSmoke({ env: { PROD_SMOKE_BASE_URL: site.url, SITE_ACCESS_PASSWORD: PASSWORD }, logger: logs })).toBe(1);
+    expect(output(logs)).toContain('/sitemap/0.xml');
   });
 
   it('bez bramki działa bez hasła', async () => {

@@ -166,6 +166,14 @@
     "appealDeadlineNotStarted": "Le délai de recours commencera à courir dès réception de la notification de la décision.",
     "appealStatusLabel": "Recours {reference}"
   },
+  "companyProfile": {
+    "metaTitle": "Offres d'emploi chez {name}",
+    "metaDescription": "Découvrez les offres d'emploi actives de {name} sur Pracuj.be.",
+    "noDescription": "Cette entreprise n'a pas encore ajouté de description.",
+    "jobsHeading": "Offres actives de cette entreprise",
+    "empty": "Cette entreprise n'a actuellement aucune offre active.",
+    "backToJobs": "Voir toutes les offres d'emploi"
+  },
   "common": {
     "appName": "Pracuj.be",
     "loading": "Chargement...",
@@ -974,6 +982,10 @@
     "employerApplicationNoProfile": "Le profil professionnel du candidat n’est pas disponible.",
     "employerApplicationHistory": "Historique des statuts",
     "employerApplicationNoHistory": "Aucun changement de statut enregistré.",
+    "employerApplicationHistoryMore": "Afficher plus",
+    "employerApplicationHistoryLoading": "Chargement…",
+    "employerApplicationHistoryMoreError": "Impossible de charger d'autres changements de statut. Réessayez.",
+    "employerApplicationHistoryRetry": "Réessayer",
     "employerApplicationMessage": "Écrire un message",
     "employerApplicationMessageLabel": "Écrire un message à : {name}",
     "employerApplicationView": "Voir la candidature",

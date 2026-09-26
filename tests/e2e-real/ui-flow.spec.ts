@@ -24,7 +24,7 @@ import {
  * - wiersz `matches` wstawia operator (pipeline materializacji dopasowań = P1-03, otwarte),
  *   bo tylko dopasowany kandydat ma w panelu przycisk „Wyślij propozycję”;
  * - ofertę publikuje pracodawca przez te same RPC co kreator, pod sesją z przeglądarki
- *   (9 kroków kreatora ma własne E2E; tu liczy się przepływ zgłoszenia).
+ *   (9 kroków kreatora: `job-wizard.spec.ts`; tu liczy się przepływ zgłoszenia).
  *
  * Kontrole ujemne: E2E_REAL_MUTATION (scripts/test-e2e-real.mjs) — każda daje czerwony test.
  */
