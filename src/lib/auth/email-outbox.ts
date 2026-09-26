@@ -114,6 +114,28 @@ export async function failAuthEmail(pool: MailPool, delivery: AuthEmailDelivery,
   return result.rows[0]?.recorded === true;
 }
 
+export type AuthSendBudget = { granted: true } | { granted: false; retryAt: Date | null };
+
+/**
+ * Budżet okna dostawcy dla puli `auth` (0087 przez nakładkę `auth.take_send_budget`, 0136).
+ * Odmowa = okno pełne; `retryAt` = początek następnego okna.
+ */
+export async function takeAuthSendBudget(pool: MailPool, template: 'accountConfirmation' | 'passwordReset'): Promise<AuthSendBudget> {
+  const row = (await pool.query('SELECT granted, retry_at FROM auth.take_send_budget($1)', [template])).rows[0] as
+    { granted?: boolean; retry_at?: Date | string | null } | undefined;
+  if (row?.granted === false) {
+    const retryAt = row.retry_at ? new Date(row.retry_at) : null;
+    return { granted: false, retryAt: retryAt && !Number.isNaN(retryAt.getTime()) ? retryAt : null };
+  }
+  return { granted: true };
+}
+
+/** Odmowa budżetu: zlecenie wraca do kolejki bez zużycia próby (0136). */
+export async function deferAuthEmail(pool: MailPool, delivery: AuthEmailDelivery, retryAt: Date | null): Promise<boolean> {
+  const result = await pool.query('SELECT auth.defer_email($1,$2,$3) AS deferred', [delivery.id, delivery.lease_id, retryAt]);
+  return result.rows[0]?.deferred === true;
+}
+
 export async function expireAuthEmails(pool: MailPool): Promise<number> {
   return (await pool.query('SELECT auth.expire_emails() AS expired')).rows[0]?.expired ?? 0;
 }
