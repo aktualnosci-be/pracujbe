@@ -170,11 +170,20 @@ describe('powiązania UI', () => {
     expect(titleKeyForType('system', { kind: 'screening_review', status: 'rejected' }, 'job')).toBe(
       'itemScreeningRejected',
     );
+    // #497 (0201): pytanie opublikowanej oferty odrzucone = ukryte, osobny tytuł z prośbą o poprawkę.
+    expect(titleKeyForType('system', { kind: 'screening_review', status: 'hidden' }, 'job')).toBe(
+      'itemScreeningHidden',
+    );
+    // Kontrola ujemna: nieznany status nie dostaje tytułu decyzji.
+    expect(titleKeyForType('system', { kind: 'screening_review', status: 'unknown' }, 'job')).not.toMatch(
+      /^itemScreening/,
+    );
   });
 
   it('dziennik zna akcje audytu z migracji 0103, filtr kolejki domyślnie oczekujące', () => {
     expect(AUDIT_ACTION_KEY['screening_question.review_requested']).toBeDefined();
     expect(AUDIT_ACTION_KEY['screening_question.reviewed']).toBeDefined();
+    expect(AUDIT_ACTION_KEY['screening_question.hidden']).toBe('auditActionScreeningHidden');
     expect(parseScreeningReviewFilter('xxx')).toBe('pending');
     expect(parseScreeningReviewFilter('decided')).toBe('decided');
   });

@@ -316,6 +316,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
+  'screening_question.hidden': 'auditActionScreeningHidden',
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
 };

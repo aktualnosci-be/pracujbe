@@ -6841,6 +6841,159 @@ select pg_temp.assert(
   'SR497-9b oferta wstrzymana, pytanie w kolejce');
 
 -- ============================================================================
+-- SH497. Pytanie odrzucone PO publikacji oferty jest ukrywane (0201, #497, decyzja właściciela
+--        26.09.2026): oferta zostaje aktywna, pytanie znika z formularza, odpowiedź na nie jest
+--        pomijana bez błędu, firma nie widzi zapisanych odpowiedzi (wiersze zostają), prośba
+--        o poprawkę dla recruiter+ firmy, audyt bez treści, wznowienie nie jest blokowane.
+-- ============================================================================
+\set SHJOB   'f4970000-0000-0000-0000-0000000000b1'
+\set SHCAND  'f4970000-0000-0000-0000-0000000000c1'
+\set SHCAND2 'f4970000-0000-0000-0000-0000000000c2'
+\set SHCAND3 'f4970000-0000-0000-0000-0000000000c3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SHCAND','shcand@test.be','Sh Cand','{"role":"candidate","first_name":"Sh","last_name":"Cand","locale":"pl"}'),
+  (:'SHCAND2','shcand2@test.be','Sh Cand2','{"role":"candidate","first_name":"Sh","last_name":"Cand2","locale":"nl"}'),
+  (:'SHCAND3','shcand3@test.be','Sh Cand3','{"role":"candidate","first_name":"Sh","last_name":"Cand3","locale":"fr"}');
+select test_fixture.attest_candidates();
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'SHJOB', :'COMPA', :'EMPA', 'sh497-kierowca', 'Kierowca SH', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_screening_questions(job_id, position, type, required, prompt) values
+  (:'SHJOB', 0, 'yes_no', true, '{"pl": "Czy masz prawo jazdy C+E?"}'),
+  (:'SHJOB', 1, 'yes_no', true, '{"pl": "Czy jesteś w ciąży?", "nl": "Ben je zwanger?"}');
+select id as sh_q0 from public.job_screening_questions where job_id = :'SHJOB' and position = 0 \gset
+select id as sh_q1 from public.job_screening_questions where job_id = :'SHJOB' and position = 1 \gset
+select id as sh_rev from public.screening_question_reviews where job_id = :'SHJOB' \gset
+-- Stan jak po 0103 dla oferty opublikowanej wcześniej: aktywna, pytanie w kolejce.
+alter table public.jobs disable trigger trg_enforce_screening_review;
+update public.jobs set status = 'active', published_at = now() where id = :'SHJOB';
+alter table public.jobs enable trigger trg_enforce_screening_review;
+
+-- SH497-1: przed decyzją pytanie z kolejki jest w formularzu; kandydat odpowiada na oba.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select count(*) = 2 as ok from public.get_public_job_screening_questions(:'SHJOB') \gset sh1_
+select pg_temp.assert(:'sh1_ok'::boolean, 'SH497-1 przed decyzją formularz ma oba pytania');
+reset role;
+set role authenticated; set app.current_uid = :'SHCAND'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SHJOB'::uuid, 'sh-k1', null, 'immediate', null,
+  jsonb_build_object(:'sh_q0', true, :'sh_q1', false)) as shapp \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) = 2 as ok from public.application_screening_answers where application_id = :'shapp' \gset sh1b_
+select pg_temp.assert(:'sh1b_ok'::boolean, 'SH497-1b przed decyzją firma widzi obie odpowiedzi');
+reset role; reset app.current_uid;
+
+-- SH497-2: admin odrzuca pytanie aktywnej oferty → ukrycie: oferta aktywna, audyt bez treści,
+-- powiadomienie „hidden” dla recruiter+ (member go nie dostaje).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_screening_review(:'sh_rev'::uuid, 'rejected', 'Pytanie o ciążę — usuń je.');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'SHJOB') = 'active'
+  and (select status from public.screening_question_reviews where id = :'sh_rev') = 'rejected',
+  'SH497-2 oferta zostaje aktywna, przegląd odrzucony');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'screening_question.hidden'
+            and entity_type = 'screening_question_review' and entity_id = :'sh_rev'::uuid and actor_id = :'ADMIN'::uuid
+            and after_data->>'job_id' = :'SHJOB' and (after_data->>'position')::int = 1
+            and not (after_data ? 'prompt') and not (after_data ? 'reason')),
+  'SH497-2b audyt ukrycia: oferta, przegląd, pozycja — bez treści pytania i uzasadnienia');
+select pg_temp.assert(
+  exists (select 1 from public.notifications where profile_id = :'EMPA'::uuid and entity_id = :'SHJOB'::uuid
+            and type = 'system' and entity_type = 'job' and title = 'screening_question_hidden'
+            and data->>'kind' = 'screening_review' and data->>'status' = 'hidden')
+  and not exists (select 1 from public.notifications where profile_id = :'SQMEM'::uuid and entity_id = :'SHJOB'::uuid),
+  'SH497-2c prośba o poprawkę dla recruiter+ firmy, nie dla zwykłego członka');
+
+-- SH497-3: pytanie znika z formularza (także dla gościa).
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select array_agg(id::text) = array[:'sh_q0'] as ok from public.get_public_job_screening_questions(:'SHJOB') \gset sh3_
+select pg_temp.assert(:'sh3_ok'::boolean, 'SH497-3 ukryte pytanie nie trafia do formularza aplikowania');
+reset role;
+
+-- SH497-4: odpowiedź na ukryte pytanie pomijana bez błędu; ukryte wymagane już nie jest wymagane.
+set role authenticated; set app.current_uid = :'SHCAND2'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SHJOB'::uuid, 'sh-k2', null, null, null,
+  jsonb_build_object(:'sh_q0', true, :'sh_q1', true)) as shapp2 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SHCAND3'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SHJOB'::uuid, 'sh-k3', null, null, null,
+  jsonb_build_object(:'sh_q0', false)) as shapp3 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select array_agg(question_id::text) from public.application_screening_answers where application_id = :'shapp2') = array[:'sh_q0']
+  and (select array_agg(question_id::text) from public.application_screening_answers where application_id = :'shapp3') = array[:'sh_q0'],
+  'SH497-4 aplikacje przyjęte, zapisana tylko odpowiedź na widoczne pytanie');
+-- Gość: walidacja przy zgłoszeniu i potwierdzeniu (record_screening_answers bez aplikacji).
+select public.record_screening_answers(null, :'SHJOB'::uuid, jsonb_build_object(:'sh_q0', true, :'sh_q1', true));
+select public.record_screening_answers(null, :'SHJOB'::uuid, jsonb_build_object(:'sh_q0', true));
+select pg_temp.expect_error(
+  format('select public.record_screening_answers(null, %L::uuid, %L::jsonb)', :'SHJOB',
+         jsonb_build_object(:'sh_q0', true, 'f4970000-0000-0000-0000-00000000dead', true)),
+  'VALIDATION_FAILED', 'SH497-4b klucz spoza pytań oferty nadal odrzucony');
+select pg_temp.expect_error(
+  format('select public.record_screening_answers(null, %L::uuid, %L::jsonb)', :'SHJOB', '{}'),
+  'SCREENING_ANSWER_REQUIRED: ' || :'sh_q0', 'SH497-4c widoczne pytanie wymagane nadal wymagane');
+
+-- SH497-5: firma nie widzi odpowiedzi na ukryte pytanie; kandydat widzi swoje; wiersze zostają.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select array_agg(question_id::text) = array[:'sh_q0'] as ok
+  from public.application_screening_answers where application_id = :'shapp' \gset sh5_
+select pg_temp.assert(:'sh5_ok'::boolean, 'SH497-5 firma widzi tylko odpowiedź na widoczne pytanie');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SHCAND'; select pg_temp.assert_client_role();
+select count(*) = 2 as ok from public.application_screening_answers where application_id = :'shapp' \gset sh5b_
+select pg_temp.assert(:'sh5b_ok'::boolean, 'SH497-5b kandydat nadal widzi obie swoje odpowiedzi');
+select pg_temp.assert(not public.screening_answer_hidden(:'SHJOB'::uuid, 'yes_no', '{"pl": "Czy jesteś w ciąży?", "nl": "Ben je zwanger?"}'::jsonb, '[]'::jsonb),
+  'SH497-5c test ukrycia nie ujawnia decyzji osobie spoza firmy');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.application_screening_answers where application_id = :'shapp') = 2,
+  'SH497-5d odpowiedź na ukryte pytanie zostaje w bazie (do decyzji o retencji)');
+
+-- SH497-6: wstrzymanie i wznowienie nie są blokowane przez ukryte pytanie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'SHJOB'::uuid, 'pause');
+select public.set_job_status(:'SHJOB'::uuid, 'resume');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.jobs where id = :'SHJOB') = 'active',
+  'SH497-6 wznowienie oferty z ukrytym pytaniem przechodzi');
+
+-- SH497-7 (kontrole ujemne, cofnięte): bez warunku ukrycia test wykrywa regresję.
+begin;
+drop policy application_screening_answers_select on public.application_screening_answers;
+create policy application_screening_answers_select on public.application_screening_answers
+  for select to authenticated
+  using (exists (select 1 from public.applications a where a.id = application_id
+                   and (a.candidate_id = auth.uid() or public.is_job_manager(a.job_id))));
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) = 2 as leak from public.application_screening_answers where application_id = :'shapp' \gset sh7a_
+rollback;
+select pg_temp.assert(:'sh7a_leak'::boolean, 'SH497-7 kontrola ujemna: polityka z 0093 pokazuje firmie odpowiedź na ukryte pytanie');
+begin;
+update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
+  where id = :'sh_rev';
+set local role anon; select pg_temp.assert_client_role();
+select count(*) = 2 as leak from public.get_public_job_screening_questions(:'SHJOB') \gset sh7b_
+rollback;
+select pg_temp.assert(:'sh7b_leak'::boolean, 'SH497-7b kontrola ujemna: bez odrzucenia pytanie wraca do formularza');
+begin;
+update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
+  where id = :'sh_rev';
+select pg_temp.expect_error(
+  format('select public.record_screening_answers(null, %L::uuid, %L::jsonb)', :'SHJOB', jsonb_build_object(:'sh_q0', true)),
+  'SCREENING_ANSWER_REQUIRED: ' || :'sh_q1', 'SH497-7c kontrola ujemna: nieukryte pytanie wymagane blokuje aplikację');
+rollback;
+begin;
+alter table public.jobs disable trigger trg_enforce_screening_review;
+update public.jobs set status = 'paused' where id = :'SHJOB';
+alter table public.jobs enable trigger trg_enforce_screening_review;
+update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
+  where id = :'sh_rev';
+select pg_temp.expect_error(format('update public.jobs set status = %L where id = %L', 'active', :'SHJOB'),
+  'SCREENING_REVIEW_REQUIRED: 1', 'SH497-7d kontrola ujemna: pytanie bez decyzji nadal blokuje wznowienie');
+rollback;
+
+-- ============================================================================
 -- CM45 (#45, etap 2, 0101): dowód zgody, budżet na odbiorcę przy kolejkowaniu,
 -- rezerwacja kampanii „rewizja + odbiorca”. Tokeny wypisania (cudzy/wygasły/zmieniony)
 -- są podpisem HMAC w aplikacji — kontrole ujemne w tests/unit/email-unsubscribe.test.ts;
