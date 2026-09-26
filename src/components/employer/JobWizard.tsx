@@ -85,6 +85,8 @@ import {
   updateJobDraft,
   updatePublishedJob,
 } from '@/lib/actions/jobs';
+import { jobCityAssist } from '@/lib/actions/job-location';
+import type { JobCityAssist } from '@/lib/locations/job-city';
 import { isLocale, routing, type Locale } from '@/i18n/routing';
 import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
 import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
@@ -532,6 +534,26 @@ export function JobWizard({
   }
 
   const [step, setStep] = React.useState<WizardStep>(1);
+
+  // P1-10: podpowiedź miasta ze słownika miejscowości (rozpoznana nazwa + propozycje).
+  // Tylko informacja — wpisany tekst zostaje, miejscowość do filtrów ustala baza przy zapisie.
+  const [cityAssist, setCityAssist] = React.useState<JobCityAssist | null>(null);
+  const cityRequest = React.useRef(0);
+  const cityValue = values.city;
+  React.useEffect(() => {
+    const request = ++cityRequest.current;
+    if (step !== 3 || cityValue.trim() === '') {
+      setCityAssist(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      jobCityAssist({ city: cityValue, locale })
+        .then((result) => { if (request === cityRequest.current) setCityAssist(result); })
+        .catch(() => { if (request === cityRequest.current) setCityAssist({ status: 'error' }); });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [cityValue, locale, step]);
+
   const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
   // #363: kod błędu z serwera → własny komunikat (zamiast zawsze „Nie udało się zapisać”).
@@ -1092,10 +1114,23 @@ export function JobWizard({
                     id={domId('city')}
                     placeholder={t('cityPlaceholder')}
                     autoComplete="address-level2"
+                    list={`${domId('city')}-suggestions`}
                     aria-invalid={errors.city ? true : undefined}
-                    aria-describedby={errorDescription('city')}
+                    aria-describedby={[errorDescription('city'), `${domId('city')}-hint`].filter(Boolean).join(' ')}
                     {...register('city')}
                   />
+                  <datalist id={`${domId('city')}-suggestions`}>
+                    {(cityAssist?.status === 'ok' ? cityAssist.suggestions : []).map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                  <p id={`${domId('city')}-hint`} className={FORM_HINT} role="status" aria-live="polite">
+                    {cityAssist?.status === 'ok' && values.city.trim() !== ''
+                      ? cityAssist.match
+                        ? t('cityRecognized', { name: cityAssist.match.name })
+                        : t('cityNotRecognized')
+                      : null}
+                  </p>
                   <FieldError name="city" />
                 </div>
                 <div className={FORM_FIELD}>

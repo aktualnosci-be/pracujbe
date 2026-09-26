@@ -1442,6 +1442,8 @@
     "startDateLabel": "Startdatum",
     "cityLabel": "Stad",
     "cityPlaceholder": "bijv. Antwerpen",
+    "cityRecognized": "Herkende plaats: {name}. De vacature verschijnt bij de filter van deze stad, ongeacht de schrijfwijze.",
+    "cityNotRecognized": "Deze naam staat niet in onze lijst met plaatsen. De vacature toont de ingevoerde naam, maar de stadsfilter vindt ze alleen met dezelfde schrijfwijze.",
     "regionLabel": "Regio",
     "regionPlaceholder": "bijv. Vlaanderen",
     "addressLabel": "Adres",

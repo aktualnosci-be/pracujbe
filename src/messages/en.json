@@ -1442,6 +1442,8 @@
     "startDateLabel": "Start date",
     "cityLabel": "City",
     "cityPlaceholder": "e.g. Antwerp",
+    "cityRecognized": "Recognised place: {name}. The job will appear under this city's filter whatever the spelling.",
+    "cityNotRecognized": "This name is not in our list of places. The job will show the name as typed, but the city filter will only find it by the same spelling.",
     "regionLabel": "Region",
     "regionPlaceholder": "e.g. Flanders",
     "addressLabel": "Address",
