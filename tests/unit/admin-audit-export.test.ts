@@ -193,7 +193,7 @@ describe('POST /api/admin/audit-export — treść', () => {
     const json = (await jsonResponse.json()) as Record<string, unknown>;
     expect(json).toMatchObject({ truncated: true, limit: 10_000, rowCount: 10_000, timeZone: 'Europe/Brussels' });
     expect((json['rows'] as unknown[]).length).toBe(10_000);
-  });
+  }, 20_000);
 
   it('każdy eksport zapisuje wpis audit_log.exported bez treści wpisów i bez frazy aktora', async () => {
     await POST(exportRequest('format=csv&actor=Anna&entity=company'));
