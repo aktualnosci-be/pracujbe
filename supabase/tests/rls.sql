@@ -4048,6 +4048,52 @@ select pg_temp.expect_error('select * from public.create_additional_company(''A'
   'permission denied', 'TM403-12b anon bez EXECUTE na kolejnej firmie');
 reset role;
 
+-- TM403-13 (#893, migracja 0300 — numer tymczasowy): limit 50 oczekujących zaproszeń
+-- liczy WYŁĄCZNIE ważne (jak panel `get_company_invitations`), nie dawno wygasłe.
+\set TMIO 'e8700000-0000-0000-0000-0000000000d1'
+\set TMIC 'e8700000-0000-0000-0000-0000000000f3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TMIO','tmio@test.be','Ivo O','{"role":"employer","first_name":"Ivo","last_name":"Owner","locale":"pl"}');
+update auth.users set email_verified = true where id = :'TMIO';
+insert into public.companies(id,name,status) values (:'TMIC','Firma TM Limit','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'TMIC',:'TMIO','owner',true);
+-- 50 dawno wygasłych oczekujących zaproszeń — dane testowe wstawione bezpośrednio (nie przez RPC),
+-- odtwarzające stan „nagromadzonych, niesprzątniętych" zaproszeń z odtworzenia w #893.
+insert into public.company_invitations(company_id, email, role, invited_by, locale, status, expires_at)
+  select :'TMIC', ('wygasly' || g || '@test.be')::public.citext, 'member', :'TMIO', 'pl', 'pending',
+         now() - interval '1 minute'
+  from generate_series(1, 50) as g;
+select pg_temp.assert(
+  (select count(*) from public.company_invitations where company_id = :'TMIC' and status = 'pending') = 50,
+  'TM403-13 przygotowano 50 wygasłych oczekujących zaproszeń');
+set role authenticated; set app.current_uid = :'TMIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 0,
+  'TM403-13b panel nie pokazuje żadnego z nich (spójne z filtrem expires_at > now())');
+-- Nowe zaproszenie mimo 50 wygasłych w bazie: przed poprawką RPC liczyło je razem
+-- z ważnymi i zwracało INVITATION_LIMIT_REACHED (kontrola ujemna: cofnięcie 0300
+-- przywraca ten błąd — `count(*) where status='pending'` bez `expires_at > now()`).
+select invitation_id as tmilinv, created as tmilcreated
+  from public.invite_company_member(:'TMIC', 'swiezy@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+select pg_temp.assert(:'tmilcreated'::boolean,
+  'TM403-13c nowe zaproszenie mimo 50 wygasłych — limit liczy tylko ważne (#893)');
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 1,
+  'TM403-13d panel pokazuje dokładnie nowe zaproszenie');
+reset role; reset app.current_uid;
+-- Limit nadal egzekwowany, gdy zaproszenia są REALNIE ważne (nie tylko przy wygasłych).
+update public.company_invitations set expires_at = now() + interval '14 days'
+  where company_id = :'TMIC' and email like 'wygasly%@test.be';
+set role authenticated; set app.current_uid = :'TMIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 51,
+  'TM403-13e po odświeżeniu ważności 51 zaproszeń jest widocznych');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMIC' || ''', ''kolejny@test.be'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
+  'INVITATION_LIMIT_REACHED', 'TM403-13f limit nadal działa przy 51 ważnych zaproszeniach');
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- UN45 (#45, 0087): wypisanie, ponowna kontrola zgody przy claimie, atomowy budżet.
 -- ============================================================================
