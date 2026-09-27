@@ -489,6 +489,9 @@
       "fr": "French",
       "en": "English"
     },
+    "machineTranslationNotice": "Automatic translation. Original language: {language}.",
+    "manualTranslationNotice": "Translated content. Original language: {language}.",
+    "translationOriginalLink": "View the original",
     "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
   },
   "landing": {

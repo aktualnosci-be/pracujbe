@@ -15282,6 +15282,296 @@ select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
 rollback;
 reset role; reset app.current_uid;
 
+-- =============================================================================
+-- TM159 (#33, 0159): odczyt przekładu oferty na publicznej stronie.
+-- `get_public_job_machine_translation` zwraca przekład (anon) wyłącznie dla oferty publicznej,
+-- bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola wyświetlane. Kontrola ujemna
+-- TM159-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji;
+-- TM159-7N: bez warunku „strona pokazuje treść default_locale” przekład nie pasuje do tekstu.
+-- =============================================================================
+\echo '--- TM159 public job machine translation ---'
+\set TMCO 'f2190000-0000-0000-0000-0000000000c1'
+\set TMJ1 'f2190000-0000-0000-0000-0000000000a1'
+reset role; reset app.current_uid;
+begin;
+set constraints all immediate;
+-- Izolacja: zadania z wcześniejszych sekcji nie trafiają do claimu tej sekcji (cofane rollbackiem).
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.companies(id, name, status) values (:'TMCO', 'Firma TM159', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TMJ1', :'TMCO', 'tm219-oferta', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits, meta_title)
+  values (:'TMJ1', 'nl', 'Magazijnmedewerker', 'Werk vanaf 8:00.', array['Orders verzamelen'], array['Parking'],
+          'Meta NL');
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TMJ1', 'nl', 'mandatory', 0, 'VCA-certificaat');
+update public.jobs set status = 'active', published_at = now() where id = :'TMJ1';
+create temp table tm219_claim on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tm_en, lease_id as tm_en_lease, fields::text as tm_f1
+  from tm219_claim where entity_id = :'TMJ1' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tm_en', :'tm_en_lease',
+  (:'tm_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
+    'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
+    'benefits.0', 'Parking', 'meta_title', 'Meta EN')) = 'applied', 'TM159-0 przekład en zastosowany');
+reset role;
+
+-- TM159-1: anon dostaje przekład en bieżącej rewizji — tylko pola wyświetlane (bez benefits/meta).
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select source_locale = 'nl' and origin = 'ai'
+    and fields->>'title' = 'Warehouse worker'
+    and fields->>'responsibilities.0' = 'Order picking'
+    and fields->>'requirements_mandatory.0' = 'VCA certificate'
+    and not (fields ? 'benefits.0') and not (fields ? 'meta_title')
+  from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-1 anon: przekład en bieżącej rewizji, tylko pola wyświetlane');
+-- TM159-2: brak przekładu (fr), język źródła (nl), język spoza serwisu = brak wiersza.
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'fr'))
+  and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'nl'))
+  and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'de')),
+  'TM159-2 brak przekładu / język źródła / język spoza serwisu = brak wiersza');
+reset role;
+
+-- TM159-3: własne tłumaczenie en (tekst człowieka) ma pierwszeństwo.
+savepoint tm_human;
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TMJ1', 'en', 'Warehouse operative', 'Human text.');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-3 własne tłumaczenie en: przekład AI nie jest zwracany');
+reset role;
+rollback to savepoint tm_human;
+
+-- TM159-4: oferta niepubliczna (wstrzymana) i firma zawieszona = brak wiersza.
+savepoint tm_paused;
+update public.jobs set status = 'paused' where id = :'TMJ1';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-4 oferta wstrzymana: brak przekładu');
+reset role;
+rollback to savepoint tm_paused;
+savepoint tm_suspended;
+update public.companies set status = 'suspended' where id = :'TMCO';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-4b firma zawieszona: brak przekładu');
+reset role;
+rollback to savepoint tm_suspended;
+
+-- TM159-5: edycja treści = nowa rewizja, przekład en nieaktualny — nie jest zwracany.
+update public.job_translations set description = 'Werk vanaf 22:00.' where job_id = :'TMJ1' and locale = 'nl';
+select pg_temp.assert((select is_stale from public.translation_documents
+  where entity_type = 'job' and entity_id = :'TMJ1' and locale = 'en'), 'TM159-5a przekład en oznaczony jako nieaktualny');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-5 po edycji przekład starej treści nie jest zwracany');
+reset role;
+
+-- TM159-6: granty — tylko odczyt RPC; tabela przekładów nadal bez dostępu dla klienta.
+select pg_temp.assert(has_function_privilege('anon', 'public.get_public_job_machine_translation(uuid, text)', 'execute')
+  and not has_table_privilege('anon', 'public.translation_documents', 'select')
+  and not has_table_privilege('authenticated', 'public.translation_documents', 'select'),
+  'TM159-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
+
+-- TM159-7: strona pokazuje tekst, z którego powstała rewizja. Oferta 2 (default_locale nl)
+-- ma tłumaczenie tylko w fr — `get_public_job` pokazuje dla en tekst fr, a rewizja powstała
+-- z `jobs.title` (nl). Przekład nl→en nie pasuje do wyświetlanego oryginału = brak wiersza.
+-- Bez tłumaczeń wcale strona pokazuje `jobs.title` = treść rewizji → przekład jest zwracany.
+\set TMJ2 'f2190000-0000-0000-0000-0000000000a2'
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TMJ2', :'TMCO', 'tm219-oferta-2', 'Heftruckchauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TMJ2', 'fr', 'Cariste', 'Travail dès 6:00.');
+update public.jobs set status = 'active', published_at = now() where id = :'TMJ2';
+create temp table tm219_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tm2_en, lease_id as tm2_en_lease, fields::text as tm2_f
+  from tm219_claim2 where entity_id = :'TMJ2' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tm2_en', :'tm2_en_lease',
+  (:'tm2_f'::jsonb) || jsonb_build_object('title', 'Forklift driver')) = 'applied',
+  'TM159-7a przekład en oferty 2 (z jobs.title) zastosowany');
+reset role;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7 strona pokazuje tłumaczenie fr (brak default_locale): przekład nl→en nie jest zwracany');
+reset role;
+savepoint tm_no_translations;
+delete from public.job_translations where job_id = :'TMJ2';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select fields->>'title' = 'Forklift driver'
+  from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7b oferta bez tłumaczeń (strona pokazuje jobs.title): przekład jest zwracany');
+reset role;
+rollback to savepoint tm_no_translations;
+
+-- TM159-7N (kontrola ujemna): definicja sprzed warunku (0159 bez sprawdzenia, że strona
+-- pokazuje treść `default_locale`) nakłada przekład nl→en na stronę z tekstem fr.
+savepoint tm_neg_src;
+create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
+returns table (source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.companies c on c.id = j.company_id
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = p_job_id and public.is_supported_locale(p_locale) and j.status = 'active'
+     and j.deleted_at is null and (j.expires_at is null or j.expires_at > now()) and not j.is_demo
+     and c.status = 'verified' and c.deleted_at is null and s.is_active
+     and d.revision_id = s.current_revision_id and not d.is_stale
+     and r.source_locale = j.default_locale and p_locale <> r.source_locale
+     and not exists (select 1 from public.job_translations jt where jt.job_id = j.id and jt.locale = p_locale)
+     and not exists (select 1 from public.job_requirements q where q.job_id = j.id and q.locale = p_locale)
+   limit 1;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7N kontrola ujemna: stara definicja nakłada przekład niepasujący do tekstu fr');
+reset role;
+rollback to savepoint tm_neg_src;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7Nb poprawna funkcja znów odmawia');
+reset role;
+
+-- TM159-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
+-- przekład starej treści (TM159-5 wykrywa taką regresję).
+savepoint tm_neg;
+create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
+returns table (source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = p_job_id and j.status = 'active' and s.is_active
+   limit 1;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-N kontrola ujemna: bez warunku rewizji zwracany jest przekład starej treści');
+reset role;
+rollback to savepoint tm_neg;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- AV157. Stan oferty w historii kandydata (0157): `get_applied_jobs_display` i
+--        `get_offered_jobs_display` zwracają `job_availability` (available/expired/closed/
+--        unavailable), a `slug` WYŁĄCZNIE dla oferty publicznej — panel nie linkuje do strony
+--        publicznej, która odpowiada 404. Tytuł i firma zostają dla każdego stanu.
+--        Kontrola ujemna: definicja sprzed 0157 (slug bez warunku) daje link do zamkniętej oferty.
+-- ============================================================================
+begin;
+reset role; reset app.current_uid;
+\set CANDAV 'e2060000-0000-0000-0000-00000000000c'
+\set RECAV  'e2060000-0000-0000-0000-0000000000a1'
+\set COMPAV 'e2060000-0000-0000-0000-0000000000f1'
+\set JAV1   'e2060000-0000-0000-0000-0000000000b1'
+\set JAV2   'e2060000-0000-0000-0000-0000000000b2'
+\set JAV3   'e2060000-0000-0000-0000-0000000000b3'
+\set JAV4   'e2060000-0000-0000-0000-0000000000b4'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDAV','candav@test.be','Ada V','{"role":"candidate","first_name":"Ada","last_name":"V","locale":"pl"}'),
+  (:'RECAV','recav@test.be','Rik V','{"role":"employer","first_name":"Rik","last_name":"V","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'COMPAV','Firma AV','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPAV',:'RECAV','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JAV1',:'COMPAV','av-otwarta','Otwarta AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV2',:'COMPAV','av-zamknieta','Zamknięta AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV3',:'COMPAV','av-po-terminie','Po terminie AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV4',:'COMPAV','av-wstrzymana','Wstrzymana AV','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDAV', false);
+
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JAV1'::uuid, 'av-app-1', null, null, null) is not null as av1 \gset
+select public.apply_to_job(:'JAV2'::uuid, 'av-app-2', null, null, null) is not null as av2 \gset
+select public.apply_to_job(:'JAV3'::uuid, 'av-app-3', null, null, null) is not null as av3 \gset
+select public.apply_to_job(:'JAV4'::uuid, 'av-app-4', null, null, null) is not null as av4 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECAV'; select pg_temp.assert_client_role();
+select public.send_offer(:'JAV2'::uuid, :'CANDAV'::uuid, 'av-offer-2', null, null) is not null as avo2 \gset
+reset role; reset app.current_uid;
+
+-- Stany po aplikacji: JAV2 zamknięta, JAV3 z terminem = now() (bez crona expire_due_jobs),
+-- JAV4 wstrzymana.
+update public.jobs set status = 'closed' where id = :'JAV2';
+update public.jobs set expires_at = now() where id = :'JAV3';
+update public.jobs set status = 'paused' where id = :'JAV4';
+
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+-- AV1: klasyfikacja każdego stanu.
+select pg_temp.assert(
+  (select string_agg(job_availability, ',' order by job_id) from public.get_applied_jobs_display('pl'))
+    = 'available,closed,expired,unavailable',
+  'AV1 job_availability: otwarta=available, wstrzymana=unavailable, zamknięta=closed, po terminie=expired');
+-- AV2: slug tylko dla oferty publicznej; tytuł i firma dla każdego stanu.
+select pg_temp.assert(
+  (select slug from public.get_applied_jobs_display('pl') where job_id = :'JAV1') = 'av-otwarta',
+  'AV2 oferta publiczna ma slug');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 1,
+  'AV2b zamknięta/po terminie/wstrzymana bez slugu (brak linku do 404)');
+select pg_temp.assert(
+  (select bool_and(title <> '' and company_name = 'Firma AV') from public.get_applied_jobs_display('pl')),
+  'AV2c tytuł i firma zostają dla każdego stanu');
+-- AV3: slug jest dokładnie wtedy, gdy strona publiczna istnieje (get_public_job).
+select pg_temp.assert(
+  exists (select 1 from public.get_public_job('av-otwarta', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-zamknieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-po-terminie', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-wstrzymana', 'pl')),
+  'AV3 slug zwracamy dokładnie dla ofert, które get_public_job pokazuje');
+-- AV4: historia propozycji — ten sam kontrakt.
+select pg_temp.assert(
+  (select job_availability = 'closed' and slug is null and title = 'Zamknięta AV'
+     from public.get_offered_jobs_display('pl') where job_id = :'JAV2'),
+  'AV4 get_offered_jobs_display: zamknięta oferta bez slugu, z tytułem');
+reset role; reset app.current_uid;
+
+-- AV5: firma zawieszona → unavailable (strona publiczna wymaga firmy verified).
+update public.companies set status = 'suspended' where id = :'COMPAV';
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select job_availability = 'unavailable' and slug is null
+     from public.get_applied_jobs_display('pl') where job_id = :'JAV1'),
+  'AV5 oferta aktywna firmy zawieszonej = unavailable, bez slugu');
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPAV';
+
+-- AV6: granty — tylko authenticated.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_offered_jobs_display(text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_offered_jobs_display(text)', 'EXECUTE'),
+  'AV6 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- AV-N (kontrola ujemna): slug bez warunku dostępności (jak przed 0157) → link do zamkniętej
+-- oferty; AV2b wykrywa regresję.
+savepoint av_neg;
+create or replace function public.candidate_job_availability(
+  p_status public.job_status, p_deleted_at timestamptz, p_expires_at timestamptz,
+  p_company_status public.company_status, p_company_deleted_at timestamptz
+) returns text language sql stable as $$ select 'available'::text $$;
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 4,
+  'AV-N bez klasyfikacji zamknięta oferta dostaje link — AV2b wykrywa regresję');
+reset role; reset app.current_uid;
+rollback to savepoint av_neg;
+rollback;
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- AV157. Stan oferty w historii kandydata (0157): `get_applied_jobs_display` i
 --        `get_offered_jobs_display` zwracają `job_availability` (available/expired/closed/

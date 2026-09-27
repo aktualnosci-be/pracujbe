@@ -489,6 +489,9 @@
       "fr": "Frans",
       "en": "Engels"
     },
+    "machineTranslationNotice": "Automatische vertaling. Oorspronkelijke taal: {language}.",
+    "manualTranslationNotice": "Vertaalde inhoud. Oorspronkelijke taal: {language}.",
+    "translationOriginalLink": "Bekijk het origineel",
     "similarJobsLoadError": "Vergelijkbare vacatures konden niet worden geladen. Deze vacature en solliciteren werken gewoon."
   },
   "landing": {
