@@ -22,7 +22,18 @@ export function JobAvailabilityNote({
   availability: JobAvailability | null | undefined;
   className?: string;
 }): React.JSX.Element | null {
-  const t = useTranslations('dashboard');
+  // Oferta publiczna i stan nieznany nic nie renderują — bez sięgania po kontekst tłumaczeń.
   if (!availability || availability === 'available') return null;
+  return <JobAvailabilityTag availability={availability} className={className} />;
+}
+
+function JobAvailabilityTag({
+  availability,
+  className,
+}: {
+  availability: Exclude<JobAvailability, 'available'>;
+  className?: string;
+}): React.JSX.Element {
+  const t = useTranslations('dashboard');
   return <span className={cn(TAG, className)}>{t(KEY[availability])}</span>;
 }
