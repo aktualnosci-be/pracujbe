@@ -9,6 +9,7 @@ import {
   toFacetItem,
 } from '@/components/public/job-filters';
 import { routing, type Locale } from '@/i18n/routing';
+import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import { getJobFilterFacets, getJobs } from '@/lib/jobs';
 import { localizeLocationFacets, resolveCityFilters } from '@/lib/locations/city-aliases';
@@ -23,9 +24,11 @@ const RATE_LIMIT_WINDOW_SECONDS = 60;
 /**
  * Krótki cache + single-flight (#595): te same filtry (kanoniczny klucz z parametrów zapytania
  * do `getJobFilterFacets`/`getJobs`) w tym oknie dostają jeden, wspólny wynik zamiast osobnej
- * agregacji na każde żądanie — nawet bez sesji/cookies (endpoint jest bezstanowy dla gościa,
- * patrz brak `viewer` w wywołaniu niżej). Ograniczona liczba wpisów — dowolny tekst wyszukiwania
- * nie może rozrastać cache bez końca.
+ * agregacji na każde żądanie. Klucz uwzględnia też zweryfikowanego kandydata (#874) — inaczej
+ * wynik jednego kandydata (bez ofert firm, które zablokował) mógłby trafić do innego kandydata
+ * albo do gościa, a licznik dynamicznych facetów byłby zawyżony względem SSR/listy po
+ * zatwierdzeniu filtra. Ograniczona liczba wpisów — dowolny tekst wyszukiwania nie może
+ * rozrastać cache bez końca.
  */
 const FACETS_CACHE_TTL_MS = 30_000;
 const FACETS_CACHE_MAX_ENTRIES = 300;
@@ -38,14 +41,23 @@ const facetsCache = createTtlSingleFlightCache<unknown>({
  * Stabilny klucz cache o STAŁYM rozmiarze (kolejność kluczy obiektu nie wpływa na trafienie).
  * Parametry gościa mogą zawierać dowolnie długi tekst (`keyword`, `city`, lista `location`) —
  * skrót SHA-256 zamiast surowego JSON-a ogranicza pamięć na wpis niezależnie od długości wejścia.
+ * `candidateId` (#874) wchodzi do tego samego skrótu — gość (`null`) i każdy kandydat mają
+ * osobny wpis, więc blokady firm jednego konta nigdy nie trafiają do wyniku innej sesji.
  */
-function facetsCacheKey(params: Record<string, unknown>): string {
-  const canonical = JSON.stringify(params, (_key, value) =>
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? Object.fromEntries(
-          Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
-        )
-      : value,
+function facetsCacheKey(
+  params: Record<string, unknown>,
+  candidateId: string | null,
+): string {
+  const canonical = JSON.stringify(
+    { candidateId, params },
+    (_key, value) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+              a.localeCompare(b),
+            ),
+          )
+        : value,
   );
   return createHash('sha256').update(canonical).digest('hex');
 }
@@ -105,11 +117,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       ? { since: new Date(Date.now() - days * 86_400_000).toISOString() }
       : {}),
   };
-  // Klucz cache = dokładnie parametry zapytania (`raw`), z których w sposób deterministyczny
+  // #97/#874: ten sam kandydat co SSR listy ofert — baza pomija oferty firm, które zablokował,
+  // więc dynamiczne facety po zmianie filtra są spójne z wynikiem po zatwierdzeniu filtra.
+  // Gość/pracodawca/admin/brak konfiguracji → `null` (wynik publiczny, jak dotychczas).
+  const candidateId = await readCandidateViewerId();
+  const viewer = { candidateId };
+  // Klucz cache = parametry zapytania (`raw`) + kandydat, z których w sposób deterministyczny
   // wynikają `params`/`filters`/`cityFilters` niżej — nie zawiera nic obliczonego przy
-  // żądaniu (np. znacznika czasu), więc te same filtry trafiają w to samo trafienie.
-  const facets = await facetsCache.run(facetsCacheKey(raw), async () => {
-    const databaseFacets = await getJobFilterFacets(params);
+  // żądaniu (np. znacznika czasu), więc te same filtry i ten sam kandydat trafiają w to samo
+  // trafienie, a inny kandydat/gość nigdy nie dostaje cudzego, spersonalizowanego wpisu.
+  const facets = await facetsCache.run(facetsCacheKey(raw, candidateId), async () => {
+    const databaseFacets = await getJobFilterFacets(params, viewer);
     return databaseFacets
       ? {
           ...databaseFacets,
@@ -121,13 +139,16 @@ export async function GET(request: Request): Promise<NextResponse> {
         }
       : buildDemoFacets(
           (
-            await getJobs({
-              locale,
-              keyword: params.keyword,
-              ...cityFilters.cityQuery,
-              page: 1,
-              pageSize: 100,
-            })
+            await getJobs(
+              {
+                locale,
+                keyword: params.keyword,
+                ...cityFilters.cityQuery,
+                page: 1,
+                pageSize: 100,
+              },
+              viewer,
+            )
           ).jobs.map(toFacetItem),
           { ...filters, locations: cityFilters.displayLocations },
         );
