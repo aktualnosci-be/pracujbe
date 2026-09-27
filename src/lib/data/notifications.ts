@@ -88,7 +88,7 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
-/** Decyzja admina o stronie WWW/logo firmy (0204): `system` + `data.kind = 'company_links'`. */
+/** Decyzja admina o stronie WWW/logo firmy (0156): `system` + `data.kind = 'company_links'`. */
 const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
   approved: 'itemCompanyLinksApproved',
   rejected: 'itemCompanyLinksRejected',

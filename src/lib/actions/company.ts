@@ -39,7 +39,7 @@ import {
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
  *   - `updateCompanyLinks` — zgłasza stronę WWW i adres logo (#112); nowy adres czeka na
- *                        decyzję admina (RPC `submit_company_links`, 0204), NIE cofa weryfikacji.
+ *                        decyzję admina (RPC `submit_company_links`, 0156), NIE cofa weryfikacji.
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
  *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
  *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
@@ -58,7 +58,7 @@ export type CreateCompanyResult =
 export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
-/** Wynik zgłoszenia linków firmy (0204): czeka na admina / weszło od razu / bez zmian. */
+/** Wynik zgłoszenia linków firmy (0156): czeka na admina / weszło od razu / bez zmian. */
 export type CompanyLinksOutcome = 'pending' | 'applied' | 'unchanged';
 export type UpdateCompanyLinksResult =
   | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
@@ -369,7 +369,7 @@ export async function updateCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Zgłasza stronę WWW i adres logo aktywnej firmy (#112) — od 0204 z zatwierdzaniem przez admina
+ * Zgłasza stronę WWW i adres logo aktywnej firmy (#112) — od 0156 z zatwierdzaniem przez admina
  * portalu. Osobna akcja od `updateCompany`: te pola NIE cofają weryfikacji firmy (w
  * przeciwieństwie do nazwy/VAT — `protect_company_verification`, 0072). Tylko owner/admin firmy;
  * RPC `submit_company_links` (pod sesją, SECURITY DEFINER) sprawdza rolę drugi raz, waliduje

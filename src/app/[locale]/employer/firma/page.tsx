@@ -268,7 +268,7 @@ export default async function EmployerCompanyPage({
                 </div>
               </section>
 
-              {/* Strona WWW i logo (#112) — nie cofa weryfikacji; nowy adres zatwierdza admin portalu (0204). */}
+              {/* Strona WWW i logo (#112) — nie cofa weryfikacji; nowy adres zatwierdza admin portalu (0156). */}
               <section className={PAPER}>
                 <h2 className={H2_EXTENDED}>{t('linksTitle')}</h2>
                 <p className={INTRO}>{t('linksSubtitle')}</p>

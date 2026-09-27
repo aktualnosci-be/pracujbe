@@ -43,7 +43,7 @@ import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
  * (`/admin/firmy/[id]` — dane, członkowie, oferty, #310) + akcje weryfikacji/odrzucenia/
  * zawieszenia (CompanyStatusActions → dialog potwierdzenia z danymi firmy → RPC
  * `admin_set_company_status`, #310). Filtr `awaiting` = kolejka weryfikacji (`unverified` +
- * `pending`, #307), filtr `links` = strona WWW/logo do zatwierdzenia (0204). Wyszukiwanie po nazwie/VAT/KBO/e-mailu i stronicowanie kursorem (#418),
+ * `pending`, #307), filtr `links` = strona WWW/logo do zatwierdzenia (0156). Wyszukiwanie po nazwie/VAT/KBO/e-mailu i stronicowanie kursorem (#418),
  * parametry w URL (`?status=&q=&cursor=`). Daty w Europe/Brussels (#421). Po zmianie statusu
  * fokus na nagłówku wiersza albo strony (#415). Błąd odczytu → jawny stan błędu (#311). Odczyt service-rolem
  * po potwierdzeniu roli admina w layoucie. NOINDEX + `force-dynamic` (dziedziczone z layoutu).

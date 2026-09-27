@@ -14891,8 +14891,8 @@ select pg_temp.assert(
   (select website is null and logo_url is null from public.companies where id = :'COMPCL'),
   'CL141-1c nieudane próby nie zmieniły danych');
 
--- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki. Od 0204
--- klient nie zapisuje linków wprost (strażnik `guard_company_links`, CLR204), więc CHECK
+-- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki. Od 0156
+-- klient nie zapisuje linków wprost (strażnik `guard_company_links`, CLR156), więc CHECK
 -- sprawdzamy jako właściciel tabel — ścieżka funkcji SECURITY DEFINER (`admin_decide_company_links`).
 reset role; set app.current_uid = :'OWNCL';
 select pg_temp.expect_error(
@@ -14906,7 +14906,7 @@ select pg_temp.expect_error(
   'companies_website_https', 'CL141-2c spacja w adresie odrzucona');
 reset role; reset app.current_uid;
 
--- CL141-3: zapis OBU adresów (ścieżka funkcji — od 0204 pole publiczne ustawia tylko decyzja
+-- CL141-3: zapis OBU adresów (ścieżka funkcji — od 0156 pole publiczne ustawia tylko decyzja
 -- admina) → status BEZ ZMIAN (verified), audyt z aktorem sesji.
 reset role; set app.current_uid = :'OWNCL';
 update public.companies
@@ -14931,7 +14931,7 @@ select pg_temp.assert(
                  and after_data->>'status' = 'pending'),
   'CL141-3c bez wpisu zmiany statusu — zmiana linków nie uruchamia ponownej weryfikacji');
 
--- CL141-4: admin firmy (nie tylko owner) czyści adres (NULL) — od 0204 przez RPC
+-- CL141-4: admin firmy (nie tylko owner) czyści adres (NULL) — od 0156 przez RPC
 -- (usunięcie linku wchodzi od razu, bez decyzji admina portalu).
 set role authenticated; set app.current_uid = :'ADMCL'; select pg_temp.assert_client_role();
 select pg_temp.assert(
@@ -15137,7 +15137,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- CLR204. Strona WWW i logo firmy z zatwierdzaniem przez admina (migracja 0204):
+-- CLR156. Strona WWW i logo firmy z zatwierdzaniem przez admina (migracja 0156):
 --         pola publiczne (`website`/`logo_url`) zmienia wyłącznie decyzja admina portalu,
 --         propozycja firmy czeka w `*_pending`; usunięcie linku wchodzi od razu; CAS po
 --         `links_pending_at`; odrzucenie z uzasadnieniem; klient nie pisze tych kolumn wprost.
@@ -15160,41 +15160,41 @@ insert into public.company_members(company_id,profile_id,role,is_active) values
   (:'COMPR',:'ADMR','admin',true),
   (:'COMPR',:'MEMR','member',true);
 
--- CLR204-1 (kontrola ujemna): owner firmy NIE ustawi pola publicznego wprost (strażnik).
+-- CLR156-1 (kontrola ujemna): owner firmy NIE ustawi pola publicznego wprost (strażnik).
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'update public.companies set website = ''https://obejscie.example'' where id = ''e2040000-0000-0000-0000-0000000000f1''',
-  'PERMISSION_DENIED', 'CLR204-1 bezpośredni UPDATE strony WWW odrzucony');
+  'PERMISSION_DENIED', 'CLR156-1 bezpośredni UPDATE strony WWW odrzucony');
 select pg_temp.expect_error(
   'update public.companies set website_pending = ''https://obejscie.example'', links_review_status = ''pending'', links_pending_at = now() where id = ''e2040000-0000-0000-0000-0000000000f1''',
-  'PERMISSION_DENIED', 'CLR204-1b bezpośredni UPDATE kolumn propozycji odrzucony');
+  'PERMISSION_DENIED', 'CLR156-1b bezpośredni UPDATE kolumn propozycji odrzucony');
 -- Nazwa firmy nadal edytowalna wprost (strażnik nie dotyka innych kolumn).
 update public.companies set description = 'Opis R' where id = :'COMPR';
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select description = 'Opis R' and website = 'https://www.firma-r.example' from public.companies where id = :'COMPR'),
-  'CLR204-1c inne kolumny bez zmian w zachowaniu, strona WWW nienaruszona');
+  'CLR156-1c inne kolumny bez zmian w zachowaniu, strona WWW nienaruszona');
 
--- CLR204-2 (kontrola ujemna): member firmy nie zgłasza propozycji.
+-- CLR156-2 (kontrola ujemna): member firmy nie zgłasza propozycji.
 set role authenticated; set app.current_uid = :'MEMR'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f1'', true, ''https://member.example'', false, null)',
-  'PERMISSION_DENIED', 'CLR204-2 member nie zgłasza linków');
+  'PERMISSION_DENIED', 'CLR156-2 member nie zgłasza linków');
 reset role; reset app.current_uid;
 
--- CLR204-3: owner zgłasza NOWE adresy → propozycja pending; pola publiczne BEZ ZMIAN,
+-- CLR156-3: owner zgłasza NOWE adresy → propozycja pending; pola publiczne BEZ ZMIAN,
 -- a `get_public_job`/`get_public_company` dalej widzą stary adres.
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   public.submit_company_links(:'COMPR', true, ' https://nowa.firma-r.example ', true, 'https://cdn.firma-r.example/logo.png') = 'pending',
-  'CLR204-3 nowy adres = propozycja do decyzji');
+  'CLR156-3 nowy adres = propozycja do decyzji');
 -- Retry tej samej propozycji: bez nowego zgłoszenia (ten sam links_pending_at).
 reset role; reset app.current_uid;
 select links_pending_at as clr_pending_at from public.companies where id = :'COMPR' \gset
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   public.submit_company_links(:'COMPR', true, 'https://nowa.firma-r.example', true, 'https://cdn.firma-r.example/logo.png') = 'pending',
-  'CLR204-3b ponowienie tej samej propozycji');
+  'CLR156-3b ponowienie tej samej propozycji');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select website = 'https://www.firma-r.example' and logo_url is null
@@ -15203,37 +15203,37 @@ select pg_temp.assert(
       and links_review_status = 'pending' and links_pending_at = :'clr_pending_at'::timestamptz
       and status::text = 'verified'
      from public.companies where id = :'COMPR'),
-  'CLR204-3c pola publiczne bez zmian, propozycja zapisana, weryfikacja nietknięta, retry idempotentny');
+  'CLR156-3c pola publiczne bez zmian, propozycja zapisana, weryfikacja nietknięta, retry idempotentny');
 select pg_temp.assert(
   exists (select 1 from public.audit_logs
            where entity_id = :'COMPR' and action = 'company.links_submitted' and actor_id = :'OWNR'),
-  'CLR204-3d audyt zgłoszenia propozycji');
+  'CLR156-3d audyt zgłoszenia propozycji');
 select pg_temp.assert(
   (select count(*) from public.audit_logs where entity_id = :'COMPR' and action = 'company.links_submitted') = 1,
-  'CLR204-3e retry nie dubluje audytu');
+  'CLR156-3e retry nie dubluje audytu');
 
--- CLR204-4 (kontrola ujemna): adres nie-https w propozycji odrzucony przez RPC.
+-- CLR156-4 (kontrola ujemna): adres nie-https w propozycji odrzucony przez RPC.
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f1'', true, ''http://zla.example'', false, null)',
-  'WEBSITE_INVALID', 'CLR204-4 http:// w propozycji odrzucone');
+  'WEBSITE_INVALID', 'CLR156-4 http:// w propozycji odrzucone');
 reset role; reset app.current_uid;
 
--- CLR204-5 (kontrola ujemna): decyzja tylko dla admina portalu (owner firmy nie zatwierdzi sam).
+-- CLR156-5 (kontrola ujemna): decyzja tylko dla admina portalu (owner firmy nie zatwierdzi sam).
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('select public.admin_decide_company_links(%L, ''approved'', %L, null)', :'COMPR', :'clr_pending_at'),
-  'PERMISSION_DENIED', 'CLR204-5 owner nie zatwierdza własnych linków');
+  'PERMISSION_DENIED', 'CLR156-5 owner nie zatwierdza własnych linków');
 reset role; reset app.current_uid;
 
--- CLR204-6: odrzucenie bez uzasadnienia → błąd; z nieaktualnym znacznikiem (CAS) → STALE_STATE.
+-- CLR156-6: odrzucenie bez uzasadnienia → błąd; z nieaktualnym znacznikiem (CAS) → STALE_STATE.
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('select public.admin_decide_company_links(%L, ''rejected'', %L, ''  '')', :'COMPR', :'clr_pending_at'),
-  'REASON_REQUIRED', 'CLR204-6 odrzucenie wymaga uzasadnienia');
+  'REASON_REQUIRED', 'CLR156-6 odrzucenie wymaga uzasadnienia');
 select pg_temp.expect_error(
   format('select public.admin_decide_company_links(%L, ''approved'', %L, null)', :'COMPR', '2020-01-01T00:00:00Z'),
-  'STALE_STATE', 'CLR204-6b decyzja na nieaktualnej propozycji (CAS) odrzucona');
+  'STALE_STATE', 'CLR156-6b decyzja na nieaktualnej propozycji (CAS) odrzucona');
 -- Odrzucenie: pola publiczne bez zmian, propozycja zostaje do wglądu z uzasadnieniem.
 select public.admin_decide_company_links(:'COMPR', 'rejected', :'clr_pending_at', 'Logo prowadzi do obcej domeny.');
 reset role; reset app.current_uid;
@@ -15242,37 +15242,37 @@ select pg_temp.assert(
       and links_review_status = 'rejected' and links_review_reason = 'Logo prowadzi do obcej domeny.'
       and website_pending = 'https://nowa.firma-r.example'
      from public.companies where id = :'COMPR'),
-  'CLR204-6c odrzucenie: publicznie bez zmian, propozycja i uzasadnienie widoczne dla firmy');
+  'CLR156-6c odrzucenie: publicznie bez zmian, propozycja i uzasadnienie widoczne dla firmy');
 select pg_temp.assert(
   exists (select 1 from public.notifications
            where profile_id = :'OWNR' and entity_id = :'COMPR'
              and data = jsonb_build_object('kind', 'company_links', 'status', 'rejected')),
-  'CLR204-6d powiadomienie właściciela o odrzuceniu');
+  'CLR156-6d powiadomienie właściciela o odrzuceniu');
 select pg_temp.assert(
   not exists (select 1 from public.notifications
                where profile_id in (:'ADMR', :'MEMR') and data->>'kind' = 'company_links'),
-  'CLR204-6e powiadomienie tylko do właściciela (nie admin/member firmy)');
+  'CLR156-6e powiadomienie tylko do właściciela (nie admin/member firmy)');
 
--- CLR204-7: drugie rozstrzygnięcie tej samej propozycji → STALE_STATE (już rozstrzygnięta).
+-- CLR156-7: drugie rozstrzygnięcie tej samej propozycji → STALE_STATE (już rozstrzygnięta).
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('select public.admin_decide_company_links(%L, ''approved'', %L, null)', :'COMPR', :'clr_pending_at'),
-  'STALE_STATE', 'CLR204-7 odrzuconej propozycji nie da się zatwierdzić bez nowego zgłoszenia');
+  'STALE_STATE', 'CLR156-7 odrzuconej propozycji nie da się zatwierdzić bez nowego zgłoszenia');
 reset role; reset app.current_uid;
 
--- CLR204-8: firma poprawia propozycję (tylko strona WWW) → nowy pending; admin zatwierdza →
+-- CLR156-8: firma poprawia propozycję (tylko strona WWW) → nowy pending; admin zatwierdza →
 -- para trafia do pól publicznych i do danych publicznych firmy.
 set role authenticated; set app.current_uid = :'ADMR'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   public.submit_company_links(:'COMPR', false, null, true, '') = 'pending',
-  'CLR204-8 poprawiona propozycja (bez logo) wraca do kolejki');
+  'CLR156-8 poprawiona propozycja (bez logo) wraca do kolejki');
 reset role; reset app.current_uid;
 select links_pending_at as clr_pending_at2 from public.companies where id = :'COMPR' \gset
 select pg_temp.assert(
   (select links_review_status = 'pending' and links_review_reason is null
       and website_pending = 'https://nowa.firma-r.example' and logo_url_pending is null
      from public.companies where id = :'COMPR'),
-  'CLR204-8b propozycja liczona od odrzuconej, uzasadnienie wyczyszczone');
+  'CLR156-8b propozycja liczona od odrzuconej, uzasadnienie wyczyszczone');
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select public.admin_decide_company_links(:'COMPR', 'approved', :'clr_pending_at2', null);
 reset role; reset app.current_uid;
@@ -15281,36 +15281,36 @@ select pg_temp.assert(
       and links_review_status is null and website_pending is null and links_pending_at is null
       and status::text = 'verified'
      from public.companies where id = :'COMPR'),
-  'CLR204-8c zatwierdzenie przenosi adres do pola publicznego, weryfikacja bez zmian');
+  'CLR156-8c zatwierdzenie przenosi adres do pola publicznego, weryfikacja bez zmian');
 set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select website from public.get_public_company('firma-r-clr204')) = 'https://nowa.firma-r.example',
-  'CLR204-8d profil publiczny widzi zatwierdzony adres');
+  'CLR156-8d profil publiczny widzi zatwierdzony adres');
 reset role;
 select pg_temp.assert(
   exists (select 1 from public.audit_logs
            where entity_id = :'COMPR' and action = 'company.links_reviewed'
              and after_data->>'decision' = 'approved' and actor_id = :'ADMIN'),
-  'CLR204-8e audyt decyzji admina');
+  'CLR156-8e audyt decyzji admina');
 
--- CLR204-9: usunięcie linku wchodzi od razu (nic nowego nie publikuje), bez kolejki.
+-- CLR156-9: usunięcie linku wchodzi od razu (nic nowego nie publikuje), bez kolejki.
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.assert(
   public.submit_company_links(:'COMPR', true, '', false, null) = 'applied',
-  'CLR204-9 usunięcie strony WWW wchodzi od razu');
+  'CLR156-9 usunięcie strony WWW wchodzi od razu');
 select pg_temp.assert(
   public.submit_company_links(:'COMPR', true, '', true, '') = 'unchanged',
-  'CLR204-9b propozycja równa stanowi publicznemu = bez zmian');
+  'CLR156-9b propozycja równa stanowi publicznemu = bez zmian');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select website is null and logo_url is null and links_review_status is null from public.companies where id = :'COMPR'),
-  'CLR204-9c pola publiczne wyczyszczone, brak propozycji w kolejce');
+  'CLR156-9c pola publiczne wyczyszczone, brak propozycji w kolejce');
 
--- CLR204-10 (kontrola ujemna): owner firmy A nie zgłasza linków firmy B.
+-- CLR156-10 (kontrola ujemna): owner firmy A nie zgłasza linków firmy B.
 set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f2'', true, ''https://obca.example'', false, null)',
-  'PERMISSION_DENIED', 'CLR204-10 obca firma odrzucona');
+  'PERMISSION_DENIED', 'CLR156-10 obca firma odrzucona');
 reset role; reset app.current_uid;
 
 -- ============================================================================

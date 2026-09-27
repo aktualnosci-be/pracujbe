@@ -43,7 +43,7 @@ export function sameOriginHost(url: string, ownHost: string): boolean {
 }
 
 /**
- * Propozycja zmiany strony WWW/logo czekająca na decyzję admina portalu (migracja 0204).
+ * Propozycja zmiany strony WWW/logo czekająca na decyzję admina portalu (migracja 0156).
  * Pola publiczne (`website`/`logo_url`) zmienia wyłącznie `admin_decide_company_links`;
  * `pending` = czeka w kolejce, `rejected` = odrzucona z uzasadnieniem (firma może poprawić).
  */
@@ -60,14 +60,14 @@ export interface CompanyLinksReview {
   reason: string | null;
 }
 
-/** Maks. długość uzasadnienia odrzucenia — jak w RPC `admin_decide_company_links` (0204). */
+/** Maks. długość uzasadnienia odrzucenia — jak w RPC `admin_decide_company_links` (0156). */
 export const COMPANY_LINKS_REASON_MAX = 1000;
 
 function textOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/** Stan propozycji z wiersza `companies` (kolumny 0204); brak propozycji → `null`. */
+/** Stan propozycji z wiersza `companies` (kolumny 0156); brak propozycji → `null`. */
 export function parseCompanyLinksReview(row: Record<string, unknown>): CompanyLinksReview | null {
   const status = row['links_review_status'];
   if (status !== 'pending' && status !== 'rejected') return null;

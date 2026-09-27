@@ -409,7 +409,7 @@ export async function decideScreeningReview(
 }
 
 /**
- * Decyzja admina o proponowanej stronie WWW/logo firmy (0204). Akceptacja przenosi adresy do
+ * Decyzja admina o proponowanej stronie WWW/logo firmy (0156). Akceptacja przenosi adresy do
  * danych publicznych (oferty, profil firmy); odrzucenie wymaga uzasadnienia (widzi je firma).
  * `expectedPendingAt` = czas zgłoszenia z odczytu (CAS): gdy firma w międzyczasie zmieniła
  * propozycję albo decyzja już zapadła → `STALE_STATE`. Te same reguły egzekwuje RPC.

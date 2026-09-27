@@ -78,7 +78,7 @@ describe('company read state', () => {
     });
   });
 
-  it('exposes a pending links proposal separately from the published addresses (0204)', async () => {
+  it('exposes a pending links proposal separately from the published addresses (0156)', async () => {
     db([{
       id: 'company-1', name: 'Acme', status: 'verified', website: 'https://acme.example',
       website_pending: 'https://nowa.acme.example', logo_url_pending: null,
@@ -186,6 +186,7 @@ describe('getCompanyById (#843) — firma z linku decyzji, niezależnie od aktyw
         statusReason: 'Suspension reason for B',
         website: null,
         logoUrl: null,
+        linksReview: null,
         canEdit: true,
       },
     });

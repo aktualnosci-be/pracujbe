@@ -33,7 +33,7 @@ import { updateCompanyLinks, type CompanyLinksOutcome } from '@/lib/actions/comp
  * puste pole = wyczyszczenie adresu. Realizuje Invariant #11 (blokada przycisku podczas
  * zapisu, błędy przy polach z fokusem na pierwszym, zachowanie danych po błędzie, jasny sukces).
  *
- * Zatwierdzanie (0204): nowy adres trafia do kolejki admina portalu (`pending`) — publicznie
+ * Zatwierdzanie (0156): nowy adres trafia do kolejki admina portalu (`pending`) — publicznie
  * widać dotychczasowe adresy, które formularz pokazuje obok; odrzucona propozycja wraca z
  * uzasadnieniem admina do poprawy. Usunięcie adresu wchodzi od razu (`applied`).
  *
@@ -47,7 +47,7 @@ export interface CompanyLinksFormProps {
   defaultValues: { website: string; logoUrl: string };
   /** Zatwierdzone (publiczne) adresy — pokazywane, gdy propozycja czeka albo została odrzucona. */
   published: { website: string | null; logoUrl: string | null };
-  /** Stan propozycji (0204) albo null. */
+  /** Stan propozycji (0156) albo null. */
   review: CompanyLinksReview | null;
   /** Host własnej witryny (`NEXT_PUBLIC_SITE_URL`, bez schematu) — dla podglądu logo. */
   ownHost: string;

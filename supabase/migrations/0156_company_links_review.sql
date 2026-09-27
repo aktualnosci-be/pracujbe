@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0204_company_links_review.sql — strona WWW i logo firmy z zatwierdzaniem przez admina.
--- (Numer tymczasowy — ostateczny nada integrator.)
+-- 0156_company_links_review.sql — strona WWW i logo firmy z zatwierdzaniem przez admina.
 --
 -- Stan przed: 0141 (#632) pozwalał owner/admin firmy zapisać `companies.website`/`logo_url`
 -- bezpośrednim UPDATE pod RLS, a oba pola od razu trafiały do danych publicznych
@@ -30,7 +29,7 @@
 --      `company.links_changed` z wartościami przed/po.
 --
 -- Zmiana linków nadal NIE cofa weryfikacji firmy (`protect_company_verification`, 0072).
--- Dowód: `supabase/tests/rls.sql` sekcja CLR204 (kontrole ujemne).
+-- Dowód: `supabase/tests/rls.sql` sekcja CLR156 (kontrole ujemne).
 --
 -- Rollback (ręczny):
 --   drop function if exists public.admin_decide_company_links(uuid, text, timestamptz, text);

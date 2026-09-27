@@ -5,7 +5,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * Zgłoszenie strony WWW/logo firmy (#112, od 0204 z zatwierdzaniem przez admina): akcja woła
+ * Zgłoszenie strony WWW/logo firmy (#112, od 0156 z zatwierdzaniem przez admina): akcja woła
  * wyłącznie RPC `submit_company_links` pod sesją (bez bezpośredniego UPDATE kolumn — blokuje go
  * strażnik w bazie), przekazuje tylko ustawione pola i zwraca wynik RPC (`pending`/`applied`/
  * `unchanged`); nieoczekiwany wynik nie udaje sukcesu.
@@ -36,7 +36,7 @@ beforeEach(() => {
   } as never);
 });
 
-describe('company links submission (review by admin, 0204)', () => {
+describe('company links submission (review by admin, 0156)', () => {
   it('rejects a regular member before writing', async () => {
     submit('pending');
     vi.mocked(getActiveCompany).mockResolvedValue({

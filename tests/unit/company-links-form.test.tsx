@@ -126,7 +126,7 @@ describe('CompanyLinksForm', () => {
     expect(screen.getByRole('link', { name: 'https://cdn.example.com/logo.png' })).toBeInTheDocument();
   });
 
-  it('a new address awaiting admin approval gets its own success message (0204)', async () => {
+  it('a new address awaiting admin approval gets its own success message (0156)', async () => {
     vi.mocked(updateCompanyLinks).mockResolvedValue({ ok: true, outcome: 'pending' });
     renderForm();
     fireEvent.change(screen.getByLabelText(pl.company.website), {

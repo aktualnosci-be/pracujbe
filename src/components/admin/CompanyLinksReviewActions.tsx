@@ -16,7 +16,7 @@ import {
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 /**
- * CompanyLinksReviewActions — decyzja o proponowanej stronie WWW/logo firmy (0204).
+ * CompanyLinksReviewActions — decyzja o proponowanej stronie WWW/logo firmy (0156).
  *
  * „Zatwierdź” i „Odrzuć” otwierają dialog z proponowanymi adresami; odrzucenie wymaga
  * uzasadnienia (firma widzi je w `/employer/firma`, trafia do dziennika). Zatwierdzenie

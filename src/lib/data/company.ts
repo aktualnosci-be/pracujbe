@@ -36,7 +36,7 @@ export interface MyCompany {
   /** Adres logo firmy (#112) — bezwzględny https albo null. */
   logoUrl: string | null;
   /**
-   * Propozycja zmiany strony WWW/logo czekająca na admina albo odrzucona (0204) — `website`/
+   * Propozycja zmiany strony WWW/logo czekająca na admina albo odrzucona (0156) — `website`/
    * `logoUrl` powyżej to wartości ZATWIERDZONE (publiczne). Brak propozycji → null.
    */
   linksReview: CompanyLinksReview | null;
@@ -180,7 +180,8 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
     const row = await withPortalTransaction(me, (tx) =>
       queryOne<Record<string, unknown>>(tx, 'company.by-id',
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
-                c.website, c.logo_url, m.role
+                c.website, c.logo_url, c.website_pending, c.logo_url_pending,
+                c.links_review_status, c.links_pending_at, c.links_review_reason, m.role
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -208,6 +209,7 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
             : null,
         website: asNullableString(company['website']),
         logoUrl: asNullableString(company['logo_url']),
+        linksReview: parseCompanyLinksReview(company),
         canEdit: role === 'owner' || role === 'admin',
       },
     };

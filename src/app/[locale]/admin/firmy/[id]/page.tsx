@@ -39,7 +39,7 @@ import { CompanyLinksReviewActions } from '@/components/admin/CompanyLinksReview
  * uzasadnienie ostatniego odrzucenia/zawieszenia, członkowie firmy (rola, aktywny dostęp)
  * i najnowsze oferty. Sekcja VIES (#92): ostatni wynik weryfikacji numeru VAT z datą i ręczne
  * ponowienie — informacja pomocnicza, status firmy zmienia wyłącznie admin. Strona WWW i logo
- * (0204): propozycja firmy czeka tu na decyzję („Zatwierdź” publikuje adresy w ofertach
+ * (0156): propozycja firmy czeka tu na decyzję („Zatwierdź” publikuje adresy w ofertach
  * i profilu firmy, „Odrzuć” wymaga uzasadnienia) — `CompanyLinksReviewActions`. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
  * z wymaganym uzasadnieniem dla odrzucenia/zawieszenia → RPC 0084: powiadomienie i e-mail
  * do właściciela w JEGO języku, wpis w dzienniku). Po decyzji fokus na nagłówku strony (#415).
@@ -222,7 +222,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
         ) : null}
       </section>
 
-      {/* Strona WWW i logo — propozycja firmy do decyzji (0204) */}
+      {/* Strona WWW i logo — propozycja firmy do decyzji (0156) */}
       <section aria-labelledby="company-links-heading" className={PANEL}>
         <div className={SECTION_HEAD}>
           <h2 id="company-links-heading" className={PANEL_H2}>

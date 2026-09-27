@@ -124,7 +124,7 @@ export const AWAITING_COMPANY_STATUSES = ['unverified', 'pending'] as const;
 /** Wartość filtra listy firm dla kolejki weryfikacji (`?status=awaiting`). */
 export const AWAITING_FILTER = 'awaiting';
 
-/** Wartość filtra listy firm dla kolejki zatwierdzania strony WWW/logo (`?status=links`, 0204). */
+/** Wartość filtra listy firm dla kolejki zatwierdzania strony WWW/logo (`?status=links`, 0156). */
 export const LINKS_REVIEW_FILTER = 'links';
 
 /** Link w panelu (ścieżka bez prefiksu locale — dokłada go next-intl `Link`). */
@@ -1618,7 +1618,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   /** Zatwierdzone (publiczne) adresy firmy. */
   website: string | null;
   logoUrl: string | null;
-  /** Propozycja zmiany strony WWW/logo do decyzji admina albo odrzucona (0204). */
+  /** Propozycja zmiany strony WWW/logo do decyzji admina albo odrzucona (0156). */
   linksReview: CompanyLinksReview | null;
   phone: string | null;
   address: string | null;
