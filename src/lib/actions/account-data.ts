@@ -18,7 +18,7 @@ import { captureError } from '@/lib/error-report';
  * samej transakcji — konto i jego sesje przestają istnieć razem (#25: wywołanie pod sesją
  * przez `withPortalTransaction`).
  *
- * Pracodawca (0209): `request_employer_account_erasure` — to samo potwierdzenie adresem;
+ * Pracodawca (0161): `request_employer_account_erasure` — to samo potwierdzenie adresem;
  * ostatni aktywny właściciel firmy dostaje `COMPANY_LAST_OWNER` → `lastOwner` (najpierw
  * przekazanie roli albo zamknięcie firmy). Członkostwa znikają, dane firmy zostają, dziennik
  * audytu zostaje z aktorem = null.

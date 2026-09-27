@@ -59,7 +59,7 @@ export default async function EmployerSettingsPage({
         )}
       </section>
 
-      {/* #486 (0209): eksport danych konta pracodawcy i usunięcie konta. */}
+      {/* #486 (0161): eksport danych konta pracodawcy i usunięcie konta. */}
       <AccountDataSettings variant="employer" />
     </div>
   );

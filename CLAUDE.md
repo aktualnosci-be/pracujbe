@@ -540,7 +540,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > (szczegół zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana) i pracodawca (Etap 4, migracja `0152`),
 > P1-10 (kanoniczny model miast — zrobione: `jobs.location_id`, migracja `0153`, patrz Etap 2), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
-> techniczna dla kandydata zrobiona w #486, dla pracodawcy w 0209, patrz Etap 7),
+> techniczna dla kandydata zrobiona w #486, dla pracodawcy w 0161, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
@@ -2257,7 +2257,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
   dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13),
   sprostowanie/ograniczenie/sprzeciw, potwierdzenie linkiem e-mail.
-  Konto pracodawcy (migracja `0209` — numer tymczasowy, `docs/DATA_RETENTION.md` §5a): sekcja
+  Konto pracodawcy (migracja `0161`, `docs/DATA_RETENTION.md` §5a): sekcja
   „Twoje dane i konto” w `/employer/ustawienia` (ten sam `AccountDataSettings`,
   `variant="employer"`; trasa `/api/account/export` i `deleteMyAccountAction` wybierają RPC po
   roli sesji). Eksport `export_my_employer_data` (konto, profil, profil pracodawcy, członkostwa,
@@ -2271,7 +2271,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
   z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
   wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
-  Dowód: `rls.sql` sekcja ER209 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
+  Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
   `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
   samoobsługowe zamknięcie firmy, retencja nieaktywnych kont pracodawców.

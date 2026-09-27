@@ -77,7 +77,7 @@ describe('deleteMyAccountAction', () => {
   });
 });
 
-describe('deleteMyAccountAction — pracodawca (0209)', () => {
+describe('deleteMyAccountAction — pracodawca (0161)', () => {
   beforeEach(() => {
     fakeSession.identity = { id: SELF, role: 'employer' };
   });

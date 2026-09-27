@@ -7,7 +7,7 @@ zatwierdza administrator danych; roboczy projekt dla prawnika jest w
 
 Migracje: `supabase/migrations/0105_data_retention_rights.sql` (mechanizm) i
 `supabase/migrations/0127_retention_values.sql` (#574 — wartości z opracowania 2026-09-25,
-brakujące zadania, dead-letter kolejki storage), `supabase/migrations/0209_employer_account_rights.sql`
+brakujące zadania, dead-letter kolejki storage), `supabase/migrations/0161_employer_account_rights.sql`
 (eksport i usunięcie konta pracodawcy — §5a; numer tymczasowy).
 
 > **Harmonogram jest WYŁĄCZONY.** Wartości z opracowania (#573, decyzja właściciela
@@ -191,7 +191,7 @@ Poprawki w 0105 wymagane przez usunięcie: `report_events_append_only` i `report
 przepuszczają wyłącznie odwołanie FK → `null` (wcześniej usunięcie autora zgłoszenia
 DSA się wywracało; kontrole ujemne DR486-5/5b).
 
-## 5a. Konto pracodawcy — eksport i usunięcie (migracja 0209, numer tymczasowy)
+## 5a. Konto pracodawcy — eksport i usunięcie (migracja 0161)
 
 UI: `/employer/ustawienia` → sekcja „Twoje dane i konto” (ten sam komponent
 `AccountDataSettings`, `variant="employer"` — inne opisy zakresu). Trasa
@@ -216,7 +216,7 @@ u kandydata (10/dobę wspólnie z `kind='access'`, `data.exported`).
    `VALIDATION_FAILED: COMPANY_LAST_OWNER` i nic się nie zmienia (komunikat
    `accountData.deleteLastOwner`: najpierw przekaż rolę albo zamknij firmę). Ta sama reguła
    jest w triggerze `enforce_owner_invariants`, ale funkcja definer bywa zaufaną rolą, więc
-   kontrola w funkcji jest wymagana (kontrola ujemna ER209-4d).
+   kontrola w funkcji jest wymagana (kontrola ujemna ER161-4d).
 2. Usuwa członkostwa, e-maile do osoby (`email_deliveries.profile_id`), jej pliki poza
    załącznikami rozmów firmy (obiekty → kolejka storage), zeruje IP/UA w audycie, usuwa
    weryfikacje Better Auth.
@@ -229,7 +229,7 @@ u kandydata (10/dobę wspólnie z `kind='access'`, `data.exported`).
 (`invited_by`), załączniki rozmów, dziennik audytu (`actor_id = null`, bez IP/UA).
 
 Poprawka wymagana przez usunięcie: `enforce_offer_integrity` przepuszcza wyłącznie
-`offers.sender_id → null` (zmiana nadawcy na inną osobę nadal odrzucana; kontrole ER209-4f/4h).
+`offers.sender_id → null` (zmiana nadawcy na inną osobę nadal odrzucana; kontrole ER161-4f/4h).
 
 Restore: `apply_erasure_tombstones` wybiera `erase_employer_subject` dla profilu pracodawcy.
 Jeśli w odtworzonej kopii osoba jest ostatnim właścicielem firmy, wywołanie kończy się
@@ -257,7 +257,7 @@ odtworzonej bazie. Procedura: [railway/BACKUP_RESTORE.md](railway/BACKUP_RESTORE
   bez triggera i starej reguły bez `hired`), `last_seen_at` z sesji, ostrzeżenie przed
   usunięciem (kontrola ujemna: bez ostrzeżenia nic nie znika), ślad gościa, dry-run bez
   zmian, 601 rekordów w partiach, dead-letter (kontrola ujemna: stary `complete`).
-- `supabase/tests/rls.sql` sekcja **ER209** (0209) — konto pracodawcy: odmowy dla anon/
+- `supabase/tests/rls.sql` sekcja **ER161** (0161) — konto pracodawcy: odmowy dla anon/
   kandydata/bez EXECUTE, zakres eksportu bez danych kandydata i innego pracodawcy, limit,
   potwierdzenie adresem (cudzy adres = nic nie znika), ostatni właściciel (także przy
   nieaktywnym współwłaścicielu), pełne usunięcie z danymi firmy i audytem z aktorem `null`,

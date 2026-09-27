@@ -16117,9 +16117,9 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- ER209. Eksport i usunięcie konta pracodawcy (#486, migracja 0209)
+-- ER161. Eksport i usunięcie konta pracodawcy (#486, migracja 0161)
 -- ============================================================================
-\echo '--- ER209 eksport i usunięcie konta pracodawcy ---'
+\echo '--- ER161 eksport i usunięcie konta pracodawcy ---'
 \set ER1 'e2090000-0000-4000-8000-000000000001'
 \set ER2 'e2090000-0000-4000-8000-000000000002'
 \set ER3 'e2090000-0000-4000-8000-000000000003'
@@ -16167,22 +16167,22 @@ select invitation_id as erinv
   from public.invite_company_member(:'ERCO1', 'nowa.osoba@test.be', 'recruiter', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
 reset role; reset app.current_uid;
 
--- ER209-1: role klienta — anon bez dostępu, kandydat nie korzysta ze ścieżek pracodawcy,
+-- ER161-1: role klienta — anon bez dostępu, kandydat nie korzysta ze ścieżek pracodawcy,
 -- funkcja wewnętrzna bez EXECUTE.
 set role anon; reset app.current_uid; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.export_my_employer_data()', 'permission denied', 'ER209-1 anon bez eksportu');
+select pg_temp.expect_error('select public.export_my_employer_data()', 'permission denied', 'ER161-1 anon bez eksportu');
 select pg_temp.expect_error('select public.request_employer_account_erasure(''er1@test.be'')', 'permission denied',
-  'ER209-1b anon bez usunięcia');
+  'ER161-1b anon bez usunięcia');
 reset role;
 set role authenticated; set app.current_uid = :'ERC'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.export_my_employer_data()', 'PERMISSION_DENIED', 'ER209-1c kandydat bez eksportu pracodawcy');
+select pg_temp.expect_error('select public.export_my_employer_data()', 'PERMISSION_DENIED', 'ER161-1c kandydat bez eksportu pracodawcy');
 select pg_temp.expect_error('select public.request_employer_account_erasure(''erc@test.be'')', 'PERMISSION_DENIED',
-  'ER209-1d kandydat nie usuwa konta ścieżką pracodawcy');
+  'ER161-1d kandydat nie usuwa konta ścieżką pracodawcy');
 select pg_temp.expect_error('select public.erase_employer_subject(''' || :'ER1' || ''', ''self_service'', null)',
-  'permission denied', 'ER209-1e funkcja wewnętrzna bez EXECUTE');
+  'permission denied', 'ER161-1e funkcja wewnętrzna bez EXECUTE');
 reset role; reset app.current_uid;
 
--- ER209-2: eksport ER1 — profil, członkostwa, zaproszenia wysłane, oferty, akcje audytowe;
+-- ER161-2: eksport ER1 — profil, członkostwa, zaproszenia wysłane, oferty, akcje audytowe;
 -- bez danych kandydata (id, imię, adres, treść wiadomości/aplikacji, id aplikacji/propozycji).
 set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
 select public.export_my_employer_data()::text as erexp \gset
@@ -16199,66 +16199,66 @@ select pg_temp.assert(
   and (:'erexp')::jsonb #>> '{jobsCreated,0,title}' = 'Magazynier ER'
   and jsonb_array_length((:'erexp')::jsonb -> 'auditActions') >= 1
   and jsonb_typeof((:'erexp')::jsonb -> 'dataRightsRequests') = 'array',
-  'ER209-2 eksport: konto, profil pracodawcy, członkostwa, zaproszenia, oferty, akcje audytowe');
+  'ER161-2 eksport: konto, profil pracodawcy, członkostwa, zaproszenia, oferty, akcje audytowe');
 select pg_temp.assert(
   position(:'ERC' in :'erexp') = 0 and position('erc@test.be' in :'erexp') = 0
   and position('Erka' in :'erexp') = 0 and position('Tekst kandydata ER' in :'erexp') = 0
   and position('Wiadomość rekruterki ER' in :'erexp') = 0
   and position(:'erapp' in :'erexp') = 0 and position(:'eroff' in :'erexp') = 0
   and position(:'ER2' in :'erexp') = 0 and position('er1-offer' in :'erexp') = 0,
-  'ER209-2b eksport bez danych kandydata, innego pracodawcy i identyfikatorów procesu');
+  'ER161-2b eksport bez danych kandydata, innego pracodawcy i identyfikatorów procesu');
 select pg_temp.assert(
   (select count(*) from jsonb_array_elements((:'erexp')::jsonb -> 'auditActions') a
     where a->>'entityType' = 'application' and a->>'entityId' is null) >= 1
   and not exists (select 1 from jsonb_array_elements((:'erexp')::jsonb -> 'auditActions') a
                    where a ? 'before' or a ? 'after' or a ? 'before_data'),
-  'ER209-2c akcje na zgłoszeniach bez identyfikatora i bez danych przed/po');
+  'ER161-2c akcje na zgłoszeniach bez identyfikatora i bez danych przed/po');
 select pg_temp.assert(
   (select count(*) from public.audit_logs where action = 'data.exported' and entity_id = :'ER1') = 1
   and (select count(*) from public.data_rights_requests where subject_id = :'ER1' and kind = 'access') = 1,
-  'ER209-2d eksport w audycie i śladzie wniosków');
--- ER209-2e: wspólny limit 10 eksportów na dobę.
+  'ER161-2d eksport w audycie i śladzie wniosków');
+-- ER161-2e: wspólny limit 10 eksportów na dobę.
 insert into public.data_rights_requests(subject_id, kind, channel, due_at, completed_at)
   select :'ER2', 'access', 'self_service', now(), now() from generate_series(1, 10);
 set role authenticated; set app.current_uid = :'ER2'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.export_my_employer_data()', 'RATE_LIMITED', 'ER209-2e 11. eksport w dobie → RATE_LIMITED');
+select pg_temp.expect_error('select public.export_my_employer_data()', 'RATE_LIMITED', 'ER161-2e 11. eksport w dobie → RATE_LIMITED');
 reset role; reset app.current_uid;
 
--- ER209-3: potwierdzenie adresem WŁASNEGO konta; cudzy adres nie usuwa ani swojego, ani cudzego.
+-- ER161-3: potwierdzenie adresem WŁASNEGO konta; cudzy adres nie usuwa ani swojego, ani cudzego.
 set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.request_employer_account_erasure(''er2@test.be'')', 'CONFIRMATION_MISMATCH',
-  'ER209-3 cudze konto (adres ER2) → CONFIRMATION_MISMATCH');
+  'ER161-3 cudze konto (adres ER2) → CONFIRMATION_MISMATCH');
 select pg_temp.expect_error('select public.request_employer_account_erasure(null)', 'CONFIRMATION_MISMATCH',
-  'ER209-3b brak potwierdzenia');
+  'ER161-3b brak potwierdzenia');
 reset role; reset app.current_uid;
 select pg_temp.assert(exists (select 1 from public.profiles where id = :'ER1')
   and exists (select 1 from public.profiles where id = :'ER2')
   and (select count(*) from public.company_members where profile_id in (:'ER1', :'ER2')) = 4,
-  'ER209-3c odmowa niczego nie usuwa (ER1 i ER2 nienaruszeni)');
+  'ER161-3c odmowa niczego nie usuwa (ER1 i ER2 nienaruszeni)');
 -- Kandydacka ścieżka nadal odrzuca pracodawcę (DR486-4c bez zmian).
 set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.request_account_erasure(''er1@test.be'')', 'PERMISSION_DENIED',
-  'ER209-3d pracodawca nie usuwa konta ścieżką kandydata');
+  'ER161-3d pracodawca nie usuwa konta ścieżką kandydata');
 reset role; reset app.current_uid;
 
--- ER209-4: ostatni aktywny właściciel firmy nie usunie konta; nic się nie zmienia.
+-- ER161-4: ostatni aktywny właściciel firmy nie usunie konta; nic się nie zmienia.
 set role authenticated; set app.current_uid = :'ER3'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.request_employer_account_erasure(''er3@test.be'')', 'COMPANY_LAST_OWNER',
-  'ER209-4 ostatni właściciel → COMPANY_LAST_OWNER');
+  'ER161-4 ostatni właściciel → COMPANY_LAST_OWNER');
 reset role; reset app.current_uid;
 select pg_temp.assert(exists (select 1 from auth.users where id = :'ER3')
   and exists (select 1 from public.company_members where profile_id = :'ER3' and company_id = :'ERCO3' and role = 'owner' and is_active)
   and not exists (select 1 from public.data_rights_requests where subject_id = :'ER3')
   and not exists (select 1 from public.erasure_tombstones where subject_id = :'ER3'),
-  'ER209-4b odmowa: konto i członkostwo zostają, brak śladu wniosku i tombstone');
--- ER209-4c: nieaktywny drugi właściciel się nie liczy — nadal ostatni aktywny.
+  'ER161-4b odmowa: konto i członkostwo zostają, brak śladu wniosku i tombstone');
+-- ER161-4c: nieaktywny drugi właściciel się nie liczy — nadal ostatni aktywny.
 insert into public.company_members(company_id, profile_id, role, is_active) values (:'ERCO3', :'ER2', 'owner', false);
 set role authenticated; set app.current_uid = :'ER3'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.request_employer_account_erasure(''er3@test.be'')', 'COMPANY_LAST_OWNER',
-  'ER209-4c nieaktywny współwłaściciel nie zwalnia z reguły');
+  'ER161-4c nieaktywny współwłaściciel nie zwalnia z reguły');
 reset role; reset app.current_uid;
 delete from public.company_members where company_id = :'ERCO3' and profile_id = :'ER2';
--- ER209-4d (kontrola ujemna): bez kontroli w erase_employer_subject konto ostatniego
+-- ER161-4d (kontrola ujemna): bez kontroli w erase_employer_subject konto ostatniego
 -- właściciela znika, a firma zostaje bez aktywnego właściciela (funkcja definer omija trigger).
 begin;
 do $neg$
@@ -16274,12 +16274,12 @@ select public.request_employer_account_erasure('er3@test.be');
 reset role;
 select pg_temp.assert(not exists (select 1 from public.company_members
                                    where company_id = :'ERCO3' and role = 'owner' and is_active),
-  'ER209-4d kontrola ujemna: bez kontroli firma zostaje bez właściciela');
+  'ER161-4d kontrola ujemna: bez kontroli firma zostaje bez właściciela');
 rollback;
 reset role; reset app.current_uid;
-select pg_temp.assert(exists (select 1 from public.profiles where id = :'ER3'), 'ER209-4e po kontroli ujemnej stan przywrócony');
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'ER3'), 'ER161-4e po kontroli ujemnej stan przywrócony');
 
--- ER209-4f (kontrola ujemna do 0209 pkt 5): reguła propozycji z 0037 odrzuca odwołanie
+-- ER161-4f (kontrola ujemna do 0161 pkt 5): reguła propozycji z 0037 odrzuca odwołanie
 -- nadawcy (sender_id → null) pod sesją usuwanego rekrutera — usunięcie konta by padło.
 begin;
 do $neg$
@@ -16293,21 +16293,21 @@ end
 $neg$;
 set local role authenticated; set local app.current_uid = :'ER1'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.request_employer_account_erasure(''er1@test.be'')',
-  'nie można zmienić powiązań propozycji', 'ER209-4f kontrola: bez poprawki usunięcie nadawcy propozycji pada');
+  'nie można zmienić powiązań propozycji', 'ER161-4f kontrola: bez poprawki usunięcie nadawcy propozycji pada');
 rollback;
 reset role; reset app.current_uid;
--- ER209-4g: poprawka nie otwiera zmiany nadawcy na inną osobę (tylko null).
+-- ER161-4g: poprawka nie otwiera zmiany nadawcy na inną osobę (tylko null).
 set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
 select pg_temp.expect_error('update public.offers set sender_id = ''' || :'ER2' || ''' where id = ''' || :'eroff' || '''',
-  'permission denied', 'ER209-4g klient nie zmienia nadawcy propozycji (brak UPDATE)');
+  'permission denied', 'ER161-4g klient nie zmienia nadawcy propozycji (brak UPDATE)');
 reset role; reset app.current_uid;
 begin;
 set local app.current_uid = :'ER1';
 select pg_temp.expect_error('update public.offers set sender_id = ''' || :'ER2' || ''' where id = ''' || :'eroff' || '''',
-  'nie można zmienić powiązań propozycji', 'ER209-4h trigger nadal odrzuca zmianę nadawcy na inną osobę');
+  'nie można zmienić powiązań propozycji', 'ER161-4h trigger nadal odrzuca zmianę nadawcy na inną osobę');
 rollback;
 
--- ER209-5: usunięcie konta ER1 (współwłaściciel ERCO1, rekruter ERCO2).
+-- ER161-5: usunięcie konta ER1 (współwłaściciel ERCO1, rekruter ERCO2).
 set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
 select public.request_employer_account_erasure('  ER1@Test.be ')::text as ererase \gset
 reset role; reset app.current_uid;
@@ -16320,7 +16320,7 @@ select pg_temp.assert(
   and not exists (select 1 from public.conversation_members where profile_id = :'ER1')
   and not exists (select 1 from public.files where id = :'ERF')
   and not exists (select 1 from public.email_deliveries where profile_id = :'ER1' or to_email = 'er1@test.be'),
-  'ER209-5 konto, sesje, profil, członkostwa, plik i e-maile osoby usunięte');
+  'ER161-5 konto, sesje, profil, członkostwa, plik i e-maile osoby usunięte');
 select pg_temp.assert(
   exists (select 1 from public.companies where id = :'ERCO1')
   and exists (select 1 from public.companies where id = :'ERCO2')
@@ -16330,30 +16330,30 @@ select pg_temp.assert(
   and (select count(*) from public.messages where conversation_id = :'erconv' and body = 'Wiadomość rekruterki ER' and sender_id is null) = 1
   and (select invited_by is null and status = 'pending' from public.company_invitations where id = :'erinv')
   and exists (select 1 from public.company_members where company_id = :'ERCO1' and profile_id = :'ER2' and role = 'owner' and is_active),
-  'ER209-5b dane firmy zostają (oferta, propozycja, zgłoszenie, rozmowa, zaproszenie, drugi właściciel)');
+  'ER161-5b dane firmy zostają (oferta, propozycja, zgłoszenie, rozmowa, zaproszenie, drugi właściciel)');
 select pg_temp.assert(
   (select count(*) from public.audit_logs where actor_id = :'ER1') = 0
   and (select count(*) from public.audit_logs
         where actor_id is null and action <> 'account.erased'
           and entity_id in (:'erapp'::uuid, :'eroff'::uuid)) >= 1,
-  'ER209-5c dziennik audytu zostaje z aktorem = null');
+  'ER161-5c dziennik audytu zostaje z aktorem = null');
 select pg_temp.assert(
   (select channel = 'self_service' from public.erasure_tombstones where subject_id = :'ER1')
   and (select completed_at is not null and (details->>'memberships')::int = 2 and (details->>'files')::int = 1
          from public.data_rights_requests where subject_id = :'ER1' and kind = 'erasure')
   and (select after_data->>'role' = 'employer' from public.audit_logs where action = 'account.erased' and entity_id = :'ER1')
   and exists (select 1 from public.storage_deletion_queue where path = :'ER1' || '/doc-er1.pdf'),
-  'ER209-5d tombstone, ślad wniosku z licznikami, audyt, obiekt pliku w kolejce');
+  'ER161-5d tombstone, ślad wniosku z licznikami, audyt, obiekt pliku w kolejce');
 set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.export_my_employer_data()', 'PERMISSION_DENIED', 'ER209-5e po usunięciu brak dostępu');
+select pg_temp.expect_error('select public.export_my_employer_data()', 'PERMISSION_DENIED', 'ER161-5e po usunięciu brak dostępu');
 reset role; reset app.current_uid;
 
--- ER209-6: ponowne usunięcie po restore — pracodawca przez erase_employer_subject;
+-- ER161-6: ponowne usunięcie po restore — pracodawca przez erase_employer_subject;
 -- ostatni właściciel = błąd dla operatora.
 set role service_role;
 select public.apply_erasure_tombstones(array[:'ER4'::uuid])::text as erre \gset
 select pg_temp.expect_error('select public.apply_erasure_tombstones(array[''' || :'ER3' || '''::uuid])', 'COMPANY_LAST_OWNER',
-  'ER209-6b restore ostatniego właściciela → COMPANY_LAST_OWNER');
+  'ER161-6b restore ostatniego właściciela → COMPANY_LAST_OWNER');
 reset role;
 select pg_temp.assert(
   (:'erre')::jsonb ->> 'reapplied' = '1'
@@ -16361,6 +16361,6 @@ select pg_temp.assert(
   and not exists (select 1 from public.company_members where profile_id = :'ER4')
   and (select channel = 'restore_reapply' from public.erasure_tombstones where subject_id = :'ER4')
   and exists (select 1 from public.profiles where id = :'ER3'),
-  'ER209-6 restore usuwa pracodawcę (członek), ostatni właściciel zostaje');
+  'ER161-6 restore usuwa pracodawcę (członek), ostatni właściciel zostaje');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

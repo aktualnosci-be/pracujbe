@@ -1,8 +1,6 @@
 -- =============================================================================
--- 0209_employer_account_rights.sql — #486 (część pracodawcy): eksport danych konta
+-- 0161_employer_account_rights.sql — #486 (część pracodawcy): eksport danych konta
 -- pracodawcy (prawo dostępu) i samoobsługowe usunięcie konta pracodawcy.
---
--- Numer TYMCZASOWY (0209) — ostateczny nada integrator.
 --
 -- Wzór: export_my_data / request_account_erasure / erase_candidate_subject kandydata (0105).
 -- Dane FIRMY (companies, oferty, zgłoszenia, rozmowy, propozycje) należą do firmy i zostają;

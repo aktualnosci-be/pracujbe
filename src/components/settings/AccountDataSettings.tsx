@@ -16,7 +16,7 @@ import { Link } from '@/i18n/navigation';
  *
  * `variant` zmienia wyłącznie opisy (zakres eksportu/usunięcia); trasa i akcja same wybierają
  * funkcję bazy po roli sesji (`export_my_employer_data` / `request_employer_account_erasure`,
- * 0209). Pracodawca będący ostatnim właścicielem firmy dostaje `deleteLastOwner`.
+ * 0161). Pracodawca będący ostatnim właścicielem firmy dostaje `deleteLastOwner`.
  *
  * Eksport: `fetch` POST `/api/account/export` (ta sama witryna, sesja w cookies) → plik
  * z odpowiedzi; status błędu → przetłumaczony komunikat, nigdy surowa odpowiedź (Invariant #8).
