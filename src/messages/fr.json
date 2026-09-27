@@ -2672,7 +2672,8 @@
     "submit": "Entrer",
     "error": "Mot de passe incorrect. Veuillez réessayer.",
     "rateLimited": "Trop de tentatives. Réessayez dans quelques minutes.",
-    "unavailable": "L’accès est temporairement indisponible. Réessayez plus tard."
+    "unavailable": "L’accès est temporairement indisponible. Réessayez plus tard.",
+    "payloadTooLarge": "Le formulaire est trop volumineux. Actualisez la page et réessayez."
   },
   "offline": {
     "title": "Pas de connexion",

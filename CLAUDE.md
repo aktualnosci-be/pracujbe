@@ -1950,6 +1950,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   edycja firmy) dla wszystkich użytkowników. Testy: `rate-limit-postgres` (jednostkowy,
   atrapa rzuca), `rate-limit` integracyjny (PG16 w Dockerze: pula zwykłej roli, odebrane
   `EXECUTE`, zamknięta pula i błędne parametry → wyjątek, nie `false`).
+  Bramka dostępu — limit rozmiaru body przed parsowaniem (#911, bez migracji): `POST
+  /api/site-access` czytał całe `request.formData()` (bez ograniczenia rozmiaru ani czasu
+  odczytu) zanim sprawdzał, czy bramka jest w ogóle aktywna, i zanim liczył próbę w limiterze
+  (#584/#625) — duże albo wolno przesyłane żądanie z jednym dużym polem formularza zużywało
+  pamięć/CPU procesu przed jakąkolwiek odpowiedzią, także przy wyłączonej bramce. Naprawa:
+  `readTextWithLimit` (już używane przez webhooki poczty i `/api/csp-report`, #`P2-05`) czyta
+  strumień z twardym limitem 4 KiB — deklarowany `Content-Length` I faktycznie odebrane bajty,
+  działa też bez tego nagłówka (chunked) — i przerywa PRZED przekroczeniem limitu; dopiero
+  zmieszczone w limicie body trafia do `formData()` (przez odtworzony `Request` z tym samym
+  `content-type`, więc nadal obsługuje urlencoded i multipart). Nad limitem → `413` z komunikatem
+  `siteAccess.payloadTooLarge` (PL/NL/FR/EN), bez porównania hasła, bez wołania limitera i
+  niezależnie od tego, czy `SITE_ACCESS_PASSWORD` jest w ogóle ustawione. Dowód: unit
+  `site-access.test.ts` (body bez `Content-Length` nad limitem, deklarowany `Content-Length` nad
+  limitem ze strumieniem, który nigdy się nie kończy — czyli obietnica, że handler NIE czyta go
+  w całości, bramka wyłączona nadal odrzuca, kontrola ujemna: body w granicach limitu bez zmian).
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
   `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
