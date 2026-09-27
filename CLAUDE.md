@@ -291,7 +291,13 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
 - `.github/workflows/ci.yml` — `runs-on: ubuntu-latest`; `install` → `lint`/`typecheck`/`unit`/`migrations`,
   równolegle `sca` i `rls`; `build` po zielonym lint+typecheck+unit; po `build` równolegle:
   - `e2e-shard` („E2E shard i/3”) — zestaw demo `playwright.config.ts` (projekt `chromium`)
-    w 3 shardach `--shard=i/3`, każdy zapisuje raport cząstkowy (blob, `E2E_BLOB_NAME`);
+    w 3 shardach podzielonych PO CZASIE testów, nie po ich liczbie (`--shard` dzieli pliki
+    alfabetycznie, a najdłuższe przeglądy axe leżą blisko siebie w alfabecie — 7,4/2,5/5,1 min).
+    `E2E_DEMO_SHARD=1|2|3` wybiera w konfiguracji jedną z dwóch jawnych list najdłuższych
+    speców (`DEMO_SHARD_1_SPECS`/`DEMO_SHARD_2_SPECS`, ~280 s każda) albo (shard 3) całą
+    resztę — dopełnienie obu list, nowy spec trafia tam sam, bez dopisywania (jak część 1
+    trybu `full` w `playwright.applications-fixture.config.ts` niżej); bez `--shard`
+    w komendzie. Każdy shard zapisuje raport cząstkowy (blob, `E2E_BLOB_NAME`);
   - `e2e-perf` („E2E perf (lab CWV + INP)”) — pomiary czasu w jednym miejscu: projekt
     `chromium-timing` (`--no-deps`, INP dialogu #393) i `perf-lab.mjs` (lab CWV + INP-proxy #395);
   - `e2e-fixtures` („E2E fixtures (full 1/2|full 2/2|error 1/1)”) — `playwright.applications-fixture.config.ts`
@@ -311,8 +317,9 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
 
 **Reguły CI:**
 - Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`. Liczba
-  shardów zmienia się w jednym miejscu (nazwa, macierz, `--shard`) — strażnik pilnuje zgodności;
-  części fixture'ów: macierz `include` = części dozwolone w konfiguracji fixture (strażnik).
+  shardów zmienia się w jednym miejscu (nazwa, macierz, `DEMO_SHARDS`/jawne listy speców
+  w `playwright.config.ts`) — strażnik pilnuje zgodności; części fixture'ów: macierz
+  `include` = części dozwolone w konfiguracji fixture (strażnik).
 - Każdy job ma `timeout-minutes`. Nowy push do PR anuluje trwający przebieg tego PR;
   przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
 - Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
