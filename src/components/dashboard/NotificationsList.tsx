@@ -92,10 +92,17 @@ export function NotificationsList({
           changed = true;
           return { ...item, unread: false };
         }
+        // Uzgadniamy WYŁĄCZNIE w kierunku nieprzeczytane → przeczytane. Serwer demo
+        // (`getNotificationsPage` bez env, #825 regresja) buduje `DEMO_SEEDS` od nowa przy
+        // KAŻDYM odczycie — `initialPage` z kolejnego `router.refresh()` ma więc zawsze te same,
+        // niezmienione flagi, nigdy nie odzwierciedlając lokalnego `mark()`. Odwrotny kierunek
+        // (przeczytane → nieprzeczytane) cofałby każde optymistyczne oznaczenie zaraz po
+        // pierwszym odświeżeniu z tej samej akcji — pozycja i przycisk „Oznacz wszystkie”
+        // wracałyby do stanu nieprzeczytanego mimo potwierdzonego zapisu.
         const fresh = freshById.get(item.id);
-        if (fresh && fresh.unread !== item.unread) {
+        if (fresh && fresh.unread === false && item.unread) {
           changed = true;
-          return { ...item, unread: fresh.unread };
+          return { ...item, unread: false };
         }
         return item;
       });
