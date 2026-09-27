@@ -53,7 +53,6 @@ function registerDefaults(rows: unknown[] = [logRow(1)]) {
       { id: ACTOR, first_name: 'Anna', last_name: 'Admin', email: 'anna@example.test' },
     ])
     .rows('admin.audit-companies', [{ id: COMPANY, name: 'Firma Test', deleted_at: null }])
-    .rows('admin.audit-actor-search', [{ id: ACTOR }])
     .exec('admin.audit-export-log', 1);
 }
 
@@ -146,8 +145,8 @@ describe('POST /api/admin/audit-export — treść', () => {
         `format=json&entity=company&action=company.status_changed&id=${COMPANY}&from=2026-07-01&to=2026-07-31&actor=Anna`,
       ),
     );
-    const [search] = fakeDb.callsTo('admin.audit-actor-search');
-    expect(search?.values).toContain('%Anna%');
+    // #857: aktor filtrowany podzapytaniem w tym samym zapytaniu, bez listy id z limitem.
+    expect(fakeDb.callsTo('admin.audit-actor-search')).toHaveLength(0);
     const [list] = fakeDb.callsTo('admin.audit-logs');
     expect(list?.as).toBe('service');
     expect(list?.values).toEqual([
@@ -156,7 +155,7 @@ describe('POST /api/admin/audit-export — treść', () => {
       COMPANY,
       '2026-06-30T22:00:00.000Z',
       '2026-07-31T22:00:00.000Z',
-      [ACTOR],
+      '%Anna%',
       10_001,
     ]);
 

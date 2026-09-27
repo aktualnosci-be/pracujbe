@@ -66,9 +66,22 @@ export function isDatabaseConfigured(): boolean {
   return Boolean(env.appDatabaseUrl);
 }
 
-/** Czy komplet prywatnej konfiguracji runtime Better Auth jest obecny. */
+/** Minimalna długość `BETTER_AUTH_SECRET` wymagana przez `createAuthServer` (`src/lib/auth/server.ts`). */
+const AUTH_SECRET_MIN_LENGTH = 32;
+
+/**
+ * Czy komplet prywatnej konfiguracji runtime Better Auth jest obecny.
+ *
+ * #873: sama obecność sekretu nie wystarcza — `createAuthServer` odrzuca sekret krótszy niż
+ * `AUTH_SECRET_MIN_LENGTH` znaków (po `trim()`). Bez tej kontroli readiness/`isAppReady()`
+ * mogły uznać produkcję za gotową z sekretem, który i tak wysadzi inicjalizację Better Auth
+ * w runtime — fail-closed zamiast fałszywej gotowości.
+ */
 export function isAuthRuntimeConfigured(): boolean {
-  return Boolean(env.authDatabaseUrl && env.authSecret && env.authBaseUrl);
+  const secret = env.authSecret;
+  return Boolean(
+    env.authDatabaseUrl && secret && secret.trim().length >= AUTH_SECRET_MIN_LENGTH && env.authBaseUrl,
+  );
 }
 
 /**

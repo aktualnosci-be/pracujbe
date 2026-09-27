@@ -13,6 +13,7 @@
 
 import { isAppealStatus, parseAppealState, type AppealState, type AppealStatus } from '@/lib/admin/appeals';
 import { getActiveCompany } from '@/lib/company-context';
+import { parseCompanyLinksReview, type CompanyLinksReview } from '@/lib/company-links';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
@@ -34,6 +35,11 @@ export interface MyCompany {
   website: string | null;
   /** Adres logo firmy (#112) — bezwzględny https albo null. */
   logoUrl: string | null;
+  /**
+   * Propozycja zmiany strony WWW/logo czekająca na admina albo odrzucona (0156) — `website`/
+   * `logoUrl` powyżej to wartości ZATWIERDZONE (publiczne). Brak propozycji → null.
+   */
+  linksReview: CompanyLinksReview | null;
   canEdit: boolean;
 }
 
@@ -51,6 +57,7 @@ const DEMO_COMPANY: MyCompany = {
   statusReason: null,
   website: 'https://example.com',
   logoUrl: null,
+  linksReview: null,
   canEdit: true,
 };
 
@@ -104,7 +111,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
       // company_members_select + companies_select_member (RLS): tylko własne aktywne członkostwo.
       const company = await queryOne<Record<string, unknown>>(tx, 'company.my-company',
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
-                c.website, c.logo_url
+                c.website, c.logo_url, c.website_pending, c.logo_url_pending,
+                c.links_review_status, c.links_pending_at, c.links_review_reason
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -134,11 +142,79 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
             : null,
         website: asNullableString(company['website']),
         logoUrl: asNullableString(company['logo_url']),
+        linksReview: parseCompanyLinksReview(company),
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };
   } catch (error) {
     captureError(error, { area: 'company.getMyCompany' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Wynik odczytu KONKRETNEJ firmy po identyfikatorze (#843) — niezależnie od aktywnej firmy
+ * z cookie. `not_found` = brak AKTYWNEGO członkostwa wywołującego w tej firmie (usunięty
+ * dostęp, zła/cudza wartość) — jawny, bezpieczny stan, NIGDY ciche podstawienie innej firmy.
+ */
+export type CompanyByIdLoad =
+  | { status: 'ok'; company: MyCompany }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+/**
+ * Odczyt danej firmy po `companyId`, wymagany dla linków decyzji (e-mail/powiadomienie), które
+ * niosą identyfikator firmy, KTÓREJ DOTYCZY zdarzenie — a nie identyfikator aktywnej firmy z
+ * cookie (#843: właściciel kilku firm z inną aktywną w cookie widział dane złej firmy).
+ * Bez env (demo) → `not_found` (brak per-firmowego kontekstu demo).
+ */
+export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad> {
+  if (!isPortalDataConfigured()) return { status: 'not_found' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
+
+    // company_members_select + companies_select_member (RLS): wyłącznie WŁASNE aktywne
+    // członkostwo w tej konkretnej firmie — brak wiersza = brak dostępu, nie inna firma.
+    const row = await withPortalTransaction(me, (tx) =>
+      queryOne<Record<string, unknown>>(tx, 'company.by-id',
+        `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
+                c.website, c.logo_url, c.website_pending, c.logo_url_pending,
+                c.links_review_status, c.links_pending_at, c.links_review_reason, m.role
+           FROM public.company_members m
+           JOIN public.companies c ON c.id = m.company_id
+          WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
+          LIMIT 1`, [me.id, companyId]),
+    );
+
+    const company = asRecord(row);
+    const id = asString(company['id']);
+    if (!id) return { status: 'not_found' };
+
+    const status = asString(company['status'], 'unverified');
+    const role = asString(company['role'], 'member');
+    return {
+      status: 'ok',
+      company: {
+        id,
+        name: asString(company['name']),
+        slug: asString(company['slug']),
+        status,
+        vatNumber: asNullableString(company['vat_number']),
+        verifiedAt: asNullableString(company['verified_at']),
+        statusReason:
+          status === 'rejected' || status === 'suspended'
+            ? asNullableString(company['status_reason'])
+            : null,
+        website: asNullableString(company['website']),
+        logoUrl: asNullableString(company['logo_url']),
+        linksReview: parseCompanyLinksReview(company),
+        canEdit: role === 'owner' || role === 'admin',
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'company.getCompanyById' });
     return { status: 'error' };
   }
 }
