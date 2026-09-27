@@ -13,15 +13,28 @@ import { findSensitiveData } from '@/lib/privacy/sensitive-data';
  * Usuwane (zastępowane neutralnym `[…]`, bez tekstu w konkretnym języku):
  *   - e-maile, telefony, NISS/BIS/PESEL, numery kart i dokumentów — detektory
  *     `src/lib/privacy/sensitive-data.ts` (te same co w aplikacji i imporcie AI);
- *   - adresy URL (ze schematem, `www.` albo host z domeną i ścieżką).
+ *   - adresy URL (ze schematem, `www.` albo host z domeną i ścieżką);
+ *   - gołe domeny bez schematu/ścieżki (#716), np. „firma.be” albo „rekrutacja.acme.be”,
+ *     także z portem — ograniczone do wiarygodnej listy TLD, żeby nie niszczyć zwykłych
+ *     skrótów/inicjałów (np. „sp. z o.o.”, „np.”, „itd.”).
  * Fail-closed: jeśli po redakcji detektor nadal coś znajduje albo zostaje znak `@`,
  * cytatu nie ma (e-mail bez cytatu, treść w panelu).
  */
 export const MESSAGE_EXCERPT_MAX = 200;
 export const EXCERPT_REDACTION = '[…]';
 
-const URL_RE =
-  /\b(?:(?:https?|ftp):\/\/|www\.)[^\s<>"'`]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s<>"'`]*/gi;
+// Lista nie jest wyczerpująca — to heurystyka „prawdopodobna domena”, nie rejestr TLD.
+// Obejmuje popularne globalne końcówki oraz ccTLD krajów UE/EOG istotnych dla portalu.
+const BARE_DOMAIN_TLDS =
+  'com|net|org|info|biz|eu|io|co|app|dev|shop|online|store|pro|me|tv|name|xyz|gov|edu|int|mil|' +
+  'be|nl|fr|de|pl|uk|ie|es|it|pt|lu|at|ch|dk|se|no|fi|gr|cz|sk|hu|ro|bg|hr|si|lt|lv|ee';
+
+const URL_RE = new RegExp(
+  '\\b(?:(?:https?|ftp)://|www\\.)[^\\s<>"\'`]+' +
+    '|\\b(?:[a-z0-9-]+\\.)+[a-z]{2,}/[^\\s<>"\'`]*' +
+    `|\\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+(?:${BARE_DOMAIN_TLDS})\\b(?::\\d{2,5})?`,
+  'gi',
+);
 // Znaki sterujące (poza spacjami, które i tak zwijamy) i znaki kierunku tekstu.
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g;
 
