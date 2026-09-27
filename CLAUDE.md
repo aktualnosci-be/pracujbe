@@ -15,8 +15,8 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
-Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: produkcja na migracji 0144,
-`main` ma 0145, brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
+Blokery startu (kod vs właściciel/infra/prawnik, stan 27.09.2026: produkcja na migracji 0148,
+brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
 bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
@@ -2222,6 +2222,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (skrypty operatora i usługi pomocnicze = sekcja 2E, zakomentowane w przykładzie); zmienne
   platformy/testów/CI (`E2E_PG*`, `VIES_LIVE_SMOKE`, `GITHUB_*`…) na allow-liście z uzasadnieniem;
   kontrola ujemna: zmienna tylko w kodzie = czerwony. Skrypty `*.sh` nie są skanowane.
+  Stan migracji produkcji w dokumentach startowych: `docs/LAUNCH_CHECKLIST.md` §0 (wiersz „Baza”),
+  §4 i sekcja 0 tego pliku podają ten sam numer ostatniej zastosowanej migracji (27.09.2026:
+  `0148`). Strażnik `launch-checklist-migrations.test.ts`: trzy miejsca zgodne, numer istnieje
+  w `supabase/migrations`/`database/*`, punkt „[ ]” w §4 i „`main` ma …” w §0 nie wskazują
+  migracji już zastosowanej (kontrole ujemne, w tym stan sprzed 27.09 z `0145` „do
+  zastosowania”). Nowa migracja na `main` nie wymaga zmiany dokumentów; po `apply` numer
+  przesuwa człowiek (strażnik nie zna stanu produkcji).
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 
 ---
