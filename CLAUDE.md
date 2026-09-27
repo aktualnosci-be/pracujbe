@@ -652,8 +652,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
-  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Linki Pomoc/Prywatność
-  w stopce e-maili (#6) są w `src/emails/_components.tsx` (język odbiorcy). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
+  `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
+  `footer.faq` strony, `data-email-help`) i link „Prywatność” → `/{locale}/polityka-prywatnosci`
+  (`data-email-privacy`; zostaje — decyzja właściciela 26.09.2026), oba w języku odbiorcy. Test
+  `email-brand-layout` (kontrole ujemne: język nadawcy, brak któregoś linku). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
   (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
@@ -1204,8 +1207,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `reason: 'sensitiveId'`, bez RPC) i w `MessageComposer` (błąd przy polu
   `messages.composerSensitiveId`, treść zostaje, podpowiedź `composerSensitiveIdHint`
   w `aria-describedby`); bez migracji (RPC `send_message` woła tylko serwer). Test:
-  `messages-sensitive-id` (kontrola ujemna). **Otwarte:** ocena prawna, treść poradnika
-  i formularza CV (#495), import CV (#487), nazwy załączników w rozmowach.
+  `messages-sensitive-id` (kontrola ujemna). Nazwy plików załączników w rozmowach
+  (#495): `checkAttachmentFile` (`src/lib/validation/message-attachment.ts`, przeglądarka i akcja
+  `uploadMessageAttachment`/`storeMessageAttachment`) odrzuca nazwę z NISS/BIS, PESEL, eID albo
+  „paszport nr…” (`attachmentNameForScan`: bez rozszerzenia, `_`/`+` → spacja) → `reason:
+  'sensitiveId'`, komunikat `messages.attachmentSensitiveId` przy pliku, nic nie trafia do
+  bucketu. Test: `message-attachment-name` (kontrola ujemna bez normalizacji separatorów),
+  `message-attachments-{actions,service,ui}`. **Otwarte:** ocena prawna, treść
+  poradnika i formularza CV (#495), import CV (#487).
   Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
   (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
   opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →

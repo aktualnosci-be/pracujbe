@@ -121,6 +121,19 @@ describe('storeMessageAttachment', () => {
     expect(store.put).not.toHaveBeenCalled();
   });
 
+  it('nazwa pliku z numerem PESEL/eID (#495) — bez kontroli dostępu i zapisu w buckecie', async () => {
+    for (const name of ['skan_44051401359.png', 'eid 591-2345678-29.png']) {
+      expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, file(PNG, 'image/png', name))).toEqual({
+        ok: false, error: 'VALIDATION_FAILED', reason: 'sensitiveId',
+      });
+    }
+    expect(rpc).not.toHaveBeenCalled();
+    expect(store.put).not.toHaveBeenCalled();
+    // Kontrola ujemna: ta sama treść pod zwykłą nazwą trafia do bucketu.
+    expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, file(PNG, 'image/png', 'skan.png'))).toEqual({ ok: true, id: ATT });
+    expect(store.put).toHaveBeenCalledOnce();
+  });
+
   it('bez dostępu do rozmowy (np. blokada firmy) nic nie trafia do bucketu', async () => {
     vi.mocked(rpc).mockResolvedValue(false);
     expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, file(PNG))).toEqual({
