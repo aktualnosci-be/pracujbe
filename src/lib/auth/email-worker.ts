@@ -43,8 +43,18 @@ export interface AuthEmailProcessResult {
    * próby i wyjdą w następnym oknie. To nie jest błąd — `ok` bez zmian.
    */
   deferred?: number;
+  /**
+   * Odłożenie zlecenia (`defer_email`) zawiodło — zostaje w stanie `leased` do wygaśnięcia
+   * dzierżawy zamiast wrócić do kolejki od razu (#665). Alarm dla cronu.
+   */
+  deferErrors?: number;
+  /**
+   * Sprawdzenie budżetu okna (`take_send_budget`) zawiodło (błąd połączenia/RPC) — paczka jest
+   * zatrzymywana i odkładana zamiast wysyłana bez ograniczenia (#673). Alarm dla cronu.
+   */
+  budgetErrors?: number;
   skipped?: string;
-  /** `false` = realny problem (brak konfiguracji w produkcji, błąd claimu/ACK) → 503 dla cronu. */
+  /** `false` = realny problem (brak konfiguracji w produkcji, błąd claimu/ACK/budżetu/odłożenia) → 503 dla cronu. */
   ok: boolean;
 }
 
@@ -98,6 +108,8 @@ export async function processAuthEmailBatch(
   let stale = 0;
   let ackErrors = 0;
   let deferred = 0;
+  let deferErrors = 0;
+  let budgetErrors = 0;
   for (const [index, delivery] of queue.entries()) {
     let message: { subject: string; html: string; text: string };
     let prepared: ReturnType<typeof prepareAuthEmail>;
@@ -110,19 +122,24 @@ export async function processAuthEmailBatch(
       failed += 1;
       continue;
     }
-    // Budżet okna dostawcy (pula `auth`, #45/0137) — po renderze, tuż przed wysyłką. Odmowa:
-    // to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby. Awaria poboru nie
-    // blokuje listu konta (fail-open, jak dawny hook): limit dostawcy zostaje ostatnią granicą.
+    // Budżet okna dostawcy (pula `auth`, #45/0137) — po renderze, tuż przed wysyłką. Odmowa: to
+    // i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby. Awaria poboru NIE jest
+    // traktowana jako zgoda (#673): nie wiadomo, czy okno jest pełne, więc paczka jest zatrzymywana
+    // i odkładana jak przy jawnej odmowie — limit dostawcy zostaje ostatnią granicą.
     let budget: AuthSendBudget;
     try {
       budget = await takeAuthSendBudget(pool, prepared.template);
     } catch (error) {
       captureError(error, { area: 'auth.email.budget', kind: delivery.kind });
-      budget = { granted: true };
+      budgetErrors += 1;
+      budget = { granted: false, retryAt: null };
     }
     if (!budget.granted) {
       for (const pending of queue.slice(index)) {
+        // Awaria odłożenia jest jawna (#665): zlecenie zostaje w stanie `leased` do wygaśnięcia
+        // dzierżawy, a cron o tym wie zamiast cicho liczyć je jako bezpiecznie odłożone.
         if (await deferAuthEmail(pool, pending, budget.retryAt).catch(() => false)) deferred += 1;
+        else deferErrors += 1;
       }
       break;
     }
@@ -152,7 +169,18 @@ export async function processAuthEmailBatch(
       ackErrors += 1;
     }
   }
-  return { processed: queue.length, sent, failed, expired, stale, ackErrors, deferred, ok: ackErrors === 0 };
+  return {
+    processed: queue.length,
+    sent,
+    failed,
+    expired,
+    stale,
+    ackErrors,
+    deferred,
+    deferErrors,
+    budgetErrors,
+    ok: ackErrors === 0 && deferErrors === 0 && budgetErrors === 0,
+  };
 }
 
 /**

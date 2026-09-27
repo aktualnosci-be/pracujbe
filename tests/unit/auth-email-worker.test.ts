@@ -182,12 +182,40 @@ describe('budżet okna dostawcy (pula auth, 0137)', () => {
     expect(pool.calls.filter((c) => c.sql.includes('take_send_budget'))).toHaveLength(1);
   });
 
-  it('awaria poboru budżetu → list konta wychodzi (fail-open), błąd w kanale bez sekretów', async () => {
-    const pool = fakePool([delivery()], { budget: 'throws' });
+  it('awaria poboru budżetu → paczka zatrzymana i odłożona (fail-closed), ok: false (#673)', async () => {
+    const pool = fakePool([delivery(), delivery({ id: second })], { budget: 'throws' });
     const result = await processAuthEmailBatch(pool as never, { send }, { baseURL, from: 'x <x@pracuj.be>' });
-    expect(result).toMatchObject({ sent: 1, deferred: 0, ok: true });
+    expect(result).toMatchObject({ processed: 2, sent: 0, deferred: 2, budgetErrors: 1, ok: false });
+    expect(send).not.toHaveBeenCalled();
     expect(vi.mocked(captureError)).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({ area: 'auth.email.budget' }));
     expectNoSecretsInCapturedErrors();
+    // Awaria zatrzymuje sprawdzanie budżetu dla kolejnych zleceń tej paczki.
+    expect(pool.calls.filter((c) => c.sql.includes('take_send_budget'))).toHaveLength(1);
+  });
+
+  it('odmowa budżetu, jedno odłożenie zawodzi → deferErrors, ok: false (#665)', async () => {
+    const calls: { sql: string; params?: unknown[] }[] = [];
+    let firstDeferSeen = false;
+    const failingDeferPool = {
+      calls,
+      query: vi.fn(async (sql: string, params?: unknown[]) => {
+        calls.push({ sql, params });
+        if (sql.includes('expire_emails')) return { rows: [{ expired: 0 }] };
+        if (sql.includes('claim_emails')) return { rows: [delivery(), delivery({ id: second })] };
+        if (sql.includes('take_send_budget')) return { rows: [{ granted: false, retry_at: RETRY_AT }] };
+        if (sql.includes('defer_email')) {
+          if (!firstDeferSeen) {
+            firstDeferSeen = true;
+            throw new Error('connection terminated');
+          }
+          return { rows: [{ deferred: true }] };
+        }
+        throw new Error(`nieoczekiwane zapytanie ${sql}`);
+      }),
+    };
+    const result = await processAuthEmailBatch(failingDeferPool as never, { send }, { baseURL, from: 'x <x@pracuj.be>' });
+    expect(result).toMatchObject({ processed: 2, sent: 0, deferred: 1, deferErrors: 1, budgetErrors: 0, ok: false });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('błąd renderu nie zużywa budżetu', async () => {
