@@ -170,7 +170,7 @@ describe('powiązania UI', () => {
     expect(titleKeyForType('system', { kind: 'screening_review', status: 'rejected' }, 'job')).toBe(
       'itemScreeningRejected',
     );
-    // #497 (0201): pytanie opublikowanej oferty odrzucone = ukryte, osobny tytuł z prośbą o poprawkę.
+    // #497 (0154): pytanie opublikowanej oferty odrzucone = ukryte, osobny tytuł z prośbą o poprawkę.
     expect(titleKeyForType('system', { kind: 'screening_review', status: 'hidden' }, 'job')).toBe(
       'itemScreeningHidden',
     );

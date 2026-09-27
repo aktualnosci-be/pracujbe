@@ -71,7 +71,7 @@ const MUTATIONS = {
   // Język e-maila nie z profilu odbiorcy (Invariant #1).
   'recipient-locale-en': `CREATE OR REPLACE FUNCTION public.resolve_recipient_locale(p_profile_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT 'en'::text $$`,
-  // #497 (0201): pytanie odrzucone po publikacji wraca do formularza aplikowania.
+  // #497 (0154): pytanie odrzucone po publikacji wraca do formularza aplikowania.
   'screening-hidden-off': `CREATE OR REPLACE FUNCTION public.get_public_job_screening_questions(p_job_id uuid)
     RETURNS TABLE (id uuid, "position" smallint, type text, required boolean, prompt jsonb, options jsonb)
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$

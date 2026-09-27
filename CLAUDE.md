@@ -1463,7 +1463,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   SR497 (kontrola ujemna: bez strażnika oferta się publikuje); unit `screening-risk`,
   `screening-review`, `screening-review-editor`; E2E `admin-screening-review`,
   `job-wizard-screening`. Teksty komunikatów do akceptacji właściciela.
-  Odrzucenie po publikacji (decyzja właściciela 26.09.2026, migracja `0201` — numer tymczasowy):
+  Odrzucenie po publikacji (decyzja właściciela 26.09.2026, migracja `0154`):
   przegląd `rejected` bieżącej treści pytania oferty poza szkicem = pytanie UKRYTE, oferta
   zostaje aktywna. `get_public_job_screening_questions` go pomija (ApplyModal i gość; strona
   ISR odświeża się w oknie `revalidate`), `record_screening_answers` po cichu pomija odpowiedź

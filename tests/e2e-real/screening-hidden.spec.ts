@@ -3,7 +3,7 @@ import { createStack, rows, rpc, rpcRows, type Actor, type Stack } from './suppo
 import { chooseOption, contextWithSession, msg, richLabel } from './support/ui';
 
 /**
- * #497 (0201, decyzja właściciela 26.09.2026): pytanie screeningowe odrzucone PO publikacji
+ * #497 (0154, decyzja właściciela 26.09.2026): pytanie screeningowe odrzucone PO publikacji
  * oferty jest ukrywane od razu — na PostgreSQL 16 z migracjami produkcyjnymi, w przeglądarce.
  *
  * Stan startowy jak po 0103 dla oferty opublikowanej wcześniej: oferta aktywna, ryzykowne

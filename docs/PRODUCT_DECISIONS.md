@@ -27,7 +27,7 @@ a firma nie widzi odpowiedzi udzielonych na to pytanie wcześniej. Te odpowiedzi
 w bazie do decyzji o retencji (#486). Aktywni rekruterzy firmy dostają w panelu powiadomienie
 z prośbą o poprawkę. Wstrzymanie i wznowienie oferty z ukrytym pytaniem działa; pytanie
 w szkicu nadal blokuje publikację do poprawki. Egzekwowanie w bazie: migracja „pytanie
-odrzucone po publikacji” (0201 — numer tymczasowy).
+odrzucone po publikacji” (0154).
 
 ## 2026-09-26: porządkowanie bucketu plików w trybie obserwacji
 

@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0201 — pytanie screeningowe odrzucone po publikacji oferty jest ukrywane (#497).
--- NUMER TYMCZASOWY — ostateczny nada integrator (kolejka migracji).
+-- 0154 — pytanie screeningowe odrzucone po publikacji oferty jest ukrywane (#497).
 --
 -- Decyzja właściciela z 26.09.2026: gdy admin odrzuci pytanie oferty, która NIE jest już
 -- szkicem (aktywna, wstrzymana, zamknięta, wygasła — np. pytanie zapisane przed 0103 i
@@ -194,7 +193,7 @@ begin
      where q.job_id = new.id
        and cardinality(q.risk_categories) > 0
        and coalesce(r.status, 'pending') <> 'approved'
-       -- #497 (0201): poza szkicem odrzucone = ukryte, nie blokuje wznowienia/ponownego otwarcia.
+       -- #497 (0154): poza szkicem odrzucone = ukryte, nie blokuje wznowienia/ponownego otwarcia.
        and not (r.status = 'rejected' and old.status is distinct from 'draft')
      order by (r.status = 'rejected') desc nulls last, q.position
      limit 1;
@@ -259,7 +258,7 @@ begin
 
   select company_id, status::text into v_company, v_job_status from public.jobs where id = v_row.job_id;
 
-  -- #497 (0201): oferta poza szkicem — pytanie znika od razu, oferta zostaje; prośba
+  -- #497 (0154): oferta poza szkicem — pytanie znika od razu, oferta zostaje; prośba
   -- o poprawkę trafia do wszystkich aktywnych recruiter+ firmy (tytuł w ich języku w UI).
   if p_decision = 'rejected' and v_job_status is distinct from 'draft' then
     perform public.write_audit('screening_question.hidden', 'screening_question_review', p_review_id, null,

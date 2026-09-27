@@ -7140,7 +7140,7 @@ select pg_temp.assert(
   'SR497-9b oferta wstrzymana, pytanie w kolejce');
 
 -- ============================================================================
--- SH497. Pytanie odrzucone PO publikacji oferty jest ukrywane (0201, #497, decyzja właściciela
+-- SH497. Pytanie odrzucone PO publikacji oferty jest ukrywane (0154, #497, decyzja właściciela
 --        26.09.2026): oferta zostaje aktywna, pytanie znika z formularza, odpowiedź na nie jest
 --        pomijana bez błędu, firma nie widzi zapisanych odpowiedzi (wiersze zostają), prośba
 --        o poprawkę dla recruiter+ firmy, audyt bez treści, wznowienie nie jest blokowane.

@@ -90,7 +90,7 @@ describe('przegląd pytań screeningowych (#497) na nowej warstwie danych', () =
   });
 });
 
-describe('pytanie odrzucone po publikacji jest ukrywane (#497, 0201)', () => {
+describe('pytanie odrzucone po publikacji jest ukrywane (#497, 0154)', () => {
   it('oferta aktywna, pytanie znika z formularza, firma nie widzi odpowiedzi, powiadomienie recruiter+', async () => {
     const pg = realSession.db!;
     const company = (await pg.admin.query(`SELECT company_id FROM public.jobs WHERE id = $1`, [jobId])).rows[0].company_id;
