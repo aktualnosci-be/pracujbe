@@ -43,7 +43,7 @@ describe('backup-s3.mjs — rozpoznanie bezpośredniego uruchomienia ze spacją 
 
     const result = spawnSync(process.execPath, [script, 'check', 'write'], {
       encoding: 'utf8',
-      env: { PATH: process.env.PATH ?? '' },
+      env: { PATH: process.env.PATH ?? '', NODE_ENV: 'test' },
     });
 
     expect(result.status).toBe(2);
@@ -62,7 +62,7 @@ describe('backup-s3.mjs — rozpoznanie bezpośredniego uruchomienia ze spacją 
 
       const result = spawnSync(process.execPath, [script, 'check', 'write'], {
         encoding: 'utf8',
-        env: { PATH: process.env.PATH ?? '' },
+        env: { PATH: process.env.PATH ?? '', NODE_ENV: 'test' },
       });
 
       expect(result.status).toBe(2);
@@ -77,7 +77,7 @@ describe('backup-s3.mjs — rozpoznanie bezpośredniego uruchomienia ze spacją 
 
     const result = spawnSync(process.execPath, [script, 'not-a-command'], {
       encoding: 'utf8',
-      env: { PATH: process.env.PATH ?? '' },
+      env: { PATH: process.env.PATH ?? '', NODE_ENV: 'test' },
     });
 
     expect(result.status).toBe(2);
