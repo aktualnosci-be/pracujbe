@@ -747,6 +747,7 @@
     "recommendedJobs": "Aanbevolen vacatures",
     "recommendedIntro": "Vacatures gekozen op basis van je profiel. Zijn er nog geen matches, dan tonen we de nieuwste vacatures.",
     "recommendedLatest": "Nieuwste vacature",
+    "recommendedApplied": "Je hebt al op deze vacature gesolliciteerd",
     "recommendedEmptyTitle": "Er zijn nu geen vacatures om te tonen",
     "recommendedEmptyBody": "Bekijk alle vacatures en kom later terug voor nieuwe kansen.",
     "recommendedBrowse": "Bekijk vacatures",
@@ -2543,6 +2544,11 @@
       "good": "Uitstekende match — je voldoet aan de meeste belangrijke vereisten.",
       "partial": "Gedeeltelijke match — je voldoet aan een deel van de vereisten.",
       "low": "Lage match — deze vacature past beperkt bij je profiel."
+    },
+    "summaryShort": {
+      "good": "Uitstekende match",
+      "partial": "Gedeeltelijke match",
+      "low": "Lage match"
     },
     "mandatory": "Verplichte vereisten: {met} van {total}",
     "strengthsTitle": "Jouw troeven",

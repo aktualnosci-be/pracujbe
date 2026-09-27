@@ -26,6 +26,7 @@ import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
+import { toMatchExplanation, type MatchExplanation } from '@/lib/matching/explanation';
 import { customOfferMessage } from '@/lib/offers/default-message';
 import { parseScreeningAnswers, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
@@ -67,6 +68,16 @@ export interface RecommendedJob {
   /** Wynik dopasowania (%). `null` = brak policzonego matchu (fallback do najnowszych ofert). */
   match: number | null;
   saved: boolean;
+  /**
+   * Polecane: krótkie wyjaśnienie zapisanego dopasowania (`null` przy ofercie zastępczej bez
+   * wyniku). Inne listy (zapisane) pola nie ustawiają.
+   */
+  explanation?: MatchExplanation | null;
+  /**
+   * Polecane: id WŁASNEGO zgłoszenia na tę ofertę (link do szczegółu), `null` = brak zgłoszenia.
+   * Karta pokazuje „już aplikowałeś” zamiast udawać nową propozycję.
+   */
+  applicationId?: string | null;
 }
 
 export interface MyApplication {
@@ -310,6 +321,35 @@ async function fetchAppliedJobsForPage(
   return toPublicJobsMap(rows, 'job_id');
 }
 
+/**
+ * Dokleja do polecanych ofert id WŁASNEGO zgłoszenia (jedno zapytanie tylko dla pokazanych
+ * ofert, jawny `candidate_id = me` — RLS 0039 wpuszcza też rekrutera firmy). Zgłoszenie
+ * usunięte (`deleted_at`) się nie liczy; wycofane tak — ponowna aplikacja i tak jest
+ * zablokowana (0071), więc karta prowadzi do istniejącego zgłoszenia.
+ */
+async function withOwnApplications(
+  tx: TransactionQuery,
+  userId: string,
+  jobs: RecommendedJob[],
+): Promise<RecommendedJob[]> {
+  if (jobs.length === 0) return jobs;
+  const rows = await queryRows(tx, 'candidate.recommended-applications',
+    `SELECT DISTINCT ON (job_id) job_id, id FROM public.applications
+      WHERE candidate_id = $1
+        AND deleted_at IS NULL
+        AND job_id = ANY($2::uuid[])
+      ORDER BY job_id, submitted_at DESC NULLS LAST, id DESC`,
+    [userId, jobs.map((job) => job.id)]);
+  const byJob = new Map<string, string>();
+  for (const row of rows) {
+    const r = asRecord(row);
+    const jobId = asStr(r['job_id']);
+    const id = asStr(r['id']);
+    if (jobId && id) byJob.set(jobId, id);
+  }
+  return jobs.map((job) => ({ ...job, applicationId: byJob.get(job.id) ?? null }));
+}
+
 /** Zbiór job_id zapisanych przez kandydata. */
 async function fetchSavedJobIds(tx: TransactionQuery, userId: string): Promise<Set<string>> {
   const rows = await queryRows(tx, 'candidate.saved-job-ids',
@@ -373,18 +413,34 @@ const loadProfileSummary = cache((me: PortalIdentity): Promise<CandidateProfileS
 
 const DEMO_RECOMMENDED_SCORES = [92, 89, 87, 84, 82] as const;
 
+const DEMO_RECOMMENDED_EXPLANATIONS = [
+  { mandatoryMet: 3, mandatoryTotal: 3, strengths: ['allMandatorySkills', 'localCandidate'] },
+  { mandatoryMet: 2, mandatoryTotal: 2, strengths: ['immediateStart'] },
+  { mandatoryMet: 0, mandatoryTotal: 0, strengths: ['withinCommuteRadius', 'ownTransport'] },
+  { mandatoryMet: 2, mandatoryTotal: 3, strengths: ['experienceExceeds'] },
+  { mandatoryMet: 1, mandatoryTotal: 1, strengths: [] },
+] as const;
+
 function demoRecommended(locale: Locale): RecommendedJob[] {
   return resolveDemoJobs(locale)
     .slice(0, 5)
-    .map((job, index) => ({
-      id: job.id,
-      slug: job.slug,
-      title: job.title,
-      companyName: job.companyName,
-      city: job.city,
-      match: DEMO_RECOMMENDED_SCORES[index] ?? 80,
-      saved: false,
-    }));
+    .map((job, index) => {
+      const score = DEMO_RECOMMENDED_SCORES[index] ?? 80;
+      // Zgłoszenia demo (`DEMO_APPLICATION_PICKS`) wskazują te same oferty demo — spójny link.
+      const pick = DEMO_APPLICATION_PICKS.findIndex((p) => p.idx === index);
+      const demo = DEMO_RECOMMENDED_EXPLANATIONS[index] ?? { mandatoryMet: 0, mandatoryTotal: 0, strengths: [] };
+      return {
+        id: job.id,
+        slug: job.slug,
+        title: job.title,
+        companyName: job.companyName,
+        city: job.city,
+        match: score,
+        saved: false,
+        explanation: toMatchExplanation({ score, ...demo }),
+        applicationId: pick >= 0 ? `demo-app-${pick}` : null,
+      };
+    });
 }
 
 const DEMO_APPLICATION_PICKS = [
@@ -647,12 +703,22 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
 
     return await withPortalTransaction(me, async (tx) => {
       const matchRows = (await queryRows(tx, 'candidate.recommended-matches',
-        `SELECT job_id, score FROM public.matches
+        `SELECT job_id, score, mandatory_met, mandatory_total, strengths FROM public.matches
           WHERE candidate_id = $1
           ORDER BY score DESC, job_id ASC
           LIMIT $2`, [me.id, RECOMMENDED_MATCHES_LIMIT])).map((row) => {
         const r = asRecord(row);
-        return { jobId: asStr(r['job_id']), score: asNum(r['score']) };
+        const score = asNum(r['score']);
+        return {
+          jobId: asStr(r['job_id']),
+          score,
+          explanation: toMatchExplanation({
+            score,
+            mandatoryMet: r['mandatory_met'],
+            mandatoryTotal: r['mandatory_total'],
+            strengths: r['strengths'],
+          }),
+        };
       }).filter((row) => row.jobId.length > 0);
       const savedIds = await fetchSavedJobIds(tx, me.id);
       const jobsById = await fetchPublicJobsByIds(tx, resolvedLocale, [...new Set(matchRows.map((row) => row.jobId))]);
@@ -664,10 +730,10 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
         const job = jobsById.get(row.jobId);
         if (!job || seen.has(job.id)) continue;
         seen.add(job.id);
-        matched.push({ ...job, match: row.score, saved: savedIds.has(job.id) });
+        matched.push({ ...job, match: row.score, saved: savedIds.has(job.id), explanation: row.explanation });
         if (matched.length >= RECOMMENDED_LIMIT) break;
       }
-      if (matched.length > 0) return matched;
+      if (matched.length > 0) return withOwnApplications(tx, me.id, matched);
 
       const jobsMap = await fetchPublicJobsMap(tx, resolvedLocale, PUBLIC_JOBS_LOOKUP_LIMIT);
       // 2) Fallback: najnowsze oferty publiczne (bez policzonego matchu). Przepuszczamy je przez
@@ -676,10 +742,10 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
       const latest: RecommendedJob[] = [];
       for (const job of jobsMap.values()) {
         if (!allowed.has(job.id)) continue;
-        latest.push({ ...job, match: null, saved: savedIds.has(job.id) });
+        latest.push({ ...job, match: null, saved: savedIds.has(job.id), explanation: null });
         if (latest.length >= RECOMMENDED_LIMIT) break;
       }
-      return latest;
+      return withOwnApplications(tx, me.id, latest);
     });
   } catch (error) {
     captureError(error, { area: 'candidate.getRecommendedJobs' });

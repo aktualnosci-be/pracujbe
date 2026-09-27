@@ -441,11 +441,21 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
   });
 
   it('polecane: najlepsze własne dopasowania, fallback najnowszych bez procentu', async () => {
-    await db().admin.query(`INSERT INTO public.matches(candidate_id, job_id, score) VALUES ($1, $2, 91), ($1, $3, 77), ($4, $5, 99)`,
+    await db().admin.query(`INSERT INTO public.matches(candidate_id, job_id, score, mandatory_met, mandatory_total, strengths)
+      VALUES ($1, $2, 91, 2, 2, ARRAY['localCandidate', 'obcy']), ($1, $3, 77, 0, 0, '{}'), ($4, $5, 99, 0, 0, '{}')`,
       [alice, jobIds[7], jobIds[4], bob, jobIds[9]]);
+    // Alice aplikowała wcześniej na wszystkie oferty (historia zgłoszeń) — karta niesie JEJ zgłoszenie.
+    const own = await db().admin.query<{ id: string }>(
+      `SELECT id FROM public.applications WHERE candidate_id = $1 AND job_id = $2 AND deleted_at IS NULL`, [alice, jobIds[7]]);
+    expect(own.rows).toHaveLength(1);
     actAs({ id: alice, role: 'candidate' });
     const recommended = await candidateData.getRecommendedJobs('pl', true);
     expect(recommended.map((r) => [r.id, r.match])).toEqual([[jobIds[7], 91], [jobIds[4], 77]]);
+    expect(recommended[0]).toMatchObject({
+      explanation: { summaryKey: 'good', mandatory: { met: 2, total: 2 }, strengths: ['localCandidate'] },
+      applicationId: own.rows[0]?.id ?? null,
+    });
+    expect(recommended[1]?.explanation).toEqual({ summaryKey: 'good', mandatory: null, strengths: [] });
     actAs({ id: stranger, role: 'employer' });
     const fallback = await candidateData.getRecommendedJobs('pl', true);
     expect(fallback).toHaveLength(5);

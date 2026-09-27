@@ -747,6 +747,7 @@
     "recommendedJobs": "Recommended jobs",
     "recommendedIntro": "Jobs selected for your profile. If there are no matches yet, we show the latest jobs.",
     "recommendedLatest": "Latest job",
+    "recommendedApplied": "You have already applied for this job",
     "recommendedEmptyTitle": "No jobs to show right now",
     "recommendedEmptyBody": "Browse all jobs and come back later for new opportunities.",
     "recommendedBrowse": "Browse jobs",
@@ -2543,6 +2544,11 @@
       "good": "Great match — you meet most of the key requirements.",
       "partial": "Partial match — you meet some of the requirements.",
       "low": "Low match — this job is a limited fit for your profile."
+    },
+    "summaryShort": {
+      "good": "Great match",
+      "partial": "Partial match",
+      "low": "Low match"
     },
     "mandatory": "Mandatory requirements: {met} of {total}",
     "strengthsTitle": "Your strengths",
