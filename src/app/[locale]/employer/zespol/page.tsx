@@ -155,6 +155,9 @@ export default async function EmployerTeamPage({
                 expiresLabel: formatDate(inv.expiresAt, locale)
                   ? t('expiresOn', { date: formatDate(inv.expiresAt, locale) })
                   : '',
+                createdLabel: formatDate(inv.createdAt, locale),
+                locale: inv.locale,
+                inviterName: inv.inviterName,
               }))}
             />
           </section>

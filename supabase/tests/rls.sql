@@ -14576,4 +14576,107 @@ select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- TI235. Oczekujące zaproszenia: język, autor, odnowienie (0235 — numer tymczasowy).
+-- get_company_invitations zwraca `locale` (0121) i `inviter_name`; bramka owner/admin bez
+-- zmian. Odnowienie = invite_company_member z językiem z bazy: ten sam wiersz, nowa ważność,
+-- autor = odnawiający. Kontrola ujemna: definicja z 0086 nie ma kolumny `locale`.
+-- ============================================================================
+\set TIO 'e8700000-0000-0000-0000-0000000235a1'
+\set TIA 'e8700000-0000-0000-0000-0000000235a2'
+\set TIR 'e8700000-0000-0000-0000-0000000235a3'
+\set TIX 'e8700000-0000-0000-0000-0000000235b1'
+\set TIC 'e8700000-0000-0000-0000-0000000235f1'
+\set TICX 'e8700000-0000-0000-0000-0000000235f2'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TIO','tio235@test.be','Olga O','{"role":"employer","first_name":"Olga","last_name":"Owner235","locale":"pl"}'),
+  (:'TIA','tia235@test.be','Adam A','{"role":"employer","first_name":"Adam","last_name":"Admin235","locale":"nl"}'),
+  (:'TIR','tir235@test.be','Rita R','{"role":"employer","first_name":"Rita","last_name":"Rec235","locale":"fr"}'),
+  (:'TIX','tix235@test.be','Xavier X','{"role":"employer","first_name":"Xavier","last_name":"Obcy235","locale":"en"}');
+update auth.users set email_verified = true where id in (:'TIO', :'TIA', :'TIR', :'TIX');
+insert into public.companies(id,name,status) values
+  (:'TIC','Firma TI235','verified'), (:'TICX','Firma TI235 obca','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'TIC',:'TIO','owner',true), (:'TIC',:'TIA','admin',true), (:'TIC',:'TIR','recruiter',true),
+  (:'TICX',:'TIX','owner',true);
+
+create or replace function pg_temp.ti_hash() returns text language sql volatile as $$
+  select encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex') $$;
+create or replace function pg_temp.ti_nonce() returns text language sql volatile as $$
+  select replace(gen_random_uuid()::text, '-', '') $$;
+
+-- TI235-1: owner zaprasza adres bez konta w języku nl — lista pokazuje język i autora.
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tiinv
+  from public.invite_company_member(:'TIC', 'nowy235@firma.be', 'member', 'nl', pg_temp.ti_hash(), pg_temp.ti_nonce()) \gset
+select pg_temp.assert(
+  (select locale = 'nl' and inviter_name = 'Olga Owner235'
+     from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+  'TI235-1 język zaproszenia i autor na liście');
+reset role; reset app.current_uid;
+
+-- TI235-2: odnowienie przez admina (język z bazy) — ten sam wiersz, dłuższa ważność, nowy autor,
+-- data utworzenia bez zmian, drugi e-mail rejestracji w języku zaproszenia.
+update public.company_invitations set expires_at = now() + interval '1 day' where id = :'tiinv';
+select created_at as ticreated from public.company_invitations where id = :'tiinv' \gset
+set role authenticated; set app.current_uid = :'TIA'; select pg_temp.assert_client_role();
+select invitation_id as tiinv2, created as ticreated2
+  from public.invite_company_member(:'TIC', 'nowy235@firma.be', 'member',
+    (select locale from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+    pg_temp.ti_hash(), pg_temp.ti_nonce()) \gset
+select pg_temp.assert(:'tiinv2' = :'tiinv' and not :'ticreated2'::boolean,
+  'TI235-2 odnowienie = to samo zaproszenie');
+select pg_temp.assert(
+  (select expires_at > now() + interval '13 days' and inviter_name = 'Adam Admin235'
+          and created_at = :'ticreated'::timestamptz and locale = 'nl'
+     from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+  'TI235-2b ważność 14 dni, autor = odnawiający, data utworzenia i język bez zmian');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where to_email = 'nowy235@firma.be' and template = 'teamInvitationSignup' and locale = 'nl') = 2,
+  'TI235-2c nowy link rejestracji w języku zaproszenia');
+
+-- TI235-3: bramka bez zmian — rekruter tej firmy i owner obcej firmy nie czytają listy.
+set role authenticated; set app.current_uid = :'TIR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.get_company_invitations(%L)', :'TIC'),
+  'PERMISSION_DENIED', 'TI235-3 rekruter nie widzi zaproszeń');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TIX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.get_company_invitations(%L)', :'TIC'),
+  'PERMISSION_DENIED', 'TI235-3b owner obcej firmy nie widzi zaproszeń');
+reset role; reset app.current_uid;
+set role anon;
+select pg_temp.expect_error(format('select * from public.get_company_invitations(%L)', :'TIC'),
+  'permission denied', 'TI235-3c anon bez EXECUTE');
+reset role;
+
+-- TI235-4: zaproszenie bez języka (sprzed 0121) → locale null, bez błędu.
+update public.company_invitations set locale = null where id = :'tiinv';
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select locale is null from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+  'TI235-4 zaproszenie bez języka = null');
+reset role; reset app.current_uid;
+
+-- TI235-5 (kontrola ujemna): definicja z 0086 nie zwraca języka — panel nie mógłby odnowić
+-- zaproszenia w jego języku ani go pokazać.
+begin;
+drop function public.get_company_invitations(uuid);
+create function public.get_company_invitations(p_company_id uuid)
+returns table (invitation_id uuid, email text, role text, expires_at timestamptz, created_at timestamptz)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select i.id, i.email::text, i.role::text, i.expires_at, i.created_at
+  from public.company_invitations i
+  where i.company_id = p_company_id and i.status = 'pending' and i.expires_at > now();
+$$;
+grant execute on function public.get_company_invitations(uuid) to authenticated;
+set local role authenticated; set local app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select locale from public.get_company_invitations(%L)', :'TIC'),
+  'column "locale" does not exist', 'TI235-5 kontrola ujemna: stara definicja bez języka');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
