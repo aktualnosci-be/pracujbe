@@ -2659,6 +2659,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  Unieważnianie cache po zmianie cyklu życia oferty (#775, bez migracji): `publishJob`,
+  `setJobStatus` (pause/resume/close/reopen) i `expire_due_jobs` w `/api/maintenance` (gdy
+  wygasiła choć jedną ofertę) wołają wspólny `revalidatePublicJobPaths()`
+  (`src/lib/jobs/public-cache.ts`) — rewaliduje wzorce z dynamicznym segmentem + typ `'page'`
+  (`/[locale]`, `/[locale]/oferty-pracy/[slug]`, `/[locale]/praca/kategoria/[category]`,
+  `/[locale]/praca/miasto/[city]`), więc bez znajomości dokładnego sluga/kategorii/miasta
+  zmienionej oferty. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
+  tylko widoków panelu (setJobStatus) — poprzednio wyrenderowana strona (i `JobPosting`) mogła
+  zostać widoczna jeszcze przez okno rewalidacji (60 s) po pauzie/zamknięciu/wygaśnięciu, a
+  nowo opublikowana/wznowiona oferta nie pojawiała się od razu. Rewalidacja następuje wyłącznie
+  po udanej transakcji (błąd RPC → bez wywołania). Testy: `job-lifecycle-public-cache`,
+  `job-expiry` (kontrola ujemna: 0 wygaszonych ofert i błąd RPC nie rewalidują niczego).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy: landingi przez `prerenderParamsAtBuild` (strony na pierwsze
   żądanie), odczyty ofert w `next build` zwracają pusty wynik (`isBuildPhase`), a layout `[locale]`
