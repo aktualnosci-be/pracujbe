@@ -173,7 +173,10 @@
     "noDescription": "Cette entreprise n'a pas encore ajouté de description.",
     "jobsHeading": "Offres actives de cette entreprise",
     "empty": "Cette entreprise n'a actuellement aucune offre active.",
-    "backToJobs": "Voir toutes les offres d'emploi"
+    "backToJobs": "Voir toutes les offres d'emploi",
+    "metaTitlePage": "Offres d'emploi chez {name} — page {page}",
+    "jobsCount": "{count, plural, one {# offre active} other {# offres actives}}",
+    "pageStatus": "Page {page} sur {lastPage}"
   },
   "common": {
     "appName": "Pracuj.be",

@@ -173,7 +173,10 @@
     "noDescription": "Ta firma nie dodała jeszcze opisu.",
     "jobsHeading": "Aktywne oferty tej firmy",
     "empty": "Ta firma nie ma teraz żadnych aktywnych ofert.",
-    "backToJobs": "Zobacz wszystkie oferty pracy"
+    "backToJobs": "Zobacz wszystkie oferty pracy",
+    "metaTitlePage": "Oferty pracy w firmie {name} — strona {page}",
+    "jobsCount": "{count, plural, one {# aktywna oferta} few {# aktywne oferty} many {# aktywnych ofert} other {# aktywnej oferty}}",
+    "pageStatus": "Strona {page} z {lastPage}"
   },
   "common": {
     "appName": "Pracuj.be",

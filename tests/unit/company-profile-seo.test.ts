@@ -16,7 +16,10 @@ import {
 
 const { getCompanyProfile } = vi.hoisted(() => ({ getCompanyProfile: vi.fn() }));
 
-vi.mock('@/lib/companies', () => ({ getCompanyProfile }));
+vi.mock('@/lib/companies', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/companies')>()),
+  getCompanyProfile,
+}));
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
   setRequestLocale: () => undefined,
@@ -25,13 +28,18 @@ vi.mock('@/i18n/navigation', () => ({ Link: () => null }));
 vi.mock('@/components/public/Breadcrumbs', () => ({ Breadcrumbs: () => null }));
 vi.mock('@/components/public/JobCard', () => ({ JobCard: () => null }));
 vi.mock('@/components/public/PublicSavedJobs', () => ({ PublicSavedJobsProvider: () => null }));
+vi.mock('@/components/public/Pagination', () => ({ Pagination: () => null }));
 
 const page = await import('@/app/[locale]/(public)/pracodawcy/[slug]/page');
+const nextPage = await import('@/app/[locale]/(public)/pracodawcy/[slug]/strona/[page]/page');
 
-function profile(activeJobsCount: number) {
+function profile(activeJobsCount: number, currentPage = 1) {
   return {
     company: { id: 'c1', slug: 'firma-x', name: 'Firma X', description: 'Opis', activeJobsCount },
     jobs: [],
+    page: currentPage,
+    lastPage: Math.max(1, Math.ceil(activeJobsCount / 50)),
+    pageSize: 50,
   };
 }
 
@@ -58,6 +66,33 @@ describe('metadane profilu firmy', () => {
   it('brak profilu (firma niezweryfikowana / zły slug): noindex, nofollow', async () => {
     getCompanyProfile.mockResolvedValue(null);
     expect((await metadata()).robots).toEqual({ index: false, follow: false });
+  });
+});
+
+describe('metadane kolejnej strony ofert profilu (#638)', () => {
+  const pageMetadata = (raw: string) =>
+    nextPage.generateMetadata({ params: Promise.resolve({ locale: 'nl', slug: 'firma-x', page: raw }) });
+
+  it('strona 2: własny canonical i hreflang tej samej strony, tytuł z numerem strony', async () => {
+    getCompanyProfile.mockResolvedValue(profile(120, 2));
+    const meta = await pageMetadata('2');
+    expect(getCompanyProfile).toHaveBeenCalledWith('firma-x', 'nl', 2);
+    expect(meta.robots).toBeUndefined();
+    expect(meta.alternates?.canonical).toMatch(/\/nl\/pracodawcy\/firma-x\/strona\/2$/);
+    expect((meta.alternates?.languages as Record<string, string>)['fr']).toMatch(/\/fr\/pracodawcy\/firma-x\/strona\/2$/);
+    expect(meta.title).toEqual({ absolute: 'metaTitlePage' });
+  });
+
+  it('kontrola ujemna: strona 1, zapis niekanoniczny i śmieci nie pytają bazy (404, noindex)', async () => {
+    for (const raw of ['1', '01', '2.0', 'x', '-2', '1e1']) {
+      expect((await pageMetadata(raw)).robots).toEqual({ index: false, follow: false });
+    }
+    expect(getCompanyProfile).not.toHaveBeenCalled();
+  });
+
+  it('strona za ostatnią (brak profilu z getCompanyProfile): noindex, nofollow', async () => {
+    getCompanyProfile.mockResolvedValue(null);
+    expect((await pageMetadata('9')).robots).toEqual({ index: false, follow: false });
   });
 });
 

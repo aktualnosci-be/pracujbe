@@ -173,7 +173,10 @@
     "noDescription": "This company has not added a description yet.",
     "jobsHeading": "Active jobs from this company",
     "empty": "This company has no active job openings right now.",
-    "backToJobs": "See all job listings"
+    "backToJobs": "See all job listings",
+    "metaTitlePage": "Jobs at {name} — page {page}",
+    "jobsCount": "{count, plural, one {# active job} other {# active jobs}}",
+    "pageStatus": "Page {page} of {lastPage}"
   },
   "common": {
     "appName": "Pracuj.be",
