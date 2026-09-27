@@ -1906,6 +1906,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0420` — numer tymczasowy,
+  `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
+  dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
+  `admin-dsa.other-admins`, `src/lib/data/admin-dsa.ts`) wymaga teraz `is_active = true`, nie
+  tylko `role = 'admin' AND deleted_at IS NULL`. Konto wyłączone operacyjnie (bez zmiany roli)
+  nie liczy się już jako dostępny drugi recenzent — autor pierwotnej decyzji może rozpatrzyć
+  odwołanie, gdy jedyny inny admin nie może się zalogować. Testy: integracyjny PG16
+  `portal-appeals.test.ts` (wyłączenie `is_active`, brak konfliktu, decyzja przechodzi,
+  przywrócenie), unit `moderation-appeals.test.ts` (SQL migracji i zapytania zawierają
+  `is_active = true`; kontrola ujemna: stara treść 0109 bez tego warunku).
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),

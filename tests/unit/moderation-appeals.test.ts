@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Locale } from '@/i18n/routing';
@@ -583,5 +585,36 @@ describe('odwołanie zgłaszającego od cofnięcia ograniczenia (0109)', () => {
     expect(html).toContain(`${SITE}/${locale}/zglos-tresc/sprawa`);
     expect(subject).not.toMatch(/\{\w+\}/);
     expect(html).not.toMatch(/\{\w+\}/);
+  });
+});
+
+describe('inny administrator do rozpatrzenia odwołania musi być AKTYWNY (#909)', () => {
+  it('loader „inny administrator” (admin-dsa.ts) filtruje po is_active = true', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/lib/data/admin-dsa.ts'), 'utf8');
+    const match = source.match(/admin-dsa\.other-admins'[\s\S]{0,220}/);
+    expect(match).not.toBeNull();
+    expect(match?.[0]).toMatch(/is_active\s*=\s*true/);
+  });
+
+  it('migracja 0420 nadpisuje admin_decide_appeal z warunkiem is_active = true dla „innego administratora”', () => {
+    const sql = readFileSync(
+      resolve(process.cwd(), 'supabase/migrations/0420_dsa_appeal_reviewer_active.sql'),
+      'utf8',
+    );
+    expect(sql).toMatch(/create or replace function public\.admin_decide_appeal/);
+    expect(sql).toMatch(
+      /p\.role = 'admin' and p\.deleted_at is null and p\.is_active = true and p\.id <> v_uid/,
+    );
+  });
+
+  // Kontrola ujemna: dawna wersja funkcji (0109, nadpisywana przez 0420) NIE sprawdzała
+  // is_active — wyłączone konto liczyło się jako dostępny drugi recenzent i blokowało
+  // autora pierwotnej decyzji przez REVIEWER_CONFLICT, mimo że nikt inny nie mógł się
+  // zalogować. Ten test dokumentuje błąd sprzed poprawki; ma pozostać czerwony, gdyby
+  // ktoś przywrócił starą treść zamiast 0420.
+  it('kontrola ujemna: 0109 (bez poprawki) pomijało is_active — błąd faktycznie istniał', () => {
+    const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/0109_dsa_restoration_appeals.sql'), 'utf8');
+    expect(sql).toMatch(/p\.role = 'admin' and p\.deleted_at is null and p\.id <> v_uid/);
+    expect(sql).not.toMatch(/p\.role = 'admin' and p\.deleted_at is null and p\.is_active = true/);
   });
 });
