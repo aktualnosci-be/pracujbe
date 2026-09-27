@@ -1247,6 +1247,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   pole z e-mailem/telefonem czyszczone, identyfikator → odmowa `JOB_IMPORT_SENSITIVE_DATA`.
   Zrzutu nie redagujemy lokalnie (brak OCR). Test: `ai-import-minimize`. **Otwarte (#500):**
   ocena prawna (art. 6/14, role), decyzja o imporcie obrazu.
+  Sprzątanie przekierowań (#827): przy statusie 3xx `safeFetchListing` od razu zamyka
+  odpowiedź i jej połączenie (`res.destroy()`, `res.on('error', …)` gasi błąd zbędnego już
+  strumienia) zamiast bezwarunkowo opróżniać ciało (`res.resume()`) — źródło mogło strumieniować
+  dowolnie długie/nigdy niekończące się ciało 3xx już po przejściu importera do kolejnego adresu
+  (dotyczy też błędnego/zablokowanego celu przekierowania i przekroczenia liczby hopów, bo
+  zamknięcie następuje zaraz po odczytaniu nagłówków, przed dalszą walidacją). Dowód: unit
+  `ai-import-safe-fetch` (serwer testowy z niekończącym się ciałem 302, kontrola ujemna:
+  test czerwony na starym `res.resume()`).
 - [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
   domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
   (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
