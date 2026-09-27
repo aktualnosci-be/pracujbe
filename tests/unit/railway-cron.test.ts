@@ -82,6 +82,7 @@ describe('Railway cron caller', () => {
     'http://web-private-host.railway.internal:3000/api/maintenance',
     'http://localhost:3000/api/email/process',
     'https://pracuj.be/api/maintenance',
+    'http://web-private-host.railway.internal:3000/api/translation/process',
   ])('przyjmuje adres zadania %s', async (target) => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     expect(await runCron({ env: { ...env, CRON_TARGET_URL: target }, fetchImpl, logger: logger() })).toBe(0);

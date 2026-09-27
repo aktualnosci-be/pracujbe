@@ -27,6 +27,7 @@ import { z } from 'zod/v3';
 import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
+import { kickAuthEmailQueue } from '@/lib/auth/email-kick';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { companyNameFromMetadata } from '@/lib/auth/signup-company-name';
@@ -251,7 +252,10 @@ export async function signIn(
       throw e;
     }
   } catch (e) {
-    return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
+    const code = isAppError(e) ? e.code : 'INTERNAL';
+    // `sendOnSignIn`: poprawne hasło niepotwierdzonego konta zleca nowy link — wysyłka od razu (W1).
+    if (code === 'AUTH_EMAIL_NOT_CONFIRMED') kickAuthEmailQueue();
+    return { ok: false, error: code };
   }
 
   // `redirect` rzuca NEXT_REDIRECT (typ zwrotny `never`); `return` spełnia sygnaturę.
@@ -347,6 +351,8 @@ export async function registerCandidate(
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
 
+  // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
+  kickAuthEmailQueue();
   return redirect({ href: '/potwierdzenie', locale });
 }
 
@@ -376,6 +382,8 @@ export async function registerEmployer(
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
 
+  // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
+  kickAuthEmailQueue();
   return redirect({ href: '/potwierdzenie', locale });
 }
 
@@ -422,6 +430,8 @@ export async function registerInvitedEmployer(
     return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };
   }
 
+  // Zlecenie potwierdzenia jest już w kolejce (COMMIT rejestracji) — wysyłka po odpowiedzi (W1).
+  kickAuthEmailQueue();
   return redirect({ href: '/potwierdzenie', locale });
 }
 
@@ -464,6 +474,8 @@ export async function requestPasswordReset(
     captureError(mapAuthError(error), { area: 'auth.requestPasswordReset' });
   }
 
+  // Zawsze (także bez konta i przy awarii zlecenia): po odpowiedzi, więc bez sygnału o koncie (W1).
+  kickAuthEmailQueue();
   return { ok: true };
 }
 

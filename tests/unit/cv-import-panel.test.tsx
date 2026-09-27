@@ -103,6 +103,67 @@ describe('CvImportPanel', () => {
     expect(await screen.findByRole('heading', { name: pl.cvImport.doneTitle })).toHaveFocus();
   });
 
+  it('poprawione wartości (nazwa, poziom języka, lata) trafiają do zapisu zamiast propozycji modelu', async () => {
+    setup();
+    vi.mocked(proposeFromCvAction).mockResolvedValueOnce({
+      ok: true,
+      suspicious: false,
+      proposals: [
+        { id: 'skill-0', kind: 'skill', value: 'Obsługa wózka widłowego', evidence: '', uncertain: true },
+        { id: 'language-0', kind: 'language', value: 'Niderlandzki', level: 'basic', evidence: '', uncertain: true },
+        { id: 'experienceYears-0', kind: 'experienceYears', value: '5', evidence: '', uncertain: false },
+      ],
+    });
+    await toReview();
+    fireEvent.change(screen.getByLabelText('Popraw wartość: Obsługa wózka widłowego'), {
+      target: { value: '  Wózek widłowy (UDT)  ' },
+    });
+    fireEvent.change(screen.getByLabelText('Popraw wartość: Niderlandzki'), { target: { value: 'Nederlands' } });
+    fireEvent.change(screen.getByLabelText('Poziom: Nederlands'), { target: { value: 'intermediate' } });
+    fireEvent.change(screen.getByLabelText(pl.cvImport.experienceEditLabel), { target: { value: '7' } });
+    // Etykieta pola wyboru pokazuje wartość po edycji.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Wózek widłowy (UDT)' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Nederlands' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '7 lat doświadczenia' }));
+    fireEvent.click(screen.getByRole('button', { name: pl.cvImport.apply }));
+    await waitFor(() => expect(applyCvProposals).toHaveBeenCalledTimes(1));
+    expect(applyCvProposals).toHaveBeenCalledWith({
+      occupations: [],
+      skills: ['Wózek widłowy (UDT)'],
+      languages: [{ language: 'Nederlands', level: 'intermediate' }],
+      certificates: [],
+      experienceYears: 7,
+    });
+    expect(proposeFromCvAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('za długa wartość po edycji: błąd przy polu, fokus na pierwszym błędnym polu, brak zapisu', async () => {
+    setup();
+    await toReview();
+    const occupation = screen.getByLabelText('Popraw wartość: Magazynier');
+    const skill = screen.getByLabelText('Popraw wartość: Obsługa wózka widłowego');
+    fireEvent.change(occupation, { target: { value: 'M'.repeat(81) } });
+    fireEvent.change(skill, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'M'.repeat(81) }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Obsługa wózka widłowego' }));
+    fireEvent.click(screen.getByRole('button', { name: pl.cvImport.apply }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(pl.cvImport.errorFieldsInvalid);
+    expect(occupation).toHaveFocus();
+    expect(occupation).toHaveAttribute('aria-invalid', 'true');
+    expect(occupation).toHaveAccessibleDescription('Za długa wartość. Maksymalnie 80 znaków.');
+    expect(skill).toHaveAccessibleDescription(pl.cvImport.errorValueRequired);
+    expect(applyCvProposals).not.toHaveBeenCalled();
+
+    // Poprawka usuwa błąd pola; niezaznaczone pole nie blokuje zapisu.
+    fireEvent.change(occupation, { target: { value: 'M'.repeat(80) } });
+    expect(occupation).not.toHaveAttribute('aria-invalid');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Obsługa wózka widłowego' }));
+    fireEvent.click(screen.getByRole('button', { name: pl.cvImport.apply }));
+    await waitFor(() => expect(applyCvProposals).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(applyCvProposals).mock.calls[0]![0]).toMatchObject({ occupations: ['M'.repeat(80)], skills: [] });
+  });
+
   it('„Odrzuć wszystkie” wraca do wyboru pliku bez zapisu; źródło i niepewność widoczne', async () => {
     setup('pl');
     await toReview();
