@@ -16,10 +16,20 @@ import { LOCALES } from './fixtures/messages';
 
 type Messages = {
   settings: { title: string };
-  companyBlocks: { sectionTitle: string; unblockNamed: string; unblockedSuccess: string; empty: string };
+  companyBlocks: {
+    sectionTitle: string;
+    unblockNamed: string;
+    unblockedSuccess: string;
+    blockedSuccess: string;
+    empty: string;
+    block: string;
+    unblock: string;
+  };
 };
 
 const DEMO_COMPANY = 'Kortrijk Techniek BV';
+/** Firma rozmowy demonstracyjnej `demo-conv-0` (`DEMO_SEEDS[0].companyIdx = 0` → `demoCompanies[0]`). */
+const DEMO_CONVERSATION_COMPANY = 'Antwerp Logistics NV';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
@@ -73,5 +83,36 @@ for (const locale of LOCALES) {
     await expect(section.getByText(m.companyBlocks.empty)).toBeVisible();
     await expect(unblock).toHaveCount(0);
     await expect(section.getByRole('alert')).toHaveCount(0);
+  });
+
+  test(`${locale}: blokada firmy z istniejącego wątku, bez aktywnej oferty (#832)`, async ({ page }) => {
+    const m = messages(locale);
+    await acceptNecessaryCookies(page);
+    await page.goto(`/${locale}/candidate/wiadomosci?c=demo-conv-0`);
+
+    const control = page.getByTestId('conversation-company-block');
+    await expect(control).toBeVisible();
+
+    const block = control.getByRole('button', { name: m.companyBlocks.block });
+    await block.click();
+    await expect(control.getByRole('status')).toHaveText(
+      fill(m.companyBlocks.blockedSuccess, DEMO_CONVERSATION_COMPANY),
+    );
+
+    const unblock = control.getByRole('button', { name: m.companyBlocks.unblock });
+    await expect(unblock).toBeVisible();
+    await unblock.click();
+    await expect(control.getByRole('status')).toHaveText(
+      fill(m.companyBlocks.unblockedSuccess, DEMO_CONVERSATION_COMPANY),
+    );
+    await expect(control.getByRole('button', { name: m.companyBlocks.block })).toBeVisible();
+  });
+
+  // Kontrola ujemna: ten sam wątek demo w panelu PRACODAWCY nigdy nie pokazuje kontrolki
+  // blokady (dane demo nie rozróżniają widza — bezpiecznik żyje w `MessageThread`, #832).
+  test(`${locale}: panel pracodawcy nie pokazuje blokady firmy w tym samym wątku demo (#832)`, async ({ page }) => {
+    await acceptNecessaryCookies(page);
+    await page.goto(`/${locale}/employer/wiadomosci?c=demo-conv-0`);
+    await expect(page.getByTestId('conversation-company-block')).toHaveCount(0);
   });
 }

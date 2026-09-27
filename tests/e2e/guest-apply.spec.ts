@@ -284,3 +284,52 @@ test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie Ht
   }).toBe(second);
   expect(requests.every((url) => !url.includes(second))).toBe(true);
 });
+
+/**
+ * #913 — zamknięcie dialogu (X/Escape) przed wysłaniem nie może wymazać niewysłanego
+ * formularza gościa. Reopen przez ponowne kliknięcie „Aplikuj” NA TEJ SAMEJ stronie (bez
+ * `page.goto` — pełne przeładowanie strony odmontowuje cały `ApplyModal`, więc szkic
+ * przetrwałby tylko przypadkiem, gdyby żył w localStorage; test celowo tego nie robi).
+ * Kontrola ujemna: po udanej wysyłce ponowne otwarcie NIE odtwarza już zapisanych danych.
+ */
+test('#913: zamknięcie X/Escape zachowuje niewysłany formularz gościa, sukces go czyści', async ({ page }) => {
+  const t = msgs('pl');
+  const { dialog } = await openGuestForm(page, 'pl', 1280);
+  const reopen = async () => {
+    await page.getByRole('button', { name: t.jobs.applyNow }).click();
+    const form = dialog.getByTestId('guest-apply-form');
+    await expect(form).toBeVisible();
+    return form;
+  };
+
+  let form = dialog.getByTestId('guest-apply-form');
+  await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
+  await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
+  await form.getByRole('radio', { name: ageLabel(t) }).click();
+
+  await dialog.getByRole('button', { name: t.apply.close }).click();
+  await expect(dialog).toBeHidden();
+
+  form = await reopen();
+  await expect(form.getByRole('textbox', { name: t.guestApply.fullName })).toHaveValue('Anna Nowak');
+  await expect(form.getByRole('textbox', { name: t.guestApply.email })).toHaveValue('anna@example.com');
+  await expect(form.getByRole('radio', { name: ageLabel(t) })).toBeChecked();
+
+  // Escape zamyka tym samym uchwytem (`onOpenChange`) — szkic zostaje po raz drugi.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  form = await reopen();
+  await expect(form.getByRole('textbox', { name: t.guestApply.fullName })).toHaveValue('Anna Nowak');
+
+  // Kontrola ujemna: po UDANEJ wysyłce ponowne otwarcie nie pokazuje już wysłanych danych.
+  await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+  await expect(dialog.getByTestId('guest-apply-sent')).toBeVisible();
+  await dialog.getByRole('button', { name: t.apply.close }).click();
+  await expect(dialog).toBeHidden();
+
+  const afterSuccess = await reopen();
+  await expect(afterSuccess.getByRole('textbox', { name: t.guestApply.fullName })).toHaveValue('');
+  await expect(afterSuccess.getByRole('textbox', { name: t.guestApply.email })).toHaveValue('');
+});
