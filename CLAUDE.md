@@ -2123,6 +2123,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Cel formularza odwołania = snapshot udanego odczytu (#884, bez migracji):
+  `ReportCaseLookup` przechowuje numer sprawy i kod dostępu, którymi POWIODŁO SIĘ sprawdzenie
+  (`reportTarget`, ustawiany razem z `report`), zamiast czytać `getValues()` z pól formularza
+  przy renderze `AppealForm` — edycja pól po odpowiedzi (albo podczas oczekiwania na nią, bez
+  wysłania drugiego odczytu) nie zmienia już celu odwołania na inną sprawę. Oba pola
+  dodatkowo `disabled` podczas `isSubmitting` (obrona w głąb). Dowód: unit
+  `report-case-lookup-appeal-target` (kontrola: bez edycji celuje w A; regresja: edycja na B
+  podczas oczekiwania na A nadal celuje w A — czerwony na kodzie sprzed naprawy; pola
+  zablokowane podczas oczekiwania).
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
