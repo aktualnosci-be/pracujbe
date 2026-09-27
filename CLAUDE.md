@@ -1153,6 +1153,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przy polu, bez wyjścia. Tryb edycji opublikowanej oferty po takim zapisie nie pokazuje
   „Zapisano” (ponowne „Zapisz zmiany” z nową wersją). Test: `job-wizard-save-revision`
   (kontrola ujemna: bez poprawki 5 z 7 czerwonych).
+  Flaga „bez wymogu języka” kontra wymagane języki (#910, bez migracji): pole `noLanguageRequired`
+  i lista `languages` w kroku 7 wykluczają się nawzajem — zapisane niezależnie dawały sprzeczny
+  wynik dla kandydata (filtr „bez języka” czyta tylko flagę, dopasowanie tylko listę). `JobWizard`
+  czyści listę języków po zaznaczeniu flagi i odznacza flagę po dodaniu języka; `step7Schema` i pełny
+  `jobSchema` (`src/lib/validation/job.ts`, `refineNoLanguageConflict`) odrzucają oba pola naraz
+  błędem przy polu `languages` (`job.error.noLanguageConflict`, PL/NL/FR/EN) — obejmuje zarówno
+  zapis kroku (`updateJobDraft`/`save_job_draft`), jak i edycję opublikowanej oferty
+  (`updatePublishedJob`, każdy krok tym samym schematem). Istniejące rekordy z fixture testowej
+  (`warehouse-rich`) nie są migrowane — poprawka zamyka tylko zapis nowych/edytowanych ofert.
+  Testy: `job-validation-draft-limits.test.ts` (kontrola ujemna: flaga + niepusta lista odrzucone
+  w obu schematach), `update-published-job.test.ts` (fixture bez sprzecznego stanu).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,

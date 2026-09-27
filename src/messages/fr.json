@@ -464,6 +464,7 @@
       "skillsTooMany": "Trop de compétences.",
       "experienceInvalid": "Nombre d'années d'expérience invalide.",
       "languagesTooMany": "Trop de langues.",
+      "noLanguageConflict": "Vous avez coché « Travail sans exigence linguistique », mais la liste contient une langue requise. Supprimez les langues requises ou décochez la case.",
       "certificatesTooMany": "Trop de certificats.",
       "conditionsTooMany": "Trop de conditions.",
       "benefitsTooMany": "Trop d'avantages.",

@@ -464,6 +464,7 @@
       "skillsTooMany": "Za dużo umiejętności.",
       "experienceInvalid": "Nieprawidłowa liczba lat doświadczenia.",
       "languagesTooMany": "Za dużo języków.",
+      "noLanguageConflict": "Zaznaczono „Praca bez znajomości języka”, ale lista zawiera wymagany język. Usuń wymagane języki albo odznacz to pole.",
       "certificatesTooMany": "Za dużo certyfikatów.",
       "conditionsTooMany": "Za dużo warunków.",
       "benefitsTooMany": "Za dużo benefitów.",
