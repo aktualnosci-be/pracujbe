@@ -832,6 +832,15 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+Dynamiczne facety (#874, bez migracji): `GET /api/job-filter-facets` (zmiana filtra bez
+przeładowania strony) czytał zweryfikowanego kandydata pomijając sesję — agregat SQL działał
+wtedy jak dla gościa i mógł zawyżyć licznik/CTA o oferty firm zablokowanych przez kandydata
+(po zatwierdzeniu filtra SSR i tak pokazywał poprawny, węższy wynik). Endpoint czyta teraz
+tego samego `readCandidateViewerId()` co strona listy i przekazuje go do `getJobFilterFacets`/
+`getJobs`; klucz krótkiego cache + single-flight (#595) uwzględnia `candidateId`, więc gość
+i różni kandydaci nigdy nie dzielą spersonalizowanego wpisu. Dowód: unit
+`job-filter-facets-route` (osobna agregacja na kandydata, kontrola ujemna: ten sam kandydat
+w oknie cache = bez nowej agregacji).
 
 Widoczność profilu dla firm (#494, migracja `0100`): przełącznik
 „Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w `/candidate/ustawienia`
