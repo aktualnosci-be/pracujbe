@@ -14,10 +14,26 @@ import { revalidatePath } from 'next/cache';
  * dokładnego sluga/kategorii/miasta zmienionej oferty. Dzięki temu naprawa nie wymaga
  * rozszerzania kontraktu RPC cyklu życia (bez migracji SQL) kosztem nieco szerszej
  * rewalidacji, ograniczonej wyłącznie do stron listujących oferty (bez całej aplikacji).
+ *
+ * Wywołujący (np. `POST /api/maintenance`) może zostać uruchomiony poza pełnym kontekstem
+ * żądania Next.js ustanawianym przez wewnętrzny serwer (dokładnie taka sytuacja występuje,
+ * gdy test integracyjny wywołuje wyeksportowany handler route'a bezpośrednio jako funkcję,
+ * z pominięciem serwera Next.js) — wtedy `revalidatePath` rzuca „static generation store
+ * missing”. Rewalidacja ISR jest optymalizacją, nie krytycznym zapisem: błąd pojedynczej
+ * ścieżki nie może przerwać pozostałych ani zawalić wywołującego zadania maintenance.
  */
 export function revalidatePublicJobPaths(): void {
-  revalidatePath('/[locale]', 'page');
-  revalidatePath('/[locale]/oferty-pracy/[slug]', 'page');
-  revalidatePath('/[locale]/praca/kategoria/[category]', 'page');
-  revalidatePath('/[locale]/praca/miasto/[city]', 'page');
+  const paths: Array<[string, 'page']> = [
+    ['/[locale]', 'page'],
+    ['/[locale]/oferty-pracy/[slug]', 'page'],
+    ['/[locale]/praca/kategoria/[category]', 'page'],
+    ['/[locale]/praca/miasto/[city]', 'page'],
+  ];
+  for (const [path, type] of paths) {
+    try {
+      revalidatePath(path, type);
+    } catch {
+      // Poza pełnym kontekstem żądania Next.js — patrz komentarz wyżej.
+    }
+  }
 }
