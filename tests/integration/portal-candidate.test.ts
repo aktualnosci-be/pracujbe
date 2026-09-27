@@ -241,6 +241,35 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(bobPage.items.map((i) => i.id)).not.toContain(aliceApp);
   });
 
+  it('filtr etapu (#809): starsze zgłoszenie „rozmowa” na pierwszej stronie, przed limitem i kursorem', async () => {
+    actAs({ id: alice, role: 'candidate' });
+    const all = await candidateData.getMyApplicationsPage('pl');
+    const rest = await candidateData.getMyApplicationsPage('pl', all.nextCursor);
+    // Najstarsze zgłoszenie Alicji leży bez filtra dopiero na drugiej stronie.
+    const oldest = rest.items[rest.items.length - 1]!;
+    expect(all.items.map((item) => item.id)).not.toContain(oldest.id);
+    const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
+    await db().admin.query(`UPDATE public.applications SET status = 'interview' WHERE id = ANY($1::uuid[])`, [[oldest.id, bobApp]]);
+    try {
+      const interview = await candidateData.getMyApplicationsPage('pl', null, 'rozmowa');
+      // Tylko własne zgłoszenie na tym etapie (zgłoszenie Boba w tym samym statusie nie wycieka).
+      expect(interview.items.map((item) => [item.id, item.status])).toEqual([[oldest.id, 'interview']]);
+      expect(interview.nextCursor).toBeNull();
+      const active = await candidateData.getMyApplicationsPage('pl', null, 'aktywne');
+      expect(active.items).toHaveLength(10);
+      expect(active.items.every((item) => item.status === 'submitted')).toBe(true);
+      const activeRest = await candidateData.getMyApplicationsPage('pl', active.nextCursor, 'aktywne');
+      // Kursor z filtrem nie wraca do pominiętego etapu: 11 z 12 zgłoszeń jest „w toku”.
+      expect(activeRest.items.map((item) => item.id)).not.toContain(oldest.id);
+      expect(active.items.length + activeRest.items.length).toBe(11);
+      expect((await candidateData.getMyApplicationsPage('pl', null, 'propozycja')).items).toEqual([]);
+      // Kontrola ujemna: bez filtra to samo zgłoszenie nadal jest dopiero na drugiej stronie.
+      expect((await candidateData.getMyApplicationsPage('pl')).items.map((item) => item.id)).not.toContain(oldest.id);
+    } finally {
+      await db().admin.query(`UPDATE public.applications SET status = 'submitted' WHERE id = ANY($1::uuid[])`, [[oldest.id, bobApp]]);
+    }
+  });
+
   it('pytania screeningowe (#101): licznik na karcie i snapshot odpowiedzi tylko dla autora zgłoszenia', async () => {
     const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
     await db().admin.query(`INSERT INTO public.application_screening_answers
@@ -412,11 +441,21 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
   });
 
   it('polecane: najlepsze własne dopasowania, fallback najnowszych bez procentu', async () => {
-    await db().admin.query(`INSERT INTO public.matches(candidate_id, job_id, score) VALUES ($1, $2, 91), ($1, $3, 77), ($4, $5, 99)`,
+    await db().admin.query(`INSERT INTO public.matches(candidate_id, job_id, score, mandatory_met, mandatory_total, strengths)
+      VALUES ($1, $2, 91, 2, 2, ARRAY['localCandidate', 'obcy']), ($1, $3, 77, 0, 0, '{}'), ($4, $5, 99, 0, 0, '{}')`,
       [alice, jobIds[7], jobIds[4], bob, jobIds[9]]);
+    // Alice aplikowała wcześniej na wszystkie oferty (historia zgłoszeń) — karta niesie JEJ zgłoszenie.
+    const own = await db().admin.query<{ id: string }>(
+      `SELECT id FROM public.applications WHERE candidate_id = $1 AND job_id = $2 AND deleted_at IS NULL`, [alice, jobIds[7]]);
+    expect(own.rows).toHaveLength(1);
     actAs({ id: alice, role: 'candidate' });
     const recommended = await candidateData.getRecommendedJobs('pl', true);
     expect(recommended.map((r) => [r.id, r.match])).toEqual([[jobIds[7], 91], [jobIds[4], 77]]);
+    expect(recommended[0]).toMatchObject({
+      explanation: { summaryKey: 'good', mandatory: { met: 2, total: 2 }, strengths: ['localCandidate'] },
+      applicationId: own.rows[0]?.id ?? null,
+    });
+    expect(recommended[1]?.explanation).toEqual({ summaryKey: 'good', mandatory: null, strengths: [] });
     actAs({ id: stranger, role: 'employer' });
     const fallback = await candidateData.getRecommendedJobs('pl', true);
     expect(fallback).toHaveLength(5);

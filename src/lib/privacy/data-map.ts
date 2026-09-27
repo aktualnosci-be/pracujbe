@@ -517,6 +517,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       mandatory_met: 'recruitment',
     },
   },
+  'public.match_recompute_queue': {
+    activities: ['matching-search'],
+    subjects: ['candidate'],
+    columns: { subject_id: 'reference' },
+    notPersonal: {
+      kind: 'Rodzaj podmiotu (kandydat albo oferta).',
+      version: 'Licznik zgłoszeń.',
+      attempts: 'Licznik prób.',
+      locked_until: 'Dzierżawa workera.',
+    },
+    note: 'Kolejka przeliczenia dopasowań (P1-03, 0147): sam UUID kandydata albo oferty; wiersz znika po przeliczeniu.',
+  },
   'public.saved_searches': {
     activities: ['matching-search'],
     subjects: ['candidate'],
@@ -972,6 +984,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { requested_by: 'reference', decided_by: 'reference', decision_reason: 'moderation' },
     note:
       'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
+  },
+  'public.job_duplications': {
+    activities: ['companies'],
+    subjects: ['employer'],
+    columns: { created_by: 'reference' },
+    note:
+      'Klucz idempotencji „Kopiuj jako szkic” (0148): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
   },
 
   // --- Płatności (wyłączone, #51) --------------------------------------------------------------

@@ -50,6 +50,31 @@ test('oferta bez tłumaczenia: JobPosting tylko w wersji kanonicznej (#301)', as
   expect(await jsonLdOfType(page, 'JobPosting')).toHaveLength(0);
 });
 
+test('oferta: BreadcrumbList Strona główna → Praca → branża → oferta, tylko w wersji kanonicznej', async ({ page }) => {
+  await page.goto(WAREHOUSE_JOB);
+  const [list] = await jsonLdOfType(page, 'BreadcrumbList');
+  const [posting] = await jsonLdOfType(page, 'JobPosting');
+  const items = list!.itemListElement as Array<{ name: string; item: string; position: number }>;
+  expect(items.map((entry) => entry.position)).toEqual([1, 2, 3, 4]);
+  expect(items.map((entry) => entry.name)).toEqual([
+    plMessages.common.home,
+    plMessages.landing.breadcrumbHub,
+    plMessages.categories.warehouse,
+    posting!.title,
+  ]);
+  expect(items[0]!.item).toMatch(/\/pl$/);
+  expect(items[1]!.item).toMatch(/\/pl\/praca$/);
+  expect(items[2]!.item).toMatch(/\/pl\/praca\/kategoria\/warehouse$/);
+  expect(items[3]!.item).toMatch(/\/pl\/oferty-pracy\/warehouse-worker-antwerp-1001$/);
+  // Pośredni landing branży istnieje (nie martwy link w danych strukturalnych).
+  const landing = await page.request.get(new URL(items[2]!.item).pathname);
+  expect(landing.status()).toBe(200);
+
+  // Kontrola ujemna (#301): wersja bez tłumaczenia nie powiela ścieżki.
+  await page.goto(`/pl${NL_ONLY_JOB}`);
+  expect(await jsonLdOfType(page, 'BreadcrumbList')).toHaveLength(0);
+});
+
 test('lista bez flagi demo: bez baneru i etykiety „przykładowa”', async ({ page }) => {
   await page.goto('/pl/oferty-pracy');
   await expect(page.locator('article').first()).toBeVisible();

@@ -12,7 +12,12 @@ import {
   getGuideBySlug,
   type GuideCategory,
 } from '@/lib/guides/guides';
-import { brandShareImageUrl, buildArticleJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
+import {
+  brandShareImageUrl,
+  buildArticleJsonLd,
+  buildBreadcrumbListJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo/structured-data';
 import { GuideCard } from '@/components/public/GuideCard';
 import { GuideContent } from '@/components/public/GuideContent';
 
@@ -118,30 +123,14 @@ export default async function GuideArticlePage({ params }: PageProps) {
 
   const articleJsonLd = buildArticleJsonLd(guide, { base: env.siteUrl, locale, canonical });
 
-  const breadcrumbJsonLd = {
-    '@context': 'https://schema.org/',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: tCommon('home'),
-        item: `${env.siteUrl}/${locale}`,
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: t('pageTitle'),
-        item: `${env.siteUrl}/${locale}${GUIDES_PATH}`,
-      },
-      {
-        '@type': 'ListItem',
-        position: 3,
-        name: guide.title,
-        item: canonical,
-      },
+  const breadcrumbJsonLd = buildBreadcrumbListJsonLd(
+    [
+      { label: tCommon('home'), href: '/' },
+      { label: t('pageTitle'), href: GUIDES_PATH },
+      { label: guide.title },
     ],
-  };
+    { base: env.siteUrl, locale, currentUrl: canonical },
+  );
 
   return (
     <div className="container py-6 md:py-10">
