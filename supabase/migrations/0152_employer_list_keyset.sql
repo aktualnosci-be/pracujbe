@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0192 (NUMER TYMCZASOWY — ostateczny nada integrator) — stronicowanie kursorem list panelu
+-- 0152 — stronicowanie kursorem list panelu
 -- pracodawcy (audyt P1-05).
 --
 -- Problem: `/employer/oferty` i `/employer/aplikacje` stronicowały przez OFFSET (koszt rośnie

@@ -13918,8 +13918,8 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- EP05. Stronicowanie kursorem list panelu pracodawcy (audyt P1-05, migracja 0192 — numer
---       tymczasowy). get_company_matches_page: najlepsze dopasowanie na kandydata w porządku
+-- EP05. Stronicowanie kursorem list panelu pracodawcy (audyt P1-05, migracja 0152).
+--       get_company_matches_page: najlepsze dopasowanie na kandydata w porządku
 --       (score DESC, candidate_id ASC), kursor w obu kierunkach, remis wyniku na granicy strony,
 --       RLS wywołującego (recruiter+ firmy, firma zweryfikowana). Kontrole ujemne: dawny
 --       get_company_top_matches kończy się na 20 kandydatach, a OFFSET po wstawieniu lepszego

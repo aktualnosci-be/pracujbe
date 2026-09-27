@@ -1082,7 +1082,7 @@ export type MatchedCandidatesLoad =
 
 /**
  * Wszyscy dopasowani kandydaci firmy (P1-05) — strony po {@link EMPLOYER_CANDIDATES_PAGE_SIZE}
- * kursorem (wynik, kandydat) w obu kierunkach (`get_company_matches_page`, 0192). Te same
+ * kursorem (wynik, kandydat) w obu kierunkach (`get_company_matches_page`, 0152). Te same
  * reguły co top 5: jeden wiersz na kandydata, RLS wywołującego, tylko firma zweryfikowana
  * (`unverified`) i recruiter+ (`denied`).
  */

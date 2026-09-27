@@ -537,7 +537,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
 > grantów + AV, usługa zewn.), ~~P1-03 (pipeline materializacji `matches`)~~ — zrobione (migracja `0147`, Etap 5), P1-04 (edycja/wznowienie
 > draftu + cykl życia oferty), ~~P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata)~~ — zamknięte: kandydat
-> (szczegół zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana) i pracodawca (Etap 4, migracja `0192`),
+> (szczegół zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana) i pracodawca (Etap 4, migracja `0152`),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
@@ -1191,8 +1191,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
-- [x] Stronicowanie kursorem i szczegół kandydata (audyt P1-05/P1-06, migracja `0192` — numer
-  tymczasowy): `/employer/oferty` (created_at, id), `/employer/aplikacje` (submitted_at, id) i
+- [x] Stronicowanie kursorem i szczegół kandydata (audyt P1-05/P1-06, migracja `0152`): `/employer/oferty` (created_at, id), `/employer/aplikacje` (submitted_at, id) i
   `/employer/kandydaci` (wynik, kandydat) zamiast OFFSET/top 5 — kursor w adresie w obu
   kierunkach (`?po=` starsze/dalsze, `?przed=` nowsze), zły token = pierwsza strona
   (`src/lib/employer/list-cursor.ts`); indeksy częściowe firmy pod kursor, RPC
