@@ -4,7 +4,7 @@ import { applyJobMachineTranslation } from '@/lib/job-machine-translation';
 import { getJobBySlug, type JobDetail } from '@/lib/jobs';
 
 /**
- * #33 (0219): przekład oferty na publicznej stronie w języku widza, z fallbackiem do oryginału.
+ * #33 (0159): przekład oferty na publicznej stronie w języku widza, z fallbackiem do oryginału.
  * Nakładka tylko przy pełnej zgodności z treścią strony; za flagą; awaria = oryginał.
  */
 
@@ -143,7 +143,7 @@ describe('getJobBySlug — przekład na język strony (#33)', () => {
     adapters.translations.mockResolvedValue([
       { job_id: 'job-1', locale: 'fr', title: 'Cariste', description: 'Travail dès 8:00.' },
     ]);
-    // Baza (0219, TM219-7) nie zwraca takiego wiersza; gdyby zwróciła, nakładka i tak odmawia.
+    // Baza (0159, TM159-7) nie zwraca takiego wiersza; gdyby zwróciła, nakładka i tak odmawia.
     adapters.machine.mockResolvedValue({ source_locale: 'nl', origin: 'ai', fields: EN_FIELDS });
     const job = await getJobBySlug('magazijnmedewerker', 'en');
     expect(job).toMatchObject({ title: 'Cariste', contentLocale: 'fr' });

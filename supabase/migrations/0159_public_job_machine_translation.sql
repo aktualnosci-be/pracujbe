@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0219_public_job_machine_translation.sql — #33: odczyt przekładu oferty na publicznej
--- stronie w języku widza (numer TYMCZASOWY — ostateczny nada integrator).
+-- 0159_public_job_machine_translation.sql — #33: odczyt przekładu oferty na publicznej
+-- stronie w języku widza.
 --
 -- Zależy od 0145 (kolejka, translation_documents) i 0146 (synchronizacja ofert).
 --

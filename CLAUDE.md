@@ -1516,7 +1516,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   bez flagi `skipped`. Wersja pipeline SQL = TS (`translation-job-sync.test`). Dowód: `rls.sql`
   sekcja TR33 (dwie sesje przez dblink, kontrola ujemna TR33-N); sekcja TR31 na własnych
   encjach. Cron: Cloudflare Worker co 10 min (`infra/cloudflare-cron`, `/api/translation/process`).
-  Odczyt na stronie oferty (migracja `0219` — numer tymczasowy): RPC
+  Odczyt na stronie oferty (migracja `0159`): RPC
   `get_public_job_machine_translation` (anon; tylko oferta publiczna, bieżąca rewizja bez
   `is_stale`, język bez własnego tłumaczenia/wymagań, strona pokazuje treść `default_locale`
   albo `jobs.title` — ten sam warunek co karty 0226, tylko pola wyświetlane) →
@@ -1525,8 +1525,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-machine-translation.ts`: nakładka tylko przy pełnej zgodności list, inaczej
   oryginał — nigdy mieszanka języków) → oznaczenie `job.machineTranslationNotice`/
   `manualTranslationNotice` z linkiem `job.translationOriginalLink` do oryginału. SEO bez zmian
-  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM219 (kontrole
-  ujemne TM219-N, TM219-7N), unit `job-machine-translation`. **Otwarte:** przekład w liście ofert,
+  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM159 (kontrole
+  ujemne TM159-N, TM159-7N), unit `job-machine-translation`. **Otwarte:** przekład w liście ofert,
   JobPosting/hreflang wersji przetłumaczonych (decyzja SEO), UI korekty ręcznej,
   `protectedTerms` (nazwa firmy).
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)

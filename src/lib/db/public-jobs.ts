@@ -311,7 +311,7 @@ export interface PublicJobMachineTranslationRow {
 }
 
 /**
- * Przekład oferty w języku widza (#33, 0219). RPC pod rolą anon zwraca wiersz tylko dla
+ * Przekład oferty w języku widza (#33, 0159). RPC pod rolą anon zwraca wiersz tylko dla
  * oferty publicznej, bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola
  * wyświetlane na stronie. Brak wiersza = brak aktualnego przekładu.
  */

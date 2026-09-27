@@ -2,7 +2,7 @@ import { isLocale, type Locale } from '@/i18n/routing';
 import type { JobDetail } from '@/lib/jobs';
 
 /**
- * Nałożenie przekładu oferty na treść ze `get_public_job` (#33, 0219).
+ * Nałożenie przekładu oferty na treść ze `get_public_job` (#33, 0159).
  *
  * Przekład jest pełnym zestawem pól jednej rewizji źródła (w języku oferty). Nakładamy go
  * tylko wtedy, gdy pasuje do tego, co pokazuje strona: rewizja jest w języku treści, a każda

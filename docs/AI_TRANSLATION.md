@@ -121,7 +121,7 @@ wznowienie, firma zawieszona, wygaśnięcie, dwie sesje równolegle, limit pól,
 delete) z kontrolą ujemną TR33-N; unit `translation-job-sync`, `translation-run`,
 `translation-process-route`.
 
-### Odczyt na stronie oferty (migracja 0219 — numer tymczasowy)
+### Odczyt na stronie oferty (migracja 0159)
 
 `get_public_job_machine_translation(job, locale)` (SECURITY DEFINER, anon/authenticated) to
 jedyna ścieżka odczytu przekładu przez klienta — tabele kolejki zostają deny. Zwraca wiersz
@@ -144,9 +144,9 @@ Oznaczenie pod paszportem: `job.machineTranslationNotice` (AI) albo
 `job.translationOriginalLink` do wersji w języku oryginału. SEO bez zmian: strona z
 przekładem nadal kanonizuje się do oryginału, bez hreflang i bez JobPosting (#301). ISR 60 s.
 
-Dowód: `rls.sql` sekcja TM219 (bieżąca rewizja, tylko pola wyświetlane, pierwszeństwo tekstu
+Dowód: `rls.sql` sekcja TM159 (bieżąca rewizja, tylko pola wyświetlane, pierwszeństwo tekstu
 człowieka, oferta wstrzymana/firma zawieszona, przekład po edycji, granty, strona z tekstem
-spoza `default_locale` — TM219-7) z kontrolami ujemnymi TM219-N i TM219-7N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
+spoza `default_locale` — TM159-7) z kontrolami ujemnymi TM159-N i TM159-7N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
 
 Otwarte (#33 → kolejne kroki): przekład w liście ofert i JobPosting/hreflang wersji
 przetłumaczonych (decyzja SEO), UI korekty ręcznej dla

@@ -15283,13 +15283,13 @@ rollback;
 reset role; reset app.current_uid;
 
 -- =============================================================================
--- TM219 (#33, 0219 — numer tymczasowy): odczyt przekładu oferty na publicznej stronie.
+-- TM159 (#33, 0159): odczyt przekładu oferty na publicznej stronie.
 -- `get_public_job_machine_translation` zwraca przekład (anon) wyłącznie dla oferty publicznej,
 -- bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola wyświetlane. Kontrola ujemna
--- TM219-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji;
--- TM219-7N: bez warunku „strona pokazuje treść default_locale” przekład nie pasuje do tekstu.
+-- TM159-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji;
+-- TM159-7N: bez warunku „strona pokazuje treść default_locale” przekład nie pasuje do tekstu.
 -- =============================================================================
-\echo '--- TM219 public job machine translation ---'
+\echo '--- TM159 public job machine translation ---'
 \set TMCO 'f2190000-0000-0000-0000-0000000000c1'
 \set TMJ1 'f2190000-0000-0000-0000-0000000000a1'
 reset role; reset app.current_uid;
@@ -15297,7 +15297,7 @@ begin;
 set constraints all immediate;
 -- Izolacja: zadania z wcześniejszych sekcji nie trafiają do claimu tej sekcji (cofane rollbackiem).
 select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
-insert into public.companies(id, name, status) values (:'TMCO', 'Firma TM219', 'verified');
+insert into public.companies(id, name, status) values (:'TMCO', 'Firma TM159', 'verified');
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values (:'TMJ1', :'TMCO', 'tm219-oferta', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
           'draft', 'nl');
@@ -15314,10 +15314,10 @@ set local role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tm_en', :'tm_en_lease',
   (:'tm_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
     'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
-    'benefits.0', 'Parking', 'meta_title', 'Meta EN')) = 'applied', 'TM219-0 przekład en zastosowany');
+    'benefits.0', 'Parking', 'meta_title', 'Meta EN')) = 'applied', 'TM159-0 przekład en zastosowany');
 reset role;
 
--- TM219-1: anon dostaje przekład en bieżącej rewizji — tylko pola wyświetlane (bez benefits/meta).
+-- TM159-1: anon dostaje przekład en bieżącej rewizji — tylko pola wyświetlane (bez benefits/meta).
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert((select source_locale = 'nl' and origin = 'ai'
     and fields->>'title' = 'Warehouse worker'
@@ -15325,56 +15325,56 @@ select pg_temp.assert((select source_locale = 'nl' and origin = 'ai'
     and fields->>'requirements_mandatory.0' = 'VCA certificate'
     and not (fields ? 'benefits.0') and not (fields ? 'meta_title')
   from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-1 anon: przekład en bieżącej rewizji, tylko pola wyświetlane');
--- TM219-2: brak przekładu (fr), język źródła (nl), język spoza serwisu = brak wiersza.
+  'TM159-1 anon: przekład en bieżącej rewizji, tylko pola wyświetlane');
+-- TM159-2: brak przekładu (fr), język źródła (nl), język spoza serwisu = brak wiersza.
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'fr'))
   and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'nl'))
   and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'de')),
-  'TM219-2 brak przekładu / język źródła / język spoza serwisu = brak wiersza');
+  'TM159-2 brak przekładu / język źródła / język spoza serwisu = brak wiersza');
 reset role;
 
--- TM219-3: własne tłumaczenie en (tekst człowieka) ma pierwszeństwo.
+-- TM159-3: własne tłumaczenie en (tekst człowieka) ma pierwszeństwo.
 savepoint tm_human;
 insert into public.job_translations(job_id, locale, title, description)
   values (:'TMJ1', 'en', 'Warehouse operative', 'Human text.');
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-3 własne tłumaczenie en: przekład AI nie jest zwracany');
+  'TM159-3 własne tłumaczenie en: przekład AI nie jest zwracany');
 reset role;
 rollback to savepoint tm_human;
 
--- TM219-4: oferta niepubliczna (wstrzymana) i firma zawieszona = brak wiersza.
+-- TM159-4: oferta niepubliczna (wstrzymana) i firma zawieszona = brak wiersza.
 savepoint tm_paused;
 update public.jobs set status = 'paused' where id = :'TMJ1';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-4 oferta wstrzymana: brak przekładu');
+  'TM159-4 oferta wstrzymana: brak przekładu');
 reset role;
 rollback to savepoint tm_paused;
 savepoint tm_suspended;
 update public.companies set status = 'suspended' where id = :'TMCO';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-4b firma zawieszona: brak przekładu');
+  'TM159-4b firma zawieszona: brak przekładu');
 reset role;
 rollback to savepoint tm_suspended;
 
--- TM219-5: edycja treści = nowa rewizja, przekład en nieaktualny — nie jest zwracany.
+-- TM159-5: edycja treści = nowa rewizja, przekład en nieaktualny — nie jest zwracany.
 update public.job_translations set description = 'Werk vanaf 22:00.' where job_id = :'TMJ1' and locale = 'nl';
 select pg_temp.assert((select is_stale from public.translation_documents
-  where entity_type = 'job' and entity_id = :'TMJ1' and locale = 'en'), 'TM219-5a przekład en oznaczony jako nieaktualny');
+  where entity_type = 'job' and entity_id = :'TMJ1' and locale = 'en'), 'TM159-5a przekład en oznaczony jako nieaktualny');
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-5 po edycji przekład starej treści nie jest zwracany');
+  'TM159-5 po edycji przekład starej treści nie jest zwracany');
 reset role;
 
--- TM219-6: granty — tylko odczyt RPC; tabela przekładów nadal bez dostępu dla klienta.
+-- TM159-6: granty — tylko odczyt RPC; tabela przekładów nadal bez dostępu dla klienta.
 select pg_temp.assert(has_function_privilege('anon', 'public.get_public_job_machine_translation(uuid, text)', 'execute')
   and not has_table_privilege('anon', 'public.translation_documents', 'select')
   and not has_table_privilege('authenticated', 'public.translation_documents', 'select'),
-  'TM219-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
+  'TM159-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
 
--- TM219-7: strona pokazuje tekst, z którego powstała rewizja. Oferta 2 (default_locale nl)
+-- TM159-7: strona pokazuje tekst, z którego powstała rewizja. Oferta 2 (default_locale nl)
 -- ma tłumaczenie tylko w fr — `get_public_job` pokazuje dla en tekst fr, a rewizja powstała
 -- z `jobs.title` (nl). Przekład nl→en nie pasuje do wyświetlanego oryginału = brak wiersza.
 -- Bez tłumaczeń wcale strona pokazuje `jobs.title` = treść rewizji → przekład jest zwracany.
@@ -15391,22 +15391,22 @@ select job_id as tm2_en, lease_id as tm2_en_lease, fields::text as tm2_f
 set local role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tm2_en', :'tm2_en_lease',
   (:'tm2_f'::jsonb) || jsonb_build_object('title', 'Forklift driver')) = 'applied',
-  'TM219-7a przekład en oferty 2 (z jobs.title) zastosowany');
+  'TM159-7a przekład en oferty 2 (z jobs.title) zastosowany');
 reset role;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
-  'TM219-7 strona pokazuje tłumaczenie fr (brak default_locale): przekład nl→en nie jest zwracany');
+  'TM159-7 strona pokazuje tłumaczenie fr (brak default_locale): przekład nl→en nie jest zwracany');
 reset role;
 savepoint tm_no_translations;
 delete from public.job_translations where job_id = :'TMJ2';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert((select fields->>'title' = 'Forklift driver'
   from public.get_public_job_machine_translation(:'TMJ2', 'en')),
-  'TM219-7b oferta bez tłumaczeń (strona pokazuje jobs.title): przekład jest zwracany');
+  'TM159-7b oferta bez tłumaczeń (strona pokazuje jobs.title): przekład jest zwracany');
 reset role;
 rollback to savepoint tm_no_translations;
 
--- TM219-7N (kontrola ujemna): definicja sprzed warunku (0219 bez sprawdzenia, że strona
+-- TM159-7N (kontrola ujemna): definicja sprzed warunku (0159 bez sprawdzenia, że strona
 -- pokazuje treść `default_locale`) nakłada przekład nl→en na stronę z tekstem fr.
 savepoint tm_neg_src;
 create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
@@ -15429,16 +15429,16 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
-  'TM219-7N kontrola ujemna: stara definicja nakłada przekład niepasujący do tekstu fr');
+  'TM159-7N kontrola ujemna: stara definicja nakłada przekład niepasujący do tekstu fr');
 reset role;
 rollback to savepoint tm_neg_src;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
-  'TM219-7Nb poprawna funkcja znów odmawia');
+  'TM159-7Nb poprawna funkcja znów odmawia');
 reset role;
 
--- TM219-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
--- przekład starej treści (TM219-5 wykrywa taką regresję).
+-- TM159-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
+-- przekład starej treści (TM159-5 wykrywa taką regresję).
 savepoint tm_neg;
 create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
 returns table (source_locale text, origin text, fields jsonb)
@@ -15453,12 +15453,12 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-N kontrola ujemna: bez warunku rewizji zwracany jest przekład starej treści');
+  'TM159-N kontrola ujemna: bez warunku rewizji zwracany jest przekład starej treści');
 reset role;
 rollback to savepoint tm_neg;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+  'TM159-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
 reset role;
 rollback;
 reset role; reset app.current_uid;

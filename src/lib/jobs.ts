@@ -118,7 +118,7 @@ export interface JobDetail extends JobListItem {
   /** Pytania screeningowe do formularza aplikowania (#101); brak = oferta bez pytań. */
   screeningQuestions?: ScreeningQuestion[];
   /**
-   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0219); brak = treść
+   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0159); brak = treść
    * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
    */
   machineTranslation?: JobMachineTranslation;
