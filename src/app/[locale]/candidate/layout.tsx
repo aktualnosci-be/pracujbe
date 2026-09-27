@@ -50,6 +50,8 @@ export default async function CandidateLayout({
   let userName: string | undefined;
   // #576: konto 16–17 → lejek ofert wyłączony na tym urządzeniu; nieznany stan → bez zmian.
   let knownMinor: boolean | undefined;
+  // #864: prawdziwa sesja Better Auth (nie demo) — panel dostaje `SessionKeepAlive`.
+  let hasSession = false;
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
@@ -57,6 +59,7 @@ export default async function CandidateLayout({
       redirect({ href: '/logowanie', locale: locale as Locale });
       return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
+    hasSession = true;
     // Pracodawca → jego panel; administrator → panel admina. Twarda granica roli kandydata
     // jest dodatkowo w RPC (ensure_candidate_profile/apply_to_job, P1-04).
     if (identity.role === 'employer') {
@@ -104,6 +107,7 @@ export default async function CandidateLayout({
       notificationError={notificationError}
       unreadMessages={unreadMessages}
       userName={userName}
+      keepSessionAlive={hasSession}
     >
       {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}

@@ -1,109 +1,182 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateCompanyLinks } from '@/lib/actions/company';
-import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+
+/**
+ * Zgłoszenie strony WWW/logo firmy WSKAZANEJ przez `companyId` (#112, #801, od 0156 z
+ * zatwierdzaniem przez admina): akcja pyta o rolę/status TYLKO dla `companyId` przekazanego
+ * z formularza (nigdy o aktywną firmę z cookie) i woła wyłącznie RPC `submit_company_links`
+ * pod sesją (bez bezpośredniego UPDATE kolumn — blokuje go strażnik w bazie), przekazuje
+ * tylko ustawione pola i zwraca wynik RPC (`pending`/`applied`/`unchanged`); nieoczekiwany
+ * wynik nie udaje sukcesu.
+ */
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/company-context', () => ({
-  ACTIVE_COMPANY_COOKIE: 'pb_active_company',
-  getActiveCompany: vi.fn(),
-}));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const USER = '11111111-1111-4111-8111-111111111111';
+const COMPANY_ID = '22222222-2222-4222-8222-222222222222';
+const OTHER_COMPANY_ID = '33333333-3333-4333-8333-333333333333';
 
-function db(rows: unknown[] | (() => never)) {
-  fakeDb.exec('company.update-links', typeof rows === 'function' ? rows : () => ({ rows }));
+function submit(result: unknown | (() => never)) {
+  fakeDb.rpc('submit_company_links', typeof result === 'function' ? result : () => result);
+}
+
+/**
+ * Członkostwo zwracane przez `getCompanyMembershipFor` — akcja pyta o rolę/status TYLKO dla
+ * `companyId` przekazanego z formularza (#801), nigdy o aktywną firmę z cookie.
+ */
+function membership(role: string, status = 'unverified') {
+  fakeDb.rows('company.membership-for-company', () => [{ role, status }]);
+}
+
+function noMembership() {
+  fakeDb.rows('company.membership-for-company', () => []);
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
   resetFakeDb({ id: USER, role: 'employer' });
   vi.mocked(checkRateLimit).mockResolvedValue(true);
-  vi.mocked(getActiveCompany).mockResolvedValue({
-    activeId: 'company-1',
-    activeRole: 'owner',
-  } as never);
+  membership('owner');
 });
 
-describe('company links update authorization', () => {
-  it('rejects a regular member before writing', async () => {
-    db([{ id: 'company-1' }]);
-    vi.mocked(getActiveCompany).mockResolvedValue({
-      activeId: 'company-1',
-      activeRole: 'member',
-    } as never);
-    expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({
+describe('company links submission (scoped to companyId, review by admin, 0156)', () => {
+  it('rejects an invalid company id before touching the database', async () => {
+    expect(await updateCompanyLinks('not-a-uuid', { website: 'https://acme.example' })).toEqual({
       ok: false,
-      error: 'PERMISSION_DENIED',
+      error: 'NOT_FOUND',
     });
     expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it('does not claim success when RLS updates zero rows', async () => {
-    db([]);
-    expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({
+  it('rejects a regular member before writing', async () => {
+    submit('pending');
+    membership('member');
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
+    expect(fakeDb.callsTo('submit_company_links')).toHaveLength(0);
   });
 
-  it('accepts a confirmed update by an owner, scoped to the active company', async () => {
-    db([{ id: 'company-1' }]);
-    expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({ ok: true });
-    // Tylko website: logo_url nie jest nadpisywany (flaga false).
-    expect(fakeDb.callsTo('company.update-links')[0]).toMatchObject({
-      as: USER,
-      values: ['company-1', true, 'https://acme.example', false, null],
+  it('rejects a company the user is not an active member of (#801: stale form after switching company)', async () => {
+    noMembership();
+    expect(
+      await updateCompanyLinks(OTHER_COMPANY_ID, { website: 'https://acme.example' }),
+    ).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(fakeDb.callsTo('submit_company_links')).toHaveLength(0);
+  });
+
+  it('a new address goes to the admin queue (outcome pending), scoped to the company from the form', async () => {
+    submit('pending');
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
+      ok: true,
+      outcome: 'pending',
+    });
+    // Tylko website: logo bez zmian (flaga false). Brak bezpośredniego UPDATE kolumn.
+    const [call] = fakeDb.callsTo('submit_company_links');
+    expect(call).toMatchObject({ as: USER });
+    expect(call?.args).toEqual({
+      p_company_id: COMPANY_ID,
+      p_set_website: true,
+      p_website: 'https://acme.example',
+      p_set_logo_url: false,
+      p_logo_url: null,
     });
   });
 
-  it('an admin may also save the links', async () => {
-    db([{ id: 'company-1' }]);
-    vi.mocked(getActiveCompany).mockResolvedValue({
-      activeId: 'company-1',
-      activeRole: 'admin',
-    } as never);
-    expect(await updateCompanyLinks({ logoUrl: 'https://acme.example/logo.png' })).toEqual({ ok: true });
+  it('an admin of the company may also submit; removal is applied immediately', async () => {
+    submit('applied');
+    membership('admin');
+    expect(await updateCompanyLinks(COMPANY_ID, { website: '', logoUrl: '' })).toEqual({
+      ok: true,
+      outcome: 'applied',
+    });
+    expect(fakeDb.callsTo('submit_company_links')[0]?.args).toMatchObject({
+      p_company_id: COMPANY_ID,
+      p_set_website: true,
+      p_website: '',
+      p_set_logo_url: true,
+      p_logo_url: '',
+    });
   });
 
-  it('empty values clear the fields; empty input writes nothing', async () => {
-    db([{ id: 'company-1' }]);
-    expect(await updateCompanyLinks({ website: '', logoUrl: '' })).toEqual({ ok: true });
-    expect(fakeDb.callsTo('company.update-links')[0]?.values).toEqual([
-      'company-1', true, null, true, null,
-    ]);
-    expect(await updateCompanyLinks({})).toEqual({ ok: true });
-    expect(fakeDb.callsTo('company.update-links')).toHaveLength(1);
+  it('empty input writes nothing', async () => {
+    expect(await updateCompanyLinks(COMPANY_ID, {})).toEqual({ ok: true, outcome: 'unchanged' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('rejects a non-https address before touching the database', async () => {
-    expect(await updateCompanyLinks({ website: 'http://acme.example' })).toEqual({
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'http://acme.example' })).toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
     });
     expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it('maps a CHECK/RLS rejection from the database to a user code', async () => {
-    db(() => {
-      throw pgError('23514', 'new row for relation "companies" violates check constraint "companies_website_https"');
+  it('maps database rejections to user codes', async () => {
+    submit(() => {
+      throw pgError('42501', 'PERMISSION_DENIED: strona WWW i logo — tylko owner/admin firmy');
     });
-    expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
+      ok: false,
+      error: 'PERMISSION_DENIED',
+    });
+    submit(() => {
+      throw pgError('22023', 'VALIDATION_FAILED: WEBSITE_INVALID');
+    });
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
+      ok: false,
+      error: 'VALIDATION_FAILED',
+    });
+  });
+
+  it('negative control: an unexpected RPC result is not reported as success', async () => {
+    submit(null);
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
       ok: false,
       error: 'INTERNAL',
     });
   });
 
+  it('demo (bez bazy): identyfikator demonstracyjny nie jest UUID i nie dostaje NOT_FOUND', async () => {
+    // `DEMO_COMPANY.id` = 'demo-company' (bez bazy nie ma prawdziwych UUID) — bramka demo musi
+    // być sprawdzana PRZED walidacją formatu UUID, inaczej panel demonstracyjny dostaje
+    // NOT_FOUND zamiast komunikatu demo (regresja #985 × #156).
+    fakeSession.configured = false;
+    expect(await updateCompanyLinks('demo-company', { website: 'https://acme.example' })).toEqual({
+      ok: true,
+      demo: true,
+      outcome: 'unchanged',
+    });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
   it('never returns reverificationRequired (links never affect verification)', async () => {
-    db([{ id: 'company-1' }]);
-    vi.mocked(getActiveCompany).mockResolvedValue({
-      activeId: 'company-1',
-      activeRole: 'owner',
-      activeStatus: 'verified',
-    } as never);
-    expect(await updateCompanyLinks({ website: 'https://acme.example' })).toEqual({ ok: true });
+    submit('pending');
+    membership('owner', 'verified');
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
+      ok: true,
+      outcome: 'pending',
+    });
+  });
+
+  it('#801: nie zapisuje do innej firmy niż ta, dla której wyrenderowano formularz', async () => {
+    // Formularz otwarty dla COMPANY_ID; aktywna firma w cookie mogła się zmienić w innej
+    // karcie na OTHER_COMPANY_ID między renderem a wysłaniem — zapis musi trafić do
+    // COMPANY_ID, nigdy do aktywnej firmy z cookie.
+    submit('pending');
+    expect(await updateCompanyLinks(COMPANY_ID, { website: 'https://acme.example' })).toEqual({
+      ok: true,
+      outcome: 'pending',
+    });
+    expect(fakeDb.callsTo('company.membership-for-company')[0]?.values).toEqual([USER, COMPANY_ID]);
+    expect(fakeDb.callsTo('submit_company_links')[0]?.args).toMatchObject({
+      p_company_id: COMPANY_ID,
+    });
   });
 });

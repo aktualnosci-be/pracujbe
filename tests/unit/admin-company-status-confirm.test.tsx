@@ -182,6 +182,61 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it('błąd ogólny (INTERNAL) po zapisie: Shift+Tab z fokusem na kontenerze zostaje w dialogu (#837)', async () => {
+    let reject!: (reason: unknown) => void;
+    setCompanyStatus.mockImplementation(
+      () =>
+        new Promise((_resolve, rej) => {
+          reject = rej;
+        }),
+    );
+    render(
+      <Page>
+        <CompanyStatusActions company={company} createdLabel="—" />
+      </Page>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason();
+    const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
+    const confirmButton = buttons[buttons.length - 1]!;
+    // jsdom nie przenosi fokusu na klik (w przeciwieństwie do przeglądarki) — symulujemy to,
+    // żeby odtworzyć rzeczywisty stan przed zapisem (klik myszą skupia przycisk).
+    confirmButton.focus();
+    fireEvent.click(confirmButton);
+
+    // W trakcie zapisu fokus jest na kontenerze dialogu (#415).
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toHaveFocus());
+
+    reject(new Error('boom'));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('errors.internal'),
+    );
+
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toBeInTheDocument();
+    // Fokus wraca z kontenera na kontrolkę sprzed zapisu — nie zostaje na tle #837.
+    await waitFor(() => expect(confirmButton).toHaveFocus());
+
+    // Kontrola ujemna: zanim fokus zdąży wrócić z kontenera, Shift+Tab z kontenera nie może
+    // wypuścić nawigacji na tło — musi trafić na ostatnią kontrolkę dialogu.
+    dialog.focus();
+    expect(dialog).toHaveFocus();
+    const shiftTab = fireEvent.keyDown(dialog, {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    expect(shiftTab).toBe(false); // preventDefault() wołane → domyślna nawigacja zablokowana
+    expect(confirmButton).toHaveFocus();
+
+    // Zwykły Tab z pierwszej kontrolki (pole uzasadnienia) zapętla na ostatnią, nie na tło.
+    const reasonField = screen.getByRole('textbox', { name: 'reasonLabel' });
+    reasonField.focus();
+    fireEvent.keyDown(reasonField, { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    expect(confirmButton).toHaveFocus();
+  });
+
   it('nieaktualny widok (STALE_STATE) → dialog zamknięty, odświeżenie, komunikat', async () => {
     setCompanyStatus.mockResolvedValue({ ok: false, error: 'STALE_STATE' });
     render(

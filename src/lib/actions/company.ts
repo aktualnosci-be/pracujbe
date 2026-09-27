@@ -6,14 +6,11 @@ import { revalidatePath } from 'next/cache';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { execute, queryOne, rpc, rpcRows } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import {
-  ACTIVE_COMPANY_COOKIE,
-  getActiveCompany,
-  type ActiveCompanyContext,
-} from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
@@ -38,8 +35,8 @@ import {
  *                        `companies_update_member`: tylko owner/admin, 0040).
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
- *   - `updateCompanyLinks` — ustawia/czyści stronę WWW i adres logo (#112); ta sama ścieżka
- *                        zapisu, ale NIE cofa weryfikacji (baza reaguje tylko na nazwę/VAT).
+ *   - `updateCompanyLinks` — zgłasza stronę WWW i adres logo (#112); nowy adres czeka na
+ *                        decyzję admina (RPC `submit_company_links`, 0156), NIE cofa weryfikacji.
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
  *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
  *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
@@ -58,8 +55,11 @@ export type CreateCompanyResult =
 export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
+/** Wynik zgłoszenia linków firmy (0156): czeka na admina / weszło od razu / bez zmian. */
+export type CompanyLinksOutcome = 'pending' | 'applied' | 'unchanged';
 export type UpdateCompanyLinksResult =
-  { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+  | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
+  | { ok: false; error: ErrorCode };
 export type AddCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
 export type ReverificationResult =
@@ -130,6 +130,31 @@ function companySlug(name: string): string {
 function nullIfEmpty(value: string | undefined | null): string | null {
   const v = value?.trim();
   return v ? v : null;
+}
+
+/**
+ * Aktywne członkostwo zalogowanego we WSKAZANEJ firmie (#801). `updateCompany`/
+ * `updateCompanyLinks` dostają `companyId` z formularza, wyrenderowanego dla konkretnej
+ * firmy — NIGDY z cookie aktywnej firmy w chwili zapisu: wybór aktywnej firmy jest wspólny
+ * dla wszystkich kart tej samej przeglądarki, więc zmiana firmy w innej karcie po
+ * wyrenderowaniu formularza nie może przekierować zapisu do innego rekordu. `null`, gdy
+ * użytkownik nie ma aktywnego członkostwa w TEJ firmie (obca/nieistniejąca firma, usunięte
+ * członkostwo) — RLS i tak odrzuciłaby zapis, ale sprawdzamy explicite, by zwrócić stabilny
+ * kod błędu zamiast liczyć na `0 rows`.
+ */
+async function getCompanyMembershipFor(
+  tx: TransactionQuery,
+  profileId: string,
+  companyId: string,
+): Promise<{ role: string; status: string } | null> {
+  const row = await queryOne<Record<string, unknown>>(tx, 'company.membership-for-company',
+    `SELECT m.role, c.status::text AS status
+       FROM public.company_members m
+       JOIN public.companies c ON c.id = m.company_id
+      WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
+      LIMIT 1`, [profileId, companyId]);
+  if (!row) return null;
+  return { role: asString(row['role'], 'member'), status: asString(row['status'], 'unverified') };
 }
 
 /**
@@ -288,12 +313,17 @@ export async function createAdditionalCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Aktualizuje dane aktywnej firmy zalogowanego (nazwa i/lub VAT). Nie ustawia statusu ani
- * sluga (stabilny w publicznych URL). Puste pola pomija; pusty VAT czyści wartość.
- * Zmiana nazwy/VAT zweryfikowanej firmy wraca do weryfikacji (baza, 0072) — wynik niesie
- * wtedy `reverificationRequired`, by formularz powiedział o tym wprost.
+ * Aktualizuje dane firmy WSKAZANEJ przez `companyId` (nazwa i/lub VAT) — nie sięga po
+ * aktywną firmę z cookie. Formularz jest wyrenderowany dla konkretnej firmy (#801):
+ * `companyId` przychodzi z tej samej odpowiedzi serwera co wartości początkowe, więc zmiana
+ * aktywnej firmy w innej karcie po wyrenderowaniu formularza nie może przekierować zapisu do
+ * innego rekordu. Nie ustawia statusu ani sluga (stabilny w publicznych URL). Puste pola
+ * pomija; pusty VAT czyści wartość. Zmiana nazwy/VAT zweryfikowanej firmy wraca do
+ * weryfikacji (baza, 0072) — wynik niesie wtedy `reverificationRequired`, by formularz
+ * powiedział o tym wprost.
  */
 export async function updateCompany(
+  companyId: string,
   input: CompanyUpdateInput,
 ): Promise<UpdateCompanyResult> {
   const parsed = companyUpdateSchema.safeParse(input);
@@ -305,7 +335,13 @@ export async function updateCompany(
   const setVat = v.vatNumber !== undefined;
   if (!setName && !setVat) return { ok: true }; // nic do zapisania
 
+  // Demo (bez bazy) używa nierzeczywistego identyfikatora (`DEMO_COMPANY.id`) — sprawdzamy
+  // format UUID dopiero DALEJ, żeby panel demonstracyjny nie dostawał NOT_FOUND.
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
+
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
+    return { ok: false, error: 'NOT_FOUND' };
+  }
 
   // Rate limit per IP — łagodny (edycja to częsta akcja).
   if (
@@ -323,12 +359,11 @@ export async function updateCompany(
 
     type Outcome =
       | { error: ErrorCode }
-      | { error: null; active: ActiveCompanyContext; companyId: string; rows: Record<string, unknown>[] };
+      | { error: null; statusBefore: string; rows: Record<string, unknown>[] };
     const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
-      const active = await getActiveCompany(tx, me.id);
-      const companyId = active.activeId;
-      if (!companyId) return { error: 'NOT_FOUND' };
-      if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+      const membership = await getCompanyMembershipFor(tx, me.id, companyId);
+      if (!membership) return { error: 'NOT_FOUND' };
+      if (membership.role !== 'owner' && membership.role !== 'admin') {
         return { error: 'PERMISSION_DENIED' };
       }
 
@@ -341,18 +376,18 @@ export async function updateCompany(
           WHERE id = $1
           RETURNING id, status::text AS status`,
         [companyId, setName, setName ? v.name : null, setVat, setVat ? nullIfEmpty(v.vatNumber) : null]);
-      return { error: null, active, companyId, rows };
+      return { error: null, statusBefore: membership.status, rows };
     });
     if (outcome.error !== null) return { ok: false, error: outcome.error };
 
-    const { active, companyId, rows } = outcome;
+    const { statusBefore, rows } = outcome;
     // RLS przepuszcza UPDATE bez wiersza (0 rows) — to nie jest sukces.
     if (rows.length !== 1 || asString(asRecord(rows[0])['id']) !== companyId) {
       return { ok: false, error: 'PERMISSION_DENIED' };
     }
 
     const newStatus = asString(asRecord(rows[0])['status']);
-    if (active.activeStatus === 'verified' && newStatus === 'pending') {
+    if (statusBefore === 'verified' && newStatus === 'pending') {
       return { ok: true, reverificationRequired: true };
     }
     return { ok: true };
@@ -366,14 +401,21 @@ export async function updateCompany(
  * ------------------------------------------------------------------------- */
 
 /**
- * Ustawia/czyści stronę WWW i adres logo aktywnej firmy (#112). Osobna akcja od
- * `updateCompany`: te pola NIE cofają weryfikacji (w przeciwieństwie do nazwy/VAT) — baza
- * to gwarantuje (`protect_company_verification` reaguje tylko na `name`/`vat_number`, 0072),
- * tu więc bez odczytu/porównania statusu przed i po. Ta sama ścieżka zapisu co `updateCompany`
- * (UPDATE pod RLS `companies_update_member`: tylko owner/admin, 0040); baza waliduje adres
- * drugi raz (CHECK `public_https_url`, 0141) i audytuje zmianę (`company.links_changed`).
+ * Zgłasza stronę WWW i adres logo firmy WSKAZANEJ przez `companyId` (#112) — nie sięga po
+ * aktywną firmę z cookie. Formularz jest wyrenderowany dla konkretnej firmy (#801): zmiana
+ * aktywnej firmy w innej karcie po wyrenderowaniu formularza nie może przekierować zapisu do
+ * innego rekordu. Od 0156 z zatwierdzaniem przez admina portalu. Osobna akcja od
+ * `updateCompany`: te pola NIE cofają weryfikacji firmy (w przeciwieństwie do nazwy/VAT —
+ * `protect_company_verification`, 0072). Tylko owner/admin WSKAZANEJ firmy; RPC
+ * `submit_company_links` (pod sesją, SECURITY DEFINER) sprawdza rolę drugi raz, waliduje
+ * adresy (`public_https_url`) i decyduje o wyniku:
+ *   - `pending`   — nowy adres czeka na decyzję admina; pola publiczne bez zmian,
+ *   - `applied`   — propozycja tylko usuwa adres (nic nowego nie publikuje) — wchodzi od razu,
+ *   - `unchanged` — propozycja = zatwierdzony stan (wycofuje ewentualną propozycję).
+ * Bezpośredni zapis kolumn przez klienta blokuje w bazie strażnik `guard_company_links`.
  */
 export async function updateCompanyLinks(
+  companyId: string,
   input: CompanyLinksUpdateInput,
 ): Promise<UpdateCompanyLinksResult> {
   const parsed = companyLinksUpdateSchema.safeParse(input);
@@ -382,9 +424,15 @@ export async function updateCompanyLinks(
 
   const setWebsite = v.website !== undefined;
   const setLogoUrl = v.logoUrl !== undefined;
-  if (!setWebsite && !setLogoUrl) return { ok: true }; // nic do zapisania
+  if (!setWebsite && !setLogoUrl) return { ok: true, outcome: 'unchanged' }; // nic do zapisania
 
-  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  // Demo (bez bazy) używa nierzeczywistego identyfikatora (`DEMO_COMPANY.id`) — sprawdzamy
+  // format UUID dopiero DALEJ, żeby panel demonstracyjny nie dostawał NOT_FOUND.
+  if (!isPortalDataConfigured()) return { ok: true, demo: true, outcome: 'unchanged' };
+
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
+    return { ok: false, error: 'NOT_FOUND' };
+  }
 
   if (
     !(await checkRateLimit('company-update', {
@@ -399,39 +447,33 @@ export async function updateCompanyLinks(
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    type Outcome =
-      | { error: ErrorCode }
-      | { error: null; companyId: string; rows: Record<string, unknown>[] };
+    type Outcome = { error: ErrorCode } | { error: null; result: unknown };
     const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
-      const active = await getActiveCompany(tx, me.id);
-      const companyId = active.activeId;
-      if (!companyId) return { error: 'NOT_FOUND' };
-      if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+      const membership = await getCompanyMembershipFor(tx, me.id, companyId);
+      if (!membership) return { error: 'NOT_FOUND' };
+      if (membership.role !== 'owner' && membership.role !== 'admin') {
         return { error: 'PERMISSION_DENIED' };
       }
-
-      // RLS `companies_update_member` (owner/admin) + CHECK `companies_website_https`/
-      // `companies_logo_url_https` (0141) — status/weryfikacja bez zmian (trigger nie reaguje).
-      const { rows } = await execute(tx, 'company.update-links',
-        `UPDATE public.companies
-            SET website  = CASE WHEN $2 THEN $3 ELSE website  END,
-                logo_url = CASE WHEN $4 THEN $5 ELSE logo_url END
-          WHERE id = $1
-          RETURNING id`,
-        [
-          companyId,
-          setWebsite, setWebsite ? nullIfEmpty(v.website) : null,
-          setLogoUrl, setLogoUrl ? nullIfEmpty(v.logoUrl) : null,
-        ]);
-      return { error: null, companyId, rows };
+      const result = await rpc(tx, 'submit_company_links', {
+        p_company_id: companyId,
+        p_set_website: setWebsite,
+        p_website: setWebsite ? (nullIfEmpty(v.website) ?? '') : null,
+        p_set_logo_url: setLogoUrl,
+        p_logo_url: setLogoUrl ? (nullIfEmpty(v.logoUrl) ?? '') : null,
+      });
+      return { error: null, result };
     });
     if (outcome.error !== null) return { ok: false, error: outcome.error };
 
-    // RLS przepuszcza UPDATE bez wiersza (0 rows) — to nie jest sukces.
-    if (outcome.rows.length !== 1 || asString(asRecord(outcome.rows[0])['id']) !== outcome.companyId) {
-      return { ok: false, error: 'PERMISSION_DENIED' };
+    const result = outcome.result;
+    if (result !== 'pending' && result !== 'applied' && result !== 'unchanged') {
+      captureError(new Error('submit_company_links: unexpected result'), {
+        area: 'company.updateCompanyLinks',
+      });
+      return { ok: false, error: 'INTERNAL' };
     }
-    return { ok: true };
+    revalidatePath('/employer', 'layout');
+    return { ok: true, outcome: result };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.updateCompanyLinks') };
   }

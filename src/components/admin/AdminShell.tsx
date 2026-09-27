@@ -1,17 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Building2, Coins, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Briefcase, Building2, Coins, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
+import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { AdminFeedbackProvider } from '@/components/admin/AdminFeedback';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 
 /**
  * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (jasny sidebar `.side-item` +
- * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
+ * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy / Oferty
  * / Zgłoszenia / Odwołania / Raport DSA (#43) / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Kampanie e-mail (#45) / Rejestr naruszeń (#490) / Koszty AI (#36) / Wydajność stron (dane polowe CWV) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *
  * Dzwonek powiadomień jest ukryty (#423) — administracja nie korzysta z kolejki notyfikacji
@@ -24,6 +25,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 const HREF = {
   summary: '/admin',
   companies: '/admin/firmy',
+  jobs: '/admin/oferty',
   reports: '/admin/zgloszenia',
   appeals: '/admin/odwolania',
   dsaReport: '/admin/raport-dsa',
@@ -49,15 +51,22 @@ export interface AdminShellProps {
   children: React.ReactNode;
   /** Nazwa zalogowanego admina (z sesji); brak → etykieta i18n `admin.adminName`. */
   userName?: string;
+  /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
+  keepSessionAlive?: boolean;
 }
 
-export function AdminShell({ children, userName }: AdminShellProps): React.JSX.Element {
+export function AdminShell({
+  children,
+  userName,
+  keepSessionAlive,
+}: AdminShellProps): React.JSX.Element {
   const t = useTranslations('admin');
   const pathname = usePathname();
 
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: t('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.companies, label: t('navCompanies'), icon: <Building2 /> },
+    { href: HREF.jobs, label: t('navJobs'), icon: <Briefcase /> },
     { href: HREF.reports, label: t('navReports'), icon: <Flag /> },
     { href: HREF.appeals, label: t('navAppeals'), icon: <Scale /> },
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },
@@ -97,6 +106,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
       user={{ name: displayName, subtitle: t('brandTag'), initials: initialsOf(displayName) }}
       showNotifications={false}
     >
+      {keepSessionAlive ? <SessionKeepAlive /> : null}
       <AdminFeedbackProvider>{children}</AdminFeedbackProvider>
     </DashboardShell>
   );

@@ -6,6 +6,7 @@ import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
+import { AgeStatusProvider } from '@/components/settings/age-status-context';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
@@ -58,6 +59,8 @@ export default async function CandidateSettingsPage({
     loadProfileVisibility(),
     loadMyAgeAttestation(),
   ]);
+  // Jeden stan wieku dla sekcji „Wiek” i widoczności (#828): nieznany = bez blokady w UI.
+  const initialAdult = age.status === 'ready' && age.attestedMinAge !== null ? age.isAdult : undefined;
 
   return (
     <div className="min-w-0 max-w-3xl">
@@ -71,34 +74,36 @@ export default async function CandidateSettingsPage({
         )}
       </section>
 
-      {age.status === 'ready' ? (
-        <AgeAttestationSettings initial={age} />
-      ) : (
-        <section aria-labelledby="age-attestation-title" className={PAPER}>
-          <h2 id="age-attestation-title" className={H2_EXTENDED}>
-            {tAge('sectionTitle')}
-          </h2>
-          <p role="alert" className="mt-2 text-sm text-error">
-            {tAge('loadError')}
-          </p>
-        </section>
-      )}
+      <AgeStatusProvider initialAdult={initialAdult}>
+        {age.status === 'ready' ? (
+          <AgeAttestationSettings initial={age} />
+        ) : (
+          <section aria-labelledby="age-attestation-title" className={PAPER}>
+            <h2 id="age-attestation-title" className={H2_EXTENDED}>
+              {tAge('sectionTitle')}
+            </h2>
+            <p role="alert" className="mt-2 text-sm text-error">
+              {tAge('loadError')}
+            </p>
+          </section>
+        )}
 
-      {visibility.status === 'ready' ? (
-        <ProfileVisibilitySettings
-          initial={visibility}
-          adult={age.status === 'ready' && age.attestedMinAge !== null ? age.isAdult : undefined}
-        />
-      ) : (
-        <section aria-labelledby="profile-visibility-title" className={PAPER}>
-          <h2 id="profile-visibility-title" className={H2_EXTENDED}>
-            {tVisibility('sectionTitle')}
-          </h2>
-          <p role="alert" className="mt-2 text-sm text-error">
-            {tVisibility('loadError')}
-          </p>
-        </section>
-      )}
+        {visibility.status === 'ready' ? (
+          <ProfileVisibilitySettings
+            initial={visibility}
+            adult={initialAdult}
+          />
+        ) : (
+          <section aria-labelledby="profile-visibility-title" className={PAPER}>
+            <h2 id="profile-visibility-title" className={H2_EXTENDED}>
+              {tVisibility('sectionTitle')}
+            </h2>
+            <p role="alert" className="mt-2 text-sm text-error">
+              {tVisibility('loadError')}
+            </p>
+          </section>
+        )}
+      </AgeStatusProvider>
 
       {blocks.status === 'ready' ? (
         <CompanyBlocksSettings initialBlocks={blocks.blocks} />

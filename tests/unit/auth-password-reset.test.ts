@@ -19,7 +19,16 @@ vi.mock('@/lib/db/transaction', async () => (await import('../helpers/auth-porta
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
-import { SESSION_COOKIE, api, authApiError, cookieJar, outcome, resetPortal, stubPortalEnv } from '../helpers/auth-portal';
+import {
+  SESSION_COOKIE,
+  api,
+  authApiError,
+  cookieJar,
+  outcome,
+  resetPortal,
+  runtimeModule,
+  stubPortalEnv,
+} from '../helpers/auth-portal';
 import { requestPasswordReset, signOut, updatePassword } from '@/lib/actions/auth';
 
 const TOKEN = 'AbCdEfGhIjKlMnOpQrStUvWx';
@@ -101,5 +110,20 @@ describe('signOut', () => {
     api.signOut.mockRejectedValue(new Error('db down'));
     expect(await outcome(() => signOut())).toEqual({ redirect: '/pl/logowanie' });
     expect(cookieJar.has(SESSION_COOKIE)).toBe(false);
+  });
+
+  // Regresja #902: `getAuthRuntime()` odrzuca PRZED przypisaniem `auth` (inicjalizacja
+  // runtime albo pierwsze zapytanie do puli auth padają, np. przejściowa awaria bazy).
+  // Sprzed naprawy `if (auth) await discardSession(auth);` pomijał całą gałąź (zmienna
+  // `auth` zostawała `undefined`) i cookie tej przeglądarki nigdy nie było kasowane, choć
+  // odpowiedź i tak przekierowywała na `/logowanie` — użytkownik mógł uznać sesję za
+  // zakończoną, mimo że cookie nadal działało. To jednocześnie kontrola ujemna: bez gałęzi
+  // `else { await clearSessionCookies(); }` w `signOut` ten test jest czerwony.
+  it('awaria inicjalizacji runtime auth (przed przypisaniem `auth`): cookie tej przeglądarki i tak usunięte (#902)', async () => {
+    cookieJar.set(SESSION_COOKIE, { value: 'tok.sig' });
+    runtimeModule.getAuthRuntime.mockRejectedValueOnce(new Error('runtime init failed'));
+    expect(await outcome(() => signOut())).toEqual({ redirect: '/pl/logowanie' });
+    expect(cookieJar.has(SESSION_COOKIE)).toBe(false);
+    expect(api.signOut).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import type { Locale } from '@/i18n/routing';
 import type { ConversationListItem } from '@/lib/data/messages';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 
 import { ConversationOpenPending } from './ConversationOpenPending';
 import { ICON_BOX } from '@/components/dashboard/panel-styles';
@@ -30,7 +31,11 @@ export interface ConversationListProps {
 function formatWhen(iso: string, locale: Locale): string {
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return '';
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(ts);
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: APP_TIME_ZONE,
+  }).format(ts);
 }
 
 /** Inicjały drugiej strony (placeholder awatara/logo). */

@@ -68,6 +68,11 @@ export function ApplicationStatusMenu({
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
   const confirmRef = React.useRef<HTMLButtonElement | null>(null);
   const restoreFocusAfterTransitionRef = React.useRef(false);
+  // Referencje do przycisków opcji listy (#800) — po anulowaniu potwierdzenia
+  // pozwalają wrócić fokusem na status, który je uruchomił, zamiast go gubić.
+  const optionRefs = React.useRef<Partial<Record<MenuTargetStatus, HTMLButtonElement | null>>>({});
+  const lastConfirmTargetRef = React.useRef<MenuTargetStatus | null>(null);
+  const restoreFocusAfterCancelRef = React.useRef(false);
   const panelId = React.useId();
   const router = useRouter();
 
@@ -103,9 +108,19 @@ export function ApplicationStatusMenu({
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  // Fokus na przycisk potwierdzenia po przejściu do kroku potwierdzenia.
+  // Fokus na przycisk potwierdzenia po przejściu do kroku potwierdzenia;
+  // zapamiętanie statusu, do którego wraca fokus po anulowaniu (#800).
   React.useEffect(() => {
-    if (confirmTarget) confirmRef.current?.focus();
+    if (confirmTarget) {
+      lastConfirmTargetRef.current = confirmTarget;
+      confirmRef.current?.focus();
+      return;
+    }
+    if (!restoreFocusAfterCancelRef.current) return;
+    restoreFocusAfterCancelRef.current = false;
+    const target = lastConfirmTargetRef.current;
+    const optionEl = target ? optionRefs.current[target] : null;
+    (optionEl ?? triggerRef.current)?.focus();
   }, [confirmTarget]);
 
   // Wybranie opcji odmontowuje panel, a trigger jest chwilowo disabled podczas zapisu.
@@ -201,7 +216,10 @@ export function ApplicationStatusMenu({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setConfirmTarget(null)}
+                  onClick={() => {
+                    restoreFocusAfterCancelRef.current = true;
+                    setConfirmTarget(null);
+                  }}
                   className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
                 >
                   {tc('cancel')}
@@ -213,6 +231,9 @@ export function ApplicationStatusMenu({
               {targets.map((target) => (
                 <li key={target}>
                   <button
+                    ref={(el) => {
+                      optionRefs.current[target] = el;
+                    }}
                     type="button"
                     onClick={() => handleSelect(target)}
                     className="flex min-h-12 w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted"
