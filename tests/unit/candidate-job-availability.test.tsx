@@ -7,9 +7,9 @@ import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote'
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * 0206 — historia zgłoszeń kandydata po zamknięciu/wygaśnięciu oferty: RPC zwraca
+ * 0157 — historia zgłoszeń kandydata po zamknięciu/wygaśnięciu oferty: RPC zwraca
  * `job_availability` i `slug` tylko dla oferty publicznej; karta pokazuje etykietę stanu
- * zamiast linku „Zobacz ofertę” (404). SQL i klasyfikacja: `rls.sql` sekcja AV206.
+ * zamiast linku „Zobacz ofertę” (404). SQL i klasyfikacja: `rls.sql` sekcja AV157.
  */
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));

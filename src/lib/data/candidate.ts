@@ -81,7 +81,7 @@ export interface RecommendedJob {
 }
 
 /**
- * Stan oferty w historii kandydata (0206, `job_availability` z RPC): `available` = strona
+ * Stan oferty w historii kandydata (0157, `job_availability` z RPC): `available` = strona
  * publiczna istnieje; pozostałe stany = brak linku i etykieta w panelu. `null` = nieznany.
  */
 export type JobAvailability = 'available' | 'expired' | 'closed' | 'unavailable';
@@ -102,7 +102,7 @@ export interface MyApplication {
   jobTitle: string;
   companyName: string;
   slug: string | null;
-  /** Stan oferty (0206) — steruje etykietą „oferta zamknięta/wygasła” zamiast martwego linku. */
+  /** Stan oferty (0157) — steruje etykietą „oferta zamknięta/wygasła” zamiast martwego linku. */
   jobAvailability?: JobAvailability | null;
   /** Data zgłoszenia (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   date: string;
@@ -140,7 +140,7 @@ export interface MyOffer {
   jobTitle: string;
   companyName: string;
   slug: string | null;
-  /** Stan oferty (0206). */
+  /** Stan oferty (0157). */
   jobAvailability?: JobAvailability | null;
   /** Treść propozycji od pracodawcy (może być pusta w danych DEMO). */
   message: string;
@@ -238,7 +238,7 @@ const PUBLIC_JOBS_LOOKUP_LIMIT = 100;
 interface PublicJobLite {
   id: string;
   slug: string;
-  /** `get_public_jobs` = zawsze publiczna; RPC historii zwracają `job_availability` (0206). */
+  /** `get_public_jobs` = zawsze publiczna; RPC historii zwracają `job_availability` (0157). */
   availability: JobAvailability | null;
   title: string;
   companyName: string;
@@ -985,7 +985,7 @@ export interface MyApplicationDetail {
   city: string;
   /** Slug publicznej oferty — `null`, gdy oferta nie ma już publicznego adresu. */
   slug: string | null;
-  /** Stan oferty (0206). */
+  /** Stan oferty (0157). */
   jobAvailability?: JobAvailability | null;
   /** Data wysłania (ISO) albo `null`, gdy nieznana. */
   submittedAt: string | null;

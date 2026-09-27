@@ -15137,13 +15137,11 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- AV206. Stan oferty w historii kandydata (0206): `get_applied_jobs_display` i
+-- AV157. Stan oferty w historii kandydata (0157): `get_applied_jobs_display` i
 --        `get_offered_jobs_display` zwracają `job_availability` (available/expired/closed/
 --        unavailable), a `slug` WYŁĄCZNIE dla oferty publicznej — panel nie linkuje do strony
 --        publicznej, która odpowiada 404. Tytuł i firma zostają dla każdego stanu.
---        Kontrola ujemna: definicja sprzed 0206 (slug bez warunku) daje link do zamkniętej oferty.
--- =====================================================================reset role; reset app.current_uid;
-
+--        Kontrola ujemna: definicja sprzed 0157 (slug bez warunku) daje link do zamkniętej oferty.
 -- ============================================================================
 begin;
 reset role; reset app.current_uid;
@@ -15231,7 +15229,7 @@ select pg_temp.assert(
   and has_function_privilege('authenticated', 'public.get_offered_jobs_display(text)', 'EXECUTE'),
   'AV6 anon bez EXECUTE, authenticated z EXECUTE');
 
--- AV-N (kontrola ujemna): slug bez warunku dostępności (jak przed 0206) → link do zamkniętej
+-- AV-N (kontrola ujemna): slug bez warunku dostępności (jak przed 0157) → link do zamkniętej
 -- oferty; AV2b wykrywa regresję.
 savepoint av_neg;
 create or replace function public.candidate_job_availability(
@@ -15245,7 +15243,9 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 rollback to savepoint av_neg;
 rollback;
-=======
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- CLR156. Strona WWW i logo firmy z zatwierdzaniem przez admina (migracja 0156):
 --         pola publiczne (`website`/`logo_url`) zmienia wyłącznie decyzja admina portalu,
 --         propozycja firmy czeka w `*_pending`; usunięcie linku wchodzi od razu; CAS po

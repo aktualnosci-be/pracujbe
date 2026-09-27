@@ -1000,7 +1000,7 @@ parsera.
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
-Stan oferty w historii (migracja `0206` — numer tymczasowy): `get_applied_jobs_display`
+Stan oferty w historii (migracja `0157`): `get_applied_jobs_display`
 i `get_offered_jobs_display` zwracają `job_availability` (`available`/`expired`/`closed`/
 `unavailable`, klasyfikacja `candidate_job_availability` = warunki `get_public_job`: aktywna,
 nieusunięta, przed terminem, firma `verified`), a `slug` tylko dla `available` — lista zgłoszeń,
@@ -1008,7 +1008,7 @@ podgląd na pulpicie, szczegół zgłoszenia i propozycje nie linkują do strony
 dałaby 404, tylko pokazują etykietę `JobAvailabilityNote` (`dashboard.jobAvailability*`). Tytuł
 i firma zostają dla każdego stanu, szczegół zgłoszenia zawsze dostępny. E-maile nie linkują do
 strony oferty (statusChanged → panel, guestStatusChanged → lista ofert). Dowód: `rls.sql` sekcja
-AV206 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
+AV157 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
 `candidate-job-availability` (kontrola ujemna: oferta publiczna = link bez etykiety).
 
 Granica błędu i 404 wewnątrz panelu kandydata (bez migracji, wzór jak panel pracodawcy #895):

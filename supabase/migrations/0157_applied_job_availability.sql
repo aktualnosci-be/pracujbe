@@ -1,7 +1,7 @@
 -- =============================================================================
--- 0206_applied_job_availability.sql — stan oferty w historii zgłoszeń i propozycji kandydata.
+-- 0157_applied_job_availability.sql — stan oferty w historii zgłoszeń i propozycji kandydata.
 --
--- Numer tymczasowy — ostateczny nada integrator.
+-- Numer ostateczny nadany przez integratora (tymczasowo 0206).
 --
 -- `get_applied_jobs_display` (0023/0113) i `get_offered_jobs_display` (0090) zwracają dane
 -- oferty NIEZALEŻNIE od jej statusu (kandydat nie traci tytułu po zamknięciu oferty), ale

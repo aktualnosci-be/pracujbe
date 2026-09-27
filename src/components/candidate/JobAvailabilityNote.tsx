@@ -5,7 +5,7 @@ import { TAG } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
 /**
- * JobAvailabilityNote — etykieta stanu oferty w historii kandydata (0206). Oferta zamknięta,
+ * JobAvailabilityNote — etykieta stanu oferty w historii kandydata (0157). Oferta zamknięta,
  * wygasła albo niedostępna nie ma strony publicznej, więc zamiast linku „Zobacz ofertę”
  * (404) karta pokazuje stan. Oferta publiczna i stan nieznany = nic.
  */
