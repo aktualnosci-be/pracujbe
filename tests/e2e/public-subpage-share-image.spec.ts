@@ -47,9 +47,18 @@ for (const locale of locales) {
   }
 }
 
-test('kontrola ujemna: brak obrazu OG jest wykrywany przez tę samą asercję', async ({ page }) => {
-  await page.goto('/pl/praca');
-  const shareImage = new URL('/og.png', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').href;
-  await page.locator('meta[property="og:image"]').evaluate((element) => element.remove());
-  await expect(expectBrandImageMetadata(page, shareImage)).rejects.toThrow();
+// Kontrola ujemna na HTML z serwera, bez JavaScriptu (tak czytają go crawlery podglądów linków).
+// Z włączonym JS usunięcie <meta> przed hydratacją bywało cofane przez React (przywraca
+// metadane z drzewa), więc asercja znajdowała tag ponownie i test był niestabilny.
+test.describe('bez JavaScriptu', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('kontrola ujemna: brak obrazu OG jest wykrywany przez tę samą asercję', async ({ page }) => {
+    await page.goto('/pl/praca');
+    const shareImage = new URL('/og.png', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').href;
+    // Bez JS obraz marki jest w HTML z serwera — asercja przechodzi przed usunięciem tagu.
+    await expectBrandImageMetadata(page, shareImage);
+    await page.locator('meta[property="og:image"]').evaluate((element) => element.remove());
+    await expect(expectBrandImageMetadata(page, shareImage)).rejects.toThrow();
+  });
 });
