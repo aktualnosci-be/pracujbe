@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Waarom is de beslissing onjuist?",
     "appealDeadline": "Termijn voor bezwaar: tot {date}.",
     "appealDeadlineNotStarted": "De bezwaartermijn begint te lopen zodra je de melding over de beslissing ontvangt.",
-    "appealStatusLabel": "Bezwaar {reference}"
+    "appealStatusLabel": "Bezwaar {reference}",
+    "targetTitle": "Bedrijf uit de beslissing",
+    "targetIntro": "Deze link gaat over een ander bedrijf dan het bedrijf dat nu actief is in je paneel. Hieronder zie je de gegevens — je actieve bedrijf is niet gewijzigd.",
+    "targetUnavailableTitle": "Dit bedrijf is niet meer beschikbaar vanaf je account",
+    "targetUnavailableHint": "Je hebt geen actieve toegang meer tot dit bedrijf, of de link is ongeldig.",
+    "targetSwitchAction": "Instellen als actief bedrijf",
+    "targetSwitchError": "Het actieve bedrijf wisselen is niet gelukt. Probeer het opnieuw."
   },
   "companyProfile": {
     "metaTitle": "Vacatures bij {name}",

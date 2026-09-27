@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Pourquoi la décision est-elle erronée ?",
     "appealDeadline": "Délai de recours : jusqu’au {date}.",
     "appealDeadlineNotStarted": "Le délai de recours commencera à courir dès réception de la notification de la décision.",
-    "appealStatusLabel": "Recours {reference}"
+    "appealStatusLabel": "Recours {reference}",
+    "targetTitle": "Entreprise concernée par la décision",
+    "targetIntro": "Ce lien concerne une autre entreprise que celle actuellement active dans votre panneau. Ses données sont affichées ci-dessous — votre entreprise active n'a pas changé.",
+    "targetUnavailableTitle": "Cette entreprise n'est plus accessible depuis votre compte",
+    "targetUnavailableHint": "Vous n'avez plus d'accès actif à cette entreprise, ou le lien est invalide.",
+    "targetSwitchAction": "Définir comme entreprise active",
+    "targetSwitchError": "Impossible de changer l'entreprise active. Réessayez."
   },
   "companyProfile": {
     "metaTitle": "Offres d'emploi chez {name}",

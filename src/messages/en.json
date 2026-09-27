@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Why is the decision wrong?",
     "appealDeadline": "Appeal deadline: {date}.",
     "appealDeadlineNotStarted": "The appeal deadline starts once you receive the notice of the decision.",
-    "appealStatusLabel": "Appeal {reference}"
+    "appealStatusLabel": "Appeal {reference}",
+    "targetTitle": "Company from the decision",
+    "targetIntro": "This link is about a different company than the one currently active in your panel. Its details are shown below — your active company has not changed.",
+    "targetUnavailableTitle": "This company is no longer available from your account",
+    "targetUnavailableHint": "You no longer have active access to this company, or the link is invalid.",
+    "targetSwitchAction": "Set as active company",
+    "targetSwitchError": "Could not switch the active company. Please try again."
   },
   "companyProfile": {
     "metaTitle": "Jobs at {name}",

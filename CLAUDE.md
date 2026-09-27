@@ -1091,6 +1091,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Czas weryfikacji (decyzja właściciela 26.09.2026): baner dla `unverified`/`pending` we wszystkich
   wariantach (pulpit, kreator, `/employer/firma`) dodaje `company.bannerEta` („Zwykle do 2 dni
   roboczych”) — bez innych obietnic; test `company-status-banner-reason` (kontrola ujemna).
+  Link decyzji dotyczy TEJ firmy, nie aktywnej z cookie (#843): CTA e-maila
+  (`companyVerified`/`companyRejected`/`companySuspended`) i link powiadomienia in-app (ten sam
+  `entity_type='company'` niosą też powiadomienia moderacyjne #42) mają `?firma=<id>` z
+  `entity_id` zdarzenia (`emailTargetPath`/`resolveHref`). Właściciel kilku firm z inną AKTYWNĄ
+  firmą w cookie widzi `/employer/firma` z danymi WŁAŚCIWEJ firmy (`getCompanyById` — odczyt po
+  identyfikatorze, niezależny od `pb_active_company`) w osobnym, read-only widoku +
+  `SwitchToCompanyButton` (jawne przełączenie aktywnej firmy, `setActiveCompany`); brak/utracone
+  członkostwo → jawny stan „firma niedostępna”, nigdy ciche podstawienie innej firmy. Bez
+  migracji (`entity_id`/`related_id` już niosły identyfikator firmy od 0084/0099). Dowód: unit
+  `company-load` (`getCompanyById`), `admin-company-review` (CTA z `?firma=`), `notifications-links`,
+  `switch-to-company-button`; E2E `employer-company-target-notice`.
 - [x] Import ogłoszenia przez AI (#465, za flagą, domyślnie wyłączony): krok „Zaimportuj
   z ogłoszenia” nad kreatorem nowej oferty — zrzut ekranu (PNG/JPG/WebP ≤ 5 MB, magic bytes)
   albo link (pobranie serwerowe odporne na SSRF: `src/lib/ai-import/safe-fetch.ts`). Model
