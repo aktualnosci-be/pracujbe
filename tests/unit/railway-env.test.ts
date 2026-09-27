@@ -11,7 +11,8 @@ const db = vi.hoisted(() => ({ query: vi.fn(), getDomainPool: vi.fn() }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: db.getDomainPool }));
 
 import { env, isAppReady, isProductionDeployment, readinessChecks } from '@/lib/env';
-import { GET, resetHealthPingCacheForTests } from '@/app/api/health/route';
+import { GET } from '@/app/api/health/route';
+import { resetHealthPingCacheForTests } from '@/lib/ops/health-ping-cache';
 
 const SECRET = 'x'.repeat(40);
 

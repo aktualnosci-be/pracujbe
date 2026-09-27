@@ -1,6 +1,6 @@
-import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import { env, isAppReady, isDatabaseConfigured, isProductionMode, readinessChecks } from '@/lib/env';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
+import { DATABASE_PING_CACHE_KEY, pingCache } from '@/lib/ops/health-ping-cache';
 import { emailProviderFromEnv } from '@/lib/email/transport/select';
 import { isTurnstileEnabled } from '@/lib/turnstile/verify';
 
@@ -26,32 +26,6 @@ export const dynamic = 'force-dynamic';
 
 /** Limit czasu sprawdzenia bazy: healthcheck nie może wisieć na zablokowanej puli. */
 const DATABASE_PING_TIMEOUT_MS = 2_000;
-
-/**
- * `ttlMs: 0` — celowo BEZ ponownego użycia rozstrzygniętego wyniku (healthcheck ma odzwierciedlać
- * realny, BIEŻĄCY stan bazy na każde odrębne żądanie — patrz komentarz na górze pliku). Cache
- * chroni wyłącznie przed RÓWNOLEGŁYMI żądaniami (#600): dopóki jedno `pool.query('SELECT 1')`
- * trwa, kolejne żądania (nawet setki naraz) czekają na TEN SAM wynik zamiast otwierać nowe
- * zapytanie — to jest właściwa ochrona przed zalewem. Gdy zapytanie się zakończy, następne,
- * odrębne żądanie zawsze sprawdza bazę od nowa.
- */
-const DATABASE_PING_CACHE_KEY = 'ping';
-
-const pingCache = createTtlSingleFlightCache<boolean>({
-  ttlMs: 0,
-  maxEntries: 1,
-});
-
-/**
- * Tylko dla testów: `pingCache` żyje w module (jeden proces, #600/#645) i normalnie kończy
- * dzielony wpis dopiero, gdy realne zapytanie się rozstrzygnie. Test symulujący zawieszoną bazę
- * (mock `pool.query`, który NIGDY się nie rozstrzyga) inaczej trwale zatruwałby stan modułu na
- * resztę pliku testowego — kolejne, odrębne testy w tym samym pliku dzieliłyby ten sam, wiecznie
- * trwający wpis `inFlight` i healthcheck fałszywie zwracałby 503 po realnym odzyskaniu bazy.
- */
-export function resetHealthPingCacheForTests(): void {
-  pingCache.clear();
-}
 
 /**
  * `true` = baza odpowiedziała; `false` = błąd. BEZ timeoutu wewnątrz — to jest właśnie
