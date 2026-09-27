@@ -7,6 +7,7 @@ interface MessagesCopy {
   threadListLabel: string;
   composerLabel: string;
   composerCounter: string;
+  composerSensitiveIdHint: string;
 }
 
 function copy(locale: string): MessagesCopy {
@@ -16,7 +17,8 @@ function copy(locale: string): MessagesCopy {
 }
 
 // #358: nazwane regiony listy i wątku, h2 z rozmówcą, nazwana lista, nadawca przed treścią,
-// etykieta pola z rozmówcą. #335: licznik znaków i limit 4000 w polu.
+// etykieta pola z rozmówcą. #335: licznik znaków i limit 4000 w polu. #495: stała podpowiedź
+// o numerach NISS/BIS/PESEL/dokumentów w opisie pola, po liczniku.
 for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
   for (const role of ['candidate', 'employer'] as const) {
     test(`wątek wiadomości — struktura dostępności: ${role}, ${locale}`, async ({ page }) => {
@@ -44,7 +46,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
       await expect(composer).toHaveAttribute('maxlength', '4000');
       await composer.fill('Test');
       await expect(composer).toHaveAccessibleDescription(
-        m.composerCounter.replace('{count}', '4').replace('{max}', '4000'),
+        `${m.composerCounter.replace('{count}', '4').replace('{max}', '4000')} ${m.composerSensitiveIdHint}`,
       );
     });
   }
