@@ -1,7 +1,5 @@
 -- =============================================================================
--- 0218_saved_jobs_availability.sql — zapisane oferty kandydata ze stanem oferty.
---
--- Numer tymczasowy — ostateczny nada integrator.
+-- 0162_saved_jobs_availability.sql — zapisane oferty kandydata ze stanem oferty.
 --
 -- `get_saved_jobs_display` (0066) zwracała WYŁĄCZNIE oferty publiczne: zapisana oferta, która
 -- została zamknięta, wygasła, wstrzymana, usunięta albo której firma straciła weryfikację,
@@ -17,8 +15,8 @@
 --   unavailable — inaczej (szkic, firma niezweryfikowana/zawieszona).
 -- `slug` jest zwracany WYŁĄCZNIE dla `available` — panel linkuje tylko do strony, która
 -- istnieje. Tytuł, firma i miasto zostają dla każdego stanu (to własny zapis kandydata).
--- Klasyfikacja zgodna z `candidate_job_availability` z historii zgłoszeń (PR #758) plus stan
--- `paused`; celowo inline, bez zależności od tamtej migracji.
+-- Klasyfikacja jak `candidate_job_availability` z historii zgłoszeń (0157) plus stan `paused`
+-- i usunięta firma = `closed`; celowo inline (inne stany niż w 0157).
 --
 -- Zmiana typu wyniku wymaga DROP + CREATE; granty jak w 0066 (bez anon).
 -- Rollback: `drop function public.get_saved_jobs_display(text)` i odtworzenie definicji z 0066.

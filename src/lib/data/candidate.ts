@@ -1152,7 +1152,7 @@ export async function getMyApplicationHistoryPage(
 }
 
 /**
- * Zapisane oferty kandydata przez RPC `get_saved_jobs_display` (0218): KAŻDY własny zapis ze
+ * Zapisane oferty kandydata przez RPC `get_saved_jobs_display` (0162): KAŻDY własny zapis ze
  * stanem oferty. Oferta zamknięta, wygasła, wstrzymana, usunięta albo firmy bez weryfikacji nie
  * znika bez śladu — karta pokazuje stan i „Usuń z zapisanych”, a `slug` (link) jest tylko dla
  * oferty publicznej (`toSavedJob`). Nie ograniczamy się do najnowszych 100 ofert.

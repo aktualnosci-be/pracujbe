@@ -95,7 +95,7 @@ const FIXTURE_ONLY_SPECS = [
   '**/candidate-applications-pagination.spec.ts',
   '**/candidate-applications-error.spec.ts',
   '**/candidate-proposals-pagination.spec.ts',
-  // Zapisane oferty zamknięte/wygasłe/wstrzymane (0218) — dane fikcyjne ze wszystkimi stanami.
+  // Zapisane oferty zamknięte/wygasłe/wstrzymane (0162) — dane fikcyjne ze wszystkimi stanami.
   '**/candidate-saved-closed.spec.ts',
   '**/candidate-dashboard-read-errors.spec.ts',
   '**/public-read-failures.spec.ts',

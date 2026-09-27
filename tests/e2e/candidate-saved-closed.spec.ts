@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
 
 /**
- * 0218 — `/candidate/zapisane` na serwerze fixture (`savedJobsFixture`: 2 oferty publiczne +
+ * 0162 — `/candidate/zapisane` na serwerze fixture (`savedJobsFixture`: 2 oferty publiczne +
  * zamknięta, wygasła, wstrzymana, niedostępna). Oferta bez strony publicznej: etykieta stanu,
  * tytuł i firma, ŻADNEGO linku do `/oferty-pracy/…` (404) i „Usuń z zapisanych”.
  * Kontrola ujemna: oferty publiczne nadal linkują — selektor linków działa.

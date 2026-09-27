@@ -15,7 +15,7 @@ const ERROR_SPECS = ['**/candidate-applications-error.spec.ts', '**/candidate-da
 const FULL_SPECS = [
   '**/candidate-applications-pagination.spec.ts',
   '**/candidate-proposals-pagination.spec.ts',
-  // Zapisane oferty bez strony publicznej: stan, brak linku, „Usuń z zapisanych” (0218).
+  // Zapisane oferty bez strony publicznej: stan, brak linku, „Usuń z zapisanych” (0162).
   '**/candidate-saved-closed.spec.ts',
   // Oferty fikcyjne bez flagi demo (#297): formularz aplikowania i JobPosting.
   '**/apply-modal-a11y.spec.ts',

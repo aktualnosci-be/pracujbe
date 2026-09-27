@@ -430,7 +430,7 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(saved).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', availability: 'available' })] });
     expect(saved.status === 'ready' && saved.jobs[0]?.slug).toBeTruthy();
 
-    // 0218: zapisana oferta po terminie nie znika — stan `expired`, bez slugu (brak linku do 404),
+    // 0162: zapisana oferta po terminie nie znika — stan `expired`, bez slugu (brak linku do 404),
     // a kandydat usuwa zapis pod RLS. `expires_at` zamiast statusu: przywrócenie nie omija strażnika publikacji.
     await db().admin.query('UPDATE public.jobs SET expires_at = now() WHERE id = $1', [jobIds[2]]);
     try {
