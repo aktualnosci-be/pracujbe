@@ -2999,6 +2999,7 @@
     "noAlertYet": "No alert sent yet.",
     "filtersLabel": "Filters of the search “{name}”",
     "open": "Show jobs",
+    "openLocaleNote": "Contains a keyword saved in {language} — it will open in that language.",
     "alerts": "Notify me about new jobs",
     "frequency": "How often",
     "daily": "Once a day",

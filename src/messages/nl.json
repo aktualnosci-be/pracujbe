@@ -2999,6 +2999,7 @@
     "noAlertYet": "We hebben nog geen melding verstuurd.",
     "filtersLabel": "Filters van de zoekopdracht „{name}”",
     "open": "Vacatures tonen",
+    "openLocaleNote": "Bevat een zoekwoord dat is opgeslagen in het {language} — wordt in die taal geopend.",
     "alerts": "Meld nieuwe vacatures",
     "frequency": "Hoe vaak",
     "daily": "Eén keer per dag",

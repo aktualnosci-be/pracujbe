@@ -958,6 +958,19 @@ alert. To samo źródło (`describeJobListFilters`) buduje chipy `/oferty-pracy`
 parametr do usunięcia), więc panel i lista nie rozjadą się. Test: unit
 `saved-search-filter-summary` (4 języki, zgodność z chipami, kontrole ujemne: pusty/nieprawidłowy
 adres, brak pustej listy).
+„Pokaż oferty” w locale zapisu, nie panelu (#823, bez migracji — kolumna `saved_searches.locale`
+istniała od `0092`, tylko nie była odczytywana): `loadMySavedSearches` zwraca teraz `locale`
+zapisu (`SavedSearch.locale`, `mapSavedSearchRow` z bezpiecznym fallbackiem do
+`routing.defaultLocale` dla brakującej/nieobsługiwanej wartości — nigdy dowolny ciąg z bazy).
+Przycisk „Pokaż oferty” w `SavedSearchList` linkuje przez `Link` z jawnym `locale={search.locale}`
+(zamiast bieżącego języka panelu next-intl), więc kandydat zawsze widzi ten sam zbiór ofert co
+worker alertów (`get_public_jobs` z `p_locale => v_search.locale`, 0092) — kluczowe przy
+wyszukiwaniu ze słowem kluczowym, bo tytuł dopasowywany jest w JEDNYM języku. Gdy zapisany
+locale różni się od panelu i wyszukiwanie ma słowo kluczowe, dodatkowa notatka
+(`savedSearches.openLocaleNote`) tłumaczy, w jakim języku otworzy się lista. Dowód: unit
+`saved-search-locale-link` (mapper: obsługiwany/brakujący/nieobsługiwany locale z kontrolą
+ujemną; komponent: link pod locale zapisu różnym i tym samym co panel, notatka tylko przy
+słowie kluczowym i różnym locale, z kontrolami ujemnymi).
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
