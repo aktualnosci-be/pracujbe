@@ -14049,12 +14049,12 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- MQ233. Kolejka dopasowań bez zakleszczeń (0233): równoległe kroki 3 i 5 onboardingu
+-- MQ233. Kolejka dopasowań bez zakleszczeń (0149): równoległe kroki 3 i 5 onboardingu
 -- tego samego kandydata. Krok 5 (sesja A) zapisuje relacje — trigger kolejkuje kandydata;
 -- w tym czasie krok 3 (sesja B) zmienia profil; potem A zapisuje certyfikaty
 -- (ensure_candidate_profile dotyka profilu). Krok 5 rozbity na dwie instrukcje tej samej
 -- transakcji (jak wnętrze save_candidate_onboarding_step5), żeby wymusić przeplot.
--- 0233: match_enqueue blokuje wiersz profilu PRZED wierszem kolejki, więc B czeka na A
+-- 0149: match_enqueue blokuje wiersz profilu PRZED wierszem kolejki, więc B czeka na A
 -- (bez cyklu) i obie sesje kończą się sukcesem. Kontrola ujemna: definicja z 0147
 -- (kolejka bez blokady profilu) → `deadlock detected` w jednej z sesji.
 -- Fixture'y i podmiana funkcji zatwierdzane w osobnej sesji (jak PP/TI611).
@@ -14130,7 +14130,7 @@ select pg_temp.remote_result('mq_a') as mq_n_a2 \gset
 select pg_temp.remote_result('mq_b') as mq_n_b1 \gset
 select dbl.dblink_exec('mq_a', 'rollback'); select dbl.dblink_exec('mq_b', 'rollback');
 select dbl.dblink_disconnect('mq_a'); select dbl.dblink_disconnect('mq_b');
--- Przywrócenie definicji z 0233 (zatwierdzone, jak podmiana).
+-- Przywrócenie definicji z 0149 (zatwierdzone, jak podmiana).
 select dbl.dblink_exec('mq_setup', :'mq_fixed_def');
 select dbl.dblink_disconnect('mq_setup');
 select pg_temp.assert(
@@ -14138,7 +14138,7 @@ select pg_temp.assert(
   'MQ2-N definicja z 0147: równoległe kroki 3 i 5 → deadlock (MQ1 wykrywa regresję)');
 select pg_temp.assert(
   pg_get_functiondef('public.match_enqueue(text,uuid)'::regprocedure) ~ 'for no key update',
-  'MQ2b definicja z 0233 przywrócona po kontroli ujemnej');
+  'MQ2b definicja z 0149 przywrócona po kontroli ujemnej');
 
 -- ============================================================================
 -- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca

@@ -1191,7 +1191,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zwracał `Date`, więc wygaśnięcie było pomijane). Dowód: `rls.sql` sekcja MP03 (kontrole
   ujemne: kwalifikacja bez widoczności/wieku/blokady/verified, naiwny zapis), unit
   `matches-materialize`, integracja `portal-matches` (PG16: wiersz = wynik live).
-  Kolejność blokad (migracja `0233` — numer tymczasowy): `match_enqueue` najpierw blokuje
+  Kolejność blokad (migracja `0149`): `match_enqueue` najpierw blokuje
   wiersz podmiotu (`candidate_profiles` kandydata / `jobs` oferty, FOR NO KEY UPDATE), dopiero
   potem wiersz kolejki — ta sama kolejność co UPDATE profilu/oferty. Wcześniej równoległe kroki
   3 i 5 onboardingu tego samego kandydata zakleszczały się (relacje: kolejka → profil, krok 3:

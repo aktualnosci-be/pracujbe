@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0233_match_queue_lock_order.sql  (numer TYMCZASOWY — ostateczny nada integrator)
+-- 0149_match_queue_lock_order.sql
 -- Kolejka `match_recompute_queue` (0147): stała kolejność blokad „wiersz podmiotu →
 -- wiersz kolejki”, koniec zakleszczeń przy równoległych zapisach profilu kandydata.
 --
