@@ -1615,6 +1615,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   stary format `?token=` odrzucany w middleware (303 bez cookie, „link nieprawidłowy”) —
   `guest-legacy-link.test` z kontrolą ujemną.
   Dowód: `rls.sql` sekcja GA98; unit `guest-apply-*`; E2E `guest-apply.spec` (fixture).
+  Kolejka nie wysyła wygasłego linku potwierdzenia (#822, migracja `0800` — numer tymczasowy):
+  `email_delivery_suppression_reason` wygasza zaległy wiersz `guestApplicationConfirm`, gdy
+  powiązane zgłoszenie nie jest już `pending` albo `confirm_expires_at` (48 h) minął —
+  w obu punktach cyklu życia wiersza (`claim_email_batch`, `email_delivery_send_check`),
+  bez zmian w `src/lib/email/outbox.ts`. Nie dotyczy `guestApplicationSent` (link przejęcia,
+  30 dni, #914 — osobne zgłoszenie o odzyskaniu). Dowód: `rls.sql` sekcja GC822 (kontrola
+  ujemna: logika sprzed naprawy dałaby zielone światło mimo wygasłego linku).
   Zmiana statusu (0122): `transition_application` → `enqueue_guest_status_email` →
   `guestStatusChanged` w języku formularza (`guest_application_requests.locale` — jawnie
   zapisany język odbiorcy bez profilu, Invariant #1), klucz = id wiersza historii, tylko

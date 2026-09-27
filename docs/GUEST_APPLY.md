@@ -142,6 +142,20 @@ firmy idą przez `enqueue_email`, czyli w języku odbiorcy.
   także po przejęciu).
 - Potwierdzenie i przejęcie są idempotentne (patrz wyżej).
 
+## Kolejka nie wysyła wygasłego linku potwierdzenia (#822, migracja `0800`)
+
+Link potwierdzenia jest ważny 48 h, ale zaległy e-mail `guestApplicationConfirm` (worker padł,
+cron się spóźnił) mógł wcześniej zostać wysłany PO tym terminie — odbiorca dostawał CTA
+prowadzące wprost do wyniku `expired`, bez możliwości dokończenia aplikacji z tego e-maila.
+`email_delivery_suppression_reason` sprawdza teraz dla `guestApplicationConfirm`, czy powiązane
+zgłoszenie jest wciąż `pending` i `confirm_expires_at` jeszcze nie minął; inaczej wiersz jest
+wygaszany (`status='failed'`, `error_message='suppressed_guest_confirm_expired'`) w obu punktach
+cyklu życia wiersza — `claim_email_batch` (zaraz po zakolejkowaniu) i `email_delivery_send_check`
+(tuż przed wywołaniem dostawcy, #621). Nie dotyczy `guestApplicationSent` (link przejęcia,
+30 dni, #914 — osobne zgłoszenie o odzyskaniu wygasłego linku przejęcia). Dowód:
+`supabase/tests/rls.sql` sekcja GC822 (z kontrolą ujemną: logika sprzed naprawy dawałaby
+zielone światło mimo wygasłego linku).
+
 ## Retencja
 
 `purge_guest_application_requests()` (service_role) jest wywoływane co godzinę przez

@@ -15571,4 +15571,149 @@ select pg_temp.assert(:'skneg' = :'skoff1',
 rollback;
 reset role; reset app.current_uid;
 
+
+-- ============================================================================
+-- GC822 (#822): kolejka nie wysyła wygasłego linku potwierdzenia aplikacji gościa (0800).
+--
+-- confirm_guest_application odrzuca link po confirm_expires_at (48 h, 0095), ale
+-- email_delivery_suppression_reason (0124/0129/0131) nie znała tej kolumny — zaległy wiersz
+-- guestApplicationConfirm mógł zostać wysłany po terminie (worker padł/cron się spóźnił).
+-- 0800 dodaje warunek: entity_type='guest_application_request' + template guestApplicationConfirm
+-- wymaga zgłoszenia wciąż `pending` i confirm_expires_at > now(); inaczej wiersz jest wygaszany
+-- (jak każda inna przyczyna) w OBU miejscach cyklu życia — claim_email_batch (zaraz po queued)
+-- i email_delivery_send_check (tuż przed wywołaniem dostawcy).
+-- ============================================================================
+\echo '--- GC822 wygasły link potwierdzenia aplikacji gościa (0800) ---'
+reset role; reset app.current_uid;
+\set GCE   'e8220000-0000-0000-0000-0000000000e1'
+\set GCCO  'e8220000-0000-0000-0000-0000000000f1'
+\set GCJ1  'e8220000-0000-0000-0000-0000000000b1'
+\set GCJ2  'e8220000-0000-0000-0000-0000000000b2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'GCE','gce822@test.be','Ewa Gc','{"role":"employer","first_name":"Ewa","last_name":"Gc","locale":"pl"}');
+insert into public.companies(id,name,status) values (:'GCCO','Firma GC822','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'GCCO',:'GCE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'GCJ1',:'GCCO','job-gc822-1','Magazynier GC822','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'GCJ2',:'GCCO','job-gc822-2','Kierowca GC822','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- GC822-1: świeże zgłoszenie — e-mail zakolejkowany, link jeszcze ważny → claim_email_batch
+-- wysyła normalnie (wiersz zostaje queued/locked, nie failed).
+set role service_role;
+select public.submit_guest_application(:'GCJ1', 'gc822-fresh@test.be', 'Fresh Guest', null, null, null, 'pl',
+  'idem-gc822-1', 'nonce-gc822-0001-aaaa', encode(sha256('tok-gc822-1'::bytea), 'hex'),
+  p_age_attested_min => 18) as gcreq1 \gset
+select id, lock_token from public.email_deliveries
+  where entity_type = 'guest_application_request' and entity_id = :'gcreq1'::uuid
+    and template = 'guestApplicationConfirm' \gset gc_fresh_
+reset role;
+select pg_temp.assert(:'gc_fresh_id' is not null, 'GC822-1a e-mail potwierdzenia zakolejkowany');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(null, 'guestApplicationConfirm', 'gc822-fresh@test.be', null,
+    'guest_application_request', :'gcreq1'::uuid) is null,
+  'GC822-1b świeży link (pending, nie wygasł) — wolno wysłać');
+set role service_role;
+select id, lock_token from public.claim_email_batch(100000, 300)
+  where id = :'gc_fresh_id'::uuid \gset gc_fresh_claim_
+reset role;
+select pg_temp.assert(:'gc_fresh_claim_id' = :'gc_fresh_id',
+  'GC822-1c claim_email_batch przejmuje świeży wiersz — nie jest wygaszany');
+select pg_temp.assert(
+  (select status = 'queued' and lock_token is not null
+     from public.email_deliveries where id = :'gc_fresh_id'::uuid),
+  'GC822-1d wiersz zostaje queued (locked), nie failed');
+
+-- GC822-2: drugie zgłoszenie — worker "zaspał" ponad 48 h: confirm_expires_at już minął, ale
+-- zgłoszenie wciąż pending (nikt go nie potwierdził), e-mail wciąż w kolejce.
+set role service_role;
+select public.submit_guest_application(:'GCJ2', 'gc822-late@test.be', 'Late Guest', null, null, null, 'nl',
+  'idem-gc822-2', 'nonce-gc822-0002-aaaa', encode(sha256('tok-gc822-2'::bytea), 'hex'),
+  p_age_attested_min => 18) as gcreq2 \gset
+select id, lock_token from public.email_deliveries
+  where entity_type = 'guest_application_request' and entity_id = :'gcreq2'::uuid
+    and template = 'guestApplicationConfirm' \gset gc_late_
+reset role;
+update public.guest_application_requests set confirm_expires_at = now() - interval '1 minute'
+  where id = :'gcreq2';
+select pg_temp.assert(
+  (select status from public.guest_application_requests where id = :'gcreq2') = 'pending',
+  'GC822-2a zgłoszenie wciąż pending, tylko link wygasł');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(null, 'guestApplicationConfirm', 'gc822-late@test.be', null,
+    'guest_application_request', :'gcreq2'::uuid) = 'suppressed_guest_confirm_expired',
+  'GC822-2b naprawa: wygasły link → wygaszony, worker go nie wyśle');
+set role service_role;
+select count(*) as n from public.claim_email_batch(100000, 300)
+  where id = :'gc_late_id'::uuid \gset gc_late_claim_
+reset role;
+select pg_temp.assert(:'gc_late_claim_n' = '0',
+  'GC822-2c claim_email_batch NIE przejmuje wygaszonego wiersza (nie zostaje wysłany)');
+select pg_temp.assert(
+  (select status = 'failed' and suppressed_at is not null
+     and error_message = 'suppressed_guest_confirm_expired'
+     from public.email_deliveries where id = :'gc_late_id'::uuid),
+  'GC822-2d wiersz oznaczony jako wygaszony (ślad zostaje, worker go nie wysyła)');
+
+-- GC822-3: zgłoszenie już ROZSTRZYGNIĘTE (np. potwierdzone inną drogą) w chwili, gdy zaległy
+-- e-mail wreszcie trafiłby do wysyłki — ponowne potwierdzenie i tak nic by nie zmieniło
+-- (confirm_guest_application zwraca already_confirmed/duplicate), więc też wygaszony.
+set role service_role;
+select public.submit_guest_application(:'GCJ2', 'gc822-conf@test.be', 'Confirmed Guest', null, null, null, 'fr',
+  'idem-gc822-3', 'nonce-gc822-0003-aaaa', encode(sha256('tok-gc822-3'::bytea), 'hex'),
+  p_age_attested_min => 18) as gcreq3 \gset
+reset role;
+update public.guest_application_requests set status = 'confirmed', confirmed_at = now()
+  where id = :'gcreq3';
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(null, 'guestApplicationConfirm', 'gc822-conf@test.be', null,
+    'guest_application_request', :'gcreq3'::uuid) = 'suppressed_guest_confirm_expired',
+  'GC822-3 zgłoszenie już rozstrzygnięte (status ≠ pending) — spóźniony e-mail też wygaszony');
+
+-- GC822-5: drugi punkt kontroli (#621) — wiersz JUŻ zaklaimowany (GC822-1, wciąż queued/locked)
+-- traci ważność w oknie między claimem a wysyłką (worker odłożył paczkę); email_delivery_send_check
+-- tuż przed wywołaniem dostawcy też go wygasza, nie tylko claim_email_batch.
+reset role; reset app.current_uid;
+update public.guest_application_requests set confirm_expires_at = now() - interval '1 minute'
+  where id = :'gcreq1';
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'gc_fresh_id'::uuid, :'gc_fresh_claim_lock_token'::uuid)
+    = 'suppressed_guest_confirm_expired',
+  'GC822-5a send_check tuż przed wysyłką też wygasza wiersz, gdy link wygasł w międzyczasie');
+reset role;
+select pg_temp.assert(
+  (select status = 'failed' and error_message = 'suppressed_guest_confirm_expired'
+     from public.email_deliveries where id = :'gc_fresh_id'::uuid),
+  'GC822-5b wiersz zaklaimowany wcześniej też kończy jako wygaszony, nie wysłany');
+
+-- GC822-4 (KONTROLA UJEMNA): logika SPRZED tej migracji (0124/0131, bez warunku #822)
+-- odtworzona wprost w pg_temp — w IDENTYCZNYM scenariuszu (wygasły, wciąż pending) dawałaby
+-- zielone światło (null), dokładnie błąd z #822, który wykrywają GC822-2b/2c/2d.
+create function pg_temp.gc822_suppression_reason_0124(
+  p_profile_id uuid, p_template text, p_to_email text, p_campaign_id uuid,
+  p_entity_type text, p_entity_id uuid
+) returns text language sql stable as $$
+  select case
+    when public.email_address_suppressed(p_to_email) then 'suppressed_address'
+    when public.email_allowed(p_profile_id, p_template) is not true then 'suppressed_opt_out'
+    when public.email_recipient_authorized(p_template, p_entity_type, p_entity_id, p_profile_id)
+           is not true then 'suppressed_recipient_unauthorized'
+    when p_template = 'jobMatch' and p_entity_type = 'saved_search' and not exists (
+           select 1 from public.saved_searches s
+            where s.id = p_entity_id
+              and s.profile_id is not distinct from p_profile_id
+              and s.alerts_enabled) then 'suppressed_alert_disabled'
+    when p_campaign_id is not null and not exists (
+           select 1 from public.email_campaigns c
+            where c.id = p_campaign_id and c.status in ('active', 'completed'))
+      then 'suppressed_campaign_inactive'
+    else null
+  end;
+$$;
+select pg_temp.assert(
+  pg_temp.gc822_suppression_reason_0124(null, 'guestApplicationConfirm', 'gc822-late@test.be', null,
+    'guest_application_request', :'gcreq2'::uuid) is null,
+  'GC822-4 KONTROLA UJEMNA: logika sprzed naprawy dałaby zielone światło mimo wygasłego linku (#822)');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
