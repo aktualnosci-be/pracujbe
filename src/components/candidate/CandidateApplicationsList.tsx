@@ -21,6 +21,7 @@ import {
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
 import { APP_STEP, APP_STEP_DONE, APP_STEPS } from '@/components/candidate/candidate-styles';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 
 /** Etapy `.application-steps` z prototypu (klucze `dashboard.*`). */
@@ -54,7 +55,12 @@ function formatDate(iso: string, locale: string): string {
   const ts = Date.parse(iso);
   return Number.isNaN(ts)
     ? ''
-    : new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(ts);
+    : new Intl.DateTimeFormat(locale, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: APP_TIME_ZONE,
+      }).format(ts);
 }
 
 export function CandidateApplicationsList({

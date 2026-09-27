@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Activity, BarChart3, Building2, Coins, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
+import { Activity, BarChart3, Briefcase, Building2, Coins, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -11,7 +11,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 
 /**
  * AdminShell — chrome panelu administratora. Reużywa `DashboardShell` (jasny sidebar `.side-item` +
- * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy
+ * topbar), tak jak panele kandydata/pracodawcy, ale z własną nawigacją: Podsumowanie / Firmy / Oferty
  * / Zgłoszenia / Odwołania / Raport DSA (#43) / Pytania screeningowe (#497) / Użytkownicy / Blokady poczty (#44) / Kampanie e-mail (#45) / Rejestr naruszeń (#490) / Koszty AI (#36) / Wydajność stron (dane polowe CWV) / Stan operacyjny (#47, czujki kolejek i crona) / Dziennik zdarzeń (#417). Renderowane przez `admin/layout.tsx` (guard + noindex).
  *
  * Dzwonek powiadomień jest ukryty (#423) — administracja nie korzysta z kolejki notyfikacji
@@ -24,6 +24,7 @@ import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/Da
 const HREF = {
   summary: '/admin',
   companies: '/admin/firmy',
+  jobs: '/admin/oferty',
   reports: '/admin/zgloszenia',
   appeals: '/admin/odwolania',
   dsaReport: '/admin/raport-dsa',
@@ -59,6 +60,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: t('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.companies, label: t('navCompanies'), icon: <Building2 /> },
+    { href: HREF.jobs, label: t('navJobs'), icon: <Briefcase /> },
     { href: HREF.reports, label: t('navReports'), icon: <Flag /> },
     { href: HREF.appeals, label: t('navAppeals'), icon: <Scale /> },
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },

@@ -11,6 +11,7 @@ import { attestCandidateAgeAction } from '@/lib/actions/age-attestation';
 import type { AgeAttestationState } from '@/lib/data/age-policy';
 import { CANDIDATE_ADULT_AGE, candidateAgeBandsFor } from '@/lib/age-policy/constants';
 import { setKnownMinorDevice } from '@/lib/job-funnel/client';
+import { useReportConfirmedAge } from '@/components/settings/age-status-context';
 import { cn } from '@/lib/utils';
 
 /**
@@ -21,6 +22,8 @@ import { cn } from '@/lib/utils';
  * (16–17 albo 18+) — bez daty urodzenia. Konto 16–17 widzi, że profil nie jest widoczny dla
  * firm, i po ukończeniu 18 lat potwierdza przedział 18+. Stan po zapisie pochodzi z serwera;
  * jedno żądanie naraz, błąd przy polu i `role="alert"`, sukces `role="status"` (Invariant #11).
+ * Potwierdzony przedział trafia też do `AgeStatusProvider` (#828) — sekcja widoczności
+ * odblokowuje się bez przeładowania; nieudany zapis niczego nie zgłasza.
  */
 export function AgeAttestationSettings({ initial }: { initial: AgeAttestationState }): React.JSX.Element {
   const t = useTranslations('ageAttestation');
@@ -33,6 +36,7 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
   const [saved, setSaved] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const fieldRef = React.useRef<HTMLInputElement>(null);
+  const reportConfirmedAge = useReportConfirmedAge();
   // Konto 16–17 potwierdza tylko przejście na 18+ (niższy przedział już ma).
   const minorOnly = meets && !adult;
   const bands = minorOnly ? [CANDIDATE_ADULT_AGE] : candidateAgeBandsFor(initial.requiredMinAge);
@@ -57,6 +61,7 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
         setAdult(isAdult);
         setBand(null);
         setKnownMinorDevice(!isAdult);
+        reportConfirmedAge(isAdult);
         setSaved(true);
       } else {
         setError(true);

@@ -279,6 +279,7 @@ export function reportReasonView(reason: string): ReportReasonView {
 /** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
+  'job',
   'report',
   'application',
   'offer',
@@ -287,6 +288,7 @@ export const AUDIT_ENTITY_TYPES = [
   'screening_question_review',
   'email_campaign',
   'age_policy',
+  'retention_policy',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -296,6 +298,11 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.status_changed': 'auditActionCompanyStatus',
   'company.reverification_requested': 'auditActionCompanyReverification',
   'company.vies_checked': 'auditActionCompanyVies',
+  'company.links_changed': 'auditActionCompanyLinksChanged',
+  'company.links_submitted': 'auditActionCompanyLinksSubmitted',
+  'company.links_reviewed': 'auditActionCompanyLinksReviewed',
+  'job.update_published': 'auditActionJobUpdatePublished',
+  'job.duplicated': 'auditActionJobDuplicated',
   'report.resolved': 'auditActionReportStatus',
   'moderation.decided': 'auditActionModerationDecided',
   'moderation.restored': 'auditActionModerationRestored',
@@ -308,6 +315,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
   'age_policy.updated': 'auditActionAgePolicyUpdated',
+  'retention.policy_changed': 'auditActionRetentionPolicyChanged',
+  'retention.policies_seeded': 'auditActionRetentionPoliciesSeeded',
   'breach.created': 'auditActionBreachCreated',
   'breach.updated': 'auditActionBreachUpdated',
   'breach.closed': 'auditActionBreachClosed',
@@ -317,8 +326,10 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
+  'screening_question.hidden': 'auditActionScreeningHidden',
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
+  'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {

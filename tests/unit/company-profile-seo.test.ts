@@ -28,9 +28,9 @@ vi.mock('@/components/public/PublicSavedJobs', () => ({ PublicSavedJobsProvider:
 
 const page = await import('@/app/[locale]/(public)/pracodawcy/[slug]/page');
 
-function profile(activeJobsCount: number) {
+function profile(activeJobsCount: number, description = 'Opis') {
   return {
-    company: { id: 'c1', slug: 'firma-x', name: 'Firma X', description: 'Opis', activeJobsCount },
+    company: { id: 'c1', slug: 'firma-x', name: 'Firma X', description, activeJobsCount },
     jobs: [],
   };
 }
@@ -58,6 +58,34 @@ describe('metadane profilu firmy', () => {
   it('brak profilu (firma niezweryfikowana / zły slug): noindex, nofollow', async () => {
     getCompanyProfile.mockResolvedValue(null);
     expect((await metadata()).robots).toEqual({ index: false, follow: false });
+  });
+});
+
+describe('meta description z opisu firmy (#647)', () => {
+  it('firma z opisem: description i og:description biorą tekst firmy, nie ogólny klucz', async () => {
+    getCompanyProfile.mockResolvedValue(profile(1, 'Produkujemy meble na zamówienie w całej Belgii.'));
+    const meta = await metadata();
+    expect(meta.description).toBe('Produkujemy meble na zamówienie w całej Belgii.');
+    expect(meta.openGraph?.description).toBe(meta.description);
+    expect(meta.twitter).toMatchObject({ description: meta.description });
+    // Kontrola ujemna: ogólny klucz tłumaczenia (mock zwraca nazwę klucza) nie trafia do metadanych.
+    expect(meta.description).not.toBe('metaDescription');
+  });
+
+  it('firma bez opisu (pusty/białe znaki): fallback na ogólny tłumaczony tekst', async () => {
+    getCompanyProfile.mockResolvedValue(profile(1, '   '));
+    const meta = await metadata();
+    expect(meta.description).toBe('metaDescription');
+  });
+
+  it('długi opis: obcięty do 160 znaków z wielokropkiem, bez łamania na środku wielu spacji', async () => {
+    const long = `Firma X ${'oferuje stabilne zatrudnienie i szkolenia '.repeat(6)}.`;
+    getCompanyProfile.mockResolvedValue(profile(1, long));
+    const meta = await metadata();
+    const description = meta.description as string;
+    expect(description.length).toBeLessThanOrEqual(160);
+    expect(description.endsWith('…')).toBe(true);
+    expect(description).not.toMatch(/\s{2,}/);
   });
 });
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCompanyJobsLoad } from "@/lib/data/employer";
+import { decodeTimeCursor, type ListPageRequest, type TimeCursor } from "@/lib/employer/list-cursor";
 import { getActiveCompany } from "@/lib/company-context";
 import { captureError } from "@/lib/error-report";
 import { fakeDb, pgError, resetFakeDb } from "../helpers/fake-db";
@@ -11,13 +12,23 @@ vi.mock("@/lib/error-report", () => ({ captureError: vi.fn() }));
 
 const USER = "11111111-1111-4111-8111-111111111111";
 
-/** Strona ofert: atrapa zwraca wycinek wg OFFSET ($2) i LIMIT 13 zapytania. */
-function db(jobRows: unknown[], error: unknown = null) {
-  fakeDb.rows("employer.jobs-page", ({ values }) => {
-    if (error) throw error;
-    const offset = Number(values[1]);
-    return jobRows.slice(offset, offset + 13);
-  });
+type Row = { id: string; created_at?: string } & Record<string, unknown>;
+
+/**
+ * Strona ofert: atrapa odtwarza kursor bazy — wiersze w porządku listy (created_at, id malejąco),
+ * `$2/$3` = kursor, `$4` = LIMIT; zapytanie „-prev” czyta rosnąco od kursora.
+ */
+function db(jobRows: Row[], error: unknown = null) {
+  const key = (r: Row) => `${r.created_at ?? ""}|${r.id}`;
+  for (const [name, prev] of [["employer.jobs-page", false], ["employer.jobs-page-prev", true]] as const) {
+    fakeDb.rows(name, ({ values }) => {
+      if (error) throw error;
+      const cursor = values[1] === null ? null : `${String(values[1])}|${String(values[2])}`;
+      const ordered = prev ? [...jobRows].reverse() : jobRows;
+      const after = cursor === null ? ordered : ordered.filter((r) => (prev ? key(r) > cursor : key(r) < cursor));
+      return after.slice(0, Number(values[3]));
+    });
+  }
 }
 
 beforeEach(() => {
@@ -48,11 +59,13 @@ describe("employer offers read state", () => {
     expect(await getCompanyJobsLoad()).toEqual({
       status: "ok",
       jobs: [],
-      hasNext: false,
+      prevCursor: null,
+      nextCursor: null,
     });
     const [call] = fakeDb.callsTo("employer.jobs-page");
-    expect(call?.values).toEqual(["company-1", 0]);
-    expect(call?.text).toContain("LIMIT 13 OFFSET $2");
+    expect(call?.values).toEqual(["company-1", null, null, 13]);
+    expect(call?.text).toContain("LIMIT $4");
+    expect(call?.text).not.toContain("OFFSET");
     expect(call?.as).toBe(USER);
     expect(captureError).not.toHaveBeenCalled();
   });
@@ -103,40 +116,43 @@ describe("employer offers read state", () => {
     expect(captureError).toHaveBeenCalledWith(error, { area: "employer.getCompanyJobs" });
   });
 
-  it("bounds invalid page numbers to the first page", async () => {
-    db([]);
-    await getCompanyJobsLoad(0);
-    await getCompanyJobsLoad(Number.MAX_SAFE_INTEGER);
-    expect(fakeDb.callsTo("employer.jobs-page").map((c) => c.values[1])).toEqual([0, 0]);
-  });
-
-  it("reveals jobs beyond twelve without repeating page one", async () => {
-    const rows = Array.from({ length: 25 }, (_, index) => ({
-      id: `job-${index}`,
+  it("walks all pages by cursor in both directions without repeats or gaps (P1-05)", async () => {
+    // 25 ofert; remis created_at na granicy stron rozstrzyga UUID.
+    const rows: Row[] = Array.from({ length: 25 }, (_, index) => ({
+      id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(99 - index).padStart(12, "0")}`,
       title: `Offer ${index}`,
       city: "Brussels",
       status: "active",
+      created_at: index < 14 ? "2026-09-20T10:00:00.000001+00:00" : "2026-09-19T10:00:00+00:00",
       new_applications: index === 12 ? 2 : 0,
       matched: index === 12 ? 1 : 0,
     }));
     db(rows);
-    const first = await getCompanyJobsLoad(1);
-    const second = await getCompanyJobsLoad(2);
-    const third = await getCompanyJobsLoad(3);
-    if (first.status !== "ok" || second.status !== "ok" || third.status !== "ok") {
-      throw new Error("expected ok pages");
-    }
-    expect(first.jobs.map((job) => job.id)).toEqual(rows.slice(0, 12).map((job) => job.id));
-    expect(second.jobs.map((job) => job.id)).toEqual(rows.slice(12, 24).map((job) => job.id));
+    const next = (token: string | null): ListPageRequest<TimeCursor> =>
+      ({ cursor: decodeTimeCursor(token), direction: "next" });
+    const first = await getCompanyJobsLoad();
+    if (first.status !== "ok") throw new Error("expected ok");
+    const second = await getCompanyJobsLoad(next(first.nextCursor));
+    if (second.status !== "ok") throw new Error("expected ok");
+    const third = await getCompanyJobsLoad(next(second.nextCursor));
+    if (third.status !== "ok") throw new Error("expected ok");
+    expect([...first.jobs, ...second.jobs, ...third.jobs].map((job) => job.id)).toEqual(rows.map((r) => r.id));
     expect(second.jobs[0]).toMatchObject({ newApplications: 2, matched: 1 });
-    expect(third.jobs.map((job) => job.id)).toEqual(["job-24"]);
-    expect([first.hasNext, second.hasNext, third.hasNext]).toEqual([true, true, false]);
-    expect(fakeDb.callsTo("employer.jobs-page").map((c) => c.values)).toEqual([
-      ["company-1", 0],
-      ["company-1", 12],
-      ["company-1", 24],
-    ]);
+    expect([first.prevCursor, first.nextCursor !== null]).toEqual([null, true]);
+    expect(third.nextCursor).toBeNull();
+    // Kursor niesie czas z mikrosekundami bez zaokrąglenia przez Date.
+    expect(decodeTimeCursor(first.nextCursor)?.ts).toBe("2026-09-20T10:00:00.000001+00:00");
+
+    // Wstecz z trzeciej strony: dokładnie druga strona, potem pierwsza bez kursora „nowsze”.
+    const back = await getCompanyJobsLoad({ cursor: decodeTimeCursor(third.prevCursor), direction: "prev" });
+    if (back.status !== "ok") throw new Error("expected ok");
+    expect(back.jobs.map((job) => job.id)).toEqual(second.jobs.map((job) => job.id));
+    const top = await getCompanyJobsLoad({ cursor: decodeTimeCursor(back.prevCursor), direction: "prev" });
+    if (top.status !== "ok") throw new Error("expected ok");
+    expect(top.jobs.map((job) => job.id)).toEqual(first.jobs.map((job) => job.id));
+    expect(top.prevCursor).toBeNull();
     expect(fakeDb.callsTo("employer.jobs-page")[0]!.text).toContain("ORDER BY j.created_at DESC, j.id DESC");
+    expect(fakeDb.callsTo("employer.jobs-page-prev")[0]!.text).toContain("ORDER BY j.created_at ASC, j.id ASC");
   });
 
   it("does not read company jobs without active membership", async () => {
@@ -151,7 +167,8 @@ describe("employer offers read state", () => {
     expect(await getCompanyJobsLoad()).toEqual({
       status: "ok",
       jobs: [],
-      hasNext: false,
+      prevCursor: null,
+      nextCursor: null,
     });
     expect(fakeDb.calls).toHaveLength(0);
   });
