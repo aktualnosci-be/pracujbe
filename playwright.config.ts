@@ -3,15 +3,18 @@ import { join } from 'path';
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_CF_ANALYTICS_TOKEN } from './tests/e2e/fixtures/trackers';
 import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
+import { e2eBaseUrl, e2ePort, e2eReuseServer } from './scripts/lib/e2e-server.mjs';
 
 /**
  * Konfiguracja Playwright (testy E2E).
  *
  * - testDir: ./tests/e2e
  * - webServer: buduje i uruchamia aplikację produkcyjnie (next build && next start)
- *   na porcie 3000. Testy E2E działają na danych demonstracyjnych (bez Supabase),
- *   dzięki czemu przechodzą BEZ zmiennych środowiskowych.
- * - baseURL: http://localhost:3000
+ *   na porcie E2E_PORT (domyślnie 3000). Testy E2E działają na danych demonstracyjnych
+ *   (bez Supabase), dzięki czemu przechodzą BEZ zmiennych środowiskowych.
+ * - baseURL: http://localhost:${E2E_PORT:-3000} (scripts/lib/e2e-server.mjs)
+ * - serwer już działający na porcie jest używany tylko przy E2E_REUSE_SERVER=1 (poza CI);
+ *   domyślnie zajęty port = błąd startu, nie ciche testowanie cudzego serwera
  * - projekt: chromium
  * - reporter: html (+ list/github w CI) i raport flaków (#375)
  *
@@ -23,8 +26,8 @@ import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
  * zmiennej zachowanie jest domyślne.
  */
 
-const PORT = 3000;
-const BASE_URL = `http://localhost:${PORT}`;
+const PORT = e2ePort('demo');
+const BASE_URL = e2eBaseUrl('demo');
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 /**
@@ -172,11 +175,12 @@ export default defineConfig({
   ],
   webServer: {
     // CI buduje w osobnym kroku; limit gotowości mierzy wtedy wyłącznie start serwera.
-    command: reuseBuild ? 'npm run start' : 'npm run build && npm run start',
+    command: reuseBuild ? `npm run start -- -p ${PORT}` : `npm run build && npm run start -- -p ${PORT}`,
     // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
     env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, ...JOB_ASSIST_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // Jawne E2E_REUSE_SERVER=1 (poza CI) — np. własny `npm run dev` na tym porcie.
+    reuseExistingServer: e2eReuseServer(),
     timeout: reuseBuild ? 180_000 : 900_000,
   },
 });

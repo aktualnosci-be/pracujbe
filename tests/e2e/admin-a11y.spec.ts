@@ -28,6 +28,8 @@ const ROUTES = [
   '/admin/firmy',
   // Szczegół firmy (#310) — firma demonstracyjna.
   '/admin/firmy/demo-c2',
+  // Baner kampanii z oferty (#175) — w demo stan „niedostępny”.
+  '/admin/oferty/demo-c2-job-1/baner?firma=demo-c2',
   '/admin/zgloszenia',
   '/admin/zgloszenia?kind=dsa_notice&flagged=1',
   '/admin/uzytkownicy',

@@ -178,12 +178,13 @@ export const PROCESSORS: readonly Processor[] = [
     id: 'openai',
     name: 'OpenAI (Responses API, model GPT-6 Luna)',
     purpose:
-      'Funkcje AI za flagami (decyzja właściciela 2026-09-26: wyłącznie model OpenAI „GPT-6 Luna”): import ogłoszenia o pracę do szkicu oferty, asystent redagowania treści oferty i import CV do propozycji pól profilu kandydata.',
+      'Funkcje AI za flagami (decyzja właściciela 2026-09-26: wyłącznie model OpenAI „GPT-6 Luna”): import ogłoszenia o pracę do szkicu oferty, asystent redagowania treści oferty, import CV do propozycji pól profilu kandydata i tłumaczenie pól tekstowych ofert/profili (#31/#32).',
     dataCategories: [
       'Import ogłoszenia: tekst strony po minimalizacji (bez e-maili, telefonów i numerów identyfikacyjnych) i sama nazwa hosta źródła',
       'Import ogłoszenia: albo obraz zrzutu ekranu (base64) — bez lokalnej redakcji; może zawierać dane osób z ogłoszenia',
       'Asystent treści: tytuł, opis, obowiązki i wymagania oferty napisane przez pracodawcę (e-maile, telefony i identyfikatory usunięte przed wysyłką)',
       'Import CV: tekst CV kandydata po lokalnej minimalizacji (bez pliku, nazwy pliku, kontaktów, referencji i danych szczególnych)',
+      'Tłumaczenia: pola tekstowe oferty albo profilu w języku źródła (treść jak w portalu, bez maskowania kontaktów — #33/#34)',
     ],
     dataSubjects: [
       'Osoby wymienione w importowanym ogłoszeniu',
@@ -191,13 +192,14 @@ export const PROCESSORS: readonly Processor[] = [
       'Kandydat importujący własne CV',
     ],
     activation:
-      'OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.',
+      'OPENAI_API_KEY + osobna flaga funkcji: AI_JOB_IMPORT_ENABLED, AI_JOB_ASSIST_ENABLED, AI_CV_IMPORT_ENABLED, AI_TRANSLATION_ENABLED (każda domyślnie wyłączona). Model: gpt-6-luna albo AI_MODEL / AI_*_MODEL.',
     codeRefs: [
       'src/lib/ai/openai.ts',
       'src/lib/ai/model-config.ts',
       'src/lib/ai-import/extract.ts',
       'src/lib/ai-import/minimize.ts',
       'src/lib/ai-assist/assist.ts',
+      'src/lib/translation/openai-provider.ts',
       'src/lib/ai-assist/guard.ts',
       'src/lib/cv-import/extract.ts',
       'src/lib/cv-import/minimize.ts',
