@@ -124,6 +124,7 @@ zakomentowane. Nie ustawiaj ich w usłudze web; hasła i URL-e podawaj tylko na 
 | `ESCO_IMPORT_DATABASE_URL` | `npm run esco:import` (#93): login `service_role` do importu taksonomii ESCO |
 | `SMOKE_BASE_URL`, `EXPECTED_SHA` | `node scripts/production-smoke.mjs` (`TEST_WDROZENIOWY.md`): adres artefaktu i oczekiwany SHA (z `HEALTH_CHECK_SECRET`) |
 | `PROD_SMOKE_BASE_URL`, `PROD_SMOKE_TIMEOUT_MS` | `node scripts/railway/prod-smoke.mjs` (`CUTOVER_ROLLBACK.md`): adres (domyślnie `https://pracuj.be`) i limit czasu (domyślnie 15000 ms) |
+| `PROD_SMOKE_EXPECT_MODE`, `PROD_SMOKE_EXPECT_SHA` | `node scripts/railway/prod-smoke.mjs` (opcjonalnie): oczekiwany tryb (`production` wymaga HSTS i braku `noindex`, `demo` wymaga `noindex`) i wdrożony SHA porównywany z `/api/health` (z `HEALTH_CHECK_SECRET` w nagłówku) |
 | `EML_ALLOWED_HOSTS` | `node scripts/check-received-eml.mjs`: dodatkowe dozwolone hosty linków w odebranym `.eml` (po przecinku) |
 
 Strażnik: `tests/unit/production-config-checklist.test.ts` zbiera zmienne czytane w `src/`,
