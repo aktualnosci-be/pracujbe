@@ -39,15 +39,18 @@ sesji/rutyn ani szczegółów luk bezpieczeństwa.
   nie twórz nowych, gdy aktywnych jest ≥ 15.
 - Na pytanie sesji „czy obserwować PR / naprawiać CI” odpowiedź zawsze: **TAK, bez scalania**.
 - Nie wypychaj pustych commitów, nie zamykaj/otwieraj PR-ów, żeby odświeżyć CI
-  (minuty Actions są płatne — `CLAUDE.md` §10).
+  (minuty są darmowe — repo publiczne — ale puste przebiegi zapychają kolejkę; `CLAUDE.md` §10).
 
 ## 3. Scalanie PR-a (procedura)
 
 Warunki: wszystkie **9/9** checki zielone dla aktualnego head SHA **i** czysty
 `git merge-tree` z `origin/main`.
 
-1. `pull_request_read` → `get_check_runs` (9 checków: Install, Lint, Typecheck, Unit,
-   Migration runner, RLS integration, SCA, Build, E2E).
+1. `pull_request_read` → `get_check_runs` (9 wymaganych checków: Install, Lint, Typecheck, Unit,
+   Migration runner, RLS integration, SCA, Build, E2E (Playwright)). „E2E (Playwright)” to job
+   zbiorczy: jest zielony tylko przy zielonych „E2E shard i/3”, „E2E perf”, „E2E fixtures”.
+   „E2E real flow (PostgreSQL 16)” jest na razie informacyjny — czerwony nie blokuje, ale
+   sprawdź przyczynę.
 2. Czy head zawiera aktualny main?
    `git merge-base --is-ancestor origin/main <head_sha>` — jeśli tak, CI przetestował
    już drzewo po scaleniu i wystarczy pkt 4.
