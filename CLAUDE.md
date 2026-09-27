@@ -2316,6 +2316,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `site-access.test.ts` (body bez `Content-Length` nad limitem, deklarowany `Content-Length` nad
   limitem ze strumieniem, który nigdy się nie kończy — czyli obietnica, że handler NIE czyta go
   w całości, bramka wyłączona nadal odrzuca, kontrola ujemna: body w granicach limitu bez zmian).
+  Wspólny limit aplikacji/wiadomości po IP (#852, bez migracji): `applyToJob`/`sendMessage`
+  liczyły limit (`checkRateLimit('apply'|'message', …)`) TYLKO po adresie IP i PRZED sprawdzeniem
+  sesji — anonimowe wywołanie (bez konta, np. bezpośrednio do Server Action) zdążało zużyć
+  wspólny bucket przed odrzuceniem, blokując realnych, zalogowanych użytkowników za tym samym
+  NAT/CGNAT/biurem. Naprawa: sesja PRZED limitem (brak konta = `UNAUTHENTICATED`/
+  `PERMISSION_DENIED` bez dotknięcia jakiegokolwiek licznika), limit biznesowy (20 aplikacji /
+  60 wiadomości na godz.) liczony PER KONTO (`identifier: me.id, perIp: false`) — dwa konta za
+  tym samym adresem mają niezależne budżety, jedno konto nie omija limitu zmieniając sieć.
+  Dodatkowa, znacznie szersza ochrona przed automatyzacją wielu kont z jednego adresu zostaje
+  jako osobny, wyższy próg (`apply-ip` 200/godz., `message-ip` 600/godz.) — nie blokuje
+  populacji współdzielącej IP po zwykłym użyciu limitu jednej osoby. Dowód: unit
+  `rate-limit-account-scope` (limit budowany z identyfikatora konta, anonimowe wywołanie zero
+  wywołań limitera, dwa konta = dwa niezależne klucze, kontrola ujemna: przekroczenie limitu
+  konta nadal blokuje).
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
   `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
