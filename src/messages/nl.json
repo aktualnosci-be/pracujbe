@@ -988,6 +988,7 @@
     "declineConfirm": "Afwijzen",
     "acceptProposalSuccess": "Het voorstel is aanvaard.",
     "declineProposalSuccess": "Het voorstel is afgewezen.",
+    "proposalExpiredNotice": "De termijn om op dit voorstel te reageren is verstreken. Je kunt het niet meer aanvaarden of afwijzen.",
     "employerApplicationDetailTitle": "Sollicitatiedetails",
     "employerApplicationBack": "Terug naar sollicitaties",
     "employerApplicationLoadError": "De sollicitatie kon niet worden geladen.",

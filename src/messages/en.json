@@ -988,6 +988,7 @@
     "declineConfirm": "Decline",
     "acceptProposalSuccess": "The proposal has been accepted.",
     "declineProposalSuccess": "The proposal has been declined.",
+    "proposalExpiredNotice": "The deadline to respond to this proposal has passed. You can no longer accept or decline it.",
     "employerApplicationDetailTitle": "Application details",
     "employerApplicationBack": "Back to applications",
     "employerApplicationLoadError": "We couldn’t load this application.",
