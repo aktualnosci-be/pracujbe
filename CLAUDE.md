@@ -595,6 +595,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Hero (#166) wg `people.js`: teza w trzech wierszach, czerwona akcja „Przeglądaj oferty” +
   link do `/rejestracja`, podpis „ilustracyjne” na zdjęciu; E2E `home-hero.spec` (4 języki,
   320/1440 px, axe, kontrola ujemna).
+  Wyszukiwarka `HeroSearch` bez JavaScriptu (#815, bez migracji): formularz ma teraz natywne
+  `method="get"` i zlokalizowane `action="/{locale}/oferty-pracy"` — bez skryptu przeglądarka
+  sama wysyła `keyword`/`city` na listę ofert (jak wyszukiwarka listy, `oferty-pracy/page.tsx`);
+  z JavaScriptem `handleSubmit` nadal przechwytuje wysyłkę i nawiguje przez `useRouter`
+  (`@/i18n/navigation`, bez przeładowania). Dowód: E2E `home-search-no-js.spec` (4 języki,
+  `javaScriptEnabled: false`, kontrola ujemna: formularz bez `action`/`method` wraca na `/{locale}`).
 - [x] Lista ofert + filtry (FilterSidebar/FilterSheet, chipy, sort, paginacja) — wg makiety 02; infinite scroll opcjonalnie później
   Wynagrodzenie (#188, 0080): suwak = EUR brutto/mies.; filtr, sort „najwyższe wynagrodzenie”,
   licznik i facety porównują ekwiwalent miesięczny (month bez zmian, year ÷ 12). Stawek
