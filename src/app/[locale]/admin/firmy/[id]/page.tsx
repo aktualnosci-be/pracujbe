@@ -330,6 +330,14 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
                 {t('jobsShown', { shown: company.jobs.length, total: company.jobsTotal })}
               </p>
             ) : null}
+            {company.jobsTotal > 0 ? (
+              <Link
+                href={{ pathname: '/admin/oferty', query: { firma: company.id } }}
+                className={cn(TEXT_LINK, 'text-sm')}
+              >
+                {t('companyJobsAllLink')}
+              </Link>
+            ) : null}
           </div>
           {company.jobs.length === 0 ? (
             <p className={EMPTY}>{t('jobsEmpty')}</p>

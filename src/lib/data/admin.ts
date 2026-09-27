@@ -286,7 +286,7 @@ const DEMO_STATS: AdminStats = {
   openReports: 3,
 };
 
-const DEMO_COMPANIES: AdminCompanyRow[] = [
+export const DEMO_COMPANIES: AdminCompanyRow[] = [
   { id: 'demo-c1', name: 'AGO Jobs & HR', status: 'verified', createdAt: '2025-01-15T09:00:00.000Z', vatNumber: 'BE0123456789', registrationNumber: '0123.456.789', email: 'jobs@example.com', city: 'Antwerpen' },
   { id: 'demo-c2', name: 'Bouwbedrijf De Vos', status: 'pending', createdAt: '2025-02-03T11:30:00.000Z', vatNumber: 'BE0987654321', registrationNumber: null, email: 'info@example.com', city: 'Gent' },
   { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z', vatNumber: 'BE0417497106', registrationNumber: null, email: null, city: null },
@@ -1373,18 +1373,6 @@ async function readAuditRows(
 ): Promise<AdminAuditRow[]> {
   const { entity, action, entityId, actorQuery, fromIso, toIso } = filters;
   const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
-  // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
-  let actorIdsFilter: string[] | null = null;
-  if (actorQuery && !systemActor) {
-    const actorParams = new SqlParams();
-    const actors = await queryRows(tx, 'admin.audit-actor-search',
-      `SELECT id FROM public.profiles
-        ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
-        LIMIT 100`, actorParams.values);
-    actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
-    if (actorIdsFilter.length === 0) return [];
-  }
-
   const params = new SqlParams();
   const where = whereOf([
     entity && `entity_type = ${params.add(entity)}`,
@@ -1393,7 +1381,12 @@ async function readAuditRows(
     fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
     toIso && `created_at < ${params.add(toIso)}::timestamptz`,
     systemActor && 'actor_id IS NULL',
-    actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
+    // Aktor po nazwie/e-mailu (#857/#844): podzapytanie po WSZYSTKICH pasujących profilach
+    // w tym samym zapytaniu — bez pośredniej listy id z limitem, więc wpisy żadnej pasującej
+    // osoby nie znikają z listy ani z eksportu.
+    actorQuery && !systemActor &&
+      `actor_id IN (SELECT p.id FROM public.profiles p WHERE ${searchCondition(
+        params, ['p.first_name', 'p.last_name', 'p.email'], actorQuery)})`,
     cursorCondition(params, cursor),
   ]);
   const limitParam = params.add(limit);
@@ -1444,6 +1437,10 @@ async function readAuditRows(
           ? { pathname: `/admin/firmy/${uuid}` }
           : { pathname: '/admin/firmy', query: { q: company.name } };
       }
+    } else if (entityType === 'job' && id) {
+      // Lista ofert admina (`/admin/oferty`) wyszukuje także po identyfikatorze oferty.
+      const uuid = parseUuid(id);
+      entityHref = uuid ? { pathname: '/admin/oferty', query: { q: uuid } } : null;
     } else if (entityType === 'report') {
       entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
     } else if (entityType === 'email_suppression') {

@@ -71,6 +71,8 @@ describe('zmiana nazwy zapisanego wyszukiwania', () => {
     expect(renameSavedSearchAction).toHaveBeenCalledWith(SEARCH.id, 'Magazyn nocny');
     expect(refresh).toHaveBeenCalled();
     expect(screen.queryByRole('textbox', { name: t.renameLabel })).toBeNull();
+    // #821: po udanym zapisie fokus wraca na „Zmień nazwę” tego wiersza, jak przy Escape/„Anuluj”.
+    await waitFor(() => expect(renameButton()).toHaveFocus());
   });
 
   it('błąd zapisu → komunikat w alert, pole zostaje z wpisaną nazwą (Invariant #11)', async () => {
