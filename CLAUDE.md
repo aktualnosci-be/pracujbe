@@ -1213,14 +1213,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   encjach. Cron: Cloudflare Worker co 10 min (`infra/cloudflare-cron`, `/api/translation/process`).
   Odczyt na stronie oferty (migracja `0219` — numer tymczasowy): RPC
   `get_public_job_machine_translation` (anon; tylko oferta publiczna, bieżąca rewizja bez
-  `is_stale`, język bez własnego tłumaczenia/wymagań, tylko pola wyświetlane) →
+  `is_stale`, język bez własnego tłumaczenia/wymagań, strona pokazuje treść `default_locale`
+  albo `jobs.title` — ten sam warunek co karty 0226, tylko pola wyświetlane) →
   `readMachineTranslation` w `getJobBySlug` (za flagą `AI_TRANSLATION_ENABLED`, awaria =
   oryginał + kod obszaru w logu) → `applyJobMachineTranslation`
   (`src/lib/job-machine-translation.ts`: nakładka tylko przy pełnej zgodności list, inaczej
   oryginał — nigdy mieszanka języków) → oznaczenie `job.machineTranslationNotice`/
   `manualTranslationNotice` z linkiem `job.translationOriginalLink` do oryginału. SEO bez zmian
-  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM219 (kontrola
-  ujemna TM219-N), unit `job-machine-translation`. **Otwarte:** przekład w liście ofert,
+  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM219 (kontrole
+  ujemne TM219-N, TM219-7N), unit `job-machine-translation`. **Otwarte:** przekład w liście ofert,
   JobPosting/hreflang wersji przetłumaczonych (decyzja SEO), UI korekty ręcznej,
   `protectedTerms` (nazwa firmy).
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)

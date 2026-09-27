@@ -136,6 +136,20 @@ describe('getJobBySlug — przekład na język strony (#33)', () => {
     expect(job).toMatchObject({ title: 'Warehouse worker', machineTranslation: { sourceLocale: 'nl', origin: 'ai' } });
   });
 
+  it('strona pokazuje tekst fr (brak tłumaczenia w default_locale) → przekład rewizji nl nie jest nakładany', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    vi.stubEnv('AI_TRANSLATION_ENABLED', 'true');
+    adapters.detail.mockResolvedValue({ ...NL_ROW, title: 'Cariste', description: 'Travail dès 8:00.' });
+    adapters.translations.mockResolvedValue([
+      { job_id: 'job-1', locale: 'fr', title: 'Cariste', description: 'Travail dès 8:00.' },
+    ]);
+    // Baza (0219, TM219-7) nie zwraca takiego wiersza; gdyby zwróciła, nakładka i tak odmawia.
+    adapters.machine.mockResolvedValue({ source_locale: 'nl', origin: 'ai', fields: EN_FIELDS });
+    const job = await getJobBySlug('magazijnmedewerker', 'en');
+    expect(job).toMatchObject({ title: 'Cariste', contentLocale: 'fr' });
+    expect(job).not.toHaveProperty('machineTranslation');
+  });
+
   it('strona w języku oryginału → bez odczytu przekładu', async () => {
     arrange();
     vi.stubEnv('AI_TRANSLATION_ENABLED', 'true');

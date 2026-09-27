@@ -127,7 +127,10 @@ delete) z kontrolą ujemną TR33-N; unit `translation-job-sync`, `translation-ru
 jedyna ścieżka odczytu przekładu przez klienta — tabele kolejki zostają deny. Zwraca wiersz
 tylko dla oferty publicznej (jak `get_public_job`, bez demo), aktywnego źródła, przekładu
 BIEŻĄCEJ rewizji (`not is_stale`) w języku oferty i języka strony, w którym oferta nie ma
-własnego tłumaczenia ani wymagań (tekst człowieka ma pierwszeństwo); tylko pola wyświetlane
+własnego tłumaczenia ani wymagań (tekst człowieka ma pierwszeństwo), i tylko gdy strona
+pokazuje treść, z której powstała rewizja: tłumaczenie w `default_locale` albo `jobs.title`
+przy braku tłumaczeń (`get_public_job` przy braku `default_locale` bierze np. `en`, a przekład
+takiego tekstu by nie odpowiadał — ten sam warunek co karty listy); tylko pola wyświetlane
 (tytuł, opis, godziny, zmiany, opis firmy, listy obowiązków/warunków/wyróżników/wymagań).
 
 Strona `/{locale}/oferty-pracy/[slug]` (`getJobBySlug` → `readMachineTranslation`): tylko za
@@ -142,8 +145,8 @@ Oznaczenie pod paszportem: `job.machineTranslationNotice` (AI) albo
 przekładem nadal kanonizuje się do oryginału, bez hreflang i bez JobPosting (#301). ISR 60 s.
 
 Dowód: `rls.sql` sekcja TM219 (bieżąca rewizja, tylko pola wyświetlane, pierwszeństwo tekstu
-człowieka, oferta wstrzymana/firma zawieszona, przekład po edycji, granty) z kontrolą ujemną
-TM219-N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
+człowieka, oferta wstrzymana/firma zawieszona, przekład po edycji, granty, strona z tekstem
+spoza `default_locale` — TM219-7) z kontrolami ujemnymi TM219-N i TM219-7N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
 
 Otwarte (#33 → kolejne kroki): przekład w liście ofert i JobPosting/hreflang wersji
 przetłumaczonych (decyzja SEO), UI korekty ręcznej dla

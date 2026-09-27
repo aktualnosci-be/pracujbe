@@ -14399,7 +14399,8 @@ reset role; reset app.current_uid;
 -- TM219 (#33, 0219 — numer tymczasowy): odczyt przekładu oferty na publicznej stronie.
 -- `get_public_job_machine_translation` zwraca przekład (anon) wyłącznie dla oferty publicznej,
 -- bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola wyświetlane. Kontrola ujemna
--- TM219-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji.
+-- TM219-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji;
+-- TM219-7N: bez warunku „strona pokazuje treść default_locale” przekład nie pasuje do tekstu.
 -- =============================================================================
 \echo '--- TM219 public job machine translation ---'
 \set TMCO 'f2190000-0000-0000-0000-0000000000c1'
@@ -14485,6 +14486,69 @@ select pg_temp.assert(has_function_privilege('anon', 'public.get_public_job_mach
   and not has_table_privilege('anon', 'public.translation_documents', 'select')
   and not has_table_privilege('authenticated', 'public.translation_documents', 'select'),
   'TM219-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
+
+-- TM219-7: strona pokazuje tekst, z którego powstała rewizja. Oferta 2 (default_locale nl)
+-- ma tłumaczenie tylko w fr — `get_public_job` pokazuje dla en tekst fr, a rewizja powstała
+-- z `jobs.title` (nl). Przekład nl→en nie pasuje do wyświetlanego oryginału = brak wiersza.
+-- Bez tłumaczeń wcale strona pokazuje `jobs.title` = treść rewizji → przekład jest zwracany.
+\set TMJ2 'f2190000-0000-0000-0000-0000000000a2'
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TMJ2', :'TMCO', 'tm219-oferta-2', 'Heftruckchauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TMJ2', 'fr', 'Cariste', 'Travail dès 6:00.');
+update public.jobs set status = 'active', published_at = now() where id = :'TMJ2';
+create temp table tm219_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tm2_en, lease_id as tm2_en_lease, fields::text as tm2_f
+  from tm219_claim2 where entity_id = :'TMJ2' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tm2_en', :'tm2_en_lease',
+  (:'tm2_f'::jsonb) || jsonb_build_object('title', 'Forklift driver')) = 'applied',
+  'TM219-7a przekład en oferty 2 (z jobs.title) zastosowany');
+reset role;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM219-7 strona pokazuje tłumaczenie fr (brak default_locale): przekład nl→en nie jest zwracany');
+reset role;
+savepoint tm_no_translations;
+delete from public.job_translations where job_id = :'TMJ2';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select fields->>'title' = 'Forklift driver'
+  from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM219-7b oferta bez tłumaczeń (strona pokazuje jobs.title): przekład jest zwracany');
+reset role;
+rollback to savepoint tm_no_translations;
+
+-- TM219-7N (kontrola ujemna): definicja sprzed warunku (0219 bez sprawdzenia, że strona
+-- pokazuje treść `default_locale`) nakłada przekład nl→en na stronę z tekstem fr.
+savepoint tm_neg_src;
+create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
+returns table (source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.companies c on c.id = j.company_id
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = p_job_id and public.is_supported_locale(p_locale) and j.status = 'active'
+     and j.deleted_at is null and (j.expires_at is null or j.expires_at > now()) and not j.is_demo
+     and c.status = 'verified' and c.deleted_at is null and s.is_active
+     and d.revision_id = s.current_revision_id and not d.is_stale
+     and r.source_locale = j.default_locale and p_locale <> r.source_locale
+     and not exists (select 1 from public.job_translations jt where jt.job_id = j.id and jt.locale = p_locale)
+     and not exists (select 1 from public.job_requirements q where q.job_id = j.id and q.locale = p_locale)
+   limit 1;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM219-7N kontrola ujemna: stara definicja nakłada przekład niepasujący do tekstu fr');
+reset role;
+rollback to savepoint tm_neg_src;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM219-7Nb poprawna funkcja znów odmawia');
+reset role;
 
 -- TM219-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
 -- przekład starej treści (TM219-5 wykrywa taką regresję).
