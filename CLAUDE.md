@@ -652,8 +652,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
-  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Linki Pomoc/Prywatność
-  w stopce e-maili (#6) są w `src/emails/_components.tsx` (język odbiorcy). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
+  `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
+  `footer.faq` strony, `data-email-help`) i link „Prywatność” → `/{locale}/polityka-prywatnosci`
+  (`data-email-privacy`; zostaje — decyzja właściciela 26.09.2026), oba w języku odbiorcy. Test
+  `email-brand-layout` (kontrole ujemne: język nadawcy, brak któregoś linku). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
   (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
@@ -703,6 +706,17 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Filtr etapu (#809, bez migracji): nawigacja „Wszystkie / W toku / Rozmowa / Propozycja /
+Zakończone” nad listą (`CandidateApplicationsFilter` — zwykłe linki z `aria-current`, działa
+bez JS), stan w URL `?etap=aktywne|rozmowa|propozycja|zakonczone` (nieznana wartość = wszystkie).
+Grupy statusów w jednym miejscu `src/lib/candidate-application-filter.ts` (rozłączne, razem =
+każdy status poza `draft`; test porównuje z enumem z migracji 0001). Warunek
+`status = ANY($5)` w tym samym zapytaniu co kursor, PRZED limitem — starsze zgłoszenie etapu jest
+na pierwszej stronie; „Pokaż więcej” przekazuje ten sam filtr (`loadMoreApplications`, Zod enum —
+wartość spoza listy = błąd, nie „wszystkie”); zmiana etapu = nowa strona serwera, kursor od
+początku. Pusty etap = osobny stan z linkiem „Pokaż wszystkie zgłoszenia”. Testy: unit
+`candidate-applications-filter`, `-list`, `-action`, `-pagination`; integracja `portal-candidate`
+(PG16, kontrola ujemna bez filtra); E2E `candidate-applications-pagination` (4 języki, 320 px).
 Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
 migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
 nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym
@@ -731,6 +745,18 @@ Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno 
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
+Polecane oferty — wyjaśnienie i stan zgłoszenia (bez migracji, dane z materializacji P1-03):
+karta z wynikiem na `/candidate/oferty-polecane` pokazuje krótką etykietę (`match.summaryShort`,
+liczona z procentu przez `summaryKeyForScore` — to samo źródło co `scoreMatch`, więc starszy
+wiersz z domyślnym `summary_key` nie przeczy procentowi), „Wymagania obowiązkowe: X z Y” tylko
+przy spójnych liczbach (Y > 0, X ≤ Y) i do dwóch atutów WYŁĄCZNIE ze znanych kluczy
+`match.criteria` (`src/lib/matching/explanation.ts`; nieznana wartość z bazy nie trafia do UI).
+Oferta z własnym zgłoszeniem (także w fallbacku najnowszych) ma „Już aplikowałeś(-aś)” i link
+„Szczegóły zgłoszenia” nad nakładką tytułu → `/candidate/aplikacje/[id]` (jedno zapytanie tylko
+o pokazane oferty, jawny `candidate_id = me` — RLS 0039 wpuszcza też rekrutera). Testy: unit
+`match-explanation` (strażnik: lista kluczy = atuty wpisywane w `score.ts`, kontrole ujemne),
+`candidate-recommended-read`, integracja `portal-candidate` (PG16), E2E
+`candidate-recommended-explanation` (4 języki, axe, kliknięcie linku nad nakładką).
 
 Blokada firmy przez kandydata (#97, migracja `0078`): tabela `candidate_company_blocks`
 (RPC-only `set_company_block`, odczyt `get_my_company_blocks`/`get_job_company_block`, firma nie
@@ -861,6 +887,17 @@ parsera.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
+
+Granica błędu i 404 wewnątrz panelu kandydata (bez migracji, wzór jak panel pracodawcy #895):
+`src/app/[locale]/candidate/error.tsx` (`CandidatePanelError`) i `not-found.tsx`
+(`CandidateNotFound`) leżą POD layoutem `/candidate`, więc nieobsłużony błąd strony albo
+`notFound()` (szczegół zgłoszenia, import CV bez flagi) nie zastępuje już panelu publiczną stroną
+błędu/404 — sidebar i dolny pasek zostają. Błąd: komunikat z i18n (`dashboard.candidatePanelError*`,
+Invariant #8), do kanału błędów sam kod (`captureError`), „Spróbuj ponownie” = `useErrorRetry`,
+link do pulpitu. 404: status 404, bez ujawniania, czy obiekt istnieje, linki do pulpitu/zgłoszeń/
+polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boundaries`
+(4 języki, bez treści wyjątku, kontrola ujemna linków spoza panelu), E2E
+`candidate-application-detail` (404 z sidebarem, 4 języki).
 
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
@@ -1204,8 +1241,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `reason: 'sensitiveId'`, bez RPC) i w `MessageComposer` (błąd przy polu
   `messages.composerSensitiveId`, treść zostaje, podpowiedź `composerSensitiveIdHint`
   w `aria-describedby`); bez migracji (RPC `send_message` woła tylko serwer). Test:
-  `messages-sensitive-id` (kontrola ujemna). **Otwarte:** ocena prawna, treść poradnika
-  i formularza CV (#495), import CV (#487), nazwy załączników w rozmowach.
+  `messages-sensitive-id` (kontrola ujemna). Nazwy plików załączników w rozmowach
+  (#495): `checkAttachmentFile` (`src/lib/validation/message-attachment.ts`, przeglądarka i akcja
+  `uploadMessageAttachment`/`storeMessageAttachment`) odrzuca nazwę z NISS/BIS, PESEL, eID albo
+  „paszport nr…” (`attachmentNameForScan`: bez rozszerzenia, `_`/`+` → spacja) → `reason:
+  'sensitiveId'`, komunikat `messages.attachmentSensitiveId` przy pliku, nic nie trafia do
+  bucketu. Test: `message-attachment-name` (kontrola ujemna bez normalizacji separatorów),
+  `message-attachments-{actions,service,ui}`. **Otwarte:** ocena prawna, treść
+  poradnika i formularza CV (#495), import CV (#487).
   Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
   (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
   opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →
@@ -1505,6 +1548,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`requireAdmin` → `notFound()`), niezależnie od layoutu. `0076`: pola tożsamości i moderacji
   zgłoszeń ustala baza (trigger `reports_guard`, limity długości), helpery ról bez EXECUTE dla
   anon/PUBLIC (`is_job_company_member` zostaje — polityki anon). Dowód: `rls.sql` sekcja QQ.
+  Granica błędu i 404 panelu (bez migracji): `src/app/[locale]/admin/error.tsx`
+  (`AdminPanelError`) i `not-found.tsx` (`AdminNotFound`) pod layoutem `/admin` — błąd strony
+  albo `notFound()` ze strony/warstwy danych zostawia menu panelu (nieznany adres = catch-all
+  `[...rest]`, ogólna 404 jak dotąd); komunikaty `admin.panelError*`/`panelNotFound*`
+  (bez ujawniania, czy obiekt istnieje), do kanału błędów sam kod. Guard bez zmian: `notFound()`
+  rzucone przez sam layout łapie granica NADRZĘDNA, więc nie-admin nadal widzi ogólną 404, nie
+  panelową (strażnik w unit `candidate-admin-panel-boundaries`).
   UX panelu (#415–#418, #420–#423): listy firm/zgłoszeń/użytkowników stronicowane kursorem
   (`created_at`+`id`, 50/stronę, `src/lib/admin/list-params.ts`) z wyszukiwaniem po stronie serwera
   (firmy: nazwa/VAT/KBO/e-mail; użytkownicy: imię/nazwisko/e-mail + filtr roli), parametry w URL.
@@ -1798,8 +1848,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
   dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
   po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
-  Chromium z Playwrighta to osobny proces (poza blokadą). Integracja PG (`vitest.integration.config.ts`)
-  bez zmian. Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
+  Chromium z Playwrighta to osobny proces (poza blokadą). Błąd wskazuje test (`plik > opis > nazwa`
+  ze stanu `expect`, pole `NetworkBlockedError.test`) i host. Integracja PG
+  (`vitest.integration.config.ts` → `tests/integration/setup.ts`) ma tę samą blokadę: PG z Dockera
+  na 127.0.0.1 (proces `docker` poza blokadą), host jawnego `INTEGRATION_PG_ADMIN_URL` dopuszczony.
+  Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
+  Punkt „blokada HTTP w testach” zamknięty (#765 + etykieta testu i integracja).
   Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
@@ -1813,6 +1867,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
   obserwacja 48 h) + smoke `node scripts/railway/prod-smoke.mjs` (poza CI; bramka hasła z env,
   4 języki + health, kod ≠ 0 przy błędzie; test `railway-prod-smoke` z atrapą serwera).
+  Smoke sprawdza też nagłówki bezpieczeństwa każdej strony (CSP `frame-ancestors`/`object-src`/
+  `base-uri`, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy`; test porównuje z nagłówkami
+  `next.config.mjs` w obu trybach), opcjonalnie tryb `PROD_SMOKE_EXPECT_MODE=production|demo`
+  (HSTS ≥ 1 rok i brak noindex / noindex) i wdrożony SHA `PROD_SMOKE_EXPECT_SHA` z `version`
+  w `/api/health` (w produkcji z `HEALTH_CHECK_SECRET` w `x-health-token`, bez logowania sekretu).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -2086,7 +2145,8 @@ npm run start          # serwer produkcyjny
 npm run lint           # ESLint: src/, tests/, scripts/ (.eslintrc.json ma "root": true)
 npm run typecheck      # tsc --noEmit
 npm run test           # Vitest (unit)
-npm run test:e2e       # Playwright
+npm run test:e2e       # Playwright (port E2E_PORT, domyślnie 3000; cudzy serwer tylko z E2E_REUSE_SERVER=1)
+E2E_PORT=3517 npx playwright test tests/e2e/smoke.spec.ts  # równolegle z innym przebiegiem — docs/E2E_FLAKY_REPORT.md
 npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
 npm run test:rls       # migracje od zera + testy RLS na lokalnym PostgreSQL 16

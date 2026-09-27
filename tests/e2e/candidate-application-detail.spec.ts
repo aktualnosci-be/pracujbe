@@ -50,3 +50,32 @@ test('nieznane zgłoszenie = 404 bez ujawniania danych', async ({ page }) => {
   expect(response?.status()).toBe(404);
   await expect(page.getByText(pl.dashboard.candidateApplicationBack)).toHaveCount(0);
 });
+
+// 404 panelu leży pod layoutem `/candidate` (src/app/[locale]/candidate/not-found.tsx): kandydat
+// zostaje w panelu (menu z sekcjami), a nie na publicznej stronie 404.
+for (const locale of Object.keys(COPY) as (keyof typeof COPY)[]) {
+  test(`404 w panelu kandydata zostawia menu panelu: ${locale}`, async ({ page }) => {
+    const m = COPY[locale].dashboard;
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const response = await page.goto(`/${locale}/candidate/aplikacje/demo-app-99`);
+    expect(response?.status()).toBe(404);
+    await rejectOptionalCookies(page, locale);
+
+    const main = page.getByRole('main');
+    await expect(main).toHaveCount(1);
+    await expect(main.getByRole('heading', { level: 1, name: m.candidateNotFoundTitle })).toBeVisible();
+    await expect(main.getByRole('link', { name: m.candidatePanelBackToDashboard })).toHaveAttribute(
+      'href',
+      `/${locale}/candidate`,
+    );
+    // Menu panelu (sidebar) nadal jest na stronie — kontrola ujemna: publiczna 404 go nie ma.
+    await expect(
+      page.getByRole('complementary').getByRole('link', { name: m.navApplications, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: COPY[locale].errors.notFound })).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
+
+    await main.getByRole('link', { name: m.navApplications, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/candidate/aplikacje$`));
+  });
+}
