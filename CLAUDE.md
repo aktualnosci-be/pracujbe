@@ -294,12 +294,15 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     w 3 shardach `--shard=i/3`, każdy zapisuje raport cząstkowy (blob, `E2E_BLOB_NAME`);
   - `e2e-perf` („E2E perf (lab CWV + INP)”) — pomiary czasu w jednym miejscu: projekt
     `chromium-timing` (`--no-deps`, INP dialogu #393) i `perf-lab.mjs` (lab CWV + INP-proxy #395);
-  - `e2e-fixtures` („E2E fixtures (full|error)”) — `playwright.applications-fixture.config.ts`;
+  - `e2e-fixtures` („E2E fixtures (full 1/2|full 2/2|error 1/1)”) — `playwright.applications-fixture.config.ts`
+    (`next dev`, dane fikcyjne); tryb `full` w 2 częściach (`TEST_APPLICATIONS_FIXTURE_PART`,
+    jawna lista części 2 `FULL_PART_2` w konfiguracji — `--shard` dzieli po liczbie testów
+    i oba speci lejka trafiały do jednego shardu), każda część zapisuje blob jak shardy demo;
   - `e2e-real` („E2E real flow (PostgreSQL 16)”) — `npm run test:e2e:real` na usłudze
     `postgres:16` (#351, #66); na start **informacyjny** (`continue-on-error`), nie blokuje
     scalania ani wdrożenia — po serii zielonych przebiegów na `main` zdejmij `continue-on-error`;
   - `e2e` („E2E (Playwright)”, wymagany check o stałej nazwie) — job zbiorczy z `always()`,
-    pada, gdy którykolwiek shard/pomiar/fixture nie jest `success`; łączy bloby
+    pada, gdy którykolwiek shard/pomiar/część fixture nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
     `failOnFlakyTests` obowiązuje w każdym shardzie.
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
@@ -308,7 +311,8 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
 
 **Reguły CI:**
 - Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`. Liczba
-  shardów zmienia się w jednym miejscu (nazwa, macierz, `--shard`) — strażnik pilnuje zgodności.
+  shardów zmienia się w jednym miejscu (nazwa, macierz, `--shard`) — strażnik pilnuje zgodności;
+  części fixture'ów: macierz `include` = części dozwolone w konfiguracji fixture (strażnik).
 - Każdy job ma `timeout-minutes`. Nowy push do PR anuluje trwający przebieg tego PR;
   przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
 - Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
