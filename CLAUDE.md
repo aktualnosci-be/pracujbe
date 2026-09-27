@@ -449,7 +449,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > --package-lock-only`) na self-hosted runnerze blokuje CI przy PRAWDZIWYCH podatnościach
 > high/critical (obecnie 0). Audyt z lockfile = deterministyczne drzewo (omija błąd „Invalid
 > package tree" przy artefakcie node_modules); skrypt parsuje JSON i blokuje tylko na realnych
-> podatnościach — niestabilny/wygaszany endpoint audytu npm (400/5xx) nie wywala CI. **QA-01 (a11y w CI) —
+> podatnościach — niestabilny/wygaszany endpoint audytu npm (400/5xx) nie wywala CI.
+> **Utwardzenie klasyfikatora (#643, bez migracji):** `scripts/lib/sca-audit-outcome.mjs` odczytuje
+> `metadata.vulnerabilities.high/critical` tylko jako nieujemną, skończoną liczbę całkowitą (brak
+> pola = 0); tekst, liczba ujemna, ułamek, `NaN`/`Infinity`, tablica, obiekt czy `boolean` w tym
+> polu dają `unrecognized` (blokuje CI) zamiast dawnego `Number(value) || 0`, które cicho zamieniało
+> taką wartość w zero i mogło dać `clean` bez dowodu. Dowód: `tests/unit/sca-audit-outcome.test.ts`
+> (kontrole ujemne). **QA-01 (a11y w CI) —
 > ZROBIONE:** bramka axe-core (`@axe-core/playwright`) w `tests/e2e/a11y.spec.ts` (uruchamiana w
 > jobie `e2e`) blokuje przy naruszeniach WCAG 2.x A/AA critical/serious na home/liście ofert/
 > logowaniu/rejestracji; domknięte realne naruszenia kontrastu tokenami: `--muted-foreground`
