@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Dlaczego decyzja jest błędna?",
     "appealDeadline": "Termin na odwołanie: do {date}.",
     "appealDeadlineNotStarted": "Termin na odwołanie zacznie biec, gdy otrzymasz powiadomienie o decyzji.",
-    "appealStatusLabel": "Odwołanie {reference}"
+    "appealStatusLabel": "Odwołanie {reference}",
+    "targetTitle": "Firma z decyzji",
+    "targetIntro": "Link dotyczy innej firmy niż aktualnie aktywna w Twoim panelu. Poniżej jej dane — bez zmiany aktywnej firmy.",
+    "targetUnavailableTitle": "Ta firma nie jest już dostępna z Twojego konta",
+    "targetUnavailableHint": "Nie masz już aktywnego dostępu do tej firmy albo link jest nieprawidłowy.",
+    "targetSwitchAction": "Ustaw jako aktywną firmę",
+    "targetSwitchError": "Nie udało się przełączyć aktywnej firmy. Spróbuj ponownie."
   },
   "companyProfile": {
     "metaTitle": "Oferty pracy w firmie {name}",
