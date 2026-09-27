@@ -3449,6 +3449,7 @@
     "errorValueTooLong": "The value is too long. Maximum {max} characters.",
     "errorValueDisallowed": "Remove contact details, links, other people's data and sensitive information.",
     "errorLanguageInvalid": "The language name must be 2 to 40 characters long.",
+    "errorLanguageDuplicate": "The same language is selected twice with different levels. Uncheck one of the proposals or use different names.",
     "errorExperienceInvalid": "Enter a number of years from 0 to 60.",
     "errorFieldsInvalid": "Correct the highlighted fields before saving."
   },

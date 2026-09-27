@@ -1080,6 +1080,14 @@ unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimal
 schematu bez limitu); E2E `cv-import.spec` (atrapa, edycja z błędem pola). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
 `docs/legal-drafts/cv-ai-osoby-trzecie.md` (#485/#486/#488/#61) przed włączeniem, AV i izolacja
 parsera.
+Duplikat języka po normalizacji (#805, bez migracji): dwie zatwierdzone propozycje, których nazwa
+języka jest po `trim()+lowerCase` identyczna (choćby inny zapis wielkości liter), ale poziom
+różny, zapisałyby się w RPC 0115 nieokreślenie (`DISTINCT ON` bez tie-breakera na poziom) —
+`cvApprovedProposalsSchema` (`superRefine`) odrzuca taki zestaw przed wysyłką (`VALIDATION_FAILED`),
+a `findDuplicateLanguageIds` wskazuje konflikt przy obu polach w `CvImportPanel` (komunikat
+`cvImport.errorLanguageDuplicate`) zanim akcja w ogóle zostanie wywołana. Dowód: unit
+`cv-import-approved` (schemat + funkcja, kontrola ujemna różnych nazw), `cv-import-panel`
+(blokada zapisu, fokus na pierwszym konflikcie, poprawka nazwy odblokowuje zapis).
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).

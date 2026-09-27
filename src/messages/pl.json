@@ -3449,6 +3449,7 @@
     "errorValueTooLong": "Za długa wartość. Maksymalnie {max} znaków.",
     "errorValueDisallowed": "Usuń dane kontaktowe, linki, dane innych osób i informacje wrażliwe.",
     "errorLanguageInvalid": "Nazwa języka musi mieć od 2 do 40 znaków.",
+    "errorLanguageDuplicate": "Wybrano ten sam język dwukrotnie z różnymi poziomami. Odznacz jedną z propozycji albo wpisz różne nazwy.",
     "errorExperienceInvalid": "Podaj liczbę lat od 0 do 60.",
     "errorFieldsInvalid": "Popraw zaznaczone pola przed zapisem."
   },

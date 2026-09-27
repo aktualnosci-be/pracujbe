@@ -164,6 +164,44 @@ describe('CvImportPanel', () => {
     expect(vi.mocked(applyCvProposals).mock.calls[0]![0]).toMatchObject({ occupations: ['M'.repeat(80)], skills: [] });
   });
 
+  it('#805: dwa zaznaczone języki o tej samej znormalizowanej nazwie i różnym poziomie blokują zapis', async () => {
+    setup();
+    vi.mocked(proposeFromCvAction).mockResolvedValueOnce({
+      ok: true,
+      suspicious: false,
+      proposals: [
+        { id: 'language-0', kind: 'language', value: 'English', level: 'basic', evidence: '', uncertain: true },
+        { id: 'language-1', kind: 'language', value: 'Angielski', level: 'fluent', evidence: '', uncertain: true },
+      ],
+    });
+    await toReview();
+    // Poprawiamy drugą propozycję na tę samą nazwę po normalizacji (inna wielkość liter/spacje).
+    // Etykieta pola wartości bierze się z propozycji modelu (`p.value`) i nie zmienia się po edycji.
+    const first = screen.getByLabelText('Popraw wartość: English');
+    const second = screen.getByLabelText('Popraw wartość: Angielski');
+    fireEvent.change(second, { target: { value: '  english ' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'English' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'english' }));
+    fireEvent.click(screen.getByRole('button', { name: pl.cvImport.apply }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(pl.cvImport.errorFieldsInvalid);
+    expect(first).toHaveFocus();
+    expect(first).toHaveAccessibleDescription(pl.cvImport.errorLanguageDuplicate);
+    expect(second).toHaveAccessibleDescription(pl.cvImport.errorLanguageDuplicate);
+    expect(applyCvProposals).not.toHaveBeenCalled();
+
+    // Poprawka nazwy usuwa konflikt i pozwala zapisać.
+    fireEvent.change(second, { target: { value: 'Nederlands' } });
+    fireEvent.click(screen.getByRole('button', { name: pl.cvImport.apply }));
+    await waitFor(() => expect(applyCvProposals).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(applyCvProposals).mock.calls[0]![0]).toMatchObject({
+      languages: [
+        { language: 'English', level: 'basic' },
+        { language: 'Nederlands', level: 'fluent' },
+      ],
+    });
+  });
+
   it('„Odrzuć wszystkie” wraca do wyboru pliku bez zapisu; źródło i niepewność widoczne', async () => {
     setup('pl');
     await toReview();

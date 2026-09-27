@@ -3449,6 +3449,7 @@
     "errorValueTooLong": "De waarde is te lang. Maximaal {max} tekens.",
     "errorValueDisallowed": "Verwijder contactgegevens, links, gegevens van andere personen en gevoelige informatie.",
     "errorLanguageInvalid": "De naam van de taal moet 2 tot 40 tekens lang zijn.",
+    "errorLanguageDuplicate": "Dezelfde taal is twee keer geselecteerd met een ander niveau. Vink een van de voorstellen uit of gebruik andere namen.",
     "errorExperienceInvalid": "Vul een aantal jaren van 0 tot 60 in.",
     "errorFieldsInvalid": "Pas de gemarkeerde velden aan voordat je opslaat."
   },
