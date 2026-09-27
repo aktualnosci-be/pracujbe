@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GuestApplyForm } from '@/components/public/GuestApplyForm';
 import { screeningFieldId } from '@/components/public/ScreeningQuestionsFields';
@@ -36,6 +36,28 @@ globalThis.ResizeObserver ??= class {
 Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 afterEach(cleanup);
+
+/**
+ * Rozgrzewka: jeden render formularza przed testami (limit hooka 10 s). Pierwszy render płaci
+ * jednorazowo kompilację JIT formularza, Radix Checkbox, next-intl i walidacji — pod obciążeniem maszyny
+ * to właśnie pierwszy test pliku zbliżał się do limitu 5 s. DOM jest potem czyszczony.
+ */
+beforeAll(() => {
+  const f = renderForm();
+  // Pusta wysyłka: walidacja, fokus i opisy błędów (dom-accessibility-api) też raz, poza testem.
+  fireEvent.click(f.submit);
+  expect(f.name).toHaveAccessibleDescription(en.guestApply.error.nameRequired);
+  cleanup();
+});
+
+/**
+ * Czeka tanim zapytaniem DOM, a asercję roli robi raz po nim. `waitFor`/`findByRole` powtarzają
+ * zapytanie co 50 ms i przy każdej mutacji, a zapytanie po roli liczy nazwy dostępne i widoczność
+ * (getComputedStyle) całego formularza — pod obciążeniem sam polling zjadał sekundy.
+ */
+async function waitForSelector(selector: string): Promise<void> {
+  await waitFor(() => expect(document.querySelector(selector)).not.toBeNull());
+}
 
 /** #493: etykieta z linkiem — nazwa dostępna zaczyna się od tekstu do końca linku. */
 function privacyAckName(label: string): RegExp {
@@ -125,7 +147,8 @@ describe('GuestApplyForm', () => {
     const sent = vi.mocked(submitGuestApplication).mock.calls[0]![0];
     expect(sent).toMatchObject({ ageConfirmed: true, minAge: 16 });
     expect(JSON.stringify(sent)).not.toMatch(/birth/i);
-    await waitFor(() => expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true'));
+    await waitForSelector('[role="radiogroup"][aria-invalid="true"]');
+    expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-invalid', 'true');
     expect(f.age).toHaveAccessibleDescription(new RegExp(en.errors.ageAttestationRequired.slice(0, 30)));
     expect(f.name).toHaveValue('Anna');
     // #576: przedział 16–17 → lejek ofert wyłączony na tym urządzeniu.
@@ -171,12 +194,14 @@ describe('GuestApplyForm', () => {
       fireEvent.click(f.age);      fireEvent.click(f.consent);
       fireEvent.click(f.submit);
 
-      expect(await screen.findByRole('alert')).toHaveTextContent(m.apply.errorNetwork);
+      await waitForSelector('[role="alert"]');
+      expect(screen.getByRole('alert')).toHaveTextContent(m.apply.errorNetwork);
       expect(f.name).toHaveValue('Anna Nowak');
       expect(f.submit).toBeEnabled();
 
       fireEvent.click(f.submit);
-      expect(await screen.findByTestId('guest-apply-sent')).toHaveTextContent('anna@example.com');
+      await waitForSelector('[data-testid="guest-apply-sent"]');
+      expect(screen.getByTestId('guest-apply-sent')).toHaveTextContent('anna@example.com');
       expect(screen.getByRole('heading', { name: m.guestApply.sentTitle })).toHaveFocus();
 
       const calls = vi.mocked(submitGuestApplication).mock.calls;
@@ -195,7 +220,8 @@ describe('GuestApplyForm', () => {
     fireEvent.change(screen.getByRole('textbox', { name: en.guestApply.phoneOptional }), { target: { value: 'abc' } });
     fireEvent.click(f.age);    fireEvent.click(f.consent);
     fireEvent.click(f.submit);
-    await waitFor(() => expect(screen.getByRole('button', { name: en.apply.submitting })).toBeDisabled());
+    await waitFor(() => expect(f.submit).toHaveTextContent(en.apply.submitting));
+    expect(screen.getByRole('button', { name: en.apply.submitting })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: en.apply.submitting }));
     expect(submitGuestApplication).toHaveBeenCalledTimes(1);
 
@@ -236,8 +262,10 @@ describe('GuestApplyForm', () => {
     fireEvent.change(f.email, { target: { value: 'anna@example.com' } });
     fireEvent.click(f.age);    fireEvent.click(f.consent);
     fireEvent.click(f.submit);
-    expect(await screen.findByRole('alert')).toHaveTextContent(en.errors.rateLimited);
+    await waitForSelector('[role="alert"]');
+    expect(screen.getByRole('alert')).toHaveTextContent(en.errors.rateLimited);
     fireEvent.click(f.submit);
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(en.guestApply.unavailable));
+    await waitFor(() => expect(document.querySelector('[role="alert"]')).toHaveTextContent(en.guestApply.unavailable));
+    expect(screen.getByRole('alert')).toHaveTextContent(en.guestApply.unavailable);
   });
 });

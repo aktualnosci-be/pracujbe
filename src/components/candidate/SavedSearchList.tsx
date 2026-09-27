@@ -25,7 +25,8 @@ import { cn } from '@/lib/utils';
  * po usunięciu fokus wraca do komunikatu (wiersz znika).
  */
 export interface SavedSearchListProps {
-  searches: Array<SavedSearch & { lastAlertLabel: string | null }>;
+  /** `filterLabels` = filtry wyszukiwania w języku widza (serwer, `savedSearchFilterLabels`). */
+  searches: Array<SavedSearch & { lastAlertLabel: string | null; filterLabels?: string[] }>;
 }
 
 type Feedback = { tone: 'ok' | 'error'; text: string } | null;
@@ -46,10 +47,14 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
     setEditingId(search.id);
     setDraftName(search.name);
   };
+  // Fokus wraca na przycisk „Zmień nazwę” tego wiersza (po ponownym renderze, gdy formularz
+  // zamykający fokus już zniknął z DOM) — zarówno po anulowaniu, jak i po udanym zapisie (#821).
+  const focusRenameButton = (id: string) => {
+    requestAnimationFrame(() => renameButtons.current.get(id)?.focus());
+  };
   const cancelRename = (id: string) => {
     setEditingId(null);
-    // Fokus wraca na przycisk „Zmień nazwę” tego wiersza (po ponownym renderze).
-    requestAnimationFrame(() => renameButtons.current.get(id)?.focus());
+    focusRenameButton(id);
   };
 
   const run = async (
@@ -108,7 +113,10 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
                         const id = search.id;
                         const name = draftName;
                         void run(id, () => renameSavedSearchAction(id, name), t('renamed')).then((ok) => {
-                          if (ok) setEditingId(null);
+                          if (ok) {
+                            setEditingId(null);
+                            focusRenameButton(id);
+                          }
                         });
                       }}
                       onKeyDown={(event) => {
@@ -157,6 +165,21 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
                         </button>
                       </div>
                     </form>
+                  ) : null}
+                  {search.filterLabels && search.filterLabels.length > 0 ? (
+                    <ul
+                      aria-label={t('filtersLabel', { name: search.name })}
+                      className="mt-2 flex min-w-0 flex-wrap gap-2"
+                    >
+                      {search.filterLabels.map((label, index) => (
+                        <li
+                          key={`${index}-${label}`}
+                          className="max-w-full rounded-full border border-border bg-soft px-3 py-1 text-[13px] text-foreground [overflow-wrap:anywhere]"
+                        >
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                   <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">
                     {search.lastAlertLabel ? t('lastAlert', { date: search.lastAlertLabel }) : t('noAlertYet')}
