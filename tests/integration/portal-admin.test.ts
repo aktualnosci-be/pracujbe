@@ -87,6 +87,7 @@ describe('panel admina na PostgreSQL (#25) — dostęp', () => {
     ['listUsers', () => data.listUsers()],
     ['listAuditLogs', () => data.listAuditLogs()],
     ['getCompanyDetail', () => data.getCompanyDetail(ownedCompany)],
+    ['getUserDetail', () => data.getUserDetail(candidate.id)],
     ['listEmailSuppressions', () => data.listEmailSuppressions()],
   ] as const;
 
@@ -187,6 +188,37 @@ describe('panel admina na PostgreSQL (#25) — listy', () => {
     ]);
     expect(detail.company.jobsTotal).toBe(0);
     expect(await data.getCompanyDetail('00000000-0000-4000-8000-000000000000')).toEqual({ status: 'not_found' });
+  });
+});
+
+describe('panel admina na PostgreSQL — szczegół konta', () => {
+  it('pracodawca: członkostwo w firmie, język wg fallbacku, bez profilu kandydata; usunięte → not_found', async () => {
+    actAs(admin);
+    const detail = await data.getUserDetail(employer.id);
+    if (detail.status !== 'ok') throw new Error('expected ok');
+    expect(detail.user).toMatchObject({
+      id: employer.id,
+      role: 'employer',
+      email: `${employer.id}@example.invalid`,
+      recipientLocale: 'fr',
+      candidate: null,
+      suppression: null,
+      memberships: [expect.objectContaining({ companyId: ownedCompany, companyName: 'Właściciel IT', role: 'owner', isActive: true })],
+    });
+    expect(await data.getUserDetail('00000000-0000-4000-8000-000000000000')).toEqual({ status: 'not_found' });
+  });
+
+  it('aktywna blokada adresu profilu jest widoczna, zdjęta — nie', async () => {
+    actAs(admin);
+    const email = `${candidate.id}@example.invalid`;
+    const id = (await db().admin.query(`INSERT INTO public.email_suppressions(email, reason) VALUES ($1, 'complaint') RETURNING id`, [email])).rows[0].id;
+    const blocked = await data.getUserDetail(candidate.id);
+    expect(blocked.status === 'ok' && blocked.user.suppression).toMatchObject({ reason: 'complaint' });
+    await db().admin.query(`UPDATE public.email_suppressions SET lifted_at = now(), lift_reason = 'test' WHERE id = $1`, [id]);
+    const lifted = await data.getUserDetail(candidate.id);
+    expect(lifted.status === 'ok' && lifted.user.suppression).toBeNull();
+    // Sprzątanie: kolejne testy liczą blokady na liście `/admin/poczta`.
+    await db().admin.query('DELETE FROM public.email_suppressions WHERE id = $1', [id]);
   });
 });
 

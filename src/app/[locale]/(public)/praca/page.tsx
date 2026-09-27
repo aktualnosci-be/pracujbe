@@ -20,7 +20,7 @@ import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import {
   getCategoryCounts,
   getCityCounts,
@@ -177,36 +177,24 @@ export default async function JobsHubPage({ params }: PageProps) {
     };
   });
 
-  const jsonLd = {
-    '@context': 'https://schema.org/',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: tCommon('home'),
-        item: `${env.siteUrl}/${locale}`,
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: t('breadcrumbHub'),
-        item: `${env.siteUrl}/${locale}${HUB_PATH}`,
-      },
-    ],
-  };
+  const trail = [{ label: tCommon('home'), href: '/' }, { label: t('breadcrumbHub') }];
+  const jsonLd = buildBreadcrumbListJsonLd(trail, {
+    base: env.siteUrl,
+    locale,
+    currentUrl: `${env.siteUrl}/${locale}${HUB_PATH}`,
+  });
 
   return (
     <div className="container py-6 md:py-10">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Breadcrumb */}
       <Breadcrumbs
         ariaLabel={tCommon('breadcrumb')}
-        items={[{ label: tCommon('home'), href: '/' }, { label: t('breadcrumbHub') }]}
+        items={trail}
       />
 
       {/* Nagłówek */}

@@ -1,6 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EMAIL_LEASE_SECONDS, SEND_DEADLINE_MS, processEmailQueue } from '@/lib/email/outbox';
+import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { warmUpEmailRender } from '../helpers/email-render-warmup';
 
 /**
  * #615 — worker poczty nie może wysłać wiersza po utracie dzierżawy. `claim_email_batch`
@@ -25,6 +28,9 @@ vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const SITE = 'https://pracuj.be';
 
+// Pierwszy render React Email (leniwy import react-dom/server) poza limitem pierwszego testu.
+beforeAll(warmUpEmailRender);
+
 function row(id: string, lockToken: string, extra: Record<string, unknown> = {}) {
   return {
     id,
@@ -39,7 +45,7 @@ function row(id: string, lockToken: string, extra: Record<string, unknown> = {})
   };
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   vi.clearAllMocks();
   resetFakeDb(null)
     .rows('email.outbox.recipient-names', [])
@@ -49,7 +55,6 @@ beforeEach(async () => {
   process.env.RESEND_API_KEY = 're_test';
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
   send.mockResolvedValue({ data: { id: 'provider-1' }, error: null });
-  const { captureError } = await import('@/lib/error-report');
   vi.mocked(captureError).mockClear();
 });
 
@@ -58,7 +63,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('claim_email_batch', [row('d1', 'token-abc')]);
     fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 1, ok: true });
     expect(fakeDb.callsTo('email_delivery_send_check')).toEqual([
       expect.objectContaining({ args: { p_delivery_id: 'd1', p_lock_token: 'token-abc' } }),
@@ -71,7 +75,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('take_email_send_budget', () => {
       throw new Error('budżet nie powinien być pobrany po utracie dzierżawy');
     });
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     const result = await processEmailQueue();
     expect(result).toMatchObject({ processed: 1, sent: 0, failed: 0, suppressed: 0, leaseLost: 1, ok: true });
     expect(send).not.toHaveBeenCalled();
@@ -83,7 +86,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('claim_email_batch', [row('d1', 'token-abc')]);
     fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 1, leaseLost: 0 });
     expect(send).toHaveBeenCalledTimes(1);
   });
@@ -93,7 +95,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('claim_email_batch', [row('sent-1', 'lt-sent')]);
     fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     await processEmailQueue();
     const [markSent] = fakeDb.callsTo('email.outbox.mark-sent');
     expect(markSent!.text).toMatch(/AND lock_token = \$5$/);
@@ -110,7 +111,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('email_delivery_send_check', () => {
       throw pgError('08006', 'db down');
     });
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     await processEmailQueue();
     const [markFailed] = fakeDb.callsTo('email.outbox.mark-failed');
     expect(markFailed!.text).toMatch(/AND lock_token = \$6$/);
@@ -129,7 +129,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('claim_email_batch', [row('defer-1', 'lt-defer')]);
     fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: false, retry_at: '2026-09-25T12:00:00.000Z' }]);
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     await processEmailQueue();
     const [deferred] = fakeDb.callsTo('email.outbox.defer');
     expect(deferred!.text).toMatch(/AND lock_token = \$3$/);
@@ -146,8 +145,6 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     fakeDb.rpc('claim_email_batch', [row('race-1', 'lt-race')]);
     fakeDb.rpc('email_delivery_send_check', null);
     fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
-    const { processEmailQueue } = await import('@/lib/email/outbox');
-    const { captureError } = await import('@/lib/error-report');
     const result = await processEmailQueue();
     // Mail FAKTYCZNIE wyszedł (transport.send się powiódł) — liczymy jako wysłany.
     expect(result).toMatchObject({ sent: 1, failed: 0 });
@@ -166,7 +163,6 @@ describe('#628 — wysyłka nie trwa dłużej niż dzierżawa (brak równoległe
   }
 
   it('termin wysyłki jest co najmniej 2× krótszy niż dzierżawa, a claim dostaje tę dzierżawę jawnie', async () => {
-    const { EMAIL_LEASE_SECONDS, SEND_DEADLINE_MS, processEmailQueue } = await import('@/lib/email/outbox');
     expect(SEND_DEADLINE_MS * 2).toBeLessThanOrEqual(EMAIL_LEASE_SECONDS * 1000);
     claimOne('d1', 'lt-1');
     await processEmailQueue();
@@ -180,7 +176,6 @@ describe('#628 — wysyłka nie trwa dłużej niż dzierżawa (brak równoległe
     afterEach(() => vi.useRealTimers());
 
     it('po terminie: brak mark-sent, ponowienie najwcześniej po pełnej dzierżawie, spóźniony wynik pominięty', async () => {
-      const { EMAIL_LEASE_SECONDS, SEND_DEADLINE_MS, processEmailQueue } = await import('@/lib/email/outbox');
       let resolveLate: (value: unknown) => void = () => undefined;
       send.mockReturnValueOnce(new Promise((resolve) => { resolveLate = resolve; }));
       claimOne('hang-1', 'lt-hang');
@@ -207,7 +202,6 @@ describe('#628 — wysyłka nie trwa dłużej niż dzierżawa (brak równoległe
     });
 
     it('KONTROLA UJEMNA: odpowiedź przed terminem = zwykła wysyłka (mark-sent, bez ponowienia)', async () => {
-      const { SEND_DEADLINE_MS, processEmailQueue } = await import('@/lib/email/outbox');
       send.mockReturnValueOnce(new Promise((resolve) => {
         setTimeout(() => resolve({ data: { id: 'provider-slow' }, error: null }), SEND_DEADLINE_MS - 1);
       }));
@@ -220,7 +214,6 @@ describe('#628 — wysyłka nie trwa dłużej niż dzierżawa (brak równoległe
     });
 
     it('KONTROLA UJEMNA: zwykły błąd dostawcy zachowuje krótki backoff (2 min), nie pełną dzierżawę', async () => {
-      const { EMAIL_LEASE_SECONDS, processEmailQueue } = await import('@/lib/email/outbox');
       send.mockResolvedValueOnce({ data: null, error: { name: 'internal_server_error', message: 'x' } });
       claimOne('err-1', 'lt-err');
       const started = Date.now();
