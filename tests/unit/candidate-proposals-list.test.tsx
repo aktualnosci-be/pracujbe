@@ -10,7 +10,14 @@ vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 vi.mock('@/i18n/navigation', () => ({ Link: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => <a href={href} {...props}>{children}</a> }));
 vi.mock('@/components/candidate/ProposalStatusPill', () => ({ ProposalStatusPill: ({ status }: { status: string }) => <span>{status}</span> }));
 vi.mock('@/components/candidate/ProposalActions', () => ({
-  ProposalActions: ({ initialCanRespond }: { initialCanRespond: boolean }) => (initialCanRespond ? <button type="button">respond</button> : null),
+  ProposalActions: ({ initialCanRespond, onExpire }: { initialCanRespond: boolean; onExpire?: () => void }) => (
+    initialCanRespond ? (
+      <>
+        <button type="button">respond</button>
+        <button type="button" onClick={onExpire}>simulate-expiry</button>
+      </>
+    ) : null
+  ),
 }));
 
 const now = '2026-09-23T12:00:00.000Z';
@@ -30,6 +37,7 @@ const cursor2 = { createdAt: '2026-09-20T09:00:00+00:00', id: 'bbbbbbbb-bbbb-4bb
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.useRealTimers();
 });
 
 describe('lista propozycji kandydata (#245)', () => {
@@ -84,5 +92,18 @@ describe('lista propozycji kandydata (#245)', () => {
     );
     expect(screen.getByText('offerDefaultMessage')).toBeVisible();
     expect(screen.getByText('Tot maandag!')).toBeVisible();
+  });
+
+  it('termin mija w trakcie wizyty → etykieta karty „wygasła” bez odświeżenia strony (#830)', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-23T12:00:00.000Z'));
+    const live: MyOffer = { ...items[20]!, id: 'offer-live', expiresAt: '2026-09-23T12:00:05.000Z' };
+    render(<CandidateProposalsList locale="pl" now={now} initialPage={{ items: [live], nextCursor: null }} />);
+    expect(screen.getByText('sent')).toBeVisible();
+
+    vi.setSystemTime(new Date('2026-09-23T12:00:05.000Z'));
+    fireEvent.click(screen.getByRole('button', { name: 'simulate-expiry' }));
+    expect(screen.getByText('expired')).toBeVisible();
+    expect(screen.queryByText('sent')).not.toBeInTheDocument();
   });
 });

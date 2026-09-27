@@ -988,6 +988,7 @@
     "declineConfirm": "Odrzuć",
     "acceptProposalSuccess": "Propozycja została przyjęta.",
     "declineProposalSuccess": "Propozycja została odrzucona.",
+    "proposalExpiredNotice": "Termin odpowiedzi na tę propozycję minął. Nie możesz już jej przyjąć ani odrzucić.",
     "employerApplicationDetailTitle": "Szczegóły zgłoszenia",
     "employerApplicationBack": "Wróć do listy zgłoszeń",
     "employerApplicationLoadError": "Nie udało się wczytać zgłoszenia.",

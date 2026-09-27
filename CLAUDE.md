@@ -1346,6 +1346,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
+  Termin mija w trakcie wizyty (#830, bez migracji): `ProposalActions` od `expiresAt` nie pozwala
+  rozpocząć nowej odpowiedzi, ale nie usuwa bieżącej operacji — trwające żądanie trzyma
+  zablokowane przyciski/dialog do wyniku, błąd (zwrócony i wyjątek) zostaje widoczny, otwarte
+  potwierdzenie bez żądania zamyka się, a fokus trafia na `role="status"`
+  `dashboard.proposalExpiredNotice`. Błąd po terminie odświeża trasę; `status` z serwera
+  (`accepted`/`declined`) po własnej próbie zamienia błąd transportu w komunikat sukcesu.
+  Etykieta karty zmienia się na „Wygasła” bez serwera (`onExpire` → `CandidateProposalsList`).
+  Testy: unit `proposal-actions` (kontrola ujemna: stary komponent = 5 czerwonych),
+  `candidate-proposals-list`.
 - [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania, zgłoszenia i załączniki gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16)
   Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
   strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
