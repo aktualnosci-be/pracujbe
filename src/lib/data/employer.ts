@@ -20,7 +20,7 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { getActiveCompany } from '@/lib/company-context';
 import { isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { attempt, queryCount, queryOne, queryRows, rpcRows } from '@/lib/db/sql';
+import { attempt, queryCount, queryOne, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { effectiveJobStatus, isPastExpiry } from '@/lib/job-expiry';
 import {
@@ -378,21 +378,15 @@ const MATCHED_CANDIDATES_SQL = `SELECT DISTINCT m.candidate_id
  * spoza firmy, czyli kandydat. Liczone per FIRMA, nie per użytkownik — wcześniejszy licznik
  * nieprzeczytanych powiadomień `message_received` obejmował też rozmowy innych firm użytkownika
  * i gasł po otwarciu powiadomienia, choć nikt nie odpisał. Członek firmy (także byłego zespołu,
- * `is_active = false`) to strona firmowa — jego wiadomość jest odpowiedzią. Odczyt pod RLS
- * (`is_conversation_member`, 0039): rozmowy firmy, których użytkownik jest uczestnikiem.
+ * `is_active = false`) to strona firmowa — jego wiadomość jest odpowiedzią.
+ *
+ * RPC `get_company_awaiting_reply_count` (0740, #700), nie zapytanie pod RLS wywołującego:
+ * `conversations_select_member` (0009/0039) ogranicza SELECT do rozmów, których BIEŻĄCY
+ * użytkownik jest uczestnikiem (`is_conversation_member`) — zapytanie wprost na `conversations`
+ * pomijało rozmowy tej samej firmy przypisane wyłącznie innym rekruterom (zaniżony licznik
+ * w zespole z rozdzielonymi rozmowami). RPC jest SECURITY DEFINER i liczy WSZYSTKIE rozmowy
+ * firmy, gejtowane w bazie `can_manage_jobs` (recruiter+, ten sam próg co `canRecruit()` niżej).
  */
-const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
-     FROM public.conversations c
-     JOIN LATERAL (
-       SELECT m.sender_id FROM public.messages m
-        WHERE m.conversation_id = c.id AND m.deleted_at IS NULL
-        ORDER BY m.created_at DESC, m.id DESC
-        LIMIT 1
-     ) last ON true
-    WHERE c.company_id = $1 AND c.deleted_at IS NULL
-      AND last.sender_id IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM public.company_members cm
-                       WHERE cm.company_id = $1 AND cm.profile_id = last.sender_id)`;
 
 /**
  * Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi).
@@ -425,7 +419,7 @@ export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
         ? await queryCount(tx, 'employer.overview-matched-candidates', MATCHED_CANDIDATES_SQL, [companyId])
         : null,
       messagesToAnswerCount: recruiter
-        ? await queryCount(tx, 'employer.overview-awaiting-reply', CONVERSATIONS_AWAITING_REPLY_SQL, [companyId])
+        ? await rpc<number>(tx, 'get_company_awaiting_reply_count', { p_company_id: companyId })
         : null,
       recruiterAccess: recruiter,
       companyVerified: companyStatus === 'verified',

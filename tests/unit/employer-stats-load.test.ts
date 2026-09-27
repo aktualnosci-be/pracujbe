@@ -25,7 +25,11 @@ function overview(values: { active?: Count; apps?: Count; matches?: Count; messa
   count('employer.overview-active-jobs', values.active ?? 0);
   count('employer.overview-new-applications', values.apps ?? 0);
   count('employer.overview-matched-candidates', values.matches ?? 0);
-  count('employer.overview-awaiting-reply', values.messages ?? 0);
+  const messages = values.messages ?? 0;
+  fakeDb.rpc('get_company_awaiting_reply_count', () => {
+    if (messages instanceof Error) throw messages;
+    return messages;
+  });
 }
 
 /** Lejek: trzy liczniki kohorty + RPC lejka ofert (#99). */
@@ -86,10 +90,13 @@ describe('employer overview tiles', () => {
     });
     for (const name of [
       'employer.overview-active-jobs', 'employer.overview-new-applications',
-      'employer.overview-matched-candidates', 'employer.overview-awaiting-reply',
+      'employer.overview-matched-candidates',
     ]) {
       expect(fakeDb.callsTo(name)[0]?.values).toEqual(['company-1']);
     }
+    // #700: liczone RPC-em (SECURITY DEFINER), nie zapytaniem pod RLS wywołującego —
+    // inaczej rozmowy tej samej firmy przypisane innemu rekruterowi znikały z licznika.
+    expect(fakeDb.callsTo('get_company_awaiting_reply_count')[0]?.args).toEqual({ p_company_id: 'company-1' });
     // Wiadomości do odpowiedzi liczone per FIRMA (rozmowy), nie z powiadomień użytkownika —
     // dawny licznik obejmował też inne firmy użytkownika.
     expect(fakeDb.callsTo('employer.overview-unread-messages')).toHaveLength(0);
@@ -104,13 +111,14 @@ describe('employer overview tiles', () => {
     expect(text).toContain('j.deleted_at IS NULL');
   });
 
-  it('P1-14: awaiting reply = last message from outside the company, per company conversation', async () => {
+  it('#700: rozmowy do odpowiedzi czytane RPC-em firmowym, nie zapytaniem pod RLS wywołującego', async () => {
     overview({});
     await getEmployerOverview();
-    const text = fakeDb.callsTo('employer.overview-awaiting-reply')[0]!.text;
-    expect(text).toContain('c.company_id = $1');
-    expect(text).toContain('ORDER BY m.created_at DESC, m.id DESC');
-    expect(text).toContain('NOT EXISTS (SELECT 1 FROM public.company_members cm');
+    // #700: logika (ostatnia wiadomość spoza firmy) jest w get_company_awaiting_reply_count
+    // (SECURITY DEFINER, migracja 0740) — nie w zapytaniu wprost na `conversations` pod RLS
+    // wywołującego (is_conversation_member), które gubiło rozmowy przypisane kolegom z zespołu.
+    expect(fakeDb.callsTo('get_company_awaiting_reply_count')).toHaveLength(1);
+    expect(fakeDb.callsTo('employer.overview-awaiting-reply')).toHaveLength(0);
   });
 
   it('P1-14: a plain member gets "no data" (null), not the zeros RLS would return', async () => {

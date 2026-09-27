@@ -250,6 +250,32 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     });
   });
 
+  it('#700: rozmowy czekające na odpowiedź liczone dla CAŁEJ firmy, nie tylko dla rozmów wywołującego', async () => {
+    // Rekruter dołączający do zespołu PO utworzeniu rozmów nie jest ich uczestnikiem
+    // (get_or_create_conversation, 0016, dodaje do conversation_members tylko aktywnych
+    // członków W CHWILI tworzenia rozmowy) — pod starą, opartą na RLS wersją zapytania
+    // (is_conversation_member) widziałby zero rozmów firmy mimo bycia recruiter+.
+    const recruiter2A = await pg.createUser('employer');
+    await pg.admin.query(`INSERT INTO public.company_members(company_id, profile_id, role, is_active)
+      VALUES ($1, $2, 'recruiter', true)`, [ids.companyA, recruiter2A]);
+    try {
+      const notAParticipant = (await pg.admin.query(
+        `SELECT NOT EXISTS (SELECT 1 FROM public.conversation_members WHERE profile_id = $1) AS v`,
+        [recruiter2A],
+      )).rows[0].v;
+      expect(notAParticipant).toBe(true);
+
+      actAs({ id: recruiter2A, role: 'employer' });
+      expect(await employer.getEmployerOverview()).toMatchObject({
+        status: 'ok',
+        // Tyle samo, co widzi owner (ta sama firma, ta sama rozmowa oczekująca na odpowiedź).
+        overview: { messagesToAnswerCount: 1, recruiterAccess: true, companyVerified: true },
+      });
+    } finally {
+      await pg.admin.query('DELETE FROM public.company_members WHERE profile_id = $1', [recruiter2A]);
+    }
+  });
+
   it('kafelki (P1-14): firma niezweryfikowana — dopasowani czekają na weryfikację, reszta realna', async () => {
     await pg.admin.query(`UPDATE public.companies SET status = 'pending' WHERE id = $1`, [ids.companyB]);
     try {

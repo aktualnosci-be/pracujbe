@@ -1082,6 +1082,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i `/employer/statystyki`. Dowód: `portal-employer` (PG16: member, firma niezweryfikowana, cudza
   firma, powiadomienia ≠ licznik), unit `employer-stats-load`, `employer-candidates-load`,
   `employer-offers-preview` (kontrole ujemne).
+  Zakres liczenia „do odpowiedzi” per CAŁA firma, nie per rozmowy wywołującego (#700, migracja
+  0740 — numer tymczasowy): licznik czytało zapytanie wprost na `conversations` pod RLS
+  wywołującego (`conversations_select_member`/`is_conversation_member`, 0009/0039) — rekruter
+  widział tylko rozmowy, których jest UCZESTNIKIEM (`conversation_members` dodaje przy tworzeniu
+  rozmowy tylko ówczesnych aktywnych członków, 0016); rekruter dołączający do zespołu później albo
+  rozmowy rozdzielone między rekruterów dawały zaniżony licznik. Naprawa: RPC SECURITY DEFINER
+  `get_company_awaiting_reply_count(p_company_id)` — ta sama logika (ostatnia nieusunięta
+  wiadomość spoza firmy), ale liczona dla WSZYSTKICH rozmów firmy, gejtowana w bazie
+  `can_manage_jobs` (recruiter+). Dowód: `portal-employer` (PG16: rekruter bez wpisu w
+  `conversation_members` widzi ten sam licznik co owner), unit `employer-stats-load`
+  (kontrola ujemna: licznik idzie RPC-em, nie starym zapytaniem).
   Wygląd panelu i kreatora oferty = kalka prototypu „04 Ludzie i praca” (#5/#6): klasy w
   `src/components/dashboard/panel-styles.ts` (wspólne z adminem), sidebar `.side-item`, opis
   odstępstw w `docs/design/people-passport/README.md`.
