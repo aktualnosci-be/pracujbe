@@ -1767,15 +1767,27 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
 }
 
 /**
+ * Jawny wynik odczytu kolejnej strony historii (#770): `ok` obejmuje też legalnie pustą stronę
+ * (zła aplikacja, brak dostępu, koniec historii) — nie ujawniamy istnienia cudzych danych.
+ * `error` to WYŁĄCZNIE awaria techniczna (np. błąd zapytania) — nie wolno jej cicho zamieniać
+ * na pustą stronę, bo UI wtedy usuwa kursor i „Pokaż więcej” tak, jakby historia się skończyła.
+ */
+export type ApplicationHistoryPageLoad =
+  | { status: 'ok'; page: ApplicationHistoryPage }
+  | { status: 'error' };
+
+/**
  * Kolejna strona historii statusów zgłoszenia (#604, „Pokaż więcej") — odczyt pod sesją i RLS,
  * ponownie zawężony do AKTYWNEJ firmy (nie ufamy samemu `applicationId` z klienta, jak w
  * `getEmployerApplicationDetail`). Obca/usunięta aplikacja → pusta strona bez ujawniania istnienia.
+ * Awaria zapytania (#770) → `{ status: 'error' }`, nigdy pusta strona — inaczej pracodawca widzi
+ * niepełną historię jako kompletną, bez komunikatu i możliwości ponowienia.
  */
 export async function getEmployerApplicationHistoryPage(
   applicationId: string,
   cursor: ApplicationHistoryCursor | null = null,
-): Promise<ApplicationHistoryPage> {
-  const empty: ApplicationHistoryPage = { items: [], nextCursor: null };
+): Promise<ApplicationHistoryPageLoad> {
+  const empty: ApplicationHistoryPageLoad = { status: 'ok', page: { items: [], nextCursor: null } };
   if (!UUID_RE.test(applicationId)) return empty;
   if (!isPortalDataConfigured()) return empty;
 
@@ -1797,10 +1809,10 @@ export async function getEmployerApplicationHistoryPage(
           ORDER BY created_at ASC, id ASC
           LIMIT $4`,
         [applicationId, cursor?.createdAt ?? null, cursor?.id ?? null, APPLICATION_HISTORY_PAGE_SIZE + 1]);
-      return pageHistoryRows(rows);
+      return { status: 'ok' as const, page: pageHistoryRows(rows) };
     });
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerApplicationHistoryPage' });
-    return empty;
+    return { status: 'error' };
   }
 }
