@@ -7285,6 +7285,9 @@ rollback;
 begin;
 alter table public.jobs disable trigger trg_enforce_screening_review;
 update public.jobs set status = 'paused' where id = :'SHJOB';
+-- Odroczony trigger synchronizacji tłumaczeń (0146) zostawia zdarzenie w kolejce transakcji;
+-- ALTER TABLE wymaga pustej kolejki, więc odpalamy je od razu.
+set constraints all immediate;
 alter table public.jobs enable trigger trg_enforce_screening_review;
 update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
   where id = :'sh_rev';
