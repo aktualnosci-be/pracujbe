@@ -2832,7 +2832,7 @@
   "companyBlocks": {
     "sectionTitle": "Entreprises bloquées",
     "sectionDescription": "Une entreprise bloquée ne voit pas votre profil, ne vous trouve pas parmi les candidats, ne peut pas vous envoyer de proposition ni de nouveau message, et ses offres disparaissent de vos recommandations. L’entreprise n’est pas informée du blocage. Vos candidatures et conversations existantes sont conservées.",
-    "empty": "Vous n’avez bloqué aucune entreprise. Vous pouvez bloquer une entreprise depuis la page de son offre.",
+    "empty": "Vous n’avez bloqué aucune entreprise. Vous pouvez bloquer une entreprise depuis la page de son offre ou depuis une conversation existante.",
     "blockedAt": "Bloquée le {date}",
     "unblock": "Débloquer",
     "unblockNamed": "Débloquer l’entreprise {company}",
@@ -2843,6 +2843,9 @@
     "jobTitle": "Contact avec cette entreprise",
     "jobDescription": "Si vous ne souhaitez pas que {company} voie votre profil et vous contacte, vous pouvez la bloquer. L’entreprise n’en sera pas informée.",
     "jobBlockedDescription": "{company} est bloquée : elle ne voit pas votre profil et ne peut pas vous envoyer de proposition ni de message. Ses offres n’apparaissent pas dans vos recommandations.",
+    "conversationTitle": "Contact avec cette entreprise",
+    "conversationDescription": "Si vous ne voulez plus que {company} vous contacte et voie votre profil, vous pouvez la bloquer. L’entreprise n’en sera pas informée. Cette conversation reste conservée.",
+    "conversationBlockedDescription": "{company} est bloquée : elle ne peut plus vous envoyer de message ni de proposition, et ne voit pas votre profil. Cette conversation reste conservée.",
     "block": "Bloquer l’entreprise",
     "blocking": "Blocage…",
     "blockedSuccess": "L’entreprise {company} a été bloquée.",

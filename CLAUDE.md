@@ -909,6 +909,24 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+Blokada z istniejącego wątku (#832, bez migracji): do #832 jedyna ścieżka UI była szczegół
+AKTYWNEJ publicznej oferty (`JobCompanyBlockControl`) — po zamknięciu ostatniego ogłoszenia
+firmy ta ścieżka znikała, choć rozmowa i prawo firmy do wysyłania wiadomości zostawały (samo
+zamknięcie oferty nie tworzy blokady). `getConversationThread` (`src/lib/data/messages.ts`)
+dolicza teraz `ConversationThread.companyBlock` — dla strony KANDYDACKIEJ rozmowy (nie dla
+widza po stronie firmy, `ctx.viewerIsCompany` z #355/0143) i tylko gdy nazwa firmy jest
+rozwiązywalna — czytany bezpośrednio z `candidate_company_blocks` pod RLS (polityka
+`..._select_own`, 0078; bez nowego RPC). `ConversationCompanyBlockControl` w nagłówku wątku
+zapisuje przez ten sam `setCompanyBlockAction`/`set_company_block` co ustawienia i szczegół
+oferty (RPC już przyjmuje dowolną nieusuniętą firmę, bez wymogu aktywnej oferty). Bezpiecznik:
+`MessageThread` renderuje kontrolkę tylko z jawnym `allowCompanyBlock` (ustawianym przez
+`MessagesView` wyłącznie na `/candidate/wiadomosci`) — nigdy w panelu pracodawcy, także dla
+danych DEMO (które nie rozróżniają widza). Dowód: unit `conversation-thread-result`
+(w tym kontrole ujemne: widz po stronie firmy i rozmowa bez firmy nie dostają `companyBlock`,
+zero zapytań do bazy), `message-thread-company-block` (kontrola ujemna `allowCompanyBlock`),
+`conversation-company-block-control`. **Otwarte:** ta sama kontrolka na własnej historii
+rekrutacji kandydata i na publicznym profilu firmy (issue wskazywał je jako alternatywne
+miejsca — wątek pokrywa opisany scenariusz odtworzenia).
 Dynamiczne facety (#874, bez migracji): `GET /api/job-filter-facets` (zmiana filtra bez
 przeładowania strony) czytał zweryfikowanego kandydata pomijając sesję — agregat SQL działał
 wtedy jak dla gościa i mógł zawyżyć licznik/CTA o oferty firm zablokowanych przez kandydata
@@ -1536,6 +1554,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zapisu. Ponowienie bez edycji zachowuje ten sam klucz i zwykły komunikat (bez zmian, kontrola
   ujemna w teście). Bez migracji — RPC `apply_to_job` (0071/0093) już rozróżniał klucze, brakowało
   tylko odróżnienia payloadu po stronie klienta. Test: `apply-modal-network` (z kontrolą ujemną).
+  Szkic przeżywa zamknięcie modalu (#913, bez migracji): zamknięcie dialogu X/Escape przed
+  wysłaniem nie zeruje już wpisanych danych — `reset()` w `ApplyModal` uruchamia się TYLKO po
+  realnym sukcesie wysyłki (Invariant #11: dane zostają po każdym innym zamknięciu, bez wyjątku
+  na błąd). Kandydat: pola już żyły w stanie `ApplyModal`, więc wystarczyło przestać je zerować
+  przy `handleOpenChange`. Gość: `GuestApplyForm` odmontowuje się razem z treścią dialogu
+  (`LightDialogContent`), więc szkic (bez tokenu Turnstile i bez stanu błędów/wysyłki — te wracają
+  do zera przy każdym montażu) trzyma `ApplyModal` w `useRef` (`GuestApplyDraft`, `initialDraft`/
+  `onDraftChange`) i czyści go dopiero po `submitGuestApplication` zwracającym sukces — celowo bez
+  `localStorage`/`sessionStorage` (decyzja z issue: bez odrębnej decyzji prywatności). Szkic nie
+  przeżywa pełnego przeładowania strony ani zmiany oferty (nowa instancja komponentu) — zgodnie
+  z kierunkiem z issue („aż do wysłania, zmiany oferty lub opuszczenia strony”). Dowód: unit
+  `apply-modal-draft-preserve` (kandydat i gość, z kontrolą ujemną: sukces czyści szkic), E2E
+  `guest-apply` (X i Escape na tej samej stronie, z kontrolą ujemną).
   Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
@@ -1819,6 +1850,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
   `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
   (edytor), `admin-a11y` (nowe trasy).
+  Zapis a edycja w toku (#820): `createEmailCampaignRevision` jest idempotentny po `clientKey`
+  (retry z tym samym kluczem NIE aktualizuje treści), więc pola edytora muszą być zablokowane
+  na czas zapisu — inaczej edycja wpisana w trakcie oczekiwania na odpowiedź serwera ginie po
+  cichu (formularz pokazuje nowszą wartość, zapisana i wyświetlona po nawigacji zostaje
+  starsza). `EmailCampaignEditor`: pola sluga i treści ofert mają `disabled={pending}`,
+  a handlery zmiany stanu (`changeContent`/`setJobField`/`addJob`/`removeJob`, onChange sluga)
+  dodatkowo odrzucają aktualizację, gdy `pending` — atrybut `disabled` sam nie blokuje zdarzenia
+  wywołanego poza normalną interakcją użytkownika. Dowód: unit
+  `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
+  ujemna bez zapisu w toku, odblokowanie po błędzie).
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
