@@ -13739,9 +13739,11 @@ select pg_temp.assert(
 -- granicę strony) + jedna starsza (SKOLD, ostatnia w sorcie) + 3 nowsze oferty firmy
 -- zablokowanej przez kandydata. Worker rejestruje wszystkie 10 151, pomija firmę
 -- zablokowaną, jeden digest ≤ 5 ofert z count = 10 151, para nie wraca. Kontrola ujemna:
--- wariant z offsetem z 0138 gubi oferty za 10 100.
+-- offset z 0138 (clamp 10 000) nie sięga ofert za 10 100.
+-- Cała sekcja w transakcji cofanej (10 tys. ofert bez kosztownego DELETE na końcu).
 -- ============================================================================
 \echo '--- SK100 alerty wyszukiwań: kursor zamiast offsetu (0158) ---'
+begin;
 \set SKA 'e9c30000-0000-0000-0000-0000000000a1'
 \set SKE 'e9c30000-0000-0000-0000-0000000000b1'
 \set SKC 'e9c30000-0000-0000-0000-0000000000c1'
@@ -13787,12 +13789,11 @@ select filters as sk_filters from public.saved_searches where id = :'sk1' \gset
 
 -- SK100-1: kursor zwraca wszystkie 10 154 pasujące (10 151 + 3 zablokowane — blokadę
 -- stosuje worker), bez dubli, bez oferty spoza filtra i sprzed okna.
+-- Jeden przebieg kursora (każde wywołanie to ~11 stron po 1000).
 set role service_role;
 select pg_temp.assert(
-  (select count(*) from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days')) = 10154
-  and (select count(distinct x) from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days') x) = 10154
-  and exists (select 1 from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days') x
-              where x = :'SKOLD'),
+  (with a as (select x from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days') x)
+   select count(*) = 10154 and count(distinct x) = 10154 and bool_or(x = :'SKOLD') from a),
   'SK100-1 kursor (published_at, id) zwraca wszystkie 10 154 oferty (> 10 100), bez dubli');
 -- SK100-1b: strony kursora rozłączne i w porządku listy (remis rozstrzyga id).
 select pg_temp.assert(
@@ -13838,36 +13839,20 @@ select pg_temp.assert(
   and (select count(*) from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 1,
   'SK100-3 ponowny przebieg bez ponownej wysyłki tych samych par');
 
--- SK100-4 (KONTROLA UJEMNA): wariant z offsetem get_public_jobs (0138) — sufit 101 stron
--- = 10 100 ofert (w tym 3 zablokowane) → 10 097 par, SKOLD i 53 inne przepadają.
-begin;
-delete from public.saved_search_alerts where saved_search_id = :'sk1';
-delete from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch';
-update public.saved_searches set next_run_at = now() - interval '1 minute',
-  last_checked_at = now() - interval '1 day' where id = :'sk1';
-create or replace function public.saved_search_matching_jobs(
-  p_filters jsonb, p_locale text, p_since timestamptz, p_max_pages integer default null
-) returns setof uuid language sql stable security definer set search_path = public, pg_temp as $$
-  with recursive pages(page_offset, ids) as (
-    select 0, array(select public.saved_search_job_page(p_filters, p_locale, p_since, 0))
-    union all
-    select p.page_offset + 100,
-           array(select public.saved_search_job_page(p_filters, p_locale, p_since, p.page_offset + 100))
-    from pages p
-    where cardinality(p.ids) = 100
-      and p.page_offset + 100 <= 10000
-      and (p.page_offset / 100) + 1 < least(greatest(coalesce(p_max_pages, 101), 1), 101)
-  )
-  select distinct unnest(ids) from pages;
-$$;
+-- SK100-4 (KONTROLA UJEMNA): stronicowanie offsetem get_public_jobs (0138,
+-- saved_search_job_page) ma sufit offsetu 10 000 — strona „10 100” to ta sama strona co
+-- 10 000, więc oferty za 10 100 (m.in. SKOLD, ostatnia w sorcie) są dla niego
+-- nieosiągalne; SK100-1/SK100-2 (10 154 / 10 151) wykrywają powrót do tego wariantu.
+-- (Pełny przebieg workera na wariancie offsetowym = 101 stron po 10 tys. wierszy —
+-- zbyt kosztowny dla zestawu uruchamianego też w jednej transakcji, rate-limit.test.ts.)
 set role service_role;
-select public.process_saved_search_alerts(1000);
-reset role;
 select pg_temp.assert(
-  (select count(*) from public.saved_search_alerts where saved_search_id = :'sk1') = 10097
-  and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'sk1' and job_id = :'SKOLD'),
-  'SK100-4 KONTROLA UJEMNA: offset get_public_jobs (sufit 10 000) gubi oferty za 10 100');
-rollback;
+  (select array_agg(x order by x) from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10100) x)
+    = (select array_agg(x order by x) from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10000) x)
+  and not exists (select 1 from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10000) x
+                  where x = :'SKOLD'),
+  'SK100-4 KONTROLA UJEMNA: offset get_public_jobs (sufit 10 000) nie sięga ofert za 10 100');
+reset role;
 set role service_role;
 select pg_temp.assert(
   (select count(*) from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 1000,
@@ -13888,9 +13873,8 @@ select pg_temp.expect_error(
   'select count(*) from public.saved_search_jobs_after(''pl'', null, null, null, null, null, null, null, null, null, null, now(), ''month'', null, null, 10)',
   'permission denied', 'SK100-5c anon bez EXECUTE');
 reset role;
-delete from public.saved_search_alerts where saved_search_id = :'sk1';
-delete from public.jobs where company_id in (:'SKC', :'SKB');
-delete from auth.users where id in (:'SKA', :'SKE');
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- JT144 (0144, numer tymczasowy): istotna zmiana warunków opublikowanej oferty →
