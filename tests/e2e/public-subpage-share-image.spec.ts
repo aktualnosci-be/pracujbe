@@ -47,9 +47,20 @@ for (const locale of locales) {
   }
 }
 
-test('kontrola ujemna: brak obrazu OG jest wykrywany przez tę samą asercję', async ({ page }) => {
-  await page.goto('/pl/praca');
+test('kontrola ujemna: brak obrazu OG jest wykrywany przez tę samą asercję', async ({ page, request }) => {
+  // HTML prawdziwej strony bez <meta og:image> i bez skryptów, załadowany jako statyczny
+  // dokument. Dawniej meta była usuwana z DOM po załadowaniu, ale Next 15 renderuje metadane
+  // także z ładunku RSC (strumieniowanie/hydratacja) i potrafił wstawić je ponownie — asercja
+  // z ponawianiem trafiała wtedy na przywrócony element (flaky w CI).
+  const response = await request.get('/pl/praca');
+  expect(response.status()).toBe(200);
+  const html = (await response.text())
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<meta[^>]*property="og:image"[^>]*>/gi, '');
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
   const shareImage = new URL('/og.png', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').href;
-  await page.locator('meta[property="og:image"]').evaluate((element) => element.remove());
+  await expect(page.locator('meta[property="og:image"]')).toHaveCount(0);
+  // Pozostałe metadane zostają — asercja pada wyłącznie przez brak og:image.
+  await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', shareImage);
   await expect(expectBrandImageMetadata(page, shareImage)).rejects.toThrow();
 });

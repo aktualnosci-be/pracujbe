@@ -241,6 +241,35 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(bobPage.items.map((i) => i.id)).not.toContain(aliceApp);
   });
 
+  it('filtr etapu (#809): starsze zgłoszenie „rozmowa” na pierwszej stronie, przed limitem i kursorem', async () => {
+    actAs({ id: alice, role: 'candidate' });
+    const all = await candidateData.getMyApplicationsPage('pl');
+    const rest = await candidateData.getMyApplicationsPage('pl', all.nextCursor);
+    // Najstarsze zgłoszenie Alicji leży bez filtra dopiero na drugiej stronie.
+    const oldest = rest.items[rest.items.length - 1]!;
+    expect(all.items.map((item) => item.id)).not.toContain(oldest.id);
+    const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
+    await db().admin.query(`UPDATE public.applications SET status = 'interview' WHERE id = ANY($1::uuid[])`, [[oldest.id, bobApp]]);
+    try {
+      const interview = await candidateData.getMyApplicationsPage('pl', null, 'rozmowa');
+      // Tylko własne zgłoszenie na tym etapie (zgłoszenie Boba w tym samym statusie nie wycieka).
+      expect(interview.items.map((item) => [item.id, item.status])).toEqual([[oldest.id, 'interview']]);
+      expect(interview.nextCursor).toBeNull();
+      const active = await candidateData.getMyApplicationsPage('pl', null, 'aktywne');
+      expect(active.items).toHaveLength(10);
+      expect(active.items.every((item) => item.status === 'submitted')).toBe(true);
+      const activeRest = await candidateData.getMyApplicationsPage('pl', active.nextCursor, 'aktywne');
+      // Kursor z filtrem nie wraca do pominiętego etapu: 11 z 12 zgłoszeń jest „w toku”.
+      expect(activeRest.items.map((item) => item.id)).not.toContain(oldest.id);
+      expect(active.items.length + activeRest.items.length).toBe(11);
+      expect((await candidateData.getMyApplicationsPage('pl', null, 'propozycja')).items).toEqual([]);
+      // Kontrola ujemna: bez filtra to samo zgłoszenie nadal jest dopiero na drugiej stronie.
+      expect((await candidateData.getMyApplicationsPage('pl')).items.map((item) => item.id)).not.toContain(oldest.id);
+    } finally {
+      await db().admin.query(`UPDATE public.applications SET status = 'submitted' WHERE id = ANY($1::uuid[])`, [[oldest.id, bobApp]]);
+    }
+  });
+
   it('pytania screeningowe (#101): licznik na karcie i snapshot odpowiedzi tylko dla autora zgłoszenia', async () => {
     const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
     await db().admin.query(`INSERT INTO public.application_screening_answers
@@ -300,6 +329,72 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(status.rows[0].status).toBe('withdrawn');
   });
 
+  it('szczegół zgłoszenia: tylko własne, historia stronicowana kursorem, rozmowa członka, bez notatek firmy', async () => {
+    // Notatka pracodawcy w historii nie może trafić do kandydata (czytamy tylko to_status/created_at).
+    await db().admin.query(`UPDATE public.application_status_history SET note = 'notatka wewnętrzna firmy'
+      WHERE application_id = $1 AND to_status = 'viewed'`, [aliceApp]);
+    const conv = await db().admin.query(`INSERT INTO public.conversations(company_id, job_id, application_id)
+      VALUES ($1, $2, $3) RETURNING id`, [companyId, jobIds[0], aliceApp]);
+    const conversationId = conv.rows[0].id as string;
+    await db().admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id) VALUES ($1, $2), ($1, $3)`,
+      [conversationId, alice, employer]);
+
+    actAs({ id: alice, role: 'candidate' });
+    const detail = await candidateData.getMyApplicationDetail('pl', aliceApp);
+    expect(detail.status).toBe('ok');
+    if (detail.status !== 'ok') return;
+    expect(detail.isDemo).toBe(false);
+    expect(detail.application).toMatchObject({
+      id: aliceApp, status: 'viewed', jobTitle: 'Oferta 0', companyName: 'Firma A', city: 'Gent',
+      message: 'Dzień dobry', conversationId,
+    });
+    expect(detail.application.history.map((h) => h.toStatus).at(-1)).toBe('viewed');
+    expect(JSON.stringify(detail.application.history)).not.toContain('notatka');
+    expect(detail.application.history.every((h) => Object.keys(h).sort().join() === 'at,id,toStatus')).toBe(true);
+    expect(detail.application.screeningAnswers.map((a) => a.position)).toEqual([0, 1]);
+    expect(detail.application.historyNextCursor).toBeNull();
+
+    // Cudze zgłoszenie = not_found (bez rozróżnienia od braku), także dla pracodawcy ścieżką kandydata.
+    actAs({ id: bob, role: 'candidate' });
+    expect(await candidateData.getMyApplicationDetail('pl', aliceApp)).toEqual({ status: 'not_found' });
+    expect(await candidateData.getMyApplicationHistoryPage(aliceApp)).toEqual({ items: [], nextCursor: null });
+    actAs({ id: employer, role: 'employer' });
+    expect(await candidateData.getMyApplicationDetail('pl', aliceApp)).toEqual({ status: 'not_found' });
+
+    // Kontrola ujemna: RLS sama w sobie wpuszcza rekrutera firmy do tego zgłoszenia (0039),
+    // więc to jawne `candidate_id = me` w loaderze trzyma ścieżkę kandydata z dala od pracodawcy.
+    const { withPortalTransaction } = await import('@/lib/db/portal');
+    const { queryRows } = await import('@/lib/db/sql');
+    const visibleToEmployer = await withPortalTransaction({ id: employer, role: 'employer' }, (tx) =>
+      queryRows(tx, 'test.employer-sees-application', 'SELECT id FROM public.applications WHERE id = $1 AND deleted_at IS NULL', [aliceApp]));
+    expect(visibleToEmployer).toHaveLength(1);
+
+    // Stronicowanie historii: 60 dodatkowych zmian o RÓWNYM czasie — kursor (created_at, id) bez dziur i dubli.
+    const at = '2026-09-21T10:00:00.000000+00:00';
+    await db().admin.query(`INSERT INTO public.application_status_history(application_id, from_status, to_status, created_at)
+      SELECT $1, 'viewed', 'viewed', $2::timestamptz FROM generate_series(1, 60)`, [aliceApp, at]);
+    actAs({ id: alice, role: 'candidate' });
+    const withMore = await candidateData.getMyApplicationDetail('pl', aliceApp);
+    if (withMore.status !== 'ok') throw new Error('expected ok');
+    expect(withMore.application.history).toHaveLength(50);
+    expect(withMore.application.historyNextCursor).not.toBeNull();
+    const rest = await candidateData.getMyApplicationHistoryPage(aliceApp, withMore.application.historyNextCursor);
+    const total = (await db().admin.query('SELECT count(*)::int AS n FROM public.application_status_history WHERE application_id = $1', [aliceApp])).rows[0].n as number;
+    expect(rest.nextCursor).toBeNull();
+    const all = [...withMore.application.history, ...rest.items].map((h) => h.id);
+    expect(all).toHaveLength(total);
+    expect(new Set(all).size).toBe(total);
+    await db().admin.query(`DELETE FROM public.application_status_history WHERE application_id = $1 AND created_at = $2::timestamptz`, [aliceApp, at]);
+
+    // Usunięte (soft-delete) zgłoszenie znika ze szczegółu.
+    const { rows } = await db().admin.query(`SELECT id FROM public.applications WHERE candidate_id = $1 AND job_id = $2`, [alice, jobIds[10]]);
+    await db().admin.query('UPDATE public.applications SET deleted_at = now() WHERE id = $1', [rows[0].id]);
+    expect(await candidateData.getMyApplicationDetail('pl', rows[0].id)).toEqual({ status: 'not_found' });
+    await db().admin.query('UPDATE public.applications SET deleted_at = NULL WHERE id = $1', [rows[0].id]);
+    // Sprzątanie: rozmowa tego testu nie może zmienić liczników w testach wiadomości niżej.
+    await db().admin.query('DELETE FROM public.conversations WHERE id = $1', [conversationId]);
+  });
+
   it('propozycja: send_offer idempotentny, historia i najnowsza aktywna tylko dla adresata', async () => {
     actAs({ id: employer, role: 'employer' });
     const key = randomUUID();
@@ -346,11 +441,21 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
   });
 
   it('polecane: najlepsze własne dopasowania, fallback najnowszych bez procentu', async () => {
-    await db().admin.query(`INSERT INTO public.matches(candidate_id, job_id, score) VALUES ($1, $2, 91), ($1, $3, 77), ($4, $5, 99)`,
+    await db().admin.query(`INSERT INTO public.matches(candidate_id, job_id, score, mandatory_met, mandatory_total, strengths)
+      VALUES ($1, $2, 91, 2, 2, ARRAY['localCandidate', 'obcy']), ($1, $3, 77, 0, 0, '{}'), ($4, $5, 99, 0, 0, '{}')`,
       [alice, jobIds[7], jobIds[4], bob, jobIds[9]]);
+    // Alice aplikowała wcześniej na wszystkie oferty (historia zgłoszeń) — karta niesie JEJ zgłoszenie.
+    const own = await db().admin.query<{ id: string }>(
+      `SELECT id FROM public.applications WHERE candidate_id = $1 AND job_id = $2 AND deleted_at IS NULL`, [alice, jobIds[7]]);
+    expect(own.rows).toHaveLength(1);
     actAs({ id: alice, role: 'candidate' });
     const recommended = await candidateData.getRecommendedJobs('pl', true);
     expect(recommended.map((r) => [r.id, r.match])).toEqual([[jobIds[7], 91], [jobIds[4], 77]]);
+    expect(recommended[0]).toMatchObject({
+      explanation: { summaryKey: 'good', mandatory: { met: 2, total: 2 }, strengths: ['localCandidate'] },
+      applicationId: own.rows[0]?.id ?? null,
+    });
+    expect(recommended[1]?.explanation).toEqual({ summaryKey: 'good', mandatory: null, strengths: [] });
     actAs({ id: stranger, role: 'employer' });
     const fallback = await candidateData.getRecommendedJobs('pl', true);
     expect(fallback).toHaveLength(5);

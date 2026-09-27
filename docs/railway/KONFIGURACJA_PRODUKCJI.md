@@ -57,6 +57,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | opcjonalnie; oba albo żaden — gdy ustawione, webhook wymaga też Basic auth |
 | `EMAIL_QUEUE_SECRET` | cron `/api/email/process` bez autoryzacji (401) |
 | `MAINTENANCE_SECRET` | cron `/api/maintenance` bez autoryzacji |
+| `AUTH_EMAIL_IMMEDIATE_SEND` | opcjonalnie; puste = e-maile konta wychodzą zaraz po rejestracji/resecie (paczka workera po odpowiedzi), `off` = tylko z harmonogramu |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | w produkcji rejestracja, reset hasła, zgłoszenia treści i aplikacja bez konta są odrzucane (fail-closed); logowanie działa |
 | `TURNSTILE_ALLOWED_HOSTNAMES` | opcjonalnie; domyślnie host `NEXT_PUBLIC_SITE_URL` |
 | `GUEST_APPLY_SECRET` | aplikacja bez konta wyłączona (#98) |
@@ -74,7 +75,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | Zmienna | Uwagi |
 |---|---|
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | domyślnie `pl` |
-| `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance` — tylko po decyzji właściciela o terminach (#40) |
+| `DSA_RETENTION_MODE` | domyślnie wyłączone; `dry-run` = podgląd, `apply` = anonimizacja spraw DSA w `/api/maintenance`. Terminy zatwierdzone 26.09.2026 (#40); na produkcji ustawione `dry-run` (działa z cronem `/api/maintenance`), `apply` po osobnej decyzji |
 | `RETENTION_MODE` | domyślnie wyłączone; `dry-run` = liczniki bez zmian, `apply` = retencja danych (okresy z 0127, #574) w `/api/maintenance` — tylko po akceptacji testów i danych operatora przez właściciela |
 | `NEXT_PUBLIC_CONSENT_POLICY_VERSION` | wersja polityki cookies w zgodach |
 | `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` | Cloudflare Web Analytics (#570, zamiast Google Analytics i Meta Pixel — usunięte), beacon wyłącznie po zgodzie w kategorii analityka (Invariant #7) |
@@ -83,6 +84,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `AI_JOB_IMPORT_ENABLED`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony; `OPENAI_API_KEY` |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
+| `AI_TRANSLATION_ENABLED`, `AI_TRANSLATION_MODEL` | tłumaczenia AI — rdzeń kolejki (#31, #32, `docs/AI_TRANSLATION.md`), domyślnie wyłączone; ten sam `OPENAI_API_KEY` |
 | `PRACUJBE_RELEASE_VERSION` | tylko przy wydaniu 1.0.0 (#103) |
 | `TRUSTED_PROXY_HEADER` | domyślnie `x-real-ip` (brzeg Railway); `cf-connecting-ip`, gdy przed Railway stoi Cloudflare proxying ruch — jedyne źródło zaufanego IP klienta dla receiptu zgody, aplikacji bez konta i limitera (#588/#602). Nieznana wartość wraca do domyślnej. Bramka hasła w produkcji odrzuca żądanie bez tego nagłówka (503 + alarm w kanale błędów), zamiast liczyć je we wspólnym limicie (#625) |
 
@@ -94,7 +96,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry usunięte w #571 (kanał błędów = `ERROR_WEBHOOK_URL`) — jeśli zostały w usłudze, usuń |
 | `SEND_EMAIL_HOOK_SECRET` | hook GoTrue usunięty w #27 (kolejka auth PostgreSQL) |
 | `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | bezpłatne MVP (#51) |
-| `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_CV_IMPORT_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
+| `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
 | `CRON_SECRET` | przestarzały wspólny sekret cronów; używaj `EMAIL_QUEUE_SECRET`/`MAINTENANCE_SECRET` |
 | `CRON_TARGET_URL`, `CRON_AUTH_SECRET` | tylko w usługach cron (sekcja 4), nie w web |
 
@@ -113,6 +115,7 @@ cronów (także poza Railway).
 |---|---|---|---|
 | `cron-email` | `http://<prywatna domena web>:<PORT>/api/email/process` | = `EMAIL_QUEUE_SECRET` | co 5 min |
 | `cron-maintenance` | `http://<prywatna domena web>:<PORT>/api/maintenance` | = `MAINTENANCE_SECRET` | `0 * * * *` |
+| `cron-translation` (tylko po włączeniu `AI_TRANSLATION_ENABLED`, #33) | `http://<prywatna domena web>:<PORT>/api/translation/process` | = `MAINTENANCE_SECRET` | co 5 min |
 
 Kopie i odtworzenie bazy: `OPERATIONS.md` sekcja 5 (osobne usługi, własne zmienne). Usługa
 `backup` (#569) buduje się z `docker/backup/Dockerfile` i wysyła kopie do Cloudflare R2

@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
+import { waitForHydrated } from './fixtures/hydration';
+
 type Messages = {
   dashboard: Record<string, string>;
   jobWizard: Record<string, string>;
@@ -33,6 +35,7 @@ test('opublikowaną ofertę można poprawić bez zmiany statusu (#325)', async (
 
   const title = page.getByLabel(w.titleLabel!);
   await expect(title).toHaveValue('Operator wózka widłowego');
+  await waitForHydrated(title);
   await title.fill('Operator wózka widłowego – zmiana nocna');
 
   // „Dalej" tylko waliduje; zapis całości z dowolnego kroku.
@@ -44,7 +47,10 @@ test('opublikowaną ofertę można poprawić bez zmiany statusu (#325)', async (
 
 test('kontrola ujemna: pusty tytuł blokuje zapis i przenosi do kroku 1 (#325)', async ({ page }) => {
   await page.goto('/pl/employer/oferty/12345/edycja');
-  await page.getByLabel(w.titleLabel!).fill('');
+  const title = page.getByLabel(w.titleLabel!);
+  // Wpis przed hydratacją ginie (React przywraca tytuł z serwera) i kreator przechodzi dalej.
+  await waitForHydrated(title);
+  await title.fill('');
   await page.getByRole('button', { name: w.next }).click();
   // Krok 1 nie przepuszcza dalej z pustym tytułem.
   await expect(page.getByRole('heading', { level: 2, name: w.step1Title })).toBeVisible();

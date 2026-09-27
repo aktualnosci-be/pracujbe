@@ -17,6 +17,7 @@ const MAINTENANCE_RPCS = [
   'release_stale_checkout_intents',
   'ai_budget_release_stale_reservations',
   'expire_due_jobs',
+  'match_recompute_claim',
   'purge_guest_application_requests',
   'process_saved_search_alerts',
   'process_email_campaigns',
