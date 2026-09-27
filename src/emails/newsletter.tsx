@@ -128,6 +128,7 @@ export function NewsletterEmail({
     <EmailLayout
       locale={locale}
       preview={copy.preview}
+      title={copy.subject}
       unsubscribeUrl={transport?.unsubscribeUrl}
       sender={transport?.sender}
     >

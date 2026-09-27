@@ -55,7 +55,7 @@ async function captureSubmits(page: Page, slug: string): Promise<string[]> {
 }
 
 for (const locale of locales) {
-  for (const { slug, employer } of pages) {
+  for (const { slug } of pages) {
     test(`/${locale}/${slug}: trzy osobne, niezaznaczone pola; zgoda opcjonalna w osobnej grupie`, async ({ page }) => {
       const t = msgs(locale);
       await page.goto(`/${locale}/${slug}`);

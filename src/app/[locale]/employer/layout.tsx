@@ -7,6 +7,7 @@ import type { NotificationItem } from '@/components/dashboard/NotificationsDropd
 import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { getCurrentIdentity, type PortalIdentity } from '@/lib/auth/current';
+import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
 import { getDomainPool } from '@/lib/db/runtime';
 import { withUserTransaction } from '@/lib/db/transaction';
 import { isPortalAuthConfigured } from '@/lib/env';
@@ -91,7 +92,11 @@ export default async function EmployerLayout({
         redirect({ href: '/rejestracja-pracodawca', locale: locale as Locale });
       }
       // #403: zaproszenia do zespołów (błąd odczytu nie blokuje zakładania własnej firmy).
-      const mine = await getMyTeamInvitations();
+      // #365: nazwa firmy z rejestracji (metadane konta) wypełnia formularz domyślnie.
+      const [mine, defaultName] = await Promise.all([
+        getMyTeamInvitations(),
+        readSignupCompanyName(identity),
+      ]);
       const tTeam = await getTranslations({ locale, namespace: 'team' });
       const dateFmt = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'Europe/Brussels' });
       const invitations = (mine.status === 'ok' ? mine.invitations : []).map((inv) => {
@@ -106,7 +111,7 @@ export default async function EmployerLayout({
       return (
         <EmployerShell mode="ok">
           <CompanyOnboarding
-            defaultName=""
+            defaultName={defaultName}
             invitations={invitations}
           />
         </EmployerShell>

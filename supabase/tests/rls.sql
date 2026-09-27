@@ -6625,6 +6625,305 @@ select pg_temp.assert(pg_temp.e93_fingerprint() = :'e93fp', 'ESCO93-8 import nie
 select pg_temp.assert((select count(*) from public.occupations where source = 'manual') = :e93manual,
   'ESCO93-8b ręczne zawody z 0010 nietknięte');
 
+-- =============================================================================
+-- TR31 (#31, 0145): rewizje źródeł i kolejka tłumaczeń odporna na edycje.
+-- Encja = oferta JOBA (typ 'job'), źródło pl → zadania nl/fr/en. Wszystkie funkcje tylko
+-- service_role; tabele bez polityk (domyślnie deny). Kontrola ujemna na końcu sekcji.
+-- =============================================================================
+-- Encje TR31 to identyfikatory bez wiersza w jobs: od 0133 aktywne oferty z fixture'ów same
+-- trafiają do kolejki (triggery), więc sekcja rdzenia używa własnych encji i wygasza ich zadania.
+\set TRJA 'f0310000-0000-0000-0000-0000000000a1'
+\set TRJB 'f0310000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+\set TRF1 '{"title":"Magazynier  ","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
+\set TRF1WS '{"title":"  Magazynier","description":"Praca w magazynie od 8:00, stawka 15,50 EUR/godz. Nie wymagamy doświadczenia.  ","requirements.0":"Certyfikat VCA","empty":"   "}'
+\set TRF2 '{"title":"Magazynier (zmiana nocna)","description":"Praca w magazynie od 22:00, stawka 17,00 EUR/godz. Nie wymagamy doświadczenia.","requirements.0":"Certyfikat VCA"}'
+\set TROUT '{"title":"Warehouse worker","description":"Warehouse work from 8:00, rate 15.50 EUR/hour. No experience required.","requirements.0":"VCA certificate"}'
+
+-- TR31-1: domyślnie deny — anon/authenticated nie widzą tabel i nie wołają funkcji.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.translation_jobs', 'permission denied', 'TR31-1 anon bez odczytu zadań');
+select pg_temp.expect_error('select count(*) from public.translation_documents', 'permission denied', 'TR31-1b anon bez odczytu przekładów');
+reset role;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.translation_source_revisions', 'permission denied', 'TR31-1c pracodawca bez odczytu rewizji');
+select pg_temp.expect_error('insert into public.translation_sources(entity_type, entity_id) values (''job'', gen_random_uuid())', 'permission denied', 'TR31-1d bez bezpośredniego zapisu');
+select pg_temp.expect_error(
+  'select public.record_translation_source(''job'', ''' || :'TRJA' || ''', ''pl'', ''{"title":"x"}''::jsonb, ''tr-v1'')',
+  'permission denied', 'TR31-1e authenticated nie woła record_translation_source');
+select pg_temp.expect_error('select * from public.claim_translation_jobs(10, 300)', 'permission denied', 'TR31-1f authenticated nie woła claim');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select bool_and(c.relrowsecurity and c.relforcerowsecurity) from pg_class c
+    where c.oid in ('public.translation_sources'::regclass, 'public.translation_source_revisions'::regclass,
+                    'public.translation_jobs'::regclass, 'public.translation_documents'::regclass))
+  and not exists (select 1 from pg_policies where tablename like 'translation\_%'),
+  'TR31-1g RLS włączone i wymuszone, bez polityk');
+
+-- TR31-2: atomowy zapis źródła — rewizja 1 + trzy zadania (bez języka źródła).
+set role service_role;
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF1'::jsonb, 'tr-v1') as tr_r1 \gset
+select pg_temp.assert((:'tr_r1'::jsonb)->>'status' = 'created' and ((:'tr_r1'::jsonb)->>'jobsQueued')::int = 3
+  and ((:'tr_r1'::jsonb)->>'revisionNo')::int = 1, 'TR31-2 rewizja 1 i trzy zadania');
+select (:'tr_r1'::jsonb)->>'revisionId' as tr_rev1 \gset
+select pg_temp.assert(
+  (select array_agg(target_locale order by target_locale) from public.translation_jobs where revision_id = :'tr_rev1')
+    = array['en', 'fr', 'nl'] and
+  (select bool_and(status = 'queued' and attempts = 0) from public.translation_jobs where revision_id = :'tr_rev1'),
+  'TR31-2b zadania nl/fr/en w stanie queued');
+select pg_temp.assert((select fields->>'title' from public.translation_source_revisions where id = :'tr_rev1') = 'Magazynier',
+  'TR31-2c pola kanoniczne (trim)');
+
+-- TR31-3: no-op — ta sama treść (inne białe znaki, puste pole) nie tworzy rewizji ani zadań.
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF1WS'::jsonb, 'tr-v1') as tr_r1b \gset
+select pg_temp.assert((:'tr_r1b'::jsonb)->>'status' = 'unchanged' and ((:'tr_r1b'::jsonb)->>'jobsQueued')::int = 0,
+  'TR31-3 ta sama treść = unchanged');
+select pg_temp.assert((select count(*) from public.translation_source_revisions where entity_id = :'TRJA') = 1
+  and (select count(*) from public.translation_jobs where entity_id = :'TRJA') = 3, 'TR31-3b brak nowych wierszy');
+select pg_temp.expect_error(
+  'select public.record_translation_source(''job'', ''' || :'TRJA' || ''', ''ro'', ''{"title":"x"}''::jsonb, ''tr-v1'')',
+  'source_locale', 'TR31-3c język spoza portalu odrzucony');
+select pg_temp.expect_error(
+  'select public.record_translation_source(''job'', ''' || :'TRJA' || ''', ''pl'', ''{"title":{"a":1}}''::jsonb, ''tr-v1'')',
+  'field_value', 'TR31-3d pole niebędące tekstem odrzucone');
+reset role;
+
+-- TR31-4: rollback transakcji wywołującego nie zostawia rewizji ani zadań.
+begin;
+set local role service_role;
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF2'::jsonb, 'tr-v1');
+rollback;
+select pg_temp.assert((select count(*) from public.translation_source_revisions where entity_id = :'TRJA') = 1
+  and (select count(*) from public.translation_jobs where entity_id = :'TRJA' and status = 'queued') = 3
+  and (select current_revision_no from public.translation_sources where entity_id = :'TRJA') = 1,
+  'TR31-4 rollback: stan jak przed zapisem');
+
+-- TR31-5: claim + lease; drugi claim nie bierze wydzierżawionych zadań.
+set role service_role;
+reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
+grant select on tr_claim to service_role; set role service_role;
+select pg_temp.assert((select count(*) from tr_claim) = 3 and (select bool_and(attempt = 1) from tr_claim),
+  'TR31-5 trzy zadania wydzierżawione');
+select pg_temp.assert((select count(*) from public.claim_translation_jobs(10, 300)) = 0, 'TR31-5b drugi claim pusty');
+select job_id as tr_job_nl, lease_id as tr_lease_nl from tr_claim where target_locale = 'nl' \gset
+select job_id as tr_job_fr, lease_id as tr_lease_fr from tr_claim where target_locale = 'fr' \gset
+select job_id as tr_job_en, lease_id as tr_lease_en from tr_claim where target_locale = 'en' \gset
+
+-- TR31-6: wynik z niepełnym zestawem pól odrzucony; poprawny — przekład aktywny.
+select pg_temp.expect_error(
+  'select public.complete_translation_job(''' || :'tr_job_en' || ''', ''' || :'tr_lease_en' || ''', ''{"title":"x"}''::jsonb)',
+  'translation_keys', 'TR31-6 brakujące pola odrzucone');
+select pg_temp.expect_error(
+  'select public.complete_translation_job(''' || :'tr_job_en' || ''', ''' || :'tr_lease_en' || ''', ''' ||
+  replace(:'TROUT', '}', ',"extra":"x"}') || '''::jsonb)',
+  'translation_keys', 'TR31-6b dodatkowy klucz odrzucony');
+select pg_temp.assert(public.complete_translation_job(:'tr_job_en', :'tr_lease_en', :'TROUT'::jsonb, 'claude-opus-5', 120, 80) = 'applied',
+  'TR31-6c poprawny wynik = applied');
+select pg_temp.assert((select revision_no = 1 and origin = 'ai' and not is_stale and fields->>'title' = 'Warehouse worker'
+  from public.translation_documents where entity_id = :'TRJA' and locale = 'en'), 'TR31-6d przekład en aktywny');
+select pg_temp.assert(public.complete_translation_job(:'tr_job_en', :'tr_lease_en', :'TROUT'::jsonb) = 'stale_lease',
+  'TR31-6e ponowny zapis tym samym lease = stale_lease');
+
+-- TR31-7: v1 kończąca się po v2 — wynik starej rewizji superseded, przekład nie cofnięty.
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF2'::jsonb, 'tr-v1') as tr_r2 \gset
+select (:'tr_r2'::jsonb)->>'revisionId' as tr_rev2 \gset
+select pg_temp.assert((:'tr_r2'::jsonb)->>'status' = 'created' and ((:'tr_r2'::jsonb)->>'revisionNo')::int = 2,
+  'TR31-7 rewizja 2');
+select pg_temp.assert((select bool_and(status = 'superseded') from public.translation_jobs
+  where revision_id = :'tr_rev1' and target_locale in ('nl', 'fr')), 'TR31-7b zaległe zadania v1 superseded');
+select pg_temp.assert(public.complete_translation_job(:'tr_job_nl', :'tr_lease_nl', :'TROUT'::jsonb) = 'superseded',
+  'TR31-7c spóźniony wynik v1 = superseded');
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TRJA' and locale = 'nl'),
+  'TR31-7d wynik v1 niczego nie opublikował');
+select pg_temp.assert((select is_stale from public.translation_documents where entity_id = :'TRJA' and locale = 'en'),
+  'TR31-7e przekład v1 oznaczony jako nieaktualny');
+select pg_temp.assert((select count(*) from public.translation_jobs where revision_id = :'tr_rev2' and status = 'queued') = 3,
+  'TR31-7f trzy zadania v2');
+select pg_temp.expect_error('update public.translation_source_revisions set fields = ''{}''::jsonb where id = ''' || :'tr_rev1' || '''',
+  'TRANSLATION_REVISION_IMMUTABLE', 'TR31-7g rewizja niezmienna');
+
+-- TR31-8: restart workera — wygasła dzierżawa wraca do puli, stary lease nie zapisze wyniku.
+reset role; drop table tr_claim; set role service_role;
+reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
+grant select on tr_claim to service_role; set role service_role;
+select job_id as tr2_nl, lease_id as tr2_nl_lease from tr_claim where target_locale = 'nl' \gset
+select job_id as tr2_fr, lease_id as tr2_fr_lease from tr_claim where target_locale = 'fr' \gset
+select job_id as tr2_en, lease_id as tr2_en_lease from tr_claim where target_locale = 'en' \gset
+reset role;
+update public.translation_jobs set lease_expires_at = now() - interval '1 second' where id = :'tr2_nl';
+set role service_role;
+select lease_id as tr2_nl_lease2, attempt as tr2_nl_att from public.claim_translation_jobs(10, 300) where job_id = :'tr2_nl' \gset
+select pg_temp.assert(:'tr2_nl_lease2' <> :'tr2_nl_lease' and :tr2_nl_att = 2, 'TR31-8 wygasła dzierżawa przejęta (próba 2)');
+select pg_temp.assert(public.complete_translation_job(:'tr2_nl', :'tr2_nl_lease', :'TROUT'::jsonb) = 'stale_lease',
+  'TR31-8b stary lease odrzucony');
+select pg_temp.assert(public.fail_translation_job(:'tr2_nl', :'tr2_nl_lease', 'timeout', true) = 'stale_lease',
+  'TR31-8c stary lease nie zmienia stanu przy błędzie');
+
+-- TR31-9: retry z backoffem; błąd trwały = failed; wyczerpane próby = failed.
+select pg_temp.assert(public.fail_translation_job(:'tr2_nl', :'tr2_nl_lease2', 'rate_limited', true, 120) = 'retry',
+  'TR31-9 błąd przejściowy = retry');
+select pg_temp.assert((select status = 'retry' and next_attempt_at >= now() + interval '119 seconds'
+  and last_error_code = 'rate_limited' and lease_id is null from public.translation_jobs where id = :'tr2_nl'),
+  'TR31-9b Retry-After jako dolna granica, dzierżawa zwolniona');
+select pg_temp.assert(not exists (select 1 from public.claim_translation_jobs(10, 300) where job_id = :'tr2_nl'),
+  'TR31-9c retry nie wraca przed terminem');
+select pg_temp.assert(public.fail_translation_job(:'tr2_fr', :'tr2_fr_lease', 'invalid_facts', false) = 'failed',
+  'TR31-9d błąd trwały = failed');
+select pg_temp.expect_error('select public.fail_translation_job(''' || :'tr2_en' || ''', ''' || :'tr2_en_lease' || ''', ''Kwota 15 EUR'', true)',
+  'error_code', 'TR31-9e kod błędu bez treści');
+reset role;
+update public.translation_jobs set attempts = max_attempts, next_attempt_at = now() - interval '1 second' where id = :'tr2_nl';
+update public.translation_jobs set lease_expires_at = now() - interval '1 second', attempts = max_attempts where id = :'tr2_en';
+set role service_role;
+select pg_temp.assert(not exists (select 1 from public.claim_translation_jobs(10, 300) where job_id in (:'tr2_nl', :'tr2_en')),
+  'TR31-9f zadania bez prób nie są pobierane');
+select pg_temp.assert((select status = 'failed' and last_error_code = 'lease_expired' from public.translation_jobs where id = :'tr2_en'),
+  'TR31-9g wygasła dzierżawa bez prób = failed');
+
+-- TR31-10: deduplikacja i nowa wersja pipeline dla tej samej treści.
+reset role;
+select pg_temp.expect_error(
+  'insert into public.translation_jobs(revision_id, entity_type, entity_id, target_locale, pipeline_version) values (''' ||
+  :'tr_rev2' || ''', ''job'', ''' || :'TRJA' || ''', ''nl'', ''tr-v1'')',
+  'translation_jobs_dedup', 'TR31-10 duplikat zadania odrzucony');
+set role service_role;
+select public.record_translation_source('job', :'TRJA', 'pl', :'TRF2'::jsonb, 'tr-v2') as tr_r3 \gset
+select pg_temp.assert((:'tr_r3'::jsonb)->>'status' = 'requeued' and ((:'tr_r3'::jsonb)->>'jobsQueued')::int = 3
+  and ((:'tr_r3'::jsonb)->>'revisionNo')::int = 2, 'TR31-10b nowa wersja pipeline = requeued bez nowej rewizji');
+select pg_temp.assert((select count(*) from public.translation_jobs where revision_id = :'tr_rev2' and pipeline_version = 'tr-v2') = 3,
+  'TR31-10c trzy zadania tr-v2');
+
+-- TR31-11: korekta ręczna — autor i wersja; AI jej nie nadpisuje; reset jest jawny.
+select pg_temp.assert(public.save_manual_translation('job', :'TRJA', 'fr',
+  '{"title":"Magasinier (nuit)","description":"Travail en entrepôt dès 22:00, 17,00 EUR/heure. Aucune expérience requise.","requirements.0":"Certificat VCA"}'::jsonb,
+  :'EMPA') = 1, 'TR31-11 korekta ręczna wersja 1');
+reset role; drop table tr_claim; set role service_role;
+reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
+grant select on tr_claim to service_role; set role service_role;
+select job_id as tr3_fr, lease_id as tr3_fr_lease from tr_claim where target_locale = 'fr' and pipeline_version = 'tr-v2' \gset
+select pg_temp.assert(public.complete_translation_job(:'tr3_fr', :'tr3_fr_lease',
+  '{"title":"Magasinier IA","description":"Entrepôt dès 22:00, 17,00 EUR/heure. Aucune expérience requise.","requirements.0":"Certificat VCA"}'::jsonb) = 'proposal',
+  'TR31-11b wynik AI przy korekcie = proposal');
+select pg_temp.assert((select origin = 'manual' and is_locked and manual_version = 1 and manual_author = :'EMPA'
+  and fields->>'title' = 'Magasinier (nuit)' from public.translation_documents where entity_id = :'TRJA' and locale = 'fr'),
+  'TR31-11c korekta nietknięta');
+select pg_temp.assert(public.record_translation_source('job', :'TRJA', 'pl', :'TRF1'::jsonb, 'tr-v2')->>'status' = 'created',
+  'TR31-11d zmiana źródła = nowa rewizja');
+select pg_temp.assert((select is_stale and is_locked and fields->>'title' = 'Magasinier (nuit)' from public.translation_documents
+       where entity_id = :'TRJA' and locale = 'fr'),
+  'TR31-11d2 zmiana źródła: korekta zostaje, oznaczona jako nieaktualna');
+select pg_temp.assert(public.release_manual_translation('job', :'TRJA', 'fr') = 'unlocked',
+  'TR31-11e jawny reset blokady');
+select pg_temp.assert((select not is_locked and origin = 'manual' from public.translation_documents where entity_id = :'TRJA' and locale = 'fr'),
+  'TR31-11e2 korekta odblokowana (brak propozycji dla bieżącej rewizji)');
+
+-- TR31-12: ukrycie encji (delete race) — spóźniony wynik niczego nie publikuje; ponowna
+-- aktywacja tej samej treści przywraca zadania; purge kasuje wszystko, worker dostaje not_found.
+reset role; drop table tr_claim; set role service_role;
+reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
+grant select on tr_claim to service_role; set role service_role;
+select job_id as tr4_nl, lease_id as tr4_nl_lease from tr_claim where target_locale = 'nl' \gset
+select count(*) as tr4_before from public.translation_documents where entity_id = :'TRJA' \gset
+select pg_temp.assert(public.deactivate_translation_source('job', :'TRJA', false) = 3, 'TR31-12 ukrycie wygasza 3 zadania');
+select pg_temp.assert(public.complete_translation_job(:'tr4_nl', :'tr4_nl_lease', :'TROUT'::jsonb) = 'superseded',
+  'TR31-12b wynik po ukryciu = superseded');
+select pg_temp.assert((select count(*) from public.translation_documents where entity_id = :'TRJA') = :tr4_before
+  and (select count(*) from public.claim_translation_jobs(10, 300)) = 0, 'TR31-12c nic nie opublikowano, nic do pobrania');
+select pg_temp.assert(public.record_translation_source('job', :'TRJA', 'pl', :'TRF1'::jsonb, 'tr-v2')->>'status' = 'requeued',
+  'TR31-12d ponowna aktywacja tej samej treści = requeued');
+reset role; drop table tr_claim; set role service_role;
+reset role; create temp table tr_claim as select * from public.claim_translation_jobs(10, 300);
+grant select on tr_claim to service_role; set role service_role;
+select job_id as tr5_nl, lease_id as tr5_nl_lease from tr_claim where target_locale = 'nl' \gset
+select pg_temp.assert(public.deactivate_translation_source('job', :'TRJA', true) >= 3, 'TR31-12e purge');
+select pg_temp.assert(public.complete_translation_job(:'tr5_nl', :'tr5_nl_lease', :'TROUT'::jsonb) = 'not_found',
+  'TR31-12f wynik po purge = not_found');
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJA')
+  and not exists (select 1 from public.translation_source_revisions where entity_id = :'TRJA')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJA')
+  and not exists (select 1 from public.translation_documents where entity_id = :'TRJA'),
+  'TR31-12g purge: brak rewizji, zadań i przekładów');
+reset role; drop table tr_claim; set role service_role;
+reset role;
+
+-- TR31-N (kontrola ujemna): complete bez ponownej kontroli rewizji zapisałby wynik v1 po v2.
+-- Ten sam scenariusz co TR31-7 na podmienionej funkcji w cofanej transakcji — asercja z TR31-7d
+-- byłaby czerwona, więc to kontrola rewizji (a nie przypadek) chroni przekład.
+begin;
+create or replace function public.complete_translation_job(
+  p_job_id uuid, p_lease_id uuid, p_fields jsonb, p_model text default null,
+  p_input_tokens integer default 0, p_output_tokens integer default 0
+) returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_job public.translation_jobs;
+begin
+  select * into v_job from public.translation_jobs where id = p_job_id for update;
+  insert into public.translation_documents (entity_type, entity_id, locale, revision_id, revision_no, fields, origin)
+  select v_job.entity_type, v_job.entity_id, v_job.target_locale, r.id, r.revision_no, p_fields, 'ai'
+    from public.translation_source_revisions r where r.id = v_job.revision_id
+  on conflict (entity_type, entity_id, locale) do update set fields = excluded.fields;
+  return 'applied';
+end $$;
+create temp table trn_claim on commit drop as select * from (
+  select public.record_translation_source('job', :'TRJB', 'pl', :'TRF1'::jsonb, 'tr-v1')) s,
+  lateral public.claim_translation_jobs(10, 300) c where c.entity_id = :'TRJB' and c.target_locale = 'nl';
+select job_id as trn_job, lease_id as trn_lease from trn_claim \gset
+select public.record_translation_source('job', :'TRJB', 'pl', :'TRF2'::jsonb, 'tr-v1');
+select public.complete_translation_job(:'trn_job', :'trn_lease', :'TROUT'::jsonb);
+select pg_temp.assert(exists (select 1 from public.translation_documents where entity_id = :'TRJB' and locale = 'nl' and revision_no = 1),
+  'TR31-N bez kontroli rewizji spóźniony wynik v1 zostałby opublikowany');
+rollback;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJB'),
+  'TR31-Nb kontrola ujemna cofnięta');
+select pg_temp.assert((select prosrc like '%current_revision_id is distinct from v_job.revision_id%'
+  from pg_proc where proname = 'complete_translation_job'), 'TR31-Nc produkcyjna funkcja przywrócona');
+
+-- TR31-13 (#36): budżet AI odmówił — odroczenie oddaje próbę, więc wielokrotna odmowa (więcej
+-- razy niż max_attempts) nie zamienia zadania w trwały błąd. Kontrola ujemna: ten sam
+-- scenariusz przez fail_translation_job(retryable) kończy się failed.
+set role service_role;
+select public.record_translation_source('job', :'JOBB', 'pl', :'TRF1'::jsonb, 'tr-v1')->>'status' = 'created' as tr13_ok \gset
+select pg_temp.assert(:'tr13_ok', 'TR31-13 źródło JOBB');
+select job_id as tr13_nl, lease_id as tr13_lease from public.claim_translation_jobs(10, 300)
+ where entity_id = :'JOBB' and target_locale = 'nl' \gset
+select pg_temp.assert(public.defer_translation_job(:'tr13_nl', gen_random_uuid(), 'budget_exceeded', 600) = 'stale_lease',
+  'TR31-13b obcy lease nie odracza');
+select pg_temp.expect_error('select public.defer_translation_job(''' || :'tr13_nl' || ''', ''' || :'tr13_lease' || ''', ''Budżet 10 USD'', 60)',
+  'error_code', 'TR31-13c kod bez treści');
+select pg_temp.assert(public.defer_translation_job(:'tr13_nl', :'tr13_lease', 'budget_exceeded', 600) = 'deferred',
+  'TR31-13d odroczenie');
+select pg_temp.assert((select status = 'retry' and attempts = 0 and lease_id is null and last_error_code = 'budget_exceeded'
+  and next_attempt_at between now() + interval '599 seconds' and now() + interval '601 seconds'
+  from public.translation_jobs where id = :'tr13_nl'), 'TR31-13e próba oddana, termin = opóźnienie');
+reset role;
+select max_attempts as tr13_max from public.translation_jobs where id = :'tr13_nl' \gset
+create temp table tr13_log(outcome text);
+select format($f$
+  do $d$ declare v_lease uuid; begin
+    for i in 1..%s loop
+      update public.translation_jobs set next_attempt_at = now() - interval '1 second' where id = %L;
+      select lease_id into v_lease from public.claim_translation_jobs(10, 300) where job_id = %L;
+      insert into tr13_log select public.defer_translation_job(%L, v_lease, 'budget_exceeded', 60);
+    end loop; end $d$;
+$f$, :tr13_max + 2, :'tr13_nl', :'tr13_nl', :'tr13_nl') as tr13_sql \gset
+:tr13_sql
+select pg_temp.assert((select count(*) = :tr13_max + 2 and bool_and(outcome = 'deferred') from tr13_log)
+  and (select status = 'retry' and attempts = 0 from public.translation_jobs where id = :'tr13_nl'),
+  'TR31-13f odroczenia ponad max_attempts nie wyczerpują prób');
+reset role;
+begin;
+truncate tr13_log;
+select replace(:'tr13_sql', 'public.defer_translation_job(' || quote_literal(:'tr13_nl') || ', v_lease, ''budget_exceeded'', 60)',
+  'public.fail_translation_job(' || quote_literal(:'tr13_nl') || ', v_lease, ''budget_exceeded'', true, 60)') as tr13n_sql \gset
+:tr13n_sql
+select pg_temp.assert((select status = 'failed' from public.translation_jobs where id = :'tr13_nl'),
+  'TR31-13N kontrola ujemna: te same odmowy przez fail(retryable) = trwały błąd');
+rollback;
+select pg_temp.assert((select status = 'retry' from public.translation_jobs where id = :'tr13_nl'),
+  'TR31-13Nb kontrola ujemna cofnięta');
+drop table tr13_log;
+select public.deactivate_translation_source('job', :'JOBB', true) >= 0 as tr13_purged \gset
+
 -- ============================================================================
 -- SR497. Kontrola treści pytań screeningowych przed publikacją (0103, #497): detektor w bazie
 --        (treść + opcje + tłumaczenia), kolejka przeglądu przy zapisie, blokada aktywacji do
@@ -11736,6 +12035,247 @@ select pg_temp.assert(
   and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text)', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
+-- =============================================================================
+-- TR33 (#33, 0146): oferta → kolejka tłumaczeń przy każdej zatwierdzonej zmianie (odroczone
+-- triggery). Źródło w języku oferty (tu nl), wymagania tekstowe w polach, publish/pause/resume/
+-- wygaśnięcie/zawieszenie firmy/usunięcie, rollback, stawka poza tłumaczeniem, dwie sesje
+-- równolegle i kontrola ujemna TR33-N (bez triggera kolejka zostaje przy starej treści).
+-- =============================================================================
+\set TRCO  'f0330000-0000-0000-0000-0000000000c1'
+\set TRJ1  'f0330000-0000-0000-0000-0000000000a1'
+\set TRJ2  'f0330000-0000-0000-0000-0000000000a2'
+\set TRJ3  'f0330000-0000-0000-0000-0000000000a3'
+\set TRJ4  'f0330000-0000-0000-0000-0000000000a4'
+reset role; reset app.current_uid;
+-- Izolacja: zadania ofert z wcześniejszych sekcji nie trafiają do claimów tej sekcji.
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.companies(id, name, status) values (:'TRCO', 'Firma TR33', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale,
+                        salary_min, salary_max, salary_period)
+  values (:'TRJ1', :'TRCO', 'draft-tr33', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl',
+          15, 17, 'hour');
+insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits)
+  values (:'TRJ1', 'nl', 'Magazijnmedewerker', 'Werk in het magazijn vanaf 8:00. Geen ervaring nodig.',
+          array['Orders verzamelen', 'Laden'], array['Parking']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TRJ1', 'nl', 'mandatory', 0, 'VCA-certificaat'),
+  (:'TRJ1', 'nl', 'mandatory', 1, 'Nachtwerk'),
+  (:'TRJ1', 'nl', 'optional', 0, 'Heftruck'),
+  (:'TRJ1', 'pl', 'mandatory', 0, 'Wiersz w innym języku');
+
+-- TR33-1: szkic nie trafia do kolejki (bez kosztu dla kreatora).
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-1 szkic bez źródła tłumaczenia');
+
+-- TR33-2: publikacja → rewizja 1 w języku oferty + zadania pl/fr/en; wymagania tekstowe w polach.
+update public.jobs set status = 'active', published_at = now() where id = :'TRJ1';
+select pg_temp.assert((select current_revision_no = 1 and is_active from public.translation_sources
+  where entity_type = 'job' and entity_id = :'TRJ1'), 'TR33-2 publikacja = rewizja 1');
+select r.id as tr33_rev1, r.fields::text as tr33_f1 from public.translation_source_revisions r
+ where r.entity_id = :'TRJ1' and r.revision_no = 1 \gset
+select pg_temp.assert((select source_locale = 'nl' from public.translation_source_revisions where id = :'tr33_rev1')
+  and (select array_agg(target_locale order by target_locale) from public.translation_jobs where revision_id = :'tr33_rev1')
+      = array['en', 'fr', 'pl'], 'TR33-2b źródło nl, zadania en/fr/pl');
+select pg_temp.assert((:'tr33_f1'::jsonb)->>'requirements_mandatory.0' = 'VCA-certificaat'
+  and (:'tr33_f1'::jsonb)->>'requirements_mandatory.1' = 'Nachtwerk'
+  and (:'tr33_f1'::jsonb)->>'requirements_optional.0' = 'Heftruck'
+  and (:'tr33_f1'::jsonb)->>'responsibilities.1' = 'Laden'
+  and (:'tr33_f1'::jsonb)->>'benefits.0' = 'Parking'
+  and (:'tr33_f1'::jsonb)->>'title' = 'Magazijnmedewerker'
+  and not (:'tr33_f1'::text like '%Wiersz w innym%')
+  and not ((:'tr33_f1'::jsonb) ? 'meta_title'),
+  'TR33-2c pola: tytuł, opis, listy i wymagania w języku oferty (bez pustych, bez innego języka)');
+
+-- TR33-3: rollback edycji nie zostawia śladu w kolejce.
+begin;
+update public.job_translations set description = 'Wycofana zmiana.' where job_id = :'TRJ1' and locale = 'nl';
+rollback;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TRJ1') = 1
+  and (select count(*) from public.translation_source_revisions where entity_id = :'TRJ1') = 1,
+  'TR33-3 rollback: brak nowej rewizji');
+
+-- TR33-4: stawka, miasto i licznik nie są polami tłumaczenia — bez rewizji i bez kosztu;
+-- wartość czytana z jobs jest od razu wspólna dla wszystkich języków.
+update public.jobs set salary_min = 16, salary_max = 18, city = 'Gent-Zuid', views_count = views_count + 1
+ where id = :'TRJ1';
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TRJ1') = 1
+  and (select count(*) from public.translation_jobs where entity_id = :'TRJ1') = 3,
+  'TR33-4 zmiana stawki bez nowej rewizji i zadań');
+
+-- TR33-5: przekład en dla rewizji 1, potem edycja w JEDNEJ transakcji (opis + replace-all wymagań)
+-- = dokładnie jedna nowa rewizja z końcową treścią (bez stanów pośrednich); stare zadania
+-- superseded, przekład en nieaktualny.
+reset role; create temp table tr33_claim as select * from public.claim_translation_jobs(100, 300);
+select job_id as tr33_en, lease_id as tr33_en_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'en' \gset
+select job_id as tr33_fr, lease_id as tr33_fr_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'fr' \gset
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_en', :'tr33_en_lease',
+  replace(replace(replace(replace(replace(replace(replace(replace(:'tr33_f1',
+    'Magazijnmedewerker', 'Warehouse worker'),
+    'Werk in het magazijn vanaf 8:00. Geen ervaring nodig.', 'Warehouse work from 8:00. No experience required.'),
+    'Orders verzamelen', 'Order picking'), 'Laden', 'Loading'), 'VCA-certificaat', 'VCA certificate'),
+    'Nachtwerk', 'Night work'), 'Heftruck', 'Forklift'), 'Parking', 'Parking')::jsonb) = 'applied',
+  'TR33-5 przekład en rewizji 1 zastosowany');
+reset role;
+begin;
+update public.job_translations set description = 'Werk in het magazijn vanaf 22:00. Geen ervaring nodig.'
+ where job_id = :'TRJ1' and locale = 'nl';
+delete from public.job_requirements where job_id = :'TRJ1' and locale = 'nl' and kind = 'mandatory';
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TRJ1', 'nl', 'mandatory', 0, 'VCA-certificaat'),
+  (:'TRJ1', 'nl', 'mandatory', 1, 'Rijbewijs B');
+commit;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TRJ1') = 2
+  and (select count(*) from public.translation_source_revisions where entity_id = :'TRJ1') = 2,
+  'TR33-5b jedna transakcja = jedna nowa rewizja');
+select id as tr33_rev2 from public.translation_source_revisions where entity_id = :'TRJ1' and revision_no = 2 \gset
+select pg_temp.assert((select fields->>'description' like '%22:00%' and fields->>'requirements_mandatory.1' = 'Rijbewijs B'
+  and not (fields ? 'requirements_mandatory.2') from public.translation_source_revisions where id = :'tr33_rev2'),
+  'TR33-5c rewizja 2 = końcowa treść (opis + wymagania)');
+select pg_temp.assert((select bool_and(status = 'superseded') from public.translation_jobs
+  where revision_id = :'tr33_rev1' and target_locale in ('fr', 'pl'))
+  and (select count(*) from public.translation_jobs where revision_id = :'tr33_rev2' and status = 'queued') = 3
+  and (select is_stale and revision_no = 1 from public.translation_documents where entity_id = :'TRJ1' and locale = 'en'),
+  'TR33-5d zadania rewizji 1 superseded, trzy zadania rewizji 2, przekład en nieaktualny');
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_fr', :'tr33_fr_lease', :'tr33_f1'::jsonb) = 'superseded',
+  'TR33-5e spóźniony wynik rewizji 1 po edycji = superseded (bez mieszania rewizji)');
+reset role; drop table tr33_claim;
+
+-- TR33-6: korekta ręczna (fr) przetrwa kolejną edycję — AI jej nie nadpisze (wynik = proposal).
+set role service_role;
+select public.save_manual_translation('job', :'TRJ1', 'fr',
+  (select fields from public.translation_source_revisions where id = :'tr33_rev2'), :'EMPA') as tr33_manual \gset
+reset role;
+update public.job_translations set title = 'Magazijnmedewerker (nacht)' where job_id = :'TRJ1' and locale = 'nl';
+select id as tr33_rev3, fields::text as tr33_f3 from public.translation_source_revisions
+ where entity_id = :'TRJ1' and revision_no = 3 \gset
+create temp table tr33_claim as select * from public.claim_translation_jobs(100, 300);
+select job_id as tr33_fr3, lease_id as tr33_fr3_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'fr' \gset
+select job_id as tr33_pl3, lease_id as tr33_pl3_lease from tr33_claim where entity_id = :'TRJ1' and target_locale = 'pl' \gset
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_fr3', :'tr33_fr3_lease', :'tr33_f3'::jsonb) = 'proposal',
+  'TR33-6 wynik AI przy korekcie ręcznej = proposal');
+reset role;
+select pg_temp.assert((select origin = 'manual' and is_locked and manual_author = :'EMPA'
+  from public.translation_documents where entity_id = :'TRJ1' and locale = 'fr'),
+  'TR33-6b korekta ręczna nietknięta po edycji oferty');
+drop table tr33_claim;
+
+-- TR33-7: wstrzymanie → źródło nieaktywne, zaległe zadania superseded, spóźniony wynik nic nie
+-- publikuje; wznowienie tej samej treści → requeued bez nowej rewizji.
+update public.jobs set status = 'paused' where id = :'TRJ1';
+select pg_temp.assert((select not is_active from public.translation_sources where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ1' and status in ('queued', 'retry', 'leased')),
+  'TR33-7 wstrzymanie: źródło nieaktywne, brak zaległych zadań');
+set role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tr33_pl3', :'tr33_pl3_lease', :'tr33_f3'::jsonb) = 'superseded',
+  'TR33-7b wynik po wstrzymaniu = superseded');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_documents where entity_id = :'TRJ1' and locale = 'pl'),
+  'TR33-7c nic nie opublikowano');
+update public.jobs set status = 'active' where id = :'TRJ1';
+select pg_temp.assert((select is_active and current_revision_no = 3 from public.translation_sources where entity_id = :'TRJ1')
+  and (select count(*) from public.translation_jobs where revision_id = :'tr33_rev3' and status = 'queued') >= 2,
+  'TR33-7d wznowienie: ta sama rewizja, zadania wracają do kolejki');
+
+-- TR33-8: zawieszenie firmy i wygaśnięcie ukrywają źródło; powrót = ponowna aktywacja.
+update public.companies set status = 'suspended' where id = :'TRCO';
+select pg_temp.assert((select not is_active from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-8 zawieszona firma: źródło nieaktywne');
+update public.companies set status = 'verified' where id = :'TRCO';
+select pg_temp.assert((select is_active from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-8b firma zweryfikowana ponownie: źródło aktywne');
+update public.jobs set expires_at = now() - interval '1 minute' where id = :'TRJ1';
+select pg_temp.assert((select not is_active from public.translation_sources where entity_id = :'TRJ1'),
+  'TR33-8c oferta po terminie: źródło nieaktywne');
+update public.jobs set expires_at = null where id = :'TRJ1';
+
+-- TR33-9: dwie sesje równolegle — sesja B edytuje opis (niezatwierdzona), sesja główna zmienia
+-- wymagania i zatwierdza; po commicie B bieżąca rewizja ma OBIE zmiany (kolejka nie gubi edycji).
+select pg_temp.remote_connect('tr33b');
+select dbl.dblink_exec('tr33b', 'begin');
+select dbl.dblink_exec('tr33b', format(
+  'update public.job_translations set description = %L where job_id = %L and locale = ''nl''',
+  'Werk in het magazijn vanaf 6:00. Geen ervaring nodig.', :'TRJ1'));
+update public.job_requirements set content = 'Heftruckcertificaat' where job_id = :'TRJ1' and kind = 'optional';
+select pg_temp.assert((select fields->>'requirements_optional.0' = 'Heftruckcertificaat' and fields->>'description' like '%22:00%'
+  from public.translation_source_revisions r join public.translation_sources s on s.current_revision_id = r.id
+  where s.entity_id = :'TRJ1'), 'TR33-9 commit sesji głównej: rewizja z jej zmianą');
+select dbl.dblink_exec('tr33b', 'commit');
+select dbl.dblink_disconnect('tr33b');
+select pg_temp.assert((select fields->>'requirements_optional.0' = 'Heftruckcertificaat' and fields->>'description' like '%6:00%'
+  from public.translation_source_revisions r join public.translation_sources s on s.current_revision_id = r.id
+  where s.entity_id = :'TRJ1'), 'TR33-9b commit sesji B: bieżąca rewizja ma obie zmiany');
+select pg_temp.assert((select count(*) from public.translation_jobs j join public.translation_sources s
+  on s.entity_id = j.entity_id and s.entity_type = j.entity_type
+  where j.entity_id = :'TRJ1' and j.status in ('queued', 'retry', 'leased') and j.revision_id <> s.current_revision_id) = 0,
+  'TR33-9c brak zaległych zadań starszych rewizji');
+
+-- TR33-10: treść ponad limit pól nie blokuje publikacji — źródło ukryte (skipped).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJ2', :'TRCO', 'draft-tr33-2', 'Oferta duża', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'TRJ2', 'pl', 'Oferta duża', 'Opis.', array(select 'Zadanie ' || g from generate_series(1, 90) g));
+update public.jobs set status = 'active' where id = :'TRJ2';
+select pg_temp.assert((select status::text from public.jobs where id = :'TRJ2') = 'active'
+  and (select public.sync_job_translation_source(:'TRJ2')) = 'skipped'
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ2'),
+  'TR33-10 za dużo pól: oferta aktywna, tłumaczenie pominięte');
+
+-- TR33-11: oferta demonstracyjna nie trafia do kolejki (Invariant #12, bez kosztu AI).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, is_demo)
+  values (:'TRJ3', :'TRCO', 'draft-tr33-3', 'Oferta demo', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'pl', true);
+insert into public.job_translations(job_id, locale, title, description) values (:'TRJ3', 'pl', 'Oferta demo', 'Opis demo.');
+update public.jobs set status = 'active' where id = :'TRJ3';
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ3'),
+  'TR33-11 oferta demo bez źródła tłumaczenia');
+
+-- TR33-12: usunięcie (soft delete i fizyczne) = purge rewizji, zadań i przekładów (także korekt).
+update public.jobs set deleted_at = now() where id = :'TRJ1';
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_source_revisions where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ1')
+  and not exists (select 1 from public.translation_documents where entity_id = :'TRJ1'),
+  'TR33-12 soft delete: purge');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TRJ4', :'TRCO', 'draft-tr33-4', 'Oferta do usunięcia', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'fr');
+insert into public.job_translations(job_id, locale, title, description) values (:'TRJ4', 'fr', 'Magasinier', 'Travail en entrepôt.');
+update public.jobs set status = 'active' where id = :'TRJ4';
+select pg_temp.assert((select source_locale from public.translation_source_revisions where entity_id = :'TRJ4') = 'fr'
+  and (select array_agg(target_locale order by target_locale) from public.translation_jobs where entity_id = :'TRJ4')
+      = array['en', 'nl', 'pl'], 'TR33-12b źródło fr: zadania en/nl/pl');
+delete from public.jobs where id = :'TRJ4';
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'TRJ4')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'TRJ4'),
+  'TR33-12c usunięcie fizyczne: purge');
+
+-- TR33-13: funkcje synchronizacji niedostępne dla ról klienta.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.sync_job_translation_source(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.sync_job_translation_source(uuid)', 'execute')
+  and not has_function_privilege('authenticated', 'public.job_translation_source_fields(uuid)', 'execute')
+  and public.translation_pipeline_version() ~ '^[a-z0-9][a-z0-9.+_-]{0,63}$',
+  'TR33-13 synchronizacja tylko dla serwera; wersja pipeline zgodna z CHECK');
+
+-- TR33-N (kontrola ujemna): bez triggera na job_translations edycja aktywnej oferty zostawia
+-- kolejkę przy starej treści — to trigger (a nie przypadek) utrzymuje rewizję w zgodzie z ofertą.
+begin;
+alter table public.job_translations disable trigger trg_job_translation_sync_translations;
+update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
+set constraints all immediate;
+select pg_temp.assert((select public.sync_job_translation_source(:'TRJ2')) = 'created', 'TR33-Na ręczna synchronizacja tworzy rewizję');
+rollback;
+begin;
+alter table public.job_translations disable trigger trg_job_translation_sync_translations;
+update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
+set constraints all immediate;
+select pg_temp.assert(not exists (select 1 from public.translation_jobs where entity_id = :'TRJ2'),
+  'TR33-N bez triggera edycja nie trafia do kolejki');
+rollback;
+update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
+select pg_temp.assert((select count(*) from public.translation_jobs where entity_id = :'TRJ2' and status = 'queued') = 3,
+  'TR33-Nb z triggerem ta sama edycja kolejkuje trzy zadania');
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
@@ -12943,6 +13483,195 @@ reset role;
 delete from auth.users where id in (:'SCA', :'SCE');
 
 -- ============================================================================
+-- JT144 (0144, numer tymczasowy): istotna zmiana warunków opublikowanej oferty →
+--       powiadomienie in-app dla kandydatów z AKTYWNĄ aplikacją; lista pól w
+--       job_material_terms(), porównanie w transakcji update_published_job
+-- ============================================================================
+\set JTJOB 'e8000000-0000-0000-0000-000000144a01'
+\set JTAPPA 'e8000000-0000-0000-0000-000000144b01'
+\set JTAPPB 'e8000000-0000-0000-0000-000000144b02'
+\set JTAPPG 'e8000000-0000-0000-0000-000000144b03'
+reset role; reset app.current_uid;
+begin;
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status,
+                        default_locale, published_at, salary_min, salary_max, salary_period, working_hours)
+  values (:'JTJOB', :'COMPA', 'jt144-magazynier', 'Magazynier JT144', 'warehouse', 'temporary', 'Gandawa',
+          'Flandria', 'active', 'pl', now() - interval '1 day', 16, 18, 'hour', '40 h');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'JTJOB', 'pl', 'Magazynier JT144', 'Opis', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'JTJOB', 'pl', 'mandatory', 0, 'Praca w nocy');
+-- Aplikacje wstawiane bez triggerów integralności (fixture): aktywna, wycofana i gościa.
+set local session_replication_role = replica;
+insert into public.applications(id, candidate_id, job_id, status, submitted_at, guest_name, guest_email) values
+  (:'JTAPPA', :'CANDA', :'JTJOB', 'shortlisted', now(), null, null),
+  (:'JTAPPB', :'CANDB', :'JTJOB', 'withdrawn', now(), null, null),
+  (:'JTAPPG', null, :'JTJOB', 'submitted', now(), 'Gość JT144', 'gosc-jt144@example.invalid');
+set local session_replication_role = origin;
+-- CANDB ma in-app wyłączone od sekcji S (SEC-16); tu włączone, żeby JT2b sprawdzał filtr stanu
+-- aplikacji, a nie preferencję (w transakcji — cofane na końcu sekcji).
+update public.notification_preferences set in_app_enabled = true where profile_id = :'CANDB';
+
+-- Treść edycji = aktualne warunki (kształt z akcji updatePublishedJob, jak w RR).
+select set_config('pb.jt_base', jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.rr_ok')::jsonb,
+  '{job,title}', '"Magazynier JT144"'), '{job,city}', '"Gandawa"'), '{job,contract_type}', '"temporary"'),
+  '{job,salary_min}', '16'), '{job,salary_max}', '18'), '{job,working_hours}', '"40 h"')::text, true);
+select count(*) as jt_mail0 from public.email_deliveries where profile_id in (:'CANDA', :'CANDB') \gset
+
+-- JT1: zmiana samego tytułu i opisu (nieistotne pola) — brak powiadomień.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,title}', '"Magazynier JT144 (nocna)"'), '{translation,description}', '"Nowy opis"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 0,
+  'JT1 zmiana tytułu i opisu nie jest istotną zmianą warunków');
+
+-- JT2: zmiana wynagrodzenia → jedno powiadomienie dla aktywnej aplikacji.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_base')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 1
+  and exists (select 1 from public.notifications
+               where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA'
+                 and type::text = 'system' and read_at is null
+                 and data = '{"kind": "job_terms_changed", "slug": "jt144-magazynier", "fields": ["salary"]}'::jsonb),
+  'JT2 zmiana wynagrodzenia → powiadomienie in-app kandydata z aktywną aplikacją (slug i pole)');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
+  'JT2b wycofana aplikacja (stan końcowy) bez powiadomienia; gość bez konta pominięty');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id in (:'CANDA', :'CANDB')) = :'jt_mail0'::int,
+  'JT2c bez e-maila (wariant in-app)');
+
+-- JT3: kilka pól naraz → jedna pozycja na kandydata z posortowaną listą pól.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.jt_base')::jsonb, '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'),
+  '{job,working_hours}', '"38 h"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+           where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA'
+             and data->'fields' = '["city", "contract_type", "salary", "working_hours"]'::jsonb)
+  and (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT3 miasto, typ umowy i godziny (i wynagrodzenie wobec treści z JT2) w jednym powiadomieniu');
+
+-- JT4: odrzucona rewizja (niekompletna treść) cofa też powiadomienie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JTJOB',
+    jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb, '{job,salary_min}', '18'),
+              '{requirements_mandatory}', '[]')),
+  'VALIDATION_FAILED', 'JT4 niekompletna rewizja odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT4b odrzucona rewizja nie zostawia powiadomienia (ta sama transakcja)');
+
+-- JT5: zmiana statusu (pauza) i zapis bez zmiany warunków → brak powiadomień.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'JTJOB'::uuid, 'pause');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT5 wstrzymanie oferty nie jest zmianą warunków');
+
+-- JT6: kandydat czyta własne powiadomienie; rekruter nie widzi powiadomień kandydata.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB') = 2,
+  'JT6 kandydat widzi swoje powiadomienia o zmianie warunków');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 0,
+  'JT6b rekruter nie czyta powiadomień kandydata (RLS)');
+reset role; reset app.current_uid;
+
+-- JT7: bezpośredni UPDATE (service_role/migracja danych, bez update_published_job) nie powiadamia;
+-- kontrola ujemna: ten sam UPDATE ze znacznikiem RPC powiadamia — to znacznik jest bramką.
+update public.jobs set salary_max = 20 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT7 bezpośredni UPDATE warunków (bez update_published_job) nie tworzy powiadomień');
+savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', :'JTJOB', true);
+update public.jobs set salary_max = 21 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT7b KONTROLA UJEMNA: ze znacznikiem RPC ten sam UPDATE powiadamia (JT7 łapie brak bramki)');
+rollback to savepoint jt_gate;
+select set_config('pracujbe.job_terms_notify', '', true);
+update public.jobs set salary_max = 18 where id = :'JTJOB';
+
+-- JT8: sama wielkość liter/diakrytyki miasta (search_fold) nie jest zmianą warunków.
+select set_config('pb.jt_now', jsonb_set(jsonb_set(jsonb_set(jsonb_set(current_setting('pb.jt_base')::jsonb,
+  '{job,city}', '"Antwerpia"'), '{job,contract_type}', '"permanent"'), '{job,working_hours}', '"38 h"'),
+  '{job,salary_min}', '16')::text, true);
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"ANTWERPIA"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT8 zmiana wielkości liter miasta nie powiadamia (search_fold)');
+savepoint jt_fold;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'city', j.city,
+    'contract_type', j.contract_type, 'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, current_setting('pb.jt_now')::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
+  'JT8b KONTROLA UJEMNA: przy surowym porównaniu miasta sama wielkość liter powiadamia (JT8 łapie regresję)');
+rollback to savepoint jt_fold;
+
+-- JT9 KONTROLA UJEMNA: bez miasta na liście pól zmiana miasta przez RPC przechodzi bez
+-- powiadomienia, a bez filtra stanu aplikacji dostaje je wycofany kandydat — JT3 i JT2b łapią regresję.
+savepoint jt_neg;
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object('salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+    'period', j.salary_period, 'currency', j.currency), 'contract_type', j.contract_type,
+    'working_hours', j.working_hours)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,city}', '"Brugia"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT9 KONTROLA UJEMNA: bez miasta w job_material_terms zmiana miasta nie powiadamia (JT3 byłby czerwony)');
+rollback to savepoint jt_neg;
+savepoint jt_neg2;
+create or replace function public.notify_job_terms_changed()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('pracujbe.job_terms_notify', true), '') <> new.id::text then return null; end if;
+  insert into public.notifications (profile_id, type, data, entity_type, entity_id)
+  select a.candidate_id, 'system', '{}'::jsonb, 'job_terms', new.id
+    from public.applications a where a.job_id = new.id and a.candidate_id is not null;
+  return null;
+end $$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid,
+  jsonb_set(current_setting('pb.jt_now')::jsonb, '{job,salary_min}', '17'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
+  'JT9b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
+rollback to savepoint jt_neg2;
+rollback;
+
+-- ============================================================================
 -- JLP594. Deterministyczny tie-breaker paginacji publicznych ofert (#594, migracja 0136).
 --         `get_public_jobs` sortuje po kluczu wynagrodzenia (opcjonalnie) i `published_at`,
 --         ale bez unikalnego tie-breakera oferty z remisem mogły wrócić w innej kolejności
@@ -13223,6 +13952,229 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- MP03. Materializacja dopasowań (P1-03, 0147): triggery kolejkują podmioty, worker
+-- (service_role) pobiera wejścia tylko dla par kwalifikujących się i zapisuje wynik
+-- `match_recompute_apply`, które sprawdza KAŻDĄ parę ponownie w bazie: profil ukończony
+-- i wyszukiwalny (#494), 18+ (#492), bez blokady firmy (#97), oferta aktywna firmy verified.
+-- Kontrole ujemne: kwalifikacja bez warunku widoczności / wieku / blokady / verified oraz
+-- zapis bez ponownej kontroli par dają wiersz, którego nie powinno być.
+-- Cała sekcja w transakcji cofanej (kolejka i wiersze nie wpływają na inne sekcje).
+-- ============================================================================
+\echo '--- MP03 materializacja matches (0147) ---'
+\set MPC  'e1903000-0000-0000-0000-000000000001'
+\set MPH  'e1903000-0000-0000-0000-000000000002'
+\set MPM  'e1903000-0000-0000-0000-000000000003'
+\set MPE  'e1903000-0000-0000-0000-000000000004'
+\set MPF1 'e1903000-0000-0000-0000-0000000000f1'
+\set MPF2 'e1903000-0000-0000-0000-0000000000f2'
+\set MPFU 'e1903000-0000-0000-0000-0000000000f3'
+\set MPJ1 'e1903000-0000-0000-0000-0000000000a1'
+\set MPJ2 'e1903000-0000-0000-0000-0000000000a2'
+\set MPJU 'e1903000-0000-0000-0000-0000000000a3'
+\set MPJD 'e1903000-0000-0000-0000-0000000000a4'
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'MPC','mpc@test.be','Mp C','{"role":"candidate","first_name":"Mia","last_name":"Match","locale":"pl"}'),
+  (:'MPH','mph@test.be','Mp H','{"role":"candidate","first_name":"Hugo","last_name":"Hidden","locale":"nl"}'),
+  (:'MPM','mpm@test.be','Mp M','{"role":"candidate","first_name":"Mila","last_name":"Minor","locale":"fr"}'),
+  (:'MPE','mpe@test.be','Mp E','{"role":"employer","first_name":"Rek","last_name":"Mp","locale":"en"}');
+-- MPM deklaruje przedział 16–17 (przed fixture, który dopisuje 18+ pozostałym).
+insert into public.candidate_age_attestations (profile_id, min_age, source) values (:'MPM', 16, 'signup');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'MPF1','Firma Mp 1','verified'), (:'MPF2','Firma Mp 2','verified'), (:'MPFU','Firma Mp U','unverified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'MPF1',:'MPE','owner',true);
+delete from public.match_recompute_queue;
+
+-- MP1: publikacja oferty (insert active) i szkic.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,occupation,published_at) values
+  (:'MPJ1',:'MPF1','job-mp-1','Magazynier MP','warehouse','permanent','Antwerpia','Flandria','active','pl','magazynier', now()),
+  (:'MPJ2',:'MPF2','job-mp-2','Magazynier MP2','warehouse','permanent','Antwerpia','Flandria','active','pl','magazynier', now()),
+  (:'MPJU',:'MPFU','job-mp-u','Magazynier MPU','warehouse','permanent','Antwerpia','Flandria','active','pl','magazynier', now()),
+  (:'MPJD',:'MPF1','job-mp-d','Szkic MP','warehouse','permanent','Antwerpia','Flandria','draft','pl','magazynier', null);
+select pg_temp.assert(
+  (select count(*) from public.match_recompute_queue where kind = 'job' and subject_id in (:'MPJ1', :'MPJ2', :'MPJU')) = 3
+  and not exists (select 1 from public.match_recompute_queue where subject_id = :'MPJD'),
+  'MP1 aktywna oferta trafia do kolejki, szkic nie');
+
+-- Profile: MPC kwalifikuje się; MPH ukończony, ale niewyszukiwalny; MPM 16–17 (wyszukiwalny
+-- tylko z pominięciem triggera wieku — stan, którego 0126 nie dopuszcza, dla kontroli bazy).
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed, occupations, categories, city, region, availability)
+values (:'MPC', true, true, array['magazynier'], array['warehouse']::public.job_category[], 'Antwerpia', 'Flandria', 'immediate'),
+       (:'MPH', false, true, array['magazynier'], array['warehouse']::public.job_category[], 'Antwerpia', 'Flandria', 'immediate');
+set local session_replication_role = replica;
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed, occupations, categories, city, region, availability)
+values (:'MPM', true, true, array['magazynier'], array['warehouse']::public.job_category[], 'Antwerpia', 'Flandria', 'immediate');
+set local session_replication_role = origin;
+insert into public.candidate_skills(candidate_profile_id, skill_label)
+  select id, 'wózek widłowy' from public.candidate_profiles where profile_id = :'MPC';
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'MPC', :'MPF2');
+select pg_temp.assert(
+  (select count(*) from public.match_recompute_queue where kind = 'candidate' and subject_id in (:'MPC', :'MPH')) = 2,
+  'MP1b zmiana profilu/relacji/blokady kolejkuje kandydata (jeden wiersz na podmiot)');
+select pg_temp.assert(
+  (select version from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPC') >= 3,
+  'MP1c kolejne zgłoszenia podbijają wersję zamiast dublować wiersz');
+
+-- MP2: kwalifikacja w bazie.
+select pg_temp.assert(public.match_pair_eligible(:'MPC', :'MPJ1'), 'MP2 kandydat wyszukiwalny 18+ × oferta verified');
+select pg_temp.assert(not public.match_pair_eligible(:'MPH', :'MPJ1'), 'MP2b niewyszukiwalny profil (#494) → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPM', :'MPJ1'), 'MP2c kandydat 16–17 (#492) → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPC', :'MPJ2'), 'MP2d blokada firmy (#97) → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPC', :'MPJU'), 'MP2e firma niezweryfikowana → brak pary');
+select pg_temp.assert(not public.match_pair_eligible(:'MPC', :'MPJD'), 'MP2f szkic → brak pary');
+
+-- MP3: wejścia dla kandydata = tylko oferty kwalifikujące się; bez imienia i kontaktu.
+set role service_role;
+select pg_temp.assert(
+  (select (i ->> 'eligible')::boolean
+      and jsonb_array_length(i -> 'candidates') = 1
+      and (select array_agg(j ->> 'job_id') from jsonb_array_elements(i -> 'jobs') j) @> array[:'MPJ1']
+      and not (i -> 'jobs')::text like '%' || :'MPJ2' || '%'
+      and not (i -> 'jobs')::text like '%' || :'MPJU' || '%'
+      and (i -> 'candidates' -> 0 -> 'skills') @> '[{"skill_label":"wózek widłowy"}]'
+      and not (i::text ~* 'mpc@test|Mia|Match')
+   from (select public.match_recompute_inputs('candidate', :'MPC'::uuid, 500) i) x),
+  'MP3 inputs kandydata: tylko pary kwalifikujące się, dane zawodowe bez PII');
+select pg_temp.assert(
+  (select (public.match_recompute_inputs('candidate', :'MPH'::uuid, 500) ->> 'eligible')::boolean) is false
+  and (select (public.match_recompute_inputs('candidate', :'MPM'::uuid, 500) ->> 'eligible')::boolean) is false
+  and (select (public.match_recompute_inputs('job', :'MPJU'::uuid, 500) ->> 'eligible')::boolean) is false,
+  'MP3b niewidoczny / 16–17 / oferta firmy niezweryfikowanej → eligible=false');
+select pg_temp.assert(
+  (select not (i -> 'candidates')::text like '%' || :'MPH' || '%'
+      and not (i -> 'candidates')::text like '%' || :'MPM' || '%'
+   from (select public.match_recompute_inputs('job', :'MPJ1'::uuid, 1000) i) x),
+  'MP3c inputs oferty nie zawierają niewidocznego ani niepełnoletniego kandydata');
+
+-- MP4: apply ponownie kwalifikuje każdą parę — worker podający niedozwolone pary nic nie zapisze.
+select pg_temp.assert(
+  (select r = '{"upserted": 1, "skipped": 2, "deleted": 0}'::jsonb
+   from public.match_recompute_apply('candidate', :'MPC'::uuid, 0,
+     jsonb_build_array(:'MPJ1', :'MPJ2', :'MPJU'),
+     jsonb_build_array(
+       jsonb_build_object('other_id', :'MPJ1', 'score', 81, 'matched', jsonb_build_array('magazynier'),
+                          'missing', '[]'::jsonb, 'strengths', '[]'::jsonb, 'mandatory_met', 0,
+                          'mandatory_total', 0, 'summary_key', 'good'),
+       jsonb_build_object('other_id', :'MPJ2', 'score', 81, 'summary_key', 'good'),
+       jsonb_build_object('other_id', :'MPJU', 'score', 81, 'summary_key', 'good'))) r),
+  'MP4 apply: zapis tylko pary kwalifikującej się (blokada i firma niezweryfikowana pominięte)');
+select pg_temp.assert(
+  (select count(*) from public.matches where candidate_id = :'MPC') = 1
+  and (select score = 81 and summary_key = 'good' and matched = array['magazynier'] and not is_demo
+       from public.matches where candidate_id = :'MPC' and job_id = :'MPJ1'),
+  'MP4b wiersz z wynikiem workera');
+select pg_temp.assert(
+  (select count(*) from public.matches where candidate_id in (:'MPH', :'MPM')) = 0,
+  'MP4c brak wierszy niewidocznego i niepełnoletniego');
+-- Wersja 0 ≠ bieżąca: podmiot zostaje w kolejce, dzierżawa zwolniona.
+select pg_temp.assert(
+  (select locked_until is null from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPC'),
+  'MP4d nieaktualna wersja nie zdejmuje podmiotu z kolejki');
+select pg_temp.expect_error(format(
+  'select public.match_recompute_apply(''job'', %L::uuid, 0, jsonb_build_array(%L), jsonb_build_array(jsonb_build_object(''other_id'', %L, ''score'', 101, ''summary_key'', ''good'')))',
+  :'MPJ1', :'MPH', :'MPH'), 'VALIDATION_FAILED', 'MP4e wynik spoza 0–100 odrzucony');
+select pg_temp.expect_error(format(
+  'select public.match_recompute_apply(''job'', %L::uuid, 0, ''[]''::jsonb, jsonb_build_array(jsonb_build_object(''other_id'', %L, ''score'', 50, ''summary_key'', ''partial'')))',
+  :'MPJ1', :'MPC'), 'VALIDATION_FAILED', 'MP4f para spoza rozważonych odrzucona');
+reset role;
+
+-- MP5: wiersz sprzed zmiany (np. seed/operator) znika przy przeliczeniu niekwalifikującego się.
+insert into public.matches(candidate_id, job_id, score) values (:'MPH', :'MPJ1', 70);
+set role service_role;
+select pg_temp.assert(
+  (select (r ->> 'deleted')::int = 1
+   from public.match_recompute_apply('candidate', :'MPH'::uuid,
+     (select version from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPH'),
+     '[]'::jsonb, '[]'::jsonb) r),
+  'MP5 niewidoczny kandydat: przeliczenie usuwa jego wiersz');
+-- Osobne zapytania: migawka instrukcji z apply nie widzi jeszcze jego zmian.
+select pg_temp.assert(
+  (select count(*) from public.matches where candidate_id = :'MPH') = 0
+  and not exists (select 1 from public.match_recompute_queue where kind = 'candidate' and subject_id = :'MPH'),
+  'MP5b brak wiersza; podmiot zdjęty z kolejki (bieżąca wersja)');
+reset role;
+
+-- MP6: blokada firmy po zapisie → przeliczenie kandydata usuwa wiersz tej firmy.
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'MPC', :'MPF1');
+set role service_role;
+select pg_temp.assert(
+  (select (r ->> 'deleted')::int = 1
+   from public.match_recompute_apply('candidate', :'MPC'::uuid, 0, '[]'::jsonb, '[]'::jsonb) r),
+  'MP6 blokada firmy (#97): przeliczenie usuwa wiersz jej oferty');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'MPC') = 0,
+  'MP6b brak wiersza dopasowania do oferty zablokowanej firmy');
+reset role;
+delete from public.candidate_company_blocks where candidate_id = :'MPC' and company_id = :'MPF1';
+
+-- MP7: claim — SKIP LOCKED + dzierżawa; drugi claim nie bierze tych samych podmiotów.
+set role service_role;
+select coalesce(string_agg(kind || ':' || subject_id, ','), '') as mp_claimed, count(*) as mp_claimed_n
+  from public.match_recompute_claim(50) \gset
+select pg_temp.assert(:mp_claimed_n > 0, 'MP7 claim zwraca podmioty');
+select pg_temp.assert(
+  (select locked_until > now() and attempts = 1 from public.match_recompute_queue
+    where kind || ':' || subject_id = split_part(:'mp_claimed', ',', 1)),
+  'MP7a claim ustawia dzierżawę i licznik prób');
+select pg_temp.assert(
+  not exists (select 1 from public.match_recompute_claim(50) c
+              where c.kind || ':' || c.subject_id = any(string_to_array(:'mp_claimed', ','))),
+  'MP7b dzierżawa: drugi claim nie bierze tych samych podmiotów');
+select pg_temp.assert((select count(*) from public.match_recompute_claim(1000)) <= 50,
+  'MP7c limit claimu ≤ 50');
+reset role;
+
+-- MP8: uprawnienia — klient nie ma kolejki ani RPC workera.
+select set_config('app.current_uid', :'MPE', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.match_recompute_queue', 'permission denied', 'MP8 authenticated nie czyta kolejki');
+select pg_temp.expect_error('select * from public.match_recompute_claim(1)', 'permission denied', 'MP8b authenticated nie woła claim');
+select pg_temp.expect_error(format('select public.match_recompute_inputs(''candidate'', %L::uuid, 1)', :'MPC'),
+  'permission denied', 'MP8c authenticated nie czyta wejść (profil kandydata)');
+select pg_temp.expect_error(format('select public.match_recompute_apply(''candidate'', %L::uuid, 0, ''[]''::jsonb, ''[]''::jsonb)', :'MPC'),
+  'permission denied', 'MP8d authenticated nie zapisuje dopasowań');
+select pg_temp.expect_error(format('insert into public.matches(candidate_id, job_id, score) values (%L, %L, 99)', :'MPC', :'MPJ1'),
+  'permission denied', 'MP8e bezpośredni INSERT do matches odrzucony');
+reset role;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select * from public.match_recompute_claim(1)', 'permission denied', 'MP8f anon nie woła claim');
+reset role;
+
+-- MP9 (kontrole ujemne): osłabiona kwalifikacja przepuszcza pary, których nie powinno być.
+savepoint mp_neg;
+create or replace function public.match_candidate_eligible(p_candidate uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select exists (select 1 from public.candidate_profiles cp where cp.profile_id = p_candidate
+                 and cp.deleted_at is null and cp.profile_completed);
+$$;
+select pg_temp.assert(public.match_pair_eligible(:'MPH', :'MPJ1') and public.match_pair_eligible(:'MPM', :'MPJ1'),
+  'MP9-N1 bez warunku widoczności i wieku para niewidocznego / 16–17 przeszłaby — MP2b/MP2c to wykrywają');
+rollback to savepoint mp_neg;
+create or replace function public.match_pair_eligible(p_candidate uuid, p_job uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select public.match_candidate_eligible(p_candidate) and exists (
+    select 1 from public.jobs j where j.id = p_job and j.status = 'active');
+$$;
+select pg_temp.assert(public.match_pair_eligible(:'MPC', :'MPJ2') and public.match_pair_eligible(:'MPC', :'MPJU'),
+  'MP9-N2 bez blokady i verified para przeszłaby — MP2d/MP2e to wykrywają');
+rollback to savepoint mp_neg;
+-- Zapis bez ponownej kontroli par (naiwny upsert) zostawiłby wiersz firmy zablokowanej.
+insert into public.matches(candidate_id, job_id, score) values (:'MPC', :'MPJ2', 81);
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'MPC' and job_id = :'MPJ2') = 1,
+  'MP9-N3 naiwny zapis tworzy wiersz zablokowanej firmy — apply (MP4) go pomija');
+set role service_role;
+select pg_temp.assert(
+  (select (r ->> 'deleted')::int >= 1
+   from public.match_recompute_apply('candidate', :'MPC'::uuid, 0, '[]'::jsonb, '[]'::jsonb) r),
+  'MP9b przeliczenie sprząta wiersz zablokowanej firmy');
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'MPC' and job_id = :'MPJ2') = 0,
+  'MP9c wiersz zablokowanej firmy usunięty');
+reset role;
+release savepoint mp_neg;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
 --       expires_at i salary_period oferty — źródło `validThrough` i
 --       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
@@ -13471,5 +14423,283 @@ select pg_temp.assert(
 select pg_temp.assert(
   (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
+
+-- ============================================================================
+-- CN143. Nazwa firmy w wiadomościach kandydata (0143, #25): kandydat czyta nazwę firmy
+--        drugiej strony rozmowy przez `get_conversation_summaries`/`get_conversation_company_name`
+--        (SECURITY DEFINER, gejtowane `is_conversation_member` jak 0039) — `companies` samo
+--        w sobie jest czytelne pod RLS tylko dla członków firmy (0014), więc bez tych funkcji
+--        kandydat dostaje zero wierszy. Obie funkcje zwracają WYŁĄCZNIE `companies.name`,
+--        nigdy profilu rekrutera (decyzja 0023). Kontrole ujemne: kandydat bez rozmowy z firmą,
+--        obcy kandydat cudzej rozmowy, `anon` bez EXECUTE.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set CANDCN 'e1660000-0000-0000-0000-00000000000c'
+\set CANDCX 'e1660000-0000-0000-0000-00000000000d'
+\set RECCN  'e1660000-0000-0000-0000-0000000000a1'
+\set COMPCN 'e1660000-0000-0000-0000-0000000000f1'
+\set JOBCN  'e1660000-0000-0000-0000-0000000000b1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDCN','candcn@test.be','Cora N','{"role":"candidate","first_name":"Cora","last_name":"N","locale":"pl"}'),
+  (:'CANDCX','candcx@test.be','Xara N','{"role":"candidate","first_name":"Xara","last_name":"N","locale":"pl"}'),
+  (:'RECCN','reccn@test.be','Remi N','{"role":"employer","first_name":"Remi","last_name":"N","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'COMPCN','Firma CN','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPCN',:'RECCN','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JOBCN',:'COMPCN','job-cn1','Magazynier CN','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDCN', false), (:'CANDCX', false);
+
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JOBCN'::uuid, 'cn-app-1', null, null, null)::text as app_cn \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECCN'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'app_cn'::uuid, null)::text as conv_cn \gset
+select public.send_message(:'conv_cn'::uuid, 'Dzień dobry, dziękujemy za zgłoszenie', gen_random_uuid())::text as msg_cn1 \gset
+reset role; reset app.current_uid;
+
+-- CN1: anon bez EXECUTE, authenticated z EXECUTE.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_conversation_company_name(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_conversation_company_name(uuid)', 'EXECUTE'),
+  'CN1 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- CN2: `companies` samo w sobie NIE jest czytelne dla kandydata (0014) — RPC jest naprawą.
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.companies where id = :'COMPCN'),
+  'CN2 kandydat nie czyta wprost tabeli companies (0014)');
+
+-- CN3: kandydat czyta nazwę firmy SWOJEJ rozmowy przez obie funkcje.
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') = 'Firma CN',
+  'CN3 get_conversation_company_name zwraca nazwę firmy własnej rozmowy');
+select pg_temp.assert(
+  (select company_name = 'Firma CN' from public.get_conversation_summaries() where conversation_id = :'conv_cn'),
+  'CN3b get_conversation_summaries niesie company_name');
+-- Rekrutera nie ujawniamy: żadna z funkcji nie zwraca imienia/nazwiska ani id profilu.
+select pg_temp.assert(
+  (select not exists (
+      select 1 from public.get_conversation_summaries() s
+      where s.conversation_id = :'conv_cn' and s::text like '%Remi%'
+   )),
+  'CN3c bez imienia rekrutera w podsumowaniu (0023)');
+reset role; reset app.current_uid;
+
+-- CN4 (kontrola ujemna — obcy): kandydat bez rozmowy z tą firmą i cudzy kandydat → brak nazwy.
+set role authenticated; set app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN4 obcy kandydat nie dostaje nazwy cudzej rozmowy');
+select pg_temp.assert(
+  (select count(*) = 0 from public.get_conversation_summaries() where conversation_id = :'conv_cn'),
+  'CN4b obcy kandydat nie widzi cudzej rozmowy w podsumowaniach');
+reset role; reset app.current_uid;
+
+-- CN5: rozmowa bez firmy (company_id null) → nazwa null, bez błędu.
+update public.conversations set company_id = null where id = :'conv_cn';
+set role authenticated; set app.current_uid = :'CANDCN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN5 rozmowa bez firmy: nazwa null');
+reset role; reset app.current_uid;
+update public.conversations set company_id = :'COMPCN' where id = :'conv_cn';
+
+-- CN6 (kontrola ujemna): bez `is_conversation_member` w treści funkcji, dowolna rozmowa
+-- z firmą wyciekłaby nazwę obcemu kandydatowi — CN4 wykrywa taką regresję.
+begin;
+savepoint cn_neg;
+create or replace function public.get_conversation_company_name(p_conversation_id uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select comp.name from public.conversations c
+  join public.companies comp on comp.id = c.company_id
+  where c.id = p_conversation_id and c.deleted_at is null and c.company_id is not null;
+$$;
+set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') = 'Firma CN',
+  'CN6 kontrola ujemna: bez is_conversation_member obcy kandydat czyta nazwę firmy');
+rollback to savepoint cn_neg;
+set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
+  'CN6b poprawna funkcja znów odmawia obcemu');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- JD216. „Kopiuj jako szkic” (0148): duplicate_job_as_draft — nowy szkic w tej samej firmie
+--        z treścią, relacjami i pytaniami (bez decyzji przeglądu), bez statusu/slugu/dat;
+--        recruiter+, idempotencja po kluczu klienta, audyt, odmowa dla zawieszonej firmy
+--        i oferty z decyzją moderacyjną; kontrole ujemne.
+-- ============================================================================
+\set OWNJD  'e2160000-0000-0000-0000-0000000000a1'
+\set RECJD  'e2160000-0000-0000-0000-0000000000a2'
+\set MEMJD  'e2160000-0000-0000-0000-0000000000a3'
+\set OUTJD  'e2160000-0000-0000-0000-0000000000a4'
+\set COMPJD 'e2160000-0000-0000-0000-0000000000f1'
+\set COMPJX 'e2160000-0000-0000-0000-0000000000f2'
+\set JOBJD  'e2160000-0000-0000-0000-0000000000b1'
+\set JOBJD2 'e2160000-0000-0000-0000-0000000000b2'
+\set KEYJD  'e2160000-0000-0000-0000-0000000000c1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data)
+  select c.id::uuid, 'jd-' || c.tag || '@test.be', 'JD ' || c.tag,
+         jsonb_build_object('role', 'employer', 'first_name', 'JD', 'last_name', c.tag, 'locale', 'pl')
+  from (values (:'OWNJD','own'), (:'RECJD','rec'), (:'MEMJD','mem'), (:'OUTJD','out')) as c(id, tag);
+insert into public.companies(id,name,status) values
+  (:'COMPJD','Firma JD','verified'), (:'COMPJX','Firma JX','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPJD',:'OWNJD','owner',true), (:'COMPJD',:'RECJD','recruiter',true),
+  (:'COMPJD',:'MEMJD','member',true), (:'COMPJX',:'OUTJD','owner',true);
+-- Źródło budowane jako szkic (pytania zmienia się tylko w szkicu), potem publikowane przez
+-- właściciela tabel po akceptacji przeglądu — jak po realnej decyzji admina.
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region,
+                        status, default_locale, salary_min, salary_max, salary_period, contact_email,
+                        requires_driving_license, is_demo)
+  values (:'JOBJD', :'COMPJD', :'OWNJD', 'draft-jd216', 'Operator JD', 'warehouse', 'temporary', 'Gandawa',
+          'Flandria', 'draft', 'nl', 16, 18, 'hour', 'hr@jd.be', true, false),
+         (:'JOBJD2', :'COMPJD', :'OWNJD', 'draft-jd216-2', 'Kierowca JD', 'transport', 'permanent', 'Gandawa',
+          'Flandria', 'draft', 'pl', null, null, 'month', null, false, false);
+insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits, highlights, meta_title) values
+  (:'JOBJD', 'nl', 'Operator JD', 'Werk in het magazijn.', array['Orderpicking'], array['Nachtpremie'], array['Nachtpremie'], 'SEO JD'),
+  (:'JOBJD', 'pl', 'Operator JD PL', 'Tłumaczenie AI.', array['Kompletacja'], '{}', '{}', null);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'JOBJD', 'nl', 'mandatory', 0, 'Nachtwerk'), (:'JOBJD', 'nl', 'optional', 0, 'Heftruck');
+insert into public.job_skills(job_id, skill_label, is_mandatory) values
+  (:'JOBJD', 'Scanner', true), (:'JOBJD', 'Excel', false);
+insert into public.job_languages(job_id, language_label, level) values (:'JOBJD', 'Nederlands', 'basic');
+insert into public.job_certificates(job_id, certificate_label) values (:'JOBJD', 'VCA');
+insert into public.job_screening_questions(job_id, position, type, required, prompt) values
+  (:'JOBJD', 0, 'yes_no', true, '{"nl": "Heb je een VCA-certificaat?"}'),
+  (:'JOBJD', 1, 'date', false, '{"nl": "Wanneer kun je beginnen?", "fr": "Votre date de naissance ?"}');
+update public.screening_question_reviews set status = 'approved', decided_at = now(), decided_by = :'ADMIN'
+  where job_id = :'JOBJD';
+update public.jobs set status = 'active', slug = 'operator-jd-216', published_at = now() - interval '3 days',
+                       expires_at = now() + interval '20 days', views_count = 42, applications_count = 3
+  where id = :'JOBJD';
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'JOBJD') = 'active'
+  and (select count(*) from public.screening_question_reviews where job_id = :'JOBJD' and status = 'approved') = 1,
+  'JD216-0 źródło: aktywna oferta z zaakceptowanym przeglądem pytania');
+
+-- JD216-1: recruiter kopiuje aktywną ofertę → nowy szkic z treścią, bez statusu/slugu/dat.
+set role authenticated; set app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdnew \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'draft' and slug like 'draft-%' and slug <> 'draft-jd216'
+          and company_id = :'COMPJD'::uuid and created_by = :'RECJD'::uuid
+          and published_at is null and expires_at is null and moderation_decision_id is null
+          and views_count = 0 and applications_count = 0
+          and title = 'Operator JD' and category::text = 'warehouse' and contract_type::text = 'temporary'
+          and default_locale = 'nl' and salary_min = 16 and salary_max = 18 and salary_period::text = 'hour'
+          and contact_email = 'hr@jd.be' and requires_driving_license and not is_demo
+     from public.jobs where id = :'jdnew'),
+  'JD216-1 szkic: kolumny z listy dozwolonych skopiowane, status/slug/daty/liczniki nie');
+select pg_temp.assert(
+  (select count(*) from public.job_translations where job_id = :'jdnew') = 1
+  and (select description = 'Werk in het magazijn.' and responsibilities = array['Orderpicking']
+              and benefits = array['Nachtpremie'] and meta_title is null
+         from public.job_translations where job_id = :'jdnew' and locale = 'nl')
+  and (select array_agg(kind::text || ':' || content order by kind, position) from public.job_requirements where job_id = :'jdnew')
+      = array['mandatory:Nachtwerk', 'optional:Heftruck']
+  and (select array_agg(skill_label || ':' || is_mandatory order by skill_label) from public.job_skills where job_id = :'jdnew')
+      = array['Excel:false', 'Scanner:true']
+  and (select array_agg(language_label || ':' || level) from public.job_languages where job_id = :'jdnew') = array['Nederlands:basic']
+  and (select array_agg(certificate_label) from public.job_certificates where job_id = :'jdnew') = array['VCA'],
+  'JD216-1b tłumaczenie w języku oferty (bez meta i innych języków) i komplet relacji');
+select pg_temp.assert(
+  (select array_agg(prompt order by position) from public.job_screening_questions where job_id = :'jdnew')
+    = (select array_agg(prompt order by position) from public.job_screening_questions where job_id = :'JOBJD')
+  and (select count(*) from public.screening_question_reviews where job_id = :'jdnew') = 1
+  and (select status from public.screening_question_reviews where job_id = :'jdnew') = 'pending'
+  and (select requested_by from public.screening_question_reviews where job_id = :'jdnew') = :'RECJD'::uuid
+  and (select count(*) from public.screening_question_reviews where job_id = :'JOBJD' and status = 'approved') = 1,
+  'JD216-1c pytania skopiowane, decyzja przeglądu NIE — nowy szkic czeka na przegląd od nowa');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+     where action = 'job.duplicated' and entity_id = :'jdnew'::uuid and actor_id = :'RECJD'::uuid
+       and after_data->>'source_job_id' = :'JOBJD' and after_data->>'company_id' = :'COMPJD') = 1
+  and (select count(*) from public.applications where job_id = :'jdnew') = 0,
+  'JD216-1d audyt job.duplicated, zero zgłoszeń na kopii');
+
+-- JD216-1e: kopia nie przechodzi publikacji bez nowej decyzji przeglądu pytań.
+set role authenticated; set app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.publish_job(%L::uuid, %L)', :'jdnew', 'operator-jd-kopia'),
+  'SCREENING_REVIEW_REQUIRED', 'JD216-1e kopia wymaga ponownego przeglądu pytania przed publikacją');
+
+-- JD216-2: idempotencja — ten sam klucz zwraca ten sam szkic, bez drugiej kopii.
+select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdagain \gset
+select pg_temp.assert(:'jdagain' = :'jdnew', 'JD216-2 ponowienie tym samym kluczem = ten sam szkic');
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, %L::uuid)', :'JOBJD2', :'KEYJD'),
+  'VALIDATION_FAILED', 'JD216-2b ten sam klucz dla innej oferty odrzucony');
+-- Szkic też można skopiować (dowolny status).
+select public.duplicate_job_as_draft(:'JOBJD2'::uuid, gen_random_uuid()) as jdnew2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.jobs where company_id = :'COMPJD') = 4
+  and (select count(*) from public.job_duplications where source_job_id = :'JOBJD') = 1
+  and (select status::text from public.jobs where id = :'jdnew2') = 'draft',
+  'JD216-2c jedna kopia na klucz; szkic też kopiowalny');
+
+-- JD216-3: członek bez roli recruiter+ → PERMISSION_DENIED, bez kopii.
+set role authenticated; set app.current_uid = :'MEMJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'PERMISSION_DENIED', 'JD216-3 member nie kopiuje oferty');
+-- JD216-4: cudza firma → NOT_FOUND (bez ujawniania istnienia oferty).
+set app.current_uid = :'OUTJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'NOT_FOUND', 'JD216-4 właściciel innej firmy nie kopiuje cudzej oferty');
+-- JD216-5: tabela idempotencji niedostępna bezpośrednio (RPC-only).
+select pg_temp.expect_error('select count(*) from public.job_duplications',
+  'permission denied', 'JD216-5 klient nie czyta job_duplications');
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, null)', :'JOBJD'),
+  'VALIDATION_FAILED', 'JD216-5b brak klucza odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.jobs where company_id = :'COMPJD') = 4,
+  'JD216-3b odmowy nie tworzą szkiców');
+
+-- JD216-6: firma zawieszona → COMPANY_SUSPENDED; oferta z decyzją moderacyjną → MODERATION_LOCKED.
+begin;
+update public.companies set status = 'suspended' where id = :'COMPJD';
+set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'COMPANY_SUSPENDED', 'JD216-6 zawieszona firma nie kopiuje ofert');
+rollback;
+begin;
+-- Blokada bez pełnej sprawy DSA (FK i strażnik wyłączone tylko na czas ustawienia znacznika).
+set local session_replication_role = replica;
+update public.jobs set moderation_decision_id = gen_random_uuid(), status = 'closed' where id = :'JOBJD';
+set local session_replication_role = origin;
+set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.duplicate_job_as_draft(%L::uuid, gen_random_uuid())', :'JOBJD'),
+  'MODERATION_LOCKED', 'JD216-6b oferta wycofana decyzją moderacyjną nie odradza się kopią');
+rollback;
+reset role; reset app.current_uid;
+
+-- JD216-7 (kontrola ujemna uprawnień): gdy bramka recruiter+ przepuszcza każdego członka,
+-- member kopiuje ofertę — JD216-3 wykrywa taką regresję.
+begin;
+create or replace function public.can_manage_jobs(p_company_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_company_member(p_company_id);
+$$;
+set local role authenticated; set local app.current_uid = :'MEMJD'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.duplicate_job_as_draft(:'JOBJD'::uuid, gen_random_uuid()) is not null,
+  'JD216-7 kontrola ujemna: bez bramki recruiter+ member kopiuje ofertę');
+rollback;
+reset role; reset app.current_uid;
+
+-- JD216-8 (kontrola ujemna idempotencji): bez wpisu w job_duplications ten sam klucz tworzy
+-- DRUGI szkic — JD216-2 opiera się na tej tabeli.
+begin;
+delete from public.job_duplications where client_key = :'KEYJD'::uuid;
+set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdneg \gset
+select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu klucza powstaje duplikat');
+rollback;
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
