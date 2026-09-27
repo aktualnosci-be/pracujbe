@@ -1,11 +1,13 @@
 import { render } from '@react-email/render';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { EmailButton, EmailLayout, EmailText, emailPalette } from '@/emails/_components';
 import { emailCopy, type EmailType } from '@/emails/copy';
 import { renderEmail } from '@/emails/templates';
 import { AUTH_EMAIL_TYPES, GUEST_EMAIL_TYPES, QUEUED_EMAIL_TYPES } from '@/emails/wiring';
 import { routing, type Locale } from '@/i18n/routing';
+
+import { warmUpEmailRender } from '../helpers/email-render-warmup';
 
 /**
  * Dostępność i spójność każdego WYSYŁANEGO e-maila (typy z `src/emails/wiring.ts` × 4 języki):
@@ -88,8 +90,18 @@ const RENDER_OPTIONS = {
 /*  Pomocnicze: style inline i kontrast                                           */
 /* ----------------------------------------------------------------------------- */
 
+/**
+ * Styl inline elementu jako mapa, parsowany raz na element. Audyt kontrastu pyta o 3–5
+ * właściwości dla każdego węzła tekstu, idąc w górę drzewa — bez pamięci podręcznej ten sam
+ * atrybut `style` przodków był parsowany setki razy na mail (144 maile w pliku).
+ */
+const styleCache = new WeakMap<Element, Map<string, string>>();
+
 function styleDeclarations(element: Element): Map<string, string> {
+  const cached = styleCache.get(element);
+  if (cached) return cached;
   const map = new Map<string, string>();
+  styleCache.set(element, map);
   const style = element.getAttribute('style');
   if (!style) return map;
   for (const part of style.split(';')) {
@@ -306,6 +318,9 @@ function auditEmail(html: string, text: string, expected: Expectation): string[]
 /* ----------------------------------------------------------------------------- */
 /*  Testy                                                                          */
 /* ----------------------------------------------------------------------------- */
+
+// Pierwszy render React Email (leniwy import react-dom/server) poza limitem pierwszego testu.
+beforeAll(warmUpEmailRender);
 
 async function renderSample(type: EmailType, locale: Locale) {
   return renderEmail(type, locale, SAMPLE as never, RENDER_OPTIONS);

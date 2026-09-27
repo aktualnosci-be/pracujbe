@@ -26,6 +26,17 @@ afterEach(() => {
   installNetworkGuard();
 });
 
+/**
+ * Zamknięcie atrapy bez czekania na gniazda keep-alive. `fetch` (undici) trzyma połączenie
+ * otwarte po odpowiedzi, a samo `server.close()` czeka, aż klient je porzuci — pod obciążeniem
+ * maszyny to potrafiło trwać sekundy. Zrywamy połączenia jawnie; asercje są już po odpowiedzi.
+ */
+async function closeServer(server: http.Server): Promise<void> {
+  const closed = new Promise((r) => server.close(r));
+  server.closeAllConnections();
+  await closed;
+}
+
 describe('#47 blokada sieci w testach Vitest', () => {
   it('jest zainstalowana globalnie przez setupFiles', () => {
     expect(isNetworkGuardInstalled()).toBe(true);
@@ -65,7 +76,7 @@ describe('#47 blokada sieci w testach Vitest', () => {
       });
       expect(body).toBe('ok');
     } finally {
-      await new Promise((r) => server.close(r));
+      await closeServer(server);
     }
   });
 
@@ -93,7 +104,7 @@ describe('#47 blokada sieci w testach Vitest', () => {
       expect(await get('127.0.0.1')).toBe('pinned');
       await expect(get(TEST_NET)).rejects.toBeInstanceOf(NetworkBlockedError);
     } finally {
-      await new Promise((r) => server.close(r));
+      await closeServer(server);
     }
   });
 

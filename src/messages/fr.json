@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Pourquoi la décision est-elle erronée ?",
     "appealDeadline": "Délai de recours : jusqu’au {date}.",
     "appealDeadlineNotStarted": "Le délai de recours commencera à courir dès réception de la notification de la décision.",
-    "appealStatusLabel": "Recours {reference}"
+    "appealStatusLabel": "Recours {reference}",
+    "targetTitle": "Entreprise concernée par la décision",
+    "targetIntro": "Ce lien concerne une autre entreprise que celle actuellement active dans votre panneau. Ses données sont affichées ci-dessous — votre entreprise active n'a pas changé.",
+    "targetUnavailableTitle": "Cette entreprise n'est plus accessible depuis votre compte",
+    "targetUnavailableHint": "Vous n'avez plus d'accès actif à cette entreprise, ou le lien est invalide.",
+    "targetSwitchAction": "Définir comme entreprise active",
+    "targetSwitchError": "Impossible de changer l'entreprise active. Réessayez."
   },
   "companyProfile": {
     "metaTitle": "Offres d'emploi chez {name}",
@@ -986,6 +992,7 @@
     "declineConfirm": "Refuser",
     "acceptProposalSuccess": "La proposition a été acceptée.",
     "declineProposalSuccess": "La proposition a été refusée.",
+    "proposalExpiredNotice": "Le délai pour répondre à cette proposition est dépassé. Vous ne pouvez plus l’accepter ni la refuser.",
     "employerApplicationDetailTitle": "Détails de la candidature",
     "employerApplicationBack": "Retour aux candidatures",
     "employerApplicationLoadError": "Impossible de charger la candidature.",
@@ -1071,7 +1078,12 @@
     "funnelDenied": "L’entonnoir de recrutement est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
     "topMatchedDenied": "Les candidats correspondants sont visibles par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
     "topMatchedUnverified": "Les candidats correspondants apparaîtront après la vérification de l’entreprise.",
-    "topMatchedLoadError": "Impossible de charger les candidats correspondants."
+    "topMatchedLoadError": "Impossible de charger les candidats correspondants.",
+    "employerPanelErrorTitle": "Impossible de charger cette page de l’espace employeur",
+    "employerPanelErrorBody": "Réessayez dans un instant. Si le problème persiste, revenez au tableau de bord et ouvrez la page à nouveau.",
+    "employerPanelBackToDashboard": "Retour au tableau de bord",
+    "employerNotFoundTitle": "Nous n’avons pas trouvé cette page dans l’espace employeur",
+    "employerNotFoundBody": "L’adresse est incorrecte ou cet élément n’appartient pas à l’entreprise active. Si vous avez accès à plusieurs entreprises, vérifiez celle qui est sélectionnée dans le sélecteur d’entreprise."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1344,6 +1356,7 @@
     "screeningRequired": "Répondez à cette question.",
     "screeningYes": "Oui",
     "screeningNo": "Non",
+    "screeningClearAnswer": "Effacer la réponse",
     "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
     "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler.",
     "ageRequired": "Avant de postuler, confirmez votre âge dans les paramètres de votre compte.",
@@ -2517,7 +2530,64 @@
     "webVitalsAboutConsent": "Les mesures proviennent de la balise Cloudflare Web Analytics, chargée uniquement après consentement dans la catégorie analyse et uniquement sur les pages publiques. Sans cookies ni identifiants personnels ; trafic des robots exclu.",
     "webVitalsAboutSampling": "Cloudflare échantillonne les événements : le nombre de mesures est une estimation. Les valeurs correspondent au 75e centile.",
     "webVitalsAboutThresholds": "Évaluation selon les seuils Core Web Vitals : LCP 2,5 / 4 s, INP 200 / 500 ms, CLS 0,1 / 0,25.",
-    "webVitalsOpenCloudflare": "Ouvrir Web Analytics dans Cloudflare (nouvel onglet)"
+    "webVitalsOpenCloudflare": "Ouvrir Web Analytics dans Cloudflare (nouvel onglet)",
+    "navJobs": "Offres",
+    "jobsTitle": "Offres",
+    "jobsSubtitle": "Toutes les offres d’emploi de toutes les entreprises — consultation uniquement. Les décisions de modération se prennent dans les signalements.",
+    "searchJobsLabel": "Rechercher des offres",
+    "searchJobsHint": "Titre, adresse de l’offre, ville, nom de l’entreprise ou identifiant.",
+    "jobsFilterModerated": "Bloquées par décision",
+    "jobsModeratedTag": "Décision de modération",
+    "jobsDemoTag": "Données d’exemple",
+    "jobsHistoryLink": "Historique des modifications",
+    "jobsHistoryLabel": "Historique des modifications : {title}",
+    "jobsCompanyFilter": "Offres de l’entreprise : {name}",
+    "jobsCompanyFilterClear": "Afficher les offres de toutes les entreprises",
+    "jobsListEmpty": "Aucune offre ne correspond aux critères.",
+    "colJobTitle": "Offre",
+    "colCompany": "Entreprise",
+    "entityJob": "Offre d’emploi",
+    "auditActionJobUpdatePublished": "Modification d’une offre publiée",
+    "auditActionJobDuplicated": "Copie d’une offre",
+    "companyJobsAllLink": "Toutes les offres de l’entreprise",
+    "auditActionRetentionPolicyChanged": "Modification d’une durée de conservation",
+    "auditActionRetentionPoliciesSeeded": "Enregistrement des durées de conservation",
+    "entityRetentionPolicy": "Durée de conservation",
+    "retentionLinkTitle": "Conservation des données",
+    "retentionLinkHint": "Durées de conservation et modes des tâches de nettoyage — consultation seule.",
+    "retentionLinkCta": "Voir la conservation des données",
+    "backToUsers": "Retour à la liste des utilisateurs",
+    "userDetailSubtitle": "Données du compte, entreprises et activité — lecture seule.",
+    "userNotFoundTitle": "Compte introuvable",
+    "userNotFoundHint": "Le compte n'existe pas ou a été supprimé.",
+    "sectionAccount": "Compte",
+    "userStatusLabel": "État du compte",
+    "userActive": "Actif",
+    "userInactive": "Inactif",
+    "userLastSeen": "Dernière activité",
+    "userNeverSeen": "Aucune donnée",
+    "userAuditLink": "Actions de ce compte dans le journal",
+    "sectionLanguage": "Langue de communication",
+    "userRecipientLocale": "Langue des e-mails et notifications",
+    "userRecipientLocaleHint": "Choisie dans cet ordre : langue préférée, langue du compte, langue d'inscription et, à défaut, l'anglais.",
+    "userPreferredLocale": "Langue préférée",
+    "userAccountLocale": "Langue du compte",
+    "userSignupLocale": "Langue d'inscription",
+    "userLocaleUnset": "Non défini",
+    "sectionUserEmail": "Distribution des e-mails",
+    "userSuppressionNone": "L'adresse n'est pas bloquée.",
+    "userSuppressionActive": "Adresse bloquée : {reason} ({date}).",
+    "userSuppressionLink": "Voir le blocage dans la messagerie",
+    "sectionUserCompanies": "Entreprises",
+    "userCompaniesEmpty": "Le compte n'appartient à aucune entreprise.",
+    "sectionCandidate": "Profil de candidat",
+    "userCandidateEmpty": "Le compte n'a pas de profil de candidat.",
+    "userProfileCompleted": "Profil complété",
+    "userSearchable": "Visible par les entreprises",
+    "userApplications": "Candidatures",
+    "userOffers": "Propositions reçues",
+    "userYes": "Oui",
+    "userNo": "Non"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2640,7 +2710,8 @@
     "submit": "Entrer",
     "error": "Mot de passe incorrect. Veuillez réessayer.",
     "rateLimited": "Trop de tentatives. Réessayez dans quelques minutes.",
-    "unavailable": "L’accès est temporairement indisponible. Réessayez plus tard."
+    "unavailable": "L’accès est temporairement indisponible. Réessayez plus tard.",
+    "payloadTooLarge": "Le formulaire est trop volumineux. Actualisez la page et réessayez."
   },
   "offline": {
     "title": "Pas de connexion",
@@ -2897,7 +2968,13 @@
     "offer": "Offre",
     "untitled": "Offre sans titre",
     "denied": "L’entonnoir des offres est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
-    "loadError": "Impossible de charger l’entonnoir des offres. Veuillez réessayer."
+    "loadError": "Impossible de charger l’entonnoir des offres. Veuillez réessayer.",
+    "csvFrom": "Du",
+    "csvTo": "Au",
+    "csvStatus": "Statut",
+    "csvTotal": "Total",
+    "exportCsv": "Télécharger le CSV",
+    "exportCsvLabel": "Télécharger l’entonnoir des offres en fichier CSV (période du {from} au {to})"
   },
   "savedSearches": {
     "hint": "Enregistrez ces filtres et nous vous préviendrons sur le site et par e-mail des nouvelles offres (au maximum une fois par jour).",
@@ -2918,6 +2995,7 @@
     "browse": "Voir les offres",
     "lastAlert": "Dernière alerte : {date}",
     "noAlertYet": "Aucune alerte envoyée pour l’instant.",
+    "filtersLabel": "Filtres de la recherche « {name} »",
     "open": "Voir les offres",
     "alerts": "M’avertir des nouvelles offres",
     "frequency": "Fréquence",
@@ -3299,5 +3377,113 @@
     "errorLanguageInvalid": "Le nom de la langue doit comporter entre 2 et 40 caractères.",
     "errorExperienceInvalid": "Indiquez un nombre d'années entre 0 et 60.",
     "errorFieldsInvalid": "Corrigez les champs signalés avant d'enregistrer."
+  },
+  "adminRetention": {
+    "title": "Conservation des données",
+    "subtitle": "Durées de conservation enregistrées en base et modes des tâches de nettoyage. Consultation seule — cette page ne modifie rien.",
+    "demoNotice": "Mode démo : valeurs initiales de la migration, sans lecture de la base.",
+    "modesTitle": "Modes des tâches planifiées",
+    "modesHint": "État des variables d’environnement du service, lu comme dans la tâche de maintenance. Le modifier exige de définir la variable chez l’hébergeur.",
+    "modeRetention": "Nettoyage des données (RETENTION_MODE)",
+    "modeDsaRetention": "Anonymisation des dossiers DSA (DSA_RETENTION_MODE)",
+    "modeStorageGc": "Nettoyage des fichiers orphelins (STORAGE_GC_MODE)",
+    "mode": {
+      "off": "Désactivé",
+      "dryRun": "Essai (sans modification)",
+      "apply": "Activé (suppression)"
+    },
+    "storageGcDryRun": "Compteurs seulement (sans suppression)",
+    "storageGcDelete": "Suppression des objets orphelins",
+    "policiesTitle": "Durées de conservation",
+    "policiesHint": "Une catégorie « désactivée » n’a pas d’échéance. Les durées sont modifiées par le responsable du traitement.",
+    "policiesEmpty": "Aucune durée de conservation enregistrée.",
+    "fieldPeriod": "Durée",
+    "fieldWarning": "Avertissement avant échéance",
+    "fieldEnforcement": "Qui fait respecter l’échéance",
+    "fieldLastChange": "Dernière modification",
+    "enforcement": {
+      "job": "Tâche de nettoyage",
+      "monitoring": "Sonde de surveillance",
+      "infrastructure": "Infrastructure",
+      "none": "Aucune tâche"
+    },
+    "days": "{count, plural, one {# jour} other {# jours}}",
+    "periodOff": "Désactivé",
+    "lastChangeValue": "{date}, {actor} : {from} → {to}",
+    "updatedValue": "{date} (migration)",
+    "lastChangeNone": "Aucune modification",
+    "actorUnknown": "Administrateur",
+    "unknownCategory": "Catégorie sans description dans le panneau.",
+    "auditLink": "Historique des modifications dans le journal",
+    "keys": {
+      "acceptance_ip_user_agent": {
+        "label": "IP et user-agent de l’acceptation",
+        "description": "L’adresse IP et le user-agent enregistrés à l’inscription sont effacés ; le justificatif d’acceptation reste."
+      },
+      "audit_log": {
+        "label": "Journal d’audit",
+        "description": "Journal minimisé des actions d’administration. Aucune tâche automatique."
+      },
+      "closed_application": {
+        "label": "Candidatures clôturées",
+        "description": "Candidature à l’état final avec ses conversations, notifications et e-mails — à compter de la clôture."
+      },
+      "confirmed_guest_request": {
+        "label": "Demandes confirmées sans compte",
+        "description": "Tampon de la demande invitée après confirmation ; la candidature reste avec son instantané."
+      },
+      "consent_evidence": {
+        "label": "Preuves des consentements",
+        "description": "Preuves des consentements après minimisation. Aucune tâche automatique."
+      },
+      "data_rights_request_log": {
+        "label": "Trace des demandes d’exercice des droits",
+        "description": "Trace du traitement d’une demande d’accès ou d’effacement, sans les données — à compter de la clôture."
+      },
+      "database_backup": {
+        "label": "Sauvegardes de la base",
+        "description": "Sauvegardes et exports de la base, élagués par le script de sauvegarde et le fournisseur."
+      },
+      "deleted_file": {
+        "label": "Fichiers supprimés",
+        "description": "Fichier marqué comme supprimé : ligne en base et objet dans le bucket."
+      },
+      "deleted_profile": {
+        "label": "Profils candidats supprimés",
+        "description": "Profil marqué comme supprimé : suppression complète du compte et des données du processus."
+      },
+      "erasure_tombstone": {
+        "label": "Registre des effacements",
+        "description": "Registre des effacements à réappliquer après restauration ; doit survivre à la plus ancienne sauvegarde."
+      },
+      "guest_ip_user_agent": {
+        "label": "IP et user-agent de l’invité",
+        "description": "L’adresse IP et le user-agent du consentement de l’invité sont effacés."
+      },
+      "inactive_candidate_account": {
+        "label": "Comptes candidats inactifs",
+        "description": "Compte sans activité : avertissement par e-mail, puis suppression complète."
+      },
+      "inactive_candidate_cv": {
+        "label": "CV des candidats inactifs",
+        "description": "CV sans activité du compte : avertissement par e-mail, puis suppression du fichier."
+      },
+      "inactive_searchable_profile": {
+        "label": "Profils visibles inactifs",
+        "description": "Un profil visible par les entreprises sans activité est masqué dans la recherche."
+      },
+      "security_log": {
+        "label": "Journaux applicatifs et de sécurité",
+        "description": "Journaux bruts chez l’hébergeur — réglage d’infrastructure."
+      },
+      "storage_physical_deletion": {
+        "label": "Suppression physique des fichiers",
+        "description": "Suppression de l’objet du bucket après celle de la ligne ; alerte avant l’échéance."
+      },
+      "unconfirmed_guest_request": {
+        "label": "Demandes non confirmées sans compte",
+        "description": "Demande invitée non confirmée — à compter du premier envoi."
+      }
+    }
   }
 }

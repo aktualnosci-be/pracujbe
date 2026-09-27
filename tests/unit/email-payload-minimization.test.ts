@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { Locale } from '@/i18n/routing';
 import type { EmailType } from '@/emails/copy';
@@ -12,6 +12,7 @@ import { EMAIL_PAYLOAD_FIELDS, minimizeEmailPayload } from '@/lib/email/payload-
 
 import { extractEmailPayloads } from '../../scripts/privacy/email-payloads.mjs';
 import { loadMigrationFiles } from '../../scripts/privacy/schema.mjs';
+import { warmUpEmailRender } from '../helpers/email-render-warmup';
 
 /**
  * #503 — minimalizacja treści e-maili wysyłanych do dostawcy poczty.
@@ -30,6 +31,9 @@ const ROOT = resolve(__dirname, '../..');
 const DELIVERED = [...QUEUED_EMAIL_TYPES, ...GUEST_EMAIL_TYPES] as const;
 const LOCALES: readonly Locale[] = ['pl', 'nl', 'fr', 'en'];
 const SITE = 'https://pracuj.be';
+
+// Pierwszy render React Email (leniwy import react-dom/server) poza limitem pierwszego testu.
+beforeAll(warmUpEmailRender);
 
 /** Nazwy pól, które nigdy nie mogą trafić do treści maila bez osobnej oceny. */
 const FORBIDDEN = /cv|resume|file|answer|screening|body|preview|^message$|phone|email|address|niss|birth|health/i;
@@ -187,15 +191,20 @@ describe('#503 lista pól e-maili', () => {
   });
 });
 
-describe('#503 treść maila na ścieżce workera', () => {
-  it.each(LOCALES)('%s: żaden szablon nie przenosi kanarków do tematu, HTML ani tekstu', async (locale) => {
-    for (const template of DELIVERED) {
-      const out = await renderDelivered(template, locale, payloadWithCanaries(template));
-      const found = Object.values(CANARIES).filter((value) => out.includes(value));
-      expect(found, template).toEqual([]);
-    }
+/**
+ * Jeden test = jeden szablon w jednym języku. Wcześniej jeden test renderował wszystkie
+ * szablony danego języka (HTML + text/plain, ~40 × 2 rendery) i pod obciążeniem maszyny
+ * przekraczał limit 5 s; asercja dla każdej pary jest ta sama.
+ */
+describe.each(LOCALES)('#503 treść maila na ścieżce workera (%s)', (locale) => {
+  it.each(DELIVERED)('%s: szablon nie przenosi kanarków do tematu, HTML ani tekstu', async (template) => {
+    const out = await renderDelivered(template, locale, payloadWithCanaries(template));
+    const found = Object.values(CANARIES).filter((value) => out.includes(value));
+    expect(found, template).toEqual([]);
   });
+});
 
+describe('#503 treść maila na ścieżce workera', () => {
   it('e-mail o aplikacji: imię kandydata i tytuł oferty + link do panelu, bez reszty', async () => {
     const out = await renderDelivered('newApplication', 'nl', {
       candidateName: 'Cleo Candidat',

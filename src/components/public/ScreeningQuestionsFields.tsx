@@ -122,6 +122,15 @@ export function ScreeningQuestionsFields({
                   );
                 })}
               </div>
+              {!question.required && value !== undefined ? (
+                <button
+                  type="button"
+                  onClick={() => onChange(question.id, undefined)}
+                  className="text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  {t('screeningClearAnswer')}
+                </button>
+              ) : null}
               {error}
             </div>
           );

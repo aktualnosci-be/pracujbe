@@ -24,7 +24,8 @@ import {
  * `getJobFunnel`: zakres `?dni=7|30|90`, definicje metryk, rozbicie per oferta). Wszystko pod sesją/RLS;
  * bez env — dane DEMO (delty tygodniowe kafelków tylko w trybie DEMO). Liczniki rekrutacyjne
  * i lejek czyta tylko recruiter+ — zwykły `member` widzi „brak danych” z powodem, nie zera
- * (audyt P1-14). NOINDEX z layoutu panelu.
+ * (audyt P1-14). NOINDEX z layoutu panelu. Lejek ofert można pobrać jako CSV dla wybranego
+ * zakresu (`/api/employer/job-funnel`); w trybie demo bez przycisku.
  */
 
 export async function generateMetadata({
@@ -92,6 +93,11 @@ export default async function EmployerStatsPage({
           totals={jobFunnel.totals}
           jobs={jobFunnel.jobs}
           locale={locale}
+          exportHref={
+            configured
+              ? `/api/employer/job-funnel?${new URLSearchParams({ dni: String(jobFunnel.range.days), locale })}`
+              : undefined
+          }
         />
       )}
     </div>
