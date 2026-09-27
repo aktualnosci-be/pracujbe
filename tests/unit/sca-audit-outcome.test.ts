@@ -37,6 +37,60 @@ describe('classifyAuditResult — audyt policzony', () => {
   });
 });
 
+describe('classifyAuditResult — wartości spoza kontraktu npm audit (#643)', () => {
+  it.each([
+    ['tekst zamiast liczby', { high: 'n/a', critical: 0 }],
+    ['liczba ujemna', { high: 0, critical: -5 }],
+    ['ułamek', { high: 1.5, critical: 0 }],
+    ['null jawnie w polu high, ale critical niepoprawny', { high: null, critical: 'x' }],
+    ['tablica zamiast liczby', { high: [1], critical: 0 }],
+    ['obiekt zamiast liczby', { high: { n: 1 }, critical: 0 }],
+    ['boolean zamiast liczby', { high: true, critical: 0 }],
+  ])('unrecognized gdy metadata.vulnerabilities.high/critical zawiera %s — BLOKUJE (kontrola ujemna)', (_label, vulnerabilities) => {
+    const result = classifyAuditResult({
+      stdout: JSON.stringify({ metadata: { vulnerabilities } }),
+      stderr: '',
+    });
+    expect(result.status).toBe('unrecognized');
+    expect(result).not.toHaveProperty('high');
+    expect(result).not.toHaveProperty('critical');
+  });
+
+  // JSON nie zna NaN/Infinity jako literałów liczbowych (nie przetrwają JSON.stringify —
+  // stają się `null`), więc odtwarzamy dokładnie to, co realny `npm audit --json` mógłby
+  // wypisać dla takich wartości: niepoprawny tekst JSON. Funkcja MUSI to nadal zablokować
+  // (inną gałęzią — niepoprawny JSON — ale ten sam wynik: `unrecognized`, nigdy `clean`).
+  it.each(['NaN', 'Infinity', '-Infinity'])(
+    'unrecognized (przez niepoprawny JSON) gdy stdout zawiera literał %s w polu vulnerabilities — BLOKUJE (kontrola ujemna)',
+    (literal) => {
+      const result = classifyAuditResult({
+        stdout: `{"metadata":{"vulnerabilities":{"high":${literal},"critical":0}}}`,
+        stderr: '',
+      });
+      expect(result.status).toBe('unrecognized');
+      expect(result).not.toHaveProperty('high');
+      expect(result).not.toHaveProperty('critical');
+    },
+  );
+
+  it('nie klasyfikuje jako clean, mimo że suma zniekształconych wartości wygląda na 0 lub ujemną (kontrola ujemna głównego scenariusza #643)', () => {
+    const result = classifyAuditResult({
+      stdout: JSON.stringify({ metadata: { vulnerabilities: { high: 'n/a', critical: -5 } } }),
+      stderr: '',
+    });
+    expect(result.status).not.toBe('clean');
+    expect(result.status).toBe('unrecognized');
+  });
+
+  it('duża, ale poprawna liczba całkowita nadal daje vulnerable (nie jest to regres kontraktu)', () => {
+    const result = classifyAuditResult({
+      stdout: JSON.stringify({ metadata: { vulnerabilities: { high: 100, critical: 0 } } }),
+      stderr: '',
+    });
+    expect(result).toEqual({ status: 'vulnerable', high: 100, critical: 0 });
+  });
+});
+
 describe('classifyAuditResult — pusty wynik (#607)', () => {
   it('unrecognized gdy stdout jest puste bez rozpoznanej przyczyny w stderr — BLOKUJE (kontrola ujemna)', () => {
     const result = classifyAuditResult({ stdout: '', stderr: '' });
