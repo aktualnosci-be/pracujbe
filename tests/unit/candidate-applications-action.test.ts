@@ -16,7 +16,22 @@ describe('loadMoreApplications', () => {
   it('accepts a valid cursor and reads under the server session', async () => {
     vi.mocked(getMyApplicationsPage).mockResolvedValue({ items: [], nextCursor: null });
     expect(await loadMoreApplications('pl', cursor)).toEqual({ status: 'ready', page: { items: [], nextCursor: null } });
-    expect(getMyApplicationsPage).toHaveBeenCalledWith('pl', cursor);
+    expect(getMyApplicationsPage).toHaveBeenCalledWith('pl', cursor, null);
+  });
+
+  it('passes the stage filter to the server read (#809)', async () => {
+    vi.mocked(getMyApplicationsPage).mockResolvedValue({ items: [], nextCursor: null });
+    await loadMoreApplications('pl', cursor, 'rozmowa');
+    expect(getMyApplicationsPage).toHaveBeenCalledWith('pl', cursor, 'rozmowa');
+  });
+
+  it.each([
+    ['unknown stage', 'offer_sent'],
+    ['SQL-looking stage', "aktywne') OR true --"],
+    ['array', ['aktywne']],
+  ])('rejects %s filter instead of widening to all applications', async (_reason, filter) => {
+    expect(await loadMoreApplications('pl', cursor, filter)).toEqual({ status: 'error' });
+    expect(getMyApplicationsPage).not.toHaveBeenCalled();
   });
 
   it.each([
