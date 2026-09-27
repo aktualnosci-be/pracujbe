@@ -1657,6 +1657,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Tryb demo (#359): layouty biorą demo z `getNotifications(locale, rola)` (czas przez Intl), bez
   literałów w `DashboardShell`. Ustawienia pracodawcy (#357): własne opisy (`settings.employer*`),
   bez przełącznika dopasowanych ofert, opis powiązany `aria-describedby`.
+  Synchronizacja pełnej listy po „oznacz wszystkie” z dzwonka (#825, bez migracji):
+  „Oznacz wszystkie” w dzwonku (`DashboardShell`) woła RPC i `router.refresh()` z INNEGO
+  komponentu niż pełna lista — `NotificationsList` dostawał świeży `initialPage` z serwera, ale
+  lokalny stan (`useState` z montowania) sam się z nim nie uzgadniał: licznik się zerował, a
+  wiersze zostawały nieprzeczytane. Efekt reagujący na KOLEJNY (nie pierwszy) `initialPage`
+  uzgadnia znane pozycje ze świeżych danych serwera; przy globalnym zerze oznacza WSZYSTKIE
+  wczytane strony (także z „Pokaż więcej”) jako przeczytane, a widok `?nieprzeczytane=1` czyści
+  do pustego stanu i kasuje kursor „Pokaż więcej” — zgodnie z tym, co pokazałoby świeże otwarcie
+  tej samej strony. Widok „wszystkie” nie usuwa wierszy (dane zostają, tylko przeczytane).
+  Dowód: unit `notifications-list` (rerender z nowym `initialPage`; kontrola ujemna: identyczny
+  obiekt props po raz drugi nic nie zmienia).
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)

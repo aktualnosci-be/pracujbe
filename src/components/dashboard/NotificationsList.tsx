@@ -66,6 +66,52 @@ export function NotificationsList({
   React.useEffect(() => setReadDelta(0), [initialPage.unread]);
   const unreadCount = Math.max(0, initialPage.unread - readDelta);
 
+  // #825: `router.refresh()` wywołane GDZIE INDZIEJ (dzwonek w `DashboardShell`, otwarcie
+  // pozycji z innej karty) daje tej stronie NOWY `initialPage` z serwera (RSC), ale lokalny
+  // `items`/`cursor` zostały zainicjowane raz przy montowaniu (`useState`) i same z siebie się
+  // nie uzgadniają z odświeżonymi propsami — stare wiersze zostają nieprzeczytane mimo że
+  // serwer już potwierdził ich odczyt. Po każdym KOLEJNYM `initialPage` (nie przy montowaniu)
+  // uzgadniamy: (1) status znanych pozycji z pierwszej strony bierzemy z serwera — źródła
+  // prawdy, (2) gdy globalny licznik spadł do zera, wszystkie wczytane strony (także dalsze,
+  // z „Pokaż więcej") są już przeczytane, a widok filtrowany „Nieprzeczytane" staje się pusty
+  // (tak jak nowe otwarcie tej samej strony by pokazało) — bez usuwania wczytanych stron
+  // w pozostałych przypadkach (Invariant #11 „zachowanie danych").
+  const previousPageRef = React.useRef(initialPage);
+  React.useEffect(() => {
+    if (previousPageRef.current === initialPage) return;
+    previousPageRef.current = initialPage;
+
+    const allRead = initialPage.unread === 0;
+    const freshById = new Map(initialPage.items.map((item) => [item.id, item] as const));
+
+    setItems((current) => {
+      let changed = false;
+      const reconciled = current.map((item) => {
+        if (allRead) {
+          if (!item.unread) return item;
+          changed = true;
+          return { ...item, unread: false };
+        }
+        const fresh = freshById.get(item.id);
+        if (fresh && fresh.unread !== item.unread) {
+          changed = true;
+          return { ...item, unread: fresh.unread };
+        }
+        return item;
+      });
+      if (!(allRead && unreadOnly)) return changed ? reconciled : current;
+      // Widok „Nieprzeczytane": po globalnym zerze nie ma już nic do pokazania — jak przy
+      // nowym otwarciu tej samej strony (`getNotificationsPage(..., unreadOnly=true)`).
+      // (`reconciled` ma tu zawsze `unread: false` na każdej pozycji, więc wynik jest pusty.)
+      return current.length === 0 ? current : reconciled.filter((item) => item.unread);
+    });
+
+    if (allRead && unreadOnly) {
+      setCursor(null);
+      setMoreFailed(false);
+    }
+  }, [initialPage, unreadOnly]);
+
   function markLocal(ids: string[] | null): void {
     const newlyRead = items.filter((item) => item.unread && (ids === null || ids.includes(item.id))).length;
     setItems((current) =>
