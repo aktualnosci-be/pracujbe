@@ -39,12 +39,20 @@ import { updateCompanyLinks } from '@/lib/actions/company';
  */
 
 export interface CompanyLinksFormProps {
+  /**
+   * ID firmy, dla której wyrenderowano formularz (#801) — akcja zapisu używa TEGO
+   * identyfikatora, nie aktywnej firmy z cookie w chwili wysłania, więc zmiana aktywnej
+   * firmy w innej karcie po otwarciu formularza nie może przekierować zapisu do innego
+   * rekordu.
+   */
+  companyId: string;
   defaultValues: { website: string; logoUrl: string };
   /** Host własnej witryny (`NEXT_PUBLIC_SITE_URL`, bez schematu) — dla podglądu logo. */
   ownHost: string;
 }
 
 export function CompanyLinksForm({
+  companyId,
   defaultValues,
   ownHost,
 }: CompanyLinksFormProps): React.JSX.Element {
@@ -89,7 +97,7 @@ export function CompanyLinksForm({
     setDemo(false);
 
     try {
-      const result = await updateCompanyLinks(values);
+      const result = await updateCompanyLinks(companyId, values);
       if (!result.ok) {
         setServerError(result.error);
         return;

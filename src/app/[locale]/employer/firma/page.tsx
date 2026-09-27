@@ -259,6 +259,7 @@ export default async function EmployerCompanyPage({
                 <div className="mt-4">
                   <CompanyForm
                     mode="edit"
+                    companyId={company.id}
                     verified={company.status === 'verified'}
                     defaultValues={{
                       name: company.name,
@@ -274,6 +275,7 @@ export default async function EmployerCompanyPage({
                 <p className={INTRO}>{t('linksSubtitle')}</p>
                 <div className="mt-4">
                   <CompanyLinksForm
+                    companyId={company.id}
                     defaultValues={{
                       website: company.website ?? '',
                       logoUrl: company.logoUrl ?? '',
