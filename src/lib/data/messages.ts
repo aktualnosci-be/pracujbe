@@ -81,6 +81,18 @@ export interface ThreadCursor {
 /** Liczba wiadomości na stronę wątku (pierwsza strona = najnowsze, kolejne = starsze). */
 export const THREAD_PAGE_SIZE = 50;
 
+/**
+ * Stan blokady firmy tej rozmowy dla kandydata (#97, #832) — pozwala zablokować firmę
+ * z istniejącego wątku, niezależnie od tego, czy ma jeszcze publiczną ofertę. `null` = rozmowa
+ * nie jest firmowa, widz jest po stronie firmy (pracodawca nie blokuje sam siebie), albo nazwa
+ * firmy nierozwiązywalna — kontrolka się wtedy nie renderuje.
+ */
+export interface ConversationCompanyBlock {
+  companyId: string;
+  companyName: string;
+  blocked: boolean;
+}
+
 export interface ConversationThread {
   id: string;
   subject: string;
@@ -89,6 +101,8 @@ export interface ConversationThread {
   messages: ThreadMessage[];
   /** Kursor do doładowania starszych; `null` = to już początek rozmowy. */
   olderCursor: ThreadCursor | null;
+  /** Blokada firmy tej rozmowy widziana przez kandydata (#832); `undefined`/`null` = brak kontrolki. */
+  companyBlock?: ConversationCompanyBlock | null;
 }
 
 export type ConversationThreadResult =
@@ -294,6 +308,27 @@ async function fetchSenderContext(
 }
 
 /**
+ * Stan blokady firmy tej rozmowy dla KANDYDATA (#832): tylko gdy rozmowa jest firmowa,
+ * widz nie jest jej członkiem (`ctx.viewerIsCompany`) i nazwa firmy jest rozwiązywalna
+ * (inaczej neutralnie brak kontrolki, jak przy nierozwiązywalnym nadawcy). Odczyt bezpośrednio
+ * z `candidate_company_blocks` pod RLS — polityka `candidate_company_blocks_select_own` (0078)
+ * zwraca wyłącznie wiersz bieżącego `auth.uid()`; zapis zostaje przez `set_company_block`
+ * (RPC już przyjmuje dowolną nieusuniętą firmę, bez wymogu aktywnej publicznej oferty).
+ */
+async function fetchCompanyBlock(
+  tx: TransactionQuery,
+  uid: string,
+  companyId: string,
+  ctx: SenderContext,
+): Promise<ConversationCompanyBlock | null> {
+  if (!companyId || ctx.viewerIsCompany || !ctx.companyName) return null;
+  const row = await queryOne(tx, 'messages.company-block',
+    `SELECT 1 AS blocked FROM public.candidate_company_blocks
+      WHERE candidate_id = $1 AND company_id = $2`, [uid, companyId]);
+  return { companyId, companyName: ctx.companyName, blocked: row !== null };
+}
+
+/**
  * Mapuje wiersze `messages` na kontrakt UI. Nadawca z profilu widocznego pod RLS; bez niego
  * (#355) wiadomość strony firmowej podpisujemy nazwą firmy, a stronę ustalamy tak: kandydat
  * widzi po drugiej stronie wyłącznie firmę, pracodawca — zespół (członkowie firmy) albo kandydata.
@@ -420,12 +455,15 @@ function buildDemo(locale: Locale): {
       unread: seed.unread,
       unreadCount: seed.unread ? 1 : 0,
     });
+    const companyId = demoCompanies[seed.companyIdx]?.id ?? '';
     threads.set(seed.id, {
       id: seed.id,
       subject,
       counterpartyName: companyName,
       messages,
       olderCursor: null,
+      // Demo (#12): kontrolka blokady widoczna też bez env, zawsze nie zablokowane na start.
+      companyBlock: companyId && companyName ? { companyId, companyName, blocked: false } : null,
     });
   }
 
@@ -599,6 +637,7 @@ export async function getConversationThread(
       const companyId = asStr(conv['company_id']);
       const ctx = await fetchSenderContext(tx, uid, cid, companyId, senderIds);
       const messages = toThreadMessages(messageRows, uid, ctx);
+      const companyBlock = await fetchCompanyBlock(tx, uid, companyId, ctx);
 
       return {
         status: 'ready',
@@ -608,6 +647,7 @@ export async function getConversationThread(
           counterpartyName: resolveCounterparty(otherIds, ctx.nameByProfile, ctx.companyName),
           messages,
           olderCursor,
+          companyBlock,
         },
       };
     });
