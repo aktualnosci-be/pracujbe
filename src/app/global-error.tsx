@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 
+import { installClientErrorReporter } from '@/lib/client-error/reporter';
 import { captureError } from '@/lib/error-report';
 
 export function GlobalErrorContent({
@@ -12,6 +13,8 @@ export function GlobalErrorContent({
   reset: () => void;
 }): React.JSX.Element {
   useEffect(() => {
+    // Global error zastępuje cały dokument (bez [locale]/layout) — reporter włączamy tu jawnie.
+    installClientErrorReporter();
     captureError(error, { area: 'global-error', digest: error.digest });
   }, [error]);
 

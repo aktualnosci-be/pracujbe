@@ -165,12 +165,16 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 ## 11. CI/CD
 
 - [ ] `ci.yml` zielony na `main` (9 jobów, `ubuntu-latest`); `Wait for CI` włączone.
-- [ ] Wdrożony SHA (stopka / `version` w `/api/health`) = SHA z zielonego CI.
+- [ ] Wdrożony SHA (stopka / `version` w `/api/health`) = SHA z zielonego CI —
+      `PROD_SMOKE_EXPECT_SHA=<sha> HEALTH_CHECK_SECRET=… node scripts/railway/prod-smoke.mjs`
+      ([`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER_ROLLBACK.md) §4.1).
 
 ## 12. Bezpieczeństwo (skrót)
 
 - [ ] [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md) przejrzana dla Railway.
-- [ ] Nagłówki (CSP, HSTS, nosniff, referrer-policy, frame-ancestors) na domenie produkcyjnej.
+- [ ] Nagłówki (CSP, HSTS, nosniff, referrer-policy, frame-ancestors) na domenie produkcyjnej —
+      smoke sprawdza je na każdej stronie; po starcie `PROD_SMOKE_EXPECT_MODE=production`
+      (HSTS ≥ 1 rok, bez `X-Robots-Tag: noindex`), przed startem `demo`.
 - [ ] Brak kluczy uprzywilejowanych w bundlu klienta; pliki tylko przez podpisane linki.
 
 ## 13. Moduły
