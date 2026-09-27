@@ -1,5 +1,5 @@
 import { ErrorCodes } from '@/lib/errors';
-import { FILTERED, redactString, redactUrl } from '@/lib/privacy/redact';
+import { FILTERED, UUID_RE, redactString, redactUrl } from '@/lib/privacy/redact';
 
 import type { ErrorWebhookFormat } from './url';
 
@@ -30,7 +30,11 @@ export function safeErrorCode(code: string): string {
 /**
  * Trasa bez query i fragmentu, bez segmentów wyglądających na token lub dane osobowe
  * (`redactUrl`, #502) i bez znaków formatowania Markdown/wzmianki — tylko znaki ścieżki
- * i szablonu App Routera (`[locale]`, `(public)`).
+ * i szablonu App Routera (`[locale]`, `(public)`). Segment-UUID (np. identyfikator
+ * aplikacji/oferty na prywatnej trasie kandydata/pracodawcy) jest tu zawsze szablonem
+ * `[id]` — w przeciwieństwie do ogólnej redakcji (`redactPathSegment`), gdzie UUID bywa
+ * celowo zachowywanym identyfikatorem korelacyjnym w logach. Ta wartość trafia na
+ * zewnątrz, do kanału błędów Discorda, więc realny UUID rekordu nigdy tam nie idzie (#776).
  */
 export function safeRoute(route: string | undefined): string {
   if (!route) return '-';
@@ -40,7 +44,11 @@ export function safeRoute(route: string | undefined): string {
   if (!path.startsWith('/')) path = `/${path}`;
   const safe = path
     .split('/')
-    .map((segment) => (segment === '' || /^[A-Za-z0-9_.~\-[\]()]+$/.test(segment) || segment === FILTERED ? segment : FILTERED))
+    .map((segment) => {
+      if (segment === '' || segment === FILTERED) return segment;
+      if (UUID_RE.test(segment)) return '[id]';
+      return /^[A-Za-z0-9_.~\-[\]()]+$/.test(segment) ? segment : FILTERED;
+    })
     .join('/');
   return safe.length > MAX_ROUTE ? `${safe.slice(0, MAX_ROUTE)}…` : safe;
 }
