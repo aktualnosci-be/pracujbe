@@ -2245,6 +2245,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Panele (#373, `panel-a11y`): axe critical/serious + `target-size` na wszystkich 29 trasach
   kandydata i pracodawcy (PL/EN 1280 px, 4 języki 320 px), z banerem, z otwartym menu statusu,
   centrum powiadomień i kompozytorem; kontrola ujemna (przycisk bez nazwy → czerwony). Admin: `admin-a11y`.
+  Pułapka fokusu `AdminConfirmDialog` po błędzie ogólnym (#837): gdy zapis kończy się błędem
+  (np. `INTERNAL`) w trakcie którego fokus stał na kontenerze dialogu (#415), fokus wraca na
+  kontrolkę sprzed zapisu zamiast zostawać na kontenerze; pułapka Tab/Shift+Tab dodatkowo
+  rozpoznaje sam kontener jako aktywny element (zapętla na pierwszą/ostatnią kontrolkę) —
+  Shift+Tab nie wypuszcza już nawigacji na przyciemnione tło. Wspólne dla 11 miejsc korzystających
+  z `AdminConfirmDialog`. Dowód: `tests/unit/admin-company-status-confirm.test.tsx` (kontrola
+  ujemna: bez poprawki fokus zostaje na kontenerze).
   Zasada E2E: kontrolki po roli i nazwie z `src/messages` (`tests/e2e/fixtures/messages.ts`),
   bez `.first()`/`.nth()` na przyciskach o znaczeniu. Invariant #1 na ścieżce enqueue → worker →
   render (#348, `email-recipient-locale-e2e`): kontrakt najnowszych `resolve_recipient_locale`/
