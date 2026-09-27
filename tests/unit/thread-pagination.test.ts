@@ -64,6 +64,8 @@ function fakeThread(store: { rows: Row[]; conversation: boolean; failMessages?: 
     .rows('messages.profile-names', [{ id: 'other', first_name: 'Anna', last_name: 'Nowak' }])
     .rpc('get_conversation_company_name', 'Firma')
     .rows('messages.company-members', [])
+    // Brak wiersza = firma nie jest zablokowana (#832) — tej kontrolki tu nic nie dotyczy.
+    .rows('messages.company-block', [])
     .rows('messages.thread-page', ({ values, text }) => {
       const [, lt, id, limit] = values as [string, string | null, string | null, number];
       calls.limit.push(limit);

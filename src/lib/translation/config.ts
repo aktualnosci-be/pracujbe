@@ -34,6 +34,15 @@ export function isTranslationEnabled(): boolean {
   return translationProvider() !== null;
 }
 
+/**
+ * Czy publiczne strony ofert pokazują gotowe przekłady (#33). Sama flaga — bez wymogu klucza
+ * dostawcy: przekład zapisany w bazie jest ważny także wtedy, gdy worker chwilowo nie działa.
+ * Wyłączenie flagi ukrywa przekłady (strona wraca do treści w języku oryginału).
+ */
+export function isTranslationDisplayEnabled(): boolean {
+  return flagOn(process.env.AI_TRANSLATION_ENABLED);
+}
+
 /** Model: `AI_TRANSLATION_MODEL` → `AI_MODEL` → `gpt-6-luna` (`src/lib/ai/model-config.ts`). */
 export function translationModel(): string {
   return resolveAiModel(process.env.AI_TRANSLATION_MODEL);

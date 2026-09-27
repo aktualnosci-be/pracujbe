@@ -75,7 +75,7 @@ export async function jobCityAssist(input: unknown): Promise<JobCityAssist> {
         suggestions: pickSuggestions(prefix.map((r) => ({
           locationId: r.location_id, alias: r.alias, sortOrder: Number(r.sort_order ?? 0),
           name: displayName(r.slug, r.name, locale),
-        })), JOB_CITY_SUGGESTION_LIMIT),
+        })), JOB_CITY_SUGGESTION_LIMIT, key),
       };
     });
   } catch (error) {
