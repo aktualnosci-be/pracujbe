@@ -152,15 +152,29 @@ export async function sendMessage(
   }
 }
 
-/** Oznacza konwersację jako przeczytaną (ustawia `last_read_at`, wygasza powiadomienia). */
-export async function markConversationRead(conversationId: string): Promise<OkResult> {
+/** ISO 8601 z wymaganą strefą (jak zwraca Postgres `timestamptz` przez `pg`/JSON). */
+const isoTimestampSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)));
+
+/**
+ * Oznacza konwersację jako przeczytaną (ustawia `last_read_at`, wygasza powiadomienia).
+ *
+ * `readUpTo` = czas najnowszej wiadomości widocznej w WYŚWIETLONYM wątku (nie „teraz") —
+ * wiadomość dostarczona po pobraniu wątku, a przed tym wywołaniem, zostaje nieprzeczytana
+ * (#889). Zły/pominięty format nie blokuje odczytu — spada na dawne zachowanie (`now()`).
+ */
+export async function markConversationRead(
+  conversationId: string,
+  readUpTo?: string,
+): Promise<OkResult> {
   if (!isPortalDataConfigured()) return { ok: true };
+
+  const upTo = readUpTo !== undefined && isoTimestampSchema.safeParse(readUpTo).success ? readUpTo : undefined;
 
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
     await withPortalTransaction(me, (tx) =>
-      rpc(tx, 'mark_conversation_read', { p_conversation_id: conversationId }),
+      rpc(tx, 'mark_conversation_read', { p_conversation_id: conversationId, p_up_to: upTo ?? null }),
     );
     return { ok: true };
   } catch (error) {

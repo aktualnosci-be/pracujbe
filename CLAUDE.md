@@ -1708,6 +1708,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ustalana z `company_members` pod RLS), inaczej etykieta `messages.sender*Fallback`; imienia
   rekrutera nie ujawniamy (0023). Demo wiadomości w języku strony (#359). Stan ładowania listy
   i wątku (#177): `wiadomosci/loading.tsx` + `ConversationOpenPending`, E2E `messages-loading.spec`.
+  Granica odczytu = pobrany wątek, nie „teraz” (#889, migracja `0810` — numer tymczasowy):
+  `mark_conversation_read(conversation, p_up_to)` przyjmuje czas najnowszej wiadomości
+  faktycznie WIDOCZNEJ w wątku, który `MessagesView` właśnie pobrał (`messages.at(-1).createdAt`,
+  kolejność chronologiczna). Dawniej RPC ustawiał `last_read_at = now()` w chwili własnej
+  transakcji, uruchamianej PO osobnej transakcji odczytu wątku — wiadomość dostarczona w tej
+  luce (po pobraniu, przed zapisem odczytu) była oznaczana jako przeczytana razem z jej
+  powiadomieniem, mimo że renderowana strona jej nie zawierała. `last_read_at` przesuwa się
+  teraz wyłącznie do przekazanej granicy i tylko w przód (`greatest(...)`, monotonicznie —
+  równoległe otwarcie ze starszą granicą nie cofa nowszego stanu), powiadomienia gasną tylko
+  dla wiadomości `created_at <= p_up_to`. Bez granicy (brak wiadomości w wątku, inny przyszły
+  wołający) — zachowanie jak dotąd (`now()`). Dowód: unit `messages-actions` (RPC dostaje
+  `p_up_to`; kontrola ujemna: brak/zła data → `null`, legacy), `messages-view` (granica = ostatnia,
+  nie pierwsza, wiadomość wątku; kontrola ujemna: pusty wątek → `undefined`).
   Podgląd ostatniej wiadomości kandydata (#712): `getLatestMessages` (`candidate.latest-messages`)
   dobiera ostatnią nieusuniętą wiadomość rozmowy przez `ORDER BY m.created_at DESC, m.id DESC`
   (ten sam tie-breaker co w `messages.ts`/`employer.ts`) — remis `created_at` (np. wiadomości

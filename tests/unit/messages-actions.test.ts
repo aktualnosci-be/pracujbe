@@ -119,6 +119,26 @@ describe('wiadomości', () => {
     expect(fakeDb.calls).toHaveLength(0);
   });
 
+  it('markConversationRead: granica odczytu trafia do RPC jako p_up_to (#889)', async () => {
+    const upTo = '2026-09-20T10:05:00.000Z';
+    expect(await markConversationRead(CONVERSATION, upTo)).toEqual({ ok: true });
+    expect(fakeDb.callsTo('mark_conversation_read')[0]).toMatchObject({
+      args: { p_conversation_id: CONVERSATION, p_up_to: upTo },
+      as: USER,
+    });
+  });
+
+  it('markConversationRead: bez granicy albo z nieprawidłową datą wysyła p_up_to=null (kontrola ujemna #889)', async () => {
+    await markConversationRead(CONVERSATION);
+    expect(fakeDb.callsTo('mark_conversation_read')[0]).toMatchObject({
+      args: { p_conversation_id: CONVERSATION, p_up_to: null },
+    });
+    await markConversationRead(CONVERSATION, 'nie-jest-datą');
+    expect(fakeDb.callsTo('mark_conversation_read')[1]).toMatchObject({
+      args: { p_conversation_id: CONVERSATION, p_up_to: null },
+    });
+  });
+
   it('bez sesji: PERMISSION_DENIED bez zapytań; tryb demo: atrapa bez bazy', async () => {
     fakeSession.identity = null;
     expect(await sendMessage(CONVERSATION, 'Dzień dobry', CLIENT_MSG)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });

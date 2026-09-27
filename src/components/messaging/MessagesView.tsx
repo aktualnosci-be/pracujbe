@@ -72,8 +72,12 @@ export async function MessagesView({
     if (threadResult.status === 'ready') {
       reports = await getMyMessageReports(activeId);
       // Oznaczamy tylko wątek, który udało się odczytać; licznik zmieniamy po sukcesie RPC.
+      // Granica odczytu = najnowsza wiadomość faktycznie WIDOCZNA w tym wątku (#889) —
+      // wiadomość wysłaną po tym pobraniu, a przed zapisem odczytu, RPC zostawia
+      // nieprzeczytaną (zamiast oznaczać wg czasu zapisu, `now()`).
+      const readUpTo = threadResult.thread.messages.at(-1)?.createdAt;
       try {
-        markedRead = (await markConversationRead(activeId)).ok;
+        markedRead = (await markConversationRead(activeId, readUpTo)).ok;
       } catch (error) {
         captureError(error, { area: 'messages.markConversationRead' });
       }

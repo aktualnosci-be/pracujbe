@@ -210,6 +210,30 @@ describe('mobilny powrót z wątku wiadomości', () => {
 
     expect(screen.getByTestId('conversation-list')).toHaveAttribute('data-unread', ok ? '0' : '2');
     expect(screen.getByText('message-thread')).toBeVisible();
+    // Bez wiadomości w wątku nie ma czego użyć jako granicy — legacy `now()` w RPC.
+    expect(markConversationRead).toHaveBeenCalledWith('conversation-1', undefined);
+  });
+
+  it('oznacza odczyt tylko do czasu najnowszej WIDOCZNEJ wiadomości, nie do „teraz” (#889)', async () => {
+    getConversationsResult.mockResolvedValue({ status: 'ready', items: [{ id: 'conversation-1' }] });
+    getConversationThread.mockResolvedValue({
+      status: 'ready',
+      thread: {
+        id: 'conversation-1',
+        messages: [
+          { id: 'm1', createdAt: '2026-01-01T10:00:00.000Z' },
+          { id: 'm2', createdAt: '2026-01-01T10:05:00.000Z' },
+        ],
+      },
+    });
+    markConversationRead.mockResolvedValue({ ok: true });
+
+    render(await MessagesView({ locale: 'pl', basePath: '/candidate/wiadomosci', activeParam: 'conversation-1' }));
+
+    // Granica = najnowsza (ostatnia w kolejności chronologicznej) wiadomość pobranego
+    // wątku, NIE pierwsza — pomyłka kolejności cofnęłaby odczyt i pokazałaby jako
+    // nieprzeczytane wiadomości, które użytkownik już widział.
+    expect(markConversationRead).toHaveBeenCalledWith('conversation-1', '2026-01-01T10:05:00.000Z');
   });
 
   it('nie usuwa licznika, gdy oznaczenie przeczytania rzuci wyjątek', async () => {
