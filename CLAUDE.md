@@ -1136,6 +1136,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
   transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
   sekcja CO28 (dblink, kontrola ujemna bez `FOR UPDATE` tworzy duplikat), `company-bootstrap-callback.test`.
+  Stary formularz nie nadpisuje innej firmy (#801, bez migracji): `updateCompany`/
+  `updateCompanyLinks` przyjmują `companyId` z formularza (wyrenderowanego dla KONKRETNEJ
+  firmy), zamiast czytać aktywną firmę z cookie w chwili zapisu — wybór aktywnej firmy jest
+  wspólny dla wszystkich kart, więc zmiana firmy w drugiej karcie po otwarciu formularza nie
+  przekierowuje już zapisu do innego rekordu (`getCompanyMembershipFor` weryfikuje rolę
+  owner/admin właśnie dla `companyId` z formularza). `CompanyForm`/`CompanyLinksForm` na
+  `/employer/firma` dostają `companyId={company.id}` z RSC. Testy: `company-update`,
+  `company-links-update` (przypadek dwóch kart), `company-links-form`.
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
   Lejek (#302): kohorta aplikacji z 30 dni (`submitted_at`) liczona zapytaniami `count` (head,
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert

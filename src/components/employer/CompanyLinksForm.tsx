@@ -43,6 +43,13 @@ import { updateCompanyLinks, type CompanyLinksOutcome } from '@/lib/actions/comp
  */
 
 export interface CompanyLinksFormProps {
+  /**
+   * ID firmy, dla której wyrenderowano formularz (#801) — akcja zapisu używa TEGO
+   * identyfikatora, nie aktywnej firmy z cookie w chwili wysłania, więc zmiana aktywnej
+   * firmy w innej karcie po otwarciu formularza nie może przekierować zapisu do innego
+   * rekordu.
+   */
+  companyId: string;
   /** Wartości pól: propozycja (gdy jest), inaczej zatwierdzone adresy. */
   defaultValues: { website: string; logoUrl: string };
   /** Zatwierdzone (publiczne) adresy — pokazywane, gdy propozycja czeka albo została odrzucona. */
@@ -54,6 +61,7 @@ export interface CompanyLinksFormProps {
 }
 
 export function CompanyLinksForm({
+  companyId,
   defaultValues,
   published,
   review,
@@ -100,7 +108,7 @@ export function CompanyLinksForm({
     setDemo(false);
 
     try {
-      const result = await updateCompanyLinks(values);
+      const result = await updateCompanyLinks(companyId, values);
       if (!result.ok) {
         setServerError(result.error);
         return;

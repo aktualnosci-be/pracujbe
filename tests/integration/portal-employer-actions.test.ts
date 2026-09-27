@@ -150,11 +150,11 @@ describe('firma (#25)', () => {
 
   it('updateCompany: owner/admin zapisują; member i recruiter nie (akcja + RLS w bazie)', async () => {
     actAs(as(adminA));
-    expect(await company.updateCompany({ name: 'Firma A Logistics' })).toEqual({ ok: true });
+    expect(await company.updateCompany(companyA, { name: 'Firma A Logistics' })).toEqual({ ok: true });
     actAs(as(memberA));
-    expect(await company.updateCompany({ name: 'Przejęta' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await company.updateCompany(companyA, { name: 'Przejęta' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     actAs(as(recruiterA));
-    expect(await company.updateCompany({ name: 'Przejęta' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await company.updateCompany(companyA, { name: 'Przejęta' })).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
 
     // Ta sama zmiana z pominięciem strażnika akcji: RLS `companies_update_member` (0040) nie
     // przepuszcza membera ani obcej firmy — zero wierszy.
@@ -174,9 +174,9 @@ describe('firma (#25)', () => {
   it('updateCompany: zmiana nazwy zweryfikowanej firmy wraca do weryfikacji; pusty VAT czyści', async () => {
     await admin("UPDATE public.companies SET status = 'verified', verified_at = now() WHERE id = $1", [companyB]);
     actAs(as(ownerB));
-    expect(await company.updateCompany({ name: 'Firma B Nowa' })).toEqual({ ok: true, reverificationRequired: true });
+    expect(await company.updateCompany(companyB, { name: 'Firma B Nowa' })).toEqual({ ok: true, reverificationRequired: true });
     await admin("UPDATE public.companies SET status = 'verified', verified_at = now(), vat_number = 'BE0999999999' WHERE id = $1", [companyB]);
-    expect(await company.updateCompany({ vatNumber: '' })).toEqual({ ok: true, reverificationRequired: true });
+    expect(await company.updateCompany(companyB, { vatNumber: '' })).toEqual({ ok: true, reverificationRequired: true });
     expect(await admin('SELECT name, vat_number FROM public.companies WHERE id = $1', [companyB]))
       .toEqual([{ name: 'Firma B Nowa', vat_number: null }]);
     await admin("UPDATE public.companies SET status = 'verified', verified_at = now() WHERE id = $1", [companyB]);
@@ -206,6 +206,29 @@ describe('firma (#25)', () => {
     expect(cookieJar.get('pb_active_company')).toBe(secondId);
     expect(await getMyCompany()).toMatchObject({ company: { id: secondId, canEdit: true } });
     // Powrót do firmy A na dalsze testy.
+    expect(await company.setActiveCompany(companyA)).toEqual({ ok: true });
+    cookieJar.clear();
+  });
+
+  it('#801: aktywna firma w cookie (przełączona w innej karcie) nie przechwytuje zapisu formularza dla innej firmy', async () => {
+    actAs(as(ownerA));
+    expect(await company.setActiveCompany(companyA)).toEqual({ ok: true });
+    const second = await company.createAdditionalCompany({ name: 'Firma A Trzecia' });
+    expect(second).toMatchObject({ ok: true });
+    const secondId = (second as { id: string }).id;
+    // createAdditionalCompany przełącza aktywną firmę (jak przełączenie w innej karcie).
+    expect(cookieJar.get('pb_active_company')).toBe(secondId);
+
+    // Formularz był otwarty dla companyA (przed przełączeniem) — zapis musi trafić do
+    // companyA z formularza, NIE do aktywnej firmy wskazanej teraz przez cookie.
+    expect(await company.updateCompany(companyA, { name: 'Firma A Po Przełączeniu' })).toEqual({ ok: true });
+    expect(await admin('SELECT name FROM public.companies WHERE id = $1', [companyA]))
+      .toEqual([{ name: 'Firma A Po Przełączeniu' }]);
+    // Aktywna firma w cookie (secondId) pozostaje nietknięta.
+    expect(await admin('SELECT name FROM public.companies WHERE id = $1', [secondId]))
+      .toEqual([{ name: 'Firma A Trzecia' }]);
+
+    // Sprzątanie: powrót do companyA jako aktywnej.
     expect(await company.setActiveCompany(companyA)).toEqual({ ok: true });
     cookieJar.clear();
   });
