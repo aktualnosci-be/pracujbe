@@ -15,8 +15,8 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
-Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: produkcja na migracji 0144,
-`main` ma 0145, brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
+Blokery startu (kod vs właściciel/infra/prawnik, stan 27.09.2026: produkcja na migracji 0148,
+brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
 bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
@@ -294,12 +294,15 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     w 3 shardach `--shard=i/3`, każdy zapisuje raport cząstkowy (blob, `E2E_BLOB_NAME`);
   - `e2e-perf` („E2E perf (lab CWV + INP)”) — pomiary czasu w jednym miejscu: projekt
     `chromium-timing` (`--no-deps`, INP dialogu #393) i `perf-lab.mjs` (lab CWV + INP-proxy #395);
-  - `e2e-fixtures` („E2E fixtures (full|error)”) — `playwright.applications-fixture.config.ts`;
+  - `e2e-fixtures` („E2E fixtures (full 1/2|full 2/2|error 1/1)”) — `playwright.applications-fixture.config.ts`
+    (`next dev`, dane fikcyjne); tryb `full` w 2 częściach (`TEST_APPLICATIONS_FIXTURE_PART`,
+    jawna lista części 2 `FULL_PART_2` w konfiguracji — `--shard` dzieli po liczbie testów
+    i oba speci lejka trafiały do jednego shardu), każda część zapisuje blob jak shardy demo;
   - `e2e-real` („E2E real flow (PostgreSQL 16)”) — `npm run test:e2e:real` na usłudze
     `postgres:16` (#351, #66); na start **informacyjny** (`continue-on-error`), nie blokuje
     scalania ani wdrożenia — po serii zielonych przebiegów na `main` zdejmij `continue-on-error`;
   - `e2e` („E2E (Playwright)”, wymagany check o stałej nazwie) — job zbiorczy z `always()`,
-    pada, gdy którykolwiek shard/pomiar/fixture nie jest `success`; łączy bloby
+    pada, gdy którykolwiek shard/pomiar/część fixture nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
     `failOnFlakyTests` obowiązuje w każdym shardzie.
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
@@ -308,7 +311,8 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
 
 **Reguły CI:**
 - Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`. Liczba
-  shardów zmienia się w jednym miejscu (nazwa, macierz, `--shard`) — strażnik pilnuje zgodności.
+  shardów zmienia się w jednym miejscu (nazwa, macierz, `--shard`) — strażnik pilnuje zgodności;
+  części fixture'ów: macierz `include` = części dozwolone w konfiguracji fixture (strażnik).
 - Każdy job ma `timeout-minutes`. Nowy push do PR anuluje trwający przebieg tego PR;
   przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
 - Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
@@ -617,6 +621,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
   bez walidacji / bez bramki weryfikacji link wycieka).
+  BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
+  `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
+  (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
+  Strony z widoczną ścieżką (landingi, hub, poradniki, dla pracodawców) i `/pomoc` używają go
+  zamiast ręcznego JSON; doszły lista ofert (Strona główna → Oferty pracy, adres listy bez
+  filtrów), profil firmy (= widoczna ścieżka) i szczegół oferty (Strona główna → Praca → branża
+  `/praca/kategoria/<klucz>` → oferta; tylko obok JobPosting — nie w wersji bez tłumaczenia #301
+  ani w demo #297). Strony zostają ISR (dane z tych samych odczytów). Test `breadcrumb-jsonld`
+  (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
+  kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
+  #301) i `company-profile` (nazwy = widoczna ścieżka).
   Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
   (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
   ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
@@ -889,6 +904,15 @@ są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najw
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
 kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
 na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
+Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
+filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
+etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
+w `src/lib/job-filter-summary.ts`: `parseJobListQuery` w języku widza, bez `date`; pusty/zły
+adres = brak listy), więc po zmianie nazwy albo języka kandydat nadal widzi, czego dotyczy
+alert. To samo źródło (`describeJobListFilters`) buduje chipy `/oferty-pracy` (etykieta +
+parametr do usunięcia), więc panel i lista nie rozjadą się. Test: unit
+`saved-search-filter-summary` (4 języki, zgodność z chipami, kontrole ujemne: pusty/nieprawidłowy
+adres, brak pustej listy).
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
@@ -990,6 +1014,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
   w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
   teraz zgody w teście.
+  Eksport CSV lejka (bez migracji): „Pobierz CSV” w sekcji lejka `/employer/statystyki` →
+  `GET /api/employer/job-funnel?dni=7|30|90&locale=` — te same dane co strona (`getJobFunnel`
+  pod sesją/RLS, recruiter+ aktywnej firmy wg `get_company_job_funnel`), kolumny od/do, oferta,
+  status (etykieta `status.*`), cztery liczniki + wiersz sumy, nagłówki w języku panelu
+  (`jobFunnel.csv*`), liczby surowe, formuły w tytułach neutralizowane (`csvCell`), BOM + CRLF,
+  plik `job-funnel-<od>_<do>.csv` (`src/lib/job-funnel/csv.ts`). Demo = 404 i brak przycisku,
+  bez sesji 401, `member`/bez firmy 403, awaria 500 bez treści, `private, no-store`. Test
+  `job-funnel-csv` (kontrola ujemna formuły), `job-funnel-stats` (przycisk tylko z adresem).
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
   Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
   w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają
@@ -1204,6 +1236,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zwracał `Date`, więc wygaśnięcie było pomijane). Dowód: `rls.sql` sekcja MP03 (kontrole
   ujemne: kwalifikacja bez widoczności/wieku/blokady/verified, naiwny zapis), unit
   `matches-materialize`, integracja `portal-matches` (PG16: wiersz = wynik live).
+  Kolejność blokad (migracja `0149`): `match_enqueue` najpierw blokuje
+  wiersz podmiotu (`candidate_profiles` kandydata / `jobs` oferty, FOR NO KEY UPDATE), dopiero
+  potem wiersz kolejki — ta sama kolejność co UPDATE profilu/oferty. Wcześniej równoległe kroki
+  3 i 5 onboardingu tego samego kandydata zakleszczały się (relacje: kolejka → profil, krok 3:
+  profil → kolejka) i akcja zwracała `INTERNAL`. Semantyka kolejki bez zmian. Dowód: `rls.sql`
+  sekcja MQ233 (dwie sesje przez dblink; kontrola ujemna z definicją z 0147 = deadlock),
+  E2E real `candidate-onboarding` (równoległe kroki 3/5).
   **Otwarte:** kandydat niewyszukiwalny nie ma wierszy (polecane oferty tylko po opt-in),
   okresowe przeliczenie przy upływie ważności certyfikatu (dziś tylko przy zmianie danych),
   prefiltr regionu/kategorii przy dużej liczbie ofert.
@@ -1359,6 +1398,23 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
+  Klucz idempotencji = cel propozycji (#853, migracja `0150`): `SendOfferButton`
+  trzyma klucz per para oferta + kandydat — zmiana `jobId`/`candidateId` w tej samej instancji
+  (przełączenie firmy + `router.refresh()`, lista kandydatów i pulpit) daje nowy klucz i czysty
+  stan, retry tej samej pary zachowuje klucz, a odpowiedź dla poprzedniego celu nie oznacza nowej
+  oferty jako wysłanej. `send_offer`: klucz znaleziony przy innej parze (także w gałęzi
+  `unique_violation`) → `VALIDATION_FAILED` zamiast zwrócenia cudzej propozycji jako sukcesu.
+  Dowód: `rls.sql` sekcja SK853 (kontrola ujemna: bez porównania celu klucz zwraca propozycję
+  oferty A), unit `send-offer-button` (trzy przypadki #853 czerwone na starym komponencie).
+  Termin mija w trakcie wizyty (#830, bez migracji): `ProposalActions` od `expiresAt` nie pozwala
+  rozpocząć nowej odpowiedzi, ale nie usuwa bieżącej operacji — trwające żądanie trzyma
+  zablokowane przyciski/dialog do wyniku, błąd (zwrócony i wyjątek) zostaje widoczny, otwarte
+  potwierdzenie bez żądania zamyka się, a fokus trafia na `role="status"`
+  `dashboard.proposalExpiredNotice`. Błąd po terminie odświeża trasę; `status` z serwera
+  (`accepted`/`declined`) po własnej próbie zamienia błąd transportu w komunikat sukcesu.
+  Etykieta karty zmienia się na „Wygasła” bez serwera (`onExpire` → `CandidateProposalsList`).
+  Testy: unit `proposal-actions` (kontrola ujemna: stary komponent = 5 czerwonych),
+  `candidate-proposals-list`.
 - [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania, zgłoszenia i załączniki gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16)
   Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
   strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
@@ -1605,6 +1661,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
   `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
   `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
+  Szczegół konta `/admin/uzytkownicy/[id]` (tylko odczyt, bez migracji; nazwa na liście = link):
+  `getUserDetail` (`requireAdmin` → service_role) — rola, e-mail, stan konta, utworzenie,
+  ostatnia aktywność (`last_seen_at`), język e-maili wyznaczony jak w kolejce
+  (`resolveRecipientLocale`, Invariant #1) obok surowych `preferred/account/signup_locale`,
+  członkostwa w firmach (link do `/admin/firmy/[id]`, rola, dostęp, status firmy), profil
+  kandydata jako same liczniki (ukończony, widoczny, zgłoszenia poza szkicem, propozycje — bez
+  treści), aktywna blokada adresu (#44, link do `/admin/poczta?q=`), skrót do dziennika
+  (`?actor=<e-mail>`). Strona niczego nie zapisuje (brak akcji = brak wpisów audytu); usunięte
+  albo nieistniejące konto = „nie znaleziono”, błąd odczytu = ponowienie. `auth.users`
+  (np. weryfikacja e-maila) poza zasięgiem service_role — świadomie pominięte. Dowód: unit
+  `admin-user-detail` (kontrola ujemna fallbacku języka), integracja `portal-admin` (PG16),
+  E2E `admin-ux`, `admin-a11y` (demo-u1/demo-u3).
   Decyzja o firmie (#310, `0084`): szczegół `/admin/firmy/[id]` (`getCompanyDetail`: dane
   rejestrowe, uzasadnienie, członkowie z rolą/aktywnością, najnowsze 20 ofert + licznik), nazwa
   na liście = link. Odrzucenie/zawieszenie wymaga uzasadnienia (≤ 1000 znaków,
@@ -2103,6 +2171,24 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `scripts/lib/stable-screenshot.mjs` (fonty + dwie ramki ze stałym układem, najwyżej 3 próby
   tylko tego błędu, wpis na stderr); testy z Chromium w projekcie Vitest `chromium`
   (`CHROMIUM_TEST_FILES`, jeden plik naraz), strażnik `stable-screenshot.test.ts`.
+  Flaki E2E przy `failOnFlakyTests` (09.2026, bez skip i bez retry): speci biorą `AxeBuilder`
+  z `tests/e2e/fixtures/axe.ts` — przed `analyze()` czeka na niepusty `<title>` (Next strumieniuje
+  metadane osobno od treści; axe po nawigacji klienckiej zgłaszał `document-title`), tam też
+  `expectNoindex` (dwa `meta[name="robots"]` naraz po nawigacji klienckiej). Serwer E2E
+  z `--keepAliveTimeout 120000` (`ECONNRESET` na keep-alive agenta `request`). Strażnik
+  `e2e-axe-ready.test.ts` (import wprost z `@axe-core/playwright` = czerwony, kontrola ujemna;
+  lista przejściowa speców z otwartych PR-ów #586/#918 tylko maleje).
+  Szybkie testy jednostkowe bez podnoszenia limitu 5 s (13 plików zgłaszanych pod obciążeniem):
+  ciężkie moduły (worker outboxa, trasa wypisania) importowane statycznie na górze pliku, nie
+  `await import()` w teście; jednorazowa rozgrzewka w `beforeAll` (render React Email —
+  `tests/helpers/email-render-warmup.ts`; pdf.js; pierwszy render/walidacja formularza, listy
+  i przejście kreatora do kroku 9), żeby pierwszy test nie płacił leniwych importów i JIT;
+  w `waitFor` tanie zapytanie DOM, a `getByRole` raz po nim (polling ról w dużym drzewie jsdom
+  rośnie z obciążeniem); render wielu szablonów = jeden test na szablon × język; styl inline
+  parsowany raz na element w audycie `email-a11y`; CRC-32 z tablicą w `cv-fixtures.ts`; atrapa
+  HTTP zamykana z `closeAllConnections()` (keep-alive `fetch`); krótki limit czasu w smoke tylko
+  dla zawieszonej trasy. `sitemap-robots` #599 bez zmian — koszt to 60 000 wpisów produkcyjnego
+  `sitemap.ts`, nie test.
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
@@ -2163,6 +2249,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wdrożenia, tag `v1.0.0`, `CHANGELOG.md`) w `docs/RELEASE_1_0.md`. Build zostaje `0.YYYYMMDD.M+SHA`
   do jawnego `PRACUJBE_RELEASE_VERSION=1.0.0` (→ `1.0.0+SHA`); inna wartość przerywa build
   (`scripts/build-version.mjs`, `build-version.test.ts`).
+  Strażnik zmiennych środowiska (`tests/unit/production-config-checklist.test.ts`): każda
+  zmienna czytana w `src/`, `scripts/` (`.ts/.tsx/.mjs/.py`: `process.env.X`, `env.X`/`source.X`,
+  destrukturyzacja, `helper(env, 'X')`, literały przy dynamicznym `env[name]`) i `next.config.mjs`
+  musi mieć wpis z komentarzem w `.env.example` i w `docs/railway/KONFIGURACJA_PRODUKCJI.md`
+  (skrypty operatora i usługi pomocnicze = sekcja 2E, zakomentowane w przykładzie); zmienne
+  platformy/testów/CI (`E2E_PG*`, `VIES_LIVE_SMOKE`, `GITHUB_*`…) na allow-liście z uzasadnieniem;
+  kontrola ujemna: zmienna tylko w kodzie = czerwony. Skrypty `*.sh` nie są skanowane.
+  Stan migracji produkcji w dokumentach startowych: `docs/LAUNCH_CHECKLIST.md` §0 (wiersz „Baza”),
+  §4 i sekcja 0 tego pliku podają ten sam numer ostatniej zastosowanej migracji (27.09.2026:
+  `0148`). Strażnik `launch-checklist-migrations.test.ts`: trzy miejsca zgodne, numer istnieje
+  w `supabase/migrations`/`database/*`, punkt „[ ]” w §4 i „`main` ma …” w §0 nie wskazują
+  migracji już zastosowanej (kontrole ujemne, w tym stan sprzed 27.09 z `0145` „do
+  zastosowania”). Nowa migracja na `main` nie wymaga zmiany dokumentów; po `apply` numer
+  przesuwa człowiek (strażnik nie zna stanu produkcji).
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 
 ---

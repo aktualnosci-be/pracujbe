@@ -54,12 +54,24 @@ export const CV_WITH_REFEREES = [
  * Pliki: minimalny DOCX (ZIP z `word/document.xml`) i PDF z warstwą tekstu
  * ------------------------------------------------------------------------- */
 
+/**
+ * CRC-32 (IEEE) z tablicą 256 wpisów. Wariant bit po bicie (8 obrotów na bajt) liczył
+ * 5-megabajtowy „zip bomb” z `cv-import-text` ponad sekundę (dwa razy na wpis) i pod
+ * obciążeniem zbliżał test do limitu 5 s; wynik jest identyczny.
+ */
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
 function crc32(buf: Buffer): number {
   let c = ~0;
-  for (const b of buf) {
-    c ^= b;
-    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
-  }
+  for (let i = 0; i < buf.length; i++) c = CRC32_TABLE[(c ^ buf[i]!) & 0xff]! ^ (c >>> 8);
   return ~c >>> 0;
 }
 
@@ -71,12 +83,13 @@ export function buildZip(entries: Record<string, string | Buffer>): Buffer {
   for (const [name, content] of Object.entries(entries)) {
     const data = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
     const compressed = deflateRawSync(data);
+    const checksum = crc32(data);
     const nameBuf = Buffer.from(name, 'utf8');
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
     local.writeUInt16LE(8, 8);
-    local.writeUInt32LE(crc32(data), 14);
+    local.writeUInt32LE(checksum, 14);
     local.writeUInt32LE(compressed.length, 18);
     local.writeUInt32LE(data.length, 22);
     local.writeUInt16LE(nameBuf.length, 26);
@@ -86,7 +99,7 @@ export function buildZip(entries: Record<string, string | Buffer>): Buffer {
     central.writeUInt16LE(20, 4);
     central.writeUInt16LE(20, 6);
     central.writeUInt16LE(8, 10);
-    central.writeUInt32LE(crc32(data), 16);
+    central.writeUInt32LE(checksum, 16);
     central.writeUInt32LE(compressed.length, 20);
     central.writeUInt32LE(data.length, 24);
     central.writeUInt16LE(nameBuf.length, 28);
