@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { ADMIN_PAGE_HEADING_FOCUS } from '@/lib/admin/focus';
 import { ADMIN_SEARCH_MAX } from '@/lib/admin/list-params';
 import { cn } from '@/lib/utils';
+import { Pagination, PaginationContent, PaginationItem } from '@/components/ui/pagination';
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -186,18 +187,24 @@ export function AdminPager({
         {q ? t('resultsForQuery', { count, q }) : t('resultsOnPage', { count })}
       </p>
       {hasCursor || nextCursor ? (
-        <nav aria-label={t('paginationLabel')} className={cn('flex flex-wrap gap-2')}>
-          {hasCursor ? (
-            <Link href={{ pathname, query: base }} className={linkClass}>
-              {t('pageFirst')}
-            </Link>
-          ) : null}
-          {nextCursor ? (
-            <Link href={{ pathname, query: { ...base, cursor: nextCursor } }} className={linkClass}>
-              {t('pageNext')}
-            </Link>
-          ) : null}
-        </nav>
+        <Pagination aria-label={t('paginationLabel')}>
+          <PaginationContent>
+            {hasCursor ? (
+              <PaginationItem>
+                <Link href={{ pathname, query: base }} className={linkClass}>
+                  {t('pageFirst')}
+                </Link>
+              </PaginationItem>
+            ) : null}
+            {nextCursor ? (
+              <PaginationItem>
+                <Link href={{ pathname, query: { ...base, cursor: nextCursor } }} className={linkClass}>
+                  {t('pageNext')}
+                </Link>
+              </PaginationItem>
+            ) : null}
+          </PaginationContent>
+        </Pagination>
       ) : null}
     </div>
   );

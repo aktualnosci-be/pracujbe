@@ -1,9 +1,8 @@
 import 'server-only';
 
-import Anthropic from '@anthropic-ai/sdk';
-
 import { localeNames, type Locale } from '@/i18n/routing';
 import { jobAssistModel } from '@/lib/ai-assist/config';
+import { AiProviderError, createStructuredResponse, type ResponsesClient } from '@/lib/ai/openai';
 import type { AssistField } from '@/lib/ai-assist/fields';
 import { ASSIST_JSON_SCHEMA, type AssistRequest } from '@/lib/ai-assist/schema';
 
@@ -11,7 +10,7 @@ import { ASSIST_JSON_SCHEMA, type AssistRequest } from '@/lib/ai-assist/schema';
  * Wywołanie modelu dla asystenta redagowania oferty (#37).
  *
  * Granica zaufania: tekst oferty pisze pracodawca, ale mógł go wkleić z innego źródła —
- * traktujemy go jako DANE, nigdy jako instrukcje. Instrukcje są wyłącznie w `system`; tekst
+ * traktujemy go jako DANE, nigdy jako instrukcje. Instrukcje są wyłącznie w `instructions`; tekst
  * trafia do wiadomości `user` w znaczniku `<offer_text>` (próby jego zamknięcia są
  * neutralizowane). Model nie ma narzędzi, odpowiedź ogranicza schemat structured output,
  * a serwer i tak ją waliduje (`guard.ts`). Model niczego nie zapisuje ani nie publikuje —
@@ -42,6 +41,9 @@ export interface AssistorResult {
 export interface JobAssistor {
   suggest(request: AssistRequest, fields: readonly AssistField[]): Promise<AssistorResult>;
 }
+
+/** Limit tokenów odpowiedzi asystenta (`max_output_tokens`) — także górna granica wyjścia w rezerwacji budżetu. */
+export const JOB_ASSIST_MAX_TOKENS = 6000;
 
 export const ASSIST_SYSTEM_PROMPT = [
   'You help an employer edit the text of their own job offer on a recruitment platform. You propose clearer wording; the employer accepts or rejects each field.',
@@ -84,48 +86,36 @@ export function buildAssistMessage(request: AssistRequest, fields: readonly Assi
   ].join('\n');
 }
 
-/** Produkcyjny dostawca: Messages API + structured output. */
-export class AnthropicJobAssistor implements JobAssistor {
-  private readonly client: Anthropic;
-
-  constructor(client?: Anthropic) {
-    // Klucz z `ANTHROPIC_API_KEY` (tylko serwer). Pracodawca czeka w kreatorze — krótki
-    // timeout i jedna ponowna próba.
-    this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 1 });
-  }
+/** Produkcyjny dostawca: OpenAI Responses API + structured output (`src/lib/ai/openai.ts`). */
+export class OpenAiJobAssistor implements JobAssistor {
+  constructor(private readonly client?: ResponsesClient) {}
 
   async suggest(request: AssistRequest, fields: readonly AssistField[]): Promise<AssistorResult> {
-    let response: Anthropic.Message;
+    let usage: AssistUsage = { inputTokens: 0, outputTokens: 0 };
     try {
-      response = await this.client.messages.create({
-        model: jobAssistModel(),
-        max_tokens: 6000,
-        system: ASSIST_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: buildAssistMessage(request, fields) }],
-        output_config: {
-          effort: 'low',
-          format: { type: 'json_schema', schema: ASSIST_JSON_SCHEMA as unknown as Record<string, unknown> },
+      const raw = await createStructuredResponse(
+        {
+          model: jobAssistModel(),
+          instructions: ASSIST_SYSTEM_PROMPT,
+          input: [{ kind: 'text', text: buildAssistMessage(request, fields) }],
+          schemaName: 'job_offer_assist',
+          schema: ASSIST_JSON_SCHEMA as unknown as Record<string, unknown>,
+          maxOutputTokens: JOB_ASSIST_MAX_TOKENS,
         },
-      });
+        {
+          client: this.client,
+          // Budżet (#36) rozlicza sumę wejścia (z cache) i wyjścia.
+          onUsage: (u) => {
+            usage = {
+              inputTokens: u.inputTokens + (u.cacheReadInputTokens ?? 0) + (u.cacheCreationInputTokens ?? 0),
+              outputTokens: u.outputTokens,
+            };
+          },
+        },
+      );
+      return { raw, usage };
     } catch (e) {
-      if (e instanceof Anthropic.RateLimitError) throw new AssistorError('rateLimited');
-      throw new AssistorError('failed');
-    }
-
-    if (response.stop_reason === 'refusal') throw new AssistorError('refused');
-    if (response.stop_reason !== 'end_turn') throw new AssistorError('failed');
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    const usage = {
-      inputTokens: response.usage?.input_tokens ?? 0,
-      outputTokens: response.usage?.output_tokens ?? 0,
-    };
-    try {
-      return { raw: JSON.parse(text) as unknown, usage };
-    } catch {
-      throw new AssistorError('failed');
+      throw new AssistorError(e instanceof AiProviderError ? e.reason : 'failed');
     }
   }
 }

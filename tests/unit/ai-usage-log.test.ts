@@ -23,7 +23,7 @@ function collect() {
 describe('log użycia AI', () => {
   it('wiersz ma wyłącznie dozwolone pola', () => {
     const line = buildAiUsageLine(
-      { feature: 'job_listing_import', outcome: 'ok', inputKind: 'image', model: 'claude-opus-5', durationMs: 1234.4 },
+      { feature: 'job_listing_import', outcome: 'ok', inputKind: 'image', model: 'gpt-6-luna', durationMs: 1234.4 },
       new Date('2026-09-24T10:00:00Z'),
     );
     expect(line).toEqual({
@@ -32,7 +32,7 @@ describe('log użycia AI', () => {
       feature: 'job_listing_import',
       outcome: 'ok',
       inputKind: 'image',
-      model: 'claude-opus-5',
+      model: 'gpt-6-luna',
       durationMs: 1234,
     });
     expect(Object.keys(line!).sort()).toEqual([...AI_USAGE_FIELDS].sort());
@@ -88,12 +88,12 @@ describe('log użycia AI', () => {
   it('import ogłoszenia: jeden wiersz na wywołanie, bez treści ogłoszenia i odpowiedzi', async () => {
     const { lines, sink } = collect();
     const inner: JobExtractor = { extract: vi.fn(async () => ({ title: SECRET_TEXT })) };
-    const logged = withJobImportUsageLog(inner, 'claude-opus-5', sink);
+    const logged = withJobImportUsageLog(inner, 'gpt-6-luna', sink);
 
     const result = await logged.extract({ kind: 'text', text: SECRET_TEXT, source: 'jobs.example' });
     expect(result).toEqual({ title: SECRET_TEXT });
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ feature: 'job_listing_import', outcome: 'ok', inputKind: 'text', model: 'claude-opus-5' });
+    expect(lines[0]).toMatchObject({ feature: 'job_listing_import', outcome: 'ok', inputKind: 'text', model: 'gpt-6-luna' });
     const serialized = JSON.stringify(lines);
     expect(serialized).not.toContain('Kowalski');
     expect(serialized).not.toContain('jobs.example');

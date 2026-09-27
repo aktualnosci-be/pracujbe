@@ -1,10 +1,10 @@
 # Import ogłoszenia przez AI (#465) — research i opis wdrożenia
 
-Stan: 24.09.2026. Funkcja jest za flagą, **domyślnie wyłączona** (także w produkcji). Włącza ją
+Stan: 24.09.2026 (dostawca zmieniony 26.09.2026 na OpenAI — decyzja właściciela). Funkcja jest za flagą, **domyślnie wyłączona** (także w produkcji). Włącza ją
 właściciel po akceptacji kosztów, dostawcy i warunków przetwarzania danych (patrz „Włączenie").
 
 Pracodawca w kreatorze nowej oferty może wgrać zrzut ekranu istniejącego ogłoszenia albo wkleić
-link. Serwer odczytuje ogłoszenie przez Claude i wstępnie wypełnia kroki kreatora. Pola niepewne
+link. Serwer odczytuje ogłoszenie modelem OpenAI (GPT-6 Luna) i wstępnie wypełnia kroki kreatora. Pola niepewne
 są oznaczone „do sprawdzenia" na odpowiednim kroku. Nic nie jest publikowane automatycznie —
 publikacja przechodzi wyłącznie przez istniejące `publish_job` po kliknięciu „Opublikuj".
 
@@ -32,31 +32,40 @@ ogłoszenia; tłumaczenie to osobny temat (#29–#35).
 
 ## Wybór modelu i API
 
-- **Dostawca:** Anthropic Messages API, oficjalny SDK `@anthropic-ai/sdk` (jedyna nowa zależność).
-- **Model domyślny:** `claude-opus-5` — najnowszy Opus z vision (wysoka rozdzielczość do
-  2576 px dłuższego boku) i structured output. Nadpisywalny `AI_JOB_IMPORT_MODEL`
-  (np. `claude-sonnet-5`, ok. 2,5× taniej — decyzja właściciela po porównaniu jakości).
-- **Structured output:** `output_config.format = { type: 'json_schema' }` ze schematem
-  `JOB_EXTRACTION_JSON_SCHEMA`. Wszystkie pola wymagane, `additionalProperties: false`, bez typów
-  unijnych (brak danych = `""` / `"unknown"` / `[]`) — API ogranicza liczbę pól unijnych.
-  Limity długości/liczby nie są wspierane przez structured output, więc egzekwuje je Zod.
-- **Effort `low`:** ekstrakcja z jednego dokumentu nie wymaga długiego rozumowania; obniża koszt
-  i czas odpowiedzi. Bez narzędzi (tools) — model nie może niczego wykonać.
-- **Odmowa modelu** (`stop_reason: refusal`), ucięcie odpowiedzi lub zły JSON → komunikat
-  „Nie udało się odczytać ogłoszenia" (bez szczegółów dostawcy, Invariant #8). Serwerowy
-  mechanizm fallbacku modelu (beta) celowo nie jest włączony — do decyzji po pierwszych danych.
+- **Dostawca:** OpenAI Responses API, oficjalny SDK `openai` (decyzja właściciela 26.09.2026 —
+  wyłącznie model „GPT-6 Luna”; SDK Anthropic usunięte). Jedno miejsce wywołania:
+  `src/lib/ai/openai.ts` (wspólne dla importu ogłoszeń, asystenta treści i importu CV).
+- **Model domyślny:** `gpt-6-luna` (potwierdzony na
+  https://developers.openai.com/api/docs/models/gpt-6-luna: vision, structured outputs,
+  Responses API, kontekst 1 050 000, wyjście do 128 000 tokenów). Nadpisywalny
+  `AI_JOB_IMPORT_MODEL`, a globalnie `AI_MODEL` (walidacja formatu identyfikatora).
+- **Structured output:** `text.format = { type: 'json_schema', name, schema, strict: true }` ze
+  schematem `JOB_EXTRACTION_JSON_SCHEMA`. Tryb strict wymaga: wszystkie pola w `required`,
+  `additionalProperties: false` (test `ai-openai-client`). Bez typów unijnych (brak danych =
+  `""` / `"unknown"` / `[]`). Limity długości/liczby egzekwuje Zod po stronie serwera.
+- **Obraz:** `input_image` jako data URL (base64), `detail: 'high'`.
+- **Effort `low`** (`reasoning.effort`): ekstrakcja z jednego dokumentu nie wymaga długiego
+  rozumowania; obniża koszt i czas. Bez narzędzi (tools) — model nie może niczego wykonać.
+  `store: false` — odpowiedź nie jest przechowywana do późniejszego pobrania przez API.
+- **Odmowa modelu** (element `refusal` w odpowiedzi albo `incomplete_details.reason =
+  content_filter`), ucięcie (`status: incomplete`, np. `max_output_tokens`) lub zły JSON →
+  komunikat „Nie udało się odczytać ogłoszenia" (bez szczegółów dostawcy, Invariant #8).
 
 ## Koszty i limity
 
-Ceny Anthropic (cache skilla claude-api, 24.06.2026; zweryfikować przed włączeniem):
-Opus 5 — 5 USD / 1 mln tokenów wejścia, 25 USD / 1 mln wyjścia; Sonnet 5 — 2 / 10 USD.
+Cennik OpenAI (https://developers.openai.com/api/docs/pricing, tier Standard, stan 26.09.2026),
+`gpt-6-luna` za 1 mln tokenów: wejście 0,10 USD, wejście z cache 0,01 USD, zapis do cache
+0,125 USD, wyjście 0,50 USD (tokeny rozumowania liczone jako wyjście). Długi kontekst:
+0,20 / 0,02 / 0,25 / 0,75 USD — **próg nie jest podany na stronie cennika**; w kodzie przyjęto
+272 000 tokenów wejścia (źródła wtórne, TODO do potwierdzenia) — nasze wejścia są daleko
+poniżej. Tabela: `src/lib/ai/pricing.ts`.
 
 Szacunek na jedno wywołanie (do potwierdzenia pomiarem `usage` na realnych ogłoszeniach):
 
-| Wejście | Tokeny wejścia | Tokeny wyjścia (w tym rozumowanie) | Opus 5 | Sonnet 5 |
-|---|---|---|---|---|
-| Zrzut ekranu (do ~4800 tokenów obrazu) + prompt i schemat (~2 tys.) | ~3–7 tys. | ~1,5–3 tys. | ~0,05–0,11 USD | ~0,02–0,04 USD |
-| Link (tekst strony do 40 000 znaków ≈ 10 tys. tokenów) | ~4–12 tys. | ~1,5–3 tys. | ~0,06–0,14 USD | ~0,02–0,05 USD |
+| Wejście | Tokeny wejścia | Tokeny wyjścia (w tym rozumowanie) | GPT-6 Luna |
+|---|---|---|---|
+| Zrzut ekranu (do ~3 tys. tokenów obrazu wg przewodnika vision dla GPT-6) + prompt i schemat (~2 tys.) | ~3–7 tys. | ~1,5–3 tys. | ~0,001–0,003 USD |
+| Link (tekst strony do 40 000 znaków ≈ 10 tys. tokenów) | ~4–12 tys. | ~1,5–3 tys. | ~0,001–0,003 USD |
 
 Limity w kodzie:
 
@@ -67,11 +76,11 @@ Limity w kodzie:
 | Rozmiar obrazu | 5 MB, PNG/JPG/WebP po sygnaturze (magic bytes) | `src/lib/ai-import/image.ts` |
 | Pobranie linku | 8 s łącznie, 2 MB HTML (po dekompresji), 5 MB obraz, 3 przekierowania | `src/lib/ai-import/safe-fetch.ts` |
 | Tekst strony do modelu | 40 000 znaków | jw. |
-| Wywołanie API | timeout 60 s, 1 ponowienie, `max_tokens` 8000 | `src/lib/ai-import/extract.ts` |
+| Wywołanie API | timeout 60 s, 1 ponowienie, `max_output_tokens` 8000 | `src/lib/ai/openai.ts`, `src/lib/ai-import/extract.ts` |
 
-Górna granica przy pełnym wykorzystaniu limitu: ~30 × 0,14 USD ≈ 4 USD dziennie na firmę (Opus 5).
+Górna granica przy pełnym wykorzystaniu limitu: ~30 × 0,003 USD ≈ 0,1 USD dziennie na firmę (GPT-6 Luna).
 Globalny budżet (#36, `docs/AI_BUDGET.md`): każde wywołanie rezerwuje górną granicę kosztu
-(Opus 5: ~0,21–0,33 USD) przed API i rozlicza się tokenami z `usage`; limit startowy 10 USD/dobę
+(GPT-6 Luna: ~0,005–0,008 USD) przed API i rozlicza się tokenami z `usage`; limit startowy 10 USD/dobę
 i 100 USD/miesiąc dla wszystkich funkcji AI. Po przekroczeniu import zwraca
 `AI_BUDGET_EXCEEDED` bez wywołania modelu. Raport: `/admin/koszty-ai`.
 
@@ -94,7 +103,7 @@ przekierowanie sprawdzane od nowa. Limit czasu i rozmiaru, także po dekompresji
 przeglądarki i wykonywania skryptów — HTML zamieniany na tekst bez `<script>`/`<style>`/komentarzy
 (zachowujemy JSON-LD `JobPosting` jako dane).
 
-**Prompt injection.** Zrzut i strona to niezaufane dane. Instrukcje są wyłącznie w `system`;
+**Prompt injection.** Zrzut i strona to niezaufane dane. Instrukcje są wyłącznie w `instructions`;
 materiał w wiadomości użytkownika w znaczniku `<listing>` (próby jego zamknięcia są
 neutralizowane). Model nie ma narzędzi, a odpowiedź jest ograniczona schematem; serwer odrzuca
 klucze spoza schematu i waliduje wartości schematami kreatora. Model zgłasza tekst skierowany
@@ -103,7 +112,7 @@ ostrzeżenie, a **nic nie jest zapisywane do bazy** do czasu przejrzenia przez c
 Znaki sterujące i niewidoczne znaki kierunku tekstu są usuwane. Publikacja zawsze wymaga
 kliknięcia „Opublikuj" i zgody w kroku 9.
 
-**Klucz API** tylko po stronie serwera (`ANTHROPIC_API_KEY`, nigdy `NEXT_PUBLIC_*`); moduły
+**Klucz API** tylko po stronie serwera (`OPENAI_API_KEY`, nigdy `NEXT_PUBLIC_*`); moduły
 `server-only`.
 
 ## Prywatność
@@ -111,10 +120,11 @@ kliknięcia „Opublikuj" i zgody w kroku 9.
 - Plik i treść strony istnieją wyłącznie w pamięci na czas żądania — nie trafiają do Storage,
   bazy ani logów. W szkicu zapisywane są tylko pola wyciągnięte z ogłoszenia (widoczne dla
   pracodawcy i edytowalne).
-- Dane trafiają do Anthropic jako podmiotu przetwarzającego. Według warunków komercyjnych
-  API dane nie są domyślnie używane do trenowania modeli; okres retencji po stronie dostawcy
-  określa aktualna polityka Anthropic (Zero Data Retention wymaga osobnej umowy). **Przed
-  włączeniem w produkcji:** potwierdzić umowę powierzenia (DPA), region przetwarzania i retencję.
+- Dane trafiają do OpenAI jako podmiotu przetwarzającego (wpis `openai` w
+  `src/lib/privacy/processors.ts`: rola, region, transfer, DPA i retencja — „DO UZUPEŁNIENIA”).
+  Kod wysyła `store: false`; okres przechowywania po stronie dostawcy (np. do monitorowania
+  nadużyć), region przetwarzania i ewentualne Zero Data Retention określa umowa z OpenAI.
+  **Przed włączeniem w produkcji:** potwierdzić DPA, region przetwarzania i retencję.
 - Ogłoszenie może zawierać dane osoby kontaktowej. Od #500 import **nie** przenosi e-maila
   kontaktowego (pole usunięte ze schematu modelu) — pracodawca wpisuje go ręcznie w kroku 9.
 - UI informuje, że import dotyczy ogłoszeń, do których pracodawca ma prawa, i że plik nie jest
@@ -170,10 +180,10 @@ i decyzja art. 14 dla osoby kontaktowej i danych przypadkowych, DPA/region/reten
 
 Zmiennych nie ustawia ta zmiana. Aby włączyć:
 
-1. `ANTHROPIC_API_KEY` — klucz organizacji Anthropic (tylko serwer).
+1. `OPENAI_API_KEY` — klucz projektu OpenAI (tylko serwer).
 2. `AI_JOB_IMPORT_ENABLED=1` — flaga funkcji. Bez niej albo bez klucza krok importu jest
    niewidoczny, a kreator działa jak dotąd.
-3. Opcjonalnie `AI_JOB_IMPORT_MODEL` (domyślnie `claude-opus-5`).
+3. Opcjonalnie `AI_JOB_IMPORT_MODEL` albo globalnie `AI_MODEL` (domyślnie `gpt-6-luna`).
 4. Limiter wymaga działającego `rate_limit_hit` (klucz service-role jak dla pozostałych limitów);
    przy jego awarii import zwraca „zbyt wiele prób" (fail-closed).
 
@@ -189,7 +199,8 @@ Zmiennych nie ustawia ta zmiana. Aby włączyć:
 - Unit: `ai-import-image`, `ai-import-safe-fetch` (adresy wewnętrzne, przekierowania, DNS,
   limity, bomba gzip, timeout; lokalny serwer testowy, DNS-atrapa), `ai-import-map` (schematy
   kroków, oznaczenia, injection, zgodność kluczy z 0083), `ai-import-extract` (atrapa klienta
-  SDK — kształt żądania, odmowa, schemat structured output), `job-import-action` (flaga, klucz,
+  OpenAI `tests/helpers/fake-openai.ts` — kształt żądania, odmowa, 429, schemat strict),
+  `ai-openai-client` (wspólny klient: store=false, brak logowania treści, zgodność schematów), `job-import-action` (flaga, klucz,
   recruiter+, limit per firma, zły plik, adres wewnętrzny, injection, brak `publish_job`),
   `job-import-panel` (UI).
 - E2E: `tests/e2e/job-import.spec.ts` z atrapą dostawcy — import ze zrzutu (pl/en), podrobiony

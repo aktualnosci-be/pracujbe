@@ -9,6 +9,7 @@
  */
 
 import { isAppealRole, isAppealStatus, type AppealRole, type AppealStatus } from '@/lib/admin/appeals';
+import { ADMIN_PAGE_SIZE, decodeAdminCursor, encodeAdminCursor } from '@/lib/admin/list-params';
 import { requireAdmin } from '@/lib/data/admin';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { queryCount, queryRows, rpc, rpcRows } from '@/lib/db/sql';
@@ -61,8 +62,30 @@ export interface AdminAppealRow {
 }
 
 export type AdminAppealsResult =
-  | { status: 'ok'; pending: AdminAppealRow[]; decided: AdminAppealRow[] }
+  | {
+      status: 'ok';
+      pending: AdminAppealRow[];
+      /** Kursor następnej strony oczekujących (posortowanych wg terminu) — #596. */
+      pendingNextCursor: string | null;
+      decided: AdminAppealRow[];
+    }
   | { status: 'error' };
+
+/**
+ * Strona listy posortowanej ROSNĄCO (`due_at ASC, id ASC`, w przeciwieństwie do wzorca
+ * `created_at DESC` z `@/lib/data/admin`) — kolejka odwołań pokazuje najbliższy termin
+ * pierwszy (#596). Pobieramy `ADMIN_PAGE_SIZE + 1` wierszy; nadmiarowy = jest kolejna strona.
+ */
+function pageAscendingByDueDate(
+  rows: AdminAppealRow[],
+  pageSize: number = ADMIN_PAGE_SIZE,
+): { page: AdminAppealRow[]; nextCursor: string | null } {
+  const page = rows.slice(0, pageSize);
+  const last = page[page.length - 1];
+  const nextCursor =
+    rows.length > pageSize && last ? encodeAdminCursor({ createdAt: last.dueAt, id: last.id }) : null;
+  return { page, nextCursor };
+}
 
 /** Odwołanie z decyzją (`decision_id`) i sprawą (`report_id`) — kształt jak dawny embed PostgREST. */
 const APPEAL_SELECT = `
@@ -122,16 +145,31 @@ function mapAppeal(row: Record<string, unknown>, viewerId: string | null, otherA
   };
 }
 
-/** Odwołania: oczekujące (wg terminu rozpatrzenia) i 20 ostatnio rozpatrzonych. */
-export async function listAppeals(): Promise<AdminAppealsResult> {
-  if (!isPortalDataConfigured()) return { status: 'ok', pending: [], decided: [] };
+export interface AdminAppealsQuery {
+  /** Kursor strony oczekujących (`due_at` + `id`, #596). Brak = pierwsza strona. */
+  cursor?: string | null;
+}
+
+/**
+ * Odwołania: oczekujące (wg terminu rozpatrzenia, stronicowane kursorem — #596, kolejka
+ * nie jest już obcięta do pierwszych 100) i 20 ostatnio rozpatrzonych.
+ */
+export async function listAppeals(query: AdminAppealsQuery = {}): Promise<AdminAppealsResult> {
+  if (!isPortalDataConfigured()) return { status: 'ok', pending: [], pendingNextCursor: null, decided: [] };
   await requireAdmin();
 
   try {
     const viewerId = (await getPortalIdentity())?.id ?? null;
+    const cursor = decodeAdminCursor(query.cursor);
+    const pendingParams: unknown[] = [];
+    const cursorSql = cursor
+      ? `AND (a.due_at, a.id) > ($${pendingParams.push(cursor.createdAt)}::timestamptz, $${pendingParams.push(cursor.id)}::uuid)`
+      : '';
+    const limitIdx = pendingParams.push(ADMIN_PAGE_SIZE + 1);
     const { pending, decided, admins } = await withServiceRole(async (tx) => ({
       pending: await queryRows(tx, 'admin-dsa.appeals-pending',
-        `${APPEAL_SELECT} WHERE a.status = 'pending' ORDER BY a.due_at ASC, a.id ASC LIMIT 100`),
+        `${APPEAL_SELECT} WHERE a.status = 'pending' ${cursorSql}
+         ORDER BY a.due_at ASC, a.id ASC LIMIT $${limitIdx}`, pendingParams),
       decided: await queryRows(tx, 'admin-dsa.appeals-decided',
         `${APPEAL_SELECT} WHERE a.status <> 'pending' ORDER BY a.decided_at DESC NULLS LAST, a.id DESC LIMIT 20`),
       admins: await queryCount(tx, 'admin-dsa.other-admins',
@@ -145,7 +183,8 @@ export async function listAppeals(): Promise<AdminAppealsResult> {
         const mapped = mapAppeal(row, viewerId, otherAdmins);
         return mapped ? [mapped] : [];
       });
-    return { status: 'ok', pending: map(pending), decided: map(decided) };
+    const { page: pendingPage, nextCursor: pendingNextCursor } = pageAscendingByDueDate(map(pending));
+    return { status: 'ok', pending: pendingPage, pendingNextCursor, decided: map(decided) };
   } catch (error) {
     captureError(error, { area: 'adminDsa.listAppeals' });
     return { status: 'error' };
@@ -273,14 +312,65 @@ export const DSA_EXPORT_COLUMNS = [
 ] as const;
 export type DsaExportRow = Record<(typeof DSA_EXPORT_COLUMNS)[number], string | boolean | null>;
 
-export type DsaExportResult = { status: 'ok'; rows: DsaExportRow[] } | { status: 'error' };
+export type DsaExportResult =
+  | { status: 'ok'; rows: DsaExportRow[]; nextCursor: string | null }
+  | { status: 'error' };
 
-export async function getStatementsExport(from: Date, to: Date): Promise<DsaExportResult> {
-  if (!isPortalDataConfigured()) return { status: 'ok', rows: [] };
+/**
+ * Rozmiar strony eksportu decyzji DSA (#606) — endpoint pobiera i wysyła po tyle rekordów
+ * naraz zamiast materializować cały zakres (do 5 lat) w jednym zapytaniu i jednej odpowiedzi.
+ */
+export const DSA_EXPORT_PAGE_SIZE = 2000;
+
+const DSA_EXPORT_CURSOR_RE = /^[A-Za-z0-9_-]{1,300}$/;
+const DSA_EXPORT_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)$/;
+
+/** Kursor strony eksportu (`decided_at` + `reference`, #606) — token nieprzezroczysty dla API. */
+export function encodeDsaExportCursor(decidedAt: string, reference: string): string {
+  return Buffer.from(`${decidedAt}|${reference}`, 'utf8').toString('base64url');
+}
+
+export function decodeDsaExportCursor(
+  token: string | undefined | null,
+): { decidedAt: string; reference: string } | null {
+  if (!token || !DSA_EXPORT_CURSOR_RE.test(token)) return null;
+  let raw: string;
+  try {
+    raw = Buffer.from(token, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const sep = raw.indexOf('|');
+  if (sep <= 0) return null;
+  const decidedAt = raw.slice(0, sep);
+  const reference = raw.slice(sep + 1);
+  if (!DSA_EXPORT_TIMESTAMP_RE.test(decidedAt) || reference.length === 0 || reference.length > 64) return null;
+  return { decidedAt, reference };
+}
+
+/**
+ * Jedna strona eksportu decyzji DSA (#606): stronicowanie kursorem (`decided_at`+`reference`,
+ * egzekwowane w RPC `dsa_statements_export`) zamiast jednego zapytania na cały okres (do 1830
+ * dni) — `nextCursor` prowadzi do kolejnej strony, wywołujący (trasa API) sam je łączy
+ * strumieniowo zamiast trzymać cały wynik w pamięci naraz.
+ */
+export async function getStatementsExport(
+  from: Date,
+  to: Date,
+  cursorToken?: string | null,
+): Promise<DsaExportResult> {
+  if (!isPortalDataConfigured()) return { status: 'ok', rows: [], nextCursor: null };
   await requireAdmin();
   try {
+    const cursor = decodeDsaExportCursor(cursorToken);
     const data = await withServiceRole((tx) =>
-      rpcRows(tx, 'dsa_statements_export', { p_from: from.toISOString(), p_to: to.toISOString() }),
+      rpcRows(tx, 'dsa_statements_export', {
+        p_from: from.toISOString(),
+        p_to: to.toISOString(),
+        p_limit: DSA_EXPORT_PAGE_SIZE,
+        p_cursor_decided_at: cursor?.decidedAt ?? null,
+        p_cursor_reference: cursor?.reference ?? null,
+      }),
     );
     const rows = asRows(data).map(
       (row) =>
@@ -291,24 +381,38 @@ export async function getStatementsExport(from: Date, to: Date): Promise<DsaExpo
           }),
         ) as DsaExportRow,
     );
-    return { status: 'ok', rows };
+    const last = rows[rows.length - 1];
+    const nextCursor =
+      rows.length >= DSA_EXPORT_PAGE_SIZE && last && typeof last.decided_at === 'string'
+        ? encodeDsaExportCursor(last.decided_at, String(last.decision_reference ?? ''))
+        : null;
+    return { status: 'ok', rows, nextCursor };
   } catch (error) {
     captureError(error, { area: 'adminDsa.export' });
     return { status: 'error' };
   }
 }
 
-/** CSV (RFC 4180, separator przecinek) — wartości w cudzysłowach; neutralizacja formuł arkusza. */
-export function toCsv(rows: DsaExportRow[]): string {
+/** Nagłówek CSV (RFC 4180) — osobno, bo strona strumieniowana wysyła go raz (#606). */
+export function csvHeader(): string {
+  return `${DSA_EXPORT_COLUMNS.join(',')}\r\n`;
+}
+
+/** Wiersze CSV (RFC 4180, separator przecinek) — wartości w cudzysłowach; neutralizacja formuł arkusza. */
+export function csvRows(rows: DsaExportRow[]): string {
   const cell = (value: string | boolean | null): string => {
     if (value === null) return '';
     let text = String(value);
     if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
     return `"${text.replace(/"/g, '""')}"`;
   };
-  const lines = [DSA_EXPORT_COLUMNS.join(',')];
-  for (const row of rows) lines.push(DSA_EXPORT_COLUMNS.map((column) => cell(row[column])).join(','));
-  return `${lines.join('\r\n')}\r\n`;
+  const lines = rows.map((row) => DSA_EXPORT_COLUMNS.map((column) => cell(row[column])).join(','));
+  return lines.length > 0 ? `${lines.join('\r\n')}\r\n` : '';
+}
+
+/** CSV pełny (nagłówek + wiersze) — zachowane dla wywołań spoza strumienia (np. testy). */
+export function toCsv(rows: DsaExportRow[]): string {
+  return csvHeader() + csvRows(rows);
 }
 
 /* ---------------------------------------------------------------------------

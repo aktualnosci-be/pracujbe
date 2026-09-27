@@ -21,7 +21,7 @@ i [`data-map.generated.md`](data-map.generated.md) sekcja 2 (usługi) i 4 (treś
 | Resend | e-maile transakcyjne i konta | `RESEND_API_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Discord (webhook błędów, #571) | powiadomienia o błędach serwera | `ERROR_WEBHOOK_URL` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Cloudflare Turnstile | ochrona formularzy | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
-| Anthropic | import ogłoszeń | `AI_JOB_IMPORT_ENABLED` + `ANTHROPIC_API_KEY` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
+| OpenAI (od 2026-09-26, zamiast Anthropic) | import ogłoszeń, asystent treści oferty, import CV (za flagami) | `OPENAI_API_KEY` + `AI_JOB_IMPORT_ENABLED` / `AI_JOB_ASSIST_ENABLED` / `AI_CV_IMPORT_ENABLED` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Google Analytics | analityka po zgodzie | ID pomiaru + zgoda `analytics` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Meta Pixel | marketing po zgodzie | ID piksela + zgoda `marketing` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | VIES (Komisja Europejska) | sprawdzenie VAT firmy | akcja administratora | do ustalenia | do ustalenia | do ustalenia | nie dotyczy / do ustalenia |
@@ -32,7 +32,12 @@ potwierdzenia przez właściciela** w panelu Railway, bez publikowania wartości
 
 ## 2. Dostawcy AI (#488)
 
-### 2.1 Anthropic — import ogłoszenia o pracę
+### 2.1 OpenAI — import ogłoszenia o pracę
+
+Decyzja właściciela 2026-09-26: funkcje AI używają wyłącznie modelu OpenAI „GPT-6 Luna”
+(`gpt-6-luna`) przez wspólnego klienta `src/lib/ai/openai.ts` (Responses API, `store: false`);
+wcześniejszy dostawca (Anthropic) usunięty z kodu. Ten sam dostawca obsługuje asystenta treści
+oferty (`docs/AI_JOB_ASSIST.md`) i import CV za osobną flagą (`docs/AI_CV_IMPORT.md`).
 
 **Z kodu** (`src/lib/ai-import/extract.ts`, `config.ts`, `run-import.ts`, `docs/AI_JOB_IMPORT.md`):
 
@@ -48,8 +53,8 @@ potwierdzenia przez właściciela** w panelu Railway, bez publikowania wartości
     może zawierać dane osób z ogłoszenia. Numer identyfikacyjny w odpowiedzi modelu powoduje
     odmowę importu (`JOB_IMPORT_SENSITIVE_DATA`).
 - Kod **nie wysyła** danych kandydatów, profili, CV ani wiadomości.
-- Model: stała `DEFAULT_JOB_IMPORT_MODEL` albo `AI_JOB_IMPORT_MODEL`. Kod nie ustawia parametru
-  regionu przetwarzania (`inference_geo`) ani innych ustawień geograficznych.
+- Model: `gpt-6-luna` albo `AI_JOB_IMPORT_MODEL` / `AI_MODEL`. Kod nie ustawia regionu
+  przetwarzania (data residency) ani innych ustawień geograficznych.
 - Portal nie zapisuje obrazu ani pobranej strony — tylko wynik po walidacji w szkicu oferty
   (`save_job_draft`). Limity: 10 importów na godzinę i 30 na dobę na firmę.
 

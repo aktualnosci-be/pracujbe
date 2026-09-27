@@ -3,15 +3,18 @@ import { join } from 'path';
 import { defineConfig, devices } from '@playwright/test';
 import { E2E_CF_ANALYTICS_TOKEN } from './tests/e2e/fixtures/trackers';
 import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
+import { e2eBaseUrl, e2ePort, e2eReuseServer } from './scripts/lib/e2e-server.mjs';
 
 /**
  * Konfiguracja Playwright (testy E2E).
  *
  * - testDir: ./tests/e2e
  * - webServer: buduje i uruchamia aplikację produkcyjnie (next build && next start)
- *   na porcie 3000. Testy E2E działają na danych demonstracyjnych (bez Supabase),
- *   dzięki czemu przechodzą BEZ zmiennych środowiskowych.
- * - baseURL: http://localhost:3000
+ *   na porcie E2E_PORT (domyślnie 3000). Testy E2E działają na danych demonstracyjnych
+ *   (bez Supabase), dzięki czemu przechodzą BEZ zmiennych środowiskowych.
+ * - baseURL: http://localhost:${E2E_PORT:-3000} (scripts/lib/e2e-server.mjs)
+ * - serwer już działający na porcie jest używany tylko przy E2E_REUSE_SERVER=1 (poza CI);
+ *   domyślnie zajęty port = błąd startu, nie ciche testowanie cudzego serwera
  * - projekt: chromium
  * - reporter: html (+ list/github w CI) i raport flaków (#375)
  *
@@ -23,8 +26,8 @@ import { E2E_UNSUBSCRIBE_SECRET } from './tests/e2e/fixtures/unsubscribe';
  * zmiennej zachowanie jest domyślne.
  */
 
-const PORT = 3000;
-const BASE_URL = `http://localhost:${PORT}`;
+const PORT = e2ePort('demo');
+const BASE_URL = e2eBaseUrl('demo');
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 /**
@@ -75,34 +78,59 @@ function buildHasTrackerIds(): boolean {
 
 // CI buduje w osobnym kroku (PLAYWRIGHT_SKIP_BUILD=1). Jeśli ten build nie ma testowych ID
 // trackerów, przebudowujemy go tutaj — inaczej test zgód przechodziłby zawsze (issue #234).
+const BROWSER = {
+  ...devices['Desktop Chrome'],
+  ...(CHROMIUM_PATH ? { launchOptions: { executablePath: CHROMIUM_PATH } } : {}),
+};
+
 const reuseBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1' && buildHasTrackerIds();
+
+/**
+ * Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
+ * na danych demo zawsze by padły.
+ */
+const FIXTURE_ONLY_SPECS = [
+  '**/candidate-applications-pagination.spec.ts',
+  '**/candidate-applications-error.spec.ts',
+  '**/candidate-proposals-pagination.spec.ts',
+  '**/candidate-dashboard-read-errors.spec.ts',
+  '**/public-read-failures.spec.ts',
+  // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
+  // nich komunikat, więc testujemy je na serwerze fixture.
+  '**/apply-modal-a11y.spec.ts',
+  '**/apply-network-error.spec.ts',
+  '**/apply-phone-validation.spec.ts',
+  '**/apply-screening.spec.ts',
+  '**/guest-apply.spec.ts',
+  '**/job-posting-fixture.spec.ts',
+  // Profil firmy (#591) — w demo profili nie ma (404); linki, JSON-LD, noindex i axe na fixture.
+  '**/company-profile.spec.ts',
+  '**/offer-message-login.spec.ts',
+  // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
+  '**/content-report-form.spec.ts',
+  '**/job-funnel-no-storage.spec.ts',
+  '**/job-funnel-minor-marker.spec.ts',
+  // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
+  '**/contact-form.spec.ts',
+];
+
+/**
+ * Speci z asercją czasu (INP otwarcia dialogu przy CPU 4×, #393). Mierzą czas interakcji, więc
+ * biegną w osobnym projekcie na jednym workerze i dopiero PO reszcie zestawu — równoległe
+ * karty nie zabierają im CPU. Pozostałe testy nie mierzą czasu i biegną równolegle.
+ */
+const TIMING_SPECS = ['**/dialog-open-inp.spec.ts'];
+
+/**
+ * Równoległość w CI: hostowany runner `ubuntu-latest` ma 4 vCPU; jeden rdzeń zostaje dla
+ * serwera `next start`. Na jednym workerze sam krok „Run E2E” trwał ~25 min.
+ */
+const CI_WORKERS = 3;
 
 export default defineConfig({
   testDir: './tests/e2e',
   // Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
   // na danych demo zawsze by padły.
-  testIgnore: [
-    '**/candidate-applications-pagination.spec.ts',
-    '**/candidate-applications-error.spec.ts',
-    '**/candidate-proposals-pagination.spec.ts',
-    '**/candidate-dashboard-read-errors.spec.ts',
-    '**/public-read-failures.spec.ts',
-    // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
-    // nich komunikat, więc testujemy je na serwerze fixture.
-    '**/apply-modal-a11y.spec.ts',
-    '**/apply-network-error.spec.ts',
-    '**/apply-phone-validation.spec.ts',
-    '**/apply-screening.spec.ts',
-    '**/guest-apply.spec.ts',
-    '**/job-posting-fixture.spec.ts',
-    '**/offer-message-login.spec.ts',
-    // Pełny formularz zgłoszenia treści (#41) — oferta fikcyjna bez flagi demo.
-    '**/content-report-form.spec.ts',
-    '**/job-funnel-no-storage.spec.ts',
-    '**/job-funnel-minor-marker.spec.ts',
-    // Wysyłka formularza kontaktu (#61) — sukces tylko w trybie fixture (demo = brak zapisu).
-    '**/contact-form.spec.ts',
-  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // Niestabilność ma być widoczna (#375). Jedno ponowienie odróżnia test niestabilny
@@ -112,7 +140,7 @@ export default defineConfig({
   // podsumowanie joba, plik flaky-tests.json); reporter `github` dodaje adnotacje.
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? CI_WORKERS : undefined,
   reporter: process.env.CI
     ? [
         ['line'],
@@ -133,19 +161,26 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        ...(CHROMIUM_PATH ? { launchOptions: { executablePath: CHROMIUM_PATH } } : {}),
-      },
+      testIgnore: [...FIXTURE_ONLY_SPECS, ...TIMING_SPECS],
+      use: BROWSER,
+    },
+    {
+      name: 'chromium-timing',
+      testMatch: TIMING_SPECS,
+      // Jeden worker i start po zakończeniu projektu `chromium` = pomiar bez konkurencji o CPU.
+      workers: 1,
+      dependencies: ['chromium'],
+      use: BROWSER,
     },
   ],
   webServer: {
     // CI buduje w osobnym kroku; limit gotowości mierzy wtedy wyłącznie start serwera.
-    command: reuseBuild ? 'npm run start' : 'npm run build && npm run start',
+    command: reuseBuild ? `npm run start -- -p ${PORT}` : `npm run build && npm run start -- -p ${PORT}`,
     // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
     env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, ...JOB_ASSIST_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // Jawne E2E_REUSE_SERVER=1 (poza CI) — np. własny `npm run dev` na tym porcie.
+    reuseExistingServer: e2eReuseServer(),
     timeout: reuseBuild ? 180_000 : 900_000,
   },
 });

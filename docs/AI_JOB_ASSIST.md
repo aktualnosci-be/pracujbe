@@ -1,11 +1,11 @@
 # Asystent redagowania oferty (#37, część pracodawcy)
 
-Stan: 25.09.2026. Funkcja jest za flagą, **domyślnie wyłączona** (także w produkcji). Wzór
+Stan: 25.09.2026 (dostawca zmieniony 26.09.2026 na OpenAI — decyzja właściciela). Funkcja jest za flagą, **domyślnie wyłączona** (także w produkcji). Wzór
 konfiguracji, limitów i bezpieczeństwa: import ogłoszenia (#465, `docs/AI_JOB_IMPORT.md`).
 Część dla kandydata (profil z odpowiedzi) to osobny etap #37 — nie ma jej w tym kodzie.
 
 Rekruter na kroku 5 (opis, obowiązki) i 6 (wymagania obowiązkowe) kreatora oferty klika
-„Zaproponuj poprawki”. Serwer prosi Claude o lepsze brzmienie tych pól **w języku oferty**
+„Zaproponuj poprawki”. Serwer prosi model OpenAI (GPT-6 Luna) o lepsze brzmienie tych pól **w języku oferty**
 (`jobs.default_locale`; nowa oferta = język panelu). Wynik to propozycja pole po polu:
 
 - obok propozycji zawsze widać tekst rekrutera („Twój tekst” / „Propozycja AI”);
@@ -27,7 +27,7 @@ czytnik ekranu ją odczytuje — E2E). Kwalifikacja prawna: szkic `docs/legal-dr
 |---|---|
 | `src/lib/ai-assist/config.ts` | flaga, dostawca (atrapa tylko poza produkcją), model |
 | `src/lib/ai-assist/schema.ts` | ścisły schemat wejścia (Zod `strict`), schemat structured output |
-| `src/lib/ai-assist/assist.ts` | wywołanie Messages API (jedyne miejsce), prompt, atrapa |
+| `src/lib/ai-assist/assist.ts` | prompt, wywołanie przez wspólnego klienta `src/lib/ai/openai.ts`, atrapa |
 | `src/lib/ai-assist/guard.ts` | bramki deterministyczne przed i po modelu |
 | `src/lib/ai-assist/run-assist.ts` | rdzeń bez autoryzacji; log użycia |
 | `src/lib/ai-assist/budget.ts` | punkt wpięcia budżetu #36 |
@@ -36,12 +36,14 @@ czytnik ekranu ją odczytuje — E2E). Kwalifikacja prawna: szkic `docs/legal-dr
 
 ## Model i API
 
-- Anthropic Messages API, SDK `@anthropic-ai/sdk` (ta sama zależność co import).
-- Model domyślny: `claude-opus-5-5` (aktualny najnowszy Claude), nadpisywalny
-  `AI_JOB_ASSIST_MODEL` (np. tańszy `claude-sonnet-5` — decyzja właściciela po porównaniu jakości).
-- Structured output (`output_config.format = json_schema`), wszystkie pola wymagane,
-  `additionalProperties: false`, bez typów unijnych. Effort `low`, `max_tokens` 6000, timeout
-  60 s, 1 ponowienie. Bez narzędzi.
+- OpenAI Responses API przez wspólnego klienta `src/lib/ai/openai.ts` (SDK `openai`, ta sama
+  zależność co import ogłoszeń i CV).
+- Model domyślny: `gpt-6-luna` (decyzja właściciela 26.09.2026), nadpisywalny
+  `AI_JOB_ASSIST_MODEL`, a globalnie `AI_MODEL`.
+- Structured output (`text.format = json_schema`, `strict: true`), wszystkie pola wymagane,
+  `additionalProperties: false`, bez typów unijnych. `reasoning.effort` `low`,
+  `max_output_tokens` 6000 (obejmuje tokeny rozumowania), `store: false`, timeout 60 s,
+  1 ponowienie. Bez narzędzi.
 - Odmowa modelu, ucięcie odpowiedzi, zły JSON → „Nie udało się przygotować propozycji” (Invariant #8).
 
 ## Limity i koszty
@@ -54,12 +56,13 @@ czytnik ekranu ją odczytuje — E2E). Kwalifikacja prawna: szkic `docs/legal-dr
 | Budżet globalny | hook `reserve` przed / `settle` po wywołaniu (tokeny) | `budget.ts`, #36 |
 
 Szacunek na wywołanie (do potwierdzenia pomiarem `usage`): wejście ~1,5–4 tys. tokenów
-(prompt + tekst oferty), wyjście ~0,5–2 tys. Górna granica przy pełnym limicie — do policzenia
-w #36 po cenach z dnia włączenia.
+(prompt + tekst oferty), wyjście ~0,5–2 tys. Przy cenach GPT-6 Luna (0,10 / 0,50 USD za 1 mln
+tokenów wejścia / wyjścia, `src/lib/ai/pricing.ts`) to ~0,0005–0,0014 USD; górna granica przy
+pełnym limicie 60 wywołań / dobę ≈ 0,1 USD na firmę.
 
 **Budżet (#36).** Bramka `budget.ts` rezerwuje w globalnym budżecie AI (`ai_budget_reserve`,
 migracja 0120, `docs/AI_BUDGET.md`) górną granicę kosztu (`src/lib/ai-assist/cost.ts`: prompt +
-schemat + treść pól + pełne `max_tokens`) PRZED wywołaniem modelu. Odmowa albo brak bazy zadań
+schemat + treść pól + pełne `max_output_tokens`) PRZED wywołaniem modelu. Odmowa albo brak bazy zadań
 = kod `AI_BUDGET_EXCEEDED` bez wywołania. Bilet rozlicza tę rezerwację samymi liczbami tokenów;
 błąd wywołania = rozliczenie pełną rezerwacją. Identyfikator firmy nie trafia do rejestru kosztów.
 
@@ -75,7 +78,7 @@ dopasowań (strażnik inwentarza).
 **Prompt injection.** Tekst oferty to niezaufane dane (mógł zostać wklejony z innego źródła).
 Dwie bramki: (1) deterministyczne wzorce poleceń dla AI w PL/NL/FR/EN i próby otwarcia
 znaczników — żądanie nie trafia do modelu; (2) model zgłasza `suspiciousInstructions`. W obu
-przypadkach brak propozycji i komunikat. Instrukcje wyłącznie w `system`, tekst w `<offer_text>`
+przypadkach brak propozycji i komunikat. Instrukcje wyłącznie w `instructions`, tekst w `<offer_text>`
 (próby zamknięcia neutralizowane), klucze spoza schematu odrzucane.
 
 **Bez nowych faktów.** Serwer porównuje propozycję z tekstem rekrutera: nowa liczba (kwota,
@@ -85,20 +88,21 @@ albo znacznik redakcji w propozycji i propozycja łamiąca limity kreatora. Ogra
 słownych (np. nowego benefitu bez liczby) nie wykrywamy deterministycznie — reguła w prompcie
 i przegląd rekrutera (propozycja obok oryginału).
 
-**Klucz API** tylko na serwerze (`ANTHROPIC_API_KEY`); moduły `server-only`.
+**Klucz API** tylko na serwerze (`OPENAI_API_KEY`); moduły `server-only`.
 
 ## Prywatność
 
 - Tekst istnieje w pamięci na czas żądania — nie trafia do bazy ani logów. Log użycia
   (`src/lib/ai/usage-log.ts`) ma tylko funkcję, wynik, rodzaj wejścia, model, czas.
 - Przed wysłaniem usuwamy e-maile, telefony i numery identyfikacyjne (`redactSensitiveData`).
-- Dane trafiają do Anthropic jako podmiotu przetwarzającego — przed włączeniem w produkcji
+- Dane trafiają do OpenAI jako podmiotu przetwarzającego (`src/lib/privacy/processors.ts`,
+  wpis `openai` — „DO UZUPEŁNIENIA”); kod wysyła `store: false`. Przed włączeniem w produkcji
   potwierdzić DPA, region i retencję (jak #465).
 
 ## Włączenie (właściciel)
 
 1. Decyzja o koszcie i dostawcy (#36), DPA.
-2. `AI_JOB_ASSIST_ENABLED=1` (+ istniejący `ANTHROPIC_API_KEY`) w Railway.
+2. `AI_JOB_ASSIST_ENABLED=1` (+ istniejący `OPENAI_API_KEY`) w Railway.
 3. Ocena prawna informacji o AI (art. 50 AI Act) — szkic A3.
 
 ## Testy
@@ -108,5 +112,7 @@ i przegląd rekrutera (propozycja obok oryginału).
 - `tests/unit/job-assist-action.test.ts` — flaga, atrapa nie w produkcji, recruiter+, limit
   per firma, budżet, brak zapisu, log bez treści.
 - `tests/unit/ai-inventory.test.ts` — wpis w inwentarzu, akcja nie zapisuje i nie publikuje.
+- `tests/unit/ai-openai-client.test.ts` — kształt żądania `OpenAiJobAssistor` (instrukcje osobno,
+  strict schemat, odmowa, zużycie z cache).
 - `tests/e2e/job-assist.spec.ts` — atrapa: akceptacja/cofnięcie/odrzucenie pola, informacja
   o AI, kontrole ujemne, axe 320/1280 px.

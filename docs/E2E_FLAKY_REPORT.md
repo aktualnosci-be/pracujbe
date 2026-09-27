@@ -10,9 +10,14 @@ i porównuje wyniki.
 ## Użycie
 
 ```bash
-# 5 przebiegów pełnej suity (serwer: `reuseExistingServer` poza CI — przy uruchomionym
-# `npm run build && npm run start` przebiegi nie budują aplikacji od nowa):
-npm run test:e2e:flaky -- --runs 5
+# 5 przebiegów pełnej suity. Każdy przebieg startuje własny serwer; po `npm run build`
+# z PLAYWRIGHT_SKIP_BUILD=1 bez ponownego builda. Serwer już uruchomiony na porcie
+# (`npm run start -- -p 3000`) zostanie użyty tylko przy jawnym E2E_REUSE_SERVER=1:
+PLAYWRIGHT_SKIP_BUILD=1 npm run test:e2e:flaky -- --runs 5
+E2E_REUSE_SERVER=1 npm run test:e2e:flaky -- --runs 5
+
+# Obok innego przebiegu na tej samej maszynie — osobny port (patrz „Port serwera” niżej):
+E2E_PORT=3517 npm run test:e2e:flaky -- --runs 3 -- tests/e2e/smoke.spec.ts
 
 # Wybrane specy i opcje Playwrighta po `--` (bez --reporter i --retries — ustawia je skrypt):
 npm run test:e2e:flaky -- --runs 3 -- tests/e2e/smoke.spec.ts tests/e2e/a11y.spec.ts --workers=4
@@ -24,6 +29,34 @@ node scripts/e2e-flaky-report.mjs r1.json r2.json r3.json
 Opcje: `--runs N` (≥ 2), `--out katalog` (domyślnie `playwright-report/flaky-runs/`;
 nie `test-results/`, bo Playwright czyści go na starcie każdego przebiegu). W katalogu
 zostają raporty `run-NN.json` i podsumowanie `flaky-summary.json`.
+
+## Port serwera i ponowne użycie (E2E_PORT, E2E_REUSE_SERVER)
+
+Porty wszystkich konfiguracji wylicza jedno miejsce: `scripts/lib/e2e-server.mjs`
+(test `tests/unit/e2e-server.test.ts`).
+
+| konfiguracja | bez `E2E_PORT` (CI) | `E2E_PORT=N` |
+|---|---|---|
+| `playwright.config.ts` (demo) | 3000 | N |
+| `playwright.applications-fixture.config.ts` full / error | 4319 / 4320 | N+1 / N+2 |
+| `playwright.real-flow.config.ts` | 4331 | N+3 |
+| `scripts/perf-lab.mjs` (bez `--base`) | 3100 | N+100 |
+
+Dwa równoległe przebiegi na jednej maszynie (np. dwie sesje agentów) dostają różne `N`
+(np. 3517 i 3700 — sloty N…N+100 nie mogą na siebie zachodzić, czyli różnica ≥ 101). Nie trzeba
+kopiować konfiguracji.
+
+`E2E_REUSE_SERVER=1` (ignorowane w CI) każe Playwrightowi użyć serwera, który już słucha
+na porcie konfiguracji demo — np. własnego `npm run dev -- -p 3517`. Domyślnie wyłączone:
+zajęty port kończy przebieg błędem Playwrighta („is already used”), zamiast po cichu
+testować serwer innej gałęzi albo innego builda. Konfiguracje fixture i real-flow nigdy nie
+używają cudzego serwera (potrzebują własnych zmiennych), a `perf-lab.mjs` przy zajętym porcie
+kończy się błędem.
+
+Adres kanoniczny w HTML (`NEXT_PUBLIC_SITE_URL`) jest wklejany w buildzie i nie zależy od
+portu — bez tej zmiennej zostaje `http://localhost:3000`, tak jak oczekują specy SEO.
+Ciasteczka ustawiane w specach na `http://localhost:3000` działają na każdym porcie
+(ciasteczka nie rozróżniają portów).
 
 ## Co raportuje
 

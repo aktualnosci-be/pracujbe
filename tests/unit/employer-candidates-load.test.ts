@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getTopMatchedCandidates } from "@/lib/data/employer";
+import { getTopMatchedCandidates, getTopMatchedCandidatesLoad } from "@/lib/data/employer";
 import { getActiveCompany } from "@/lib/company-context";
 import { getPortalIdentity } from "@/lib/db/portal";
 import { captureError } from "@/lib/error-report";
@@ -163,5 +163,39 @@ describe("employer candidates read", () => {
     expect(offers?.values).toEqual([["candidate-1", "candidate-2"], ["job-1"]]);
     expect(offers?.text).toContain("status IN ('sent', 'viewed')");
     expect(offers?.text).toContain("deleted_at IS NULL");
+  });
+});
+
+describe("top matched candidates load states (P1-14)", () => {
+  const active = (activeRole: string, activeStatus = "verified") =>
+    vi.mocked(getActiveCompany).mockResolvedValue({
+      activeId: "company-1", activeStatus, activeName: "Firma", activeRole, companies: [],
+    });
+
+  it("a plain member gets an explicit denied state, no candidate query runs", async () => {
+    db({ winners: [{ candidate_id: "candidate-1", job_id: "job-1", score: 90 }] });
+    active("member");
+    expect(await getTopMatchedCandidatesLoad()).toEqual({ status: "denied" });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it("an unverified company gets its own state, not an empty list", async () => {
+    db();
+    active("owner", "pending");
+    expect(await getTopMatchedCandidatesLoad()).toEqual({ status: "unverified" });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it("a failed read is an error, never an empty list", async () => {
+    db({ failed: "get_company_top_matches" });
+    active("owner");
+    expect(await getTopMatchedCandidatesLoad()).toEqual({ status: "error" });
+  });
+
+  it("negative control: recruiter of a verified company reads the list", async () => {
+    db();
+    active("recruiter");
+    expect(await getTopMatchedCandidatesLoad()).toEqual({ status: "ok", candidates: [] });
+    expect(fakeDb.callsTo("get_company_top_matches")).toHaveLength(1);
   });
 });

@@ -33,10 +33,12 @@ function db(options: { fail?: boolean; userId?: string | null; rows?: AppRow[]; 
   fakeDb
     .rows('candidate.applications-page', ({ values }) => {
       if (options.fail) throw pgError('08006', 'database unavailable');
-      const [candidate, beforeDate, beforeId, limit] = values as [string, string | null, string | null, number];
+      const [candidate, beforeDate, beforeId, limit, statuses] =
+        values as [string, string | null, string | null, number, string[] | null];
       expect(candidate).toBe(ownerId);
       return (options.rows ?? records).filter((row) =>
-        !beforeDate || row.submitted_at < beforeDate || (row.submitted_at === beforeDate && row.id < beforeId!),
+        (!statuses || statuses.includes(row.status))
+        && (!beforeDate || row.submitted_at < beforeDate || (row.submitted_at === beforeDate && row.id < beforeId!)),
       ).slice(0, limit);
     })
     .rows('candidate.applied-jobs-page', ({ values }) => {
@@ -66,18 +68,27 @@ describe('candidate application history', () => {
     const [firstCall, secondCall] = fakeDb.callsTo('candidate.applications-page');
     // Zapytanie zawężone do właściciela sesji, bez usuniętych, stabilna kolejność i limit strony + 1.
     expect(firstCall!.as).toBe(ownerId);
-    expect(firstCall!.values).toEqual([ownerId, null, null, 11]);
+    expect(firstCall!.values).toEqual([ownerId, null, null, 11, null]);
     expect(firstCall!.text).toContain('candidate_id = $1');
     expect(firstCall!.text).toContain('deleted_at IS NULL');
     expect(firstCall!.text).toContain('(submitted_at, id) < ($2::timestamptz, $3::uuid)');
     expect(firstCall!.text).toContain('ORDER BY submitted_at DESC, id DESC');
-    expect(secondCall!.values).toEqual([ownerId, submittedAt, records[9]!.id, 11]);
+    expect(secondCall!.values).toEqual([ownerId, submittedAt, records[9]!.id, 11, null]);
     expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.values[0]).toBe('pl');
     expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.text).toContain('get_applied_jobs_display');
     // #184 (0108): filtr stron wewnątrz RPC (SECURITY DEFINER nie jest inline'owana), nie WHERE na wyniku.
     expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.text).toContain('p_job_ids => $2::uuid[]');
     expect(fakeDb.callsTo('candidate.applied-jobs-page')[0]!.text).not.toMatch(/WHERE\s+d\.job_id/);
     expect(second.items.every((row) => row.jobTitle === 'Older job' && row.slug === 'older-job')).toBe(true);
+  });
+
+  it('filters the stage in SQL before the page limit (#809)', async () => {
+    db({ rows: records.map((row, index) => (index === 14 ? { ...row, status: 'interview' } : row)) });
+    const page = await getMyApplicationsPage('pl', null, 'rozmowa');
+    expect(page.items.map((row) => row.id)).toEqual([records[14]!.id]);
+    const call = fakeDb.callsTo('candidate.applications-page')[0]!;
+    expect(call.values).toEqual([ownerId, null, null, 11, ['interview']]);
+    expect(call.text).toContain('status::text = ANY($5::text[])');
   });
 
   it('does not query applications without a session', async () => {

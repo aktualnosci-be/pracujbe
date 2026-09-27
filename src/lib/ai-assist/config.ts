@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { DEFAULT_AI_MODEL, isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
 /**
@@ -8,14 +9,14 @@ import { isProductionMode } from '@/lib/env';
  *
  * Asystent jest WIDOCZNY tylko gdy:
  *   - `AI_JOB_ASSIST_ENABLED` = `1`/`true` (domyślnie wyłączony, także w produkcji), ORAZ
- *   - jest dostawca: `ANTHROPIC_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
+ *   - jest dostawca: `OPENAI_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
  *     `AI_JOB_ASSIST_PROVIDER=fixture` (E2E i lokalny UX bez kosztów i bez sieci).
  */
 
-/** Domyślny model: aktualny najnowszy Claude (docs/AI_JOB_ASSIST.md). */
-export const DEFAULT_JOB_ASSIST_MODEL = 'claude-opus-5-5';
+/** Domyślny model: GPT-6 Luna (decyzja właściciela 2026-09-26, `src/lib/ai/openai.ts`). */
+export const DEFAULT_JOB_ASSIST_MODEL = DEFAULT_AI_MODEL;
 
-export type JobAssistProvider = 'anthropic' | 'fixture';
+export type JobAssistProvider = 'openai' | 'fixture';
 
 function flagOn(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
@@ -27,7 +28,7 @@ export function jobAssistProvider(): JobAssistProvider | null {
   if (process.env.AI_JOB_ASSIST_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }
-  return process.env.ANTHROPIC_API_KEY ? 'anthropic' : null;
+  return isOpenAiConfigured() ? 'openai' : null;
 }
 
 /** Czy panel asystenta ma być widoczny w kreatorze. */
@@ -35,8 +36,7 @@ export function isJobAssistEnabled(): boolean {
   return jobAssistProvider() !== null;
 }
 
-/** Model Claude (nadpisywalny przez `AI_JOB_ASSIST_MODEL`). */
+/** Model OpenAI: `AI_JOB_ASSIST_MODEL` → `AI_MODEL` → `gpt-6-luna` (`resolveAiModel`). */
 export function jobAssistModel(): string {
-  const m = process.env.AI_JOB_ASSIST_MODEL?.trim();
-  return m && /^[a-z0-9][a-z0-9.-]{2,63}$/.test(m) ? m : DEFAULT_JOB_ASSIST_MODEL;
+  return resolveAiModel(process.env.AI_JOB_ASSIST_MODEL);
 }

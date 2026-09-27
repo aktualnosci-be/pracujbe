@@ -62,7 +62,7 @@ function fakeThread(store: { rows: Row[]; conversation: boolean; failMessages?: 
     .rows('messages.conversation-access', store.conversation ? [{ id: 'thread-1', company_id: 'company-1' }] : [])
     .rows('messages.thread-other-members', [{ profile_id: 'other' }])
     .rows('messages.profile-names', [{ id: 'other', first_name: 'Anna', last_name: 'Nowak' }])
-    .rows('messages.company-names', [{ id: 'company-1', name: 'Firma' }])
+    .rpc('get_conversation_company_name', 'Firma')
     .rows('messages.company-members', [])
     .rows('messages.thread-page', ({ values, text }) => {
       const [, lt, id, limit] = values as [string, string | null, string | null, number];

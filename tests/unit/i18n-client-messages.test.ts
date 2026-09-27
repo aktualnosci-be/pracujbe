@@ -37,7 +37,11 @@ function resolveImport(from: string, spec: string): string | null {
   if (spec.startsWith('@/')) base = join(SRC, spec.slice(2));
   else if (spec.startsWith('.')) base = resolve(dirname(from), spec);
   else return null;
-  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')]) {
+  // Tylko TS/TSX wchodzi do grafu analizy (`sourceFiles()` niżej zbiera te same rozszerzenia).
+  // Import z jawnym rozszerzeniem innym niż .ts/.tsx (np. `.mjs` — czysta logika bez i18n/React,
+  // współdzielona z next.config.mjs, patrz src/lib/security/csp-inline-scripts.mjs) jest liściem
+  // grafu: nie ma dyrektywy ani wywołań useTranslations, więc nie zmienia wymaganych przestrzeni.
+  for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')]) {
     if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
   }
   return null;

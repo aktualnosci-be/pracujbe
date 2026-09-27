@@ -9,7 +9,7 @@ import { captureError } from '@/lib/error-report';
 import { jobImportModel, jobImportProvider } from '@/lib/ai-import/config';
 import { withJobImportBudget, withJobImportUsageLog } from '@/lib/ai/job-import-usage';
 import { isServiceDatabaseConfigured } from '@/lib/db/portal';
-import { AnthropicJobExtractor, FixtureJobExtractor } from '@/lib/ai-import/extract';
+import { OpenAiJobExtractor, FixtureJobExtractor } from '@/lib/ai-import/extract';
 import { IMPORT_IMAGE_MAX_BYTES, type ImportImageProblem } from '@/lib/ai-import/image';
 import { buildImportDraftContent, type ImportedWizardValues } from '@/lib/ai-import/map';
 import { precheckSource, runJobImport, type ImportSource } from '@/lib/ai-import/run-import';
@@ -110,7 +110,7 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
     // Log użycia bez treści i PII (#489, src/lib/ai/usage-log.ts).
     const model = provider === 'fixture' ? 'fixture' : jobImportModel();
     const logged = withJobImportUsageLog(
-      provider === 'fixture' ? new FixtureJobExtractor() : new AnthropicJobExtractor(),
+      provider === 'fixture' ? new FixtureJobExtractor() : new OpenAiJobExtractor(),
       model,
     );
     // Globalny budżet AI (#36): płatny dostawca ZAWSZE przez rezerwację (bez bazy zadań

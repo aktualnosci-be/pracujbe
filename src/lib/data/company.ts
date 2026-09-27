@@ -30,6 +30,10 @@ export interface MyCompany {
   verifiedAt: string | null;
   /** Uzasadnienie admina dla odrzuconej/zawieszonej firmy (0084, #310) — inaczej null. */
   statusReason: string | null;
+  /** Strona WWW firmy (#112) — bezwzględny https albo null (baza waliduje format). */
+  website: string | null;
+  /** Adres logo firmy (#112) — bezwzględny https albo null. */
+  logoUrl: string | null;
   canEdit: boolean;
 }
 
@@ -45,6 +49,8 @@ const DEMO_COMPANY: MyCompany = {
   vatNumber: 'BE0123456789',
   verifiedAt: '2025-01-15T09:00:00.000Z',
   statusReason: null,
+  website: 'https://example.com',
+  logoUrl: null,
   canEdit: true,
 };
 
@@ -97,7 +103,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
       if (!active.activeId) return { active, company: null };
       // company_members_select + companies_select_member (RLS): tylko własne aktywne członkostwo.
       const company = await queryOne<Record<string, unknown>>(tx, 'company.my-company',
-        `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at
+        `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
+                c.website, c.logo_url
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -125,6 +132,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
           status === 'rejected' || status === 'suspended'
             ? asNullableString(company['status_reason'])
             : null,
+        website: asNullableString(company['website']),
+        logoUrl: asNullableString(company['logo_url']),
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };

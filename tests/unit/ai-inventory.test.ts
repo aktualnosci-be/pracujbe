@@ -50,13 +50,28 @@ describe('inwentarz AI (#489)', () => {
       { path: 'src/lib/new-feature/score.ts', source: "import OpenAI from 'openai';\n" },
       { path: 'scripts/raw-call.mjs', source: "await fetch('https://api.anthropic.com/v1/messages');\n" },
       { path: 'src/lib/new-feature/lazy.ts', source: "const sdk = await import('@anthropic-ai/sdk');\n" },
+      // OpenAI: podścieżka SDK, require, import dynamiczny, surowe HTTP i wspólny klient.
+      { path: 'src/lib/new-feature/types.ts', source: "import type { Response } from 'openai/resources/responses/responses';\n" },
+      { path: 'scripts/cjs.cjs', source: "const OpenAI = require('openai');\n" },
+      { path: 'src/lib/new-feature/lazy-openai.ts', source: "const { default: OpenAI } = await import('openai');\n" },
+      { path: 'scripts/raw-openai.mjs', source: "await fetch('https://api.openai.com/v1/responses', { method: 'POST' });\n" },
+      { path: 'src/lib/new-feature/shared.ts', source: "import { createStructuredResponse } from '@/lib/ai/openai';\n" },
+      { path: 'src/lib/ai/relative.ts', source: "import { createStructuredResponse } from './openai';\n" },
     ];
     expect(undeclaredCallSites(files)).toEqual([
+      'scripts/cjs.cjs',
       'scripts/raw-call.mjs',
+      'scripts/raw-openai.mjs',
+      'src/lib/ai/relative.ts',
+      'src/lib/new-feature/lazy-openai.ts',
       'src/lib/new-feature/lazy.ts',
       'src/lib/new-feature/rank.ts',
       'src/lib/new-feature/score.ts',
+      'src/lib/new-feature/shared.ts',
+      'src/lib/new-feature/types.ts',
     ]);
+    // Konfiguracja modelu (bez SDK) nie jest wywołaniem modelu.
+    expect(containsModelCall("import { resolveAiModel } from '@/lib/ai/model-config';\n")).toBe(false);
   });
 
   it('wpisy „behind_flag” wskazują istniejące pliki, które faktycznie wołają model', () => {
@@ -87,9 +102,32 @@ describe('inwentarz AI (#489)', () => {
     const aiPackages = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).filter((name) =>
       AI_SDK_PACKAGES.some((p) => p.test(name)),
     );
-    // Dziś jedyny dostawca to Anthropic — inny pakiet wymaga nowego `provider` w inwentarzu.
-    for (const name of aiPackages) expect(name, name).toMatch(/^@anthropic-ai\//);
-    if (aiPackages.length > 0) expect(AI_FEATURES.some((f) => f.provider === 'anthropic')).toBe(true);
+    // Decyzja właściciela 2026-09-26: jedyny dostawca to OpenAI (SDK `openai`).
+    expect(aiPackages).toEqual(['openai']);
+    expect(AI_FEATURES.some((f) => f.provider === 'openai')).toBe(true);
+  });
+
+  it('funkcje „behind_flag” używają wyłącznie OpenAI przez wspólnego klienta (decyzja 2026-09-26)', () => {
+    for (const feature of AI_FEATURES.filter((f) => f.status === 'behind_flag')) {
+      expect(feature.provider, feature.id).toBe('openai');
+      expect(feature.callSites, feature.id).toContain('src/lib/ai/openai.ts');
+    }
+  });
+
+  it('SDK Anthropic nie jest używane w kodzie produkcyjnym (kontrola ujemna)', () => {
+    const ANTHROPIC = /['"]@anthropic-ai\/[^'"]+['"]|api\.anthropic\.com/;
+    const offenders = sourceFiles()
+      .filter((f) => !f.path.startsWith('src/lib/ai/inventory.ts') && ANTHROPIC.test(f.source))
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+    expect("import Anthropic from '@anthropic-ai/sdk';").toMatch(ANTHROPIC);
+  });
+
+  it('SDK OpenAI importuje wyłącznie wspólny klient src/lib/ai/openai.ts', () => {
+    const SDK = /(?:from|require\(|import\()\s*['"]openai(?:\/[^'"]*)?['"]/;
+    const importers = sourceFiles().filter((f) => SDK.test(f.source)).map((f) => f.path);
+    expect(importers).toEqual(['src/lib/ai/openai.ts']);
+    expect("import OpenAI from 'openai';").toMatch(SDK);
   });
 
   it('funkcje dotyczące kandydatów spoza inwentarza nie wołają modelu (art. 22 — brak AI)', () => {

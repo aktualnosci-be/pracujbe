@@ -26,6 +26,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
     retry: t['employerOffersRetry']!,
     newApplications: t['employerOffersApplicationsLabel']!,
     matched: t['colMatched']!,
+    noData: t['funnelNoData']!,
   };
 
   describe(`employer dashboard offers preview (${locale})`, () => {
@@ -68,6 +69,25 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
       expect(html).toContain('href="/employer/oferty"');
       expect(html).not.toContain('role="alert"');
       expect(html).not.toContain(labels.empty);
+    });
+
+    it('P1-14: counters unavailable for the role show "no data", never a false zero', () => {
+      const render = (newApplications: number | null, matched: number | null) => renderToStaticMarkup(
+        <EmployerOffersPreview
+          result={{
+            status: 'ok',
+            hasNext: false,
+            jobs: [{ id: 'job-1', title: 'Operator wózka', city: 'Liège', status: 'active', slug: 'operator-wozka', pastExpiry: false, newApplications, matched, createdAt: null }],
+          }}
+          locale={locale}
+          labels={labels}
+        />,
+      );
+      const values = (html: string) => [...new DOMParser().parseFromString(html, 'text/html').querySelectorAll('dd')]
+        .map((dd) => dd.textContent);
+      expect(values(render(null, null))).toEqual([`—${labels.noData}`, `—${labels.noData}`]);
+      // Kontrola ujemna: realne zero z bazy to 0, nie „brak danych”.
+      expect(values(render(0, 0))).toEqual(['0', '0']);
     });
   });
 }

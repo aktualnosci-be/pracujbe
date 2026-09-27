@@ -7,8 +7,8 @@ import { SALARY_PERIODS } from '@/lib/validation/job';
  * Kształt odpowiedzi modelu przy imporcie ogłoszenia (#465).
  *
  * Dwie warstwy:
- *   1. `JOB_EXTRACTION_JSON_SCHEMA` — JSON Schema dla structured output API Claude
- *      (`output_config.format`): każde pole wymagane, brak danych = `null`/`[]`, obiekty
+ *   1. `JOB_EXTRACTION_JSON_SCHEMA` — JSON Schema dla structured output OpenAI
+ *      (`text.format`, `strict: true`): każde pole wymagane, brak danych = `null`/`[]`, obiekty
  *      z `additionalProperties: false`. Model nie może dopisać własnych kluczy.
  *   2. `rawExtractionSchema` — luźna walidacja Zod po stronie serwera (odpowiedź to nadal
  *      niezaufane dane). Dopiero mapowanie (`map.ts`) przepuszcza wartości przez TE SAME

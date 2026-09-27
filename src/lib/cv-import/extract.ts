@@ -1,18 +1,17 @@
 import 'server-only';
 
-import Anthropic from '@anthropic-ai/sdk';
-
-import { ExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
+import { toExtractorError, type ExtractionHooks } from '@/lib/ai-import/extract';
+import { createStructuredResponse, type ResponsesClient } from '@/lib/ai/openai';
 import { cvImportModel } from '@/lib/cv-import/config';
 import { CV_EXTRACTION_JSON_SCHEMA } from '@/lib/cv-import/proposals';
 
 /**
- * Propozycje pól profilu z CV przez Claude (#487). Granice jak przy imporcie ogłoszeń
+ * Propozycje pól profilu z CV przez model OpenAI (#487, domyślnie `gpt-6-luna`). Granice jak przy imporcie ogłoszeń
  * (`src/lib/ai-import/extract.ts`, ta sama klasa błędów):
  *   - do modelu trafia WYŁĄCZNIE tekst po `minimizeCvText` (bez pliku, obrazu, nazwy pliku,
  *     identyfikatora konta i danych kontaktowych);
  *   - CV to niezaufany materiał w znaczniku `<cv>` (próby jego zamknięcia neutralizowane),
- *     instrukcje tylko w `system`; model bez narzędzi, wynik ograniczony schematem
+ *     instrukcje tylko w `instructions`; model bez narzędzi, wynik ograniczony schematem
  *     structured output i ponownie walidowany (`mapCvExtraction`);
  *   - wynik to propozycje — nie ocena kandydata, nie ranking i nie wejście do `scoreMatch`.
  */
@@ -49,52 +48,27 @@ export function wrapCvText(text: string): string {
   return `<cv>\n${safe}\n</cv>\n\nPropose profile entries from the CV above in the required JSON structure.`;
 }
 
-/** Produkcyjny ekstraktor: Messages API + structured output. */
-export class AnthropicCvExtractor implements CvExtractor {
-  private readonly client: Anthropic;
-
-  constructor(client?: Anthropic) {
-    this.client = client ?? new Anthropic({ timeout: 60_000, maxRetries: 1 });
-  }
+/** Produkcyjny ekstraktor: OpenAI Responses API + structured output (`src/lib/ai/openai.ts`). */
+export class OpenAiCvExtractor implements CvExtractor {
+  constructor(private readonly client?: ResponsesClient) {}
 
   async extract(minimizedText: string, hooks?: ExtractionHooks): Promise<unknown> {
-    let response: Anthropic.Message;
+    // #36: zużycie naliczane także przy odmowie — klient zgłasza je przed oceną odpowiedzi.
+    // Bez `usage` budżet rozlicza pełną kwotę rezerwacji (zachowawczo).
     try {
-      response = await this.client.messages.create({
-        model: cvImportModel(),
-        max_tokens: CV_EXTRACTION_MAX_TOKENS,
-        system: CV_EXTRACTION_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: [{ type: 'text', text: wrapCvText(minimizedText) }] }],
-        output_config: {
-          effort: 'low',
-          format: { type: 'json_schema', schema: CV_EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown> },
+      return await createStructuredResponse(
+        {
+          model: cvImportModel(),
+          instructions: CV_EXTRACTION_SYSTEM_PROMPT,
+          input: [{ kind: 'text', text: wrapCvText(minimizedText) }],
+          schemaName: 'cv_profile_proposals',
+          schema: CV_EXTRACTION_JSON_SCHEMA as unknown as Record<string, unknown>,
+          maxOutputTokens: CV_EXTRACTION_MAX_TOKENS,
         },
-      });
+        { onUsage: hooks?.onUsage, client: this.client },
+      );
     } catch (e) {
-      if (e instanceof Anthropic.RateLimitError) throw new ExtractorError('rateLimited');
-      throw new ExtractorError('failed');
-    }
-    // #36: zużycie naliczane także przy odmowie — zgłaszamy je przed oceną odpowiedzi. Bez
-    // `usage` budżet rozlicza pełną kwotę rezerwacji (zachowawczo).
-    const usage = response.usage as Anthropic.Usage | undefined;
-    if (usage) {
-      hooks?.onUsage?.({
-        inputTokens: usage.input_tokens,
-        outputTokens: usage.output_tokens,
-        cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
-        cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
-      });
-    }
-    if (response.stop_reason === 'refusal') throw new ExtractorError('refused');
-    if (response.stop_reason !== 'end_turn') throw new ExtractorError('failed');
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      throw new ExtractorError('failed');
+      throw toExtractorError(e);
     }
   }
 }

@@ -49,17 +49,23 @@ beforeEach(() => {
 });
 
 describe('recordConsent', () => {
-  it('wysyła kategorie, źródło, visitor_id, zaufany IP (X-Real-IP) i user-agent', async () => {
-    expect(await recordConsent(CATEGORIES, 'cookie_settings')).toEqual({ ok: true });
+  it('wysyła kategorie, źródło, visitor_id, zaufany IP (X-Real-IP), user-agent i wersję', async () => {
+    expect(await recordConsent(CATEGORIES, 'cookie_settings', '2026-01')).toEqual({ ok: true });
     expect(sentArgs()).toEqual({
       p_categories: CATEGORIES,
       p_source: 'cookie_settings',
       p_visitor_id: 'visitor-1',
       p_ip: '203.0.113.7',
       p_user_agent: 'Mozilla/5.0 test',
+      p_version: '2026-01',
     });
     // Zalogowany: transakcja sesji (auth.uid() = konto), jsonb jako JSON.
     expect(fakeDb.callsTo('record_consent')[0]!.as).toBe(USER);
+  });
+
+  it('bez wersji (wołający nie ją podał) → p_version null, RPC dobiera bieżącą', async () => {
+    await recordConsent(CATEGORIES, 'cookie_banner');
+    expect(sentArgs().p_version).toBeNull();
   });
 
   it('kontrola ujemna (#588): sfałszowany X-Forwarded-For nie zastępuje brakującego X-Real-IP', async () => {

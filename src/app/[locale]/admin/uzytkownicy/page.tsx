@@ -25,11 +25,16 @@ import {
   ROW_TITLE,
   TABLE_WRAP,
   TAG,
-  TD,
-  TD_WRAP,
-  TH,
 } from '@/components/admin/admin-styles';
 import { cn } from '@/lib/utils';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 /**
  * Panel administratora — Użytkownicy (Etap 7g).
@@ -159,27 +164,27 @@ export default async function AdminUsersPage({
             <>
               {/* Desktop: tabela */}
               <div className={cn(TABLE_WRAP, 'hidden md:block')}>
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th scope="col" className={TH}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
                         {t('colUser')}
-                      </th>
-                      <th scope="col" className={TH}>
+                      </TableHead>
+                      <TableHead>
                         {t('colEmail')}
-                      </th>
-                      <th scope="col" className={TH}>
+                      </TableHead>
+                      <TableHead>
                         {t('colRole')}
-                      </th>
-                      <th scope="col" className={TH}>
+                      </TableHead>
+                      <TableHead>
                         {t('colCreated')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {users.map((user) => (
-                      <tr key={user.id}>
-                        <td className={TD_WRAP}>
+                      <TableRow key={user.id}>
+                        <TableCell wrap>
                           <div className="flex items-center gap-3">
                             <span className={cn(ICON_BOX, 'size-9')} aria-hidden="true">
                               {initials(user.name || t('nameFallback'))}
@@ -188,22 +193,22 @@ export default async function AdminUsersPage({
                               {user.name || t('nameFallback')}
                             </span>
                           </div>
-                        </td>
-                        <td className={TD}>
+                        </TableCell>
+                        <TableCell>
                           {user.email ?? '—'}
-                        </td>
-                        <td className={TD}>
+                        </TableCell>
+                        <TableCell>
                           <span className={cn(TAG, ROLE_TONE[user.role])}>
                             {roleLabel(user.role)}
                           </span>
-                        </td>
-                        <td className={TD}>
+                        </TableCell>
+                        <TableCell>
                           {formatDate(user.createdAt)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               {/* Mobile: karty */}

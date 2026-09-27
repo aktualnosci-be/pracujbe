@@ -56,6 +56,8 @@ describe('company read state', () => {
         status: 'pending',
         vat_number: null,
         verified_at: null,
+        website: 'https://acme.example',
+        logo_url: null,
       },
     ]);
     expect(await getMyCompany()).toEqual({
@@ -68,6 +70,8 @@ describe('company read state', () => {
         vatNumber: null,
         verifiedAt: null,
         statusReason: null,
+        website: 'https://acme.example',
+        logoUrl: null,
         canEdit: true,
       },
     });

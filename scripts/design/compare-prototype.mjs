@@ -86,7 +86,6 @@ export const SCREENS = [
     group: "public",
     pixel: false,
   },
-  { id: "faq", proto: "jobs", app: "/pl/faq", group: "public", pixel: false },
   { id: "about", proto: "jobs", app: "/pl/o-nas", group: "public", pixel: false },
   { id: "contact", proto: "jobs", app: "/pl/kontakt", group: "public", pixel: false },
   { id: "help", proto: "jobs", app: "/pl/pomoc", group: "public", pixel: false },

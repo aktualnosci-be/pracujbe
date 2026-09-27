@@ -28,7 +28,7 @@ vi.mock('@/lib/ai-assist/assist', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/ai-assist/assist')>();
   return {
     ...real,
-    AnthropicJobAssistor: class {
+    OpenAiJobAssistor: class {
       suggest = suggest;
     },
   };
@@ -53,7 +53,7 @@ let logged: string[];
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AI_JOB_ASSIST_ENABLED = '1';
-  process.env.ANTHROPIC_API_KEY = 'test-key-not-real';
+  process.env.OPENAI_API_KEY = 'test-key-not-real';
   delete process.env.AI_JOB_ASSIST_PROVIDER;
   delete process.env.AI_JOB_ASSIST_MODEL;
   resetFakeDb({ id: USER, role: 'employer' });
@@ -87,7 +87,7 @@ describe('flaga i dostawca', () => {
     expect(isJobAssistEnabled()).toBe(false);
     expect(await suggestJobText(INPUT)).toEqual({ ok: false, error: 'NOT_FOUND' });
     process.env.AI_JOB_ASSIST_ENABLED = '1';
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     expect(isJobAssistEnabled()).toBe(false);
     expect(suggest).not.toHaveBeenCalled();
   });
@@ -100,7 +100,7 @@ describe('flaga i dostawca', () => {
   });
 
   it('kontrola ujemna: atrapa nie działa w trybie produkcyjnym', () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     process.env.AI_JOB_ASSIST_PROVIDER = 'fixture';
     expect(isJobAssistEnabled()).toBe(false);
     vi.mocked(isProductionMode).mockReturnValue(false);
@@ -108,11 +108,11 @@ describe('flaga i dostawca', () => {
   });
 
   it('model domyślny i nadpisanie przez env (tylko poprawny identyfikator)', () => {
-    expect(jobAssistModel()).toBe('claude-opus-5-5');
-    process.env.AI_JOB_ASSIST_MODEL = 'claude-sonnet-5';
-    expect(jobAssistModel()).toBe('claude-sonnet-5');
+    expect(jobAssistModel()).toBe('gpt-6-luna');
+    process.env.AI_JOB_ASSIST_MODEL = 'gpt-6-sol';
+    expect(jobAssistModel()).toBe('gpt-6-sol');
     process.env.AI_JOB_ASSIST_MODEL = 'x; rm -rf /';
-    expect(jobAssistModel()).toBe('claude-opus-5-5');
+    expect(jobAssistModel()).toBe('gpt-6-luna');
   });
 
   it('bez bazy (demo) płatny dostawca jest niedostępny', async () => {
@@ -175,12 +175,12 @@ describe('autoryzacja, limity, budżet', () => {
     expect(reserve).toHaveBeenCalledWith({
       feature: 'job_offer_assist',
       companyId: COMPANY,
-      model: 'claude-opus-5-5',
+      model: 'gpt-6-luna',
       estimateMicroUsd: expect.any(Number),
     });
-    // Rezerwacja pokrywa co najmniej pełne max_tokens wyjścia (Opus 5.5: 20 USD / 1 mln).
+    // Rezerwacja pokrywa co najmniej pełne max_output_tokens wyjścia (GPT-6 Luna: 0,50 USD / 1 mln).
     const [[firstCall]] = reserve.mock.calls as unknown as [[{ estimateMicroUsd: number }]];
-    expect(firstCall.estimateMicroUsd).toBeGreaterThanOrEqual(6000 * 20);
+    expect(firstCall.estimateMicroUsd).toBeGreaterThanOrEqual(Math.ceil(6000 * 0.5));
 
     reserve.mockResolvedValue({ settle });
     expect((await suggestJobText(INPUT)).ok).toBe(true);
@@ -294,7 +294,7 @@ describe('wejście i wynik', () => {
     expect(lines).toHaveLength(1);
     const line = JSON.parse(lines[0]!) as Record<string, unknown>;
     expect(Object.keys(line).sort()).toEqual(['at', 'durationMs', 'feature', 'inputKind', 'model', 'outcome', 'type']);
-    expect(line).toMatchObject({ feature: 'job_offer_assist', outcome: 'ok', inputKind: 'text', model: 'claude-opus-5-5' });
+    expect(line).toMatchObject({ feature: 'job_offer_assist', outcome: 'ok', inputKind: 'text', model: 'gpt-6-luna' });
     for (const secret of ['magazijn', 'jan.peeters', COMPANY, USER, 'Orderpicker']) {
       expect(lines[0]).not.toContain(secret);
     }

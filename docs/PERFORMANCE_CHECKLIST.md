@@ -32,7 +32,17 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 | CLS (Cumulative Layout Shift) | < 0,1 |
 | TTFB | < 0,8 s |
 
-- [ ] Monitoring CWV w produkcji (Vercel Analytics / Web Vitals + Sentry).
+- [~] Monitoring CWV w produkcji — **Cloudflare Web Analytics** (bez własnej zbiórki): ten sam
+      beacon, który liczy wyświetlenia, mierzy LCP, INP i CLS (CLS tylko w przeglądarkach
+      Chromium) i ładuje się wyłącznie po zgodzie w kategorii analitycznej i tylko na trasach
+      publicznych (`Analytics.tsx`, `route-policy.ts`, Invariant #7) — bez cookies i identyfikatorów.
+      Podgląd: `/admin/wydajnosc` (tylko admin, 7/28 dni) — p75 całego serwisu i 20 najczęściej
+      odwiedzanych ścieżek z ocenami wg progów, ruch botów pominięty; odczyt z serwera przez
+      GraphQL Analytics API (`rumWebVitalsEventsAdaptiveGroups`, `src/lib/web-vitals/*`, zmienne
+      `CF_ANALYTICS_ACCOUNT_ID`/`CF_WEB_ANALYTICS_SITE_TAG`/`CF_ANALYTICS_API_TOKEN`). Szczegóły
+      (elementy LCP/CLS, kraje, urządzenia) w Vitals Explorer w panelu Cloudflare. Ograniczenia:
+      tylko osoby ze zgodą, liczby próbkowane (szacunek), bez TTFB w podglądzie. **Do zrobienia
+      (właściciel):** token beaconu i token API w Railway.
 - [ ] LCP: element LCP na stronach ofert to tekst/obraz nad linią zgięcia — priorytetyzuj.
 - [ ] CLS: rezerwuj wymiary obrazów i kontenerów (brak przeskoków layoutu).
 - [ ] INP: minimalizuj JS wykonywany przy interakcji; wyspy klienckie tylko tam gdzie trzeba.
@@ -237,7 +247,7 @@ npx lighthouse http://localhost:3000/pl --preset=desktop --view
 ```
 
 - [ ] Audyt przed każdym większym wdrożeniem i po zmianach dotykających stron publicznych.
-- [ ] Regresje CWV monitorowane w produkcji (dane polowe > lab).
+- [ ] Regresje CWV monitorowane w produkcji (dane polowe > lab) — przegląd `/admin/wydajnosc` po każdym większym wdrożeniu.
 
 ---
 

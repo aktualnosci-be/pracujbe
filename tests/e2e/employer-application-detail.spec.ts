@@ -39,8 +39,13 @@ for (const locale of locales) {
     await expect(main.getByRole('heading', { level: 2, name: m.dashboard.employerApplicationHistory })).toBeVisible();
     await expect(main.getByRole('button', { name: new RegExp(`^${m.dashboard.employerApplicationMessage}`) })).toBeEnabled();
 
-    const robots = await page.locator('meta[name="robots"]').getAttribute('content');
-    expect(robots).toContain('noindex');
+    // Po nawigacji klienta z listy przez chwilę w DOM są dwa `meta[name="robots"]` (strumieniowany
+    // w `<body>` i nowy w `<head>`) — ścisły lokator bywał niestabilny. Jak w notifications-list.spec:
+    // żaden nie pozwala indeksować, a świeży dokument trasy sam niesie `noindex`.
+    await expect(page.locator('meta[name="robots"]').first()).toBeAttached();
+    await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
+    const html = await (await page.request.get(page.url())).text();
+    expect(html, 'dokument trasy niesie noindex').toMatch(/<meta name="robots" content="[^"]*noindex/);
 
     const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth }));
     expect(width.document).toBeLessThanOrEqual(width.viewport + 1);

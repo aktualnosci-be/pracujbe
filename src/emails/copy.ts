@@ -109,6 +109,14 @@ export const jobMatchAlertOffLabel: Record<Locale, string> = {
  * #503: e-mail `newMessage` mówi tylko, ILE plików dołączono (bez nazw) — pliki odbiorca
  * otwiera w wątku po zalogowaniu. Forma „Załączniki: N” omija odmianę liczebnika.
  */
+/** Podpis cytatu w e-mailu propozycji (#503, decyzja 26.09.2026) — w języku odbiorcy. */
+export const jobOfferExcerptLabel: Record<Locale, string> = {
+  pl: 'Fragment wiadomości od firmy. Całą wiadomość przeczytasz w panelu.',
+  nl: 'Fragment uit het bericht van het bedrijf. Het volledige bericht lees je in je dashboard.',
+  fr: 'Extrait du message de l’entreprise. Vous pouvez lire le message complet dans votre tableau de bord.',
+  en: 'Excerpt from the company’s message. Read the full message in your dashboard.',
+};
+
 export const newMessageAttachmentsLabel: Record<Locale, string> = {
   pl: 'Załączniki w wiadomości: {count}. Pliki otworzysz w panelu.',
   nl: 'Bijlagen bij het bericht: {count}. Je opent de bestanden in je dashboard.',
@@ -131,9 +139,12 @@ export interface LayoutCopy {
   footerNote: string;
   /** Nota o prawach autorskich (zawiera token `{year}`). */
   rights: string;
-  /** Etykieta linku do pomocy. */
+  /**
+   * Etykieta linku do `/{locale}/pomoc` (pytania i odpowiedzi, #61) — to samo brzmienie co
+   * `footer.faq` w stopce strony (test `email-brand-layout`).
+   */
   help: string;
-  /** Etykieta linku do polityki prywatności. */
+  /** Etykieta linku do polityki prywatności (decyzja właściciela: link zostaje w stopce). */
   privacy: string;
   /** Link wypisania z kategorii tej wiadomości (#45); tylko gdy mail ma kategorię preferencji. */
   unsubscribe: string;
@@ -149,7 +160,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Praca w Belgii bez CV i barier językowych.',
     footerNote: 'Otrzymujesz tę wiadomość, ponieważ masz konto w serwisie Pracuj.be.',
     rights: '© {year} Pracuj.be. Wszelkie prawa zastrzeżone.',
-    help: 'Pomoc',
+    help: 'Pytania i odpowiedzi',
     privacy: 'Prywatność',
     unsubscribe: 'Wypisz się z tych e-maili',
     sender: 'Nadawca',
@@ -160,7 +171,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Werk in België zonder cv en zonder taaldrempels.',
     footerNote: 'Je ontvangt dit bericht omdat je een account hebt op Pracuj.be.',
     rights: '© {year} Pracuj.be. Alle rechten voorbehouden.',
-    help: 'Help',
+    help: 'Veelgestelde vragen',
     privacy: 'Privacy',
     unsubscribe: 'Afmelden voor deze e-mails',
     sender: 'Afzender',
@@ -171,7 +182,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Du travail en Belgique sans CV ni barrière de langue.',
     footerNote: 'Vous recevez ce message car vous avez un compte sur Pracuj.be.',
     rights: '© {year} Pracuj.be. Tous droits réservés.',
-    help: 'Aide',
+    help: 'Questions fréquentes',
     privacy: 'Confidentialité',
     unsubscribe: 'Se désinscrire de ces e-mails',
     sender: 'Expéditeur',
@@ -182,7 +193,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     tagline: 'Work in Belgium without a CV or language barriers.',
     footerNote: 'You are receiving this email because you have an account on Pracuj.be.',
     rights: '© {year} Pracuj.be. All rights reserved.',
-    help: 'Help',
+    help: 'FAQ',
     privacy: 'Privacy',
     unsubscribe: 'Unsubscribe from these emails',
     sender: 'Sender',

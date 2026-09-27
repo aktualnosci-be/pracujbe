@@ -82,6 +82,7 @@ export type ActivityId =
   | 'support-contact'
   | 'security-audit'
   | 'ai-job-import'
+  | 'ai-translation'
   | 'job-statistics'
   | 'analytics-marketing'
   | 'backups'
@@ -191,8 +192,15 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   'ai-job-import': {
     name: 'Import ogłoszenia przez AI',
     inCode: 'Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone.',
-    processors: [...HOSTING, 'anthropic'],
+    processors: [...HOSTING, 'openai'],
     retentionInCode: 'Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty.',
+  },
+  'ai-translation': {
+    name: 'Tłumaczenia AI (rdzeń)',
+    inCode: 'Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0145). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone.',
+    processors: [...HOSTING, 'openai'],
+    retentionInCode:
+      'deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej).',
   },
   'job-statistics': {
     name: 'Statystyki ofert (lejek)',
@@ -508,6 +516,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       strengths: 'recruitment',
       mandatory_met: 'recruitment',
     },
+  },
+  'public.match_recompute_queue': {
+    activities: ['matching-search'],
+    subjects: ['candidate'],
+    columns: { subject_id: 'reference' },
+    notPersonal: {
+      kind: 'Rodzaj podmiotu (kandydat albo oferta).',
+      version: 'Licznik zgłoszeń.',
+      attempts: 'Licznik prób.',
+      locked_until: 'Dzierżawa workera.',
+    },
+    note: 'Kolejka przeliczenia dopasowań (P1-03, 0147): sam UUID kandydata albo oferty; wiersz znika po przeliczeniu.',
   },
   'public.saved_searches': {
     activities: ['matching-search'],
@@ -917,6 +937,31 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   },
 
   // --- Treść ofert --------------------------------------------------------------------------
+  'public.translation_sources': {
+    activities: ['ai-translation'],
+    subjects: ['candidate', 'employer'],
+    columns: { entity_id: 'reference' },
+    note: 'Głowa encji tłumaczonej (oferta albo profil kandydata): bieżąca rewizja i aktywność.',
+  },
+  'public.translation_source_revisions': {
+    activities: ['ai-translation'],
+    subjects: ['candidate', 'employer'],
+    columns: { entity_id: 'reference', fields: 'professional' },
+    notPersonal: { content_hash: 'SHA-256 kanonicznej treści do wykrywania braku zmian, nie sekret.' },
+    note: 'Niezmienne kopie pól źródła (treść oferty albo profilu — wolny tekst może zawierać dane osobowe).',
+  },
+  'public.translation_jobs': {
+    activities: ['ai-translation'],
+    subjects: ['candidate', 'employer'],
+    columns: { entity_id: 'reference', result: 'professional', last_error_code: 'technical' },
+    note: 'Zadania kolejki; `result` tylko jako propozycja przy zablokowanej korekcie ręcznej.',
+  },
+  'public.translation_documents': {
+    activities: ['ai-translation'],
+    subjects: ['candidate', 'employer'],
+    columns: { entity_id: 'reference', fields: 'professional', manual_author: 'reference' },
+    note: 'Aktualny przekład per język; korekta ręczna z autorem i wersją.',
+  },
   'public.job_translations': {
     activities: ['companies'],
     subjects: [],
@@ -939,6 +984,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { requested_by: 'reference', decided_by: 'reference', decision_reason: 'moderation' },
     note:
       'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
+  },
+  'public.job_duplications': {
+    activities: ['companies'],
+    subjects: ['employer'],
+    columns: { created_by: 'reference' },
+    note:
+      'Klucz idempotencji „Kopiuj jako szkic” (0148): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
   },
 
   // --- Płatności (wyłączone, #51) --------------------------------------------------------------

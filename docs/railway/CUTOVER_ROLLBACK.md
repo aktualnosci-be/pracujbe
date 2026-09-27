@@ -135,21 +135,37 @@ Alternatywa dla błędu w kodzie: `git revert` na `main` → CI → `Wait for CI
 ### 4.1 Smoke test (`scripts/railway/prod-smoke.mjs`)
 
 Uruchamiany ręcznie przez operatora, poza CI. Sprawdza `/api/health` (200 i
-`status: ok`), `/` (przekierowanie na `/{język}`), `robots.txt`, `sitemap.xml` oraz
+`status: ok`), `/` (przekierowanie na `/{język}`), `robots.txt`, `sitemap/0.xml` (indeks partii, #599) oraz
 strony publiczne i auth w PL/NL/FR/EN: oczekiwany kod, brak 5xx, limit czasu każdego
 żądania. Tylko GET — nie tworzy danych.
+
+Na każdej stronie 200 sprawdza też nagłówki bezpieczeństwa z `next.config.mjs`: CSP
+z `frame-ancestors 'none'`, `object-src 'none'` i `base-uri 'self'`, `X-Content-Type-Options:
+nosniff`, `X-Frame-Options: DENY` oraz `Referrer-Policy` nieujawniającą ścieżki. Opcjonalnie:
+
+- `PROD_SMOKE_EXPECT_MODE=production` — po kroku 4 (`APP_MODE=production`): HSTS z
+  `max-age` ≥ 31536000 i brak nagłówka `X-Robots-Tag: noindex`; `demo` — przed startem:
+  `X-Robots-Tag: noindex` na każdej stronie. Bez zmiennej tryb nie jest sprawdzany.
+- `PROD_SMOKE_EXPECT_SHA=<sha z zielonego CI>` — `version` z `/api/health` musi kończyć się
+  tym skrótem. W trybie produkcyjnym publiczny health pokazuje tylko `status`, więc wtedy
+  ustaw też `HEALTH_CHECK_SECRET` (wysyłany w nagłówku `x-health-token`, nigdy w adresie
+  ani w logach).
 
 ```bash
 # hasło bramki wczytaj z menedżera haseł do zmiennej środowiska, nie wpisuj go jawnie
 SITE_ACCESS_PASSWORD="$(…)" node scripts/railway/prod-smoke.mjs
 # inny adres / limit czasu (ms):
 PROD_SMOKE_BASE_URL=https://pracuj.be PROD_SMOKE_TIMEOUT_MS=20000 node scripts/railway/prod-smoke.mjs
+# po starcie: tryb produkcyjny i wdrożony SHA (sekret monitoringu z menedżera haseł)
+PROD_SMOKE_EXPECT_MODE=production PROD_SMOKE_EXPECT_SHA=<sha> HEALTH_CHECK_SECRET="$(…)" \
+  SITE_ACCESS_PASSWORD="$(…)" node scripts/railway/prod-smoke.mjs
 ```
 
 Kod wyjścia: `0` wszystko zgodne, `1` co najmniej jeden błąd, `2` zła konfiguracja.
 Skrypt nie wypisuje hasła ani cookie bramki. Bez `SITE_ACCESS_PASSWORD` przy aktywnej
 bramce kończy się błędem z podpowiedzią. Testy: `tests/unit/railway-prod-smoke.test.ts`
-(atrapa serwera, kontrole ujemne: 5xx, 404, timeout, złe hasło, brak hasła, health).
+(atrapa serwera, kontrole ujemne: 5xx, 404, timeout, złe hasło, brak hasła, health, brak
+nagłówka, zły tryb, inny SHA, brak sekretu; nagłówki z `next.config.mjs` w obu trybach).
 
 ### 4.2 Harmonogram obserwacji
 

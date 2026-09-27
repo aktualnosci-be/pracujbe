@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getJobs, getJobBySlug, getCategoryCounts, getCityCounts, getJobFilterFacets } from '@/lib/jobs';
+import { buildJobPostingJsonLd, type JobPostingLabels } from '@/lib/seo/structured-data';
 
 const adapters = vi.hoisted(() => ({
   list: vi.fn(),
@@ -115,6 +116,69 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     adapters.screening.mockRejectedValueOnce(new Error('permission denied'));
 
     await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
+  });
+  describe('JobPosting z wiersza get_public_job (audyt P1-12)', () => {
+    const labels: JobPostingLabels = {
+      responsibilities: 'R', requirementsMandatory: 'M', requirementsOptional: 'O',
+      conditions: 'C', workingHours: 'H', shifts: 'S',
+    };
+    // Kształt jak `to_jsonb(get_public_job(...))` — timestamptz jako tekst z przesunięciem.
+    const row = {
+      id: 'job-1', slug: 'magazynier', title: 'Magazynier', published_at: '2026-09-01T08:00:00+00:00',
+      salary_min: 15, salary_max: 18, currency: 'EUR', salary_period: 'hour',
+      expires_at: '2026-10-15T23:59:00+00:00',
+    };
+    async function jsonLd(detail: Record<string, unknown>) {
+      vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+      adapters.detail.mockResolvedValue(detail);
+      adapters.translations.mockResolvedValue([]);
+      const job = await getJobBySlug('magazynier', 'pl');
+      return buildJobPostingJsonLd(job!, 'https://pracuj.be/pl/oferty-pracy/magazynier', labels);
+    }
+
+    it('validThrough z expires_at i unitText z salary_period', async () => {
+      const data = await jsonLd(row);
+      expect(data.validThrough).toBe('2026-10-15T23:59:00.000Z');
+      expect(data.baseSalary).toMatchObject({ value: { minValue: 15, maxValue: 18, unitText: 'HOUR' } });
+    });
+
+    it('bez expires_at i bez kwot: brak validThrough i baseSalary (bez wymyślonych wartości)', async () => {
+      const data = await jsonLd({ ...row, expires_at: null, salary_min: null, salary_max: null });
+      expect(data).not.toHaveProperty('validThrough');
+      expect(data).not.toHaveProperty('baseSalary');
+    });
+
+    it('kontrola ujemna: nieznany okres albo zła data nie dają unitText/validThrough', async () => {
+      const data = await jsonLd({ ...row, salary_period: 'week', expires_at: 'nie-data' });
+      expect(data).not.toHaveProperty('validThrough');
+      expect((data.baseSalary as { value: Record<string, unknown> }).value).not.toHaveProperty('unitText');
+      // Klucz w camelCase (inny kształt niż zwrot RPC) nie jest czytany — mapowanie bierze kolumny bazy.
+      const camel = await jsonLd({ ...row, expires_at: undefined, expiresAt: row.expires_at });
+      expect(camel).not.toHaveProperty('validThrough');
+    });
+  });
+  it('#591: mapuje company_slug (link do profilu firmy), brak = CTA ukryte', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', company_slug: 'firma-x' }],
+      total: 1, page: 1, pageSize: 12,
+    });
+    const result = await getJobs({ locale: 'pl' });
+    expect(result.jobs[0]).toMatchObject({ companySlug: 'firma-x' });
+
+    adapters.detail.mockResolvedValue({ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z', company_slug: 'firma-x' });
+    adapters.translations.mockResolvedValue([]);
+    const detail = await getJobBySlug('oferta', 'pl');
+    expect(detail).toMatchObject({ companySlug: 'firma-x' });
+  });
+  it('#591 kontrola ujemna: bez company_slug w wierszu pole zostaje puste (CTA profilu ukryte)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z' }],
+      total: 1, page: 1, pageSize: 12,
+    });
+    const result = await getJobs({ locale: 'pl' });
+    expect(result.jobs[0]).not.toHaveProperty('companySlug');
   });
   it('brak oferty w bazie pozostaje brakiem oferty', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');

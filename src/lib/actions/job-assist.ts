@@ -5,7 +5,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { AnthropicJobAssistor, FixtureJobAssistor } from '@/lib/ai-assist/assist';
+import { OpenAiJobAssistor, FixtureJobAssistor } from '@/lib/ai-assist/assist';
 import { aiBudgetGate } from '@/lib/ai-assist/budget';
 import { estimateJobAssistCost } from '@/lib/ai-assist/cost';
 import { jobAssistModel, jobAssistProvider } from '@/lib/ai-assist/config';
@@ -85,7 +85,7 @@ export async function suggestJobText(input: unknown): Promise<JobAssistResult> {
     let usageReported = false;
     try {
       result = await runJobAssist(request, {
-        assistor: provider === 'fixture' ? new FixtureJobAssistor() : new AnthropicJobAssistor(),
+        assistor: provider === 'fixture' ? new FixtureJobAssistor() : new OpenAiJobAssistor(),
         model,
         onUsage: async (usage) => {
           usageReported = true;

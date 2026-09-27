@@ -5,9 +5,11 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
+import { DuplicateJobButton } from "@/components/employer/DuplicateJobButton";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
+import { StatValue } from "@/components/dashboard/StatValue";
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -37,6 +39,9 @@ import {
  *
  * #325: aktywną i wstrzymaną ofertę można poprawić („Edytuj" → kreator w trybie edycji,
  * RPC `update_published_job`), a aktywną obejrzeć publicznie („Zobacz ofertę").
+ *
+ * 0148: każdą ofertę (dowolny status) można skopiować jako nowy szkic („Kopiuj jako szkic”,
+ * RPC `duplicate_job_as_draft`) — potem kreator nowego szkicu.
  */
 export const dynamic = "force-dynamic";
 
@@ -193,7 +198,7 @@ export default async function EmployerOffersPage({
                         {td("employerOffersApplicationsLabel")}
                       </dt>
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        {offer.newApplications}
+                        <StatValue value={offer.newApplications} noDataLabel={td("funnelNoData")} />
                       </dd>
                     </div>
                     <div className="min-w-0 border-l border-border pl-4">
@@ -201,11 +206,15 @@ export default async function EmployerOffersPage({
                         {td("colMatched")}
                       </dt>
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        {offer.matched}
+                        <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
                       </dd>
                     </div>
                   </dl>
                   <div className="mt-auto flex flex-wrap items-center gap-[9px] pt-[14px]">
+                    {/* 0148: kopia oferty w dowolnym statusie jako nowy szkic (recruiter+). */}
+                    {canRecruitHere ? (
+                      <DuplicateJobButton jobId={offer.id} title={offer.title} />
+                    ) : null}
                     {offer.status === "draft" ? (
                       !canRecruitHere ? null : (
                       <Link className={BTN_SECONDARY} href={`/employer/oferty/${offer.id}/edycja`}>

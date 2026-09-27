@@ -6,6 +6,7 @@ import { isCvImportEnabled } from '@/lib/cv-import/config';
 import type { PortalIdentity } from '@/lib/auth/session';
 import { isProductionMode } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { CANDIDATE_ITEM_LIMITS } from '@/lib/validation/candidate';
 import { buildDocx, CV_WITH_REFEREES, DOCX_TYPE, REFEREES } from '../helpers/cv-fixtures';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
@@ -28,7 +29,7 @@ vi.mock('@/lib/cv-import/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/cv-import/extract')>();
   return {
     ...real,
-    AnthropicCvExtractor: class {
+    OpenAiCvExtractor: class {
       extract = extract;
     },
   };
@@ -51,7 +52,7 @@ function docxForm(): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.AI_CV_IMPORT_ENABLED = '1';
-  process.env.ANTHROPIC_API_KEY = 'test-key-not-real';
+  process.env.OPENAI_API_KEY = 'test-key-not-real';
   delete process.env.AI_CV_IMPORT_PROVIDER;
   vi.mocked(isProductionMode).mockReturnValue(true);
   vi.mocked(checkRateLimit).mockResolvedValue(true);
@@ -85,7 +86,7 @@ describe('flaga i dostawca', () => {
     expect(await applyCvProposals(APPROVED)).toEqual({ ok: false, error: 'NOT_FOUND' });
 
     process.env.AI_CV_IMPORT_ENABLED = '1';
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     expect(isCvImportEnabled()).toBe(false);
     // Flaga importu ogłoszeń nie włącza importu CV.
     process.env.AI_JOB_IMPORT_ENABLED = '1';
@@ -96,7 +97,7 @@ describe('flaga i dostawca', () => {
   });
 
   it('atrapa dostawcy nie działa w trybie produkcyjnym', () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     process.env.AI_CV_IMPORT_PROVIDER = 'fixture';
     expect(isCvImportEnabled()).toBe(false);
     vi.mocked(isProductionMode).mockReturnValue(false);
@@ -234,6 +235,30 @@ describe('zapis zatwierdzonych pozycji', () => {
       { skills: ['ok'], referees: [REFEREES.name2] },
     ]) {
       expect(await applyCvProposals(bad), JSON.stringify(bad)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    }
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('poprawiona przez kandydata wartość trafia do bazy; za długa po edycji → VALIDATION_FAILED bez zapisu', async () => {
+    // Wartość na granicy limitu kreatora (80 znaków zawodu) przechodzi i trafia do RPC (po trim).
+    const edited = 'M'.repeat(CANDIDATE_ITEM_LIMITS.occupation);
+    const ok = await applyCvProposals({ ...APPROVED, occupations: [`  ${edited}  `] });
+    expect(ok).toMatchObject({ ok: true });
+    expect(fakeDb.callsTo('apply_candidate_cv_proposals')[0]!.args).toMatchObject({ p_occupations: [edited] });
+
+    // Kontrola ujemna: o znak dłuższa (także dla każdej innej listy) nie dociera do bazy.
+    resetFakeDb(CANDIDATE);
+    for (const bad of [
+      { occupations: ['M'.repeat(CANDIDATE_ITEM_LIMITS.occupation + 1)] },
+      { skills: ['S'.repeat(CANDIDATE_ITEM_LIMITS.skill + 1)] },
+      { certificates: ['C'.repeat(CANDIDATE_ITEM_LIMITS.certificate + 1)] },
+      { languages: [{ language: 'L'.repeat(41), level: 'basic' }] },
+      { languages: [{ language: 'N', level: 'basic' }] },
+      { experienceYears: 61 },
+      { experienceYears: 2.5 },
+      { skills: ['   '] },
+    ]) {
+      expect(await applyCvProposals({ ...APPROVED, ...bad }), JSON.stringify(bad)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     }
     expect(fakeDb.calls).toHaveLength(0);
   });

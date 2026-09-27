@@ -4,7 +4,8 @@ import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/serve
 
 import { Link } from '@/i18n/navigation';
 import { getEmployerApplicationDetail } from '@/lib/data/employer';
-import { StatusPill, toCamel } from '@/components/ui/status-pill';
+import { StatusPill } from '@/components/ui/status-pill';
+import { ApplicationHistoryList } from '@/components/employer/ApplicationHistoryList';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { MessageCandidateButton } from '@/components/employer/MessageCandidateButton';
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
@@ -62,7 +63,6 @@ export default async function EmployerApplicationDetailPage({
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
-  const ts = await getTranslations({ locale, namespace: 'status' });
   const format = await getFormatter({ locale });
 
   const result = await getEmployerApplicationDetail(id);
@@ -215,18 +215,11 @@ export default async function EmployerApplicationDetailPage({
 
       <section aria-labelledby="application-history" className={PANEL}>
         <h2 id="application-history" className={PANEL_H2}>{t('employerApplicationHistory')}</h2>
-        {application.history.length ? (
-          <ol className="mt-4 space-y-3">
-            {application.history.map((entry, index) => (
-              <li key={`${entry.toStatus}-${entry.at}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3 last:border-b-0 last:pb-0">
-                <span className="font-semibold text-foreground">{ts(toCamel(entry.toStatus))}</span>
-                <time dateTime={entry.at} className={`text-xs text-muted-foreground`}>{date(entry.at)}</time>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className={`mt-3 ${PANEL_P}`}>{t('employerApplicationNoHistory')}</p>
-        )}
+        <ApplicationHistoryList
+          applicationId={application.id}
+          initialItems={application.history}
+          initialNextCursor={application.historyNextCursor}
+        />
       </section>
     </div>
   );

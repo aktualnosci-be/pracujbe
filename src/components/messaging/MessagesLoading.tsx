@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EYEBROW, H1_EXTENDED, P_EXTENDED } from "@/components/dashboard/panel-styles";
 
 /** Fallback podczas odczytu rozmów; nie pokazuje przykładowych danych użytkowników. */
@@ -28,17 +29,14 @@ export function MessagesLoading({ panel }: { panel?: "candidate" | "employer" } 
           <p role="status" className="text-base font-medium text-foreground">
             {t("loading")}
           </p>
-          <div
-            aria-hidden="true"
-            className="mt-6 space-y-5 motion-safe:animate-pulse"
-          >
-            <div className="h-16 rounded-xl bg-soft" />
-            <div className="h-16 rounded-xl bg-soft" />
-            <div className="h-16 rounded-xl bg-soft" />
+          <div aria-hidden="true" className="mt-6 space-y-5">
+            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-xl" />
+            <Skeleton className="h-16 rounded-xl" />
           </div>
         </div>
         <div aria-hidden="true" className="hidden p-6 lg:block">
-          <div className="h-5 w-1/2 rounded-lg bg-soft motion-safe:animate-pulse" />
+          <Skeleton className="h-5 w-1/2 rounded-lg" />
         </div>
       </div>
     </div>

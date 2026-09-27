@@ -4,7 +4,7 @@
  * sygnaturę zawartości (magic bytes), bo nagłówek `type` pochodzi od klienta.
  *
  * Limit 5 MB leży poniżej limitu ciała Server Actions (`6mb`, next.config.mjs) i poniżej
- * limitu obrazu API Claude, więc plik odrzucony tutaj nigdy nie jest wysyłany dalej.
+ * limitu żądania OpenAI Responses API (512 MB), więc plik odrzucony tutaj nigdy nie jest wysyłany dalej.
  */
 
 export const IMPORT_IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5 MB

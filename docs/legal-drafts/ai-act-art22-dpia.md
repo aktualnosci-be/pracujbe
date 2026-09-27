@@ -27,8 +27,9 @@ AI albo adres jego API), który nie ma wpisu w inwentarzu. Test ma kontrolę uje
 | A3 | Asystent redagowania oferty (#37, część pracodawcy) | ten PR, za flagą `AI_JOB_ASSIST_ENABLED` (domyślnie wyłączona) | tytuł, opis, obowiązki i wymagania obowiązkowe oferty wpisane przez rekrutera (e-maile, telefony, numery identyfikacyjne usuwane przed wysłaniem) | propozycja nowego brzmienia tych pól w języku oferty; propozycje z nowymi liczbami/linkami albo danymi kontaktowymi odrzuca serwer | tak: propozycja widoczna obok tekstu rekrutera; pole zmienia się dopiero po kliknięciu „Użyj propozycji”; akcja nic nie zapisuje i nie publikuje (test) | brak: wejście nie zawiera danych kandydatów (ścisły schemat, test); kod nie dotyka aplikacji, profili, dopasowań ani widoczności |
 | A4 | Import CV do profilu (#487, #498) | za flagą `AI_CV_IMPORT_ENABLED` (domyślnie wyłączona) | tekst CV wgrany przez kandydata, po lokalnej minimalizacji (bez referentów, kontaktów, danych osobowych i kategorii szczególnych; NISS/BIS/dokument = odmowa); kandydat widzi tekst przed wysłaniem | propozycje pól profilu ze źródłem i niepewnością | tak: każda propozycja zatwierdzana osobno przez kandydata; bez zatwierdzenia brak zapisu (`apply_candidate_cv_proposals`) | brak: wynik nie trafia do firm, dopasowania, rankingu ani statusu aplikacji; szczegóły i pytania prawne: `docs/legal-drafts/cv-ai-osoby-trzecie.md` |
 
-Dostawca wszystkich funkcji: Anthropic (Messages API). Model domyślny: `claude-opus-5` (A1, A4),
-`claude-opus-5-5` (A3), nadpisywalny zmienną środowiskową. Model nie ma narzędzi; odpowiedź ogranicza schemat JSON.
+Dostawca wszystkich funkcji (decyzja właściciela 2026-09-26): OpenAI (Responses API, wspólny
+klient `src/lib/ai/openai.ts`, `store: false`). Model domyślny: `gpt-6-luna` (A1, A3, A4),
+nadpisywalny zmienną środowiskową (`AI_MODEL` lub zmienna funkcji). Model nie ma narzędzi; odpowiedź ogranicza schemat JSON.
 
 Log użycia: od tej zmiany import ogłoszenia (A1) zapisuje jeden wiersz JSON na wywołanie
 modelu (`src/lib/ai/usage-log.ts`): `type`, `at`, `feature`, `outcome`, `inputKind`, `model`,
