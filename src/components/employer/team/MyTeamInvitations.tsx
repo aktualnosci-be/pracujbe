@@ -13,7 +13,6 @@ import { roleLabelKey } from './role-keys';
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
-  NOTICE,
   PANEL,
   PANEL_H2,
   ROW,
