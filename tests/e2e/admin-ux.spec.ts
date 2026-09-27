@@ -212,6 +212,33 @@ test('admin #418: wyszukiwanie firm i użytkowników po stronie serwera (paramet
   await expect(page.getByRole('table').getByText('Adam Kowalski')).toHaveCount(0);
 });
 
+test('admin: szczegół konta z listy użytkowników — firma, język komunikacji, dziennik', async ({
+  page,
+}) => {
+  const t = admin('pl');
+  await page.goto('/pl/admin/uzytkownicy?role=employer');
+  await rejectOptionalCookies(page, 'pl');
+  await page.getByRole('table').getByRole('link', { name: 'Jan Peeters' }).click();
+  await expect(page).toHaveURL(/\/pl\/admin\/uzytkownicy\/demo-u3$/);
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { level: 1, name: 'Jan Peeters' })).toBeVisible();
+  await expect(main.getByRole('heading', { name: t.sectionLanguage })).toBeVisible();
+  await expect(main.getByText(t.userCandidateEmpty)).toBeVisible();
+  await expect(main.getByText(t.userSuppressionNone)).toBeVisible();
+  await expect(main.getByRole('link', { name: 'AGO Jobs & HR' })).toHaveAttribute(
+    'href',
+    '/pl/admin/firmy/demo-c1',
+  );
+  await expect(main.getByRole('link', { name: t.userAuditLink })).toHaveAttribute(
+    'href',
+    /\/pl\/admin\/dziennik\?actor=jan\.peeters%40ago\.be$/,
+  );
+  expect(await blockingViolations(page)).toEqual([]);
+
+  await page.goto('/pl/admin/uzytkownicy/demo-nieistnieje');
+  await expect(page.getByRole('heading', { level: 1, name: t.userNotFoundTitle })).toBeVisible();
+});
+
 test('admin #417: dziennik zdarzeń w nawigacji, etykiety akcji i filtr aktora „system”', async ({
   page,
 }) => {

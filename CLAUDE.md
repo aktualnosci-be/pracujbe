@@ -1494,6 +1494,18 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
   `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
   `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
+  Szczegół konta `/admin/uzytkownicy/[id]` (tylko odczyt, bez migracji; nazwa na liście = link):
+  `getUserDetail` (`requireAdmin` → service_role) — rola, e-mail, stan konta, utworzenie,
+  ostatnia aktywność (`last_seen_at`), język e-maili wyznaczony jak w kolejce
+  (`resolveRecipientLocale`, Invariant #1) obok surowych `preferred/account/signup_locale`,
+  członkostwa w firmach (link do `/admin/firmy/[id]`, rola, dostęp, status firmy), profil
+  kandydata jako same liczniki (ukończony, widoczny, zgłoszenia poza szkicem, propozycje — bez
+  treści), aktywna blokada adresu (#44, link do `/admin/poczta?q=`), skrót do dziennika
+  (`?actor=<e-mail>`). Strona niczego nie zapisuje (brak akcji = brak wpisów audytu); usunięte
+  albo nieistniejące konto = „nie znaleziono”, błąd odczytu = ponowienie. `auth.users`
+  (np. weryfikacja e-maila) poza zasięgiem service_role — świadomie pominięte. Dowód: unit
+  `admin-user-detail` (kontrola ujemna fallbacku języka), integracja `portal-admin` (PG16),
+  E2E `admin-ux`, `admin-a11y` (demo-u1/demo-u3).
   Decyzja o firmie (#310, `0084`): szczegół `/admin/firmy/[id]` (`getCompanyDetail`: dane
   rejestrowe, uzasadnienie, członkowie z rolą/aktywnością, najnowsze 20 ofert + licznik), nazwa
   na liście = link. Odrzucenie/zawieszenie wymaga uzasadnienia (≤ 1000 znaków,

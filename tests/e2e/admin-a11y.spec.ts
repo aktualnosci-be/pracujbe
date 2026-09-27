@@ -31,6 +31,9 @@ const ROUTES = [
   '/admin/zgloszenia',
   '/admin/zgloszenia?kind=dsa_notice&flagged=1',
   '/admin/uzytkownicy',
+  // Szczegół konta (tylko odczyt): pracodawca z firmą, kandydat z licznikami.
+  '/admin/uzytkownicy/demo-u3',
+  '/admin/uzytkownicy/demo-u1',
   // Blokady adresów e-mail (#44).
   '/admin/poczta',
   // Kampanie e-mail (#45): lista, szkic (dialog akcji), rewizja aktywna.
