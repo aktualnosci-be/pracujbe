@@ -28,9 +28,14 @@ const ROUTES = [
   '/admin/firmy',
   // Szczegół firmy (#310) — firma demonstracyjna.
   '/admin/firmy/demo-c2',
+  // Baner kampanii z oferty (#175) — w demo stan „niedostępny”.
+  '/admin/oferty/demo-c2-job-1/baner?firma=demo-c2',
   '/admin/zgloszenia',
   '/admin/zgloszenia?kind=dsa_notice&flagged=1',
   '/admin/uzytkownicy',
+  // Szczegół konta (tylko odczyt): pracodawca z firmą, kandydat z licznikami.
+  '/admin/uzytkownicy/demo-u3',
+  '/admin/uzytkownicy/demo-u1',
   // Blokady adresów e-mail (#44).
   '/admin/poczta',
   // Kampanie e-mail (#45): lista, szkic (dialog akcji), rewizja aktywna.

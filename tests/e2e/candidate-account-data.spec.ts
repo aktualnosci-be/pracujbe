@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
