@@ -20,7 +20,7 @@ const id = '11111111-1111-4111-8111-111111111111';
 function configure() {
   vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
   vi.stubEnv('DATABASE_AUTH_URL', 'postgres://auth-placeholder');
-  vi.stubEnv('BETTER_AUTH_SECRET', 'test-secret');
+  vi.stubEnv('BETTER_AUTH_SECRET', 'test-secret-01234567890123456789');
   vi.stubEnv('BETTER_AUTH_URL', 'http://localhost:3000');
 }
 
