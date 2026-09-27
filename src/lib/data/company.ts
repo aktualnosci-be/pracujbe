@@ -143,6 +143,71 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
   }
 }
 
+/**
+ * Wynik odczytu KONKRETNEJ firmy po identyfikatorze (#843) — niezależnie od aktywnej firmy
+ * z cookie. `not_found` = brak AKTYWNEGO członkostwa wywołującego w tej firmie (usunięty
+ * dostęp, zła/cudza wartość) — jawny, bezpieczny stan, NIGDY ciche podstawienie innej firmy.
+ */
+export type CompanyByIdLoad =
+  | { status: 'ok'; company: MyCompany }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+/**
+ * Odczyt danej firmy po `companyId`, wymagany dla linków decyzji (e-mail/powiadomienie), które
+ * niosą identyfikator firmy, KTÓREJ DOTYCZY zdarzenie — a nie identyfikator aktywnej firmy z
+ * cookie (#843: właściciel kilku firm z inną aktywną w cookie widział dane złej firmy).
+ * Bez env (demo) → `not_found` (brak per-firmowego kontekstu demo).
+ */
+export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad> {
+  if (!isPortalDataConfigured()) return { status: 'not_found' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'error' };
+
+    // company_members_select + companies_select_member (RLS): wyłącznie WŁASNE aktywne
+    // członkostwo w tej konkretnej firmie — brak wiersza = brak dostępu, nie inna firma.
+    const row = await withPortalTransaction(me, (tx) =>
+      queryOne<Record<string, unknown>>(tx, 'company.by-id',
+        `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
+                c.website, c.logo_url, m.role
+           FROM public.company_members m
+           JOIN public.companies c ON c.id = m.company_id
+          WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
+          LIMIT 1`, [me.id, companyId]),
+    );
+
+    const company = asRecord(row);
+    const id = asString(company['id']);
+    if (!id) return { status: 'not_found' };
+
+    const status = asString(company['status'], 'unverified');
+    const role = asString(company['role'], 'member');
+    return {
+      status: 'ok',
+      company: {
+        id,
+        name: asString(company['name']),
+        slug: asString(company['slug']),
+        status,
+        vatNumber: asNullableString(company['vat_number']),
+        verifiedAt: asNullableString(company['verified_at']),
+        statusReason:
+          status === 'rejected' || status === 'suspended'
+            ? asNullableString(company['status_reason'])
+            : null,
+        website: asNullableString(company['website']),
+        logoUrl: asNullableString(company['logo_url']),
+        canEdit: role === 'owner' || role === 'admin',
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'company.getCompanyById' });
+    return { status: 'error' };
+  }
+}
+
 /** Decyzja moderacyjna dotycząca firmy lub jej oferty (#42) — uzasadnienie dla autora. */
 export interface CompanyModerationDecision {
   id: string;

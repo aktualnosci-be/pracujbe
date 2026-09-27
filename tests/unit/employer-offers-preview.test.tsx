@@ -45,7 +45,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
 
     it('shows the empty state only after a successful empty read', () => {
       const html = renderToStaticMarkup(
-        <EmployerOffersPreview result={{ status: 'ok', jobs: [], hasNext: false }} locale={locale} labels={labels} />,
+        <EmployerOffersPreview result={{ status: 'ok', jobs: [], prevCursor: null, nextCursor: null }} locale={locale} labels={labels} />,
       );
       expect(html).toContain(labels.empty);
       expect(html).not.toContain('role="alert"');
@@ -57,7 +57,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
         <EmployerOffersPreview
           result={{
             status: 'ok',
-            hasNext: false,
+            prevCursor: null, nextCursor: null,
             jobs: [{ id: 'job-1', title: 'Operator wózka', city: 'Liège', status: 'active', slug: 'operator-wozka', pastExpiry: false, newApplications: 2, matched: 3, createdAt: null }],
           }}
           locale={locale}
@@ -76,7 +76,7 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
         <EmployerOffersPreview
           result={{
             status: 'ok',
-            hasNext: false,
+            prevCursor: null, nextCursor: null,
             jobs: [{ id: 'job-1', title: 'Operator wózka', city: 'Liège', status: 'active', slug: 'operator-wozka', pastExpiry: false, newApplications, matched, createdAt: null }],
           }}
           locale={locale}

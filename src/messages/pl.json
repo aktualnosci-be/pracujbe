@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Dlaczego decyzja jest błędna?",
     "appealDeadline": "Termin na odwołanie: do {date}.",
     "appealDeadlineNotStarted": "Termin na odwołanie zacznie biec, gdy otrzymasz powiadomienie o decyzji.",
-    "appealStatusLabel": "Odwołanie {reference}"
+    "appealStatusLabel": "Odwołanie {reference}",
+    "targetTitle": "Firma z decyzji",
+    "targetIntro": "Link dotyczy innej firmy niż aktualnie aktywna w Twoim panelu. Poniżej jej dane — bez zmiany aktywnej firmy.",
+    "targetUnavailableTitle": "Ta firma nie jest już dostępna z Twojego konta",
+    "targetUnavailableHint": "Nie masz już aktywnego dostępu do tej firmy albo link jest nieprawidłowy.",
+    "targetSwitchAction": "Ustaw jako aktywną firmę",
+    "targetSwitchError": "Nie udało się przełączyć aktywnej firmy. Spróbuj ponownie."
   },
   "companyProfile": {
     "metaTitle": "Oferty pracy w firmie {name}",
@@ -943,7 +949,6 @@
     "employerApplicationsCandidateLabel": "Kandydat",
     "employerApplicationsJobLabel": "Oferta pracy",
     "employerApplicationsPagination": "Strony aplikacji",
-    "employerApplicationsPage": "Strona {page}",
     "employerApplicationsNewer": "Nowsze aplikacje",
     "employerApplicationsOlder": "Starsze aplikacje",
     "emptyState": "Brak danych do wyświetlenia.",
@@ -956,7 +961,6 @@
     "employerOffersPaginationLabel": "Paginacja ofert",
     "employerOffersPrevious": "Poprzednia strona",
     "employerOffersFirstPage": "Wróć do pierwszej strony",
-    "employerOffersPage": "Strona {page}",
     "employerOffersNext": "Następna strona",
     "employerOffersPageEmpty": "Na tej stronie nie ma już ofert.",
     "employerOffersRetry": "Spróbuj ponownie",
@@ -988,6 +992,7 @@
     "declineConfirm": "Odrzuć",
     "acceptProposalSuccess": "Propozycja została przyjęta.",
     "declineProposalSuccess": "Propozycja została odrzucona.",
+    "proposalExpiredNotice": "Termin odpowiedzi na tę propozycję minął. Nie możesz już jej przyjąć ani odrzucić.",
     "employerApplicationDetailTitle": "Szczegóły zgłoszenia",
     "employerApplicationBack": "Wróć do listy zgłoszeń",
     "employerApplicationLoadError": "Nie udało się wczytać zgłoszenia.",
@@ -1047,12 +1052,38 @@
     "applicationStepInterview": "Rozmowa",
     "applicationStepDecision": "Decyzja",
     "employerPlaceEyebrow": "Twoja rekrutacja",
+    "employerApplicationsFirstPage": "Wróć do najnowszych aplikacji",
+    "employerApplicationsForJob": "Zgłoszenia do oferty „{title}”.",
+    "employerApplicationsAllJobs": "Pokaż wszystkie zgłoszenia",
+    "employerOffersViewApplications": "Zobacz zgłoszenia",
+    "employerOffersViewApplicationsLabel": "Zobacz zgłoszenia do oferty {title}",
+    "employerApplicationViewCandidate": "Zobacz profil kandydata",
+    "candidatesViewProfile": "Zobacz profil",
+    "candidatesViewProfileLabel": "Zobacz profil: {name}",
+    "candidatesPagination": "Strony kandydatów",
+    "candidatesPrevious": "Lepiej dopasowani kandydaci",
+    "candidatesNext": "Kolejni kandydaci",
+    "candidatesFirstPage": "Wróć do najlepiej dopasowanych",
+    "candidatesPageEmpty": "Na tej stronie nie ma już kandydatów.",
+    "employerCandidateDetailTitle": "Profil kandydata",
+    "employerCandidateBack": "Wróć do kandydatów",
+    "employerCandidateLoadError": "Nie udało się wczytać profilu kandydata",
+    "employerCandidateOccupations": "Zawody",
+    "employerCandidateMatches": "Dopasowanie do ofert firmy",
+    "employerCandidateNoMatches": "Brak policzonych dopasowań do ofert firmy.",
+    "employerCandidateApplications": "Zgłoszenia do ofert firmy",
+    "employerCandidateNoApplications": "Kandydat nie zgłosił się do ofert firmy.",
     "statRecruiterOnly": "Widzą właściciel, administrator i rekruterzy firmy",
     "statAfterVerification": "Dostępne po weryfikacji firmy",
     "funnelDenied": "Lejek rekrutacyjny widzą właściciel, administrator i rekruterzy firmy.",
     "topMatchedDenied": "Dopasowanych kandydatów widzą właściciel, administrator i rekruterzy firmy.",
     "topMatchedUnverified": "Dopasowani kandydaci pojawią się po weryfikacji firmy.",
-    "topMatchedLoadError": "Nie udało się wczytać dopasowanych kandydatów."
+    "topMatchedLoadError": "Nie udało się wczytać dopasowanych kandydatów.",
+    "employerPanelErrorTitle": "Nie udało się wczytać tej strony panelu",
+    "employerPanelErrorBody": "Spróbuj ponownie za chwilę. Jeśli problem się powtarza, wróć do pulpitu i otwórz stronę jeszcze raz.",
+    "employerPanelBackToDashboard": "Wróć do pulpitu",
+    "employerNotFoundTitle": "Nie znaleźliśmy tej strony w panelu",
+    "employerNotFoundBody": "Adres jest nieprawidłowy albo ten element nie należy do aktywnej firmy. Jeśli masz dostęp do kilku firm, sprawdź, która jest wybrana w przełączniku firmy."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1326,6 +1357,7 @@
     "screeningRequired": "Odpowiedz na to pytanie.",
     "screeningYes": "Tak",
     "screeningNo": "Nie",
+    "screeningClearAnswer": "Wyczyść odpowiedź",
     "sensitiveIdHint": "Do aplikowania nie jest potrzebny numer NISS/BIS ani numer dokumentu tożsamości — nie wpisuj ich.",
     "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
     "ageRequired": "Przed aplikowaniem potwierdź swój wiek w ustawieniach konta.",
@@ -2500,7 +2532,64 @@
     "webVitalsAboutConsent": "Pomiar wykonuje beacon Cloudflare Web Analytics, ładowany tylko po zgodzie w kategorii analitycznej i tylko na stronach publicznych. Bez cookies i bez identyfikatorów osób; ruch botów pominięty.",
     "webVitalsAboutSampling": "Cloudflare próbkuje zdarzenia, więc liczby pomiarów są szacunkowe. Wartości to 75. percentyl.",
     "webVitalsAboutThresholds": "Oceny według progów Core Web Vitals: LCP 2,5 / 4 s, INP 200 / 500 ms, CLS 0,1 / 0,25.",
-    "webVitalsOpenCloudflare": "Otwórz Web Analytics w Cloudflare (nowa karta)"
+    "webVitalsOpenCloudflare": "Otwórz Web Analytics w Cloudflare (nowa karta)",
+    "navJobs": "Oferty",
+    "jobsTitle": "Oferty",
+    "jobsSubtitle": "Wszystkie oferty pracy wszystkich firm — podgląd bez edycji. Decyzje moderacyjne zapadają w zgłoszeniach.",
+    "searchJobsLabel": "Szukaj ofert",
+    "searchJobsHint": "Tytuł, adres oferty, miasto, nazwa firmy albo identyfikator.",
+    "jobsFilterModerated": "Zablokowane decyzją",
+    "jobsModeratedTag": "Decyzja moderacyjna",
+    "jobsDemoTag": "Dane przykładowe",
+    "jobsHistoryLink": "Historia zmian",
+    "jobsHistoryLabel": "Historia zmian: {title}",
+    "jobsCompanyFilter": "Oferty firmy: {name}",
+    "jobsCompanyFilterClear": "Pokaż oferty wszystkich firm",
+    "jobsListEmpty": "Brak ofert spełniających kryteria.",
+    "colJobTitle": "Oferta",
+    "colCompany": "Firma",
+    "entityJob": "Oferta pracy",
+    "auditActionJobUpdatePublished": "Edycja opublikowanej oferty",
+    "auditActionJobDuplicated": "Kopia oferty",
+    "companyJobsAllLink": "Wszystkie oferty firmy",
+    "auditActionRetentionPolicyChanged": "Zmiana okresu retencji",
+    "auditActionRetentionPoliciesSeeded": "Wpisanie okresów retencji",
+    "entityRetentionPolicy": "Okres retencji",
+    "retentionLinkTitle": "Retencja danych",
+    "retentionLinkHint": "Okresy przechowywania danych i tryby zadań czyszczenia — tylko podgląd.",
+    "retentionLinkCta": "Zobacz retencję danych",
+    "backToUsers": "Wróć do listy użytkowników",
+    "userDetailSubtitle": "Dane konta, firmy i aktywność — tylko do odczytu.",
+    "userNotFoundTitle": "Nie znaleziono konta",
+    "userNotFoundHint": "Konto nie istnieje albo zostało usunięte.",
+    "sectionAccount": "Konto",
+    "userStatusLabel": "Stan konta",
+    "userActive": "Aktywne",
+    "userInactive": "Nieaktywne",
+    "userLastSeen": "Ostatnia aktywność",
+    "userNeverSeen": "Brak danych",
+    "userAuditLink": "Działania tego konta w dzienniku",
+    "sectionLanguage": "Język komunikacji",
+    "userRecipientLocale": "Język e-maili i powiadomień",
+    "userRecipientLocaleHint": "Wybierany w tej kolejności: język preferowany, język konta, język rejestracji, a gdy żadnego nie ma — angielski.",
+    "userPreferredLocale": "Język preferowany",
+    "userAccountLocale": "Język konta",
+    "userSignupLocale": "Język rejestracji",
+    "userLocaleUnset": "Nie ustawiono",
+    "sectionUserEmail": "Doręczanie e-maili",
+    "userSuppressionNone": "Adres nie jest zablokowany.",
+    "userSuppressionActive": "Adres zablokowany: {reason} ({date}).",
+    "userSuppressionLink": "Zobacz blokadę w poczcie",
+    "sectionUserCompanies": "Firmy",
+    "userCompaniesEmpty": "Konto nie należy do żadnej firmy.",
+    "sectionCandidate": "Profil kandydata",
+    "userCandidateEmpty": "Konto nie ma profilu kandydata.",
+    "userProfileCompleted": "Profil ukończony",
+    "userSearchable": "Widoczny dla firm",
+    "userApplications": "Zgłoszenia",
+    "userOffers": "Otrzymane propozycje",
+    "userYes": "Tak",
+    "userNo": "Nie"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2623,7 +2712,8 @@
     "submit": "Wejdź",
     "error": "Nieprawidłowe hasło. Spróbuj ponownie.",
     "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
-    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później."
+    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później.",
+    "payloadTooLarge": "Formularz jest za duży. Odśwież stronę i spróbuj ponownie."
   },
   "offline": {
     "title": "Brak połączenia",
@@ -2880,7 +2970,13 @@
     "offer": "Oferta",
     "untitled": "Oferta bez tytułu",
     "denied": "Lejek ofert widzą właściciel, administrator i rekruterzy firmy.",
-    "loadError": "Nie udało się wczytać lejka ofert. Spróbuj ponownie."
+    "loadError": "Nie udało się wczytać lejka ofert. Spróbuj ponownie.",
+    "csvFrom": "Od",
+    "csvTo": "Do",
+    "csvStatus": "Status",
+    "csvTotal": "Razem",
+    "exportCsv": "Pobierz CSV",
+    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})"
   },
   "savedSearches": {
     "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",
@@ -2901,6 +2997,7 @@
     "browse": "Przeglądaj oferty",
     "lastAlert": "Ostatni alert: {date}",
     "noAlertYet": "Jeszcze nie wysłaliśmy alertu.",
+    "filtersLabel": "Filtry wyszukiwania „{name}”",
     "open": "Pokaż oferty",
     "alerts": "Powiadamiaj o nowych ofertach",
     "frequency": "Jak często",
@@ -3282,5 +3379,113 @@
     "errorLanguageInvalid": "Nazwa języka musi mieć od 2 do 40 znaków.",
     "errorExperienceInvalid": "Podaj liczbę lat od 0 do 60.",
     "errorFieldsInvalid": "Popraw zaznaczone pola przed zapisem."
+  },
+  "adminRetention": {
+    "title": "Retencja danych",
+    "subtitle": "Okresy przechowywania zapisane w bazie i tryby zadań czyszczenia. Tylko podgląd — strona niczego nie zmienia.",
+    "demoNotice": "Tryb demonstracyjny: wartości startowe z migracji, bez odczytu bazy.",
+    "modesTitle": "Tryby zadań w harmonogramie",
+    "modesHint": "Stan zmiennych środowiska usługi, odczytany tak samo jak w zadaniu konserwacji. Zmiana wymaga ustawienia zmiennej w hostingu.",
+    "modeRetention": "Czyszczenie danych (RETENTION_MODE)",
+    "modeDsaRetention": "Anonimizacja spraw DSA (DSA_RETENTION_MODE)",
+    "modeStorageGc": "Sprzątanie osieroconych plików (STORAGE_GC_MODE)",
+    "mode": {
+      "off": "Wyłączone",
+      "dryRun": "Próbny przebieg (bez zmian)",
+      "apply": "Włączone (usuwanie)"
+    },
+    "storageGcDryRun": "Tylko liczniki (bez usuwania)",
+    "storageGcDelete": "Usuwanie osieroconych obiektów",
+    "policiesTitle": "Okresy przechowywania",
+    "policiesHint": "Kategoria z okresem „wyłączone” nie ma terminu. Okresy zmienia administrator danych.",
+    "policiesEmpty": "Brak zapisanych okresów retencji.",
+    "fieldPeriod": "Okres",
+    "fieldWarning": "Ostrzeżenie przed terminem",
+    "fieldEnforcement": "Kto pilnuje terminu",
+    "fieldLastChange": "Ostatnia zmiana",
+    "enforcement": {
+      "job": "Zadanie czyszczenia",
+      "monitoring": "Czujka monitoringu",
+      "infrastructure": "Infrastruktura",
+      "none": "Brak zadania"
+    },
+    "days": "{count, plural, one {# dzień} other {# dni}}",
+    "periodOff": "Wyłączone",
+    "lastChangeValue": "{date}, {actor}: {from} → {to}",
+    "updatedValue": "{date} (migracja)",
+    "lastChangeNone": "Brak zmian",
+    "actorUnknown": "Administrator",
+    "unknownCategory": "Kategoria bez opisu w panelu.",
+    "auditLink": "Historia zmian w dzienniku",
+    "keys": {
+      "acceptance_ip_user_agent": {
+        "label": "IP i user-agent akceptacji regulaminu",
+        "description": "Adres IP i user-agent zapisane przy rejestracji są zerowane; sam receipt akceptacji zostaje."
+      },
+      "audit_log": {
+        "label": "Dziennik audytu",
+        "description": "Zminimalizowany dziennik zdarzeń administracyjnych. Brak zadania automatycznego."
+      },
+      "closed_application": {
+        "label": "Zamknięte aplikacje",
+        "description": "Aplikacja w stanie końcowym wraz z rozmowami, powiadomieniami i e-mailami — liczone od zamknięcia."
+      },
+      "confirmed_guest_request": {
+        "label": "Potwierdzone zgłoszenia bez konta",
+        "description": "Bufor zgłoszenia gościa po potwierdzeniu; aplikacja zostaje ze snapshotem."
+      },
+      "consent_evidence": {
+        "label": "Dowody zgód i akceptacji",
+        "description": "Dowody zgód po minimalizacji. Brak zadania automatycznego."
+      },
+      "data_rights_request_log": {
+        "label": "Ślad wniosków o prawa",
+        "description": "Ślad obsługi wniosku o dostęp lub usunięcie, bez treści danych — od zakończenia."
+      },
+      "database_backup": {
+        "label": "Kopie bazy danych",
+        "description": "Kopie bazy i eksporty, przycinane przez skrypt kopii i dostawcę."
+      },
+      "deleted_file": {
+        "label": "Usunięte pliki",
+        "description": "Plik oznaczony jako usunięty: wiersz w bazie i obiekt w buckecie."
+      },
+      "deleted_profile": {
+        "label": "Usunięte profile kandydatów",
+        "description": "Profil oznaczony jako usunięty: pełne usunięcie konta i danych procesu."
+      },
+      "erasure_tombstone": {
+        "label": "Rejestr usunięć",
+        "description": "Rejestr usunięć do ponownego zastosowania po odtworzeniu kopii; musi przeżyć najstarszą kopię."
+      },
+      "guest_ip_user_agent": {
+        "label": "IP i user-agent gościa",
+        "description": "Adres IP i user-agent zgody gościa są zerowane."
+      },
+      "inactive_candidate_account": {
+        "label": "Nieaktywne konta kandydatów",
+        "description": "Konto bez aktywności: ostrzeżenie e-mailem, potem pełne usunięcie."
+      },
+      "inactive_candidate_cv": {
+        "label": "CV nieaktywnych kandydatów",
+        "description": "CV bez aktywności konta: ostrzeżenie e-mailem, potem usunięcie pliku."
+      },
+      "inactive_searchable_profile": {
+        "label": "Nieaktywne profile wyszukiwalne",
+        "description": "Profil widoczny dla firm bez aktywności kandydata jest ukrywany w wyszukiwarce."
+      },
+      "security_log": {
+        "label": "Logi aplikacji i bezpieczeństwa",
+        "description": "Surowe logi u dostawcy hostingu — ustawienie infrastruktury."
+      },
+      "storage_physical_deletion": {
+        "label": "Fizyczne usunięcie plików",
+        "description": "Usunięcie obiektu z bucketu po usunięciu wiersza; alarm czujki przed terminem."
+      },
+      "unconfirmed_guest_request": {
+        "label": "Niepotwierdzone zgłoszenia bez konta",
+        "description": "Zgłoszenie gościa bez potwierdzenia — liczone od pierwszego wysłania."
+      }
+    }
   }
 }

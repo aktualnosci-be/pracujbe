@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
@@ -9,6 +9,7 @@ import { ProposalActions } from '@/components/candidate/ProposalActions';
 import { canRespondToProposal, proposalAnchorId, proposalDisplayStatus } from '@/lib/candidate-offers';
 import { loadMoreProposals } from '@/lib/actions/candidate-proposals';
 import type { MyOffer, MyOffersPage } from '@/lib/data/candidate';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import {
   ACTION_ROW,
   BTN_PRIMARY,
@@ -26,7 +27,12 @@ function formatDate(iso: string, locale: string): string {
   const ts = Date.parse(iso);
   return Number.isNaN(ts)
     ? ''
-    : new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(ts);
+    : new Intl.DateTimeFormat(locale, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: APP_TIME_ZONE,
+      }).format(ts);
 }
 
 /**
@@ -50,6 +56,12 @@ export function CandidateProposalsList({
   const [pending, startTransition] = useTransition();
   const generation = useRef(0);
   const nowDate = new Date(now);
+  // Propozycje, których termin minął w trakcie wizyty (#830): `now` z serwera jest stałe, więc
+  // bez tego etykieta karty zostawałaby „Wysłana” po zniknięciu przycisków.
+  const [expiredDuringVisit, setExpiredDuringVisit] = useState<ReadonlySet<string>>(() => new Set());
+  const markExpired = useCallback((id: string) => {
+    setExpiredDuringVisit((current) => (current.has(id) ? current : new Set(current).add(id)));
+  }, []);
 
   // Po odpowiedzi na propozycję ProposalActions odświeża trasę; zsynchronizuj karty z nowym SSR.
   useEffect(() => {
@@ -126,7 +138,11 @@ export function CandidateProposalsList({
                     ) : null}
                   </div>
                   <ProposalStatusPill
-                    status={proposalDisplayStatus(offer.status, offer.expiresAt, nowDate)}
+                    status={proposalDisplayStatus(
+                      offer.status,
+                      offer.expiresAt,
+                      expiredDuringVisit.has(offer.id) ? new Date() : nowDate,
+                    )}
                     className="shrink-0"
                   />
                 </div>
@@ -143,6 +159,8 @@ export function CandidateProposalsList({
                     expiresAt={offer.expiresAt}
                     jobTitle={offer.jobTitle || undefined}
                     initialCanRespond={canRespondToProposal(offer.status, offer.expiresAt, nowDate)}
+                    status={offer.status}
+                    onExpire={() => markExpired(offer.id)}
                   />
                   <Link href="/candidate/wiadomosci" className={TEXT_LINK}>
                     {t('navMessages')}

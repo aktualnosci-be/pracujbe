@@ -192,8 +192,13 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       return employer ? '/employer/aplikacje' : '/candidate/propozycje';
     case 'job':
       return employer ? '/employer/oferty' : '/candidate/oferty-polecane';
-    case 'company':
-      return employer ? '/employer/firma' : '/candidate';
+    case 'company': {
+      // #843: decyzja dotyczy TEJ firmy (`entity_id`), niezależnie od aktywnej firmy z cookie
+      // (właściciel kilku firm) — `?firma=` pozwala stronie pokazać właściwe dane bez cichej
+      // podmiany na aktywną. Ten sam `entity_type` niosą też powiadomienia moderacyjne (#42).
+      const path = employer ? '/employer/firma' : '/candidate';
+      return employer && UUID_RE.test(entityId) ? `${path}?firma=${entityId.toLowerCase()}` : path;
+    }
     case 'saved_search':
       // #100: nowe oferty dla zapisanego wyszukiwania — zarządzanie i otwarcie listy.
       return employer ? '/employer' : '/candidate/wyszukiwania';

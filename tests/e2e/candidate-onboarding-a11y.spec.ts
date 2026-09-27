@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { waitForHydrated } from './fixtures/hydration';
 import { rejectOptionalCookies } from './fixtures/messages';
 
 /**
@@ -14,6 +15,9 @@ const locales = ['pl', 'nl', 'fr', 'en'] as const;
 async function openWizard(page: Page, locale: string): Promise<void> {
   await page.goto(`/${locale}/candidate/onboarding`);
   await rejectOptionalCookies(page, locale);
+  // Wpis przed hydratacją ginie (React przywraca wartość z serwera) — pod obciążeniem CI
+  // kolejne kroki kreatora czekały wtedy do limitu czasu testu.
+  await waitForHydrated(page.locator('#onb-firstName'));
 }
 
 /** Przycisk „Dalej: <krok>” — jedyny przycisk kreatora ze strzałką w prawo (niezależnie od języka). */
