@@ -32,7 +32,6 @@ export const LOCALIZED_PAGES = [
   '/poradniki',
   '/dla-pracodawcow',
   '/o-nas',
-  '/faq',
   '/kontakt',
   '/pomoc',
   '/regulamin',

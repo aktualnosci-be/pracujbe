@@ -195,7 +195,7 @@ describe('prod smoke — atrapa serwera', () => {
     ['/fr/logowanie', { status: 502 }, 'błąd serwera 5xx'],
     ['/en/rejestracja', { status: 404 }, 'oczekiwano 200'],
     ['/api/health', { health: 'unavailable' }, 'błąd serwera 5xx'],
-    ['/pl/faq', { hang: true }, 'przekroczono czas'],
+    ['/pl/pomoc', { hang: true }, 'przekroczono czas'],
   ] as const)('kontrola ujemna: %s (%j) → kod 1', async (path, fault, reason) => {
     site = await startFakeSite({ faults: { [path]: fault } });
     const logs = logger();

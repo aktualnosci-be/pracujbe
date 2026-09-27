@@ -436,7 +436,12 @@ export function EmailRawLink({ href }: { href: string }): ReactNode {
 
 /**
  * Kompletny layout maila: `<Html>` z nagłówkiem (logo), treścią (children) i stopką.
- * `preview` to preheader; `locale` ustawia `lang` i teksty stopki.
+ * `preview` to preheader; `locale` ustawia `lang` i teksty stopki; `title` = temat maila.
+ *
+ * Dostępność (strażnik `tests/unit/email-a11y.test.tsx`): `lang` = język odbiorcy, jawne
+ * `dir="ltr"`, `<title>` = temat (czytniki ekranu i podgląd w przeglądarce), preheader ukryty
+ * wizualnie i pominięty w text/plain (`data-skip-in-text` — bez znaków wypełniacza w wersji
+ * tekstowej), tabele układu z `role="presentation"`.
  */
 export function EmailLayout({
   locale,
@@ -445,9 +450,12 @@ export function EmailLayout({
   unsubscribeUrl,
   footerNote,
   sender,
+  title,
 }: {
   locale: Locale;
   preview: string;
+  /** Temat maila — trafia do `<title>` (ten sam tekst co nagłówek Subject). */
+  title: string;
   children: ReactNode;
   /** Strona wypisania z kategorii tej wiadomości (#45). Brak = mail bez linku wypisania. */
   unsubscribeUrl?: string;
@@ -463,9 +471,11 @@ export function EmailLayout({
   const privacyHref = `${env.siteUrl}/${locale}/polityka-prywatnosci`;
 
   return (
-    <Html lang={locale}>
-      <Head />
-      <Preview>{preview}</Preview>
+    <Html lang={locale} dir="ltr">
+      <Head>
+        <title>{title}</title>
+      </Head>
+      <Preview data-skip-in-text="true">{preview}</Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
           <Section style={styles.header}>

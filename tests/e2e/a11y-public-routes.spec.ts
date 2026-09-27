@@ -33,7 +33,6 @@ const ROUTES = [
   '/poradniki/praca-w-belgii-bez-znajomosci-jezyka',
   '/dla-pracodawcow',
   '/o-nas',
-  '/faq',
   '/kontakt',
   '/pomoc',
   '/regulamin',

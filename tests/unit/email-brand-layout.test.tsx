@@ -14,7 +14,7 @@ import { routing, type Locale } from '@/i18n/routing';
 describe('wspólny layout e-maili', () => {
   it('renderuje zatwierdzone logo i paletę marki w gotowym HTML wiadomości', async () => {
     const html = await render(
-      <EmailLayout locale="pl" preview="Podgląd wiadomości">
+      <EmailLayout locale="pl" preview="Podgląd wiadomości" title="Temat">
         <EmailHeading>Nowa propozycja pracy</EmailHeading>
         <EmailHighlight>Operator produkcji</EmailHighlight>
         <EmailQuote>Treść wiadomości</EmailQuote>
@@ -64,7 +64,7 @@ describe('wspólny layout e-maili', () => {
     'prowadzi ze stopki do pomocy i prywatności w języku odbiorcy (%s)',
     async (locale: Locale) => {
       const html = await render(
-        <EmailLayout locale={locale} preview="Podgląd wiadomości">
+        <EmailLayout locale={locale} preview="Podgląd wiadomości" title="Temat">
           <EmailHeading>Wiadomość</EmailHeading>
         </EmailLayout>,
       );

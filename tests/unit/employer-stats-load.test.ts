@@ -24,8 +24,8 @@ function count(name: string, value: Count) {
 function overview(values: { active?: Count; apps?: Count; matches?: Count; messages?: Count }) {
   count('employer.overview-active-jobs', values.active ?? 0);
   count('employer.overview-new-applications', values.apps ?? 0);
-  count('employer.overview-matches', values.matches ?? 0);
-  count('employer.overview-unread-messages', values.messages ?? 0);
+  count('employer.overview-matched-candidates', values.matches ?? 0);
+  count('employer.overview-awaiting-reply', values.messages ?? 0);
 }
 
 /** Lejek: trzy liczniki kohorty + RPC lejka ofert (#99). */
@@ -39,13 +39,18 @@ function funnel(values: { apps?: Count; interviews?: Count; hired?: Count; rpc?:
   });
 }
 
+/** Aktywna firma sesji z daną rolą i statusem weryfikacji. */
+function activeAs(role: string, status = 'verified') {
+  vi.mocked(getActiveCompany).mockResolvedValue({
+    activeId: 'company-1', activeStatus: status, activeName: 'Firma',
+    activeRole: role, companies: [],
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   resetFakeDb({ id: USER, role: 'employer' });
-  vi.mocked(getActiveCompany).mockResolvedValue({
-    activeId: 'company-1', activeStatus: 'verified', activeName: 'Firma',
-    activeRole: 'owner', companies: [],
-  });
+  activeAs('owner');
 });
 
 describe('employer overview tiles', () => {
@@ -62,23 +67,86 @@ describe('employer overview tiles', () => {
     overview({});
     expect(await getEmployerOverview()).toEqual({
       status: 'ok',
-      overview: { activeOffersCount: 0, newApplicationsCount: 0, matchedCandidatesCount: 0, messagesToAnswerCount: 0 },
+      overview: {
+        activeOffersCount: 0, newApplicationsCount: 0, matchedCandidatesCount: 0, messagesToAnswerCount: 0,
+        recruiterAccess: true, companyVerified: true,
+      },
     });
     expect(captureError).not.toHaveBeenCalled();
   });
 
-  it('keeps successful counts scoped to the active company and the session user', async () => {
+  it('keeps every counter scoped to the ACTIVE company, read under the session user', async () => {
     overview({ active: 3, apps: 5, matches: 7, messages: 2 });
     expect(await getEmployerOverview()).toEqual({
       status: 'ok',
-      overview: { activeOffersCount: 3, newApplicationsCount: 5, matchedCandidatesCount: 7, messagesToAnswerCount: 2 },
+      overview: {
+        activeOffersCount: 3, newApplicationsCount: 5, matchedCandidatesCount: 7, messagesToAnswerCount: 2,
+        recruiterAccess: true, companyVerified: true,
+      },
     });
-    expect(fakeDb.callsTo('employer.overview-active-jobs')[0]?.values).toEqual(['company-1']);
-    expect(fakeDb.callsTo('employer.overview-new-applications')[0]?.values).toEqual(['company-1']);
-    expect(fakeDb.callsTo('employer.overview-matches')[0]?.values).toEqual(['company-1']);
-    // Wiadomości do odpowiedzi = powiadomienia WŁASNE użytkownika sesji.
-    expect(fakeDb.callsTo('employer.overview-unread-messages')[0]?.values).toEqual([USER]);
+    for (const name of [
+      'employer.overview-active-jobs', 'employer.overview-new-applications',
+      'employer.overview-matched-candidates', 'employer.overview-awaiting-reply',
+    ]) {
+      expect(fakeDb.callsTo(name)[0]?.values).toEqual(['company-1']);
+    }
+    // Wiadomości do odpowiedzi liczone per FIRMA (rozmowy), nie z powiadomień użytkownika —
+    // dawny licznik obejmował też inne firmy użytkownika.
+    expect(fakeDb.callsTo('employer.overview-unread-messages')).toHaveLength(0);
     expect(new Set(fakeDb.calls.map((c) => c.as))).toEqual(new Set([USER]));
+  });
+
+  it('P1-14: matched = DISTINCT candidates (one candidate matched to many offers counts once)', async () => {
+    overview({});
+    await getEmployerOverview();
+    const text = fakeDb.callsTo('employer.overview-matched-candidates')[0]!.text;
+    expect(text).toContain('SELECT DISTINCT m.candidate_id');
+    expect(text).toContain('j.deleted_at IS NULL');
+  });
+
+  it('P1-14: awaiting reply = last message from outside the company, per company conversation', async () => {
+    overview({});
+    await getEmployerOverview();
+    const text = fakeDb.callsTo('employer.overview-awaiting-reply')[0]!.text;
+    expect(text).toContain('c.company_id = $1');
+    expect(text).toContain('ORDER BY m.created_at DESC, m.id DESC');
+    expect(text).toContain('NOT EXISTS (SELECT 1 FROM public.company_members cm');
+  });
+
+  it('P1-14: a plain member gets "no data" (null), not the zeros RLS would return', async () => {
+    activeAs('member');
+    overview({ active: 3, apps: 0, matches: 0, messages: 0 });
+    expect(await getEmployerOverview()).toEqual({
+      status: 'ok',
+      overview: {
+        activeOffersCount: 3, newApplicationsCount: null, matchedCandidatesCount: null, messagesToAnswerCount: null,
+        recruiterAccess: false, companyVerified: true,
+      },
+    });
+    // Liczniki rekrutacyjne w ogóle nie są pytane (bez wyników udających brak aktywności).
+    expect(fakeDb.callsTo('employer.overview-new-applications')).toHaveLength(0);
+    expect(fakeDb.callsTo('employer.overview-matched-candidates')).toHaveLength(0);
+    expect(fakeDb.callsTo('employer.overview-awaiting-reply')).toHaveLength(0);
+  });
+
+  it.each(['owner', 'admin', 'recruiter'])('negative control: %s (recruiter+) gets real counts', async (role) => {
+    activeAs(role);
+    overview({ apps: 4, matches: 2, messages: 1 });
+    const result = await getEmployerOverview();
+    expect(result).toMatchObject({
+      status: 'ok',
+      overview: { newApplicationsCount: 4, matchedCandidatesCount: 2, messagesToAnswerCount: 1, recruiterAccess: true },
+    });
+  });
+
+  it('P1-14: unverified company — matched candidates wait for verification (null), the rest is real', async () => {
+    activeAs('owner', 'pending');
+    overview({ apps: 4, matches: 9, messages: 1 });
+    expect(await getEmployerOverview()).toMatchObject({
+      status: 'ok',
+      overview: { newApplicationsCount: 4, matchedCandidatesCount: null, messagesToAnswerCount: 1, companyVerified: false },
+    });
+    expect(fakeDb.callsTo('employer.overview-matched-candidates')).toHaveLength(0);
   });
 
   it('does not count an active job past expires_at as active (#72)', async () => {
@@ -161,6 +229,16 @@ describe('job funnel views in the recruitment funnel (#99)', () => {
       status: 'ok',
       funnel: { views: null, applications: 4, interviews: 1, hired: 0 },
     });
+  });
+
+  it('P1-14: a plain member gets an explicit "denied" funnel, no queries run', async () => {
+    activeAs('member');
+    funnel({ apps: 0, interviews: 0, hired: 0, rpc: [] });
+    expect(await getFunnelStats(NOW)).toEqual({ status: 'denied' });
+    expect(fakeDb.calls).toHaveLength(0);
+    // Kontrola ujemna: recruiter czyta ten sam lejek.
+    activeAs('recruiter');
+    expect(await getFunnelStats(NOW)).toMatchObject({ status: 'ok' });
   });
 
   it('reports a failed job funnel read as an error', async () => {

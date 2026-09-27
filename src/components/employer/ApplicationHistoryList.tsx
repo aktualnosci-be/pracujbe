@@ -4,7 +4,10 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { toCamel } from '@/components/ui/status-pill';
-import { loadMoreApplicationHistory } from '@/lib/actions/employer-application-history';
+import {
+  loadMoreApplicationHistory,
+  type MoreApplicationHistoryResult,
+} from '@/lib/actions/employer-application-history';
 import type { ApplicationHistoryCursor, ApplicationHistoryEntry } from '@/lib/data/employer';
 import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
 
@@ -13,15 +16,20 @@ import { BTN_SECONDARY } from '@/components/dashboard/panel-styles';
  * (`getEmployerApplicationDetail`), kolejne przez Server Action `loadMoreApplicationHistory`
  * (kursor `created_at` + UUID, jak `CandidateProposalsList` dla #245). Błąd kolejnej strony nie
  * usuwa już wczytanych wpisów.
+ *
+ * `loadMore` podmienia źródło kolejnych stron (szczegół zgłoszenia kandydata przekazuje
+ * `loadMoreMyApplicationHistory` — ta sama lista, odczyt zawężony do własnych zgłoszeń).
  */
 export function ApplicationHistoryList({
   applicationId,
   initialItems,
   initialNextCursor,
+  loadMore: loadPage = loadMoreApplicationHistory,
 }: {
   applicationId: string;
   initialItems: ApplicationHistoryEntry[];
   initialNextCursor: ApplicationHistoryCursor | null;
+  loadMore?: (applicationId: string, cursor: ApplicationHistoryCursor) => Promise<MoreApplicationHistoryResult>;
 }) {
   const t = useTranslations('dashboard');
   const ts = useTranslations('status');
@@ -45,7 +53,7 @@ export function ApplicationHistoryList({
     setFailed(false);
     startTransition(async () => {
       try {
-        const result = await loadMoreApplicationHistory(applicationId, cursor);
+        const result = await loadPage(applicationId, cursor);
         if (generation.current !== startedAt) return;
         if (result.status === 'error') {
           setFailed(true);

@@ -229,3 +229,44 @@ export function buildArticleJsonLd(
     mainEntityOfPage: canonical,
   };
 }
+
+export interface OrganizationInput {
+  name: string;
+  description?: string;
+  city?: string;
+  region?: string;
+  website?: string;
+  logoUrl?: string;
+}
+
+/**
+ * Organization dla publicznego profilu firmy `/pracodawcy/<slug>` (#591). Strona istnieje
+ * wyłącznie dla firmy zweryfikowanej (`get_public_company`), więc dane nie opisują firm
+ * niezweryfikowanych. `url` = kanoniczny adres profilu; strona WWW (`sameAs`) i logo tylko
+ * jako bezpieczny https — jak `hiringOrganization` w JobPosting (drugi filtr po bazie).
+ */
+export function buildOrganizationJsonLd(company: OrganizationInput, url: string): Record<string, unknown> {
+  const sameAs = publicHttpsUrl(company.website);
+  const logo = publicHttpsUrl(company.logoUrl);
+  const description = company.description?.trim();
+  const address =
+    company.city || company.region
+      ? {
+          '@type': 'PostalAddress',
+          ...(company.city ? { addressLocality: company.city } : {}),
+          ...(company.region ? { addressRegion: company.region } : {}),
+          addressCountry: 'BE',
+        }
+      : undefined;
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: company.name,
+    url,
+    ...(description ? { description } : {}),
+    ...(sameAs ? { sameAs } : {}),
+    ...(logo ? { logo } : {}),
+    ...(address ? { address } : {}),
+  };
+}

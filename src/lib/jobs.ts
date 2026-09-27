@@ -17,6 +17,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
+import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
 
@@ -80,6 +81,11 @@ export interface JobListItem {
    * i nie pozwala aplikować. Oferty z bazy nigdy nie mają tej flagi.
    */
   isDemo?: true;
+  /**
+   * Stabilny slug profilu firmy (`/pracodawcy/<slug>`, tylko firma verified — 0140, #591).
+   * Brak = brak publicznego profilu (bezpiecznik) — sitemap i CTA go wtedy pomijają.
+   */
+  companySlug?: string;
 }
 
 export interface JobDetail extends JobListItem {
@@ -186,7 +192,7 @@ function toLocale(locale: string): Locale {
  * fikcyjne zastępują realny backend, więc nie są oznaczane jako demo — tam testujemy
  * formularz aplikowania i JobPosting. Nie działa w buildzie produkcyjnym.
  */
-function isRealJobsFixture(): boolean {
+export function isRealJobsFixture(): boolean {
   return process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full';
 }
 
@@ -199,7 +205,10 @@ export function isShowingDemoJobs(): boolean {
 }
 
 function markDemo<T extends JobListItem>(job: T): T {
-  return isRealJobsFixture() ? job : { ...job, isDemo: true };
+  if (!isRealJobsFixture()) return { ...job, isDemo: true };
+  // Serwer fixture: slug profilu firmy jak `company_slug` z bazy (tylko firma zweryfikowana).
+  const companySlug = fixtureCompanySlug(job.companyName, job.companyVerified);
+  return companySlug ? { ...job, companySlug } : job;
 }
 
 function newestFirst(a: JobListItem, b: JobListItem): number {
@@ -353,7 +362,9 @@ function computeIsNew(publishedAt: string): boolean {
   return Date.now() - ts <= NEW_DAYS * 24 * 60 * 60 * 1000;
 }
 
-function rowToJobListItem(row: unknown): JobListItem {
+/** Wystawiona dla `@/lib/companies` (#591): profil firmy zwraca oferty w tym samym kształcie
+ *  co `get_public_jobs`, więc mapowanie wiersza na `JobListItem` jest tylko jedno. */
+export function rowToJobListItem(row: unknown): JobListItem {
   const r = asRecord(row);
   const publishedAt = asString(r['published_at'], new Date().toISOString());
   const salaryPeriod = asSalaryPeriod(r['salary_period']);
@@ -377,6 +388,7 @@ function rowToJobListItem(row: unknown): JobListItem {
     accommodation: asBool(r['accommodation']),
     immediate: asBool(r['immediate']),
     noLanguageRequired: asBool(r['no_language_required']),
+    ...(asOptString(r['company_slug']) ? { companySlug: asOptString(r['company_slug']) } : {}),
   };
 }
 
@@ -404,6 +416,7 @@ function rowToJobDetail(row: unknown): JobDetail {
     ...(asOptString(r['company_logo_url'])
       ? { companyLogoUrl: asOptString(r['company_logo_url']) }
       : {}),
+    // companySlug: już zmapowane przez rowToJobListItem (kolumna wspólna z get_public_jobs).
   };
 }
 

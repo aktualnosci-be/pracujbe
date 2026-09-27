@@ -64,8 +64,11 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
  *
  * TODO(i18n-slugs): jeden segment `oferty-pracy` dla wszystkich języków; lokalizowane slugi
  * w mapie drogowej (spec 12).
- * TODO(company-page): „Dowiedz się więcej o firmie” prowadzi tymczasowo do ofert firmy
- * (wyszukiwarka), docelowo do dedykowanej strony firmy.
+ *
+ * „Dowiedz się więcej o firmie” (#591) prowadzi do dedykowanego, stabilnego profilu firmy
+ * `/pracodawcy/<slug>` (`job.companySlug`, tylko firma verified — 0140); bez sluga (nie powinno
+ * się zdarzyć dla zweryfikowanej firmy, ale bezpiecznik) CTA jest ukryte zamiast linkować do
+ * wyszukiwarki po nazwie, która mogła zwrócić oferty innej firmy albo nic.
  */
 
 const BASE_PATH = '/oferty-pracy';
@@ -332,7 +335,16 @@ export default async function JobDetailPage({ params }: PageProps) {
               {job.title}
             </h1>
             <p className={cn(INTRO, 'mt-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1')}>
-              <span className="break-words">{job.companyName}</span>
+              {job.companySlug ? (
+                <Link
+                  href={`/pracodawcy/${job.companySlug}`}
+                  className="break-words underline-offset-2 hover:underline"
+                >
+                  {job.companyName}
+                </Link>
+              ) : (
+                <span className="break-words">{job.companyName}</span>
+              )}
               {job.companyVerified && !job.isDemo ? (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                   <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -538,13 +550,17 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </div>
               </div>
               <p lang={contentLang} className={cn(P_EXTENDED, 'mt-3')}>{job.companyDescription}</p>
-              <Link
-                href={`${BASE_PATH}?keyword=${encodeURIComponent(job.companyName)}`}
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-dark"
-              >
-                {t('learnMoreCompany')}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
+              {/* #591: CTA prowadzi do stabilnego profilu firmy; bez sluga (nie powinno się
+                  zdarzyć dla zweryfikowanej firmy) — ukryte zamiast linkować donikąd. */}
+              {job.companySlug ? (
+                <Link
+                  href={`/pracodawcy/${job.companySlug}`}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-dark"
+                >
+                  {t('learnMoreCompany')}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              ) : null}
               {/* Blokada firmy (tylko zalogowany kandydat; wyspa kliencka, #97). Demo — brak. */}
               {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
             </div>

@@ -2,15 +2,10 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { isPortalDataConfigured } from '@/lib/db/portal';
-import {
-  getEmployerOverview,
-  getFunnelStats,
-  getJobFunnel,
-  DEMO_OVERVIEW_DELTAS,
-} from '@/lib/data/employer';
+import { getEmployerOverview, getFunnelStats, getJobFunnel } from '@/lib/data/employer';
 import { parseFunnelRange } from '@/lib/job-funnel/range';
-import { PanelStats } from '@/components/dashboard/PanelStats';
-import { RecruitmentFunnel } from '@/components/employer/RecruitmentFunnel';
+import { EmployerFunnelSection } from '@/components/employer/EmployerFunnelSection';
+import { EmployerOverviewStats } from '@/components/employer/EmployerOverviewStats';
 import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
 import { JobFunnelRangePicker, JobFunnelStats } from '@/components/employer/JobFunnelStats';
 import {
@@ -27,7 +22,9 @@ import {
  * Rząd kafelków przeglądowych (`getEmployerOverview`) + pełny lejek rekrutacyjny
  * (`getFunnelStats` + RecruitmentFunnel z konwersjami między etapami) oraz lejek ofert (#99,
  * `getJobFunnel`: zakres `?dni=7|30|90`, definicje metryk, rozbicie per oferta). Wszystko pod sesją/RLS;
- * bez env — dane DEMO (delty tygodniowe kafelków tylko w trybie DEMO). NOINDEX z layoutu panelu.
+ * bez env — dane DEMO (delty tygodniowe kafelków tylko w trybie DEMO). Liczniki rekrutacyjne
+ * i lejek czyta tylko recruiter+ — zwykły `member` widzi „brak danych” z powodem, nie zera
+ * (audyt P1-14). NOINDEX z layoutu panelu.
  */
 
 export async function generateMetadata({
@@ -74,53 +71,11 @@ export default async function EmployerStatsPage({
         <h1 className={H1_EXTENDED}>{td('funnelTitle')}</h1>
       </div>
 
-      {/* Kafelki przeglądowe */}
-      {overview.status === 'error' ? (
-        <EmployerStatsError message={td('employerOverviewLoadError')} retryLabel={tc('retry')} />
-      ) : (
-        <PanelStats
-          items={[
-            {
-              label: td('activeOffers'),
-              value: overview.overview.activeOffersCount,
-              sub: configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.activeOffers }),
-            },
-            {
-              label: td('newApplications'),
-              value: overview.overview.newApplicationsCount,
-              sub: configured
-                ? undefined
-                : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.newApplications }),
-            },
-            {
-              label: td('matchedCandidates'),
-              value: overview.overview.matchedCandidatesCount,
-              sub: configured ? undefined : td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.matched }),
-            },
-            {
-              label: td('messagesToAnswer'),
-              value: overview.overview.messagesToAnswerCount,
-              sub: configured ? undefined : td('urgent', { count: DEMO_OVERVIEW_DELTAS.urgent }),
-            },
-          ]}
-        />
-      )}
+      {/* Kafelki przeglądowe (liczniki rekrutacyjne tylko recruiter+, inaczej „brak danych”) */}
+      <EmployerOverviewStats locale={locale} overview={overview} demo={!configured} />
 
       {/* Lejek rekrutacyjny */}
-      {funnel.status === 'error' ? (
-        <EmployerStatsError
-          title={td('funnelTitle')}
-          message={td('employerFunnelLoadError')}
-          retryLabel={tc('retry')}
-        />
-      ) : (
-        <RecruitmentFunnel
-          views={funnel.funnel.views}
-          applications={funnel.funnel.applications}
-          interviews={funnel.funnel.interviews}
-          hired={funnel.funnel.hired}
-        />
-      )}
+      <EmployerFunnelSection locale={locale} funnel={funnel} />
 
       {/* Lejek ofert (#99): serwerowy agregat bez śledzenia, zakres dat i definicje metryk. */}
       <JobFunnelRangePicker range={jobFunnel.range} />
