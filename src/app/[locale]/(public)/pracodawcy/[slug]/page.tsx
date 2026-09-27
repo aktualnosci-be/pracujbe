@@ -8,7 +8,12 @@ import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl, buildOrganizationJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
+import {
+  brandShareImageUrl,
+  buildBreadcrumbListJsonLd,
+  buildOrganizationJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo/structured-data';
 import { getCompanyProfile } from '@/lib/companies';
 import { JobCard } from '@/components/public/JobCard';
 
@@ -124,6 +129,18 @@ export default async function CompanyProfilePage({ params }: PageProps) {
     getTranslations('common'),
   ]);
 
+  // Widoczna ścieżka i BreadcrumbList z jednej listy — dane strukturalne = nawigacja.
+  const trail = [
+    { label: tCommon('home'), href: '/' },
+    { label: tJobs('pageTitle'), href: JOBS_PATH },
+    { label: company.name },
+  ];
+  const breadcrumbJsonLd = buildBreadcrumbListJsonLd(trail, {
+    base: env.siteUrl,
+    locale,
+    currentUrl: profileUrl,
+  });
+
   return (
     <PublicSavedJobsProvider key={JSON.stringify(jobs.map((job) => job.id))} jobIds={jobs.map((job) => job.id)}>
       {/* Organization (#591): strona istnieje tylko dla firmy zweryfikowanej. */}
@@ -131,14 +148,14 @@ export default async function CompanyProfilePage({ params }: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+      />
       <div className="container py-6 md:py-10">
         <Breadcrumbs
           ariaLabel={tCommon('breadcrumb')}
-          items={[
-            { label: tCommon('home'), href: '/' },
-            { label: tJobs('pageTitle'), href: JOBS_PATH },
-            { label: company.name },
-          ]}
+          items={trail}
         />
 
         <header className="mt-4 flex items-start gap-4">
