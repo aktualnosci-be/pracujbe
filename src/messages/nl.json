@@ -1349,6 +1349,7 @@
     "loginRequired": "Log in om te solliciteren.",
     "errorGeneric": "De sollicitatie kon niet worden verzonden. Probeer opnieuw.",
     "alreadyApplied": "Je hebt al op deze vacature gesolliciteerd.",
+    "alreadyAppliedEdited": "Je eerdere versie van de sollicitatie is al bij de werkgever aangekomen — deze wijzigingen zijn niet verzonden.",
     "submitting": "Bezig met verzenden...",
     "close": "Sluiten",
     "phoneInvalid": "Vul een geldig telefoonnummer in: een nationaal nummer voor het gekozen land of het volledige nummer met landcode, bijv. +32 470 12 34 56.",

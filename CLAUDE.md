@@ -1459,6 +1459,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Edycja formularza po utraconej odpowiedzi (#926): ponowienie z INNYMI danymi niż ostatnio
+  wysłane (kandydat poprawił telefon/wiadomość/dostępność/odpowiedzi po błędzie sieci, którego
+  pierwszy zapis mógł się już udać) dostaje NOWY klucz idempotencji zamiast ślepo ponawiać stary —
+  `ApplyModal` trzyma migawkę ostatnio wysłanego payloadu (`submittedPayloadRef`) obok klucza.
+  Trafienie na istniejącą aplikację z INNYM kluczem niż edytowana próba pokazuje osobny komunikat
+  `apply.alreadyAppliedEdited` (edytowane dane NIE zostały zapisane) zamiast ogólnego
+  `alreadyApplied`, więc UI nigdy nie przedstawia zmodyfikowanego payloadu jako potwierdzonego
+  zapisu. Ponowienie bez edycji zachowuje ten sam klucz i zwykły komunikat (bez zmian, kontrola
+  ujemna w teście). Bez migracji — RPC `apply_to_job` (0071/0093) już rozróżniał klucze, brakowało
+  tylko odróżnienia payloadu po stronie klienta. Test: `apply-modal-network` (z kontrolą ujemną).
   Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`

@@ -1349,6 +1349,7 @@
     "loginRequired": "Connectez-vous pour postuler.",
     "errorGeneric": "L'envoi de la candidature a échoué. Réessayez.",
     "alreadyApplied": "Vous avez déjà postulé à cette offre.",
+    "alreadyAppliedEdited": "Votre version précédente de la candidature est déjà parvenue à l'employeur — ces modifications n'ont pas été envoyées.",
     "submitting": "Envoi en cours...",
     "close": "Fermer",
     "phoneInvalid": "Saisissez un numéro de téléphone valide : un numéro national pour le pays choisi ou le numéro complet avec l’indicatif, par ex. +32 470 12 34 56.",
