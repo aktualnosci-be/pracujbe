@@ -714,6 +714,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
   `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
   opublikowane przed 0156 zostają bez przeglądu.
+  Zakres portu (#745): `isPublicHttpsUrl` (`src/lib/company-links.ts`, lustro Zod
+  `companyLinksSchema`) dopuszcza port wyłącznie z prawdziwego zakresu TCP `1–65535` —
+  `:0` i wartości powyżej `65535` (np. `:99999`) są odrzucane na jedynej ścieżce, którą
+  pracodawca faktycznie zapisuje adres, zanim trafi do RPC `submit_company_links`. **Otwarte:**
+  baza (`public.public_https_url`, 0114/0141/0156) nadal luźno dopuszcza dowolne 1–5 cyfr portu
+  w CHECK — zaostrzenie wymaga osobnej migracji i decyzji o ewentualnych istniejących wierszach
+  poza zakresem.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
