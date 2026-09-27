@@ -1052,7 +1052,12 @@
     "funnelDenied": "The recruitment funnel is visible to the company owner, administrators and recruiters.",
     "topMatchedDenied": "Matched candidates are visible to the company owner, administrators and recruiters.",
     "topMatchedUnverified": "Matched candidates will appear once the company is verified.",
-    "topMatchedLoadError": "We could not load matched candidates."
+    "topMatchedLoadError": "We could not load matched candidates.",
+    "employerPanelErrorTitle": "We couldn’t load this dashboard page",
+    "employerPanelErrorBody": "Try again in a moment. If the problem persists, go back to the dashboard and open the page again.",
+    "employerPanelBackToDashboard": "Back to the dashboard",
+    "employerNotFoundTitle": "We couldn’t find this page in the dashboard",
+    "employerNotFoundBody": "The address is incorrect or this item doesn’t belong to the active company. If you have access to several companies, check which one is selected in the company switcher."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",

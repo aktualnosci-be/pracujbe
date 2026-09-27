@@ -1052,7 +1052,12 @@
     "funnelDenied": "De wervingstrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
     "topMatchedDenied": "Gematchte kandidaten zijn zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
     "topMatchedUnverified": "Gematchte kandidaten verschijnen zodra het bedrijf is geverifieerd.",
-    "topMatchedLoadError": "We konden de gematchte kandidaten niet laden."
+    "topMatchedLoadError": "We konden de gematchte kandidaten niet laden.",
+    "employerPanelErrorTitle": "Deze pagina van het dashboard kon niet worden geladen",
+    "employerPanelErrorBody": "Probeer het zo meteen opnieuw. Blijft het probleem bestaan, ga dan terug naar het overzicht en open de pagina nog een keer.",
+    "employerPanelBackToDashboard": "Terug naar het overzicht",
+    "employerNotFoundTitle": "We hebben deze pagina niet gevonden in het dashboard",
+    "employerNotFoundBody": "Het adres is ongeldig of dit item hoort niet bij het actieve bedrijf. Heb je toegang tot meerdere bedrijven, controleer dan welk bedrijf in de bedrijvenkeuze is geselecteerd."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",

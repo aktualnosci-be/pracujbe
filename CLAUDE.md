@@ -20,7 +20,7 @@ Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: produkcja na
 bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
-2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
+2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, decyzja właściciela 2026-09-23; repo publiczne, minuty darmowe — 2026-09-27); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Nie wypychaj pustych commitów ani push-ów „na odświeżenie”.
 3. **Niezmienne reguły (NIGDY nie łam):** patrz sekcja „Invariants". Najważniejsze: język e-maili = język odbiorcy; wysyłka propozycji idempotentna; brak service-role key w przeglądarce; brak trackingu przed zgodą; RLS na wszystkim; żadnych tekstów UI na sztywno.
 4. **Gdzie co jest:** patrz „Struktura katalogów".
 5. **Co dalej:** patrz „Roadmapa / status" — sekcja z checkboxami. Wybierz kolejny niezaznaczony punkt.
@@ -285,15 +285,30 @@ historia → notyfikacja → enqueue e-mail.
 
 CI chodzi na **GitHub-hosted runnerach `ubuntu-latest`** (decyzja właściciela z 2026-09-23;
 wcześniej jeden współdzielony self-hosted runner serializował wszystkie przebiegi — #50).
-Minuty Actions są płatne z ograniczonej puli, więc workflow jest zbudowany oszczędnie.
+Od 2026-09-27 repo jest publiczne, więc minuty hostowanych runnerów są darmowe: workflow
+optymalizujemy pod czas przebiegu (równoległe joby), nie pod liczbę minut.
 Wdrożenie obsługuje natywna integracja Railway. Zobacz:
 - `.github/workflows/ci.yml` — `runs-on: ubuntu-latest`; `install` → `lint`/`typecheck`/`unit`/`migrations`,
-  równolegle `sca` i `rls`; `build` po zielonym lint+typecheck+unit; `e2e` po `build`.
+  równolegle `sca` i `rls`; `build` po zielonym lint+typecheck+unit; po `build` równolegle:
+  - `e2e-shard` („E2E shard i/3”) — zestaw demo `playwright.config.ts` (projekt `chromium`)
+    w 3 shardach `--shard=i/3`, każdy zapisuje raport cząstkowy (blob, `E2E_BLOB_NAME`);
+  - `e2e-perf` („E2E perf (lab CWV + INP)”) — pomiary czasu w jednym miejscu: projekt
+    `chromium-timing` (`--no-deps`, INP dialogu #393) i `perf-lab.mjs` (lab CWV + INP-proxy #395);
+  - `e2e-fixtures` („E2E fixtures (full|error)”) — `playwright.applications-fixture.config.ts`;
+  - `e2e-real` („E2E real flow (PostgreSQL 16)”) — `npm run test:e2e:real` na usłudze
+    `postgres:16` (#351, #66); na start **informacyjny** (`continue-on-error`), nie blokuje
+    scalania ani wdrożenia — po serii zielonych przebiegów na `main` zdejmij `continue-on-error`;
+  - `e2e` („E2E (Playwright)”, wymagany check o stałej nazwie) — job zbiorczy z `always()`,
+    pada, gdy którykolwiek shard/pomiar/fixture nie jest `success`; łączy bloby
+    (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
+    `failOnFlakyTests` obowiązuje w każdym shardzie.
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
-- `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint`.
+- `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint` (test z kontrolami
+  ujemnymi: `tests/unit/ci-workflows-guard.test.ts`).
 
 **Reguły CI:**
-- Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`.
+- Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`. Liczba
+  shardów zmienia się w jednym miejscu (nazwa, macierz, `--shard`) — strażnik pilnuje zgodności.
 - Każdy job ma `timeout-minutes`. Nowy push do PR anuluje trwający przebieg tego PR;
   przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
 - Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
@@ -927,6 +942,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Pulpit: karty ofert w stylu paszportu (#171), jawny błąd najnowszych zgłoszeń z ponowieniem
   (#157), „Zobacz wszystkie” → `/employer/aplikacje` (#164); bramka axe 320/1280 px i 200% tekstu
   w 4 językach — `tests/e2e/employer-dashboard-a11y.spec.ts`.
+  Granica błędu i 404 wewnątrz panelu (bez migracji): `src/app/[locale]/employer/error.tsx`
+  (`EmployerPanelError`) i `not-found.tsx` (`EmployerNotFound`) leżą POD layoutem `/employer`,
+  więc nieobsłużony błąd strony albo `notFound()` (szczegół zgłoszenia #300, edycja oferty) nie
+  zastępuje już całego panelu publiczną stroną błędu/404 — sidebar, przełącznik firmy i dolny
+  pasek zostają. Błąd: komunikat z i18n (`dashboard.employerPanelError*`, Invariant #8), do
+  kanału błędów sam kod (`captureError`), „Spróbuj ponownie” = `router.refresh()` + `reset()`
+  (`useErrorRetry`), link do pulpitu. 404: status 404, podpowiedź o aktywnej firmie
+  (multi-company, bez ujawniania istnienia obiektu), linki do pulpitu/zgłoszeń/ofert, bez
+  drugiego `<main>`. Testy: unit `employer-panel-boundaries` (4 języki, bez treści wyjątku,
+  kontrola ujemna linków publicznych), E2E `employer-application-detail` (404 z sidebarem,
+  4 języki).
   Lejek ofert bez śledzenia (#99, migracja `0089`): `job_funnel_daily` = oferta × dzień (Europe/Brussels)
   × `search_appearances`/`detail_views`/`apply_started`; brak IP, cookies, tekstu wyszukiwania,
   identyfikatora osoby. `applications_submitted` liczy przy odczycie `get_company_job_funnel` ze stanu
@@ -1972,7 +1998,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zmiany stanu, równoległe zapisy kroków 3/5 i „Zakończ” bez duplikatów, `finish_onboarding`
   (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
   (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
-  completeness-guard-off|relations-dml-open`. Zestaw real-flow nie jest w CI (uruchamiany ręcznie).
+  completeness-guard-off|relations-dml-open`. Zestaw real-flow biegnie w CI w jobie `e2e-real`
+  (usługa `postgres:16`, na start check informacyjny — CLAUDE.md §10); mutacje nadal ręcznie.
   Kroki UI w przeglądarce (`tests/e2e-real/ui-flow.spec.ts`, helpery `support/ui.ts`): serwer
   `next dev` z Better Auth na ograniczonym loginie auth (`DATABASE_AUTH_URL`, origin jak w stosie
   testu). Rejestracja pracodawcy (nl) i kandydata (fr) formularzami → link potwierdzenia z
@@ -1992,8 +2019,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z poziomem, certyfikaty); publikacja przy firmie niezweryfikowanej = komunikat i nadal `draft`
   (bez e-maila `jobPublished`), po weryfikacji przez admina ta sama sesja publikuje (`active`,
   slug publiczny, e-mail w języku publikującego, strona oferty dla gościa). Mutacje:
-  `wizard-draft-noop|publish-unverified`. **Otwarte:** wpięcie w CI (job z usługą `postgres:16`)
-  — gotowy fragment `ci.yml` w opisie PR.
+  `wizard-draft-noop|publish-unverified`. W CI: job `e2e-real` (informacyjny). **Otwarte:**
+  po serii zielonych przebiegów — check wymagany (zdjęcie `continue-on-error`).
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
@@ -2076,7 +2103,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny).
   Bramka wydajności w CI (#395): kroki „Performance budget (static)” w `build` (JS gzip
   kluczowych tras = layouty + strona, fonty woff2; `scripts/perf-budget-static.mjs`) i
-  „Performance budget (lab CWV)” w `e2e` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,
+  „Performance budget (lab CWV)” w `e2e-perf` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,
   pierwsza wizyta i ze zgodą; `scripts/perf-lab.mjs`, ten sam build i Chromium). Budżety i
   progi w `perf-budgets.json`, opis w `docs/PERFORMANCE_CHECKLIST.md` §10; strażnik kroków
   w `check-ci-workflows.mjs`. INP-proxy w tym samym kroku: tapnięcie „Filtry”, zapis oferty
