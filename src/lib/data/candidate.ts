@@ -834,6 +834,213 @@ export async function getMyApplicationScreeningAnswers(applicationId: string): P
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Szczegół własnego zgłoszenia (P1-05/P1-06 po stronie kandydata)
+ * ------------------------------------------------------------------------- */
+
+/** Kursor historii statusów (`created_at` + UUID, rosnąco — jak w panelu pracodawcy, #604). */
+export interface MyApplicationHistoryCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface MyApplicationHistoryEntry {
+  id: string;
+  toStatus: string;
+  at: string;
+}
+
+export interface MyApplicationHistoryPage {
+  items: MyApplicationHistoryEntry[];
+  nextCursor: MyApplicationHistoryCursor | null;
+}
+
+/** Rozmiar strony historii statusów — ten sam co w szczególe pracodawcy (#604). */
+const MY_APPLICATION_HISTORY_PAGE_SIZE = 50;
+
+export interface MyApplicationDetail {
+  id: string;
+  status: string;
+  jobTitle: string;
+  companyName: string;
+  city: string;
+  /** Slug publicznej oferty — `null`, gdy oferta nie ma już publicznego adresu. */
+  slug: string | null;
+  /** Data wysłania (ISO) albo `null`, gdy nieznana. */
+  submittedAt: string | null;
+  message: string;
+  phone: string;
+  availability: string;
+  /** Rozmowa powiązana z tym zgłoszeniem (członkostwo pod RLS) — `null`, gdy jej nie ma. */
+  conversationId: string | null;
+  screeningAnswers: ScreeningAnswer[];
+  history: MyApplicationHistoryEntry[];
+  historyNextCursor: MyApplicationHistoryCursor | null;
+}
+
+/**
+ * Jawny stan odczytu szczegółu. `not_found` obejmuje brak rekordu, cudze i usunięte zgłoszenie
+ * (bez rozróżnienia — nie ujawniamy istnienia cudzych danych); `error` = awaria odczytu
+ * (ekran: komunikat + ponowienie, nigdy pusty szczegół udający brak danych).
+ */
+export type MyApplicationDetailLoad =
+  | { status: 'ok'; application: MyApplicationDetail; isDemo: boolean }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+/** Wiersze `id, to_status, created_at` (rosnąco, `PAGE_SIZE + 1`) → strona + kursor kolejnej. */
+function pageMyHistoryRows(rows: unknown): MyApplicationHistoryPage {
+  const all = asArr(rows).map((row) => {
+    const r = asRecord(row);
+    return { id: asStr(r['id']), toStatus: asStr(r['to_status']), at: asStr(r['created_at']) };
+  });
+  const items = all.slice(0, MY_APPLICATION_HISTORY_PAGE_SIZE);
+  const last = items[items.length - 1];
+  const nextCursor =
+    all.length > MY_APPLICATION_HISTORY_PAGE_SIZE && last ? { createdAt: last.at, id: last.id } : null;
+  return { items, nextCursor };
+}
+
+/** Szczegół DEMO (bez bazy): zgłoszenia z `demoApplications`, historia z dat na liście. */
+function demoApplicationDetail(locale: Locale, id: string): MyApplicationDetailLoad {
+  const base = demoApplications(locale).find((app) => app.id === id);
+  if (!base) return { status: 'not_found' };
+  const jobs = resolveDemoJobs(locale);
+  const pick = DEMO_APPLICATION_PICKS[Number(id.replace('demo-app-', ''))];
+  const job = pick ? jobs[pick.idx] : undefined;
+  const history: MyApplicationHistoryEntry[] = [{ id: `${id}-h0`, toStatus: 'submitted', at: base.date }];
+  if (base.status !== 'submitted') {
+    history.push({ id: `${id}-h1`, toStatus: base.status, at: new Date(Date.parse(base.date) + 86_400_000).toISOString() });
+  }
+  return {
+    status: 'ok',
+    isDemo: true,
+    application: {
+      id: base.id,
+      status: base.status,
+      jobTitle: base.jobTitle,
+      companyName: base.companyName,
+      city: job?.city ?? '',
+      slug: base.slug,
+      submittedAt: base.date,
+      message: '',
+      phone: '',
+      availability: 'immediate',
+      conversationId: null,
+      screeningAnswers: DEMO_SCREENING_ANSWERS[id] ?? [],
+      history,
+      historyNextCursor: null,
+    },
+  };
+}
+
+/**
+ * Szczegół WŁASNEGO zgłoszenia: dane wysłane do firmy (wiadomość, telefon, dostępność),
+ * odpowiedzi na pytania (snapshot #101), historia statusów (stronicowana jak u pracodawcy, #604)
+ * i powiązana rozmowa. Odczyt pod sesją: RLS `applications_select` i `can_access_application`
+ * wpuszczają kandydata tylko do jego zgłoszeń; `candidate_id = me` w zapytaniu to ten sam zakres
+ * powtórzony jawnie. Notatki pracodawcy z historii (`note`) nie są czytane.
+ */
+export async function getMyApplicationDetail(
+  locale: string,
+  id: string,
+): Promise<MyApplicationDetailLoad> {
+  const resolvedLocale = toLocale(locale);
+  if (!isPortalDataConfigured()) return demoApplicationDetail(resolvedLocale, id);
+  if (!ANSWERS_UUID_RE.test(id)) return { status: 'not_found' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'not_found' };
+
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      const row = await queryOne(tx, 'candidate.application-detail',
+        `SELECT id, job_id, status, submitted_at, message, phone, availability
+           FROM public.applications
+          WHERE id = $1 AND candidate_id = $2 AND deleted_at IS NULL`, [id, me.id]);
+      if (!row) return null;
+
+      const jobsMap = await fetchAppliedJobsForPage(tx, resolvedLocale, [asStr(row['job_id'])]);
+      const historyRows = await queryRows(tx, 'candidate.application-detail-history',
+        `SELECT id, to_status, created_at FROM public.application_status_history
+          WHERE application_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2`,
+        [id, MY_APPLICATION_HISTORY_PAGE_SIZE + 1]);
+      const answerRows = await queryRows(tx, 'candidate.application-detail-answers',
+        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      // conversations_select_member: tylko rozmowy, których kandydat jest członkiem.
+      const conversation = await queryOne(tx, 'candidate.application-detail-conversation',
+        `SELECT id FROM public.conversations
+          WHERE application_id = $1 AND deleted_at IS NULL
+          ORDER BY created_at DESC, id DESC LIMIT 1`, [id]);
+      return { row, job: jobsMap.get(asStr(row['job_id'])), historyRows, answerRows, conversation };
+    });
+    if (!loaded) return { status: 'not_found' };
+
+    const { row, job, historyRows, answerRows, conversation } = loaded;
+    const history = pageMyHistoryRows(historyRows);
+    return {
+      status: 'ok',
+      isDemo: false,
+      application: {
+        id: asStr(row['id']),
+        status: asStr(row['status'], 'submitted'),
+        jobTitle: job?.title ?? '',
+        companyName: job?.companyName ?? '',
+        city: job?.city ?? '',
+        slug: job?.slug || null,
+        submittedAt: asStr(row['submitted_at']) || null,
+        message: asStr(row['message']).trim(),
+        phone: asStr(row['phone']).trim(),
+        availability: asStr(row['availability']),
+        conversationId: conversation ? asStr(conversation['id']) || null : null,
+        screeningAnswers: parseScreeningAnswers(answerRows),
+        history: history.items,
+        historyNextCursor: history.nextCursor,
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'candidate.getMyApplicationDetail' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Kolejna strona historii statusów własnego zgłoszenia („Pokaż więcej"). `applicationId`
+ * z klienta jest niezaufany: najpierw sprawdzamy, że zgłoszenie należy do sesji — cudze albo
+ * usunięte daje pustą stronę bez ujawniania istnienia. Błąd bazy → wyjątek (akcja zamienia go
+ * na jawny stan błędu; wczytane wpisy zostają na ekranie).
+ */
+export async function getMyApplicationHistoryPage(
+  applicationId: string,
+  cursor: MyApplicationHistoryCursor | null = null,
+): Promise<MyApplicationHistoryPage> {
+  const empty: MyApplicationHistoryPage = { items: [], nextCursor: null };
+  if (!isPortalDataConfigured() || !ANSWERS_UUID_RE.test(applicationId)) return empty;
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return empty;
+    return await withPortalTransaction(me, async (tx) => {
+      const owner = await queryOne(tx, 'candidate.application-history-owner',
+        `SELECT 1 FROM public.applications WHERE id = $1 AND candidate_id = $2 AND deleted_at IS NULL`,
+        [applicationId, me.id]);
+      if (!owner) return empty;
+      const rows = await queryRows(tx, 'candidate.application-history-page',
+        `SELECT id, to_status, created_at FROM public.application_status_history
+          WHERE application_id = $1
+            AND ($2::timestamptz IS NULL OR (created_at, id) > ($2::timestamptz, $3::uuid))
+          ORDER BY created_at ASC, id ASC
+          LIMIT $4`,
+        [applicationId, cursor?.createdAt ?? null, cursor?.id ?? null, MY_APPLICATION_HISTORY_PAGE_SIZE + 1]);
+      return pageMyHistoryRows(rows);
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getMyApplicationHistoryPage' });
+    throw error;
+  }
+}
+
 /**
  * Zapisane oferty kandydata przez RPC, które łączy własne `saved_jobs` z aktywnymi,
  * publicznymi ofertami przed sortowaniem. Nie ograniczamy się do najnowszych 100 ofert,

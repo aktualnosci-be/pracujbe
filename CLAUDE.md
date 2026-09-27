@@ -15,8 +15,9 @@ z `main`, z włączonym natywnym `Wait for CI`. Plan, issues i instrukcje są w
 `docs/railway/README.md` oraz `docs/railway/STATUS.md`. `APP_MODE=production`
 ustaw jawnie w Railway; `VERCEL_ENV` nie wybiera trybu aplikacji. Pozostałości
 Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
-Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: migracja 0137, brak
-usług cron, tryb demo za bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
+Blokery startu (kod vs właściciel/infra/prawnik, stan 26.09.2026: produkcja na migracji 0144,
+`main` ma 0145, brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
+bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, pula minut Actions — decyzja właściciela 2026-09-23); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Oszczędzaj minuty: nie wypychaj pustych commitów ani zbędnych przebiegów.
@@ -70,7 +71,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Favicon, ikony PWA i `og.png` (#7) = ten sam znak z konturów DM Sans 800 (`scripts/brand-glyphs.py` → `assets/brand/logo-glyphs.json` → `scripts/generate-icons.mjs`; opis `public/ICONS_README.md`, strażnik `brand-assets.test.ts`).
 
-**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian). Typografię pól paszportu porównuje z prototypem test `email-passport-prototype.test.tsx` (z kontrolą ujemną).
+**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian). Typografię pól paszportu porównuje z prototypem test `email-passport-prototype.test.tsx` (z kontrolą ujemną). Dostępność maili: `EmailLayout` wymaga `title` (= temat, `EmailShell` liczy go tak samo jak `renderEmail`) → `<title>`, `<html lang>` = język odbiorcy z jawnym `dir="ltr"`, preheader ukryty i pominięty w text/plain (`data-skip-in-text`, bez znaków wypełniacza), logo = link z `aria-label` „Pracuj.be” (znak z tekstu, bez obrazka). Test `email-a11y.test.tsx` renderuje każdy typ z `src/emails/wiring.ts` × 4 języki i sprawdza: lang/dir, `<title>` = temat, brak niewypełnionych tokenów, preheader zgodny z `copy.ts` w języku odbiorcy, alt obrazów, nazwę logo, href i czytelną nazwę każdego linku (lista „kliknij tutaj” PL/NL/FR/EN), `role="presentation"` tabel, kontrast każdego tekstu ≥ AA (kolor i tło ze stylów inline, 3:1 dla dużego tekstu) oraz text/plain z tym samym zbiorem linków i nazw linków co HTML; kontrole ujemne dla każdej reguły. Nowe typy w `wiring.ts` wchodzą do testu same.
 
 ---
 
@@ -508,8 +509,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > P3-04 (billing nie połyka błędów DB — INTERNAL vs NOT_FOUND).
 > **P1 NIE-AUTONOMICZNE / duże funkcje (OTWARTE — wymagają Ciebie/produktu/infry/prawnika):**
 > P1-01 (entitlements planów — brak warstwy policy/limitów), P1-02 (dostęp firmy do CV = model
-> grantów + AV, usługa zewn.), P1-03 (pipeline materializacji `matches`), P1-04 (edycja/wznowienie
-> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata),
+> grantów + AV, usługa zewn.), ~~P1-03 (pipeline materializacji `matches`)~~ — zrobione (migracja `0147`, Etap 5), P1-04 (edycja/wznowienie
+> draftu + cykl życia oferty), P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata — strona kandydata zrobiona: szczegół
+> zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana; panel pracodawcy w #684),
 > P1-10 (kanoniczny model miast — dopasowanie nazw i18n do `jobs.city`), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
@@ -650,9 +652,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
-  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486), linki Pomoc/Prywatność
-  w stopce e-maili (#6). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
-  (test `faq-redirect`).
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Linki Pomoc/Prywatność
+  w stopce e-maili (#6) są w `src/emails/_components.tsx` (język odbiorcy). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
 - [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Domyślna nazwa
@@ -661,6 +663,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `internalAdapter.findUserById`, nigdy z URL/formularza) wypełniają `CompanyOnboarding` w
   `/employer/firma` i w layoucie panelu; błąd odczytu → formularz pusty (nie blokuje zakładania
   firmy).
+  Wysyłka e-maili konta bez czekania na harmonogram (bloker startu W1, `docs/LAUNCH_CHECKLIST.md`
+  K10, bez migracji): `registerCandidate`/`registerEmployer`/`registerInvitedEmployer`,
+  `requestPasswordReset` (zawsze — wynik neutralny) i `signIn` z `AUTH_EMAIL_NOT_CONFIRMED`
+  (`sendOnSignIn`) planują `kickAuthEmailQueue()` (`src/lib/auth/email-kick.ts`): po odpowiedzi
+  (`after()` z `next/server`) jedna paczka `processAuthEmailQueue(5)` — ten sam claim z dzierżawą,
+  budżet puli `auth` i klucz idempotencji dostawcy co cron, więc równoległy cron nie wyśle drugiego
+  listu. Awaria planowania/workera nie zmienia wyniku akcji (zlecenie czeka na harmonogram).
+  Wyłącznik `AUTH_EMAIL_IMMEDIATE_SEND=off`. Ponowienia i `email_deliveries` nadal wymagają crona.
+  Test: `auth-email-kick` (kontrole ujemne: limit, walidacja, nieudana rejestracja, złe hasło,
+  udane logowanie, wyłącznik).
   Rozdzielenie zgód (#493, migracja `0108`): rejestracja kandydata/pracodawcy
   i krok 6 onboardingu mają osobne, niezaznaczone pola — akceptacja regulaminu (wymagana),
   potwierdzenie zapoznania się z informacją o prywatności (wymagane, NIE zgoda) i zgoda
@@ -691,6 +703,17 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
+migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
+nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym
+`candidate_id = me` (RLS 0039 wpuszcza też rekrutera firmy — kontrola ujemna w
+`portal-candidate.test.ts`): dane wysłane do firmy (wiadomość, telefon, dostępność), odpowiedzi
+ze snapshotu #101, historia statusów bez notatek firmy (`note`), stronicowana po 50 kursorem
+`created_at` + `id` (`ApplicationHistoryList` z prop `loadMore` →
+`loadMoreMyApplicationHistory`, własność sprawdzana ponownie), link do powiązanej rozmowy,
+wycofanie (`ApplicationActions`). Cudze/usunięte/nieistniejące = 404, awaria = komunikat
+z ponowieniem, demo oznaczone. Testy: unit `candidate-application-detail`,
+`candidate-applications-list`; E2E `candidate-application-detail` (4 języki), `panel-a11y`.
 Metadane ofert (#184, 0113): `get_applied_jobs_display(p_locale, p_job_ids)` filtruje oferty
 bieżącej strony WEWNĄTRZ funkcji (SECURITY DEFINER nie jest inline'owana), więc baza nie liczy
 całej historii; ≤ 100 identyfikatorów, tylko własne aplikacje. Ten sam filtr dla propozycji
@@ -822,14 +845,19 @@ osobach trzecich, dane osobowe, kategorie art. 9/10, kontakty i linki usunięte;
 nagłówkiem dokumentu → bezpieczne zatrzymanie) → PODGLĄD tekstu dla kandydata → po
 potwierdzeniu ponowna redakcja na serwerze i model OpenAI (structured output, tylko zawody/
 umiejętności/języki/certyfikaty/lata) → PROPOZYCJE ze źródłem i niepewnością, domyślnie
-niezaznaczone → zapis wyłącznie zaznaczonych RPC `apply_candidate_cv_proposals` (dopisanie,
-`FOR UPDATE`, limity kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
+niezaznaczone → kandydat może poprawić wartość każdej propozycji (nazwa, poziom języka, lata;
+bez wywołania modelu) — `src/lib/cv-import/approved.ts` = elementy `step2/3/5Schema` kreatora
+(`CANDIDATE_ITEM_LIMITS`), błąd przy polu i fokus na pierwszym błędnym polu → zapis wyłącznie
+zaznaczonych RPC `apply_candidate_cv_proposals` (akcja waliduje ponownie tym samym schematem —
+wartość spoza limitu po edycji = `VALIDATION_FAILED` bez bazy; dopisanie, `FOR UPDATE`, limity
+kreatora, brak zatwierdzenia = `VALIDATION_FAILED`). Pliku, tekstu ani
 propozycji nie zapisujemy; CV nie trafia do firm, wynik nie wpływa na `scoreMatch`. Limit 5/h
 i 10/dobę na konto (fail-closed). Dowód: `rls.sql` sekcja CV487 (kontrola ujemna replace-all);
-unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimalizacji); E2E
-`cv-import.spec` (atrapa). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
+unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimalizacji;
+`cv-import-approved`/`-actions`: edycja za długa = odrzucenie na serwerze, kontrola ujemna
+schematu bez limitu); E2E `cv-import.spec` (atrapa, edycja z błędem pola). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
 `docs/legal-drafts/cv-ai-osoby-trzecie.md` (#485/#486/#488/#61) przed włączeniem, AV i izolacja
-parsera, edycja wartości propozycji.
+parsera.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
@@ -906,8 +934,24 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `published_at` i zgłoszenia bez zmian; zamknięta/wygasła → najpierw „Otwórz ponownie”
   (`JOB_NOT_EDITABLE`). Baza blokuje bezpośredni zapis treści i relacji oferty innej niż szkic
   (strażniki + `set_job_*` tylko dla szkicu). „Zobacz ofertę” dla aktywnej. Dowód: `rls.sql`
-  sekcja RR. **Otwarte:** powiadomienie kandydatów, którzy już aplikowali, o istotnej zmianie
-  warunków (decyzja produktowa).
+  sekcja RR.
+  Powiadomienie o zmianie warunków (migracja `0144`): gdy `update_published_job` zmienia
+  wynagrodzenie (kwoty, okres, waluta), miasto (porównanie przez `search_fold`), typ umowy albo
+  godziny pracy — lista pól w jednym miejscu, `job_material_terms(jobs)` — trigger AFTER UPDATE
+  na `jobs` tworzy powiadomienie in-app. Trigger reaguje WYŁĄCZNIE na zapis z tego RPC (lokalny
+  znacznik `pracujbe.job_terms_notify` = id oferty, ustawiany tuż przed UPDATE i czyszczony po
+  nim; bezpośredni UPDATE service_role/migracji i zmiany statusu nie powiadamiają); ta sama
+  transakcja, odrzucona rewizja nie zostawia powiadomienia. Odbiorcy: kandydaci z AKTYWNĄ
+  aplikacją (submitted/viewed/shortlisted/interview/offer_sent/offer_accepted; bez gości, szkiców
+  i stanów końcowych; preferencja `in_app_enabled` jak zawsze). `system`, `entity_type=
+  'job_terms'`, `data` = rodzaj, slug, nazwy pól (bez kwot). Tytuł
+  `notifications.itemJobTermsChanged` w języku panelu odbiorcy (Invariant #1), link do
+  `/candidate/aplikacje` (oferta wstrzymana/zamknięta/wygasła nie ma publicznej strony). Bez
+  e-maila (bezpieczny wariant). Dowód: `rls.sql` sekcja JT144 (kontrole ujemne: pole spoza listy,
+  brak filtra stanu aplikacji, bramka znacznika, surowe porównanie miasta), unit
+  `job-terms-notification`.
+  **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
+  zmieniło.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
@@ -946,11 +990,10 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   startowe 10 USD/dobę i 100 USD/miesiąc (`ai_budget_limits`, zmiana tylko w bazie). Rejestr
   `ai_usage_ledger` bez treści i identyfikatorów osób/firm. Raport tylko do odczytu
   `/admin/koszty-ai`; czujki `ai_budget_*` w `/api/health/ops`. Strażnik: funkcja `behind_flag`
-  w inwentarzu musi mieć `costBudgeted: true` — import ogłoszeń, asystent treści i import CV
-  (#487, `src/lib/cv-import/cost.ts`). Hook dla tłumaczeń (#514) opisany w
-  `docs/AI_BUDGET.md`. Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
+  w inwentarzu musi mieć `costBudgeted: true` — import ogłoszeń, asystent treści, import CV
+  (#487, `src/lib/cv-import/cost.ts`) i tłumaczenia (#514, `estimateTranslationCost`). Dowód: `rls.sql` sekcja AIB36 (kontrola ujemna), unit `ai-budget`,
   `ai-budget-report`. **Otwarte:** DPA/retencja dostawcy (decyzja właściciela), limity per firma
-  poza limiterem importu, podpięcie tłumaczeń po scaleniu #514.
+  poza limiterem importu.
   Porzucone rezerwacje (#609, migracja `0134`): jeśli proces pada między rezerwacją a
   rozliczeniem, rezerwacja nie może blokować limitu bezterminowo. `/api/maintenance` woła co
   godzinę `ai_budget_release_stale_reservations` (service_role, idempotentne, `FOR UPDATE SKIP
@@ -1051,6 +1094,26 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
   zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
+  Materializacja `matches` (P1-03, migracja `0147`): triggery kolejkują
+  podmiot w `match_recompute_queue` (kind `candidate`/`job`, PK = jeden wiersz, ponowne
+  zgłoszenie podbija `version`): oferta aktywna (jobs + relacje), status firmy, profil
+  kandydata i relacje, konto (rola/usunięcie), blokada firmy (#97), deklaracja wieku (#492).
+  Worker `runMatchRecompute` (`src/lib/matching/materialize.ts`) w `/api/maintenance` po
+  `expire_due_jobs`: `match_recompute_claim` (SKIP LOCKED, dzierżawa 10 min, ≤ 50, po 5 próbach
+  czeka na nowe zgłoszenie; na przebieg ≤ 100 podmiotów) → `match_recompute_inputs` (tylko pary
+  kwalifikujące się, ≤ 500 stron przeciwnych; oferta = `get_job_match_profile`) → `scoreMatch`
+  przez wspólne mapowanie `src/lib/matching/inputs.ts` (to samo co `getMyJobMatch`, bez AI) →
+  `match_recompute_apply` (service_role; każda para ponownie `match_pair_eligible`: profil
+  ukończony i wyszukiwalny #494, 18+ #492, bez blokady firmy #97, oferta active/niewygasła
+  firmy verified; wiersze niekwalifikujące się i rozważone poniżej progu 40 usuwane; kolejka
+  zdejmowana tylko przy niezmienionej wersji). Do przebiegu workera firmom wiersze ukrywa RLS
+  (0100). Backfill w migracji. Odczyt live: data ważności certyfikatu jako tekst (sterownik pg
+  zwracał `Date`, więc wygaśnięcie było pomijane). Dowód: `rls.sql` sekcja MP03 (kontrole
+  ujemne: kwalifikacja bez widoczności/wieku/blokady/verified, naiwny zapis), unit
+  `matches-materialize`, integracja `portal-matches` (PG16: wiersz = wynik live).
+  **Otwarte:** kandydat niewyszukiwalny nie ma wierszy (polecane oferty tylko po opt-in),
+  okresowe przeliczenie przy upływie ważności certyfikatu (dziś tylko przy zmianie danych),
+  prefiltr regionu/kategorii przy dużej liczbie ofert.
   Certyfikaty (#96, 0079): `candidate_certificates.expires_at` zapisywane przez
   `set_candidate_certificates(jsonb)` (krok 5 onboardingu: data „Ważny do” przy każdym certyfikacie,
   oznaczenie „Wygasł”); `scoreMatch(…, { today })` nie liczy certyfikatu z `expires_at` < dziś
@@ -1075,6 +1138,37 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   **Do zrobienia (właściciel):** pobranie oficjalnych paczek CSV (formularz z linkiem e-mail),
   zatwierdzenie `data/esco/esco-v1.2.1.manifest.json`, pełny import; atrybucja w UI i matching
   na ESCO = osobne issues.
+- [~] Tłumaczenia AI — rdzeń (#31, #32, migracja `0145`, `docs/AI_TRANSLATION.md`), tylko
+  pl/nl/fr/en, domyślnie wyłączone (`AI_TRANSLATION_ENABLED`). Kolejka: niezmienne rewizje
+  źródła (kanoniczne pola + SHA-256, ta sama treść = no-op), zadania per język docelowy i wersję
+  pipeline (unikat = deduplikacja), `claim_translation_jobs` (SKIP LOCKED + lease, restart =
+  przejęcie wygasłej dzierżawy), `complete_translation_job` (CAS po lease + kontrola bieżącej
+  rewizji — wynik v1 po v2 = `superseded`), `fail_translation_job` (backoff/jitter/Retry-After),
+  ukrycie/purge encji, korekta ręczna z autorem i wersją (AI jej nie nadpisuje). Wszystko RPC
+  service_role, tabele deny. Adapter `src/lib/translation/`: interfejs dostawcy + OpenAI
+  (`openai-provider.ts` na wspólnym kliencie `src/lib/ai/openai.ts`, `gpt-6-luna`, structured
+  output `strict`, bez narzędzi, `store: false`, dane w `<source_fields>`), walidacja
+  kształtu i niezmienności faktów pole po polu (`facts.ts`: liczby, kwoty, waluty, daty,
+  godziny, e-maile/URL/telefony, jednostki, brutto/netto, okres stawki, kwalifikacje, nazwy
+  własne, negacja) — niepoprawny wynik nigdy nie trafia do bazy; logi tylko kody. Worker
+  `processTranslationBatch` (dostawca poza transakcją). Budżet AI (#36): adapter przez
+  `withAiBudget` (rezerwacja przed API, rozliczenie tokenami, log użycia bez treści); odmowa
+  budżetu → `defer_translation_job` (zadanie wraca po 1 h / 5 min bez zużycia próby). Dowód:
+  `rls.sql` sekcja TR31 z kontrolami ujemnymi TR31-N i TR31-13N; unit `translation-*`.
+  **Do zrobienia:** wpięcie profili (#34), benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
+  Oferty (#33, migracja `0146`, zależy od #514): odroczone triggery na `jobs`/
+  `job_translations`/`job_requirements`/`companies` → przy COMMIT `sync_job_translation_source`:
+  oferta publiczna (active, niewygasła, firma verified, nie demo) = `record_translation_source`
+  z polami w języku oferty (opis, listy, wymagania tekstowe `requirements_mandatory.N`/
+  `_optional.N`), niepubliczna = ukrycie, usunięta = purge. Każda ścieżka zapisu (publish,
+  edycja, pauza/wznowienie, wygaśnięcie, moderacja, status firmy) kolejkuje zatwierdzoną treść;
+  rollback bez śladu, jedna transakcja = jedna rewizja, stawka/miasto bez rewizji (wspólne
+  z `jobs`), limit pól rdzenia = `skipped` bez blokady publikacji. Worker `POST
+  /api/translation/process` (`MAINTENANCE_SECRET`, `src/lib/translation/run.ts`, log użycia AI),
+  bez flagi `skipped`. Wersja pipeline SQL = TS (`translation-job-sync.test`). Dowód: `rls.sql`
+  sekcja TR33 (dwie sesje przez dblink, kontrola ujemna TR33-N); sekcja TR31 na własnych
+  encjach. **Otwarte:** odczyt przekładów w widoku oferty/liście/JobPosting (UI/SEO), UI korekty
+  ręcznej, `protectedTerms` (nazwa firmy), cron (właściciel).
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -1479,11 +1573,14 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
   APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
-  `admin-a11y` (nowe trasy). **Do zatwierdzenia przez właściciela (#40):** okno odwołania
-  6 mies., termin rozpatrzenia 14 dni, retencja 12 mies., zakres publikacji i przekazywania do
-  bazy DSA, treść prawna o procedurze. Harmonogram czyszczenia: `/api/maintenance` woła
-  `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE` (`dry-run`/`apply`, domyślnie
-  wyłączone, liczniki w odpowiedzi; `src/lib/admin/dsa-retention-mode.ts`). Odwołanie
+  `admin-a11y` (nowe trasy). **Zatwierdzone przez właściciela 26.09.2026 (#40):** okno
+  odwołania 6 mies., termin rozpatrzenia 14 dni, retencja 12 mies. (funkcje z 0104, strażnik
+  `dsa-approved-terms` z kontrolą ujemną). **Do ustalenia:** zakres publikacji i przekazywania
+  do bazy DSA, treść prawna o procedurze (prawnik — bez tekstów prawnych w UI). Harmonogram
+  czyszczenia: `/api/maintenance` woła `dsa_retention_run` tylko za flagą `DSA_RETENTION_MODE`
+  (`dry-run`/`apply`, domyślnie wyłączone, liczniki w odpowiedzi;
+  `src/lib/admin/dsa-retention-mode.ts`); na produkcji ustawione `DSA_RETENTION_MODE=dry-run`
+  — działa dopiero, gdy cron woła `/api/maintenance`. Odwołanie
   zgłaszającego od cofnięcia ograniczenia (migracja `0109`): ręczne cofnięcie
   wysyła `reportRestored` w języku zgłaszającego, termin od wysłania, formularz na
   `/zglos-tresc/sprawa` (znacznik treści prawnej), `submit_report_restoration_appeal`,
@@ -1522,6 +1619,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
+  Eksport CSV/JSON (bez migracji): przyciski „Eksport CSV/JSON” (`AuditExportButton`, klucze
+  `admin.auditExport*`) → `POST /api/admin/audit-export?format=&entity=&action=&actor=&from=&to=&id=`
+  — te same filtry i walidacja co lista (wspólny odczyt `readAuditRows` w `src/lib/data/admin.ts`),
+  od najnowszego, najwyżej `AUDIT_EXPORT_LIMIT` = 10 000 wierszy (obcięcie: nagłówek
+  `X-Export-Truncated`, w CSV ostatni wiersz `#truncated,10000`, w JSON `truncated`, komunikat
+  w UI). Rola admina sprawdzana w `exportAuditLogs` (brak sesji/inna rola/demo → 404), `Origin` tej
+  witryny (inaczej 403), `no-store`, `GET` = 405. Kolumny = to, co pokazuje lista (czas w
+  Europe/Brussels z przesunięciem, akcja, obiekt, statusy, uzasadnienie, aktor jako nazwa albo
+  „System”; bez e-maili i id aktorów), komórki przez `csvCell` (neutralizacja `= + - @`) —
+  `src/lib/admin/audit-export.ts`. Każdy eksport w tej samej transakcji zapisuje wpis
+  `audit_log.exported` (aktor = admin; tylko format, liczba wierszy, obcięcie i rodzaj filtrów —
+  bez frazy aktora i treści wpisów); awaria zapisu = brak eksportu. Test: `admin-audit-export`
+  (kontrole ujemne: nie-admin 404, GET 405, obcy Origin 403, formuła w CSV, limit bez obcięcia).
 - [~] Retencja i prawa kandydata (#486, migracja `0105`, `docs/DATA_RETENTION.md`):
   okresy jako dane (`retention_policies`, null = kategoria wyłączona; zmiana tylko
   `admin_set_retention_policy` z audytem, rejestr usunięć ≥ 400 dni). `/api/maintenance` woła
@@ -1621,8 +1731,8 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   i E2E `job-funnel-no-storage` (fixture: bez zgody zero żądań; po zgodzie zero cookies/storage
   i żądanie bez `Cookie`). Wariant zgody lejka rozstrzygnięty (#575: tylko po zgodzie analitycznej).
   Szkice NIEOPUBLIKOWANE: `docs/legal-drafts/ai-act-art22-dpia.md`, `eprivacy-lejek.md`.
-  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie, wpis
-  tłumaczeń (#514) do logu użycia.
+  **Otwarte (decyzja prawnika/właściciela):** klasyfikacja, DPIA tak/nie (tłumaczenia #514 są
+  już w logu użycia i inwentarzu).
 - [x] Cloudflare Turnstile (#46) — logowanie/rejestracja/reset: siteverify w Server Actions
   (`src/lib/turnstile/verify.ts`: akcja, hostname, jednorazowość, timeout 5 s), polityka awarii
   per przepływ (`policy.ts`: login fail-open, reszta fail-closed), widżet `TurnstileWidget`.
@@ -1651,7 +1761,15 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
-  cron kopii/odtworzenia), blokada HTTP w testach, odmiana i aliasy miast w SQL.
+  cron kopii/odtworzenia), odmiana i aliasy miast w SQL.
+  Blokada sieci w testach Vitest (#47): `tests/setup.ts` (setupFiles obu projektów, także
+  `chromium`) instaluje `tests/helpers/network-guard.ts` — `net.Socket#connect` (http/https/tls/
+  undici/`fetch`/`pg`) i `globalThis.fetch` do hosta spoza localhost/127.0.0.0/8/::1 i
+  `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
+  dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
+  po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
+  Chromium z Playwrighta to osobny proces (poza blokadą). Integracja PG (`vitest.integration.config.ts`)
+  bez zmian. Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
   Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
@@ -1918,7 +2036,7 @@ npm install            # instalacja
 npm run dev            # dev server (http://localhost:3000/pl)
 npm run build          # build produkcyjny
 npm run start          # serwer produkcyjny
-npm run lint           # ESLint
+npm run lint           # ESLint: src/, tests/, scripts/ (.eslintrc.json ma "root": true)
 npm run typecheck      # tsc --noEmit
 npm run test           # Vitest (unit)
 npm run test:e2e       # Playwright
@@ -1938,6 +2056,10 @@ npm run db:migrate:production  # migracje na wskazanej bazie (MIGRATION_DATABASE
 - Dostęp do DB: `src/lib/db/portal.ts` + `src/lib/db/sql.ts` (#25); nazwy zapytań/funkcji tylko stałe, wartości w `$n`. Operacje wrażliwe = Server Actions/route handlers.
 - Błędy: rzucaj `AppError` z kodem (`src/lib/errors`); mapuj na komunikat tłumaczony.
 - Nazwy plików: `kebab-case`; komponenty React: `PascalCase`.
+- Lint obejmuje `src/`, `tests/` i `scripts/` (`next lint --dir …`); `.eslintrc.json` ma `"root": true`,
+  więc worktree w `.claude/worktrees/` nie dziedziczy konfiguracji z checkoutu nadrzędnego (konflikt
+  pluginu `@next/next`). Reguł nie wyłączamy globalnie — lokalny `eslint-disable` tylko z komentarzem
+  uzasadnienia (np. `require` w preloadzie CommonJS `tests/e2e-real/support/server-only-hook.cjs`).
 - Każdy nowy przepływ krytyczny = test (unit i/lub e2e).
 
 ---

@@ -114,6 +114,8 @@ const SYSTEM_TITLE_KEY_BY_ENTITY: Record<string, string> = {
 /** Tytuły wg `entity_type` niezależnie od typu powiadomienia (#100: alert wyszukiwania). */
 const TITLE_KEY_BY_ENTITY: Record<string, string> = {
   saved_search: 'itemSavedSearch',
+  // 0144: zmiana istotnych warunków oferty, na którą kandydat aplikował.
+  job_terms: 'itemJobTermsChanged',
 };
 
 export function titleKeyForType(type: string, data?: unknown, entityType = ''): string {
@@ -173,6 +175,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export function resolveHref(entityType: string, role: string, entityId = ''): string {
   const employer = role === 'employer';
   switch (entityType) {
+    case 'job_terms':
+      // 0144: historia zgłoszeń — oferta wstrzymana/zamknięta/wygasła nie ma publicznej strony
+      // (link do /oferty-pracy/{slug} dawałby 404), a zgłoszenie z nową treścią oferty jest tam zawsze.
+      return employer ? '/employer/oferty' : '/candidate/aplikacje';
     case 'conversation': {
       const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
       return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
