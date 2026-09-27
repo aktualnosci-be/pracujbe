@@ -661,6 +661,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   same są kategorią zatrudnienia, więc nadal emitują `employmentType`. Dowód:
   `tests/unit/structured-data.test.ts` (kontrola ujemna: `permanent` + opis część etatu →
   brak `employmentType`, nigdy `FULL_TIME`).
+  `directApply` (#840, bez migracji): portal nie ma pola z zewnętrznym adresem ATS — każda
+  realna, kanoniczna oferta (wywołujący już pomija demo i wersje bez tłumaczenia treści,
+  #297/#301) ma pełny formularz aplikowania na tej samej stronie (zalogowany kandydat i gość
+  bez konta), więc `buildJobPostingJsonLd` emituje `directApply: true` zamiast stałego `false`.
+  Dowód: `tests/unit/structured-data.test.ts` (kontrola ujemna). **Otwarte:** gdy pojawi się
+  oferta bez tego przepływu (np. link zewnętrzny), wartość trzeba wyliczać z danych oferty.
   BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
   `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
   (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
