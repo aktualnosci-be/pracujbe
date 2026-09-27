@@ -57,7 +57,12 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
     ['offer', 'employer', '/employer/aplikacje'],
     ['job', 'candidate', '/candidate/oferty-polecane'],
     ['job', 'employer', '/employer/oferty'],
-    ['company', 'employer', '/employer/firma'],
+    // #843: decyzja o firmie (weryfikacja/odrzucenie/zawieszenie) niesie identyfikator firmy,
+    // której dotyczy — inaczej właściciel kilku firm z inną AKTYWNĄ firmą w cookie widziałby
+    // jej dane zamiast tej z decyzji (strona `/employer/firma` czyta `?firma=`, patrz #843).
+    ['company', 'employer', `/employer/firma?firma=${CONVERSATION}`],
+    // Kandydat nie ma panelu firmy — bez identyfikatora w URL (nie ma gdzie go użyć).
+    ['company', 'candidate', '/candidate'],
     ['conversation', 'candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
     ['conversation', 'employer', `/employer/wiadomosci?c=${CONVERSATION}`],
     ['unknown', 'candidate', '/candidate'],
@@ -70,8 +75,16 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
     'nie wkleja niezweryfikowanego id do URL: %j',
     (entityId) => {
       expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
+      // #843: to samo dla firmy — zła/brakująca wartość nie trafia do zapytania.
+      expect(resolveHref('company', 'employer', entityId)).toBe('/employer/firma');
     },
   );
+
+  // KONTROLA UJEMNA (#843): bez poprawki `resolveHref('company', 'employer', id)` zawsze
+  // zwracało `/employer/firma` bez identyfikatora — ten test byłby czerwony.
+  it('KONTROLA UJEMNA: link firmy niesie identyfikator, nie jest stałym adresem', () => {
+    expect(resolveHref('company', 'employer', CONVERSATION)).not.toBe('/employer/firma');
+  });
 });
 
 const items = [

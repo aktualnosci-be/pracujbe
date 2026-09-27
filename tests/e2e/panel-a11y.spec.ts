@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -55,6 +55,7 @@ const ROUTES = [
   'employer/firma',
   'employer/firma/nowa',
   'employer/kandydaci',
+  'employer/kandydaci/demo-c-1',
   'employer/oferty',
   'employer/oferty/nowa',
   'employer/oferty/12345/edycja',

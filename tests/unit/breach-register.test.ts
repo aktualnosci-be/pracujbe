@@ -235,6 +235,17 @@ describe('#490 odbiorcy zawiadomienia i eksport', () => {
   it('CSV: ochrona przed formułami, cudzysłowy, bez client_key', () => {
     expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
     expect(csvCell('a,b')).toBe('"a,b"');
+    // #876: LF przed formułą (OWASP CSV Injection) — bez ochrony arkusz otwiera to jako formułę.
+    expect(csvCell('\n=HYPERLINK(https://example.invalid,test)')).toBe(
+      `"'\n=HYPERLINK(https://example.invalid,test)"`,
+    );
+    // #876: pełnoszerokie warianty operatorów formuł (＝ ＋ － ＠).
+    expect(csvCell('＝1+1')).toBe(`'＝1+1`);
+    expect(csvCell('＋1')).toBe(`'＋1`);
+    expect(csvCell('－1')).toBe(`'－1`);
+    expect(csvCell('＠SUM(1,2)')).toBe(`"'＠SUM(1,2)"`);
+    // Kontrola ujemna: zwykły tekst bez wiodącego znaku formuły zostaje bez zmian.
+    expect(csvCell('zwykły tekst =nie na początku')).toBe('zwykły tekst =nie na początku');
     const csv = breachExportCsv({
       incident: { reference: 'NAR-2026-ABC', client_key: KEY, title: 'T', data_categories: ['contact', 'cv_files'] },
       events: [{ version: 1, eventType: 'created', createdAt: 'x', actor: null, changes: {}, note: '' }],
