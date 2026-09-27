@@ -2915,7 +2915,13 @@
     "offer": "Vacature",
     "untitled": "Vacature zonder titel",
     "denied": "De vacaturetrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
-    "loadError": "De vacaturetrechter kon niet worden geladen. Probeer het opnieuw."
+    "loadError": "De vacaturetrechter kon niet worden geladen. Probeer het opnieuw.",
+    "csvFrom": "Van",
+    "csvTo": "Tot",
+    "csvStatus": "Status",
+    "csvTotal": "Totaal",
+    "exportCsv": "CSV downloaden",
+    "exportCsvLabel": "Vacaturetrechter downloaden als CSV-bestand (periode {from} – {to})"
   },
   "savedSearches": {
     "hint": "Sla deze filters op en we laten je op de site en per e-mail weten wanneer er nieuwe vacatures zijn (hoogstens één keer per dag).",

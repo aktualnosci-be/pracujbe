@@ -2915,7 +2915,13 @@
     "offer": "Offre",
     "untitled": "Offre sans titre",
     "denied": "L’entonnoir des offres est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
-    "loadError": "Impossible de charger l’entonnoir des offres. Veuillez réessayer."
+    "loadError": "Impossible de charger l’entonnoir des offres. Veuillez réessayer.",
+    "csvFrom": "Du",
+    "csvTo": "Au",
+    "csvStatus": "Statut",
+    "csvTotal": "Total",
+    "exportCsv": "Télécharger le CSV",
+    "exportCsvLabel": "Télécharger l’entonnoir des offres en fichier CSV (période du {from} au {to})"
   },
   "savedSearches": {
     "hint": "Enregistrez ces filtres et nous vous préviendrons sur le site et par e-mail des nouvelles offres (au maximum une fois par jour).",
