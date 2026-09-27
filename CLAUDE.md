@@ -2393,6 +2393,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
   `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
   dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
+  Rozpoznanie bezpośredniego uruchomienia CLI (#925): `backup-s3.mjs` porównuje
+  `import.meta.url` z `pathToFileURL(process.argv[1]).href` (nie z ręcznie zbudowanym
+  `file://${process.argv[1]}`) — ścieżka repozytorium/wdrożenia ze spacją (albo innym znakiem
+  kodowanym w URL) już nie powodowała cichego pominięcia `main()` i fałszywego kodu 0
+  (`backup.sh` raportowałby wtedy sukces R2 bez żadnej wysyłki). Dowód:
+  `backup-r2-space-path.test` (prawdziwy podproces z repozytorium skopiowanym do katalogu ze
+  spacją; kontrola ujemna: ta sama ścieżka bez spacji ma ten sam kontrakt).
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
