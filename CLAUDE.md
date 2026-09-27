@@ -71,7 +71,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 
 **Logo:** komponent `src/components/brand/Logo.tsx` — czarne „pracuj” i białe „.be” na czerwonym, zaokrąglonym kafelku. Favicon, ikony PWA i `og.png` (#7) = ten sam znak z konturów DM Sans 800 (`scripts/brand-glyphs.py` → `assets/brand/logo-glyphs.json` → `scripts/generate-icons.mjs`; opis `public/ICONS_README.md`, strażnik `brand-assets.test.ts`).
 
-**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian). Typografię pól paszportu porównuje z prototypem test `email-passport-prototype.test.tsx` (z kontrolą ujemną).
+**E-maile (#7):** layout `src/emails/_components.tsx` = kalka `prototype/materials/newsletter.html` (tło #f4f4f4, biała kolumna 600 px, logo jak w nagłówku, H1 36 px, akapity 16 px/1,7 #666, przycisk z promieniem 11 px, sekcje „paszportu” z linią #e5e5e5, stopka #f8f8f8). Kolory wyłącznie z `emailPalette` (test `email-palette.test.tsx` odrzuca inne, z kontrolą ujemną). Odstępstwa klienta pocztowego: style inline + tabele, bez webfontów (`'DM Sans', Arial, sans-serif`), #777 → #767676, tekst stopki #6b6b6b (AA na #f8f8f8); bez nadtytułu „PRACA W BELGII” i czerwonej drugiej linii nagłówka (treść maili bez zmian). Typografię pól paszportu porównuje z prototypem test `email-passport-prototype.test.tsx` (z kontrolą ujemną). Dostępność maili: `EmailLayout` wymaga `title` (= temat, `EmailShell` liczy go tak samo jak `renderEmail`) → `<title>`, `<html lang>` = język odbiorcy z jawnym `dir="ltr"`, preheader ukryty i pominięty w text/plain (`data-skip-in-text`, bez znaków wypełniacza), logo = link z `aria-label` „Pracuj.be” (znak z tekstu, bez obrazka). Test `email-a11y.test.tsx` renderuje każdy typ z `src/emails/wiring.ts` × 4 języki i sprawdza: lang/dir, `<title>` = temat, brak niewypełnionych tokenów, preheader zgodny z `copy.ts` w języku odbiorcy, alt obrazów, nazwę logo, href i czytelną nazwę każdego linku (lista „kliknij tutaj” PL/NL/FR/EN), `role="presentation"` tabel, kontrast każdego tekstu ≥ AA (kolor i tło ze stylów inline, 3:1 dla dużego tekstu) oraz text/plain z tym samym zbiorem linków i nazw linków co HTML; kontrole ujemne dla każdej reguły. Nowe typy w `wiring.ts` wchodzą do testu same.
 
 ---
 
@@ -93,7 +93,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 - **Bezpieczeństwo danych:** **Row Level Security** na każdej tabeli. Operacje wrażliwe = Server Actions/Route Handlers.
 - **Formularze:** React Hook Form + Zod resolver. Server Actions do zapisu.
 - **E-mail:** **Resend** + **React Email** (szablony w `src/emails`), wysyłka przez kolejkę (`email_deliveries`).
-- **Błędy/monitoring:** webhook Discorda `ERROR_WEBHOOK_URL` (#571, `src/lib/error-webhook`, tylko serwer; Sentry usunięte). Centralny system błędów `src/lib/errors`, `captureError` w `src/lib/error-report.ts`.
+- **Błędy/monitoring:** webhook Discorda `ERROR_WEBHOOK_URL` (#571, `src/lib/error-webhook`, tylko serwer; Sentry usunięte; błędy przeglądarki przez `POST /api/client-error`). Centralny system błędów `src/lib/errors`, `captureError` w `src/lib/error-report.ts`.
 - **Testy:** **Vitest** (unit/integration) + **Playwright** (e2e). Patrz `tests/`.
 - **Hosting:** **Railway**, jedna produkcja z `main`; natywne `Wait for CI` blokuje wdrożenie do zielonego CI. Migracje SQL są wersjonowane w repozytorium.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
@@ -652,8 +652,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
-  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Linki Pomoc/Prywatność
-  w stopce e-maili (#6) są w `src/emails/_components.tsx` (język odbiorcy). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
+  `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
+  `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
+  `footer.faq` strony, `data-email-help`) i link „Prywatność” → `/{locale}/polityka-prywatnosci`
+  (`data-email-privacy`; zostaje — decyzja właściciela 26.09.2026), oba w języku odbiorcy. Test
+  `email-brand-layout` (kontrole ujemne: język nadawcy, brak któregoś linku). Dawna atrapa `/faq` usunięta — middleware daje 308 na `/{locale}/pomoc`
   (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
@@ -703,6 +706,17 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Filtr etapu (#809, bez migracji): nawigacja „Wszystkie / W toku / Rozmowa / Propozycja /
+Zakończone” nad listą (`CandidateApplicationsFilter` — zwykłe linki z `aria-current`, działa
+bez JS), stan w URL `?etap=aktywne|rozmowa|propozycja|zakonczone` (nieznana wartość = wszystkie).
+Grupy statusów w jednym miejscu `src/lib/candidate-application-filter.ts` (rozłączne, razem =
+każdy status poza `draft`; test porównuje z enumem z migracji 0001). Warunek
+`status = ANY($5)` w tym samym zapytaniu co kursor, PRZED limitem — starsze zgłoszenie etapu jest
+na pierwszej stronie; „Pokaż więcej” przekazuje ten sam filtr (`loadMoreApplications`, Zod enum —
+wartość spoza listy = błąd, nie „wszystkie”); zmiana etapu = nowa strona serwera, kursor od
+początku. Pusty etap = osobny stan z linkiem „Pokaż wszystkie zgłoszenia”. Testy: unit
+`candidate-applications-filter`, `-list`, `-action`, `-pagination`; integracja `portal-candidate`
+(PG16, kontrola ujemna bez filtra); E2E `candidate-applications-pagination` (4 języki, 320 px).
 Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
 migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
 nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym
@@ -731,6 +745,18 @@ Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno 
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
+Polecane oferty — wyjaśnienie i stan zgłoszenia (bez migracji, dane z materializacji P1-03):
+karta z wynikiem na `/candidate/oferty-polecane` pokazuje krótką etykietę (`match.summaryShort`,
+liczona z procentu przez `summaryKeyForScore` — to samo źródło co `scoreMatch`, więc starszy
+wiersz z domyślnym `summary_key` nie przeczy procentowi), „Wymagania obowiązkowe: X z Y” tylko
+przy spójnych liczbach (Y > 0, X ≤ Y) i do dwóch atutów WYŁĄCZNIE ze znanych kluczy
+`match.criteria` (`src/lib/matching/explanation.ts`; nieznana wartość z bazy nie trafia do UI).
+Oferta z własnym zgłoszeniem (także w fallbacku najnowszych) ma „Już aplikowałeś(-aś)” i link
+„Szczegóły zgłoszenia” nad nakładką tytułu → `/candidate/aplikacje/[id]` (jedno zapytanie tylko
+o pokazane oferty, jawny `candidate_id = me` — RLS 0039 wpuszcza też rekrutera). Testy: unit
+`match-explanation` (strażnik: lista kluczy = atuty wpisywane w `score.ts`, kontrole ujemne),
+`candidate-recommended-read`, integracja `portal-candidate` (PG16), E2E
+`candidate-recommended-explanation` (4 języki, axe, kliknięcie linku nad nakładką).
 
 Blokada firmy przez kandydata (#97, migracja `0078`): tabela `candidate_company_blocks`
 (RPC-only `set_company_block`, odczyt `get_my_company_blocks`/`get_job_company_block`, firma nie
@@ -952,6 +978,23 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `job-terms-notification`.
   **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
   zmieniło.
+- [x] Kopiuj jako szkic (migracja `0148`): przycisk „Kopiuj jako szkic” przy
+  każdej ofercie listy `/employer/oferty` (dowolny status, recruiter+; `DuplicateJobButton`,
+  klucz UUID operacji w `useRef` — podwójne kliknięcie/ponowienie po błędzie sieci = ten sam
+  szkic) → akcja `duplicateJobAsDraft` (oferta aktywnej firmy, limiter `job-draft`) → jedno RPC
+  `duplicate_job_as_draft(job, client_key)` → kreator nowego szkicu (`/employer/oferty/<id>/edycja`;
+  demo = pusty kreator). Kopiowane: kolumny `jobs` z listy dozwolonych `save_job_draft` +
+  `default_locale`/`is_demo`, tłumaczenie w języku oferty (bez `meta_*` i innych języków),
+  wymagania, umiejętności, języki, certyfikaty, pytania screeningowe — BEZ decyzji
+  `screening_question_reviews` (trigger 0103 zgłasza nowy przegląd dla nowej oferty). Nie
+  kopiuje: statusu, slugu, `published_at`, `expires_at`, zgłoszeń, liczników, lejka, blokady
+  moderacyjnej. Idempotencja: blokada doradcza + `job_duplications` (unikat konto + klucz,
+  RPC-only; ten sam klucz dla innej oferty = `VALIDATION_FAILED`). Cudza firma = `NOT_FOUND`,
+  member = `PERMISSION_DENIED`, firma zawieszona (status albo blokada) = `COMPANY_SUSPENDED`
+  (`errors.companySuspended`), oferta z decyzją moderacyjną = `MODERATION_LOCKED`
+  (`dashboard.duplicateJobModerationLocked`); audyt `job.duplicated`. Dowód: `rls.sql` sekcja
+  JD216 (kontrole ujemne: bramka recruiter+, wpis klucza), unit `job-duplicate-draft`, E2E
+  `employer-job-duplicate` (demo, 4 języki, axe 320 px).
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
@@ -1182,8 +1225,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
   w akcjach + refine w Zod; detektor `src/lib/privacy/sensitive-data.ts`). Podpowiedź pod polem
-  wiadomości. Test: `sensitive-data`, `apply-sensitive-id`. **Otwarte:** ocena prawna, treść
-  poradnika i formularza CV (#495), import CV (#487), wiadomości w rozmowach.
+  wiadomości. Test: `sensitive-data`, `apply-sensitive-id`. Wiadomości w rozmowach: ten sam
+  detektor w `sendMessage` (przed trybem demo i limitem → `VALIDATION_FAILED` + `field: 'body'`,
+  `reason: 'sensitiveId'`, bez RPC) i w `MessageComposer` (błąd przy polu
+  `messages.composerSensitiveId`, treść zostaje, podpowiedź `composerSensitiveIdHint`
+  w `aria-describedby`); bez migracji (RPC `send_message` woła tylko serwer). Test:
+  `messages-sensitive-id` (kontrola ujemna). Nazwy plików załączników w rozmowach
+  (#495): `checkAttachmentFile` (`src/lib/validation/message-attachment.ts`, przeglądarka i akcja
+  `uploadMessageAttachment`/`storeMessageAttachment`) odrzuca nazwę z NISS/BIS, PESEL, eID albo
+  „paszport nr…” (`attachmentNameForScan`: bez rozszerzenia, `_`/`+` → spacja) → `reason:
+  'sensitiveId'`, komunikat `messages.attachmentSensitiveId` przy pliku, nic nie trafia do
+  bucketu. Test: `message-attachment-name` (kontrola ujemna bez normalizacji separatorów),
+  `message-attachments-{actions,service,ui}`. **Otwarte:** ocena prawna, treść
+  poradnika i formularza CV (#495), import CV (#487).
   Pytania screeningowe (#101, migracja `0093`): recruiter+ ustala w kroku 7 kreatora do 10 pytań
   (`yes_no`/`single_choice`/`date`/`short_text`, „wymagane”, kolejność, treść w języku oferty +
   opcjonalne tłumaczenia) — zapis w tej samej transakcji co krok (`save_job_draft` →
@@ -1768,8 +1822,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
   dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
   po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
-  Chromium z Playwrighta to osobny proces (poza blokadą). Integracja PG (`vitest.integration.config.ts`)
-  bez zmian. Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
+  Chromium z Playwrighta to osobny proces (poza blokadą). Błąd wskazuje test (`plik > opis > nazwa`
+  ze stanu `expect`, pole `NetworkBlockedError.test`) i host. Integracja PG
+  (`vitest.integration.config.ts` → `tests/integration/setup.ts`) ma tę samą blokadę: PG z Dockera
+  na 127.0.0.1 (proces `docker` poza blokadą), host jawnego `INTEGRATION_PG_ADMIN_URL` dopuszczony.
+  Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
+  Punkt „blokada HTTP w testach” zamknięty (#765 + etykieta testu i integracja).
   Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
@@ -1783,6 +1841,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
   obserwacja 48 h) + smoke `node scripts/railway/prod-smoke.mjs` (poza CI; bramka hasła z env,
   4 języki + health, kod ≠ 0 przy błędzie; test `railway-prod-smoke` z atrapą serwera).
+  Smoke sprawdza też nagłówki bezpieczeństwa każdej strony (CSP `frame-ancestors`/`object-src`/
+  `base-uri`, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy`; test porównuje z nagłówkami
+  `next.config.mjs` w obu trybach), opcjonalnie tryb `PROD_SMOKE_EXPECT_MODE=production|demo`
+  (HSTS ≥ 1 rok i brak noindex / noindex) i wdrożony SHA `PROD_SMOKE_EXPECT_SHA` z `version`
+  w `/api/health` (w produkcji z `HEALTH_CHECK_SECRET` w `x-health-token`, bez logowania sekretu).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -1790,8 +1853,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   allowed_mentions:{parse:[]}}`, z końcówką `/slack` → `{text}`; https i host `discord.com`/
   `discordapp.com`, inny adres = brak wysyłki). `src/lib/error-webhook/` (url, message, send)
   rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
-  `captureError` (`src/lib/error-report.ts`, izomorficzny, w przeglądarce no-op) przekazuje
-  tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
+  `captureError` (`src/lib/error-report.ts`, izomorficzny) przekazuje tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
   query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
   ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
   awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
@@ -1801,9 +1863,20 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w `installConsoleRedaction()` (`register()`, poza `next dev`). Dowód: `privacy-redaction`,
   `error-webhook` (oba formaty, brak wysyłki bez zmiennej, payload bez PII z kontrolą ujemną,
   limit, deduplikacja, 429, timeout, strażnik bundla klienta). Opis: `docs/TELEMETRY_PRIVACY.md`.
+  Błędy przeglądarki: `POST /api/client-error` (`src/app/api/client-error/route.ts`) — tylko ta
+  sama witryna (`Origin`/`Sec-Fetch-Site`, inaczej 403), body ≤ 4 KB, wyłącznie pola `code`
+  (spoza `ErrorCodes` → `INTERNAL`), `route` (`safeRoute`) i `release`; każde inne pole (np.
+  `message`/`stack`) = 400 bez wysyłki (`src/lib/client-error/payload.ts`); limiter w pamięci
+  10/min po HMAC adresu (jak lejek ofert); bez `ERROR_WEBHOOK_URL` = 204 bez wysyłki. Klient
+  (`src/lib/client-error/reporter.ts`, `ClientErrorReporter` w `[locale]/layout`, jawnie w
+  `global-error`): nasłuch `error` (tylko skrypty własnej witryny) i `unhandledrejection` + granice
+  błędów przez `captureError`; wysyła tylko kod, ścieżkę i wydanie (`credentials: 'omit'`,
+  deduplikacja w karcie, ≤ 10 na załadowanie), pomija błędy z `digest` (zgłoszone już przez
+  `onRequestError`). Bez zgody cookies (diagnostyka bez identyfikatorów). Wiadomość „błąd w
+  przeglądarce”, osobne okno deduplikacji. Dowód: `client-error` (kontrole ujemne: payload z PII,
+  obcy Origin, strażnik grafu importów klienta), `client-error-capture`.
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
-  logi Railway (retencja/dostęp), rejestr (#485). Błędy w przeglądarce nie są zgłaszane
-  (brak endpointu klienta).
+  logi Railway (retencja/dostęp), rejestr (#485).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
@@ -1953,9 +2026,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Znak jak `Logo.tsx`, tokeny `--pp-*`, osadzony DM Sans, pomiar tekstu tablicą szerokości
   (`src/lib/campaign-banner/`). Opis: `docs/design/people-passport/BANNER-EXPORT.md`. Testy:
   `campaign-banner*.test.ts` (Chromium: pomiar przeglądarki ≤ serwera), E2E `campaign-banner`.
-  Link do baneru w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy linkuje
-  do `GET /api/employer/jobs/[id]/banner` (endpoint dopuszcza admina, `/employer/oferty/[id]/baner`
-  jest zablokowana layoutem panelu pracodawcy dla konta bez firmy) — otwiera się w nowej karcie.
+  Baner w panelu admina: `/admin/firmy/[id]` przy każdej AKTYWNEJ ofercie firmy ma link „Baner
+  kampanii” (`adminBannerHref`, `src/lib/admin/campaign-banner-link.ts`; nazwa dostępna z tytułem
+  oferty) do generatora `/admin/oferty/[id]/baner?firma=<id>` — `/employer/oferty/[id]/baner` jest
+  zablokowana layoutem panelu pracodawcy dla konta bez firmy. Obie strony renderuje wspólny
+  `CampaignBannerView` (`src/components/employer/`), podgląd i pobranie idą przez ten sam
+  endpoint (admina dopuszcza `get_managed_campaign_job`, 0102). Strona admina: noindex,
+  `requireAdmin()` przed odczytem (nie-admin → 404 niezależnie od layoutu), powrót do firmy
+  (parametr `firma` tylko jako bezpieczny segment), demo = „niedostępny”. Bez migracji. Testy:
+  unit `admin-campaign-banner` (kontrola ujemna: pracodawca/bez sesji → 404 bez odczytu; mutacja
+  bez `requireAdmin` = czerwony), E2E `admin-campaign-banner` (4 języki, link tylko przy aktywnej,
+  axe), trasa w `admin-a11y`.
   Eksport grafik poza CI (#378): `scripts/lib/launch-chromium.mjs` — `PLAYWRIGHT_CHROMIUM_PATH`
   (zła ścieżka = czytelny błąd), potem przeglądarka z `playwright install` (CI bez zmian), potem
   najnowsza rewizja w `PLAYWRIGHT_BROWSERS_PATH`. Story PNG porównywane pikselami
