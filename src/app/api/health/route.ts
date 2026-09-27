@@ -43,6 +43,17 @@ const pingCache = createTtlSingleFlightCache<boolean>({
 });
 
 /**
+ * Tylko dla testów: `pingCache` żyje w module (jeden proces, #600/#645) i normalnie kończy
+ * dzielony wpis dopiero, gdy realne zapytanie się rozstrzygnie. Test symulujący zawieszoną bazę
+ * (mock `pool.query`, który NIGDY się nie rozstrzyga) inaczej trwale zatruwałby stan modułu na
+ * resztę pliku testowego — kolejne, odrębne testy w tym samym pliku dzieliłyby ten sam, wiecznie
+ * trwający wpis `inFlight` i healthcheck fałszywie zwracałby 503 po realnym odzyskaniu bazy.
+ */
+export function resetHealthPingCacheForTests(): void {
+  pingCache.clear();
+}
+
+/**
  * `true` = baza odpowiedziała; `false` = błąd. BEZ timeoutu wewnątrz — to jest właśnie
  * obietnica, którą `pingCache` trzyma jako `inFlight` (patrz `pingDatabase` niżej): musi żyć
  * dokładnie tak długo, jak realne `pool.query`, inaczej single-flight przestaje chronić pulę
