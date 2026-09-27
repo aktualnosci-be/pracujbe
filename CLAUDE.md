@@ -764,6 +764,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   cały krok. Krok 6 z „Zakończ”: dane kroku zapisane jednym upsertem, `finish_onboarding` tylko
   sprawdza kompletność, receipt best-effort. Dowód: `rls.sql` sekcja OB142 (wstrzyknięty błąd
   drugiej części + kontrola ujemna starej ścieżki).
+  Edycja w trakcie zapisu (#813, bez migracji): pola kreatora zostawały edytowalne podczas
+  oczekiwania na `saveOnboardingStep`, więc zmiana wpisana po kliknięciu „Dalej”/„Zapisz i wyjdź”/
+  „Zakończ” była tracona — odpowiedź starszego snapshotu bezwarunkowo oznaczała krok jako
+  zapisany i pozwalała nawigować dalej. `persistStep` (`OnboardingWizard.tsx`) porównuje teraz
+  dane wysłane z bieżącymi wartościami formularza po każdej udanej odpowiedzi; różnica = nowsza
+  edycja w trakcie zapisu → automatyczny ponowny zapis (limit 5 prób) przed zmianą kroku/wyjściem,
+  zamiast fałszywego „Zapisano”. Ten sam wzorzec co naprawa #829 dla `JobWizard` pracodawcy.
+  Dowód: `onboarding-wizard-save-revision.test.tsx` (4 testy: zapis nowszej wartości przy „Zapisz
+  i wyjdź”/„Dalej”, kontrola ujemna bez zmian = jeden zapis, błąd ponownego zapisu bez wyjścia).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
