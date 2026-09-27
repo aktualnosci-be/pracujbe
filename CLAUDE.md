@@ -2102,6 +2102,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `scripts/lib/stable-screenshot.mjs` (fonty + dwie ramki ze stałym układem, najwyżej 3 próby
   tylko tego błędu, wpis na stderr); testy z Chromium w projekcie Vitest `chromium`
   (`CHROMIUM_TEST_FILES`, jeden plik naraz), strażnik `stable-screenshot.test.ts`.
+  Flaki E2E przy `failOnFlakyTests` (09.2026, bez skip i bez retry): speci biorą `AxeBuilder`
+  z `tests/e2e/fixtures/axe.ts` — przed `analyze()` czeka na niepusty `<title>` (Next strumieniuje
+  metadane osobno od treści; axe po nawigacji klienckiej zgłaszał `document-title`), tam też
+  `expectNoindex` (dwa `meta[name="robots"]` naraz po nawigacji klienckiej). Serwer E2E
+  z `--keepAliveTimeout 120000` (`ECONNRESET` na keep-alive agenta `request`). Strażnik
+  `e2e-axe-ready.test.ts` (import wprost z `@axe-core/playwright` = czerwony, kontrola ujemna;
+  lista przejściowa speców z otwartych PR-ów #586/#918 tylko maleje).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
