@@ -612,6 +612,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
+  Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
+  (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
+  (`f.locations.join(',')` + `splitParam`/`value.split(',')` nie rozróżniały separatora listy
+  od przecinka wewnątrz jednej nazwy) — zaznaczenie takiej jednej opcji gubiło ofertę, dla
+  której się pojawiła. `parseLocationsParam`/`serializeLocations` (`src/components/public/job-filters.ts`)
+  escapują przecinek/backslash wewnątrz każdej nazwy backslashem przed złączeniem; jedno
+  źródło dla JS-owego sidebara/sheetu, noscriptowego formularza (`FilterSheet.tsx`), usuwania
+  chipa (`withoutValue` w stronie listy) i zapisanych wyszukiwań (`sidebarFiltersToParams`).
+  Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
+  jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
+  ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -661,6 +672,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   same są kategorią zatrudnienia, więc nadal emitują `employmentType`. Dowód:
   `tests/unit/structured-data.test.ts` (kontrola ujemna: `permanent` + opis część etatu →
   brak `employmentType`, nigdy `FULL_TIME`).
+  `directApply` (#840, bez migracji): portal nie ma pola z zewnętrznym adresem ATS — każda
+  realna, kanoniczna oferta (wywołujący już pomija demo i wersje bez tłumaczenia treści,
+  #297/#301) ma pełny formularz aplikowania na tej samej stronie (zalogowany kandydat i gość
+  bez konta), więc `buildJobPostingJsonLd` emituje `directApply: true` zamiast stałego `false`.
+  Dowód: `tests/unit/structured-data.test.ts` (kontrola ujemna). **Otwarte:** gdy pojawi się
+  oferta bez tego przepływu (np. link zewnętrzny), wartość trzeba wyliczać z danych oferty.
   BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
   `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
   (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
@@ -682,6 +699,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
   rozszerzania CSP. Dowód: `rls.sql` sekcja CL141 (member/recruiter bez dostępu, http:// i adres
   nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
+  Zatwierdzanie przez admina (migracja `0156`): `website`/`logo_url` =
+  wartości ZATWIERDZONE (jedyne publiczne — RPC 0114/0140 bez zmian). Formularz woła RPC
+  `submit_company_links` (owner/admin): nowy adres → propozycja `website_pending`/
+  `logo_url_pending` ze stanem `links_review_status='pending'` (publicznie dalej stare adresy,
+  formularz pokazuje oba), samo usunięcie adresu → od razu (`applied`), propozycja = stan
+  publiczny → wycofanie (`unchanged`). Strażnik `guard_company_links` blokuje bezpośredni
+  zapis tych kolumn przez klienta. Admin: filtr `/admin/firmy?status=links` (kolejka) i sekcja
+  „Strona WWW i logo” w `/admin/firmy/[id]` (`CompanyLinksReviewActions` →
+  `admin_decide_company_links`: CAS po `links_pending_at` → `STALE_STATE`, odrzucenie
+  z uzasadnieniem ≤ 1000 widocznym dla firmy, audyt `company.links_submitted`/`links_reviewed`,
+  powiadomienie in-app właścicieli `system` + `data.kind='company_links'`). Dowód: `rls.sql`
+  sekcja CLR156 (kontrole ujemne: bezpośredni UPDATE, member, obca firma, owner zatwierdzający
+  sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
+  `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
+  opublikowane przed 0156 zostają bez przeglądu.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -708,6 +740,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z aktywnych ofert. Serwer fixture E2E ma profile firm zweryfikowanych i jedną firmę bez ofert
   (`src/lib/company-fixture.ts`). Dowód: unit `company-profile-seo` (kontrole ujemne), E2E
   `company-profile` (linki, JSON-LD, noindex, 404 niezweryfikowanej, axe 320/1280 px w 4 językach).
+  Meta description z opisu firmy (#647, bez migracji): `generateMetadata()` obcina realny
+  `company.description` do 160 znaków (ten sam `truncate` co szczegół oferty) zamiast ogólnego
+  klucza `companyProfile.metaDescription` z samą nazwą dla każdej firmy; pusty/białe znaki opisu
+  = fallback na ten klucz. Dotyczy też `og:description`/`twitter.description`. Dowód: unit
+  `company-profile-seo` (kontrola ujemna: ogólny klucz nie trafia do metadanych przy niepustym opisie).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść
@@ -721,6 +758,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z CAS i audytem). Obie strony indeksowalne (canonical, hreflang, sitemap), stopka „Pytania
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
+  Bez JavaScriptu (#817): `<form>` ma `method="post"` (obronnie — natywna submisja trafiłaby do
+  body żądania, nie do adresu URL) i przycisk wysyłki startuje jako `disabled`, odblokowany
+  dopiero po zamontowaniu komponentu — bez JS zostaje trwale zablokowany, więc ani klik, ani
+  Enter w polu nie wysyłają treści wiadomości/imienia/e-maila w query URL (historia przeglądarki,
+  logi serwera); `<noscript>` informuje o wymogu JavaScriptu. Dowód: E2E `contact-form`
+  (kontekst `javaScriptEnabled: false`, kontrola ujemna: formularz bez `method="post"`).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
   `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
   `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
@@ -730,7 +773,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
-- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Domyślna nazwa
+- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Wylogowanie po awarii inicjalizacji runtime auth (#902, bez migracji): `sessionCookieNames()` liczy nazwy cookies sesji WYŁĄCZNIE ze statycznej konfiguracji `createAuthServer` (`getCookies` z `better-auth/cookies`, `advanced.useSecureCookies: true`), bez odczytu `auth.$context` — `signOut` czyści cookie tej przeglądarki także wtedy, gdy `getAuthRuntime()` odrzuci PRZED przypisaniem `auth` (przejściowa awaria puli/bazy), nie tylko gdy sam `auth.api.signOut()` zawiedzie. Dowód: unit `auth-password-reset` (kontrola ujemna: bez gałęzi `else { await clearSessionCookies(); }` test czerwony). Domyślna nazwa
   firmy w formularzu po nieudanym bootstrapie (#365, `src/lib/auth/signup-company-name.ts`): metadane
   rejestracji (`raw_user_meta_data.company_name`) czytane pod WŁASNYM `identity.id` (Better Auth
   `internalAdapter.findUserById`, nigdy z URL/formularza) wypełniają `CompanyOnboarding` w
@@ -770,6 +813,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   cały krok. Krok 6 z „Zakończ”: dane kroku zapisane jednym upsertem, `finish_onboarding` tylko
   sprawdza kompletność, receipt best-effort. Dowód: `rls.sql` sekcja OB142 (wstrzyknięty błąd
   drugiej części + kontrola ujemna starej ścieżki).
+  Edycja w trakcie zapisu (#813, bez migracji): pola kreatora zostawały edytowalne podczas
+  oczekiwania na `saveOnboardingStep`, więc zmiana wpisana po kliknięciu „Dalej”/„Zapisz i wyjdź”/
+  „Zakończ” była tracona — odpowiedź starszego snapshotu bezwarunkowo oznaczała krok jako
+  zapisany i pozwalała nawigować dalej. `persistStep` (`OnboardingWizard.tsx`) porównuje teraz
+  dane wysłane z bieżącymi wartościami formularza po każdej udanej odpowiedzi; różnica = nowsza
+  edycja w trakcie zapisu → automatyczny ponowny zapis (limit 5 prób) przed zmianą kroku/wyjściem,
+  zamiast fałszywego „Zapisano”. Ten sam wzorzec co naprawa #829 dla `JobWizard` pracodawcy.
+  Dowód: `onboarding-wizard-save-revision.test.tsx` (4 testy: zapis nowszej wartości przy „Zapisz
+  i wyjdź”/„Dalej”, kontrola ujemna bez zmian = jeden zapis, błąd ponownego zapisu bez wyjścia).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
 
 Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilnym kursorem
@@ -1234,6 +1286,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   pole z e-mailem/telefonem czyszczone, identyfikator → odmowa `JOB_IMPORT_SENSITIVE_DATA`.
   Zrzutu nie redagujemy lokalnie (brak OCR). Test: `ai-import-minimize`. **Otwarte (#500):**
   ocena prawna (art. 6/14, role), decyzja o imporcie obrazu.
+  Sprzątanie przekierowań (#827): przy statusie 3xx `safeFetchListing` od razu zamyka
+  odpowiedź i jej połączenie (`res.destroy()`, `res.on('error', …)` gasi błąd zbędnego już
+  strumienia) zamiast bezwarunkowo opróżniać ciało (`res.resume()`) — źródło mogło strumieniować
+  dowolnie długie/nigdy niekończące się ciało 3xx już po przejściu importera do kolejnego adresu
+  (dotyczy też błędnego/zablokowanego celu przekierowania i przekroczenia liczby hopów, bo
+  zamknięcie następuje zaraz po odczytaniu nagłówków, przed dalszą walidacją). Dowód: unit
+  `ai-import-safe-fetch` (serwer testowy z niekończącym się ciałem 302, kontrola ujemna:
+  test czerwony na starym `res.resume()`).
 - [x] Asystent redagowania treści oferty (#37, część pracodawcy; za flagą `AI_JOB_ASSIST_ENABLED`,
   domyślnie wyłączony; `docs/AI_JOB_ASSIST.md`): panel na krokach 5–6 kreatora
   (`JobAssistPanel`) → akcja `suggestJobText` (recruiter+ aktywnej firmy, limit per firma 20/h
@@ -1261,6 +1321,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   gubić po odmontowaniu panelu; Escape nadal zamyka całe menu i wraca fokusem na trigger (bez
   zmiany). Bez migracji, bez nowych tekstów. Dowód: `tests/unit/application-status-menu.test.tsx`
   (kontrola ujemna: Escape w kroku potwierdzenia zamyka menu i nie używa nowej ścieżki fokusu).
+  Historia zgłoszenia nie znika po awarii kolejnej strony (#770): `getEmployerApplicationHistoryPage`
+  zwracał błąd zapytania jako pustą, „gotową” stronę (`{items:[],nextCursor:null}`) — server action
+  zgłaszał `ready`, a `ApplicationHistoryList` usuwał kursor i „Pokaż więcej”, jakby historia się
+  skończyła, bez komunikatu i bez możliwości ponowienia. Loader ma teraz jawny wynik
+  `{status:'ok', page}` / `{status:'error'}` (`ApplicationHistoryPageLoad`); pusta strona zostaje
+  tylko dla legalnych przypadków (zły identyfikator, cudza/usunięta aplikacja, koniec historii) —
+  awaria zapytania propaguje `error` do akcji i UI (istniejący komunikat + „Spróbuj ponownie” już
+  to obsługiwały, brakowało tylko sygnału z loadera). Bez migracji, bez nowych tekstów. Dowód:
+  `tests/unit/employer-application-history.test.ts` (kontrola ujemna regresji #770).
 - [x] Stronicowanie kursorem i szczegół kandydata (audyt P1-05/P1-06, migracja `0152`): `/employer/oferty` (created_at, id), `/employer/aplikacje` (submitted_at, id) i
   `/employer/kandydaci` (wynik, kandydat) zamiast OFFSET/top 5 — kursor w adresie w obu
   kierunkach (`?po=` starsze/dalsze, `?przed=` nowsze), zły token = pierwsza strona
@@ -1446,6 +1515,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i ponowienie tym samym kluczem (#360); `UNAUTHENTICATED` (link logowania) odróżniony od
   `PERMISSION_DENIED` (konto nie-kandydata), własne komunikaty `RATE_LIMITED`/`JOB_NOT_ACTIVE`.
   Dowód: `rls.sql` B3b/B3c, J7d–J7f.
+  Edycja formularza po utraconej odpowiedzi (#926): ponowienie z INNYMI danymi niż ostatnio
+  wysłane (kandydat poprawił telefon/wiadomość/dostępność/odpowiedzi po błędzie sieci, którego
+  pierwszy zapis mógł się już udać) dostaje NOWY klucz idempotencji zamiast ślepo ponawiać stary —
+  `ApplyModal` trzyma migawkę ostatnio wysłanego payloadu (`submittedPayloadRef`) obok klucza.
+  Trafienie na istniejącą aplikację z INNYM kluczem niż edytowana próba pokazuje osobny komunikat
+  `apply.alreadyAppliedEdited` (edytowane dane NIE zostały zapisane) zamiast ogólnego
+  `alreadyApplied`, więc UI nigdy nie przedstawia zmodyfikowanego payloadu jako potwierdzonego
+  zapisu. Ponowienie bez edycji zachowuje ten sam klucz i zwykły komunikat (bez zmian, kontrola
+  ujemna w teście). Bez migracji — RPC `apply_to_job` (0071/0093) już rozróżniał klucze, brakowało
+  tylko odróżnienia payloadu po stronie klienta. Test: `apply-modal-network` (z kontrolą ujemną).
   Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
@@ -1783,6 +1862,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
   `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
   `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
+  Gołe domeny bez schematu (#716): redakcja URL-i w cytacie obejmuje też domeny bez `http(s)://`,
+  `www.` ani ścieżki (np. „firma.be”, poddomena, z portem) — ograniczone do wiarygodnej listy
+  TLD, żeby nie niszczyć zwykłych skrótów/inicjałów („sp. z o.o.”, „np.”, „itd.”). Dowód:
+  `email-message-excerpt` (kanarki gołych domen + kontrola ujemna na zwykłych skrótach).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
@@ -2238,6 +2321,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `next.config.mjs` w obu trybach), opcjonalnie tryb `PROD_SMOKE_EXPECT_MODE=production|demo`
   (HSTS ≥ 1 rok i brak noindex / noindex) i wdrożony SHA `PROD_SMOKE_EXPECT_SHA` z `version`
   w `/api/health` (w produkcji z `HEALTH_CHECK_SECRET` w `x-health-token`, bez logowania sekretu).
+  Partie sitemap ofert (#689): statyczna lista sprawdzeń zna tylko `/sitemap/0.xml` (strony
+  statyczne) — smoke odczytuje `/robots.txt` i dopisuje sprawdzenie dla KAŻDEJ partii ofert
+  (`/sitemap/1.xml`, `2.xml`, …) tam wskazanej (`parseRobotsSitemapShardPaths`), więc awaria
+  generowania katalogu ofert (zapytanie, paginacja, tłumaczenia) nie umyka już wynikowi
+  „wszystkie sprawdzenia zgodne” mimo zielonego `id=0`. Katalog bez partii ofert = bez zmian.
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -2247,6 +2335,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
   `captureError` (`src/lib/error-report.ts`, izomorficzny) przekazuje tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
   query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
+  segment-UUID w trasie wysyłanej NA ZEWNĄTRZ (`safeRoute`, `src/lib/error-webhook/message.ts`)
+  jest zawsze szablonem `[id]` (np. `/candidate/aplikacje/[id]`) — inaczej niż ogólna redakcja
+  ścieżek (`redactPathSegment`), gdzie UUID zostaje jako identyfikator korelacyjny w logach
+  wewnętrznych; bez tego rozróżnienia raport z prywatnej strony szczegółu aplikacji
+  (`POST /api/client-error`) niósł do Discorda realny UUID rekordu kandydata/pracodawcy (#776,
+  naprawione — `UUID_RE` eksportowane z `src/lib/privacy/redact.ts`, dowód `error-webhook`
+  z kontrolą ujemną);
   ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
   awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
   Logi serwera — wspólne reguły redakcji

@@ -38,7 +38,7 @@ beforeEach(() => {
   });
 });
 
-describe('getEmployerApplicationHistoryPage (#604)', () => {
+describe('getEmployerApplicationHistoryPage (#604, #770)', () => {
   it('pierwsza strona ma 50 wpisów i kursor; druga niesie resztę bez kursora', async () => {
     fakeDb.rows('employer.application-history-owner', [{ x: 1 }]);
     const rows = Array.from({ length: 51 }, (_, i) => historyRow(i));
@@ -46,34 +46,55 @@ describe('getEmployerApplicationHistoryPage (#604)', () => {
       values[1] === null ? rows : rows.slice(50),
     );
 
-    const page1 = await getEmployerApplicationHistoryPage(APP_ID);
-    expect(page1.items).toHaveLength(50);
-    expect(page1.items[0]).toEqual({ id: historyRow(0).id, toStatus: 'viewed', at: historyRow(0).created_at });
-    expect(page1.nextCursor).toEqual({ createdAt: historyRow(49).created_at, id: historyRow(49).id });
+    const result1 = await getEmployerApplicationHistoryPage(APP_ID);
+    if (result1.status !== 'ok') throw new Error('oczekiwano status ok');
+    expect(result1.page.items).toHaveLength(50);
+    expect(result1.page.items[0]).toEqual({ id: historyRow(0).id, toStatus: 'viewed', at: historyRow(0).created_at });
+    expect(result1.page.nextCursor).toEqual({ createdAt: historyRow(49).created_at, id: historyRow(49).id });
 
-    const page2 = await getEmployerApplicationHistoryPage(APP_ID, page1.nextCursor);
-    expect(page2.items).toHaveLength(1);
-    expect(page2.items[0]?.id).toBe(historyRow(50).id);
-    expect(page2.nextCursor).toBeNull();
+    const result2 = await getEmployerApplicationHistoryPage(APP_ID, result1.page.nextCursor);
+    if (result2.status !== 'ok') throw new Error('oczekiwano status ok');
+    expect(result2.page.items).toHaveLength(1);
+    expect(result2.page.items[0]?.id).toBe(historyRow(50).id);
+    expect(result2.page.nextCursor).toBeNull();
 
     const calls = fakeDb.callsTo('employer.application-history-page');
     expect(calls[0]?.values).toEqual([APP_ID, null, null, 51]);
     expect(calls[1]?.values).toEqual([APP_ID, historyRow(49).created_at, historyRow(49).id, 51]);
   });
 
-  it('cudza/usunięta aplikacja (poza aktywną firmą) → pusta strona, historia nieodczytana', async () => {
+  it('cudza/usunięta aplikacja (poza aktywną firmą) → pusta strona ok, historia nieodczytana', async () => {
     fakeDb.rows('employer.application-history-owner', []);
-    expect(await getEmployerApplicationHistoryPage(APP_ID)).toEqual({ items: [], nextCursor: null });
+    expect(await getEmployerApplicationHistoryPage(APP_ID)).toEqual({
+      status: 'ok',
+      page: { items: [], nextCursor: null },
+    });
     expect(fakeDb.callsTo('employer.application-history-page')).toHaveLength(0);
   });
 
-  it('zły identyfikator aplikacji → pusta strona bez zapytań do bazy', async () => {
-    expect(await getEmployerApplicationHistoryPage('nie-uuid')).toEqual({ items: [], nextCursor: null });
+  it('zły identyfikator aplikacji → pusta strona ok bez zapytań do bazy', async () => {
+    expect(await getEmployerApplicationHistoryPage('nie-uuid')).toEqual({
+      status: 'ok',
+      page: { items: [], nextCursor: null },
+    });
     expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('#770: awaria zapytania o kolejną stronę → status błędu, NIGDY pusta gotowa strona', async () => {
+    fakeDb.rows('employer.application-history-owner', [{ x: 1 }]);
+    fakeDb.rows('employer.application-history-page', () => {
+      throw new Error('boom — awaria bazy podczas pobrania strony');
+    });
+
+    const result = await getEmployerApplicationHistoryPage(APP_ID);
+    expect(result).toEqual({ status: 'error' });
+    // Kontrola ujemna regresji #770: przed naprawą loader zwracał tu `{ items: [], nextCursor: null }`
+    // (pustą, „gotową" stronę) — dokładnie ten kształt, którego UI nie odróżniało od końca historii.
+    expect(result).not.toEqual({ status: 'ok', page: { items: [], nextCursor: null } });
   });
 });
 
-describe('server action loadMoreApplicationHistory (#604)', () => {
+describe('server action loadMoreApplicationHistory (#604, #770)', () => {
   it('odrzuca zły identyfikator aplikacji i zniekształcony kursor przed odczytem', async () => {
     expect(
       await loadMoreApplicationHistory('nie-uuid', { createdAt: '2026-09-01T00:00:00Z', id: APP_ID }),
@@ -93,5 +114,18 @@ describe('server action loadMoreApplicationHistory (#604)', () => {
       id: APP_ID,
     });
     expect(result).toEqual({ status: 'ready', page: { items: [], nextCursor: null } });
+  });
+
+  it('#770: awaria zapytania o kolejną stronę → akcja zwraca status błędu (ponowialny), nie pustą stronę', async () => {
+    fakeDb.rows('employer.application-history-owner', [{ x: 1 }]);
+    fakeDb.rows('employer.application-history-page', () => {
+      throw new Error('boom — awaria bazy podczas pobrania strony');
+    });
+
+    const result = await loadMoreApplicationHistory(APP_ID, {
+      createdAt: '2026-09-01T00:00:00Z',
+      id: APP_ID,
+    });
+    expect(result).toEqual({ status: 'error' });
   });
 });
