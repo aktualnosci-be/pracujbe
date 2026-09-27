@@ -19,6 +19,7 @@ import {
   FIELD,
   FIELD_LABEL,
   ICON_BOX,
+  INLINE_LINK,
   PANEL,
   ROW,
   ROW_META,
@@ -27,6 +28,8 @@ import {
   TAG,
 } from '@/components/admin/admin-styles';
 import { cn } from '@/lib/utils';
+import { Link } from '@/i18n/navigation';
+import { USER_ROLE_LABEL as ROLE_LABEL, USER_ROLE_TONE as ROLE_TONE, userInitials as initials } from '@/components/admin/user-role';
 import {
   Table,
   TableBody,
@@ -42,32 +45,10 @@ import {
  * Lista kont (tylko odczyt): nazwa, e-mail, rola, data utworzenia (Europe/Brussels, #421).
  * Wyszukiwanie po imieniu/nazwisku/e-mailu, filtr roli i stronicowanie kursorem (#418),
  * parametry w URL (`?q=&role=&cursor=`). Odczyt service-rolem po
- * potwierdzeniu roli admina w layoucie. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
+ * potwierdzeniu roli admina w layoucie. Nazwa konta = link do szczegółu `/admin/uzytkownicy/[id]`. NOINDEX + `force-dynamic` (dziedziczone z layoutu).
  */
 
 export const dynamic = 'force-dynamic';
-
-/** Etykieta roli (klucz i18n w namespace `admin`); brak w mapie → surowa wartość. */
-const ROLE_LABEL: Record<string, string> = {
-  candidate: 'roleCandidate',
-  employer: 'roleEmployer',
-  admin: 'roleAdmin',
-  moderator: 'roleModerator',
-};
-
-/** Ton wizualny roli (kolory tokenami; tekst na tincie → warianty `-text`, WCAG AA — #316). */
-const ROLE_TONE: Record<string, string> = {
-  candidate: 'bg-accent/10 text-accent-dark',
-  employer: 'bg-primary/10 text-primary-dark',
-  admin: 'bg-warning/10 text-warning-text',
-  moderator: 'bg-success/10 text-success-text',
-};
-
-/** Inicjały z nazwy (maks. 2 znaki). */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
-}
 
 export async function generateMetadata({
   params,
@@ -189,9 +170,12 @@ export default async function AdminUsersPage({
                             <span className={cn(ICON_BOX, 'size-9')} aria-hidden="true">
                               {initials(user.name || t('nameFallback'))}
                             </span>
-                            <span className="break-words font-semibold">
+                            <Link
+                              href={`${BASE_PATH}/${encodeURIComponent(user.id)}`}
+                              className={cn(INLINE_LINK, 'break-words')}
+                            >
                               {user.name || t('nameFallback')}
-                            </span>
+                            </Link>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -219,7 +203,14 @@ export default async function AdminUsersPage({
                       {initials(user.name || t('nameFallback'))}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className={ROW_TITLE}>{user.name || t('nameFallback')}</p>
+                      <p className={ROW_TITLE}>
+                        <Link
+                          href={`${BASE_PATH}/${encodeURIComponent(user.id)}`}
+                          className={cn(INLINE_LINK, 'break-words')}
+                        >
+                          {user.name || t('nameFallback')}
+                        </Link>
+                      </p>
                       {user.email ? (
                         <p className={cn(ROW_META, 'break-all')}>{user.email}</p>
                       ) : null}

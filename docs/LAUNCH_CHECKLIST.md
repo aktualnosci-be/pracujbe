@@ -20,7 +20,7 @@ płatności (#51). Powiązane: [`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER
 
 | Obszar | Stan |
 |---|---|
-| Baza | migracje zastosowane do `0144` (usługa `db-migrator`); `main` ma już `0145` (do zastosowania) |
+| Baza | migracje zastosowane do `0148` (usługa `db-migrator`, stan 27.09.2026); nowsze migracje z `main` — §4 |
 | Tryb | `mode: "demo"` — `APP_MODE=production` **nieustawione** (decyzja właściciela) |
 | Bramka | `SITE_ACCESS_PASSWORD` aktywna: strony = 503 z formularzem hasła, `robots.txt` = `Disallow: /` |
 | `/api/health` | 200 `ok`; `databaseReachable`, `auth`, `authMail`, `rateLimit`, `turnstile`, `fileBucket`, `errorWebhook`, `emailProviderReady` (EmailLabs), `queueSecret`, `maintenanceSecret`, `cronSecretsSeparate` = `true` |
@@ -67,7 +67,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K5 | ~~P2~~ | **Zrobione:** stopka każdego e-maila (`src/emails/_components.tsx`) linkuje `/{locale}/pomoc` i `/{locale}/polityka-prywatnosci` w języku odbiorcy | treść polityki = W5 |
 | K6 | P2 | Wersja polityki z cookie w receipcie zgody | zrobione w #631 (migracja `0142`): receipt niesie wersję z cookie, jeśli jest opublikowana w `consent_versions`; nazewnictwo — pkt w §3 |
 | K7 | ~~P2~~ | **Zrobione (#633, migracja `0143`):** domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | |
-| K8 | P2 | `npm run test:e2e:real` poza CI (gotowy fragment `ci.yml` — issues #351, #66) | decyzja o minutach CI |
+| K8 | P2 | `npm run test:e2e:real` w CI — job `e2e-real` (usługa `postgres:16`), na start informacyjny (`continue-on-error`) | po serii zielonych przebiegów na `main`: check wymagany (repo publiczne — minuty darmowe, decyzja 27.09.2026) |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
 | K10 | ~~P0~~ | **Zrobione:** e-maile konta (potwierdzenie adresu, reset hasła, nowy link przy logowaniu niepotwierdzonego konta) wychodzą zaraz po akcji — jedna paczka workera `auth.email_outbox` po odpowiedzi (`after()`, `src/lib/auth/email-kick.ts`), ten sam claim z dzierżawą, budżet i klucz idempotencji co cron. Wyłącznik: `AUTH_EMAIL_IMMEDIATE_SEND=off` | ponowienia i `email_deliveries` nadal wymagają W1; test `auth-email-kick` (kontrole ujemne) |
 
@@ -106,8 +106,12 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 
 ## 4. Baza danych
 
-- [x] PostgreSQL Railway, migracje do `0144` (`db-migrator`, `MIGRATION_MODE=status` po `apply`).
-- [ ] `0145` (kolejka tłumaczeń AI, #514 — funkcja za flagą) zastosowana po wdrożeniu `main`.
+- [x] PostgreSQL Railway, migracje do `0148` (`db-migrator`, `MIGRATION_MODE=status` po `apply`;
+      stan 27.09.2026). Od `0145`: kolejka tłumaczeń AI (#514, funkcja za flagą), synchronizacja
+      tłumaczeń ofert (`0146`, #33), kolejka przeliczania `matches` (`0147`, P1-03 — worker w
+      `/api/maintenance`, więc wymaga W2), kopia oferty jako szkic (`0148`).
+- [ ] Każda nowa migracja z `main` zastosowana po wdrożeniu — dopisz ją tutaj jako `[ ]` do czasu
+      `apply`, a po `apply` przesuń numer wyżej i w §0 (strażnik `launch-checklist-migrations.test.ts`).
 - [ ] Loginy runtime po `verify` ([`railway/LOGINY_POSTGRESQL_ONE_OFF.md`](./railway/LOGINY_POSTGRESQL_ONE_OFF.md)).
 - [ ] Brak danych demonstracyjnych (seed nigdy nieuruchomiony na produkcji):
       ```sql
