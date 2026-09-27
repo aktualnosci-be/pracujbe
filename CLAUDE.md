@@ -951,6 +951,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
   w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
   teraz zgody w teście.
+  Eksport CSV lejka (bez migracji): „Pobierz CSV” w sekcji lejka `/employer/statystyki` →
+  `GET /api/employer/job-funnel?dni=7|30|90&locale=` — te same dane co strona (`getJobFunnel`
+  pod sesją/RLS, recruiter+ aktywnej firmy wg `get_company_job_funnel`), kolumny od/do, oferta,
+  status (etykieta `status.*`), cztery liczniki + wiersz sumy, nagłówki w języku panelu
+  (`jobFunnel.csv*`), liczby surowe, formuły w tytułach neutralizowane (`csvCell`), BOM + CRLF,
+  plik `job-funnel-<od>_<do>.csv` (`src/lib/job-funnel/csv.ts`). Demo = 404 i brak przycisku,
+  bez sesji 401, `member`/bez firmy 403, awaria 500 bez treści, `private, no-store`. Test
+  `job-funnel-csv` (kontrola ujemna formuły), `job-funnel-stats` (przycisk tylko z adresem).
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
   Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
   w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają

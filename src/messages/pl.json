@@ -2878,7 +2878,13 @@
     "offer": "Oferta",
     "untitled": "Oferta bez tytułu",
     "denied": "Lejek ofert widzą właściciel, administrator i rekruterzy firmy.",
-    "loadError": "Nie udało się wczytać lejka ofert. Spróbuj ponownie."
+    "loadError": "Nie udało się wczytać lejka ofert. Spróbuj ponownie.",
+    "csvFrom": "Od",
+    "csvTo": "Do",
+    "csvStatus": "Status",
+    "csvTotal": "Razem",
+    "exportCsv": "Pobierz CSV",
+    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})"
   },
   "savedSearches": {
     "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",
