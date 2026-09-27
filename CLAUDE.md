@@ -1033,8 +1033,16 @@ Bez limitu 100 ofert na przebieg (migracja `0138`): worker bierze nowe oferty z
 snapshot); remis `published_at` rozstrzyga `id` w `get_public_jobs` (0136, #594), więc strony
 są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najwyżej raz
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
-kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
-na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
+kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101).
+Bez górnej granicy 10 100 ofert (migracja `0158`): `saved_search_matching_jobs`
+stronicuje kursorem (`published_at`, `id`) po 1000 (`saved_search_keyset_page` →
+`saved_search_jobs_after`, tylko service_role) zamiast offsetu `get_public_jobs` (clamp 10 000),
+nadal w jednym zapytaniu (jeden snapshot); `p_max_pages` = strony kursora, domyślnie bez limitu.
+Filtry = blok FROM … WHERE skopiowany 1:1 z najnowszej definicji `get_public_jobs` (kontrakt listy
+ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontrolą ujemną). Worker
+bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
+SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
+za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
@@ -1526,18 +1534,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   bez flagi `skipped`. Wersja pipeline SQL = TS (`translation-job-sync.test`). Dowód: `rls.sql`
   sekcja TR33 (dwie sesje przez dblink, kontrola ujemna TR33-N); sekcja TR31 na własnych
   encjach. Cron: Cloudflare Worker co 10 min (`infra/cloudflare-cron`, `/api/translation/process`).
-  Odczyt na stronie oferty (migracja `0219` — numer tymczasowy): RPC
+  Odczyt na stronie oferty (migracja `0159`): RPC
   `get_public_job_machine_translation` (anon; tylko oferta publiczna, bieżąca rewizja bez
-  `is_stale`, język bez własnego tłumaczenia/wymagań, tylko pola wyświetlane) →
+  `is_stale`, język bez własnego tłumaczenia/wymagań, strona pokazuje treść `default_locale`
+  albo `jobs.title` — ten sam warunek co karty 0160, tylko pola wyświetlane) →
   `readMachineTranslation` w `getJobBySlug` (za flagą `AI_TRANSLATION_ENABLED`, awaria =
   oryginał + kod obszaru w logu) → `applyJobMachineTranslation`
   (`src/lib/job-machine-translation.ts`: nakładka tylko przy pełnej zgodności list, inaczej
   oryginał — nigdy mieszanka języków) → oznaczenie `job.machineTranslationNotice`/
   `manualTranslationNotice` z linkiem `job.translationOriginalLink` do oryginału. SEO bez zmian
-  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM219 (kontrola
-  ujemna TM219-N), unit `job-machine-translation`.
-  Karty listy (migracja `0226` — numer tymczasowy, zależy od 0219): `get_public_jobs_machine_titles(ids[],
-  locale)` (anon, SECURITY DEFINER; ≤ 100 id, warunki jak 0219 + karta pokazuje treść
+  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM159 (kontrole
+  ujemne TM159-N, TM159-7N), unit `job-machine-translation`.
+  Karty listy (migracja `0160`, zależy od 0159): `get_public_jobs_machine_titles(ids[],
+  locale)` (anon, SECURITY DEFINER; ≤ 100 id, warunki jak 0159 + karta pokazuje treść
   `default_locale`, z której powstała rewizja; tylko `title` i `highlights.N`) → JEDNO zapytanie
   na stronę w `withListMachineTranslations` (`src/lib/jobs.ts`, za flagą, w tym samym renderze
   serwera — ISR bez zmian; awaria = oryginał + `jobs.readListMachineTranslations`) →
@@ -1546,7 +1555,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `/oferty-pracy`, landingi kategorii/miasta, profil firmy; sitemap, liczniki, facety i „Podobne
   oferty” bez przekładu. Znacznik w wierszu firmy `JobCard`: `jobs.machineTranslatedBadge`/
   `jobs.translatedBadge`. SEO bez zmian (JSON-LD i adresy kart nie zależą od przekładu). Dowód:
-  `rls.sql` sekcja TM226 (kontrola ujemna TM226-N, limit 100 id, oferta wstrzymana/wygasła/firma
+  `rls.sql` sekcja TM160 (kontrola ujemna TM160-N, limit 100 id, oferta wstrzymana/wygasła/firma
   zawieszona, tekst człowieka), unit `job-list-machine-translation` (flaga wyłączona = brak
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty

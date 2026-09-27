@@ -4,7 +4,7 @@ import { applyJobMachineTranslation } from '@/lib/job-machine-translation';
 import { getJobBySlug, type JobDetail } from '@/lib/jobs';
 
 /**
- * #33 (0219): przekład oferty na publicznej stronie w języku widza, z fallbackiem do oryginału.
+ * #33 (0159): przekład oferty na publicznej stronie w języku widza, z fallbackiem do oryginału.
  * Nakładka tylko przy pełnej zgodności z treścią strony; za flagą; awaria = oryginał.
  */
 
@@ -134,6 +134,20 @@ describe('getJobBySlug — przekład na język strony (#33)', () => {
     const job = await getJobBySlug('magazijnmedewerker', 'en');
     expect(adapters.machine).toHaveBeenCalledWith(adapters.pool, 'job-1', 'en');
     expect(job).toMatchObject({ title: 'Warehouse worker', machineTranslation: { sourceLocale: 'nl', origin: 'ai' } });
+  });
+
+  it('strona pokazuje tekst fr (brak tłumaczenia w default_locale) → przekład rewizji nl nie jest nakładany', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    vi.stubEnv('AI_TRANSLATION_ENABLED', 'true');
+    adapters.detail.mockResolvedValue({ ...NL_ROW, title: 'Cariste', description: 'Travail dès 8:00.' });
+    adapters.translations.mockResolvedValue([
+      { job_id: 'job-1', locale: 'fr', title: 'Cariste', description: 'Travail dès 8:00.' },
+    ]);
+    // Baza (0159, TM159-7) nie zwraca takiego wiersza; gdyby zwróciła, nakładka i tak odmawia.
+    adapters.machine.mockResolvedValue({ source_locale: 'nl', origin: 'ai', fields: EN_FIELDS });
+    const job = await getJobBySlug('magazijnmedewerker', 'en');
+    expect(job).toMatchObject({ title: 'Cariste', contentLocale: 'fr' });
+    expect(job).not.toHaveProperty('machineTranslation');
   });
 
   it('strona w języku oryginału → bez odczytu przekładu', async () => {

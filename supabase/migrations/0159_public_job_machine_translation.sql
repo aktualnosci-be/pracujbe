@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0219_public_job_machine_translation.sql — #33: odczyt przekładu oferty na publicznej
--- stronie w języku widza (numer TYMCZASOWY — ostateczny nada integrator).
+-- 0159_public_job_machine_translation.sql — #33: odczyt przekładu oferty na publicznej
+-- stronie w języku widza.
 --
 -- Zależy od 0145 (kolejka, translation_documents) i 0146 (synchronizacja ofert).
 --
@@ -15,6 +15,12 @@
 --   * tylko gdy rewizja jest w języku oferty (`default_locale`) i język docelowy jest inny,
 --   * tylko gdy oferta nie ma w tym języku własnego tłumaczenia ani wymagań (tekst człowieka
 --     ma pierwszeństwo przed przekładem),
+--   * tylko gdy strona pokazuje tę treść, z której powstała rewizja: `get_public_job` przy
+--     braku tłumaczenia w języku strony bierze tłumaczenie w `default_locale`, a gdy go nie ma
+--     — dowolne inne (np. `en`), choć rewizja powstaje z `default_locale` (albo `jobs.title`,
+--     gdy tłumaczeń nie ma wcale, 0146). Wymagamy więc tłumaczenia w `default_locale` albo
+--     braku tłumaczeń — inaczej przekład nie odpowiadałby wyświetlanemu oryginałowi (ten sam
+--     warunek co karty listy, 0226),
 --   * zwraca wyłącznie pola wyświetlane na stronie (lista kluczy niżej) — bez meta, autora
 --     korekty, wersji pipeline ani identyfikatorów kolejki.
 --
@@ -59,6 +65,9 @@ language sql stable security definer set search_path = public, pg_temp as $$
                       where jt.job_id = j.id and jt.locale = p_locale)
      and not exists (select 1 from public.job_requirements q
                       where q.job_id = j.id and q.locale = p_locale)
+     and (exists (select 1 from public.job_translations jt
+                   where jt.job_id = j.id and jt.locale = j.default_locale)
+          or not exists (select 1 from public.job_translations jt where jt.job_id = j.id))
    limit 1;
 $$;
 revoke all on function public.get_public_job_machine_translation(uuid, text) from public;

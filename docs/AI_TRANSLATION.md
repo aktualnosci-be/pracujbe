@@ -121,13 +121,16 @@ wznowienie, firma zawieszona, wygaśnięcie, dwie sesje równolegle, limit pól,
 delete) z kontrolą ujemną TR33-N; unit `translation-job-sync`, `translation-run`,
 `translation-process-route`.
 
-### Odczyt na stronie oferty (migracja 0219 — numer tymczasowy)
+### Odczyt na stronie oferty (migracja 0159)
 
 `get_public_job_machine_translation(job, locale)` (SECURITY DEFINER, anon/authenticated) to
 jedyna ścieżka odczytu przekładu przez klienta — tabele kolejki zostają deny. Zwraca wiersz
 tylko dla oferty publicznej (jak `get_public_job`, bez demo), aktywnego źródła, przekładu
 BIEŻĄCEJ rewizji (`not is_stale`) w języku oferty i języka strony, w którym oferta nie ma
-własnego tłumaczenia ani wymagań (tekst człowieka ma pierwszeństwo); tylko pola wyświetlane
+własnego tłumaczenia ani wymagań (tekst człowieka ma pierwszeństwo), i tylko gdy strona
+pokazuje treść, z której powstała rewizja: tłumaczenie w `default_locale` albo `jobs.title`
+przy braku tłumaczeń (`get_public_job` przy braku `default_locale` bierze np. `en`, a przekład
+takiego tekstu by nie odpowiadał — ten sam warunek co karty listy); tylko pola wyświetlane
 (tytuł, opis, godziny, zmiany, opis firmy, listy obowiązków/warunków/wyróżników/wymagań).
 
 Strona `/{locale}/oferty-pracy/[slug]` (`getJobBySlug` → `readMachineTranslation`): tylko za
@@ -141,15 +144,15 @@ Oznaczenie pod paszportem: `job.machineTranslationNotice` (AI) albo
 `job.translationOriginalLink` do wersji w języku oryginału. SEO bez zmian: strona z
 przekładem nadal kanonizuje się do oryginału, bez hreflang i bez JobPosting (#301). ISR 60 s.
 
-Dowód: `rls.sql` sekcja TM219 (bieżąca rewizja, tylko pola wyświetlane, pierwszeństwo tekstu
-człowieka, oferta wstrzymana/firma zawieszona, przekład po edycji, granty) z kontrolą ujemną
-TM219-N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
+Dowód: `rls.sql` sekcja TM159 (bieżąca rewizja, tylko pola wyświetlane, pierwszeństwo tekstu
+człowieka, oferta wstrzymana/firma zawieszona, przekład po edycji, granty, strona z tekstem
+spoza `default_locale` — TM159-7) z kontrolami ujemnymi TM159-N i TM159-7N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
 
-### Karty listy ofert (migracja 0226 — numer tymczasowy)
+### Karty listy ofert (migracja 0160)
 
 `get_public_jobs_machine_titles(ids[], locale)` (SECURITY DEFINER, anon/authenticated) zwraca
 przekład pól karty — `title` i `highlights.N` — dla najwyżej 100 ofert jednej strony listy.
-Warunki jak w 0219 (oferta publiczna, bieżąca rewizja bez `is_stale`, język bez własnego
+Warunki jak w 0159 (oferta publiczna, bieżąca rewizja bez `is_stale`, język bez własnego
 tłumaczenia i wymagań) plus warunek karty: `get_public_jobs` pokazuje przy braku tłumaczenia
 w języku strony tłumaczenie `default_locale` (albo `jobs.title`), więc wiersz jest zwracany
 tylko wtedy, gdy karta pokazuje właśnie tę treść, z której powstała rewizja.
@@ -165,8 +168,8 @@ Sitemap, liczniki, facety i „Podobne oferty” (lista bez znacznika) zostają 
 Znacznik na karcie (wiersz firmy): `jobs.machineTranslatedBadge` albo `jobs.translatedBadge`
 (korekta ręczna). SEO bez zmian — adresy kart i dane strukturalne nie zależą od przekładu.
 
-Dowód: `rls.sql` sekcja TM226 (tylko pola karty, limit 100 id, tekst człowieka, oferta
-wstrzymana/wygasła, firma zawieszona, przekład po edycji, granty) z kontrolą ujemną TM226-N;
+Dowód: `rls.sql` sekcja TM160 (tylko pola karty, limit 100 id, tekst człowieka, oferta
+wstrzymana/wygasła, firma zawieszona, przekład po edycji, granty) z kontrolą ujemną TM160-N;
 unit `job-list-machine-translation` (flaga wyłączona = brak odczytu, lista bez kart = brak
 odczytu, jedno wywołanie na stronę, fallback, awaria).
 

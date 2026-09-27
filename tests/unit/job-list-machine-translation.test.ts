@@ -4,7 +4,7 @@ import { applyJobListMachineTranslation } from '@/lib/job-machine-translation';
 import { getJobs, getLatestJobs, type JobListItem } from '@/lib/jobs';
 
 /**
- * #33 (0226): przekład tytułu i wyróżników kart listy ofert w języku widza. Jedno zapytanie
+ * #33 (0160): przekład tytułu i wyróżników kart listy ofert w języku widza. Jedno zapytanie
  * na stronę listy (bez N+1), tylko za flagą i tylko dla list trafiających na karty; każda
  * niezgodność albo awaria = karta w oryginale.
  */

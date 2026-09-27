@@ -13696,9 +13696,11 @@ select pg_temp.assert(
   'SC100-4 KONTROLA UJEMNA: jedna strona rejestruje 100 ofert, oferta 101+ przepada');
 rollback;
 set role service_role;
+-- 0158: p_max_pages liczy strony KURSORA po 1000 — jedna strona mieści wszystkie 105
+-- (obcięcie stroną kursora sprawdza SK100-4b).
 select pg_temp.assert(
-  (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 100,
-  'SC100-4b KONTROLA UJEMNA: limit jednej strony obcina wynik do 100');
+  (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 105,
+  'SC100-4b jedna strona kursora (1000) mieści wszystkie 105 ofert');
 reset role;
 
 -- SC100-5 (KONTROLE UJEMNE): funkcje stron tylko dla service_role.
@@ -13729,6 +13731,150 @@ select pg_temp.assert(
   and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'sc1')
   and not exists (select 1 from public.email_deliveries where profile_id in (:'SCA', :'SCE')),
   'SC100-6 dane testu usunięte (oferty, firma, wyszukiwanie, alerty, e-maile)');
+
+-- ============================================================================
+-- SK100. Alerty zapisanych wyszukiwań bez górnej granicy 10 100 ofert (0158, #100):
+-- saved_search_matching_jobs stronicuje kursorem (published_at, id) zamiast offsetu
+-- get_public_jobs (clamp 10 000). 10 150 ofert z JEDNYM published_at (remis przez każdą
+-- granicę strony) + jedna starsza (SKOLD, ostatnia w sorcie) + 3 nowsze oferty firmy
+-- zablokowanej przez kandydata. Worker rejestruje wszystkie 10 151, pomija firmę
+-- zablokowaną, jeden digest ≤ 5 ofert z count = 10 151, para nie wraca. Kontrola ujemna:
+-- offset z 0138 (clamp 10 000) nie sięga ofert za 10 100.
+-- Cała sekcja w transakcji cofanej (10 tys. ofert bez kosztownego DELETE na końcu).
+-- ============================================================================
+\echo '--- SK100 alerty wyszukiwań: kursor zamiast offsetu (0158) ---'
+begin;
+\set SKA 'e9c30000-0000-0000-0000-0000000000a1'
+\set SKE 'e9c30000-0000-0000-0000-0000000000b1'
+\set SKC 'e9c30000-0000-0000-0000-0000000000c1'
+\set SKB 'e9c30000-0000-0000-0000-0000000000c2'
+\set SKOLD 'e9c30000-0000-0000-0000-0000000000d0'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SKA','ska@test.be','Sol A','{"role":"candidate","first_name":"Sol","last_name":"A","locale":"fr"}'),
+  (:'SKE','ske@test.be','Emil E','{"role":"employer","first_name":"Emil","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'SKC','Firma SK100','verified'), (:'SKB','Firma SK100 zablokowana','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'SKC',:'SKE','owner',true), (:'SKB',:'SKE','owner',true);
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'SKA', :'SKB');
+
+set role authenticated; set app.current_uid = :'SKA'; select pg_temp.assert_client_role();
+select saved_search_id as sk1 from public.save_saved_search(
+  'Spawanie SK100', 'pl', '{"keyword":"Spawacz SK100Z"}', '?keyword=Spawacz+SK100Z') \gset
+reset role; reset app.current_uid;
+
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+select gen_random_uuid(), :'SKC', 'sk100-' || n, 'Spawacz SK100Z ' || n, 'production', 'permanent',
+       'Gent', 'Vlaanderen', 'active', 'pl', date_trunc('second', now()) - interval '2 hours'
+from generate_series(1, 10150) n;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+values (:'SKOLD', :'SKC', 'sk100-old', 'Spawacz SK100Z najstarszy', 'production', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '3 hours');
+-- Firma zablokowana: 3 najnowsze oferty; poza filtrem: inny tytuł i oferta sprzed okna.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+select gen_random_uuid(), :'SKB', 'sk100-blk-' || n, 'Spawacz SK100Z blok ' || n, 'production', 'permanent',
+       'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '1 hour'
+from generate_series(1, 3) n;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+values (gen_random_uuid(), :'SKC', 'sk100-other', 'Kierowca SK100Z', 'production', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '2 hours'),
+       (gen_random_uuid(), :'SKC', 'sk100-before', 'Spawacz SK100Z sprzed okna', 'production', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '5 days');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days' where id = :'sk1';
+select filters as sk_filters from public.saved_searches where id = :'sk1' \gset
+
+-- SK100-1: kursor zwraca wszystkie 10 154 pasujące (10 151 + 3 zablokowane — blokadę
+-- stosuje worker), bez dubli, bez oferty spoza filtra i sprzed okna.
+-- Jeden przebieg kursora (każde wywołanie to ~11 stron po 1000).
+set role service_role;
+select pg_temp.assert(
+  (with a as (select x from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days') x)
+   select count(*) = 10154 and count(distinct x) = 10154 and bool_or(x = :'SKOLD') from a),
+  'SK100-1 kursor (published_at, id) zwraca wszystkie 10 154 oferty (> 10 100), bez dubli');
+-- SK100-1b: strony kursora rozłączne i w porządku listy (remis rozstrzyga id).
+select pg_temp.assert(
+  (with p1 as (select * from public.saved_search_keyset_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', null, null, 1000)),
+        p2 as (select k.* from p1 cross join lateral public.saved_search_keyset_page(
+                 :'sk_filters'::jsonb, 'pl', now() - interval '2 days', p1.last_published_at, p1.last_id, 1000) k)
+   select cardinality(p1.ids) = 1000 and cardinality(p2.ids) = 1000
+      and not (p1.ids && p2.ids)
+      and p1.last_id = p1.ids[1000]
+   from p1, p2),
+  'SK100-1b kolejne strony kursora rozłączne, kursor = ostatnia oferta strony');
+reset role;
+
+-- SK100-2: worker — 10 151 par, SKOLD też, firma zablokowana pominięta, jeden digest (fr).
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sk1') = 10151
+  and exists (select 1 from public.saved_search_alerts where saved_search_id = :'sk1' and job_id = :'SKOLD')
+  and not exists (select 1 from public.saved_search_alerts a join public.jobs j on j.id = a.job_id
+                  where a.saved_search_id = :'sk1' and j.company_id = :'SKB'),
+  'SK100-2 wszystkie 10 151 ofert zarejestrowane (także za 10 100), firma zablokowana pominięta');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 1
+  and (select (payload ->> 'count')::integer from public.email_deliveries
+         where profile_id = :'SKA' and template = 'jobMatch') = 10151
+  and (select jsonb_array_length(payload -> 'jobs') from public.email_deliveries
+         where profile_id = :'SKA' and template = 'jobMatch') = 5
+  and (select locale from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 'fr'
+  and (select count(*) from public.notifications
+         where profile_id = :'SKA' and type = 'job_match' and entity_id = :'sk1') = 1,
+  'SK100-2b jeden e-mail jobMatch (fr): count 10 151, w treści 5 ofert; jedno in-app');
+
+-- SK100-3: ponowny przebieg — te same pary nie wracają.
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day' where id = :'sk1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sk1') = 10151
+  and (select count(*) from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 1,
+  'SK100-3 ponowny przebieg bez ponownej wysyłki tych samych par');
+
+-- SK100-4 (KONTROLA UJEMNA): stronicowanie offsetem get_public_jobs (0138,
+-- saved_search_job_page) ma sufit offsetu 10 000 — strona „10 100” to ta sama strona co
+-- 10 000, więc oferty za 10 100 (m.in. SKOLD, ostatnia w sorcie) są dla niego
+-- nieosiągalne; SK100-1/SK100-2 (10 154 / 10 151) wykrywają powrót do tego wariantu.
+-- (Pełny przebieg workera na wariancie offsetowym = 101 stron po 10 tys. wierszy —
+-- zbyt kosztowny dla zestawu uruchamianego też w jednej transakcji, rate-limit.test.ts.)
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(x order by x) from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10100) x)
+    = (select array_agg(x order by x) from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10000) x)
+  and not exists (select 1 from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10000) x
+                  where x = :'SKOLD'),
+  'SK100-4 KONTROLA UJEMNA: offset get_public_jobs (sufit 10 000) nie sięga ofert za 10 100');
+reset role;
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 1000,
+  'SK100-4b KONTROLA UJEMNA: limit jednej strony kursora obcina wynik do 1000');
+reset role;
+
+-- SK100-5 (KONTROLE UJEMNE): funkcje kursora tylko dla service_role.
+set role authenticated; set app.current_uid = :'SKA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_keyset_page(''{}''::jsonb, ''pl'', now(), null, null, 10)',
+  'permission denied', 'SK100-5 klient nie wywoła saved_search_keyset_page');
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_jobs_after(''pl'', null, null, null, null, null, null, null, null, null, null, now(), ''month'', null, null, 10)',
+  'permission denied', 'SK100-5b klient nie wywoła saved_search_jobs_after');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_jobs_after(''pl'', null, null, null, null, null, null, null, null, null, null, now(), ''month'', null, null, 10)',
+  'permission denied', 'SK100-5c anon bez EXECUTE');
+reset role;
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- JT144 (0144, numer tymczasowy): istotna zmiana warunków opublikowanej oferty →
@@ -15137,12 +15283,13 @@ rollback;
 reset role; reset app.current_uid;
 
 -- =============================================================================
--- TM219 (#33, 0219 — numer tymczasowy): odczyt przekładu oferty na publicznej stronie.
+-- TM159 (#33, 0159): odczyt przekładu oferty na publicznej stronie.
 -- `get_public_job_machine_translation` zwraca przekład (anon) wyłącznie dla oferty publicznej,
 -- bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola wyświetlane. Kontrola ujemna
--- TM219-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji.
+-- TM159-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji;
+-- TM159-7N: bez warunku „strona pokazuje treść default_locale” przekład nie pasuje do tekstu.
 -- =============================================================================
-\echo '--- TM219 public job machine translation ---'
+\echo '--- TM159 public job machine translation ---'
 \set TMCO 'f2190000-0000-0000-0000-0000000000c1'
 \set TMJ1 'f2190000-0000-0000-0000-0000000000a1'
 reset role; reset app.current_uid;
@@ -15150,7 +15297,7 @@ begin;
 set constraints all immediate;
 -- Izolacja: zadania z wcześniejszych sekcji nie trafiają do claimu tej sekcji (cofane rollbackiem).
 select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
-insert into public.companies(id, name, status) values (:'TMCO', 'Firma TM219', 'verified');
+insert into public.companies(id, name, status) values (:'TMCO', 'Firma TM159', 'verified');
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values (:'TMJ1', :'TMCO', 'tm219-oferta', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
           'draft', 'nl');
@@ -15167,10 +15314,10 @@ set local role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tm_en', :'tm_en_lease',
   (:'tm_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
     'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
-    'benefits.0', 'Parking', 'meta_title', 'Meta EN')) = 'applied', 'TM219-0 przekład en zastosowany');
+    'benefits.0', 'Parking', 'meta_title', 'Meta EN')) = 'applied', 'TM159-0 przekład en zastosowany');
 reset role;
 
--- TM219-1: anon dostaje przekład en bieżącej rewizji — tylko pola wyświetlane (bez benefits/meta).
+-- TM159-1: anon dostaje przekład en bieżącej rewizji — tylko pola wyświetlane (bez benefits/meta).
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert((select source_locale = 'nl' and origin = 'ai'
     and fields->>'title' = 'Warehouse worker'
@@ -15178,57 +15325,120 @@ select pg_temp.assert((select source_locale = 'nl' and origin = 'ai'
     and fields->>'requirements_mandatory.0' = 'VCA certificate'
     and not (fields ? 'benefits.0') and not (fields ? 'meta_title')
   from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-1 anon: przekład en bieżącej rewizji, tylko pola wyświetlane');
--- TM219-2: brak przekładu (fr), język źródła (nl), język spoza serwisu = brak wiersza.
+  'TM159-1 anon: przekład en bieżącej rewizji, tylko pola wyświetlane');
+-- TM159-2: brak przekładu (fr), język źródła (nl), język spoza serwisu = brak wiersza.
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'fr'))
   and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'nl'))
   and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'de')),
-  'TM219-2 brak przekładu / język źródła / język spoza serwisu = brak wiersza');
+  'TM159-2 brak przekładu / język źródła / język spoza serwisu = brak wiersza');
 reset role;
 
--- TM219-3: własne tłumaczenie en (tekst człowieka) ma pierwszeństwo.
+-- TM159-3: własne tłumaczenie en (tekst człowieka) ma pierwszeństwo.
 savepoint tm_human;
 insert into public.job_translations(job_id, locale, title, description)
   values (:'TMJ1', 'en', 'Warehouse operative', 'Human text.');
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-3 własne tłumaczenie en: przekład AI nie jest zwracany');
+  'TM159-3 własne tłumaczenie en: przekład AI nie jest zwracany');
 reset role;
 rollback to savepoint tm_human;
 
--- TM219-4: oferta niepubliczna (wstrzymana) i firma zawieszona = brak wiersza.
+-- TM159-4: oferta niepubliczna (wstrzymana) i firma zawieszona = brak wiersza.
 savepoint tm_paused;
 update public.jobs set status = 'paused' where id = :'TMJ1';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-4 oferta wstrzymana: brak przekładu');
+  'TM159-4 oferta wstrzymana: brak przekładu');
 reset role;
 rollback to savepoint tm_paused;
 savepoint tm_suspended;
 update public.companies set status = 'suspended' where id = :'TMCO';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-4b firma zawieszona: brak przekładu');
+  'TM159-4b firma zawieszona: brak przekładu');
 reset role;
 rollback to savepoint tm_suspended;
 
--- TM219-5: edycja treści = nowa rewizja, przekład en nieaktualny — nie jest zwracany.
+-- TM159-5: edycja treści = nowa rewizja, przekład en nieaktualny — nie jest zwracany.
 update public.job_translations set description = 'Werk vanaf 22:00.' where job_id = :'TMJ1' and locale = 'nl';
 select pg_temp.assert((select is_stale from public.translation_documents
-  where entity_type = 'job' and entity_id = :'TMJ1' and locale = 'en'), 'TM219-5a przekład en oznaczony jako nieaktualny');
+  where entity_type = 'job' and entity_id = :'TMJ1' and locale = 'en'), 'TM159-5a przekład en oznaczony jako nieaktualny');
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-5 po edycji przekład starej treści nie jest zwracany');
+  'TM159-5 po edycji przekład starej treści nie jest zwracany');
 reset role;
 
--- TM219-6: granty — tylko odczyt RPC; tabela przekładów nadal bez dostępu dla klienta.
+-- TM159-6: granty — tylko odczyt RPC; tabela przekładów nadal bez dostępu dla klienta.
 select pg_temp.assert(has_function_privilege('anon', 'public.get_public_job_machine_translation(uuid, text)', 'execute')
   and not has_table_privilege('anon', 'public.translation_documents', 'select')
   and not has_table_privilege('authenticated', 'public.translation_documents', 'select'),
-  'TM219-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
+  'TM159-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
 
--- TM219-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
--- przekład starej treści (TM219-5 wykrywa taką regresję).
+-- TM159-7: strona pokazuje tekst, z którego powstała rewizja. Oferta 2 (default_locale nl)
+-- ma tłumaczenie tylko w fr — `get_public_job` pokazuje dla en tekst fr, a rewizja powstała
+-- z `jobs.title` (nl). Przekład nl→en nie pasuje do wyświetlanego oryginału = brak wiersza.
+-- Bez tłumaczeń wcale strona pokazuje `jobs.title` = treść rewizji → przekład jest zwracany.
+\set TMJ2 'f2190000-0000-0000-0000-0000000000a2'
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TMJ2', :'TMCO', 'tm219-oferta-2', 'Heftruckchauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TMJ2', 'fr', 'Cariste', 'Travail dès 6:00.');
+update public.jobs set status = 'active', published_at = now() where id = :'TMJ2';
+create temp table tm219_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tm2_en, lease_id as tm2_en_lease, fields::text as tm2_f
+  from tm219_claim2 where entity_id = :'TMJ2' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tm2_en', :'tm2_en_lease',
+  (:'tm2_f'::jsonb) || jsonb_build_object('title', 'Forklift driver')) = 'applied',
+  'TM159-7a przekład en oferty 2 (z jobs.title) zastosowany');
+reset role;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7 strona pokazuje tłumaczenie fr (brak default_locale): przekład nl→en nie jest zwracany');
+reset role;
+savepoint tm_no_translations;
+delete from public.job_translations where job_id = :'TMJ2';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select fields->>'title' = 'Forklift driver'
+  from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7b oferta bez tłumaczeń (strona pokazuje jobs.title): przekład jest zwracany');
+reset role;
+rollback to savepoint tm_no_translations;
+
+-- TM159-7N (kontrola ujemna): definicja sprzed warunku (0159 bez sprawdzenia, że strona
+-- pokazuje treść `default_locale`) nakłada przekład nl→en na stronę z tekstem fr.
+savepoint tm_neg_src;
+create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
+returns table (source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.companies c on c.id = j.company_id
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = p_job_id and public.is_supported_locale(p_locale) and j.status = 'active'
+     and j.deleted_at is null and (j.expires_at is null or j.expires_at > now()) and not j.is_demo
+     and c.status = 'verified' and c.deleted_at is null and s.is_active
+     and d.revision_id = s.current_revision_id and not d.is_stale
+     and r.source_locale = j.default_locale and p_locale <> r.source_locale
+     and not exists (select 1 from public.job_translations jt where jt.job_id = j.id and jt.locale = p_locale)
+     and not exists (select 1 from public.job_requirements q where q.job_id = j.id and q.locale = p_locale)
+   limit 1;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7N kontrola ujemna: stara definicja nakłada przekład niepasujący do tekstu fr');
+reset role;
+rollback to savepoint tm_neg_src;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7Nb poprawna funkcja znów odmawia');
+reset role;
+
+-- TM159-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
+-- przekład starej treści (TM159-5 wykrywa taką regresję).
 savepoint tm_neg;
 create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
 returns table (source_locale text, origin text, fields jsonb)
@@ -15243,24 +15453,24 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-N kontrola ujemna: bez warunku rewizji zwracany jest przekład starej treści');
+  'TM159-N kontrola ujemna: bez warunku rewizji zwracany jest przekład starej treści');
 reset role;
 rollback to savepoint tm_neg;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
-  'TM219-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+  'TM159-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
 reset role;
 rollback;
 reset role; reset app.current_uid;
 
 -- =============================================================================
--- TM226 (#33, 0226 — numer tymczasowy): przekład tytułu i wyróżników kart listy ofert.
+-- TM160 (#33, 0160): przekład tytułu i wyróżników kart listy ofert.
 -- `get_public_jobs_machine_titles(ids[], locale)` — jedno wywołanie na stronę listy; wiersz
 -- tylko dla oferty publicznej z przekładem bieżącej rewizji, języka bez własnego tłumaczenia;
 -- tylko pola karty (title, highlights.N); najwyżej 100 identyfikatorów. Kontrola ujemna
--- TM226-N: bez warunku bieżącej rewizji anon dostaje tytuł starej treści po edycji.
+-- TM160-N: bez warunku bieżącej rewizji anon dostaje tytuł starej treści po edycji.
 -- =============================================================================
-\echo '--- TM226 public jobs machine titles (list) ---'
+\echo '--- TM160 public jobs machine titles (list) ---'
 \set TLCO 'f2260000-0000-0000-0000-0000000000c1'
 \set TLJ1 'f2260000-0000-0000-0000-0000000000a1'
 \set TLJ2 'f2260000-0000-0000-0000-0000000000a2'
@@ -15268,7 +15478,7 @@ reset role; reset app.current_uid;
 begin;
 set constraints all immediate;
 select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
-insert into public.companies(id, name, status) values (:'TLCO', 'Firma TM226', 'verified');
+insert into public.companies(id, name, status) values (:'TLCO', 'Firma TM160', 'verified');
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values (:'TLJ1', :'TLCO', 'tm226-oferta-1', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
           'draft', 'nl'),
@@ -15289,84 +15499,84 @@ set local role service_role;
 select pg_temp.assert(public.complete_translation_job(:'tl_en', :'tl_en_lease',
   (:'tl_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
     'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
-    'highlights.0', 'Parking', 'highlights.1', 'Night shift')) = 'applied', 'TM226-0 przekład en oferty 1 zastosowany');
+    'highlights.0', 'Parking', 'highlights.1', 'Night shift')) = 'applied', 'TM160-0 przekład en oferty 1 zastosowany');
 reset role;
 
--- TM226-1: jedno wywołanie dla całej strony — wiersz tylko dla oferty z przekładem (2 bez
+-- TM160-1: jedno wywołanie dla całej strony — wiersz tylko dla oferty z przekładem (2 bez
 -- przekładu en = brak wiersza), tylko pola karty.
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) = 1 from public.get_public_jobs_machine_titles(
     array[:'TLJ1', :'TLJ2']::uuid[], 'en')),
-  'TM226-1a jeden wiersz: tylko oferta z przekładem');
+  'TM160-1a jeden wiersz: tylko oferta z przekładem');
 select pg_temp.assert((select job_id = :'TLJ1' and source_locale = 'nl' and origin = 'ai'
     and fields = jsonb_build_object('title', 'Warehouse worker', 'highlights.0', 'Parking', 'highlights.1', 'Night shift')
   from public.get_public_jobs_machine_titles(array[:'TLJ1', :'TLJ2']::uuid[], 'en')),
-  'TM226-1b tylko title i highlights.N (bez opisu, list i wymagań)');
--- TM226-2: język źródła, język bez przekładu, język spoza serwisu, NULL i pusta tablica = brak wierszy.
+  'TM160-1b tylko title i highlights.N (bez opisu, list i wymagań)');
+-- TM160-2: język źródła, język bez przekładu, język spoza serwisu, NULL i pusta tablica = brak wierszy.
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'nl'))
   and not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'fr'))
   and not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'de'))
   and not exists (select 1 from public.get_public_jobs_machine_titles(null, 'en'))
   and not exists (select 1 from public.get_public_jobs_machine_titles('{}'::uuid[], 'en')),
-  'TM226-2 język źródła / bez przekładu / spoza serwisu / brak id = brak wierszy');
--- TM226-3: najwyżej 100 identyfikatorów — oferta na 101. pozycji nie jest czytana.
+  'TM160-2 język źródła / bez przekładu / spoza serwisu / brak id = brak wierszy');
+-- TM160-3: najwyżej 100 identyfikatorów — oferta na 101. pozycji nie jest czytana.
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(
     array(select gen_random_uuid() from generate_series(1, 100)) || array[:'TLJ1']::uuid[], 'en'))
   and exists (select 1 from public.get_public_jobs_machine_titles(
     array(select gen_random_uuid() from generate_series(1, 99)) || array[:'TLJ1']::uuid[], 'en')),
-  'TM226-3 limit 100 identyfikatorów na wywołanie');
+  'TM160-3 limit 100 identyfikatorów na wywołanie');
 reset role;
 
--- TM226-4: własne tłumaczenie en ma pierwszeństwo.
+-- TM160-4: własne tłumaczenie en ma pierwszeństwo.
 savepoint tl_human;
 insert into public.job_translations(job_id, locale, title, description)
   values (:'TLJ1', 'en', 'Warehouse operative', 'Human text.');
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-4 własne tłumaczenie en: przekład AI karty nie jest zwracany');
+  'TM160-4 własne tłumaczenie en: przekład AI karty nie jest zwracany');
 reset role;
 rollback to savepoint tl_human;
 
--- TM226-5: oferta wstrzymana, wygasła i firma zawieszona = brak wiersza (tylko oferty publiczne).
+-- TM160-5: oferta wstrzymana, wygasła i firma zawieszona = brak wiersza (tylko oferty publiczne).
 savepoint tl_paused;
 update public.jobs set status = 'paused' where id = :'TLJ1';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-5a oferta wstrzymana: brak przekładu karty');
+  'TM160-5a oferta wstrzymana: brak przekładu karty');
 reset role;
 rollback to savepoint tl_paused;
 savepoint tl_expired;
 update public.jobs set expires_at = now() - interval '1 minute' where id = :'TLJ1';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-5b oferta wygasła: brak przekładu karty');
+  'TM160-5b oferta wygasła: brak przekładu karty');
 reset role;
 rollback to savepoint tl_expired;
 savepoint tl_suspended;
 update public.companies set status = 'suspended' where id = :'TLCO';
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-5c firma zawieszona: brak przekładu karty');
+  'TM160-5c firma zawieszona: brak przekładu karty');
 reset role;
 rollback to savepoint tl_suspended;
 
--- TM226-6: edycja treści = nowa rewizja; przekład starej treści nie trafia na kartę.
+-- TM160-6: edycja treści = nowa rewizja; przekład starej treści nie trafia na kartę.
 update public.job_translations set title = 'Magazijnmedewerker nacht' where job_id = :'TLJ1' and locale = 'nl';
 select pg_temp.assert((select is_stale from public.translation_documents
-  where entity_type = 'job' and entity_id = :'TLJ1' and locale = 'en'), 'TM226-6a przekład en oznaczony jako nieaktualny');
+  where entity_type = 'job' and entity_id = :'TLJ1' and locale = 'en'), 'TM160-6a przekład en oznaczony jako nieaktualny');
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-6 po edycji tytuł starej treści nie jest zwracany');
+  'TM160-6 po edycji tytuł starej treści nie jest zwracany');
 reset role;
 
--- TM226-7: granty — anon/authenticated tylko EXECUTE RPC; tabele kolejki nadal bez dostępu.
+-- TM160-7: granty — anon/authenticated tylko EXECUTE RPC; tabele kolejki nadal bez dostępu.
 select pg_temp.assert(has_function_privilege('anon', 'public.get_public_jobs_machine_titles(uuid[], text)', 'execute')
   and has_function_privilege('authenticated', 'public.get_public_jobs_machine_titles(uuid[], text)', 'execute')
   and not has_table_privilege('anon', 'public.translation_documents', 'select'),
-  'TM226-7 anon: EXECUTE RPC, bez SELECT na translation_documents');
+  'TM160-7 anon: EXECUTE RPC, bez SELECT na translation_documents');
 
--- TM226-N (kontrola ujemna): bez warunku bieżącej rewizji anon dostałby na karcie tytuł
--- przekładu starej treści (TM226-6 wykrywa taką regresję).
+-- TM160-N (kontrola ujemna): bez warunku bieżącej rewizji anon dostałby na karcie tytuł
+-- przekładu starej treści (TM160-6 wykrywa taką regresję).
 savepoint tl_neg;
 create or replace function public.get_public_jobs_machine_titles(p_job_ids uuid[], p_locale text)
 returns table (job_id uuid, source_locale text, origin text, fields jsonb)
@@ -15380,12 +15590,12 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-N kontrola ujemna: bez warunku rewizji zwracany jest tytuł starej treści');
+  'TM160-N kontrola ujemna: bez warunku rewizji zwracany jest tytuł starej treści');
 reset role;
 rollback to savepoint tl_neg;
 set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
-  'TM226-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+  'TM160-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
 reset role;
 rollback;
 reset role; reset app.current_uid;

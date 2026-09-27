@@ -105,7 +105,7 @@ export async function JobCard({
           </span>
         ) : null}
         {job.machineTranslation ? (
-          // Tytuł i wyróżniki przetłumaczone na język strony (#33, 0226) — dyskretny znacznik
+          // Tytuł i wyróżniki przetłumaczone na język strony (#33, 0160) — dyskretny znacznik
           // w wierszu firmy, jak inne stany karty; oryginał jest na stronie oferty.
           <span className="pp-passport-tag" data-testid="job-card-translation">
             <Languages className="h-4 w-4" aria-hidden="true" />

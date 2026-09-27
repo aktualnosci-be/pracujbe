@@ -88,7 +88,7 @@ async function getCompanyProfileFromDb(
   const jobsResult = await getPublicCompanyJobs(pool, slug, locale, COMPANY_JOBS_LIMIT, 0);
   return {
     company: rowToCompanyProfile(companyRow),
-    // Karty ofert profilu: przekład tytułu w języku strony (#33, 0226), jedno zapytanie.
+    // Karty ofert profilu: przekład tytułu w języku strony (#33, 0160), jedno zapytanie.
     jobs: await withListMachineTranslations(pool, jobsResult.rows.map(rowToJobListItem), toLocale(locale)),
   };
 }

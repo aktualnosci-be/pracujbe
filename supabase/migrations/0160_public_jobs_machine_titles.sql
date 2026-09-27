@@ -1,12 +1,12 @@
 -- =============================================================================
--- 0226_public_jobs_machine_titles.sql — #33: przekład tytułu i wyróżników ofert na LIŚCIE
+-- 0160_public_jobs_machine_titles.sql — #33: przekład tytułu i wyróżników ofert na LIŚCIE
 -- (karty ofert: strona główna, /oferty-pracy, landingi, profil firmy) w języku widza.
--- Numer TYMCZASOWY — ostateczny nada integrator. Zależy od 0145, 0146 i 0219.
+-- Zależy od 0145, 0146 i 0159.
 --
 -- Jedno wywołanie na stronę listy: `get_public_jobs_machine_titles(ids[], locale)` przyjmuje
 -- identyfikatory ofert bieżącej strony (najwyżej 100 — tyle, ile zwraca `get_public_jobs`)
 -- i zwraca wiersz tylko dla ofert, które mają aktualny przekład. Te same warunki co
--- `get_public_job_machine_translation` (0219):
+-- `get_public_job_machine_translation` (0159):
 --
 --   * oferta publiczna (active, nieusunięta, niewygasła, firma verified i nieusunięta), nie demo,
 --   * źródło aktywne i przekład BIEŻĄCEJ rewizji (`revision_id = current_revision_id`,

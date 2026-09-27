@@ -97,7 +97,7 @@ export interface JobListItem {
   companySlug?: string;
   /**
    * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33): na szczególe całość
-   * (0219), na karcie listy tytuł i wyróżniki (0226). Brak = treść własna oferty. Strona
+   * (0159), na karcie listy tytuł i wyróżniki (0160). Brak = treść własna oferty. Strona
    * oznacza przekład (szczegół: z linkiem do oryginału, karta: dyskretny znacznik).
    */
   machineTranslation?: JobMachineTranslation;
@@ -512,7 +512,7 @@ async function readMachineTranslation(
 }
 
 /**
- * Przekład tytułu i wyróżników kart listy (#33, 0226) — JEDNO zapytanie na stronę (lista id),
+ * Przekład tytułu i wyróżników kart listy (#33, 0160) — JEDNO zapytanie na stronę (lista id),
  * nigdy zapytanie na kartę. Tylko za flagą `AI_TRANSLATION_ENABLED`, w tym samym renderze
  * serwera co lista (strony ISR dostają gotowy HTML). Odczyt pomocniczy: awaria = karty
  * w oryginale + kod obszaru w logu (bez treści ofert).
