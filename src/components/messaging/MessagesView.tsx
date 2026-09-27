@@ -153,8 +153,13 @@ export async function MessagesView({
                     locale={locale}
                     headingId={THREAD_HEADING_ID}
                     reports={reports}
+                    allowCompanyBlock={basePath.startsWith('/candidate')}
                   />
                   <MessageComposer
+                    // Klucz per rozmowa: pełny remount przy przełączeniu izoluje szkic,
+                    // błąd, załączniki i klucz idempotencji (#849) — bez tego stan
+                    // instancji zostawał przypisany do nowego conversationId.
+                    key={activeId}
                     conversationId={activeId}
                     recipientName={threadDisplayName(threadResult.thread, t('title'))}
                   />

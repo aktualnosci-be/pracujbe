@@ -148,6 +148,53 @@ export function splitParam(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Lokalizacja jest jedynym filtrem CSV, którego wartości pochodzą z wolnego tekstu wpisanego
+ * przez pracodawcę w kreatorze (`jobs.city`, #845) — w przeciwieństwie do kategorii/rodzaju
+ * umowy/zakwaterowania (stały słownik bez przecinka) miasto może samo zawierać przecinek, np.
+ * „Bruxelles, Belgique”. `splitParam`/`join(',')` nie rozróżnia wtedy separatora listy od
+ * przecinka należącego do jednej nazwy — zaznaczenie takiej opcji rozbija ją na dwie wartości
+ * i gubi ofertę, dla której opcja się pojawiła. `parseLocationsParam`/`serializeLocations`
+ * escapują przecinek/backslash wewnątrz KAŻDEJ nazwy backslashem przed złączeniem, więc
+ * separator listy (nieescapowany przecinek) zawsze da się odróżnić od przecinka wewnątrz
+ * nazwy. Zgodność wstecz: istniejący adres bez backslashy (`Brussels,Antwerp`) parsuje się
+ * dokładnie jak dawny `splitParam` — nowy escaping tylko dopisuje backslash, nigdy niczego
+ * nie usuwa z nieescapowanego tekstu.
+ */
+function escapeLocationToken(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,');
+}
+
+/** Serializuje listę lokalizacji do jednej wartości parametru `location` (#845). */
+export function serializeLocations(locations: readonly string[]): string {
+  return locations.map(escapeLocationToken).join(',');
+}
+
+/**
+ * Odczytuje parametr `location` z URL, respektując backslash-escaping z
+ * {@link serializeLocations} (#845). Nieescapowany przecinek zawsze kończy jedną wartość;
+ * `\,` i `\\` wracają do dosłownego przecinka/backslasha wewnątrz nazwy.
+ */
+export function parseLocationsParam(value: string | undefined): string[] {
+  if (!value) return [];
+  const tokens: string[] = [];
+  let current = '';
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    if (ch === '\\' && i + 1 < value.length) {
+      current += value[i + 1];
+      i += 1;
+    } else if (ch === ',') {
+      tokens.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  tokens.push(current);
+  return tokens.map((token) => token.trim()).filter(Boolean);
+}
+
 export function clampSalary(value: number, unit: SalaryUnit = 'month'): number {
   const { min, max, step } = salaryBounds(unit);
   const stepped = Math.round(value / step) * step;
@@ -169,7 +216,7 @@ export function parseSidebarFilters(
   f.categories = splitParam(sp['category']).filter((v): v is CategoryKey =>
     (CATEGORY_KEYS as readonly string[]).includes(v),
   );
-  f.locations = splitParam(sp['location']);
+  f.locations = parseLocationsParam(sp['location']);
   f.contractTypes = splitParam(sp['contractType']).filter(
     (v): v is ContractType => (CONTRACT_TYPES as readonly string[]).includes(v),
   );
@@ -355,7 +402,7 @@ export function sidebarFiltersToParams(
 ): Record<string, string> {
   const params: Record<string, string> = {};
   if (f.categories.length) params['category'] = f.categories.join(',');
-  if (f.locations.length) params['location'] = f.locations.join(',');
+  if (f.locations.length) params['location'] = serializeLocations(f.locations);
   if (f.contractTypes.length)
     params['contractType'] = f.contractTypes.join(',');
   if (f.salaryUnit !== 'month') params['salaryUnit'] = f.salaryUnit;

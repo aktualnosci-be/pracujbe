@@ -210,6 +210,37 @@ describe('POST /api/job-funnel', () => {
     expect(statuses.slice(60)).toEqual([429, 429]);
   });
 
+  it('#646: ignoruje X-Forwarded-For — spoofowanie tego nagłówka nie omija limitu przy tym samym zaufanym adresie', async () => {
+    const spoofed = (i: number) =>
+      post(
+        { event: 'detail_view', nonce: NONCE, jobIds: [JOB] },
+        {
+          'x-real-ip': '203.0.113.55',
+          // Ten sam zaufany adres proxy, ale klient próbuje zmieniać X-Forwarded-For przy
+          // każdym żądaniu — nie może to utworzyć nowego klucza limitera.
+          'x-forwarded-for': `10.0.0.${i}`,
+        },
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 62; i += 1) statuses.push((await spoofed(i)).status);
+    expect(statuses.slice(0, 60).every((s) => s === 204)).toBe(true);
+    expect(statuses.slice(60)).toEqual([429, 429]);
+  });
+
+  it('#646: bez zaufanego nagłówka proxy klienci dzielą jedną wspólną pulę zamiast każdy dostawać osobny limit', async () => {
+    const noHeader = (xff: string) =>
+      post(
+        { event: 'detail_view', nonce: NONCE, jobIds: [JOB] },
+        // Brak X-Real-IP: tylko X-Forwarded-For sterowany przez klienta — nie może dać
+        // osobnego budżetu na każdą zmyśloną wartość.
+        { 'x-forwarded-for': xff, 'x-real-ip': '' },
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 62; i += 1) statuses.push((await noHeader(`198.51.100.${i}`)).status);
+    expect(statuses.slice(0, 60).every((s) => s === 204)).toBe(true);
+    expect(statuses.slice(60)).toEqual([429, 429]);
+  });
+
   it('does nothing in demo mode and hides database failures from the client', async () => {
     delete process.env.DATABASE_APP_URL;
     expect((await post({ event: 'detail_view', nonce: NONCE, jobIds: [JOB] })).status).toBe(204);

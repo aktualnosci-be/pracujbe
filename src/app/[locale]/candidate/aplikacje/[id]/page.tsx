@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote';
 import { notFound } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
@@ -125,7 +126,9 @@ export default async function CandidateApplicationDetailPage({
               {t('actionView')}
               <ArrowRight className="size-3.5" aria-hidden="true" />
             </Link>
-          ) : null}
+          ) : (
+            <JobAvailabilityNote availability={application.jobAvailability} />
+          )}
           {application.conversationId ? (
             <Link href={`/candidate/wiadomosci?c=${application.conversationId}`} className={TEXT_LINK}>
               {t('candidateApplicationConversation')}

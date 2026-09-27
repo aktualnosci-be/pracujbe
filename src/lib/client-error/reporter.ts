@@ -11,6 +11,10 @@ import { captureError, setErrorReporter, type ErrorReport } from '@/lib/error-re
  * Deduplikacja w karcie: para (kod, ścieżka) najwyżej raz, łącznie najwyżej
  * {@link CLIENT_ERROR_MAX_PER_TAB} zgłoszeń na załadowanie karty. Czy coś trafia dalej,
  * decyduje serwer (bez `ERROR_WEBHOOK_URL` endpoint odpowiada 204 i nic nie wysyła).
+ *
+ * Odpowiedź `429` (limiter serwera, #901) oznacza, że zgłoszenie NIE dotarło — klucz wraca
+ * do puli od razu, więc kolejne wystąpienie tego samego błędu (np. po ustaniu przeciążenia)
+ * nie jest ciszej gubione jako „już wysłane”, a odrzucona próba nie zajmuje budżetu karty.
  */
 export const CLIENT_ERROR_ENDPOINT = '/api/client-error';
 export const CLIENT_ERROR_MAX_PER_TAB = 10;
@@ -60,7 +64,12 @@ export function createClientErrorReporter(deps: ClientReporterDeps = {}): (repor
         credentials: 'omit',
         keepalive: true,
         cache: 'no-store',
-      }).catch(() => undefined);
+      })
+        .then((response) => {
+          // Limiter serwera: zgłoszenie nie dotarło, więc nie liczy się jako wysłane.
+          if (response.status === 429) seen.delete(key);
+        })
+        .catch(() => undefined);
     } catch {
       // Zgłoszenie błędu nigdy nie psuje strony.
     }

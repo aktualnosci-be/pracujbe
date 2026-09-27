@@ -49,7 +49,11 @@ import {
 } from '@/lib/validation/candidate';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
-import { saveOnboardingStep, type OnboardingStep } from '@/lib/actions/onboarding';
+import {
+  saveOnboardingStep,
+  type OnboardingStep,
+  type SaveOnboardingResult,
+} from '@/lib/actions/onboarding';
 import { referenceDate } from '@/lib/matching/reference-date';
 import {
   BTN_PRIMARY,
@@ -424,41 +428,64 @@ export function OnboardingWizard({
   }
 
   /**
+   * Ile razy `persistStep` może się sam powtórzyć, gdy formularz zmienił się w trakcie
+   * oczekiwania na odpowiedź zapisu (#813). Zapobiega nieskończonej pętli przy ciągłym pisaniu;
+   * po wyczerpaniu limitu zatrzymujemy się na kroku (bez utraty danych — nawigacja się nie odbywa).
+   */
+  const MAX_PERSIST_RETRIES = 5;
+
+  /**
    * Waliduje i zapisuje bieżący krok. Zwraca true przy sukcesie. Krok 6 bez `finish`
    * („Zapisz i wyjdź”) nie wymaga zgody (#337) — zgoda blokuje tylko „Zakończ”.
+   *
+   * #813: jeśli użytkownik zmieni pole PODCZAS trwającego zapisu, odpowiedź serwera dotyczy
+   * już nieaktualnego snapshotu. Po każdym udanym zapisie porównujemy wysłane dane z bieżącymi
+   * wartościami formularza — różnica oznacza nowszą edycję, więc zapisujemy ją ponownie zamiast
+   * bezwarunkowo kończyć krok (i pozwalać wywołującemu nawigować dalej/wyjść).
    */
   async function persistStep(current: OnboardingStep, finish = false): Promise<boolean> {
     if (savingRef.current) return false;
-    clearErrors(STEP_FIELDS[current]);
-    const data = buildStepData(current, getValues());
-    const schema = current === 6 && !finish ? step6DraftSchema : SCHEMAS[current];
-    const result = schema.safeParse(data);
 
-    if (!result.success) {
-      const erroredFields = new Set<string>();
-      for (const issue of result.error.issues) {
-        const field = String(issue.path[0] ?? '');
-        // Pierwsza niespełniona reguła pola jest najtrafniejsza („wymagane” przed „za krótkie”,
-        // #367) — kolejne nie mogą jej nadpisać.
-        if (!field || erroredFields.has(field)) continue;
-        erroredFields.add(field);
-        if ((STEP_FIELDS[current] as string[]).includes(field)) {
-          setError(field as keyof FormValues, {
-            type: 'validate',
-            message: toErrorKey(field, issue.message),
-          });
+    for (let attempt = 0; attempt < MAX_PERSIST_RETRIES; attempt += 1) {
+      clearErrors(STEP_FIELDS[current]);
+      const data = buildStepData(current, getValues());
+      const schema = current === 6 && !finish ? step6DraftSchema : SCHEMAS[current];
+      const result = schema.safeParse(data);
+
+      if (!result.success) {
+        const erroredFields = new Set<string>();
+        for (const issue of result.error.issues) {
+          const field = String(issue.path[0] ?? '');
+          // Pierwsza niespełniona reguła pola jest najtrafniejsza („wymagane” przed „za krótkie”,
+          // #367) — kolejne nie mogą jej nadpisać.
+          if (!field || erroredFields.has(field)) continue;
+          erroredFields.add(field);
+          if ((STEP_FIELDS[current] as string[]).includes(field)) {
+            setError(field as keyof FormValues, {
+              type: 'validate',
+              message: toErrorKey(field, issue.message),
+            });
+          }
         }
+        setSaveState('idle');
+        scrollToFirstError(current, erroredFields);
+        return false;
       }
-      setSaveState('idle');
-      scrollToFirstError(current, erroredFields);
-      return false;
-    }
 
-    savingRef.current = true;
-    setSaveError(null);
-    setSaveState('saving');
-    try {
-      const res = await saveOnboardingStep(current, data, { finish });
+      savingRef.current = true;
+      setSaveError(null);
+      setSaveState('saving');
+      let res: SaveOnboardingResult;
+      try {
+        res = await saveOnboardingStep(current, data, { finish });
+      } catch {
+        savingRef.current = false;
+        setSaveError('INTERNAL');
+        setSaveState('error');
+        return false;
+      }
+      savingRef.current = false;
+
       if (!res.ok) {
         setSaveError(res.error);
         setSaveState('error');
@@ -470,17 +497,24 @@ export function OnboardingWizard({
         }
         return false;
       }
+
+      // Wartości mogły się zmienić, podczas gdy czekaliśmy na `saveOnboardingStep` — zapisany
+      // snapshot jest wtedy przestarzały. Zapisujemy ponownie zamiast zgłaszać sukces (#813).
+      const latest = buildStepData(current, getValues());
+      if (JSON.stringify(latest) !== JSON.stringify(data)) {
+        continue;
+      }
+
       setDemoSaved(Boolean(res.demo));
       setSaveState('saved');
       setBadgeVisible(true);
       return true;
-    } catch {
-      setSaveError('INTERNAL');
-      setSaveState('error');
-      return false;
-    } finally {
-      savingRef.current = false;
     }
+
+    // Formularz zmieniał się przy każdej próbie — zatrzymujemy się na kroku bez nawigacji,
+    // dane z ostatniej próby są już zapisane w bazie; kolejne kliknięcie spróbuje ponownie.
+    setSaveState('idle');
+    return false;
   }
 
   async function handleNext(): Promise<void> {

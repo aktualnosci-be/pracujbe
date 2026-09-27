@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { loginHref, registerHref } from '@/lib/auth/next-path';
 import { reportApplyStarted } from '@/lib/job-funnel/client';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
-import { GuestApplyForm } from '@/components/public/GuestApplyForm';
+import { GuestApplyForm, type GuestApplyDraft } from '@/components/public/GuestApplyForm';
 import { LegalDocLink } from '@/components/legal/LegalDocLink';
 import {
   APPLY_AVAILABILITY_OPTIONS,
@@ -113,6 +113,7 @@ type FormError =
   | 'generic'
   | 'network'
   | 'already'
+  | 'alreadyEdited'
   | 'login'
   | 'candidateOnly'
   | 'rateLimited'
@@ -182,6 +183,15 @@ export function ApplyModal({
   const formErrorRef = React.useRef<HTMLDivElement>(null);
   // Jeden klucz na otwarcie modalu: ponowienie po błędzie = ta sama próba (Invariant #4).
   const idempotencyKeyRef = React.useRef<string | null>(null);
+  // #926: migawka pól faktycznie wysłanych z bieżącym kluczem. Ponowienie z INNYMI danymi
+  // (kandydat edytował formularz po utraconej odpowiedzi) nie może po cichu potwierdzić
+  // starego zapisu jako zapisania nowych danych — dostaje nowy klucz, więc baza rozpozna
+  // to jako świadomą kolejną próbę (APPLICATION_ALREADY_EXISTS), a nie retry.
+  const submittedPayloadRef = React.useRef<string | null>(null);
+  // #913: niewysłany szkic gościa przeżywa odmontowanie `GuestApplyForm` przy zamknięciu
+  // dialogu (Radix odmontowuje treść, gdy `open` jest `false`) — sam `ApplyModal` zostaje
+  // zamontowany, więc `useRef` tutaj wystarcza bez localStorage/sessionStorage.
+  const guestDraftRef = React.useRef<GuestApplyDraft | undefined>(undefined);
 
   const availabilityLabel = (value: Availability): string => {
     switch (value) {
@@ -196,6 +206,8 @@ export function ApplyModal({
     }
   };
 
+  // Zeruje CAŁY formularz (dane + stan próby) — tylko po realnym sukcesie wysyłki, kiedy
+  // szkic przestaje być potrzebny (#913).
   const reset = () => {
     setPhone('');
     setAvailability('immediate');
@@ -207,11 +219,18 @@ export function ApplyModal({
     setFormError(null);
     setSubmitting(false);
     idempotencyKeyRef.current = null;
+    submittedPayloadRef.current = null;
   };
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
-      reset();
+      // #913: zamknięcie modalu (X/Escape) NIE czyści wpisanych danych — kandydat wraca do
+      // wypełnionego formularza tej samej oferty. Czyścimy tylko komunikaty z poprzedniej
+      // próby (błąd formularza i pól), żeby nieaktualny alert nie wisiał nad świeżo otwartym
+      // dialogiem; wartości pól, klucz idempotencji i migawka wysłanych danych zostają.
+      setFormError(null);
+      setErrors({});
+      setAnswerErrors({});
       setFormReady(false);
       // Lejek ofert (#99): rozpoczęcie aplikowania, raz na wyświetlenie oferty.
       if (!demo) reportApplyStarted(jobId);
@@ -271,7 +290,25 @@ export function ApplyModal({
     setSubmitting(true);
 
     const trimmedMessage = message.trim();
-    idempotencyKeyRef.current ??= crypto.randomUUID();
+    // #926: migawka danych faktycznie wysyłanych z tą próbą — porównanie z poprzednią
+    // wysyłką mówi, czy to nieedytowane ponowienie (bezpieczny retry z tym samym kluczem)
+    // czy kandydat zmienił formularz po poprzedniej próbie.
+    const payloadSnapshot = JSON.stringify({
+      phone: phone.trim(),
+      dial,
+      availability: AVAILABILITY_TO_DB[availability],
+      message: trimmedMessage,
+      answers: answerPayload,
+    });
+    const isEditedRetry =
+      idempotencyKeyRef.current !== null && submittedPayloadRef.current !== payloadSnapshot;
+    if (idempotencyKeyRef.current === null || isEditedRetry) {
+      // Pierwsza próba tego zestawu danych: nowy klucz. Poprzednia próba (z innym kluczem)
+      // mogła się już zapisać mimo utraconej odpowiedzi — nie wolno przedstawić TEJ wysyłki
+      // jako potwierdzenia zapisania edytowanych danych pod starym kluczem (Invariant #4/#11).
+      idempotencyKeyRef.current = crypto.randomUUID();
+    }
+    submittedPayloadRef.current = payloadSnapshot;
 
     let res: Awaited<ReturnType<typeof applyToJob>>;
     try {
@@ -296,6 +333,8 @@ export function ApplyModal({
     if (res.ok) {
       setOpen(false);
       setSent(true);
+      // #913: szkic potrzebny tylko do wysłania — po sukcesie czyścimy formularz na kolejne otwarcie.
+      reset();
       return;
     }
 
@@ -331,7 +370,10 @@ export function ApplyModal({
       // Zalogowany pracodawca/admin — link logowania nie ma sensu (#361).
       setFormError('candidateOnly');
     } else if (res.error === 'APPLICATION_ALREADY_EXISTS') {
-      setFormError('already');
+      // #926: gdy to ponowienie z EDYTOWANYMI danymi (nowy klucz, bo migawka się nie zgadzała),
+      // baza ma już wcześniejszą wersję pod innym kluczem — te edycje nie zostały zapisane.
+      // Odróżniamy to od zwykłej „już aplikowałeś” (pierwsza próba trafia na istniejącą aplikację).
+      setFormError(isEditedRetry ? 'alreadyEdited' : 'already');
     } else if (res.error === 'RATE_LIMITED') {
       setFormError('rateLimited');
     } else if (res.error === 'JOB_NOT_ACTIVE') {
@@ -403,6 +445,10 @@ export function ApplyModal({
                 screeningQuestions={screeningQuestions}
                 candidateMinAge={candidateMinAge}
                 contentLocale={contentLocale}
+                initialDraft={guestDraftRef.current}
+                onDraftChange={(draft) => {
+                  guestDraftRef.current = draft;
+                }}
               />
             ) : null}
             <p className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
@@ -591,6 +637,13 @@ export function ApplyModal({
                     ) : formError === 'already' ? (
                       <>
                         {t('alreadyApplied')}{' '}
+                        <Link href="/candidate/aplikacje" className="font-medium underline">
+                          {t('viewApplications')}
+                        </Link>
+                      </>
+                    ) : formError === 'alreadyEdited' ? (
+                      <>
+                        {t('alreadyAppliedEdited')}{' '}
                         <Link href="/candidate/aplikacje" className="font-medium underline">
                           {t('viewApplications')}
                         </Link>

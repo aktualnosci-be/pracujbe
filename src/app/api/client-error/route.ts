@@ -4,6 +4,7 @@ import { parseClientErrorPayload } from '@/lib/client-error/payload';
 import { env } from '@/lib/env';
 import { errorWebhookFromEnv, installErrorWebhook } from '@/lib/error-webhook';
 import { readTextWithLimit } from '@/lib/http/read-limited';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { createFunnelRateLimiter } from '@/lib/job-funnel/rate-limit';
 
 /**
@@ -14,8 +15,11 @@ import { createFunnelRateLimiter } from '@/lib/job-funnel/rate-limit';
  *   `Sec-Fetch-Site` musi być `same-origin` — inaczej 403.
  * - Body ≤ 4 KB (limit przy streamingu), wyłącznie pola `code`/`route`/`release`
  *   (`parseClientErrorPayload`); inne pola (np. `message`, `stack`) = 400, nic nie wychodzi.
- * - Limiter w pamięci po HMAC adresu z losową solą procesu (jak lejek ofert, #99); adres nie
- *   trafia do wiadomości, logów ani bazy. Cookies nie są czytane.
+ * - Limiter w pamięci po HMAC adresu z losową solą procesu (jak lejek ofert, #99); adres
+ *   WYŁĄCZNIE z jedynego zaufanego nagłówka proxy (`trustedClientIp`, #588/#602/#901) —
+ *   NIGDY z `X-Forwarded-For`/`X-Real-IP` wprost, który klient może dowolnie zmieniać przy
+ *   każdym żądaniu (jak `#646` dla lejka ofert). Adres nie trafia do wiadomości, logów ani
+ *   bazy. Cookies nie są czytane.
  * - Brak (poprawnego) `ERROR_WEBHOOK_URL` = 204 bez wysyłki.
  * Odpowiedzi bez treści, zawsze `no-store`.
  */
@@ -46,12 +50,16 @@ function sameOrigin(request: Request): boolean {
   return allowed.has(origin);
 }
 
-/** Adres z nagłówka zaufanego proxy (jak lejek ofert); używany wyłącznie w limiterze. */
+/**
+ * Adres niepoprawny albo nieustalony → wspólny zastępczy klucz (jak `lib/rate-limit.ts` i
+ * `job-funnel/route.ts`). Brak zaufanego nagłówka proxy nie może dawać klientowi osobnego
+ * budżetu na każdą zmyśloną wartość — wszystkie takie żądania dzielą jedną, wspólną pulę.
+ */
+const UNKNOWN_IP = '0.0.0.0';
+
+/** Adres z JEDYNEGO, jawnie skonfigurowanego, zaufanego nagłówka proxy; używany wyłącznie w limiterze. */
 function clientAddress(headers: Headers): string {
-  const realIp = headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  const forwarded = headers.get('x-forwarded-for')?.split(',').map((part) => part.trim()).filter(Boolean);
-  return forwarded?.at(-1) ?? 'unknown';
+  return trustedClientIp(headers) ?? UNKNOWN_IP;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

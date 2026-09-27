@@ -2,8 +2,11 @@ import { cn } from '@/lib/utils';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { notFound } from 'next/navigation';
+
 import { Link } from '@/i18n/navigation';
 import { getEmployerApplicationsPage } from '@/lib/data/employer';
+import { decodeTimeCursor, encodeTimeCursor, listPageHref, listPageRequest, listRequestHref } from '@/lib/employer/list-cursor';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import {
@@ -20,6 +23,7 @@ import {
   PANEL_H2,
   PANEL_P,
   TAG,
+  TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
 
 export const dynamic = 'force-dynamic';
@@ -28,11 +32,6 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   return { title: t('navEmployerApplications'), robots: { index: false, follow: false } };
-}
-
-function pageNumber(value: string | undefined): number {
-  if (!value || !/^[1-9]\d{0,3}$/.test(value)) return 1;
-  return Math.min(Number(value), 1000);
 }
 
 function initials(name: string): string {
@@ -45,16 +44,22 @@ export default async function EmployerApplicationsPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ po?: string | string[]; przed?: string | string[]; oferta?: string | string[] }>;
 }) {
   const { locale } = await params;
-  const { page: pageParam } = await searchParams;
+  const query = await searchParams;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
-  const page = pageNumber(pageParam);
-  const result = await getEmployerApplicationsPage(page);
-  const pageHref = (number: number) => `/employer/aplikacje?page=${number}`;
+  // P1-05: kursor (submitted_at, id) w adresie — `?po=` starsze, `?przed=` nowsze.
+  const request = listPageRequest(query, decodeTimeCursor);
+  const jobId = typeof query.oferta === 'string' ? query.oferta : null;
+  const result = await getEmployerApplicationsPage(request, jobId);
+  if (result.status === 'not_found') notFound();
+  const filter: Record<string, string> = jobId ? { oferta: jobId } : {};
+  const base = '/employer/aplikacje';
+  const firstHref = listPageHref(base, 'po', null, filter);
+  const currentHref = listRequestHref(base, request, encodeTimeCursor, filter);
 
   return (
     <div className="space-y-7">
@@ -62,6 +67,12 @@ export default async function EmployerApplicationsPage({
         <p className={EYEBROW}>{t('employerRole')}</p>
         <h1 className={H1_EXTENDED}>{t('navEmployerApplications')}</h1>
         <p className={INTRO}>{t('employerApplicationsIntro')}</p>
+        {result.status === 'ok' && result.job ? (
+          <p className={`mt-3 ${PANEL_P}`}>
+            {t('employerApplicationsForJob', { title: result.job.title || t('applicationUnknownJob') })}{' '}
+            <Link href={base} className={TEXT_LINK}>{t('employerApplicationsAllJobs')}</Link>
+          </p>
+        ) : null}
         {result.status === 'ok' && result.isDemo ? (
           <p className={`mt-3 ${TAG}`}>{t('employerApplicationsDemo')}</p>
         ) : null}
@@ -71,7 +82,7 @@ export default async function EmployerApplicationsPage({
         <section role="alert" className={PANEL}>
           <h2 className={PANEL_H2}>{t('employerApplicationsLoadError')}</h2>
           <p className={`mt-2 ${PANEL_P}`}>{t('employerApplicationsLoadErrorHint')}</p>
-          <a href={`/${locale}${pageHref(page)}`} className={`mt-5 ${BTN_SECONDARY}`}>
+          <a href={`/${locale}${currentHref}`} className={`mt-5 ${BTN_SECONDARY}`}>
             {t('employerApplicationsRetry')}
           </a>
         </section>
@@ -79,7 +90,7 @@ export default async function EmployerApplicationsPage({
         <section className={PANEL}>
           <h2 className={PANEL_H2}>{t('employerApplicationsEmptyTitle')}</h2>
           <p className={`mt-2 ${PANEL_P}`}>{t('employerApplicationsEmptyHint')}</p>
-          {page > 1 ? <Link href={pageHref(page - 1)} className={`mt-5 ${BTN_SECONDARY}`}>{t('employerApplicationsNewer')}</Link> : null}
+          {request.cursor ? <Link href={firstHref} className={`mt-5 ${BTN_SECONDARY}`}>{t('employerApplicationsFirstPage')}</Link> : null}
         </section>
       ) : (
         <>
@@ -121,13 +132,20 @@ export default async function EmployerApplicationsPage({
               );
             })}
           </ul>
-          <nav className="flex flex-wrap items-center justify-between gap-3" aria-label={t('employerApplicationsPagination')}>
-            <span className={`text-xs text-muted-foreground`}>{t('employerApplicationsPage', { page })}</span>
-            <div className="flex flex-wrap gap-2">
-              {page > 1 ? <Link href={pageHref(page - 1)} className={BTN_SECONDARY}>{t('employerApplicationsNewer')}</Link> : null}
-              {result.hasMore ? <Link href={pageHref(page + 1)} className={BTN_SECONDARY}>{t('employerApplicationsOlder')}</Link> : null}
-            </div>
-          </nav>
+          {result.prevCursor || result.nextCursor ? (
+            <nav className="flex flex-wrap items-center justify-end gap-2" aria-label={t('employerApplicationsPagination')}>
+              {result.prevCursor ? (
+                <Link href={listPageHref(base, 'przed', result.prevCursor, filter)} rel="prev" className={BTN_SECONDARY}>
+                  {t('employerApplicationsNewer')}
+                </Link>
+              ) : null}
+              {result.nextCursor ? (
+                <Link href={listPageHref(base, 'po', result.nextCursor, filter)} rel="next" className={BTN_SECONDARY}>
+                  {t('employerApplicationsOlder')}
+                </Link>
+              ) : null}
+            </nav>
+          ) : null}
         </>
       )}
     </div>

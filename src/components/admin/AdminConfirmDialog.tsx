@@ -67,6 +67,9 @@ export function AdminConfirmDialog({
   const t = useTranslations('admin');
   const dialogRef = React.useRef<HTMLDivElement>(null);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
+  // Kontrolka aktywna tuż przed przejściem w stan zapisu (zwykle „Potwierdź") — do niej
+  // wraca fokus po błędzie ogólnym, gdy dialog zostaje otwarty (#837).
+  const lastFocusedRef = React.useRef<HTMLElement | null>(null);
   const idBase = React.useId();
   const titleId = `${idBase}-title`;
   const descId = `${idBase}-desc`;
@@ -78,9 +81,17 @@ export function AdminConfirmDialog({
   }, []);
 
   // Wyłączony przycisk traci fokus (przeglądarka przenosi go na <body>) — w trakcie zapisu
-  // trzymamy fokus na samym dialogu (#415).
+  // trzymamy fokus na samym dialogu (#415). Po zakończeniu zapisu błędem ogólnym dialog
+  // zostaje otwarty — fokus wraca z kontenera na kontrolkę sprzed zapisu, inaczej pułapka
+  // fokusu nie rozpoznaje aktywnego elementu i Shift+Tab wychodzi na tło (#837). Sukces
+  // zwykle odmontowuje dialog z poziomu rodzica, więc ta gałąź go wtedy nie dotyczy.
   React.useEffect(() => {
-    if (pending) dialogRef.current?.focus();
+    if (pending) {
+      lastFocusedRef.current = document.activeElement as HTMLElement | null;
+      dialogRef.current?.focus();
+    } else if (document.activeElement === dialogRef.current) {
+      (lastFocusedRef.current ?? cancelRef.current)?.focus();
+    }
   }, [pending]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -102,6 +113,14 @@ export function AdminConfirmDialog({
     }
     const first = focusable[0]!;
     const last = focusable[focusable.length - 1]!;
+    // Fokus wciąż na kontenerze (np. tuż po błędzie, zanim efekt zdążył go przenieść) —
+    // traktuj to jak wyjście poza pierwszą/ostatnią kontrolkę, żeby Shift+Tab/Tab nie
+    // wypuszczały nawigacji na tło (#837).
+    if (document.activeElement === dialogRef.current) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+      return;
+    }
     if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();

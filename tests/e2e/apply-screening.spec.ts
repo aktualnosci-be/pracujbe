@@ -78,6 +78,24 @@ test('tekst pytań w języku strony, bez tłumaczenia w języku oferty', async (
   await expect(dialog.getByText(en.apply.screeningTitle)).toBeVisible();
 });
 
+test('pytanie opcjonalne tak/nie: przycisk czyszczenia pojawia się dopiero po odpowiedzi (#916)', async ({ page }) => {
+  await page.goto(JOB_PATH);
+  await page.getByRole('button', { name: pl.jobs.applyNow }).first().click();
+  const dialog = page.getByRole('dialog');
+  const adr = dialog.getByRole('radiogroup', { name: 'Czy masz certyfikat ADR?' });
+  await expect(adr).toBeVisible();
+  const clearButton = dialog.getByRole('button', { name: pl.apply.screeningClearAnswer });
+  await expect(clearButton).toHaveCount(0);
+
+  await adr.getByRole('radio', { name: pl.apply.screeningYes }).check();
+  await expect(clearButton).toBeVisible();
+  await clearButton.click();
+  await expect(adr.getByRole('radio', { name: pl.apply.screeningYes })).not.toBeChecked();
+  await expect(adr.getByRole('radio', { name: pl.apply.screeningNo })).not.toBeChecked();
+  // Kontrola ujemna: po wyczyszczeniu przycisk znika ponownie, dopóki nie ma odpowiedzi.
+  await expect(clearButton).toHaveCount(0);
+});
+
 test('oferta bez pytań: formularz bez sekcji pytań', async ({ page }) => {
   await page.goto('/pl/oferty-pracy/bricklayer-brussels-1002');
   await page.getByRole('button', { name: pl.jobs.applyNow }).first().click();

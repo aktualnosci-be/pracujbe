@@ -140,6 +140,56 @@ describe('menu „…” przy aplikacji — wzorzec ARIA menu (#341)', () => {
   });
 });
 
+describe('brak pozycji menu — przycisk się nie renderuje (#806)', () => {
+  it('status zakończony bez slugu (oferta niedostępna) nie renderuje przycisku „…”', () => {
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl}>
+        <ApplicationActions applicationId="app-1" status="rejected" slug={null} jobTitle="Magazynier" />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.queryByRole('button', { name: rowActionsName(pl, 'Magazynier') })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it.each(['hired', 'withdrawn'] as const)(
+    'status końcowy „%s” bez slugu też nie renderuje przycisku',
+    (status) => {
+      render(
+        <NextIntlClientProvider locale="pl" messages={pl}>
+          <ApplicationActions applicationId="app-1" status={status} slug={null} />
+        </NextIntlClientProvider>,
+      );
+      expect(screen.queryByRole('button', { name: pl.dashboard.rowActions })).not.toBeInTheDocument();
+    },
+  );
+
+  // Kontrola ujemna: status w toku bez slugu ma wciąż akcję „Wycofaj”, więc przycisk zostaje —
+  // brak akcji nie jest wynikiem samego `slug === null`, tylko koniunkcji obu warunków (#806).
+  it('kontrola ujemna: status w toku bez slugu ma akcję „Wycofaj” i przycisk się renderuje', () => {
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl}>
+        <ApplicationActions applicationId="app-1" status="submitted" slug={null} jobTitle="Magazynier" />
+      </NextIntlClientProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: rowActionsName(pl, 'Magazynier') });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menuitem', { name: pl.dashboard.withdrawApplication })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: pl.dashboard.actionView })).not.toBeInTheDocument();
+  });
+
+  it('status zakończony ZE slugiem (oferta wciąż dostępna) renderuje „Zobacz ofertę”', () => {
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl}>
+        <ApplicationActions applicationId="app-1" status="rejected" slug="job-1" jobTitle="Magazynier" />
+      </NextIntlClientProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: rowActionsName(pl, 'Magazynier') });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menuitem', { name: pl.dashboard.actionView })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: pl.dashboard.withdrawApplication })).not.toBeInTheDocument();
+  });
+});
+
 describe('checklista kompletności (#317)', () => {
   it('„Dodaj” z celem jest prawdziwym linkiem z nazwą sekcji', () => {
     render(

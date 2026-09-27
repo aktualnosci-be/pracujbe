@@ -29,6 +29,8 @@ import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { Pagination } from '@/components/public/Pagination';
 import {
   buildDemoFacets,
+  parseLocationsParam,
+  serializeLocations,
   sidebarFiltersToParams,
   splitParam,
   toFacetItem,
@@ -243,8 +245,13 @@ export default async function JobsListPage({
   };
   const withoutValue = (key: string, value: string): string => {
     const next = { ...activeParams };
-    const rest = splitParam(next[key]).filter((v) => v !== value);
-    if (rest.length) next[key] = rest.join(',');
+    // Lokalizacja jest wolnym tekstem i może sama zawierać przecinek (#845) — parsuje/serializuje
+    // ją osobna, escapująca para funkcji zamiast generycznego CSV używanego przez inne filtry.
+    const rest =
+      key === 'location'
+        ? parseLocationsParam(next[key]).filter((v) => v !== value)
+        : splitParam(next[key]).filter((v) => v !== value);
+    if (rest.length) next[key] = key === 'location' ? serializeLocations(rest) : rest.join(',');
     else delete next[key];
     return hrefFrom(next);
   };
