@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0238 — send_offer: klucz idempotencji związany z celem propozycji (#853)
+-- 0150 — send_offer: klucz idempotencji związany z celem propozycji (#853)
 -- NUMER TYMCZASOWY — ostateczny nada integrator.
 --
 -- Problem: send_offer szukał `p_idempotency_key` globalnie w `offers` i od razu zwracał

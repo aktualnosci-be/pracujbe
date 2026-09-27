@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CandidateApplicationsList } from '@/components/candidate/CandidateApplicationsList';
 import type { MyApplication } from '@/lib/data/candidate';
@@ -22,6 +22,26 @@ const items: MyApplication[] = Array.from({ length: 15 }, (_, index) => ({
 }));
 const cursor = { submittedAt: '2026-09-20T09:00:00+00:00', id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000010' };
 
+/**
+ * Czekanie na liczbę kart tanim zapytaniem DOM (`<li>`), a asercja roli raz po nim. `waitFor`
+ * powtarza callback co 50 ms i przy każdej mutacji, a `getAllByRole` liczy role i widoczność
+ * (getComputedStyle) całego drzewa — pod obciążeniem maszyny sam polling zjadał sekundy.
+ */
+async function expectListItems(count: number): Promise<void> {
+  await waitFor(() => expect(document.querySelectorAll('li')).toHaveLength(count));
+  expect(screen.getAllByRole('listitem')).toHaveLength(count);
+}
+
+/**
+ * Rozgrzewka: jeden render listy przed testami (limit hooka 10 s). Pierwszy render płaci
+ * jednorazowo kompilację JIT kart i ich zależności — pod obciążeniem maszyny to właśnie
+ * pierwszy test pliku był najwolniejszy. DOM jest potem czyszczony.
+ */
+beforeAll(() => {
+  render(<CandidateApplicationsList locale="pl" initialPage={{ items: items.slice(0, 10), nextCursor: cursor }} />);
+  cleanup();
+});
+
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -33,7 +53,7 @@ describe('candidate application list', () => {
     render(<CandidateApplicationsList locale="pl" initialPage={{ items: items.slice(0, 10), nextCursor: cursor }} />);
     expect(screen.getAllByRole('listitem')).toHaveLength(10);
     fireEvent.click(screen.getByRole('button', { name: 'applicationsMore' }));
-    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(15));
+    await expectListItems(15);
     expect(loadMoreApplications).toHaveBeenCalledWith('pl', cursor, null);
     expect(screen.getByText('applicationsEnd')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'applicationsMore' })).not.toBeInTheDocument();
@@ -60,7 +80,7 @@ describe('candidate application list', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(10);
     const retry = await screen.findByRole('button', { name: 'candidateListRetry' });
     fireEvent.click(retry);
-    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(15));
+    await expectListItems(15);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(loadMoreApplications).toHaveBeenCalledTimes(2);
   });
@@ -93,7 +113,7 @@ describe('candidate application list', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'applicationsMore' }));
-    await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(15));
+    await expectListItems(15);
     expect(loadMoreApplications).toHaveBeenCalledWith('pl', cursor, 'rozmowa');
     expect(screen.getByText('applicationsFilterEnd')).toBeVisible();
     expect(screen.queryByText('applicationsEnd')).not.toBeInTheDocument();
