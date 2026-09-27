@@ -8,7 +8,7 @@ import { toUserMessageKey } from '@/lib/errors';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * 0216 — „Kopiuj jako szkic”: akcja woła JEDNO RPC `duplicate_job_as_draft` pod sesją
+ * 0148 — „Kopiuj jako szkic”: akcja woła JEDNO RPC `duplicate_job_as_draft` pod sesją
  * (idempotencja, uprawnienia, blokady i kopia w bazie — dowód `rls.sql` sekcja JD216). Tu
  * pilnujemy granicy akcji: aktywna firma, klucz klienta, kody użytkowe zamiast tekstu bazy
  * oraz zakres kopii zapisany w migracji (co kopiujemy, czego nie).
@@ -43,7 +43,7 @@ beforeEach(() => {
     });
 });
 
-describe('duplicateJobAsDraft (0216)', () => {
+describe('duplicateJobAsDraft (0148)', () => {
   it('jedno RPC pod sesją z kluczem klienta → id nowego szkicu', async () => {
     expect(await duplicateJobAsDraft(JOB, KEY)).toEqual({ ok: true, id: NEW });
     const calls = fakeDb.callsTo('duplicate_job_as_draft');
@@ -108,7 +108,7 @@ describe('duplicateJobAsDraft (0216)', () => {
 
   it('migracja kopiuje treść, ale nie status, slug, daty publikacji ani blokadę moderacyjną', () => {
     const sql = readFileSync(
-      join(process.cwd(), 'supabase/migrations/0216_job_duplicate_draft.sql'),
+      join(process.cwd(), 'supabase/migrations/0148_job_duplicate_draft.sql'),
       'utf8',
     );
     const body = sql.slice(sql.indexOf('create or replace function public.duplicate_job_as_draft'));

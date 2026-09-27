@@ -53,7 +53,7 @@ import {
  *                          jedno transakcyjne RPC `update_published_job` (kompletność jak przy
  *                          publikacji, firma verified, CAS po `updated_at`); status i zgłoszenia
  *                          bez zmian.
- *   - `duplicateJobAsDraft` — „Kopiuj jako szkic” (0216): nowy szkic z treścią oferty
+ *   - `duplicateJobAsDraft` — „Kopiuj jako szkic” (0148): nowy szkic z treścią oferty
  *                          w dowolnym statusie, jednym RPC `duplicate_job_as_draft`.
  *   - `publishJob`      — ustawia `status = 'active'`, `published_at = now()`. Publikacja wymaga
  *                          firmy `verified` (RLS/with-check); niezweryfikowaną firmę mapujemy
@@ -242,7 +242,7 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
 
 /**
  * Tworzy nowy SZKIC w aktywnej firmie z treścią istniejącej oferty (dowolny status) —
- * jedno transakcyjne RPC `duplicate_job_as_draft` (0216): recruiter+, firma niezawieszona,
+ * jedno transakcyjne RPC `duplicate_job_as_draft` (0148): recruiter+, firma niezawieszona,
  * oferta bez decyzji moderacyjnej, idempotentnie po `clientKey` (UUID jednej operacji
  * w przeglądarce — podwójne kliknięcie i ponowienie zwracają ten sam szkic), audyt
  * `job.duplicated`. Nie kopiuje statusu, slugu, dat publikacji/wygaśnięcia, zgłoszeń ani

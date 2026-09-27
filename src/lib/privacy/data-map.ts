@@ -990,7 +990,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['employer'],
     columns: { created_by: 'reference' },
     note:
-      'Klucz idempotencji „Kopiuj jako szkic” (0216): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
+      'Klucz idempotencji „Kopiuj jako szkic” (0148): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
   },
 
   // --- Płatności (wyłączone, #51) --------------------------------------------------------------

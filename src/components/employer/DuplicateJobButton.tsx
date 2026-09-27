@@ -13,7 +13,7 @@ import { BTN_SMALL } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
 /**
- * „Kopiuj jako szkic” (0216) — nowy szkic w tej samej firmie z treścią oferty w dowolnym
+ * „Kopiuj jako szkic” (0148) — nowy szkic w tej samej firmie z treścią oferty w dowolnym
  * statusie, potem przejście do kreatora nowego szkicu.
  *
  * Idempotencja (Invariant #11): jeden klucz (UUID) na operację trzymany w `useRef` — podwójne

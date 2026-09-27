@@ -9,7 +9,7 @@ import pl from '../../src/messages/pl.json';
 import { waitForHydrated } from './fixtures/hydration';
 
 /**
- * „Kopiuj jako szkic” (0216) — tryb demo (bez bazy): przycisk przy każdej ofercie listy
+ * „Kopiuj jako szkic” (0148) — tryb demo (bez bazy): przycisk przy każdej ofercie listy
  * pracodawcy (dowolny status), nazwa dostępna z tytułem oferty, kliknięcie prowadzi do
  * kreatora bez zapisu. Kopię w bazie, idempotencję, uprawnienia i odmowy dowodzi
  * `rls.sql` sekcja JD216, granicę akcji — `job-duplicate-draft.test.ts`.

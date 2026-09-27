@@ -952,7 +952,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `job-terms-notification`.
   **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
   zmieniło.
-- [x] Kopiuj jako szkic (migracja `0216` — numer tymczasowy): przycisk „Kopiuj jako szkic” przy
+- [x] Kopiuj jako szkic (migracja `0148`): przycisk „Kopiuj jako szkic” przy
   każdej ofercie listy `/employer/oferty` (dowolny status, recruiter+; `DuplicateJobButton`,
   klucz UUID operacji w `useRef` — podwójne kliknięcie/ponowienie po błędzie sieci = ten sam
   szkic) → akcja `duplicateJobAsDraft` (oferta aktywnej firmy, limiter `job-draft`) → jedno RPC

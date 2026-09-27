@@ -781,14 +781,14 @@ Tabele w migracjach: 106; z danymi osobowymi: 70; bez danych osobowych: 36.
 
 ### `public.job_duplications`
 
-- **Migracja:** `supabase/migrations/0216_job_duplicate_draft.sql`
+- **Migracja:** `supabase/migrations/0148_job_duplicate_draft.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm
-- **Uwaga:** Klucz idempotencji „Kopiuj jako szkic” (0216): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.
+- **Uwaga:** Klucz idempotencji „Kopiuj jako szkic” (0148): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0216_job_duplicate_draft.sql` |
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0148_job_duplicate_draft.sql` |
 
 ### `public.jobs`
 

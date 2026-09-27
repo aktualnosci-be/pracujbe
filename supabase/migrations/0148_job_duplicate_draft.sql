@@ -1,4 +1,4 @@
--- 0216_job_duplicate_draft.sql — „Kopiuj jako szkic” na liście ofert pracodawcy
+-- 0148_job_duplicate_draft.sql — „Kopiuj jako szkic” na liście ofert pracodawcy
 -- (numer tymczasowy; ostateczny nada integrator).
 --
 -- Rekruter tworzy nowy SZKIC w tej samej firmie z treścią istniejącej oferty w dowolnym

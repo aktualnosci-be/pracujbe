@@ -14396,7 +14396,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- JD216. „Kopiuj jako szkic” (0216): duplicate_job_as_draft — nowy szkic w tej samej firmie
+-- JD216. „Kopiuj jako szkic” (0148): duplicate_job_as_draft — nowy szkic w tej samej firmie
 --        z treścią, relacjami i pytaniami (bez decyzji przeglądu), bez statusu/slugu/dat;
 --        recruiter+, idempotencja po kluczu klienta, audyt, odmowa dla zawieszonej firmy
 --        i oferty z decyzją moderacyjną; kontrole ujemne.
