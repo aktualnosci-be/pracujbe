@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+import { e2ePort } from './scripts/lib/e2e-server.mjs';
 
 /**
  * E2E przepływu kandydat ↔ pracodawca na PRAWDZIWYM PostgreSQL 16 (#351, #66).
@@ -7,9 +8,10 @@ import { defineConfig, devices } from '@playwright/test';
  * Uruchamiaj wyłącznie przez `npm run test:e2e:real` (scripts/test-e2e-real.mjs): skrypt tworzy
  * izolowaną bazę z migracjami produkcyjnymi i ograniczone loginy, a tutaj dostajemy tylko ich
  * adresy (E2E_REAL_*). Osobny katalog testów i port — nie koliduje z playwright.config.ts
- * (dane demo, port 3000) ani z konfiguracją fixture (4319/4320).
+ * (dane demo, port 3000) ani z konfiguracją fixture (4319/4320). Port 4331, a z E2E_PORT=N — N+3
+ * (scripts/lib/e2e-server.mjs).
  */
-const PORT = 4331;
+const PORT = e2ePort('realFlow');
 const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 const appUrl = process.env.E2E_REAL_APP_URL;
 if (!appUrl || !process.env.E2E_REAL_AUTH_URL || !process.env.E2E_REAL_ADMIN_URL) {

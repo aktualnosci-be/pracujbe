@@ -888,6 +888,17 @@ parsera.
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
 
+Granica błędu i 404 wewnątrz panelu kandydata (bez migracji, wzór jak panel pracodawcy #895):
+`src/app/[locale]/candidate/error.tsx` (`CandidatePanelError`) i `not-found.tsx`
+(`CandidateNotFound`) leżą POD layoutem `/candidate`, więc nieobsłużony błąd strony albo
+`notFound()` (szczegół zgłoszenia, import CV bez flagi) nie zastępuje już panelu publiczną stroną
+błędu/404 — sidebar i dolny pasek zostają. Błąd: komunikat z i18n (`dashboard.candidatePanelError*`,
+Invariant #8), do kanału błędów sam kod (`captureError`), „Spróbuj ponownie” = `useErrorRetry`,
+link do pulpitu. 404: status 404, bez ujawniania, czy obiekt istnieje, linki do pulpitu/zgłoszeń/
+polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boundaries`
+(4 języki, bez treści wyjątku, kontrola ujemna linków spoza panelu), E2E
+`candidate-application-detail` (404 z sidebarem, 4 języki).
+
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
   Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła
@@ -1537,6 +1548,13 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   (`requireAdmin` → `notFound()`), niezależnie od layoutu. `0076`: pola tożsamości i moderacji
   zgłoszeń ustala baza (trigger `reports_guard`, limity długości), helpery ról bez EXECUTE dla
   anon/PUBLIC (`is_job_company_member` zostaje — polityki anon). Dowód: `rls.sql` sekcja QQ.
+  Granica błędu i 404 panelu (bez migracji): `src/app/[locale]/admin/error.tsx`
+  (`AdminPanelError`) i `not-found.tsx` (`AdminNotFound`) pod layoutem `/admin` — błąd strony
+  albo `notFound()` ze strony/warstwy danych zostawia menu panelu (nieznany adres = catch-all
+  `[...rest]`, ogólna 404 jak dotąd); komunikaty `admin.panelError*`/`panelNotFound*`
+  (bez ujawniania, czy obiekt istnieje), do kanału błędów sam kod. Guard bez zmian: `notFound()`
+  rzucone przez sam layout łapie granica NADRZĘDNA, więc nie-admin nadal widzi ogólną 404, nie
+  panelową (strażnik w unit `candidate-admin-panel-boundaries`).
   UX panelu (#415–#418, #420–#423): listy firm/zgłoszeń/użytkowników stronicowane kursorem
   (`created_at`+`id`, 50/stronę, `src/lib/admin/list-params.ts`) z wyszukiwaniem po stronie serwera
   (firmy: nazwa/VAT/KBO/e-mail; użytkownicy: imię/nazwisko/e-mail + filtr roli), parametry w URL.
@@ -2126,7 +2144,8 @@ npm run start          # serwer produkcyjny
 npm run lint           # ESLint: src/, tests/, scripts/ (.eslintrc.json ma "root": true)
 npm run typecheck      # tsc --noEmit
 npm run test           # Vitest (unit)
-npm run test:e2e       # Playwright
+npm run test:e2e       # Playwright (port E2E_PORT, domyślnie 3000; cudzy serwer tylko z E2E_REUSE_SERVER=1)
+E2E_PORT=3517 npx playwright test tests/e2e/smoke.spec.ts  # równolegle z innym przebiegiem — docs/E2E_FLAKY_REPORT.md
 npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
 npm run test:rls       # migracje od zera + testy RLS na lokalnym PostgreSQL 16
