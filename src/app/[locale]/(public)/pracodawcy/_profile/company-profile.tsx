@@ -10,7 +10,12 @@ import { Pagination } from '@/components/public/Pagination';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl, buildOrganizationJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
+import {
+  brandShareImageUrl,
+  buildBreadcrumbListJsonLd,
+  buildOrganizationJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo/structured-data';
 import { companyProfilePath, getCompanyProfile } from '@/lib/companies';
 
 /**
@@ -117,6 +122,20 @@ export async function CompanyProfileView({
   ]);
   const pageStatus = t('pageStatus', { page: result.page, lastPage });
 
+  // Widoczna ścieżka i BreadcrumbList z jednej listy — dane strukturalne = nawigacja (#930).
+  const trail = [
+    { label: tCommon('home'), href: '/' },
+    { label: tJobs('pageTitle'), href: JOBS_PATH },
+    ...(result.page > 1
+      ? [{ label: company.name, href: companyProfilePath(slug) }, { label: pageStatus }]
+      : [{ label: company.name }]),
+  ];
+  const breadcrumbJsonLd = buildBreadcrumbListJsonLd(trail, {
+    base: env.siteUrl,
+    locale,
+    currentUrl: `${env.siteUrl}/${locale}${companyProfilePath(slug, result.page)}`,
+  });
+
   return (
     <PublicSavedJobsProvider key={JSON.stringify(jobs.map((job) => job.id))} jobIds={jobs.map((job) => job.id)}>
       {/* Organization (#591): strona istnieje tylko dla firmy zweryfikowanej. */}
@@ -124,16 +143,14 @@ export async function CompanyProfileView({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+      />
       <div className="container py-6 md:py-10">
         <Breadcrumbs
           ariaLabel={tCommon('breadcrumb')}
-          items={[
-            { label: tCommon('home'), href: '/' },
-            { label: tJobs('pageTitle'), href: JOBS_PATH },
-            ...(result.page > 1
-              ? [{ label: company.name, href: companyProfilePath(slug) }, { label: pageStatus }]
-              : [{ label: company.name }]),
-          ]}
+          items={trail}
         />
 
         <header className="mt-4 flex items-start gap-4">
