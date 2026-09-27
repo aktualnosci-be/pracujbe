@@ -127,6 +127,12 @@ const TIMING_SPECS = ['**/dialog-open-inp.spec.ts'];
  */
 const CI_WORKERS = 3;
 
+/**
+ * Nazwa raportu cząstkowego (blob) w CI: `shard-1`…, `timing` — ustawiają ją joby shardów
+ * i pomiaru w .github/workflows/ci.yml. Pusta (lokalnie) = zwykłe reportery.
+ */
+const BLOB_NAME = (process.env.E2E_BLOB_NAME ?? '').replace(/[^a-z0-9-]/gi, '');
+
 export default defineConfig({
   testDir: './tests/e2e',
   // Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
@@ -141,7 +147,12 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   failOnFlakyTests: !!process.env.CI,
   workers: process.env.CI ? CI_WORKERS : undefined,
-  reporter: process.env.CI
+  reporter: BLOB_NAME
+    ? // Shard CI (`--shard=i/N`) albo krok pomiaru: raport cząstkowy (blob) łączy job zbiorczy
+      // „E2E (Playwright)” przez `playwright merge-reports` (playwright.merge.config.ts — tam
+      // html i raport flaków). `failOnFlakyTests` obowiązuje w każdym shardzie osobno.
+      [['line'], ['github'], ['blob', { outputDir: 'blob-report', fileName: `report-${BLOB_NAME}.zip` }]]
+    : process.env.CI
     ? [
         ['line'],
         ['github'],
