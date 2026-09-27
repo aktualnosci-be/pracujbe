@@ -86,3 +86,38 @@ for (const [locale, heading] of Object.entries(headings)) {
     }
   });
 }
+
+// #809: filtr etapu działa przed limitem strony — najstarsze zgłoszenie fixture (rozmowa)
+// jest bez filtra dopiero na drugiej stronie, a z filtrem „Rozmowa” na pierwszej.
+const stage = {
+  pl: { nav: 'Etap zgłoszenia', all: 'Wszystkie', interview: 'Rozmowa', emptyTitle: 'Brak zgłoszeń na tym etapie', showAll: 'Pokaż wszystkie zgłoszenia', end: 'To wszystkie Twoje zgłoszenia na tym etapie.' },
+  nl: { nav: 'Fase van de sollicitatie', all: 'Alle', interview: 'Gesprek', emptyTitle: 'Geen sollicitaties in deze fase', showAll: 'Alle sollicitaties tonen', end: 'Dit zijn al je sollicitaties in deze fase.' },
+  fr: { nav: 'Étape de la candidature', all: 'Toutes', interview: 'Entretien', emptyTitle: 'Aucune candidature à cette étape', showAll: 'Afficher toutes les candidatures', end: 'Vous avez vu toutes vos candidatures à cette étape.' },
+  en: { nav: 'Application stage', all: 'All', interview: 'Interview', emptyTitle: 'No applications at this stage', showAll: 'Show all applications', end: 'These are all your applications at this stage.' },
+} as const;
+
+for (const [locale, copy] of Object.entries(stage)) {
+  test(`candidate application stage filter works before pagination in ${locale}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`/${locale}/candidate/aplikacje`);
+    await rejectOptionalCookies(page, locale);
+    const cards = page.getByRole('main').getByRole('listitem');
+    await expect(cards).toHaveCount(10);
+    const nav = page.getByRole('navigation', { name: copy.nav });
+    await expect(nav.getByRole('link', { name: copy.all, exact: true })).toHaveAttribute('aria-current', 'page');
+
+    await nav.getByRole('link', { name: copy.interview, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/candidate/aplikacje\\?etap=rozmowa$`));
+    await expect(cards).toHaveCount(1);
+    await expect(nav.getByRole('link', { name: copy.interview, exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByText(copy.end)).toBeVisible();
+
+    await page.goto(`/${locale}/candidate/aplikacje?etap=propozycja`);
+    await expect(page.getByRole('heading', { level: 2, name: copy.emptyTitle })).toBeVisible();
+    await page.getByRole('link', { name: copy.showAll }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/candidate/aplikacje$`));
+    await expect(cards).toHaveCount(10);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+}
