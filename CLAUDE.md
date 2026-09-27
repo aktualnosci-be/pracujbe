@@ -1882,6 +1882,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Szkic procedury (nieopublikowany): `docs/legal-drafts/procedura-naruszen.md`. **Do zrobienia
   (właściciel/prawnik):** role i kontakty dyżuru, organ i portal, treść zawiadomień, tabletop,
   zatwierdzenie procedury; okres przechowywania wpisów.
+  Wspólny `csvCell` (#876, bez migracji): neutralizacja formuł arkusza rozszerzona o wiodący LF
+  (`\n`) i pełnoszerokie warianty operatorów (`＝ ＋ － ＠`) — poprzedni regex `/^[=+\-@\t\r]/`
+  pomijał oba przypadki z listy OWASP CSV Injection, więc kontrolowana wartość zaczynająca się
+  od LF przed formułą (np. w uzasadnieniu wpisu) trafiała do eksportu bez prefiksu `'`. Jeden
+  helper obsługuje eksport rejestru naruszeń (`breachExportCsv`) i eksport dziennika audytu
+  (`auditExportCsv`, #841) — poprawka obejmuje oba. Dowód: unit `breach-register` (kontrole
+  ujemne: LF, każdy pełnoszeroki wariant, zwykły tekst z `=` nie na początku zostaje bez zmian).
 - [~] Mapa danych osobowych (#485/#488/#503/#504, część techniczna): `node scripts/privacy/data-map.mjs`
   generuje `docs/legal-drafts/data-map.generated.md` z migracji produkcyjnych (parser
   `scripts/privacy/schema.mjs`), klasyfikacji `src/lib/privacy/data-map.ts` (każda tabela, kategorie,
