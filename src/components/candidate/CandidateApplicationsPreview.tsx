@@ -4,6 +4,7 @@ import { ApplicationActions } from '@/components/candidate/ApplicationActions';
 import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import type { CandidateSectionLoad, MyApplication } from '@/lib/data/candidate';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import { ArrowRight } from 'lucide-react';
 import { EMPTY, PANEL, PANEL_H2, ROW, ROW_META, ROW_TITLE, SECTION_HEAD, TEXT_LINK } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ function formatDate(iso: string, locale: string): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: APP_TIME_ZONE,
   }).format(ts);
 }
 

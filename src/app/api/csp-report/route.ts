@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { readTextWithLimit } from '@/lib/http/read-limited';
+import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { createFunnelRateLimiter } from '@/lib/job-funnel/rate-limit';
 import { isCspReportContentType, parseCspReports } from '@/lib/security/csp-report';
 
@@ -39,12 +40,20 @@ function empty(status: number): NextResponse {
   return new NextResponse(null, { status, headers: NO_STORE });
 }
 
-/** Adres z nagłówka zaufanego proxy (jak `lib/rate-limit.ts`); używany wyłącznie w limiterze. */
+/**
+ * Adres niepoprawny albo nieustalony → wspólny zastępczy klucz (jak `lib/rate-limit.ts`).
+ * Brak nagłówka proxy nie może ani wyłączać limitu (klucz zmienny na życzenie klienta),
+ * ani blokować całego ruchu — wszystkie takie żądania dzielą jedną, wspólną pulę.
+ */
+const UNKNOWN_IP = '0.0.0.0';
+
+/**
+ * Adres z JEDYNEGO, jawnie skonfigurowanego, zaufanego nagłówka proxy (#588/#602,
+ * `@/lib/http/trusted-ip`) — NIGDY z `X-Forwarded-For`, który klient dopisuje sam i może
+ * dowolnie zmieniać przy każdym żądaniu, omijając limiter (#648).
+ */
 function clientAddress(headers: Headers): string {
-  const realIp = headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp;
-  const forwarded = headers.get('x-forwarded-for')?.split(',').map((part) => part.trim()).filter(Boolean);
-  return forwarded?.at(-1) ?? 'unknown';
+  return trustedClientIp(headers) ?? UNKNOWN_IP;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

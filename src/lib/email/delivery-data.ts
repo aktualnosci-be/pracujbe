@@ -24,6 +24,9 @@ export interface DeliveryInput {
   template: string;
   locale: string;
   payload: Record<string, unknown> | null;
+  /** #843: obiekt zdarzenia (np. `'company'`) — routing CTA do właściwej firmy, nie aktywnej z cookie. */
+  entity_type?: string | null;
+  entity_id?: string | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,8 +36,19 @@ export function deliveryLocale(value: string): Locale {
   return isLocale(value) ? value : 'en';
 }
 
-/** Ścieżka (bez prefiksu locale) sekcji panelu, do której prowadzi CTA danego typu maila. */
-export function emailTargetPath(template: string, payload: Record<string, unknown> | null): string {
+/**
+ * Ścieżka (bez prefiksu locale) sekcji panelu, do której prowadzi CTA danego typu maila.
+ *
+ * `companyId` (#843): dla decyzji o firmie (`companyVerified`/`companyRejected`/
+ * `companySuspended`) to identyfikator firmy, KTÓREJ DOTYCZY zdarzenie (`entity_id` wiersza
+ * kolejki) — właściciel kilku firm może mieć w cookie inną AKTYWNĄ firmę. Dołączony jako
+ * `?firma=` pozwala stronie pokazać dane właściwej firmy zamiast cichej podmiany na aktywną.
+ */
+export function emailTargetPath(
+  template: string,
+  payload: Record<string, unknown> | null,
+  companyId?: string | null,
+): string {
   switch (template) {
     case 'jobOffer':
       return '/candidate/propozycje';
@@ -51,6 +65,9 @@ export function emailTargetPath(template: string, payload: Record<string, unknow
     case 'companyVerified':
     case 'companyRejected':
     case 'companySuspended':
+      return companyId && UUID_RE.test(companyId)
+        ? `/employer/firma?firma=${companyId.toLowerCase()}`
+        : '/employer/firma';
     case 'moderationJobRemoved':
     case 'moderationCompanySuspended':
     case 'moderationRestored':
@@ -202,7 +219,10 @@ export function buildDeliveryData(
   // before exchanging the token for a short-lived HttpOnly cookie via POST.
   const fragment = isGuest ? `#token=${encodeURIComponent(guestToken ?? '')}` : '';
   const base = site.replace(/\/+$/, '');
-  const url = `${base}/${locale}${emailTargetPath(row.template, payload)}${fragment}`;
+  // #843: `entity_id` niesie identyfikator OBIEKTU zdarzenia (dla `company*` — firmy, której
+  // dotyczy decyzja), nie aktywnej firmy z cookie odbiorcy.
+  const companyId = row.entity_type === 'company' ? row.entity_id : undefined;
+  const url = `${base}/${locale}${emailTargetPath(row.template, payload, companyId)}${fragment}`;
   const firstName = recipientFirstName?.trim() || undefined;
   const salary = deliverySalary(payload, locale);
 

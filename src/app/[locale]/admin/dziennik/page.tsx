@@ -59,6 +59,7 @@ const BASE_PATH = '/admin/dziennik';
 
 const ENTITY_LABEL: Record<string, string> = {
   company: 'targetCompany',
+  job: 'entityJob',
   report: 'entityReport',
   application: 'entityApplication',
   offer: 'entityOffer',
@@ -67,6 +68,7 @@ const ENTITY_LABEL: Record<string, string> = {
   screening_question_review: 'entityScreeningReview',
   email_campaign: 'entityEmailCampaign',
   age_policy: 'entityAgePolicy',
+  retention_policy: 'entityRetentionPolicy',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;

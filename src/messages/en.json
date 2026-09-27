@@ -165,7 +165,13 @@
     "appealGroundsLabel": "Why is the decision wrong?",
     "appealDeadline": "Appeal deadline: {date}.",
     "appealDeadlineNotStarted": "The appeal deadline starts once you receive the notice of the decision.",
-    "appealStatusLabel": "Appeal {reference}"
+    "appealStatusLabel": "Appeal {reference}",
+    "targetTitle": "Company from the decision",
+    "targetIntro": "This link is about a different company than the one currently active in your panel. Its details are shown below — your active company has not changed.",
+    "targetUnavailableTitle": "This company is no longer available from your account",
+    "targetUnavailableHint": "You no longer have active access to this company, or the link is invalid.",
+    "targetSwitchAction": "Set as active company",
+    "targetSwitchError": "Could not switch the active company. Please try again."
   },
   "companyProfile": {
     "metaTitle": "Jobs at {name}",
@@ -943,7 +949,6 @@
     "employerApplicationsCandidateLabel": "Candidate",
     "employerApplicationsJobLabel": "Job",
     "employerApplicationsPagination": "Application pages",
-    "employerApplicationsPage": "Page {page}",
     "employerApplicationsNewer": "Newer applications",
     "employerApplicationsOlder": "Older applications",
     "emptyState": "No data to display.",
@@ -956,7 +961,6 @@
     "employerOffersPaginationLabel": "Job pagination",
     "employerOffersPrevious": "Previous page",
     "employerOffersFirstPage": "Back to the first page",
-    "employerOffersPage": "Page {page}",
     "employerOffersNext": "Next page",
     "employerOffersPageEmpty": "There are no more jobs on this page.",
     "employerOffersRetry": "Try again",
@@ -988,6 +992,7 @@
     "declineConfirm": "Decline",
     "acceptProposalSuccess": "The proposal has been accepted.",
     "declineProposalSuccess": "The proposal has been declined.",
+    "proposalExpiredNotice": "The deadline to respond to this proposal has passed. You can no longer accept or decline it.",
     "employerApplicationDetailTitle": "Application details",
     "employerApplicationBack": "Back to applications",
     "employerApplicationLoadError": "We couldn’t load this application.",
@@ -1047,6 +1052,27 @@
     "applicationStepInterview": "Interview",
     "applicationStepDecision": "Decision",
     "employerPlaceEyebrow": "Your recruitment",
+    "employerApplicationsFirstPage": "Back to the newest applications",
+    "employerApplicationsForJob": "Applications for the job “{title}”.",
+    "employerApplicationsAllJobs": "Show all applications",
+    "employerOffersViewApplications": "View applications",
+    "employerOffersViewApplicationsLabel": "View applications for the job {title}",
+    "employerApplicationViewCandidate": "View candidate profile",
+    "candidatesViewProfile": "View profile",
+    "candidatesViewProfileLabel": "View profile: {name}",
+    "candidatesPagination": "Candidate pages",
+    "candidatesPrevious": "Better matched candidates",
+    "candidatesNext": "More candidates",
+    "candidatesFirstPage": "Back to the best matches",
+    "candidatesPageEmpty": "There are no more candidates on this page.",
+    "employerCandidateDetailTitle": "Candidate profile",
+    "employerCandidateBack": "Back to candidates",
+    "employerCandidateLoadError": "The candidate profile could not be loaded",
+    "employerCandidateOccupations": "Occupations",
+    "employerCandidateMatches": "Match with the company’s jobs",
+    "employerCandidateNoMatches": "No matches have been calculated for the company’s jobs.",
+    "employerCandidateApplications": "Applications to the company’s jobs",
+    "employerCandidateNoApplications": "The candidate has not applied to the company’s jobs.",
     "statRecruiterOnly": "Visible to the company owner, administrators and recruiters",
     "statAfterVerification": "Available once the company is verified",
     "funnelDenied": "The recruitment funnel is visible to the company owner, administrators and recruiters.",
@@ -1269,6 +1295,7 @@
     "itemModerationAppealReversed": "Appeal granted: decision changed",
     "itemScreeningApproved": "A question in your job was approved",
     "itemScreeningRejected": "A question in your job was not approved",
+    "itemScreeningHidden": "A question in your published job was hidden — please revise it",
     "listIntro": "All notifications from your account, newest first.",
     "filterLabel": "Notification filter",
     "filterAll": "All",
@@ -1333,6 +1360,7 @@
     "screeningRequired": "Please answer this question.",
     "screeningYes": "Yes",
     "screeningNo": "No",
+    "screeningClearAnswer": "Clear answer",
     "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
     "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
     "ageRequired": "Before applying, confirm your age in your account settings.",
@@ -1492,6 +1520,8 @@
     "startDateLabel": "Start date",
     "cityLabel": "City",
     "cityPlaceholder": "e.g. Antwerp",
+    "cityRecognized": "Recognised place: {name}. The job will appear under this city's filter whatever the spelling.",
+    "cityNotRecognized": "This name is not in our list of places. The job will show the name as typed, but the city filter will only find it by the same spelling.",
     "regionLabel": "Region",
     "regionPlaceholder": "e.g. Flanders",
     "addressLabel": "Address",
@@ -2164,6 +2194,7 @@
     "entityScreeningReview": "Screening question",
     "auditActionScreeningRequested": "Question sent for review",
     "auditActionScreeningReviewed": "Screening question decision",
+    "auditActionScreeningHidden": "Screening question hidden",
     "navBreaches": "Breach register",
     "entityBreach": "Breach register entry",
     "auditActionBreachCreated": "New breach register entry",
@@ -2506,7 +2537,64 @@
     "webVitalsAboutConsent": "The Cloudflare Web Analytics beacon takes the measurements. It loads only after consent in the analytics category and only on public pages. No cookies and no personal identifiers; bot traffic excluded.",
     "webVitalsAboutSampling": "Cloudflare samples events, so measurement counts are estimates. Values are the 75th percentile.",
     "webVitalsAboutThresholds": "Ratings use the Core Web Vitals thresholds: LCP 2.5 / 4 s, INP 200 / 500 ms, CLS 0.1 / 0.25.",
-    "webVitalsOpenCloudflare": "Open Web Analytics in Cloudflare (new tab)"
+    "webVitalsOpenCloudflare": "Open Web Analytics in Cloudflare (new tab)",
+    "navJobs": "Jobs",
+    "jobsTitle": "Jobs",
+    "jobsSubtitle": "All job offers from all companies — view only. Moderation decisions are made in reports.",
+    "searchJobsLabel": "Search jobs",
+    "searchJobsHint": "Title, job address, city, company name or ID.",
+    "jobsFilterModerated": "Blocked by decision",
+    "jobsModeratedTag": "Moderation decision",
+    "jobsDemoTag": "Sample data",
+    "jobsHistoryLink": "Change history",
+    "jobsHistoryLabel": "Change history: {title}",
+    "jobsCompanyFilter": "Company jobs: {name}",
+    "jobsCompanyFilterClear": "Show jobs from all companies",
+    "jobsListEmpty": "No jobs match the criteria.",
+    "colJobTitle": "Job",
+    "colCompany": "Company",
+    "entityJob": "Job offer",
+    "auditActionJobUpdatePublished": "Published job edited",
+    "auditActionJobDuplicated": "Job copied",
+    "companyJobsAllLink": "All company jobs",
+    "auditActionRetentionPolicyChanged": "Retention period changed",
+    "auditActionRetentionPoliciesSeeded": "Retention periods recorded",
+    "entityRetentionPolicy": "Retention period",
+    "retentionLinkTitle": "Data retention",
+    "retentionLinkHint": "Retention periods and clean-up job modes — view only.",
+    "retentionLinkCta": "View data retention",
+    "backToUsers": "Back to the user list",
+    "userDetailSubtitle": "Account data, companies and activity — read only.",
+    "userNotFoundTitle": "Account not found",
+    "userNotFoundHint": "The account does not exist or has been deleted.",
+    "sectionAccount": "Account",
+    "userStatusLabel": "Account status",
+    "userActive": "Active",
+    "userInactive": "Inactive",
+    "userLastSeen": "Last activity",
+    "userNeverSeen": "No data",
+    "userAuditLink": "Actions by this account in the audit log",
+    "sectionLanguage": "Communication language",
+    "userRecipientLocale": "Language of emails and notifications",
+    "userRecipientLocaleHint": "Chosen in this order: preferred language, account language, sign-up language and, if none is set, English.",
+    "userPreferredLocale": "Preferred language",
+    "userAccountLocale": "Account language",
+    "userSignupLocale": "Sign-up language",
+    "userLocaleUnset": "Not set",
+    "sectionUserEmail": "Email delivery",
+    "userSuppressionNone": "The address is not blocked.",
+    "userSuppressionActive": "Address blocked: {reason} ({date}).",
+    "userSuppressionLink": "View the block in email",
+    "sectionUserCompanies": "Companies",
+    "userCompaniesEmpty": "The account does not belong to any company.",
+    "sectionCandidate": "Candidate profile",
+    "userCandidateEmpty": "The account has no candidate profile.",
+    "userProfileCompleted": "Profile completed",
+    "userSearchable": "Visible to companies",
+    "userApplications": "Applications",
+    "userOffers": "Offers received",
+    "userYes": "Yes",
+    "userNo": "No"
   },
   "settings": {
     "title": "Notification preferences",
@@ -2629,7 +2717,8 @@
     "submit": "Enter",
     "error": "Incorrect password. Please try again.",
     "rateLimited": "Too many attempts. Please try again in a few minutes.",
-    "unavailable": "Access is temporarily unavailable. Please try again later."
+    "unavailable": "Access is temporarily unavailable. Please try again later.",
+    "payloadTooLarge": "The form is too large. Refresh the page and try again."
   },
   "offline": {
     "title": "No connection",
@@ -2886,7 +2975,13 @@
     "offer": "Job",
     "untitled": "Untitled job",
     "denied": "The job funnel is visible to the company owner, administrators and recruiters.",
-    "loadError": "The job funnel could not be loaded. Please try again."
+    "loadError": "The job funnel could not be loaded. Please try again.",
+    "csvFrom": "From",
+    "csvTo": "To",
+    "csvStatus": "Status",
+    "csvTotal": "Total",
+    "exportCsv": "Download CSV",
+    "exportCsvLabel": "Download the job funnel as a CSV file ({from} – {to})"
   },
   "savedSearches": {
     "hint": "Save these filters and we will let you know on the site and by email about new jobs (at most once a day).",
@@ -2907,6 +3002,7 @@
     "browse": "Browse jobs",
     "lastAlert": "Last alert: {date}",
     "noAlertYet": "No alert sent yet.",
+    "filtersLabel": "Filters of the search “{name}”",
     "open": "Show jobs",
     "alerts": "Notify me about new jobs",
     "frequency": "How often",
@@ -3288,5 +3384,113 @@
     "errorLanguageInvalid": "The language name must be 2 to 40 characters long.",
     "errorExperienceInvalid": "Enter a number of years from 0 to 60.",
     "errorFieldsInvalid": "Correct the highlighted fields before saving."
+  },
+  "adminRetention": {
+    "title": "Data retention",
+    "subtitle": "Retention periods stored in the database and clean-up job modes. View only — this page changes nothing.",
+    "demoNotice": "Demo mode: initial values from the migration, without reading the database.",
+    "modesTitle": "Scheduled job modes",
+    "modesHint": "State of the service environment variables, read the same way as the maintenance job. Changing it requires setting the variable in hosting.",
+    "modeRetention": "Data clean-up (RETENTION_MODE)",
+    "modeDsaRetention": "DSA case anonymisation (DSA_RETENTION_MODE)",
+    "modeStorageGc": "Orphaned file clean-up (STORAGE_GC_MODE)",
+    "mode": {
+      "off": "Off",
+      "dryRun": "Dry run (no changes)",
+      "apply": "On (deleting)"
+    },
+    "storageGcDryRun": "Counters only (no deleting)",
+    "storageGcDelete": "Deleting orphaned objects",
+    "policiesTitle": "Retention periods",
+    "policiesHint": "A category marked “off” has no deadline. Periods are changed by the data controller.",
+    "policiesEmpty": "No retention periods stored.",
+    "fieldPeriod": "Period",
+    "fieldWarning": "Warning before deadline",
+    "fieldEnforcement": "Who enforces the deadline",
+    "fieldLastChange": "Last change",
+    "enforcement": {
+      "job": "Clean-up job",
+      "monitoring": "Monitoring sensor",
+      "infrastructure": "Infrastructure",
+      "none": "No job"
+    },
+    "days": "{count, plural, one {# day} other {# days}}",
+    "periodOff": "Off",
+    "lastChangeValue": "{date}, {actor}: {from} → {to}",
+    "updatedValue": "{date} (migration)",
+    "lastChangeNone": "No changes",
+    "actorUnknown": "Administrator",
+    "unknownCategory": "Category without a description in the panel.",
+    "auditLink": "Change history in the audit log",
+    "keys": {
+      "acceptance_ip_user_agent": {
+        "label": "Acceptance IP and user agent",
+        "description": "The IP address and user agent stored at sign-up are cleared; the acceptance receipt stays."
+      },
+      "audit_log": {
+        "label": "Audit log",
+        "description": "Minimised log of administrative actions. No automatic job."
+      },
+      "closed_application": {
+        "label": "Closed applications",
+        "description": "Application in a final state with its conversations, notifications and emails — counted from closing."
+      },
+      "confirmed_guest_request": {
+        "label": "Confirmed guest requests",
+        "description": "Buffer of the guest request after confirmation; the application stays with its snapshot."
+      },
+      "consent_evidence": {
+        "label": "Consent evidence",
+        "description": "Consent evidence after minimisation. No automatic job."
+      },
+      "data_rights_request_log": {
+        "label": "Data rights request log",
+        "description": "Record of handling an access or erasure request, without the data — counted from completion."
+      },
+      "database_backup": {
+        "label": "Database backups",
+        "description": "Database backups and exports, pruned by the backup script and the provider."
+      },
+      "deleted_file": {
+        "label": "Deleted files",
+        "description": "File marked as deleted: database row and bucket object."
+      },
+      "deleted_profile": {
+        "label": "Deleted candidate profiles",
+        "description": "Profile marked as deleted: full removal of the account and process data."
+      },
+      "erasure_tombstone": {
+        "label": "Erasure register",
+        "description": "Erasure register reapplied after a restore; must outlive the oldest backup."
+      },
+      "guest_ip_user_agent": {
+        "label": "Guest IP and user agent",
+        "description": "The IP address and user agent of the guest consent are cleared."
+      },
+      "inactive_candidate_account": {
+        "label": "Inactive candidate accounts",
+        "description": "Account without activity: email warning, then full removal."
+      },
+      "inactive_candidate_cv": {
+        "label": "CVs of inactive candidates",
+        "description": "CV without account activity: email warning, then file removal."
+      },
+      "inactive_searchable_profile": {
+        "label": "Inactive searchable profiles",
+        "description": "A profile visible to companies without activity is hidden from search."
+      },
+      "security_log": {
+        "label": "Application and security logs",
+        "description": "Raw logs at the hosting provider — an infrastructure setting."
+      },
+      "storage_physical_deletion": {
+        "label": "Physical file deletion",
+        "description": "Removal of the bucket object after the row is deleted; alert before the deadline."
+      },
+      "unconfirmed_guest_request": {
+        "label": "Unconfirmed guest requests",
+        "description": "Guest request without confirmation — counted from the first submission."
+      }
+    }
   }
 }

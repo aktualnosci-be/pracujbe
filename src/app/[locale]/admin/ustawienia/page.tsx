@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AdminPageHeader } from '@/components/admin/AdminListControls';
 import { AgePolicyForm } from '@/components/admin/AgePolicyForm';
+import { Link } from '@/i18n/navigation';
 import {
   INFO_LABEL,
   INFO_PAIRS,
@@ -17,6 +18,7 @@ import {
   PANEL_P,
   STATUS,
   STATUS_GOOD,
+  TEXT_LINK,
 } from '@/components/admin/admin-styles';
 
 /**
@@ -123,6 +125,18 @@ export default async function AdminAgePolicyPage({ params }: { params: Promise<{
           <AgePolicyForm minAge={result.minAge} confirmed={result.confirmed} />
         </>
       )}
+
+      <section className={PANEL} aria-labelledby="settings-retention">
+        <h2 id="settings-retention" className={PANEL_H2}>
+          {t('retentionLinkTitle')}
+        </h2>
+        <p className={cn(PANEL_P, 'mt-2')}>{t('retentionLinkHint')}</p>
+        <p className="mt-3">
+          <Link href="/admin/ustawienia/retencja" className={TEXT_LINK}>
+            {t('retentionLinkCta')}
+          </Link>
+        </p>
+      </section>
     </div>
   );
 }

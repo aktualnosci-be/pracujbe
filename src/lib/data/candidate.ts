@@ -1380,7 +1380,7 @@ export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMe
            SELECT m.body, m.sender_id, m.created_at
              FROM public.messages m
             WHERE m.conversation_id = c.id AND m.deleted_at IS NULL
-            ORDER BY m.created_at DESC
+            ORDER BY m.created_at DESC, m.id DESC
             LIMIT 1
          ) lm ON true
         WHERE cm.profile_id = $1 AND c.deleted_at IS NULL
