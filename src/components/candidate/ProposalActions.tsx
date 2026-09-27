@@ -28,6 +28,14 @@ const MAX_TIMEOUT_MS = 2_147_483_647;
  * Odrzucenie jest stanem końcowym, więc wymaga potwierdzenia w `ConfirmDialog` (#328);
  * anulowanie nie woła akcji i oddaje fokus przyciskowi „Odrzuć". Po udanej odpowiedzi zostaje
  * komunikat `role="status"`, który dostaje fokus (przyciski znikają po odświeżeniu trasy).
+ *
+ * Upływ terminu w trakcie wizyty (#830): od chwili `expiresAt` nie można ROZPOCZĄĆ nowej
+ * odpowiedzi (baza i tak odrzuca `expires_at <= now()`), ale bieżąca operacja i jej wynik
+ * zostają widoczne. Trwające żądanie trzyma zablokowane przyciski i dialog do wyniku; otwarte
+ * potwierdzenie bez żądania zamyka się, a fokus trafia na komunikat o upływie terminu. Błąd po
+ * terminie pokazuje komunikat i odświeża trasę, żeby karta pokazała rzeczywisty stan (odpowiedź
+ * mogła zostać zapisana tuż przed terminem — wtedy `status` z serwera zamienia błąd w sukces).
+ * `onExpire` pozwala liście zmienić etykietę karty na „Wygasła” bez czekania na serwer.
  */
 
 export function ProposalActions({
@@ -35,6 +43,8 @@ export function ProposalActions({
   expiresAt,
   initialCanRespond,
   jobTitle,
+  status,
+  onExpire,
   className,
 }: {
   offerId: string;
@@ -42,6 +52,10 @@ export function ProposalActions({
   jobTitle?: string;
   expiresAt: string | null;
   initialCanRespond: boolean;
+  /** Zapisany status propozycji z serwera (po odświeżeniu trasy rozstrzyga wynik po błędzie). */
+  status?: string;
+  /** Wywoływane raz, gdy termin odpowiedzi minie podczas wizyty. */
+  onExpire?: () => void;
   className?: string;
 }): React.JSX.Element | null {
   const td = useTranslations('dashboard');
@@ -52,11 +66,21 @@ export function ProposalActions({
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState(false);
   const [canRespond, setCanRespond] = React.useState(initialCanRespond);
+  const [expired, setExpired] = React.useState(false);
+  const [focusNotice, setFocusNotice] = React.useState(false);
   const requestPendingRef = React.useRef(false);
+  const canRespondRef = React.useRef(initialCanRespond);
+  const attemptedRef = React.useRef(false);
+  const onExpireRef = React.useRef(onExpire);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [responded, setResponded] = React.useState<'accepted' | 'declined' | null>(null);
   const declineRef = React.useRef<HTMLButtonElement>(null);
   const statusRef = React.useRef<HTMLDivElement>(null);
+  const noticeRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
 
   React.useEffect(() => {
     // Dialog oddaje fokus sam (getReturnFocus); przy przyjęciu bez dialogu robimy to tutaj.
@@ -64,7 +88,28 @@ export function ProposalActions({
   }, [responded]);
 
   React.useEffect(() => {
+    // Po odświeżeniu trasy serwer zna rzeczywisty wynik: odpowiedź z tej karty mogła zostać
+    // zapisana mimo błędu transportu. Tylko po własnej próbie — inaczej każda przyjęta
+    // wcześniej propozycja pokazywałaby komunikat sukcesu przy wejściu na stronę.
+    if (!attemptedRef.current || responded !== null) return;
+    if (status === 'accepted' || status === 'declined') {
+      setError(false);
+      setResponded(status);
+    }
+  }, [status, responded]);
+
+  const showExpiredNotice = expired && responded === null && !pending;
+
+  React.useEffect(() => {
+    // Czekamy, aż komunikat faktycznie się wyrenderuje (po końcu przejścia) i dialog się zamknie.
+    if (!focusNotice || confirmOpen || !showExpiredNotice) return;
+    noticeRef.current?.focus();
+    setFocusNotice(false);
+  }, [focusNotice, confirmOpen, showExpiredNotice]);
+
+  React.useEffect(() => {
     if (!initialCanRespond) {
+      canRespondRef.current = false;
       setCanRespond(false);
       return;
     }
@@ -72,6 +117,7 @@ export function ProposalActions({
 
     const expiresAtMs = Date.parse(expiresAt);
     if (!Number.isFinite(expiresAtMs)) {
+      canRespondRef.current = false;
       setCanRespond(false);
       return;
     }
@@ -80,7 +126,13 @@ export function ProposalActions({
     const scheduleExpiry = () => {
       const remaining = expiresAtMs - Date.now();
       if (remaining <= 0) {
+        canRespondRef.current = false;
         setCanRespond(false);
+        setExpired(true);
+        // Otwarte potwierdzenie bez trwającego żądania nie ma już sensu; trwające żądanie
+        // dokończy się w dialogu (zamknięcie jest wtedy zablokowane — Invariant #11).
+        if (!requestPendingRef.current) setConfirmOpen(false);
+        onExpireRef.current?.();
         return;
       }
       timeout = setTimeout(scheduleExpiry, Math.min(remaining, MAX_TIMEOUT_MS));
@@ -109,14 +161,17 @@ export function ProposalActions({
     </div>
   ) : null;
 
-  const showActions = initialCanRespond && canRespond;
-  // Po odpowiedzi odświeżona trasa odbiera akcje; komunikat zostaje w tym samym miejscu drzewa,
-  // więc nie jest montowany od nowa i nie gubi fokusu.
-  if (!showActions && !successNode) return null;
+  // Trwające żądanie zostawia (zablokowane) przyciski do wyniku, także po terminie.
+  const showActions = initialCanRespond && (canRespond || pending);
+  // Po odpowiedzi odświeżona trasa odbiera akcje; komunikaty zostają w tym samym miejscu drzewa,
+  // więc nie są montowane od nowa i nie gubią fokusu. Otwarty dialog i błąd też utrzymują
+  // komponent (#830) — wcześniej upływ terminu usuwał je bez śladu.
+  if (!showActions && !successNode && !showExpiredNotice && !error && !confirmOpen) return null;
 
   const respond = (accept: boolean) => {
-    if (pending || requestPendingRef.current) return;
+    if (pending || requestPendingRef.current || !canRespondRef.current) return;
     requestPendingRef.current = true;
+    attemptedRef.current = true;
     setError(false);
     startTransition(async () => {
       try {
@@ -134,6 +189,12 @@ export function ProposalActions({
       } finally {
         requestPendingRef.current = false;
       }
+      if (!canRespondRef.current) {
+        // Termin minął w trakcie żądania: karta ma pokazać rzeczywisty stan z serwera,
+        // a fokus — wyjaśnienie, dlaczego przycisków już nie ma.
+        setFocusNotice(true);
+        router.refresh();
+      }
     });
   };
 
@@ -144,7 +205,7 @@ export function ProposalActions({
           type="button"
           className={cn(BTN_PRIMARY, BTN_RESET)}
           onClick={() => respond(true)}
-          disabled={pending}
+          disabled={pending || !canRespond}
         >
           <Check className="h-4 w-4" aria-hidden="true" />
           {td('acceptProposal')}
@@ -155,7 +216,7 @@ export function ProposalActions({
           variant="outline"
           className={cn(BTN_SECONDARY, BTN_RESET)}
           onClick={() => setConfirmOpen(true)}
-          disabled={pending}
+          disabled={pending || !canRespond}
         >
           <X className="h-4 w-4" aria-hidden="true" />
           {td('declineProposal')}
@@ -163,6 +224,17 @@ export function ProposalActions({
       </div> : null}
 
       {successNode ? <div className={showActions ? 'mt-3' : undefined}>{successNode}</div> : null}
+
+      {showExpiredNotice ? (
+        <div
+          ref={noticeRef}
+          role="status"
+          tabIndex={-1}
+          className="rounded-[8px] bg-muted px-3 py-2 text-[13px] font-medium text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          {td('proposalExpiredNotice')}
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={confirmOpen}
@@ -177,7 +249,7 @@ export function ProposalActions({
         cancelLabel={tc('cancel')}
         onConfirm={() => respond(false)}
         pending={pending}
-        getReturnFocus={() => statusRef.current ?? declineRef.current}
+        getReturnFocus={() => statusRef.current ?? noticeRef.current ?? declineRef.current}
       />
 
       {error ? (

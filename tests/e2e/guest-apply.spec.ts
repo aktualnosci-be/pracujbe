@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { expect, test, type Page } from '@playwright/test';

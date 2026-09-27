@@ -11,7 +11,7 @@ name: CI
 # - joby E2E startują po zielonym buildzie (build po lint/typecheck/unit);
 # - każdy job ma `timeout-minutes`, więc zawieszony krok nie blokuje przebiegu;
 # - joby E2E odtwarzają `.next` z jobu build (cache Actions) zamiast budować drugi raz (#127);
-# - E2E: 3 shardy + pomiar + fixture'y równolegle, wynik zbiera wymagany check
+# - E2E: 3 shardy + pomiar + fixture'y (full w 2 częściach) równolegle, wynik zbiera wymagany check
 #   „E2E (Playwright)”; przepływ na PostgreSQL 16 (`e2e-real`) na razie informacyjny.
 
 on:
@@ -474,10 +474,13 @@ jobs:
           retention-days: 2
 
   e2e-fixtures:
-    name: E2E fixtures (${{ matrix.fixture }})
+    name: E2E fixtures (${{ matrix.fixture }} ${{ matrix.part }})
     # Serwer `next dev` z danymi fikcyjnymi (playwright.applications-fixture.config.ts):
     # `full` = historia zgłoszeń, formularze, JobPosting; `error` = wymuszone błędy odczytu.
-    # Nie używa builda (next dev), ale startuje po nim — jak reszta E2E.
+    # `full` w 2 częściach (~9 min na jednym runnerze; podział w konfiguracji fixture — jawna
+    # lista części 2, bo `--shard` dzieli pliki po liczbie testów, nie po czasie). Każda część
+    # zapisuje raport cząstkowy (blob) dla jobu zbiorczego. Nie używa builda (next dev),
+    # ale startuje po nim — jak reszta E2E.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
@@ -485,7 +488,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fixture: [full, error]
+        include:
+          - { fixture: full, part: 1/2 }
+          - { fixture: full, part: 2/2 }
+          - { fixture: error, part: 1/1 }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -510,11 +516,20 @@ jobs:
       - name: Run E2E on application fixtures
         env:
           TEST_APPLICATIONS_FIXTURE: ${{ matrix.fixture }}
+          TEST_APPLICATIONS_FIXTURE_PART: ${{ matrix.part }}
+          E2E_BLOB_NAME: fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}
         run: npx playwright test --config playwright.applications-fixture.config.ts
+      # Raport cząstkowy zawsze (także przy zielonej części) — job zbiorczy łączy komplet.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}
+          path: blob-report/
+          retention-days: 2
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: fixtures-${{ matrix.fixture }}-test-results
+          name: fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}-test-results
           path: test-results/
           retention-days: 2
 

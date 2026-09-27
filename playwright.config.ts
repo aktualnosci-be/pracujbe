@@ -29,6 +29,8 @@ import { e2eBaseUrl, e2ePort, e2eReuseServer } from './scripts/lib/e2e-server.mj
 const PORT = e2ePort('demo');
 const BASE_URL = e2eBaseUrl('demo');
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+/** Keep-alive serwera E2E (ms) — dłuższy niż bezczynność gniazd agenta HTTP Playwrighta. */
+const SERVER_KEEP_ALIVE_MS = 120_000;
 
 /**
  * Testowy token Cloudflare Web Analytics (Invariant #7, issue #234/#570). Bez niego komponent
@@ -186,7 +188,13 @@ export default defineConfig({
   ],
   webServer: {
     // CI buduje w osobnym kroku; limit gotowości mierzy wtedy wyłącznie start serwera.
-    command: reuseBuild ? `npm run start -- -p ${PORT}` : `npm run build && npm run start -- -p ${PORT}`,
+    // `--keepAliveTimeout`: `request`/`page.request` Playwrighta dzielą w workerze jednego agenta
+    // HTTP z keep-alive; domyślne 5 s serwera Node zamyka bezczynne gniazdo w chwili, gdy klient
+    // wysyła po nim następne żądanie → `read ECONNRESET` (flaky free-mvp-no-sales). 120 s > przerwy
+    // między testami jednego workera.
+    command: reuseBuild
+      ? `npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`
+      : `npm run build && npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`,
     // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
     env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, ...JOB_ASSIST_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
     url: BASE_URL,

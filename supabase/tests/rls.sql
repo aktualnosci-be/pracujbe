@@ -14049,6 +14049,98 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- MQ233. Kolejka dopasowań bez zakleszczeń (0149): równoległe kroki 3 i 5 onboardingu
+-- tego samego kandydata. Krok 5 (sesja A) zapisuje relacje — trigger kolejkuje kandydata;
+-- w tym czasie krok 3 (sesja B) zmienia profil; potem A zapisuje certyfikaty
+-- (ensure_candidate_profile dotyka profilu). Krok 5 rozbity na dwie instrukcje tej samej
+-- transakcji (jak wnętrze save_candidate_onboarding_step5), żeby wymusić przeplot.
+-- 0149: match_enqueue blokuje wiersz profilu PRZED wierszem kolejki, więc B czeka na A
+-- (bez cyklu) i obie sesje kończą się sukcesem. Kontrola ujemna: definicja z 0147
+-- (kolejka bez blokady profilu) → `deadlock detected` w jednej z sesji.
+-- Fixture'y i podmiana funkcji zatwierdzane w osobnej sesji (jak PP/TI611).
+-- ============================================================================
+\echo '--- MQ233 kolejka matches: kolejność blokad profil → kolejka ---'
+\set MQC  'e2330000-0000-0000-0000-00000000000c'
+\set MQC2 'e2330000-0000-0000-0000-00000000000d'
+reset role; reset app.current_uid;
+select pg_temp.remote_connect('mq_setup');
+select dbl.dblink_exec('mq_setup', $fx$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e2330000-0000-0000-0000-00000000000c','mqc@test.be','Mq C',
+     '{"role":"candidate","first_name":"Mona","last_name":"Queue","locale":"pl"}'),
+    ('e2330000-0000-0000-0000-00000000000d','mqd@test.be','Mq D',
+     '{"role":"candidate","first_name":"Max","last_name":"Queue","locale":"nl"}');
+  insert into public.candidate_profiles(profile_id, experience_years) values
+    ('e2330000-0000-0000-0000-00000000000c', 1), ('e2330000-0000-0000-0000-00000000000d', 1);
+$fx$);
+
+-- MQ1: poprawka — obie sesje kończą się sukcesem, B czekała na A.
+select pg_temp.remote_begin('mq_a', :'MQC') as mq_pid_a \gset
+select pg_temp.remote_begin('mq_b', :'MQC') as mq_pid_b \gset
+select t.v as mq_a1 from dbl.dblink('mq_a',
+  $q$select 'ok'::text from public.set_candidate_languages('[{"language":"Nederlands","level":"intermediate"},{"language":"English","level":"fluent"}]'::jsonb)$q$)
+  as t(v text) \gset
+select dbl.dblink_send_query('mq_b',
+  $q$select 'ok'::text from public.save_candidate_onboarding_step3(6, array['heftruck', 'orderpicking', 'VCA'])$q$);
+select pg_temp.wait_blocked(:mq_pid_b, 'MQ1 krok 3 czeka na krok 5');
+select t.v as mq_a2 from dbl.dblink('mq_a',
+  $q$select 'ok'::text from public.set_candidate_certificates('["VCA", {"label": "Heftruck", "expires_at": "2030-01-01"}]'::jsonb)$q$)
+  as t(v text) \gset
+select dbl.dblink_exec('mq_a', 'commit');
+select pg_temp.remote_result('mq_b') as mq_b1 \gset
+select dbl.dblink_exec('mq_b', 'commit');
+select dbl.dblink_disconnect('mq_a'); select dbl.dblink_disconnect('mq_b');
+select pg_temp.assert(:'mq_a1' = 'ok' and :'mq_a2' = 'ok' and :'mq_b1' = 'ok',
+  'MQ1 równoległe kroki 3 i 5 tego samego kandydata: obie transakcje bez błędu (było: deadlock → INTERNAL)');
+select pg_temp.assert(
+  (select cp.experience_years = 6
+      and (select count(*) from public.candidate_skills s where s.candidate_profile_id = cp.id) = 3
+      and (select count(*) from public.candidate_languages l where l.candidate_profile_id = cp.id) = 2
+      and (select count(*) from public.candidate_certificates c where c.candidate_profile_id = cp.id) = 2
+   from public.candidate_profiles cp where cp.profile_id = :'MQC'),
+  'MQ1b oba kroki zapisane w całości');
+select pg_temp.assert(
+  (select count(*) = 1 and min(version) >= 2 from public.match_recompute_queue
+    where kind = 'candidate' and subject_id = :'MQC'),
+  'MQ1c semantyka kolejki bez zmian: jeden wiersz na kandydata, kolejne zgłoszenia podbijają wersję');
+
+-- MQ2 (kontrola ujemna): definicja z 0147 — ta sama sekwencja kończy się zakleszczeniem.
+select pg_get_functiondef('public.match_enqueue(text,uuid)'::regprocedure) as mq_fixed_def \gset
+select dbl.dblink_exec('mq_setup', $fx$
+  create or replace function public.match_enqueue(p_kind text, p_subject uuid)
+  returns void language sql security definer set search_path = public, pg_temp as $f$
+    insert into public.match_recompute_queue as q (kind, subject_id)
+    select p_kind, p_subject
+    where p_subject is not null and p_kind in ('candidate', 'job')
+    on conflict (kind, subject_id) do update
+      set version = q.version + 1, attempts = 0, enqueued_at = now();
+  $f$;
+$fx$);
+select pg_temp.remote_begin('mq_a', :'MQC2') as mq_pid_a \gset
+select pg_temp.remote_begin('mq_b', :'MQC2') as mq_pid_b \gset
+select t.v as mq_n_a1 from dbl.dblink('mq_a',
+  $q$select 'ok'::text from public.set_candidate_languages('[{"language":"Nederlands","level":"intermediate"}]'::jsonb)$q$)
+  as t(v text) \gset
+select dbl.dblink_send_query('mq_b',
+  $q$select 'ok'::text from public.save_candidate_onboarding_step3(6, array['heftruck'])$q$);
+select pg_temp.wait_blocked(:mq_pid_b, 'MQ2 krok 3 czeka na kolejkę');
+select dbl.dblink_send_query('mq_a',
+  $q$select 'ok'::text from public.set_candidate_certificates('["VCA"]'::jsonb)$q$);
+select pg_temp.remote_result('mq_a') as mq_n_a2 \gset
+select pg_temp.remote_result('mq_b') as mq_n_b1 \gset
+select dbl.dblink_exec('mq_a', 'rollback'); select dbl.dblink_exec('mq_b', 'rollback');
+select dbl.dblink_disconnect('mq_a'); select dbl.dblink_disconnect('mq_b');
+-- Przywrócenie definicji z 0149 (zatwierdzone, jak podmiana).
+select dbl.dblink_exec('mq_setup', :'mq_fixed_def');
+select dbl.dblink_disconnect('mq_setup');
+select pg_temp.assert(
+  strpos(:'mq_n_a2' || ' ' || :'mq_n_b1', 'deadlock detected') > 0,
+  'MQ2-N definicja z 0147: równoległe kroki 3 i 5 → deadlock (MQ1 wykrywa regresję)');
+select pg_temp.assert(
+  pg_get_functiondef('public.match_enqueue(text,uuid)'::regprocedure) ~ 'for no key update',
+  'MQ2b definicja z 0149 przywrócona po kontroli ujemnej');
+
+-- ============================================================================
 -- JP12. JobPosting validThrough / unitText (audyt P1-12): get_public_job zwraca
 --       expires_at i salary_period oferty — źródło `validThrough` i
 --       `baseSalary.value.unitText` w JSON-LD (src/lib/seo/structured-data.ts; mapowanie
@@ -14756,6 +14848,83 @@ delete from public.job_duplications where client_key = :'KEYJD'::uuid;
 set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
 select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdneg \gset
 select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu klucza powstaje duplikat');
+rollback;
+reset role; reset app.current_uid;
+
+\echo '--- SK853 send_offer: klucz idempotencji związany z celem (0150) ---'
+\set SKC  'e8530000-0000-0000-0000-00000000000c'
+\set SKC2 'e8530000-0000-0000-0000-00000000000d'
+\set SKE  'e8530000-0000-0000-0000-0000000000a1'
+\set SKCO 'e8530000-0000-0000-0000-0000000000f1'
+\set SKJ1 'e8530000-0000-0000-0000-0000000000b1'
+\set SKJ2 'e8530000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SKC','skc@test.be','Noor S','{"role":"candidate","first_name":"Noor","last_name":"Smet","locale":"nl"}'),
+  (:'SKC2','skc2@test.be','Luc S','{"role":"candidate","first_name":"Luc","last_name":"Simon","locale":"fr"}'),
+  (:'SKE','ske@test.be','Piotr S','{"role":"employer","first_name":"Piotr","last_name":"Szef","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'SKCO','Firma SK853','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'SKCO',:'SKE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'SKJ1',:'SKCO','job-sk853-1','Magazynier SK853','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'SKJ2',:'SKCO','job-sk853-2','Kierowca SK853','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'SKC', false), (:'SKC2', false);
+select set_config('app.current_uid', :'SKC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SKJ1'::uuid, 'sk853-app-1', null, null, null) as skapp1 \gset
+select public.apply_to_job(:'SKJ2'::uuid, 'sk853-app-2', null, null, null) as skapp2 \gset
+reset role;
+select set_config('app.current_uid', :'SKC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SKJ1'::uuid, 'sk853-app-3', null, null, null) as skapp3 \gset
+reset role;
+
+select set_config('app.current_uid', :'SKE', false);
+set role authenticated; select pg_temp.assert_client_role();
+-- SK853-1: propozycja dla J1 i retry tym samym kluczem → to samo ID (idempotencja bez zmian).
+select public.send_offer(:'SKJ1'::uuid, :'SKC'::uuid, 'sk853-key-1', null, null) as skoff1 \gset
+select public.send_offer(:'SKJ1'::uuid, :'SKC'::uuid, 'sk853-key-1', null, null) as skoff1b \gset
+select pg_temp.assert(:'skoff1' = :'skoff1b', 'SK853-1 retry tej samej pary z tym samym kluczem = to samo ID');
+-- SK853-2: ten sam klucz dla INNEJ oferty (po przełączeniu firmy/celu) → błąd, nie cudze ID.
+select pg_temp.expect_error(
+  format('select public.send_offer(%L::uuid, %L::uuid, %L, null, null)', :'SKJ2', :'SKC', 'sk853-key-1'),
+  'VALIDATION_FAILED', 'SK853-2 klucz innej propozycji (inna oferta) odrzucony');
+-- SK853-3: ten sam klucz dla INNEGO kandydata tej samej oferty → błąd.
+select pg_temp.expect_error(
+  format('select public.send_offer(%L::uuid, %L::uuid, %L, null, null)', :'SKJ1', :'SKC2', 'sk853-key-1'),
+  'VALIDATION_FAILED', 'SK853-3 klucz innej propozycji (inny kandydat) odrzucony');
+-- SK853-4: nowy klucz dla J2 → nowa propozycja, z powiadomieniem.
+select public.send_offer(:'SKJ2'::uuid, :'SKC'::uuid, 'sk853-key-2', null, null) as skoff2 \gset
+select pg_temp.assert(:'skoff2' <> :'skoff1', 'SK853-4 nowy klucz dla innej oferty = nowa propozycja');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.offers where job_id = :'SKJ2'::uuid and candidate_id = :'SKC'::uuid)
+  and (select count(*) = 1 from public.offers where job_id = :'SKJ1'::uuid and candidate_id = :'SKC'::uuid)
+  and (select count(*) = 0 from public.offers where candidate_id = :'SKC2'::uuid),
+  'SK853-4b po odrzuconych próbach: jedna propozycja na parę, brak propozycji dla SKC2');
+select pg_temp.assert(
+  (select count(*) = 2 from public.notifications
+     where profile_id = :'SKC'::uuid and type = 'offer_received'
+       and entity_id in (:'skoff1'::uuid, :'skoff2'::uuid)),
+  'SK853-4c każda propozycja ma dokładnie jedno powiadomienie');
+
+-- SK853-5 (kontrola ujemna): bez porównania celu (zachowanie 0113) ten sam klucz dla J2 zwraca
+-- ID propozycji J1 jako sukces — dokładnie błąd z #853, który wykrywa SK853-2.
+begin;
+do $sk$
+declare
+  v_def text := pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure);
+begin
+  if position('v_key_job is distinct from p_job_id or' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: SK853-5 brak porównania celu w send_offer';
+  end if;
+  execute replace(v_def, 'v_key_job is distinct from p_job_id or', 'false and');
+end $sk$;
+set local role authenticated; set local app.current_uid = :'SKE'; select pg_temp.assert_client_role();
+select public.send_offer(:'SKJ2'::uuid, :'SKC2'::uuid, 'sk853-key-1', null, null) as skneg \gset
+select pg_temp.assert(:'skneg' = :'skoff1',
+  'SK853-5 kontrola ujemna: bez porównania celu klucz zwraca cudzą propozycję');
 rollback;
 reset role; reset app.current_uid;
 
