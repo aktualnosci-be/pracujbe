@@ -14,7 +14,7 @@ import { companyVatSource } from '@/lib/vies/state';
  * Woła je wyłącznie SERWER po udanym `create_first_company` / `create_additional_company` /
  * `create_company_with_owner` — klient nie ma na nie wpływu. Kolejność: bieżący numer firmy
  * (service_role) → istniejący adapter VIES (pre-check BE, timeout, ponowienia) → zapis TYLKO
- * wyniku rozstrzygającego przez `record_company_vies_check_auto` (0197: service_role, bez
+ * wyniku rozstrzygającego przez `record_company_vies_check_auto` (0164: service_role, bez
  * nadpisywania wyniku admina, audyt). Firma bez numeru albo z numerem spoza BE — brak
  * zapytania. Awaria VIES / bazy niczego nie blokuje i nie zmienia statusu firmy (status
  * zmienia tylko admin); wynik widzi admin w `/admin/firmy/[id]`, kandydaci — nie.

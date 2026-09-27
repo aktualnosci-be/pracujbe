@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0197_company_vies_auto_check.sql (numer tymczasowy — ostateczny nada integrator)
+-- 0164_company_vies_auto_check.sql
 -- Automatyczne sprawdzenie VAT w VIES przy zakładaniu firmy (decyzja właściciela 26.09.2026).
 --
 -- Po utworzeniu firmy (create_first_company / create_additional_company /
