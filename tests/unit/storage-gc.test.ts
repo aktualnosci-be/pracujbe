@@ -125,7 +125,7 @@ describe('runStorageGc', () => {
 describe('/api/maintenance + GC (#17)', () => {
   const MAINTENANCE_RPCS = [
     'release_stale_discount_reservations', 'release_stale_checkout_intents',
-    'ai_budget_release_stale_reservations', 'expire_due_jobs',
+    'ai_budget_release_stale_reservations', 'expire_due_jobs', 'match_recompute_claim',
     'purge_guest_application_requests', 'process_saved_search_alerts', 'process_email_campaigns',
     'run_retention_purge',
     'purge_job_funnel_data',
