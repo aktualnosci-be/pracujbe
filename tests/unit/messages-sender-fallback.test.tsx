@@ -70,7 +70,9 @@ function fakeClient(opts: { uid: string; team: string[]; visibleProfiles: Record
       viewerIsMember
         ? (values[1] as string[]).filter((id) => opts.team.includes(id)).map((profile_id) => ({ profile_id }))
         : [],
-    );
+    )
+    // Brak wiersza = firma nie jest zablokowana (#832) — nieużywane po stronie firmy.
+    .rows('messages.company-block', []);
 }
 
 describe('nadawca wiadomości pod RLS (#355)', () => {

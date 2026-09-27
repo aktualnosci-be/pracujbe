@@ -909,6 +909,24 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+Blokada z istniejącego wątku (#832, bez migracji): do #832 jedyna ścieżka UI była szczegół
+AKTYWNEJ publicznej oferty (`JobCompanyBlockControl`) — po zamknięciu ostatniego ogłoszenia
+firmy ta ścieżka znikała, choć rozmowa i prawo firmy do wysyłania wiadomości zostawały (samo
+zamknięcie oferty nie tworzy blokady). `getConversationThread` (`src/lib/data/messages.ts`)
+dolicza teraz `ConversationThread.companyBlock` — dla strony KANDYDACKIEJ rozmowy (nie dla
+widza po stronie firmy, `ctx.viewerIsCompany` z #355/0143) i tylko gdy nazwa firmy jest
+rozwiązywalna — czytany bezpośrednio z `candidate_company_blocks` pod RLS (polityka
+`..._select_own`, 0078; bez nowego RPC). `ConversationCompanyBlockControl` w nagłówku wątku
+zapisuje przez ten sam `setCompanyBlockAction`/`set_company_block` co ustawienia i szczegół
+oferty (RPC już przyjmuje dowolną nieusuniętą firmę, bez wymogu aktywnej oferty). Bezpiecznik:
+`MessageThread` renderuje kontrolkę tylko z jawnym `allowCompanyBlock` (ustawianym przez
+`MessagesView` wyłącznie na `/candidate/wiadomosci`) — nigdy w panelu pracodawcy, także dla
+danych DEMO (które nie rozróżniają widza). Dowód: unit `conversation-thread-result`
+(w tym kontrole ujemne: widz po stronie firmy i rozmowa bez firmy nie dostają `companyBlock`,
+zero zapytań do bazy), `message-thread-company-block` (kontrola ujemna `allowCompanyBlock`),
+`conversation-company-block-control`. **Otwarte:** ta sama kontrolka na własnej historii
+rekrutacji kandydata i na publicznym profilu firmy (issue wskazywał je jako alternatywne
+miejsca — wątek pokrywa opisany scenariusz odtworzenia).
 Dynamiczne facety (#874, bez migracji): `GET /api/job-filter-facets` (zmiana filtra bez
 przeładowania strony) czytał zweryfikowanego kandydata pomijając sesję — agregat SQL działał
 wtedy jak dla gościa i mógł zawyżyć licznik/CTA o oferty firm zablokowanych przez kandydata
