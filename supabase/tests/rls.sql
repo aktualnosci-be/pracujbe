@@ -13918,6 +13918,137 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- LC153. Kanoniczne miasto oferty (audyt P1-10, migracja 0153):
+--        `jobs.location_id` ze słownika (aliasy PL/NL/FR/EN, pisownia bez znaczenia) ustawia
+--        wyłącznie trigger; wpisany tekst zostaje. Filtr/licznik/facety/wyszukiwanie miasta
+--        dopasowują miejscowość, nie dokładny tekst.
+-- ============================================================================
+\set LCCO  'f9500000-0000-0000-0000-000000020000'
+\set LCJ1  'f9500000-0000-0000-0000-000000020001'
+\set LCJ2  'f9500000-0000-0000-0000-000000020002'
+\set LCJ3  'f9500000-0000-0000-0000-000000020003'
+\set LCJ4  'f9500000-0000-0000-0000-000000020004'
+\set LCJ5  'f9500000-0000-0000-0000-000000020005'
+reset role; reset app.current_uid;
+
+-- LC153-1: city_key = cityKey z TS (te same przypadki w tests/unit/job-location.test.ts).
+select pg_temp.assert(
+  public.city_key('Antwerpen') = 'antwerpen'
+  and public.city_key('  ANTWERPEN ') = 'antwerpen'
+  and public.city_key('Liège') = 'liege'
+  and public.city_key('Sint-Niklaas') = 'sint niklaas'
+  and public.city_key('La  Louvière') = 'la louviere'
+  and public.city_key(E'Braine-l\u2019Alleud') = E'braine l\u2019alleud'
+  and public.city_key(E'Kessel\u00a0-  Lo') = 'kessel lo'
+  and public.city_key('') = '',
+  'LC153-1 city_key: diakrytyki, wielkość liter, spacje/myślniki jak cityKey');
+
+insert into public.companies(id, name, status) values (:'LCCO', 'LC153 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'LCJ1',:'LCCO','lc153-a','Magazynier LC153','warehouse','permanent','Antwerpen','Flandria','active','pl', now()),
+  (:'LCJ2',:'LCCO','lc153-b','Magazynier LC153','warehouse','permanent','  ANTWERPEN ','Flandria','active','pl', now()),
+  (:'LCJ3',:'LCCO','lc153-c','Magazynier LC153','warehouse','permanent','Anvers','Flandre','active','pl', now()),
+  (:'LCJ4',:'LCCO','lc153-d','Magazynier LC153','warehouse','permanent','Aalst','Flandria','active','pl', now()),
+  (:'LCJ5',:'LCCO','lc153-e','Magazynier LC153','warehouse','permanent','Nieznanowo','Flandria','active','pl', now());
+
+-- LC153-2: trigger rozpoznaje miejscowość (także gminę spoza 10 tłumaczonych miast);
+--          wpisany tekst bez zmian; nierozpoznana nazwa = null.
+select pg_temp.assert(
+  (select array_agg(coalesce(l.slug, '-') || '|' || j.city order by j.slug)
+     from public.jobs j left join public.locations l on l.id = j.location_id
+    where j.company_id = :'LCCO')
+  = array['antwerp|Antwerpen', 'antwerp|  ANTWERPEN ', 'antwerp|Anvers', 'aalst|Aalst', '-|Nieznanowo'],
+  'LC153-2 location_id ze słownika, jobs.city bez zmian');
+
+-- LC153-3: wartość podana wprost jest nadpisywana (także przy INSERT).
+update public.jobs set location_id = (select id from public.locations where slug = 'leuven') where id = :'LCJ1';
+select pg_temp.assert(
+  (select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.id = :'LCJ1') = 'antwerp',
+  'LC153-3 location_id podane przez klienta zastąpione miejscowością z jobs.city');
+begin;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,location_id)
+  select gen_random_uuid(), :'LCCO', 'lc153-x', 'X LC153', 'warehouse', 'permanent', 'Nieznanowo', 'Flandria', 'draft', 'pl', id
+    from public.locations where slug = 'leuven';
+select pg_temp.assert((select location_id from public.jobs where slug = 'lc153-x') is null,
+  'LC153-3b INSERT z location_id dla nieznanej nazwy = null');
+-- LC153-4: zmiana miasta zmienia miejscowość.
+update public.jobs set city = 'Gandawa' where slug = 'lc153-x';
+select pg_temp.assert(
+  (select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.slug = 'lc153-x') = 'ghent',
+  'LC153-4 zmiana jobs.city przelicza location_id');
+rollback;
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- LC153-5: filtr p_locations dopasowuje miejscowość niezależnie od pisowni i języka.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs('pl', 'lc153', p_locations => array['Antwerpia']))
+    = array['lc153-a', 'lc153-b', 'lc153-c']
+  and public.get_public_jobs_count('pl', 'lc153', p_locations => array['Antwerpia']) = 3
+  and public.get_public_jobs_count('pl', 'lc153', p_locations => array['Brussel', 'Anvers', 'Aalst']) = 4
+  and public.get_public_jobs_count('pl', 'lc153', p_locations => array['Nieznanowo']) = 1,
+  'LC153-5 lista i licznik: Antwerpia = Antwerpen/ANTWERPEN/Anvers; nieznana nazwa po tekście');
+-- LC153-6: facet miasta = jedna pozycja na miejscowość (nazwa kanoniczna), filtr w facetach.
+select pg_temp.assert(
+  (select array_agg(key || ':' || total order by key)
+     from public.get_public_job_filter_facets('pl', 'lc153') where dimension = 'location')
+    = array['Aalst:1', 'Antwerp:3', 'Nieznanowo:1']
+  and (select total from public.get_public_job_filter_facets('pl', 'lc153', p_locations => array['antwerpia'])
+        where dimension = 'total') = 3,
+  'LC153-6 facety scalają pisownie jednej miejscowości');
+-- LC153-7: wyszukiwanie tekstowe miasta: nazwa w innym języku + dotychczasowe „zawiera”.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'lc153', 'Antwerpia') = 3
+  and public.get_public_jobs_count('pl', 'lc153', 'antw') = 2
+  and public.get_public_jobs_count('pl', 'lc153', 'nieznan') = 1,
+  'LC153-7 search_city_candidates: miejscowość z wpisu albo fragment wpisanego tekstu');
+-- LC153-8: klient nie wywoła funkcji triggerów.
+select pg_temp.expect_error('select public.location_aliases_relink_jobs()', 'permission denied',
+  'LC153-8 funkcja triggera słownika niedostępna dla anon');
+reset role;
+
+-- LC153-9: nowy alias w słowniku dowiązuje ofertę bez miejscowości.
+begin;
+insert into public.location_aliases (location_id, alias, alias_key)
+  select id, 'Nieznanowo', 'nieznanowo' from public.locations where slug = 'aalst';
+select pg_temp.assert(
+  (select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.id = :'LCJ5') = 'aalst',
+  'LC153-9 alias dodany do słownika dowiązuje istniejącą ofertę');
+rollback;
+-- LC153-10: usunięta albo nieaktywna miejscowość nie zostawia wiszącego powiązania.
+begin;
+delete from public.locations where slug = 'aalst';
+select pg_temp.assert((select location_id from public.jobs where id = :'LCJ4') is null,
+  'LC153-10 usunięcie miejscowości = location_id null (tekst zostaje)');
+rollback;
+begin;
+update public.locations set is_active = false where slug = 'aalst';
+update public.jobs set city = 'aalst' where id = :'LCJ4';
+select pg_temp.assert((select location_id from public.jobs where id = :'LCJ4') is null,
+  'LC153-10b nieaktywna miejscowość nie jest rozpoznawana');
+rollback;
+
+-- KONTROLA UJEMNA (LC153-N1): bez location_id (stan przed 0153) filtr po nazwie w innym
+-- języku i innej pisowni nie znajduje ofert — dopasowanie zależy od miejscowości.
+begin;
+alter table public.jobs disable trigger trg_jobs_resolve_location;
+update public.jobs set location_id = null where company_id = :'LCCO';
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'lc153', p_locations => array['Antwerpia']) = 0
+  and (select count(*) from public.get_public_job_filter_facets('pl', 'lc153') where dimension = 'location') = 5,
+  'LC153-N1 kontrola ujemna: bez location_id Antwerpia = 0 ofert, facety rozbite na pisownie');
+reset role;
+rollback;
+-- KONTROLA UJEMNA (LC153-N2): bez triggera oferta zapisana z nową pisownią nie ma miejscowości.
+begin;
+alter table public.jobs disable trigger trg_jobs_resolve_location;
+update public.jobs set city = 'Antwerpia' where id = :'LCJ4';
+select pg_temp.assert((select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.id = :'LCJ4') = 'aalst',
+  'LC153-N2 kontrola ujemna: bez triggera location_id nie nadąża za jobs.city');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- EP05. Stronicowanie kursorem list panelu pracodawcy (audyt P1-05, migracja 0152).
 --       get_company_matches_page: najlepsze dopasowanie na kandydata w porządku
 --       (score DESC, candidate_id ASC), kursor w obu kierunkach, remis wyniku na granicy strony,
