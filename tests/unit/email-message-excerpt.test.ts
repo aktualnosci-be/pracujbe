@@ -28,12 +28,17 @@ const CANARIES = {
   niss: '85.07.30-033.28',
   eid: '592-1234567-32',
   passport: 'paszport nr EH1234567',
+  // #716 — gołe domeny bez schematu/ścieżki/`www.` też muszą zniknąć z cytatu.
+  bareDomain: 'firma-canary.be',
+  bareSubdomain: 'rekrutacja.acme-canary.be',
+  bareDomainPort: 'firma-canary.be:8080',
 } as const;
 
 const RAW_MESSAGE =
   `Dzień dobry, zapraszamy na rozmowę w poniedziałek o 9:00. Proszę pisać na ${CANARIES.email} ` +
   `lub dzwonić ${CANARIES.phoneIntl} / ${CANARIES.phoneNational}. Szczegóły: ${CANARIES.url}, ` +
-  `${CANARIES.www}, ${CANARIES.bareUrl}. Numery: ${CANARIES.niss}, ${CANARIES.eid}, ${CANARIES.passport}.`;
+  `${CANARIES.www}, ${CANARIES.bareUrl}, ${CANARIES.bareDomain}, ${CANARIES.bareSubdomain}, ` +
+  `${CANARIES.bareDomainPort}. Numery: ${CANARIES.niss}, ${CANARIES.eid}, ${CANARIES.passport}.`;
 
 function leaked(text: string): string[] {
   return Object.values(CANARIES).filter((c) => text.includes(c));
@@ -75,6 +80,21 @@ describe('buildMessageExcerpt', () => {
     for (const v of [null, undefined, 42, '', '   ', CANARIES.email, `${CANARIES.phoneIntl}, ${CANARIES.url}`]) {
       expect(buildMessageExcerpt(v), String(v)).toBeNull();
     }
+  });
+
+  it('#716: gołe domeny bez schematu/ścieżki/portu znikają z cytatu', () => {
+    for (const bare of [CANARIES.bareDomain, CANARIES.bareSubdomain, CANARIES.bareDomainPort]) {
+      const excerpt = buildMessageExcerpt(`Więcej informacji na ${bare} — zapraszamy.`) ?? '';
+      expect(excerpt, bare).not.toContain(bare);
+      expect(excerpt, bare).toContain(EXCERPT_REDACTION);
+    }
+  });
+
+  it('#716 kontrola ujemna: zwykłe skróty i inicjały zostają bez zmian (nie są domeną)', () => {
+    const text =
+      'ACME Sp. z o.o. poszukuje pracownika, np. na magazyn, itd. Godz. 9-17, ul. Kwiatowa 5, ' +
+      'wersja 1.2.1 harmonogramu, tzw. druga zmiana.';
+    expect(buildMessageExcerpt(text)).toBe(text);
   });
 });
 
