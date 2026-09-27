@@ -12,7 +12,13 @@ import { isBuildPhase } from '@/lib/static-rendering';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
-import { getJobs, isRealJobsFixture, rowToJobListItem, type JobListItem } from '@/lib/jobs';
+import {
+  getJobs,
+  isRealJobsFixture,
+  rowToJobListItem,
+  withListMachineTranslations,
+  type JobListItem,
+} from '@/lib/jobs';
 import { fixtureCompanyBySlug } from '@/lib/company-fixture';
 
 /** Zawęża dowolny string do obsługiwanego locale (fallback: język domyślny). Jak w `@/lib/jobs`. */
@@ -82,7 +88,8 @@ async function getCompanyProfileFromDb(
   const jobsResult = await getPublicCompanyJobs(pool, slug, locale, COMPANY_JOBS_LIMIT, 0);
   return {
     company: rowToCompanyProfile(companyRow),
-    jobs: jobsResult.rows.map(rowToJobListItem),
+    // Karty ofert profilu: przekład tytułu w języku strony (#33, 0226), jedno zapytanie.
+    jobs: await withListMachineTranslations(pool, jobsResult.rows.map(rowToJobListItem), toLocale(locale)),
   };
 }
 

@@ -184,7 +184,7 @@ export default async function JobsListPage({
   // filtruje baza — 0090). Gość i pracodawca dostają wspólny wynik publiczny.
   const viewer = { candidateId: await readCandidateViewerId() };
   const [results, databaseFacets] = await Promise.all([
-    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer),
+    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer, { translateCards: true }),
     getJobFilterFacets(filterParams, viewer),
   ]);
   const facets = databaseFacets

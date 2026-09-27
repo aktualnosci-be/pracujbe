@@ -374,7 +374,9 @@
     "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
     "demoNoticeTitle": "Dane przykładowe — te oferty nie są prawdziwe",
     "demoNoticeBody": "Serwis działa w wersji demonstracyjnej. Oferty i firmy na tej stronie są fikcyjne, nie są weryfikowane i nie można na nie aplikować.",
-    "demoBadge": "Przykładowa oferta"
+    "demoBadge": "Przykładowa oferta",
+    "machineTranslatedBadge": "Tłumaczenie automatyczne",
+    "translatedBadge": "Przetłumaczono"
   },
   "job": {
     "apply": "Aplikuj na to stanowisko",

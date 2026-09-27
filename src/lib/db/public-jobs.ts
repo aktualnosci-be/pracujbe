@@ -331,6 +331,34 @@ export async function getPublicJobMachineTranslation(
   });
 }
 
+export interface PublicJobListMachineTitleRow extends PublicJobMachineTranslationRow {
+  job_id: string;
+}
+
+/** Najwięcej ofert w jednym odczycie przekładów listy — tyle, ile zwraca `get_public_jobs`. */
+export const MACHINE_TITLES_BATCH_LIMIT = 100;
+
+/**
+ * Przekłady tytułu i wyróżników kart ofert (#33, 0226) — JEDNO zapytanie na stronę listy.
+ * RPC pod rolą anon zwraca wiersz tylko dla oferty publicznej z aktualnym przekładem w języku
+ * bez własnego tłumaczenia; tylko pola karty. Brak wiersza = karta w oryginale.
+ */
+export async function getPublicJobsMachineTitles(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+  requestedLocale: string,
+): Promise<PublicJobListMachineTitleRow[]> {
+  if (jobIds.length === 0 || !isLocale(requestedLocale)) return [];
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id, source_locale, origin, fields
+       FROM public.get_public_jobs_machine_titles(p_job_ids => $1::uuid[], p_locale => $2::text)`,
+      [jobIds.slice(0, MACHINE_TITLES_BATCH_LIMIT), requestedLocale],
+    )) as { rows: PublicJobListMachineTitleRow[] };
+    return result.rows;
+  });
+}
+
 /**
  * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
  * (0093) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).

@@ -1,5 +1,5 @@
 import { isLocale, type Locale } from '@/i18n/routing';
-import type { JobDetail } from '@/lib/jobs';
+import type { JobDetail, JobListItem } from '@/lib/jobs';
 
 /**
  * Nałożenie przekładu oferty na treść ze `get_public_job` (#33, 0219).
@@ -87,4 +87,28 @@ export function applyJobMachineTranslation(
     next[target] = list;
   }
   return { ...next, machineTranslation: { sourceLocale, origin } };
+}
+
+/**
+ * Nałożenie przekładu na kartę oferty (#33, 0226): tytuł i wyróżniki. Baza zwraca wiersz tylko
+ * wtedy, gdy karta pokazuje treść w języku rewizji, więc tu sprawdzamy już tylko kształt:
+ * niepusty tytuł i tyle samo wyróżników co w oryginale. Każda niezgodność = karta bez zmian.
+ */
+export function applyJobListMachineTranslation<T extends JobListItem>(
+  job: T,
+  input: MachineTranslationInput | null,
+  requestedLocale: Locale,
+): T {
+  if (!input) return job;
+  const { source_locale: sourceLocale, origin, fields } = input;
+  if (typeof sourceLocale !== 'string' || !isLocale(sourceLocale)) return job;
+  if (origin !== 'ai' && origin !== 'manual') return job;
+  if (typeof fields !== 'object' || fields === null || Array.isArray(fields)) return job;
+  if (sourceLocale === requestedLocale) return job;
+  const record = fields as Record<string, unknown>;
+  const title = record.title;
+  if (typeof title !== 'string' || title.trim() === '') return job;
+  const highlights = readList(record, 'highlights');
+  if (!highlights || highlights.length !== job.highlights.length) return job;
+  return { ...job, title, highlights, machineTranslation: { sourceLocale, origin } };
 }

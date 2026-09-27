@@ -374,7 +374,9 @@
     "saveFailed": "Could not save the change. Try again.",
     "demoNoticeTitle": "Sample data — these job offers are not real",
     "demoNoticeBody": "The site is running as a demo. The job offers and companies on this page are fictional, not verified, and you cannot apply to them.",
-    "demoBadge": "Sample offer"
+    "demoBadge": "Sample offer",
+    "machineTranslatedBadge": "Automatic translation",
+    "translatedBadge": "Translated"
   },
   "job": {
     "apply": "Apply for this job",

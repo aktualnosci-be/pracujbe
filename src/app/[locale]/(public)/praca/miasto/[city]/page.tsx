@@ -142,7 +142,7 @@ export default async function CityLandingPage({ params }: PageProps) {
     locations: cityAliases(city),
     page: 1,
     pageSize: LIST_LIMIT,
-  });
+  }, undefined, { translateCards: true });
 
   const otherCities = LOCATION_KEYS.filter((key) => key !== city);
 

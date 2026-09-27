@@ -14512,4 +14512,141 @@ reset role;
 rollback;
 reset role; reset app.current_uid;
 
+-- =============================================================================
+-- TM226 (#33, 0226 — numer tymczasowy): przekład tytułu i wyróżników kart listy ofert.
+-- `get_public_jobs_machine_titles(ids[], locale)` — jedno wywołanie na stronę listy; wiersz
+-- tylko dla oferty publicznej z przekładem bieżącej rewizji, języka bez własnego tłumaczenia;
+-- tylko pola karty (title, highlights.N); najwyżej 100 identyfikatorów. Kontrola ujemna
+-- TM226-N: bez warunku bieżącej rewizji anon dostaje tytuł starej treści po edycji.
+-- =============================================================================
+\echo '--- TM226 public jobs machine titles (list) ---'
+\set TLCO 'f2260000-0000-0000-0000-0000000000c1'
+\set TLJ1 'f2260000-0000-0000-0000-0000000000a1'
+\set TLJ2 'f2260000-0000-0000-0000-0000000000a2'
+reset role; reset app.current_uid;
+begin;
+set constraints all immediate;
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.companies(id, name, status) values (:'TLCO', 'Firma TM226', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TLJ1', :'TLCO', 'tm226-oferta-1', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl'),
+         (:'TLJ2', :'TLCO', 'tm226-oferta-2', 'Heftruckchauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities, highlights)
+  values (:'TLJ1', 'nl', 'Magazijnmedewerker', 'Werk vanaf 8:00.', array['Orders verzamelen'],
+          array['Parking', 'Nachtploeg']),
+         (:'TLJ2', 'nl', 'Heftruckchauffeur', 'Werk vanaf 6:00.', array['Heftruck rijden'], array['Parking']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TLJ1', 'nl', 'mandatory', 0, 'VCA-certificaat'),
+  (:'TLJ2', 'nl', 'mandatory', 0, 'Heftruckattest');
+update public.jobs set status = 'active', published_at = now() where id in (:'TLJ1', :'TLJ2');
+create temp table tm226_claim on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tl_en, lease_id as tl_en_lease, fields::text as tl_f1
+  from tm226_claim where entity_id = :'TLJ1' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tl_en', :'tl_en_lease',
+  (:'tl_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
+    'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
+    'highlights.0', 'Parking', 'highlights.1', 'Night shift')) = 'applied', 'TM226-0 przekład en oferty 1 zastosowany');
+reset role;
+
+-- TM226-1: jedno wywołanie dla całej strony — wiersz tylko dla oferty z przekładem (2 bez
+-- przekładu en = brak wiersza), tylko pola karty.
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 1 from public.get_public_jobs_machine_titles(
+    array[:'TLJ1', :'TLJ2']::uuid[], 'en')),
+  'TM226-1a jeden wiersz: tylko oferta z przekładem');
+select pg_temp.assert((select job_id = :'TLJ1' and source_locale = 'nl' and origin = 'ai'
+    and fields = jsonb_build_object('title', 'Warehouse worker', 'highlights.0', 'Parking', 'highlights.1', 'Night shift')
+  from public.get_public_jobs_machine_titles(array[:'TLJ1', :'TLJ2']::uuid[], 'en')),
+  'TM226-1b tylko title i highlights.N (bez opisu, list i wymagań)');
+-- TM226-2: język źródła, język bez przekładu, język spoza serwisu, NULL i pusta tablica = brak wierszy.
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'nl'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'fr'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'de'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles(null, 'en'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles('{}'::uuid[], 'en')),
+  'TM226-2 język źródła / bez przekładu / spoza serwisu / brak id = brak wierszy');
+-- TM226-3: najwyżej 100 identyfikatorów — oferta na 101. pozycji nie jest czytana.
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(
+    array(select gen_random_uuid() from generate_series(1, 100)) || array[:'TLJ1']::uuid[], 'en'))
+  and exists (select 1 from public.get_public_jobs_machine_titles(
+    array(select gen_random_uuid() from generate_series(1, 99)) || array[:'TLJ1']::uuid[], 'en')),
+  'TM226-3 limit 100 identyfikatorów na wywołanie');
+reset role;
+
+-- TM226-4: własne tłumaczenie en ma pierwszeństwo.
+savepoint tl_human;
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TLJ1', 'en', 'Warehouse operative', 'Human text.');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-4 własne tłumaczenie en: przekład AI karty nie jest zwracany');
+reset role;
+rollback to savepoint tl_human;
+
+-- TM226-5: oferta wstrzymana, wygasła i firma zawieszona = brak wiersza (tylko oferty publiczne).
+savepoint tl_paused;
+update public.jobs set status = 'paused' where id = :'TLJ1';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-5a oferta wstrzymana: brak przekładu karty');
+reset role;
+rollback to savepoint tl_paused;
+savepoint tl_expired;
+update public.jobs set expires_at = now() - interval '1 minute' where id = :'TLJ1';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-5b oferta wygasła: brak przekładu karty');
+reset role;
+rollback to savepoint tl_expired;
+savepoint tl_suspended;
+update public.companies set status = 'suspended' where id = :'TLCO';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-5c firma zawieszona: brak przekładu karty');
+reset role;
+rollback to savepoint tl_suspended;
+
+-- TM226-6: edycja treści = nowa rewizja; przekład starej treści nie trafia na kartę.
+update public.job_translations set title = 'Magazijnmedewerker nacht' where job_id = :'TLJ1' and locale = 'nl';
+select pg_temp.assert((select is_stale from public.translation_documents
+  where entity_type = 'job' and entity_id = :'TLJ1' and locale = 'en'), 'TM226-6a przekład en oznaczony jako nieaktualny');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-6 po edycji tytuł starej treści nie jest zwracany');
+reset role;
+
+-- TM226-7: granty — anon/authenticated tylko EXECUTE RPC; tabele kolejki nadal bez dostępu.
+select pg_temp.assert(has_function_privilege('anon', 'public.get_public_jobs_machine_titles(uuid[], text)', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_machine_titles(uuid[], text)', 'execute')
+  and not has_table_privilege('anon', 'public.translation_documents', 'select'),
+  'TM226-7 anon: EXECUTE RPC, bez SELECT na translation_documents');
+
+-- TM226-N (kontrola ujemna): bez warunku bieżącej rewizji anon dostałby na karcie tytuł
+-- przekładu starej treści (TM226-6 wykrywa taką regresję).
+savepoint tl_neg;
+create or replace function public.get_public_jobs_machine_titles(p_job_ids uuid[], p_locale text)
+returns table (job_id uuid, source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select j.id, r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = any (p_job_ids) and j.status = 'active' and s.is_active;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-N kontrola ujemna: bez warunku rewizji zwracany jest tytuł starej treści');
+reset role;
+rollback to savepoint tl_neg;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM226-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
