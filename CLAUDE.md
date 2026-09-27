@@ -2078,7 +2078,8 @@ npm run start          # serwer produkcyjny
 npm run lint           # ESLint: src/, tests/, scripts/ (.eslintrc.json ma "root": true)
 npm run typecheck      # tsc --noEmit
 npm run test           # Vitest (unit)
-npm run test:e2e       # Playwright
+npm run test:e2e       # Playwright (port E2E_PORT, domyślnie 3000; cudzy serwer tylko z E2E_REUSE_SERVER=1)
+E2E_PORT=3517 npx playwright test tests/e2e/smoke.spec.ts  # równolegle z innym przebiegiem — docs/E2E_FLAKY_REPORT.md
 npm run test:e2e:real  # Playwright + izolowany PostgreSQL 16 (E2E_PG*; przepływ kandydat ↔ pracodawca)
 npm run verify         # lint + typecheck + test (uruchamiaj przed commitem)
 npm run test:rls       # migracje od zera + testy RLS na lokalnym PostgreSQL 16

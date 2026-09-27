@@ -1,9 +1,13 @@
 import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+import { e2ePort } from './scripts/lib/e2e-server.mjs';
 
-/** Osobny serwer dev i dane fikcyjne: nigdy nie dotyka produkcji ani współdzielonego portu 3000. */
+/**
+ * Osobny serwer dev i dane fikcyjne: nigdy nie dotyka produkcji ani portu konfiguracji demo.
+ * Port: 4319 (full) / 4320 (error), a z E2E_PORT=N — N+1 / N+2 (scripts/lib/e2e-server.mjs).
+ */
 const mode = process.env.TEST_APPLICATIONS_FIXTURE === 'error' ? 'error' : 'full';
-const port = mode === 'error' ? 4320 : 4319;
+const port = e2ePort(mode === 'error' ? 'fixtureError' : 'fixtureFull');
 const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 const requireShim = resolve(__dirname, 'tests/e2e/fixtures/require-globals.cjs').replaceAll('\\', '/');
 
