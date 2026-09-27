@@ -621,6 +621,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
   bez walidacji / bez bramki weryfikacji link wycieka).
+  BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
+  `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
+  (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
+  Strony z widoczną ścieżką (landingi, hub, poradniki, dla pracodawców) i `/pomoc` używają go
+  zamiast ręcznego JSON; doszły lista ofert (Strona główna → Oferty pracy, adres listy bez
+  filtrów), profil firmy (= widoczna ścieżka) i szczegół oferty (Strona główna → Praca → branża
+  `/praca/kategoria/<klucz>` → oferta; tylko obok JobPosting — nie w wersji bez tłumaczenia #301
+  ani w demo #297). Strony zostają ISR (dane z tych samych odczytów). Test `breadcrumb-jsonld`
+  (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
+  kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
+  #301) i `company-profile` (nazwy = widoczna ścieżka).
   Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
   (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
   ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
@@ -880,6 +891,15 @@ są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najw
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
 kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
 na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
+Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
+filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
+etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
+w `src/lib/job-filter-summary.ts`: `parseJobListQuery` w języku widza, bez `date`; pusty/zły
+adres = brak listy), więc po zmianie nazwy albo języka kandydat nadal widzi, czego dotyczy
+alert. To samo źródło (`describeJobListFilters`) buduje chipy `/oferty-pracy` (etykieta +
+parametr do usunięcia), więc panel i lista nie rozjadą się. Test: unit
+`saved-search-filter-summary` (4 języki, zgodność z chipami, kontrole ujemne: pusty/nieprawidłowy
+adres, brak pustej listy).
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
@@ -981,6 +1001,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
   w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
   teraz zgody w teście.
+  Eksport CSV lejka (bez migracji): „Pobierz CSV” w sekcji lejka `/employer/statystyki` →
+  `GET /api/employer/job-funnel?dni=7|30|90&locale=` — te same dane co strona (`getJobFunnel`
+  pod sesją/RLS, recruiter+ aktywnej firmy wg `get_company_job_funnel`), kolumny od/do, oferta,
+  status (etykieta `status.*`), cztery liczniki + wiersz sumy, nagłówki w języku panelu
+  (`jobFunnel.csv*`), liczby surowe, formuły w tytułach neutralizowane (`csvCell`), BOM + CRLF,
+  plik `job-funnel-<od>_<do>.csv` (`src/lib/job-funnel/csv.ts`). Demo = 404 i brak przycisku,
+  bez sesji 401, `member`/bez firmy 403, awaria 500 bez treści, `private, no-store`. Test
+  `job-funnel-csv` (kontrola ujemna formuły), `job-funnel-stats` (przycisk tylko z adresem).
 - [x] Kreator oferty (9 kroków, autozapis draftu, publikacja z kontrolą `verified`) — `src/lib/actions/jobs.ts` + `JobWizard`
   Krok 9: „Zapisz i wyjdź” zapisuje szkic bez zgody na publikację (`step9DraftSchema`, także
   w `updateJobDraft`); zgodę wymaga tylko „Opublikuj” (`step9Schema`) (#193). Pozycje list mają
@@ -1596,6 +1624,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
   `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
   `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
+  Szczegół konta `/admin/uzytkownicy/[id]` (tylko odczyt, bez migracji; nazwa na liście = link):
+  `getUserDetail` (`requireAdmin` → service_role) — rola, e-mail, stan konta, utworzenie,
+  ostatnia aktywność (`last_seen_at`), język e-maili wyznaczony jak w kolejce
+  (`resolveRecipientLocale`, Invariant #1) obok surowych `preferred/account/signup_locale`,
+  członkostwa w firmach (link do `/admin/firmy/[id]`, rola, dostęp, status firmy), profil
+  kandydata jako same liczniki (ukończony, widoczny, zgłoszenia poza szkicem, propozycje — bez
+  treści), aktywna blokada adresu (#44, link do `/admin/poczta?q=`), skrót do dziennika
+  (`?actor=<e-mail>`). Strona niczego nie zapisuje (brak akcji = brak wpisów audytu); usunięte
+  albo nieistniejące konto = „nie znaleziono”, błąd odczytu = ponowienie. `auth.users`
+  (np. weryfikacja e-maila) poza zasięgiem service_role — świadomie pominięte. Dowód: unit
+  `admin-user-detail` (kontrola ujemna fallbacku języka), integracja `portal-admin` (PG16),
+  E2E `admin-ux`, `admin-a11y` (demo-u1/demo-u3).
   Decyzja o firmie (#310, `0084`): szczegół `/admin/firmy/[id]` (`getCompanyDetail`: dane
   rejestrowe, uzasadnienie, członkowie z rolą/aktywnością, najnowsze 20 ofert + licznik), nazwa
   na liście = link. Odrzucenie/zawieszenie wymaga uzasadnienia (≤ 1000 znaków,
@@ -2094,6 +2134,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `scripts/lib/stable-screenshot.mjs` (fonty + dwie ramki ze stałym układem, najwyżej 3 próby
   tylko tego błędu, wpis na stderr); testy z Chromium w projekcie Vitest `chromium`
   (`CHROMIUM_TEST_FILES`, jeden plik naraz), strażnik `stable-screenshot.test.ts`.
+  Flaki E2E przy `failOnFlakyTests` (09.2026, bez skip i bez retry): speci biorą `AxeBuilder`
+  z `tests/e2e/fixtures/axe.ts` — przed `analyze()` czeka na niepusty `<title>` (Next strumieniuje
+  metadane osobno od treści; axe po nawigacji klienckiej zgłaszał `document-title`), tam też
+  `expectNoindex` (dwa `meta[name="robots"]` naraz po nawigacji klienckiej). Serwer E2E
+  z `--keepAliveTimeout 120000` (`ECONNRESET` na keep-alive agenta `request`). Strażnik
+  `e2e-axe-ready.test.ts` (import wprost z `@axe-core/playwright` = czerwony, kontrola ujemna;
+  lista przejściowa speców z otwartych PR-ów #586/#918 tylko maleje).
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
@@ -2154,6 +2201,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wdrożenia, tag `v1.0.0`, `CHANGELOG.md`) w `docs/RELEASE_1_0.md`. Build zostaje `0.YYYYMMDD.M+SHA`
   do jawnego `PRACUJBE_RELEASE_VERSION=1.0.0` (→ `1.0.0+SHA`); inna wartość przerywa build
   (`scripts/build-version.mjs`, `build-version.test.ts`).
+  Strażnik zmiennych środowiska (`tests/unit/production-config-checklist.test.ts`): każda
+  zmienna czytana w `src/`, `scripts/` (`.ts/.tsx/.mjs/.py`: `process.env.X`, `env.X`/`source.X`,
+  destrukturyzacja, `helper(env, 'X')`, literały przy dynamicznym `env[name]`) i `next.config.mjs`
+  musi mieć wpis z komentarzem w `.env.example` i w `docs/railway/KONFIGURACJA_PRODUKCJI.md`
+  (skrypty operatora i usługi pomocnicze = sekcja 2E, zakomentowane w przykładzie); zmienne
+  platformy/testów/CI (`E2E_PG*`, `VIES_LIVE_SMOKE`, `GITHUB_*`…) na allow-liście z uzasadnieniem;
+  kontrola ujemna: zmienna tylko w kodzie = czerwony. Skrypty `*.sh` nie są skanowane.
 - [x] Dane seed pełne — 10 firm / 50 ofert / 40 kandydatów / 48 aplikacji / 80 dopasowań; ładuje się bez błędów (guard CI `test:seed`)
 
 ---
