@@ -241,6 +241,35 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(bobPage.items.map((i) => i.id)).not.toContain(aliceApp);
   });
 
+  it('filtr etapu (#809): starsze zgłoszenie „rozmowa” na pierwszej stronie, przed limitem i kursorem', async () => {
+    actAs({ id: alice, role: 'candidate' });
+    const all = await candidateData.getMyApplicationsPage('pl');
+    const rest = await candidateData.getMyApplicationsPage('pl', all.nextCursor);
+    // Najstarsze zgłoszenie Alicji leży bez filtra dopiero na drugiej stronie.
+    const oldest = rest.items[rest.items.length - 1]!;
+    expect(all.items.map((item) => item.id)).not.toContain(oldest.id);
+    const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
+    await db().admin.query(`UPDATE public.applications SET status = 'interview' WHERE id = ANY($1::uuid[])`, [[oldest.id, bobApp]]);
+    try {
+      const interview = await candidateData.getMyApplicationsPage('pl', null, 'rozmowa');
+      // Tylko własne zgłoszenie na tym etapie (zgłoszenie Boba w tym samym statusie nie wycieka).
+      expect(interview.items.map((item) => [item.id, item.status])).toEqual([[oldest.id, 'interview']]);
+      expect(interview.nextCursor).toBeNull();
+      const active = await candidateData.getMyApplicationsPage('pl', null, 'aktywne');
+      expect(active.items).toHaveLength(10);
+      expect(active.items.every((item) => item.status === 'submitted')).toBe(true);
+      const activeRest = await candidateData.getMyApplicationsPage('pl', active.nextCursor, 'aktywne');
+      // Kursor z filtrem nie wraca do pominiętego etapu: 11 z 12 zgłoszeń jest „w toku”.
+      expect(activeRest.items.map((item) => item.id)).not.toContain(oldest.id);
+      expect(active.items.length + activeRest.items.length).toBe(11);
+      expect((await candidateData.getMyApplicationsPage('pl', null, 'propozycja')).items).toEqual([]);
+      // Kontrola ujemna: bez filtra to samo zgłoszenie nadal jest dopiero na drugiej stronie.
+      expect((await candidateData.getMyApplicationsPage('pl')).items.map((item) => item.id)).not.toContain(oldest.id);
+    } finally {
+      await db().admin.query(`UPDATE public.applications SET status = 'submitted' WHERE id = ANY($1::uuid[])`, [[oldest.id, bobApp]]);
+    }
+  });
+
   it('pytania screeningowe (#101): licznik na karcie i snapshot odpowiedzi tylko dla autora zgłoszenia', async () => {
     const bobApp = (await db().admin.query('SELECT id FROM public.applications WHERE candidate_id = $1', [bob])).rows[0].id as string;
     await db().admin.query(`INSERT INTO public.application_screening_answers

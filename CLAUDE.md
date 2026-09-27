@@ -706,6 +706,17 @@ Historia własnych aplikacji w panelu jest stronicowana po 10 rekordów stabilny
 `submitted_at` + `id`; starsze zgłoszenia pozostają dostępne przez „Pokaż więcej”.
 Granica strony (#180): 10 zgłoszeń = koniec listy, 11. na kolejnej stronie (test
 `candidate-applications-pagination`).
+Filtr etapu (#809, bez migracji): nawigacja „Wszystkie / W toku / Rozmowa / Propozycja /
+Zakończone” nad listą (`CandidateApplicationsFilter` — zwykłe linki z `aria-current`, działa
+bez JS), stan w URL `?etap=aktywne|rozmowa|propozycja|zakonczone` (nieznana wartość = wszystkie).
+Grupy statusów w jednym miejscu `src/lib/candidate-application-filter.ts` (rozłączne, razem =
+każdy status poza `draft`; test porównuje z enumem z migracji 0001). Warunek
+`status = ANY($5)` w tym samym zapytaniu co kursor, PRZED limitem — starsze zgłoszenie etapu jest
+na pierwszej stronie; „Pokaż więcej” przekazuje ten sam filtr (`loadMoreApplications`, Zod enum —
+wartość spoza listy = błąd, nie „wszystkie”); zmiana etapu = nowa strona serwera, kursor od
+początku. Pusty etap = osobny stan z linkiem „Pokaż wszystkie zgłoszenia”. Testy: unit
+`candidate-applications-filter`, `-list`, `-action`, `-pagination`; integracja `portal-candidate`
+(PG16, kontrola ujemna bez filtra); E2E `candidate-applications-pagination` (4 języki, 320 px).
 Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
 migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
 nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym

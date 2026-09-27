@@ -29,6 +29,11 @@ import { findLatestActiveProposal } from '@/lib/candidate-offers';
 import { customOfferMessage } from '@/lib/offers/default-message';
 import { parseScreeningAnswers, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
+  applicationFilterStatuses,
+  matchesApplicationFilter,
+  type ApplicationFilter,
+} from '@/lib/candidate-application-filter';
+import {
   EMPTY_PROFILE_CHECKLIST,
   completionPctOf,
   computeProfileChecklist,
@@ -695,17 +700,21 @@ function isDashboardErrorFixture(): boolean {
 export async function getMyApplicationsPage(
   locale: string = routing.defaultLocale,
   cursor: ApplicationCursor | null = null,
+  filter: ApplicationFilter | null = null,
 ): Promise<MyApplicationsPage> {
   const resolvedLocale = toLocale(locale);
   if (!isPortalDataConfigured()) {
     // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
-      return developmentApplicationFixture(resolvedLocale, cursor);
+      return developmentApplicationFixture(resolvedLocale, cursor, filter);
     }
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
       throw new Error('Isolated application history fixture failure');
     }
-    return { items: cursor ? [] : demoApplications(resolvedLocale), nextCursor: null };
+    return {
+      items: cursor ? [] : demoApplications(resolvedLocale).filter((app) => matchesApplicationFilter(app.status, filter)),
+      nextCursor: null,
+    };
   }
 
   try {
@@ -715,6 +724,9 @@ export async function getMyApplicationsPage(
     return await withPortalTransaction(me, async (tx) => {
       // Kursor (czas + UUID) jako porównanie krotek: starsze zgłoszenie albo ten sam czas
       // i mniejszy UUID. Kursor z Server Action jest sprawdzany przez Zod przed trafieniem tutaj.
+      // Filtr etapu (#809) działa w tym samym zapytaniu PRZED limitem i kursorem — starsze
+      // zgłoszenie wybranego etapu jest na pierwszej stronie mimo wielu nowszych innych.
+      const statuses = applicationFilterStatuses(filter);
       const rows = await queryRows(tx, 'candidate.applications-page',
         `SELECT id, job_id, status, submitted_at,
                 (SELECT count(*)::int FROM public.application_screening_answers s
@@ -723,9 +735,11 @@ export async function getMyApplicationsPage(
           WHERE candidate_id = $1
             AND deleted_at IS NULL
             AND ($2::timestamptz IS NULL OR (submitted_at, id) < ($2::timestamptz, $3::uuid))
+            AND ($5::text[] IS NULL OR status::text = ANY($5::text[]))
           ORDER BY submitted_at DESC, id DESC
           LIMIT $4`,
-        [me.id, cursor?.submittedAt ?? null, cursor?.id ?? null, APPLICATION_PAGE_SIZE + 1]);
+        [me.id, cursor?.submittedAt ?? null, cursor?.id ?? null, APPLICATION_PAGE_SIZE + 1,
+          statuses ? [...statuses] : null]);
 
       if (rows.length === 0) return { items: [], nextCursor: null };
       const visibleRows = rows.slice(0, APPLICATION_PAGE_SIZE);
@@ -766,7 +780,11 @@ export async function getMyApplicationsPage(
 }
 
 /** Dane wyłącznie dla izolowanego testu Next dev; produkcyjny kompilator usuwa tę ścieżkę. */
-function developmentApplicationFixture(locale: Locale, cursor: ApplicationCursor | null): MyApplicationsPage {
+function developmentApplicationFixture(
+  locale: Locale,
+  cursor: ApplicationCursor | null,
+  filter: ApplicationFilter | null,
+): MyApplicationsPage {
   const jobs = resolveDemoJobs(locale);
   const submittedAt = '2026-09-20T09:00:00+00:00';
   const all = Array.from({ length: 15 }, (_, index) => {
@@ -777,10 +795,12 @@ function developmentApplicationFixture(locale: Locale, cursor: ApplicationCursor
       companyName: job?.companyName ?? '',
       slug: job?.slug ?? null,
       date: submittedAt,
-      status: 'submitted',
+      // Najstarsze zgłoszenie jest na etapie rozmowy (#809): filtr „Rozmowa” pokazuje je
+      // na pierwszej stronie, choć bez filtra leży dopiero na drugiej.
+      status: index === 14 ? 'interview' : 'submitted',
       screeningCount: 0,
     };
-  });
+  }).filter((item) => matchesApplicationFilter(item.status, filter));
   const remaining = cursor
     ? all.filter((item) => item.date < cursor.submittedAt || (item.date === cursor.submittedAt && item.id < cursor.id))
     : all;
