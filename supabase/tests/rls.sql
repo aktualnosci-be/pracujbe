@@ -15262,4 +15262,90 @@ select pg_temp.assert(:'skneg' = :'skoff1',
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0450):
+--        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
+--        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
+--        już ustalonego, dłuższego terminu ostrzeżenia (e-mail z konkretną datą był wysłany).
+-- ============================================================================
+\echo '--- RW862 wydłużenie retencji odracza usunięcie (0450) ---'
+reset role; reset app.current_uid;
+\set RW1 '86200000-0000-4000-8000-0000000000c1'
+\set RW2 '86200000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RW1','rw862c1@test.be','Rw Jeden','{"role":"candidate","first_name":"Rw","last_name":"Jeden","locale":"pl"}'),
+  (:'RW2','rw862c2@test.be','Rw Dwa','{"role":"candidate","first_name":"Rw","last_name":"Dwa","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW1', 'candidate-files', :'RW1' || '/cv-rw1.pdf', 'candidate_cv');
+-- RW2 (plik + aktywność + ostrzeżenie) powstaje dopiero tuż przed RW862-5: wcześniejsze
+-- wywołania admin_set_retention_policy (RW862-1/3, które SŁUSZNIE synchronizują WSZYSTKIE
+-- ostrzeżenia tej kategorii, więc RW2 też by odsunęły, gdyby już istniał) nie mogą go dotknąć
+-- — kontrola ujemna ma sprawdzać goły zapis retention_policies.period, nie efekt uboczny
+-- poprawnie działającej naprawy.
+
+-- Ostrzeżenie RW1 wysłane pod poprzednią, krótszą polityką: aktywność dawno temu, termin już
+-- minięty (25 dni temu) — dokładnie stan tuż po wysłaniu e-maila z konkretną datą usunięcia.
+select (now() - interval '400 days')::text as rw_activity \gset
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW1';
+set session_replication_role = origin;
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW1', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+
+-- RW862-1: admin WYDŁUŻA okres (365→500 dni) przez admin_set_retention_policy — termin już
+-- wysłanego ostrzeżenia RW1 ma się odsunąć do activity_at + 500 dni (w przyszłość).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 500);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days'
+  and (select due_at > now() + interval '90 days' from public.retention_warnings
+        where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv'),
+  'RW862-1 wydłużenie okresu przez admin_set_retention_policy przesuwa due_at już wysłanego ostrzeżenia w przyszłość');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp1 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-2 po wydłużeniu przez RPC CV nie jest usuwane mimo minięcia dawnego, krótszego terminu');
+
+-- RW862-3: skrócenie do 300 dni NIE cofa już ustalonego (dłuższego) terminu RW1.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 300);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days',
+  'RW862-3 skrócenie okresu nie obniża już ustalonego, dłuższego terminu ostrzeżenia');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp2 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-4 po skróceniu RW1 nadal nie jest usuwany przed odroczonym terminem');
+
+-- RW862-5 (kontrola ujemna): świeże ostrzeżenie RW2 pod tym samym, dawno minionym terminem,
+-- a potem sama zmiana retention_policies.period z pominięciem RPC (czyli dokładnie to, co
+-- robił kod SPRZED naprawy #862 — bez synchronizacji due_at) NIE odracza tego ostrzeżenia:
+-- CV znika mimo że okres formalnie „wydłużono" do 500 dni.
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW2';
+set session_replication_role = origin;
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW2', 'candidate-files', :'RW2' || '/cv-rw2.pdf', 'candidate_cv');
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW2', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+update public.retention_policies set period = interval '500 days' where key = 'inactive_candidate_cv';
+set role service_role;
+select public.run_retention_purge(200)::text as rwp3 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RW2' || '/cv-rw2.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RW2' || '/cv-rw2.pdf'),
+  'RW862-5 kontrola ujemna: bez synchronizacji przez RPC (goła zmiana period) CV nadal ginie mimo wydłużenia');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
