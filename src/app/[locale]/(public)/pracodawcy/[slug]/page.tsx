@@ -8,7 +8,12 @@ import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl, buildOrganizationJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
+import {
+  brandShareImageUrl,
+  buildBreadcrumbListJsonLd,
+  buildOrganizationJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo/structured-data';
 import { getCompanyProfile } from '@/lib/companies';
 import { JobCard } from '@/components/public/JobCard';
 
@@ -31,6 +36,13 @@ const JOBS_PATH = '/oferty-pracy';
 type PageProps = {
   params: Promise<{ locale: string; slug: string }>;
 };
+
+/** Jak w szczególe oferty (`oferty-pracy/[slug]/page.tsx`): jedna linia, granica słowa, wielokropek. */
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1).trimEnd()}…`;
+}
 
 function initials(name: string): string {
   const letters = name
@@ -62,7 +74,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const path = `${BASE_PATH}/${slug}`;
   const url = `${base}/${locale}${path}`;
   const title = t('metaTitle', { name: result.company.name });
-  const description = t('metaDescription', { name: result.company.name });
+  // #647: opis firmy różnicuje profile w wynikach wyszukiwania i podglądach linków — bez niego
+  // wszystkie profile miały identyczny opis z podmienioną tylko nazwą. Fallback zostaje dla
+  // firmy bez opisu (Invariant #8: nic technicznego, sam tłumaczony tekst ogólny).
+  const rawDescription = result.company.description.trim();
+  const description = rawDescription
+    ? truncate(rawDescription, 160)
+    : t('metaDescription', { name: result.company.name });
   const shareImage = brandShareImageUrl(base);
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
@@ -124,6 +142,18 @@ export default async function CompanyProfilePage({ params }: PageProps) {
     getTranslations('common'),
   ]);
 
+  // Widoczna ścieżka i BreadcrumbList z jednej listy — dane strukturalne = nawigacja.
+  const trail = [
+    { label: tCommon('home'), href: '/' },
+    { label: tJobs('pageTitle'), href: JOBS_PATH },
+    { label: company.name },
+  ];
+  const breadcrumbJsonLd = buildBreadcrumbListJsonLd(trail, {
+    base: env.siteUrl,
+    locale,
+    currentUrl: profileUrl,
+  });
+
   return (
     <PublicSavedJobsProvider key={JSON.stringify(jobs.map((job) => job.id))} jobIds={jobs.map((job) => job.id)}>
       {/* Organization (#591): strona istnieje tylko dla firmy zweryfikowanej. */}
@@ -131,14 +161,14 @@ export default async function CompanyProfilePage({ params }: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
+      />
       <div className="container py-6 md:py-10">
         <Breadcrumbs
           ariaLabel={tCommon('breadcrumb')}
-          items={[
-            { label: tCommon('home'), href: '/' },
-            { label: tJobs('pageTitle'), href: JOBS_PATH },
-            { label: company.name },
-          ]}
+          items={trail}
         />
 
         <header className="mt-4 flex items-start gap-4">

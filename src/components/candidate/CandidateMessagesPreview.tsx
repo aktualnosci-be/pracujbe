@@ -1,6 +1,7 @@
 import { Link } from '@/i18n/navigation';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
 import type { CandidateSectionLoad, LatestMessage } from '@/lib/data/candidate';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import { BTN_SECONDARY, EMPTY, ICON_BOX, PANEL, PANEL_H2, SECTION_HEAD } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +25,11 @@ function initials(name: string): string {
 function formatShort(iso: string, locale: string): string {
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return '';
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(ts);
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: APP_TIME_ZONE,
+  }).format(ts);
 }
 
 /** Najnowsze wiadomości na pulpicie: awaria odczytu nigdy nie udaje braku rozmów (#244). */

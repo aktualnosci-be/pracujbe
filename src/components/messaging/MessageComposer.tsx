@@ -38,6 +38,12 @@ import { BTN_PRIMARY, BTN_SMALL, FORM_CONTROL } from '@/components/dashboard/pan
  * `checkAttachmentFile` przed wysyłką, każdy upload ma własny stały klucz — ponowienie nie
  * dubluje pliku), a „Wyślij” łączy gotowe pliki z wiadomością w jednej transakcji. W trakcie
  * wgrywania albo przy nieudanym pliku wysyłka jest zablokowana; plik można usunąć lub ponowić.
+ *
+ * Izolacja stanu między rozmowami (#849): `value`/`error`/`drafts`/`operationRef` żyją w tej
+ * instancji, więc `MessagesView` MUSI montować ten komponent z `key={conversationId}` — inaczej
+ * przełączenie rozmowy zmienia tylko prop `conversationId`, a szkic (i klucz idempotencji)
+ * napisany do jednego rozmówcy trafiłby po „Wyślij” do innego. Sam komponent nie zna poprzedniej
+ * rozmowy i nie może się przed tym zabezpieczyć — odpowiedzialność jest po stronie rodzica.
  */
 
 interface DraftAttachment {

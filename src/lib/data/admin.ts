@@ -42,11 +42,14 @@ import {
   type ReportSort,
 } from '@/lib/admin/list-params';
 import { appDayStartUtc } from '@/lib/datetime';
+import { parseCompanyLinksReview, type CompanyLinksReview } from '@/lib/company-links';
 import { demoJobs } from '@/lib/data/demo';
 import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/lib/db/portal';
 import { attempt, execute, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
+import type { Locale } from '@/i18n/routing';
+import { resolveRecipientLocale } from '@/lib/i18n/recipient-locale';
 import {
   isScreeningQuestionType,
   toLocalizedText,
@@ -120,6 +123,9 @@ export const AWAITING_COMPANY_STATUSES = ['unverified', 'pending'] as const;
 
 /** Wartość filtra listy firm dla kolejki weryfikacji (`?status=awaiting`). */
 export const AWAITING_FILTER = 'awaiting';
+
+/** Wartość filtra listy firm dla kolejki zatwierdzania strony WWW/logo (`?status=links`, 0156). */
+export const LINKS_REVIEW_FILTER = 'links';
 
 /** Link w panelu (ścieżka bez prefiksu locale — dokłada go next-intl `Link`). */
 export interface AdminHref {
@@ -280,7 +286,7 @@ const DEMO_STATS: AdminStats = {
   openReports: 3,
 };
 
-const DEMO_COMPANIES: AdminCompanyRow[] = [
+export const DEMO_COMPANIES: AdminCompanyRow[] = [
   { id: 'demo-c1', name: 'AGO Jobs & HR', status: 'verified', createdAt: '2025-01-15T09:00:00.000Z', vatNumber: 'BE0123456789', registrationNumber: '0123.456.789', email: 'jobs@example.com', city: 'Antwerpen' },
   { id: 'demo-c2', name: 'Bouwbedrijf De Vos', status: 'pending', createdAt: '2025-02-03T11:30:00.000Z', vatNumber: 'BE0987654321', registrationNumber: null, email: 'info@example.com', city: 'Gent' },
   { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z', vatNumber: 'BE0417497106', registrationNumber: null, email: null, city: null },
@@ -427,6 +433,8 @@ function filterDemoCompanies(filter?: string): AdminCompanyRow[] {
       (AWAITING_COMPANY_STATUSES as readonly string[]).includes(c.status),
     );
   }
+  // Firmy demonstracyjne nie mają propozycji linków (zapis wymaga bazy).
+  if (filter === LINKS_REVIEW_FILTER) return [];
   return DEMO_COMPANIES.filter((c) => c.status === filter);
 }
 
@@ -605,15 +613,17 @@ export async function listCompanies(
 
   try {
     const params = new SqlParams();
+    const linksQueue = filter === LINKS_REVIEW_FILTER;
     const statuses =
       filter === AWAITING_FILTER
         ? [...AWAITING_COMPANY_STATUSES]
-        : filter && filter !== 'all'
+        : filter && filter !== 'all' && !linksQueue
           ? [filter]
           : null;
     const where = whereOf([
       'deleted_at IS NULL',
       statuses && `status::text = ANY(${params.add(statuses)}::text[])`,
+      linksQueue && "links_review_status = 'pending'",
       q && searchCondition(params, ['name', 'vat_number', 'registration_number', 'email'], q),
       cursorCondition(params, query.cursor),
     ]);
@@ -1057,6 +1067,201 @@ export async function listUsers(
 }
 
 /* ---------------------------------------------------------------------------
+ * Szczegół konta (tylko odczyt) — dane konta, firmy, proces kandydata, blokada adresu
+ * ------------------------------------------------------------------------- */
+
+export interface AdminUserMembership {
+  /** `company_members.id`. */
+  id: string;
+  companyId: string;
+  companyName: string;
+  /** `company_status` firmy. */
+  companyStatus: string;
+  /** `company_member_role`: owner/admin/recruiter/member. */
+  role: string;
+  isActive: boolean;
+  since: string | null;
+}
+
+export interface AdminUserCandidateSummary {
+  profileCompleted: boolean;
+  isSearchable: boolean;
+  /** Zgłoszenia poza szkicem (bez usuniętych). */
+  applications: number;
+  /** Otrzymane propozycje (bez szkiców). */
+  offers: number;
+}
+
+export interface AdminUserDetail extends AdminUserRow {
+  isActive: boolean;
+  lastSeenAt: string | null;
+  preferredLocale: string | null;
+  accountLocale: string | null;
+  signupLocale: string | null;
+  /** Język e-maili i powiadomień wg Invariantu #1 (preferred → account → signup → en). */
+  recipientLocale: Locale;
+  memberships: AdminUserMembership[];
+  /** Tylko konto z profilem kandydata; inaczej null. */
+  candidate: AdminUserCandidateSummary | null;
+  /** Aktywna blokada adresu e-mail (#44) albo null. */
+  suppression: { reason: string; createdAt: string | null } | null;
+}
+
+export type AdminUserDetailResult =
+  | { status: 'ok'; user: AdminUserDetail }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+function demoUserDetail(id: string): AdminUserDetailResult {
+  const row = DEMO_USERS.find((u) => u.id === id);
+  if (!row) return { status: 'not_found' };
+  const company = DEMO_COMPANIES[0];
+  return {
+    status: 'ok',
+    user: {
+      ...row,
+      isActive: true,
+      lastSeenAt: row.createdAt,
+      preferredLocale: null,
+      accountLocale: 'pl',
+      signupLocale: 'pl',
+      recipientLocale: 'pl',
+      memberships:
+        row.role === 'employer' && company
+          ? [
+              {
+                id: `${row.id}-m1`,
+                companyId: company.id,
+                companyName: company.name,
+                companyStatus: company.status,
+                role: 'owner',
+                isActive: true,
+                since: row.createdAt,
+              },
+            ]
+          : [],
+      candidate:
+        row.role === 'candidate'
+          ? { profileCompleted: true, isSearchable: false, applications: 2, offers: 0 }
+          : null,
+      suppression: null,
+    },
+  };
+}
+
+/**
+ * Szczegół konta dla admina (tylko odczyt): dane profilu, język komunikacji wg Invariantu #1,
+ * członkostwa w firmach, podsumowanie procesu kandydata (same liczniki — bez treści zgłoszeń)
+ * i aktywna blokada adresu. Nieistniejące/usunięte konto albo zły identyfikator →
+ * `not_found`; błąd któregokolwiek odczytu → `error` (bez częściowych danych). Bez env → DEMO.
+ */
+export async function getUserDetail(id: string): Promise<AdminUserDetailResult> {
+  if (!isPortalDataConfigured()) return demoUserDetail(id);
+  await requireAdmin();
+
+  const uuid = parseUuid(id);
+  if (!uuid) return { status: 'not_found' };
+
+  try {
+    const loaded = await withServiceRole(async (tx) => {
+      const profile = await queryOne(tx, 'admin.user-detail',
+        `SELECT id, first_name, last_name, email, role, preferred_locale, account_locale,
+                signup_locale, is_active, last_seen_at, created_at
+           FROM public.profiles
+          WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
+      if (!profile) return null;
+      const p = asRecord(profile);
+      const memberships = await queryRows(tx, 'admin.user-memberships',
+        `SELECT m.id, m.role, m.is_active, m.joined_at, m.created_at,
+                c.id AS company_id, c.name AS company_name, c.status AS company_status
+           FROM public.company_members m
+           JOIN public.companies c ON c.id = m.company_id AND c.deleted_at IS NULL
+          WHERE m.profile_id = $1
+          ORDER BY m.created_at ASC, m.id ASC`, [uuid]);
+      const candidateRow = await queryOne(tx, 'admin.user-candidate',
+        `SELECT profile_completed, is_searchable
+           FROM public.candidate_profiles
+          WHERE profile_id = $1 AND deleted_at IS NULL`, [uuid]);
+      const candidate = candidateRow
+        ? {
+            row: asRecord(candidateRow),
+            applications: await queryCount(tx, 'admin.user-applications',
+              `SELECT 1 FROM public.applications
+                WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text <> 'draft'`, [uuid]),
+            offers: await queryCount(tx, 'admin.user-offers',
+              `SELECT 1 FROM public.offers
+                WHERE candidate_id = $1 AND status::text <> 'draft'`, [uuid]),
+          }
+        : null;
+      const email = asNullableString(p['email']);
+      const suppression = email
+        ? await queryOne(tx, 'admin.user-suppression',
+            `SELECT reason, created_at
+               FROM public.email_suppressions
+              WHERE email = $1::citext AND lifted_at IS NULL
+              ORDER BY created_at DESC
+              LIMIT 1`, [email])
+        : null;
+      return { p, memberships: asRows(memberships), candidate, suppression };
+    });
+    if (!loaded) return { status: 'not_found' };
+
+    const { p, candidate } = loaded;
+    const preferredLocale = asNullableString(p['preferred_locale']);
+    const accountLocale = asNullableString(p['account_locale']);
+    const signupLocale = asNullableString(p['signup_locale']);
+    const suppression = loaded.suppression ? asRecord(loaded.suppression) : null;
+
+    return {
+      status: 'ok',
+      user: {
+        id: asString(p['id']),
+        name: fullName(p),
+        email: asNullableString(p['email']),
+        role: asString(p['role'], 'candidate'),
+        createdAt: asNullableString(p['created_at']),
+        isActive: p['is_active'] !== false,
+        lastSeenAt: asNullableString(p['last_seen_at']),
+        preferredLocale,
+        accountLocale,
+        signupLocale,
+        recipientLocale: resolveRecipientLocale({
+          preferred_locale: preferredLocale,
+          account_locale: accountLocale,
+          signup_locale: signupLocale,
+        }),
+        memberships: loaded.memberships.map((row) => ({
+          id: asString(row['id']),
+          companyId: asString(row['company_id']),
+          companyName: asString(row['company_name']),
+          companyStatus: asString(row['company_status'], 'unverified'),
+          role: asString(row['role'], 'member'),
+          isActive: row['is_active'] === true,
+          since: asNullableString(row['joined_at']) ?? asNullableString(row['created_at']),
+        })),
+        candidate: candidate
+          ? {
+              profileCompleted: candidate.row['profile_completed'] === true,
+              isSearchable: candidate.row['is_searchable'] === true,
+              applications: candidate.applications,
+              offers: candidate.offers,
+            }
+          : null,
+        suppression: suppression
+          ? {
+              reason: asString(suppression['reason'], 'hard_bounce'),
+              createdAt: asNullableString(suppression['created_at']),
+            }
+          : null,
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'admin.getUserDetail' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Dziennik zdarzeń (audit_logs) — tylko odczyt (#417)
  * ------------------------------------------------------------------------- */
 
@@ -1168,18 +1373,6 @@ async function readAuditRows(
 ): Promise<AdminAuditRow[]> {
   const { entity, action, entityId, actorQuery, fromIso, toIso } = filters;
   const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
-  // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
-  let actorIdsFilter: string[] | null = null;
-  if (actorQuery && !systemActor) {
-    const actorParams = new SqlParams();
-    const actors = await queryRows(tx, 'admin.audit-actor-search',
-      `SELECT id FROM public.profiles
-        ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
-        LIMIT 100`, actorParams.values);
-    actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
-    if (actorIdsFilter.length === 0) return [];
-  }
-
   const params = new SqlParams();
   const where = whereOf([
     entity && `entity_type = ${params.add(entity)}`,
@@ -1188,7 +1381,12 @@ async function readAuditRows(
     fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
     toIso && `created_at < ${params.add(toIso)}::timestamptz`,
     systemActor && 'actor_id IS NULL',
-    actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
+    // Aktor po nazwie/e-mailu (#857/#844): podzapytanie po WSZYSTKICH pasujących profilach
+    // w tym samym zapytaniu — bez pośredniej listy id z limitem, więc wpisy żadnej pasującej
+    // osoby nie znikają z listy ani z eksportu.
+    actorQuery && !systemActor &&
+      `actor_id IN (SELECT p.id FROM public.profiles p WHERE ${searchCondition(
+        params, ['p.first_name', 'p.last_name', 'p.email'], actorQuery)})`,
     cursorCondition(params, cursor),
   ]);
   const limitParam = params.add(limit);
@@ -1239,6 +1437,10 @@ async function readAuditRows(
           ? { pathname: `/admin/firmy/${uuid}` }
           : { pathname: '/admin/firmy', query: { q: company.name } };
       }
+    } else if (entityType === 'job' && id) {
+      // Lista ofert admina (`/admin/oferty`) wyszukuje także po identyfikatorze oferty.
+      const uuid = parseUuid(id);
+      entityHref = uuid ? { pathname: '/admin/oferty', query: { q: uuid } } : null;
     } else if (entityType === 'report') {
       entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
     } else if (entityType === 'email_suppression') {
@@ -1413,7 +1615,11 @@ export interface AdminCompanyJob {
 }
 
 export interface AdminCompanyDetail extends AdminCompanyRow {
+  /** Zatwierdzone (publiczne) adresy firmy. */
   website: string | null;
+  logoUrl: string | null;
+  /** Propozycja zmiany strony WWW/logo do decyzji admina albo odrzucona (0156). */
+  linksReview: CompanyLinksReview | null;
   phone: string | null;
   address: string | null;
   postalCode: string | null;
@@ -1452,6 +1658,8 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
     company: {
       ...row,
       website: null,
+      logoUrl: null,
+      linksReview: null,
       phone: null,
       address: null,
       postalCode: null,
@@ -1535,7 +1743,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
       const company = await queryOne(tx, 'admin.company-detail',
         `SELECT id, name, status, status_reason, created_at, verified_at, vat_number,
                 registration_number, email, phone, website, address, postal_code, city, region,
-                country, industry, description
+                country, industry, description, logo_url, website_pending, logo_url_pending,
+                links_review_status, links_pending_at, links_review_reason
            FROM public.companies
           WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
       if (!company) return null;
@@ -1590,6 +1799,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         email: asNullableString(c['email']),
         city: asNullableString(c['city']),
         website: asNullableString(c['website']),
+        logoUrl: asNullableString(c['logo_url']),
+        linksReview: parseCompanyLinksReview(c),
         phone: asNullableString(c['phone']),
         address: asNullableString(c['address']),
         postalCode: asNullableString(c['postal_code']),

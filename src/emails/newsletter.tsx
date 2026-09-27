@@ -16,6 +16,11 @@ import { interpolate, layoutCopy } from "@/emails/copy";
 import type { Locale } from "@/i18n/routing";
 import { env } from "@/lib/env";
 import type { EmailSenderIdentity } from "@/lib/email/sender";
+import {
+  NEWSLETTER_JOBS_MAX,
+  NEWSLETTER_JOBS_MIN,
+  newsletterJobIssues,
+} from "@/lib/email/newsletter-rules";
 
 export interface NewsletterJob {
   /** Język treści oferty. Musi być zgodny z językiem całej wiadomości. */
@@ -55,33 +60,28 @@ export interface NewsletterRenderFoundation {
   readonly text: string;
 }
 
-const placeholderPattern = /\{\{[^}]+\}\}/;
-const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 export function assertRenderableJobs(
   jobs: readonly NewsletterJob[],
   locale: Locale,
 ): asserts jobs is readonly NewsletterJob[] {
-  if (jobs.length < 1 || jobs.length > 3) {
+  if (jobs.length < NEWSLETTER_JOBS_MIN || jobs.length > NEWSLETTER_JOBS_MAX) {
     throw new Error("Newsletter wymaga od 1 do 3 realnych ofert.");
   }
 
   for (const job of jobs) {
-    const values = [job.slug, job.title, job.city, job.salary ?? ""];
     if (job.isDemo === true)
       throw new Error("Newsletter nie może zawierać oferty demonstracyjnej.");
     if (job.locale !== locale) {
       throw new Error("Język oferty musi być zgodny z językiem newslettera.");
     }
-    if (
-      !slugPattern.test(job.slug) ||
-      values.some((value) => placeholderPattern.test(value))
-    ) {
+    // Te same reguły pól co edytor kampanii w panelu admina (`newsletter-rules.ts`).
+    const issues = Object.values(newsletterJobIssues(job));
+    if (issues.includes("slug") || issues.includes("placeholder")) {
       throw new Error(
         "Newsletter wymaga realnego sluga i treści bez placeholderów.",
       );
     }
-    if (!job.title.trim() || !job.city.trim()) {
+    if (issues.includes("required")) {
       throw new Error("Newsletter wymaga tytułu i miasta każdej oferty.");
     }
   }

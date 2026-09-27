@@ -87,6 +87,7 @@ describe('panel admina na PostgreSQL (#25) — dostęp', () => {
     ['listUsers', () => data.listUsers()],
     ['listAuditLogs', () => data.listAuditLogs()],
     ['getCompanyDetail', () => data.getCompanyDetail(ownedCompany)],
+    ['getUserDetail', () => data.getUserDetail(candidate.id)],
     ['listEmailSuppressions', () => data.listEmailSuppressions()],
   ] as const;
 
@@ -190,6 +191,37 @@ describe('panel admina na PostgreSQL (#25) — listy', () => {
   });
 });
 
+describe('panel admina na PostgreSQL — szczegół konta', () => {
+  it('pracodawca: członkostwo w firmie, język wg fallbacku, bez profilu kandydata; usunięte → not_found', async () => {
+    actAs(admin);
+    const detail = await data.getUserDetail(employer.id);
+    if (detail.status !== 'ok') throw new Error('expected ok');
+    expect(detail.user).toMatchObject({
+      id: employer.id,
+      role: 'employer',
+      email: `${employer.id}@example.invalid`,
+      recipientLocale: 'fr',
+      candidate: null,
+      suppression: null,
+      memberships: [expect.objectContaining({ companyId: ownedCompany, companyName: 'Właściciel IT', role: 'owner', isActive: true })],
+    });
+    expect(await data.getUserDetail('00000000-0000-4000-8000-000000000000')).toEqual({ status: 'not_found' });
+  });
+
+  it('aktywna blokada adresu profilu jest widoczna, zdjęta — nie', async () => {
+    actAs(admin);
+    const email = `${candidate.id}@example.invalid`;
+    const id = (await db().admin.query(`INSERT INTO public.email_suppressions(email, reason) VALUES ($1, 'complaint') RETURNING id`, [email])).rows[0].id;
+    const blocked = await data.getUserDetail(candidate.id);
+    expect(blocked.status === 'ok' && blocked.user.suppression).toMatchObject({ reason: 'complaint' });
+    await db().admin.query(`UPDATE public.email_suppressions SET lifted_at = now(), lift_reason = 'test' WHERE id = $1`, [id]);
+    const lifted = await data.getUserDetail(candidate.id);
+    expect(lifted.status === 'ok' && lifted.user.suppression).toBeNull();
+    // Sprzątanie: kolejne testy liczą blokady na liście `/admin/poczta`.
+    await db().admin.query('DELETE FROM public.email_suppressions WHERE id = $1', [id]);
+  });
+});
+
 describe('panel admina na PostgreSQL (#25) — akcje i dziennik', () => {
   it('admin_set_company_status: przejście z p_expected_status, nieaktualny status → STALE_STATE', async () => {
     actAs(admin);
@@ -261,5 +293,36 @@ describe('panel admina na PostgreSQL (#25) — akcje i dziennik', () => {
     expect(stored.rows[0]).toEqual({ result: 'valid', checked_by: admin.id });
     expect(JSON.stringify(detail.company.vies)).toContain('valid');
     expect(await actions.checkCompanyVies('00000000-0000-4000-8000-000000000000')).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
+});
+
+describe('dziennik: filtr aktora przy ponad 100 pasujących profilach (#857/#844)', () => {
+  it('wpisy aktora spoza pierwszych 100 dopasowań trafiają do listy i eksportu', async () => {
+    actAs(admin);
+    const pg = db();
+    // 120 kont o wspólnym fragmencie nazwiska; wpis dziennika ma tylko OSTATNIE z nich.
+    const created = await pg.admin.query(`INSERT INTO auth.users(id, email, name, raw_user_meta_data)
+      SELECT gen_random_uuid(), 'wspolny' || lpad(g::text, 3, '0') || '@example.invalid', 'Test',
+             '{"role":"employer","locale":"pl"}'::jsonb
+        FROM generate_series(1, 120) g
+      RETURNING id, email`);
+    const ids = created.rows.map((r: { id: string }) => r.id);
+    await pg.admin.query(`UPDATE public.profiles SET first_name = 'Jan', last_name = 'Wspólnyk' WHERE id = ANY($1::uuid[])`, [ids]);
+    const target = (created.rows.find((r: { email: string }) => r.email.startsWith('wspolny120')) as { id: string }).id;
+    await pg.admin.query(`INSERT INTO public.audit_logs(actor_id, action, entity_type, entity_id, after_data)
+      VALUES ($1, 'company.status_changed', 'company', $2, '{"status":"verified"}'::jsonb)`, [target, ownedCompany]);
+
+    // Kontrola ujemna: dawny pośredni krok (id profili z LIMIT 100) nie obejmuje tego aktora,
+    // więc test byłby czerwony na poprzedniej implementacji.
+    const old = await pg.admin.query(`SELECT id FROM public.profiles
+      WHERE (first_name::text ILIKE $1 OR last_name::text ILIKE $1 OR email::text ILIKE $1) LIMIT 100`, ['%Wspólnyk%']);
+    expect(old.rows.map((r: { id: string }) => r.id)).not.toContain(target);
+
+    const list = await data.listAuditLogs({ actor: 'Wspólnyk' });
+    if (list.status !== 'ok') throw new Error('expected ok');
+    expect(list.rows.map((r) => r.actorId)).toEqual([target]);
+    const exported = await data.exportAuditLogs({ actor: 'Wspólnyk' }, 'json');
+    expect(exported?.rows.map((r) => r.actorId)).toEqual([target]);
+    expect(exported?.truncated).toBe(false);
   });
 });

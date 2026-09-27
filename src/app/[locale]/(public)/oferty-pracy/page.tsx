@@ -6,13 +6,12 @@ import { SearchX, X } from 'lucide-react';
 import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { getJobFilterFacets, getJobs, isShowingDemoJobs } from '@/lib/jobs';
 import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import {
-  localizedLocationLabel,
   localizeLocationFacets,
 } from '@/lib/locations/city-aliases';
 import {
@@ -21,6 +20,7 @@ import {
   savedSearchFiltersFromQuery,
   savedSearchQueryString,
 } from '@/lib/job-list-query';
+import { describeJobListFilters } from '@/lib/job-filter-summary';
 import { SaveSearchButton } from '@/components/public/SaveSearchButton';
 import { FilterSidebar, SortMenu } from '@/components/public/FilterSidebar';
 import { FilterSheet } from '@/components/public/FilterSheet';
@@ -29,12 +29,11 @@ import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { Pagination } from '@/components/public/Pagination';
 import {
   buildDemoFacets,
-  isSalaryNarrowed,
-  salaryBounds,
+  parseLocationsParam,
+  serializeLocations,
   sidebarFiltersToParams,
   splitParam,
   toFacetItem,
-  type DateValue,
   type SortValue,
 } from '@/components/public/job-filters';
 
@@ -211,12 +210,6 @@ export default async function JobsListPage({
   const pageItems = results.jobs;
   const total = results.total;
 
-  const currency = new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: 0,
-  });
-
   // Zestaw aktywnych parametrów (spójny z tym, co zapisuje sidebar) do budowy linków.
   const activeParams: Record<string, string> = {
     ...sidebarFiltersToParams(sf),
@@ -252,8 +245,13 @@ export default async function JobsListPage({
   };
   const withoutValue = (key: string, value: string): string => {
     const next = { ...activeParams };
-    const rest = splitParam(next[key]).filter((v) => v !== value);
-    if (rest.length) next[key] = rest.join(',');
+    // Lokalizacja jest wolnym tekstem i może sama zawierać przecinek (#845) — parsuje/serializuje
+    // ją osobna, escapująca para funkcji zamiast generycznego CSV używanego przez inne filtry.
+    const rest =
+      key === 'location'
+        ? parseLocationsParam(next[key]).filter((v) => v !== value)
+        : splitParam(next[key]).filter((v) => v !== value);
+    if (rest.length) next[key] = key === 'location' ? serializeLocations(rest) : rest.join(',');
     else delete next[key];
     return hrefFrom(next);
   };
@@ -271,89 +269,22 @@ export default async function JobsListPage({
     return hrefFrom(next);
   };
 
-  const dateChipLabel = (d: DateValue): string =>
-    d === '24h'
-      ? tFilters('date24h')
-      : d === '7d'
-        ? tFilters('date7d')
-        : d === '30d'
-          ? tFilters('date30d')
-          : tFilters('any');
-
-  const salaryMaxLabel =
-    sf.salaryMax >= salaryBounds(sf.salaryUnit).max
-      ? tFilters('salaryMaxCap', { value: currency.format(sf.salaryMax) })
-      : currency.format(sf.salaryMax);
-  const salaryChipLabel = tFilters(
-    sf.salaryUnit === 'hour' ? 'salaryChipHourly' : 'salaryChip',
-    { min: currency.format(sf.salaryMin), max: salaryMaxLabel },
-  );
-
-  // Chipy aktywnych filtrów (odzwierciedlają activeParams).
-  const chips: Array<{ id: string; label: string; href: string }> = [];
-  if (keyword)
-    chips.push({ id: 'kw', label: keyword, href: withoutKey('keyword') });
-  if (city)
-    chips.push({
-      id: 'city',
-      label: cityFilters.cityLabel ?? city,
-      href: withoutKey('city'),
-    });
-  for (const cat of sf.categories) {
-    chips.push({
-      id: `cat-${cat}`,
-      label: tCat(cat),
-      href: withoutValue('category', cat),
-    });
-  }
-  for (const loc of sf.locations) {
-    chips.push({
-      id: `loc-${loc}`,
-      label: localizedLocationLabel(loc, locale),
-      href: withoutValue('location', loc),
-    });
-  }
-  for (const ct of sf.contractTypes) {
-    chips.push({
-      id: `ct-${ct}`,
-      label: tContract(ct),
-      href: withoutValue('contractType', ct),
-    });
-  }
-  if (isSalaryNarrowed(sf)) {
-    chips.push({ id: 'salary', label: salaryChipLabel, href: withoutSalary() });
-  }
-  if (sf.accommodation.length === 1) {
-    const value = sf.accommodation.includes('provided')
-      ? 'provided'
-      : 'unavailable';
-    chips.push({
-      id: 'acc',
-      label: tFilters(value),
-      href: withoutKey('accommodation'),
-    });
-  }
-  if (sf.immediate) {
-    chips.push({
-      id: 'immediate',
-      label: tFilters('immediate'),
-      href: withoutKey('immediate'),
-    });
-  }
-  if (sf.noLanguageRequired) {
-    chips.push({
-      id: 'nolang',
-      label: tFilters('noLanguageRequired'),
-      href: withoutKey('noLang'),
-    });
-  }
-  if (sf.date !== 'any') {
-    chips.push({
-      id: 'date',
-      label: dateChipLabel(sf.date),
-      href: withoutKey('date'),
-    });
-  }
+  // Chipy aktywnych filtrów (odzwierciedlają activeParams). Etykiety z jednego źródła
+  // z podsumowaniem zapisanego wyszukiwania (#100, `describeJobListFilters`).
+  const chips: Array<{ id: string; label: string; href: string }> = describeJobListFilters(
+    listQuery,
+    locale,
+    { filters: tFilters, categories: tCat, contractTypes: tContract },
+  ).map((item) => ({
+    id: item.id,
+    label: item.label,
+    href:
+      item.removeKey === 'salary'
+        ? withoutSalary()
+        : item.removeValue !== undefined
+          ? withoutValue(item.removeKey, item.removeValue)
+          : withoutKey(item.removeKey),
+  }));
 
   // „Wyczyść filtry” usuwa wszystkie chipy — także słowo kluczowe i miasto; inaczej przy samym
   // wyszukiwaniu tekstowym link prowadził na ten sam adres (#228). Sortowanie zostaje.
@@ -389,6 +320,18 @@ export default async function JobsListPage({
       jobIds={pageItems.map((job) => job.id)}
     >
     <div className="container py-6 md:py-10">
+      {/* BreadcrumbList = widoczna ścieżka poniżej; adres listy bez filtrów (jak canonical bazowy). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(
+            buildBreadcrumbListJsonLd(
+              [{ label: tCommon('home'), href: '/' }, { label: tNav('jobs') }],
+              { base: env.siteUrl, locale, currentUrl: `${env.siteUrl}/${locale}${BASE_PATH}` },
+            ),
+          ),
+        }}
+      />
       {/* Breadcrumb */}
         <nav
           aria-label={tCommon('breadcrumb')}

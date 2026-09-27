@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
@@ -21,6 +21,10 @@ function admin(locale: string): AdminMessages {
       admin: AdminMessages;
     }
   ).admin;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function blockingViolations(page: Page) {
@@ -48,6 +52,9 @@ for (const locale of LOCALES) {
     await expect(title).toBeFocused();
     await expect(title).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByRole('alert').filter({ hasText: t.breachFormHasErrors })).toBeVisible();
+    // Po nawigacji klienckiej z listy <title> strony dociera ze strumieniem metadanych po treści —
+    // axe łapał wtedy `document-title`. Czekamy na stan końcowy (właściwy tytuł).
+    await expect(page).toHaveTitle(new RegExp(escapeRegExp(t.breachNewTitle!)));
     expect(await blockingViolations(page)).toEqual([]);
 
     await title.fill('Test');

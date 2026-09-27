@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   EMAIL_AUTH_TEMPLATES,
@@ -9,7 +9,10 @@ import {
   emailPreferenceCategory,
   emailSendPool,
 } from '@/lib/email/categories';
+import * as unsubscribeRoute from '@/app/api/email/unsubscribe/route';
+import { processEmailQueue } from '@/lib/email/outbox';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { warmUpEmailRender } from '../helpers/email-render-warmup';
 import {
   createUnsubscribeToken,
   UNSUBSCRIBE_TOKEN_TTL_SECONDS,
@@ -46,6 +49,9 @@ const SECRET = 'test-unsubscribe-secret-0123456789abcdef';
 const PROFILE = '8f2c1d3e-4b5a-4c6d-8e7f-901234567890';
 const NOW = Date.UTC(2026, 8, 24, 12, 0, 0);
 const SITE = 'https://pracuj.be';
+
+// Pierwszy render React Email (leniwy import react-dom/server) poza limitem pierwszego testu.
+beforeAll(warmUpEmailRender);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -145,7 +151,7 @@ describe('lustro SQL ↔ TS (migracja 0087)', () => {
 
 describe('POST/GET /api/email/unsubscribe', () => {
   async function route() {
-    return import('@/app/api/email/unsubscribe/route');
+    return unsubscribeRoute;
   }
   const token = () => createUnsubscribeToken({ profileId: PROFILE, category: 'messages' }, SECRET);
   const post = (t: string) =>
@@ -224,7 +230,6 @@ describe('worker outboxa: wypisanie i budżet', () => {
 
   it('mail z kategorią: nagłówki RFC 8058 i link w stopce w języku odbiorcy', async () => {
     mockRpc([row('d1', 'jobOffer')], () => ({ granted: true, retry_at: null }));
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 1, deferred: 0, ok: true });
 
     const [message] = send.mock.calls[0]!;
@@ -247,7 +252,6 @@ describe('worker outboxa: wypisanie i budżet', () => {
     fakeDb.rows('email.outbox.offer-messages', ({ values }) =>
       (values[0] as string[]).includes(OFFER) ? [{ id: OFFER, message: raw }] : [],
     );
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 1, ok: true });
     const [message] = send.mock.calls[0]!;
     const out = `${message.html}\n${message.text}`;
@@ -263,13 +267,11 @@ describe('worker outboxa: wypisanie i budżet', () => {
     fakeDb.rows('email.outbox.offer-messages', () => {
       throw new Error('db down');
     });
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 1, ok: true });
   });
 
   it('mail bez kategorii (jobPublished) i bez profilu: bez linku i nagłówków', async () => {
     mockRpc([row('d1', 'jobPublished'), row('d2', 'jobOffer', null)], () => ({ granted: true, retry_at: null }));
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     await processEmailQueue();
     for (const [message] of send.mock.calls) {
       expect(message.headers).toBeUndefined();
@@ -280,7 +282,6 @@ describe('worker outboxa: wypisanie i budżet', () => {
   it('payload kolejki nie podstawi własnego adresu wypisania', async () => {
     const evil = { ...row('d1', 'jobPublished'), payload: { jobTitle: 'X', unsubscribeUrl: 'https://evil.example/u' } };
     mockRpc([evil], () => ({ granted: true, retry_at: null }));
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     await processEmailQueue();
     expect(send.mock.calls[0]![0].html).not.toContain('evil.example');
   });
@@ -288,7 +289,6 @@ describe('worker outboxa: wypisanie i budżet', () => {
   it('odmowa budżetu: brak wysyłki, odłożenie do okna bez zwiększania attempts; reszta puli bez zapytań', async () => {
     const retryAt = '2026-09-24T12:01:00.000Z';
     mockRpc([row('d1', 'statusChanged'), row('d2', 'jobOffer')], () => ({ granted: false, retry_at: retryAt }));
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ processed: 2, sent: 0, failed: 0, deferred: 2, ok: true });
     expect(send).not.toHaveBeenCalled();
     expect(fakeDb.callsTo('take_email_send_budget')).toHaveLength(1);
@@ -304,14 +304,12 @@ describe('worker outboxa: wypisanie i budżet', () => {
 
   it('KONTROLA UJEMNA: przyznany budżet → ta sama paczka wychodzi', async () => {
     mockRpc([row('d1', 'statusChanged'), row('d2', 'jobOffer')], () => ({ granted: true, retry_at: null }));
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 2, deferred: 0 });
   });
 
   it('marketing bez sekretu wypisania nigdy nie wychodzi (ponowienie, nie wysyłka)', async () => {
     delete process.env.EMAIL_UNSUBSCRIBE_SECRET;
     mockRpc([row('d1', 'jobMatch')], () => ({ granted: true, retry_at: null }));
-    const { processEmailQueue } = await import('@/lib/email/outbox');
     expect(await processEmailQueue()).toMatchObject({ sent: 0, failed: 1 });
     expect(send).not.toHaveBeenCalled();
     const [failed] = updates();

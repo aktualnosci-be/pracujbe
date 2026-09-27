@@ -125,3 +125,10 @@ resetu hasła i logowania niepotwierdzonego konta uruchamiają po odpowiedzi jed
 idempotencji co cron). Wyłącznik: `AUTH_EMAIL_IMMEDIATE_SEND=off`. Harmonogram (W1/W2) nadal jest
 potrzebny do ponowień, kolejki `email_deliveries` i `/api/maintenance` — gotowy Worker Cloudflare
 (#690) czeka na wdrożenie przez właściciela. Bez migracji i bez zmian w Railway.
+
+## Migracje produkcji — 27 września 2026
+
+Produkcja: migracje zastosowane do `0148` (odczyt integratora, usługa `db-migrator`). `LAUNCH_CHECKLIST.md` §0/§4 i sekcja 0 `CLAUDE.md` podają ten sam
+numer — pilnuje tego `tests/unit/launch-checklist-migrations.test.ts` (numer istnieje w repo,
+trzy miejsca zgodne, pozycja „do zastosowania” w §4 nie wskazuje migracji już zastosowanej).
+Bez zmian w Railway.

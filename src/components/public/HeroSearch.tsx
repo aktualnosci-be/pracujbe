@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { useRouter } from '@/i18n/navigation';
 
@@ -11,14 +11,18 @@ import { useRouter } from '@/i18n/navigation';
  * (promień 17 px), etykiety nad polami, pola bez ramek, separator i czerwony przycisk
  * „Szukaj pracy ↗”. ≤ 850 px pola układają się w kolumnę z poziomym separatorem.
  *
- * Nawigacja przez `useRouter` z `@/i18n/navigation`, dzięki czemu docelowy adres
- * zachowuje prefiks bieżącego języka. Puste pola nie trafiają do query.
+ * Formularz ma natywne `method="get"` i zlokalizowane `action` na listę ofert (#815) — bez
+ * JavaScriptu przeglądarka sama wysyła `keyword`/`city` na `/{locale}/oferty-pracy`, tak samo
+ * jak wyszukiwarka na liście ofert (`app/[locale]/(public)/oferty-pracy/page.tsx`). Gdy skrypt
+ * działa, `handleSubmit` przechwytuje wysyłkę i nawiguje przez `useRouter` z `@/i18n/navigation`
+ * (bez pełnego przeładowania). Puste pola nie trafiają do query.
  */
 
 const JOBS_PATH = '/oferty-pracy';
 
 export function HeroSearch(): React.JSX.Element {
   const t = useTranslations('home');
+  const locale = useLocale();
   const router = useRouter();
 
   const [keyword, setKeyword] = React.useState('');
@@ -36,7 +40,13 @@ export function HeroSearch(): React.JSX.Element {
   }
 
   return (
-    <form onSubmit={handleSubmit} role="search" className="pp-search">
+    <form
+      onSubmit={handleSubmit}
+      action={`/${locale}${JOBS_PATH}`}
+      method="get"
+      role="search"
+      className="pp-search"
+    >
       {/* `.people .search`: etykieta z polem wewnątrz (label/for zachowane), bez ramek pól,
           separator między komórkami; fokus = obrys komórki (`label:focus-within`). */}
       <label htmlFor="hero-keyword">

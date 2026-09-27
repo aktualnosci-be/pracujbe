@@ -6,6 +6,8 @@
  * awaria skonfigurowanej bazy nigdy nie pokazuje fikcyjnych ofert.
  */
 
+import { createHash } from 'node:crypto';
+
 import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import { isBuildPhase } from '@/lib/static-rendering';
 import { AppError } from '@/lib/errors';
@@ -21,6 +23,8 @@ import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
 import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
+import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
+import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 export type ContractType =
   | 'permanent'
@@ -632,21 +636,56 @@ export async function getLatestJobs(
   return result.jobs;
 }
 
-export async function getJobFilterFacets(params: GetJobsParams, viewer?: JobsViewer) {
+/**
+ * #903: krótki cache + single-flight (jak `/api/job-filter-facets`, #595) na poziomie tej
+ * współdzielonej funkcji — chroni też renderowanie SSR listy ofert (`oferty-pracy/page.tsx`),
+ * które woła agregat facetów BEZPOŚREDNIO, z pominięciem cache endpointu AJAX. Klucz uwzględnia
+ * `candidateId` widza (#97: wynik zależy od zablokowanych przez niego firm), więc wynik jednego
+ * kandydata nigdy nie trafia do innego ani do gościa.
+ */
+const JOB_FILTER_FACETS_CACHE_TTL_MS = 15_000;
+const JOB_FILTER_FACETS_CACHE_MAX_ENTRIES = 500;
+const jobFilterFacetsCache = createTtlSingleFlightCache<JobFilterFacets>({
+  ttlMs: JOB_FILTER_FACETS_CACHE_TTL_MS,
+  maxEntries: JOB_FILTER_FACETS_CACHE_MAX_ENTRIES,
+});
+
+/** Stabilny klucz (kolejność kluczy obiektu i tablic filtrów nie wpływa na trafienie w cache). */
+function jobFilterFacetsCacheKey(
+  params: GetJobsParams,
+  candidateId: string | null,
+): string {
+  const canonical = JSON.stringify(params, (_key, value) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+            a.localeCompare(b),
+          ),
+        )
+      : value,
+  );
+  return createHash('sha256')
+    .update(`${candidateId ?? ''}|${canonical}`)
+    .digest('hex');
+}
+
+export async function getJobFilterFacets(
+  params: GetJobsParams,
+  viewer?: JobsViewer,
+): Promise<JobFilterFacets | null> {
   if (!isDatabaseConfigured() || isBuildPhase()) return null;
-  try {
-    const [{ getDomainPool }, { getPublicJobFilterFacets }] = await Promise.all(
-      [import('@/lib/db/runtime'), import('@/lib/db/public-jobs')],
-    );
-    return await getPublicJobFilterFacets(
-      await getDomainPool(),
-      params,
-      viewer?.candidateId ?? null,
-    );
-  } catch (error) {
-    captureError(error, { area: 'jobs.getJobFilterFacets' });
-    throw new AppError('INTERNAL');
-  }
+  const candidateId = viewer?.candidateId ?? null;
+  return jobFilterFacetsCache.run(jobFilterFacetsCacheKey(params, candidateId), async () => {
+    try {
+      const [{ getDomainPool }, { getPublicJobFilterFacets }] = await Promise.all(
+        [import('@/lib/db/runtime'), import('@/lib/db/public-jobs')],
+      );
+      return await getPublicJobFilterFacets(await getDomainPool(), params, candidateId);
+    } catch (error) {
+      captureError(error, { area: 'jobs.getJobFilterFacets' });
+      throw new AppError('INTERNAL');
+    }
+  });
 }
 
 /**

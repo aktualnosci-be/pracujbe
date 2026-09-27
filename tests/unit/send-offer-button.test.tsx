@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SendOfferButton } from '@/components/employer/SendOfferButton';
@@ -28,17 +28,29 @@ afterEach(() => {
 const JOB = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001';
 const CANDIDATE = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002';
 
-function renderButton(offerSentAt: string | null = null) {
-  render(
+const JOB_B = 'bbbbbbbb-bbbb-4bbb-8bbb-000000000001';
+
+function button(jobId: string, offerSentAt: string | null = null, jobTitle = 'Operator wózka') {
+  return (
     <SendOfferButton
-      jobId={JOB}
+      jobId={jobId}
       candidateId={CANDIDATE}
       candidateName="Piotr Nowak"
-      jobTitle="Operator wózka"
+      jobTitle={jobTitle}
       jobSlug="operator-wozka"
       offerSentAt={offerSentAt}
-    />,
+    />
   );
+}
+
+function renderButton(offerSentAt: string | null = null) {
+  return render(button(JOB, offerSentAt));
+}
+
+async function submitOffer() {
+  fireEvent.click(screen.getByRole('button', { name: /^sendOfferTo/ }));
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getAllByRole('button', { name: 'sendOffer' }).at(-1)!);
 }
 
 describe('SendOfferButton (#327)', () => {
@@ -94,5 +106,53 @@ describe('SendOfferButton (#327)', () => {
     renderButton('2026-09-20T10:00:00Z');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.getByText('offerSentOn|20 wrz 2026')).toBeInTheDocument();
+  });
+
+  describe('zmiana celu w tej samej instancji (#853)', () => {
+    it('inna oferta po przełączeniu firmy = nowy klucz; retry tej samej pary = ten sam klucz', async () => {
+      sendOffer.mockResolvedValue({ ok: true, id: 'offer-a' });
+      const view = renderButton();
+      await submitOffer();
+      expect(await screen.findByText('offerSentSuccess')).toBeInTheDocument();
+      const keyA = sendOffer.mock.calls[0]![0].idempotencyKey as string;
+
+      // router.refresh() po przełączeniu firmy: ta sama instancja, inna oferta, bez propozycji.
+      view.rerender(button(JOB_B, null, 'Kierowca'));
+      sendOffer.mockResolvedValue({ ok: false, error: 'INTERNAL' });
+      await submitOffer();
+      await waitFor(() => expect(sendOffer).toHaveBeenCalledTimes(2));
+      const second = sendOffer.mock.calls[1]![0];
+      expect(second).toMatchObject({ jobId: JOB_B, candidateId: CANDIDATE });
+      expect(second.idempotencyKey).not.toBe(keyA);
+
+      // Ponowienie po błędzie dla oferty B — ten sam klucz B (Invariant #3).
+      await waitFor(() => expect(screen.getAllByRole('button', { name: 'sendOffer' }).at(-1)).toBeEnabled());
+      fireEvent.click(screen.getAllByRole('button', { name: 'sendOffer' }).at(-1)!);
+      await waitFor(() => expect(sendOffer).toHaveBeenCalledTimes(3));
+      expect(sendOffer.mock.calls[2]![0].idempotencyKey).toBe(second.idempotencyKey);
+    });
+
+    it('nowy cel czyści lokalny stan „wysłano” poprzedniej oferty', async () => {
+      sendOffer.mockResolvedValue({ ok: true, id: 'offer-a' });
+      const view = renderButton();
+      await submitOffer();
+      expect(await screen.findByText('offerSentOn|20 wrz 2026')).toBeInTheDocument();
+      view.rerender(button(JOB_B, null, 'Kierowca'));
+      expect(screen.queryByText('offerSentOn|20 wrz 2026')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'sendOfferTo|Piotr Nowak|Kierowca' })).toBeInTheDocument();
+    });
+
+    it('odpowiedź dla poprzedniego celu nie oznacza nowej oferty jako wysłanej', async () => {
+      let resolve: (value: { ok: true; id: string }) => void = () => {};
+      sendOffer.mockImplementation(() => new Promise((r) => { resolve = r; }));
+      const view = renderButton();
+      await submitOffer();
+      await waitFor(() => expect(sendOffer).toHaveBeenCalledTimes(1));
+      view.rerender(button(JOB_B, null, 'Kierowca'));
+      await act(async () => resolve({ ok: true, id: 'offer-a' }));
+      expect(screen.queryByText('offerSentSuccess')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'sendOfferTo|Piotr Nowak|Kierowca' })).toBeInTheDocument();
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
   });
 });
