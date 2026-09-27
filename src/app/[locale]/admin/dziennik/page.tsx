@@ -67,6 +67,7 @@ const ENTITY_LABEL: Record<string, string> = {
   screening_question_review: 'entityScreeningReview',
   email_campaign: 'entityEmailCampaign',
   age_policy: 'entityAgePolicy',
+  retention_policy: 'entityRetentionPolicy',
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;

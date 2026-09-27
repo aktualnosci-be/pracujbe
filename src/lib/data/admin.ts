@@ -47,6 +47,8 @@ import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/li
 import { attempt, execute, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
+import type { Locale } from '@/i18n/routing';
+import { resolveRecipientLocale } from '@/lib/i18n/recipient-locale';
 import {
   isScreeningQuestionType,
   toLocalizedText,
@@ -1057,6 +1059,201 @@ export async function listUsers(
 }
 
 /* ---------------------------------------------------------------------------
+ * Szczegół konta (tylko odczyt) — dane konta, firmy, proces kandydata, blokada adresu
+ * ------------------------------------------------------------------------- */
+
+export interface AdminUserMembership {
+  /** `company_members.id`. */
+  id: string;
+  companyId: string;
+  companyName: string;
+  /** `company_status` firmy. */
+  companyStatus: string;
+  /** `company_member_role`: owner/admin/recruiter/member. */
+  role: string;
+  isActive: boolean;
+  since: string | null;
+}
+
+export interface AdminUserCandidateSummary {
+  profileCompleted: boolean;
+  isSearchable: boolean;
+  /** Zgłoszenia poza szkicem (bez usuniętych). */
+  applications: number;
+  /** Otrzymane propozycje (bez szkiców). */
+  offers: number;
+}
+
+export interface AdminUserDetail extends AdminUserRow {
+  isActive: boolean;
+  lastSeenAt: string | null;
+  preferredLocale: string | null;
+  accountLocale: string | null;
+  signupLocale: string | null;
+  /** Język e-maili i powiadomień wg Invariantu #1 (preferred → account → signup → en). */
+  recipientLocale: Locale;
+  memberships: AdminUserMembership[];
+  /** Tylko konto z profilem kandydata; inaczej null. */
+  candidate: AdminUserCandidateSummary | null;
+  /** Aktywna blokada adresu e-mail (#44) albo null. */
+  suppression: { reason: string; createdAt: string | null } | null;
+}
+
+export type AdminUserDetailResult =
+  | { status: 'ok'; user: AdminUserDetail }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+function demoUserDetail(id: string): AdminUserDetailResult {
+  const row = DEMO_USERS.find((u) => u.id === id);
+  if (!row) return { status: 'not_found' };
+  const company = DEMO_COMPANIES[0];
+  return {
+    status: 'ok',
+    user: {
+      ...row,
+      isActive: true,
+      lastSeenAt: row.createdAt,
+      preferredLocale: null,
+      accountLocale: 'pl',
+      signupLocale: 'pl',
+      recipientLocale: 'pl',
+      memberships:
+        row.role === 'employer' && company
+          ? [
+              {
+                id: `${row.id}-m1`,
+                companyId: company.id,
+                companyName: company.name,
+                companyStatus: company.status,
+                role: 'owner',
+                isActive: true,
+                since: row.createdAt,
+              },
+            ]
+          : [],
+      candidate:
+        row.role === 'candidate'
+          ? { profileCompleted: true, isSearchable: false, applications: 2, offers: 0 }
+          : null,
+      suppression: null,
+    },
+  };
+}
+
+/**
+ * Szczegół konta dla admina (tylko odczyt): dane profilu, język komunikacji wg Invariantu #1,
+ * członkostwa w firmach, podsumowanie procesu kandydata (same liczniki — bez treści zgłoszeń)
+ * i aktywna blokada adresu. Nieistniejące/usunięte konto albo zły identyfikator →
+ * `not_found`; błąd któregokolwiek odczytu → `error` (bez częściowych danych). Bez env → DEMO.
+ */
+export async function getUserDetail(id: string): Promise<AdminUserDetailResult> {
+  if (!isPortalDataConfigured()) return demoUserDetail(id);
+  await requireAdmin();
+
+  const uuid = parseUuid(id);
+  if (!uuid) return { status: 'not_found' };
+
+  try {
+    const loaded = await withServiceRole(async (tx) => {
+      const profile = await queryOne(tx, 'admin.user-detail',
+        `SELECT id, first_name, last_name, email, role, preferred_locale, account_locale,
+                signup_locale, is_active, last_seen_at, created_at
+           FROM public.profiles
+          WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
+      if (!profile) return null;
+      const p = asRecord(profile);
+      const memberships = await queryRows(tx, 'admin.user-memberships',
+        `SELECT m.id, m.role, m.is_active, m.joined_at, m.created_at,
+                c.id AS company_id, c.name AS company_name, c.status AS company_status
+           FROM public.company_members m
+           JOIN public.companies c ON c.id = m.company_id AND c.deleted_at IS NULL
+          WHERE m.profile_id = $1
+          ORDER BY m.created_at ASC, m.id ASC`, [uuid]);
+      const candidateRow = await queryOne(tx, 'admin.user-candidate',
+        `SELECT profile_completed, is_searchable
+           FROM public.candidate_profiles
+          WHERE profile_id = $1 AND deleted_at IS NULL`, [uuid]);
+      const candidate = candidateRow
+        ? {
+            row: asRecord(candidateRow),
+            applications: await queryCount(tx, 'admin.user-applications',
+              `SELECT 1 FROM public.applications
+                WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text <> 'draft'`, [uuid]),
+            offers: await queryCount(tx, 'admin.user-offers',
+              `SELECT 1 FROM public.offers
+                WHERE candidate_id = $1 AND status::text <> 'draft'`, [uuid]),
+          }
+        : null;
+      const email = asNullableString(p['email']);
+      const suppression = email
+        ? await queryOne(tx, 'admin.user-suppression',
+            `SELECT reason, created_at
+               FROM public.email_suppressions
+              WHERE email = $1::citext AND lifted_at IS NULL
+              ORDER BY created_at DESC
+              LIMIT 1`, [email])
+        : null;
+      return { p, memberships: asRows(memberships), candidate, suppression };
+    });
+    if (!loaded) return { status: 'not_found' };
+
+    const { p, candidate } = loaded;
+    const preferredLocale = asNullableString(p['preferred_locale']);
+    const accountLocale = asNullableString(p['account_locale']);
+    const signupLocale = asNullableString(p['signup_locale']);
+    const suppression = loaded.suppression ? asRecord(loaded.suppression) : null;
+
+    return {
+      status: 'ok',
+      user: {
+        id: asString(p['id']),
+        name: fullName(p),
+        email: asNullableString(p['email']),
+        role: asString(p['role'], 'candidate'),
+        createdAt: asNullableString(p['created_at']),
+        isActive: p['is_active'] !== false,
+        lastSeenAt: asNullableString(p['last_seen_at']),
+        preferredLocale,
+        accountLocale,
+        signupLocale,
+        recipientLocale: resolveRecipientLocale({
+          preferred_locale: preferredLocale,
+          account_locale: accountLocale,
+          signup_locale: signupLocale,
+        }),
+        memberships: loaded.memberships.map((row) => ({
+          id: asString(row['id']),
+          companyId: asString(row['company_id']),
+          companyName: asString(row['company_name']),
+          companyStatus: asString(row['company_status'], 'unverified'),
+          role: asString(row['role'], 'member'),
+          isActive: row['is_active'] === true,
+          since: asNullableString(row['joined_at']) ?? asNullableString(row['created_at']),
+        })),
+        candidate: candidate
+          ? {
+              profileCompleted: candidate.row['profile_completed'] === true,
+              isSearchable: candidate.row['is_searchable'] === true,
+              applications: candidate.applications,
+              offers: candidate.offers,
+            }
+          : null,
+        suppression: suppression
+          ? {
+              reason: asString(suppression['reason'], 'hard_bounce'),
+              createdAt: asNullableString(suppression['created_at']),
+            }
+          : null,
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'admin.getUserDetail' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Dziennik zdarzeń (audit_logs) — tylko odczyt (#417)
  * ------------------------------------------------------------------------- */
 
@@ -1168,18 +1365,6 @@ async function readAuditRows(
 ): Promise<AdminAuditRow[]> {
   const { entity, action, entityId, actorQuery, fromIso, toIso } = filters;
   const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
-  // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
-  let actorIdsFilter: string[] | null = null;
-  if (actorQuery && !systemActor) {
-    const actorParams = new SqlParams();
-    const actors = await queryRows(tx, 'admin.audit-actor-search',
-      `SELECT id FROM public.profiles
-        ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
-        LIMIT 100`, actorParams.values);
-    actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
-    if (actorIdsFilter.length === 0) return [];
-  }
-
   const params = new SqlParams();
   const where = whereOf([
     entity && `entity_type = ${params.add(entity)}`,
@@ -1188,7 +1373,12 @@ async function readAuditRows(
     fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
     toIso && `created_at < ${params.add(toIso)}::timestamptz`,
     systemActor && 'actor_id IS NULL',
-    actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
+    // Aktor po nazwie/e-mailu (#857/#844): podzapytanie po WSZYSTKICH pasujących profilach
+    // w tym samym zapytaniu — bez pośredniej listy id z limitem, więc wpisy żadnej pasującej
+    // osoby nie znikają z listy ani z eksportu.
+    actorQuery && !systemActor &&
+      `actor_id IN (SELECT p.id FROM public.profiles p WHERE ${searchCondition(
+        params, ['p.first_name', 'p.last_name', 'p.email'], actorQuery)})`,
     cursorCondition(params, cursor),
   ]);
   const limitParam = params.add(limit);

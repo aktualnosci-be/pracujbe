@@ -13,8 +13,14 @@ może uruchomić produkcyjnego wdrożenia.
 
 CI działa w `.github/workflows/ci.yml` na GitHub-hosted runnerach
 (`ubuntu-latest`) i obejmuje lint, typecheck, testy jednostkowe, testy
-PostgreSQL/RLS, E2E oraz build. Joby niezależne biegną równolegle; build i E2E
-startują po zielonym lint/typecheck/unit. Nowy push do PR anuluje nieaktualny
+PostgreSQL/RLS, E2E oraz build. Joby niezależne biegną równolegle; build startuje
+po zielonym lint/typecheck/unit, a E2E po buildzie — 3 shardy (zestaw demo podzielony po
+czasie testów jawnymi listami speców w `playwright.config.ts`, nie po liczbie plików —
+`CLAUDE.md` §10), pomiary wydajności
+i fixture'y (tryb `full` w 2 częściach, `error` w jednej) równolegle; ich wynik zbiera job „E2E (Playwright)” (stała nazwa checka,
+na nią czeka Railway). Przepływ na PostgreSQL 16 („E2E real flow”) jest na razie
+informacyjny (`continue-on-error`) i nie wstrzymuje wdrożenia. Repo jest publiczne,
+więc minuty hostowanych runnerów są darmowe. Nowy push do PR anuluje nieaktualny
 przebieg tego PR, ale przebiegi `main` nigdy nie są anulowane — Railway wdraża
 po zielonym CI dla SHA na `main` przez natywne `Wait for CI`; nie uruchamiamy
 deployu jako joba Actions.
