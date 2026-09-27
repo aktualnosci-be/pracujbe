@@ -336,6 +336,97 @@ describe("bramka dostępu — limit prób (#584)", () => {
   });
 });
 
+describe("bramka dostępu — limit rozmiaru body (#911)", () => {
+  beforeEach(() => {
+    vi.stubEnv("SITE_ACCESS_PASSWORD", PASSWORD);
+    checkRateLimit.mockClear();
+    checkRateLimit.mockResolvedValue(true);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("body nad limitem, BEZ nagłówka Content-Length → 413 przed parsowaniem formularza, bez limitera i bez cookie", async () => {
+    const body = new URLSearchParams({
+      password: PASSWORD,
+      next: "/pl",
+      locale: "pl",
+      junk: "x".repeat(6000),
+    });
+    const res = await POST(
+      new Request(`${ORIGIN}/api/site-access`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-real-ip": CLIENT_IP,
+        },
+        body,
+      }),
+    );
+    expect(res.status).toBe(413);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-robots-tag")).toContain("noindex");
+    expect(res.headers.get("set-cookie")).toBeNull();
+    const html = await res.text();
+    expect(html).toContain(pl.siteAccess.payloadTooLarge);
+    expect(html).not.toContain(pl.siteAccess.error);
+    // Body za duże, więc nawet POPRAWNE hasło w formularzu nie jest porównywane, a limiter
+    // (koszt zapytania) w ogóle nie jest wołany — odrzucamy PRZED parsowaniem i przed liczeniem prób.
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("deklarowany Content-Length nad limitem → 413 bez odczytu strumienia (odtworzenie #911: 7 MiB w polu formularza)", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // Nigdy nie kończy strumienia — gdyby handler czytał go w całości przed odrzuceniem,
+        // test zawiśnie zamiast dostać szybką odpowiedź 413.
+        controller.enqueue(new TextEncoder().encode("a".repeat(1024)));
+      },
+    });
+    const res = await POST(
+      new Request(`${ORIGIN}/api/site-access`, {
+        method: "POST",
+        // @ts-expect-error — duplex wymagane przez fetch przy strumieniu, brak w typach DOM tej wersji
+        duplex: "half",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          "content-length": String(7 * 1024 * 1024),
+          "x-real-ip": CLIENT_IP,
+        },
+        body: stream,
+      }),
+    );
+    expect(res.status).toBe(413);
+    expect(res.headers.get("set-cookie")).toBeNull();
+    const html = await res.text();
+    expect(html).toContain(pl.siteAccess.payloadTooLarge);
+  });
+
+  it("bramka WYŁĄCZONA (bez SITE_ACCESS_PASSWORD) — body nad limitem nadal 413, nie ciche przekierowanie", async () => {
+    vi.stubEnv("SITE_ACCESS_PASSWORD", "");
+    const res = await POST(
+      new Request(`${ORIGIN}/api/site-access`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          next: "/pl",
+          locale: "pl",
+          junk: "x".repeat(6000),
+        }),
+      }),
+    );
+    expect(res.status).toBe(413);
+  });
+
+  it("kontrola ujemna: body w granicach limitu — zwykły przepływ bez zmian (poprawne hasło daje cookie)", async () => {
+    const res = await POST(
+      formRequest({ password: PASSWORD, next: "/pl", locale: "pl" }),
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get("set-cookie")).toContain("pb_site_access=");
+  });
+});
+
 describe("bramka dostępu — brak zaufanego adresu klienta (#625)", () => {
   beforeEach(() => {
     vi.stubEnv("SITE_ACCESS_PASSWORD", PASSWORD);

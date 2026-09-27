@@ -54,6 +54,29 @@ vi.mock('@/components/messaging/MessageComposer', () => ({
 }));
 
 import { MessagesView } from '@/components/messaging/MessagesView';
+import { MessageComposer } from '@/components/messaging/MessageComposer';
+
+/**
+ * Szuka w drzewie elementów React (bez renderowania) pierwszego elementu danego typu — tu
+ * używane, by odczytać `key` przypisany do `MessageComposer` przez `MessagesView` (#849:
+ * `key` nie trafia do DOM, więc test przez `render()`/`screen` go nie zobaczy).
+ */
+function findElementByType(node: unknown, type: unknown): { key: React.Key | null } | null {
+  if (node === null || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findElementByType(child, type);
+      if (found) return found;
+    }
+    return null;
+  }
+  const element = node as { type?: unknown; key?: React.Key | null; props?: { children?: unknown } };
+  if (element.type === type) return { key: element.key ?? null };
+  if (element.props && 'children' in element.props) {
+    return findElementByType(element.props.children, type);
+  }
+  return null;
+}
 
 describe('mobilny powrót z wątku wiadomości', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -201,4 +224,22 @@ describe('mobilny powrót z wątku wiadomości', () => {
     expect(screen.getByText('message-thread')).toBeVisible();
     expect(captureError).toHaveBeenCalledWith(failure, { area: 'messages.markConversationRead' });
   });
+
+  it.each(['conversation-1', 'conversation-2'])(
+    'MessageComposer ma key=id rozmowy (#849) — bez tego szkic instancji przenosi się między rozmowami: %s',
+    async (activeParam) => {
+      getConversationsResult.mockResolvedValue({
+        status: 'ready',
+        items: [{ id: 'conversation-1' }, { id: 'conversation-2' }],
+      });
+      getConversationThread.mockResolvedValue({ status: 'ready', thread: { id: activeParam, messages: [] } });
+      markConversationRead.mockResolvedValue({ ok: true });
+
+      const element = await MessagesView({ locale: 'pl', basePath: '/candidate/wiadomosci', activeParam });
+      const composer = findElementByType(element, MessageComposer);
+
+      expect(composer).not.toBeNull();
+      expect(composer?.key).toBe(activeParam);
+    },
+  );
 });

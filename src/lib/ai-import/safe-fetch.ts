@@ -228,7 +228,13 @@ function requestOnce(url: URL, address: string, signal: AbortSignal, maxBytes: n
           return (Array.isArray(v) ? v[0] : v) ?? '';
         };
         if (status >= 300 && status < 400) {
-          res.resume();
+          // Ciało przekierowania nie jest nam potrzebne — zamykamy je i jego połączenie od razu,
+          // zamiast bezwarunkowo je opróżniać (#827): serwer źródłowy mógłby inaczej strumieniować
+          // dowolnie długie/nigdy niekończące się ciało już po przejściu do kolejnego adresu.
+          res.on('error', () => {
+            /* gasimy błąd zerwanego, zbędnego już strumienia — połączenie i tak jest zamykane */
+          });
+          res.destroy();
           resolve({ status, location: header('location'), contentType: '', contentEncoding: '', body: Buffer.alloc(0) });
           return;
         }

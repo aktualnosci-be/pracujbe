@@ -73,6 +73,56 @@ describe('JobPosting JSON-LD (#313)', () => {
     expect(data).not.toHaveProperty('validThrough');
   });
 
+  // #840 — portal nie ma zewnętrznego ATS: każda realna, kanoniczna oferta ma formularz
+  // aplikowania na tej samej stronie (zalogowany kandydat i gość bez konta), więc `directApply`
+  // musi odzwierciedlać ten przepływ zamiast stałego `false`.
+  it('#840: directApply jest true (aplikowanie odbywa się na stronie oferty)', () => {
+    const data = buildJobPostingJsonLd(job(), 'u', labels);
+    expect(data.directApply).toBe(true);
+  });
+
+  it('#840 kontrola ujemna: dawna stała false nie wraca dla innej oferty', () => {
+    // Gdyby implementacja wróciła do stałej `directApply: false`, ten test staje się czerwony
+    // niezależnie od danych konkretnej oferty (regresja #840).
+    const data = buildJobPostingJsonLd(
+      job({ title: 'Inna oferta', city: 'Antwerpen', contractType: 'freelance' }),
+      'u',
+      labels,
+    );
+    expect(data.directApply).not.toBe(false);
+    expect(data.directApply).toBe(true);
+  });
+
+  // #842 — umowa na stałe nie mówi nic o wymiarze etatu (patrz `job.workingHours`, wolny tekst);
+  // fałszywe `FULL_TIME` przy realnej ofercie na część etatu wprowadzało w błąd wyszukiwarki.
+  it('#842: umowa na stałe (permanent) NIE emituje employmentType — wymiar etatu nieznany', () => {
+    const data = buildJobPostingJsonLd(
+      job({ contractType: 'permanent', workingHours: 'Part-time, 20 hours/week' }),
+      'u',
+      labels,
+    );
+    expect(data).not.toHaveProperty('employmentType');
+    expect(data.employmentType).not.toBe('FULL_TIME');
+  });
+
+  it('#842 kontrola ujemna: rodzaje umowy o znanej kategorii nadal emitują employmentType', () => {
+    expect(buildJobPostingJsonLd(job({ contractType: 'temporary' }), 'u', labels).employmentType).toBe(
+      'TEMPORARY',
+    );
+    expect(buildJobPostingJsonLd(job({ contractType: 'interim' }), 'u', labels).employmentType).toBe(
+      'TEMPORARY',
+    );
+    expect(buildJobPostingJsonLd(job({ contractType: 'freelance' }), 'u', labels).employmentType).toBe(
+      'CONTRACTOR',
+    );
+    expect(buildJobPostingJsonLd(job({ contractType: 'internship' }), 'u', labels).employmentType).toBe(
+      'INTERN',
+    );
+    expect(buildJobPostingJsonLd(job({ contractType: 'seasonal' }), 'u', labels).employmentType).toBe(
+      'TEMPORARY',
+    );
+  });
+
   it('opis jest pełnym HTML: obowiązki, wymagania, warunki, godziny i zmiany', () => {
     const description = String(buildJobPostingJsonLd(job(), 'u', labels).description);
     expect(description).toContain('<p>Budowa domów.</p>');

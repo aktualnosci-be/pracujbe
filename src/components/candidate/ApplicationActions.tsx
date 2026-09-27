@@ -22,6 +22,10 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
  * Wycofanie jest nieodwracalne, więc najpierw pyta w `ConfirmDialog` (#328); anulowanie nie woła
  * akcji, fokus wraca do przycisku „…". Po sukcesie komunikat `role="status"` i odświeżenie trasy
  * (StatusPill zmieni się na „Wycofana"); błąd → Toast z i18n.
+ *
+ * Bez pozycji menu (#806): oferta zamknięta/wygasła/niedostępna (`slug === null`) i status
+ * zakończony (nie w `WITHDRAWABLE`) razem nie dają żadnej dostępnej akcji — przycisk „…” wtedy
+ * w ogóle się nie renderuje, zamiast otwierać puste `role="menu"`, którego Escape/Tab nie zamyka.
  */
 
 /** Statusy, z których kandydat może jeszcze wycofać aplikację. */
@@ -38,7 +42,7 @@ export function ApplicationActions({
   slug: string | null;
   /** Tytuł oferty do treści potwierdzenia (opcjonalny — bez niego tekst ogólny). */
   jobTitle?: string;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const td = useTranslations('dashboard');
   const te = useTranslations('errors');
   const tc = useTranslations('common');
@@ -55,6 +59,7 @@ export function ApplicationActions({
   const router = useRouter();
 
   const canWithdraw = WITHDRAWABLE.has(status);
+  const hasMenuItems = Boolean(slug) || canWithdraw;
 
   // „…" jest zablokowany w trakcie zapisu, więc fokus wraca do niego po zakończeniu.
   React.useEffect(() => {
@@ -149,6 +154,8 @@ export function ApplicationActions({
       }
     });
   };
+
+  if (!hasMenuItems) return null;
 
   return (
     <div ref={containerRef} className="relative shrink-0">

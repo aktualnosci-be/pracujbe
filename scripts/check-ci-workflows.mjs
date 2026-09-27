@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import prettier from 'prettier';
 
 // Strażnik workflowów CI na GitHub-hosted runnerach (`ubuntu-latest`; repo publiczne,
 // minuty darmowe — decyzja właściciela 2026-09-27). Pilnuje nazw jobów (wymagane checki
-// i Railway `Wait for CI`), limitów czasu, kolejności jobów, shardów E2E z jobem zbiorczym
-// o stałej nazwie „E2E (Playwright)” i tego, że przebiegi main nigdy nie są anulowane.
+// i Railway `Wait for CI`), limitów czasu, kolejności jobów, shardów E2E (podział zestawu
+// demo po czasie, nie po liczbie testów) z jobem zbiorczym o stałej nazwie „E2E (Playwright)”
+// i tego, że przebiegi main nigdy nie są anulowane.
 //
-// Użycie: `node scripts/check-ci-workflows.mjs [katalog-workflowów]` — katalog domyślnie
-// `.github/workflows`; argument służy testowi strażnika (kopia z celowym błędem).
+// Użycie: `node scripts/check-ci-workflows.mjs [katalog-workflowów] [playwright.config.ts]` —
+// domyślnie `.github/workflows` i konfiguracja z repo; argumenty służą testowi strażnika
+// (kopia z celowym błędem).
 
 const root = new URL('../', import.meta.url);
 const workflowsDir = process.argv[2]
@@ -59,7 +61,7 @@ const expected = {
   migrations: ['Migration runner (PostgreSQL 16)', ['install']],
   'e2e-shard': ['E2E shard ${{ matrix.shard }}/3', ['build']],
   'e2e-perf': ['E2E perf (lab CWV + INP)', ['build']],
-  'e2e-fixtures': ['E2E fixtures (${{ matrix.fixture }})', ['build']],
+  'e2e-fixtures': ['E2E fixtures (${{ matrix.fixture }} ${{ matrix.part }})', ['build']],
   'e2e-real': ['E2E real flow (PostgreSQL 16)', ['build']],
   e2e: ['E2E (Playwright)', ['build', ...E2E_PARTS]],
 };
@@ -115,14 +117,18 @@ for (const [name, body] of [['e2e-shard', shard], ['e2e-perf', perf]]) {
 }
 assert.equal((ci.match(/npm run build/g) ?? []).length, 3, 'ci.yml: jeden build + fallback w shardach i pomiarze, bez kolejnych buildów');
 
-// Shardy: liczba w nazwie = liczba w macierzy = mianownik `--shard`; projekt `chromium`
-// (pomiar czasu osobno); wszystkie shardy do końca; raport cząstkowy (blob) zawsze.
+// Shardy: liczba w nazwie = liczba w macierzy = liczba dozwolonych wartości `E2E_DEMO_SHARD`
+// w playwright.config.ts (`DEMO_SHARDS`); projekt `chromium` (pomiar czasu osobno); bez
+// `--shard` w komendzie (konfiguracja sama dzieli zestaw demo jawnymi listami — podwójny
+// podział zgubiłby testy); wszystkie shardy do końca; raport cząstkowy (blob) zawsze.
 const shardCount = Number(expected['e2e-shard'][0].match(/\/(\d+)$/)[1]);
 const shardList = shard.match(/^        shard: \[([^\]]*)\]\s*$/m)?.[1].split(',').map((item) => Number(item.trim()));
 assert.deepEqual(shardList, Array.from({ length: shardCount }, (_, index) => index + 1), `e2e-shard: macierz shardów musi być 1..${shardCount}`);
 assert.ok(shardCount >= 2 && shardCount <= 4, 'e2e-shard: 2–4 shardy');
 assert.match(shard, /^      fail-fast: false\s*$/m, 'e2e-shard: fail-fast: false — raport ze wszystkich shardów');
-assert.ok(shard.includes(`npx playwright test --project=chromium --shard=\${{ matrix.shard }}/${shardCount}`), 'e2e-shard: `--project=chromium --shard=i/N` zgodne z macierzą');
+assert.match(shard, /^        run: npx playwright test --project=chromium\s*$/m, 'e2e-shard: `npx playwright test --project=chromium` bez --shard (podział w konfiguracji)');
+assert.doesNotMatch(shard, /^\s*run: .*--shard/m, 'e2e-shard: bez --shard — podział robi E2E_DEMO_SHARD w playwright.config.ts');
+assert.ok(shard.includes(`E2E_DEMO_SHARD: \${{ matrix.shard }}`), 'e2e-shard: `E2E_DEMO_SHARD: ${{ matrix.shard }}` zgodne z macierzą');
 assert.match(shard, /E2E_BLOB_NAME: shard-\$\{\{ matrix\.shard \}\}/, 'e2e-shard: raport cząstkowy (blob) z nazwą shardu');
 assert.match(shard, /if: \$\{\{ !cancelled\(\) \}\}\s*\r?\n\s*with:\s*\r?\n\s*name: blob-report-shard-\$\{\{ matrix\.shard \}\}/, 'e2e-shard: wyślij blob także przy czerwonym shardzie');
 
@@ -149,11 +155,34 @@ for (const [name, body] of jobs) {
   assert.doesNotMatch(body, /run: .*(perf-lab\.mjs|chromium-timing)/, `${name}: pomiary czasu tylko w e2e-perf`);
 }
 
-// Fixture'y (`next dev`, dane fikcyjne) — oba tryby w macierzy.
+// Fixture'y (`next dev`, dane fikcyjne): tryb `full` w 2 częściach, `error` w jednej. Każdy
+// tryb ma w macierzy komplet części 1..N, zgodny z częściami dozwolonymi w konfiguracji
+// fixture (inaczej część testów nie uruchomiłaby się nigdzie); raport blob zawsze.
 const fixtures = jobs.get('e2e-fixtures');
-assert.match(fixtures, /^        fixture: \[full, error\]\s*$/m, 'e2e-fixtures: tryby full i error');
+const fixtureParts = new Map();
+for (const [, mode, current, total] of fixtures.matchAll(/^          - \{ fixture: ([a-z]+), part: (\d+)\/(\d+) \}\s*$/gm)) {
+  const list = fixtureParts.get(mode) ?? [];
+  list.push(`${current}/${total}`);
+  fixtureParts.set(mode, list);
+}
+const partsOf = (count) => Array.from({ length: count }, (_, index) => `${index + 1}/${count}`);
+assert.deepEqual([...fixtureParts.keys()], ['full', 'error'], 'e2e-fixtures: tryby full i error w macierzy (include)');
+assert.deepEqual(fixtureParts.get('full'), partsOf(2), 'e2e-fixtures: tryb full w częściach 1/2 i 2/2');
+assert.deepEqual(fixtureParts.get('error'), partsOf(1), 'e2e-fixtures: tryb error w jednej części 1/1');
+assert.match(fixtures, /^      fail-fast: false\s*$/m, 'e2e-fixtures: fail-fast: false — raport ze wszystkich części');
 assert.match(fixtures, /TEST_APPLICATIONS_FIXTURE: \$\{\{ matrix\.fixture \}\}/, 'e2e-fixtures: tryb z macierzy');
-assert.match(fixtures, /npx playwright test --config playwright\.applications-fixture\.config\.ts/, 'e2e-fixtures: konfiguracja fixture');
+assert.match(fixtures, /TEST_APPLICATIONS_FIXTURE_PART: \$\{\{ matrix\.part \}\}/, 'e2e-fixtures: część z macierzy');
+assert.match(fixtures, /npx playwright test --config playwright\.applications-fixture\.config\.ts\s*$/m, 'e2e-fixtures: konfiguracja fixture');
+assert.match(fixtures, /E2E_BLOB_NAME: fixtures-\$\{\{ matrix\.fixture \}\}-\$\{\{ strategy\.job-index \}\}/, 'e2e-fixtures: raport cząstkowy (blob) z nazwą części');
+assert.match(fixtures, /if: \$\{\{ !cancelled\(\) \}\}\s*\r?\n\s*with:\s*\r?\n\s*name: blob-report-fixtures-/, 'e2e-fixtures: wyślij blob także przy czerwonej części');
+const fixtureConfig = await readFile(new URL('playwright.applications-fixture.config.ts', root), 'utf8');
+const allowedParts = fixtureConfig.match(/\(mode === 'full' \? \[([^\]]*)\] : \[([^\]]*)\]\)\.includes\(part\)/);
+assert.ok(allowedParts, 'playwright.applications-fixture.config.ts: lista dozwolonych części');
+const quoted = (list) => list.split(',').map((item) => item.trim().replace(/^'|'$/g, ''));
+assert.deepEqual(quoted(allowedParts[1]), fixtureParts.get('full'), 'fixture config: części full = macierz CI');
+assert.deepEqual(quoted(allowedParts[2]), fixtureParts.get('error'), 'fixture config: części error = macierz CI');
+assert.match(fixtureConfig, /\['blob', \{ outputDir: 'blob-report'/, 'fixture config: blob do blob-report/');
+assert.match(fixtureConfig, /retries: 0,/, 'fixture config: bez ponowień (retries: 0)');
 
 // Przepływ na PostgreSQL 16 (#351, #66): izolowana baza z „e2e” w nazwie, informacyjny
 // (`continue-on-error`), więc NIE jest zależnością wymaganego checka „E2E (Playwright)”.
@@ -176,14 +205,56 @@ assert.match(aggregate, /pattern: blob-report-\*/, 'e2e: pobierz raporty wszystk
 assert.doesNotMatch(aggregate, /playwright install|npm run build/, 'e2e: job zbiorczy nie uruchamia testów');
 
 // Konfiguracja Playwrighta: blob tylko w częściach CI, flaki nadal czerwienią przebieg (#375).
-const playwrightConfig = await readFile(new URL('playwright.config.ts', root), 'utf8');
+const playwrightConfig = await readFile(process.argv[3] ?? new URL('playwright.config.ts', root), 'utf8');
 assert.match(playwrightConfig, /failOnFlakyTests: !!process\.env\.CI,/, 'playwright.config.ts: failOnFlakyTests bez zmian');
 assert.match(playwrightConfig, /process\.env\.E2E_BLOB_NAME/, 'playwright.config.ts: reporter blob sterowany E2E_BLOB_NAME');
 assert.match(playwrightConfig, /\['blob', \{ outputDir: 'blob-report'/, 'playwright.config.ts: blob do blob-report/');
+
+// Podział zestawu demo po czasie: `DEMO_SHARDS` = macierz e2e-shard jako stringi '1'..'N';
+// dwie jawne listy (shard 1 i 2) wskazują istniejące speci projektu `chromium` (nie
+// fixture/pomiar), bez powtórzeń między sobą; shard N (ostatni) = dopełnienie obu list —
+// każdy test dokładnie raz, bez własnej listy (nowy spec trafia tam sam).
+const listOf = (name) => {
+  const body = playwrightConfig.match(new RegExp(`^const ${name} = \\[([^\\]]*)\\];`, 'ms'))?.[1];
+  assert.ok(body !== undefined, `playwright.config.ts: brak listy ${name}`);
+  return [...body.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+};
+assert.deepEqual(
+  listOf('DEMO_SHARDS'),
+  Array.from({ length: shardCount }, (_, index) => `${index + 1}`),
+  `playwright.config.ts: DEMO_SHARDS musi być '1'..'${shardCount}' (macierz e2e-shard)`,
+);
+const demoShard1 = listOf('DEMO_SHARD_1_SPECS');
+const demoShard2 = listOf('DEMO_SHARD_2_SPECS');
+assert.ok(demoShard1.length > 0 && demoShard2.length > 0, 'playwright.config.ts: DEMO_SHARD_1/2_SPECS nie mogą być puste');
+const excludedFromChromium = new Set([...listOf('FIXTURE_ONLY_SPECS'), ...listOf('TIMING_SPECS')]);
+const e2eFiles = new Set(await readdir(new URL('tests/e2e/', root)));
+for (const [name, specs] of [['DEMO_SHARD_1_SPECS', demoShard1], ['DEMO_SHARD_2_SPECS', demoShard2]]) {
+  for (const spec of specs) {
+    assert.ok(e2eFiles.has(spec.replace('**/', '')), `playwright.config.ts: ${name} — ${spec} nie istnieje w tests/e2e`);
+    assert.ok(!excludedFromChromium.has(spec), `playwright.config.ts: ${name} — ${spec} to spec fixture/pomiaru, nie projektu chromium`);
+  }
+}
+assert.ok(demoShard1.every((spec) => !demoShard2.includes(spec)), 'playwright.config.ts: DEMO_SHARD_1_SPECS i DEMO_SHARD_2_SPECS nie mogą się pokrywać');
+assert.match(
+  playwrightConfig,
+  /DEMO_SHARD === '1' \? \{ testMatch: DEMO_SHARD_1_SPECS \} : \{\}/,
+  'playwright.config.ts: shard 1 = testMatch DEMO_SHARD_1_SPECS',
+);
+assert.match(
+  playwrightConfig,
+  /DEMO_SHARD === '2' \? \{ testMatch: DEMO_SHARD_2_SPECS \} : \{\}/,
+  'playwright.config.ts: shard 2 = testMatch DEMO_SHARD_2_SPECS',
+);
+assert.match(
+  playwrightConfig,
+  /DEMO_SHARD === '3' \? \[\.\.\.DEMO_SHARD_1_SPECS, \.\.\.DEMO_SHARD_2_SPECS\] : \[\]/,
+  'playwright.config.ts: ostatni shard pomija obie jawne listy (dopełnienie)',
+);
 const mergeConfig = await readFile(new URL('playwright.merge.config.ts', root), 'utf8');
 assert.match(mergeConfig, /flaky-report\.ts/, 'playwright.merge.config.ts: raport flaków w połączonym raporcie');
 
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
-console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E z jobem zbiorczym, main bez anulowania.');
+console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E (podział po czasie) i części fixture’ów z jobem zbiorczym, main bez anulowania.');

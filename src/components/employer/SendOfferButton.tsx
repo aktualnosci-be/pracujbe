@@ -26,12 +26,20 @@ import { BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, INFO_LABEL, INFO_VALUE, PANEL_H2
  * w JEGO języku (Invariant #1, #289). Własna treść rekrutera trafia do kandydata bez zmian.
  *
  * Woła idempotentną Server Action `sendOffer` (RPC `send_offer`, Invariant #3). `idempotencyKey`
- * generowany JEDNORAZOWO na instancję — ponowne kliknięcia / retry trafiają w ten sam klucz.
+ * należy do CELU operacji (para oferta + kandydat), nie do instancji komponentu: ponowne
+ * kliknięcia / retry tej samej pary trafiają w ten sam klucz, a zmiana `jobId`/`candidateId`
+ * w tej samej instancji (np. przełączenie aktywnej firmy + `router.refresh()`, #853) daje nowy
+ * klucz i czysty stan dialogu. Wynik żądania dla poprzedniego celu nie zmienia widoku nowego.
  * Stan „wysłano" pochodzi z DB (`offerSentAt` z loadera), więc przetrwa odświeżenie strony.
  * Przycisk wysyłki zablokowany w trakcie zapisu (Invariant #11); błędy → komunikat i18n.
  */
 
 const TOAST_MS = 4000;
+
+/** Tożsamość operacji wysyłki: para oferta + kandydat (identyfikatory UUID nie zawierają `|`). */
+function offerTarget(jobId: string, candidateId: string): string {
+  return `${jobId}|${candidateId}`;
+}
 
 export interface SendOfferButtonProps {
   jobId: string;
@@ -73,11 +81,23 @@ export function SendOfferButton({
   const messageRef = React.useRef<HTMLTextAreaElement | null>(null);
   const fieldId = React.useId();
 
-  // Stały klucz idempotencyjny na instancję przycisku (ochrona przed duplikatem propozycji).
-  const idempotencyKeyRef = React.useRef<string>('');
-  if (idempotencyKeyRef.current === '') {
-    idempotencyKeyRef.current = crypto.randomUUID();
+  // Klucz idempotencyjny per CEL (oferta + kandydat), stały dla ponowień tej samej pary.
+  const target = offerTarget(jobId, candidateId);
+  const [operation, setOperation] = React.useState(() => ({ target, key: crypto.randomUUID() }));
+  if (operation.target !== target) {
+    // Ta sama instancja dostała inny cel (#853): nowa operacja i stan z DB dla nowej pary.
+    // Wzorzec „dopasuj stan przy zmianie propsów” — bez efektu, więc bez klatki ze starym stanem.
+    setOperation({ target, key: crypto.randomUUID() });
+    setSentAt(offerSentAt);
+    setMessage('');
+    setFieldError(null);
+    setOpen(false);
   }
+  // Bieżący cel dla odpowiedzi, która wraca po zmianie celu (nie może oznaczyć nowej pary).
+  const currentTargetRef = React.useRef(target);
+  React.useEffect(() => {
+    currentTargetRef.current = target;
+  }, [target]);
   const router = useRouter();
 
   React.useEffect(() => {
@@ -136,14 +156,21 @@ export function SendOfferButton({
       return;
     }
     setFieldError(null);
+    const submittedTarget = operation.target;
     startTransition(async () => {
       try {
         const res = await sendOffer({
           jobId,
           candidateId,
           message: parsed.data,
-          idempotencyKey: idempotencyKeyRef.current,
+          idempotencyKey: operation.key,
         });
+        if (currentTargetRef.current !== submittedTarget) {
+          // Cel zmienił się w trakcie żądania: widok należy już do innej pary. Stan „wysłano”
+          // przyjdzie z DB po odświeżeniu, zamiast przypisać sukces poprzedniej operacji.
+          router.refresh();
+          return;
+        }
         if (res.ok) {
           setOpen(false);
           setSentAt(new Date().toISOString());
