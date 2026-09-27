@@ -3257,6 +3257,7 @@
     "title": "Contact",
     "intro": "Have a question about your account, a job or how the site works? Write to us through the form — we will reply to the email address you enter.",
     "formTitle": "Contact form",
+    "jsRequired": "This form requires JavaScript. Enable it in your browser to send a message.",
     "topicLabel": "Topic",
     "topicPlaceholder": "Choose a topic",
     "topicCandidateAccount": "Candidate account",

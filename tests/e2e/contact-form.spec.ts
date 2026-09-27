@@ -101,3 +101,58 @@ test('gość wysyła wiadomość: walidacja, numer dokumentu, awaria sieci, sukc
   expect(field(bodies[1]!, 'idempotencyKey')).toBe(field(bodies[0]!, 'idempotencyKey'));
   expect(field(bodies[1]!, 'locale')).toBe('pl');
 });
+
+/**
+ * #817: bez JavaScriptu formularz i tak nie mógłby się powieść (Turnstile jest fail-closed),
+ * ale zwykły `<form>` bez `method`/`action` wykonałby natywny GET na `/pl/kontakt`, dopisując
+ * treść wiadomości, imię i e-mail do adresu URL. Sprawdzamy, że: formularz deklaruje
+ * `method="post"` (kontrola ujemna — powrót do braku atrybutu/GET wywali ten test), przycisk
+ * wysyłki jest trwale zablokowany bez JS (nie ma niejawnej submisji przez Enter), a próba
+ * kliknięcia/Enter nie zmienia adresu ani nie dopisuje prywatnych pól do query.
+ */
+test('formularz kontaktu bez JavaScriptu nie wysyła danych przez URL', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  await context.addCookies([
+    {
+      name: 'pracujbe_consent',
+      value: JSON.stringify({
+        v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+        categories: { necessary: true, preferences: false, analytics: false },
+        ts: '2026-01-01T00:00:00.000Z',
+        id: 'contact-form-e2e-nojs',
+      }),
+      url: baseURL!,
+      sameSite: 'Lax',
+    },
+  ]);
+  const page = await context.newPage();
+
+  await page.goto('/pl/kontakt');
+
+  const form = page.locator('form[aria-labelledby="contact-form-title"]');
+  // Kontrola ujemna: bez tego atrybutu przeglądarka wykonałaby GET na bieżący adres.
+  await expect(form).toHaveAttribute('method', 'post');
+  await expect(page.getByText(t.jsRequired, { exact: true })).toBeVisible();
+
+  const submit = page.getByRole('button', { name: t.submit });
+  await expect(submit).toBeDisabled();
+
+  const message = page.getByRole('textbox', { name: t.messageLabel });
+  await message.fill('Nie mogę zapisać profilu — treść, która nigdy nie powinna trafić do URL.');
+  await page.getByRole('textbox', { name: t.emailLabel }).fill('gosc-nojs@example.com');
+  await page.getByRole('textbox', { name: t.nameLabel }).fill('Anna Testowa');
+
+  // Klik na zablokowanym przycisku nie ma efektu (przeglądarka nie wywołuje submit na
+  // elemencie `disabled`).
+  await submit.click({ force: true });
+  // Enter w polu e-mail: bez włączonego przycisku submit nie ma niejawnej submisji.
+  await page.getByRole('textbox', { name: t.emailLabel }).press('Enter');
+
+  await page.waitForTimeout(300);
+  const url = new URL(page.url());
+  expect(url.pathname).toBe('/pl/kontakt');
+  expect(url.search).toBe('');
+  expect(page.url()).not.toContain('message=');
+  expect(page.url()).not.toContain('senderEmail=');
+  expect(page.url()).not.toContain('senderName=');
+});
