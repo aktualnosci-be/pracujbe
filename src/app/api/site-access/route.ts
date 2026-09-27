@@ -4,6 +4,7 @@ import { isLocale, routing, type Locale } from "@/i18n/routing";
 import { isProductionMode } from "@/lib/env";
 import { captureError } from "@/lib/error-report";
 import { AppError, ErrorCodes } from "@/lib/errors";
+import { readTextWithLimit } from "@/lib/http/read-limited";
 import { trustedClientIp } from "@/lib/http/trusted-ip";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withinLocalSiteAccessLimit } from "@/lib/site-access-local-limit";
@@ -13,6 +14,7 @@ import {
   SITE_ACCESS_MAX_AGE,
   constantTimeEqual,
   getSiteAccessPassword,
+  pickGateLocale,
   renderSiteAccessPage,
   siteAccessReturnPath,
   siteAccessToken,
@@ -27,6 +29,15 @@ import {
  * (`checkRateLimit`, klucz per zaufany adres IP — patrz `src/lib/rate-limit.ts`), zanim
  * hasło jest w ogóle porównywane. Po przekroczeniu — `429` + `Retry-After`, bez porównania
  * hasła i bez ujawnienia, czy akurat podane hasło jest poprawne.
+ *
+ * Limit rozmiaru body (#911): formularz ma trzy krótkie pola tekstowe (hasło, `next`, `locale`)
+ * — bez plików. `request.formData()` samo w sobie buforuje CAŁE body zanim cokolwiek sprawdzimy
+ * (limiter, czy bramka jest w ogóle aktywna), więc duże albo wolno przesyłane żądanie zużywa
+ * pamięć/czas procesu przed jakąkolwiek odpowiedzią. `readTextWithLimit` czyta strumień z twardym
+ * limitem bajtów (deklarowany `Content-Length` I faktycznie odebrane bajty — działa też bez tego
+ * nagłówka) i przerywa, zanim padnie limit; dopiero zmieszczone w limicie body trafia do
+ * `formData()` (przez odtworzony `Request` z tym samym `content-type`, więc obsługuje zarówno
+ * urlencoded, jak i multipart).
  */
 
 export const dynamic = "force-dynamic";
@@ -35,6 +46,8 @@ const FAILURE_DELAY_MS = 750;
 const RATE_LIMIT_ACTION = "site-access";
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+/** Hasło + `next` (≤ 512 znaków, patrz `safeNextPath`) + `locale` mieszczą się z dużym zapasem. */
+const MAX_BODY_BYTES = 4096;
 
 function unavailable(locale: Locale, next: string): Response {
   return new NextResponse(
@@ -65,6 +78,21 @@ function tooManyRequests(locale: Locale, next: string): Response {
   );
 }
 
+/** Body ponad `MAX_BODY_BYTES` (#911) — odrzucone przed parsowaniem, bez porównania hasła. */
+function payloadTooLarge(locale: Locale, next: string): Response {
+  return new NextResponse(
+    renderSiteAccessPage({ locale, next, error: false, tooLarge: true }),
+    {
+      status: 413,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "x-robots-tag": "noindex,nofollow",
+      },
+    },
+  );
+}
+
 /**
  * Przekierowanie względne (`Location: /pl/...`). Za proxy Railway `request.url` wskazuje
  * wewnętrzny adres (np. https://localhost:8080), więc absolutny URL z niego wysłałby
@@ -76,9 +104,29 @@ function redirectTo(path: string): NextResponse {
 
 export async function POST(request: Request): Promise<Response> {
   const expected = getSiteAccessPassword();
+
+  // Limit rozmiaru body PRZED parsowaniem formularza (#911) — niezależnie od tego, czy bramka
+  // jest aktywna. Body nad limitem nie jest w ogóle sparsowane: bez `next`/`locale` z żądania
+  // nie znamy zamierzonego celu ani języka, więc bierzemy je z tych samych sygnałów co strona
+  // bramki bez ważnego cookie (`pickGateLocale` — Accept-Language, tu bez prefiksu ścieżki).
+  const bodyLimit = await readTextWithLimit(request, MAX_BODY_BYTES);
+  if (!bodyLimit.ok) {
+    const fallbackLocale = pickGateLocale(
+      "/",
+      request.headers.get("accept-language"),
+    );
+    return payloadTooLarge(fallbackLocale, `/${fallbackLocale}`);
+  }
+
   let form: FormData;
   try {
-    form = await request.formData();
+    const contentType = request.headers.get("content-type");
+    const reconstructed = new Request("https://pracuj.invalid/api/site-access", {
+      method: "POST",
+      headers: contentType ? { "content-type": contentType } : undefined,
+      body: bodyLimit.text,
+    });
+    form = await reconstructed.formData();
   } catch {
     form = new FormData();
   }

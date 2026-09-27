@@ -64,6 +64,7 @@ const ROUTES = [
   '/admin/wydajnosc?dni=7',
   // Próg wieku kandydatów (#492) — bieżące ustawienie + formularz zmiany.
   '/admin/ustawienia',
+  '/admin/ustawienia/retencja',
 ];
 
 for (const viewport of [
