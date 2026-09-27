@@ -798,6 +798,12 @@ Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno 
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
+Bez pozycji menu (#806, bez migracji): dla zakończonej aplikacji (status poza `WITHDRAWABLE`) do
+oferty bez publicznej strony (`slug === null` — zamknięta/wygasła/niedostępna, #206) przycisk „…”
+w ogóle się nie renderuje, zamiast otwierać puste `role="menu"` bez pozycji, którego Escape/Tab
+nie zamykały. Ten sam status ZE slugiem lub status w toku BEZ slugu (akcja „Wycofaj” zostaje)
+nadal pokazują przycisk. Dowód: `candidate-confirm-actions.test.tsx` (kontrola ujemna: status
+w toku bez slugu ma akcję „Wycofaj” i przycisk się renderuje).
 Polecane oferty — wyjaśnienie i stan zgłoszenia (bez migracji, dane z materializacji P1-03):
 karta z wynikiem na `/candidate/oferty-polecane` pokazuje krótką etykietę (`match.summaryShort`,
 liczona z procentu przez `summaryKeyForScore` — to samo źródło co `scoreMatch`, więc starszy
