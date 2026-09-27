@@ -9,6 +9,14 @@ import { pathToFileURL } from 'node:url';
  * Tylko GET na stronach, które nie zmieniają danych — nie zakłada kont, nie aplikuje,
  * nie wysyła e-maili (testy niszczące dane wyłącznie w izolowanej bazie, #16).
  *
+ * Partie sitemap ofert (#689): `src/app/sitemap.ts` dzieli katalog na `id` 0 (strony statyczne,
+ * sprawdzany zawsze) i `1..N` (oferty, `generateSitemaps()`), a `src/app/robots.ts` wskazuje
+ * KAŻDY plik osobną linią `Sitemap:`. Statyczna lista sprawdzeń zna tylko `id=0` — po
+ * odczytaniu `/robots.txt` skrypt DOPISUJE sprawdzenie dla każdej partii ofert, której
+ * jeszcze nie ma na liście, więc awaria generowania sitemap ofert (zapytanie, paginacja,
+ * tłumaczenia) nie umyka smoke testowi mimo zielonego `id=0`. Katalog bez partii ofert
+ * (środowisko bez ofert) = bez dodatkowych sprawdzeń, jak dotąd.
+ *
  * Bramka hasła (`SITE_ACCESS_PASSWORD`, `src/lib/site-access.ts`): jeśli zmienna jest
  * ustawiona w środowisku operatora, skrypt loguje się przez `POST /api/site-access` i używa
  * wydanego cookie. Hasła i cookie nie wypisujemy nigdy; hasło nie trafia do adresu URL
@@ -80,16 +88,18 @@ const REQUIRED_CSP_DIRECTIVES = ["frame-ancestors 'none'", "object-src 'none'", 
 
 /**
  * Lista sprawdzeń: `expect` = dozwolone kody, `redirectToLocale` = 3xx na `/{locale}`,
- * `health` = JSON `{ status: "ok" }`, `page` = strona HTML z nagłówkami bezpieczeństwa.
- * @returns {{ path: string, expect: number[], redirectToLocale?: boolean, health?: boolean, page?: boolean }[]}
+ * `health` = JSON `{ status: "ok" }`, `page` = strona HTML z nagłówkami bezpieczeństwa,
+ * `robots` = treść czytana do wykrycia partii sitemap ofert (#689, patrz `runSmoke`).
+ * @returns {{ path: string, expect: number[], redirectToLocale?: boolean, health?: boolean, page?: boolean, robots?: boolean }[]}
  */
 export function buildChecks() {
   const checks = [
     { path: '/api/health', expect: [200], health: true },
     { path: '/', expect: [307, 308], redirectToLocale: true },
-    { path: '/robots.txt', expect: [200] },
+    { path: '/robots.txt', expect: [200], robots: true },
     // Sitemap index (#599): `src/app/sitemap.ts` ma `generateSitemaps()`, więc Next.js serwuje
     // `/sitemap/<id>.xml` (0 = strony statyczne, 1..N = oferty), a `/sitemap.xml` daje 404.
+    // Partie `1..N` dopisuje `runSmoke()` po odczytaniu `/robots.txt` (#689).
     { path: `/sitemap/${SITEMAP_STATIC_ID}.xml`, expect: [200] },
   ];
   for (const locale of LOCALES) {
@@ -173,6 +183,36 @@ export function versionMatchesSha(version, expectedSha) {
   if (!revision) return false;
   const length = Math.min(revision.length, expectedSha.length);
   return length >= 7 && revision.slice(0, length) === expectedSha.slice(0, length);
+}
+
+/**
+ * Ścieżki partii sitemap ofert (`/sitemap/<id>.xml`, `id` ≥ 1) wskazane w treści `robots.txt`
+ * (#689). Tylko linie `Sitemap:` (dowolna wielkość liter, RFC bez formalnej specyfikacji
+ * pisowni), tylko TEN SAM origin co `baseUrl` (nigdy cudzy host z treści odpowiedzi) i tylko
+ * wzorzec `generateSitemaps()` (`src/app/sitemap.ts`/`src/app/robots.ts`) — inny wpis
+ * (np. przyszły `sitemap-images.xml`) jest pomijany, nie sprawdzany na ślepo. `id=0` (statyczne
+ * strony) wraca z `buildChecks()`, więc go tu wykluczamy, żeby nie sprawdzać go dwa razy.
+ * @param {string} robotsText
+ * @param {URL} baseUrl
+ * @returns {string[]}
+ */
+export function parseRobotsSitemapShardPaths(robotsText, baseUrl) {
+  const paths = [];
+  for (const line of robotsText.split(/\r?\n/)) {
+    const match = /^\s*sitemap\s*:\s*(\S+)\s*$/i.exec(line);
+    if (!match) continue;
+    let url;
+    try {
+      url = new URL(match[1], baseUrl);
+    } catch {
+      continue;
+    }
+    if (url.origin !== baseUrl.origin) continue;
+    const shard = /^\/sitemap\/(\d+)\.xml$/.exec(url.pathname);
+    if (!shard || Number(shard[1]) === SITEMAP_STATIC_ID) continue;
+    if (!paths.includes(url.pathname)) paths.push(url.pathname);
+  }
+  return paths.sort((a, b) => Number(/\d+/.exec(a)?.[0]) - Number(/\d+/.exec(b)?.[0]));
 }
 
 async function timedFetch(fetchImpl, url, init, timeoutMs) {
@@ -286,6 +326,11 @@ async function runCheck(check, config, fetchImpl, cookie) {
     }
     return { ...base, ok: true };
   }
+  if (check.robots) {
+    // Treść potrzebna do wykrycia partii sitemap ofert (#689) — nie odrzucamy body jak niżej.
+    const text = await readText(response, config.timeoutMs);
+    return { ...base, ok: true, body: text ?? '' };
+  }
   await response.body?.cancel().catch(() => {});
   if (check.page) {
     const problems = securityHeaderProblems(response.headers, { https: config.baseUrl.protocol === 'https:', expectMode: config.expectMode });
@@ -343,22 +388,38 @@ export async function runSmoke({ env = process.env, fetchImpl = fetch, logger = 
   }
 
   const results = await mapLimited(checks, CONCURRENCY, (check) => runCheck(check, config, fetchImpl, cookie));
-  for (const result of results) {
+
+  // #689: partie sitemap ofert (`/sitemap/1.xml`, `2.xml`, …) wskazane w treści `/robots.txt`,
+  // ale nieobecne na statycznej liście (tylko `id=0`) — dopisujemy sprawdzenie dla każdej,
+  // zamiast kończyć smoke test z pominiętym generowaniem katalogu ofert.
+  const robotsResult = results.find((result) => typeof result.body === 'string');
+  let allResults = results;
+  if (robotsResult) {
+    const known = new Set(checks.map((check) => check.path));
+    const shardPaths = parseRobotsSitemapShardPaths(robotsResult.body, config.baseUrl).filter((path) => !known.has(path));
+    if (shardPaths.length > 0) {
+      const shardChecks = shardPaths.map((path) => ({ path, expect: [200] }));
+      const shardResults = await mapLimited(shardChecks, CONCURRENCY, (check) => runCheck(check, config, fetchImpl, cookie));
+      allResults = [...results, ...shardResults];
+    }
+  }
+
+  for (const result of allResults) {
     const status = result.status === undefined ? '---' : String(result.status);
     const line = `${status.padEnd(4)} ${String(result.ms).padStart(6)} ms  ${result.path}`;
     if (result.ok) logger.log(`OK    ${line}`);
     else logger.error(`BŁĄD  ${line}  — ${result.reason}`);
   }
 
-  const failures = results.filter((result) => !result.ok);
+  const failures = allResults.filter((result) => !result.ok);
   if (!config.password && failures.some((result) => result.gate)) {
     logger.error('Strony zwracają bramkę hasła — ustaw SITE_ACCESS_PASSWORD w środowisku uruchomienia.');
   }
   if (failures.length > 0) {
-    logger.error(`Wynik: ${failures.length} z ${results.length} sprawdzeń nieudanych.`);
+    logger.error(`Wynik: ${failures.length} z ${allResults.length} sprawdzeń nieudanych.`);
     return 1;
   }
-  logger.log(`Wynik: wszystkie ${results.length} sprawdzeń zgodne.`);
+  logger.log(`Wynik: wszystkie ${allResults.length} sprawdzeń zgodne.`);
   return 0;
 }
 

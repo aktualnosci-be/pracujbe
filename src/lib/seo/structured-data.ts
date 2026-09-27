@@ -137,6 +137,12 @@ export function buildJobPostingDescription(job: JobDetail, labels: JobPostingLab
 /**
  * JobPosting dla detalu oferty. `validThrough` wyłącznie z realnego `expiresAt` — bez daty
  * wygaśnięcia pole jest pomijane (wymyślona data zdejmowała aktywne oferty z Google, #313).
+ *
+ * `directApply` (#840): portal nie ma pola z zewnętrznym adresem ATS — każda realna, kanoniczna
+ * oferta (wywołujący pomija demo i wersje bez tłumaczenia treści, #297/#301) ma pełny formularz
+ * aplikowania na tej samej stronie (zalogowany kandydat albo gość bez konta), więc `true`. Gdy
+ * w przyszłości pojawi się oferta bez tego przepływu (np. link zewnętrzny), tę wartość trzeba
+ * wyliczać z danych oferty zamiast stałej.
  */
 export function buildJobPostingJsonLd(
   job: JobDetail,
@@ -206,7 +212,7 @@ export function buildJobPostingJsonLd(
     ...(baseSalary ? { baseSalary } : {}),
     ...(job.startDate ? { jobStartDate: job.startDate } : {}),
     url,
-    directApply: false,
+    directApply: true,
   };
 }
 

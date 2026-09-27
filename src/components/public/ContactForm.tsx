@@ -47,6 +47,16 @@ import {
  * polach (`aria-invalid` + `aria-describedby`), fokus na pierwszym błędnym polu (RHF), jasny
  * sukces z numerem referencyjnym. Klucz idempotencji powstaje raz na formularz (`useRef`):
  * ponowienie po zerwanym połączeniu zwraca tę samą wiadomość, bez drugiego e-maila.
+ *
+ * Bez JavaScriptu (#817): formularz i tak nie mógłby się powieść (Turnstile jest fail-closed,
+ * `docs/TURNSTILE.md`), ale zwykły `<form>` bez `method`/`action` wykonałby natywny GET na
+ * `/[locale]/kontakt` — dopisując treść wiadomości, imię i e-mail do adresu URL (historia
+ * przeglądarki, logi serwera; OWASP ASVS 5.0 V14.2.1). Naprawa: `method="post"` (obronnie —
+ * dane trafiłyby do body, nie do adresu, nawet gdyby coś ominęło poniższe) + przycisk wysyłki
+ * zaczyna jako `disabled` i odblokowuje się dopiero po zamontowaniu komponentu (`mounted`).
+ * Bez JS pozostaje trwale zablokowany: formularz bez włączonego przycisku typu submit nie ma
+ * niejawnej submisji, więc ani klik, ani Enter w polu nie wysyłają niczego. `<noscript>`
+ * informuje o wymogu JavaScriptu zamiast pokazywać pozornie działający formularz.
  */
 
 
@@ -63,6 +73,12 @@ export function ContactForm(): React.JSX.Element {
   const alertRef = React.useRef<HTMLDivElement | null>(null);
   const successRef = React.useRef<HTMLHeadingElement | null>(null);
   const idempotencyKeyRef = React.useRef<string | null>(null);
+  // #817: bez JS ten stan nigdy nie zmienia się na true, więc przycisk wysyłki zostaje
+  // trwale zablokowany i formularz nie ma jak wykonać niejawnej (natywnej) submisji.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const botCheckEnabled = isTurnstileWidgetEnabled();
   const botCheckRef = React.useRef<TurnstileHandle | null>(null);
@@ -174,6 +190,7 @@ export function ContactForm(): React.JSX.Element {
     <form
       onSubmit={onSubmit}
       noValidate
+      method="post"
       className={cn(PAPER, 'space-y-5')}
       aria-busy={isSubmitting || undefined}
       aria-labelledby="contact-form-title"
@@ -181,6 +198,12 @@ export function ContactForm(): React.JSX.Element {
       <h2 id="contact-form-title" className="text-[23px] font-bold leading-[1.3] tracking-[-0.025em] text-foreground">
         {t('formTitle')}
       </h2>
+      <noscript>
+        <p className="flex items-start gap-3 rounded-[11px] border border-error/30 bg-error/10 p-3 text-sm text-error">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          {t('jsRequired')}
+        </p>
+      </noscript>
       {serverMessage ? (
         <div
           ref={alertRef}
@@ -297,7 +320,11 @@ export function ContactForm(): React.JSX.Element {
         />
       ) : null}
 
-      <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET, 'w-full sm:w-auto')} disabled={isSubmitting}>
+      <Button
+        type="submit"
+        className={cn(BTN_PRIMARY, BTN_RESET, 'w-full sm:w-auto')}
+        disabled={isSubmitting || !mounted}
+      >
         {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
