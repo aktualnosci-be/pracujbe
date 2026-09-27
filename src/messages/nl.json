@@ -2659,7 +2659,8 @@
     "submit": "Doorgaan",
     "error": "Onjuist wachtwoord. Probeer het opnieuw.",
     "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
-    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw."
+    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+    "payloadTooLarge": "Het formulier is te groot. Vernieuw de pagina en probeer het opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",

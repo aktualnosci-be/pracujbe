@@ -2659,7 +2659,8 @@
     "submit": "Wejdź",
     "error": "Nieprawidłowe hasło. Spróbuj ponownie.",
     "rateLimited": "Zbyt wiele prób. Spróbuj ponownie za kilka minut.",
-    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później."
+    "unavailable": "Wejście jest chwilowo niedostępne. Spróbuj ponownie później.",
+    "payloadTooLarge": "Formularz jest za duży. Odśwież stronę i spróbuj ponownie."
   },
   "offline": {
     "title": "Brak połączenia",
