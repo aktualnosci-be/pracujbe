@@ -62,7 +62,11 @@ for (const [locale, messages] of Object.entries(locales)) {
       page.getByRole("heading", { level: 2, name: t.step1Title }),
     ).toBeVisible();
 
-    await page.getByLabel(t.categoryLabel).click();
+    // Rola `combobox` (nie `getByLabel`): po naprawie #819 listbox otwartego Selecta ma
+    // teraz WŁASNĄ, poprawnie rozwiązywalną nazwę dostępności (placeholder triggera), która
+    // bywa nadzbiorem etykiety pola (np. nl „Kies een categorie” zawiera „Categorie”) —
+    // `getByLabel` łapał wtedy oba elementy naraz (tryb strict Playwrighta).
+    await page.getByRole('combobox', { name: t.categoryLabel }).click();
     await page.getByRole("option").first().click();
     await page.getByLabel(t.occupationLabel).fill("Magazynier");
     await page.getByRole("button", { name: t.next, exact: true }).click();

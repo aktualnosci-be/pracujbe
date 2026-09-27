@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Eye, Loader2 } from 'lucide-react';
 
 import { PAPER } from '@/components/dashboard/panel-styles';
 import { Link } from '@/i18n/navigation';
+import { useConfirmedAdult } from '@/components/settings/age-status-context';
 import { setProfileVisibilityAction } from '@/lib/actions/profile-visibility';
 import type { ProfileVisibility } from '@/lib/data/profile-visibility';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,8 @@ import { cn } from '@/lib/utils';
  * #576 (LAUNCH-1): włączenie tylko dla konta z potwierdzonym przedziałem 18+. Konto 16–17
  * (`adult === false`) widzi wyłączony przełącznik z wyjaśnieniem; baza odrzuca włączenie
  * niezależnie od UI (`AGE_ADULT_REQUIRED`). `adult` nieznane (błąd odczytu) = bez blokady w UI.
+ * W `AgeStatusProvider` (#828) status pochodzi ze wspólnego stanu strony — po potwierdzeniu
+ * 18+ w sekcji „Wiek” przełącznik odblokowuje się bez przeładowania, ale sam się nie włącza.
  */
 export function ProfileVisibilitySettings({
   initial,
@@ -39,7 +42,8 @@ export function ProfileVisibilitySettings({
   const [error, setError] = React.useState<'save' | 'incomplete' | 'age' | 'adult' | null>(null);
   const [saved, setSaved] = React.useState<boolean | null>(null);
 
-  const minor = adult === false;
+  const confirmedAdult = useConfirmedAdult(adult);
+  const minor = confirmedAdult === false;
   const canEnable = initial.completed && !minor;
   const disabled = pending || (!searchable && !canEnable);
 

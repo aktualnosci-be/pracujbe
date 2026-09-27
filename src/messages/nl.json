@@ -121,7 +121,7 @@
     "editVerifiedHint": "Als je de naam of het btw-/KBO-nummer van een geverifieerd bedrijf wijzigt, is opnieuw verificatie nodig. Tot de goedkeuring zijn de vacatures van je bedrijf niet openbaar zichtbaar en zijn publiceren en voorstellen versturen gepauzeerd.",
     "savedReverification": "Bedrijfsgegevens opgeslagen. Je bedrijf wordt opnieuw geverifieerd — een beheerder controleert de nieuwe gegevens.",
     "linksTitle": "Website en logo",
-    "linksSubtitle": "Deze adressen tonen we bij vacatures en bedrijfsgegevens. Een wijziging vereist geen nieuwe verificatie.",
+    "linksSubtitle": "We tonen de adressen in je vacatures en op het bedrijfsprofiel. Een nieuw adres publiceren we na controle door de beheerder van het portaal; een adres verwijderen werkt meteen. Een wijziging vereist geen nieuwe verificatie van het bedrijf.",
     "website": "Website van het bedrijf (optioneel)",
     "websitePlaceholder": "https://www.jouwbedrijf.be",
     "logoUrl": "Adres van het logo — URL (optioneel)",
@@ -165,7 +165,22 @@
     "appealGroundsLabel": "Waarom is de beslissing onjuist?",
     "appealDeadline": "Termijn voor bezwaar: tot {date}.",
     "appealDeadlineNotStarted": "De bezwaartermijn begint te lopen zodra je de melding over de beslissing ontvangt.",
-    "appealStatusLabel": "Bezwaar {reference}"
+    "appealStatusLabel": "Bezwaar {reference}",
+    "linksReviewPendingTitle": "Wacht op goedkeuring",
+    "linksReviewPendingBody": "De beheerder van het portaal controleert de nieuwe adressen. Tot dan zijn in vacatures en op het bedrijfsprofiel de huidige adressen zichtbaar.",
+    "linksReviewRejectedTitle": "De beheerder heeft de voorgestelde adressen niet goedgekeurd",
+    "linksReviewRejectedReason": "Reden: {reason}",
+    "linksReviewRejectedHint": "Pas de adressen aan en sla ze opnieuw op. In vacatures en op het bedrijfsprofiel blijven de huidige adressen zichtbaar.",
+    "linksPublicLabel": "Nu publiek",
+    "linksPublicNone": "geen",
+    "linksSubmittedPending": "Adressen opgeslagen. Ze worden publiek na goedkeuring door de beheerder van het portaal.",
+    "linksUnchanged": "De adressen zijn gelijk aan de gepubliceerde — er is niets gewijzigd.",
+    "targetTitle": "Bedrijf uit de beslissing",
+    "targetIntro": "Deze link gaat over een ander bedrijf dan het bedrijf dat nu actief is in je paneel. Hieronder zie je de gegevens — je actieve bedrijf is niet gewijzigd.",
+    "targetUnavailableTitle": "Dit bedrijf is niet meer beschikbaar vanaf je account",
+    "targetUnavailableHint": "Je hebt geen actieve toegang meer tot dit bedrijf, of de link is ongeldig.",
+    "targetSwitchAction": "Instellen als actief bedrijf",
+    "targetSwitchError": "Het actieve bedrijf wisselen is niet gelukt. Probeer het opnieuw."
   },
   "companyProfile": {
     "metaTitle": "Vacatures bij {name}",
@@ -953,7 +968,6 @@
     "employerApplicationsCandidateLabel": "Kandidaat",
     "employerApplicationsJobLabel": "Vacature",
     "employerApplicationsPagination": "Sollicitatiepagina's",
-    "employerApplicationsPage": "Pagina {page}",
     "employerApplicationsNewer": "Nieuwere sollicitaties",
     "employerApplicationsOlder": "Oudere sollicitaties",
     "emptyState": "Geen gegevens om weer te geven.",
@@ -966,7 +980,6 @@
     "employerOffersPaginationLabel": "Paginering van vacatures",
     "employerOffersPrevious": "Vorige pagina",
     "employerOffersFirstPage": "Terug naar de eerste pagina",
-    "employerOffersPage": "Pagina {page}",
     "employerOffersNext": "Volgende pagina",
     "employerOffersPageEmpty": "Op deze pagina staan geen vacatures meer.",
     "employerOffersRetry": "Opnieuw proberen",
@@ -1058,6 +1071,27 @@
     "applicationStepInterview": "Gesprek",
     "applicationStepDecision": "Beslissing",
     "employerPlaceEyebrow": "Jouw werving",
+    "employerApplicationsFirstPage": "Terug naar de nieuwste sollicitaties",
+    "employerApplicationsForJob": "Sollicitaties voor de vacature „{title}”.",
+    "employerApplicationsAllJobs": "Alle sollicitaties tonen",
+    "employerOffersViewApplications": "Sollicitaties bekijken",
+    "employerOffersViewApplicationsLabel": "Sollicitaties voor de vacature {title} bekijken",
+    "employerApplicationViewCandidate": "Profiel van de kandidaat bekijken",
+    "candidatesViewProfile": "Profiel bekijken",
+    "candidatesViewProfileLabel": "Profiel bekijken: {name}",
+    "candidatesPagination": "Pagina’s met kandidaten",
+    "candidatesPrevious": "Beter passende kandidaten",
+    "candidatesNext": "Meer kandidaten",
+    "candidatesFirstPage": "Terug naar de best passende kandidaten",
+    "candidatesPageEmpty": "Op deze pagina staan geen kandidaten meer.",
+    "employerCandidateDetailTitle": "Profiel van de kandidaat",
+    "employerCandidateBack": "Terug naar kandidaten",
+    "employerCandidateLoadError": "Het profiel van de kandidaat kon niet worden geladen",
+    "employerCandidateOccupations": "Beroepen",
+    "employerCandidateMatches": "Match met de vacatures van het bedrijf",
+    "employerCandidateNoMatches": "Er zijn geen matches berekend voor de vacatures van het bedrijf.",
+    "employerCandidateApplications": "Sollicitaties op de vacatures van het bedrijf",
+    "employerCandidateNoApplications": "De kandidaat heeft niet gesolliciteerd op de vacatures van het bedrijf.",
     "statRecruiterOnly": "Zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf",
     "statAfterVerification": "Beschikbaar zodra het bedrijf is geverifieerd",
     "funnelDenied": "De wervingstrechter is zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
@@ -1277,6 +1311,7 @@
     "itemModerationAppealReversed": "Bezwaar gegrond: beslissing gewijzigd",
     "itemScreeningApproved": "Een vraag in je vacature is goedgekeurd",
     "itemScreeningRejected": "Een vraag in je vacature is niet goedgekeurd",
+    "itemScreeningHidden": "Een vraag in je gepubliceerde vacature is verborgen — pas ze aan",
     "listIntro": "Alle meldingen van je account, nieuwste eerst.",
     "filterLabel": "Meldingenfilter",
     "filterAll": "Alle",
@@ -1289,7 +1324,9 @@
     "loadMore": "Meer tonen",
     "loadingMore": "Laden…",
     "listEnd": "Dat zijn al je meldingen.",
-    "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw."
+    "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw.",
+    "itemCompanyLinksApproved": "Website en logo van het bedrijf goedgekeurd",
+    "itemCompanyLinksRejected": "Website en logo van het bedrijf niet goedgekeurd"
   },
   "pricing": {
     "standard": "Standaard",
@@ -1322,6 +1359,7 @@
     "loginRequired": "Log in om te solliciteren.",
     "errorGeneric": "De sollicitatie kon niet worden verzonden. Probeer opnieuw.",
     "alreadyApplied": "Je hebt al op deze vacature gesolliciteerd.",
+    "alreadyAppliedEdited": "Je eerdere versie van de sollicitatie is al bij de werkgever aangekomen — deze wijzigingen zijn niet verzonden.",
     "submitting": "Bezig met verzenden...",
     "close": "Sluiten",
     "phoneInvalid": "Vul een geldig telefoonnummer in: een nationaal nummer voor het gekozen land of het volledige nummer met landcode, bijv. +32 470 12 34 56.",
@@ -1341,6 +1379,7 @@
     "screeningRequired": "Beantwoord deze vraag.",
     "screeningYes": "Ja",
     "screeningNo": "Nee",
+    "screeningClearAnswer": "Antwoord wissen",
     "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
     "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
     "ageRequired": "Bevestig je leeftijd in je accountinstellingen voordat je solliciteert.",
@@ -1500,6 +1539,8 @@
     "startDateLabel": "Startdatum",
     "cityLabel": "Stad",
     "cityPlaceholder": "bijv. Antwerpen",
+    "cityRecognized": "Herkende plaats: {name}. De vacature verschijnt bij de filter van deze stad, ongeacht de schrijfwijze.",
+    "cityNotRecognized": "Deze naam staat niet in onze lijst met plaatsen. De vacature toont de ingevoerde naam, maar de stadsfilter vindt ze alleen met dezelfde schrijfwijze.",
     "regionLabel": "Regio",
     "regionPlaceholder": "bijv. Vlaanderen",
     "addressLabel": "Adres",
@@ -2172,6 +2213,7 @@
     "entityScreeningReview": "Screeningvraag",
     "auditActionScreeningRequested": "Vraag ter controle voorgelegd",
     "auditActionScreeningReviewed": "Beslissing over screeningvraag",
+    "auditActionScreeningHidden": "Screeningvraag verborgen",
     "navBreaches": "Register van inbreuken",
     "entityBreach": "Registerregel inbreuk",
     "auditActionBreachCreated": "Nieuwe registerregel inbreuk",
@@ -2422,6 +2464,34 @@
     "campaignCancelled": "De verzending van de revisie is gestopt.",
     "auditActionCampaignActivated": "Activering van campagnerevisie",
     "auditActionCampaignCancelled": "Campagnerevisie gestopt",
+    "campaignNewTitle": "Nieuwe campagne",
+    "campaignNewSubtitle": "Slug en inhoud van de e-mail in elke taal van de site. Opslaan maakt een revisie als concept — activeren is een aparte stap in de revisiedetails.",
+    "campaignNewRevisionTitle": "Nieuwe revisie",
+    "campaignNewRevisionSubtitle": "Formulier ingevuld met de inhoud van revisie {revision}. Opslaan maakt een volgende revisie als concept; revisie {revision} blijft ongewijzigd.",
+    "campaignEditorSectionSlug": "Campagne",
+    "campaignEditorSlug": "Campagneslug",
+    "campaignEditorSlugHint": "Kleine letters, cijfers en enkele koppeltekens, maximaal 80 tekens, bv. nieuwsbrief-oktober. Een bestaande slug = volgende revisie van die campagne.",
+    "campaignEditorSlugFixedHint": "Een nieuwe revisie heeft dezelfde slug als de campagne.",
+    "campaignEditorLocaleHint": "1 tot 3 vacatures. De e-mail gaat in de taal van de ontvanger, dus inhoud is in elke taal verplicht.",
+    "campaignEditorJobLegend": "Vacature {number}",
+    "campaignEditorJobSlug": "Vacatureslug",
+    "campaignEditorJobTitle": "Titel",
+    "campaignEditorJobCity": "Stad",
+    "campaignEditorJobSalary": "Loon (optioneel)",
+    "campaignEditorAddJob": "Vacature toevoegen ({language})",
+    "campaignEditorRemoveJob": "Vacature {number} verwijderen",
+    "campaignEditorPreviewHint": "Voorbeeld berekend zoals in de revisiedetails. Kies een taal.",
+    "campaignEditorPreviewLocales": "Taal van het voorbeeld",
+    "campaignEditorSave": "Revisie opslaan",
+    "campaignEditorHasErrors": "Corrigeer de gemarkeerde velden.",
+    "campaignEditorDemoNotSaved": "Demomodus — de revisie is niet opgeslagen.",
+    "campaignEditorErrorRequired": "Dit veld is verplicht.",
+    "campaignEditorErrorSlug": "Gebruik kleine letters, cijfers en enkele koppeltekens.",
+    "campaignEditorErrorPlaceholder": "Verwijder tekens tussen dubbele accolades — zo’n e-mail kan niet worden verstuurd.",
+    "campaignEditorErrorTooLong": "Te lang — maximaal {max} tekens.",
+    "campaignEditorErrorJobsCount": "Voeg 1 tot 3 vacatures toe.",
+    "campaignEditorErrorInvalid": "De inhoud in deze taal kan niet worden weergegeven.",
+    "auditActionCampaignRevisionCreated": "Nieuwe campagnerevisie",
     "entityEmailCampaign": "E-mailcampagne",
     "entityAgePolicy": "Leeftijdsdrempel kandidaten",
     "appealTargetRestoration": "Tegen opheffen van beperking",
@@ -2515,6 +2585,56 @@
     "webVitalsAboutSampling": "Cloudflare neemt steekproeven, dus het aantal metingen is een schatting. De waarden zijn het 75e percentiel.",
     "webVitalsAboutThresholds": "Beoordeling volgens de Core Web Vitals-drempels: LCP 2,5 / 4 s, INP 200 / 500 ms, CLS 0,1 / 0,25.",
     "webVitalsOpenCloudflare": "Web Analytics openen in Cloudflare (nieuw tabblad)",
+    "filterCompanyLinks": "Website en logo goed te keuren",
+    "sectionCompanyLinks": "Website en logo",
+    "detailLogoUrl": "Logo-adres",
+    "companyLinksStatusPending": "Wacht op beslissing",
+    "companyLinksStatusRejected": "Afgewezen",
+    "companyLinksPublishedWebsite": "Website — publiek",
+    "companyLinksPublishedLogo": "Logo — publiek",
+    "companyLinksProposedWebsite": "Website — voorstel van het bedrijf",
+    "companyLinksProposedLogo": "Logo — voorstel van het bedrijf",
+    "companyLinksRemoved": "geen adres",
+    "companyLinksSubmittedAt": "Ingediend",
+    "companyLinksReviewHint": "Controleer of de adressen bij dit bedrijf horen. Na goedkeuring verschijnen ze in de vacatures en op het bedrijfsprofiel.",
+    "companyLinksNoProposal": "Geen voorstel tot wijziging.",
+    "companyLinksActionApprove": "Adressen goedkeuren",
+    "companyLinksActionReject": "Adressen afwijzen",
+    "companyLinksApproveConfirmTitle": "Website en logo goedkeuren?",
+    "companyLinksApproveConfirmHint": "De adressen verschijnen meteen in de vacatures en op het bedrijfsprofiel.",
+    "companyLinksRejectConfirmTitle": "Website en logo afwijzen?",
+    "companyLinksRejectConfirmHint": "Publiek blijven de huidige adressen. Het bedrijf ziet de motivering en kan het voorstel aanpassen.",
+    "companyLinksReasonHint": "Max. {max} tekens. Het bedrijf ziet de motivering in het paneel; ze komt ook in het gebeurtenissenlogboek.",
+    "companyLinksApproved": "Website en logo goedgekeurd.",
+    "companyLinksRejected": "Website en logo afgewezen.",
+    "auditActionCompanyLinksChanged": "Wijziging publieke website/logo",
+    "auditActionCompanyLinksSubmitted": "Voorstel website/logo",
+    "auditActionCompanyLinksReviewed": "Beslissing over website/logo",
+    "navJobs": "Vacatures",
+    "jobsTitle": "Vacatures",
+    "jobsSubtitle": "Alle vacatures van alle bedrijven — alleen bekijken. Moderatiebeslissingen neem je bij de meldingen.",
+    "searchJobsLabel": "Vacatures zoeken",
+    "searchJobsHint": "Titel, adres van de vacature, stad, bedrijfsnaam of ID.",
+    "jobsFilterModerated": "Geblokkeerd door beslissing",
+    "jobsModeratedTag": "Moderatiebeslissing",
+    "jobsDemoTag": "Voorbeeldgegevens",
+    "jobsHistoryLink": "Wijzigingsgeschiedenis",
+    "jobsHistoryLabel": "Wijzigingsgeschiedenis: {title}",
+    "jobsCompanyFilter": "Vacatures van bedrijf: {name}",
+    "jobsCompanyFilterClear": "Vacatures van alle bedrijven tonen",
+    "jobsListEmpty": "Geen vacatures die aan de criteria voldoen.",
+    "colJobTitle": "Vacature",
+    "colCompany": "Bedrijf",
+    "entityJob": "Vacature",
+    "auditActionJobUpdatePublished": "Gepubliceerde vacature bewerkt",
+    "auditActionJobDuplicated": "Kopie van vacature",
+    "companyJobsAllLink": "Alle vacatures van het bedrijf",
+    "auditActionRetentionPolicyChanged": "Wijziging van bewaartermijn",
+    "auditActionRetentionPoliciesSeeded": "Bewaartermijnen vastgelegd",
+    "entityRetentionPolicy": "Bewaartermijn",
+    "retentionLinkTitle": "Gegevensbewaring",
+    "retentionLinkHint": "Bewaartermijnen en modi van de opschoontaken — alleen weergave.",
+    "retentionLinkCta": "Gegevensbewaring bekijken",
     "backToUsers": "Terug naar de gebruikerslijst",
     "userDetailSubtitle": "Accountgegevens, bedrijven en activiteit — alleen lezen.",
     "userNotFoundTitle": "Account niet gevonden",
@@ -2669,7 +2789,8 @@
     "submit": "Doorgaan",
     "error": "Onjuist wachtwoord. Probeer het opnieuw.",
     "rateLimited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
-    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw."
+    "unavailable": "De toegang is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+    "payloadTooLarge": "Het formulier is te groot. Vernieuw de pagina en probeer het opnieuw."
   },
   "offline": {
     "title": "Geen verbinding",
@@ -2955,6 +3076,7 @@
     "noAlertYet": "We hebben nog geen melding verstuurd.",
     "filtersLabel": "Filters van de zoekopdracht „{name}”",
     "open": "Vacatures tonen",
+    "openLocaleNote": "Bevat een zoekwoord dat is opgeslagen in het {language} — wordt in die taal geopend.",
     "alerts": "Meld nieuwe vacatures",
     "frequency": "Hoe vaak",
     "daily": "Eén keer per dag",
@@ -3335,5 +3457,113 @@
     "errorLanguageInvalid": "De naam van de taal moet 2 tot 40 tekens lang zijn.",
     "errorExperienceInvalid": "Vul een aantal jaren van 0 tot 60 in.",
     "errorFieldsInvalid": "Pas de gemarkeerde velden aan voordat je opslaat."
+  },
+  "adminRetention": {
+    "title": "Gegevensbewaring",
+    "subtitle": "Bewaartermijnen uit de database en modi van de opschoontaken. Alleen weergave — deze pagina wijzigt niets.",
+    "demoNotice": "Demomodus: startwaarden uit de migratie, zonder databaseleesactie.",
+    "modesTitle": "Modi van geplande taken",
+    "modesHint": "Status van de omgevingsvariabelen van de dienst, gelezen zoals in de onderhoudstaak. Wijzigen vereist het instellen van de variabele bij de hosting.",
+    "modeRetention": "Opschonen van gegevens (RETENTION_MODE)",
+    "modeDsaRetention": "Anonimisering van DSA-zaken (DSA_RETENTION_MODE)",
+    "modeStorageGc": "Opruimen van verweesde bestanden (STORAGE_GC_MODE)",
+    "mode": {
+      "off": "Uitgeschakeld",
+      "dryRun": "Proefrun (zonder wijzigingen)",
+      "apply": "Ingeschakeld (verwijderen)"
+    },
+    "storageGcDryRun": "Alleen tellers (zonder verwijderen)",
+    "storageGcDelete": "Verweesde objecten verwijderen",
+    "policiesTitle": "Bewaartermijnen",
+    "policiesHint": "Een categorie met termijn „uitgeschakeld” heeft geen termijn. Termijnen wijzigt de verwerkingsverantwoordelijke.",
+    "policiesEmpty": "Geen bewaartermijnen opgeslagen.",
+    "fieldPeriod": "Termijn",
+    "fieldWarning": "Waarschuwing vóór termijn",
+    "fieldEnforcement": "Wie bewaakt de termijn",
+    "fieldLastChange": "Laatste wijziging",
+    "enforcement": {
+      "job": "Opschoontaak",
+      "monitoring": "Monitoringsensor",
+      "infrastructure": "Infrastructuur",
+      "none": "Geen taak"
+    },
+    "days": "{count, plural, one {# dag} other {# dagen}}",
+    "periodOff": "Uitgeschakeld",
+    "lastChangeValue": "{date}, {actor}: {from} → {to}",
+    "updatedValue": "{date} (migratie)",
+    "lastChangeNone": "Geen wijzigingen",
+    "actorUnknown": "Beheerder",
+    "unknownCategory": "Categorie zonder beschrijving in het paneel.",
+    "auditLink": "Wijzigingsgeschiedenis in het logboek",
+    "keys": {
+      "acceptance_ip_user_agent": {
+        "label": "IP en user-agent van aanvaarding",
+        "description": "Het bij registratie opgeslagen IP-adres en de user-agent worden gewist; het aanvaardingsbewijs blijft."
+      },
+      "audit_log": {
+        "label": "Auditlogboek",
+        "description": "Geminimaliseerd logboek van beheeracties. Geen automatische taak."
+      },
+      "closed_application": {
+        "label": "Afgesloten sollicitaties",
+        "description": "Sollicitatie in eindstatus met gesprekken, meldingen en e-mails — geteld vanaf de afsluiting."
+      },
+      "confirmed_guest_request": {
+        "label": "Bevestigde aanvragen zonder account",
+        "description": "Buffer van de gastaanvraag na bevestiging; de sollicitatie blijft met momentopname."
+      },
+      "consent_evidence": {
+        "label": "Bewijs van toestemmingen",
+        "description": "Bewijs van toestemmingen na minimalisatie. Geen automatische taak."
+      },
+      "data_rights_request_log": {
+        "label": "Spoor van verzoeken over rechten",
+        "description": "Spoor van de behandeling van een inzage- of wisverzoek, zonder gegevens — vanaf de afronding."
+      },
+      "database_backup": {
+        "label": "Databaseback-ups",
+        "description": "Back-ups en exports van de database, opgeschoond door het back-upscript en de provider."
+      },
+      "deleted_file": {
+        "label": "Verwijderde bestanden",
+        "description": "Als verwijderd gemarkeerd bestand: databaserij en object in de bucket."
+      },
+      "deleted_profile": {
+        "label": "Verwijderde kandidaatprofielen",
+        "description": "Als verwijderd gemarkeerd profiel: volledige verwijdering van account en procesgegevens."
+      },
+      "erasure_tombstone": {
+        "label": "Register van wissingen",
+        "description": "Register van wissingen om na herstel van een back-up opnieuw toe te passen; moet de oudste back-up overleven."
+      },
+      "guest_ip_user_agent": {
+        "label": "IP en user-agent van gast",
+        "description": "Het IP-adres en de user-agent van de toestemming van de gast worden gewist."
+      },
+      "inactive_candidate_account": {
+        "label": "Inactieve kandidaataccounts",
+        "description": "Account zonder activiteit: waarschuwing per e-mail, daarna volledige verwijdering."
+      },
+      "inactive_candidate_cv": {
+        "label": "Cv van inactieve kandidaten",
+        "description": "Cv zonder accountactiviteit: waarschuwing per e-mail, daarna verwijdering van het bestand."
+      },
+      "inactive_searchable_profile": {
+        "label": "Inactieve vindbare profielen",
+        "description": "Een voor bedrijven zichtbaar profiel zonder activiteit wordt verborgen in de zoekfunctie."
+      },
+      "security_log": {
+        "label": "Applicatie- en beveiligingslogs",
+        "description": "Ruwe logs bij de hostingprovider — infrastructuurinstelling."
+      },
+      "storage_physical_deletion": {
+        "label": "Fysieke verwijdering van bestanden",
+        "description": "Verwijdering van het object uit de bucket na verwijdering van de rij; alarm vóór de termijn."
+      },
+      "unconfirmed_guest_request": {
+        "label": "Onbevestigde aanvragen zonder account",
+        "description": "Gastaanvraag zonder bevestiging — geteld vanaf de eerste verzending."
+      }
+    }
   }
 }

@@ -120,16 +120,20 @@ export function renderSiteAccessPage(opts: {
   rateLimited?: boolean;
   /** Wejście chwilowo niedostępne (#625: brak zaufanego adresu klienta w produkcji). */
   unavailable?: boolean;
+  /** Body żądania nad limitem rozmiaru (#911) — odrzucone przed parsowaniem formularza. */
+  tooLarge?: boolean;
 }): string {
   const t = COPY[opts.locale];
   const next = escapeHtml(opts.next);
-  const message = opts.unavailable
-    ? t.unavailable
-    : opts.rateLimited
-      ? t.rateLimited
-      : opts.error
-        ? t.error
-        : null;
+  const message = opts.tooLarge
+    ? t.payloadTooLarge
+    : opts.unavailable
+      ? t.unavailable
+      : opts.rateLimited
+        ? t.rateLimited
+        : opts.error
+          ? t.error
+          : null;
   const error = message
     ? `<p id="pb-access-error" role="alert" style="margin:0 0 1rem;color:#B42318;font-weight:600">${escapeHtml(message)}</p>`
     : "";

@@ -85,6 +85,8 @@ import {
   updateJobDraft,
   updatePublishedJob,
 } from '@/lib/actions/jobs';
+import { jobCityAssist } from '@/lib/actions/job-location';
+import type { JobCityAssist } from '@/lib/locations/job-city';
 import { isLocale, routing, type Locale } from '@/i18n/routing';
 import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
 import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
@@ -333,6 +335,17 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
   }
 }
 
+/** Najwyżej tyle kolejnych zapisów kroku, gdy pola zmieniają się w trakcie zapisu (#829). */
+const MAX_SAVE_ROUNDS = 3;
+
+/**
+ * Czy dane kroku zmieniły się względem zapisanego snapshotu (#829). `buildStepData`
+ * buduje obiekt w stałej kolejności kluczy, więc porównanie serializacji jest deterministyczne.
+ */
+function stepDataChanged(saved: unknown, current: unknown): boolean {
+  return JSON.stringify(saved) !== JSON.stringify(current);
+}
+
 /** Zamienia komunikat błędu z Zod na klucz i18n (fallback dla domyślnych komunikatów enum). */
 function toErrorKey(field: string, message: string): string {
   if (message.startsWith('job.error.')) return message;
@@ -532,6 +545,26 @@ export function JobWizard({
   }
 
   const [step, setStep] = React.useState<WizardStep>(1);
+
+  // P1-10: podpowiedź miasta ze słownika miejscowości (rozpoznana nazwa + propozycje).
+  // Tylko informacja — wpisany tekst zostaje, miejscowość do filtrów ustala baza przy zapisie.
+  const [cityAssist, setCityAssist] = React.useState<JobCityAssist | null>(null);
+  const cityRequest = React.useRef(0);
+  const cityValue = values.city;
+  React.useEffect(() => {
+    const request = ++cityRequest.current;
+    if (step !== 3 || cityValue.trim() === '') {
+      setCityAssist(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      jobCityAssist({ city: cityValue, locale })
+        .then((result) => { if (request === cityRequest.current) setCityAssist(result); })
+        .catch(() => { if (request === cityRequest.current) setCityAssist({ status: 'error' }); });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [cityValue, locale, step]);
+
   const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
   // #363: kod błędu z serwera → własny komunikat (zamiast zawsze „Nie udało się zapisać”).
@@ -727,13 +760,33 @@ export function JobWizard({
         if (created.demo) setDemo(true);
       }
 
-      const res = await updateJobDraft(id, current, data);
-      if (!res.ok) {
-        setSaveError(res.error);
-        setSaveState('error');
-        return false;
+      // #829: pola zostają edytowalne w trakcie zapisu, a akcja dostaje snapshot z chwili
+      // kliknięcia. Po sukcesie porównujemy snapshot z bieżącymi wartościami kroku — nowsza
+      // edycja jest walidowana i zapisywana ponownie, zanim kreator zmieni krok albo wyjdzie.
+      let saved = data;
+      for (let round = 0; ; round += 1) {
+        const res = await updateJobDraft(id, current, saved);
+        if (!res.ok) {
+          setSaveError(res.error);
+          setSaveState('error');
+          return false;
+        }
+        if (res.demo) setDemo(true);
+        if (!stepDataChanged(saved, buildStepData(current, getValues(), contentLocale))) break;
+        if (round + 1 >= MAX_SAVE_ROUNDS) {
+          // Wartości zmieniają się szybciej niż zapis — zostajemy w kreatorze bez „Zapisano”.
+          setSaveState('idle');
+          return false;
+        }
+        const next = validateStep(current, intent);
+        if (!next.ok) {
+          // Nowsza wartość jest niepoprawna: nie wychodzimy, błąd przy polu (Invariant #11).
+          setSaveState('idle');
+          scrollToFirstError(current, next.erroredFields);
+          return false;
+        }
+        saved = next.data;
       }
-      if (res.demo) setDemo(true);
       setSaveState('saved');
       setBadgeVisible(true);
       return true;
@@ -794,7 +847,12 @@ export function JobWizard({
       if (res.demo) setDemo(true);
       if (res.updatedAt) setEditVersion(res.updatedAt);
       if (res.slug) setPublicSlug(res.slug);
-      setSaveState('saved');
+      // #829: edycja w trakcie zapisu nie jest zapisana — bez „Zapisano”, przycisk znów aktywny.
+      const latest = getValues();
+      const changed = stepsData.some((saved, i) =>
+        stepDataChanged(saved, buildStepData((i + 1) as WizardStep, latest, contentLocale)),
+      );
+      setSaveState(changed ? 'idle' : 'saved');
     } catch {
       setSaveError('INTERNAL');
       setSaveState('error');
@@ -1092,10 +1150,23 @@ export function JobWizard({
                     id={domId('city')}
                     placeholder={t('cityPlaceholder')}
                     autoComplete="address-level2"
+                    list={`${domId('city')}-suggestions`}
                     aria-invalid={errors.city ? true : undefined}
-                    aria-describedby={errorDescription('city')}
+                    aria-describedby={[errorDescription('city'), `${domId('city')}-hint`].filter(Boolean).join(' ')}
                     {...register('city')}
                   />
+                  <datalist id={`${domId('city')}-suggestions`}>
+                    {(cityAssist?.status === 'ok' ? cityAssist.suggestions : []).map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                  <p id={`${domId('city')}-hint`} className={FORM_HINT} role="status" aria-live="polite">
+                    {cityAssist?.status === 'ok' && values.city.trim() !== ''
+                      ? cityAssist.match
+                        ? t('cityRecognized', { name: cityAssist.match.name })
+                        : t('cityNotRecognized')
+                      : null}
+                  </p>
                   <FieldError name="city" />
                 </div>
                 <div className={FORM_FIELD}>
