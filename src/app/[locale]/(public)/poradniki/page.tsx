@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { getAllGuides } from '@/lib/guides/guides';
 import { GuideCard } from '@/components/public/GuideCard';
 
@@ -72,30 +72,16 @@ export default async function GuidesListPage({ params }: PageProps) {
 
   const guides = getAllGuides(locale);
 
-  const jsonLd = {
-    '@context': 'https://schema.org/',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: tCommon('home'),
-        item: `${env.siteUrl}/${locale}`,
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: t('pageTitle'),
-        item: `${env.siteUrl}/${locale}${GUIDES_PATH}`,
-      },
-    ],
-  };
+  const jsonLd = buildBreadcrumbListJsonLd(
+    [{ label: tCommon('home'), href: '/' }, { label: t('pageTitle') }],
+    { base: env.siteUrl, locale, currentUrl: `${env.siteUrl}/${locale}${GUIDES_PATH}` },
+  );
 
   return (
     <div className="container py-6 md:py-10">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Breadcrumb */}

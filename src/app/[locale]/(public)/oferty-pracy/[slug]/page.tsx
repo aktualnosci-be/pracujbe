@@ -26,7 +26,12 @@ import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
 import { getCandidateMinAge } from '@/lib/data/age-policy';
-import { brandShareImageUrl, buildJobPostingJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
+import {
+  brandShareImageUrl,
+  buildBreadcrumbListJsonLd,
+  buildJobPostingJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo/structured-data';
 import { cn } from '@/lib/utils';
 import {
   EYEBROW,
@@ -72,6 +77,9 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
  */
 
 const BASE_PATH = '/oferty-pracy';
+/** Hub i landing branży — pośrednie pozycje BreadcrumbList (jak ścieżka landingu kategorii). */
+const HUB_PATH = '/praca';
+const CATEGORY_BASE = '/praca/kategoria';
 
 /** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
 const OG_LOCALE: Record<string, string> = {
@@ -198,7 +206,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, format, candidateMinAge] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -206,6 +214,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('common'),
     getTranslations('apply'),
     getTranslations('contentReport'),
+    getTranslations('landing'),
     getFormatter(),
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
@@ -237,6 +246,20 @@ export default async function JobDetailPage({ params }: PageProps) {
         workingHours: t('workingHours'),
         shifts: t('shifts'),
       });
+  // BreadcrumbList (SEO): Strona główna → Praca → branża (landing `/praca/kategoria/<klucz>`,
+  // jak ścieżka tego landingu) → oferta. Tylko tam, gdzie JobPosting — wersja bez tłumaczenia
+  // kanonizuje się do innego języka (#301), a oferta demo jest noindex (#297).
+  const breadcrumbJsonLd = jsonLd
+    ? buildBreadcrumbListJsonLd(
+        [
+          { label: tCommon('home'), href: '/' },
+          { label: tLanding('breadcrumbHub'), href: HUB_PATH },
+          { label: tCategory(job.category), href: `${CATEGORY_BASE}/${job.category}` },
+          { label: job.title },
+        ],
+        { base: env.siteUrl, locale, currentUrl: url },
+      )
+    : null;
   // Treść w innym języku niż strona → `lang` na fragmentach treści (WCAG 3.1.2).
   // Przekład (#33) jest w języku strony — bez `lang`, za to z oznaczeniem i linkiem do oryginału.
   // SEO bez zmian: wersja z przekładem nadal kanonizuje się do oryginału i nie ma JobPosting.
@@ -308,6 +331,12 @@ export default async function JobDetailPage({ params }: PageProps) {
           type="application/ld+json"
           // Escapowanie „<" chroni przed wyjściem z tagu <script> dla danych z bazy.
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
+        />
+      ) : null}
+      {breadcrumbJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
         />
       ) : null}
 
