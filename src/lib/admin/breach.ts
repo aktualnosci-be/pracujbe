@@ -410,14 +410,21 @@ export const BREACH_EXPORT_COLUMNS = [
   'updated_at',
 ] as const;
 
-/** Komórka CSV (RFC 4180) z ochroną przed formułami arkusza (`=`, `+`, `-`, `@`). */
+/**
+ * Komórka CSV (RFC 4180) z ochroną przed formułami arkusza (#523, #876). Neutralizuje pierwszy
+ * znak `= + - @`, tabulator i CR (RFC), a także LF (`\n`) i pełnoszerokie warianty operatorów
+ * (`＝ ＋ － ＠`), które OWASP wymienia jako niebezpieczne początki komórek CSV — arkusz otwiera
+ * je jak zwykły tekst formuły niezależnie od tego, który z tych znaków jest pierwszy.
+ */
+const FORMULA_LEAD = /^[=+\-@\t\r\n＝＋－＠]/;
+
 export function csvCell(value: unknown): string {
   let text: string;
   if (value === null || value === undefined) text = '';
   else if (Array.isArray(value)) text = value.join('; ');
   else if (typeof value === 'object') text = JSON.stringify(value);
   else text = String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (FORMULA_LEAD.test(text)) text = `'${text}`;
   return /[",\n\r;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
