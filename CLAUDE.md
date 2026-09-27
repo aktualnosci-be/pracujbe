@@ -2069,14 +2069,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sama witryna (`Origin`/`Sec-Fetch-Site`, inaczej 403), body ≤ 4 KB, wyłącznie pola `code`
   (spoza `ErrorCodes` → `INTERNAL`), `route` (`safeRoute`) i `release`; każde inne pole (np.
   `message`/`stack`) = 400 bez wysyłki (`src/lib/client-error/payload.ts`); limiter w pamięci
-  10/min po HMAC adresu (jak lejek ofert); bez `ERROR_WEBHOOK_URL` = 204 bez wysyłki. Klient
+  10/min po HMAC adresu (jak lejek ofert), adres wyłącznie z jedynego zaufanego nagłówka
+  proxy (`trustedClientIp`, #588/#602 — NIGDY z `X-Real-IP`/`X-Forwarded-For` wprost, #901,
+  jak wcześniej #646/#648 dla lejka ofert/CSP); bez `ERROR_WEBHOOK_URL` = 204 bez wysyłki. Klient
   (`src/lib/client-error/reporter.ts`, `ClientErrorReporter` w `[locale]/layout`, jawnie w
   `global-error`): nasłuch `error` (tylko skrypty własnej witryny) i `unhandledrejection` + granice
   błędów przez `captureError`; wysyła tylko kod, ścieżkę i wydanie (`credentials: 'omit'`,
   deduplikacja w karcie, ≤ 10 na załadowanie), pomija błędy z `digest` (zgłoszone już przez
-  `onRequestError`). Bez zgody cookies (diagnostyka bez identyfikatorów). Wiadomość „błąd w
-  przeglądarce”, osobne okno deduplikacji. Dowód: `client-error` (kontrole ujemne: payload z PII,
-  obcy Origin, strażnik grafu importów klienta), `client-error-capture`.
+  `onRequestError`). Odpowiedź `429` z limitera zwalnia klucz deduplikacji (#901) — odrzucona
+  próba nie jest cicho gubiona jako „wysłana” i nie zajmuje budżetu karty; odpowiedź `204`
+  (dostarczone) klucza nie zwalnia. Bez zgody cookies (diagnostyka bez identyfikatorów).
+  Wiadomość „błąd w przeglądarce”, osobne okno deduplikacji. Dowód: `client-error` (kontrole
+  ujemne: payload z PII, obcy Origin, spoofowany `X-Forwarded-For`/brak nagłówka proxy,
+  strażnik grafu importów klienta), `client-error-capture`.
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
