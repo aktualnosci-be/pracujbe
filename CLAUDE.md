@@ -2301,6 +2301,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
   `captureError` (`src/lib/error-report.ts`, izomorficzny) przekazuje tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
   query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
+  segment-UUID w trasie wysyłanej NA ZEWNĄTRZ (`safeRoute`, `src/lib/error-webhook/message.ts`)
+  jest zawsze szablonem `[id]` (np. `/candidate/aplikacje/[id]`) — inaczej niż ogólna redakcja
+  ścieżek (`redactPathSegment`), gdzie UUID zostaje jako identyfikator korelacyjny w logach
+  wewnętrznych; bez tego rozróżnienia raport z prywatnej strony szczegółu aplikacji
+  (`POST /api/client-error`) niósł do Discorda realny UUID rekordu kandydata/pracodawcy (#776,
+  naprawione — `UUID_RE` eksportowane z `src/lib/privacy/redact.ts`, dowód `error-webhook`
+  z kontrolą ujemną);
   ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
   awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
   Logi serwera — wspólne reguły redakcji
