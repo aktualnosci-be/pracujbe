@@ -84,6 +84,26 @@ const DIAL_CODES: ReadonlyArray<{ code: PhoneCountry; dial: string }> = [
 type FieldErrors = Partial<Record<GuestApplyField, string>>;
 type FormError = ErrorCode | 'network';
 
+/**
+ * Niewysłany szkic gościnnego formularza (#913). Trzymany przez rodzica (`ApplyModal`) w
+ * `useRef`, POZA stanem tego komponentu — dialog odmontowuje `GuestApplyForm` przy zamknięciu
+ * (Radix `Presence`), więc bez tego szkic ginie razem z komponentem. Celowo bez pól błędów/stanu
+ * wysyłki (te wracają do stanu początkowego przy każdym ponownym montażu) i bez tokenu Turnstile
+ * (jednorazowy). Nigdy nie trafia do `localStorage`/`sessionStorage` — żyje tylko w pamięci karty,
+ * do wysłania, zmiany oferty (nowa instancja komponentu) albo opuszczenia strony.
+ */
+export interface GuestApplyDraft {
+  fullName: string;
+  email: string;
+  dial: PhoneCountry;
+  phone: string;
+  availability: ApplyAvailabilityOption;
+  message: string;
+  consent: boolean;
+  ageBand: number | null;
+  answers: Record<string, ScreeningAnswerValue>;
+}
+
 export interface GuestApplyFormProps {
   jobId: string;
   companyName: string;
@@ -93,6 +113,13 @@ export interface GuestApplyFormProps {
   contentLocale?: string;
   /** #492/#576: próg konta z bazy; brak → 18 (tylko przedział 18+). */
   candidateMinAge?: number;
+  /** #913: niewysłany szkic z poprzedniego montażu (np. sprzed zamknięcia dialogu). */
+  initialDraft?: GuestApplyDraft;
+  /**
+   * #913: wywoływane po każdej zmianie pola — rodzic trzyma najnowszy szkic w `useRef`.
+   * `undefined` po udanej wysyłce: szkic przestał być potrzebny.
+   */
+  onDraftChange?: (draft: GuestApplyDraft | undefined) => void;
 }
 
 export function GuestApplyForm({
@@ -101,21 +128,27 @@ export function GuestApplyForm({
   screeningQuestions = [],
   contentLocale,
   candidateMinAge = CANDIDATE_MIN_AGE_FALLBACK,
+  initialDraft,
+  onDraftChange,
 }: GuestApplyFormProps): React.JSX.Element {
   const t = useTranslations('guestApply');
   const ta = useTranslations('apply');
   const tRoot = useTranslations();
   const locale = useLocale() as Locale;
 
-  const [fullName, setFullName] = React.useState('');
-  const [email, setEmail] = React.useState('');
-  const [dial, setDial] = React.useState<PhoneCountry>('PL');
-  const [phone, setPhone] = React.useState('');
-  const [availability, setAvailability] = React.useState<ApplyAvailabilityOption>('immediate');
-  const [message, setMessage] = React.useState('');
-  const [consent, setConsent] = React.useState(false);
-  const [ageBand, setAgeBand] = React.useState<number | null>(null);
-  const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>({});
+  const [fullName, setFullName] = React.useState(initialDraft?.fullName ?? '');
+  const [email, setEmail] = React.useState(initialDraft?.email ?? '');
+  const [dial, setDial] = React.useState<PhoneCountry>(initialDraft?.dial ?? 'PL');
+  const [phone, setPhone] = React.useState(initialDraft?.phone ?? '');
+  const [availability, setAvailability] = React.useState<ApplyAvailabilityOption>(
+    initialDraft?.availability ?? 'immediate',
+  );
+  const [message, setMessage] = React.useState(initialDraft?.message ?? '');
+  const [consent, setConsent] = React.useState(initialDraft?.consent ?? false);
+  const [ageBand, setAgeBand] = React.useState<number | null>(initialDraft?.ageBand ?? null);
+  const [answers, setAnswers] = React.useState<Record<string, ScreeningAnswerValue>>(
+    initialDraft?.answers ?? {},
+  );
   const [answerErrors, setAnswerErrors] = React.useState<Record<string, ScreeningAnswerError>>({});
   const [errors, setErrors] = React.useState<FieldErrors>({});
   const [formError, setFormError] = React.useState<FormError | null>(null);
@@ -144,6 +177,22 @@ export function GuestApplyForm({
   }, [formError]);
   React.useEffect(() => {
     if (sentTo) sentHeadingRef.current?.focus();
+  }, [sentTo]);
+
+  // #913: po każdym renderze (dopóki formularz nie został wysłany) przekazujemy rodzicowi
+  // najnowszy szkic — bez deps, celowo: to jedyny sposób, by złapać KAŻDĄ zmianę pola bez
+  // wypisywania osobnego efektu na każdy z nich. Po wysłaniu (`sentTo`) formularz znika za
+  // ekranem potwierdzenia — dalsze zmiany nie mogą już nadejść, więc efekt nic nie robi.
+  React.useEffect(() => {
+    if (sentTo) return;
+    onDraftChange?.({ fullName, email, dial, phone, availability, message, consent, ageBand, answers });
+  });
+  // Sukces wysyłki kończy potrzebę szkicu (Invariant #913: „aż do wysłania”) — jawnie czyścimy
+  // go u rodzica, żeby kolejne otwarcie tego samego dialogu (np. przez pomyłkę) nie odtworzyło
+  // już wysłanych danych.
+  React.useEffect(() => {
+    if (sentTo) onDraftChange?.(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentTo]);
 
   const focusQuestion = (questionId: string) => {
