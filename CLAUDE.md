@@ -887,6 +887,15 @@ są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najw
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
 kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
 na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
+Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
+filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
+etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
+w `src/lib/job-filter-summary.ts`: `parseJobListQuery` w języku widza, bez `date`; pusty/zły
+adres = brak listy), więc po zmianie nazwy albo języka kandydat nadal widzi, czego dotyczy
+alert. To samo źródło (`describeJobListFilters`) buduje chipy `/oferty-pracy` (etykieta +
+parametr do usunięcia), więc panel i lista nie rozjadą się. Test: unit
+`saved-search-filter-summary` (4 języki, zgodność z chipami, kontrole ujemne: pusty/nieprawidłowy
+adres, brak pustej listy).
 
 Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w

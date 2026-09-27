@@ -2942,6 +2942,7 @@
     "browse": "Przeglądaj oferty",
     "lastAlert": "Ostatni alert: {date}",
     "noAlertYet": "Jeszcze nie wysłaliśmy alertu.",
+    "filtersLabel": "Filtry wyszukiwania „{name}”",
     "open": "Pokaż oferty",
     "alerts": "Powiadamiaj o nowych ofertach",
     "frequency": "Jak często",

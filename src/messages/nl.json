@@ -2942,6 +2942,7 @@
     "browse": "Vacatures bekijken",
     "lastAlert": "Laatste melding: {date}",
     "noAlertYet": "We hebben nog geen melding verstuurd.",
+    "filtersLabel": "Filters van de zoekopdracht „{name}”",
     "open": "Vacatures tonen",
     "alerts": "Meld nieuwe vacatures",
     "frequency": "Hoe vaak",
