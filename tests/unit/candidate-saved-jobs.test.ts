@@ -53,7 +53,7 @@ describe('saved jobs read', () => {
     expect(fakeDb.callsTo('get_public_jobs')).toHaveLength(0);
   });
 
-  it('keeps saved jobs that lost their public page, without a link (0215)', async () => {
+  it('keeps saved jobs that lost their public page, without a link (0218)', async () => {
     const closedId = '11111111-1111-4111-8111-111111111112';
     db({ rows: [
       oldSavedJob,
@@ -67,8 +67,8 @@ describe('saved jobs read', () => {
     ]);
   });
 
-  it('RPC 0215 returns every own saved row with availability and slug only for public jobs', () => {
-    const sql = readFileSync('supabase/migrations/0215_saved_jobs_availability.sql', 'utf8');
+  it('RPC 0218 returns every own saved row with availability and slug only for public jobs', () => {
+    const sql = readFileSync('supabase/migrations/0218_saved_jobs_availability.sql', 'utf8');
     expect(sql).toMatch(/from public\.saved_jobs s\s+join public\.jobs j on j\.id = s\.job_id/i);
     expect(sql).toMatch(/where s\.candidate_id = auth\.uid\(\)\s+order by/i);
     expect(sql).toMatch(/case when v\.availability = 'available' then j\.slug end as slug/i);

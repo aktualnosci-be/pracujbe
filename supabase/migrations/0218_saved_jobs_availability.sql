@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0215_saved_jobs_availability.sql — zapisane oferty kandydata ze stanem oferty.
+-- 0218_saved_jobs_availability.sql — zapisane oferty kandydata ze stanem oferty.
 --
 -- Numer tymczasowy — ostateczny nada integrator.
 --

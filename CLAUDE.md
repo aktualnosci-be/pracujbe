@@ -723,7 +723,7 @@ zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie od
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
 
-Zapisane oferty bez strony publicznej (migracja `0215` — numer tymczasowy):
+Zapisane oferty bez strony publicznej (migracja `0218` — numer tymczasowy):
 `get_saved_jobs_display` zwraca KAŻDY własny zapis z `job_availability` (`available`/`closed`/
 `expired`/`paused`/`unavailable` — warunki `available` = `get_public_job`; usunięta oferta albo
 firma = `closed`, firma niezweryfikowana/zawieszona = `unavailable`), `slug` tylko dla
@@ -734,7 +734,7 @@ karta `SavedJobUnavailableItem`: etykieta stanu (`dashboard.savedState*`), tytu�
 linku i zakładki, „Usuń z zapisanych” (`toggleSavedJob(id, false)`, blokada w trakcie, komunikat
 `role="status"` z fokusem, błąd przy przycisku). Klasyfikacja zgodna z historią zgłoszeń (PR
 #758, `candidate_job_availability`) + stan `paused`; świadomie inline, bez zależności od 0206.
-Dowód: `rls.sql` sekcja SV215 (kontrola ujemna: definicja z 0066 gubi 5 z 6 zapisów),
+Dowód: `rls.sql` sekcja SV218 (kontrola ujemna: definicja z 0066 gubi 5 z 6 zapisów),
 `portal-candidate` (PG16: po terminie = `expired` bez slugu, usunięcie pod RLS), unit
 `saved-job-availability` i `candidate-saved-jobs` (kontrole ujemne), E2E `candidate-saved-closed`
 (fixture, 4 języki, 320 px, axe; mutacja strony = czerwony).

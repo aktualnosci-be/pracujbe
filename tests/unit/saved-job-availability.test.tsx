@@ -9,8 +9,8 @@ import fr from '@/messages/fr.json';
 import en from '@/messages/en.json';
 
 /**
- * 0215 — `/candidate/zapisane`: zapisana oferta bez strony publicznej ma kartę ze stanem, bez
- * linku do 404, z „Usuń z zapisanych”. SQL i klasyfikacja: `rls.sql` sekcja SV215.
+ * 0218 — `/candidate/zapisane`: zapisana oferta bez strony publicznej ma kartę ze stanem, bez
+ * linku do 404, z „Usuń z zapisanych”. SQL i klasyfikacja: `rls.sql` sekcja SV218.
  */
 
 const toggleSavedJob = vi.fn();
@@ -51,7 +51,7 @@ describe('toSavedJob', () => {
   it('never links an unknown state or a public job without slug', () => {
     expect(toSavedJob({ id: 'x', slug: 'praca', title: 'T', job_availability: 'deleted' })).toMatchObject({ availability: 'unavailable', slug: null });
     expect(toSavedJob({ id: 'x', slug: '', title: 'T', job_availability: 'available' })).toMatchObject({ availability: 'unavailable', slug: null });
-    // Baza sprzed 0215: kolumny brak, RPC zwracało wyłącznie oferty publiczne.
+    // Baza sprzed 0218: kolumny brak, RPC zwracało wyłącznie oferty publiczne.
     expect(toSavedJob({ id: 'x', slug: 'praca', title: 'T' })).toMatchObject({ availability: 'available', slug: 'praca' });
   });
 

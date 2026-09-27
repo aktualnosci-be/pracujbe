@@ -9,7 +9,7 @@ import { P_EXTENDED, PAPER, TAG, TEXT_LINK } from '@/components/dashboard/panel-
 import { cn } from '@/lib/utils';
 
 /**
- * Karta zapisanej oferty, która nie ma już strony publicznej (0215: zamknięta, wygasła,
+ * Karta zapisanej oferty, która nie ma już strony publicznej (0218: zamknięta, wygasła,
  * wstrzymana, usunięta albo firma bez weryfikacji). Ta sama kalka `.pp-passport` co
  * `CandidateJobPassport`, ale BEZ linku (strona odpowiedziałaby 404) i bez zakładki zapisu:
  * etykieta stanu, tytuł i firma (jeśli są) oraz przycisk „Usuń z zapisanych”.

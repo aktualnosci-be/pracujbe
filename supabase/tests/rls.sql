@@ -14299,7 +14299,7 @@ select pg_temp.assert(
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
 -- ============================================================================
--- SV215. Zapisane oferty ze stanem oferty (0215): `get_saved_jobs_display` zwraca KAŻDY
+-- SV218. Zapisane oferty ze stanem oferty (0218): `get_saved_jobs_display` zwraca KAŻDY
 --        własny zapis z `job_availability` (available/closed/expired/paused/unavailable),
 --        `slug` WYŁĄCZNIE dla oferty publicznej (brak linku do 404), tytuł i firmę dla każdego
 --        stanu; kandydat usuwa zapis oferty niedostępnej pod RLS.

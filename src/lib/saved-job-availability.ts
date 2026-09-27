@@ -1,5 +1,5 @@
 /**
- * Stan zapisanej oferty w panelu kandydata (`/candidate/zapisane`, migracja 0215).
+ * Stan zapisanej oferty w panelu kandydata (`/candidate/zapisane`, migracja 0218).
  *
  * `get_saved_jobs_display` zwraca każdy własny zapis z `job_availability`; `slug` tylko dla
  * oferty publicznej. Ten moduł jest jedynym miejscem, które zamienia wiersz RPC na stan karty:
@@ -46,7 +46,7 @@ function str(value: unknown): string {
 
 /**
  * Wiersz `get_saved_jobs_display` → karta. Nieznana wartość stanu = `unavailable` (bez linku).
- * Brak kolumny (baza sprzed 0215 zwraca tylko oferty publiczne) = `available`, gdy jest slug.
+ * Brak kolumny (baza sprzed 0218 zwraca tylko oferty publiczne) = `available`, gdy jest slug.
  */
 export function toSavedJob(row: Record<string, unknown>): SavedJob {
   const rawSlug = str(row['slug']).trim();
