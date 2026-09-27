@@ -8,6 +8,7 @@ import {
   getJobs,
   getJobsAvailableLocales,
   type CategoryKey,
+  type JobListItem,
   type LocationKey,
 } from '@/lib/jobs';
 import { MAX_JOB_LIST_OFFSET } from '@/lib/job-list-pagination';
@@ -134,6 +135,21 @@ function buildLanguages(
   const xDefault = locales.includes(routing.defaultLocale) ? routing.defaultLocale : locales[0];
   if (xDefault) languages['x-default'] = `${base}${pathForLocale(xDefault)}`;
   return languages;
+}
+
+/**
+ * `lastModified` sitemap ofert (#796): data ostatniej istotnej edycji treści (`updatedAt` z
+ * `jobs.updated_at`, 0860) zamiast wyłącznie daty pierwotnej publikacji — po edycji
+ * opublikowanej oferty (wynagrodzenie, opis, warunki…) `updated_at` jest nowsze niż
+ * `published_at`, więc Google dostaje wiarygodny sygnał do ponownego crawlowania. Brak pola
+ * (RPC bez niego, dane demonstracyjne, błąd odczytu) albo nieparsowalna wartość = zachowanie
+ * sprzed 0860 (fallback na `publishedAt`, a przy błędzie obu — bieżący czas).
+ */
+function jobLastModified(job: Pick<JobListItem, 'publishedAt' | 'updatedAt'>, fallback: Date): Date {
+  const updatedTs = job.updatedAt ? Date.parse(job.updatedAt) : NaN;
+  if (!Number.isNaN(updatedTs)) return new Date(updatedTs);
+  const publishedTs = Date.parse(job.publishedAt);
+  return Number.isNaN(publishedTs) ? fallback : new Date(publishedTs);
 }
 
 /**
@@ -276,8 +292,7 @@ async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitem
       const available = availableByJob?.[job.id];
       const jobLocales = availableByJob && available?.length ? available : locales;
       const languages = buildLanguages(base, jobLocales, (locale) => `/${locale}${path}`);
-      const publishedTs = Date.parse(job.publishedAt);
-      const lastModified = Number.isNaN(publishedTs) ? now : new Date(publishedTs);
+      const lastModified = jobLastModified(job, now);
       for (const locale of jobLocales) {
         entries.push({
           url: `${base}/${locale}${path}`,

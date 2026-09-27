@@ -67,4 +67,32 @@ describe('sitemap', () => {
     const urls = (await sitemap({ id: 1 })).map((entry) => entry.url).filter((url) => url.includes('/oferta-a'));
     expect(urls).toHaveLength(4);
   });
+
+  // #796: po istotnej edycji opublikowanej oferty `jobs.updated_at` jest nowsze niż
+  // `published_at` — sitemap ma to zobaczyć, inaczej Google dostaje przestarzały sygnał.
+  it('lastModified odzwierciedla ostatnią istotną edycję (updated_at), nie datę publikacji', async () => {
+    jobs.getJobsAvailableLocales.mockResolvedValue(null);
+    jobs.getJobs.mockResolvedValue({
+      jobs: [{ ...job('edited'), updatedAt: '2026-09-20T12:00:00.000Z' }],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+    });
+    const entries = await sitemap({ id: 1 });
+    const entry = entries.find((e) => e.url.endsWith('/oferta-edited'));
+    expect(entry?.lastModified).toEqual(new Date('2026-09-20T12:00:00.000Z'));
+    // Kontrola ujemna: gdyby sitemap nadal liczył wyłącznie z `publishedAt` (zachowanie
+    // sprzed 0860), ten test by nie przeszedł — data publikacji jest wcześniejsza.
+    expect(entry?.lastModified).not.toEqual(new Date('2026-09-01T00:00:00.000Z'));
+  });
+
+  // Bez `updatedAt` (dane demonstracyjne, profil firmy, starszy wiersz RPC) sitemap liczy
+  // `lastModified` z `publishedAt`, dokładnie jak przed 0860 — brak regresji fallbacku.
+  it('brak updated_at (dane demo / starszy RPC): lastModified z published_at jak dotychczas', async () => {
+    jobs.getJobsAvailableLocales.mockResolvedValue(null);
+    jobs.getJobs.mockResolvedValue({ jobs: [job('demo')], total: 1, page: 1, pageSize: 100 });
+    const entries = await sitemap({ id: 1 });
+    const entry = entries.find((e) => e.url.endsWith('/oferta-demo'));
+    expect(entry?.lastModified).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+  });
 });

@@ -180,6 +180,27 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     const result = await getJobs({ locale: 'pl' });
     expect(result.jobs[0]).not.toHaveProperty('companySlug');
   });
+  it('#796: mapuje updated_at (sitemap liczy lastModified z ostatniej edycji, nie publikacji)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{
+        id: 'id', slug: 'oferta', title: 'Elektryk',
+        published_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-15T09:30:00Z',
+      }],
+      total: 1, page: 1, pageSize: 12,
+    });
+    const result = await getJobs({ locale: 'pl' });
+    expect(result.jobs[0]).toMatchObject({ updatedAt: '2026-01-15T09:30:00Z' });
+  });
+  it('#796 kontrola ujemna: bez updated_at w wierszu pole zostaje puste (fallback na published_at)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.list.mockResolvedValue({
+      rows: [{ id: 'id', slug: 'oferta', title: 'Elektryk', published_at: '2026-01-01T00:00:00Z' }],
+      total: 1, page: 1, pageSize: 12,
+    });
+    const result = await getJobs({ locale: 'pl' });
+    expect(result.jobs[0]).not.toHaveProperty('updatedAt');
+  });
   it('brak oferty w bazie pozostaje brakiem oferty', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.detail.mockResolvedValue(null);

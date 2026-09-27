@@ -689,6 +689,15 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
   kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
   #301) i `company-profile` (nazwy = widoczna ścieżka).
+  `lastmod` po istotnej edycji (#796, migracja `0860` — numer tymczasowy): sitemap ofert liczył
+  `lastModified` wyłącznie z `published_at` — po edycji opublikowanej oferty (`update_published_job`,
+  0077/0144) baza aktualizuje `jobs.updated_at`, ale wpis w sitemapie nadal wskazywał dzień
+  pierwotnej publikacji. `get_public_jobs` zwraca dodatkowo `updated_at`; `JobListItem.updatedAt`
+  (`rowToJobListItem`, opcjonalne — brak w profilu firmy/danych demo/starszych wierszach) i
+  `src/app/sitemap.ts` (`jobLastModified`) liczą `lastModified` z niego, z fallbackiem na
+  `publishedAt` jak dotychczas. Dowód: `tests/unit/sitemap-seo.test.ts` (edycja przesuwa
+  `lastModified`, kontrola ujemna: brak daty publikacji), `tests/unit/jobs-postgres.test.ts`
+  (mapowanie `updated_at`, kontrola ujemna bez pola w wierszu).
   Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
   (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
   ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
