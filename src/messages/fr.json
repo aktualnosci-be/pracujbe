@@ -1052,7 +1052,12 @@
     "funnelDenied": "L’entonnoir de recrutement est visible par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
     "topMatchedDenied": "Les candidats correspondants sont visibles par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
     "topMatchedUnverified": "Les candidats correspondants apparaîtront après la vérification de l’entreprise.",
-    "topMatchedLoadError": "Impossible de charger les candidats correspondants."
+    "topMatchedLoadError": "Impossible de charger les candidats correspondants.",
+    "employerPanelErrorTitle": "Impossible de charger cette page de l’espace employeur",
+    "employerPanelErrorBody": "Réessayez dans un instant. Si le problème persiste, revenez au tableau de bord et ouvrez la page à nouveau.",
+    "employerPanelBackToDashboard": "Retour au tableau de bord",
+    "employerNotFoundTitle": "Nous n’avons pas trouvé cette page dans l’espace employeur",
+    "employerNotFoundBody": "L’adresse est incorrecte ou cet élément n’appartient pas à l’entreprise active. Si vous avez accès à plusieurs entreprises, vérifiez celle qui est sélectionnée dans le sélecteur d’entreprise."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
