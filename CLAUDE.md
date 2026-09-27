@@ -714,6 +714,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
   `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
   opublikowane przed 0156 zostają bez przeglądu.
+  Zakres portu (#745): `isPublicHttpsUrl` (`src/lib/company-links.ts`, lustro Zod
+  `companyLinksSchema`) dopuszcza port wyłącznie z prawdziwego zakresu TCP `1–65535` —
+  `:0` i wartości powyżej `65535` (np. `:99999`) są odrzucane na jedynej ścieżce, którą
+  pracodawca faktycznie zapisuje adres, zanim trafi do RPC `submit_company_links`. **Otwarte:**
+  baza (`public.public_https_url`, 0114/0141/0156) nadal luźno dopuszcza dowolne 1–5 cyfr portu
+  w CHECK — zaostrzenie wymaga osobnej migracji i decyzji o ewentualnych istniejących wierszach
+  poza zakresem.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -773,7 +780,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
-- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Wylogowanie po awarii inicjalizacji runtime auth (#902, bez migracji): `sessionCookieNames()` liczy nazwy cookies sesji WYŁĄCZNIE ze statycznej konfiguracji `createAuthServer` (`getCookies` z `better-auth/cookies`, `advanced.useSecureCookies: true`), bez odczytu `auth.$context` — `signOut` czyści cookie tej przeglądarki także wtedy, gdy `getAuthRuntime()` odrzuci PRZED przypisaniem `auth` (przejściowa awaria puli/bazy), nie tylko gdy sam `auth.api.signOut()` zawiedzie. Dowód: unit `auth-password-reset` (kontrola ujemna: bez gałęzi `else { await clearSessionCookies(); }` test czerwony). Domyślna nazwa
+- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Odświeżanie
+  sesji przy zwykłym przeglądaniu (#864, bez migracji): guardy paneli czytają sesję po stronie
+  Server Components, które nie mogą zapisać odnowionego `Set-Cookie` — samo przeglądanie panelu
+  (bez Server Action) nie przedłużało 7-dniowej sesji Better Auth. `SessionKeepAlive`
+  (`src/components/auth/SessionKeepAlive.tsx`) woła z przeglądarki jedyny dozwolony endpoint SDK,
+  `GET /api/auth/get-session` (ten sam origin → przeglądarka sama stosuje ewentualny `Set-Cookie`
+  z odpowiedzi, SDK sam decyduje wg progu `updateAge`); layouty przekazują `keepSessionAlive` do
+  `CandidateShell`/`EmployerShell`/`AdminShell` TYLKO gdy sesja jest prawdziwa (nie tryb demo).
+  Dowód: unit `session-keep-alive`, `panel-shells-keep-alive` (kontrola ujemna: bez prawdziwej
+  sesji `SessionKeepAlive` się nie montuje). Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Wylogowanie po awarii inicjalizacji runtime auth (#902, bez migracji): `sessionCookieNames()` liczy nazwy cookies sesji WYŁĄCZNIE ze statycznej konfiguracji `createAuthServer` (`getCookies` z `better-auth/cookies`, `advanced.useSecureCookies: true`), bez odczytu `auth.$context` — `signOut` czyści cookie tej przeglądarki także wtedy, gdy `getAuthRuntime()` odrzuci PRZED przypisaniem `auth` (przejściowa awaria puli/bazy), nie tylko gdy sam `auth.api.signOut()` zawiedzie. Dowód: unit `auth-password-reset` (kontrola ujemna: bez gałęzi `else { await clearSessionCookies(); }` test czerwony). Domyślna nazwa
   firmy w formularzu po nieudanym bootstrapie (#365, `src/lib/auth/signup-company-name.ts`): metadane
   rejestracji (`raw_user_meta_data.company_name`) czytane pod WŁASNYM `identity.id` (Better Auth
   `internalAdapter.findUserById`, nigdy z URL/formularza) wypełniają `CompanyOnboarding` w
@@ -2107,6 +2123,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Cel formularza odwołania = snapshot udanego odczytu (#884, bez migracji):
+  `ReportCaseLookup` przechowuje numer sprawy i kod dostępu, którymi POWIODŁO SIĘ sprawdzenie
+  (`reportTarget`, ustawiany razem z `report`), zamiast czytać `getValues()` z pól formularza
+  przy renderze `AppealForm` — edycja pól po odpowiedzi (albo podczas oczekiwania na nią, bez
+  wysłania drugiego odczytu) nie zmienia już celu odwołania na inną sprawę. Oba pola
+  dodatkowo `disabled` podczas `isSubmitting` (obrona w głąb). Dowód: unit
+  `report-case-lookup-appeal-target` (kontrola: bez edycji celuje w A; regresja: edycja na B
+  podczas oczekiwania na A nadal celuje w A — czerwony na kodzie sprzed naprawy; pola
+  zablokowane podczas oczekiwania).
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
@@ -2291,6 +2316,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `site-access.test.ts` (body bez `Content-Length` nad limitem, deklarowany `Content-Length` nad
   limitem ze strumieniem, który nigdy się nie kończy — czyli obietnica, że handler NIE czyta go
   w całości, bramka wyłączona nadal odrzuca, kontrola ujemna: body w granicach limitu bez zmian).
+  Wspólny limit aplikacji/wiadomości po IP (#852, bez migracji): `applyToJob`/`sendMessage`
+  liczyły limit (`checkRateLimit('apply'|'message', …)`) TYLKO po adresie IP i PRZED sprawdzeniem
+  sesji — anonimowe wywołanie (bez konta, np. bezpośrednio do Server Action) zdążało zużyć
+  wspólny bucket przed odrzuceniem, blokując realnych, zalogowanych użytkowników za tym samym
+  NAT/CGNAT/biurem. Naprawa: sesja PRZED limitem (brak konta = `UNAUTHENTICATED`/
+  `PERMISSION_DENIED` bez dotknięcia jakiegokolwiek licznika), limit biznesowy (20 aplikacji /
+  60 wiadomości na godz.) liczony PER KONTO (`identifier: me.id, perIp: false`) — dwa konta za
+  tym samym adresem mają niezależne budżety, jedno konto nie omija limitu zmieniając sieć.
+  Dodatkowa, znacznie szersza ochrona przed automatyzacją wielu kont z jednego adresu zostaje
+  jako osobny, wyższy próg (`apply-ip` 200/godz., `message-ip` 600/godz.) — nie blokuje
+  populacji współdzielącej IP po zwykłym użyciu limitu jednej osoby. Dowód: unit
+  `rate-limit-account-scope` (limit budowany z identyfikatora konta, anonimowe wywołanie zero
+  wywołań limitera, dwa konta = dwa niezależne klucze, kontrola ujemna: przekroczenie limitu
+  konta nadal blokuje).
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
   `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
@@ -2370,6 +2409,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`/sitemap/1.xml`, `2.xml`, …) tam wskazanej (`parseRobotsSitemapShardPaths`), więc awaria
   generowania katalogu ofert (zapytanie, paginacja, tłumaczenia) nie umyka już wynikowi
   „wszystkie sprawdzenia zgodne” mimo zielonego `id=0`. Katalog bez partii ofert = bez zmian.
+  Pierwsze wystąpienie dyrektywy CSP (#900): `securityHeaderProblems` sprawdzała obecność
+  wymaganego tekstu GDZIEKOLWIEK w nagłówku (`directives.includes(...)`) — duplikat tej samej
+  nazwy dyrektywy z SŁABSZĄ pierwszą wartością (np. `frame-ancestors *` przed poprawnym
+  `frame-ancestors 'none'`) dawał fałszywie zielony wynik, mimo że zgodnie z CSP Level 3
+  przeglądarka stosuje wyłącznie pierwsze wystąpienie nazwy. Teraz porównanie bierze TYLKO
+  pierwszą wartość każdej nazwy dyrektywy z nagłówka. Dowód: test `railway-prod-smoke`
+  (kanarek z odtworzenia issue + kontrola ujemna: ten sam zestaw bez duplikatów zostaje zielony).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -2659,6 +2705,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  Unieważnianie cache po zmianie cyklu życia oferty (#775, bez migracji): `publishJob`,
+  `setJobStatus` (pause/resume/close/reopen) i `expire_due_jobs` w `/api/maintenance` (gdy
+  wygasiła choć jedną ofertę) wołają wspólny `revalidatePublicJobPaths()`
+  (`src/lib/jobs/public-cache.ts`) — rewaliduje wzorce z dynamicznym segmentem + typ `'page'`
+  (`/[locale]`, `/[locale]/oferty-pracy/[slug]`, `/[locale]/praca/kategoria/[category]`,
+  `/[locale]/praca/miasto/[city]`), więc bez znajomości dokładnego sluga/kategorii/miasta
+  zmienionej oferty. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
+  tylko widoków panelu (setJobStatus) — poprzednio wyrenderowana strona (i `JobPosting`) mogła
+  zostać widoczna jeszcze przez okno rewalidacji (60 s) po pauzie/zamknięciu/wygaśnięciu, a
+  nowo opublikowana/wznowiona oferta nie pojawiała się od razu. Rewalidacja następuje wyłącznie
+  po udanej transakcji (błąd RPC → bez wywołania). Testy: `job-lifecycle-public-cache`,
+  `job-expiry` (kontrola ujemna: 0 wygaszonych ofert i błąd RPC nie rewalidują niczego).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy: landingi przez `prerenderParamsAtBuild` (strony na pierwsze
   żądanie), odczyty ofert w `next build` zwracają pusty wynik (`isBuildPhase`), a layout `[locale]`

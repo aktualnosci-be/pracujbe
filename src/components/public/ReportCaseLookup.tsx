@@ -68,6 +68,11 @@ export function ReportCaseLookup(): React.JSX.Element {
   const formatDate = React.useMemo(() => createAppDateFormatter(locale, { withTime: true }), [locale]);
 
   const [report, setReport] = React.useState<ReportCaseView | null>(null);
+  // Niezmienny snapshot numeru sprawy i kodu dostępu, którymi POWIODŁO SIĘ sprawdzenie —
+  // ustawiany razem z `report`, nigdy z aktualnej treści pól. Formularz odwołania (#884) musi
+  // zawsze celować w sprawę widoczną na ekranie, nawet gdy użytkownik zdąży zmienić pola
+  // podczas oczekiwania na odpowiedź albo po jej otrzymaniu.
+  const [reportTarget, setReportTarget] = React.useState<ReportCaseLookupInput | null>(null);
   const [serverError, setServerError] = React.useState<ErrorCode | 'NETWORK' | null>(null);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
   const resultRef = React.useRef<HTMLHeadingElement | null>(null);
@@ -76,7 +81,6 @@ export function ReportCaseLookup(): React.JSX.Element {
     register,
     handleSubmit,
     reset,
-    getValues,
     formState: { errors, isSubmitting },
   } = useForm<ReportCaseLookupInput>({
     resolver: zodResolver(reportCaseLookupSchema),
@@ -86,10 +90,15 @@ export function ReportCaseLookup(): React.JSX.Element {
   const check = React.useCallback(async (values: ReportCaseLookupInput) => {
     setServerError(null);
     setReport(null);
+    setReportTarget(null);
     try {
       const result = await lookupReportCase(values);
-      if (result.ok) setReport(result.report);
-      else setServerError(result.error);
+      if (result.ok) {
+        setReport(result.report);
+        setReportTarget(values);
+      } else {
+        setServerError(result.error);
+      }
     } catch {
       setServerError('NETWORK');
     }
@@ -166,6 +175,7 @@ export function ReportCaseLookup(): React.JSX.Element {
             id="case-number"
             autoComplete="off"
             spellCheck={false}
+            disabled={isSubmitting}
             aria-invalid={caseError ? true : undefined}
             aria-describedby={caseError ? 'case-number-error' : undefined}
             {...register('caseNumber')}
@@ -182,6 +192,7 @@ export function ReportCaseLookup(): React.JSX.Element {
             id="access-code"
             autoComplete="off"
             spellCheck={false}
+            disabled={isSubmitting}
             aria-invalid={codeError ? true : undefined}
             aria-describedby={codeError ? 'access-code-error' : undefined}
             {...register('accessCode')}
@@ -265,15 +276,17 @@ export function ReportCaseLookup(): React.JSX.Element {
                   ? t('appealDeadline', { date: formatDate(report.appealDeadline) })
                   : t('appealDeadlineNotStarted')}
               </p>
-              <AppealForm
-                target={{
-                  kind: 'case',
-                  caseNumber: getValues('caseNumber'),
-                  accessCode: getValues('accessCode'),
-                }}
-                messages="contentReport"
-                onSubmitted={() => undefined}
-              />
+              {reportTarget ? (
+                <AppealForm
+                  target={{
+                    kind: 'case',
+                    caseNumber: reportTarget.caseNumber,
+                    accessCode: reportTarget.accessCode,
+                  }}
+                  messages="contentReport"
+                  onSubmitted={() => undefined}
+                />
+              ) : null}
               <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
                 {t('appealLegalPlaceholder')}
               </p>
@@ -298,16 +311,18 @@ export function ReportCaseLookup(): React.JSX.Element {
                       ? t('appealDeadline', { date: formatDate(report.restoration.appealDeadline) })
                       : t('restorationAppealDeadlineNotStarted')}
                   </p>
-                  <AppealForm
-                    target={{
-                      kind: 'case',
-                      caseNumber: getValues('caseNumber'),
-                      accessCode: getValues('accessCode'),
-                      restoration: true,
-                    }}
-                    messages="contentReport"
-                    onSubmitted={() => undefined}
-                  />
+                  {reportTarget ? (
+                    <AppealForm
+                      target={{
+                        kind: 'case',
+                        caseNumber: reportTarget.caseNumber,
+                        accessCode: reportTarget.accessCode,
+                        restoration: true,
+                      }}
+                      messages="contentReport"
+                      onSubmitted={() => undefined}
+                    />
+                  ) : null}
                   <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
                     {t('appealLegalPlaceholder')}
                   </p>
