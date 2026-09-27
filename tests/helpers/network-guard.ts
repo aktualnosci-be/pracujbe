@@ -18,16 +18,37 @@
  * osobny proces — blokada go nie obejmuje (strony renderuje z `setContent`/lokalnych plików).
  */
 import net from 'node:net';
+import { relative } from 'node:path';
+import { expect } from 'vitest';
+
+/**
+ * Bieżący test (plik + pełna nazwa) ze stanu `expect` Vitest — żeby błąd wskazywał winowajcę
+ * także wtedy, gdy żądanie wychodzi z głęboko zagnieżdżonego modułu. Poza testem (np. import
+ * modułu na poziomie pliku) = sam plik albo null.
+ */
+export function currentTestLabel(): string | null {
+  try {
+    const state = expect.getState();
+    const file = state.testPath ? relative(process.cwd(), state.testPath) : null;
+    const name = state.currentTestName ?? null;
+    if (file && name) return `${file} › ${name}`;
+    return file ?? name;
+  } catch {
+    return null;
+  }
+}
 
 export class NetworkBlockedError extends Error {
   readonly code = 'TEST_NETWORK_BLOCKED';
-  constructor(readonly host: string, readonly via: string) {
+  readonly test: string | null;
+  constructor(readonly host: string, readonly via: string, test: string | null = currentTestLabel()) {
     super(
-      `[network-guard] Test próbował połączyć się z „${host}” (${via}). ` +
+      `[network-guard] Test ${test ? `„${test}” ` : ''}próbował połączyć się z „${host}” (${via}). ` +
         'Testy jednostkowe nie mogą wychodzić do sieci — użyj atrapy (vi.stubGlobal("fetch", …), ' +
         'serwer na 127.0.0.1) albo dodaj host do TEST_NETWORK_ALLOW dla świadomego testu na żywo.',
     );
     this.name = 'NetworkBlockedError';
+    this.test = test;
   }
 }
 
@@ -46,6 +67,16 @@ export function extraAllowedHosts(env: NodeJS.ProcessEnv = process.env): string[
     .split(',')
     .map(normalizeHost)
     .filter(Boolean);
+}
+
+/** Host bazy z `INTEGRATION_PG_ADMIN_URL` (setup integracji dopuszcza go jawnie). */
+export function integrationAllowedHost(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return normalizeHost(new URL(url).hostname) || null;
+  } catch {
+    return null;
+  }
 }
 
 export function isAllowedHost(host: string, extra: readonly string[] = extraAllowedHosts()): boolean {

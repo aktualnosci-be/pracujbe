@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test } from '@playwright/test';
 
 import { rejectOptionalCookies } from './fixtures/messages';

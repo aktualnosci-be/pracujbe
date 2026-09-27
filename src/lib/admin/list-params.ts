@@ -313,6 +313,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'breach.closed': 'auditActionBreachClosed',
   'breach.reopened': 'auditActionBreachReopened',
   'breach.exported': 'auditActionBreachExported',
+  'audit_log.exported': 'auditActionAuditExported',
   'breach.subjects_notified': 'auditActionBreachSubjectsNotified',
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
