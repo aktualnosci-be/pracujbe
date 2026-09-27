@@ -2452,6 +2452,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
+  Rejestracja Service Workera po hydratacji (#797): `ServiceWorkerRegister` czekał wyłącznie na
+  przyszłe zdarzenie `window.load` — gdy efekt montował się już po `document.readyState ===
+  'complete'` (późna hydratacja/wolniejsze urządzenie), `load` już minęło i listener nigdy się
+  nie odpalał, więc SW nie rejestrował się na tej wizycie. Rejestracja następuje teraz od razu
+  przy `readyState === 'complete'`, inaczej czeka na `load` (`{ once: true }`) jak dotąd. Test:
+  `tests/unit/service-worker-register.test.tsx` (z kontrolą ujemną).
 
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
