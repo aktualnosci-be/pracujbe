@@ -3,6 +3,7 @@ import { BellRing } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
+import type { Locale } from '@/i18n/routing';
 import { SavedSearchList } from '@/components/candidate/SavedSearchList';
 import { loadMySavedSearches } from '@/lib/data/saved-searches';
 import { createAppDateFormatter } from '@/lib/datetime';
@@ -72,6 +73,7 @@ export default async function CandidateSavedSearchesPage({
         </section>
       ) : (
         <SavedSearchList
+          currentLocale={locale as Locale}
           searches={load.searches.map((search) => ({
             ...search,
             lastAlertLabel: search.lastAlertAt ? formatDate(search.lastAlertAt) : null,

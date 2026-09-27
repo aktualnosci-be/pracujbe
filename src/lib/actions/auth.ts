@@ -21,7 +21,8 @@
 import { getLocale } from 'next-intl/server';
 import { cookies, headers } from 'next/headers';
 import { redirect as redirectPath } from 'next/navigation';
-import { parseSetCookieHeader, toCookieOptions } from 'better-auth/cookies';
+import { getCookies, parseSetCookieHeader, toCookieOptions } from 'better-auth/cookies';
+import type { BetterAuthOptions } from 'better-auth';
 import { z } from 'zod/v3';
 
 import { redirect } from '@/i18n/navigation';
@@ -170,14 +171,30 @@ async function applyAuthCookies(responseHeaders: Headers | null | undefined): Pr
   });
 }
 
-/** Nazwy cookies sesji SDK (z prefiksem `__Secure-`). */
-async function sessionCookieNames(auth: AuthRuntime): Promise<string[]> {
-  const context = await auth.$context;
+/**
+ * Nazwy cookies sesji SDK (z prefiksem `__Secure-`), liczone WYŁĄCZNIE ze statycznej
+ * konfiguracji `createAuthServer` (`advanced.useSecureCookies: true`, bez własnego
+ * `cookiePrefix`/`cookies`/`crossSubDomainCookies`) — bez odczytu `auth.$context`. Dzięki temu
+ * nazwy są znane nawet wtedy, gdy inicjalizacja runtime auth albo pierwsze zapytanie do bazy
+ * się nie powiodły (#902): cookie tej przeglądarki i tak da się usunąć.
+ */
+function sessionCookieNames(): string[] {
+  const authCookies = getCookies({ advanced: { useSecureCookies: true } } as BetterAuthOptions);
   return [
-    context.authCookies.sessionToken.name,
-    context.authCookies.sessionData.name,
-    context.authCookies.dontRememberToken.name,
+    authCookies.sessionToken.name,
+    authCookies.sessionData.name,
+    authCookies.dontRememberToken.name,
   ];
+}
+
+/** Kasuje cookies sesji tej przeglądarki. Best-effort, niezależnie od stanu runtime auth (#902). */
+async function clearSessionCookies(): Promise<void> {
+  try {
+    const store = await cookies();
+    for (const name of sessionCookieNames()) store.delete(name);
+  } catch (error) {
+    captureError(error, { area: 'auth.discardSession.cookies' });
+  }
 }
 
 /**
@@ -195,12 +212,7 @@ async function discardSession(
   } catch (error) {
     captureError(error, { area: 'auth.discardSession' });
   }
-  try {
-    const store = await cookies();
-    for (const name of await sessionCookieNames(auth)) store.delete(name);
-  } catch (error) {
-    captureError(error, { area: 'auth.discardSession.cookies' });
-  }
+  await clearSessionCookies();
 }
 
 /**
@@ -613,7 +625,11 @@ export async function signOut(): Promise<void> {
       await applyAuthCookies(signedOut.headers);
     } catch (error) {
       captureError(error, { area: 'auth.signOut' });
+      // `auth` może pozostać nieustawione (błąd `getAuthRuntime()` — inicjalizacja albo
+      // pierwsze zapytanie do bazy): `discardSession` wymaga `auth.$context`, więc cookie
+      // czyścimy zawsze niezależnie od tego, czy runtime się uruchomił (#902).
       if (auth) await discardSession(auth);
+      else await clearSessionCookies();
     }
   }
   redirect({ href: '/logowanie', locale });

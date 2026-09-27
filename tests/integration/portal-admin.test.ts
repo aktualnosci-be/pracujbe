@@ -295,3 +295,34 @@ describe('panel admina na PostgreSQL (#25) — akcje i dziennik', () => {
     expect(await actions.checkCompanyVies('00000000-0000-4000-8000-000000000000')).toEqual({ ok: false, error: 'NOT_FOUND' });
   });
 });
+
+describe('dziennik: filtr aktora przy ponad 100 pasujących profilach (#857/#844)', () => {
+  it('wpisy aktora spoza pierwszych 100 dopasowań trafiają do listy i eksportu', async () => {
+    actAs(admin);
+    const pg = db();
+    // 120 kont o wspólnym fragmencie nazwiska; wpis dziennika ma tylko OSTATNIE z nich.
+    const created = await pg.admin.query(`INSERT INTO auth.users(id, email, name, raw_user_meta_data)
+      SELECT gen_random_uuid(), 'wspolny' || lpad(g::text, 3, '0') || '@example.invalid', 'Test',
+             '{"role":"employer","locale":"pl"}'::jsonb
+        FROM generate_series(1, 120) g
+      RETURNING id, email`);
+    const ids = created.rows.map((r: { id: string }) => r.id);
+    await pg.admin.query(`UPDATE public.profiles SET first_name = 'Jan', last_name = 'Wspólnyk' WHERE id = ANY($1::uuid[])`, [ids]);
+    const target = (created.rows.find((r: { email: string }) => r.email.startsWith('wspolny120')) as { id: string }).id;
+    await pg.admin.query(`INSERT INTO public.audit_logs(actor_id, action, entity_type, entity_id, after_data)
+      VALUES ($1, 'company.status_changed', 'company', $2, '{"status":"verified"}'::jsonb)`, [target, ownedCompany]);
+
+    // Kontrola ujemna: dawny pośredni krok (id profili z LIMIT 100) nie obejmuje tego aktora,
+    // więc test byłby czerwony na poprzedniej implementacji.
+    const old = await pg.admin.query(`SELECT id FROM public.profiles
+      WHERE (first_name::text ILIKE $1 OR last_name::text ILIKE $1 OR email::text ILIKE $1) LIMIT 100`, ['%Wspólnyk%']);
+    expect(old.rows.map((r: { id: string }) => r.id)).not.toContain(target);
+
+    const list = await data.listAuditLogs({ actor: 'Wspólnyk' });
+    if (list.status !== 'ok') throw new Error('expected ok');
+    expect(list.rows.map((r) => r.actorId)).toEqual([target]);
+    const exported = await data.exportAuditLogs({ actor: 'Wspólnyk' }, 'json');
+    expect(exported?.rows.map((r) => r.actorId)).toEqual([target]);
+    expect(exported?.truncated).toBe(false);
+  });
+});

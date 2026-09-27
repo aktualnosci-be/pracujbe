@@ -48,6 +48,14 @@ const QUESTIONS: ScreeningQuestion[] = [
     prompt: { pl: 'Doświadczenie z tachografem cyfrowym', en: 'Experience with a digital tachograph' },
     options: [],
   },
+  {
+    id: 'f1010000-0000-4000-8000-000000000005',
+    position: 4,
+    type: 'yes_no',
+    required: false,
+    prompt: { pl: 'Czy masz certyfikat ADR?', en: 'Do you hold an ADR certificate?' },
+    options: [],
+  },
 ];
 
 export function fixtureScreeningQuestions(jobId: string): ScreeningQuestion[] {

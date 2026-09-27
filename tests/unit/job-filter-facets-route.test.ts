@@ -15,8 +15,15 @@ vi.mock('@/lib/rate-limit', () => ({
 const getJobFilterFacets = vi.fn();
 const getJobs = vi.fn();
 vi.mock('@/lib/jobs', () => ({
-  getJobFilterFacets: (params: unknown) => getJobFilterFacets(params),
-  getJobs: (params: unknown) => getJobs(params),
+  getJobFilterFacets: (params: unknown, viewer?: unknown) => getJobFilterFacets(params, viewer),
+  getJobs: (params: unknown, viewer?: unknown) => getJobs(params, viewer),
+}));
+
+// #874: kandydat identyczny z tym, który przekazuje SSR listy ofert (`readCandidateViewerId`).
+// Domyślnie gość (`null`); poszczególne testy nadpisują `mockResolvedValueOnce`.
+const readCandidateViewerId = vi.fn(async () => null as string | null);
+vi.mock('@/lib/auth/candidate-viewer', () => ({
+  readCandidateViewerId: () => readCandidateViewerId(),
 }));
 
 import { GET } from '@/app/api/job-filter-facets/route';
@@ -42,7 +49,14 @@ beforeEach(() => {
   checkRateLimit.mockResolvedValue(true);
   getJobFilterFacets.mockReset();
   getJobs.mockReset();
+  readCandidateViewerId.mockReset();
+  readCandidateViewerId.mockResolvedValue(null);
 });
+
+/** Odczekuje kolejkę mikrozadań tyle razy, ile jest asynchronicznych `await` przed agregacją. */
+async function flushMicrotasks(times = 3): Promise<void> {
+  for (let i = 0; i < times; i += 1) await Promise.resolve();
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -78,7 +92,7 @@ describe('GET /api/job-filter-facets — cache + single-flight (#595)', () => {
     );
     const query = '?locale=pl&keyword=magazyn&category=warehouse';
     const first = Promise.all([GET(request(query)), GET(request(query))]);
-    await Promise.resolve();
+    await flushMicrotasks();
     resolveFacets(facetsResult(11));
     const [r1, r2] = await first;
     expect(r1.status).toBe(200);
@@ -98,5 +112,63 @@ describe('GET /api/job-filter-facets — cache + single-flight (#595)', () => {
     expect(await a.json()).toMatchObject({ total: 3 });
     expect(await b.json()).toMatchObject({ total: 9 });
     expect(getJobFilterFacets).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('GET /api/job-filter-facets — kontekst kandydata (#874)', () => {
+  it('przekazuje zweryfikowanego kandydata z sesji do agregacji facetów i listy demo', async () => {
+    readCandidateViewerId.mockResolvedValue('11111111-1111-1111-1111-111111111111');
+    getJobFilterFacets.mockResolvedValue(facetsResult(2));
+    await GET(request('?locale=pl&immediate=1&keyword=t874a'));
+    expect(getJobFilterFacets).toHaveBeenCalledWith(
+      expect.objectContaining({ immediate: true }),
+      { candidateId: '11111111-1111-1111-1111-111111111111' },
+    );
+  });
+
+  it('przekazuje kandydata też do zapasowej listy demo (getJobs), gdy baza nie ma agregatu', async () => {
+    readCandidateViewerId.mockResolvedValue('22222222-2222-2222-2222-222222222222');
+    getJobFilterFacets.mockResolvedValue(null);
+    getJobs.mockResolvedValue({ jobs: [], total: 0, page: 1, pageSize: 100, maxPage: 1 });
+    await GET(request('?locale=pl&keyword=t874b'));
+    expect(getJobs).toHaveBeenCalledWith(
+      expect.any(Object),
+      { candidateId: '22222222-2222-2222-2222-222222222222' },
+    );
+  });
+
+  it('ten sam filtr, RÓŻNI kandydaci → OSOBNA agregacja (blokady firm jednego konta nie trafiają do drugiego)', async () => {
+    // Zapytanie unikalne dla tego testu (osobny klucz cache po stronie `keyword`) — jedyna
+    // zmienna między trzema wywołaniami jest kandydat z sesji.
+    const query = '?locale=pl&immediate=1&keyword=t874c';
+    getJobFilterFacets
+      .mockResolvedValueOnce(facetsResult(1)) // gość: firma zablokowana przez kandydata A jest widoczna
+      .mockResolvedValueOnce(facetsResult(2)) // kandydat A: bez ofert zablokowanej firmy
+      .mockResolvedValueOnce(facetsResult(1)); // kandydat B: znów widzi wszystko
+
+    readCandidateViewerId.mockResolvedValueOnce(null);
+    const guest = await GET(request(query));
+
+    readCandidateViewerId.mockResolvedValueOnce('11111111-1111-1111-1111-111111111111');
+    const candidateA = await GET(request(query));
+
+    readCandidateViewerId.mockResolvedValueOnce('22222222-2222-2222-2222-222222222222');
+    const candidateB = await GET(request(query));
+
+    expect(await guest.json()).toMatchObject({ total: 1 });
+    expect(await candidateA.json()).toMatchObject({ total: 2 });
+    expect(await candidateB.json()).toMatchObject({ total: 1 });
+    // Trzy osobne agregacje — bez tej poprawki (klucz cache bez candidateId) druga i trzecia
+    // trafiłyby w cache pierwszej i getJobFilterFacets zostałoby wywołane tylko raz.
+    expect(getJobFilterFacets).toHaveBeenCalledTimes(3);
+  });
+
+  it('kontrola ujemna: ten sam kandydat, drugie żądanie w oknie cache → BEZ nowej agregacji', async () => {
+    readCandidateViewerId.mockResolvedValue('11111111-1111-1111-1111-111111111111');
+    getJobFilterFacets.mockResolvedValue(facetsResult(4));
+    const query = '?locale=pl&immediate=1&keyword=t874d';
+    await GET(request(query));
+    await GET(request(query));
+    expect(getJobFilterFacets).toHaveBeenCalledTimes(1);
   });
 });

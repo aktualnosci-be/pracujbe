@@ -333,9 +333,14 @@ jobs:
   e2e-shard:
     name: E2E shard ${{ matrix.shard }}/3
     # Zestaw demo (`playwright.config.ts`, projekt `chromium`) podzielony na 3 równoległe
-    # shardy. Na jednym runnerze sam krok „Run E2E” trwał ~11 min. Każdy shard zapisuje raport
-    # cząstkowy (blob); łączy je job zbiorczy „E2E (Playwright)”. Test z pomiarem czasu
-    # (projekt `chromium-timing`) biegnie w jobie `e2e-perf`, bez konkurencji o CPU.
+    # shardy PO CZASIE testów, nie po ich liczbie: `--shard` Playwrighta dzielił pliki
+    # alfabetycznie, a najdłuższe przeglądy axe leżą blisko siebie w alfabecie — 7,4 / 2,5 /
+    # 5,1 min (przebieg 36327645914). `E2E_DEMO_SHARD=1|2|3` wybiera w konfiguracji jedną
+    # z dwóch jawnych list najdłuższych speców (DEMO_SHARD_1/2_SPECS, ~280 s każda) albo
+    # (shard 3) całą resztę (dopełnienie obu list). Bez `--shard` w komendzie (podwójny
+    # podział zgubiłby testy). Każdy shard zapisuje raport cząstkowy (blob); łączy je job
+    # zbiorczy „E2E (Playwright)”. Test z pomiarem czasu (projekt `chromium-timing`) biegnie
+    # w jobie `e2e-perf`, bez konkurencji o CPU.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
@@ -393,7 +398,8 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
           E2E_BLOB_NAME: shard-${{ matrix.shard }}
-        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/3
+          E2E_DEMO_SHARD: ${{ matrix.shard }}
+        run: npx playwright test --project=chromium
       # Raport cząstkowy zawsze (także przy zielonym shardzie) — job zbiorczy łączy komplet.
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
