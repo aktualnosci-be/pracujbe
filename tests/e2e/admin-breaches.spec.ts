@@ -42,6 +42,9 @@ for (const locale of LOCALES) {
     await expect(page.getByRole('link', { name: 'Przykładowy wpis: e-mail do niewłaściwego odbiorcy' })).toBeVisible();
     await page.getByRole('link', { name: t.breachNew }).click();
     await expect(page.getByRole('heading', { level: 1, name: t.breachNewTitle })).toBeVisible();
+    // Po nawigacji klienckiej Next ustawia <title> ze strumieniowanych metadanych chwilę po
+    // treści — axe przed tym widzi pusty tytuł (`document-title`, flake w CI). Czekamy na tytuł.
+    await expect(page).toHaveTitle(new RegExp(t.breachNewTitle!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
     await page.getByRole('button', { name: t.breachCreateSubmit }).click();
     const title = page.getByRole('textbox', { name: new RegExp(`^${t.breachFieldTitle}`) });

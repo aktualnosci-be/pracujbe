@@ -27,14 +27,22 @@ describe('OpenAiProfileAssistor', () => {
     const usages: unknown[] = [];
     const out = await new OpenAiProfileAssistor(client).extract('Q1: pracowałem w magazynie', { onUsage: (u) => usages.push(u) });
     expect(out).toEqual({ aboutWork: true });
-    const params = callParams(create) as Record<string, any>;
+    const params = callParams(create) as {
+      model: string;
+      instructions: string;
+      store: boolean;
+      tools?: unknown;
+      max_output_tokens: number;
+      text: { format: unknown };
+      input: { content: { text: string }[] }[];
+    };
     expect(params.model).toBe('gpt-6-luna');
     expect(params.instructions).toBe(PROFILE_ASSIST_SYSTEM_PROMPT);
     expect(params.store).toBe(false);
     expect(params.tools).toBeUndefined();
     expect(params.max_output_tokens).toBe(PROFILE_ASSIST_MAX_TOKENS);
     expect(params.text.format).toMatchObject({ type: 'json_schema', strict: true, schema: PROFILE_ASSIST_JSON_SCHEMA });
-    const text = params.input[0].content[0].text as string;
+    const text = params.input[0]!.content[0]!.text;
     expect(text).toMatch(/^<answers>\nQ1: pracowałem w magazynie\n<\/answers>/);
     expect(PROFILE_ASSIST_SYSTEM_PROMPT).not.toContain('magazynie');
     expect(usages).toEqual([expect.objectContaining({ inputTokens: 50, outputTokens: 7 })]);
