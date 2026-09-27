@@ -1331,6 +1331,7 @@
     "screeningRequired": "Beantwoord deze vraag.",
     "screeningYes": "Ja",
     "screeningNo": "Nee",
+    "screeningClearAnswer": "Antwoord wissen",
     "sensitiveIdHint": "Voor je sollicitatie is geen INSZ-/BIS-nummer of nummer van een identiteitsdocument nodig — vul die niet in.",
     "sensitiveIdNotAllowed": "Verwijder het INSZ-/BIS-nummer, PESEL-nummer of documentnummer — dat is niet nodig om te solliciteren.",
     "ageRequired": "Bevestig je leeftijd in je accountinstellingen voordat je solliciteert.",
