@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { SavedSearchList } from '@/components/candidate/SavedSearchList';
 import { loadMySavedSearches } from '@/lib/data/saved-searches';
 import { createAppDateFormatter } from '@/lib/datetime';
+import { savedSearchFilterLabels } from '@/lib/job-filter-summary';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { BTN_PRIMARY, BTN_SECONDARY, P_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
@@ -15,7 +16,9 @@ import { cn } from '@/lib/utils';
  *
  * Odczyt pod sesją (RLS: własne `saved_searches`, 0092), zapis przez RPC w
  * `SavedSearchList`. Błąd odczytu = jawny komunikat z ponowieniem. NOINDEX + guard
- * dziedziczone z `candidate/layout.tsx`. Daty ostatniego alertu w Europe/Brussels.
+ * dziedziczone z `candidate/layout.tsx`. Daty ostatniego alertu w Europe/Brussels. Każde
+ * wyszukiwanie pokazuje swoje filtry w języku panelu (`savedSearchFilterLabels` — te same
+ * etykiety co chipy listy ofert).
  */
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +46,13 @@ export default async function CandidateSavedSearchesPage({
 
   const t = await getTranslations({ locale, namespace: 'savedSearches' });
   const td = await getTranslations({ locale, namespace: 'dashboard' });
-  const load = await loadMySavedSearches();
+  const [tFilters, tCat, tContract, load] = await Promise.all([
+    getTranslations({ locale, namespace: 'filters' }),
+    getTranslations({ locale, namespace: 'categories' }),
+    getTranslations({ locale, namespace: 'contractTypes' }),
+    loadMySavedSearches(),
+  ]);
+  const filterTranslators = { filters: tFilters, categories: tCat, contractTypes: tContract };
   const formatDate = createAppDateFormatter(locale, { withTime: true });
 
   return (
@@ -66,6 +75,8 @@ export default async function CandidateSavedSearchesPage({
           searches={load.searches.map((search) => ({
             ...search,
             lastAlertLabel: search.lastAlertAt ? formatDate(search.lastAlertAt) : null,
+            // Filtry w języku widza z kanonicznego adresu (nazwa bywa zmieniona albo w innym języku).
+            filterLabels: savedSearchFilterLabels(search.query, locale, filterTranslators),
           }))}
         />
       )}

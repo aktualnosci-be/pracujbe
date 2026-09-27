@@ -8,7 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { getJobs, isShowingDemoJobs, type LocationKey } from '@/lib/jobs';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
@@ -146,47 +146,29 @@ export default async function CityLandingPage({ params }: PageProps) {
 
   const otherCities = LOCATION_KEYS.filter((key) => key !== city);
 
-  const jsonLd = {
-    '@context': 'https://schema.org/',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      {
-        '@type': 'ListItem',
-        position: 1,
-        name: tCommon('home'),
-        item: `${env.siteUrl}/${locale}`,
-      },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: t('breadcrumbHub'),
-        item: `${env.siteUrl}/${locale}${HUB_PATH}`,
-      },
-      {
-        '@type': 'ListItem',
-        position: 3,
-        name,
-        item: `${env.siteUrl}/${locale}${CITY_BASE}/${city}`,
-      },
-    ],
-  };
+  const trail = [
+    { label: tCommon('home'), href: '/' },
+    { label: t('breadcrumbHub'), href: HUB_PATH },
+    { label: name },
+  ];
+  const jsonLd = buildBreadcrumbListJsonLd(trail, {
+    base: env.siteUrl,
+    locale,
+    currentUrl: `${env.siteUrl}/${locale}${CITY_BASE}/${city}`,
+  });
 
   return (
     <PublicSavedJobsProvider key={JSON.stringify(result.jobs.map(job => job.id))} jobIds={result.jobs.map(job => job.id)}>
     <div className="container py-6 md:py-10">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Breadcrumb */}
       <Breadcrumbs
         ariaLabel={tCommon('breadcrumb')}
-        items={[
-          { label: tCommon('home'), href: '/' },
-          { label: t('breadcrumbHub'), href: HUB_PATH },
-          { label: name },
-        ]}
+        items={trail}
       />
 
       {/* Nagłówek */}
