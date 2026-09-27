@@ -11,6 +11,7 @@ import {
   type MyApplicationsPage,
 } from '@/lib/data/candidate';
 import type { ScreeningAnswer } from '@/lib/screening/questions';
+import { APPLICATION_FILTERS } from '@/lib/candidate-application-filter';
 
 const cursorSchema = z.object({
   submittedAt: z.iso.datetime({ offset: true }),
@@ -21,14 +22,22 @@ export type MoreApplicationsResult =
   | { status: 'ready'; page: MyApplicationsPage }
   | { status: 'error' };
 
-/** Serwer czyta każdą kolejną stronę ponownie pod bieżącą sesją i RLS. */
-export async function loadMoreApplications(locale: string, cursor: unknown): Promise<MoreApplicationsResult> {
+/** Filtr etapu z klienta (#809): brak = wszystkie; wartość spoza listy = błąd, nie „wszystkie”. */
+const filterSchema = z.enum(APPLICATION_FILTERS).nullable().optional();
+
+/** Serwer czyta każdą kolejną stronę ponownie pod bieżącą sesją i RLS (z tym samym filtrem etapu). */
+export async function loadMoreApplications(
+  locale: string,
+  cursor: unknown,
+  filter?: unknown,
+): Promise<MoreApplicationsResult> {
   if (!routing.locales.some((available) => available === locale)) return { status: 'error' };
   const parsed = cursorSchema.safeParse(cursor);
-  if (!parsed.success) return { status: 'error' };
+  const parsedFilter = filterSchema.safeParse(filter);
+  if (!parsed.success || !parsedFilter.success) return { status: 'error' };
 
   try {
-    return { status: 'ready', page: await getMyApplicationsPage(locale, parsed.data) };
+    return { status: 'ready', page: await getMyApplicationsPage(locale, parsed.data, parsedFilter.data ?? null) };
   } catch {
     return { status: 'error' };
   }

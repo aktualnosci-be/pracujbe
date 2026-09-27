@@ -1,5 +1,7 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
+
+import nlMessages from '../../src/messages/nl.json';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
 
@@ -56,6 +58,23 @@ test('profil z ofertami: Organization JSON-LD, indeksowalny', async ({ page }) =
   expect((org!.address as Record<string, unknown>).addressCountry).toBe('BE');
   await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', new RegExp(`/nl${PROFILE}$`));
+});
+
+test('profil: BreadcrumbList = widoczna ścieżka (Strona główna → Oferty pracy → firma)', async ({ page }) => {
+  await page.goto(`/nl${PROFILE}`);
+  const lists = (await page.locator('script[type="application/ld+json"]').allTextContents())
+    .map((raw) => JSON.parse(raw) as Record<string, unknown>)
+    .filter((item) => item['@type'] === 'BreadcrumbList');
+  expect(lists).toHaveLength(1);
+  const items = lists[0]!.itemListElement as Array<{ name: string; item: string; position: number }>;
+  const visible = (await page.getByRole('navigation', { name: nlMessages.common.breadcrumb }).getByRole('listitem').allTextContents())
+    .map((text) => text.trim())
+    .filter((text) => text !== '/');
+  expect(items.map((entry) => entry.name)).toEqual(visible);
+  expect(items.map((entry) => entry.position)).toEqual([1, 2, 3]);
+  expect(items[0]!.item).toMatch(/\/nl$/);
+  expect(items[1]!.item).toMatch(/\/nl\/oferty-pracy$/);
+  expect(items[2]!.item).toMatch(new RegExp(`/nl${PROFILE}$`));
 });
 
 test('profil bez aktywnych ofert: noindex, follow i brak canonical', async ({ page }) => {

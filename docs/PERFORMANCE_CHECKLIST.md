@@ -170,8 +170,9 @@ banera (`src/lib/consent-cookie.ts`), więc nie ciągnie dodatkowych modułów.
 Budżet JS = stan + ok. 5%: aktualizacja zależności mieści się, nowa biblioteka kliencka
 w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.ts`).
 
-**`E2E (Playwright)` → „Performance budget (lab CWV)”** — `node scripts/perf-lab.mjs`
-(~2–2,5 min z INP-proxy, po testach E2E, na tym samym buildzie i Chromium co Playwright; własny
+**`E2E perf (lab CWV + INP)` → „Performance budget (lab CWV)”** — `node scripts/perf-lab.mjs`
+(~2–2,5 min z INP-proxy, na osobnym runnerze po specu INP dialogu, na tym samym buildzie
+i Chromium co Playwright; wynik zbiera wymagany check `E2E (Playwright)`; własny
 `next start` na porcie 3100). Strony: `/pl`, `/pl/oferty-pracy`, pierwsza oferta z listy,
 pierwszy poradnik, `/pl/logowanie` × {pierwsza wizyta, z zapisaną zgodą} × 3 próby
 w świeżym kontekście, przeplatane runda po rundzie; liczy się **mediana**. Warunki: CPU 4×

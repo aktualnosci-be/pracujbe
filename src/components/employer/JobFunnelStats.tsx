@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Download } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Link } from '@/i18n/navigation';
@@ -6,7 +7,7 @@ import { createAppDateFormatter } from '@/lib/datetime';
 import type { JobFunnelItem, JobFunnelMetrics } from '@/lib/data/employer';
 import { FUNNEL_RANGE_OPTIONS, type FunnelDateRange } from '@/lib/job-funnel/range';
 import { cn } from '@/lib/utils';
-import { PANEL, PANEL_H2, STAT_LABEL, STAT_VALUE, chipClass } from '@/components/dashboard/panel-styles';
+import { BTN_SECONDARY, PANEL, PANEL_H2, STAT_LABEL, STAT_VALUE, chipClass } from '@/components/dashboard/panel-styles';
 
 /**
  * Lejek ofert panelu pracodawcy (#99): pojawienia w wynikach → wyświetlenia → rozpoczęte
@@ -50,11 +51,17 @@ export function JobFunnelStats({
   totals,
   jobs,
   locale,
+  exportHref,
 }: {
   range: FunnelDateRange;
   totals: JobFunnelMetrics;
   jobs: readonly JobFunnelItem[];
   locale: string;
+  /**
+   * Adres eksportu CSV (`/api/employer/job-funnel`) dla wybranego zakresu. Brak = bez przycisku
+   * (tryb demo — danych demonstracyjnych nie eksportujemy).
+   */
+  exportHref?: string;
 }): React.JSX.Element {
   const t = useTranslations('jobFunnel');
   const format = useFormatter();
@@ -74,6 +81,18 @@ export function JobFunnelStats({
         <p className="text-sm text-muted-foreground" data-testid="job-funnel-consent-note">
           {t('consentNote')}
         </p>
+        {exportHref ? (
+          // Zwykły link do pobrania (nie `Link` next-intl): trasa API bez prefiksu języka, bez prefetchu.
+          <a
+            href={exportHref}
+            download
+            className={cn(BTN_SECONDARY, 'mt-3')}
+            aria-label={t('exportCsvLabel', { from: day(range.from), to: day(range.to) })}
+          >
+            <Download className="size-4" aria-hidden="true" />
+            {t('exportCsv')}
+          </a>
+        ) : null}
       </div>
 
       <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-3">

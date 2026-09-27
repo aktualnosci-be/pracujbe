@@ -64,6 +64,36 @@ describe('JobFunnelStats', () => {
     expect(screen.getByText(en.jobFunnel.empty)).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: en.jobFunnel.tableCaption })).toBeNull();
   });
+
+  it.each([['pl', pl], ['nl', nl], ['fr', fr], ['en', en]] as const)(
+    '%s: offers a CSV download of the selected range only when an export URL is given',
+    (locale, messages) => {
+      const href = `/api/employer/job-funnel?dni=30&locale=${locale}`;
+      const { unmount } = render(
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <JobFunnelStats range={range} totals={totals} jobs={jobs} locale={locale} exportHref={href} />
+        </NextIntlClientProvider>,
+      );
+      const formatter = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'Europe/Brussels' });
+      const link = screen.getByRole('link', {
+        name: messages.jobFunnel.exportCsvLabel
+          .replace('{from}', formatter.format(new Date('2026-08-26T12:00:00Z')))
+          .replace('{to}', formatter.format(new Date('2026-09-24T12:00:00Z'))),
+      });
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('download');
+      expect(link).toHaveTextContent(messages.jobFunnel.exportCsv);
+      unmount();
+
+      // Tryb demo: bez adresu eksportu nie ma przycisku (kontrola ujemna).
+      render(
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <JobFunnelStats range={range} totals={totals} jobs={jobs} locale={locale} />
+        </NextIntlClientProvider>,
+      );
+      expect(screen.queryByText(messages.jobFunnel.exportCsv)).toBeNull();
+    },
+  );
 });
 
 describe('JobFunnelRangePicker', () => {

@@ -10,6 +10,7 @@ import { ApplicationScreeningAnswers } from '@/components/candidate/ApplicationS
 import { StatusPill } from '@/components/ui/status-pill';
 import { loadMoreApplications } from '@/lib/actions/candidate-applications';
 import type { MyApplication, MyApplicationsPage } from '@/lib/data/candidate';
+import { applicationFilterHref, type ApplicationFilter } from '@/lib/candidate-application-filter';
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -59,9 +60,12 @@ function formatDate(iso: string, locale: string): string {
 export function CandidateApplicationsList({
   locale,
   initialPage,
+  filter = null,
 }: {
   locale: string;
   initialPage: MyApplicationsPage;
+  /** Filtr etapu z URL (#809) — kolejne strony czyta serwer z tym samym filtrem. */
+  filter?: ApplicationFilter | null;
 }) {
   const t = useTranslations('dashboard');
   const [items, setItems] = useState(initialPage.items);
@@ -84,7 +88,7 @@ export function CandidateApplicationsList({
     setFailed(false);
     startTransition(async () => {
       try {
-        const result = await loadMoreApplications(locale, cursor);
+        const result = await loadMoreApplications(locale, cursor, filter);
         if (generation.current !== startedAt) return;
         if (result.status === 'error') {
           setFailed(true);
@@ -101,6 +105,19 @@ export function CandidateApplicationsList({
       }
     });
   };
+
+  if (items.length === 0 && filter) {
+    // Filtr nic nie znalazł, ale kandydat może mieć zgłoszenia na innych etapach.
+    return (
+      <section className={cn(PAPER, 'px-[25px] py-[45px] text-center')}>
+        <h2 className={H2_EXTENDED}>{t('applicationsFilterEmptyTitle')}</h2>
+        <p className={cn(P_EXTENDED, 'mt-2')}>{t('applicationsFilterEmptyBody')}</p>
+        <Link href={applicationFilterHref(null)} className={cn(BTN_SECONDARY, 'mt-5')}>
+          {t('applicationsFilterShowAll')}
+        </Link>
+      </section>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -184,7 +201,11 @@ export function CandidateApplicationsList({
         >
           {pending ? t('applicationsLoading') : failed ? t('candidateListRetry') : t('applicationsMore')}
         </button>
-      ) : <p className="text-[13px] text-muted-foreground">{t('applicationsEnd')}</p>}
+      ) : (
+        <p className="text-[13px] text-muted-foreground">
+          {filter ? t('applicationsFilterEnd') : t('applicationsEnd')}
+        </p>
+      )}
     </div>
   );
 }
