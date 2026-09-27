@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import { docxXmlToText, extractCvText } from '@/lib/cv-import/text';
 import { buildDocx, buildPdf, buildZip, DOCX_TYPE, PDF_TYPE } from '../helpers/cv-fixtures';
@@ -10,6 +10,14 @@ import { buildDocx, buildPdf, buildZip, DOCX_TYPE, PDF_TYPE } from '../helpers/c
  */
 
 const LINES = ['Tomasz Testowy', 'Doswiadczenie zawodowe', 'Magazynier 2020-2025, Logistyka Test NV', 'Obsluga wozka widlowego i skanera'];
+
+/**
+ * Rozgrzewka pdf.js (limit hooka 10 s): `extractCvText` ładuje bibliotekę leniwie przy pierwszym
+ * PDF, a ten jednorazowy koszt (import + kompilacja modułu ~MB) płacił pierwszy test pliku.
+ */
+beforeAll(async () => {
+  await extractCvText(new Uint8Array(buildPdf(['Rozgrzewka'])), PDF_TYPE);
+});
 
 describe('extractCvText', () => {
   it('PDF z warstwą tekstu → linie tekstu', async () => {

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CandidateProposalsList } from '@/components/candidate/CandidateProposalsList';
 import type { MyOffer } from '@/lib/data/candidate';
@@ -27,6 +27,26 @@ const items: MyOffer[] = Array.from({ length: 21 }, (_, index) => ({
 const cursor = { createdAt: '2026-09-20T09:00:00+00:00', id: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000012' };
 const cursor2 = { createdAt: '2026-09-20T09:00:00+00:00', id: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000002' };
 
+/**
+ * Czekanie na liczbę kart tanim zapytaniem DOM (`<article>`), a asercja roli raz po nim.
+ * `waitFor` powtarza callback co 50 ms i przy każdej mutacji, a `getAllByRole` liczy role
+ * i widoczność (getComputedStyle) całego drzewa — pod obciążeniem sam polling zjadał sekundy.
+ */
+async function expectArticles(count: number): Promise<void> {
+  await waitFor(() => expect(document.querySelectorAll('article')).toHaveLength(count));
+  expect(screen.getAllByRole('article')).toHaveLength(count);
+}
+
+/**
+ * Rozgrzewka: jeden render listy przed testami (limit hooka 10 s). Pierwszy render płaci
+ * jednorazowo kompilację JIT kart i ich zależności — pod obciążeniem maszyny to właśnie
+ * pierwszy test pliku był najwolniejszy. DOM jest potem czyszczony.
+ */
+beforeAll(() => {
+  render(<CandidateProposalsList locale="pl" now={now} initialPage={{ items: items.slice(0, 10), nextCursor: cursor }} />);
+  cleanup();
+});
+
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -40,9 +60,9 @@ describe('lista propozycji kandydata (#245)', () => {
     render(<CandidateProposalsList locale="pl" now={now} initialPage={{ items: items.slice(0, 10), nextCursor: cursor }} />);
     expect(screen.getAllByRole('article')).toHaveLength(10);
     fireEvent.click(screen.getByRole('button', { name: 'proposalsMore' }));
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(20));
+    await expectArticles(20);
     fireEvent.click(await screen.findByRole('button', { name: 'proposalsMore' }));
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(21));
+    await expectArticles(21);
     expect(loadMoreProposals).toHaveBeenNthCalledWith(1, 'pl', cursor);
     expect(loadMoreProposals).toHaveBeenNthCalledWith(2, 'pl', cursor2);
     expect(screen.getByRole('link', { name: 'Job 21' })).toHaveAttribute('href', '/oferty-pracy/job-21');
@@ -61,7 +81,7 @@ describe('lista propozycji kandydata (#245)', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('proposalsMoreError'));
     expect(screen.getAllByRole('article')).toHaveLength(10);
     fireEvent.click(await screen.findByRole('button', { name: 'candidateListRetry' }));
-    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(21));
+    await expectArticles(21);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

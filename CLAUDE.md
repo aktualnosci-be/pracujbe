@@ -2063,6 +2063,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `scripts/lib/stable-screenshot.mjs` (fonty + dwie ramki ze stałym układem, najwyżej 3 próby
   tylko tego błędu, wpis na stderr); testy z Chromium w projekcie Vitest `chromium`
   (`CHROMIUM_TEST_FILES`, jeden plik naraz), strażnik `stable-screenshot.test.ts`.
+  Szybkie testy jednostkowe bez podnoszenia limitu 5 s (13 plików zgłaszanych pod obciążeniem):
+  ciężkie moduły (worker outboxa, trasa wypisania) importowane statycznie na górze pliku, nie
+  `await import()` w teście; jednorazowa rozgrzewka w `beforeAll` (render React Email —
+  `tests/helpers/email-render-warmup.ts`; pdf.js; pierwszy render/walidacja formularza, listy
+  i przejście kreatora do kroku 9), żeby pierwszy test nie płacił leniwych importów i JIT;
+  w `waitFor` tanie zapytanie DOM, a `getByRole` raz po nim (polling ról w dużym drzewie jsdom
+  rośnie z obciążeniem); render wielu szablonów = jeden test na szablon × język; styl inline
+  parsowany raz na element w audycie `email-a11y`; CRC-32 z tablicą w `cv-fixtures.ts`; atrapa
+  HTTP zamykana z `closeAllConnections()` (keep-alive `fetch`); krótki limit czasu w smoke tylko
+  dla zawieszonej trasy. `sitemap-robots` #599 bez zmian — koszt to 60 000 wpisów produkcyjnego
+  `sitemap.ts`, nie test.
 - [~] Wydajność / Core Web Vitals / dostępność (audyt) — **dostępność (a11y) ZROBIONE:** bramka
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
