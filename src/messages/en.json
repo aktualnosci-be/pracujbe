@@ -2899,6 +2899,7 @@
     "browse": "Browse jobs",
     "lastAlert": "Last alert: {date}",
     "noAlertYet": "No alert sent yet.",
+    "filtersLabel": "Filters of the search “{name}”",
     "open": "Show jobs",
     "alerts": "Notify me about new jobs",
     "frequency": "How often",
