@@ -60,7 +60,8 @@ function runPlaywright(index, total, out, playwrightArgs) {
   const result = spawnSync(
     'npx',
     ['playwright', 'test', '--reporter=json', '--retries=0', ...playwrightArgs],
-    // CI nie ustawiamy: lokalnie serwer jest używany ponownie (reuseExistingServer).
+    // Każdy przebieg startuje własny serwer (E2E_PORT, E2E_REUSE_SERVER — scripts/lib/e2e-server.mjs);
+    // z E2E_REUSE_SERVER=1 przebiegi używają serwera już działającego na porcie.
     { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] },
   );
   if (result.error) throw result.error;

@@ -15,9 +15,8 @@ const locales = ['pl', 'nl', 'fr', 'en'] as const;
 async function openWizard(page: Page, locale: string): Promise<void> {
   await page.goto(`/${locale}/candidate/onboarding`);
   await rejectOptionalCookies(page, locale);
-  // Wpis przed hydratacją kreatora ginie (React przywraca wartość z serwera): „Dalej” zostaje
-  // wtedy w kroku 1 z błędem, a kolejne `fill` czeka na pole kroku 2 do limitu czasu testu
-  // (flaky w CI pod obciążeniem). Baner cookies hydratuje się niezależnie od kreatora.
+  // Wpis przed hydratacją ginie (React przywraca wartość z serwera) — pod obciążeniem CI
+  // kolejne kroki kreatora czekały wtedy do limitu czasu testu.
   await waitForHydrated(page.locator('#onb-firstName'));
 }
 
