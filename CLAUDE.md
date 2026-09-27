@@ -676,6 +676,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   host (jedyny dozwolony w `images.remotePatterns`/CSP `img-src`) — inaczej sam link, bez
   rozszerzania CSP. Dowód: `rls.sql` sekcja CL141 (member/recruiter bez dostępu, http:// i adres
   nad limitem długości odrzucone, zmiana linków nie cofa `verified`, zmiana nazwy nadal cofa).
+  Zatwierdzanie przez admina (migracja `0156`): `website`/`logo_url` =
+  wartości ZATWIERDZONE (jedyne publiczne — RPC 0114/0140 bez zmian). Formularz woła RPC
+  `submit_company_links` (owner/admin): nowy adres → propozycja `website_pending`/
+  `logo_url_pending` ze stanem `links_review_status='pending'` (publicznie dalej stare adresy,
+  formularz pokazuje oba), samo usunięcie adresu → od razu (`applied`), propozycja = stan
+  publiczny → wycofanie (`unchanged`). Strażnik `guard_company_links` blokuje bezpośredni
+  zapis tych kolumn przez klienta. Admin: filtr `/admin/firmy?status=links` (kolejka) i sekcja
+  „Strona WWW i logo” w `/admin/firmy/[id]` (`CompanyLinksReviewActions` →
+  `admin_decide_company_links`: CAS po `links_pending_at` → `STALE_STATE`, odrzucenie
+  z uzasadnieniem ≤ 1000 widocznym dla firmy, audyt `company.links_submitted`/`links_reviewed`,
+  powiadomienie in-app właścicieli `system` + `data.kind='company_links'`). Dowód: `rls.sql`
+  sekcja CLR156 (kontrole ujemne: bezpośredni UPDATE, member, obca firma, owner zatwierdzający
+  sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
+  `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
+  opublikowane przed 0156 zostają bez przeglądu.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -1667,7 +1682,6 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `rls.sql` sekcja CM45 (dblink, kontrole ujemne), unit `email-consent-campaigns`.
   **Do zrobienia (właściciel):** wartości `EMAIL_SENDER_*`, wyłączenie trackingu w Resend i
   kontrola odebranego `.eml` na produkcji; treść prawna zgody marketingowej (#40). **Otwarte:**
-  tworzenie rewizji kampanii z panelu (dziś `create_email_campaign_revision`, service_role),
   prawdziwa pauza z wznowieniem (wymaga zmiany `claim_email_batch`), rejestracja z opt-in marketingu.
   Panel kampanii (#45, migracja `0111`): `/admin/kampanie` — rewizje
   (filtr statusu, slug, kursor) z liczbami odbiorców według statusu (bez adresów),
@@ -1680,6 +1694,22 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
   AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
   E2E `admin-email-campaigns`, `admin-a11y`.
+  Edytor rewizji (#45, migracja `0155`): „Nowa kampania” na liście →
+  `/admin/kampanie/nowa`, „Nowa rewizja” w szczególe → `/admin/kampanie/[id]/nowa-rewizja`
+  (formularz wypełniony treścią tej rewizji, slug stały). `EmailCampaignEditor`: w każdym języku
+  serwisu 1–3 oferty (slug, tytuł, miasto, stawka opcjonalnie), treść w kształcie workera
+  (`isDemo: false`); walidacja `campaignEditorErrors` (`src/lib/admin/campaign-editor.ts`) =
+  reguły pól workera (`src/lib/email/newsletter-rules.ts`, wspólne z `assertRenderableJobs`
+  i podglądem `campaignPreview`) + limity długości; brak treści w języku = błąd przy polu, fokus
+  na pierwszym błędzie, przełączany podgląd języka (`CampaignPreviewCard`, jak w szczególe),
+  jeden klucz idempotencji na operację. Zapis `createEmailCampaignRevision` → RPC
+  `admin_create_email_campaign_revision(client_key, slug, content)` (is_admin, `email_campaigns.client_key`
+  — ten sam klucz = ta sama rewizja, `email_campaign_jobs_renderable` = lustro reguł workera,
+  skutek = `create_email_campaign_revision` z 0101, audyt `email_campaign.revision_created` bez
+  treści). Nowa rewizja = szkic; aktywacja i bramka nadawcy bez zmian. Dowód: `rls.sql` sekcja
+  AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
+  `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
+  (edytor), `admin-a11y` (nowe trasy).
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń

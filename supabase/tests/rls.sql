@@ -14343,6 +14343,132 @@ delete from auth.users where id in (:'EPO', :'EPM', :'EPX', :'EPNEW')
   or id in (select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid from generate_series(1, 25) n);
 
 -- ============================================================================
+-- AC155. Edytor rewizji kampanii e-mail (#45, 0155): admin_create_email_campaign_revision —
+--        tylko admin (is_admin), idempotencja po kluczu klienta (retry = ta sama rewizja),
+--        komplet języków i treść, którą worker wyrenderuje, nowa rewizja = szkic,
+--        audyt `email_campaign.revision_created` bez treści.
+-- ============================================================================
+\set AC155K1 'a2020000-0000-4000-8000-000000000001'
+\set AC155K2 'a2020000-0000-4000-8000-000000000002'
+reset role; reset app.current_uid;
+
+-- AC155-1: anon bez EXECUTE; kandydat i pracodawca → PERMISSION_DENIED, bez wiersza.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-news'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'permission denied', 'AC155-1 anon nie wywoła edytora');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-news'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'PERMISSION_DENIED', 'AC155-1b kandydat nie tworzy rewizji');
+select pg_temp.expect_error(format('select public.create_email_campaign_revision(''ac155-news'', %L::jsonb)', :'CMJOBS'),
+  'permission denied', 'AC155-1c kandydat nie wywoła RPC service_role z 0101');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-news'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'PERMISSION_DENIED', 'AC155-1d pracodawca nie tworzy rewizji');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.email_campaigns where slug = 'ac155-news'),
+  'AC155-1e odmowy nie utworzyły rewizji');
+
+-- AC155-2: admin tworzy szkic; ponowienie tym samym kluczem = ta sama rewizja (bez duplikatu);
+--          ten sam klucz z innym slugiem → VALIDATION_FAILED; nowy klucz = kolejna rewizja.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-news', :'CMJOBS'::jsonb) as ac155_rev1 \gset
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-news', :'CMJOBS'::jsonb) as ac155_retry \gset
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-other'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-2 ten sam klucz z innym slugiem odrzucony');
+select public.admin_create_email_campaign_revision(:'AC155K2', 'ac155-news', :'CMJOBS'::jsonb) as ac155_rev2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ac155_rev1' = :'ac155_retry', 'AC155-2b ponowienie tym samym kluczem zwraca tę samą rewizję');
+select pg_temp.assert(
+  (select string_agg(revision || ':' || status, ',' order by revision) from public.email_campaigns
+    where slug = 'ac155-news') = '1:draft,2:draft'
+  and not exists (select 1 from public.email_campaigns where slug = 'ac155-other')
+  and (select client_key from public.email_campaigns where id = :'ac155_rev1') = :'AC155K1'::uuid,
+  'AC155-2c dwie rewizje (szkice, bez duplikatu), klucz zapisany przy rewizji');
+
+-- AC155-3: audyt — po jednym wpisie na rewizję (ponowienie bez wpisu), aktor = admin,
+--          tylko status/slug/rewizja, bez treści.
+select pg_temp.assert(
+  (select count(*) = 2
+          and bool_and(actor_id = :'ADMIN'::uuid and entity_type = 'email_campaign' and before_data is null
+                       and after_data ->> 'status' = 'draft' and after_data ->> 'slug' = 'ac155-news'
+                       and (after_data - 'status' - 'slug' - 'revision') = '{}'::jsonb
+                       and not (after_data::text like '%Magazynier%'))
+     from public.audit_logs
+    where action = 'email_campaign.revision_created'
+      and entity_id in (:'ac155_rev1'::uuid, :'ac155_rev2'::uuid)),
+  'AC155-3 audyt: jeden wpis na rewizję, admin, bez treści');
+
+-- AC155-4: treść, której worker nie wyrenderuje, i brak języka → VALIDATION_FAILED, bez zapisu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', (%L::jsonb - ''en''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4 brak języka (en) odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{pl,jobs,0,isDemo}'', ''true''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4b oferta demonstracyjna odrzucona');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{fr,jobs,0,locale}'', ''"pl"''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4c język oferty ≠ język wpisu odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{nl,jobs,0,title}'', ''"Hej {{imie}}"''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4d placeholder odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{en,jobs,0,city}'', ''"  "''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4e puste miasto odrzucone');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''Zły Slug'', %L::jsonb)',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED: slug', 'AC155-4f zły slug kampanii odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(null, ''ac155-bad'', %L::jsonb)',
+  :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4g brak klucza odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.email_campaigns where slug in ('ac155-bad', 'Zły Slug'))
+  and not exists (select 1 from public.audit_logs where action = 'email_campaign.revision_created'
+                   and after_data ->> 'slug' = 'ac155-bad'),
+  'AC155-4h odrzucenia bez rewizji i bez audytu');
+
+-- AC155-5: nowa rewizja nie jest aktywowana — aktywacja to osobny krok (0111).
+select pg_temp.assert(
+  (select activated_at is null from public.email_campaigns where id = :'ac155_rev2'),
+  'AC155-5 nowa rewizja bez aktywacji');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac155_rev2', 'draft');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac155_rev2') = 'active'
+  and (select status from public.email_campaigns where id = :'ac155_rev1') = 'superseded',
+  'AC155-5b aktywacja osobnym krokiem działa na rewizji z edytora');
+
+-- AC155-6: KONTROLA UJEMNA — wariant bez idempotencji (samo opakowanie 0101) przy ponowieniu
+--          tworzy duplikat (asercje AC155-2b/2c wykrywają brak klucza).
+begin;
+create or replace function public.admin_create_email_campaign_revision(p_client_key uuid, p_slug text, p_content jsonb)
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception 'PERMISSION_DENIED' using errcode = '42501'; end if;
+  return public.create_email_campaign_revision(p_slug, p_content);
+end $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-neg', :'CMJOBS'::jsonb) as ac155_neg1 \gset
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-neg', :'CMJOBS'::jsonb) as ac155_neg2 \gset
+reset role;
+select pg_temp.assert(:'ac155_neg1' <> :'ac155_neg2'
+  and (select count(*) from public.email_campaigns where slug = 'ac155-neg') = 2,
+  'AC155-6 bez idempotencji ponowienie tworzy duplikat — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- AC155-7: KONTROLA UJEMNA — bez reguł workera (tylko kontrola kształtu z 0101) rewizja
+--          z ofertą demonstracyjną przeszłaby (asercja AC155-4b wykrywa brak reguł).
+begin;
+create or replace function public.email_campaign_jobs_renderable(p_content jsonb)
+returns boolean language sql immutable as $$ select true $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'ac155-neg-demo',
+  jsonb_set(:'CMJOBS'::jsonb, '{pl,jobs,0,isDemo}', 'true'));
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_campaigns where slug = 'ac155-neg-demo'),
+  'AC155-7 bez reguł workera oferta demo trafia do rewizji — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- MP03. Materializacja dopasowań (P1-03, 0147): triggery kolejkują podmioty, worker
 -- (service_role) pobiera wejścia tylko dla par kwalifikujących się i zapisuje wynik
 -- `match_recompute_apply`, które sprawdza KAŻDĄ parę ponownie w bazie: profil ukończony
@@ -14765,8 +14891,10 @@ select pg_temp.assert(
   (select website is null and logo_url is null from public.companies where id = :'COMPCL'),
   'CL141-1c nieudane próby nie zmieniły danych');
 
--- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki.
-set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+-- CL141-2: http:// (nie-https) odrzucone przez CHECK, niezależnie od roli/ścieżki. Od 0156
+-- klient nie zapisuje linków wprost (strażnik `guard_company_links`, CLR156), więc CHECK
+-- sprawdzamy jako właściciel tabel — ścieżka funkcji SECURITY DEFINER (`admin_decide_company_links`).
+reset role; set app.current_uid = :'OWNCL';
 select pg_temp.expect_error(
   'update public.companies set website = ''http://owner-attempt.example'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
   'companies_website_https', 'CL141-2 http:// odrzucone (strona WWW)');
@@ -14778,8 +14906,9 @@ select pg_temp.expect_error(
   'companies_website_https', 'CL141-2c spacja w adresie odrzucona');
 reset role; reset app.current_uid;
 
--- CL141-3: owner ustawia OBA adresy poprawnie → zapis, status BEZ ZMIAN (verified), audyt.
-set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+-- CL141-3: zapis OBU adresów (ścieżka funkcji — od 0156 pole publiczne ustawia tylko decyzja
+-- admina) → status BEZ ZMIAN (verified), audyt z aktorem sesji.
+reset role; set app.current_uid = :'OWNCL';
 update public.companies
    set website = 'https://www.firma-cl.example', logo_url = 'https://www.firma-cl.example/logo.png'
  where id = :'COMPCL';
@@ -14802,9 +14931,12 @@ select pg_temp.assert(
                  and after_data->>'status' = 'pending'),
   'CL141-3c bez wpisu zmiany statusu — zmiana linków nie uruchamia ponownej weryfikacji');
 
--- CL141-4: admin (nie tylko owner) może edytować; puste pole czyści adres (NULL).
+-- CL141-4: admin firmy (nie tylko owner) czyści adres (NULL) — od 0156 przez RPC
+-- (usunięcie linku wchodzi od razu, bez decyzji admina portalu).
 set role authenticated; set app.current_uid = :'ADMCL'; select pg_temp.assert_client_role();
-update public.companies set logo_url = null where id = :'COMPCL';
+select pg_temp.assert(
+  public.submit_company_links(:'COMPCL', false, null, true, '') = 'applied',
+  'CL141-4a usunięcie logo przez RPC wchodzi od razu');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select website = 'https://www.firma-cl.example' and logo_url is null and status::text = 'verified'
@@ -14812,7 +14944,7 @@ select pg_temp.assert(
   'CL141-4 admin czyści logo bez wpływu na stronę WWW ani status');
 
 -- CL141-5: adres nad limitem długości (2048 znaków) odrzucony (SEC-04-style, path-independent).
-set role authenticated; set app.current_uid = :'OWNCL'; select pg_temp.assert_client_role();
+reset role; set app.current_uid = :'OWNCL';
 select pg_temp.expect_error(
   format('update public.companies set website = ''https://www.firma-cl.example/%s'' where id = ''e1620000-0000-0000-0000-0000000000f1''',
          repeat('a', 2048)),
@@ -15010,6 +15142,8 @@ reset role; reset app.current_uid;
 --        unavailable), a `slug` WYŁĄCZNIE dla oferty publicznej — panel nie linkuje do strony
 --        publicznej, która odpowiada 404. Tytuł i firma zostają dla każdego stanu.
 --        Kontrola ujemna: definicja sprzed 0206 (slug bez warunku) daje link do zamkniętej oferty.
+-- =====================================================================reset role; reset app.current_uid;
+
 -- ============================================================================
 begin;
 reset role; reset app.current_uid;
@@ -15111,6 +15245,181 @@ select pg_temp.assert(
 reset role; reset app.current_uid;
 rollback to savepoint av_neg;
 rollback;
+=======
+-- CLR156. Strona WWW i logo firmy z zatwierdzaniem przez admina (migracja 0156):
+--         pola publiczne (`website`/`logo_url`) zmienia wyłącznie decyzja admina portalu,
+--         propozycja firmy czeka w `*_pending`; usunięcie linku wchodzi od razu; CAS po
+--         `links_pending_at`; odrzucenie z uzasadnieniem; klient nie pisze tych kolumn wprost.
+-- ============================================================================
+\set OWNR 'e2040000-0000-0000-0000-000000000001'
+\set ADMR 'e2040000-0000-0000-0000-000000000002'
+\set MEMR 'e2040000-0000-0000-0000-000000000003'
+\set COMPR 'e2040000-0000-0000-0000-0000000000f1'
+\set COMPR2 'e2040000-0000-0000-0000-0000000000f2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWNR','ownr@test.be','Olga R','{"role":"employer","first_name":"Olga","last_name":"R","locale":"nl"}'),
+  (:'ADMR','admr@test.be','Adam R','{"role":"employer","first_name":"Adam","last_name":"R","locale":"pl"}'),
+  (:'MEMR','memr@test.be','Mira R','{"role":"employer","first_name":"Mira","last_name":"R","locale":"pl"}');
+insert into public.companies(id,name,slug,status,vat_number,verified_at,website) values
+  (:'COMPR','Firma R','firma-r-clr204','verified','BE0622222222',now(),'https://www.firma-r.example'),
+  (:'COMPR2','Firma R2','firma-r2-clr204','verified','BE0633333333',now(),null);
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPR',:'OWNR','owner',true),
+  (:'COMPR',:'ADMR','admin',true),
+  (:'COMPR',:'MEMR','member',true);
+
+-- CLR156-1 (kontrola ujemna): owner firmy NIE ustawi pola publicznego wprost (strażnik).
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set website = ''https://obejscie.example'' where id = ''e2040000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'CLR156-1 bezpośredni UPDATE strony WWW odrzucony');
+select pg_temp.expect_error(
+  'update public.companies set website_pending = ''https://obejscie.example'', links_review_status = ''pending'', links_pending_at = now() where id = ''e2040000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'CLR156-1b bezpośredni UPDATE kolumn propozycji odrzucony');
+-- Nazwa firmy nadal edytowalna wprost (strażnik nie dotyka innych kolumn).
+update public.companies set description = 'Opis R' where id = :'COMPR';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select description = 'Opis R' and website = 'https://www.firma-r.example' from public.companies where id = :'COMPR'),
+  'CLR156-1c inne kolumny bez zmian w zachowaniu, strona WWW nienaruszona');
+
+-- CLR156-2 (kontrola ujemna): member firmy nie zgłasza propozycji.
+set role authenticated; set app.current_uid = :'MEMR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f1'', true, ''https://member.example'', false, null)',
+  'PERMISSION_DENIED', 'CLR156-2 member nie zgłasza linków');
+reset role; reset app.current_uid;
+
+-- CLR156-3: owner zgłasza NOWE adresy → propozycja pending; pola publiczne BEZ ZMIAN,
+-- a `get_public_job`/`get_public_company` dalej widzą stary adres.
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_links(:'COMPR', true, ' https://nowa.firma-r.example ', true, 'https://cdn.firma-r.example/logo.png') = 'pending',
+  'CLR156-3 nowy adres = propozycja do decyzji');
+-- Retry tej samej propozycji: bez nowego zgłoszenia (ten sam links_pending_at).
+reset role; reset app.current_uid;
+select links_pending_at as clr_pending_at from public.companies where id = :'COMPR' \gset
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_links(:'COMPR', true, 'https://nowa.firma-r.example', true, 'https://cdn.firma-r.example/logo.png') = 'pending',
+  'CLR156-3b ponowienie tej samej propozycji');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-r.example' and logo_url is null
+      and website_pending = 'https://nowa.firma-r.example'
+      and logo_url_pending = 'https://cdn.firma-r.example/logo.png'
+      and links_review_status = 'pending' and links_pending_at = :'clr_pending_at'::timestamptz
+      and status::text = 'verified'
+     from public.companies where id = :'COMPR'),
+  'CLR156-3c pola publiczne bez zmian, propozycja zapisana, weryfikacja nietknięta, retry idempotentny');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPR' and action = 'company.links_submitted' and actor_id = :'OWNR'),
+  'CLR156-3d audyt zgłoszenia propozycji');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where entity_id = :'COMPR' and action = 'company.links_submitted') = 1,
+  'CLR156-3e retry nie dubluje audytu');
+
+-- CLR156-4 (kontrola ujemna): adres nie-https w propozycji odrzucony przez RPC.
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f1'', true, ''http://zla.example'', false, null)',
+  'WEBSITE_INVALID', 'CLR156-4 http:// w propozycji odrzucone');
+reset role; reset app.current_uid;
+
+-- CLR156-5 (kontrola ujemna): decyzja tylko dla admina portalu (owner firmy nie zatwierdzi sam).
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_links(%L, ''approved'', %L, null)', :'COMPR', :'clr_pending_at'),
+  'PERMISSION_DENIED', 'CLR156-5 owner nie zatwierdza własnych linków');
+reset role; reset app.current_uid;
+
+-- CLR156-6: odrzucenie bez uzasadnienia → błąd; z nieaktualnym znacznikiem (CAS) → STALE_STATE.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_links(%L, ''rejected'', %L, ''  '')', :'COMPR', :'clr_pending_at'),
+  'REASON_REQUIRED', 'CLR156-6 odrzucenie wymaga uzasadnienia');
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_links(%L, ''approved'', %L, null)', :'COMPR', '2020-01-01T00:00:00Z'),
+  'STALE_STATE', 'CLR156-6b decyzja na nieaktualnej propozycji (CAS) odrzucona');
+-- Odrzucenie: pola publiczne bez zmian, propozycja zostaje do wglądu z uzasadnieniem.
+select public.admin_decide_company_links(:'COMPR', 'rejected', :'clr_pending_at', 'Logo prowadzi do obcej domeny.');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://www.firma-r.example' and logo_url is null
+      and links_review_status = 'rejected' and links_review_reason = 'Logo prowadzi do obcej domeny.'
+      and website_pending = 'https://nowa.firma-r.example'
+     from public.companies where id = :'COMPR'),
+  'CLR156-6c odrzucenie: publicznie bez zmian, propozycja i uzasadnienie widoczne dla firmy');
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+           where profile_id = :'OWNR' and entity_id = :'COMPR'
+             and data = jsonb_build_object('kind', 'company_links', 'status', 'rejected')),
+  'CLR156-6d powiadomienie właściciela o odrzuceniu');
+select pg_temp.assert(
+  not exists (select 1 from public.notifications
+               where profile_id in (:'ADMR', :'MEMR') and data->>'kind' = 'company_links'),
+  'CLR156-6e powiadomienie tylko do właściciela (nie admin/member firmy)');
+
+-- CLR156-7: drugie rozstrzygnięcie tej samej propozycji → STALE_STATE (już rozstrzygnięta).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_links(%L, ''approved'', %L, null)', :'COMPR', :'clr_pending_at'),
+  'STALE_STATE', 'CLR156-7 odrzuconej propozycji nie da się zatwierdzić bez nowego zgłoszenia');
+reset role; reset app.current_uid;
+
+-- CLR156-8: firma poprawia propozycję (tylko strona WWW) → nowy pending; admin zatwierdza →
+-- para trafia do pól publicznych i do danych publicznych firmy.
+set role authenticated; set app.current_uid = :'ADMR'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_links(:'COMPR', false, null, true, '') = 'pending',
+  'CLR156-8 poprawiona propozycja (bez logo) wraca do kolejki');
+reset role; reset app.current_uid;
+select links_pending_at as clr_pending_at2 from public.companies where id = :'COMPR' \gset
+select pg_temp.assert(
+  (select links_review_status = 'pending' and links_review_reason is null
+      and website_pending = 'https://nowa.firma-r.example' and logo_url_pending is null
+     from public.companies where id = :'COMPR'),
+  'CLR156-8b propozycja liczona od odrzuconej, uzasadnienie wyczyszczone');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_links(:'COMPR', 'approved', :'clr_pending_at2', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website = 'https://nowa.firma-r.example' and logo_url is null
+      and links_review_status is null and website_pending is null and links_pending_at is null
+      and status::text = 'verified'
+     from public.companies where id = :'COMPR'),
+  'CLR156-8c zatwierdzenie przenosi adres do pola publicznego, weryfikacja bez zmian');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select website from public.get_public_company('firma-r-clr204')) = 'https://nowa.firma-r.example',
+  'CLR156-8d profil publiczny widzi zatwierdzony adres');
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPR' and action = 'company.links_reviewed'
+             and after_data->>'decision' = 'approved' and actor_id = :'ADMIN'),
+  'CLR156-8e audyt decyzji admina');
+
+-- CLR156-9: usunięcie linku wchodzi od razu (nic nowego nie publikuje), bez kolejki.
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_links(:'COMPR', true, '', false, null) = 'applied',
+  'CLR156-9 usunięcie strony WWW wchodzi od razu');
+select pg_temp.assert(
+  public.submit_company_links(:'COMPR', true, '', true, '') = 'unchanged',
+  'CLR156-9b propozycja równa stanowi publicznemu = bez zmian');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select website is null and logo_url is null and links_review_status is null from public.companies where id = :'COMPR'),
+  'CLR156-9c pola publiczne wyczyszczone, brak propozycji w kolejce');
+
+-- CLR156-10 (kontrola ujemna): owner firmy A nie zgłasza linków firmy B.
+set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f2'', true, ''https://obca.example'', false, null)',
+  'PERMISSION_DENIED', 'CLR156-10 obca firma odrzucona');
 reset role; reset app.current_uid;
 
 -- ============================================================================

@@ -298,6 +298,9 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.status_changed': 'auditActionCompanyStatus',
   'company.reverification_requested': 'auditActionCompanyReverification',
   'company.vies_checked': 'auditActionCompanyVies',
+  'company.links_changed': 'auditActionCompanyLinksChanged',
+  'company.links_submitted': 'auditActionCompanyLinksSubmitted',
+  'company.links_reviewed': 'auditActionCompanyLinksReviewed',
   'job.update_published': 'auditActionJobUpdatePublished',
   'job.duplicated': 'auditActionJobDuplicated',
   'report.resolved': 'auditActionReportStatus',
@@ -326,6 +329,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'screening_question.hidden': 'auditActionScreeningHidden',
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
+  'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {
