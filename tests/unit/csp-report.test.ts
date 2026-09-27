@@ -181,6 +181,41 @@ describe('POST /api/csp-report', () => {
     expect((await POST(request(body, { 'x-real-ip': '198.51.100.1' }))).status).toBe(204);
   });
 
+  it('#648: ignoruje X-Forwarded-For — spoofowanie tego nagłówka nie omija limitu 20/min', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { POST } = await route();
+    const body = JSON.stringify(legacyReport);
+    const spoofed = (i: number) =>
+      new Request('http://localhost/api/csp-report', {
+        method: 'POST',
+        body,
+        headers: {
+          'content-type': 'application/csp-report',
+          'x-real-ip': '203.0.113.7',
+          // Ten sam zaufany adres proxy, ale klient próbuje zmieniać X-Forwarded-For
+          // przy każdym żądaniu — nie może to utworzyć nowego klucza limitera.
+          'x-forwarded-for': `10.0.0.${i}`,
+        },
+      });
+    for (let i = 0; i < 20; i += 1) expect((await POST(spoofed(i))).status).toBe(204);
+    expect((await POST(spoofed(20))).status).toBe(429);
+  });
+
+  it('#648: kontrola ujemna — bez zaufanego nagłówka wszystkie żądania dzielą jedną pulę', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { POST } = await route();
+    const noHeader = (xff: string) =>
+      new Request('http://localhost/api/csp-report', {
+        method: 'POST',
+        body: JSON.stringify(legacyReport),
+        // Brak X-Real-IP: tylko X-Forwarded-For sterowany przez klienta — nie może dać
+        // osobnego budżetu na każdą zmyśloną wartość.
+        headers: { 'content-type': 'application/csp-report', 'x-forwarded-for': xff },
+      });
+    for (let i = 0; i < 20; i += 1) expect((await POST(noHeader(`203.0.113.${i}`))).status).toBe(204);
+    expect((await POST(noHeader('203.0.113.99'))).status).toBe(429);
+  });
+
   const enforcedApiEntry = {
     ...reportingApiReport[0],
     body: { ...reportingApiReport[0]!.body, disposition: 'enforce' },

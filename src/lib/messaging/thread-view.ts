@@ -1,4 +1,5 @@
 import type { ConversationThread, ThreadMessage } from '@/lib/data/messages';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 
 /**
  * Wiadomość gotowa do renderu w kliencie: czas sformatowany PO STRONIE SERWERA (SSR i Server
@@ -18,6 +19,7 @@ export function formatMessageTime(iso: string, locale: string): string {
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: APP_TIME_ZONE,
   }).format(ts);
 }
 

@@ -155,6 +155,10 @@ export async function MessagesView({
                     reports={reports}
                   />
                   <MessageComposer
+                    // Klucz per rozmowa: pełny remount przy przełączeniu izoluje szkic,
+                    // błąd, załączniki i klucz idempotencji (#849) — bez tego stan
+                    // instancji zostawał przypisany do nowego conversationId.
+                    key={activeId}
                     conversationId={activeId}
                     recipientName={threadDisplayName(threadResult.thread, t('title'))}
                   />

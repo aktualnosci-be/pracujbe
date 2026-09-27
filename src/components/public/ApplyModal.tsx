@@ -113,6 +113,7 @@ type FormError =
   | 'generic'
   | 'network'
   | 'already'
+  | 'alreadyEdited'
   | 'login'
   | 'candidateOnly'
   | 'rateLimited'
@@ -182,6 +183,11 @@ export function ApplyModal({
   const formErrorRef = React.useRef<HTMLDivElement>(null);
   // Jeden klucz na otwarcie modalu: ponowienie po błędzie = ta sama próba (Invariant #4).
   const idempotencyKeyRef = React.useRef<string | null>(null);
+  // #926: migawka pól faktycznie wysłanych z bieżącym kluczem. Ponowienie z INNYMI danymi
+  // (kandydat edytował formularz po utraconej odpowiedzi) nie może po cichu potwierdzić
+  // starego zapisu jako zapisania nowych danych — dostaje nowy klucz, więc baza rozpozna
+  // to jako świadomą kolejną próbę (APPLICATION_ALREADY_EXISTS), a nie retry.
+  const submittedPayloadRef = React.useRef<string | null>(null);
 
   const availabilityLabel = (value: Availability): string => {
     switch (value) {
@@ -207,6 +213,7 @@ export function ApplyModal({
     setFormError(null);
     setSubmitting(false);
     idempotencyKeyRef.current = null;
+    submittedPayloadRef.current = null;
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -271,7 +278,25 @@ export function ApplyModal({
     setSubmitting(true);
 
     const trimmedMessage = message.trim();
-    idempotencyKeyRef.current ??= crypto.randomUUID();
+    // #926: migawka danych faktycznie wysyłanych z tą próbą — porównanie z poprzednią
+    // wysyłką mówi, czy to nieedytowane ponowienie (bezpieczny retry z tym samym kluczem)
+    // czy kandydat zmienił formularz po poprzedniej próbie.
+    const payloadSnapshot = JSON.stringify({
+      phone: phone.trim(),
+      dial,
+      availability: AVAILABILITY_TO_DB[availability],
+      message: trimmedMessage,
+      answers: answerPayload,
+    });
+    const isEditedRetry =
+      idempotencyKeyRef.current !== null && submittedPayloadRef.current !== payloadSnapshot;
+    if (idempotencyKeyRef.current === null || isEditedRetry) {
+      // Pierwsza próba tego zestawu danych: nowy klucz. Poprzednia próba (z innym kluczem)
+      // mogła się już zapisać mimo utraconej odpowiedzi — nie wolno przedstawić TEJ wysyłki
+      // jako potwierdzenia zapisania edytowanych danych pod starym kluczem (Invariant #4/#11).
+      idempotencyKeyRef.current = crypto.randomUUID();
+    }
+    submittedPayloadRef.current = payloadSnapshot;
 
     let res: Awaited<ReturnType<typeof applyToJob>>;
     try {
@@ -331,7 +356,10 @@ export function ApplyModal({
       // Zalogowany pracodawca/admin — link logowania nie ma sensu (#361).
       setFormError('candidateOnly');
     } else if (res.error === 'APPLICATION_ALREADY_EXISTS') {
-      setFormError('already');
+      // #926: gdy to ponowienie z EDYTOWANYMI danymi (nowy klucz, bo migawka się nie zgadzała),
+      // baza ma już wcześniejszą wersję pod innym kluczem — te edycje nie zostały zapisane.
+      // Odróżniamy to od zwykłej „już aplikowałeś” (pierwsza próba trafia na istniejącą aplikację).
+      setFormError(isEditedRetry ? 'alreadyEdited' : 'already');
     } else if (res.error === 'RATE_LIMITED') {
       setFormError('rateLimited');
     } else if (res.error === 'JOB_NOT_ACTIVE') {
@@ -591,6 +619,13 @@ export function ApplyModal({
                     ) : formError === 'already' ? (
                       <>
                         {t('alreadyApplied')}{' '}
+                        <Link href="/candidate/aplikacje" className="font-medium underline">
+                          {t('viewApplications')}
+                        </Link>
+                      </>
+                    ) : formError === 'alreadyEdited' ? (
+                      <>
+                        {t('alreadyAppliedEdited')}{' '}
                         <Link href="/candidate/aplikacje" className="font-medium underline">
                           {t('viewApplications')}
                         </Link>
