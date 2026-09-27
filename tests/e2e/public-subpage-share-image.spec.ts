@@ -50,6 +50,17 @@ for (const locale of locales) {
 test('kontrola ujemna: brak obrazu OG jest wykrywany przez tę samą asercję', async ({ page }) => {
   await page.goto('/pl/praca');
   const shareImage = new URL('/og.png', process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').href;
-  await page.locator('meta[property="og:image"]').evaluate((element) => element.remove());
+  const ogImage = page.locator('meta[property="og:image"]');
+  // React 19 traktuje <meta> jako element „hoistable”: przy hydratacji dopasowuje go w <head>,
+  // a brakujący wstawia od nowa. Usunięcie przed hydratacją (dłuższe okno pod obciążeniem CI)
+  // kończyło się ponownym pojawieniem się meta i fałszywym „brakiem błędu”. Czekamy, aż React
+  // przejmie węzeł (klucz __reactFiber$), i dopiero wtedy go usuwamy.
+  await expect
+    .poll(() => ogImage.evaluate((el) => Object.keys(el).some((key) => key.startsWith('__reactFiber$'))), {
+      message: 'meta og:image przejęte przez React po hydratacji',
+    })
+    .toBe(true);
+  await ogImage.evaluate((element) => element.remove());
+  await expect(ogImage).toHaveCount(0);
   await expect(expectBrandImageMetadata(page, shareImage)).rejects.toThrow();
 });
