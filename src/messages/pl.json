@@ -3029,6 +3029,7 @@
     "noAlertYet": "Jeszcze nie wysłaliśmy alertu.",
     "filtersLabel": "Filtry wyszukiwania „{name}”",
     "open": "Pokaż oferty",
+    "openLocaleNote": "Zawiera słowo kluczowe zapisane w języku {language} — otworzy się w tym języku.",
     "alerts": "Powiadamiaj o nowych ofertach",
     "frequency": "Jak często",
     "daily": "Raz dziennie",
