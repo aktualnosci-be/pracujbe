@@ -2454,6 +2454,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.
   Tryb na produkcji: `dry-run` do obserwacji liczników (decyzja właściciela 26.09.2026,
   `docs/PRODUCT_DECISIONS.md`); `delete` dopiero po nowej decyzji.
+  Załączniki wiadomości w tym samym GC (#833, bez migracji): `runStorageGc` sprząta teraz DWA
+  niezależne logiczne buckety jednego fizycznego bucketu Railway — CV (`candidate-files`,
+  domyślnie) i załączniki rozmów (`message-files`, `bucket`/`pattern: 'attachment'`), każdy
+  własnym przebiegiem (`storage_gc_sweeps` per bucket, generyczne RPC 0117 bez zmian).
+  Wcześniej `list()` adaptera klasyfikował KAŻDY klucz `att-*` jako obcy niezależnie od
+  wywołania — osierocony załącznik po przerwanym uploadzie nigdy nie trafiał do kolejki
+  usuwania nawet po latach. `/api/maintenance` woła oba przebiegi po kolei (osobne `try/catch`,
+  `messageAttachmentsGc` w odpowiedzi); awaria jednego nie blokuje drugiego. Dowód: unit
+  `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
