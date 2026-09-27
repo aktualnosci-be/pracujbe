@@ -27,6 +27,7 @@ const env = {
 };
 const EMAIL = CRON_TASKS['*/5 * * * *'];
 const MAINT = CRON_TASKS['0 * * * *'];
+const TRANSLATION = CRON_TASKS['*/10 * * * *'];
 const logger = () => ({ log: vi.fn(), error: vi.fn() });
 
 function allLogs(l: ReturnType<typeof logger>): string {
@@ -43,6 +44,8 @@ describe('Cloudflare cron worker — konfiguracja', () => {
     expect(Object.values(CRON_TASKS).map((t) => t.path).sort()).toEqual([...CRON_PATHS].sort());
     expect(EMAIL.path).toBe('/api/email/process');
     expect(MAINT.path).toBe('/api/maintenance');
+    // #33: worker tłumaczeń chroni sekret maintenance (route: src/app/api/translation/process).
+    expect(TRANSLATION).toMatchObject({ path: '/api/translation/process', secret: 'MAINTENANCE_SECRET' });
   });
 
   it('wrangler.toml nie zawiera sekretów, a worker nie ma adresu HTTP', () => {
