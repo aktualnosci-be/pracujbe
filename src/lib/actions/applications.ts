@@ -73,11 +73,6 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Kandydat aplikuje na ofertę (idempotentnie). */
 export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> {
-  // Rate limit per IP (20 aplikacji / godz) — ochrona przed spamowaniem ofert.
-  if (!(await checkRateLimit('apply', { max: 20, windowSeconds: 3600 }))) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   // Telefon najpierw: błędny numer (#145) wraca jako błąd pola, a nie ogólny komunikat.
   const phone = applicationPhoneSchema.safeParse({
     phone: input.phone,
@@ -93,14 +88,37 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
   // Tryb demo (bez bazy): oferty mają syntetyczne identyfikatory i nic nie zapisujemy.
   if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
+  // #852: sesja PRZED limitem — anonimowe wywołanie (bez konta) nie może zużyć wspólnego
+  // budżetu IP/NAT i zablokować prawdziwych kandydatów za tym samym adresem. Brak sesji =
+  // UNAUTHENTICATED (link logowania w modalu), bez dotykania jakiegokolwiek licznika.
+  const me = await getPortalIdentity();
+  if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
+
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
 
+  // Limit biznesowy PER KONTO (20 aplikacji / godz), niezależny od IP (#852): dwa konta za
+  // tym samym adresem (NAT/CGNAT, biuro, dom) mają niezależne budżety, a jedno konto nie
+  // omija swojego limitu zmieniając sieć.
+  if (
+    !(await checkRateLimit('apply', {
+      max: 20,
+      windowSeconds: 3600,
+      identifier: me.id,
+      perIp: false,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  // Dodatkowa, znacznie szersza ochrona sieciowa przed automatyzacją wielu kont z jednego
+  // adresu — próg nie blokuje populacji współdzielącej IP po zwykłym użyciu limitu jednej
+  // osoby (#852).
+  if (!(await checkRateLimit('apply-ip', { max: 200, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   try {
-    // Brak sesji = UNAUTHENTICATED (link logowania); konto innej roli dostaje PERMISSION_DENIED z RPC.
-    const me = await getPortalIdentity();
-    if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
     const data = await withPortalTransaction(me, (tx) => rpc(tx, 'apply_to_job', {
       p_job_id: v.jobId,
       p_idempotency_key: v.idempotencyKey ?? randomUUID(),

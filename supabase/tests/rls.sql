@@ -13696,9 +13696,11 @@ select pg_temp.assert(
   'SC100-4 KONTROLA UJEMNA: jedna strona rejestruje 100 ofert, oferta 101+ przepada');
 rollback;
 set role service_role;
+-- 0158: p_max_pages liczy strony KURSORA po 1000 — jedna strona mieści wszystkie 105
+-- (obcięcie stroną kursora sprawdza SK100-4b).
 select pg_temp.assert(
-  (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 100,
-  'SC100-4b KONTROLA UJEMNA: limit jednej strony obcina wynik do 100');
+  (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 105,
+  'SC100-4b jedna strona kursora (1000) mieści wszystkie 105 ofert');
 reset role;
 
 -- SC100-5 (KONTROLE UJEMNE): funkcje stron tylko dla service_role.
@@ -13729,6 +13731,150 @@ select pg_temp.assert(
   and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'sc1')
   and not exists (select 1 from public.email_deliveries where profile_id in (:'SCA', :'SCE')),
   'SC100-6 dane testu usunięte (oferty, firma, wyszukiwanie, alerty, e-maile)');
+
+-- ============================================================================
+-- SK100. Alerty zapisanych wyszukiwań bez górnej granicy 10 100 ofert (0158, #100):
+-- saved_search_matching_jobs stronicuje kursorem (published_at, id) zamiast offsetu
+-- get_public_jobs (clamp 10 000). 10 150 ofert z JEDNYM published_at (remis przez każdą
+-- granicę strony) + jedna starsza (SKOLD, ostatnia w sorcie) + 3 nowsze oferty firmy
+-- zablokowanej przez kandydata. Worker rejestruje wszystkie 10 151, pomija firmę
+-- zablokowaną, jeden digest ≤ 5 ofert z count = 10 151, para nie wraca. Kontrola ujemna:
+-- offset z 0138 (clamp 10 000) nie sięga ofert za 10 100.
+-- Cała sekcja w transakcji cofanej (10 tys. ofert bez kosztownego DELETE na końcu).
+-- ============================================================================
+\echo '--- SK100 alerty wyszukiwań: kursor zamiast offsetu (0158) ---'
+begin;
+\set SKA 'e9c30000-0000-0000-0000-0000000000a1'
+\set SKE 'e9c30000-0000-0000-0000-0000000000b1'
+\set SKC 'e9c30000-0000-0000-0000-0000000000c1'
+\set SKB 'e9c30000-0000-0000-0000-0000000000c2'
+\set SKOLD 'e9c30000-0000-0000-0000-0000000000d0'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SKA','ska@test.be','Sol A','{"role":"candidate","first_name":"Sol","last_name":"A","locale":"fr"}'),
+  (:'SKE','ske@test.be','Emil E','{"role":"employer","first_name":"Emil","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'SKC','Firma SK100','verified'), (:'SKB','Firma SK100 zablokowana','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'SKC',:'SKE','owner',true), (:'SKB',:'SKE','owner',true);
+insert into public.candidate_company_blocks(candidate_id, company_id) values (:'SKA', :'SKB');
+
+set role authenticated; set app.current_uid = :'SKA'; select pg_temp.assert_client_role();
+select saved_search_id as sk1 from public.save_saved_search(
+  'Spawanie SK100', 'pl', '{"keyword":"Spawacz SK100Z"}', '?keyword=Spawacz+SK100Z') \gset
+reset role; reset app.current_uid;
+
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+select gen_random_uuid(), :'SKC', 'sk100-' || n, 'Spawacz SK100Z ' || n, 'production', 'permanent',
+       'Gent', 'Vlaanderen', 'active', 'pl', date_trunc('second', now()) - interval '2 hours'
+from generate_series(1, 10150) n;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+values (:'SKOLD', :'SKC', 'sk100-old', 'Spawacz SK100Z najstarszy', 'production', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '3 hours');
+-- Firma zablokowana: 3 najnowsze oferty; poza filtrem: inny tytuł i oferta sprzed okna.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+select gen_random_uuid(), :'SKB', 'sk100-blk-' || n, 'Spawacz SK100Z blok ' || n, 'production', 'permanent',
+       'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '1 hour'
+from generate_series(1, 3) n;
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+values (gen_random_uuid(), :'SKC', 'sk100-other', 'Kierowca SK100Z', 'production', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '2 hours'),
+       (gen_random_uuid(), :'SKC', 'sk100-before', 'Spawacz SK100Z sprzed okna', 'production', 'permanent',
+        'Gent', 'Vlaanderen', 'active', 'pl', now() - interval '5 days');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days' where id = :'sk1';
+select filters as sk_filters from public.saved_searches where id = :'sk1' \gset
+
+-- SK100-1: kursor zwraca wszystkie 10 154 pasujące (10 151 + 3 zablokowane — blokadę
+-- stosuje worker), bez dubli, bez oferty spoza filtra i sprzed okna.
+-- Jeden przebieg kursora (każde wywołanie to ~11 stron po 1000).
+set role service_role;
+select pg_temp.assert(
+  (with a as (select x from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days') x)
+   select count(*) = 10154 and count(distinct x) = 10154 and bool_or(x = :'SKOLD') from a),
+  'SK100-1 kursor (published_at, id) zwraca wszystkie 10 154 oferty (> 10 100), bez dubli');
+-- SK100-1b: strony kursora rozłączne i w porządku listy (remis rozstrzyga id).
+select pg_temp.assert(
+  (with p1 as (select * from public.saved_search_keyset_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', null, null, 1000)),
+        p2 as (select k.* from p1 cross join lateral public.saved_search_keyset_page(
+                 :'sk_filters'::jsonb, 'pl', now() - interval '2 days', p1.last_published_at, p1.last_id, 1000) k)
+   select cardinality(p1.ids) = 1000 and cardinality(p2.ids) = 1000
+      and not (p1.ids && p2.ids)
+      and p1.last_id = p1.ids[1000]
+   from p1, p2),
+  'SK100-1b kolejne strony kursora rozłączne, kursor = ostatnia oferta strony');
+reset role;
+
+-- SK100-2: worker — 10 151 par, SKOLD też, firma zablokowana pominięta, jeden digest (fr).
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sk1') = 10151
+  and exists (select 1 from public.saved_search_alerts where saved_search_id = :'sk1' and job_id = :'SKOLD')
+  and not exists (select 1 from public.saved_search_alerts a join public.jobs j on j.id = a.job_id
+                  where a.saved_search_id = :'sk1' and j.company_id = :'SKB'),
+  'SK100-2 wszystkie 10 151 ofert zarejestrowane (także za 10 100), firma zablokowana pominięta');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 1
+  and (select (payload ->> 'count')::integer from public.email_deliveries
+         where profile_id = :'SKA' and template = 'jobMatch') = 10151
+  and (select jsonb_array_length(payload -> 'jobs') from public.email_deliveries
+         where profile_id = :'SKA' and template = 'jobMatch') = 5
+  and (select locale from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 'fr'
+  and (select count(*) from public.notifications
+         where profile_id = :'SKA' and type = 'job_match' and entity_id = :'sk1') = 1,
+  'SK100-2b jeden e-mail jobMatch (fr): count 10 151, w treści 5 ofert; jedno in-app');
+
+-- SK100-3: ponowny przebieg — te same pary nie wracają.
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day' where id = :'sk1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'sk1') = 10151
+  and (select count(*) from public.email_deliveries where profile_id = :'SKA' and template = 'jobMatch') = 1,
+  'SK100-3 ponowny przebieg bez ponownej wysyłki tych samych par');
+
+-- SK100-4 (KONTROLA UJEMNA): stronicowanie offsetem get_public_jobs (0138,
+-- saved_search_job_page) ma sufit offsetu 10 000 — strona „10 100” to ta sama strona co
+-- 10 000, więc oferty za 10 100 (m.in. SKOLD, ostatnia w sorcie) są dla niego
+-- nieosiągalne; SK100-1/SK100-2 (10 154 / 10 151) wykrywają powrót do tego wariantu.
+-- (Pełny przebieg workera na wariancie offsetowym = 101 stron po 10 tys. wierszy —
+-- zbyt kosztowny dla zestawu uruchamianego też w jednej transakcji, rate-limit.test.ts.)
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(x order by x) from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10100) x)
+    = (select array_agg(x order by x) from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10000) x)
+  and not exists (select 1 from public.saved_search_job_page(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 10000) x
+                  where x = :'SKOLD'),
+  'SK100-4 KONTROLA UJEMNA: offset get_public_jobs (sufit 10 000) nie sięga ofert za 10 100');
+reset role;
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs(:'sk_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 1000,
+  'SK100-4b KONTROLA UJEMNA: limit jednej strony kursora obcina wynik do 1000');
+reset role;
+
+-- SK100-5 (KONTROLE UJEMNE): funkcje kursora tylko dla service_role.
+set role authenticated; set app.current_uid = :'SKA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_keyset_page(''{}''::jsonb, ''pl'', now(), null, null, 10)',
+  'permission denied', 'SK100-5 klient nie wywoła saved_search_keyset_page');
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_jobs_after(''pl'', null, null, null, null, null, null, null, null, null, null, now(), ''month'', null, null, 10)',
+  'permission denied', 'SK100-5b klient nie wywoła saved_search_jobs_after');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select count(*) from public.saved_search_jobs_after(''pl'', null, null, null, null, null, null, null, null, null, null, now(), ''month'', null, null, 10)',
+  'permission denied', 'SK100-5c anon bez EXECUTE');
+reset role;
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- JT144 (0144, numer tymczasowy): istotna zmiana warunków opublikowanej oferty →
@@ -15261,6 +15407,405 @@ rollback to savepoint cn_neg;
 set local role authenticated; set local app.current_uid = :'CANDCX'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
   'CN6b poprawna funkcja znów odmawia obcemu');
+rollback;
+reset role; reset app.current_uid;
+
+-- =============================================================================
+-- TM159 (#33, 0159): odczyt przekładu oferty na publicznej stronie.
+-- `get_public_job_machine_translation` zwraca przekład (anon) wyłącznie dla oferty publicznej,
+-- bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola wyświetlane. Kontrola ujemna
+-- TM159-N: bez warunku bieżącej rewizji anon dostaje przekład starej treści po edycji;
+-- TM159-7N: bez warunku „strona pokazuje treść default_locale” przekład nie pasuje do tekstu.
+-- =============================================================================
+\echo '--- TM159 public job machine translation ---'
+\set TMCO 'f2190000-0000-0000-0000-0000000000c1'
+\set TMJ1 'f2190000-0000-0000-0000-0000000000a1'
+reset role; reset app.current_uid;
+begin;
+set constraints all immediate;
+-- Izolacja: zadania z wcześniejszych sekcji nie trafiają do claimu tej sekcji (cofane rollbackiem).
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.companies(id, name, status) values (:'TMCO', 'Firma TM159', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TMJ1', :'TMCO', 'tm219-oferta', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits, meta_title)
+  values (:'TMJ1', 'nl', 'Magazijnmedewerker', 'Werk vanaf 8:00.', array['Orders verzamelen'], array['Parking'],
+          'Meta NL');
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TMJ1', 'nl', 'mandatory', 0, 'VCA-certificaat');
+update public.jobs set status = 'active', published_at = now() where id = :'TMJ1';
+create temp table tm219_claim on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tm_en, lease_id as tm_en_lease, fields::text as tm_f1
+  from tm219_claim where entity_id = :'TMJ1' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tm_en', :'tm_en_lease',
+  (:'tm_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
+    'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
+    'benefits.0', 'Parking', 'meta_title', 'Meta EN')) = 'applied', 'TM159-0 przekład en zastosowany');
+reset role;
+
+-- TM159-1: anon dostaje przekład en bieżącej rewizji — tylko pola wyświetlane (bez benefits/meta).
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select source_locale = 'nl' and origin = 'ai'
+    and fields->>'title' = 'Warehouse worker'
+    and fields->>'responsibilities.0' = 'Order picking'
+    and fields->>'requirements_mandatory.0' = 'VCA certificate'
+    and not (fields ? 'benefits.0') and not (fields ? 'meta_title')
+  from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-1 anon: przekład en bieżącej rewizji, tylko pola wyświetlane');
+-- TM159-2: brak przekładu (fr), język źródła (nl), język spoza serwisu = brak wiersza.
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'fr'))
+  and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'nl'))
+  and not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'de')),
+  'TM159-2 brak przekładu / język źródła / język spoza serwisu = brak wiersza');
+reset role;
+
+-- TM159-3: własne tłumaczenie en (tekst człowieka) ma pierwszeństwo.
+savepoint tm_human;
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TMJ1', 'en', 'Warehouse operative', 'Human text.');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-3 własne tłumaczenie en: przekład AI nie jest zwracany');
+reset role;
+rollback to savepoint tm_human;
+
+-- TM159-4: oferta niepubliczna (wstrzymana) i firma zawieszona = brak wiersza.
+savepoint tm_paused;
+update public.jobs set status = 'paused' where id = :'TMJ1';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-4 oferta wstrzymana: brak przekładu');
+reset role;
+rollback to savepoint tm_paused;
+savepoint tm_suspended;
+update public.companies set status = 'suspended' where id = :'TMCO';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-4b firma zawieszona: brak przekładu');
+reset role;
+rollback to savepoint tm_suspended;
+
+-- TM159-5: edycja treści = nowa rewizja, przekład en nieaktualny — nie jest zwracany.
+update public.job_translations set description = 'Werk vanaf 22:00.' where job_id = :'TMJ1' and locale = 'nl';
+select pg_temp.assert((select is_stale from public.translation_documents
+  where entity_type = 'job' and entity_id = :'TMJ1' and locale = 'en'), 'TM159-5a przekład en oznaczony jako nieaktualny');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-5 po edycji przekład starej treści nie jest zwracany');
+reset role;
+
+-- TM159-6: granty — tylko odczyt RPC; tabela przekładów nadal bez dostępu dla klienta.
+select pg_temp.assert(has_function_privilege('anon', 'public.get_public_job_machine_translation(uuid, text)', 'execute')
+  and not has_table_privilege('anon', 'public.translation_documents', 'select')
+  and not has_table_privilege('authenticated', 'public.translation_documents', 'select'),
+  'TM159-6 anon: EXECUTE RPC, bez SELECT na translation_documents');
+
+-- TM159-7: strona pokazuje tekst, z którego powstała rewizja. Oferta 2 (default_locale nl)
+-- ma tłumaczenie tylko w fr — `get_public_job` pokazuje dla en tekst fr, a rewizja powstała
+-- z `jobs.title` (nl). Przekład nl→en nie pasuje do wyświetlanego oryginału = brak wiersza.
+-- Bez tłumaczeń wcale strona pokazuje `jobs.title` = treść rewizji → przekład jest zwracany.
+\set TMJ2 'f2190000-0000-0000-0000-0000000000a2'
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TMJ2', :'TMCO', 'tm219-oferta-2', 'Heftruckchauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TMJ2', 'fr', 'Cariste', 'Travail dès 6:00.');
+update public.jobs set status = 'active', published_at = now() where id = :'TMJ2';
+create temp table tm219_claim2 on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tm2_en, lease_id as tm2_en_lease, fields::text as tm2_f
+  from tm219_claim2 where entity_id = :'TMJ2' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tm2_en', :'tm2_en_lease',
+  (:'tm2_f'::jsonb) || jsonb_build_object('title', 'Forklift driver')) = 'applied',
+  'TM159-7a przekład en oferty 2 (z jobs.title) zastosowany');
+reset role;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7 strona pokazuje tłumaczenie fr (brak default_locale): przekład nl→en nie jest zwracany');
+reset role;
+savepoint tm_no_translations;
+delete from public.job_translations where job_id = :'TMJ2';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select fields->>'title' = 'Forklift driver'
+  from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7b oferta bez tłumaczeń (strona pokazuje jobs.title): przekład jest zwracany');
+reset role;
+rollback to savepoint tm_no_translations;
+
+-- TM159-7N (kontrola ujemna): definicja sprzed warunku (0159 bez sprawdzenia, że strona
+-- pokazuje treść `default_locale`) nakłada przekład nl→en na stronę z tekstem fr.
+savepoint tm_neg_src;
+create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
+returns table (source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.companies c on c.id = j.company_id
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = p_job_id and public.is_supported_locale(p_locale) and j.status = 'active'
+     and j.deleted_at is null and (j.expires_at is null or j.expires_at > now()) and not j.is_demo
+     and c.status = 'verified' and c.deleted_at is null and s.is_active
+     and d.revision_id = s.current_revision_id and not d.is_stale
+     and r.source_locale = j.default_locale and p_locale <> r.source_locale
+     and not exists (select 1 from public.job_translations jt where jt.job_id = j.id and jt.locale = p_locale)
+     and not exists (select 1 from public.job_requirements q where q.job_id = j.id and q.locale = p_locale)
+   limit 1;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7N kontrola ujemna: stara definicja nakłada przekład niepasujący do tekstu fr');
+reset role;
+rollback to savepoint tm_neg_src;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ2', 'en')),
+  'TM159-7Nb poprawna funkcja znów odmawia');
+reset role;
+
+-- TM159-N (kontrola ujemna): bez warunku bieżącej rewizji/nieaktualności anon dostałby
+-- przekład starej treści (TM159-5 wykrywa taką regresję).
+savepoint tm_neg;
+create or replace function public.get_public_job_machine_translation(p_job_id uuid, p_locale text)
+returns table (source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = p_job_id and j.status = 'active' and s.is_active
+   limit 1;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-N kontrola ujemna: bez warunku rewizji zwracany jest przekład starej treści');
+reset role;
+rollback to savepoint tm_neg;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_job_machine_translation(:'TMJ1', 'en')),
+  'TM159-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- AV157. Stan oferty w historii kandydata (0157): `get_applied_jobs_display` i
+--        `get_offered_jobs_display` zwracają `job_availability` (available/expired/closed/
+--        unavailable), a `slug` WYŁĄCZNIE dla oferty publicznej — panel nie linkuje do strony
+--        publicznej, która odpowiada 404. Tytuł i firma zostają dla każdego stanu.
+--        Kontrola ujemna: definicja sprzed 0157 (slug bez warunku) daje link do zamkniętej oferty.
+-- ============================================================================
+begin;
+reset role; reset app.current_uid;
+\set CANDAV 'e2060000-0000-0000-0000-00000000000c'
+\set RECAV  'e2060000-0000-0000-0000-0000000000a1'
+\set COMPAV 'e2060000-0000-0000-0000-0000000000f1'
+\set JAV1   'e2060000-0000-0000-0000-0000000000b1'
+\set JAV2   'e2060000-0000-0000-0000-0000000000b2'
+\set JAV3   'e2060000-0000-0000-0000-0000000000b3'
+\set JAV4   'e2060000-0000-0000-0000-0000000000b4'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDAV','candav@test.be','Ada V','{"role":"candidate","first_name":"Ada","last_name":"V","locale":"pl"}'),
+  (:'RECAV','recav@test.be','Rik V','{"role":"employer","first_name":"Rik","last_name":"V","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'COMPAV','Firma AV','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPAV',:'RECAV','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JAV1',:'COMPAV','av-otwarta','Otwarta AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV2',:'COMPAV','av-zamknieta','Zamknięta AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV3',:'COMPAV','av-po-terminie','Po terminie AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV4',:'COMPAV','av-wstrzymana','Wstrzymana AV','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDAV', false);
+
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JAV1'::uuid, 'av-app-1', null, null, null) is not null as av1 \gset
+select public.apply_to_job(:'JAV2'::uuid, 'av-app-2', null, null, null) is not null as av2 \gset
+select public.apply_to_job(:'JAV3'::uuid, 'av-app-3', null, null, null) is not null as av3 \gset
+select public.apply_to_job(:'JAV4'::uuid, 'av-app-4', null, null, null) is not null as av4 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECAV'; select pg_temp.assert_client_role();
+select public.send_offer(:'JAV2'::uuid, :'CANDAV'::uuid, 'av-offer-2', null, null) is not null as avo2 \gset
+reset role; reset app.current_uid;
+
+-- Stany po aplikacji: JAV2 zamknięta, JAV3 z terminem = now() (bez crona expire_due_jobs),
+-- JAV4 wstrzymana.
+update public.jobs set status = 'closed' where id = :'JAV2';
+update public.jobs set expires_at = now() where id = :'JAV3';
+update public.jobs set status = 'paused' where id = :'JAV4';
+
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+-- AV1: klasyfikacja każdego stanu.
+select pg_temp.assert(
+  (select string_agg(job_availability, ',' order by job_id) from public.get_applied_jobs_display('pl'))
+    = 'available,closed,expired,unavailable',
+  'AV1 job_availability: otwarta=available, wstrzymana=unavailable, zamknięta=closed, po terminie=expired');
+-- AV2: slug tylko dla oferty publicznej; tytuł i firma dla każdego stanu.
+select pg_temp.assert(
+  (select slug from public.get_applied_jobs_display('pl') where job_id = :'JAV1') = 'av-otwarta',
+  'AV2 oferta publiczna ma slug');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 1,
+  'AV2b zamknięta/po terminie/wstrzymana bez slugu (brak linku do 404)');
+select pg_temp.assert(
+  (select bool_and(title <> '' and company_name = 'Firma AV') from public.get_applied_jobs_display('pl')),
+  'AV2c tytuł i firma zostają dla każdego stanu');
+-- AV3: slug jest dokładnie wtedy, gdy strona publiczna istnieje (get_public_job).
+select pg_temp.assert(
+  exists (select 1 from public.get_public_job('av-otwarta', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-zamknieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-po-terminie', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-wstrzymana', 'pl')),
+  'AV3 slug zwracamy dokładnie dla ofert, które get_public_job pokazuje');
+-- AV4: historia propozycji — ten sam kontrakt.
+select pg_temp.assert(
+  (select job_availability = 'closed' and slug is null and title = 'Zamknięta AV'
+     from public.get_offered_jobs_display('pl') where job_id = :'JAV2'),
+  'AV4 get_offered_jobs_display: zamknięta oferta bez slugu, z tytułem');
+reset role; reset app.current_uid;
+
+-- AV5: firma zawieszona → unavailable (strona publiczna wymaga firmy verified).
+update public.companies set status = 'suspended' where id = :'COMPAV';
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select job_availability = 'unavailable' and slug is null
+     from public.get_applied_jobs_display('pl') where job_id = :'JAV1'),
+  'AV5 oferta aktywna firmy zawieszonej = unavailable, bez slugu');
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPAV';
+
+-- AV6: granty — tylko authenticated.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_offered_jobs_display(text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_offered_jobs_display(text)', 'EXECUTE'),
+  'AV6 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- AV-N (kontrola ujemna): slug bez warunku dostępności (jak przed 0157) → link do zamkniętej
+-- oferty; AV2b wykrywa regresję.
+savepoint av_neg;
+create or replace function public.candidate_job_availability(
+  p_status public.job_status, p_deleted_at timestamptz, p_expires_at timestamptz,
+  p_company_status public.company_status, p_company_deleted_at timestamptz
+) returns text language sql stable as $$ select 'available'::text $$;
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 4,
+  'AV-N bez klasyfikacji zamknięta oferta dostaje link — AV2b wykrywa regresję');
+reset role; reset app.current_uid;
+rollback to savepoint av_neg;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- AV157. Stan oferty w historii kandydata (0157): `get_applied_jobs_display` i
+--        `get_offered_jobs_display` zwracają `job_availability` (available/expired/closed/
+--        unavailable), a `slug` WYŁĄCZNIE dla oferty publicznej — panel nie linkuje do strony
+--        publicznej, która odpowiada 404. Tytuł i firma zostają dla każdego stanu.
+--        Kontrola ujemna: definicja sprzed 0157 (slug bez warunku) daje link do zamkniętej oferty.
+-- ============================================================================
+begin;
+reset role; reset app.current_uid;
+\set CANDAV 'e2060000-0000-0000-0000-00000000000c'
+\set RECAV  'e2060000-0000-0000-0000-0000000000a1'
+\set COMPAV 'e2060000-0000-0000-0000-0000000000f1'
+\set JAV1   'e2060000-0000-0000-0000-0000000000b1'
+\set JAV2   'e2060000-0000-0000-0000-0000000000b2'
+\set JAV3   'e2060000-0000-0000-0000-0000000000b3'
+\set JAV4   'e2060000-0000-0000-0000-0000000000b4'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDAV','candav@test.be','Ada V','{"role":"candidate","first_name":"Ada","last_name":"V","locale":"pl"}'),
+  (:'RECAV','recav@test.be','Rik V','{"role":"employer","first_name":"Rik","last_name":"V","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'COMPAV','Firma AV','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPAV',:'RECAV','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JAV1',:'COMPAV','av-otwarta','Otwarta AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV2',:'COMPAV','av-zamknieta','Zamknięta AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV3',:'COMPAV','av-po-terminie','Po terminie AV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JAV4',:'COMPAV','av-wstrzymana','Wstrzymana AV','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDAV', false);
+
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'JAV1'::uuid, 'av-app-1', null, null, null) is not null as av1 \gset
+select public.apply_to_job(:'JAV2'::uuid, 'av-app-2', null, null, null) is not null as av2 \gset
+select public.apply_to_job(:'JAV3'::uuid, 'av-app-3', null, null, null) is not null as av3 \gset
+select public.apply_to_job(:'JAV4'::uuid, 'av-app-4', null, null, null) is not null as av4 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'RECAV'; select pg_temp.assert_client_role();
+select public.send_offer(:'JAV2'::uuid, :'CANDAV'::uuid, 'av-offer-2', null, null) is not null as avo2 \gset
+reset role; reset app.current_uid;
+
+-- Stany po aplikacji: JAV2 zamknięta, JAV3 z terminem = now() (bez crona expire_due_jobs),
+-- JAV4 wstrzymana.
+update public.jobs set status = 'closed' where id = :'JAV2';
+update public.jobs set expires_at = now() where id = :'JAV3';
+update public.jobs set status = 'paused' where id = :'JAV4';
+
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+-- AV1: klasyfikacja każdego stanu.
+select pg_temp.assert(
+  (select string_agg(job_availability, ',' order by job_id) from public.get_applied_jobs_display('pl'))
+    = 'available,closed,expired,unavailable',
+  'AV1 job_availability: otwarta=available, wstrzymana=unavailable, zamknięta=closed, po terminie=expired');
+-- AV2: slug tylko dla oferty publicznej; tytuł i firma dla każdego stanu.
+select pg_temp.assert(
+  (select slug from public.get_applied_jobs_display('pl') where job_id = :'JAV1') = 'av-otwarta',
+  'AV2 oferta publiczna ma slug');
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 1,
+  'AV2b zamknięta/po terminie/wstrzymana bez slugu (brak linku do 404)');
+select pg_temp.assert(
+  (select bool_and(title <> '' and company_name = 'Firma AV') from public.get_applied_jobs_display('pl')),
+  'AV2c tytuł i firma zostają dla każdego stanu');
+-- AV3: slug jest dokładnie wtedy, gdy strona publiczna istnieje (get_public_job).
+select pg_temp.assert(
+  exists (select 1 from public.get_public_job('av-otwarta', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-zamknieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-po-terminie', 'pl'))
+  and not exists (select 1 from public.get_public_job('av-wstrzymana', 'pl')),
+  'AV3 slug zwracamy dokładnie dla ofert, które get_public_job pokazuje');
+-- AV4: historia propozycji — ten sam kontrakt.
+select pg_temp.assert(
+  (select job_availability = 'closed' and slug is null and title = 'Zamknięta AV'
+     from public.get_offered_jobs_display('pl') where job_id = :'JAV2'),
+  'AV4 get_offered_jobs_display: zamknięta oferta bez slugu, z tytułem');
+reset role; reset app.current_uid;
+
+-- AV5: firma zawieszona → unavailable (strona publiczna wymaga firmy verified).
+update public.companies set status = 'suspended' where id = :'COMPAV';
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select job_availability = 'unavailable' and slug is null
+     from public.get_applied_jobs_display('pl') where job_id = :'JAV1'),
+  'AV5 oferta aktywna firmy zawieszonej = unavailable, bez slugu');
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPAV';
+
+-- AV6: granty — tylko authenticated.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.get_offered_jobs_display(text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_offered_jobs_display(text)', 'EXECUTE'),
+  'AV6 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- AV-N (kontrola ujemna): slug bez warunku dostępności (jak przed 0157) → link do zamkniętej
+-- oferty; AV2b wykrywa regresję.
+savepoint av_neg;
+create or replace function public.candidate_job_availability(
+  p_status public.job_status, p_deleted_at timestamptz, p_expires_at timestamptz,
+  p_company_status public.company_status, p_company_deleted_at timestamptz
+) returns text language sql stable as $$ select 'available'::text $$;
+set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 4,
+  'AV-N bez klasyfikacji zamknięta oferta dostaje link — AV2b wykrywa regresję');
+reset role; reset app.current_uid;
+rollback to savepoint av_neg;
 rollback;
 reset role; reset app.current_uid;
 

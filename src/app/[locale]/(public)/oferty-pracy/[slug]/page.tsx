@@ -261,7 +261,10 @@ export default async function JobDetailPage({ params }: PageProps) {
       )
     : null;
   // Treść w innym języku niż strona → `lang` na fragmentach treści (WCAG 3.1.2).
-  const contentLang = version.fallback ? version.contentLocale : undefined;
+  // Przekład (#33) jest w języku strony — bez `lang`, za to z oznaczeniem i linkiem do oryginału.
+  // SEO bez zmian: wersja z przekładem nadal kanonizuje się do oryginału i nie ma JobPosting.
+  const translation = job.machineTranslation;
+  const contentLang = version.fallback && !translation ? version.contentLocale : undefined;
 
   // Podobne oferty (ta sama kategoria, bez bieżącej). Sekcja pomocnicza: jej błąd odczytu
   // nie przerywa strony — opis, firma i aplikowanie zostają dostępne (#191).
@@ -420,6 +423,25 @@ export default async function JobDetailPage({ params }: PageProps) {
               <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
             </p>
+
+            {translation ? (
+              <p data-testid="job-machine-translation" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+                <LanguagesIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="break-words">
+                  {translation.origin === 'ai'
+                    ? t('machineTranslationNotice', { language: t(`contentLanguageNames.${translation.sourceLocale}`) })
+                    : t('manualTranslationNotice', { language: t(`contentLanguageNames.${translation.sourceLocale}`) })}{' '}
+                  <Link
+                    href={`${BASE_PATH}/${slug}`}
+                    locale={translation.sourceLocale}
+                    hrefLang={translation.sourceLocale}
+                    className={TEXT_LINK}
+                  >
+                    {t('translationOriginalLink')}
+                  </Link>
+                </span>
+              </p>
+            ) : null}
 
             {contentLang ? (
               <p data-testid="job-content-language" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">

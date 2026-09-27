@@ -128,14 +128,34 @@ export async function sendMessage(
 
   if (!isPortalDataConfigured()) return { ok: true, id: 'demo' };
 
-  // Rate limit per IP (60 wiadomości / godz) — ochrona przed spamowaniem konwersacji.
-  if (!(await checkRateLimit('message', { max: 60, windowSeconds: 3600 }))) {
+  // #852: sesja PRZED limitem — anonimowe, poprawnie sformatowane wywołanie nie może zużyć
+  // wspólnego budżetu IP/NAT i zablokować prawdziwych uczestników rozmów za tym samym adresem.
+  // Bez sesji RPC i tak odmawia (UNAUTHENTICATED → PERMISSION_DENIED); sprawdzamy to tu, bez
+  // dotykania jakiegokolwiek licznika.
+  const me = await getPortalIdentity();
+  if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+
+  // Limit biznesowy PER KONTO (60 wiadomości / godz), niezależny od IP (#852): dwa konta za
+  // tym samym adresem mają niezależne budżety, a jedno konto nie omija swojego limitu
+  // zmieniając sieć.
+  if (
+    !(await checkRateLimit('message', {
+      max: 60,
+      windowSeconds: 3600,
+      identifier: me.id,
+      perIp: false,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  // Dodatkowa, znacznie szersza ochrona sieciowa przed automatyzacją wielu kont z jednego
+  // adresu — próg nie blokuje populacji współdzielącej IP po zwykłym użyciu limitu jednej
+  // osoby (#852).
+  if (!(await checkRateLimit('message-ip', { max: 600, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
 
   try {
-    const me = await getPortalIdentity();
-    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
     // Ten sam `client_message_id` przy ponowieniu = ta sama wiadomość (idempotencja w RPC, 0075).
     const data = await withPortalTransaction(me, (tx) =>
       rpc(tx, 'send_message', {
