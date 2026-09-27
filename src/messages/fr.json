@@ -2498,7 +2498,13 @@
     "webVitalsAboutConsent": "Les mesures proviennent de la balise Cloudflare Web Analytics, chargée uniquement après consentement dans la catégorie analyse et uniquement sur les pages publiques. Sans cookies ni identifiants personnels ; trafic des robots exclu.",
     "webVitalsAboutSampling": "Cloudflare échantillonne les événements : le nombre de mesures est une estimation. Les valeurs correspondent au 75e centile.",
     "webVitalsAboutThresholds": "Évaluation selon les seuils Core Web Vitals : LCP 2,5 / 4 s, INP 200 / 500 ms, CLS 0,1 / 0,25.",
-    "webVitalsOpenCloudflare": "Ouvrir Web Analytics dans Cloudflare (nouvel onglet)"
+    "webVitalsOpenCloudflare": "Ouvrir Web Analytics dans Cloudflare (nouvel onglet)",
+    "auditActionRetentionPolicyChanged": "Modification d’une durée de conservation",
+    "auditActionRetentionPoliciesSeeded": "Enregistrement des durées de conservation",
+    "entityRetentionPolicy": "Durée de conservation",
+    "retentionLinkTitle": "Conservation des données",
+    "retentionLinkHint": "Durées de conservation et modes des tâches de nettoyage — consultation seule.",
+    "retentionLinkCta": "Voir la conservation des données"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -3280,5 +3286,113 @@
     "errorLanguageInvalid": "Le nom de la langue doit comporter entre 2 et 40 caractères.",
     "errorExperienceInvalid": "Indiquez un nombre d'années entre 0 et 60.",
     "errorFieldsInvalid": "Corrigez les champs signalés avant d'enregistrer."
+  },
+  "adminRetention": {
+    "title": "Conservation des données",
+    "subtitle": "Durées de conservation enregistrées en base et modes des tâches de nettoyage. Consultation seule — cette page ne modifie rien.",
+    "demoNotice": "Mode démo : valeurs initiales de la migration, sans lecture de la base.",
+    "modesTitle": "Modes des tâches planifiées",
+    "modesHint": "État des variables d’environnement du service, lu comme dans la tâche de maintenance. Le modifier exige de définir la variable chez l’hébergeur.",
+    "modeRetention": "Nettoyage des données (RETENTION_MODE)",
+    "modeDsaRetention": "Anonymisation des dossiers DSA (DSA_RETENTION_MODE)",
+    "modeStorageGc": "Nettoyage des fichiers orphelins (STORAGE_GC_MODE)",
+    "mode": {
+      "off": "Désactivé",
+      "dryRun": "Essai (sans modification)",
+      "apply": "Activé (suppression)"
+    },
+    "storageGcDryRun": "Compteurs seulement (sans suppression)",
+    "storageGcDelete": "Suppression des objets orphelins",
+    "policiesTitle": "Durées de conservation",
+    "policiesHint": "Une catégorie « désactivée » n’a pas d’échéance. Les durées sont modifiées par le responsable du traitement.",
+    "policiesEmpty": "Aucune durée de conservation enregistrée.",
+    "fieldPeriod": "Durée",
+    "fieldWarning": "Avertissement avant échéance",
+    "fieldEnforcement": "Qui fait respecter l’échéance",
+    "fieldLastChange": "Dernière modification",
+    "enforcement": {
+      "job": "Tâche de nettoyage",
+      "monitoring": "Sonde de surveillance",
+      "infrastructure": "Infrastructure",
+      "none": "Aucune tâche"
+    },
+    "days": "{count, plural, one {# jour} other {# jours}}",
+    "periodOff": "Désactivé",
+    "lastChangeValue": "{date}, {actor} : {from} → {to}",
+    "updatedValue": "{date} (migration)",
+    "lastChangeNone": "Aucune modification",
+    "actorUnknown": "Administrateur",
+    "unknownCategory": "Catégorie sans description dans le panneau.",
+    "auditLink": "Historique des modifications dans le journal",
+    "keys": {
+      "acceptance_ip_user_agent": {
+        "label": "IP et user-agent de l’acceptation",
+        "description": "L’adresse IP et le user-agent enregistrés à l’inscription sont effacés ; le justificatif d’acceptation reste."
+      },
+      "audit_log": {
+        "label": "Journal d’audit",
+        "description": "Journal minimisé des actions d’administration. Aucune tâche automatique."
+      },
+      "closed_application": {
+        "label": "Candidatures clôturées",
+        "description": "Candidature à l’état final avec ses conversations, notifications et e-mails — à compter de la clôture."
+      },
+      "confirmed_guest_request": {
+        "label": "Demandes confirmées sans compte",
+        "description": "Tampon de la demande invitée après confirmation ; la candidature reste avec son instantané."
+      },
+      "consent_evidence": {
+        "label": "Preuves des consentements",
+        "description": "Preuves des consentements après minimisation. Aucune tâche automatique."
+      },
+      "data_rights_request_log": {
+        "label": "Trace des demandes d’exercice des droits",
+        "description": "Trace du traitement d’une demande d’accès ou d’effacement, sans les données — à compter de la clôture."
+      },
+      "database_backup": {
+        "label": "Sauvegardes de la base",
+        "description": "Sauvegardes et exports de la base, élagués par le script de sauvegarde et le fournisseur."
+      },
+      "deleted_file": {
+        "label": "Fichiers supprimés",
+        "description": "Fichier marqué comme supprimé : ligne en base et objet dans le bucket."
+      },
+      "deleted_profile": {
+        "label": "Profils candidats supprimés",
+        "description": "Profil marqué comme supprimé : suppression complète du compte et des données du processus."
+      },
+      "erasure_tombstone": {
+        "label": "Registre des effacements",
+        "description": "Registre des effacements à réappliquer après restauration ; doit survivre à la plus ancienne sauvegarde."
+      },
+      "guest_ip_user_agent": {
+        "label": "IP et user-agent de l’invité",
+        "description": "L’adresse IP et le user-agent du consentement de l’invité sont effacés."
+      },
+      "inactive_candidate_account": {
+        "label": "Comptes candidats inactifs",
+        "description": "Compte sans activité : avertissement par e-mail, puis suppression complète."
+      },
+      "inactive_candidate_cv": {
+        "label": "CV des candidats inactifs",
+        "description": "CV sans activité du compte : avertissement par e-mail, puis suppression du fichier."
+      },
+      "inactive_searchable_profile": {
+        "label": "Profils visibles inactifs",
+        "description": "Un profil visible par les entreprises sans activité est masqué dans la recherche."
+      },
+      "security_log": {
+        "label": "Journaux applicatifs et de sécurité",
+        "description": "Journaux bruts chez l’hébergeur — réglage d’infrastructure."
+      },
+      "storage_physical_deletion": {
+        "label": "Suppression physique des fichiers",
+        "description": "Suppression de l’objet du bucket après celle de la ligne ; alerte avant l’échéance."
+      },
+      "unconfirmed_guest_request": {
+        "label": "Demandes non confirmées sans compte",
+        "description": "Demande invitée non confirmée — à compter du premier envoi."
+      }
+    }
   }
 }
