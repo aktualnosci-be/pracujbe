@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { loginHref, registerHref } from '@/lib/auth/next-path';
 import { reportApplyStarted } from '@/lib/job-funnel/client';
 import { usePublicViewerStatus } from '@/components/public/PublicSavedJobs';
-import { GuestApplyForm } from '@/components/public/GuestApplyForm';
+import { GuestApplyForm, type GuestApplyDraft } from '@/components/public/GuestApplyForm';
 import { LegalDocLink } from '@/components/legal/LegalDocLink';
 import {
   APPLY_AVAILABILITY_OPTIONS,
@@ -188,6 +188,10 @@ export function ApplyModal({
   // starego zapisu jako zapisania nowych danych — dostaje nowy klucz, więc baza rozpozna
   // to jako świadomą kolejną próbę (APPLICATION_ALREADY_EXISTS), a nie retry.
   const submittedPayloadRef = React.useRef<string | null>(null);
+  // #913: niewysłany szkic gościa przeżywa odmontowanie `GuestApplyForm` przy zamknięciu
+  // dialogu (Radix odmontowuje treść, gdy `open` jest `false`) — sam `ApplyModal` zostaje
+  // zamontowany, więc `useRef` tutaj wystarcza bez localStorage/sessionStorage.
+  const guestDraftRef = React.useRef<GuestApplyDraft | undefined>(undefined);
 
   const availabilityLabel = (value: Availability): string => {
     switch (value) {
@@ -202,6 +206,8 @@ export function ApplyModal({
     }
   };
 
+  // Zeruje CAŁY formularz (dane + stan próby) — tylko po realnym sukcesie wysyłki, kiedy
+  // szkic przestaje być potrzebny (#913).
   const reset = () => {
     setPhone('');
     setAvailability('immediate');
@@ -218,7 +224,13 @@ export function ApplyModal({
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
-      reset();
+      // #913: zamknięcie modalu (X/Escape) NIE czyści wpisanych danych — kandydat wraca do
+      // wypełnionego formularza tej samej oferty. Czyścimy tylko komunikaty z poprzedniej
+      // próby (błąd formularza i pól), żeby nieaktualny alert nie wisiał nad świeżo otwartym
+      // dialogiem; wartości pól, klucz idempotencji i migawka wysłanych danych zostają.
+      setFormError(null);
+      setErrors({});
+      setAnswerErrors({});
       setFormReady(false);
       // Lejek ofert (#99): rozpoczęcie aplikowania, raz na wyświetlenie oferty.
       if (!demo) reportApplyStarted(jobId);
@@ -321,6 +333,8 @@ export function ApplyModal({
     if (res.ok) {
       setOpen(false);
       setSent(true);
+      // #913: szkic potrzebny tylko do wysłania — po sukcesie czyścimy formularz na kolejne otwarcie.
+      reset();
       return;
     }
 
@@ -431,6 +445,10 @@ export function ApplyModal({
                 screeningQuestions={screeningQuestions}
                 candidateMinAge={candidateMinAge}
                 contentLocale={contentLocale}
+                initialDraft={guestDraftRef.current}
+                onDraftChange={(draft) => {
+                  guestDraftRef.current = draft;
+                }}
               />
             ) : null}
             <p className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">

@@ -612,6 +612,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
+  Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
+  (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
+  (`f.locations.join(',')` + `splitParam`/`value.split(',')` nie rozróżniały separatora listy
+  od przecinka wewnątrz jednej nazwy) — zaznaczenie takiej jednej opcji gubiło ofertę, dla
+  której się pojawiła. `parseLocationsParam`/`serializeLocations` (`src/components/public/job-filters.ts`)
+  escapują przecinek/backslash wewnątrz każdej nazwy backslashem przed złączeniem; jedno
+  źródło dla JS-owego sidebara/sheetu, noscriptowego formularza (`FilterSheet.tsx`), usuwania
+  chipa (`withoutValue` w stronie listy) i zapisanych wyszukiwań (`sidebarFiltersToParams`).
+  Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
+  jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
+  ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -747,6 +758,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z CAS i audytem). Obie strony indeksowalne (canonical, hreflang, sitemap), stopka „Pytania
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
+  Bez JavaScriptu (#817): `<form>` ma `method="post"` (obronnie — natywna submisja trafiłaby do
+  body żądania, nie do adresu URL) i przycisk wysyłki startuje jako `disabled`, odblokowany
+  dopiero po zamontowaniu komponentu — bez JS zostaje trwale zablokowany, więc ani klik, ani
+  Enter w polu nie wysyłają treści wiadomości/imienia/e-maila w query URL (historia przeglądarki,
+  logi serwera); `<noscript>` informuje o wymogu JavaScriptu. Dowód: E2E `contact-form`
+  (kontekst `javaScriptEnabled: false`, kontrola ujemna: formularz bez `method="post"`).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
   `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
   `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
@@ -892,6 +909,24 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+Blokada z istniejącego wątku (#832, bez migracji): do #832 jedyna ścieżka UI była szczegół
+AKTYWNEJ publicznej oferty (`JobCompanyBlockControl`) — po zamknięciu ostatniego ogłoszenia
+firmy ta ścieżka znikała, choć rozmowa i prawo firmy do wysyłania wiadomości zostawały (samo
+zamknięcie oferty nie tworzy blokady). `getConversationThread` (`src/lib/data/messages.ts`)
+dolicza teraz `ConversationThread.companyBlock` — dla strony KANDYDACKIEJ rozmowy (nie dla
+widza po stronie firmy, `ctx.viewerIsCompany` z #355/0143) i tylko gdy nazwa firmy jest
+rozwiązywalna — czytany bezpośrednio z `candidate_company_blocks` pod RLS (polityka
+`..._select_own`, 0078; bez nowego RPC). `ConversationCompanyBlockControl` w nagłówku wątku
+zapisuje przez ten sam `setCompanyBlockAction`/`set_company_block` co ustawienia i szczegół
+oferty (RPC już przyjmuje dowolną nieusuniętą firmę, bez wymogu aktywnej oferty). Bezpiecznik:
+`MessageThread` renderuje kontrolkę tylko z jawnym `allowCompanyBlock` (ustawianym przez
+`MessagesView` wyłącznie na `/candidate/wiadomosci`) — nigdy w panelu pracodawcy, także dla
+danych DEMO (które nie rozróżniają widza). Dowód: unit `conversation-thread-result`
+(w tym kontrole ujemne: widz po stronie firmy i rozmowa bez firmy nie dostają `companyBlock`,
+zero zapytań do bazy), `message-thread-company-block` (kontrola ujemna `allowCompanyBlock`),
+`conversation-company-block-control`. **Otwarte:** ta sama kontrolka na własnej historii
+rekrutacji kandydata i na publicznym profilu firmy (issue wskazywał je jako alternatywne
+miejsca — wątek pokrywa opisany scenariusz odtworzenia).
 Dynamiczne facety (#874, bez migracji): `GET /api/job-filter-facets` (zmiana filtra bez
 przeładowania strony) czytał zweryfikowanego kandydata pomijając sesję — agregat SQL działał
 wtedy jak dla gościa i mógł zawyżyć licznik/CTA o oferty firm zablokowanych przez kandydata
@@ -1500,6 +1535,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zapisu. Ponowienie bez edycji zachowuje ten sam klucz i zwykły komunikat (bez zmian, kontrola
   ujemna w teście). Bez migracji — RPC `apply_to_job` (0071/0093) już rozróżniał klucze, brakowało
   tylko odróżnienia payloadu po stronie klienta. Test: `apply-modal-network` (z kontrolą ujemną).
+  Szkic przeżywa zamknięcie modalu (#913, bez migracji): zamknięcie dialogu X/Escape przed
+  wysłaniem nie zeruje już wpisanych danych — `reset()` w `ApplyModal` uruchamia się TYLKO po
+  realnym sukcesie wysyłki (Invariant #11: dane zostają po każdym innym zamknięciu, bez wyjątku
+  na błąd). Kandydat: pola już żyły w stanie `ApplyModal`, więc wystarczyło przestać je zerować
+  przy `handleOpenChange`. Gość: `GuestApplyForm` odmontowuje się razem z treścią dialogu
+  (`LightDialogContent`), więc szkic (bez tokenu Turnstile i bez stanu błędów/wysyłki — te wracają
+  do zera przy każdym montażu) trzyma `ApplyModal` w `useRef` (`GuestApplyDraft`, `initialDraft`/
+  `onDraftChange`) i czyści go dopiero po `submitGuestApplication` zwracającym sukces — celowo bez
+  `localStorage`/`sessionStorage` (decyzja z issue: bez odrębnej decyzji prywatności). Szkic nie
+  przeżywa pełnego przeładowania strony ani zmiany oferty (nowa instancja komponentu) — zgodnie
+  z kierunkiem z issue („aż do wysłania, zmiany oferty lub opuszczenia strony”). Dowód: unit
+  `apply-modal-draft-preserve` (kandydat i gość, z kontrolą ujemną: sukces czyści szkic), E2E
+  `guest-apply` (X i Escape na tej samej stronie, z kontrolą ujemną).
   Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
@@ -1783,6 +1831,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
   `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
   (edytor), `admin-a11y` (nowe trasy).
+  Zapis a edycja w toku (#820): `createEmailCampaignRevision` jest idempotentny po `clientKey`
+  (retry z tym samym kluczem NIE aktualizuje treści), więc pola edytora muszą być zablokowane
+  na czas zapisu — inaczej edycja wpisana w trakcie oczekiwania na odpowiedź serwera ginie po
+  cichu (formularz pokazuje nowszą wartość, zapisana i wyświetlona po nawigacji zostaje
+  starsza). `EmailCampaignEditor`: pola sluga i treści ofert mają `disabled={pending}`,
+  a handlery zmiany stanu (`changeContent`/`setJobField`/`addJob`/`removeJob`, onChange sluga)
+  dodatkowo odrzucają aktualizację, gdy `pending` — atrybut `disabled` sam nie blokuje zdarzenia
+  wywołanego poza normalną interakcją użytkownika. Dowód: unit
+  `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
+  ujemna bez zapisu w toku, odblokowanie po błędzie).
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń
@@ -1837,6 +1895,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
   `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
   `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
+  Gołe domeny bez schematu (#716): redakcja URL-i w cytacie obejmuje też domeny bez `http(s)://`,
+  `www.` ani ścieżki (np. „firma.be”, poddomena, z portem) — ograniczone do wiarygodnej listy
+  TLD, żeby nie niszczyć zwykłych skrótów/inicjałów („sp. z o.o.”, „np.”, „itd.”). Dowód:
+  `email-message-excerpt` (kanarki gołych domen + kontrola ujemna na zwykłych skrótach).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
@@ -2292,6 +2354,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `next.config.mjs` w obu trybach), opcjonalnie tryb `PROD_SMOKE_EXPECT_MODE=production|demo`
   (HSTS ≥ 1 rok i brak noindex / noindex) i wdrożony SHA `PROD_SMOKE_EXPECT_SHA` z `version`
   w `/api/health` (w produkcji z `HEALTH_CHECK_SECRET` w `x-health-token`, bez logowania sekretu).
+  Partie sitemap ofert (#689): statyczna lista sprawdzeń zna tylko `/sitemap/0.xml` (strony
+  statyczne) — smoke odczytuje `/robots.txt` i dopisuje sprawdzenie dla KAŻDEJ partii ofert
+  (`/sitemap/1.xml`, `2.xml`, …) tam wskazanej (`parseRobotsSitemapShardPaths`), więc awaria
+  generowania katalogu ofert (zapytanie, paginacja, tłumaczenia) nie umyka już wynikowi
+  „wszystkie sprawdzenia zgodne” mimo zielonego `id=0`. Katalog bez partii ofert = bez zmian.
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -2301,6 +2368,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
   `captureError` (`src/lib/error-report.ts`, izomorficzny) przekazuje tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
   query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
+  segment-UUID w trasie wysyłanej NA ZEWNĄTRZ (`safeRoute`, `src/lib/error-webhook/message.ts`)
+  jest zawsze szablonem `[id]` (np. `/candidate/aplikacje/[id]`) — inaczej niż ogólna redakcja
+  ścieżek (`redactPathSegment`), gdzie UUID zostaje jako identyfikator korelacyjny w logach
+  wewnętrznych; bez tego rozróżnienia raport z prywatnej strony szczegółu aplikacji
+  (`POST /api/client-error`) niósł do Discorda realny UUID rekordu kandydata/pracodawcy (#776,
+  naprawione — `UUID_RE` eksportowane z `src/lib/privacy/redact.ts`, dowód `error-webhook`
+  z kontrolą ujemną);
   ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
   awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
   Logi serwera — wspólne reguły redakcji
