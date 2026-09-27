@@ -1022,6 +1022,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (kolumny `jobs` z listy dozwolonych + tłumaczenie + relacje replace-all w jednej transakcji,
   tylko szkic, recruiter+) — błąd w części kroku nie zostawia częściowego zapisu. Treść kroku
   buduje `src/lib/job-draft-content.ts`. Dowód: `rls.sql` sekcja WZ192.
+  Edycja w trakcie zapisu (#829, bez migracji): pola zostają edytowalne, a akcja dostaje
+  snapshot z chwili kliknięcia — po sukcesie `persistStep` porównuje go z bieżącymi danymi
+  kroku (`stepDataChanged`) i nowszą wartość waliduje i zapisuje ponownie (najwyżej 3 rundy),
+  zanim „Dalej” zmieni krok albo „Zapisz i wyjdź” wyjdzie; niepoprawna nowsza wartość = błąd
+  przy polu, bez wyjścia. Tryb edycji opublikowanej oferty po takim zapisie nie pokazuje
+  „Zapisano” (ponowne „Zapisz zmiany” z nową wersją). Test: `job-wizard-save-revision`
+  (kontrola ujemna: bez poprawki 5 z 7 czerwonych).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
