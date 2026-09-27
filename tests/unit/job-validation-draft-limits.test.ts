@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   JOB_ITEM_LIMITS,
+  jobSchema,
   step1Schema,
   step5Schema,
   step6Schema,
@@ -144,5 +145,66 @@ describe("kreator oferty: limity pozycji list (#364)", () => {
     expect(cut(latestBody("set_job_requirements"))).toContain(JOB_ITEM_LIMITS.requirement);
     expect(cut(latestBody("set_job_skills"))).toContain(JOB_ITEM_LIMITS.skill);
     expect(cut(latestBody("set_job_certificates"))).toContain(JOB_ITEM_LIMITS.certificate);
+  });
+});
+
+describe("kreator oferty: „bez wymogu języka” wyklucza wymagane języki (#910)", () => {
+  it("kontrola ujemna: flaga zaznaczona z niepustą listą języków jest odrzucana", () => {
+    const result = step7Schema.safeParse({
+      languages: [{ language: "Niderlandzki", level: "basic" }],
+      noLanguageRequired: true,
+    });
+    expect(result.success).toBe(false);
+    expect(firstMessage(result as never)).toBe("job.error.noLanguageConflict");
+  });
+
+  it("flaga bez języków przechodzi", () => {
+    expect(
+      step7Schema.safeParse({ languages: [], noLanguageRequired: true }).success,
+    ).toBe(true);
+  });
+
+  it("języki bez flagi przechodzą", () => {
+    expect(
+      step7Schema.safeParse({
+        languages: [{ language: "Niderlandzki", level: "basic" }],
+        noLanguageRequired: false,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("domyślne wartości (krok pominięty) przechodzą", () => {
+    expect(step7Schema.safeParse({}).success).toBe(true);
+  });
+
+  it("ta sama reguła obowiązuje w pełnym jobSchema (edycja opublikowanej oferty)", () => {
+    const base = {
+      title: "Magazynier",
+      category: "warehouse",
+      occupation: "Magazynier",
+      contractType: "temporary",
+      workingHours: "40 h",
+      startImmediately: true,
+      city: "Gandawa",
+      region: "Flandria",
+      remote: false,
+      salaryPeriod: "hour" as const,
+      currency: "EUR" as const,
+      description: "x".repeat(40),
+      responsibilities: ["a"],
+      requirementsMandatory: ["a"],
+      mandatorySkills: ["a"],
+      companyDescription: "x".repeat(40),
+      agreePublish: true as const,
+    };
+    const invalid = jobSchema.safeParse({
+      ...base,
+      languages: [{ language: "Niderlandzki", level: "basic" }],
+      noLanguageRequired: true,
+    });
+    expect(invalid.success).toBe(false);
+    expect(
+      !invalid.success && invalid.error.issues.some((i) => i.message === "job.error.noLanguageConflict"),
+    ).toBe(true);
   });
 });

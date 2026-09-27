@@ -1511,7 +1511,14 @@ export function JobWizard({
                   id={domId('noLanguageRequired')}
                   label={t('noLanguageRequired')}
                   checked={values.noLanguageRequired}
-                  onChange={(c) => setValue('noLanguageRequired', c, { shouldDirty: true })}
+                  onChange={(c) => {
+                    setValue('noLanguageRequired', c, { shouldDirty: true });
+                    // #910: flaga i lista wymaganych języków wykluczają się — zaznaczenie
+                    // czyści dotychczas dodane języki zamiast zostawiać sprzeczny stan.
+                    if (c && values.languages.length > 0) {
+                      setValue('languages', [], { shouldDirty: true });
+                    }
+                  }}
                 />
               </div>
 
@@ -1862,6 +1869,11 @@ export function JobWizard({
       setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
         shouldDirty: true,
       });
+      // #910: dodanie wymaganego języka wyklucza „bez znajomości języka" — flaga i lista
+      // nie mogą współistnieć (walidacja kroku odrzuciłaby zapis).
+      if (values.noLanguageRequired) {
+        setValue('noLanguageRequired', false, { shouldDirty: true });
+      }
     }
     setLangDraft('');
     setLangError(false);

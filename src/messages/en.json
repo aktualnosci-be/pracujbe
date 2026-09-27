@@ -464,6 +464,7 @@
       "skillsTooMany": "Too many skills.",
       "experienceInvalid": "Invalid number of years of experience.",
       "languagesTooMany": "Too many languages.",
+      "noLanguageConflict": "You checked “No language required”, but the list still has a required language. Remove the required languages or uncheck the box.",
       "certificatesTooMany": "Too many certificates.",
       "conditionsTooMany": "Too many conditions.",
       "benefitsTooMany": "Too many benefits.",

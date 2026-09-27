@@ -176,9 +176,29 @@ const step7Base = z.object({
   screeningQuestions: screeningQuestionsSchema,
   screeningLocale: localeSchema.optional(),
 });
-export const step7Schema = step7Base.superRefine((data, ctx) =>
-  refineScreeningPrimaryLocale(data.screeningQuestions, data.screeningLocale, ctx),
-);
+/**
+ * #910: „Praca bez znajomości języka” i lista wymaganych języków wykluczają się nawzajem —
+ * flaga i `languages` są zapisywane niezależnie (filtr publiczny czyta tylko flagę, dopasowanie
+ * tylko listę), więc jednoczesne ustawienie obu dawało sprzeczny wynik dla kandydata. Błąd
+ * przy polu `languages` (ta sama lista, gdzie kandydat/rekruter je widzi i usuwa).
+ */
+function refineNoLanguageConflict(
+  data: { languages: unknown[]; noLanguageRequired: boolean },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.noLanguageRequired && data.languages.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['languages'],
+      message: 'job.error.noLanguageConflict',
+    });
+  }
+}
+
+export const step7Schema = step7Base.superRefine((data, ctx) => {
+  refineScreeningPrimaryLocale(data.screeningQuestions, data.screeningLocale, ctx);
+  refineNoLanguageConflict(data, ctx);
+});
 
 /** Krok 8 — warunki i benefity. */
 const step8Base = z.object({
@@ -226,7 +246,8 @@ export const jobSchema = step1Base
   .refine(salaryRefine, {
     path: ['salaryMax'],
     message: 'job.error.salaryRangeInvalid',
-  });
+  })
+  .superRefine(refineNoLanguageConflict);
 
 export type JobStep1 = z.infer<typeof step1Schema>;
 export type JobStep2 = z.infer<typeof step2Schema>;
