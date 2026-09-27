@@ -148,6 +148,49 @@ export function splitParam(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Lokalizacje (#845): w przeciwieństwie do kategorii/typu umowy (słownik zamknięty), nazwa
+ * miasta jest wolnym tekstem i może zawierać przecinek (np. „Bruxelles, Belgique”). Zwykłe
+ * CSV nie odróżnia wtedy separatora listy od przecinka wewnątrz jednej nazwy — zaznaczenie
+ * takiej pozycji gubi ofertę, dla której się pojawiła. Pojedynczy token jest więc escapowany
+ * (`\,` = literalny przecinek, `\\` = literalny backslash) PRZED złączeniem listy przecinkiem;
+ * `parseLocationsParam` odwraca escapowanie dopiero po rozbiciu na tokeny. Istniejące adresy
+ * bez backslashy (stare zapisane wyszukiwania, linki) parsują się identycznie jak wcześniej.
+ */
+function escapeLocationToken(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,');
+}
+
+/** Serializuje listę lokalizacji do jednej wartości parametru `location` (#845). */
+export function joinLocationsParam(values: readonly string[]): string {
+  return values.map(escapeLocationToken).join(',');
+}
+
+/** Rozbija wartość parametru `location`, respektując escapowany przecinek (#845). */
+export function parseLocationsParam(value: string | undefined): string[] {
+  if (!value) return [];
+  const tokens: string[] = [];
+  let current = '';
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    if (ch === '\\' && i + 1 < value.length) {
+      current += value[i + 1];
+      i += 1;
+      continue;
+    }
+    if (ch === ',') {
+      tokens.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  tokens.push(current);
+  // Escapy (`\,`, `\\`) są już rozwiązane wewnątrz pętli powyżej — tu tylko przycinamy
+  // białe znaki (jak `splitParam`) i odrzucamy puste tokeny.
+  return tokens.map((token) => token.trim()).filter(Boolean);
+}
+
 export function clampSalary(value: number, unit: SalaryUnit = 'month'): number {
   const { min, max, step } = salaryBounds(unit);
   const stepped = Math.round(value / step) * step;
@@ -169,7 +212,7 @@ export function parseSidebarFilters(
   f.categories = splitParam(sp['category']).filter((v): v is CategoryKey =>
     (CATEGORY_KEYS as readonly string[]).includes(v),
   );
-  f.locations = splitParam(sp['location']);
+  f.locations = parseLocationsParam(sp['location']);
   f.contractTypes = splitParam(sp['contractType']).filter(
     (v): v is ContractType => (CONTRACT_TYPES as readonly string[]).includes(v),
   );
@@ -355,7 +398,7 @@ export function sidebarFiltersToParams(
 ): Record<string, string> {
   const params: Record<string, string> = {};
   if (f.categories.length) params['category'] = f.categories.join(',');
-  if (f.locations.length) params['location'] = f.locations.join(',');
+  if (f.locations.length) params['location'] = joinLocationsParam(f.locations);
   if (f.contractTypes.length)
     params['contractType'] = f.contractTypes.join(',');
   if (f.salaryUnit !== 'month') params['salaryUnit'] = f.salaryUnit;

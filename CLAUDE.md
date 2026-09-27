@@ -636,6 +636,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
   `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy
   (dopasowanie po `parent_location_id`), matching nadal liczy odległość z tekstu (`cityKey`).
+  Przecinek w nazwie miasta (#845): jedna lokalizacja bez wpisu w słowniku (np. „Bruxelles,
+  Belgique”) po zaznaczeniu w filtrze wracała jako DWIE lokalizacje — parametr `location`
+  łączył/rozbijał listę zwykłym `join(',')`/`split(',')`, więc przecinek wewnątrz jednej nazwy
+  ginął w separatorze i wybrana oferta znikała z wyników. `joinLocationsParam`/
+  `parseLocationsParam` (`src/components/public/job-filters.ts`) escapują literalny przecinek
+  (`\,`) i backslash (`\\`) w pojedynczym tokenie przed złączeniem CSV, a rozbijanie odwraca to
+  dopiero po tokenizacji; stare adresy bez backslashy (zapisane wyszukiwania, linki) parsują się
+  identycznie jak wcześniej. Ta sama para funkcji w `FilterSheet.tsx` (formularz bez JS) — wartość
+  pojedynczej opcji i połączona wartość wielokrotnego wyboru. Bez migracji (czysta serializacja
+  URL, sam `get_public_jobs`/`_count` przyjmuje już rozbitą tablicę `p_locations`). Dowód: unit
+  `job-filters-location` (roundtrip, zgodność wsteczna CSV, kontrola ujemna naiwnego join/split).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
