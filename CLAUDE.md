@@ -560,7 +560,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
 - [x] shadcn/ui — zestaw komponentów w `src/components/ui` (API shadcn, styl „Ludzie i praca”, tokeny,
-  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select),
+  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select;
+  `aria-labelledby` listy zawsze wskazuje na faktycznie wyrenderowany `id` triggera, także gdy
+  wywołujący nadpisuje wygenerowany `id` — regresja #819, test `select-trigger-id`),
   card, badge (`success` = `success-text` na `success/10`, AA), toast, light-dialog (#393) +
   confirm-dialog, stepper, status-pill, match-bar, stat-card oraz **skeleton**, **table**
   (domyślne klasy = `TH`/`TD`/`TD_WRAP` z `panel-styles.ts`, `TableRowHeader` = `<th scope="row">`),
