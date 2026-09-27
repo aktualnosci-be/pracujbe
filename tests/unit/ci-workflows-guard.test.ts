@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 /**
  * Strażnik workflowów CI (`scripts/check-ci-workflows.mjs`, job `lint`): prawdziwe workflowy
  * przechodzą, a każda z kontroli ujemnych (kopia z jednym celowym błędem) daje czerwony wynik.
- * Pilnuje stałej nazwy wymaganego checka „E2E (Playwright)” po podziale E2E na shardy.
+ * Pilnuje stałej nazwy wymaganego checka „E2E (Playwright)” po podziale E2E na shardy
+ * i fixture'u `full` na 2 części (macierz = części dozwolone w konfiguracji fixture).
  */
 const WORKFLOWS = join(process.cwd(), '.github/workflows');
 const FILES = ['ci.yml', 'delete-old-runs.yml'];
@@ -39,7 +40,7 @@ afterEach(() => {
 describe('strażnik workflowów CI', () => {
   it('prawdziwe workflowy przechodzą', () => {
     const { code, output } = runGuard();
-    expect(output).toContain('shardy E2E z jobem zbiorczym');
+    expect(output).toContain('części fixture’ów z jobem zbiorczym');
     expect(code).toBe(0);
   });
 
@@ -59,6 +60,11 @@ describe('strażnik workflowów CI', () => {
     ['pomiar czasu poza e2e-perf', (ci) => ci.replace('run: npx playwright test --config playwright.applications-fixture.config.ts', 'run: npx playwright test --config playwright.applications-fixture.config.ts --project=chromium-timing'), 'e2e-perf'],
     ['e2e-real jako check blokujący', (ci) => ci.replace('    continue-on-error: true\n    services:', '    services:'), 'informacyjny'],
     ['baza e2e-real bez „e2e” w nazwie', (ci) => ci.replace('E2E_PGDATABASE: pracujbe_e2e_real', 'E2E_PGDATABASE: pracujbe_real'), 'e2e'],
+    ['fixture full bez części 2/2', (ci) => ci.replace('          - { fixture: full, part: 2/2 }\n', ''), 'częściach 1/2 i 2/2'],
+    ['fixture full w 3 częściach (niezgodne z konfiguracją)', (ci) => ci.replace('          - { fixture: full, part: 2/2 }\n', '          - { fixture: full, part: 2/2 }\n          - { fixture: full, part: 3/3 }\n'), 'częściach 1/2 i 2/2'],
+    ['fixture bez części z macierzy', (ci) => ci.replace('          TEST_APPLICATIONS_FIXTURE_PART: ${{ matrix.part }}\n', ''), 'część z macierzy'],
+    ['blob fixture tylko przy zielonej części', (ci) => ci.replace("        if: ${{ !cancelled() }}\n        with:\n          name: blob-report-fixtures-", "        if: success()\n        with:\n          name: blob-report-fixtures-"), 'czerwonej części'],
+    ['job zbiorczy bez fixture w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures]', 'needs: [build, e2e-shard, e2e-perf]'), 'zależności'],
     ['self-hosted runner', (ci) => ci.replace('runs-on: ubuntu-latest', 'runs-on: [self-hosted, linux]'), 'self-hosted'],
     ['job bez limitu czasu', (ci) => ci.replace('    timeout-minutes: 20\n    strategy:', '    strategy:'), 'timeout-minutes'],
   ];

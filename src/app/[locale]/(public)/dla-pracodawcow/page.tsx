@@ -6,7 +6,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 
 /**
  * Strona informacyjna dla pracodawców `/dla-pracodawcow` (#339) — SSG, INDEKSOWALNA.
@@ -91,25 +91,16 @@ export default async function EmployersPage({ params }: PageProps) {
 
   const [t, tCommon] = await Promise.all([getTranslations('employers'), getTranslations('common')]);
 
-  const jsonLd = {
-    '@context': 'https://schema.org/',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: tCommon('home'), item: `${env.siteUrl}/${locale}` },
-      {
-        '@type': 'ListItem',
-        position: 2,
-        name: t('pageTitle'),
-        item: `${env.siteUrl}/${locale}${EMPLOYERS_PATH}`,
-      },
-    ],
-  };
+  const jsonLd = buildBreadcrumbListJsonLd(
+    [{ label: tCommon('home'), href: '/' }, { label: t('pageTitle') }],
+    { base: env.siteUrl, locale, currentUrl: `${env.siteUrl}/${locale}${EMPLOYERS_PATH}` },
+  );
 
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
 
       {/* Nagłówek: tekst + CTA obok fotografii ilustracyjnej (jak hero strony głównej). */}

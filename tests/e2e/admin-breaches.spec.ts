@@ -23,6 +23,10 @@ function admin(locale: string): AdminMessages {
   ).admin;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function blockingViolations(page: Page) {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -48,6 +52,9 @@ for (const locale of LOCALES) {
     await expect(title).toBeFocused();
     await expect(title).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByRole('alert').filter({ hasText: t.breachFormHasErrors })).toBeVisible();
+    // Po nawigacji klienckiej z listy <title> strony dociera ze strumieniem metadanych po treści —
+    // axe łapał wtedy `document-title`. Czekamy na stan końcowy (właściwy tytuł).
+    await expect(page).toHaveTitle(new RegExp(escapeRegExp(t.breachNewTitle!)));
     expect(await blockingViolations(page)).toEqual([]);
 
     await title.fill('Test');

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
 import { updateCompanyLinks } from '@/lib/actions/company';
@@ -38,6 +38,25 @@ function renderForm(website = '', logoUrl = '', ownHost = 'pracuj.be') {
   );
 }
 
+/**
+ * Rozgrzewka: jedna nieudana walidacja przed testami (limit hooka 10 s). Pierwszy test płacił
+ * jednorazowo kompilację JIT React Hook Form, resolvera Zod i formularza — pod obciążeniem
+ * maszyny zbliżało to go do limitu 5 s. DOM jest potem czyszczony.
+ */
+beforeAll(async () => {
+  renderForm();
+  const field = screen.getByLabelText(pl.company.website);
+  fireEvent.change(field, { target: { value: 'http://acme.example' } });
+  fireEvent.click(screen.getByRole('button', { name: pl.company.linksSubmit }));
+  await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+  cleanup();
+});
+
+/** Tanie czekanie na element (bez przeliczania ról całego drzewa co 50 ms); asercja roli po nim. */
+async function waitForSelector(selector: string): Promise<void> {
+  await waitFor(() => expect(document.querySelector(selector)).not.toBeNull());
+}
+
 describe('CompanyLinksForm', () => {
   it('rejects a non-https address at the field, without calling the server', async () => {
     renderForm();
@@ -66,7 +85,8 @@ describe('CompanyLinksForm', () => {
       website: 'https://acme.example',
       logoUrl: '',
     }));
-    expect(await screen.findByRole('status')).toHaveTextContent(pl.company.linksSavedSuccess);
+    await waitForSelector('[role="status"]');
+    expect(screen.getByRole('status')).toHaveTextContent(pl.company.linksSavedSuccess);
     expect(refresh).toHaveBeenCalledOnce();
   });
 
@@ -79,7 +99,8 @@ describe('CompanyLinksForm', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: pl.company.linksSubmit }));
 
-    await screen.findByRole('alert');
+    await waitForSelector('[role="alert"]');
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByLabelText(pl.company.logoUrl)).toHaveValue('https://acme.example/logo.png');
   });
 
