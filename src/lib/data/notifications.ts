@@ -88,6 +88,12 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
+/** Decyzja admina o stronie WWW/logo firmy (0156): `system` + `data.kind = 'company_links'`. */
+const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
+  approved: 'itemCompanyLinksApproved',
+  rejected: 'itemCompanyLinksRejected',
+};
+
 /** Decyzja admina o pytaniu screeningowym (0103, #497): `system` + `data.kind = 'screening_review'`. */
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
@@ -128,6 +134,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   const d = asRecord(data);
   if (d['kind'] === 'company_status') {
     const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'company_links') {
+    const key = COMPANY_LINKS_TITLE_KEY[asStr(d['status'])];
     if (key) return key;
   }
   if (d['kind'] === 'screening_review') {
