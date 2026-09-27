@@ -333,6 +333,17 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
   }
 }
 
+/** Najwyżej tyle kolejnych zapisów kroku, gdy pola zmieniają się w trakcie zapisu (#829). */
+const MAX_SAVE_ROUNDS = 3;
+
+/**
+ * Czy dane kroku zmieniły się względem zapisanego snapshotu (#829). `buildStepData`
+ * buduje obiekt w stałej kolejności kluczy, więc porównanie serializacji jest deterministyczne.
+ */
+function stepDataChanged(saved: unknown, current: unknown): boolean {
+  return JSON.stringify(saved) !== JSON.stringify(current);
+}
+
 /** Zamienia komunikat błędu z Zod na klucz i18n (fallback dla domyślnych komunikatów enum). */
 function toErrorKey(field: string, message: string): string {
   if (message.startsWith('job.error.')) return message;
@@ -727,13 +738,33 @@ export function JobWizard({
         if (created.demo) setDemo(true);
       }
 
-      const res = await updateJobDraft(id, current, data);
-      if (!res.ok) {
-        setSaveError(res.error);
-        setSaveState('error');
-        return false;
+      // #829: pola zostają edytowalne w trakcie zapisu, a akcja dostaje snapshot z chwili
+      // kliknięcia. Po sukcesie porównujemy snapshot z bieżącymi wartościami kroku — nowsza
+      // edycja jest walidowana i zapisywana ponownie, zanim kreator zmieni krok albo wyjdzie.
+      let saved = data;
+      for (let round = 0; ; round += 1) {
+        const res = await updateJobDraft(id, current, saved);
+        if (!res.ok) {
+          setSaveError(res.error);
+          setSaveState('error');
+          return false;
+        }
+        if (res.demo) setDemo(true);
+        if (!stepDataChanged(saved, buildStepData(current, getValues(), contentLocale))) break;
+        if (round + 1 >= MAX_SAVE_ROUNDS) {
+          // Wartości zmieniają się szybciej niż zapis — zostajemy w kreatorze bez „Zapisano”.
+          setSaveState('idle');
+          return false;
+        }
+        const next = validateStep(current, intent);
+        if (!next.ok) {
+          // Nowsza wartość jest niepoprawna: nie wychodzimy, błąd przy polu (Invariant #11).
+          setSaveState('idle');
+          scrollToFirstError(current, next.erroredFields);
+          return false;
+        }
+        saved = next.data;
       }
-      if (res.demo) setDemo(true);
       setSaveState('saved');
       setBadgeVisible(true);
       return true;
@@ -794,7 +825,12 @@ export function JobWizard({
       if (res.demo) setDemo(true);
       if (res.updatedAt) setEditVersion(res.updatedAt);
       if (res.slug) setPublicSlug(res.slug);
-      setSaveState('saved');
+      // #829: edycja w trakcie zapisu nie jest zapisana — bez „Zapisano”, przycisk znów aktywny.
+      const latest = getValues();
+      const changed = stepsData.some((saved, i) =>
+        stepDataChanged(saved, buildStepData((i + 1) as WizardStep, latest, contentLocale)),
+      );
+      setSaveState(changed ? 'idle' : 'saved');
     } catch {
       setSaveError('INTERNAL');
       setSaveState('error');

@@ -48,9 +48,19 @@ export function publicHttpsUrl(value: string | undefined): string | undefined {
   return parsed.href;
 }
 
-/** Mapowanie rodzaju umowy na schema.org employmentType. */
-const EMPLOYMENT_TYPE: Record<ContractType, string> = {
-  permanent: 'FULL_TIME',
+/**
+ * Mapowanie rodzaju umowy na schema.org `employmentType` (#842).
+ *
+ * Rodzaj umowy i wymiar czasu pracy (pełny/część etatu) to dwie NIEZALEŻNE cechy oferty —
+ * `permanent` („Umowa na stałe”) nie mówi nic o wymiarze; godziny są osobnym wolnym tekstem
+ * (`job.workingHours`, `src/lib/validation/job.ts`), którego celowo NIE zgadujemy (oferta na
+ * część etatu z umową na stałe istnieje naprawdę). Dlatego `permanent` jest tu pominięty —
+ * `buildJobPostingJsonLd` w ogóle nie emituje `employmentType` dla niepotwierdzonego wymiaru,
+ * zamiast fałszywie deklarować `FULL_TIME`. Pozostałe rodzaje (`temporary`/`interim`/
+ * `freelance`/`internship`/`seasonal`) same w sobie są kategorią zatrudnienia niezależną od
+ * wymiaru, więc zostają. Docelowe jawne pole wymiaru etatu — #811.
+ */
+const EMPLOYMENT_TYPE: Partial<Record<ContractType, string>> = {
   temporary: 'TEMPORARY',
   interim: 'TEMPORARY',
   freelance: 'CONTRACTOR',
@@ -174,7 +184,10 @@ export function buildJobPostingJsonLd(
     },
     datePosted: job.publishedAt,
     ...(validThrough ? { validThrough } : {}),
-    employmentType: EMPLOYMENT_TYPE[job.contractType],
+    // #842 — bez potwierdzonego wymiaru pracy (`permanent`) pole jest pomijane, nie zgadywane.
+    ...(EMPLOYMENT_TYPE[job.contractType]
+      ? { employmentType: EMPLOYMENT_TYPE[job.contractType] }
+      : {}),
     hiringOrganization: {
       '@type': 'Organization',
       name: job.companyName,
