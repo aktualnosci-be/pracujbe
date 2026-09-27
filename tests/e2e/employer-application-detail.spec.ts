@@ -72,3 +72,30 @@ test('nieistniejące zgłoszenie zwraca 404', async ({ page }) => {
   const response = await page.goto('/pl/employer/aplikacje/00000000-0000-0000-0000-000000000000');
   expect(response?.status()).toBe(404);
 });
+
+// 404 panelu leży pod layoutem `/employer` (src/app/[locale]/employer/not-found.tsx): rekruter
+// zostaje w panelu (menu z przełącznikiem firmy), a nie na publicznej stronie 404.
+for (const locale of locales) {
+  test(`404 w panelu zostawia chrome panelu: ${locale}`, async ({ page }) => {
+    const m = load(locale);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const response = await page.goto(`/${locale}/employer/aplikacje/00000000-0000-0000-0000-000000000000`);
+    expect(response?.status()).toBe(404);
+
+    const main = page.getByRole('main');
+    await expect(main).toHaveCount(1);
+    await expect(main.getByRole('heading', { level: 1, name: m.dashboard.employerNotFoundTitle })).toBeVisible();
+    await expect(main.getByRole('link', { name: m.dashboard.employerPanelBackToDashboard })).toHaveAttribute(
+      'href',
+      `/${locale}/employer`,
+    );
+    // Menu panelu (sidebar) nadal jest na stronie — kontrola ujemna: publiczna 404 go nie ma.
+    await expect(
+      page.getByRole('complementary').getByRole('link', { name: m.dashboard.navEmployerApplications, exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
+
+    await main.getByRole('link', { name: m.dashboard.employerPanelBackToDashboard }).click();
+    await expect(page).toHaveURL(new RegExp(`/${locale}/employer$`));
+  });
+}

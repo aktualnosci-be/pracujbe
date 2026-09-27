@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   JobWizard,
@@ -51,7 +51,7 @@ const FULL_DRAFT: JobWizardInitialValues = {
   contactEmail: "hr@example.be",
 };
 
-beforeEach(() => {
+function installDomShims(): void {
   Element.prototype.scrollIntoView = vi.fn();
   // Radix Checkbox mierzy kontrolkę przez ResizeObserver, którego jsdom nie ma.
   globalThis.ResizeObserver ??= class {
@@ -59,6 +59,26 @@ beforeEach(() => {
     unobserve(): void {}
     disconnect(): void {}
   } as unknown as typeof ResizeObserver;
+}
+
+/**
+ * Rozgrzewka: jedno przejście kreatora do kroku 9 przed testami (limit hooka 10 s). Pierwszy
+ * render każdego kroku płaci jednorazowo kompilację JIT komponentów i ich zależności — przy
+ * pełnym `npm run verify` na obciążonej maszynie właśnie pierwszy test pliku przekraczał 5 s,
+ * choć kolejne, identyczne przejścia mieściły się z zapasem. Stan (DOM, atrapy) jest potem
+ * czyszczony, więc testy startują od zera jak wcześniej.
+ */
+beforeAll(async () => {
+  installDomShims();
+  updateJobDraft.mockResolvedValue({ ok: true, demo: false });
+  render(<JobWizard initialJobId="job-warmup" initialValues={FULL_DRAFT} />);
+  await goToStep(9);
+  cleanup();
+  vi.resetAllMocks();
+});
+
+beforeEach(() => {
+  installDomShims();
   updateJobDraft.mockResolvedValue({ ok: true, demo: false });
   publishJob.mockResolvedValue({ ok: true });
 });
@@ -69,6 +89,29 @@ afterEach(() => {
 });
 
 /**
+ * Przycisk stopki kreatora po samym tekście. W pętli przejść kroków celowo NIE używamy
+ * `getByRole`: w jsdom liczy on nazwę dostępną i widoczność (getComputedStyle w górę drzewa)
+ * dla każdego przycisku dużego formularza, a `waitFor` powtarza zapytanie co 50 ms — pod
+ * obciążeniem samo przejście do kroku 9 trwało kilka sekund (limit 5 s). Asercje, które
+ * sprawdzają rolę i nazwę dostępną (zgoda, „saveExit”, „publish”, alert), zostają przy
+ * zapytaniach po roli w treści testów.
+ */
+function wizardButton(label: string): HTMLButtonElement {
+  const matches = Array.from(document.querySelectorAll("button")).filter(
+    (b) => b.textContent?.trim() === label,
+  );
+  expect(matches).toHaveLength(1);
+  return matches[0]!;
+}
+
+/** Nagłówek kroku (`<h2>` z prefiksem „0n / ”) — tanie zapytanie DOM zamiast `getAllByRole`. */
+function stepHeadingShows(prefix: string): boolean {
+  return Array.from(document.querySelectorAll("h2")).some((h) =>
+    h.textContent?.startsWith(prefix),
+  );
+}
+
+/**
  * Czeka, aż kreator POKAŻE krok `n` (nagłówek „0n / …”). Samo wywołanie `updateJobDraft`
  * nie wystarcza: akcja jest wołana synchronicznie w kliknięciu, a krok zmienia się dopiero
  * po jej rozwiązaniu — kolejne „Dalej” w tym oknie trafiało w zablokowany przycisk (zapis
@@ -76,17 +119,13 @@ afterEach(() => {
  */
 async function waitForStep(n: number): Promise<void> {
   const prefix = `${String(n).padStart(2, "0")} / `;
-  await waitFor(() =>
-    expect(
-      screen.getAllByRole("heading", { level: 2 }).some((h) => h.textContent?.startsWith(prefix)),
-    ).toBe(true),
-  );
-  expect(screen.getByRole("button", { name: n < 9 ? "next" : "publish" })).toBeEnabled();
+  await waitFor(() => expect(stepHeadingShows(prefix)).toBe(true));
+  expect(wizardButton(n < 9 ? "next" : "publish")).toBeEnabled();
 }
 
 async function goToStep(target: number): Promise<void> {
   for (let s = 1; s < target; s += 1) {
-    fireEvent.click(screen.getByRole("button", { name: "next" }));
+    fireEvent.click(wizardButton("next"));
     await waitForStep(s + 1);
     expect(updateJobDraft).toHaveBeenCalledTimes(s);
   }

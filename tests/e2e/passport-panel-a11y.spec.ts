@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test } from '@playwright/test';
 
 const locales = ['pl', 'nl', 'fr', 'en'] as const;

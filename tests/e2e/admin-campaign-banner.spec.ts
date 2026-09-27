@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder, { expectNoindex } from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
@@ -69,7 +69,8 @@ for (const locale of LOCALES) {
       'href',
       `/${locale}/admin/firmy/demo-c2`,
     );
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
+    // Po nawigacji klienckiej w DOM bywają naraz dwa `meta[name="robots"]` (flaky: strict mode).
+    await expectNoindex(page);
     await expect(page).toHaveTitle(/\S/);
     expect(await blockingViolations(page)).toEqual([]);
   });

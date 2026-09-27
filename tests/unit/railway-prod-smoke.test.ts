@@ -223,7 +223,11 @@ describe('prod smoke — atrapa serwera', () => {
   ] as const)('kontrola ujemna: %s (%j) → kod 1', async (path, fault, reason) => {
     site = await startFakeSite({ faults: { [path]: fault } });
     const logs = logger();
-    const env = { PROD_SMOKE_BASE_URL: site.url, SITE_ACCESS_PASSWORD: PASSWORD, PROD_SMOKE_TIMEOUT_MS: '300' };
+    // Krótki limit czasu tylko dla zawieszonej trasy. Wspólne 300 ms dla wszystkich ~26 żądań
+    // pod obciążeniem maszyny zamieniało zwykłą (wolną) odpowiedź atrapy w „przekroczono czas”
+    // i psuło asercję „1 z N”; 5xx/404 nie potrzebują limitu, więc dostają zapas.
+    const timeoutMs = 'hang' in fault ? '500' : '4000';
+    const env = { PROD_SMOKE_BASE_URL: site.url, SITE_ACCESS_PASSWORD: PASSWORD, PROD_SMOKE_TIMEOUT_MS: timeoutMs };
     expect(await runSmoke({ env, logger: logs })).toBe(1);
     const errors = JSON.stringify(logs.error.mock.calls);
     expect(errors).toContain(path);
