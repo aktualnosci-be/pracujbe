@@ -533,6 +533,31 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     actAs({ id: bob, role: 'candidate' });
     expect(await candidateData.getLatestMessages()).toEqual({ status: 'ok', items: [] });
   });
+
+  it('ostatnia wiadomość przy remisie created_at jest deterministyczna (#712, id DESC)', async () => {
+    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
+      VALUES ($1, 'Remis', now()) RETURNING id`, [companyId]);
+    const conv = rows[0].id;
+    await db().admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id) VALUES ($1, $2), ($1, $3)`, [conv, alice, employer]);
+    // Ten sam created_at dla obu wiadomości; wstawiona jako pierwsza ma MNIEJSZY id, druga —
+    // większy. Bez tie-breaka `m.id DESC` zapytanie zwraca fizycznie pierwszy zeskanowany
+    // wiersz przy remisie (czyli błędnie „Starsza"), zamiast wiersza z największym `id`.
+    // Kontrola ujemna: cofnięcie `, m.id DESC` w `ORDER BY m.created_at DESC` w kodzie sprawia,
+    // że ten test staje się czerwony (zweryfikowane ręcznie przed dopisaniem naprawy).
+    const tie = new Date().toISOString();
+    const higherId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    const lowerId = '00000000-0000-4000-8000-000000000000';
+    await db().admin.query(`INSERT INTO public.messages(id, conversation_id, sender_id, body, created_at)
+      VALUES ($1, $2, $3, 'Starsza (mniejszy id, wstawiona jako pierwsza)', $4::timestamptz)`, [lowerId, conv, employer, tie]);
+    await db().admin.query(`INSERT INTO public.messages(id, conversation_id, sender_id, body, created_at)
+      VALUES ($1, $2, $3, 'Nowsza (większy id, wstawiona jako druga)', $4::timestamptz)`, [higherId, conv, employer, tie]);
+
+    actAs({ id: alice, role: 'candidate' });
+    const result = await candidateData.getLatestMessages();
+    expect(result.status).toBe('ok');
+    const item = result.status === 'ok' ? result.items.find((it) => it.id === conv) : undefined;
+    expect(item).toEqual(expect.objectContaining({ id: conv, title: 'Remis', preview: 'Nowsza (większy id, wstawiona jako druga)' }));
+  });
 });
 
 describe('aplikacja bez konta (#98, #25)', () => {
