@@ -26,17 +26,23 @@ export function cityKeyPrefixPattern(key: string): string {
 /**
  * Z aliasów pasujących do prefiksu: jedna propozycja na miejscowość (alias w pisowni rekrutera
  * — `datalist` filtruje po wpisanym tekście), kolejność słownika, bez duplikatów. Alias
- * techniczny (slug małymi literami, np. `charleroi`) zastępuje nazwa miejscowości `name`.
+ * techniczny (slug małymi literami, np. `charleroi`) zastępuje nazwa miejscowości `name`,
+ * ALE tylko gdy ta nazwa nadal zaczyna się od wpisanego prefiksu (`matchKey`, #807) — inaczej
+ * przeglądarka odfiltrowuje podpowiedź jako niepasującą do wpisu (np. alias „ghent" nie może
+ * zamienić się w „Gandawa" przy wpisanym „Ghe").
  */
 export function pickSuggestions(
   rows: ReadonlyArray<{ locationId: string; alias: string; sortOrder: number; name?: string }>,
   limit = JOB_CITY_SUGGESTION_LIMIT,
+  matchKey?: string,
 ): string[] {
   const best = new Map<string, { alias: string; sortOrder: number }>();
   for (const input of rows) {
-    const row = input.name && input.alias === input.alias.toLowerCase() && input.name !== input.name.toLowerCase()
-      ? { ...input, alias: input.name }
-      : input;
+    const canSwap = Boolean(input.name)
+      && input.alias === input.alias.toLowerCase()
+      && input.name !== input.name!.toLowerCase()
+      && (!matchKey || cityKey(input.name!).startsWith(matchKey));
+    const row = canSwap ? { ...input, alias: input.name! } : input;
     const current = best.get(row.locationId);
     // Nazwa własna przed zapisem technicznym (alias = slug małymi literami), potem krótsza.
     const rank = (a: string) => [a === a.toLowerCase() ? 1 : 0, a.length] as const;

@@ -653,6 +653,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
   `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy
   (dopasowanie po `parent_location_id`), matching nadal liczy odległość z tekstu (`cityKey`).
+  Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
+  „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
+  wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
+  aliasie, bo przeglądarka odfiltrowuje z natywnego `datalist` opcję, której wartość nie zawiera
+  wpisanego tekstu. Test: `job-location` (kontrole pozytywna/ujemna).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
