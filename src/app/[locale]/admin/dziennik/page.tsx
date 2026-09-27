@@ -13,9 +13,16 @@ import {
   parseUuid,
   parseYmd,
 } from '@/lib/admin/list-params';
-import { AUDIT_ACTOR_SYSTEM, listAuditLogs, type AdminAuditRow } from '@/lib/data/admin';
+import {
+  AUDIT_ACTOR_SYSTEM,
+  AUDIT_EXPORT_LIMIT,
+  listAuditLogs,
+  type AdminAuditRow,
+} from '@/lib/data/admin';
+import { isPortalDataConfigured } from '@/lib/db/portal';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
+import { AuditExportButton } from '@/components/admin/AuditExportButton';
 import {
   AdminEmptyState,
   AdminPageHeader,
@@ -35,6 +42,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/admin/admin-styles';
+import { PANEL_P } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
 /**
@@ -153,6 +161,7 @@ export default async function AdminAuditPage({
     row.actorId ? (row.actorName ?? t('auditActorUnknown')) : t('auditActorSystem');
 
   const fieldClass = FIELD;
+  const exportLimit = new Intl.NumberFormat(locale).format(AUDIT_EXPORT_LIMIT);
 
   return (
     <div className="min-w-0 space-y-[22px]">
@@ -242,6 +251,25 @@ export default async function AdminAuditPage({
           </button>
         </div>
       </form>
+
+      {isPortalDataConfigured() ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-start gap-2">
+            {(['csv', 'json'] as const).map((format) => (
+              <AuditExportButton
+                key={format}
+                format={format}
+                query={listQuery}
+                label={t(format === 'csv' ? 'auditExportCsv' : 'auditExportJson')}
+                pendingLabel={t('auditExportPending')}
+                errorLabel={t('auditExportError')}
+                truncatedLabel={t('auditExportTruncated', { limit: exportLimit })}
+              />
+            ))}
+          </div>
+          <p className={PANEL_P}>{t('auditExportHint', { limit: exportLimit })}</p>
+        </div>
+      ) : null}
 
       {result.status === 'error' ? (
         <AdminLoadError retryHref={`/${locale}${BASE_PATH}${retryParams ? `?${retryParams}` : ''}`} />

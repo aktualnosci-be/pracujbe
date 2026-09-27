@@ -74,35 +74,39 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
     const webhook = target();
     if (!webhook) return 'disabled';
     const code = safeErrorCode(report.code);
+    const source = report.source === 'client' ? 'client' : 'server';
+    // Błędy przeglądarki mają osobne okno deduplikacji — nie zagłuszają błędów serwera.
+    const key = source === 'client' ? `client:${code}` : code;
     const at = now();
 
     if (at < blockedUntil) {
-      suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
+      suppressed.set(key, (suppressed.get(key) ?? 0) + 1);
       return 'rate_limited';
     }
-    const previousSent = lastSent.get(code);
+    const previousSent = lastSent.get(key);
     if (previousSent !== undefined && at - previousSent < dedupMs) {
-      suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
+      suppressed.set(key, (suppressed.get(key) ?? 0) + 1);
       return 'deduplicated';
     }
-    const previousFailure = lastFailure.get(code);
+    const previousFailure = lastFailure.get(key);
     if (previousFailure !== undefined && at - previousFailure < failureBackoffMs) {
-      suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
+      suppressed.set(key, (suppressed.get(key) ?? 0) + 1);
       return 'deduplicated';
     }
-    if (inFlight.has(code)) {
-      suppressed.set(code, (suppressed.get(code) ?? 0) + 1);
+    if (inFlight.has(key)) {
+      suppressed.set(key, (suppressed.get(key) ?? 0) + 1);
       return 'deduplicated';
     }
 
-    const repeated = suppressed.get(code) ?? 0;
-    suppressed.delete(code);
-    inFlight.add(code);
+    const repeated = suppressed.get(key) ?? 0;
+    suppressed.delete(key);
+    inFlight.add(key);
 
     const text = buildErrorWebhookText({
       code,
       route: report.route,
-      release: release(),
+      release: source === 'client' && report.release ? report.release : release(),
+      source,
       environment: environment(),
       time: new Date(at),
       repeated,
@@ -123,18 +127,18 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
         return 'rate_limited';
       }
       if (response.ok) {
-        track(lastSent, code, at);
-        lastFailure.delete(code);
+        track(lastSent, key, at);
+        lastFailure.delete(key);
         return 'sent';
       }
-      track(lastFailure, code, at);
+      track(lastFailure, key, at);
       return 'failed';
     } catch {
-      track(lastFailure, code, at);
+      track(lastFailure, key, at);
       return 'failed';
     } finally {
       clearTimeout(timer);
-      inFlight.delete(code);
+      inFlight.delete(key);
     }
   }
 

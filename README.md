@@ -59,7 +59,7 @@ z danymi demonstracyjnymi (fallback) — dzięki temu CI/build przechodzi bez se
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run test` | testy jednostkowe (Vitest) |
-| `npm run test:e2e` | testy e2e (Playwright) |
+| `npm run test:e2e` | testy e2e (Playwright); inny port: `E2E_PORT=3517 npm run test:e2e`, cudzy serwer tylko z `E2E_REUSE_SERVER=1` — `docs/E2E_FLAKY_REPORT.md` |
 | `npm run verify` | lint + typecheck + test — **uruchom przed commitem** |
 
 ## Struktura
