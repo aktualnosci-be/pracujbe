@@ -1713,6 +1713,22 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
   `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
   `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
+  Lista ofert `/admin/oferty` (bez migracji, tylko odczyt): wszystkie nieusunięte oferty
+  wszystkich firm (`listAdminJobs`, `src/lib/data/admin-jobs.ts` → `requireAdmin` przed
+  service-role, jedna transakcja, błąd = jawny stan). Filtr statusu EFEKTYWNEGO
+  (`src/lib/admin/job-list-params.ts`: aktywna po `expires_at` = wygasła, jak `job-expiry.ts`;
+  `moderated` = `jobs.moderation_decision_id`), filtr firmy `?firma=<uuid>` (link „Wszystkie
+  oferty firmy” w `/admin/firmy/[id]`, nagłówek z nazwą i link do wszystkich firm),
+  wyszukiwanie po tytule/slugu/mieście/nazwie firmy/identyfikatorze, kursor `created_at`+`id`.
+  Tytuł linkuje do strony publicznej tylko dla oferty widocznej publicznie (aktywna, przed
+  terminem, firma `verified`, nie demo), firma → szczegół firmy, „Historia zmian” → dziennik
+  `?entity=job&id=` (nowy typ obiektu `job` i etykiety `job.update_published`/`job.duplicated`;
+  wpis o ofercie linkuje do `/admin/oferty?q=<id>`). Oznaczenia: decyzja moderacyjna, dane
+  przykładowe. Bez akcji zapisu (decyzje zapadają w `/admin/zgloszenia`). Testy: unit
+  `admin-jobs` (kontrole ujemne: bez sesji/pracodawca = 404 bez zapytań, fraza tylko
+  w parametrach; mutacja bez `requireAdmin` = czerwony), integracja `portal-admin-jobs` (PG16:
+  kursor bez luk przy remisach, status efektywny, filtr firmy), E2E `admin-jobs` (4 języki),
+  trasy w `admin-a11y`.
   Szczegół konta `/admin/uzytkownicy/[id]` (tylko odczyt, bez migracji; nazwa na liście = link):
   `getUserDetail` (`requireAdmin` → service_role) — rola, e-mail, stan konta, utworzenie,
   ostatnia aktywność (`last_seen_at`), język e-maili wyznaczony jak w kolejce
