@@ -800,6 +800,12 @@ Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno 
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
+Bez pozycji menu (#806, bez migracji): dla zakończonej aplikacji (status poza `WITHDRAWABLE`) do
+oferty bez publicznej strony (`slug === null` — zamknięta/wygasła/niedostępna, #206) przycisk „…”
+w ogóle się nie renderuje, zamiast otwierać puste `role="menu"` bez pozycji, którego Escape/Tab
+nie zamykały. Ten sam status ZE slugiem lub status w toku BEZ slugu (akcja „Wycofaj” zostaje)
+nadal pokazują przycisk. Dowód: `candidate-confirm-actions.test.tsx` (kontrola ujemna: status
+w toku bez slugu ma akcję „Wycofaj” i przycisk się renderuje).
 Polecane oferty — wyjaśnienie i stan zgłoszenia (bez migracji, dane z materializacji P1-03):
 karta z wynikiem na `/candidate/oferty-polecane` pokazuje krótką etykietę (`match.summaryShort`,
 liczona z procentu przez `summaryKeyForScore` — to samo źródło co `scoreMatch`, więc starszy
@@ -1249,7 +1255,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z generatorem, lustro TS z bazą (z kontrolą ujemną) i klucze z `cityKey`. Dowód: `rls.sql`
   sekcja LOC194 (kontrola ujemna bez polityki RLS), rollback `supabase/rollback/0112_…down.sql`,
   integracja `portal-candidate` (Puurs–Bornem tylko z bazy; mutacja bez słownika = czerwony).
-  **Do zrobienia:** części gmin (deelgemeenten), geokodowanie miejscowości spoza słownika;
+  Części gmin (migracja `0151`): 2066 deelgemeenten / sections de commune
+  z migawki Wikidata (CC0 1.0, `data/locations/be-sections.wikidata.json`, klasa Q2785216 +
+  kody NIS części) jako `locations.kind = 'section'` z `parent_location_id` (gmina z 0112:
+  obecna z P131, potem następca gminy zniesionej P1366, potem kod NIS; strażnik
+  `locations_section_parent_guard` — rodzicem tylko gmina, usunięcie gminy usuwa części),
+  współrzędne części (brak = gminy), aliasy PL/NL/FR/EN: klucz zajęty w 0112 zostaje przy gminie,
+  nazwa wspólna kilku części (Deurne, Berchem…) pominięta. Matching bez zmian w kodzie — loader
+  czyta te same aliasy (Heverlee–Kessel-Lo w promieniu tylko ze słownika). Ten sam generator
+  (`build-migration.mjs` pisze 0112 i 0151; 0112 bez zmian). Dowód: `rls.sql` sekcja SEC151
+  (kontrole ujemne: bez strażnika, bez danych), `matching-locations` (plik = generator, reguły
+  aliasów z kontrolą ujemną), integracja `portal-candidate` (kontrola ujemna: części nieaktywne),
+  rollback `supabase/rollback/0151_…down.sql` (test w `test-rls.sh`).
+  **Do zrobienia:** geokodowanie miejscowości spoza słownika, nazwy części wspólne dla kilku gmin
+  (dziś pominięte);
   zmiana listy w kodzie po wdrożeniu 0112 = nowa migracja (test wskazuje plik 0112).
   Polecane oferty (#196): `get_public_jobs_by_ids` dla najlepszych `matches`, bez limitu 100 najnowszych.
   Materializacja `matches` (P1-03, migracja `0147`): triggery kolejkują
@@ -1702,6 +1721,22 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w `admin_set_company_status`/`admin_resolve_report` + `p_expected_status` (`FOR UPDATE`,
   `STALE_STATE`), firma usunięta → `NOT_FOUND`, ponowne otwarcie zgłoszenia czyści
   `resolved_*`. Dowód: `rls.sql` sekcja ADM; E2E `admin-ux.spec`.
+  Lista ofert `/admin/oferty` (bez migracji, tylko odczyt): wszystkie nieusunięte oferty
+  wszystkich firm (`listAdminJobs`, `src/lib/data/admin-jobs.ts` → `requireAdmin` przed
+  service-role, jedna transakcja, błąd = jawny stan). Filtr statusu EFEKTYWNEGO
+  (`src/lib/admin/job-list-params.ts`: aktywna po `expires_at` = wygasła, jak `job-expiry.ts`;
+  `moderated` = `jobs.moderation_decision_id`), filtr firmy `?firma=<uuid>` (link „Wszystkie
+  oferty firmy” w `/admin/firmy/[id]`, nagłówek z nazwą i link do wszystkich firm),
+  wyszukiwanie po tytule/slugu/mieście/nazwie firmy/identyfikatorze, kursor `created_at`+`id`.
+  Tytuł linkuje do strony publicznej tylko dla oferty widocznej publicznie (aktywna, przed
+  terminem, firma `verified`, nie demo), firma → szczegół firmy, „Historia zmian” → dziennik
+  `?entity=job&id=` (nowy typ obiektu `job` i etykiety `job.update_published`/`job.duplicated`;
+  wpis o ofercie linkuje do `/admin/oferty?q=<id>`). Oznaczenia: decyzja moderacyjna, dane
+  przykładowe. Bez akcji zapisu (decyzje zapadają w `/admin/zgloszenia`). Testy: unit
+  `admin-jobs` (kontrole ujemne: bez sesji/pracodawca = 404 bez zapytań, fraza tylko
+  w parametrach; mutacja bez `requireAdmin` = czerwony), integracja `portal-admin-jobs` (PG16:
+  kursor bez luk przy remisach, status efektywny, filtr firmy), E2E `admin-jobs` (4 języki),
+  trasy w `admin-a11y`.
   Szczegół konta `/admin/uzytkownicy/[id]` (tylko odczyt, bez migracji; nazwa na liście = link):
   `getUserDetail` (`requireAdmin` → service_role) — rola, e-mail, stan konta, utworzenie,
   ostatnia aktywność (`last_seen_at`), język e-maili wyznaczony jak w kolejce
