@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateCompany } from '@/lib/actions/company';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
@@ -113,6 +113,15 @@ describe('company update authorization', () => {
     membership('owner', 'verified');
     db([{ id: COMPANY_ID, status: 'verified' }]);
     expect(await updateCompany(COMPANY_ID, { name: 'Acme' })).toEqual({ ok: true });
+  });
+
+  it('demo (bez bazy): identyfikator demonstracyjny nie jest UUID i nie dostaje NOT_FOUND', async () => {
+    // `DEMO_COMPANY.id` = 'demo-company' (bez bazy nie ma prawdziwych UUID) — bramka demo musi
+    // być sprawdzana PRZED walidacją formatu UUID, inaczej panel demonstracyjny dostaje
+    // NOT_FOUND zamiast komunikatu demo.
+    fakeSession.configured = false;
+    expect(await updateCompany('demo-company', { name: 'Acme' })).toEqual({ ok: true, demo: true });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('#801: nie zapisuje do innej firmy niż ta, dla której wyrenderowano formularz', async () => {

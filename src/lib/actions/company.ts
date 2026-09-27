@@ -326,9 +326,6 @@ export async function updateCompany(
   companyId: string,
   input: CompanyUpdateInput,
 ): Promise<UpdateCompanyResult> {
-  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
-    return { ok: false, error: 'NOT_FOUND' };
-  }
   const parsed = companyUpdateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
@@ -338,7 +335,13 @@ export async function updateCompany(
   const setVat = v.vatNumber !== undefined;
   if (!setName && !setVat) return { ok: true }; // nic do zapisania
 
+  // Demo (bez bazy) używa nierzeczywistego identyfikatora (`DEMO_COMPANY.id`) — sprawdzamy
+  // format UUID dopiero DALEJ, żeby panel demonstracyjny nie dostawał NOT_FOUND.
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
+
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
+    return { ok: false, error: 'NOT_FOUND' };
+  }
 
   // Rate limit per IP — łagodny (edycja to częsta akcja).
   if (
@@ -415,9 +418,6 @@ export async function updateCompanyLinks(
   companyId: string,
   input: CompanyLinksUpdateInput,
 ): Promise<UpdateCompanyLinksResult> {
-  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
-    return { ok: false, error: 'NOT_FOUND' };
-  }
   const parsed = companyLinksUpdateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
@@ -426,7 +426,13 @@ export async function updateCompanyLinks(
   const setLogoUrl = v.logoUrl !== undefined;
   if (!setWebsite && !setLogoUrl) return { ok: true, outcome: 'unchanged' }; // nic do zapisania
 
+  // Demo (bez bazy) używa nierzeczywistego identyfikatora (`DEMO_COMPANY.id`) — sprawdzamy
+  // format UUID dopiero DALEJ, żeby panel demonstracyjny nie dostawał NOT_FOUND.
   if (!isPortalDataConfigured()) return { ok: true, demo: true, outcome: 'unchanged' };
+
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) {
+    return { ok: false, error: 'NOT_FOUND' };
+  }
 
   if (
     !(await checkRateLimit('company-update', {

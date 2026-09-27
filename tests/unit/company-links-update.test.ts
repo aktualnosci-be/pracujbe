@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateCompanyLinks } from '@/lib/actions/company';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * Zgłoszenie strony WWW/logo firmy WSKAZANEJ przez `companyId` (#112, #801, od 0156 z
@@ -60,7 +60,7 @@ describe('company links submission (scoped to companyId, review by admin, 0156)'
       ok: false,
       error: 'PERMISSION_DENIED',
     });
-    expect(fakeDb.calls).toHaveLength(0);
+    expect(fakeDb.callsTo('submit_company_links')).toHaveLength(0);
   });
 
   it('rejects a company the user is not an active member of (#801: stale form after switching company)', async () => {
@@ -141,6 +141,19 @@ describe('company links submission (scoped to companyId, review by admin, 0156)'
       ok: false,
       error: 'INTERNAL',
     });
+  });
+
+  it('demo (bez bazy): identyfikator demonstracyjny nie jest UUID i nie dostaje NOT_FOUND', async () => {
+    // `DEMO_COMPANY.id` = 'demo-company' (bez bazy nie ma prawdziwych UUID) — bramka demo musi
+    // być sprawdzana PRZED walidacją formatu UUID, inaczej panel demonstracyjny dostaje
+    // NOT_FOUND zamiast komunikatu demo (regresja #985 × #156).
+    fakeSession.configured = false;
+    expect(await updateCompanyLinks('demo-company', { website: 'https://acme.example' })).toEqual({
+      ok: true,
+      demo: true,
+      outcome: 'unchanged',
+    });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('never returns reverificationRequired (links never affect verification)', async () => {
