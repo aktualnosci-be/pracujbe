@@ -839,6 +839,7 @@ unit `age-policy` (lejek z kontrolą ujemną), `profile-visibility`, `guest-appl
 `auth-age-declaration`, `guest-apply`, `job-funnel-minor-marker` (PRIV-01: przy znaczniku zero żądań
 `/api/job-funnel` mimo zgody — strony, „Aplikuj”, zamknięcie karty, druga karta, znacznik zapisany w
 drugiej karcie; kontrole ujemne bez znacznika i z inną wartością, mutacja bramki = czerwony). Szkic (nieopublikowany): `docs/legal-drafts/kandydaci-niepelnoletni.md`.
+Wspólny stan wieku na `/candidate/ustawienia` (#828, bez migracji): sekcje „Wiek” i widoczność profilu dostają jeden stan z `AgeStatusProvider` (`src/components/settings/age-status-context.tsx`); udany zapis 18+ odblokowuje przełącznik kompletnego profilu bez przeładowania, ale go nie włącza (osobny opt-in #494); nieudany zapis/`meetsPolicy=false`/niekompletny profil — bez zmian. Test `age-visibility-settings` (kontrola ujemna: sam prop z odczytu strony zostawia blokadę).
 UI zmiany progu w panelu admina (#492): `/admin/ustawienia` — bieżący próg, status zatwierdzenia
 i ostatnia zmiana z dziennika (`getAgePolicySettings`, odczyt service-rolem po `requireAdmin`),
 formularz wyboru 16/18 + uzasadnienie (zawsze wymagane, jak przy statusie firmy) + dialog
