@@ -163,6 +163,60 @@ describe('NotificationsList (#148)', () => {
     expect(screen.getByText(t.emptyUnread)).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: t.filterLabel }).querySelector('[aria-current="page"]')?.textContent).toBe(t.filterUnread);
   });
+
+  // #825: „Oznacz wszystkie” w dzwonku (DashboardShell) woła RPC i `router.refresh()` z
+  // ZUPEŁNIE INNEGO komponentu — ta strona dostaje jedynie nowy `initialPage` z serwera
+  // (RSC re-render), bez lokalnego wywołania `mark()`. Widok „wszystkie” ma pokazać te same
+  // pozycje jako przeczytane (bez znikania z listy), widok „Nieprzeczytane” ma opróżnić stronę.
+  it('#825: nowy initialPage z zerowym licznikiem (odświeżenie z dzwonka) czyści stan listy „wszystkie”', () => {
+    const view = renderList(page([item(2, true), item(1, true)], 2));
+    expect(screen.getAllByRole('button', { name: /Oznacz jako przeczytane:/ })).toHaveLength(2);
+
+    // Serwer po „oznacz wszystkie” z dzwonka zwraca nowy obiekt: unread=0, pozycje już czyste.
+    view.rerender(
+      <NotificationsList
+        locale="pl"
+        basePath="/candidate/powiadomienia"
+        initialPage={page([{ ...item(2, false) }, { ...item(1, false) }], 0)}
+        unreadOnly={false}
+      />,
+    );
+
+    expect(screen.queryAllByRole('button', { name: /Oznacz jako przeczytane:/ })).toHaveLength(0);
+    expect(screen.getByText('Brak nieprzeczytanych')).toBeInTheDocument();
+    // Wiersze zostają (Invariant #11: dane po odświeżeniu nie znikają bez potrzeby).
+    expect(screen.getByRole('link', { name: /Powiadomienie 1/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Powiadomienie 2/ })).toBeInTheDocument();
+  });
+
+  it('#825: to samo w widoku „Nieprzeczytane” opróżnia listę i cofa kursor „Pokaż więcej”', () => {
+    const view = renderList(page([item(2, true), item(1, true)], 2, true), true);
+    expect(screen.getByRole('button', { name: t.loadMore })).toBeInTheDocument();
+
+    view.rerender(
+      <NotificationsList
+        locale="pl"
+        basePath="/candidate/powiadomienia"
+        initialPage={page([], 0)}
+        unreadOnly
+      />,
+    );
+
+    expect(screen.getByText(t.emptyUnread)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.loadMore })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Powiadomienie/ })).not.toBeInTheDocument();
+  });
+
+  it('#825 (kontrola ujemna): pierwsze wyrenderowanie z tym samym initialPage NIE czyści listy', () => {
+    const initial = page([item(1, true)], 1);
+    const view = renderList(initial);
+    // Ten sam obiekt props ponownie (np. rerender rodzica bez nowych danych z serwera)
+    // nie powinien nic zmienić — efekt uzgadniania reaguje tylko na FAKTYCZNIE nowy `initialPage`.
+    view.rerender(
+      <NotificationsList locale="pl" basePath="/candidate/powiadomienia" initialPage={initial} unreadOnly={false} />,
+    );
+    expect(screen.getByRole('button', { name: `Oznacz jako przeczytane: Powiadomienie 1` })).toBeInTheDocument();
+  });
 });
 
 describe('DashboardShell — „Zobacz wszystkie” (#148)', () => {

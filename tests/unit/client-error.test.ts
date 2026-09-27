@@ -190,6 +190,40 @@ describe('POST /api/client-error', () => {
     expect((await POST(request(JSON.stringify({ code: 'INTERNAL' }), {}, '198.51.100.2'))).status).toBe(204);
   });
 
+  it('#901: klucz limitera to WYŁĄCZNIE zaufany nagłówek proxy — X-Forwarded-For sterowany przez klienta nie tworzy osobnej puli', async () => {
+    const { POST } = await route();
+    const spoofed = (i: number) =>
+      POST(
+        request(JSON.stringify({ code: 'INTERNAL', route: `/pl/${i}` }), {
+          'x-real-ip': '203.0.113.55',
+          // Ten sam zaufany adres proxy, ale klient próbuje zmieniać X-Forwarded-For przy
+          // każdym żądaniu — nie może to utworzyć nowego klucza limitera.
+          'x-forwarded-for': `10.0.0.${i}`,
+        }),
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i += 1) statuses.push((await spoofed(i)).status);
+    expect(statuses.slice(0, 10).every((s) => s === 204)).toBe(true);
+    expect(statuses[10]).toBe(429);
+  });
+
+  it('#901: TRUSTED_PROXY_HEADER=cf-connecting-ip — klucz liczy TEN nagłówek, nie X-Real-IP', async () => {
+    vi.stubEnv('TRUSTED_PROXY_HEADER', 'cf-connecting-ip');
+    const { POST } = await route();
+    const withCfHeader = (cfIp: string) =>
+      POST(
+        request(JSON.stringify({ code: 'INTERNAL', route: '/pl' }), {
+          // Wspólny X-Real-IP (np. brzeg Cloudflare przed Railway) — nie powinien już liczyć.
+          'x-real-ip': '198.51.100.9',
+          'cf-connecting-ip': cfIp,
+        }),
+      );
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i += 1) statuses.push((await withCfHeader(`203.0.113.${i}`)).status);
+    // Jedenaście różnych CF-Connecting-IP → jedenaście osobnych, niepełnych pul.
+    expect(statuses.every((s) => s === 204)).toBe(true);
+  });
+
   it('GET → 405', async () => {
     const { GET } = await route();
     expect(GET().status).toBe(405);
@@ -221,6 +255,43 @@ describe('reporter przeglądarki', () => {
     }
     expect(bodies).toHaveLength(CLIENT_ERROR_MAX_PER_TAB);
     expect(Object.keys(bodies[0]!).sort()).toEqual(['code', 'release', 'route']);
+  });
+
+  it('#901: 429 z serwera zwalnia klucz — ten sam błąd może zostać zgłoszony ponownie', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    let resolveNext: ((status: number) => void) | null = null;
+    const report = createClientErrorReporter({
+      fetch: (async (_url: string, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        const status = await new Promise<number>((resolve) => {
+          resolveNext = resolve;
+        });
+        return new Response(null, { status });
+      }) as typeof fetch,
+      pathname: () => '/pl',
+      release: '1.0.0+abc',
+    });
+
+    report({ code: 'INTERNAL' });
+    // Druga próba tego samego (kod, trasa) przed odpowiedzią serwera jest nadal odrzucona —
+    // deduplikacja w karcie działa od razu, zanim odpowiedź wróci.
+    report({ code: 'INTERNAL' });
+    expect(bodies).toHaveLength(1);
+
+    resolveNext!(429);
+    await Promise.resolve();
+    await Promise.resolve();
+    // Po 429 klucz wrócił do puli: ten sam błąd może zostać wysłany ponownie.
+    report({ code: 'INTERNAL' });
+    expect(bodies).toHaveLength(2);
+
+    resolveNext!(204);
+    await Promise.resolve();
+    await Promise.resolve();
+    // Kontrola ujemna: odpowiedź 204 (dostarczone) NIE zwalnia klucza — kolejna próba tego
+    // samego błędu zostaje zdeduplikowana, tak jak przed tą zmianą.
+    report({ code: 'INTERNAL' });
+    expect(bodies).toHaveLength(2);
   });
 
   it('trasa bez query/fragmentu; błędy skryptów obcych witryn pomijane', () => {

@@ -23,7 +23,7 @@ import nl from '@/messages/nl.json';
 
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn() }),
-  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+  Link: ({ href, locale: _locale, children, ...rest }: { href: string; locale?: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>{children}</a>
   ),
 }));
@@ -119,6 +119,7 @@ const SEARCH = {
   id: '5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d',
   name: 'Moja nazwa',
   query: '?category=warehouse&immediate=1',
+  locale: 'pl' as const,
   frequency: 'daily' as const,
   alertsEnabled: true,
   lastAlertAt: null,
@@ -131,6 +132,7 @@ describe('SavedSearchList — filtry przy wyszukiwaniu', () => {
     render(
       <NextIntlClientProvider locale="en" messages={en}>
         <SavedSearchList
+          currentLocale="en"
           searches={[{ ...SEARCH, filterLabels: savedSearchFilterLabels(SEARCH.query, 'en', translators('en')) }]}
         />
       </NextIntlClientProvider>,
@@ -145,7 +147,7 @@ describe('SavedSearchList — filtry przy wyszukiwaniu', () => {
   it('bez etykiet nie renderuje pustej listy (kontrola ujemna)', () => {
     render(
       <NextIntlClientProvider locale="pl" messages={pl}>
-        <SavedSearchList searches={[{ ...SEARCH, filterLabels: [] }]} />
+        <SavedSearchList currentLocale="pl" searches={[{ ...SEARCH, filterLabels: [] }]} />
       </NextIntlClientProvider>,
     );
     expect(

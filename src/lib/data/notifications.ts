@@ -88,10 +88,18 @@ const COMPANY_STATUS_TITLE_KEY: Record<string, string> = {
   suspended: 'itemCompanySuspended',
 };
 
+/** Decyzja admina o stronie WWW/logo firmy (0156): `system` + `data.kind = 'company_links'`. */
+const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
+  approved: 'itemCompanyLinksApproved',
+  rejected: 'itemCompanyLinksRejected',
+};
+
 /** Decyzja admina o pytaniu screeningowym (0103, #497): `system` + `data.kind = 'screening_review'`. */
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
   rejected: 'itemScreeningRejected',
+  // #497 (0154): odrzucenie pytania opublikowanej oferty = ukrycie + prośba o poprawkę.
+  hidden: 'itemScreeningHidden',
 };
 
 /**
@@ -132,6 +140,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   const d = asRecord(data);
   if (d['kind'] === 'company_status') {
     const key = COMPANY_STATUS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'company_links') {
+    const key = COMPANY_LINKS_TITLE_KEY[asStr(d['status'])];
     if (key) return key;
   }
   if (d['kind'] === 'screening_review') {
@@ -200,8 +212,13 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       return employer ? '/employer/aplikacje' : '/candidate/propozycje';
     case 'job':
       return employer ? '/employer/oferty' : '/candidate/oferty-polecane';
-    case 'company':
-      return employer ? '/employer/firma' : '/candidate';
+    case 'company': {
+      // #843: decyzja dotyczy TEJ firmy (`entity_id`), niezależnie od aktywnej firmy z cookie
+      // (właściciel kilku firm) — `?firma=` pozwala stronie pokazać właściwe dane bez cichej
+      // podmiany na aktywną. Ten sam `entity_type` niosą też powiadomienia moderacyjne (#42).
+      const path = employer ? '/employer/firma' : '/candidate';
+      return employer && UUID_RE.test(entityId) ? `${path}?firma=${entityId.toLowerCase()}` : path;
+    }
     case 'saved_search':
       // #100: nowe oferty dla zapisanego wyszukiwania — zarządzanie i otwarcie listy.
       return employer ? '/employer' : '/candidate/wyszukiwania';

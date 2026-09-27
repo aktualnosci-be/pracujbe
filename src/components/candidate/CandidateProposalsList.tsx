@@ -9,6 +9,7 @@ import { ProposalActions } from '@/components/candidate/ProposalActions';
 import { canRespondToProposal, proposalAnchorId, proposalDisplayStatus } from '@/lib/candidate-offers';
 import { loadMoreProposals } from '@/lib/actions/candidate-proposals';
 import type { MyOffer, MyOffersPage } from '@/lib/data/candidate';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import {
   ACTION_ROW,
   BTN_PRIMARY,
@@ -26,7 +27,12 @@ function formatDate(iso: string, locale: string): string {
   const ts = Date.parse(iso);
   return Number.isNaN(ts)
     ? ''
-    : new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(ts);
+    : new Intl.DateTimeFormat(locale, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: APP_TIME_ZONE,
+      }).format(ts);
 }
 
 /**

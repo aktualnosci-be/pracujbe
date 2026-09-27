@@ -128,11 +128,29 @@ describe('safeFetchListing', () => {
   let server: http.Server;
   let port = 0;
   const hits: string[] = [];
+  let redirectDrainClosed = false;
 
   beforeAll(async () => {
     server = http.createServer((req, res) => {
       hits.push(req.url ?? '');
       const url = req.url ?? '/';
+      if (url === '/redirect-drain') {
+        // #827: przekierowanie, którego ciało nigdy się nie kończy — serwer wysyła je dalej,
+        // dopóki połączenie nie zostanie zamknięte. Poprawny klient nie powinien go czytać.
+        res.writeHead(302, { location: '/job' });
+        const timer = setInterval(() => {
+          if (res.writableEnded || res.destroyed) {
+            clearInterval(timer);
+            return;
+          }
+          res.write(Buffer.alloc(1024, 0x62));
+        }, 5);
+        res.on('close', () => {
+          redirectDrainClosed = true;
+          clearInterval(timer);
+        });
+        return;
+      }
       if (url === '/job') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end('<html><body><h1>Orderpicker</h1><script>steal()</script><p>Antwerpen, 38 u</p></body></html>');
@@ -216,6 +234,17 @@ describe('safeFetchListing', () => {
   it('podąża za przekierowaniem w obrębie publicznego hosta', async () => {
     const res = await safeFetchListing(`http://jobs.test:${port}/redirect-ok`, deps());
     expect(res.kind === 'text' && res.text).toContain('Orderpicker');
+  });
+
+  it('#827: zamyka ciało przekierowania zamiast bezterminowo je opróżniać', async () => {
+    redirectDrainClosed = false;
+    const res = await safeFetchListing(`http://jobs.test:${port}/redirect-drain`, deps());
+    expect(res.kind === 'text' && res.text).toContain('Orderpicker');
+    // Serwer zamyka strumień `/redirect-drain` dopiero, gdy klient przerwie połączenie —
+    // jeśli helper zostawiłby je otwarte (stare `res.resume()`), ten warunek by nie zaszedł.
+    await expect
+      .poll(() => redirectDrainClosed, { timeout: 1_000, interval: 10 })
+      .toBe(true);
   });
 
   it('zwraca obraz, gdy link prowadzi wprost do PNG', async () => {
