@@ -55,7 +55,8 @@ describe('strażnik workflowów CI', () => {
     ['job zbiorczy bez shardów w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures]', 'needs: [build, e2e-perf, e2e-fixtures]'), 'zależności'],
     ['mianownik shardu ≠ macierz', (ci) => ci.replace('--shard=${{ matrix.shard }}/3', '--shard=${{ matrix.shard }}/4'), '--shard'],
     ['shard z fail-fast', (ci) => ci.replace('      fail-fast: false\n      matrix:\n        shard:', '      fail-fast: true\n      matrix:\n        shard:'), 'fail-fast'],
-    ['lab CWV poza e2e-perf', (ci) => ci.replace('run: npx playwright test --project=chromium --shard', 'run: node scripts/perf-lab.mjs && npx playwright test --project=chromium --shard'), 'e2e-perf'],
+    // Bez nazwy skryptu lab CWV w tym pliku: stable-screenshot.test szuka testów uruchamiających Chromium po nazwach skryptów.
+    ['pomiar czasu poza e2e-perf', (ci) => ci.replace('run: npx playwright test --config playwright.applications-fixture.config.ts', 'run: npx playwright test --config playwright.applications-fixture.config.ts --project=chromium-timing'), 'e2e-perf'],
     ['e2e-real jako check blokujący', (ci) => ci.replace('    continue-on-error: true\n    services:', '    services:'), 'informacyjny'],
     ['baza e2e-real bez „e2e” w nazwie', (ci) => ci.replace('E2E_PGDATABASE: pracujbe_e2e_real', 'E2E_PGDATABASE: pracujbe_real'), 'e2e'],
     ['self-hosted runner', (ci) => ci.replace('runs-on: ubuntu-latest', 'runs-on: [self-hosted, linux]'), 'self-hosted'],
