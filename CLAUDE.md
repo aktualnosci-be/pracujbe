@@ -2014,6 +2014,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
   ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
   na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
+- [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
+  sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
+  (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,
+  mimo że `createAuthServer` (`src/lib/auth/server.ts`) i tak odrzuca taką wartość w runtime
+  (`dependencies.secret.trim().length < 32`). `isAuthRuntimeConfigured()` liczy teraz tę samą
+  długość po `trim()` — fail-closed zamiast fałszywej gotowości. Dowód:
+  `tests/unit/auth-secret-length.test.ts` (pozytywne 32 znaki, kontrole ujemne: 31 znaków, z
+  otaczającymi spacjami, pusty sekret, `isAppReady()` z resztą rdzenia gotową).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
   Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
   zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna
