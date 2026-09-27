@@ -890,6 +890,17 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   Pulpit: karty ofert w stylu paszportu (#171), jawny błąd najnowszych zgłoszeń z ponowieniem
   (#157), „Zobacz wszystkie” → `/employer/aplikacje` (#164); bramka axe 320/1280 px i 200% tekstu
   w 4 językach — `tests/e2e/employer-dashboard-a11y.spec.ts`.
+  Granica błędu i 404 wewnątrz panelu (bez migracji): `src/app/[locale]/employer/error.tsx`
+  (`EmployerPanelError`) i `not-found.tsx` (`EmployerNotFound`) leżą POD layoutem `/employer`,
+  więc nieobsłużony błąd strony albo `notFound()` (szczegół zgłoszenia #300, edycja oferty) nie
+  zastępuje już całego panelu publiczną stroną błędu/404 — sidebar, przełącznik firmy i dolny
+  pasek zostają. Błąd: komunikat z i18n (`dashboard.employerPanelError*`, Invariant #8), do
+  kanału błędów sam kod (`captureError`), „Spróbuj ponownie” = `router.refresh()` + `reset()`
+  (`useErrorRetry`), link do pulpitu. 404: status 404, podpowiedź o aktywnej firmie
+  (multi-company, bez ujawniania istnienia obiektu), linki do pulpitu/zgłoszeń/ofert, bez
+  drugiego `<main>`. Testy: unit `employer-panel-boundaries` (4 języki, bez treści wyjątku,
+  kontrola ujemna linków publicznych), E2E `employer-application-detail` (404 z sidebarem,
+  4 języki).
   Lejek ofert bez śledzenia (#99, migracja `0089`): `job_funnel_daily` = oferta × dzień (Europe/Brussels)
   × `search_appearances`/`detail_views`/`apply_started`; brak IP, cookies, tekstu wyszukiwania,
   identyfikatora osoby. `applications_submitted` liczy przy odczycie `get_company_job_funnel` ze stanu

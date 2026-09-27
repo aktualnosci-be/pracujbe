@@ -1032,7 +1032,12 @@
     "funnelDenied": "Lejek rekrutacyjny widzą właściciel, administrator i rekruterzy firmy.",
     "topMatchedDenied": "Dopasowanych kandydatów widzą właściciel, administrator i rekruterzy firmy.",
     "topMatchedUnverified": "Dopasowani kandydaci pojawią się po weryfikacji firmy.",
-    "topMatchedLoadError": "Nie udało się wczytać dopasowanych kandydatów."
+    "topMatchedLoadError": "Nie udało się wczytać dopasowanych kandydatów.",
+    "employerPanelErrorTitle": "Nie udało się wczytać tej strony panelu",
+    "employerPanelErrorBody": "Spróbuj ponownie za chwilę. Jeśli problem się powtarza, wróć do pulpitu i otwórz stronę jeszcze raz.",
+    "employerPanelBackToDashboard": "Wróć do pulpitu",
+    "employerNotFoundTitle": "Nie znaleźliśmy tej strony w panelu",
+    "employerNotFoundBody": "Adres jest nieprawidłowy albo ten element nie należy do aktywnej firmy. Jeśli masz dostęp do kilku firm, sprawdź, która jest wybrana w przełączniku firmy."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
