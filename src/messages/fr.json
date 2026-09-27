@@ -3455,6 +3455,7 @@
     "errorValueTooLong": "La valeur est trop longue. {max} caractères maximum.",
     "errorValueDisallowed": "Supprimez les coordonnées, les liens, les données d'autres personnes et les informations sensibles.",
     "errorLanguageInvalid": "Le nom de la langue doit comporter entre 2 et 40 caractères.",
+    "errorLanguageDuplicate": "La même langue est sélectionnée deux fois avec des niveaux différents. Décochez l'une des propositions ou utilisez des noms différents.",
     "errorExperienceInvalid": "Indiquez un nombre d'années entre 0 et 60.",
     "errorFieldsInvalid": "Corrigez les champs signalés avant d'enregistrer."
   },
