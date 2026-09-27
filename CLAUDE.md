@@ -1015,8 +1015,16 @@ Bez limitu 100 ofert na przebieg (migracja `0138`): worker bierze nowe oferty z
 snapshot); remis `published_at` rozstrzyga `id` w `get_public_jobs` (0136, #594), więc strony
 są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najwyżej raz
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
-kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101). **Otwarte:** górna granica 10 100 ofert
-na wyszukiwanie w jednym przebiegu (limit offsetu listy 10 000).
+kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101).
+Bez górnej granicy 10 100 ofert (migracja `0158`): `saved_search_matching_jobs`
+stronicuje kursorem (`published_at`, `id`) po 1000 (`saved_search_keyset_page` →
+`saved_search_jobs_after`, tylko service_role) zamiast offsetu `get_public_jobs` (clamp 10 000),
+nadal w jednym zapytaniu (jeden snapshot); `p_max_pages` = strony kursora, domyślnie bez limitu.
+Filtry = blok FROM … WHERE skopiowany 1:1 z najnowszej definicji `get_public_jobs` (kontrakt listy
+ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontrolą ujemną). Worker
+bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
+SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
+za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
@@ -1065,6 +1073,17 @@ parsera.
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
+
+Stan oferty w historii (migracja `0157`): `get_applied_jobs_display`
+i `get_offered_jobs_display` zwracają `job_availability` (`available`/`expired`/`closed`/
+`unavailable`, klasyfikacja `candidate_job_availability` = warunki `get_public_job`: aktywna,
+nieusunięta, przed terminem, firma `verified`), a `slug` tylko dla `available` — lista zgłoszeń,
+podgląd na pulpicie, szczegół zgłoszenia i propozycje nie linkują do strony publicznej, która
+dałaby 404, tylko pokazują etykietę `JobAvailabilityNote` (`dashboard.jobAvailability*`). Tytuł
+i firma zostają dla każdego stanu, szczegół zgłoszenia zawsze dostępny. E-maile nie linkują do
+strony oferty (statusChanged → panel, guestStatusChanged → lista ofert). Dowód: `rls.sql` sekcja
+AV157 (kontrola ujemna: bez klasyfikacji zamknięta oferta dostaje link), unit
+`candidate-job-availability` (kontrola ujemna: oferta publiczna = link bez etykiety).
 
 Granica błędu i 404 wewnątrz panelu kandydata (bez migracji, wzór jak panel pracodawcy #895):
 `src/app/[locale]/candidate/error.tsx` (`CandidatePanelError`) i `not-found.tsx`
