@@ -8,18 +8,27 @@ import { useEffect } from 'react';
  * SW jest funkcjonalny (offline shell + cache niezmiennych assetów), NIE analityczny —
  * dlatego rejestracja nie wymaga zgody cookie (Invariant #7 dotyczy trackingu, nie SW).
  * Rejestrujemy tylko w produkcji, by nie kolidować z HMR w dev. Brak wsparcia = no-op.
+ *
+ * #797: efekt montuje się dopiero po hydratacji Reacta — jeśli w tym momencie dokument ma
+ * już `readyState === 'complete'`, zdarzenie `load` już minęło i sam listener na nie nigdy
+ * się nie odpali (dotyczy zwłaszcza wolniejszych urządzeń/późnej hydratacji). Rejestrujemy
+ * od razu, gdy strona jest już w pełni załadowana, inaczej czekamy na `load` jak dotąd.
  */
 export function ServiceWorkerRegister(): null {
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-    const onLoad = () => {
+    const register = () => {
       navigator.serviceWorker.register('/sw.js').catch(() => {
         // Rejestracja SW to ulepszenie progresywne — ciche niepowodzenie jest OK.
       });
     };
-    window.addEventListener('load', onLoad);
-    return () => window.removeEventListener('load', onLoad);
+    if (typeof document !== 'undefined' && document.readyState === 'complete') {
+      register();
+      return;
+    }
+    window.addEventListener('load', register, { once: true });
+    return () => window.removeEventListener('load', register);
   }, []);
 
   return null;
