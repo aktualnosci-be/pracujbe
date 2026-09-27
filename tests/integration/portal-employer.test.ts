@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb, type PortalDb } from './support/portal-db';
+import { withUserTransaction } from '../../src/lib/db/transaction';
+import { rpc } from '../../src/lib/db/sql';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -391,6 +393,67 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     actAs(ownerB);
     expect(await employer.getEmployerApplicationDetail(appsA[0]!)).toEqual({ status: 'not_found' });
     expect(await employer.getEmployerApplicationDetail('nie-uuid')).toEqual({ status: 'not_found' });
+  });
+
+  it('#912: blokada per firma — wspólne członkostwo w innej firmie nie odsłania profilu zablokowanego kandydata', async () => {
+    // Scenariusz: rekruter aktywny w A i w nowej firmie C; kandydat[0] ma historyczne
+    // zgłoszenie w OBU. Blokuje A. Ambientna RLS (`company_can_view_candidate`) wpuściłaby
+    // profil dalej dzięki niezablokowanej relacji z C — loader musi to samodzielnie zawęzić
+    // do firmy KONKRETNEGO zgłoszenia/kandydata (`recruiter_candidate_blocked`, 0410).
+    const companyC = randomUUID();
+    const jobC = randomUUID();
+    await pg.admin.query(`INSERT INTO public.companies(id, name, status) VALUES ($1, 'Firma C (wspólny rekruter)', 'verified')`, [companyC]);
+    // ownerA — ten sam rekruter co w firmie A — aktywny też w C (scenariusz #912).
+    await pg.admin.query(`INSERT INTO public.company_members(company_id, profile_id, role, is_active) VALUES ($1, $2, 'owner', true)`,
+      [companyC, ownerA.id]);
+    await job(jobC, companyC, 'active', 'c-active');
+    const appC = (await pg.admin.query(`INSERT INTO public.applications(job_id, candidate_id, company_id, status)
+      VALUES ($1, $2, $3, 'submitted') RETURNING id`, [jobC, candidates[0], companyC])).rows[0].id as string;
+
+    // Kandydat[0] blokuje firmę A (przez prawdziwą ścieżkę RPC pod jego sesją/RLS).
+    await withUserTransaction(pg.web, candidates[0]!, (tx) => rpc(tx, 'set_company_block', { p_company_id: ids.companyA, p_blocked: true }));
+    try {
+      actAs(ownerA);
+      // Punkt odniesienia problemu: dzięki niezablokowanej relacji z C (ten sam rekruter),
+      // ambientna RLS (`company_can_view_candidate`) NADAL zwraca `true` — to zamierzone dla
+      // ogólnej funkcji (wyszukiwanie/wiadomości), nie coś, co da się naprawić samym RLS bez
+      // ryzyka regresji gdzie indziej. Bez naprawy loadera poniższe asercje `''`/`null` by nie
+      // przeszły — profil wyciekałby dokładnie tak jak w #912.
+      const ambientlyVisible = await withUserTransaction(pg.web, ownerA.id, (tx) =>
+        rpc<boolean>(tx, 'company_can_view_candidate', { p_profile_id: candidates[0]! }));
+      expect(ambientlyVisible).toBe(true);
+
+      // Mimo to — w KONTEKŚCIE FIRMY A (zablokowanej) — imię/profil są ukryte; historia
+      // zgłoszenia zostaje (Invariant: „historia nietknięta”, 0078).
+      const detailA = await employer.getEmployerApplicationDetail(appsA[0]!);
+      expect(detailA.status).toBe('ok');
+      if (detailA.status === 'ok') {
+        expect(detailA.application.candidateName).toBe('');
+        expect(detailA.application.profile).toBeNull();
+        expect(detailA.application.matchScore).toBeNull();
+        expect(detailA.application.id).toBe(appsA[0]);
+      }
+      const candidateFromA = await employer.getEmployerCandidateDetail(candidates[0]!);
+      expect(candidateFromA.status).toBe('ok');
+      if (candidateFromA.status === 'ok') {
+        expect(candidateFromA.candidate.name).toBe('');
+        expect(candidateFromA.candidate.profile).toBeNull();
+        // Historia zgłoszeń firmy A zostaje widoczna (tylko profil/imię są ukryte).
+        expect(candidateFromA.candidate.applications.map((a) => a.id)).toContain(appsA[0]);
+      }
+
+      // Kontrola ujemna: bez blokady (firma C) wszystko wraca do normy dla tego samego
+      // rekrutera i kandydata — dowód, że to zawężenie per-firma, a nie ogólny błąd.
+      await withUserTransaction(pg.web, candidates[0]!, (tx) => rpc(tx, 'set_company_block', { p_company_id: ids.companyA, p_blocked: false }));
+      const detailAUnblocked = await employer.getEmployerApplicationDetail(appsA[0]!);
+      expect(detailAUnblocked.status === 'ok' && detailAUnblocked.application.candidateName).toBe('Kand Nr1');
+    } finally {
+      await withUserTransaction(pg.web, candidates[0]!, (tx) => rpc(tx, 'set_company_block', { p_company_id: ids.companyA, p_blocked: false }));
+      await pg.admin.query('DELETE FROM public.applications WHERE id = $1', [appC]);
+      await pg.admin.query('DELETE FROM public.jobs WHERE id = $1', [jobC]);
+      await pg.admin.query('DELETE FROM public.company_members WHERE company_id = $1', [companyC]);
+      await pg.admin.query('DELETE FROM public.companies WHERE id = $1', [companyC]);
+    }
   });
 
   it('kreator: szkic własnej firmy z relacjami; obca firma = not-found; zamknięta = not-editable', async () => {

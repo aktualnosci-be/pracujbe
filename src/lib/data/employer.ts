@@ -1485,9 +1485,13 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
 
     const loaded = await withPortalTransaction(me, async (tx) => {
       // RLS (0039): tylko kandydat lub recruiter+ oferty; dodatkowo zawężamy do AKTYWNEJ firmy.
+      // #912: `recruiter_candidate_blocked` (0410) sprawdza blokadę WZGLĘDEM TEJ firmy —
+      // ambientna RLS (`company_can_view_candidate`) wpuściłaby profil dalej, gdyby wywołujący
+      // miał niezablokowaną relację z kandydatem przez INNĄ, wspólnie zarządzaną firmę.
       const row = await queryOne(tx, 'employer.application-detail',
         `SELECT a.id, a.status, a.candidate_id, a.guest_name, a.guest_email, a.job_id, a.message,
                 a.phone, a.availability, a.submitted_at, a.match_score,
+                public.recruiter_candidate_blocked(a.candidate_id, a.company_id) AS blocked,
                 (SELECT to_json(p) FROM (SELECT pr.first_name, pr.last_name FROM public.profiles pr
                                           WHERE pr.id = a.candidate_id) p) AS profiles,
                 (SELECT to_json(j) FROM (SELECT jb.title FROM public.jobs jb
@@ -1498,9 +1502,12 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
 
       const candidateId = asString(row['candidate_id']);
       const jobId = asString(row['job_id']);
-      const candidate = applicationCandidate(row);
+      const blockedByCandidate = row['blocked'] === true;
+      // #912: kandydat zablokował TĘ firmę — imię/profil ukryte, mimo że dane wciąż
+      // technicznie istnieją (mogą pochodzić z relacji przez inną firmę wywołującego).
+      const candidate = blockedByCandidate ? { candidateName: '' } : applicationCandidate(row);
       // #98: aplikacja bez konta nie ma profilu ani dopasowania — nie pytamy o nie bazy.
-      const withAccount = !candidate.isGuest && candidateId.length > 0;
+      const withAccount = !blockedByCandidate && !candidate.isGuest && candidateId.length > 0;
 
       // #604: pobieramy jedną nadmiarową pozycję, aby wiedzieć, czy jest kolejna strona,
       // zamiast cicho obcinać historię do pierwszych 50 zmian bez sygnału i paginacji.
@@ -1691,9 +1698,16 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
         `SELECT job_id, sent_at, created_at FROM public.offers
           WHERE candidate_id = $1 AND job_id = ANY($2::uuid[])
             AND status IN ('sent', 'viewed') AND deleted_at IS NULL`, [candidateId, jobIds]);
-      const nameRow = await queryOne(tx, 'employer.candidate-detail-name',
+      // #912: aplikacja bez profilu (kandydat blokujący AKTYWNĄ firmę pojawia się tu tylko
+      // przez `applicationRows`, bo `matches` już go wyklucza) nie pyta o profil/imię — inaczej
+      // ambientna RLS (`company_can_view_candidate`) wpuściłaby je dzięki relacji z INNĄ firmą
+      // wywołującego. `recruiter_candidate_blocked` (0410) sprawdza blokadę wprost dla tej firmy.
+      const blockedRow = await queryOne(tx, 'employer.candidate-detail-blocked',
+        'SELECT public.recruiter_candidate_blocked($1, $2) AS blocked', [candidateId, companyId]);
+      const blocked = asRecord(blockedRow)['blocked'] === true;
+      const nameRow = blocked ? null : await queryOne(tx, 'employer.candidate-detail-name',
         'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [candidateId]);
-      const cpRow = await queryOne(tx, 'employer.candidate-detail-profile',
+      const cpRow = blocked ? null : await queryOne(tx, 'employer.candidate-detail-profile',
         `SELECT id, headline, city, occupations, experience_years, availability, has_driving_license
            FROM public.candidate_profiles WHERE profile_id = $1 AND deleted_at IS NULL`, [candidateId]);
       let relations: { skills: Record<string, unknown>[]; languages: Record<string, unknown>[]; certificates: Record<string, unknown>[] } | null = null;

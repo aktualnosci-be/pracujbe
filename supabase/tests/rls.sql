@@ -2595,6 +2595,53 @@ select pg_temp.assert((select count(*) from public.offers where id = :'bloffer11
   'BL7d po odblokowaniu propozycja przechodzi');
 
 -- ============================================================================
+-- BL912. Wspólne członkostwo w dwóch firmach nie omija blokady PER FIRMA (#912, 0410):
+--     rekruter aktywny w BLF1 i BLF2 nie widzi blokady BLF1, mimo niezablokowanej relacji
+--     przez BLF2 z tym samym kandydatem. `company_can_view_candidate` (ambientna RLS) zostaje
+--     bez zmian (zamierzone dla wyszukiwania/wiadomości) — kontrolę robi nowa, per-firmowa
+--     `recruiter_candidate_blocked`, której używa loader szczegółu zgłoszenia/kandydata.
+-- ============================================================================
+\set BLF3 'e7800000-0000-0000-0000-0000000000f3'
+insert into public.companies(id, name, status) values (:'BLF3', 'Firma Blok 3 (bez relacji)', 'verified');
+
+-- BLE1 dołącza też do BLF2 jako recruiter (scenariusz #912: wspólny rekruter dwóch firm).
+insert into public.company_members(company_id, profile_id, role, is_active)
+  values (:'BLF2', :'BLE1', 'recruiter', true);
+
+-- BLC1 blokuje ponownie BLF1 (BL7 go wcześniej odblokował); relacja z BLF2 już istnieje
+-- (aplikacja `bl-app-12` z fixture BL powyżej).
+select set_config('app.current_uid', :'BLC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.set_company_block(:'BLF1'::uuid, true);
+reset role;
+
+select set_config('app.current_uid', :'BLE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+-- Punkt odniesienia problemu: ambientna RLS nadal przepuszcza profil dzięki relacji z BLF2 —
+-- to jest ZAMIERZONE dla ogólnej funkcji (wyszukiwanie/wiadomości), nie regresja.
+select pg_temp.assert(
+  public.company_can_view_candidate(:'BLC1'::uuid),
+  'BL912-0 punkt odniesienia: ambientna RLS przepuszcza dzięki relacji przez BLF2');
+-- Nowa funkcja per-firma odróżnia kontekst: BLF1 (zablokowana) → true, BLF2 (ten sam
+-- rekruter, niezablokowana) → false.
+select pg_temp.assert(
+  public.recruiter_candidate_blocked(:'BLC1'::uuid, :'BLF1'::uuid),
+  'BL912-1 recruiter_candidate_blocked(BLF1)=true mimo relacji przez BLF2');
+select pg_temp.assert(
+  not public.recruiter_candidate_blocked(:'BLC1'::uuid, :'BLF2'::uuid),
+  'BL912-2 kontrola ujemna: ten sam rekruter, kontekst BLF2 bez blokady = false');
+-- Fail-closed: firma, w której wywołujący NIE jest aktywnym recruiter+, nigdy nie dostaje
+-- „false” (nie ujawnia nawet tego, czy blokada istnieje).
+select pg_temp.assert(
+  public.recruiter_candidate_blocked(:'BLC1'::uuid, :'BLF3'::uuid),
+  'BL912-3 fail-closed: brak członkostwa w BLF3 → true (bez wycieku stanu blokady)');
+reset role;
+
+-- Loader panelu (src/lib/data/employer.ts) korzysta dokładnie z tej funkcji — dowód
+-- integracyjny (PostgreSQL 16) w tests/integration/portal-employer.test.ts: szczegół
+-- zgłoszenia/kandydata w kontekście BLF1 ukrywa imię i profil, w kontekście BLF2 — nie.
+
+-- ============================================================================
 -- MC. Dopasowanie (0079): data ważności certyfikatów kandydata (#96) oraz pięciu RÓŻNYCH
 --     najlepiej dopasowanych kandydatów firmy przed limitem (#141). Identyfikatory e79….
 -- ============================================================================

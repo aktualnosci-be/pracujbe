@@ -851,6 +851,21 @@ Dowód: `rls.sql` sekcja BL97 (kontrola ujemna: bez `0090` pada BL97-1). **Otwar
 gdy sesje Better Auth są spięte z trasami (#24) — bez runtime auth lista zostaje listą gościa.
 Historia propozycji bierze dane oferty z `get_offered_jobs_display` (0090), więc blokada nie
 kasuje tytułu propozycji bez aplikacji (BL97-6).
+
+Zawężenie blokady do FIRMY KONTEKSTU, nie dowolnej firmy rekrutera (#912, migracja `0410` —
+numer tymczasowy): rekruter aktywny w kilku firmach, z niezablokowaną relacją (aplikacja/
+propozycja) do kandydata przez jedną z nich, nadal widział jego profil/PII w szczególe
+zgłoszenia/kandydata INNEJ, zablokowanej firmy — `company_can_view_candidate` (ambientna RLS)
+sprawdza relację przez DOWOLNĄ zarządzaną firmę (zamierzone dla wyszukiwania/wiadomości, gdzie
+zostaje bez zmian). Nowa funkcja `recruiter_candidate_blocked(candidate_id, company_id)`
+sprawdza blokadę WPROST dla firmy zapytania (fail-closed dla firmy, w której wywołujący nie
+jest recruiter+); `getEmployerApplicationDetail`/`getEmployerCandidateDetail`
+(`src/lib/data/employer.ts`) czytają tę flagę i pomijają imię/profil zawodowy niezależnie od
+tego, co przepuściłaby ambientna RLS przez inną firmę — historia zgłoszenia (status, treść,
+kontakt nadesłany TEJ firmie) zostaje nietknięta, jak w 0078. Dowód: `rls.sql` sekcja BL912
+(punkt odniesienia: `company_can_view_candidate` nadal `true`, kontrola ujemna bez migracji),
+integracja `portal-employer.test.ts` (PG16: profil ukryty w kontekście zablokowanej firmy,
+widoczny po odblokowaniu, dla tego samego rekrutera i kandydata).
 Dynamiczne facety (#874, bez migracji): `GET /api/job-filter-facets` (zmiana filtra bez
 przeładowania strony) czytał zweryfikowanego kandydata pomijając sesję — agregat SQL działał
 wtedy jak dla gościa i mógł zawyżyć licznik/CTA o oferty firm zablokowanych przez kandydata
