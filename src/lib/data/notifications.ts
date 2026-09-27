@@ -98,6 +98,8 @@ const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
   rejected: 'itemScreeningRejected',
+  // #497 (0154): odrzucenie pytania opublikowanej oferty = ukrycie + prośba o poprawkę.
+  hidden: 'itemScreeningHidden',
 };
 
 /**

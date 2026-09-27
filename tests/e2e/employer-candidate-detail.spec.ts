@@ -40,8 +40,10 @@ for (const locale of locales) {
     await expect(main.getByRole('link', { name: m.dashboard.employerCandidateBack })).toHaveAttribute(
       'href', `/${locale}/employer/kandydaci`);
 
-    const robots = await page.locator('meta[name="robots"]').getAttribute('content');
-    expect(robots).toContain('noindex');
+    // Po nawigacji klienta z listy przez chwilę w DOM są dwa `meta[name="robots"]` (poprzedniej
+    // i nowej trasy) — ścisły lokator bywa flaky; żaden nie może być bez `noindex`.
+    await expect(page.locator('meta[name="robots"]').first()).toBeAttached();
+    await expect(page.locator('meta[name="robots"]:not([content*="noindex"])')).toHaveCount(0);
     const width = await page.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth }));
     expect(width.document).toBeLessThanOrEqual(width.viewport + 1);
   });

@@ -7140,6 +7140,162 @@ select pg_temp.assert(
   'SR497-9b oferta wstrzymana, pytanie w kolejce');
 
 -- ============================================================================
+-- SH497. Pytanie odrzucone PO publikacji oferty jest ukrywane (0154, #497, decyzja właściciela
+--        26.09.2026): oferta zostaje aktywna, pytanie znika z formularza, odpowiedź na nie jest
+--        pomijana bez błędu, firma nie widzi zapisanych odpowiedzi (wiersze zostają), prośba
+--        o poprawkę dla recruiter+ firmy, audyt bez treści, wznowienie nie jest blokowane.
+-- ============================================================================
+\set SHJOB   'f4970000-0000-0000-0000-0000000000b1'
+\set SHCAND  'f4970000-0000-0000-0000-0000000000c1'
+\set SHCAND2 'f4970000-0000-0000-0000-0000000000c2'
+\set SHCAND3 'f4970000-0000-0000-0000-0000000000c3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SHCAND','shcand@test.be','Sh Cand','{"role":"candidate","first_name":"Sh","last_name":"Cand","locale":"pl"}'),
+  (:'SHCAND2','shcand2@test.be','Sh Cand2','{"role":"candidate","first_name":"Sh","last_name":"Cand2","locale":"nl"}'),
+  (:'SHCAND3','shcand3@test.be','Sh Cand3','{"role":"candidate","first_name":"Sh","last_name":"Cand3","locale":"fr"}');
+select test_fixture.attest_candidates();
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'SHJOB', :'COMPA', :'EMPA', 'sh497-kierowca', 'Kierowca SH', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_screening_questions(job_id, position, type, required, prompt) values
+  (:'SHJOB', 0, 'yes_no', true, '{"pl": "Czy masz prawo jazdy C+E?"}'),
+  (:'SHJOB', 1, 'yes_no', true, '{"pl": "Czy jesteś w ciąży?", "nl": "Ben je zwanger?"}');
+select id as sh_q0 from public.job_screening_questions where job_id = :'SHJOB' and position = 0 \gset
+select id as sh_q1 from public.job_screening_questions where job_id = :'SHJOB' and position = 1 \gset
+select id as sh_rev from public.screening_question_reviews where job_id = :'SHJOB' \gset
+-- Stan jak po 0103 dla oferty opublikowanej wcześniej: aktywna, pytanie w kolejce.
+alter table public.jobs disable trigger trg_enforce_screening_review;
+update public.jobs set status = 'active', published_at = now() where id = :'SHJOB';
+alter table public.jobs enable trigger trg_enforce_screening_review;
+
+-- SH497-1: przed decyzją pytanie z kolejki jest w formularzu; kandydat odpowiada na oba.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select count(*) = 2 as ok from public.get_public_job_screening_questions(:'SHJOB') \gset sh1_
+select pg_temp.assert(:'sh1_ok'::boolean, 'SH497-1 przed decyzją formularz ma oba pytania');
+reset role;
+set role authenticated; set app.current_uid = :'SHCAND'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SHJOB'::uuid, 'sh-k1', null, 'immediate', null,
+  jsonb_build_object(:'sh_q0', true, :'sh_q1', false)) as shapp \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) = 2 as ok from public.application_screening_answers where application_id = :'shapp' \gset sh1b_
+select pg_temp.assert(:'sh1b_ok'::boolean, 'SH497-1b przed decyzją firma widzi obie odpowiedzi');
+reset role; reset app.current_uid;
+
+-- SH497-2: admin odrzuca pytanie aktywnej oferty → ukrycie: oferta aktywna, audyt bez treści,
+-- powiadomienie „hidden” dla recruiter+ (member go nie dostaje).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_screening_review(:'sh_rev'::uuid, 'rejected', 'Pytanie o ciążę — usuń je.');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text from public.jobs where id = :'SHJOB') = 'active'
+  and (select status from public.screening_question_reviews where id = :'sh_rev') = 'rejected',
+  'SH497-2 oferta zostaje aktywna, przegląd odrzucony');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'screening_question.hidden'
+            and entity_type = 'screening_question_review' and entity_id = :'sh_rev'::uuid and actor_id = :'ADMIN'::uuid
+            and after_data->>'job_id' = :'SHJOB' and (after_data->>'position')::int = 1
+            and not (after_data ? 'prompt') and not (after_data ? 'reason')),
+  'SH497-2b audyt ukrycia: oferta, przegląd, pozycja — bez treści pytania i uzasadnienia');
+select pg_temp.assert(
+  exists (select 1 from public.notifications where profile_id = :'EMPA'::uuid and entity_id = :'SHJOB'::uuid
+            and type = 'system' and entity_type = 'job' and title = 'screening_question_hidden'
+            and data->>'kind' = 'screening_review' and data->>'status' = 'hidden')
+  and not exists (select 1 from public.notifications where profile_id = :'SQMEM'::uuid and entity_id = :'SHJOB'::uuid),
+  'SH497-2c prośba o poprawkę dla recruiter+ firmy, nie dla zwykłego członka');
+
+-- SH497-3: pytanie znika z formularza (także dla gościa).
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select array_agg(id::text) = array[:'sh_q0'] as ok from public.get_public_job_screening_questions(:'SHJOB') \gset sh3_
+select pg_temp.assert(:'sh3_ok'::boolean, 'SH497-3 ukryte pytanie nie trafia do formularza aplikowania');
+reset role;
+
+-- SH497-4: odpowiedź na ukryte pytanie pomijana bez błędu; ukryte wymagane już nie jest wymagane.
+set role authenticated; set app.current_uid = :'SHCAND2'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SHJOB'::uuid, 'sh-k2', null, null, null,
+  jsonb_build_object(:'sh_q0', true, :'sh_q1', true)) as shapp2 \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SHCAND3'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SHJOB'::uuid, 'sh-k3', null, null, null,
+  jsonb_build_object(:'sh_q0', false)) as shapp3 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select array_agg(question_id::text) from public.application_screening_answers where application_id = :'shapp2') = array[:'sh_q0']
+  and (select array_agg(question_id::text) from public.application_screening_answers where application_id = :'shapp3') = array[:'sh_q0'],
+  'SH497-4 aplikacje przyjęte, zapisana tylko odpowiedź na widoczne pytanie');
+-- Gość: walidacja przy zgłoszeniu i potwierdzeniu (record_screening_answers bez aplikacji).
+select public.record_screening_answers(null, :'SHJOB'::uuid, jsonb_build_object(:'sh_q0', true, :'sh_q1', true));
+select public.record_screening_answers(null, :'SHJOB'::uuid, jsonb_build_object(:'sh_q0', true));
+select pg_temp.expect_error(
+  format('select public.record_screening_answers(null, %L::uuid, %L::jsonb)', :'SHJOB',
+         jsonb_build_object(:'sh_q0', true, 'f4970000-0000-0000-0000-00000000dead', true)),
+  'VALIDATION_FAILED', 'SH497-4b klucz spoza pytań oferty nadal odrzucony');
+select pg_temp.expect_error(
+  format('select public.record_screening_answers(null, %L::uuid, %L::jsonb)', :'SHJOB', '{}'),
+  'SCREENING_ANSWER_REQUIRED: ' || :'sh_q0', 'SH497-4c widoczne pytanie wymagane nadal wymagane');
+
+-- SH497-5: firma nie widzi odpowiedzi na ukryte pytanie; kandydat widzi swoje; wiersze zostają.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select array_agg(question_id::text) = array[:'sh_q0'] as ok
+  from public.application_screening_answers where application_id = :'shapp' \gset sh5_
+select pg_temp.assert(:'sh5_ok'::boolean, 'SH497-5 firma widzi tylko odpowiedź na widoczne pytanie');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SHCAND'; select pg_temp.assert_client_role();
+select count(*) = 2 as ok from public.application_screening_answers where application_id = :'shapp' \gset sh5b_
+select pg_temp.assert(:'sh5b_ok'::boolean, 'SH497-5b kandydat nadal widzi obie swoje odpowiedzi');
+select pg_temp.assert(not public.screening_answer_hidden(:'SHJOB'::uuid, 'yes_no', '{"pl": "Czy jesteś w ciąży?", "nl": "Ben je zwanger?"}'::jsonb, '[]'::jsonb),
+  'SH497-5c test ukrycia nie ujawnia decyzji osobie spoza firmy');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.application_screening_answers where application_id = :'shapp') = 2,
+  'SH497-5d odpowiedź na ukryte pytanie zostaje w bazie (do decyzji o retencji)');
+
+-- SH497-6: wstrzymanie i wznowienie nie są blokowane przez ukryte pytanie.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_status(:'SHJOB'::uuid, 'pause');
+select public.set_job_status(:'SHJOB'::uuid, 'resume');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.jobs where id = :'SHJOB') = 'active',
+  'SH497-6 wznowienie oferty z ukrytym pytaniem przechodzi');
+
+-- SH497-7 (kontrole ujemne, cofnięte): bez warunku ukrycia test wykrywa regresję.
+begin;
+drop policy application_screening_answers_select on public.application_screening_answers;
+create policy application_screening_answers_select on public.application_screening_answers
+  for select to authenticated
+  using (exists (select 1 from public.applications a where a.id = application_id
+                   and (a.candidate_id = auth.uid() or public.is_job_manager(a.job_id))));
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) = 2 as leak from public.application_screening_answers where application_id = :'shapp' \gset sh7a_
+rollback;
+select pg_temp.assert(:'sh7a_leak'::boolean, 'SH497-7 kontrola ujemna: polityka z 0093 pokazuje firmie odpowiedź na ukryte pytanie');
+begin;
+update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
+  where id = :'sh_rev';
+set local role anon; select pg_temp.assert_client_role();
+select count(*) = 2 as leak from public.get_public_job_screening_questions(:'SHJOB') \gset sh7b_
+rollback;
+select pg_temp.assert(:'sh7b_leak'::boolean, 'SH497-7b kontrola ujemna: bez odrzucenia pytanie wraca do formularza');
+begin;
+update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
+  where id = :'sh_rev';
+select pg_temp.expect_error(
+  format('select public.record_screening_answers(null, %L::uuid, %L::jsonb)', :'SHJOB', jsonb_build_object(:'sh_q0', true)),
+  'SCREENING_ANSWER_REQUIRED: ' || :'sh_q1', 'SH497-7c kontrola ujemna: nieukryte pytanie wymagane blokuje aplikację');
+rollback;
+begin;
+alter table public.jobs disable trigger trg_enforce_screening_review;
+update public.jobs set status = 'paused' where id = :'SHJOB';
+-- Odroczony trigger synchronizacji tłumaczeń (0146) zostawia zdarzenie w kolejce transakcji;
+-- ALTER TABLE wymaga pustej kolejki, więc odpalamy je od razu.
+set constraints all immediate;
+alter table public.jobs enable trigger trg_enforce_screening_review;
+update public.screening_question_reviews set status = 'pending', decided_at = null, decided_by = null, decision_reason = null
+  where id = :'sh_rev';
+select pg_temp.expect_error(format('update public.jobs set status = %L where id = %L', 'active', :'SHJOB'),
+  'SCREENING_REVIEW_REQUIRED: 1', 'SH497-7d kontrola ujemna: pytanie bez decyzji nadal blokuje wznowienie');
+rollback;
+
+-- ============================================================================
 -- CM45 (#45, etap 2, 0101): dowód zgody, budżet na odbiorcę przy kolejkowaniu,
 -- rezerwacja kampanii „rewizja + odbiorca”. Tokeny wypisania (cudzy/wygasły/zmieniony)
 -- są podpisem HMAC w aplikacji — kontrole ujemne w tests/unit/email-unsubscribe.test.ts;
@@ -14185,6 +14341,132 @@ delete from public.jobs where company_id in (:'EPC', :'EPD');
 delete from public.companies where id in (:'EPC', :'EPD');
 delete from auth.users where id in (:'EPO', :'EPM', :'EPX', :'EPNEW')
   or id in (select format('e9c20000-0000-0000-0000-000000000%s', 100 + n)::uuid from generate_series(1, 25) n);
+
+-- ============================================================================
+-- AC155. Edytor rewizji kampanii e-mail (#45, 0155): admin_create_email_campaign_revision —
+--        tylko admin (is_admin), idempotencja po kluczu klienta (retry = ta sama rewizja),
+--        komplet języków i treść, którą worker wyrenderuje, nowa rewizja = szkic,
+--        audyt `email_campaign.revision_created` bez treści.
+-- ============================================================================
+\set AC155K1 'a2020000-0000-4000-8000-000000000001'
+\set AC155K2 'a2020000-0000-4000-8000-000000000002'
+reset role; reset app.current_uid;
+
+-- AC155-1: anon bez EXECUTE; kandydat i pracodawca → PERMISSION_DENIED, bez wiersza.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-news'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'permission denied', 'AC155-1 anon nie wywoła edytora');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-news'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'PERMISSION_DENIED', 'AC155-1b kandydat nie tworzy rewizji');
+select pg_temp.expect_error(format('select public.create_email_campaign_revision(''ac155-news'', %L::jsonb)', :'CMJOBS'),
+  'permission denied', 'AC155-1c kandydat nie wywoła RPC service_role z 0101');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-news'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'PERMISSION_DENIED', 'AC155-1d pracodawca nie tworzy rewizji');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.email_campaigns where slug = 'ac155-news'),
+  'AC155-1e odmowy nie utworzyły rewizji');
+
+-- AC155-2: admin tworzy szkic; ponowienie tym samym kluczem = ta sama rewizja (bez duplikatu);
+--          ten sam klucz z innym slugiem → VALIDATION_FAILED; nowy klucz = kolejna rewizja.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-news', :'CMJOBS'::jsonb) as ac155_rev1 \gset
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-news', :'CMJOBS'::jsonb) as ac155_retry \gset
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-other'', %L::jsonb)',
+  :'AC155K1', :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-2 ten sam klucz z innym slugiem odrzucony');
+select public.admin_create_email_campaign_revision(:'AC155K2', 'ac155-news', :'CMJOBS'::jsonb) as ac155_rev2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ac155_rev1' = :'ac155_retry', 'AC155-2b ponowienie tym samym kluczem zwraca tę samą rewizję');
+select pg_temp.assert(
+  (select string_agg(revision || ':' || status, ',' order by revision) from public.email_campaigns
+    where slug = 'ac155-news') = '1:draft,2:draft'
+  and not exists (select 1 from public.email_campaigns where slug = 'ac155-other')
+  and (select client_key from public.email_campaigns where id = :'ac155_rev1') = :'AC155K1'::uuid,
+  'AC155-2c dwie rewizje (szkice, bez duplikatu), klucz zapisany przy rewizji');
+
+-- AC155-3: audyt — po jednym wpisie na rewizję (ponowienie bez wpisu), aktor = admin,
+--          tylko status/slug/rewizja, bez treści.
+select pg_temp.assert(
+  (select count(*) = 2
+          and bool_and(actor_id = :'ADMIN'::uuid and entity_type = 'email_campaign' and before_data is null
+                       and after_data ->> 'status' = 'draft' and after_data ->> 'slug' = 'ac155-news'
+                       and (after_data - 'status' - 'slug' - 'revision') = '{}'::jsonb
+                       and not (after_data::text like '%Magazynier%'))
+     from public.audit_logs
+    where action = 'email_campaign.revision_created'
+      and entity_id in (:'ac155_rev1'::uuid, :'ac155_rev2'::uuid)),
+  'AC155-3 audyt: jeden wpis na rewizję, admin, bez treści');
+
+-- AC155-4: treść, której worker nie wyrenderuje, i brak języka → VALIDATION_FAILED, bez zapisu.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', (%L::jsonb - ''en''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4 brak języka (en) odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{pl,jobs,0,isDemo}'', ''true''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4b oferta demonstracyjna odrzucona');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{fr,jobs,0,locale}'', ''"pl"''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4c język oferty ≠ język wpisu odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{nl,jobs,0,title}'', ''"Hej {{imie}}"''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4d placeholder odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''ac155-bad'', jsonb_set(%L::jsonb, ''{en,jobs,0,city}'', ''"  "''))',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4e puste miasto odrzucone');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(%L, ''Zły Slug'', %L::jsonb)',
+  gen_random_uuid(), :'CMJOBS'), 'VALIDATION_FAILED: slug', 'AC155-4f zły slug kampanii odrzucony');
+select pg_temp.expect_error(format('select public.admin_create_email_campaign_revision(null, ''ac155-bad'', %L::jsonb)',
+  :'CMJOBS'), 'VALIDATION_FAILED', 'AC155-4g brak klucza odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.email_campaigns where slug in ('ac155-bad', 'Zły Slug'))
+  and not exists (select 1 from public.audit_logs where action = 'email_campaign.revision_created'
+                   and after_data ->> 'slug' = 'ac155-bad'),
+  'AC155-4h odrzucenia bez rewizji i bez audytu');
+
+-- AC155-5: nowa rewizja nie jest aktywowana — aktywacja to osobny krok (0111).
+select pg_temp.assert(
+  (select activated_at is null from public.email_campaigns where id = :'ac155_rev2'),
+  'AC155-5 nowa rewizja bez aktywacji');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_activate_email_campaign(:'ac155_rev2', 'draft');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status from public.email_campaigns where id = :'ac155_rev2') = 'active'
+  and (select status from public.email_campaigns where id = :'ac155_rev1') = 'superseded',
+  'AC155-5b aktywacja osobnym krokiem działa na rewizji z edytora');
+
+-- AC155-6: KONTROLA UJEMNA — wariant bez idempotencji (samo opakowanie 0101) przy ponowieniu
+--          tworzy duplikat (asercje AC155-2b/2c wykrywają brak klucza).
+begin;
+create or replace function public.admin_create_email_campaign_revision(p_client_key uuid, p_slug text, p_content jsonb)
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not public.is_admin() then raise exception 'PERMISSION_DENIED' using errcode = '42501'; end if;
+  return public.create_email_campaign_revision(p_slug, p_content);
+end $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-neg', :'CMJOBS'::jsonb) as ac155_neg1 \gset
+select public.admin_create_email_campaign_revision(:'AC155K1', 'ac155-neg', :'CMJOBS'::jsonb) as ac155_neg2 \gset
+reset role;
+select pg_temp.assert(:'ac155_neg1' <> :'ac155_neg2'
+  and (select count(*) from public.email_campaigns where slug = 'ac155-neg') = 2,
+  'AC155-6 bez idempotencji ponowienie tworzy duplikat — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
+
+-- AC155-7: KONTROLA UJEMNA — bez reguł workera (tylko kontrola kształtu z 0101) rewizja
+--          z ofertą demonstracyjną przeszłaby (asercja AC155-4b wykrywa brak reguł).
+begin;
+create or replace function public.email_campaign_jobs_renderable(p_content jsonb)
+returns boolean language sql immutable as $$ select true $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_create_email_campaign_revision(gen_random_uuid(), 'ac155-neg-demo',
+  jsonb_set(:'CMJOBS'::jsonb, '{pl,jobs,0,isDemo}', 'true'));
+reset role;
+select pg_temp.assert(exists (select 1 from public.email_campaigns where slug = 'ac155-neg-demo'),
+  'AC155-7 bez reguł workera oferta demo trafia do rewizji — test wykrywa błąd');
+rollback;
+reset role; reset app.current_uid;
 
 -- ============================================================================
 -- MP03. Materializacja dopasowań (P1-03, 0147): triggery kolejkują podmioty, worker
