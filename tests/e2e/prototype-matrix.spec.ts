@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';

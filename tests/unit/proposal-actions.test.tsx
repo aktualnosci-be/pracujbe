@@ -200,4 +200,164 @@ describe('ProposalActions', () => {
     expect(status).toHaveTextContent(en.dashboard.declineProposalSuccess);
     await waitFor(() => expect(status).toHaveFocus());
   });
+
+  describe('termin mija w trakcie wizyty (#830)', () => {
+    const OFFER = '11111111-1111-4111-8111-111111111111';
+    const START = new Date('2026-09-22T10:00:00.000Z');
+    const EXPIRES = '2026-09-22T10:00:01.000Z';
+
+    function showLive(props: Partial<React.ComponentProps<typeof ProposalActions>> = {}) {
+      const element = (extra: Partial<React.ComponentProps<typeof ProposalActions>> = {}) => (
+        <NextIntlClientProvider locale="en" messages={en}>
+          <ProposalActions
+            offerId={OFFER}
+            expiresAt={EXPIRES}
+            initialCanRespond
+            status="sent"
+            {...props}
+            {...extra}
+          />
+        </NextIntlClientProvider>
+      );
+      const view = render(element());
+      return { ...view, rerenderWith: (extra: Partial<React.ComponentProps<typeof ProposalActions>>) => view.rerender(element(extra)) };
+    }
+
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+      return { promise, resolve, reject };
+    }
+
+    const flush = async () => {
+      await act(async () => {
+        await Promise.resolve();
+        vi.advanceTimersByTime(0);
+      });
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START);
+    });
+
+    it('returned failure after expiry stays visible, refreshes the route and explains the missing actions', async () => {
+      const request = deferred<{ ok: false; error: 'VALIDATION_FAILED' }>();
+      vi.mocked(respondToOffer).mockReturnValue(request.promise);
+      showLive();
+
+      const accept = screen.getByRole('button', { name: en.dashboard.acceptProposal });
+      fireEvent.click(accept);
+      act(() => vi.advanceTimersByTime(1_000));
+
+      // Trwające żądanie: przyciski zostają zablokowane, nowej odpowiedzi nie da się zacząć.
+      expect(screen.getByRole('button', { name: en.dashboard.acceptProposal })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.acceptProposal }));
+      expect(respondToOffer).toHaveBeenCalledTimes(1);
+
+      await act(async () => request.resolve({ ok: false, error: 'VALIDATION_FAILED' }));
+      await flush();
+
+      expect(screen.getByText(en.errors.generic)).toBeVisible();
+      expect(router.refresh).toHaveBeenCalledTimes(1);
+      const notice = screen.getByText(en.dashboard.proposalExpiredNotice);
+      expect(notice).toHaveAttribute('role', 'status');
+      expect(notice).toHaveFocus();
+      expect(screen.queryByRole('button', { name: en.dashboard.acceptProposal })).not.toBeInTheDocument();
+    });
+
+    it('thrown failure after expiry keeps the error and refreshes the route', async () => {
+      const request = deferred<{ ok: true }>();
+      vi.mocked(respondToOffer).mockReturnValue(request.promise);
+      showLive();
+
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.acceptProposal }));
+      act(() => vi.advanceTimersByTime(1_000));
+      await act(async () => request.reject(new Error('transport')));
+      await flush();
+
+      expect(screen.getByText(en.errors.generic)).toBeVisible();
+      expect(screen.getByText(en.dashboard.proposalExpiredNotice)).toBeVisible();
+      expect(router.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('success committed before expiry is announced, without the expiry notice', async () => {
+      const request = deferred<{ ok: true }>();
+      vi.mocked(respondToOffer).mockReturnValue(request.promise);
+      showLive();
+
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.acceptProposal }));
+      act(() => vi.advanceTimersByTime(1_000));
+      await act(async () => request.resolve({ ok: true }));
+      await flush();
+
+      expect(screen.getByText(en.dashboard.acceptProposalSuccess)).toBeVisible();
+      expect(screen.queryByText(en.dashboard.proposalExpiredNotice)).not.toBeInTheDocument();
+      expect(screen.queryByText(en.errors.generic)).not.toBeInTheDocument();
+      expect(router.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('open decline dialog without a request closes at expiry and focus lands on the notice', async () => {
+      const onExpire = vi.fn();
+      showLive({ onExpire });
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.declineProposal }));
+      expect(screen.getByRole('alertdialog')).toBeVisible();
+
+      act(() => vi.advanceTimersByTime(1_000));
+      await flush();
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      const notice = screen.getByText(en.dashboard.proposalExpiredNotice);
+      expect(notice).toHaveFocus();
+      expect(respondToOffer).not.toHaveBeenCalled();
+      expect(onExpire).toHaveBeenCalledTimes(1);
+    });
+
+    it('confirmation already in progress stays open until the result, then shows the error', async () => {
+      const request = deferred<{ ok: false; error: 'VALIDATION_FAILED' }>();
+      vi.mocked(respondToOffer).mockReturnValue(request.promise);
+      showLive();
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.declineProposal }));
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.declineConfirm }));
+
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(screen.getByRole('alertdialog')).toBeVisible();
+      expect(screen.getByRole('button', { name: en.dashboard.declineConfirm })).toBeDisabled();
+
+      await act(async () => request.resolve({ ok: false, error: 'VALIDATION_FAILED' }));
+      await flush();
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByText(en.errors.generic)).toBeVisible();
+      expect(screen.getByText(en.dashboard.proposalExpiredNotice)).toHaveFocus();
+      expect(respondToOffer).toHaveBeenCalledExactlyOnceWith(OFFER, false);
+    });
+
+    it('server status after the refresh turns a transport error into the saved answer', async () => {
+      const request = deferred<{ ok: true }>();
+      vi.mocked(respondToOffer).mockReturnValue(request.promise);
+      const view = showLive();
+
+      fireEvent.click(screen.getByRole('button', { name: en.dashboard.acceptProposal }));
+      act(() => vi.advanceTimersByTime(1_000));
+      await act(async () => request.reject(new Error('transport')));
+      await flush();
+      expect(screen.getByText(en.errors.generic)).toBeVisible();
+
+      // Odświeżona trasa: odpowiedź zdążyła się zapisać przed terminem.
+      view.rerenderWith({ status: 'accepted', initialCanRespond: false });
+      await flush();
+
+      expect(screen.getByText(en.dashboard.acceptProposalSuccess)).toBeVisible();
+      expect(screen.queryByText(en.errors.generic)).not.toBeInTheDocument();
+      expect(screen.queryByText(en.dashboard.proposalExpiredNotice)).not.toBeInTheDocument();
+    });
+
+    it('an answer saved earlier is not announced as a new success on page load', () => {
+      showLive({ status: 'accepted', initialCanRespond: false });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+  });
 });
