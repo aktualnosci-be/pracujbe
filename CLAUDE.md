@@ -612,6 +612,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
+  Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
+  (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
+  (`f.locations.join(',')` + `splitParam`/`value.split(',')` nie rozróżniały separatora listy
+  od przecinka wewnątrz jednej nazwy) — zaznaczenie takiej jednej opcji gubiło ofertę, dla
+  której się pojawiła. `parseLocationsParam`/`serializeLocations` (`src/components/public/job-filters.ts`)
+  escapują przecinek/backslash wewnątrz każdej nazwy backslashem przed złączeniem; jedno
+  źródło dla JS-owego sidebara/sheetu, noscriptowego formularza (`FilterSheet.tsx`), usuwania
+  chipa (`withoutValue` w stronie listy) i zapisanych wyszukiwań (`sidebarFiltersToParams`).
+  Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
+  jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
+  ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -747,6 +758,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z CAS i audytem). Obie strony indeksowalne (canonical, hreflang, sitemap), stopka „Pytania
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
+  Bez JavaScriptu (#817): `<form>` ma `method="post"` (obronnie — natywna submisja trafiłaby do
+  body żądania, nie do adresu URL) i przycisk wysyłki startuje jako `disabled`, odblokowany
+  dopiero po zamontowaniu komponentu — bez JS zostaje trwale zablokowany, więc ani klik, ani
+  Enter w polu nie wysyłają treści wiadomości/imienia/e-maila w query URL (historia przeglądarki,
+  logi serwera); `<noscript>` informuje o wymogu JavaScriptu. Dowód: E2E `contact-form`
+  (kontekst `javaScriptEnabled: false`, kontrola ujemna: formularz bez `method="post"`).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
   `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
   `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =
@@ -1837,6 +1854,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   oczyszcza pole ponownie, szablon nie przyjmuje pełnego `message`; podpis cytatu
   `jobOfferExcerptLabel` w języku odbiorcy. Błąd odczytu = e-mail bez cytatu. Testy:
   `email-message-excerpt` (kanarki, 4 języki, kontrola ujemna), `email-unsubscribe` (worker).
+  Gołe domeny bez schematu (#716): redakcja URL-i w cytacie obejmuje też domeny bez `http(s)://`,
+  `www.` ani ścieżki (np. „firma.be”, poddomena, z portem) — ograniczone do wiarygodnej listy
+  TLD, żeby nie niszczyć zwykłych skrótów/inicjałów („sp. z o.o.”, „np.”, „itd.”). Dowód:
+  `email-message-excerpt` (kanarki gołych domen + kontrola ujemna na zwykłych skrótach).
 - [x] Powiadomienia in-app + preferencje — in-app (RPC 0016, dropdown+badge, „oznacz wszystkie") + ekran preferencji `/candidate/ustawienia` i `/employer/ustawienia` (upsert `notification_preferences` pod RLS)
   Pozycje dropdownu są linkami do obiektu (`resolveHref` wg `entity_type` i roli, rozmowa → `?c=`
   tylko dla UUID), otwarcie oznacza jedno powiadomienie; „Zobacz wszystkie” prowadzi do
@@ -2306,6 +2327,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `next.config.mjs` w obu trybach), opcjonalnie tryb `PROD_SMOKE_EXPECT_MODE=production|demo`
   (HSTS ≥ 1 rok i brak noindex / noindex) i wdrożony SHA `PROD_SMOKE_EXPECT_SHA` z `version`
   w `/api/health` (w produkcji z `HEALTH_CHECK_SECRET` w `x-health-token`, bez logowania sekretu).
+  Partie sitemap ofert (#689): statyczna lista sprawdzeń zna tylko `/sitemap/0.xml` (strony
+  statyczne) — smoke odczytuje `/robots.txt` i dopisuje sprawdzenie dla KAŻDEJ partii ofert
+  (`/sitemap/1.xml`, `2.xml`, …) tam wskazanej (`parseRobotsSitemapShardPaths`), więc awaria
+  generowania katalogu ofert (zapytanie, paginacja, tłumaczenia) nie umyka już wynikowi
+  „wszystkie sprawdzenia zgodne” mimo zielonego `id=0`. Katalog bez partii ofert = bez zmian.
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -2315,6 +2341,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rejestrowany w `register()` (`src/instrumentation.ts`), `onRequestError` = szablon trasy;
   `captureError` (`src/lib/error-report.ts`, izomorficzny) przekazuje tylko kod. Wiadomość: kod z `ErrorCodes` (inaczej `INTERNAL`), trasa przez `redactUrl` bez
   query/fragmentu, wydanie (`NEXT_PUBLIC_APP_VERSION`), środowisko, czas; limit 2000 znaków;
+  segment-UUID w trasie wysyłanej NA ZEWNĄTRZ (`safeRoute`, `src/lib/error-webhook/message.ts`)
+  jest zawsze szablonem `[id]` (np. `/candidate/aplikacje/[id]`) — inaczej niż ogólna redakcja
+  ścieżek (`redactPathSegment`), gdzie UUID zostaje jako identyfikator korelacyjny w logach
+  wewnętrznych; bez tego rozróżnienia raport z prywatnej strony szczegółu aplikacji
+  (`POST /api/client-error`) niósł do Discorda realny UUID rekordu kandydata/pracodawcy (#776,
+  naprawione — `UUID_RE` eksportowane z `src/lib/privacy/redact.ts`, dowód `error-webhook`
+  z kontrolą ujemną);
   ten sam kod raz na 10 min (licznik pominiętych), 429 → przerwa wg `retry_after`, timeout 3 s,
   awaria cicha bez adresu w logach. `/api/health` → `checks.errorWebhook`. CSP bez hosta Sentry.
   Logi serwera — wspólne reguły redakcji
