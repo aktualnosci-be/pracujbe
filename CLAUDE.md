@@ -1614,6 +1614,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `MessageComposer` trzyma jeden UUID na operację danej treści (`useRef`), ponowienie po
   zerwanym połączeniu = ta sama wiadomość bez drugiego powiadomienia/e-maila. Dowód: `rls.sql`
   sekcja PP (retry, dwie równoległe sesje przez dblink, rollback pierwszej próby).
+  Izolacja kompozytora między rozmowami (#849, bez migracji): `MessagesView` montuje
+  `MessageComposer` z `key={conversationId}` — przełączenie rozmowy w tej samej trasie (bez
+  pełnego przeładowania) wcześniej zmieniało tylko prop `conversationId` tej samej instancji,
+  więc niewysłany szkic, błąd, gotowe załączniki i klucz idempotencji (#147) zostawały i mogły
+  trafić do wysyłki pod nowym adresatem. Klucz per rozmowa wymusza pełny remount (jak już miał
+  `ThreadMessageList` przez `key={thread.id}`). Testy: unit `messages-view` (key = `activeParam`
+  w drzewie elementów), `message-composer` (harness z przełącznikiem rozmowy: z kluczem szkic
+  znika, kontrola ujemna bez klucza pokazuje mechanizm wycieku).
   Odbiorcy powiadomień/e-maili firmowych (aplikacja, wiadomość, odpowiedź na propozycję) = aktywni
   recruiter+ z aktywnym profilem (`company_recipient_ok`, 0070); e-mail o wiadomości od firmy do
   kandydata podpisany nazwą firmy. Dowód: `rls.sql` sekcja LL.
