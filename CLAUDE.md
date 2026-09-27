@@ -1500,6 +1500,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zapisu. Ponowienie bez edycji zachowuje ten sam klucz i zwykły komunikat (bez zmian, kontrola
   ujemna w teście). Bez migracji — RPC `apply_to_job` (0071/0093) już rozróżniał klucze, brakowało
   tylko odróżnienia payloadu po stronie klienta. Test: `apply-modal-network` (z kontrolą ujemną).
+  Szkic przeżywa zamknięcie modalu (#913, bez migracji): zamknięcie dialogu X/Escape przed
+  wysłaniem nie zeruje już wpisanych danych — `reset()` w `ApplyModal` uruchamia się TYLKO po
+  realnym sukcesie wysyłki (Invariant #11: dane zostają po każdym innym zamknięciu, bez wyjątku
+  na błąd). Kandydat: pola już żyły w stanie `ApplyModal`, więc wystarczyło przestać je zerować
+  przy `handleOpenChange`. Gość: `GuestApplyForm` odmontowuje się razem z treścią dialogu
+  (`LightDialogContent`), więc szkic (bez tokenu Turnstile i bez stanu błędów/wysyłki — te wracają
+  do zera przy każdym montażu) trzyma `ApplyModal` w `useRef` (`GuestApplyDraft`, `initialDraft`/
+  `onDraftChange`) i czyści go dopiero po `submitGuestApplication` zwracającym sukces — celowo bez
+  `localStorage`/`sessionStorage` (decyzja z issue: bez odrębnej decyzji prywatności). Szkic nie
+  przeżywa pełnego przeładowania strony ani zmiany oferty (nowa instancja komponentu) — zgodnie
+  z kierunkiem z issue („aż do wysłania, zmiany oferty lub opuszczenia strony”). Dowód: unit
+  `apply-modal-draft-preserve` (kandydat i gość, z kontrolą ujemną: sukces czyści szkic), E2E
+  `guest-apply` (X i Escape na tej samej stronie, z kontrolą ujemną).
   Bez NISS/BIS i numerów dokumentów (#495): wiadomość do firmy i odpowiedzi na pytania
   (kandydat i gość) z numerem rejestru narodowego/BIS (mod 97), PESEL, kartą eID albo numerem
   po słowie kluczowym („paszport nr…”) → błąd przy polu, bez zapisu (`findPersonalIdentifierField`
