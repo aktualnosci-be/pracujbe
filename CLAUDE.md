@@ -621,6 +621,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
   bez walidacji / bez bramki weryfikacji link wycieka).
+  `employmentType` (#842, bez migracji): rodzaj umowy i wymiar czasu pracy są niezależne
+  (wymiar to wolny tekst `job.workingHours`, bez osobnego pola — patrz #811), więc `permanent`
+  („Umowa na stałe”) już NIE wymusza `FULL_TIME` — realna oferta na część etatu z umową na
+  stałe nie dostaje sprzecznej z opisem wartości; pole jest wtedy pomijane, nie zgadywane z
+  tekstu godzin. Pozostałe rodzaje (`temporary`/`interim`/`freelance`/`internship`/`seasonal`)
+  same są kategorią zatrudnienia, więc nadal emitują `employmentType`. Dowód:
+  `tests/unit/structured-data.test.ts` (kontrola ujemna: `permanent` + opis część etatu →
+  brak `employmentType`, nigdy `FULL_TIME`).
   BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
   `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
   (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
