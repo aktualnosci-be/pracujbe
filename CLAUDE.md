@@ -1296,6 +1296,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   gubić po odmontowaniu panelu; Escape nadal zamyka całe menu i wraca fokusem na trigger (bez
   zmiany). Bez migracji, bez nowych tekstów. Dowód: `tests/unit/application-status-menu.test.tsx`
   (kontrola ujemna: Escape w kroku potwierdzenia zamyka menu i nie używa nowej ścieżki fokusu).
+  Historia zgłoszenia nie znika po awarii kolejnej strony (#770): `getEmployerApplicationHistoryPage`
+  zwracał błąd zapytania jako pustą, „gotową” stronę (`{items:[],nextCursor:null}`) — server action
+  zgłaszał `ready`, a `ApplicationHistoryList` usuwał kursor i „Pokaż więcej”, jakby historia się
+  skończyła, bez komunikatu i bez możliwości ponowienia. Loader ma teraz jawny wynik
+  `{status:'ok', page}` / `{status:'error'}` (`ApplicationHistoryPageLoad`); pusta strona zostaje
+  tylko dla legalnych przypadków (zły identyfikator, cudza/usunięta aplikacja, koniec historii) —
+  awaria zapytania propaguje `error` do akcji i UI (istniejący komunikat + „Spróbuj ponownie” już
+  to obsługiwały, brakowało tylko sygnału z loadera). Bez migracji, bez nowych tekstów. Dowód:
+  `tests/unit/employer-application-history.test.ts` (kontrola ujemna regresji #770).
 - [x] Stronicowanie kursorem i szczegół kandydata (audyt P1-05/P1-06, migracja `0152`): `/employer/oferty` (created_at, id), `/employer/aplikacje` (submitted_at, id) i
   `/employer/kandydaci` (wynik, kandydat) zamiast OFFSET/top 5 — kursor w adresie w obu
   kierunkach (`?po=` starsze/dalsze, `?przed=` nowsze), zły token = pierwsza strona
