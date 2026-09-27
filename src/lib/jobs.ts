@@ -13,6 +13,7 @@ import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 import { resolveJobContentLocales } from '@/lib/job-content-locale';
+import { applyJobMachineTranslation, type JobMachineTranslation } from '@/lib/job-machine-translation';
 import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
@@ -112,6 +113,11 @@ export interface JobDetail extends JobListItem {
   availableLocales?: Locale[];
   /** Pytania screeningowe do formularza aplikowania (#101); brak = oferta bez pytań. */
   screeningQuestions?: ScreeningQuestion[];
+  /**
+   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0219); brak = treść
+   * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
+   */
+  machineTranslation?: JobMachineTranslation;
 }
 
 export interface GetJobsParams {
@@ -460,11 +466,37 @@ async function getJobBySlugFromDb(
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
   const { getPublicJobScreeningQuestions } = await import('@/lib/db/public-jobs');
   const screeningQuestions = parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id));
-  return {
+  const requested = toLocale(locale);
+  const withLocales: JobDetail = {
     ...job,
-    ...(await readContentLocales(pool, job, toLocale(locale))),
+    ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };
+  return readMachineTranslation(pool, withLocales, requested);
+}
+
+/**
+ * Przekład na język strony (#33). Tylko za flagą `AI_TRANSLATION_ENABLED`, tylko gdy treść
+ * oferty jest w innym (znanym) języku niż strona. Odczyt pomocniczy: jego awaria zostawia
+ * oryginał i loguje sam kod obszaru (bez treści oferty).
+ */
+async function readMachineTranslation(
+  pool: TransactionPool,
+  job: JobDetail,
+  locale: Locale,
+): Promise<JobDetail> {
+  if (!job.contentLocale || job.contentLocale === locale) return job;
+  if (job.availableLocales?.includes(locale)) return job;
+  try {
+    const { isTranslationDisplayEnabled } = await import('@/lib/translation/config');
+    if (!isTranslationDisplayEnabled()) return job;
+    const { getPublicJobMachineTranslation } = await import('@/lib/db/public-jobs');
+    const row = await getPublicJobMachineTranslation(pool, job.id, locale);
+    return applyJobMachineTranslation(job, row, locale);
+  } catch (error) {
+    captureError(error, { area: 'jobs.readMachineTranslation', jobId: job.id });
+    return job;
+  }
 }
 
 /**

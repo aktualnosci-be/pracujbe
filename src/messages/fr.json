@@ -474,6 +474,9 @@
       "fr": "français",
       "en": "anglais"
     },
+    "machineTranslationNotice": "Traduction automatique. Langue d’origine : {language}.",
+    "manualTranslationNotice": "Contenu traduit. Langue d’origine : {language}.",
+    "translationOriginalLink": "Voir l’original",
     "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement."
   },
   "landing": {

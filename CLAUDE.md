@@ -1155,7 +1155,7 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `withAiBudget` (rezerwacja przed API, rozliczenie tokenami, log użycia bez treści); odmowa
   budżetu → `defer_translation_job` (zadanie wraca po 1 h / 5 min bez zużycia próby). Dowód:
   `rls.sql` sekcja TR31 z kontrolami ujemnymi TR31-N i TR31-13N; unit `translation-*`.
-  **Do zrobienia:** wpięcie profili (#34), benchmark i wybór modelu (#30), UI/SEO stanu tłumaczenia.
+  **Do zrobienia:** wpięcie profili (#34), benchmark i wybór modelu (#30), SEO wersji przetłumaczonych.
   Oferty (#33, migracja `0146`, zależy od #514): odroczone triggery na `jobs`/
   `job_translations`/`job_requirements`/`companies` → przy COMMIT `sync_job_translation_source`:
   oferta publiczna (active, niewygasła, firma verified, nie demo) = `record_translation_source`
@@ -1167,8 +1167,19 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   /api/translation/process` (`MAINTENANCE_SECRET`, `src/lib/translation/run.ts`, log użycia AI),
   bez flagi `skipped`. Wersja pipeline SQL = TS (`translation-job-sync.test`). Dowód: `rls.sql`
   sekcja TR33 (dwie sesje przez dblink, kontrola ujemna TR33-N); sekcja TR31 na własnych
-  encjach. **Otwarte:** odczyt przekładów w widoku oferty/liście/JobPosting (UI/SEO), UI korekty
-  ręcznej, `protectedTerms` (nazwa firmy), cron (właściciel).
+  encjach. Cron: Cloudflare Worker co 10 min (`infra/cloudflare-cron`, `/api/translation/process`).
+  Odczyt na stronie oferty (migracja `0219` — numer tymczasowy): RPC
+  `get_public_job_machine_translation` (anon; tylko oferta publiczna, bieżąca rewizja bez
+  `is_stale`, język bez własnego tłumaczenia/wymagań, tylko pola wyświetlane) →
+  `readMachineTranslation` w `getJobBySlug` (za flagą `AI_TRANSLATION_ENABLED`, awaria =
+  oryginał + kod obszaru w logu) → `applyJobMachineTranslation`
+  (`src/lib/job-machine-translation.ts`: nakładka tylko przy pełnej zgodności list, inaczej
+  oryginał — nigdy mieszanka języków) → oznaczenie `job.machineTranslationNotice`/
+  `manualTranslationNotice` z linkiem `job.translationOriginalLink` do oryginału. SEO bez zmian
+  (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM219 (kontrola
+  ujemna TM219-N), unit `job-machine-translation`. **Otwarte:** przekład w liście ofert,
+  JobPosting/hreflang wersji przetłumaczonych (decyzja SEO), UI korekty ręcznej,
+  `protectedTerms` (nazwa firmy).
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
