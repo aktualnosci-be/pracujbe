@@ -1839,6 +1839,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `retention-warning-email`. **Otwarte (#574):** włączenie `RETENTION_MODE` (właściciel), minimum
   rejestru usunięć po RET-09/RET-10, zadania dla zgód/audytu/`auth.email_outbox`/e-maili,
   kopie liczone w dniach (`backup.sh`), konto pracodawcy, język gościa na aplikacji (#546).
+  Podgląd w panelu admina (bez migracji): `/admin/ustawienia/retencja` (link z
+  `/admin/ustawienia`), TYLKO ODCZYT — każda kategoria `retention_policies` z etykietą i opisem
+  z `adminRetention.keys.*` (PL/NL/FR/EN), okres i ostrzeżenie w dniach („wyłączone” = null),
+  kto pilnuje terminu (`enforcement`) i ostatnia zmiana z dziennika (`retention.policy_changed`,
+  aktor po nazwie); tryby crona `RETENTION_MODE`/`DSA_RETENTION_MODE`/`STORAGE_GC_MODE`
+  odczytane TYMI SAMYMI funkcjami co `/api/maintenance` (`readRetentionModes`). Odczyt
+  `getRetentionOverview` (`src/lib/data/admin-retention.ts`) service-rolem po `requireAdmin`;
+  demo = wartości z migracji 0127/0132. Dziennik: typ obiektu `retention_policy` i etykiety akcji
+  `retention.policy_changed`/`retention.policies_seeded`. Strona nie zmienia okresów ani trybów
+  (decyzja administratora danych). Testy: unit `admin-retention` (kontrole ujemne: nie-admin bez
+  odczytu, literówka trybu nie włącza usuwania; strażnik: kategorie z migracji = klucze
+  tłumaczeń w 4 językach), E2E `admin-retention` (4 języki), trasa w `admin-a11y`.
+  **Otwarte:** edycja okresu z panelu (RPC 0105 bez uzasadnienia i CAS — osobna migracja).
 - [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
   portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
   `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne

@@ -287,6 +287,7 @@ export const AUDIT_ENTITY_TYPES = [
   'screening_question_review',
   'email_campaign',
   'age_policy',
+  'retention_policy',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -308,6 +309,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email.suppressed': 'auditActionEmailSuppressed',
   'email.suppression_lifted': 'auditActionEmailSuppressionLifted',
   'age_policy.updated': 'auditActionAgePolicyUpdated',
+  'retention.policy_changed': 'auditActionRetentionPolicyChanged',
+  'retention.policies_seeded': 'auditActionRetentionPoliciesSeeded',
   'breach.created': 'auditActionBreachCreated',
   'breach.updated': 'auditActionBreachUpdated',
   'breach.closed': 'auditActionBreachClosed',
