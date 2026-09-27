@@ -59,7 +59,7 @@ const expected = {
   migrations: ['Migration runner (PostgreSQL 16)', ['install']],
   'e2e-shard': ['E2E shard ${{ matrix.shard }}/3', ['build']],
   'e2e-perf': ['E2E perf (lab CWV + INP)', ['build']],
-  'e2e-fixtures': ['E2E fixtures (${{ matrix.fixture }})', ['build']],
+  'e2e-fixtures': ['E2E fixtures (${{ matrix.fixture }} ${{ matrix.part }})', ['build']],
   'e2e-real': ['E2E real flow (PostgreSQL 16)', ['build']],
   e2e: ['E2E (Playwright)', ['build', ...E2E_PARTS]],
 };
@@ -149,11 +149,34 @@ for (const [name, body] of jobs) {
   assert.doesNotMatch(body, /run: .*(perf-lab\.mjs|chromium-timing)/, `${name}: pomiary czasu tylko w e2e-perf`);
 }
 
-// Fixture'y (`next dev`, dane fikcyjne) — oba tryby w macierzy.
+// Fixture'y (`next dev`, dane fikcyjne): tryb `full` w 2 częściach, `error` w jednej. Każdy
+// tryb ma w macierzy komplet części 1..N, zgodny z częściami dozwolonymi w konfiguracji
+// fixture (inaczej część testów nie uruchomiłaby się nigdzie); raport blob zawsze.
 const fixtures = jobs.get('e2e-fixtures');
-assert.match(fixtures, /^        fixture: \[full, error\]\s*$/m, 'e2e-fixtures: tryby full i error');
+const fixtureParts = new Map();
+for (const [, mode, current, total] of fixtures.matchAll(/^          - \{ fixture: ([a-z]+), part: (\d+)\/(\d+) \}\s*$/gm)) {
+  const list = fixtureParts.get(mode) ?? [];
+  list.push(`${current}/${total}`);
+  fixtureParts.set(mode, list);
+}
+const partsOf = (count) => Array.from({ length: count }, (_, index) => `${index + 1}/${count}`);
+assert.deepEqual([...fixtureParts.keys()], ['full', 'error'], 'e2e-fixtures: tryby full i error w macierzy (include)');
+assert.deepEqual(fixtureParts.get('full'), partsOf(2), 'e2e-fixtures: tryb full w częściach 1/2 i 2/2');
+assert.deepEqual(fixtureParts.get('error'), partsOf(1), 'e2e-fixtures: tryb error w jednej części 1/1');
+assert.match(fixtures, /^      fail-fast: false\s*$/m, 'e2e-fixtures: fail-fast: false — raport ze wszystkich części');
 assert.match(fixtures, /TEST_APPLICATIONS_FIXTURE: \$\{\{ matrix\.fixture \}\}/, 'e2e-fixtures: tryb z macierzy');
-assert.match(fixtures, /npx playwright test --config playwright\.applications-fixture\.config\.ts/, 'e2e-fixtures: konfiguracja fixture');
+assert.match(fixtures, /TEST_APPLICATIONS_FIXTURE_PART: \$\{\{ matrix\.part \}\}/, 'e2e-fixtures: część z macierzy');
+assert.match(fixtures, /npx playwright test --config playwright\.applications-fixture\.config\.ts\s*$/m, 'e2e-fixtures: konfiguracja fixture');
+assert.match(fixtures, /E2E_BLOB_NAME: fixtures-\$\{\{ matrix\.fixture \}\}-\$\{\{ strategy\.job-index \}\}/, 'e2e-fixtures: raport cząstkowy (blob) z nazwą części');
+assert.match(fixtures, /if: \$\{\{ !cancelled\(\) \}\}\s*\r?\n\s*with:\s*\r?\n\s*name: blob-report-fixtures-/, 'e2e-fixtures: wyślij blob także przy czerwonej części');
+const fixtureConfig = await readFile(new URL('playwright.applications-fixture.config.ts', root), 'utf8');
+const allowedParts = fixtureConfig.match(/\(mode === 'full' \? \[([^\]]*)\] : \[([^\]]*)\]\)\.includes\(part\)/);
+assert.ok(allowedParts, 'playwright.applications-fixture.config.ts: lista dozwolonych części');
+const quoted = (list) => list.split(',').map((item) => item.trim().replace(/^'|'$/g, ''));
+assert.deepEqual(quoted(allowedParts[1]), fixtureParts.get('full'), 'fixture config: części full = macierz CI');
+assert.deepEqual(quoted(allowedParts[2]), fixtureParts.get('error'), 'fixture config: części error = macierz CI');
+assert.match(fixtureConfig, /\['blob', \{ outputDir: 'blob-report'/, 'fixture config: blob do blob-report/');
+assert.match(fixtureConfig, /retries: 0,/, 'fixture config: bez ponowień (retries: 0)');
 
 // Przepływ na PostgreSQL 16 (#351, #66): izolowana baza z „e2e” w nazwie, informacyjny
 // (`continue-on-error`), więc NIE jest zależnością wymaganego checka „E2E (Playwright)”.
@@ -186,4 +209,4 @@ assert.match(mergeConfig, /flaky-report\.ts/, 'playwright.merge.config.ts: rapor
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
-console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E z jobem zbiorczym, main bez anulowania.');
+console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E i części fixture’ów z jobem zbiorczym, main bez anulowania.');
