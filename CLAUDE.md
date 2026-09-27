@@ -560,7 +560,9 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 - [x] CI (`ci.yml`, od 2026-09-23 na `ubuntu-latest`) + natywne wdrożenie Railway z `main`
 - [x] Centralny system błędów + kody + kanał błędów (webhook Discorda od #571; wcześniej Sentry)
 - [x] shadcn/ui — zestaw komponentów w `src/components/ui` (API shadcn, styl „Ludzie i praca”, tokeny,
-  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select),
+  bez hexów): button, input, textarea, label, checkbox (Radix), select (własny, API Radix Select;
+  `aria-labelledby` listy zawsze wskazuje na faktycznie wyrenderowany `id` triggera, także gdy
+  wywołujący nadpisuje wygenerowany `id` — regresja #819, test `select-trigger-id`),
   card, badge (`success` = `success-text` na `success/10`, AA), toast, light-dialog (#393) +
   confirm-dialog, stepper, status-pill, match-bar, stat-card oraz **skeleton**, **table**
   (domyślne klasy = `TH`/`TD`/`TD_WRAP` z `panel-styles.ts`, `TableRowHeader` = `<th scope="row">`),
@@ -1199,7 +1201,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
-- [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
+- [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
+  Fokus po anulowaniu potwierdzenia (#800): „Anuluj” w kroku potwierdzenia (`rejected`/`hired`)
+  przywraca fokus na status, który uruchomił potwierdzenie (referencje opcji listy), zamiast go
+  gubić po odmontowaniu panelu; Escape nadal zamyka całe menu i wraca fokusem na trigger (bez
+  zmiany). Bez migracji, bez nowych tekstów. Dowód: `tests/unit/application-status-menu.test.tsx`
+  (kontrola ujemna: Escape w kroku potwierdzenia zamyka menu i nie używa nowej ścieżki fokusu).
 - [x] Stronicowanie kursorem i szczegół kandydata (audyt P1-05/P1-06, migracja `0152`): `/employer/oferty` (created_at, id), `/employer/aplikacje` (submitted_at, id) i
   `/employer/kandydaci` (wynik, kandydat) zamiast OFFSET/top 5 — kursor w adresie w obu
   kierunkach (`?po=` starsze/dalsze, `?przed=` nowsze), zły token = pierwsza strona
@@ -1707,6 +1714,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Tryb demo (#359): layouty biorą demo z `getNotifications(locale, rola)` (czas przez Intl), bez
   literałów w `DashboardShell`. Ustawienia pracodawcy (#357): własne opisy (`settings.employer*`),
   bez przełącznika dopasowanych ofert, opis powiązany `aria-describedby`.
+  Synchronizacja pełnej listy po „oznacz wszystkie” z dzwonka (#825, bez migracji):
+  „Oznacz wszystkie” w dzwonku (`DashboardShell`) woła RPC i `router.refresh()` z INNEGO
+  komponentu niż pełna lista — `NotificationsList` dostawał świeży `initialPage` z serwera, ale
+  lokalny stan (`useState` z montowania) sam się z nim nie uzgadniał: licznik się zerował, a
+  wiersze zostawały nieprzeczytane. Efekt reagujący na KOLEJNY (nie pierwszy) `initialPage`
+  uzgadnia znane pozycje ze świeżych danych serwera; przy globalnym zerze oznacza WSZYSTKIE
+  wczytane strony (także z „Pokaż więcej”) jako przeczytane, a widok `?nieprzeczytane=1` czyści
+  do pustego stanu i kasuje kursor „Pokaż więcej” — zgodnie z tym, co pokazałoby świeże otwarcie
+  tej samej strony. Widok „wszystkie” nie usuwa wierszy (dane zostają, tylko przeczytane).
+  Dowód: unit `notifications-list` (rerender z nowym `initialPage`; kontrola ujemna: identyczny
+  obiekt props po raz drugi nic nie zmienia).
 
 ### Etap 7 — admin / prywatność / płatności
 - [~] Cookies: baner + kategorie + centrum ustawień + zapis zgód (podstawa)

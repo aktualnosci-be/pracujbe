@@ -18,11 +18,12 @@ const ROOT = resolve(__dirname, '../..');
 const E2E = join(ROOT, 'tests/e2e');
 
 /**
- * Ostatni spec zmieniany w PR-ie otwartym w chwili wprowadzenia helpera (#951: admin-ux).
- * Lista tylko maleje: po scaleniu tego PR-u przenieść import na `./fixtures/axe` i usunąć
- * spec stąd.
+ * Speci zmieniane w PR-ach otwartych w chwili wprowadzenia helpera (#586: admin-breaches,
+ * panel-a11y; #918: admin-a11y; #951: admin-ux) są teraz wszystkie przeniesione na
+ * `./fixtures/axe`. Lista przejściowa jest pusta — nowy spec z bezpośrednim importem
+ * `@axe-core/playwright` od razu czerwieni pierwszy test niżej.
  */
-const PENDING_PR_SPECS = new Set(['admin-ux.spec.ts']);
+const PENDING_PR_SPECS = new Set<string>([]);
 
 const RAW_AXE_IMPORT = /from ['"]@axe-core\/playwright['"]/;
 
