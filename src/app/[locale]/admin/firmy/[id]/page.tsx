@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
+import { adminBannerHref } from '@/lib/admin/campaign-banner-link';
 import { parseUuid } from '@/lib/admin/list-params';
 import { getCompanyDetail, type AdminCompanyDetail } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
@@ -104,6 +105,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
   const { locale, id } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'admin' });
+  const tb = await getTranslations({ locale, namespace: 'campaignBanner' });
   const formatDate = createAppDateFormatter(locale);
 
   const result = await getCompanyDetail(id);
@@ -294,16 +296,18 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
                     <span className={cn(TAG, 'mt-1.5')}>
                       {t(JOB_STATUS_KEY[job.status] ?? 'statusUnknown')}
                     </span>
-                    {job.status === 'active' ? (
-                      <a
-                        href={`/api/employer/jobs/${job.id}/banner?format=1200x300&locale=${locale}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(TEXT_LINK, 'ml-2 mt-1.5 px-0 text-xs')}
-                      >
-                        {t('jobBannerLink')}
-                      </a>
-                    ) : null}
+                    {(() => {
+                      const bannerHref = adminBannerHref(job, company.id);
+                      return bannerHref ? (
+                        <Link
+                          href={bannerHref}
+                          aria-label={tb('openBannerLabel', { title: job.title || t('targetUnnamed') })}
+                          className={cn(TEXT_LINK, 'ml-2 mt-1.5 px-0 text-xs')}
+                        >
+                          {t('jobBannerLink')}
+                        </Link>
+                      ) : null;
+                    })()}
                   </div>
                 </li>
               ))}

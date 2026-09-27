@@ -10,9 +10,11 @@
 // Kontrola ujemna: `--inject-click-delay-ms 300` dodaje blokujący listener kliknięcia → czerwony.
 //
 // CI (job `e2e`, po testach): ten sam build i ten sam Chromium co Playwright, własny
-// `next start` na porcie 3100. Lokalnie:
+// `next start` na porcie 3100 (z E2E_PORT=N: N+100, scripts/lib/e2e-server.mjs). Lokalnie:
 //   node scripts/perf-lab.mjs                                 # startuje next start na 3100
+//   E2E_PORT=3517 node scripts/perf-lab.mjs                   # własny serwer na 3617
 //   node scripts/perf-lab.mjs --base http://localhost:3000    # istniejący serwer
+// Zajęty port bez --base = błąd (nie mierzymy cudzego serwera).
 // Chromium: PLAYWRIGHT_CHROMIUM_PATH (np. /opt/pw-browsers/chromium) albo `playwright install`.
 import { spawn } from "node:child_process";
 import {
@@ -24,6 +26,7 @@ import {
 import { dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { e2eBaseUrl, e2ePort } from "./lib/e2e-server.mjs";
 import { launchChromium } from "./lib/launch-chromium.mjs";
 import {
   clsFromShifts,
@@ -47,8 +50,8 @@ const pl = JSON.parse(
   readFileSync(new URL("../src/messages/pl.json", import.meta.url), "utf8"),
 );
 const injectClickDelayMs = Number(argValue("--inject-click-delay-ms") ?? 0);
-const PORT = 3100;
-const base = (argValue("--base") ?? `http://localhost:${PORT}`).replace(
+const PORT = e2ePort("perfLab");
+const base = (argValue("--base") ?? e2eBaseUrl("perfLab")).replace(
   /\/$/,
   "",
 );
@@ -131,6 +134,16 @@ function injectClickDelay(ms) {
     },
     true,
   );
+}
+
+/** Czy pod adresem ktoś już odpowiada (dowolny status HTTP). */
+async function answers(url) {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(2_000) });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function waitForServer(url, timeoutMs) {
@@ -392,6 +405,11 @@ let server;
 let serverExit;
 async function main() {
   if (!argValue("--base")) {
+    if (await answers(base)) {
+      throw new Error(
+        `Port ${PORT} jest zajęty przez inny serwer — ustaw inny E2E_PORT albo podaj --base.`,
+      );
+    }
     server = spawn(
       process.execPath,
       ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)],

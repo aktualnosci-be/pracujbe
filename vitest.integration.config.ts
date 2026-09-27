@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/integration/**/*.test.ts'],
+    // Blokada wyjść sieciowych poza loopback i hostem INTEGRATION_PG_ADMIN_URL (#47).
+    setupFiles: ['./tests/integration/setup.ts'],
     hookTimeout: 90_000,
     testTimeout: 20_000,
     fileParallelism: false,
