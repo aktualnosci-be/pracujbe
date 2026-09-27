@@ -13,6 +13,7 @@ import {
   NetworkBlockedError,
   connectTarget,
   installNetworkGuard,
+  integrationAllowedHost,
   isAllowedHost,
   isNetworkGuardInstalled,
   uninstallNetworkGuard,
@@ -108,6 +109,35 @@ describe('#47 blokada sieci w testach Vitest', () => {
     expect(connectTarget([{ path: '/tmp/.s.PGSQL.5432' }])).toBeNull();
     expect(connectTarget([[{ host: 'example.com', port: 443 }, null]])).toBe('example.com');
     expect(connectTarget([5432])).toBe('localhost');
+  });
+
+  it('błąd wskazuje plik i nazwę testu, który próbował wyjść do sieci', async () => {
+    const err = await fetch('https://example.com/').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NetworkBlockedError);
+    const blocked = err as NetworkBlockedError;
+    expect(blocked.test).toBe(
+      'tests/unit/network-guard.test.ts › #47 blokada sieci w testach Vitest > błąd wskazuje plik i nazwę testu, który próbował wyjść do sieci',
+    );
+    expect(blocked.message).toContain('network-guard.test.ts');
+    expect(blocked.message).toContain('example.com');
+    let socketErr: unknown;
+    try {
+      net.connect(443, TEST_NET);
+    } catch (e) {
+      socketErr = e;
+    }
+    expect((socketErr as NetworkBlockedError).message).toMatch(/błąd wskazuje plik.*192\.0\.2\.1/s);
+    // Poza kontekstem testu (brak stanu expect) komunikat nadal jest poprawny, bez etykiety.
+    expect(new NetworkBlockedError('example.com', 'fetch', null).message).toMatch(/^\[network-guard\] Test próbował/);
+  });
+
+  it('integracja: host z INTEGRATION_PG_ADMIN_URL trafia na allow-listę, reszta nie', () => {
+    expect(integrationAllowedHost('postgresql://postgres@127.0.0.1:55432/postgres')).toBe('127.0.0.1');
+    expect(integrationAllowedHost('postgresql://u:p@DB.Internal.:5432/x')).toBe('db.internal');
+    expect(integrationAllowedHost(undefined)).toBeNull();
+    expect(integrationAllowedHost('nie-url')).toBeNull();
+    expect(isAllowedHost('db.internal', ['db.internal'])).toBe(true);
+    expect(isAllowedHost('example.com', ['db.internal'])).toBe(false);
   });
 
   it('kontrola ujemna: bez strażnika to samo połączenie nie kończy się NetworkBlockedError', () => {

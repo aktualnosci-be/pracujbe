@@ -1799,8 +1799,12 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
   dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
   po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
-  Chromium z Playwrighta to osobny proces (poza blokadą). Integracja PG (`vitest.integration.config.ts`)
-  bez zmian. Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
+  Chromium z Playwrighta to osobny proces (poza blokadą). Błąd wskazuje test (`plik > opis > nazwa`
+  ze stanu `expect`, pole `NetworkBlockedError.test`) i host. Integracja PG
+  (`vitest.integration.config.ts` → `tests/integration/setup.ts`) ma tę samą blokadę: PG z Dockera
+  na 127.0.0.1 (proces `docker` poza blokadą), host jawnego `INTEGRATION_PG_ADMIN_URL` dopuszczony.
+  Strażnik `network-guard.test` (kontrola ujemna: bez blokady to samo połączenie przechodzi).
+  Punkt „blokada HTTP w testach” zamknięty (#765 + etykieta testu i integracja).
   Wyszukiwanie (migracja `0110`): `search_fold` = `lower(unaccent)` (IMMUTABLE) po obu stronach,
   wpis jako literał LIKE (`search_like_pattern` escapuje `\ % _`), prefiltry przez GIN na
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
