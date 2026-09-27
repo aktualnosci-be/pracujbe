@@ -1818,6 +1818,11 @@ rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`)
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
   obserwacja 48 h) + smoke `node scripts/railway/prod-smoke.mjs` (poza CI; bramka hasła z env,
   4 języki + health, kod ≠ 0 przy błędzie; test `railway-prod-smoke` z atrapą serwera).
+  Smoke sprawdza też nagłówki bezpieczeństwa każdej strony (CSP `frame-ancestors`/`object-src`/
+  `base-uri`, nosniff, `X-Frame-Options: DENY`, `Referrer-Policy`; test porównuje z nagłówkami
+  `next.config.mjs` w obu trybach), opcjonalnie tryb `PROD_SMOKE_EXPECT_MODE=production|demo`
+  (HSTS ≥ 1 rok i brak noindex / noindex) i wdrożony SHA `PROD_SMOKE_EXPECT_SHA` z `version`
+  w `/api/health` (w produkcji z `HEALTH_CHECK_SECRET` w `x-health-token`, bez logowania sekretu).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
