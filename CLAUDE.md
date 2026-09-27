@@ -860,6 +860,16 @@ tego samego `readCandidateViewerId()` co strona listy i przekazuje go do `getJob
 i różni kandydaci nigdy nie dzielą spersonalizowanego wpisu. Dowód: unit
 `job-filter-facets-route` (osobna agregacja na kandydata, kontrola ujemna: ten sam kandydat
 w oknie cache = bez nowej agregacji).
+Cache facetów przy renderowaniu SSR (#903, bez migracji): powyższy cache + single-flight chronił
+tylko endpoint AJAX `/api/job-filter-facets` — renderowanie strony `/oferty-pracy` woła
+`getJobFilterFacets` BEZPOŚREDNIO przy każdym żądaniu HTML, z pominięciem tej ochrony (#595
+zamykało to tylko dla ścieżki AJAX). Cache + single-flight przeniesiony na poziom samej funkcji
+współdzielonej `getJobFilterFacets` (`src/lib/jobs.ts`) — SSR i endpoint AJAX z tymi samymi
+filtrami i tym samym widzem w krótkim oknie (15 s) dzielą teraz jedną agregację SQL niezależnie
+od tego, którą ścieżką wynik jest pobierany; klucz nadal uwzględnia `candidateId` (#97), więc
+wynik jednego kandydata nigdy nie wycieka do innego ani do gościa. Dowód: unit
+`job-filter-facets-ssr-cache` (jedna agregacja dla równoległych i odrębnych wywołań SSR,
+kontrole ujemne: inny kandydat i inne filtry → osobna agregacja).
 
 Widoczność profilu dla firm (#494, migracja `0100`): przełącznik
 „Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w `/candidate/ustawienia`
