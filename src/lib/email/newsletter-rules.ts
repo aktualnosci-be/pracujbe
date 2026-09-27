@@ -2,7 +2,7 @@
  * Reguły treści oferty w newsletterze (#45) — jedno źródło dla workera
  * (`assertRenderableJobs` w `src/emails/newsletter.tsx`) i edytora kampanii w panelu admina
  * (`src/lib/admin/campaign-editor.ts`); lustro w bazie: `email_campaign_jobs_renderable`
- * (migracja 0202). Czyste funkcje, bez zależności serwerowych (działa w przeglądarce).
+ * (migracja 0155). Czyste funkcje, bez zależności serwerowych (działa w przeglądarce).
  */
 
 export const NEWSLETTER_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

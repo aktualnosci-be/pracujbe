@@ -13,7 +13,7 @@ import { NOTICE, NOTICE_TEXT, NOTICE_TITLE, TEXT_LINK } from '@/components/admin
 
 /**
  * Panel administratora — nowa rewizja istniejącej kampanii e-mail (#45). Formularz wstępnie
- * wypełniony treścią wskazanej rewizji; slug stały. Zapis (RPC 0202) tworzy kolejną rewizję
+ * wypełniony treścią wskazanej rewizji; slug stały. Zapis (RPC 0155) tworzy kolejną rewizję
  * jako SZKIC — wskazana rewizja zostaje bez zmian, aktywacja w szczególe nowej rewizji.
  */
 

@@ -1668,7 +1668,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przed bazą, `/api/maintenance` nie woła `process_email_campaigns`. Dowód: `rls.sql` sekcja
   AC45 (kontrola ujemna bez CAS), unit `admin-email-campaigns` (kontrole ujemne bramki nadawcy),
   E2E `admin-email-campaigns`, `admin-a11y`.
-  Edytor rewizji (#45, migracja `0202` — numer tymczasowy): „Nowa kampania” na liście →
+  Edytor rewizji (#45, migracja `0155`): „Nowa kampania” na liście →
   `/admin/kampanie/nowa`, „Nowa rewizja” w szczególe → `/admin/kampanie/[id]/nowa-rewizja`
   (formularz wypełniony treścią tej rewizji, slug stały). `EmailCampaignEditor`: w każdym języku
   serwisu 1–3 oferty (slug, tytuł, miasto, stawka opcjonalnie), treść w kształcie workera
@@ -1681,7 +1681,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   — ten sam klucz = ta sama rewizja, `email_campaign_jobs_renderable` = lustro reguł workera,
   skutek = `create_email_campaign_revision` z 0101, audyt `email_campaign.revision_created` bez
   treści). Nowa rewizja = szkic; aktywacja i bramka nadawcy bez zmian. Dowód: `rls.sql` sekcja
-  AC202 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
+  AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
   `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
   (edytor), `admin-a11y` (nowe trasy).
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`

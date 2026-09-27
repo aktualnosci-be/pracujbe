@@ -7,7 +7,7 @@
  *   - treść rewizji = dokładnie kształt, który czyta worker (`newsletterJobsFromPayload`):
  *     `{ "<język>": { "jobs": [{ locale, slug, title, city, salary?, isDemo: false }] } }`,
  *   - walidacja pól: reguły workera (`newsletterJobIssues`, jedno źródło z
- *     `assertRenderableJobs`) + limity długości (lustro `email_campaign_jobs_renderable`, 0202),
+ *     `assertRenderableJobs`) + limity długości (lustro `email_campaign_jobs_renderable`, 0155),
  *     a na końcu ta sama funkcja co podgląd (`campaignPreview`). Brak treści w którymś języku =
  *     błąd przy konkretnym polu (Invariant #1: list idzie w języku odbiorcy).
  */
@@ -25,7 +25,7 @@ import {
 /** Slug kampanii (CHECK `email_campaigns_slug`, 0101). */
 export const CAMPAIGN_SLUG_MAX = 80;
 
-/** Limity pól oferty — te same w `email_campaign_jobs_renderable` (0202). */
+/** Limity pól oferty — te same w `email_campaign_jobs_renderable` (0155). */
 export const CAMPAIGN_JOB_LIMITS: Record<NewsletterJobField, number> = {
   slug: 200,
   title: 160,

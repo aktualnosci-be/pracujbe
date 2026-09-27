@@ -41,7 +41,7 @@ import {
  *
  * Rewizje `email_campaigns` (najnowsze pierwsze) z liczbami odbiorców według statusu
  * (`email_campaign_recipients` — same liczby, bez adresów). Filtr statusu, wyszukiwanie po
- * slugu, stronicowanie kursorem. „Nowa kampania” → edytor (`/admin/kampanie/nowa`, RPC 0202). Aktywacja i zatrzymanie — w szczególe rewizji (podgląd treści
+ * slugu, stronicowanie kursorem. „Nowa kampania” → edytor (`/admin/kampanie/nowa`, RPC 0155). Aktywacja i zatrzymanie — w szczególe rewizji (podgląd treści
  * w każdym języku przed decyzją). Bez konfiguracji nadawcy marketingu jawny komunikat.
  * NOINDEX + `force-dynamic`.
  */

@@ -43,7 +43,7 @@ import {
  * serwisu (list idzie w języku odbiorcy — Invariant #1; „niepoprawna treść” = worker jej nie
  * wyrenderuje), rewizje tego sluga oraz aktywacja/zatrzymanie (`EmailCampaignActions`, RPC
  * z CAS i audytem, 0111). Bez konfiguracji nadawcy marketingu — komunikat i brak aktywacji.
- * „Nowa rewizja” → edytor wstępnie wypełniony treścią tej rewizji (RPC 0202, szkic).
+ * „Nowa rewizja” → edytor wstępnie wypełniony treścią tej rewizji (RPC 0155, szkic).
  */
 
 export const dynamic = 'force-dynamic';

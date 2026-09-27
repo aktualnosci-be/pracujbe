@@ -23,7 +23,7 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 /**
  * #45 — edytor rewizji kampanii e-mail w panelu admina (`/admin/kampanie/nowa`, „Nowa
  * rewizja”): walidacja pól = reguły workera + podgląd (jedno źródło), treść w kształcie
- * workera, akcja pod sesją admina z kluczem idempotencji (RPC 0202). Kontrole ujemne: brak
+ * workera, akcja pod sesją admina z kluczem idempotencji (RPC 0155). Kontrole ujemne: brak
  * języka / placeholder / demo = błąd przy polu i brak RPC; walidator pomijający język nie
  * przeszedłby testu zgodności z workerem.
  */
@@ -35,7 +35,7 @@ const ADMIN_ID = '00000000-0000-4000-8000-00000000a001';
 const CLIENT_KEY = '5b3a1c2d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
 const NEW_ID = '7c0e8f4c-2b1d-4c3e-9f7a-1d2e3f4a5b6c';
 const MIGRATION = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0202_admin_email_campaign_editor.sql'),
+  resolve(process.cwd(), 'supabase/migrations/0155_admin_email_campaign_editor.sql'),
   'utf8',
 );
 
@@ -153,7 +153,7 @@ describe('walidacja edytora = reguły workera i podglądu', () => {
   });
 });
 
-describe('migracja 0202 (kontrakt)', () => {
+describe('migracja 0155 (kontrakt)', () => {
   it('tylko admin, idempotencja po kluczu, audyt bez treści, EXECUTE tylko authenticated', () => {
     expect(MIGRATION).toContain('create or replace function public.admin_create_email_campaign_revision(');
     expect(MIGRATION).toContain("if not public.is_admin() then raise exception 'PERMISSION_DENIED'");

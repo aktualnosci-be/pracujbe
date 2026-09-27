@@ -103,7 +103,7 @@ test('admin kampanie: filtr „Zamknięte” i rewizje tego samego sluga', async
 });
 
 /* ---------------------------------------------------------------------------
- * Edytor rewizji (#45, 0202) — tryb DEMO: walidacja i podgląd w przeglądarce, zapis bez bazy.
+ * Edytor rewizji (#45, 0155) — tryb DEMO: walidacja i podgląd w przeglądarce, zapis bez bazy.
  * ------------------------------------------------------------------------- */
 
 const LOCALE_NAMES: Record<string, string> = { pl: 'Polski', nl: 'Nederlands', fr: 'Français', en: 'English' };

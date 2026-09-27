@@ -26,7 +26,7 @@ import { captureError } from '@/lib/error-report';
  *   - `cancelEmailCampaign` — zatrzymuje rewizję przez `admin_cancel_email_campaign`
  *     (niezadzierżawione listy wygaszone; nieodwracalne). Działa także bez nadawcy.
  *   - `createEmailCampaignRevision` — nowa rewizja (szkic) z edytora przez
- *     `admin_create_email_campaign_revision` (0202: is_admin(), idempotencja po kluczu, audyt).
+ *     `admin_create_email_campaign_revision` (0155: is_admin(), idempotencja po kluczu, audyt).
  *
  * Zapis pod SESJĄ admina (`withPortalTransaction`, `auth.uid()` = admin), bo RPC sprawdzają
  * `is_admin()`. Błędy bazy → stabilny `ErrorCode` (Invariant #8). Bez env → DEMO.
@@ -103,7 +103,7 @@ export async function cancelEmailCampaign(
 }
 
 /* ---------------------------------------------------------------------------
- * Edytor rewizji (0202)
+ * Edytor rewizji (0155)
  * ------------------------------------------------------------------------- */
 
 export type CampaignRevisionResult =

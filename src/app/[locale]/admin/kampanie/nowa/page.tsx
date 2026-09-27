@@ -11,7 +11,7 @@ import { NOTICE, NOTICE_TEXT, NOTICE_TITLE, TEXT_LINK } from '@/components/admin
 
 /**
  * Panel administratora — nowa kampania e-mail (#45): slug + treść w każdym języku serwisu.
- * Zapis (`createEmailCampaignRevision`, RPC 0202) tworzy SZKIC rewizji 1; aktywacja w szczególe.
+ * Zapis (`createEmailCampaignRevision`, RPC 0155) tworzy SZKIC rewizji 1; aktywacja w szczególe.
  * Bez konfiguracji nadawcy marketingu — ten sam komunikat co na liście (szkic można zapisać).
  */
 

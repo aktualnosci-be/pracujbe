@@ -1,8 +1,6 @@
 -- =============================================================================
--- 0202_admin_email_campaign_editor.sql — #45 (otwarte): tworzenie rewizji kampanii
+-- 0155_admin_email_campaign_editor.sql — #45 (otwarte): tworzenie rewizji kampanii
 -- e-mail z panelu admina (`/admin/kampanie/nowa`, „Nowa rewizja” w szczególe).
---
--- Numer TYMCZASOWY — ostateczny nada integrator (kolejka migracji).
 --
 -- 0101 dało create_email_campaign_revision(slug, content) wyłącznie dla service_role
 -- (bez sprawdzenia roli, bez idempotencji i bez śladu w dzienniku); 0111 — aktywację
