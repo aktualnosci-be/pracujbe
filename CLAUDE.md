@@ -731,6 +731,18 @@ Kompletność profilu (pulpit + profil) = 6 kroków kreatora onboardingu, jedno 
 kreator = 100% (#315). Flaga `profile_completed` w DB (`finish_onboarding`) ma własne kryteria.
 Baner nowej propozycji prowadzi do `/candidate/propozycje#offer-{id}` (#324); „Najnowsze
 wiadomości” linkują do `?c={id}` (#340); menu „…” aplikacji ma pełny wzorzec ARIA menu (#341).
+Polecane oferty — wyjaśnienie i stan zgłoszenia (bez migracji, dane z materializacji P1-03):
+karta z wynikiem na `/candidate/oferty-polecane` pokazuje krótką etykietę (`match.summaryShort`,
+liczona z procentu przez `summaryKeyForScore` — to samo źródło co `scoreMatch`, więc starszy
+wiersz z domyślnym `summary_key` nie przeczy procentowi), „Wymagania obowiązkowe: X z Y” tylko
+przy spójnych liczbach (Y > 0, X ≤ Y) i do dwóch atutów WYŁĄCZNIE ze znanych kluczy
+`match.criteria` (`src/lib/matching/explanation.ts`; nieznana wartość z bazy nie trafia do UI).
+Oferta z własnym zgłoszeniem (także w fallbacku najnowszych) ma „Już aplikowałeś(-aś)” i link
+„Szczegóły zgłoszenia” nad nakładką tytułu → `/candidate/aplikacje/[id]` (jedno zapytanie tylko
+o pokazane oferty, jawny `candidate_id = me` — RLS 0039 wpuszcza też rekrutera). Testy: unit
+`match-explanation` (strażnik: lista kluczy = atuty wpisywane w `score.ts`, kontrole ujemne),
+`candidate-recommended-read`, integracja `portal-candidate` (PG16), E2E
+`candidate-recommended-explanation` (4 języki, axe, kliknięcie linku nad nakładką).
 
 Blokada firmy przez kandydata (#97, migracja `0078`): tabela `candidate_company_blocks`
 (RPC-only `set_company_block`, odczyt `get_my_company_blocks`/`get_job_company_block`, firma nie

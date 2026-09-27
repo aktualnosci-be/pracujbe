@@ -746,6 +746,7 @@
     "recommendedJobs": "Offres recommandées",
     "recommendedIntro": "Des offres choisies pour votre profil. Sans offre compatible pour l'instant, nous affichons les offres récentes.",
     "recommendedLatest": "Offre récente",
+    "recommendedApplied": "Vous avez déjà postulé à cette offre",
     "recommendedEmptyTitle": "Aucune offre à afficher pour le moment",
     "recommendedEmptyBody": "Parcourez toutes les offres et revenez plus tard pour en découvrir de nouvelles.",
     "recommendedBrowse": "Voir les offres",
@@ -2526,6 +2527,11 @@
       "good": "Excellente compatibilité — vous remplissez la plupart des critères importants.",
       "partial": "Compatibilité partielle — vous remplissez une partie des critères.",
       "low": "Faible compatibilité — cette offre correspond peu à votre profil."
+    },
+    "summaryShort": {
+      "good": "Excellente compatibilité",
+      "partial": "Compatibilité partielle",
+      "low": "Faible compatibilité"
     },
     "mandatory": "Exigences obligatoires : {met} sur {total}",
     "strengthsTitle": "Vos atouts",
