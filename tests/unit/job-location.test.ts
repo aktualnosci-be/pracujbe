@@ -18,13 +18,13 @@ vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 const USER = '11111111-1111-4111-8111-111111111111';
 
 /**
- * Kanoniczne miasto oferty (audyt P1-10, migracja 0200). Zapis `jobs.location_id` i filtry
- * sprawdza rls.sql sekcja LC200 (PG16); tu: zgodność klucza TS z SQL, gwarancje słownika dla
+ * Kanoniczne miasto oferty (audyt P1-10, migracja 0153). Zapis `jobs.location_id` i filtry
+ * sprawdza rls.sql sekcja LC153 (PG16); tu: zgodność klucza TS z SQL, gwarancje słownika dla
  * landingów/facetów i podpowiedź kreatora.
  */
 
 describe('city_key (SQL) = cityKey (TS)', () => {
-  // Te same przypadki co rls.sql LC200-1 — rozjazd normalizacji = inna miejscowość w bazie i w UI.
+  // Te same przypadki co rls.sql LC153-1 — rozjazd normalizacji = inna miejscowość w bazie i w UI.
   it.each([
     ['Antwerpen', 'antwerpen'],
     ['  ANTWERPEN ', 'antwerpen'],

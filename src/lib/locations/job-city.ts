@@ -1,7 +1,7 @@
 import { BELGIAN_CITIES, cityKey } from '@/lib/matching/belgian-cities';
 
 /**
- * Kanoniczne miasto oferty w kreatorze (audyt P1-10, migracja 0200). Zapis `jobs.location_id`
+ * Kanoniczne miasto oferty w kreatorze (audyt P1-10, migracja 0153). Zapis `jobs.location_id`
  * robi trigger w bazie — tu tylko podpowiedź dla rekrutera: czy wpisana nazwa jest w słowniku
  * miejscowości (`location_aliases`, klucz `cityKey`) i propozycje nazw do listy `datalist`.
  * Wpisany tekst nigdy nie jest podmieniany.

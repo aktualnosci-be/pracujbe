@@ -538,7 +538,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > grantów + AV, usługa zewn.), ~~P1-03 (pipeline materializacji `matches`)~~ — zrobione (migracja `0147`, Etap 5), P1-04 (edycja/wznowienie
 > draftu + cykl życia oferty), ~~P1-05/P1-06 (paginacja + widoki szczegółu aplikacji/kandydata)~~ — zamknięte: kandydat
 > (szczegół zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana) i pracodawca (Etap 4, migracja `0152`),
-> P1-10 (kanoniczny model miast — zrobione: `jobs.location_id`, migracja 0200, patrz Etap 2), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
+> P1-10 (kanoniczny model miast — zrobione: `jobs.location_id`, migracja `0153`, patrz Etap 2), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
 > techniczna dla kandydata zrobiona w #486, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
@@ -611,7 +611,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   brak kwoty = brak pola, okres tylko z danych. Testy: `salary.test.ts`, E2E `job-detail-salary`.
   E-mail propozycji (0113): `send_offer` kolejkuje kwoty oferty (`salaryMin`/`salaryMax`/
   `salaryPeriod`/`currency`), tekst składa worker w locale odbiorcy (`email-payload-followups.test`).
-  Kanoniczne miasto oferty (audyt P1-10, migracja `0200` — numer tymczasowy): `jobs.city` zostaje
+  Kanoniczne miasto oferty (audyt P1-10, migracja `0153`): `jobs.city` zostaje
   tekstem wpisanym w kreatorze, a `jobs.location_id` (→ `locations`, 0112) ustawia WYŁĄCZNIE
   trigger `trg_jobs_resolve_location` przy każdym zapisie miasta (kreator, edycja opublikowanej,
   import, DML) — po aliasie `location_aliases` i kluczu `city_key` (lustro `cityKey` z TS: bez
@@ -623,7 +623,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   huba i zapisane wyszukiwania korzystają z tych RPC bez zmian w kodzie. Kreator: podpowiedź pod
   polem miasta (rozpoznana miejscowość albo informacja o braku w słowniku) + `datalist` propozycji
   (`jobCityAssist`, odczyt słownika pod RLS, niczego nie zapisuje; `src/lib/locations/job-city.ts`).
-  Dowód: `rls.sql` sekcja LC200 (kontrole ujemne: bez `location_id` / bez triggera), unit
+  Dowód: `rls.sql` sekcja LC153 (kontrole ujemne: bez `location_id` / bez triggera), unit
   `job-location` (parzystość klucza, 10 miast landingów → jedna miejscowość, facet),
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
   `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy

@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0200_job_location_canonical.sql — kanoniczne miasto oferty (audyt P1-10).
--- Numer tymczasowy — ostateczny nada integrator.
+-- 0153_job_location_canonical.sql — kanoniczne miasto oferty (audyt P1-10).
 --
 -- Problem: `jobs.city` to tekst wpisany w kreatorze. Filtr i landing miasta porównywały go
 -- DOKŁADNIE z listą nazw (`j.city = any(p_locations)`), więc „Antwerpen ”, „ANTWERPEN”,
@@ -8,7 +7,7 @@
 -- dzieliły jedno miasto na kilka pozycji.
 --
 -- 1. `city_key(text)` — ta sama normalizacja co `cityKey` w TS (NFD bez znaków łączących,
---    małe litery, spacje/myślniki → jedna spacja). Zgodność pilnuje rls.sql sekcja LC200.
+--    małe litery, spacje/myślniki → jedna spacja). Zgodność pilnuje rls.sql sekcja LC153.
 -- 2. `jobs.location_id` → `locations` (0112): miejscowość ze słownika rozpoznana po aliasie
 --    (`location_aliases.alias_key`, nazwy PL/NL/FR/EN). Wpisany tekst `jobs.city` zostaje bez
 --    zmian (prezentacja, JSON-LD). Nierozpoznana nazwa = `null` i dotychczasowe zachowanie.
@@ -69,7 +68,7 @@ alter table public.jobs
 create index if not exists idx_jobs_location_id on public.jobs (location_id)
   where location_id is not null;
 comment on column public.jobs.location_id is
-  'Miejscowość ze słownika rozpoznana z jobs.city (trigger trg_jobs_resolve_location, 0200). Wpisany tekst zostaje w jobs.city.';
+  'Miejscowość ze słownika rozpoznana z jobs.city (trigger trg_jobs_resolve_location, 0153). Wpisany tekst zostaje w jobs.city.';
 
 -- Każdy zapis miasta ustala miejscowość; podana przez klienta wartość jest nadpisywana.
 create or replace function public.jobs_resolve_location()

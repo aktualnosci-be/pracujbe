@@ -456,7 +456,7 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     // Znaki LIKE we wpisie nie działają jak wzorzec.
     expect(await jobCityAssist({ city: '%', locale: 'pl' })).toEqual({ status: 'ok', match: null, suggestions: [] });
     expect(await jobCityAssist({ city: 'Nieznanowo', locale: 'pl' })).toMatchObject({ status: 'ok', match: null });
-    // Oferty fixture'u zapisane jako „Antwerp” mają miejscowość ze słownika (trigger 0200).
+    // Oferty fixture'u zapisane jako „Antwerp” mają miejscowość ze słownika (trigger 0153).
     const { rows } = await pg.admin.query(`SELECT count(*)::int AS n FROM public.jobs j
       JOIN public.locations l ON l.id = j.location_id WHERE j.company_id = $1 AND l.slug = 'antwerp'`, [ids.companyA]);
     expect(rows[0].n).toBe(14);
