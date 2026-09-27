@@ -1,15 +1,18 @@
 name: CI
 
-# CI Pracuj.be — GitHub-hosted runnery (`ubuntu-latest`), płatne z puli minut
-# Actions. Decyzja właściciela z 2026-09-23: współdzielony self-hosted runner
-# serializował wszystkie przebiegi (kolejka FIFO, #50) i blokował wdrożenia.
+# CI Pracuj.be — GitHub-hosted runnery (`ubuntu-latest`). Decyzja właściciela z 2026-09-23:
+# współdzielony self-hosted runner serializował wszystkie przebiegi (kolejka FIFO, #50);
+# 2026-09-27: repo jest publiczne, więc minuty hostowanych runnerów są darmowe — CI
+# optymalizujemy pod czas przebiegu (równoległe joby E2E), nie pod liczbę minut.
 #
-# Oszczędzanie minut:
+# Zasady:
 # - nowy push do PR anuluje trwający przebieg tego PR (main nigdy — Railway
 #   `Wait for CI` potrzebuje wyniku każdego SHA na main);
-# - drogie joby (build, e2e) startują dopiero po zielonym lint/typecheck/unit;
-# - każdy job ma `timeout-minutes`, więc zawieszony krok nie zjada puli;
-# - e2e odtwarza `.next` z jobu build (cache Actions) zamiast budować drugi raz (#127).
+# - joby E2E startują po zielonym buildzie (build po lint/typecheck/unit);
+# - każdy job ma `timeout-minutes`, więc zawieszony krok nie blokuje przebiegu;
+# - joby E2E odtwarzają `.next` z jobu build (cache Actions) zamiast budować drugi raz (#127);
+# - E2E: 3 shardy + pomiar + fixture'y (full w 2 częściach) równolegle, wynik zbiera wymagany check
+#   „E2E (Playwright)”; przepływ na PostgreSQL 16 (`e2e-real`) na razie informacyjny.
 
 on:
   push:
@@ -327,15 +330,21 @@ jobs:
       - name: Verify runtime PostgreSQL isolation
         run: node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts
 
-  e2e:
-    name: E2E (Playwright)
+  e2e-shard:
+    name: E2E shard ${{ matrix.shard }}/3
+    # Zestaw demo (`playwright.config.ts`, projekt `chromium`) podzielony na 3 równoległe
+    # shardy. Na jednym runnerze sam krok „Run E2E” trwał ~11 min. Każdy shard zapisuje raport
+    # cząstkowy (blob); łączy je job zbiorczy „E2E (Playwright)”. Test z pomiarem czasu
+    # (projekt `chromium-timing`) biegnie w jobie `e2e-perf`, bez konkurencji o CPU.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
-    # Zestaw E2E + fixture'y + lab CWV zajmuje już ~28–30 min na jednym workerze;
-    # przy 30 min job był anulowany mimo zielonych testów (#549). Repo publiczne —
-    # minuty hostowanych runnerów nie są limitem.
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      # Wszystkie shardy do końca — raport ma pokazać każdy czerwony test, nie tylko pierwszy.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -359,7 +368,7 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       # Build z jobu `build` tego przebiegu (#127). restore-keys łapie też build
-      # z wcześniejszej próby, gdy ponawiany jest sam e2e.
+      # z wcześniejszej próby, gdy ponawiany jest sam shard.
       - name: Restore build from build job
         uses: actions/cache/restore@v6
         with:
@@ -380,24 +389,263 @@ jobs:
         env:
           NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
         run: rm -rf .next && npm run build
-      - name: Run E2E
+      - name: Run E2E shard
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'
-        run: npm run test:e2e
-      # Bramka wydajności, lab CWV (#395, ~2 min): LCP/CLS/TBT (mediana prób) na tym samym
-      # buildzie i Chromium co E2E — bez drugiego builda i bez instalacji przeglądarki.
-      # Przed krokiem fixture: `next dev` nadpisuje produkcyjny `.next`.
+          E2E_BLOB_NAME: shard-${{ matrix.shard }}
+        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/3
+      # Raport cząstkowy zawsze (także przy zielonym shardzie) — job zbiorczy łączy komplet.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-shard-${{ matrix.shard }}
+          path: blob-report/
+          retention-days: 2
+
+  e2e-perf:
+    name: E2E perf (lab CWV + INP)
+    # Pomiary czasu w jednym miejscu, na osobnym runnerze (bez równoległych kart zabierających CPU):
+    # INP otwarcia dialogu (#393, projekt `chromium-timing`) i lab CWV z INP-proxy (#395).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Restore build from build job
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .next
+            !.next/cache
+          key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-
+      - name: Verify restored build
+        id: next-build
+        continue-on-error: true
+        run: node scripts/check-next-build.mjs
+      - name: Build application for E2E (fallback)
+        if: steps.next-build.outcome != 'success'
+        timeout-minutes: 15
+        env:
+          NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
+        run: rm -rf .next && npm run build
+      # Projekt `chromium-timing` bez zależności (`--no-deps`): reszta zestawu biegnie w shardach.
+      - name: Run E2E timing specs
+        env:
+          PLAYWRIGHT_SKIP_BUILD: '1'
+          E2E_BLOB_NAME: timing
+        run: npx playwright test --project=chromium-timing --no-deps
+      # Bramka wydajności, lab CWV (#395, ~2 min): LCP/CLS/TBT i INP-proxy (mediana prób) na tym
+      # samym buildzie i Chromium — bez drugiego builda i bez instalacji przeglądarki.
       # JSON wyników trafia do playwright-report/ (artefakt tylko przy porażce).
       - name: Performance budget (lab CWV)
         run: node scripts/perf-lab.mjs
-      # Historia aplikacji kandydata: osobny serwer z danymi fikcyjnymi (15 zgłoszeń / wymuszony błąd).
-      - name: Run E2E on application fixtures
-        run: |
-          TEST_APPLICATIONS_FIXTURE=full npx playwright test --config playwright.applications-fixture.config.ts
-          TEST_APPLICATIONS_FIXTURE=error npx playwright test --config playwright.applications-fixture.config.ts
-      # Raport tylko przy porażce i z krótką retencją — oszczędza płatny storage.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-timing
+          path: blob-report/
+          retention-days: 2
       - uses: actions/upload-artifact@v7
         if: failure()
+        with:
+          name: perf-lab-report
+          path: playwright-report/
+          retention-days: 2
+
+  e2e-fixtures:
+    name: E2E fixtures (${{ matrix.fixture }} ${{ matrix.part }})
+    # Serwer `next dev` z danymi fikcyjnymi (playwright.applications-fixture.config.ts):
+    # `full` = historia zgłoszeń, formularze, JobPosting; `error` = wymuszone błędy odczytu.
+    # `full` w 2 częściach (~9 min na jednym runnerze; podział w konfiguracji fixture — jawna
+    # lista części 2, bo `--shard` dzieli pliki po liczbie testów, nie po czasie). Każda część
+    # zapisuje raport cząstkowy (blob) dla jobu zbiorczego. Nie używa builda (next dev),
+    # ale startuje po nim — jak reszta E2E.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { fixture: full, part: 1/2 }
+          - { fixture: full, part: 2/2 }
+          - { fixture: error, part: 1/1 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E on application fixtures
+        env:
+          TEST_APPLICATIONS_FIXTURE: ${{ matrix.fixture }}
+          TEST_APPLICATIONS_FIXTURE_PART: ${{ matrix.part }}
+          E2E_BLOB_NAME: fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}
+        run: npx playwright test --config playwright.applications-fixture.config.ts
+      # Raport cząstkowy zawsze (także przy zielonej części) — job zbiorczy łączy komplet.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}
+          path: blob-report/
+          retention-days: 2
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}-test-results
+          path: test-results/
+          retention-days: 2
+
+  e2e-real:
+    name: E2E real flow (PostgreSQL 16)
+    # Przepływ kandydat ↔ pracodawca na prawdziwym PostgreSQL 16 i sesjach Better Auth
+    # (#351, #66): `npm run test:e2e:real` tworzy izolowaną bazę (nazwa z „e2e”), nakłada
+    # migracje produkcyjne i jednorazowe ograniczone loginy, potem Playwright + `next dev`.
+    # Na start INFORMACYJNY (`continue-on-error`): scenariusz nigdy nie biegł w CI — czerwony
+    # wynik jest widoczny w checku, ale nie blokuje scalania ani Railway `Wait for CI`.
+    # Po serii zielonych przebiegów na main: usuń `continue-on-error` i dodaj do wymaganych.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run E2E real flow
+        env:
+          E2E_PGHOST: 127.0.0.1
+          E2E_PGPORT: ${{ job.services.postgres.ports[5432] }}
+          E2E_PGUSER: postgres
+          E2E_PGPASSWORD: isolated-test-only
+          E2E_PGDATABASE: pracujbe_e2e_real
+        run: npm run test:e2e:real
+      # Trace'y (`retain-on-failure`) tylko przy porażce, krótka retencja.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-real-test-results
+          path: test-results/
+          retention-days: 2
+
+  e2e:
+    name: E2E (Playwright)
+    # Job zbiorczy o STAŁEJ nazwie wymaganego checka (reguły scalania, Railway `Wait for CI`).
+    # `always()`: pominięty job liczyłby się jako zaliczony check — tutaj czerwony shard,
+    # pomiar albo fixture zawsze daje czerwony „E2E (Playwright)”. Łączy raporty cząstkowe
+    # w jeden raport html + raport flaków (#375).
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    needs: [build, e2e-shard, e2e-perf, e2e-fixtures]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Download blob reports
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: blob-report-*
+          path: blob-report
+          merge-multiple: true
+      # Awaria samego łączenia raportu nie zmienia wyniku testów — ten ustala krok niżej.
+      - name: Merge E2E reports
+        id: merge
+        if: hashFiles('blob-report/*.zip') != ''
+        continue-on-error: true
+        run: npx playwright merge-reports --config playwright.merge.config.ts blob-report
+      - name: Check E2E jobs
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e '
+            const needs = JSON.parse(process.env.RESULTS);
+            const bad = Object.entries(needs).filter(([, job]) => job.result !== "success");
+            for (const [name, job] of Object.entries(needs)) console.log(`${name}: ${job.result}`);
+            if (bad.length > 0) { console.error(`Niezaliczone: ${bad.map(([name]) => name).join(", ")}`); process.exit(1); }
+          '
+      # Raport tylko przy porażce i z krótką retencją.
+      - uses: actions/upload-artifact@v7
+        if: failure() && steps.merge.outcome == 'success'
         with:
           name: playwright-report
           path: playwright-report/
