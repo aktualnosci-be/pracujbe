@@ -1785,6 +1785,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   data w Europe/Brussels, aktor (nazwa albo „System”), akcja i statusy jako etykiety i18n,
   obiekt z linkiem; filtry typu obiektu, akcji, aktora, zakresu dat i `id` (skrót „Historia
   statusów” w wierszu firmy), stronicowanie kursorem.
+  Filtr aktora (#857/#844, bez migracji): tekst po imieniu/nazwisku/e-mailu filtruje dziennik
+  podzapytaniem `actor_id IN (SELECT … FROM profiles …)` w tym samym zapytaniu (lista i eksport,
+  wspólne `readAuditRows`) — bez pośredniej listy najwyżej 100 id, więc przy ponad 100 pasujących
+  kontach żaden wpis nie znika. Dowód: `portal-admin` (PG16, 120 kont, kontrola ujemna dawnego
+  kroku z `LIMIT 100`), unit `admin-data-load`, `admin-audit-export`.
   Eksport CSV/JSON (bez migracji): przyciski „Eksport CSV/JSON” (`AuditExportButton`, klucze
   `admin.auditExport*`) → `POST /api/admin/audit-export?format=&entity=&action=&actor=&from=&to=&id=`
   — te same filtry i walidacja co lista (wspólny odczyt `readAuditRows` w `src/lib/data/admin.ts`),

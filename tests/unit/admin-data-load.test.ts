@@ -417,24 +417,28 @@ describe('panel admina — dziennik zdarzeń (#417)', () => {
     expect(call.values).toEqual([ADMIN_PAGE_SIZE + 1]);
   });
 
-  it('aktor po nazwie: id dopasowanych profili filtrują dziennik', async () => {
-    fakeDb.rows('admin.audit-actor-search', [{ id: 'p1' }, { id: 'p2' }]);
+  it('aktor po nazwie (#857): podzapytanie po wszystkich pasujących profilach, bez limitu id', async () => {
     emptyList('admin.audit-logs');
     await listAuditLogs({ actor: 'Ada' });
-    expect(fakeDb.callsTo('admin.audit-actor-search')[0]?.values).toEqual(['%Ada%']);
+    // Jedno zapytanie — bez osobnego wyszukiwania profili zwracającego najwyżej 100 id.
+    expect(fakeDb.callsTo('admin.audit-actor-search')).toHaveLength(0);
     const call = fakeDb.callsTo('admin.audit-logs')[0]!;
-    expect(call.text).toContain('actor_id = ANY($1::uuid[])');
-    expect(call.values[0]).toEqual(['p1', 'p2']);
+    expect(call.text).toContain('actor_id IN (SELECT p.id FROM public.profiles p WHERE');
+    expect(call.text).toMatch(/p\.first_name::text ILIKE \$1 OR p\.last_name::text ILIKE \$1 OR p\.email::text ILIKE \$1/);
+    expect(call.values).toEqual(['%Ada%', ADMIN_PAGE_SIZE + 1]);
+    // Kontrola ujemna: pośrednia lista id (`= ANY(…)`) albo limit w podzapytaniu profili
+    // przywróciłyby obcinanie wyników do pierwszych 100 osób.
+    expect(call.text).not.toMatch(/actor_id = ANY/);
+    expect(call.text.match(/LIMIT/gi)).toHaveLength(1); // tylko limit strony dziennika
   });
 
-  it('aktor po nazwie bez dopasowań → pusta lista bez odczytu audit_logs', async () => {
-    emptyList('admin.audit-actor-search');
+  it('aktor po nazwie bez dopasowań → pusta lista (baza zwraca zero wierszy)', async () => {
+    emptyList('admin.audit-logs');
     await expect(listAuditLogs({ actor: 'Nikt' })).resolves.toEqual({
       status: 'ok',
       rows: [],
       nextCursor: null,
     });
-    expect(fakeDb.callsTo('admin.audit-logs')).toHaveLength(0);
     expect(serviceCalls()).toHaveLength(1);
   });
 });
