@@ -1,8 +1,8 @@
 -- =============================================================================
--- Rollback 0191 — części gmin w słowniku miejscowości. Uruchamiać ręcznie jako migrator,
+-- Rollback 0151 — części gmin w słowniku miejscowości. Uruchamiać ręcznie jako migrator,
 -- w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć wpis z app_migrations.history.
 -- Plik celowo BEZ BEGIN/COMMIT (supabase/tests/locations-sections-rollback.sql wykonuje go
--- w transakcji i cofa). Numer tymczasowy — zmienia się razem z migracją.
+-- w transakcji i cofa).
 --
 -- Usuwa części gmin (kind = 'section'; aliasy znikają kaskadowo), kolumnę
 -- `parent_location_id` ze strażnikiem i przywraca CHECK rodzaju z 0112. Gminy i aliasy

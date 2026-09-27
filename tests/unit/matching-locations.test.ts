@@ -180,7 +180,7 @@ describe('słownik locations w bazie (#194, migracja 0112)', () => {
 
 type SectionRow = GeneratedRow & { parentSlug: string; region: string };
 
-describe('części gmin w słowniku (migracja 0191)', () => {
+describe('części gmin w słowniku (migracja 0151)', () => {
   const sections = generateSections();
   const migrationSql = readFileSync(join(process.cwd(), SECTIONS_MIGRATION_FILE), 'utf8');
   const bySlug = new Map(sections.rows.map((r: SectionRow) => [r.slug, r]));

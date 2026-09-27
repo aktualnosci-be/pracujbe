@@ -492,7 +492,7 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     }
   });
 
-  it('części gmin ze słownika (0191): Heverlee i Kessel-Lo tylko w bazie, kontrola ujemna', async () => {
+  it('części gmin ze słownika (0151): Heverlee i Kessel-Lo tylko w bazie, kontrola ujemna', async () => {
     const setCities = async (candidate: string, job: string) => {
       await db().admin.query('UPDATE public.candidate_profiles SET city = $2 WHERE profile_id = $1', [alice, candidate]);
       await db().admin.query('UPDATE public.jobs SET city = $2 WHERE id = $1', [jobIds[0], job]);

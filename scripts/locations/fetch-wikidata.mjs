@@ -3,7 +3,7 @@
 // Uruchamiane ręcznie przy odświeżaniu danych (poza CI):
 //   node scripts/locations/fetch-wikidata.mjs                 — gminy i części gmin
 //   node scripts/locations/fetch-wikidata.mjs municipalities  — tylko gminy (migracja 0112)
-//   node scripts/locations/fetch-wikidata.mjs sections        — tylko części gmin (migracja 0191)
+//   node scripts/locations/fetch-wikidata.mjs sections        — tylko części gmin (migracja 0151)
 // Odświeżenie migawki gmin zmienia wynik generatora 0112 — po wdrożeniu 0112 zmiany idą nową migracją.
 // Zapisuje wyłącznie to, czego potrzebuje generator migracji: QID, kod NIS (REFNIS),
 // współrzędne i etykiety PL/NL/FR/EN. Gminy zniesione przy fuzjach od 2019 r. zostają

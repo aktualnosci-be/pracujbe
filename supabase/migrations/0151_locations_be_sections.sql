@@ -1,7 +1,6 @@
 -- =============================================================================
--- 0191_locations_be_sections.sql — części gmin Belgii (deelgemeenten / sections de commune) w słowniku.
+-- 0151_locations_be_sections.sql — części gmin Belgii (deelgemeenten / sections de commune) w słowniku.
 -- PLIK GENEROWANY: node scripts/locations/build-migration.mjs (nie edytuj ręcznie).
--- Numer tymczasowy — ostateczny nada integrator (SECTIONS_MIGRATION_FILE w generatorze).
 --
 -- 1. locations: rodzaj `section` i `parent_location_id` (gmina, do której należy część;
 --    wymagane dla `section`, usunięcie gminy usuwa jej części i ich aliasy).
@@ -17,7 +16,7 @@
 --    między częściami, 1 części bez gminy nadrzędnej w słowniku.
 -- 4. RLS bez zmian (słownik czytelny publicznie, zapis tylko service_role).
 --
--- Rollback: supabase/rollback/0191_locations_be_sections.down.sql
+-- Rollback: supabase/rollback/0151_locations_be_sections.down.sql
 -- =============================================================================
 
 alter table public.locations drop constraint if exists locations_kind_check;

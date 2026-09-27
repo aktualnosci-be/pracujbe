@@ -1,5 +1,5 @@
 -- =============================================================================
--- SEC-R — rollback migracji 0191 (części gmin). Uruchamiany przez scripts/test-rls.sh po
+-- SEC-R — rollback migracji 0151 (części gmin). Uruchamiany przez scripts/test-rls.sh po
 -- rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -17,7 +17,7 @@ select md5(string_agg(concat_ws('|', a.alias_key, l.slug), ',' order by a.alias_
  where l.kind <> 'section' \gset
 
 begin;
-\ir ../rollback/0191_locations_be_sections.down.sql
+\ir ../rollback/0151_locations_be_sections.down.sql
 select pg_temp.assert(
   not exists (select 1 from information_schema.columns
                where table_schema = 'public' and table_name = 'locations' and column_name = 'parent_location_id')
@@ -32,4 +32,4 @@ rollback;
 select pg_temp.assert((select count(*) from public.locations where kind = 'section') > 1500
   and exists (select 1 from public.location_aliases where alias_key = 'heverlee'),
   'SEC-R2 rollback testu cofnięty');
-\echo 'SEC-R rollback 0191: PASS'
+\echo 'SEC-R rollback 0151: PASS'

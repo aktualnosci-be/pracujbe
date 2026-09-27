@@ -173,7 +173,7 @@ export function buildLocations({ curated, snapshot }) {
   if (orphans.length) throw new Error(`Miejscowości bez aliasu: ${orphans.join(', ')}`);
   const order = new Map(rows.map((r, i) => [r.slug, i]));
   aliases.sort((a, b) => order.get(a.slug) - order.get(b.slug) || a.key.localeCompare(b.key));
-  // Klucze zajęte przez gminy (także niejednoznaczne) — części gmin (0191) ich nie przejmują.
+  // Klucze zajęte przez gminy (także niejednoznaczne) — części gmin (0151) ich nie przejmują.
   return { rows, aliases, ambiguous, reservedKeys: new Set(owners.keys()) };
 }
 
@@ -286,15 +286,15 @@ export function generate(cwd = process.cwd()) {
 }
 
 // -----------------------------------------------------------------------------
-// Części gmin (deelgemeenten / sections de commune) — migracja 0191, osobny plik:
+// Części gmin (deelgemeenten / sections de commune) — migracja 0151, osobny plik:
 // 0112 zostaje bez zmian (jest wdrożona), części gmin dochodzą jako kind = 'section'
 // z powiązaniem z gminą (`parent_location_id`).
 // -----------------------------------------------------------------------------
 
-/** Numer tymczasowy — ostateczny nada integrator (zmiana tutaj + nazwa pliku + rollback). */
-export const SECTIONS_MIGRATION_FILE = 'supabase/migrations/0191_locations_be_sections.sql';
+/** Numer ostateczny nadany przez integratora (kolejka migracji). */
+export const SECTIONS_MIGRATION_FILE = 'supabase/migrations/0151_locations_be_sections.sql';
 const SECTIONS_SNAPSHOT_FILE = 'data/locations/be-sections.wikidata.json';
-const SECTIONS_ROLLBACK = 'supabase/rollback/0191_locations_be_sections.down.sql';
+const SECTIONS_ROLLBACK = 'supabase/rollback/0151_locations_be_sections.down.sql';
 const SECTION_SORT_ORDER = 2000;
 
 /**
@@ -391,7 +391,6 @@ export function renderSectionsMigrationSql({ rows, aliases, skipped }, snapshot)
   return `-- =============================================================================
 -- ${file} — części gmin Belgii (deelgemeenten / sections de commune) w słowniku.
 -- PLIK GENEROWANY: node scripts/locations/build-migration.mjs (nie edytuj ręcznie).
--- Numer tymczasowy — ostateczny nada integrator (SECTIONS_MIGRATION_FILE w generatorze).
 --
 -- 1. locations: rodzaj \`section\` i \`parent_location_id\` (gmina, do której należy część;
 --    wymagane dla \`section\`, usunięcie gminy usuwa jej części i ich aliasy).
