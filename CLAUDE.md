@@ -1385,6 +1385,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
+  Klucz idempotencji = cel propozycji (#853, migracja `0150`): `SendOfferButton`
+  trzyma klucz per para oferta + kandydat — zmiana `jobId`/`candidateId` w tej samej instancji
+  (przełączenie firmy + `router.refresh()`, lista kandydatów i pulpit) daje nowy klucz i czysty
+  stan, retry tej samej pary zachowuje klucz, a odpowiedź dla poprzedniego celu nie oznacza nowej
+  oferty jako wysłanej. `send_offer`: klucz znaleziony przy innej parze (także w gałęzi
+  `unique_violation`) → `VALIDATION_FAILED` zamiast zwrócenia cudzej propozycji jako sukcesu.
+  Dowód: `rls.sql` sekcja SK853 (kontrola ujemna: bez porównania celu klucz zwraca propozycję
+  oferty A), unit `send-offer-button` (trzy przypadki #853 czerwone na starym komponencie).
   Termin mija w trakcie wizyty (#830, bez migracji): `ProposalActions` od `expiresAt` nie pozwala
   rozpocząć nowej odpowiedzi, ale nie usuwa bieżącej operacji — trwające żądanie trzyma
   zablokowane przyciski/dialog do wyniku, błąd (zwrócony i wyjątek) zostaje widoczny, otwarte
