@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * #100 (0211) — alerty zapisanych wyszukiwań stronicują nowe oferty kursorem
+ * #100 (0158) — alerty zapisanych wyszukiwań stronicują nowe oferty kursorem
  * (published_at, id) w `saved_search_jobs_after`, a nie offsetem `get_public_jobs`
  * (clamp 10 000). Filtry muszą być IDENTYCZNE z listą ofert: blok FROM … WHERE jest kopią
  * z najnowszej definicji `get_public_jobs`. Ten test pilnuje kopii — zmiana filtrów listy
@@ -57,7 +57,7 @@ function keysetFilters(body: string): string {
   return normalize(body.slice(body.indexOf('\n', begin), end));
 }
 
-describe('saved_search_jobs_after = filtry get_public_jobs (#100, 0211)', () => {
+describe('saved_search_jobs_after = filtry get_public_jobs (#100, 0158)', () => {
   const list = latestFunctionBody('get_public_jobs');
   const keyset = latestFunctionBody('saved_search_jobs_after');
 

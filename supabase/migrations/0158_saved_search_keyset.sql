@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0211 (NUMER TYMCZASOWY — ostateczny nada integrator) — alerty zapisanych wyszukiwań
+-- 0158 — alerty zapisanych wyszukiwań
 -- bez górnej granicy 10 100 ofert na przebieg (#100).
 --
 -- Problem (0138): saved_search_matching_jobs zbierał strony get_public_jobs po OFFSECIE.
@@ -36,7 +36,7 @@
 --   boolean, boolean, boolean, timestamptz, text, timestamptz, uuid, integer).
 -- =============================================================================
 
--- --- Strona z kursorem: filtry = get_public_jobs (0140), porządek „najnowsze” -----------
+-- --- Strona z kursorem: filtry = get_public_jobs (0153), porządek „najnowsze” -----------
 create or replace function public.saved_search_jobs_after(
   p_locale              text,
   p_keyword             text,
@@ -78,7 +78,8 @@ language sql stable security definer set search_path = public, pg_temp as $$
       where b.candidate_id = auth.uid() and b.company_id = j.company_id
     )
     and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
-    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations))
+    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations)
+         or j.location_id in (select unnest(public.location_filter_ids(p_locations))))
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
     and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
     -- Prefiltr po indeksach (tytuł oferty albo któregokolwiek tłumaczenia); dokładny

@@ -999,7 +999,7 @@ snapshot); remis `published_at` rozstrzyga `id` w `get_public_jobs` (0136, #594)
 są bez dziur i dubli. Digest nadal ≤ 5 ofert (`count` = wszystkie nowe), najwyżej raz
 na dobę/tydzień, para (wyszukiwanie, oferta) raz. Dowód: `rls.sql` sekcja SC100 (105 ofert z remisem;
 kontrola ujemna: jedna strona jak w 0092 gubi ofertę 101).
-Bez górnej granicy 10 100 ofert (migracja `0211` — numer tymczasowy): `saved_search_matching_jobs`
+Bez górnej granicy 10 100 ofert (migracja `0158`): `saved_search_matching_jobs`
 stronicuje kursorem (`published_at`, `id`) po 1000 (`saved_search_keyset_page` →
 `saved_search_jobs_after`, tylko service_role) zamiast offsetu `get_public_jobs` (clamp 10 000),
 nadal w jednym zapytaniu (jeden snapshot); `p_max_pages` = strony kursora, domyślnie bez limitu.

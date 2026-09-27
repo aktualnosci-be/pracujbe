@@ -13696,7 +13696,7 @@ select pg_temp.assert(
   'SC100-4 KONTROLA UJEMNA: jedna strona rejestruje 100 ofert, oferta 101+ przepada');
 rollback;
 set role service_role;
--- 0211: p_max_pages liczy strony KURSORA po 1000 — jedna strona mieści wszystkie 105
+-- 0158: p_max_pages liczy strony KURSORA po 1000 — jedna strona mieści wszystkie 105
 -- (obcięcie stroną kursora sprawdza SK100-4b).
 select pg_temp.assert(
   (select count(*) from public.saved_search_matching_jobs(:'sc_filters'::jsonb, 'pl', now() - interval '2 days', 1)) = 105,
@@ -13733,7 +13733,7 @@ select pg_temp.assert(
   'SC100-6 dane testu usunięte (oferty, firma, wyszukiwanie, alerty, e-maile)');
 
 -- ============================================================================
--- SK100. Alerty zapisanych wyszukiwań bez górnej granicy 10 100 ofert (0211, #100):
+-- SK100. Alerty zapisanych wyszukiwań bez górnej granicy 10 100 ofert (0158, #100):
 -- saved_search_matching_jobs stronicuje kursorem (published_at, id) zamiast offsetu
 -- get_public_jobs (clamp 10 000). 10 150 ofert z JEDNYM published_at (remis przez każdą
 -- granicę strony) + jedna starsza (SKOLD, ostatnia w sorcie) + 3 nowsze oferty firmy
@@ -13741,12 +13741,12 @@ select pg_temp.assert(
 -- zablokowaną, jeden digest ≤ 5 ofert z count = 10 151, para nie wraca. Kontrola ujemna:
 -- wariant z offsetem z 0138 gubi oferty za 10 100.
 -- ============================================================================
-\echo '--- SK100 alerty wyszukiwań: kursor zamiast offsetu (0211) ---'
-\set SKA 'e9c20000-0000-0000-0000-0000000000a1'
-\set SKE 'e9c20000-0000-0000-0000-0000000000b1'
-\set SKC 'e9c20000-0000-0000-0000-0000000000c1'
-\set SKB 'e9c20000-0000-0000-0000-0000000000c2'
-\set SKOLD 'e9c20000-0000-0000-0000-0000000000d0'
+\echo '--- SK100 alerty wyszukiwań: kursor zamiast offsetu (0158) ---'
+\set SKA 'e9c30000-0000-0000-0000-0000000000a1'
+\set SKE 'e9c30000-0000-0000-0000-0000000000b1'
+\set SKC 'e9c30000-0000-0000-0000-0000000000c1'
+\set SKB 'e9c30000-0000-0000-0000-0000000000c2'
+\set SKOLD 'e9c30000-0000-0000-0000-0000000000d0'
 
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
