@@ -2,6 +2,8 @@
 // transakcja użytkownika). Pakiet `server-only` rzuca poza warunkiem `react-server`, więc —
 // jak alias w vitest.config.ts — mapujemy go na pusty stub. Dotyczy tylko procesu testów,
 // nie serwera Next (webServer dostaje własne NODE_OPTIONS).
+// Plik ładowany przez `node --require` (CommonJS, przed ESM) — `import` jest tu niemożliwy.
+/* eslint-disable @typescript-eslint/no-require-imports */
 const Module = require('node:module');
 const path = require('node:path');
 
