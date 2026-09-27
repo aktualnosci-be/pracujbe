@@ -754,6 +754,14 @@ wartość spoza listy = błąd, nie „wszystkie”); zmiana etapu = nowa strona
 początku. Pusty etap = osobny stan z linkiem „Pokaż wszystkie zgłoszenia”. Testy: unit
 `candidate-applications-filter`, `-list`, `-action`, `-pagination`; integracja `portal-candidate`
 (PG16, kontrola ujemna bez filtra); E2E `candidate-applications-pagination` (4 języki, 320 px).
+Strefa czasowa dat i godzin (#865, bez migracji): formatery w `CandidateApplicationsList`,
+`CandidateProposalsList`, `CandidateApplicationsPreview`, `CandidateMessagesPreview`,
+`ConversationList` i `src/lib/messaging/thread-view.ts` liczyły dzień/godzinę w strefie procesu
+(UTC na Railway) zamiast `APP_TIME_ZONE` (`Europe/Brussels`, `src/lib/datetime.ts`) — blisko
+północy pokazywały dzień wcześniejszy niż w Belgii, a klienckie listy aplikacji/propozycji
+dodatkowo rozjeżdżały się między SSR i hydratacją w przeglądarce. Każdy `Intl.DateTimeFormat`
+w tych plikach dostaje teraz `timeZone: APP_TIME_ZONE`. Test: `candidate-timezone-formatting`
+(kontrola ujemna: bez strefy ta sama chwila daje inny dzień).
 Szczegół zgłoszenia `/candidate/aplikacje/[id]` (audyt P1-05/P1-06, strona kandydata; bez
 migracji): karta listy linkuje „Szczegóły zgłoszenia” (nazwa z tytułem oferty, także gdy oferta
 nie ma już publicznego adresu). `getMyApplicationDetail` pod sesją/RLS z jawnym
