@@ -1947,7 +1947,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
   → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
   z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
-  strict-origin-when-cross-origin` globalnie — test `csp-report`.
+  strict-origin-when-cross-origin` globalnie — test `csp-report`. Limiter per adres (#648): klucz
+  wyłącznie z `@/lib/http/trusted-ip` (jeden jawnie skonfigurowany nagłówek proxy, #588/#602) —
+  wcześniej lokalny `clientAddress()` ufał też `X-Forwarded-For`, więc klient mógł zmieniać go
+  w każdym żądaniu i rotować klucze limitera bez ograniczeń; brak zaufanego nagłówka trafia teraz
+  do jednej wspólnej puli zastępczej (`0.0.0.0`), nie do osobnego klucza per wartość nagłówka.
+  Ten sam wzorzec w `/api/job-funnel` pozostaje otwarty jako #646.
   Cutover i rollback (#16/#18): runbook `docs/railway/CUTOVER_ROLLBACK.md` (kolejność: bazy →
   Better Auth → Resend/cron → `APP_MODE` na decyzję właściciela; rollback = wyzerowanie zmiennych
   w odwrotnej kolejności albo redeploy ostatniego dobrego wdrożenia, baza tylko do przodu;
