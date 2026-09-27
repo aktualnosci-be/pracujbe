@@ -13922,7 +13922,7 @@ reset role; reset app.current_uid;
 --        `jobs.location_id` ze słownika (aliasy PL/NL/FR/EN, pisownia bez znaczenia) ustawia
 --        wyłącznie trigger; wpisany tekst zostaje. Filtr/licznik/facety/wyszukiwanie miasta
 --        dopasowują miejscowość, nie dokładny tekst.
--- =====================================================================-- ============================================================================
+-- ============================================================================
 \set LCCO  'f9500000-0000-0000-0000-000000020000'
 \set LCJ1  'f9500000-0000-0000-0000-000000020001'
 \set LCJ2  'f9500000-0000-0000-0000-000000020002'

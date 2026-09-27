@@ -97,6 +97,39 @@ describe('ApplicationStatusMenu', () => {
     await waitFor(() => expect(transitionApplication).toHaveBeenCalledWith('demo-application', 'rejected'));
   });
 
+  it('anulowanie potwierdzenia przywraca fokus na status, który je uruchomił (#800)', async () => {
+    renderMenu('interview');
+    fireEvent.click(screen.getByRole('button', { name: TRIGGER }));
+
+    const rejectedOption = screen.getByRole('button', { name: 'rejected' });
+    rejectedOption.focus();
+    fireEvent.click(rejectedOption);
+
+    const cancelButton = screen.getByRole('button', { name: 'cancel' });
+    cancelButton.focus();
+    fireEvent.click(cancelButton);
+
+    // Bez naprawy #800 fokus po odmontowaniu „Anuluj” wraca na <body> (jsdom),
+    // więc ta asercja jest czerwona na kodzie sprzed poprawki.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'rejected' })).toHaveFocus(),
+    );
+    expect(transitionApplication).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: Escape w kroku potwierdzenia zamyka całe menu i wraca fokusem na trigger, nie na opcję', () => {
+    renderMenu('interview');
+    const trigger = screen.getByRole('button', { name: TRIGGER });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'rejected' }));
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'statusConfirmAction' }), { key: 'Escape' });
+
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'cancel' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it('błąd niedozwolonego przejścia pokazuje osobny komunikat, nie „sprawdź dane"', async () => {
     transitionApplication.mockResolvedValue({ ok: false, error: 'INVALID_TRANSITION' });
     renderMenu('viewed');

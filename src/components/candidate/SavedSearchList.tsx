@@ -47,10 +47,14 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
     setEditingId(search.id);
     setDraftName(search.name);
   };
+  // Fokus wraca na przycisk „Zmień nazwę” tego wiersza (po ponownym renderze, gdy formularz
+  // zamykający fokus już zniknął z DOM) — zarówno po anulowaniu, jak i po udanym zapisie (#821).
+  const focusRenameButton = (id: string) => {
+    requestAnimationFrame(() => renameButtons.current.get(id)?.focus());
+  };
   const cancelRename = (id: string) => {
     setEditingId(null);
-    // Fokus wraca na przycisk „Zmień nazwę” tego wiersza (po ponownym renderze).
-    requestAnimationFrame(() => renameButtons.current.get(id)?.focus());
+    focusRenameButton(id);
   };
 
   const run = async (
@@ -109,7 +113,10 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
                         const id = search.id;
                         const name = draftName;
                         void run(id, () => renameSavedSearchAction(id, name), t('renamed')).then((ok) => {
-                          if (ok) setEditingId(null);
+                          if (ok) {
+                            setEditingId(null);
+                            focusRenameButton(id);
+                          }
                         });
                       }}
                       onKeyDown={(event) => {
