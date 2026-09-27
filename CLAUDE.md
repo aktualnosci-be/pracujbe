@@ -1800,6 +1800,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   AC155 (kontrole ujemne: bez klucza duplikat, bez reguł workera oferta demo), unit
   `admin-campaign-editor` (zgodność z workerem, kontrole ujemne), E2E `admin-email-campaigns`
   (edytor), `admin-a11y` (nowe trasy).
+  Zapis a edycja w toku (#820): `createEmailCampaignRevision` jest idempotentny po `clientKey`
+  (retry z tym samym kluczem NIE aktualizuje treści), więc pola edytora muszą być zablokowane
+  na czas zapisu — inaczej edycja wpisana w trakcie oczekiwania na odpowiedź serwera ginie po
+  cichu (formularz pokazuje nowszą wartość, zapisana i wyświetlona po nawigacji zostaje
+  starsza). `EmailCampaignEditor`: pola sluga i treści ofert mają `disabled={pending}`,
+  a handlery zmiany stanu (`changeContent`/`setJobField`/`addJob`/`removeJob`, onChange sluga)
+  dodatkowo odrzucają aktualizację, gdy `pending` — atrybut `disabled` sam nie blokuje zdarzenia
+  wywołanego poza normalną interakcją użytkownika. Dowód: unit
+  `email-campaign-editor-pending-edit` (blokada sluga i pola oferty podczas zapisu, kontrola
+  ujemna bez zapisu w toku, odblokowanie po błędzie).
   Doręczenia i blokady (#44, migracja `0098`): webhook `POST /api/email/webhook/resend`
   (podpis Svix przez `verifyStandardWebhook`, ±300 s, limit body 256 kB, inbox
   `processed_webhooks` `resend:<svix-id>`, brak `RESEND_WEBHOOK_SECRET` → 503). Model zdarzeń

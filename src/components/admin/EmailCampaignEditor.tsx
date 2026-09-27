@@ -51,6 +51,16 @@ import { CampaignPreviewCard } from '@/components/admin/CampaignPreviewCard';
  * błędzie, dane zostają po błędzie, przycisk zablokowany w trakcie zapisu i jeden klucz
  * idempotencji na operację (Invariant #11). Podgląd wybranego języka liczy `campaignPreview`
  * (ta sama funkcja co szczegół rewizji). Zapis tworzy SZKIC — aktywacja w szczególe rewizji.
+ *
+ * #820: pola tekstowe (slug + treść ofert) są zablokowane (`disabled`) w trakcie zapisu —
+ * `createEmailCampaignRevision` jest idempotentny po `clientKey` (ten sam klucz = ta sama
+ * rewizja, nowa treść w retry jest IGNOROWANA), więc bez blokady edycja wpisana w czasie
+ * oczekiwania na odpowiedź serwera ginie: formularz pokazuje nowszą wartość, ale zapisana
+ * (i wyświetlona po nawigacji na szczegół rewizji) zostaje starsza. Handlery zmiany treści
+ * (`changeContent`/`setJobField`/`addJob`/`removeJob`, onChange sluga) dodatkowo odrzucają
+ * aktualizację stanu, gdy `pending` jest prawdziwe — `disabled` jest tylko atrybutem DOM
+ * (nie blokuje zdarzenia wywołanego poza normalną interakcją użytkownika), więc bez tej
+ * bramki w logice stan formularza mógłby się zmienić mimo wizualnie zablokowanych pól.
  */
 
 type JobField = (typeof CAMPAIGN_JOB_FIELDS)[number];
@@ -93,23 +103,30 @@ export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps)
   };
 
   const changeContent = (locale: Locale, jobs: CampaignEditorJob[]) => {
+    // #820: zapis w toku ma zablokowany `disabled`, ale zdarzenie zmiany elementu wyłączonego
+    // można wywołać programowo (np. zdarzenie DOM poza normalną interakcją) — bez tej bramki
+    // stan komponentu i tak by się zaktualizował, mimo że pola są wizualnie zablokowane.
+    if (pending) return;
     // Zmiana treści = nowa operacja (nowy klucz przy kolejnym zapisie).
     clientKey.current = '';
     setForm((prev) => ({ ...prev, content: { ...prev.content, [locale]: jobs } }));
   };
 
   const setJobField = (locale: Locale, index: number, field: JobField, value: string) => {
+    if (pending) return;
     const jobs = form.content[locale].map((job, i) => (i === index ? { ...job, [field]: value } : job));
     changeContent(locale, jobs);
     clearError(jobFieldKey(locale, index, field), localeJobsKey(locale));
   };
 
   const addJob = (locale: Locale) => {
+    if (pending) return;
     changeContent(locale, [...form.content[locale], emptyCampaignJob()]);
     clearError(localeJobsKey(locale));
   };
 
   const removeJob = (locale: Locale, index: number) => {
+    if (pending) return;
     changeContent(
       locale,
       form.content[locale].filter((_job, i) => i !== index),
@@ -204,6 +221,7 @@ export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps)
             type="text"
             value={form.slug}
             readOnly={mode === 'revision'}
+            disabled={pending}
             required
             maxLength={CAMPAIGN_SLUG_MAX + 20}
             autoComplete="off"
@@ -211,6 +229,7 @@ export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps)
             aria-invalid={errors.slug ? true : undefined}
             aria-describedby={[slugHintId, errors.slug ? `${idOf('slug')}-error` : null].filter(Boolean).join(' ')}
             onChange={(event) => {
+              if (pending) return;
               clientKey.current = '';
               setForm((prev) => ({ ...prev, slug: event.target.value }));
               clearError('slug');
@@ -263,6 +282,7 @@ export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps)
                             data-campaign-field={key}
                             type="text"
                             value={job[field]}
+                            disabled={pending}
                             required={field !== 'salary'}
                             maxLength={CAMPAIGN_JOB_LIMITS[field] + 20}
                             autoComplete="off"
