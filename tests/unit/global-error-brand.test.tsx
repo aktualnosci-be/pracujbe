@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import GlobalError, { GlobalErrorContent } from '@/app/global-error';
 import { captureError } from '@/lib/error-report';
 
-vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/error-report', () => ({ captureError: vi.fn(), setErrorReporter: vi.fn() }));
 
 beforeEach(() => vi.mocked(captureError).mockClear());
 

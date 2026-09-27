@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/** Jedyne zadania, które caller może wywołać (#13) — sekret nie trafi pod inny adres. */
-export const CRON_PATHS = Object.freeze(['/api/email/process', '/api/maintenance']);
+/** Jedyne zadania, które caller może wywołać (#13; #33: worker tłumaczeń) — sekret nie trafi pod inny adres. */
+export const CRON_PATHS = Object.freeze(['/api/email/process', '/api/maintenance', '/api/translation/process']);
 export const DEFAULT_TIMEOUT_SECONDS = 120;
 const MAX_TIMEOUT_SECONDS = 600;
 
