@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import AxeBuilder from './fixtures/axe';
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
 
 /**
