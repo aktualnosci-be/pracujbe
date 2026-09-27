@@ -11,12 +11,13 @@ import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import { isBuildPhase } from '@/lib/static-rendering';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
-import { routing } from '@/i18n/routing';
-import { rowToJobListItem, type JobListItem } from '@/lib/jobs';
+import { routing, type Locale } from '@/i18n/routing';
+import { getJobs, isRealJobsFixture, rowToJobListItem, type JobListItem } from '@/lib/jobs';
+import { fixtureCompanyBySlug } from '@/lib/company-fixture';
 
 /** Zawęża dowolny string do obsługiwanego locale (fallback: język domyślny). Jak w `@/lib/jobs`. */
-function toLocale(locale: string): string {
-  return (routing.locales as readonly string[]).includes(locale) ? locale : routing.defaultLocale;
+function toLocale(locale: string): Locale {
+  return (routing.locales as readonly string[]).includes(locale) ? (locale as Locale) : routing.defaultLocale;
 }
 
 export interface CompanyProfile {
@@ -86,6 +87,24 @@ async function getCompanyProfileFromDb(
 }
 
 /**
+ * Serwer fixture E2E (tryb `full`, nigdy build produkcyjny): profil zweryfikowanej firmy
+ * fikcyjnej i jej oferty z tej samej listy fikcyjnej co `/oferty-pracy` (`companySlug`).
+ */
+async function getCompanyProfileFromFixture(slug: string, locale: Locale): Promise<CompanyProfileResult | null> {
+  const company = fixtureCompanyBySlug(slug, locale);
+  if (!company) return null;
+  const { jobs } = await getJobs({ locale, page: 1, pageSize: COMPANY_JOBS_LIMIT });
+  // Jak `get_public_company_jobs`: oferty na profilu bez `company_slug` (bez linku do samego siebie).
+  const companyJobs = jobs
+    .filter((job) => job.companySlug === slug)
+    .map(({ companySlug: _companySlug, ...job }) => job);
+  return {
+    company: { ...company, activeJobsCount: companyJobs.length },
+    jobs: companyJobs,
+  };
+}
+
+/**
  * Profil publiczny firmy po slugu. `null` = firma nie istnieje, nie jest zweryfikowana albo
  * jest usunięta — strona wywołująca renderuje 404 (nigdy technikaliów, Invariant #8).
  */
@@ -106,6 +125,7 @@ export async function getCompanyProfile(
   }
 
   if (isProductionMode()) throw new AppError('INTERNAL');
+  if (isRealJobsFixture()) return getCompanyProfileFromFixture(slug, resolvedLocale);
   // Demo/dev bez bazy: brak prawdziwych firm z profilem — strona 404 zamiast fikcji (#297/#12).
   return null;
 }

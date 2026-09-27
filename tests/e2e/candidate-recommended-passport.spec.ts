@@ -14,7 +14,8 @@ for (const [locale, heading] of Object.entries(headings)) {
       await page.goto(`/${locale}/candidate/oferty-polecane`);
 
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-      const cards = page.getByRole('list', { name: heading }).getByRole('listitem');
+      // Tylko karty: listy atutów wewnątrz kart też mają `listitem`.
+      const cards = page.getByRole('list', { name: heading }).getByRole('listitem').filter({ has: page.locator('article') });
       await expect(cards).toHaveCount(5);
       await expect(cards.first().getByRole('progressbar')).toBeVisible();
       await expect(cards.first().locator(`a[href^="/${locale}/oferty-pracy/"]`)).toBeVisible();

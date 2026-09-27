@@ -21,8 +21,10 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import {
   companyFormSchema,
+  companyLinksUpdateSchema,
   companyUpdateSchema,
   type CompanyFormInput,
+  type CompanyLinksUpdateInput,
   type CompanyUpdateInput,
 } from '@/lib/validation/company';
 
@@ -36,6 +38,8 @@ import {
  *                        `companies_update_member`: tylko owner/admin, 0040).
  *                        Statusu nie ustawia; zmiana nazwy/VAT zweryfikowanej firmy przywraca
  *                        w bazie status `pending` (trigger `protect_company_verification`, 0072).
+ *   - `updateCompanyLinks` — ustawia/czyści stronę WWW i adres logo (#112); ta sama ścieżka
+ *                        zapisu, ale NIE cofa weryfikacji (baza reaguje tylko na nazwę/VAT).
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
  *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
  *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
@@ -54,6 +58,8 @@ export type CreateCompanyResult =
 export type UpdateCompanyResult =
   | { ok: true; demo?: boolean; reverificationRequired?: boolean }
   | { ok: false; error: ErrorCode };
+export type UpdateCompanyLinksResult =
+  { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
 export type AddCompanyResult =
   { ok: true; id: string; demo?: boolean } | { ok: false; error: TeamError };
 export type ReverificationResult =
@@ -352,6 +358,82 @@ export async function updateCompany(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.updateCompany') };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * updateCompanyLinks
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Ustawia/czyści stronę WWW i adres logo aktywnej firmy (#112). Osobna akcja od
+ * `updateCompany`: te pola NIE cofają weryfikacji (w przeciwieństwie do nazwy/VAT) — baza
+ * to gwarantuje (`protect_company_verification` reaguje tylko na `name`/`vat_number`, 0072),
+ * tu więc bez odczytu/porównania statusu przed i po. Ta sama ścieżka zapisu co `updateCompany`
+ * (UPDATE pod RLS `companies_update_member`: tylko owner/admin, 0040); baza waliduje adres
+ * drugi raz (CHECK `public_https_url`, 0141) i audytuje zmianę (`company.links_changed`).
+ */
+export async function updateCompanyLinks(
+  input: CompanyLinksUpdateInput,
+): Promise<UpdateCompanyLinksResult> {
+  const parsed = companyLinksUpdateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  const v = parsed.data;
+
+  const setWebsite = v.website !== undefined;
+  const setLogoUrl = v.logoUrl !== undefined;
+  if (!setWebsite && !setLogoUrl) return { ok: true }; // nic do zapisania
+
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+
+  if (
+    !(await checkRateLimit('company-update', {
+      max: UPDATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    type Outcome =
+      | { error: ErrorCode }
+      | { error: null; companyId: string; rows: Record<string, unknown>[] };
+    const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
+      const active = await getActiveCompany(tx, me.id);
+      const companyId = active.activeId;
+      if (!companyId) return { error: 'NOT_FOUND' };
+      if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
+        return { error: 'PERMISSION_DENIED' };
+      }
+
+      // RLS `companies_update_member` (owner/admin) + CHECK `companies_website_https`/
+      // `companies_logo_url_https` (0141) — status/weryfikacja bez zmian (trigger nie reaguje).
+      const { rows } = await execute(tx, 'company.update-links',
+        `UPDATE public.companies
+            SET website  = CASE WHEN $2 THEN $3 ELSE website  END,
+                logo_url = CASE WHEN $4 THEN $5 ELSE logo_url END
+          WHERE id = $1
+          RETURNING id`,
+        [
+          companyId,
+          setWebsite, setWebsite ? nullIfEmpty(v.website) : null,
+          setLogoUrl, setLogoUrl ? nullIfEmpty(v.logoUrl) : null,
+        ]);
+      return { error: null, companyId, rows };
+    });
+    if (outcome.error !== null) return { ok: false, error: outcome.error };
+
+    // RLS przepuszcza UPDATE bez wiersza (0 rows) — to nie jest sukces.
+    if (outcome.rows.length !== 1 || asString(asRecord(outcome.rows[0])['id']) !== outcome.companyId) {
+      return { ok: false, error: 'PERMISSION_DENIED' };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: failureCode(e, 'company.updateCompanyLinks') };
   }
 }
 

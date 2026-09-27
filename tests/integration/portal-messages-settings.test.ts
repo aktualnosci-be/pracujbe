@@ -109,22 +109,22 @@ describe('wiadomości na PostgreSQL (#25)', () => {
     expect(alerts.rows.map((r) => r.profile_id)).toEqual([recruiter.id]);
   });
 
-  it('lista i wątek: kandydatka nie widzi imienia rekrutera, recruiter widzi kandydatkę', async () => {
+  it('lista i wątek: kandydatka widzi nazwę firmy, nie imię rekrutera; recruiter widzi kandydatkę', async () => {
     actAs(recruiter);
     const reply = await messagesActions.sendMessage(conversation, 'Zapraszamy w czwartek.', randomUUID());
     expect(reply.ok).toBe(true);
 
     actAs(anna);
-    // Od 0014 kandydat nie czyta tabeli `companies` (brak polityki publicznej) — nazwa firmy
-    // pod RLS jest niedostępna, więc UI pokazuje neutralną etykietę (tak samo jak przy PostgREST).
-    // Imię rekrutera (profil pod RLS) nigdy nie trafia do kandydatki (0023).
+    // Od 0014 kandydat nie czyta tabeli `companies` pod RLS; nazwę firmy (i tylko ją) zwracają
+    // SECURITY DEFINER `get_conversation_summaries`/`get_conversation_company_name` (0143),
+    // gejtowane `is_conversation_member`. Imię rekrutera nigdy nie trafia do kandydatki (0023).
     const annaList = await messagesData.getConversationsResult('pl');
-    expect(annaList).toMatchObject({ status: 'ready', items: [{ id: conversation, counterpartyName: '', unreadCount: 1, lastPreview: 'Zapraszamy w czwartek.' }] });
+    expect(annaList).toMatchObject({ status: 'ready', items: [{ id: conversation, counterpartyName: 'Firma X IT', unreadCount: 1, lastPreview: 'Zapraszamy w czwartek.' }] });
     const annaThread = await messagesData.getConversationThread(conversation, 'pl');
     if (annaThread.status !== 'ready') throw new Error(annaThread.status);
     expect(annaThread.thread.messages.map((m) => [m.body, m.mine, m.senderSide, m.senderName])).toEqual([
       ['Dzień dobry, kiedy mogę przyjść?', true, 'candidate', 'Anna Kandydat'],
-      ['Zapraszamy w czwartek.', false, 'company', ''],
+      ['Zapraszamy w czwartek.', false, 'company', 'Firma X IT'],
     ]);
 
     actAs(recruiter);

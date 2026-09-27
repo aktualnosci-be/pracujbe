@@ -4,6 +4,8 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CandidateApplicationsList } from "@/components/candidate/CandidateApplicationsList";
 import { getMyApplicationsPage } from "@/lib/data/candidate";
 import { CandidatePageHeader } from "@/components/candidate/CandidatePageHeader";
+import { CandidateApplicationsFilter } from "@/components/candidate/CandidateApplicationsFilter";
+import { APPLICATION_FILTER_PARAM, parseApplicationFilter } from "@/lib/candidate-application-filter";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +24,19 @@ export async function generateMetadata({
 
 export default async function CandidateApplicationsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: "dashboard" });
-  const initialPage = await getMyApplicationsPage(locale);
+  // #809: filtr etapu z URL (`?etap=`); nieznana wartość = wszystkie zgłoszenia.
+  const filter = parseApplicationFilter((await searchParams)[APPLICATION_FILTER_PARAM]);
+  const initialPage = await getMyApplicationsPage(locale, null, filter);
+  // Bez żadnego zgłoszenia filtr nic nie wnosi — zostaje sam pusty stan z linkiem do ofert.
+  const showFilter = filter !== null || initialPage.items.length > 0;
 
   return (
     <div className="min-w-0">
@@ -38,7 +46,8 @@ export default async function CandidateApplicationsPage({
         intro={t("applicationsIntro")}
       />
 
-      <CandidateApplicationsList locale={locale} initialPage={initialPage} />
+      {showFilter ? <CandidateApplicationsFilter current={filter} /> : null}
+      <CandidateApplicationsList key={filter ?? "all"} locale={locale} initialPage={initialPage} filter={filter} />
     </div>
   );
 }

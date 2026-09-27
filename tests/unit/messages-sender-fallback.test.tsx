@@ -64,7 +64,7 @@ function fakeClient(opts: { uid: string; team: string[]; visibleProfiles: Record
           return { id, first_name, last_name };
         }),
     )
-    .rows('messages.company-names', [{ id: 'company-1', name: 'Firma Logistyczna' }])
+    .rpc('get_conversation_company_name', 'Firma Logistyczna')
     .rows('messages.company-members', ({ values }) =>
       // Kandydat nie jest członkiem firmy, więc pod RLS nie widzi żadnego wiersza zespołu.
       viewerIsMember

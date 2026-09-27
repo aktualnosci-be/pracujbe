@@ -33,6 +33,7 @@ import { formatPublishedRelative, PUBLISHED_DATE_TIME_ZONE } from '@/lib/relativ
 
 /** Ścieżka szczegółów oferty (prefiks języka dokłada next-intl Link). */
 const JOB_DETAIL_BASE = '/oferty-pracy';
+const COMPANY_PROFILE_BASE = '/pracodawcy';
 
 export interface JobCardProps {
   job: JobListItem;
@@ -86,7 +87,18 @@ export async function JobCard({
       {/* Wiersz firmy; stany spoza prototypu (oznaczenie demo — Invariant #12, nowa oferta,
           weryfikacja, data) w tym samym wierszu, żeby karta zachowała wysokość z prototypu. */}
       <p className="pp-passport-company">
-        <span>{job.companyName}</span>
+        {job.companySlug ? (
+          // Profil firmy (#591): nad nakładką linku tytułu (`after:inset-0`), więc klik w nazwę
+          // prowadzi do firmy, a reszta karty — do oferty. Tylko firma zweryfikowana ma slug.
+          <Link
+            href={`${COMPANY_PROFILE_BASE}/${job.companySlug}`}
+            className="relative z-10 rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            {job.companyName}
+          </Link>
+        ) : (
+          <span>{job.companyName}</span>
+        )}
         {job.isDemo ? (
           <span className="pp-passport-tag rounded-full border border-warning/40 bg-warning/10 px-2 font-medium text-warning-text">
             {t('demoBadge')}

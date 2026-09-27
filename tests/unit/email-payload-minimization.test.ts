@@ -51,7 +51,10 @@ const DROPPED: Partial<Record<EmailType, readonly string[]>> = {
  * Pola z listy, których SQL dziś nie kolejkuje (dane przyszłych payloadów). Od 0113
  * `jobOffer` (kwoty, `expiresAt`) i `newMessage` (`conversationId`) są już kolejkowane.
  */
-const NOT_YET_QUEUED: Partial<Record<EmailType, readonly string[]>> = {};
+const NOT_YET_QUEUED: Partial<Record<EmailType, readonly string[]>> = {
+  // Decyzja 26.09.2026: cytat liczy worker z `offers.message` w chwili wysyłki, nie SQL.
+  jobOffer: ['messageExcerpt'],
+};
 
 /** Wartości-kanarki: gdyby którakolwiek trafiła do treści, minimalizacja nie działa. */
 const CANARIES = {
@@ -214,7 +217,7 @@ describe('#503 treść maila na ścieżce workera', () => {
     const offer = await renderEmail('jobOffer', 'pl', {
       companyName: 'Acme',
       jobTitle: 'Magazynier',
-      message: CANARIES.message,
+      messageExcerpt: CANARIES.message,
       offerUrl: `${SITE}/pl/candidate/propozycje`,
     });
     expect(offer.html).toContain(CANARIES.message);
