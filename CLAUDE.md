@@ -1468,6 +1468,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Top dopasowani (#141, 0079): `get_company_top_matches` — najlepsze dopasowanie na kandydata
   (DISTINCT ON) przed limitem 5, pod RLS (recruiter+, widoczność kandydata, firma verified).
   Dowód: `rls.sql` sekcja MC.
+  Data propozycji deterministyczna (#718, bez migracji): odczyt aktywnej propozycji
+  (`sent`/`viewed`) dla pulpitu, pełnej listy dopasowanych kandydatów i szczegółu kandydata
+  (`matchedCandidateCards`, `getEmployerCandidateDetail` w `src/lib/data/employer.ts`) dodaje
+  `ORDER BY COALESCE(sent_at, created_at) DESC` w SQL i wybiera w JS zawsze późniejszą datę
+  (`setLatestOfferDate`), zamiast nadpisywać wynik ostatnim odczytanym wierszem — dwie aktywne
+  propozycje dla tej samej pary kandydat–oferta (historyczna + ponowiona) nie mogą już pokazać
+  starszej daty w zależności od planu zapytania/indeksu/vacuum. Testy: `employer-candidates-load`
+  (kontrola ujemna: odwrócona kolejność wierszy), `employer-candidate-detail-offers`.
   Odporność odczytu (#191/#197): `getSimilarJobs` i `getMyJobMatch` zwracają jawny wynik
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się

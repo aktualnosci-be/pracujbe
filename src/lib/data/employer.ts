@@ -984,6 +984,27 @@ function matchWinners(rows: unknown): MatchWinner[] {
 }
 
 /**
+ * Zapisuje w `map` najnowszą (nie ostatnio odczytaną) datę propozycji dla danego klucza (#718).
+ * Kolejność wierszy zwróconych przez SQL bez wiążącego kontraktu (plan zapytania, indeks,
+ * vacuum) nie może decydować, którą datę zobaczy panel — dwie aktywne propozycje dla tej samej
+ * pary kandydat–oferta (historyczna + ponowiona) muszą zawsze dać najnowszą z nich, niezależnie
+ * od tego, w jakiej kolejności baza zwróciła wiersze.
+ */
+function setLatestOfferDate(map: Map<string, string>, key: string, value: string): void {
+  if (!key || !value) return;
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, value);
+    return;
+  }
+  const currentTime = new Date(current).getTime();
+  const nextTime = new Date(value).getTime();
+  if (Number.isFinite(nextTime) && (!Number.isFinite(currentTime) || nextTime > currentTime)) {
+    map.set(key, value);
+  }
+}
+
+/**
  * Dane kart kandydatów dla zwycięzców dopasowań — w tej samej transakcji pod sesją/RLS.
  * candidate_profiles: widoczność kandydata dla firmy; profiles (imię) tylko dla powiązanych
  * relacją (brak imienia → UI podstawia etykietę); jobs/offers: tytuł oferty docelowej i aktywna
@@ -1005,7 +1026,8 @@ async function matchedCandidateCards(tx: TransactionQuery, winners: MatchWinner[
     `SELECT candidate_id, job_id, sent_at, created_at
        FROM public.offers
       WHERE candidate_id = ANY($1::uuid[]) AND job_id = ANY($2::uuid[])
-        AND status IN ('sent', 'viewed') AND deleted_at IS NULL`, [candidateIds, targetJobIds]);
+        AND status IN ('sent', 'viewed') AND deleted_at IS NULL
+      ORDER BY COALESCE(sent_at, created_at) DESC`, [candidateIds, targetJobIds]);
 
   const jobMap = new Map<string, { title: string; slug: string }>();
   for (const r of asRows(jobData)) {
@@ -1013,7 +1035,8 @@ async function matchedCandidateCards(tx: TransactionQuery, winners: MatchWinner[
   }
   const offerMap = new Map<string, string>();
   for (const r of asRows(offerData)) {
-    offerMap.set(
+    setLatestOfferDate(
+      offerMap,
       `${asString(r['candidate_id'])}:${asString(r['job_id'])}`,
       asString(r['sent_at']) || asString(r['created_at']),
     );
@@ -1690,7 +1713,8 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
       const offerRows = jobIds.length === 0 ? [] : await queryRows(tx, 'employer.candidate-detail-offers',
         `SELECT job_id, sent_at, created_at FROM public.offers
           WHERE candidate_id = $1 AND job_id = ANY($2::uuid[])
-            AND status IN ('sent', 'viewed') AND deleted_at IS NULL`, [candidateId, jobIds]);
+            AND status IN ('sent', 'viewed') AND deleted_at IS NULL
+          ORDER BY COALESCE(sent_at, created_at) DESC`, [candidateId, jobIds]);
       const nameRow = await queryOne(tx, 'employer.candidate-detail-name',
         'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [candidateId]);
       const cpRow = await queryOne(tx, 'employer.candidate-detail-profile',
@@ -1716,7 +1740,7 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
 
     const offerMap = new Map<string, string>();
     for (const r of asRows(loaded.offerRows)) {
-      offerMap.set(asString(r['job_id']), asString(r['sent_at']) || asString(r['created_at']));
+      setLatestOfferDate(offerMap, asString(r['job_id']), asString(r['sent_at']) || asString(r['created_at']));
     }
     let profile: EmployerCandidateDetail['profile'] = null;
     if (loaded.cpRow && loaded.relations) {
