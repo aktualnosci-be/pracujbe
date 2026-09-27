@@ -1331,6 +1331,7 @@
     "screeningRequired": "Répondez à cette question.",
     "screeningYes": "Oui",
     "screeningNo": "Non",
+    "screeningClearAnswer": "Effacer la réponse",
     "sensitiveIdHint": "Votre candidature ne nécessite ni numéro NISS/BIS ni numéro de pièce d’identité — ne les indiquez pas.",
     "sensitiveIdNotAllowed": "Supprimez le numéro NISS/BIS, PESEL ou de pièce d’identité — il n’est pas nécessaire pour postuler.",
     "ageRequired": "Avant de postuler, confirmez votre âge dans les paramètres de votre compte.",

@@ -1331,6 +1331,7 @@
     "screeningRequired": "Please answer this question.",
     "screeningYes": "Yes",
     "screeningNo": "No",
+    "screeningClearAnswer": "Clear answer",
     "sensitiveIdHint": "Your application does not need a NISS/BIS number or an identity document number — please leave them out.",
     "sensitiveIdNotAllowed": "Remove the NISS/BIS, PESEL or identity document number — it is not needed to apply.",
     "ageRequired": "Before applying, confirm your age in your account settings.",

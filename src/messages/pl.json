@@ -1331,6 +1331,7 @@
     "screeningRequired": "Odpowiedz na to pytanie.",
     "screeningYes": "Tak",
     "screeningNo": "Nie",
+    "screeningClearAnswer": "Wyczyść odpowiedź",
     "sensitiveIdHint": "Do aplikowania nie jest potrzebny numer NISS/BIS ani numer dokumentu tożsamości — nie wpisuj ich.",
     "sensitiveIdNotAllowed": "Usuń numer NISS/BIS, PESEL lub numer dokumentu tożsamości — nie jest potrzebny do aplikowania.",
     "ageRequired": "Przed aplikowaniem potwierdź swój wiek w ustawieniach konta.",

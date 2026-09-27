@@ -1332,7 +1332,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   kluczem nie nadpisuje odpowiedzi. Odczyt odpowiedzi: kandydat i recruiter+ firmy oferty; widok
   w szczególe zgłoszenia. Bez reguł dyskwalifikujących i bez LLM (osobny etap). Dowód: `rls.sql`
   sekcja SQ101; unit `screening-questions`; E2E `job-wizard-screening`, `apply-screening` (fixture),
-  `employer-application-screening`. Historia zgłoszeń kandydata: karta z zapisanymi
+  `employer-application-screening`.
+  Czyszczenie opcjonalnej odpowiedzi (#916): pytania `yes_no`/`single_choice` w
+  `ScreeningQuestionsFields` mają przycisk „Wyczyść odpowiedź” (`apply.screeningClearAnswer`) —
+  widoczny tylko przy pytaniu OPCJONALNYM i już zaznaczonej odpowiedzi, woła
+  `onChange(id, undefined)` (rodzic — ApplyModal/GuestApplyForm — już usuwał klucz z formularza).
+  Pytania wymagane nigdy nie pokazują tej kontrolki. Bez migracji. Dowód: unit
+  `screening-questions-fields` (obie ścieżki, dwa pytania naraz bez wzajemnego wpływu, kontrola
+  ujemna: pytanie wymagane bez przycisku).
+  Historia zgłoszeń kandydata: karta z zapisanymi
   odpowiedziami ma rozwijane „Moje odpowiedzi” (`ApplicationScreeningAnswers`; licznik z
   podzapytania strony, treść przy pierwszym rozwinięciu przez `loadApplicationScreeningAnswers`
   → `getMyApplicationScreeningAnswers` pod sesją/RLS, snapshot w języku widza z fallbackiem,
