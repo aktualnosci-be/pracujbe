@@ -2318,6 +2318,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`/sitemap/1.xml`, `2.xml`, …) tam wskazanej (`parseRobotsSitemapShardPaths`), więc awaria
   generowania katalogu ofert (zapytanie, paginacja, tłumaczenia) nie umyka już wynikowi
   „wszystkie sprawdzenia zgodne” mimo zielonego `id=0`. Katalog bez partii ofert = bez zmian.
+  Pierwsze wystąpienie dyrektywy CSP (#900): `securityHeaderProblems` sprawdzała obecność
+  wymaganego tekstu GDZIEKOLWIEK w nagłówku (`directives.includes(...)`) — duplikat tej samej
+  nazwy dyrektywy z SŁABSZĄ pierwszą wartością (np. `frame-ancestors *` przed poprawnym
+  `frame-ancestors 'none'`) dawał fałszywie zielony wynik, mimo że zgodnie z CSP Level 3
+  przeglądarka stosuje wyłącznie pierwsze wystąpienie nazwy. Teraz porównanie bierze TYLKO
+  pierwszą wartość każdej nazwy dyrektywy z nagłówka. Dowód: test `railway-prod-smoke`
+  (kanarek z odtworzenia issue + kontrola ujemna: ten sam zestaw bez duplikatów zostaje zielony).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
