@@ -1365,18 +1365,6 @@ async function readAuditRows(
 ): Promise<AdminAuditRow[]> {
   const { entity, action, entityId, actorQuery, fromIso, toIso } = filters;
   const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
-  // Aktor po nazwie/e-mailu → id profili (max 100 dopasowań); brak dopasowań = pusta lista.
-  let actorIdsFilter: string[] | null = null;
-  if (actorQuery && !systemActor) {
-    const actorParams = new SqlParams();
-    const actors = await queryRows(tx, 'admin.audit-actor-search',
-      `SELECT id FROM public.profiles
-        ${whereOf([searchCondition(actorParams, ['first_name', 'last_name', 'email'], actorQuery)])}
-        LIMIT 100`, actorParams.values);
-    actorIdsFilter = uniqueIds(asRows(actors).map((r) => asString(r['id'])));
-    if (actorIdsFilter.length === 0) return [];
-  }
-
   const params = new SqlParams();
   const where = whereOf([
     entity && `entity_type = ${params.add(entity)}`,
@@ -1385,7 +1373,12 @@ async function readAuditRows(
     fromIso && `created_at >= ${params.add(fromIso)}::timestamptz`,
     toIso && `created_at < ${params.add(toIso)}::timestamptz`,
     systemActor && 'actor_id IS NULL',
-    actorIdsFilter && `actor_id = ANY(${params.add(actorIdsFilter)}::uuid[])`,
+    // Aktor po nazwie/e-mailu (#857/#844): podzapytanie po WSZYSTKICH pasujących profilach
+    // w tym samym zapytaniu — bez pośredniej listy id z limitem, więc wpisy żadnej pasującej
+    // osoby nie znikają z listy ani z eksportu.
+    actorQuery && !systemActor &&
+      `actor_id IN (SELECT p.id FROM public.profiles p WHERE ${searchCondition(
+        params, ['p.first_name', 'p.last_name', 'p.email'], actorQuery)})`,
     cursorCondition(params, cursor),
   ]);
   const limitParam = params.add(limit);
