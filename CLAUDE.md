@@ -612,6 +612,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   miesięcznych/rocznych nie przeliczamy na godziny (nieporównywalne → nie odpadają, sort na
   końcu). Jednostka steruje też sortem po wynagrodzeniu; zmiana jednostki zeruje widełki.
   Dowód: `rls.sql` sekcja SP188.
+  Lokalizacja z przecinkiem w nazwie (#845, bez migracji): miasto z wolnego tekstu kreatora
+  (`jobs.city`, np. „Bruxelles, Belgique”) rozbijało się na URL na dwie wartości filtra
+  (`f.locations.join(',')` + `splitParam`/`value.split(',')` nie rozróżniały separatora listy
+  od przecinka wewnątrz jednej nazwy) — zaznaczenie takiej jednej opcji gubiło ofertę, dla
+  której się pojawiła. `parseLocationsParam`/`serializeLocations` (`src/components/public/job-filters.ts`)
+  escapują przecinek/backslash wewnątrz każdej nazwy backslashem przed złączeniem; jedno
+  źródło dla JS-owego sidebara/sheetu, noscriptowego formularza (`FilterSheet.tsx`), usuwania
+  chipa (`withoutValue` w stronie listy) i zapisanych wyszukiwań (`sidebarFiltersToParams`).
+  Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
+  jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
+  ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
