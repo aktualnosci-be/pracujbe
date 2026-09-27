@@ -219,6 +219,14 @@ function certificateLabel(entry: CertificateEntry): string {
   return typeof entry === 'string' ? entry : entry.label;
 }
 
+/**
+ * Etykieta wyniku z procentu: >= 70 'good', >= 40 'partial', niżej 'low'. Jedno źródło dla
+ * `scoreMatch` i list, które czytają zapisany wynik (`matches.score`, np. polecane oferty).
+ */
+export function summaryKeyForScore(score: number): MatchResult['summaryKey'] {
+  return score >= 70 ? 'good' : score >= 40 ? 'partial' : 'low';
+}
+
 export function scoreMatch(
   candidate: MatchCandidate,
   job: MatchJob,
@@ -436,8 +444,7 @@ export function scoreMatch(
   if (mandatoryTotal > 0 && mandatoryMet < mandatoryTotal) {
     finalScore = Math.min(finalScore, 65);
   }
-  const summaryKey: MatchResult['summaryKey'] =
-    finalScore >= 70 ? 'good' : finalScore >= 40 ? 'partial' : 'low';
+  const summaryKey = summaryKeyForScore(finalScore);
 
   return {
     score: finalScore,
