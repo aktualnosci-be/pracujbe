@@ -23,6 +23,7 @@ import {
   countActiveSidebar,
   emptySidebarFilters,
   isSalaryNarrowed,
+  serializeLocations,
   sidebarFiltersToParams,
   type SidebarFilters,
   type SortValue,
@@ -89,7 +90,11 @@ function NoScriptFilterForm({
     'min-h-12 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
   const optionClass = 'flex min-h-12 items-center gap-3';
   const selectedCategories = initial.categories.join(',');
-  const selectedLocations = initial.locations.join(',');
+  // Wartość natywnego `<select>` bez JS wraca na serwer jako zwykły tekst parametru
+  // `location` — musi więc przejść przez ten sam escaping co JS-owy sidebar (#845),
+  // inaczej miasto z przecinkiem w nazwie (np. „Bruxelles, Belgique”) rozbija się na dwie
+  // wartości po stronie `parseSidebarFilters`.
+  const selectedLocations = serializeLocations(initial.locations);
   const selectedContracts = initial.contractTypes.join(',');
   const selectedAccommodation = initial.accommodation.join(',');
   // Bez JS jednostkę można zmienić razem z kwotami, więc pola przyjmują zakres obu
@@ -165,7 +170,7 @@ function NoScriptFilterForm({
             </option>
           ) : null}
           {locations.map((location) => (
-            <option key={location} value={location}>
+            <option key={location} value={serializeLocations([location])}>
               {location}
             </option>
           ))}

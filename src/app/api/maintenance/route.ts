@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { campaignSendingReady } from '@/lib/admin/campaigns';
 import { dsaRetentionMode } from '@/lib/admin/dsa-retention-mode';
 import { isCronAuthorized } from '@/lib/cron/auth';
+import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
@@ -155,6 +156,13 @@ async function run(request: Request): Promise<Response> {
     { p_older_than_minutes: 60, p_limit: 200 },
   );
   const expiredJobs = await task('jobExpiry', 'expire_due_jobs');
+  // #775: oferty wygaszone w tym przebiegu (`active` → `expired`) muszą natychmiast zniknąć
+  // z publicznych stron cache'owanych przez ISR (szczegół, strona główna, landingi kategorii
+  // i miasta) — inaczej mogłyby zostać widoczne razem z `JobPosting` jeszcze przez okno
+  // rewalidacji (do 60 s). Bez zmienionych wierszy (0 albo błąd RPC) nic nie unieważniamy.
+  if (typeof expiredJobs === 'number' && expiredJobs > 0) {
+    revalidatePublicJobPaths();
+  }
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
   let matches: MatchRecomputeRun | null = null;
   try {

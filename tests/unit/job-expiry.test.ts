@@ -9,6 +9,8 @@ vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fake
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/actions/jobs', () => ({ setJobStatus: vi.fn() }));
+const { revalidatePath } = vi.hoisted(() => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath }));
 
 import { isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
@@ -122,6 +124,24 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       dsaRetention: { mode: 'off' },
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
+    // #775: oferty wygaszone w tym przebiegu muszą zniknąć z publicznych stron ISR od razu,
+    // nie dopiero po 60 s okna rewalidacji.
+    expect(revalidatePath.mock.calls).toEqual(
+      expect.arrayContaining([
+        ['/[locale]', 'page'],
+        ['/[locale]/oferty-pracy/[slug]', 'page'],
+        ['/[locale]/praca/kategoria/[category]', 'page'],
+        ['/[locale]/praca/miasto/[city]', 'page'],
+      ]),
+    );
+  });
+
+  it('kontrola ujemna: bez wygaszonych ofert (0) nie rewaliduje publicznych stron', async () => {
+    fakeDb.rpc('expire_due_jobs', 0);
+    const res = await POST(request('Bearer maintenance-secret'));
+    expect(res.status).toBe(200);
+    expect((await res.json()).expiredJobs).toBe(0);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('błąd wygaszania → 503 bez pozornego sukcesu i bez szczegółów w odpowiedzi', async () => {
@@ -140,5 +160,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       area: 'maintenance.gc',
       task: 'jobExpiry',
     });
+    // #775: błąd RPC nie zwraca liczby wygaszonych ofert (`task()` łapie wyjątek → null),
+    // więc nic nie jest unieważniane.
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

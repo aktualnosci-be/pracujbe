@@ -304,6 +304,33 @@ export async function getPublicJobTranslations(
   });
 }
 
+export interface PublicJobMachineTranslationRow {
+  source_locale: string;
+  origin: string;
+  fields: Record<string, unknown>;
+}
+
+/**
+ * Przekład oferty w języku widza (#33, 0159). RPC pod rolą anon zwraca wiersz tylko dla
+ * oferty publicznej, bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola
+ * wyświetlane na stronie. Brak wiersza = brak aktualnego przekładu.
+ */
+export async function getPublicJobMachineTranslation(
+  pool: TransactionPool,
+  jobId: string,
+  requestedLocale: string,
+): Promise<PublicJobMachineTranslationRow | null> {
+  if (!isLocale(requestedLocale)) return null;
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT source_locale, origin, fields
+       FROM public.get_public_job_machine_translation(p_job_id => $1::uuid, p_locale => $2::text)`,
+      [jobId, requestedLocale],
+    )) as { rows: PublicJobMachineTranslationRow[] };
+    return result.rows[0] ?? null;
+  });
+}
+
 /**
  * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
  * (0093) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).

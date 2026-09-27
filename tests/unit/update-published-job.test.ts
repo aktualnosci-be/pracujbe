@@ -39,7 +39,9 @@ function steps(): unknown[] {
       languages: [{ language: 'Angielski', level: 'basic' }],
       requiredCertificates: ['VCA'],
       requiresDrivingLicense: false,
-      noLanguageRequired: true,
+      // #910: flaga i lista wymaganych języków wykluczają się — fixture zachowuje wymagany
+      // język, więc flaga zostaje wyłączona (inaczej krok byłby odrzucony przez walidację).
+      noLanguageRequired: false,
     },
     { conditions: ['Umowa przez agencję'], benefits: ['Dodatek nocny'], accommodation: true, transport: false },
     // Edycja nie wymaga ponownej zgody na publikację (oferta już jest opublikowana).
@@ -73,7 +75,7 @@ describe('updatePublishedJob (#325)', () => {
         salary_min: 16,
         salary_period: 'hour',
         address: null,
-        no_language_required: true,
+        no_language_required: false,
         accommodation: true,
         contact_email: 'hr@firma-a.be',
       },

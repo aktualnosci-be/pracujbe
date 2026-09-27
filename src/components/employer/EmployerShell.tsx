@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
+import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { CompanySwitcher, type CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
@@ -65,6 +66,8 @@ export interface EmployerShellProps {
   activeCompanyName?: string;
   /** Nazwa zalogowanego użytkownika (topbar). */
   userName?: string;
+  /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
+  keepSessionAlive?: boolean;
 }
 
 function initialsOf(name: string): string {
@@ -106,6 +109,7 @@ export function EmployerShell({
   activeCompanyId,
   activeCompanyName,
   userName,
+  keepSessionAlive,
 }: EmployerShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
@@ -164,6 +168,7 @@ export function EmployerShell({
       unreadMessages={unreadMessages}
       notificationsHref="/employer/powiadomienia"
     >
+      {keepSessionAlive ? <SessionKeepAlive /> : null}
       {mode === 'error' ? <ShellLoadError /> : null}
       {children}
     </DashboardShell>

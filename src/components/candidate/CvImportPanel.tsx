@@ -31,6 +31,7 @@ import {
   type PrepareCvImportResult,
 } from '@/lib/actions/cv-import';
 import {
+  findDuplicateLanguageIds,
   parseExperienceYears,
   proposalValueMaxLength,
   proposalValueProblem,
@@ -91,6 +92,7 @@ const PROBLEM_MESSAGE: Record<CvProposalValueProblem, string> = {
   disallowed: 'errorValueDisallowed',
   languageInvalid: 'errorLanguageInvalid',
   experienceInvalid: 'errorExperienceInvalid',
+  languageDuplicate: 'errorLanguageDuplicate',
 };
 const SUMMARY_KEYS: (keyof CvRedactionSummary)[] = [
   'referenceSections',
@@ -199,6 +201,11 @@ export function CvImportPanel(): React.JSX.Element {
       const problem = proposalValueProblem(p.kind, valueOf(p), levelOf(p));
       if (problem) problems[p.id] = problem;
     }
+    // #805: dwa zaznaczone języki o tej samej nazwie po normalizacji (np. różny zapis wielkości
+    // liter), choćby z różnym poziomem, zapisałyby się w bazie nieokreślenie i po cichu straciły
+    // jedną z wartości — wskazujemy konflikt PRZED wysłaniem, zamiast pozwolić RPC go rozstrzygnąć.
+    const duplicateLanguageIds = findDuplicateLanguageIds(chosen.filter((p) => p.kind === 'language').map((p) => ({ id: p.id, language: valueOf(p) })));
+    for (const id of duplicateLanguageIds) if (!problems[id]) problems[id] = 'languageDuplicate';
     setFieldErrors(problems);
     const firstInvalid = KIND_ORDER.flatMap((kind) => proposals.filter((p) => p.kind === kind)).find((p) => problems[p.id]);
     if (firstInvalid) {
