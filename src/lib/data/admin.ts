@@ -280,7 +280,7 @@ const DEMO_STATS: AdminStats = {
   openReports: 3,
 };
 
-const DEMO_COMPANIES: AdminCompanyRow[] = [
+export const DEMO_COMPANIES: AdminCompanyRow[] = [
   { id: 'demo-c1', name: 'AGO Jobs & HR', status: 'verified', createdAt: '2025-01-15T09:00:00.000Z', vatNumber: 'BE0123456789', registrationNumber: '0123.456.789', email: 'jobs@example.com', city: 'Antwerpen' },
   { id: 'demo-c2', name: 'Bouwbedrijf De Vos', status: 'pending', createdAt: '2025-02-03T11:30:00.000Z', vatNumber: 'BE0987654321', registrationNumber: null, email: 'info@example.com', city: 'Gent' },
   { id: 'demo-c3', name: 'Logistiek Antwerpen NV', status: 'pending', createdAt: '2025-02-10T08:15:00.000Z', vatNumber: 'BE0417497106', registrationNumber: null, email: null, city: null },
@@ -1239,6 +1239,10 @@ async function readAuditRows(
           ? { pathname: `/admin/firmy/${uuid}` }
           : { pathname: '/admin/firmy', query: { q: company.name } };
       }
+    } else if (entityType === 'job' && id) {
+      // Lista ofert admina (`/admin/oferty`) wyszukuje także po identyfikatorze oferty.
+      const uuid = parseUuid(id);
+      entityHref = uuid ? { pathname: '/admin/oferty', query: { q: uuid } } : null;
     } else if (entityType === 'report') {
       entityHref = { pathname: '/admin/zgloszenia', query: { status: 'all' } };
     } else if (entityType === 'email_suppression') {

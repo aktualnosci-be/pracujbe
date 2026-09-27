@@ -279,6 +279,7 @@ export function reportReasonView(reason: string): ReportReasonView {
 /** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
+  'job',
   'report',
   'application',
   'offer',
@@ -296,6 +297,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.status_changed': 'auditActionCompanyStatus',
   'company.reverification_requested': 'auditActionCompanyReverification',
   'company.vies_checked': 'auditActionCompanyVies',
+  'job.update_published': 'auditActionJobUpdatePublished',
+  'job.duplicated': 'auditActionJobDuplicated',
   'report.resolved': 'auditActionReportStatus',
   'moderation.decided': 'auditActionModerationDecided',
   'moderation.restored': 'auditActionModerationRestored',

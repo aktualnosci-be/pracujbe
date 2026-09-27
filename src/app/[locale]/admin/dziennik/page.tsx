@@ -59,6 +59,7 @@ const BASE_PATH = '/admin/dziennik';
 
 const ENTITY_LABEL: Record<string, string> = {
   company: 'targetCompany',
+  job: 'entityJob',
   report: 'entityReport',
   application: 'entityApplication',
   offer: 'entityOffer',
