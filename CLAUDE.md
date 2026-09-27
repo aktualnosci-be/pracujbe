@@ -747,6 +747,12 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z CAS i audytem). Obie strony indeksowalne (canonical, hreflang, sitemap), stopka „Pytania
   i odpowiedzi” → `/pomoc`. Dowód: `rls.sql` sekcja CT61; unit `contact-form`, `contact-emails`,
   `help-contact-pages`; E2E `help-contact` (4 języki, axe 320 px), `contact-form` (fixture).
+  Bez JavaScriptu (#817): `<form>` ma `method="post"` (obronnie — natywna submisja trafiłaby do
+  body żądania, nie do adresu URL) i przycisk wysyłki startuje jako `disabled`, odblokowany
+  dopiero po zamontowaniu komponentu — bez JS zostaje trwale zablokowany, więc ani klik, ani
+  Enter w polu nie wysyłają treści wiadomości/imienia/e-maila w query URL (historia przeglądarki,
+  logi serwera); `<noscript>` informuje o wymogu JavaScriptu. Dowód: E2E `contact-form`
+  (kontekst `javaScriptEnabled: false`, kontrola ujemna: formularz bez `method="post"`).
   **Otwarte (właściciel):** treść Polityki prywatności (placeholder + noindex zostaje), retencja
   `contact_messages` i ich miejsce w eksporcie/usunięciu konta (#486). Stopka e-maili (#6/#61,
   `EmailLayout` w `src/emails/_components.tsx`): link „Pytania i odpowiedzi” → `/{locale}/pomoc` (etykieta `layoutCopy.help` =

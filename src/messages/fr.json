@@ -3323,6 +3323,7 @@
     "title": "Contact",
     "intro": "Une question sur votre compte, une offre ou le fonctionnement du site ? Écrivez-nous via le formulaire — nous répondrons à l’adresse e-mail indiquée.",
     "formTitle": "Formulaire de contact",
+    "jsRequired": "Ce formulaire nécessite JavaScript. Activez-le dans votre navigateur pour envoyer un message.",
     "topicLabel": "Sujet",
     "topicPlaceholder": "Choisissez un sujet",
     "topicCandidateAccount": "Compte candidat",
