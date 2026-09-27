@@ -1140,7 +1140,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
-- [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu
+- [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
+  Fokus po anulowaniu potwierdzenia (#800): „Anuluj” w kroku potwierdzenia (`rejected`/`hired`)
+  przywraca fokus na status, który uruchomił potwierdzenie (referencje opcji listy), zamiast go
+  gubić po odmontowaniu panelu; Escape nadal zamyka całe menu i wraca fokusem na trigger (bez
+  zmiany). Bez migracji, bez nowych tekstów. Dowód: `tests/unit/application-status-menu.test.tsx`
+  (kontrola ujemna: Escape w kroku potwierdzenia zamyka menu i nie używa nowej ścieżki fokusu).
 - [x] Zespół firmy i kolejna firma (#403, migracja `0086`): `/employer/zespol` — lista członków
   (owner/admin; RPC `get_company_team`), zmiana roli (`set_company_member_role`), odebranie/
   przywrócenie dostępu (`set_company_member_active`, z potwierdzeniem), zaproszenie po e-mailu
