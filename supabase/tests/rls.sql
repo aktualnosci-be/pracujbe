@@ -14576,4 +14576,81 @@ select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu
 rollback;
 reset role; reset app.current_uid;
 
+\echo '--- SK853 send_offer: klucz idempotencji związany z celem (0238) ---'
+\set SKC  'e8530000-0000-0000-0000-00000000000c'
+\set SKC2 'e8530000-0000-0000-0000-00000000000d'
+\set SKE  'e8530000-0000-0000-0000-0000000000a1'
+\set SKCO 'e8530000-0000-0000-0000-0000000000f1'
+\set SKJ1 'e8530000-0000-0000-0000-0000000000b1'
+\set SKJ2 'e8530000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SKC','skc@test.be','Noor S','{"role":"candidate","first_name":"Noor","last_name":"Smet","locale":"nl"}'),
+  (:'SKC2','skc2@test.be','Luc S','{"role":"candidate","first_name":"Luc","last_name":"Simon","locale":"fr"}'),
+  (:'SKE','ske@test.be','Piotr S','{"role":"employer","first_name":"Piotr","last_name":"Szef","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'SKCO','Firma SK853','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'SKCO',:'SKE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'SKJ1',:'SKCO','job-sk853-1','Magazynier SK853','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'SKJ2',:'SKCO','job-sk853-2','Kierowca SK853','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'SKC', false), (:'SKC2', false);
+select set_config('app.current_uid', :'SKC', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SKJ1'::uuid, 'sk853-app-1', null, null, null) as skapp1 \gset
+select public.apply_to_job(:'SKJ2'::uuid, 'sk853-app-2', null, null, null) as skapp2 \gset
+reset role;
+select set_config('app.current_uid', :'SKC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'SKJ1'::uuid, 'sk853-app-3', null, null, null) as skapp3 \gset
+reset role;
+
+select set_config('app.current_uid', :'SKE', false);
+set role authenticated; select pg_temp.assert_client_role();
+-- SK853-1: propozycja dla J1 i retry tym samym kluczem → to samo ID (idempotencja bez zmian).
+select public.send_offer(:'SKJ1'::uuid, :'SKC'::uuid, 'sk853-key-1', null, null) as skoff1 \gset
+select public.send_offer(:'SKJ1'::uuid, :'SKC'::uuid, 'sk853-key-1', null, null) as skoff1b \gset
+select pg_temp.assert(:'skoff1' = :'skoff1b', 'SK853-1 retry tej samej pary z tym samym kluczem = to samo ID');
+-- SK853-2: ten sam klucz dla INNEJ oferty (po przełączeniu firmy/celu) → błąd, nie cudze ID.
+select pg_temp.expect_error(
+  format('select public.send_offer(%L::uuid, %L::uuid, %L, null, null)', :'SKJ2', :'SKC', 'sk853-key-1'),
+  'VALIDATION_FAILED', 'SK853-2 klucz innej propozycji (inna oferta) odrzucony');
+-- SK853-3: ten sam klucz dla INNEGO kandydata tej samej oferty → błąd.
+select pg_temp.expect_error(
+  format('select public.send_offer(%L::uuid, %L::uuid, %L, null, null)', :'SKJ1', :'SKC2', 'sk853-key-1'),
+  'VALIDATION_FAILED', 'SK853-3 klucz innej propozycji (inny kandydat) odrzucony');
+-- SK853-4: nowy klucz dla J2 → nowa propozycja, z powiadomieniem.
+select public.send_offer(:'SKJ2'::uuid, :'SKC'::uuid, 'sk853-key-2', null, null) as skoff2 \gset
+select pg_temp.assert(:'skoff2' <> :'skoff1', 'SK853-4 nowy klucz dla innej oferty = nowa propozycja');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.offers where job_id = :'SKJ2'::uuid and candidate_id = :'SKC'::uuid)
+  and (select count(*) = 1 from public.offers where job_id = :'SKJ1'::uuid and candidate_id = :'SKC'::uuid)
+  and (select count(*) = 0 from public.offers where candidate_id = :'SKC2'::uuid),
+  'SK853-4b po odrzuconych próbach: jedna propozycja na parę, brak propozycji dla SKC2');
+select pg_temp.assert(
+  (select count(*) = 2 from public.notifications
+     where profile_id = :'SKC'::uuid and type = 'offer_received'
+       and entity_id in (:'skoff1'::uuid, :'skoff2'::uuid)),
+  'SK853-4c każda propozycja ma dokładnie jedno powiadomienie');
+
+-- SK853-5 (kontrola ujemna): bez porównania celu (zachowanie 0113) ten sam klucz dla J2 zwraca
+-- ID propozycji J1 jako sukces — dokładnie błąd z #853, który wykrywa SK853-2.
+begin;
+do $sk$
+declare
+  v_def text := pg_get_functiondef('public.send_offer(uuid, uuid, text, text, timestamptz)'::regprocedure);
+begin
+  if position('v_key_job is distinct from p_job_id or' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: SK853-5 brak porównania celu w send_offer';
+  end if;
+  execute replace(v_def, 'v_key_job is distinct from p_job_id or', 'false and');
+end $sk$;
+set local role authenticated; set local app.current_uid = :'SKE'; select pg_temp.assert_client_role();
+select public.send_offer(:'SKJ2'::uuid, :'SKC2'::uuid, 'sk853-key-1', null, null) as skneg \gset
+select pg_temp.assert(:'skneg' = :'skoff1',
+  'SK853-5 kontrola ujemna: bez porównania celu klucz zwraca cudzą propozycję');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
