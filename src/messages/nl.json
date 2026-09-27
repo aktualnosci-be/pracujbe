@@ -3326,6 +3326,7 @@
     "title": "Contact",
     "intro": "Heb je een vraag over je account, een vacature of de werking van de website? Stuur ons een bericht via het formulier — we antwoorden op het opgegeven e-mailadres.",
     "formTitle": "Contactformulier",
+    "jsRequired": "Dit formulier vereist JavaScript. Schakel het in je browser in om een bericht te versturen.",
     "topicLabel": "Onderwerp",
     "topicPlaceholder": "Kies een onderwerp",
     "topicCandidateAccount": "Kandidatenaccount",

@@ -19,7 +19,7 @@ import {
 import { AppError } from '@/lib/errors';
 import { readinessChecks } from '@/lib/env';
 
-import { PII, expectNoPii } from '../helpers/privacy-fixtures';
+import { PII, UUID, expectNoPii } from '../helpers/privacy-fixtures';
 
 /**
  * #571 — kanał błędów przez webhook Discorda (`ERROR_WEBHOOK_URL`) zamiast Sentry.
@@ -179,6 +179,22 @@ describe('payload', () => {
     const text = buildErrorWebhookText({ code: `boom ${PII.email}`, route, time: new Date(0) });
     expectNoPii(text);
     expect(text).toContain('Kod: INTERNAL');
+  });
+
+  it('#776 — segment-UUID na prywatnej trasie aplikacji staje się szablonem [id], nie identyfikatorem rekordu', () => {
+    const candidateRoute = `/pl/candidate/aplikacje/${UUID}`;
+    const employerRoute = `/pl/employer/aplikacje/${UUID}`;
+    // Kontrola pozytywna: wejście naprawdę niesie realny UUID rekordu.
+    expect(candidateRoute).toContain(UUID);
+    expect(employerRoute).toContain(UUID);
+
+    expect(safeRoute(candidateRoute)).toBe('/pl/candidate/aplikacje/[id]');
+    expect(safeRoute(employerRoute)).toBe('/pl/employer/aplikacje/[id]');
+
+    const text = buildErrorWebhookText({ code: 'INTERNAL', route: candidateRoute, time: new Date(0) });
+    // Kontrola ujemna: bez naprawy #776 tekst zawierałby dokładnie ten UUID.
+    expect(text).not.toContain(UUID);
+    expect(text).toContain('Trasa: /pl/candidate/aplikacje/[id]');
   });
 
   it('limit 2000 znaków: długi tekst jest obcinany w obu formatach', () => {

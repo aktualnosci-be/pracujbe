@@ -3326,6 +3326,7 @@
     "title": "Kontakt",
     "intro": "Masz pytanie o konto, ofertę albo działanie serwisu? Napisz do nas przez formularz — odpowiemy na podany adres e-mail.",
     "formTitle": "Formularz kontaktu",
+    "jsRequired": "Ten formularz wymaga włączonego JavaScriptu. Włącz go w przeglądarce, żeby wysłać wiadomość.",
     "topicLabel": "Temat",
     "topicPlaceholder": "Wybierz temat",
     "topicCandidateAccount": "Konto kandydata",
