@@ -602,6 +602,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `company_logo_url` tylko dla firmy `verified` i tylko jako bezwzględny https (`public_https_url`),
   JSON-LD waliduje je drugi raz (`publicHttpsUrl`). Dowód: `rls.sql` sekcja OL112 (kontrole ujemne:
   bez walidacji / bez bramki weryfikacji link wycieka).
+  BreadcrumbList z jednego helpera (bez migracji): `buildBreadcrumbListJsonLd` w
+  `structured-data.ts` bierze tę samą listę pozycji co widoczna ścieżka `Breadcrumbs`
+  (`{ label, href }`; prefiks języka, bieżąca strona = jej adres, pozycja bez nazwy pominięta).
+  Strony z widoczną ścieżką (landingi, hub, poradniki, dla pracodawców) i `/pomoc` używają go
+  zamiast ręcznego JSON; doszły lista ofert (Strona główna → Oferty pracy, adres listy bez
+  filtrów), profil firmy (= widoczna ścieżka) i szczegół oferty (Strona główna → Praca → branża
+  `/praca/kategoria/<klucz>` → oferta; tylko obok JobPosting — nie w wersji bez tłumaczenia #301
+  ani w demo #297). Strony zostają ISR (dane z tych samych odczytów). Test `breadcrumb-jsonld`
+  (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
+  kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
+  #301) i `company-profile` (nazwy = widoczna ścieżka).
   Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
   (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
   ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/

@@ -7,6 +7,7 @@ import { H2_EXTENDED, P_EXTENDED, PAPER } from '@/components/dashboard/panel-sty
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 
 import { buildInfoMetadata } from '../_info/info-metadata';
 
@@ -51,14 +52,10 @@ export default async function HelpPage({ params }: PageProps) {
     getTranslations({ locale, namespace: 'common' }),
   ]);
 
-  const jsonLd = {
-    '@context': 'https://schema.org/',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: tCommon('home'), item: `${env.siteUrl}/${locale}` },
-      { '@type': 'ListItem', position: 2, name: t('title'), item: `${env.siteUrl}/${locale}${PATH}` },
-    ],
-  };
+  const jsonLd = buildBreadcrumbListJsonLd(
+    [{ label: tCommon('home'), href: '/' }, { label: t('title') }],
+    { base: env.siteUrl, locale, currentUrl: `${env.siteUrl}/${locale}${PATH}` },
+  );
 
   const link = (href: string) =>
     function RichLink(chunks: ReactNode) {
@@ -73,7 +70,7 @@ export default async function HelpPage({ params }: PageProps) {
     <div className="container py-10 md:py-14">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <div className="mx-auto max-w-3xl">
         <h1 className="pp-page-title">{t('title')}</h1>

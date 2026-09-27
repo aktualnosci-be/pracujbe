@@ -6,7 +6,7 @@ import { SearchX, X } from 'lucide-react';
 import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
-import { brandShareImageUrl } from '@/lib/seo/structured-data';
+import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 import { getJobFilterFacets, getJobs, isShowingDemoJobs } from '@/lib/jobs';
 import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
@@ -389,6 +389,18 @@ export default async function JobsListPage({
       jobIds={pageItems.map((job) => job.id)}
     >
     <div className="container py-6 md:py-10">
+      {/* BreadcrumbList = widoczna ścieżka poniżej; adres listy bez filtrów (jak canonical bazowy). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(
+            buildBreadcrumbListJsonLd(
+              [{ label: tCommon('home'), href: '/' }, { label: tNav('jobs') }],
+              { base: env.siteUrl, locale, currentUrl: `${env.siteUrl}/${locale}${BASE_PATH}` },
+            ),
+          ),
+        }}
+      />
       {/* Breadcrumb */}
         <nav
           aria-label={tCommon('breadcrumb')}
