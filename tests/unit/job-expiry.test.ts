@@ -58,6 +58,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'release_stale_checkout_intents',
     'ai_budget_release_stale_reservations',
     'expire_due_jobs',
+    'match_recompute_claim',
     'purge_guest_application_requests',
     'process_saved_search_alerts',
     'process_email_campaigns',
@@ -102,6 +103,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       releasedCheckouts: 0,
       releasedAiBudgetReservations: 0,
       expiredJobs: 3,
+      // P1-03: pusta kolejka dopasowań — same liczniki.
+      matches: { subjects: 0, failed: 0, upserted: 0, deleted: 0, skipped: 0 },
       savedSearchDigests: 0,
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,

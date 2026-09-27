@@ -54,5 +54,5 @@ export function fakeOpenAiClient(response: FakeResponseSpec | Error = {}) {
 
 /** Parametry pierwszego (albo n-tego) wywołania `responses.create`. */
 export function callParams(create: ReturnType<typeof fakeOpenAiClient>['create'], n = 0) {
-  return create.mock.calls[n]![0] as OpenAI.Responses.ResponseCreateParamsNonStreaming & Record<string, any>;
+  return create.mock.calls[n]![0] as OpenAI.Responses.ResponseCreateParamsNonStreaming;
 }
