@@ -2215,6 +2215,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Szkic procedury (nieopublikowany): `docs/legal-drafts/procedura-naruszen.md`. **Do zrobienia
   (właściciel/prawnik):** role i kontakty dyżuru, organ i portal, treść zawiadomień, tabletop,
   zatwierdzenie procedury; okres przechowywania wpisów.
+  Ponowienie zapisu po utraconej odpowiedzi (#835, bez migracji): `admin_create_breach_incident`
+  przy trafieniu na już zajęty `client_key` zawsze zwraca wcześniej zapisany wiersz — retry
+  z NIEZMIENIONĄ treścią jest w porządku (Invariant #11), ale retry z treścią POPRAWIONĄ między
+  próbami wcześniej po cichu porzucał tę poprawkę. `createBreachIncident` (`src/lib/actions/breaches.ts`)
+  po odpowiedzi RPC odczytuje zapisany wiersz service-rolem i porównuje go z właśnie wysłanym
+  formularzem (`breachFormsMatch`/`breachFormFromRow`, `src/lib/admin/breach.ts` — porównanie po
+  normalizacji jak w bazie: przycięte teksty, posortowane kategorie, instant zamiast tekstu daty);
+  różnica → `problem: 'clientKeyReused'` z `id`/`existingVersion` istniejącego wpisu zamiast cichego
+  sukcesu. `BreachIncidentForm` pokazuje komunikat i link do istniejącego wpisu oraz przycisk
+  „Zapisz poprawki jako edycję” (`updateBreachIncident` z CAS po wersji) — poprawka trafia do
+  bazy jako jawna edycja, nie znika. Odczyt porównawczy jest best-effort (błąd → brak konfliktu,
+  nie blokuje zwykłego zapisu). Dowód: unit `breach-register` (`#835` — retry bez zmian = sukces,
+  retry ze zmianą = konflikt z wersją, kontrola ujemna: awaria odczytu porównawczego nie blokuje
+  zapisu; `breachFormsMatch` — zgodność po normalizacji i wykrycie różnicy pól).
   Wspólny `csvCell` (#876, bez migracji): neutralizacja formuł arkusza rozszerzona o wiodący LF
   (`\n`) i pełnoszerokie warianty operatorów (`＝ ＋ － ＠`) — poprzedni regex `/^[=+\-@\t\r]/`
   pomijał oba przypadki z listy OWASP CSV Injection, więc kontrolowana wartość zaczynająca się
