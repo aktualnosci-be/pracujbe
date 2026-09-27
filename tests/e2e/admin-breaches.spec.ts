@@ -48,6 +48,9 @@ for (const locale of LOCALES) {
     await expect(title).toBeFocused();
     await expect(title).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByRole('alert').filter({ hasText: t.breachFormHasErrors })).toBeVisible();
+    // Po nawigacji klienckiej <title> strony dynamicznej jest strumieniowany po treści —
+    // axe łapał wtedy `document-title` (flaky w CI). Czekamy na stan końcowy (jak admin-ux).
+    await expect(page).toHaveTitle(new RegExp(t.breachNewTitle!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     expect(await blockingViolations(page)).toEqual([]);
 
     await title.fill('Test');
