@@ -2589,7 +2589,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `docs/PRODUCT_DECISIONS.md`); `delete` dopiero po nowej decyzji.
   **Otwarte:** utworzenie bucketu (właściciel), GC
   `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
-  czyści `/api/maintenance` od migracji `0193` — numer tymczasowy, `rls.sql` sekcja GC193), AV, PDF faktur (`storage.ts`, #27).
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,

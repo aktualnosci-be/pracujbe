@@ -187,7 +187,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Bezpieczeństwo, audyt i limity',
     inCode: 'Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów.',
     processors: [...HOSTING, 'discord-webhook', 'cloudflare-turnstile'],
-    retentionInCode: '/api/maintenance (0193): rate_limit_gc — okna limitera starsze niż doba; processed_webhooks_gc — rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. audit_logs bez usuwania w kodzie.',
+    retentionInCode: '/api/maintenance (0163): rate_limit_gc — okna limitera starsze niż doba; processed_webhooks_gc — rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. audit_logs bez usuwania w kodzie.',
   },
   'ai-job-import': {
     name: 'Import ogłoszenia przez AI',

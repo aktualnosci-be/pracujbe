@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0193 (NUMER TYMCZASOWY — ostateczny nada integrator) — sprzątanie tabel technicznych
+-- 0163 — sprzątanie tabel technicznych
 -- w /api/maintenance (K2 z docs/LAUNCH_CHECKLIST.md, #17).
 --
 -- Problem: rate_limit_gc (0015) i processed_webhooks_gc (0036) istnieją, ale nikt ich nie
@@ -20,7 +20,7 @@
 --
 -- Poza zakresem: email_deliveries_gc (0022) — okres przechowywania e-maili to decyzja
 -- administratora danych (#574, retencja), nie sprzątanie techniczne.
--- Dowód: supabase/tests/rls.sql sekcja GC193 (z kontrolą ujemną).
+-- Dowód: supabase/tests/rls.sql sekcja GC163 (z kontrolą ujemną).
 -- =============================================================================
 
 create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400)

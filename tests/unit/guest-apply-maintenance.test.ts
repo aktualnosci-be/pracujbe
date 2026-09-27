@@ -259,7 +259,7 @@ describe('maintenance: harmonogram retencji za jawną flagą (#574)', () => {
   });
 });
 
-describe('maintenance: tabele techniczne (K2, 0193)', () => {
+describe('maintenance: tabele techniczne (K2, 0163)', () => {
   it('woła rate_limit_gc i processed_webhooks_gc jako service_role i zwraca same liczniki', async () => {
     fakeDb.rpc('rate_limit_gc', 7).rpc('processed_webhooks_gc', 3);
     const res = await POST(request());
@@ -269,7 +269,7 @@ describe('maintenance: tabele techniczne (K2, 0193)', () => {
     expect(await res.json()).toMatchObject({ ok: true, purgedRateLimits: 7, purgedWebhookInbox: 3 });
   });
 
-  it('kontrola ujemna: brak EXECUTE (stan sprzed 0193) → 503, nie cichy sukces', async () => {
+  it('kontrola ujemna: brak EXECUTE (stan sprzed 0163) → 503, nie cichy sukces', async () => {
     fakeDb.rpc('processed_webhooks_gc', () => {
       throw pgError('42501', 'permission denied for function processed_webhooks_gc');
     });
