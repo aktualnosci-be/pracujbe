@@ -1,8 +1,8 @@
 -- =============================================================================
--- 0147_ai_profile_assist_budget.sql — #37 (część kandydata): asystent budowania profilu
+-- 0217_ai_profile_assist_budget.sql — #37 (część kandydata): asystent budowania profilu
 -- z odpowiedzi kandydata objęty globalnym budżetem AI (#36, migracja 0120).
 --
--- Numer nadany przez integratora (0147). Zależy od 0120 (#552).
+-- Numer TYMCZASOWY (0217) — ostateczny nada integrator. Zależy od 0120 (#552).
 --
 -- Jedyna zmiana: nowa funkcja AI `profile_answers_assist` na liście dozwolonych funkcji
 -- rejestru `ai_usage_ledger` i rezerwacji `ai_budget_reserve` (lista = `AI_FEATURE_IDS`

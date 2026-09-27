@@ -10,7 +10,7 @@ import { buildDocx, buildPdf, CV_WITH_REFEREES, DOCX_TYPE, PDF_TYPE, REFEREES } 
  * (`AI_CV_IMPORT_PROVIDER=fixture`, playwright.config.ts). Zero wywołań prawdziwego API.
  *
  * Pokrywa: podgląd przed wysłaniem bez danych referentów, propozycje domyślnie
- * niezaznaczone, zapis tylko zaznaczonych; kontrole ujemne — NISS w CV (odmowa, bez
+ * niezaznaczone, edycja wartości z błędem przy polu (limit kreatora), zapis tylko zaznaczonych; kontrole ujemne — NISS w CV (odmowa, bez
  * podglądu), zatwierdzenie bez zaznaczenia (blokada). Brak zapisu bez zatwierdzenia na
  * poziomie bazy dowodzi `rls.sql` sekcja CV487, a akcji — `cv-import-actions.test.ts`.
  */
@@ -53,7 +53,21 @@ for (const [locale, m] of Object.entries({ pl, en })) {
     await page.getByRole('button', { name: m.cvImport.apply }).click();
     await expect(page.getByRole('alert').filter({ hasText: m.cvImport.errorNothingSelected })).toBeVisible();
 
+    // Edycja wartości przed zapisem: za długa (limit kreatora 160 znaków) → błąd przy polu
+    // i fokus na nim, bez zapisu; po poprawce zapis poprawionej wartości.
     await page.getByRole('checkbox', { name: 'VCA' }).check();
+    const vca = page.getByLabel(m.cvImport.editLabel.replace('{value}', 'VCA'));
+    await vca.fill('V'.repeat(161));
+    await page.getByRole('button', { name: m.cvImport.apply }).click();
+    await expect(page.getByRole('alert').filter({ hasText: m.cvImport.errorFieldsInvalid })).toBeVisible();
+    await expect(vca).toBeFocused();
+    await expect(vca).toHaveAttribute('aria-invalid', 'true');
+    await expect(vca).toHaveAccessibleDescription(m.cvImport.errorValueTooLong.replace('{max}', '160'));
+    await expect(page.getByRole('heading', { name: m.cvImport.doneTitle })).toHaveCount(0);
+
+    await vca.fill('VCA VOL');
+    await expect(vca).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('checkbox', { name: 'VCA VOL' })).toBeChecked();
     await page.getByRole('button', { name: m.cvImport.apply }).click();
     await expect(page.getByRole('heading', { name: m.cvImport.doneTitle })).toBeFocused();
   });

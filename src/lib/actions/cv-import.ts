@@ -28,8 +28,9 @@ import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
  *      zredagowany tekst i liczniki usuniętych fragmentów do podglądu.
  *   2. `proposeFromCvAction` — po potwierdzeniu zakresu przez kandydata: ponowna redakcja na
  *      serwerze, wywołanie modelu, walidacja → PROPOZYCJE (nic nie jest zapisywane).
- *   3. `applyCvProposals` — wyłącznie pozycje zaznaczone przez kandydata → jedno RPC
- *      `apply_candidate_cv_proposals` (0115: dopisanie w jednej transakcji, limity).
+ *   3. `applyCvProposals` — wyłącznie pozycje zaznaczone (i ewentualnie poprawione) przez
+ *      kandydata → walidacja schematami kroków kreatora (`cvApprovedProposalsSchema`) → jedno
+ *      RPC `apply_candidate_cv_proposals` (0115: dopisanie w jednej transakcji, limity).
  *
  * Autoryzacja: zalogowane konto KANDYDATA z sesji serwera (`getPortalIdentity`, rola z bazy);
  * zapis pod RLS jako ten użytkownik (`withPortalTransaction`) — import dotyczy wyłącznie
