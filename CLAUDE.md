@@ -1510,6 +1510,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ustalana z `company_members` pod RLS), inaczej etykieta `messages.sender*Fallback`; imienia
   rekrutera nie ujawniamy (0023). Demo wiadomości w języku strony (#359). Stan ładowania listy
   i wątku (#177): `wiadomosci/loading.tsx` + `ConversationOpenPending`, E2E `messages-loading.spec`.
+  Podgląd ostatniej wiadomości kandydata (#712): `getLatestMessages` (`candidate.latest-messages`)
+  dobiera ostatnią nieusuniętą wiadomość rozmowy przez `ORDER BY m.created_at DESC, m.id DESC`
+  (ten sam tie-breaker co w `messages.ts`/`employer.ts`) — remis `created_at` (np. wiadomości
+  zapisane w tej samej transakcji/milisekundzie) nie daje już niedeterministycznego podglądu
+  i flagi „nieprzeczytane” na pulpicie kandydata. Dowód: `portal-candidate.test.ts` (PG16,
+  dwie wiadomości z identycznym `created_at`; kontrola ujemna: cofnięcie `, m.id DESC` = czerwony).
 
 ### Etap 6 — komunikacja
 - [x] Wybór języka odbiorcy (fallback) — util + test + `resolve_recipient_locale()` w DB (INVARIANT #1 egzekwowany przy kolejkowaniu)
