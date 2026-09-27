@@ -19,15 +19,11 @@ const E2E = join(ROOT, 'tests/e2e');
 
 /**
  * Speci zmieniane w PR-ach otwartych w chwili wprowadzenia helpera (#586: admin-breaches,
- * panel-a11y; #918: admin-a11y, admin-ux). Lista tylko maleje: po scaleniu tych PR-ów przenieść
- * import na `./fixtures/axe` i usunąć spec stąd.
+ * panel-a11y; #918: admin-a11y). Lista tylko maleje: po scaleniu tych PR-ów przenieść import na
+ * `./fixtures/axe` i usunąć spec stąd. `admin-ux.spec.ts` przeniesiony (#951 — flaky
+ * `document-title` blokował shard E2E niezależny od zmiany tego PR).
  */
-const PENDING_PR_SPECS = new Set([
-  'admin-a11y.spec.ts',
-  'admin-breaches.spec.ts',
-  'admin-ux.spec.ts',
-  'panel-a11y.spec.ts',
-]);
+const PENDING_PR_SPECS = new Set(['admin-a11y.spec.ts', 'admin-breaches.spec.ts', 'panel-a11y.spec.ts']);
 
 const RAW_AXE_IMPORT = /from ['"]@axe-core\/playwright['"]/;
 
