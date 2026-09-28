@@ -864,7 +864,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
   kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
   #301) i `company-profile` (nazwy = widoczna ścieżka).
-  `lastmod` po istotnej edycji (#796, migracja `0860` — numer tymczasowy): sitemap ofert liczył
+  `lastmod` po istotnej edycji (#796, migracja `0956` — numer tymczasowy): sitemap ofert liczył
   `lastModified` wyłącznie z `published_at` — po edycji opublikowanej oferty (`update_published_job`,
   0077/0144) baza aktualizuje `jobs.updated_at`, ale wpis w sitemapie nadal wskazywał dzień
   pierwotnej publikacji. `get_public_jobs` zwraca dodatkowo `updated_at`; `JobListItem.updatedAt`

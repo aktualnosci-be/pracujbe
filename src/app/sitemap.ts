@@ -139,11 +139,11 @@ function buildLanguages(
 
 /**
  * `lastModified` sitemap ofert (#796): data ostatniej istotnej edycji treści (`updatedAt` z
- * `jobs.updated_at`, 0860) zamiast wyłącznie daty pierwotnej publikacji — po edycji
+ * `jobs.updated_at`, 0956) zamiast wyłącznie daty pierwotnej publikacji — po edycji
  * opublikowanej oferty (wynagrodzenie, opis, warunki…) `updated_at` jest nowsze niż
  * `published_at`, więc Google dostaje wiarygodny sygnał do ponownego crawlowania. Brak pola
  * (RPC bez niego, dane demonstracyjne, błąd odczytu) albo nieparsowalna wartość = zachowanie
- * sprzed 0860 (fallback na `publishedAt`, a przy błędzie obu — bieżący czas).
+ * sprzed 0956 (fallback na `publishedAt`, a przy błędzie obu — bieżący czas).
  */
 function jobLastModified(job: Pick<JobListItem, 'publishedAt' | 'updatedAt'>, fallback: Date): Date {
   const updatedTs = job.updatedAt ? Date.parse(job.updatedAt) : NaN;

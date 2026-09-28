@@ -14216,7 +14216,7 @@ select pg_temp.assert(
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
   'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
 
--- KONTROLA UJEMNA: definicja z 0110 (bez tie-breakera; typ zwrotny z `company_slug` z 0140) — introspekcja JLP594-3 wykrywa brak,
+-- KONTROLA UJEMNA: definicja z 0110 (bez tie-breakera; typ zwrotny z `company_slug` z 0140 i `updated_at` z 0956) — introspekcja JLP594-3 wykrywa brak,
 -- a podział na strony (JLP594-1) traci swoją gwarancję (nie ma już czego porównać
 -- deterministycznie: bez unikalnego klucza w ORDER BY sam SQL nie obiecuje stabilnego wyniku).
 begin;
@@ -14243,7 +14243,8 @@ returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
   city text, region text, contract_type text, salary_min integer, salary_max integer,
   currency text, salary_period text, published_at timestamptz, highlights text[], category text,
-  accommodation boolean, immediate boolean, no_language_required boolean, company_slug text
+  accommodation boolean, immediate boolean, no_language_required boolean, company_slug text,
+  updated_at timestamptz
 )
 language sql stable security definer set search_path = public, pg_temp as $jlneg$
   select
@@ -14258,7 +14259,8 @@ language sql stable security definer set search_path = public, pg_temp as $jlneg
     coalesce(t.highlights, '{}'::text[]) as highlights,
     j.category::text,
     j.accommodation, j.immediate, j.no_language_required,
-    c.slug as company_slug
+    c.slug as company_slug,
+    j.updated_at
   from public.jobs j
   join public.companies c on c.id = j.company_id
   left join lateral (
@@ -19024,5 +19026,45 @@ select public.save_candidate_onboarding_step3(4, array['Wózek widłowy']);
 reset role; reset app.current_uid;
 select pg_temp.assert(exists (select 1 from public.candidate_skills where candidate_profile_id = :'cacp'),
   'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
+
+-- ============================================================================
+-- SM796. Sitemap ofert: `get_public_jobs` zwraca `updated_at` (#796, migracja 0956) — lastmod
+--        z ostatniej edycji, nie tylko z publikacji. Definicja zachowuje filtry z 0167
+--        (p_direct_only, miejscowość kanoniczna, blokada firmy).
+-- ============================================================================
+\echo '--- SM796 get_public_jobs zwraca updated_at (0956) ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(p_limit => 100)) >= 1
+  and not exists (
+    select 1 from public.get_public_jobs(p_limit => 100) g
+    join public.jobs j on j.id = g.id
+    where g.updated_at is null or g.updated_at is distinct from j.updated_at),
+  'SM796-1 każda oferta z listy niesie updated_at równe jobs.updated_at');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_jobs(p_limit => 100) where updated_at is not null) >= 1,
+  'SM796-1b anon odczytuje updated_at listy publicznej');
+reset role;
+select pg_temp.assert(
+  pg_get_function_result('public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)'::regprocedure)
+    ~ 'updated_at timestamp with time zone'
+  and pg_get_function_arguments('public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)'::regprocedure)
+    ~ 'p_direct_only'
+  and pg_get_functiondef('public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)'::regprocedure)
+    ~ 'location_filter_ids'
+  and (select count(*) from pg_proc where proname = 'get_public_jobs' and pronamespace = 'public'::regnamespace) = 1,
+  'SM796-2 jedna definicja z updated_at, filtrem p_direct_only i miejscowością kanoniczną (stan 0167 + kolumna)');
+-- SM796-2n kontrola ujemna: funkcja, której nie dotyczy zmiana (licznik), nie niesie updated_at.
+select pg_temp.assert(
+  pg_get_function_result(oid) !~ 'updated_at'
+  , 'SM796-2n kontrola ujemna: sprawdzenie odróżnia funkcję bez kolumny updated_at')
+from pg_proc where proname = 'get_public_jobs_count' and pronamespace = 'public'::regnamespace;
+select pg_temp.assert(
+  has_function_privilege('anon',
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)', 'execute')
+  and has_function_privilege('authenticated',
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)', 'execute'),
+  'SM796-3 granty anon/authenticated zachowane po drop + create');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

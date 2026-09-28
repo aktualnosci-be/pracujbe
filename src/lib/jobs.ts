@@ -87,9 +87,9 @@ export interface JobListItem {
   salaryPeriod?: SalaryPeriod;
   publishedAt: string;
   /**
-   * Data ostatniej istotnej edycji treści (`jobs.updated_at`, 0860, #796) — sitemap liczy z
+   * Data ostatniej istotnej edycji treści (`jobs.updated_at`, 0956, #796) — sitemap liczy z
    * niej `lastModified` zamiast z samej daty publikacji. Brak = RPC bez tego pola (dane
-   * demonstracyjne, profil firmy) albo błąd odczytu; wtedy liczy się jak przed 0860
+   * demonstracyjne, profil firmy) albo błąd odczytu; wtedy liczy się jak przed 0956
    * (fallback na `publishedAt`).
    */
   updatedAt?: string;
@@ -461,7 +461,7 @@ export function rowToJobListItem(row: unknown): JobListItem {
     immediate: asBool(r['immediate']),
     noLanguageRequired: asBool(r['no_language_required']),
     ...(asOptString(r['company_slug']) ? { companySlug: asOptString(r['company_slug']) } : {}),
-    // #796: pole nowe od 0860 (get_public_jobs) — brak (profil firmy, dane demo, starsze RPC)
+    // #796: pole nowe od 0956 (get_public_jobs) — brak (profil firmy, dane demo, starsze RPC)
     // = sitemap liczy `lastModified` z `publishedAt`, jak przed tą zmianą.
     ...(asOptString(r['updated_at']) ? { updatedAt: asOptString(r['updated_at']) } : {}),
   };

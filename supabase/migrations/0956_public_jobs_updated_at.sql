@@ -1,31 +1,30 @@
--- 0860_public_jobs_updated_at.sql — numer tymczasowy (ostateczny nada integrator).
+-- 0956_public_jobs_updated_at.sql — numer tymczasowy (ostateczny nada integrator).
 --
 -- #796: sitemap ofert ustawiał `lastmod` wyłącznie z `published_at`. Po istotnej edycji
 -- opublikowanej oferty (`update_published_job`, 0077/0144) baza aktualizuje `jobs.updated_at`,
--- ale publiczny `get_public_jobs` (ostatnio redefiniowany w 0140 — dodanie `company_slug`) nie
--- zwracał tej kolumny, więc każda wersja językowa URL-a nadal wskazywała dzień pierwotnej
--- publikacji, niezależnie od liczby późniejszych edycji treści.
+-- ale publiczny `get_public_jobs` nie zwracał tej kolumny, więc każda wersja językowa URL-a
+-- nadal wskazywała dzień pierwotnej publikacji, niezależnie od liczby późniejszych edycji treści.
 --
 -- Zmiana: `get_public_jobs` zwraca dodatkowo `updated_at` (kolumna z `jobs`, bez zmiany
--- semantyki pozostałych pól ani filtrów/sortowania — sama funkcja SQL, `create or replace`
--- niemożliwe przy zmianie listy kolumn wyniku, więc `drop function` + ponowne utworzenie z tą
--- samą sygnaturą argumentów jak w 0140). `src/lib/jobs.ts` (`rowToJobListItem`) mapuje nowe pole
--- jako `updatedAt`, a `src/app/sitemap.ts` liczy `lastModified` z `updatedAt` (fallback na
--- `publishedAt`, gdy pole nieobecne — dane demonstracyjne, błąd odczytu, starsze wiersze RPC).
+-- semantyki pozostałych pól ani filtrów/sortowania). Definicja = NAJNOWSZA z 0167 (filtr
+-- „bezpośrednio od pracodawcy” `p_direct_only`, miejscowość kanoniczna 0153, blokada firmy #97)
+-- z jedną dodaną kolumną wyniku; `create or replace` jest niemożliwe przy zmianie listy kolumn
+-- wyniku, więc `drop function` + ponowne utworzenie z tą samą sygnaturą argumentów (17).
+-- Blok FROM … WHERE zostaje kopią 1:1, więc `saved_search_jobs_after` (0158) nie wymaga zmian.
+-- `src/lib/jobs.ts` (`rowToJobListItem`) mapuje nowe pole jako `updatedAt`, a
+-- `src/app/sitemap.ts` liczy `lastModified` z `updatedAt` (fallback na `publishedAt`, gdy pole
+-- nieobecne — dane demonstracyjne, błąd odczytu, starsze wiersze RPC).
 --
 -- `get_public_jobs_count`, `get_public_job` i `get_public_company_jobs` nie są tu zmieniane —
--- `updated_at` służy wyłącznie liście używanej przez sitemap (#796); ich ewentualne
--- odwzorowanie w `lastModified`/`dateModified` to osobny zakres.
+-- `updated_at` służy wyłącznie liście używanej przez sitemap (#796).
 --
 -- Rollback: `drop function public.get_public_jobs(text, text, text, text[], text[], text[],
---   integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text);`
---   + odtworzyć wersję z 0140 (bez `updated_at`).
+--   integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text,
+--   boolean);` + odtworzyć wersję z 0167 (bez `updated_at`).
 
 drop function if exists public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text
-);
-
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean);
 create or replace function public.get_public_jobs(
   p_locale         text        default 'pl',
   p_keyword        text        default null,
@@ -42,7 +41,8 @@ create or replace function public.get_public_jobs(
   p_sort           text        default 'newest',
   p_limit          integer     default 20,
   p_offset         integer     default 0,
-  p_salary_unit    text        default 'month'
+  p_salary_unit    text        default 'month',
+  p_direct_only    boolean     default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -85,7 +85,8 @@ language sql stable security definer set search_path = public, pg_temp as $$
       where b.candidate_id = auth.uid() and b.company_id = j.company_id
     )
     and (p_categories is null or array_length(p_categories, 1) is null or j.category::text = any(p_categories))
-    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations))
+    and (p_locations is null or array_length(p_locations, 1) is null or j.city = any(p_locations)
+         or j.location_id in (select unnest(public.location_filter_ids(p_locations))))
     and (p_contract_types is null or array_length(p_contract_types, 1) is null or j.contract_type::text = any(p_contract_types))
     and (p_city is null or j.id in (select public.search_city_candidates(left(p_city, 100))))
     -- Prefiltr po indeksach (tytuł oferty albo któregokolwiek tłumaczenia); dokładny
@@ -100,23 +101,22 @@ language sql stable security definer set search_path = public, pg_temp as $$
     and (coalesce(p_immediate, false) = false or j.immediate = true)
     and (coalesce(p_no_language, false) = false or j.no_language_required = true)
     and (p_since is null or j.published_at >= p_since)
+    -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
+    and (coalesce(p_direct_only, false) = false or not c.is_agency)
   order by
     (case when p_sort = 'salary' then public.job_salary_sort_key(
       j.salary_min, j.salary_max, j.salary_period, p_salary_unit) end) desc nulls last,
     j.published_at desc,
-    -- #594 (0136): tie-breaker deterministyczny (PK, unikalny) — bez niego remis na kluczu
-    -- wynagrodzenia/dacie publikacji może zmieniać kolejność między wywołaniami i ciąć
-    -- grupę remisową w innym miejscu przy offsetowej paginacji (pominięcia/duplikaty).
+    -- #594 (0136): tie-breaker deterministyczny (PK, unikalny).
     j.id desc
   limit least(greatest(coalesce(p_limit, 20), 1), 100)
   offset least(greatest(coalesce(p_offset, 0), 0), 10000);
 $$;
-
 revoke all on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean
 ) from public;
 grant execute on function public.get_public_jobs(
   text, text, text, text[], text[], text[], integer, integer,
-  boolean, boolean, boolean, timestamptz, text, integer, integer, text
+  boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean
 ) to anon, authenticated;
