@@ -10,7 +10,7 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import pl from '@/messages/pl.json';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useClassifiedsMode as classifiedsModeInTests, useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withClassifiedsMode as classifiedsModeInTests, withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
