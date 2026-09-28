@@ -464,6 +464,7 @@
       "skillsTooMany": "Trop de compétences.",
       "experienceInvalid": "Nombre d'années d'expérience invalide.",
       "languagesTooMany": "Trop de langues.",
+      "noLanguageConflict": "Vous avez coché « Travail sans exigence linguistique », mais la liste contient une langue requise. Supprimez les langues requises ou décochez la case.",
       "certificatesTooMany": "Trop de certificats.",
       "conditionsTooMany": "Trop de conditions.",
       "benefitsTooMany": "Trop d'avantages.",
@@ -489,6 +490,9 @@
       "fr": "français",
       "en": "anglais"
     },
+    "machineTranslationNotice": "Traduction automatique. Langue d’origine : {language}.",
+    "manualTranslationNotice": "Contenu traduit. Langue d’origine : {language}.",
+    "translationOriginalLink": "Voir l’original",
     "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement."
   },
   "landing": {
@@ -2356,6 +2360,9 @@
     "breachErrorConflictsWithRisk": "Cette décision ne correspond pas à l’évaluation du risque.",
     "breachErrorClosed": "L’entrée est clôturée. Actualisez la page.",
     "breachErrorStale": "L’entrée a été modifiée entre-temps. Actualisez la page et refaites vos modifications.",
+    "breachErrorClientKeyReused": "Cette entrée existe déjà avec un contenu différent (la tentative précédente a réussi). Ouvrez-la ou enregistrez vos corrections comme modification.",
+    "breachReconcileOpenExisting": "Ouvrir l’entrée existante",
+    "breachReconcileSubmit": "Enregistrer les corrections comme modification",
     "breachLanguagePl": "Polonais",
     "breachLanguageNl": "Néerlandais",
     "breachLanguageFr": "Français",
@@ -3452,6 +3459,7 @@
     "errorValueTooLong": "La valeur est trop longue. {max} caractères maximum.",
     "errorValueDisallowed": "Supprimez les coordonnées, les liens, les données d'autres personnes et les informations sensibles.",
     "errorLanguageInvalid": "Le nom de la langue doit comporter entre 2 et 40 caractères.",
+    "errorLanguageDuplicate": "La même langue est sélectionnée deux fois avec des niveaux différents. Décochez l'une des propositions ou utilisez des noms différents.",
     "errorExperienceInvalid": "Indiquez un nombre d'années entre 0 et 60.",
     "errorFieldsInvalid": "Corrigez les champs signalés avant d'enregistrer."
   },

@@ -30,6 +30,21 @@ describe('isPublicHttpsUrl', () => {
     const long = `https://example.com/${'a'.repeat(2048)}`;
     expect(isPublicHttpsUrl(long)).toBe(false);
   });
+
+  // #745: baza (`public_https_url`) wciąż dopuszcza dowolne 1–5 cyfr portu (`:0`, `:99999`);
+  // formularz musi to zawężać do prawdziwego zakresu portów TCP, zanim adres w ogóle trafi
+  // do RPC `submit_company_links`.
+  it('accepts only ports within the valid TCP range 1–65535', () => {
+    expect(isPublicHttpsUrl('https://example.com:1')).toBe(true);
+    expect(isPublicHttpsUrl('https://example.com:8443')).toBe(true);
+    expect(isPublicHttpsUrl('https://example.com:65535')).toBe(true);
+    expect(isPublicHttpsUrl('https://example.com')).toBe(true); // bez portu — bez zmian
+
+    expect(isPublicHttpsUrl('https://example.com:0')).toBe(false); // port 0 nie istnieje
+    expect(isPublicHttpsUrl('https://example.com:65536')).toBe(false); // poza zakresem o 1
+    expect(isPublicHttpsUrl('https://example.com:99999')).toBe(false);
+    expect(isPublicHttpsUrl('https://example.com:00443')).toBe(false); // wiodące zero
+  });
 });
 
 describe('sameOriginHost', () => {
