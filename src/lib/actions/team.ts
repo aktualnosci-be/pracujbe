@@ -9,7 +9,7 @@ import { rpc, rpcRows, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 import { issueTeamInviteToken } from '@/lib/team/invite-token';
 import {
@@ -76,7 +76,15 @@ function fail(error: ErrorCode | TeamError): TeamActionResult {
   return { ok: false, error };
 }
 
-export async function inviteTeamMember(input: TeamInviteInput): Promise<TeamActionResult> {
+/**
+ * Zaprasza osobę do firmy, dla której wyrenderowano formularz (`expectedCompanyId`, EMP-02).
+ * Gdy aktywna firma zmieniła się w międzyczasie (inna karta), zaproszenie nie trafia do nowej
+ * firmy — `ACTIVE_COMPANY_CHANGED`.
+ */
+export async function inviteTeamMember(
+  input: TeamInviteInput,
+  expectedCompanyId: string,
+): Promise<TeamActionResult> {
   const parsed = teamInviteSchema.safeParse(input);
   if (!parsed.success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
@@ -92,20 +100,20 @@ export async function inviteTeamMember(input: TeamInviteInput): Promise<TeamActi
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
-    const invited = await withPortalTransaction(me, async (tx) => {
-      const active = await getActiveCompany(tx, me.id);
-      if (!active.activeId) return false;
+    const invited = await withPortalTransaction(me, async (tx): Promise<TeamError | null> => {
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) return expected.error;
       await rpcRows(tx, 'invite_company_member', {
-        p_company_id: active.activeId,
+        p_company_id: expected.context.activeId,
         p_email: parsed.data.email,
         p_role: parsed.data.role,
         p_locale: parsed.data.locale,
         p_signup_token_hash: signupToken.hash,
         p_signup_nonce: signupToken.nonce,
       });
-      return true;
+      return null;
     });
-    if (!invited) return fail('NOT_FOUND');
+    if (invited) return fail(invited);
     refreshPanel();
     return { ok: true };
   } catch (e) {

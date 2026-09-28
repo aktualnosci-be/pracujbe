@@ -10,7 +10,7 @@ import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
@@ -488,7 +488,9 @@ export async function updateCompanyLinks(
  * firma wraca do kolejki admina. Tylko owner/admin firmy; inne stany → `INVALID_TRANSITION`
  * (zawieszenie zdejmuje wyłącznie administrator). Autoryzację i przejście egzekwuje RPC.
  */
-export async function requestCompanyReverification(): Promise<ReverificationResult> {
+export async function requestCompanyReverification(
+  expectedCompanyId: string,
+): Promise<ReverificationResult> {
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   if (
@@ -505,8 +507,10 @@ export async function requestCompanyReverification(): Promise<ReverificationResu
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
-      const active = await getActiveCompany(tx, me.id);
-      if (!active.activeId) return 'NOT_FOUND';
+      // EMP-02: zgłaszamy firmę pokazaną na ekranie, nie firmę przełączoną w innej karcie.
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) return expected.error;
+      const active = expected.context;
       if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
         return 'PERMISSION_DENIED';
       }
