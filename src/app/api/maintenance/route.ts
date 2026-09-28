@@ -15,7 +15,7 @@ import {
 } from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
 import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
-import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
+import { MESSAGE_ATTACHMENTS_BUCKET, runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
   railwayDeleter,
@@ -49,6 +49,9 @@ import {
  * #17: dzienny GC bucketu CV (`runStorageGc`, 0117) — obiekty bez wiersza `files` do kolejki
  * usuwania (tylko przy `STORAGE_GC_MODE=delete`; domyślnie dry-run z samymi licznikami),
  * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
+ * #833: analogiczny GC dla załączników wiadomości (`messageAttachmentsGc`, ten sam bucket
+ * Railway, logiczny bucket `message-files`, wzorzec klucza `att-*`) — do #833 był pomijany
+ * przez GC CV jako „obcy” i nigdy nie trafiał do kolejki usuwania, nawet po awarii uploadu.
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  * #575: twarde terminy lejka ofert (`purge_job_funnel_data`, 0128) — receipts deduplikacji
@@ -127,6 +130,7 @@ async function run(request: Request): Promise<Response> {
     | 'rateLimits'
     | 'webhookInbox'
     | 'storageGc'
+    | 'messageAttachmentsGc'
     | 'dsaRetention'
     | 'storageDeletions';
   const failures: Array<{ task: Task; error: unknown }> = [];
@@ -226,14 +230,27 @@ async function run(request: Request): Promise<Response> {
   // retencji: e-maile (`email_deliveries_gc`) czekają na #574.
   const purgedRateLimits = await task('rateLimits', 'rate_limit_gc', { p_older_than_seconds: 86_400 });
   const purgedWebhookInbox = await task('webhookInbox', 'processed_webhooks_gc', { p_older_than_days: 30 });
-  // #17: GC sierot bucketu CV przed workerem kolejki — sieroty znikają w tym samym przebiegu.
+  // #17/#833: GC sierot bucketu Railway przed workerem kolejki — sieroty znikają w tym samym
+  // przebiegu. Dwa niezależne, logiczne buckety (CV i załączniki wiadomości) na jednym fizycznym
+  // buckecie: awaria jednego przebiegu nie blokuje drugiego (osobne try/catch, osobne zadanie).
   let storageGc: StorageGcRun | null = null;
+  let messageAttachmentsGc: StorageGcRun | null = null;
   try {
     const { fileBucketConfig } = await import('@/lib/env');
     const config = fileBucketConfig();
     if (config) {
       const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
-      storageGc = await runStorageGc(createRailwayBucket(config), { dryRun: storageGcDryRun() });
+      const bucketStore = createRailwayBucket(config);
+      storageGc = await runStorageGc(bucketStore, { dryRun: storageGcDryRun() });
+      try {
+        messageAttachmentsGc = await runStorageGc(bucketStore, {
+          dryRun: storageGcDryRun(),
+          bucket: MESSAGE_ATTACHMENTS_BUCKET,
+          pattern: 'attachment',
+        });
+      } catch (error) {
+        failures.push({ task: 'messageAttachmentsGc', error });
+      }
     }
   } catch (error) {
     failures.push({ task: 'storageGc', error });
@@ -280,6 +297,7 @@ async function run(request: Request): Promise<Response> {
     purgedRateLimits: purgedRateLimits ?? 0,
     purgedWebhookInbox: purgedWebhookInbox ?? 0,
     storageGc,
+    messageAttachmentsGc,
     dsaRetention,
     storageDeletions,
   });

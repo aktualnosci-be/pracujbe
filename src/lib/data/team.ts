@@ -47,6 +47,8 @@ export type TeamPageData =
   | {
       status: 'ok';
       demo: boolean;
+      /** Aktywna firma, dla której wyrenderowano stronę — formularz zaproszenia wysyła ją do akcji (EMP-02). */
+      companyId: string;
       activeRole: string;
       companyName: string;
       /** `null` — rola bez zarządzania zespołem (recruiter/member). */
@@ -74,6 +76,7 @@ function rows(value: unknown): Record<string, unknown>[] {
 const DEMO_DATA: Extract<TeamPageData, { status: 'ok' }> = {
   status: 'ok',
   demo: true,
+  companyId: 'demo-company',
   activeRole: 'owner',
   companyName: 'AGO Jobs & HR',
   members: [
@@ -163,12 +166,15 @@ export async function getTeamPageData(): Promise<TeamPageData> {
     });
     if (!loaded) return { status: 'error' };
     const { ctx } = loaded;
+    const companyId = ctx.activeId;
+    if (!companyId) return { status: 'error' };
     const myInvitations = mapMyInvitations(loaded.mine);
 
     if (loaded.team === null) {
       return {
         status: 'ok',
         demo: false,
+        companyId,
         activeRole: ctx.activeRole,
         companyName: ctx.activeName,
         members: null,
@@ -199,6 +205,7 @@ export async function getTeamPageData(): Promise<TeamPageData> {
     return {
       status: 'ok',
       demo: false,
+      companyId,
       activeRole: ctx.activeRole,
       companyName: ctx.activeName,
       members,

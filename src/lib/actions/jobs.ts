@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { revalidatePath } from 'next/cache';
 
-import { getActiveCompanyId } from '@/lib/company-context';
+import { getActiveCompanyId, getExpectedActiveCompany } from '@/lib/company-context';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import type { PortalIdentity } from '@/lib/auth/session';
@@ -197,8 +197,14 @@ function validateJobStep(step: number, data: unknown): unknown | null {
 /**
  * Tworzy szkic oferty dla aktywnej firmy zalogowanego użytkownika i zwraca jego `id`.
  * @param locale locale, w którym pracodawca tworzy ofertę (default_locale oferty).
+ * @param expectedCompanyId firma, dla której wyrenderowano kreator (EMP-02). Gdy aktywna firma
+ *   zmieniła się w międzyczasie (inna karta, przełącznik), szkic NIE powstaje w nowej firmie —
+ *   `ACTIVE_COMPANY_CHANGED`.
  */
-export async function createJobDraft(locale?: string): Promise<CreateDraftResult> {
+export async function createJobDraft(
+  locale: string | undefined,
+  expectedCompanyId: string | null | undefined,
+): Promise<CreateDraftResult> {
   const loc = normalizeLocale(locale);
 
   if (!isPortalDataConfigured()) {
@@ -216,10 +222,14 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    const id = await withPortalTransaction(me, async (tx) => {
-      // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
-      const companyId = await getActiveCompanyId(tx, me.id);
-      if (!companyId) return null;
+    const id = await withPortalTransaction(me, async (tx): Promise<string | { error: ErrorCode }> => {
+      // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo",
+      // i tylko ta, którą pokazywał kreator (EMP-02).
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) {
+        return { error: expected.error === 'NOT_FOUND' ? 'PERMISSION_DENIED' : expected.error };
+      }
+      const companyId = expected.context.activeId;
       // jobs_insert (RLS, recruiter+ aktywnej firmy); created_by = użytkownik sesji.
       const { rows } = await execute(tx, 'jobs.create-draft',
         `INSERT INTO public.jobs
@@ -229,7 +239,7 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
         [companyId, me.id, `draft-${randomUUID()}`, loc, PLACEHOLDER_CATEGORY, PLACEHOLDER_CONTRACT]);
       return asString(asRecord(rows[0])['id']);
     });
-    if (id === null) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (typeof id !== 'string') return { ok: false, error: id.error };
     if (!id) return { ok: false, error: 'INTERNAL' };
     return { ok: true, id };
   } catch (error) {

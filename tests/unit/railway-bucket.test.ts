@@ -370,6 +370,27 @@ describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
       },
     });
   });
+  it("LIST (#17 × 0119, #833): pattern='attachment' zwraca załączniki, klucz CV jest wtedy obcy", async () => {
+    const { store, handle } = fixture();
+    const attachment = `${owner}/att-44444444-4444-4444-8444-444444444444.png`;
+    handle.mockResolvedValueOnce(
+      response(200, Readable.from([
+        `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><IsTruncated>false</IsTruncated>` +
+          [key, attachment].map((k) => `<Contents><Key>${k}</Key><LastModified>2026-09-20T10:00:00.000Z</LastModified><Size>3</Size></Contents>`).join("") +
+          `<KeyCount>2</KeyCount><MaxKeys>10</MaxKeys></ListBucketResult>`,
+      ]), { "content-type": "application/xml" }),
+    );
+    // Kontrola ujemna: bez naprawy #833 (`pattern` ignorowany) ten wynik byłby `objects: []`,
+    // a załącznik liczyłby się jako obcy — GC nigdy by go nie zauważył.
+    expect(await store.list({ maxKeys: 10, pattern: "attachment" })).toEqual({
+      ok: true,
+      value: {
+        objects: [{ key: attachment, lastModified: new Date("2026-09-20T10:00:00.000Z") }],
+        foreign: 1,
+        nextStartAfter: null,
+      },
+    });
+  });
   it("LIST (#17): odrzuca zły limit i kursor bez żądania; błąd dostawcy = kod", async () => {
     const { store, handle } = fixture();
     for (const input of [{ maxKeys: 0 }, { maxKeys: 1001 }, { maxKeys: 1.5 }, { startAfter: "" }, { startAfter: "x".repeat(501) }])

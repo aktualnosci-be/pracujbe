@@ -1,6 +1,6 @@
 'use server';
 
-import { getActiveCompany } from '@/lib/company-context';
+import { getExpectedActiveCompany } from '@/lib/company-context';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -80,6 +80,9 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
   const pre = precheckSource(source);
   if (!pre.ok) return pre;
 
+  const companyField = formData.get('companyId');
+  const expectedCompanyId = typeof companyField === 'string' ? companyField : null;
+
   const configured = isPortalDataConfigured();
   if (!configured && provider !== 'fixture') return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
@@ -88,8 +91,16 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
       const me = await getPortalIdentity();
       if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-      const company = await withPortalTransaction(me, (tx) => getActiveCompany(tx, me.id));
-      if (!company.activeId || !JOB_MANAGER_ROLES.has(company.activeRole)) {
+      // EMP-02: import (płatne wywołanie modelu) i szkic tylko dla firmy, którą pokazywał
+      // kreator (`companyId` z formularza) — nie dla firmy przełączonej w innej karcie.
+      const expected = await withPortalTransaction(me, (tx) =>
+        getExpectedActiveCompany(tx, me.id, expectedCompanyId),
+      );
+      if (!expected.ok) {
+        return { ok: false, error: expected.error === 'NOT_FOUND' ? 'PERMISSION_DENIED' : expected.error };
+      }
+      const company = expected.context;
+      if (!JOB_MANAGER_ROLES.has(company.activeRole)) {
         return { ok: false, error: 'PERMISSION_DENIED' };
       }
 
@@ -132,7 +143,7 @@ export async function importJobListing(formData: FormData, locale?: string): Pro
     const content = buildImportDraftContent(mapped.validSteps);
     if (!content) return { ...base, jobId: null, savedSteps: [] };
 
-    const created = await createJobDraft(locale);
+    const created = await createJobDraft(locale, expectedCompanyId);
     if (!created.ok) return { ...base, jobId: null, savedSteps: [] };
     if (created.demo) {
       return { ...base, jobId: created.id, demo: true, savedSteps: mapped.validSteps.map((s) => s.step) };
