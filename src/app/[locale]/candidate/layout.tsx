@@ -43,6 +43,8 @@ export default async function CandidateLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  // #1128/#1142: tryb produktu liczony na serwerze i podawany do klienckiego chrome'u.
+  const recruitmentEnabled = isRecruitmentEnabled();
 
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
@@ -75,7 +77,8 @@ export default async function CandidateLayout({
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
     const [notif, unread, age] = await Promise.all([
       getNotifications(locale),
-      getUnreadConversationsCount(),
+      // #1142: w trybie ogłoszeniowym panel nie ma pozycji „Wiadomości” — bez licznika.
+      recruitmentEnabled ? getUnreadConversationsCount() : Promise.resolve(undefined),
       loadMyAgeAttestation().catch(() => null),
     ]);
     if (age?.status === 'ready' && !age.demo && age.attestedMinAge !== null) {
@@ -109,7 +112,7 @@ export default async function CandidateLayout({
       unreadMessages={unreadMessages}
       userName={userName}
       keepSessionAlive={hasSession}
-      recruitmentEnabled={isRecruitmentEnabled()}
+      recruitmentEnabled={recruitmentEnabled}
     >
       {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}

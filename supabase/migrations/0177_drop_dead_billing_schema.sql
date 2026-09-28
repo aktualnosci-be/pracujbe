@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0980 — usunięcie martwego schematu billingu (płatności wyłączone w bezpłatnym MVP, #51;
--- decyzja właściciela 28.09.2026). NUMER TYMCZASOWY — ostateczny nada integrator.
+-- 0177 — usunięcie martwego schematu billingu (płatności wyłączone w bezpłatnym MVP, #51;
+-- decyzja właściciela 28.09.2026).
 --
 -- Portal nie sprzedaje planów, nie przyjmuje płatności ani nie wystawia faktur, a billing nigdy
 -- nie był włączony (brak danych produkcyjnych). Tabele i RPC po dawnym checkoucie Stripe były
@@ -26,7 +26,7 @@
 --     i staleCheckoutIntents (czujka maintenance_lag zostaje dla przeterminowanych ofert).
 --
 -- Zostaje: plan_entitlements, processed_webhooks (inbox webhooków poczty, 0036/0038).
--- Rollback: supabase/rollback/0980_drop_dead_billing_schema.down.sql (odtwarza schemat
+-- Rollback: supabase/rollback/0177_drop_dead_billing_schema.down.sql (odtwarza schemat
 -- z definicji migracji 0001, 0007–0009, 0022, 0042, 0045, 0050, 0055, 0171).
 -- =============================================================================
 

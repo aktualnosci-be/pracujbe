@@ -45,10 +45,13 @@ export function CandidateProposalsList({
   locale,
   initialPage,
   now,
+  messagesEnabled = false,
 }: {
   locale: string;
   initialPage: MyOffersPage;
   now: string;
+  /** #1134: tryb produktu z serwera — link do wiadomości tylko w trybie rekrutacyjnym. */
+  messagesEnabled?: boolean;
 }) {
   const t = useTranslations('dashboard');
   const [items, setItems] = useState(initialPage.items);
@@ -164,9 +167,11 @@ export function CandidateProposalsList({
                     status={offer.status}
                     onExpire={() => markExpired(offer.id)}
                   />
-                  <Link href="/candidate/wiadomosci" className={TEXT_LINK}>
-                    {t('navMessages')}
-                  </Link>
+                  {messagesEnabled ? (
+                    <Link href="/candidate/wiadomosci" className={TEXT_LINK}>
+                      {t('navMessages')}
+                    </Link>
+                  ) : null}
                 </div>
               </article>
             </li>

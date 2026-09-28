@@ -55,7 +55,7 @@ describe('Czujki operacyjne (#47)', () => {
     expect(evaluateOps(m).alerts).toEqual(['maintenance_lag']);
   });
 
-  it('metryki z bazy sprzed 0980 (dodatkowe liczniki billingu) nadal się parsują, klucze są ignorowane', () => {
+  it('metryki z bazy sprzed 0177 (dodatkowe liczniki billingu) nadal się parsują, klucze są ignorowane', () => {
     const parsed = parseOpsMetrics({
       ...healthy(),
       maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 4, staleCheckoutIntents: 2 },

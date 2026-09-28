@@ -4,7 +4,7 @@ import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
 
 /**
  * #51 — bezpłatny MVP: w żadnym języku użytkownik nie widzi cennika, pakietów ani CTA zakupu,
- * a trasy sprzedażowe są nieosiągalne (kod i schemat billingu usunięte, #51 / migracja 0980).
+ * a trasy sprzedażowe są nieosiągalne (kod i schemat billingu usunięte, #51 / migracja 0177).
  *
  * Zakazane teksty pochodzą z plików tłumaczeń (dawne klucze sprzedaży, które zostały w
  * `src/messages` bez użycia) oraz z ogólnych słów sprzedażowych w danym języku.

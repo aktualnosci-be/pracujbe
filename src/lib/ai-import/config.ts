@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isAiFeatureEnabled } from '@/lib/ai/feature-gate';
 import { DEFAULT_AI_MODEL, isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
@@ -21,13 +22,11 @@ export const DEFAULT_JOB_IMPORT_MODEL = DEFAULT_AI_MODEL;
 
 export type JobImportProvider = 'openai' | 'fixture';
 
-function flagOn(value: string | undefined): boolean {
-  return value === '1' || value?.toLowerCase() === 'true';
-}
 
 /** Dostawca ekstrakcji albo `null`, gdy funkcja jest wyłączona/nieskonfigurowana. */
 export function jobImportProvider(): JobImportProvider | null {
-  if (!flagOn(process.env.AI_JOB_IMPORT_ENABLED)) return null;
+  // #1152: flaga funkcji × tryb produktu (wspólna bramka `src/lib/ai/feature-gate.ts`).
+  if (!isAiFeatureEnabled('job_listing_import')) return null;
   if (process.env.AI_JOB_IMPORT_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }

@@ -234,6 +234,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   if (!job) {
     notFound();
   }
+  const messagingOn = isRecruitmentEnabled('messaging');
 
   const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
@@ -800,8 +801,9 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="break-words font-medium text-foreground">{job.companyName}</p>
+                  {/* #1134: kontakt przez platformę tylko przy włączonych rozmowach. */}
                   <p className="text-sm text-muted-foreground">
-                    {recruitment ? t('contactViaPlatform') : t('employerApply.contact')}
+                    {messagingOn ? t('contactViaPlatform') : t('employerApply.contact')}
                   </p>
                 </div>
               </div>
@@ -810,8 +812,9 @@ export default async function JobDetailPage({ params }: PageProps) {
                   {t('languages')}: {languageNames}
                 </p>
               ) : null}
-              {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}
-              {job.isDemo || !recruitment ? null : (
+              {/* Do fikcyjnej firmy demo nie da się napisać (#297). #1134: w trybie ogłoszeniowym
+                  (decyzja produktowa) portal nie prowadzi rozmów — bez „Wyślij wiadomość”. */}
+              {!messagingOn || job.isDemo || !recruitment ? null : (
                 <Link
                   href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
                   className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}

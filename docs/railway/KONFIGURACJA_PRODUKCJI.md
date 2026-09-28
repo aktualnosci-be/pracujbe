@@ -98,7 +98,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` | kod ich nie czyta od #27 — jeśli zostały w usłudze, usuń |
 | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Sentry usunięte w #571 (kanał błędów = `ERROR_WEBHOOK_URL`) — jeśli zostały w usłudze, usuń |
 | `SEND_EMAIL_HOOK_SECRET` | hook GoTrue usunięty w #27 (kolejka auth PostgreSQL) |
-| `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | płatności usunięte (#51, migracja 0980: brak kodu i tabel billingu) — jeśli zostały w usłudze, usuń |
+| `BILLING_ENABLED`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | płatności usunięte (#51, migracja 0177: brak kodu i tabel billingu) — jeśli zostały w usłudze, usuń |
 | `AI_JOB_IMPORT_PROVIDER`, `AI_JOB_ASSIST_PROVIDER`, `AI_JOB_FRAUD_CHECK_PROVIDER`, `AI_CV_IMPORT_PROVIDER`, `AI_TRANSLATION_PROVIDER` | atrapy testowe; ignorowane przy `APP_MODE=production` |
 | `CRON_SECRET` | przestarzały wspólny sekret cronów; używaj `EMAIL_QUEUE_SECRET`/`MAINTENANCE_SECRET` |
 | `CRON_TARGET_URL`, `CRON_AUTH_SECRET` | tylko w usługach cron (sekcja 4), nie w web |

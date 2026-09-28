@@ -19,6 +19,10 @@ import {
 } from '@/lib/files/candidate-cv';
 import { createPrivateDownloadToken } from '@/lib/storage/private-download-token';
 import { createRailwayBucket } from '@/lib/storage/railway-bucket';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /**
  * Serwis CV na prywatnym buckecie (#26). Bucket = rzeczywisty adapter i SDK S3 z transportem

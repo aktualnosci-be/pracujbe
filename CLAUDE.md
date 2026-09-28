@@ -121,6 +121,21 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   → 404; nawigacja (`recruitmentEnabled` z layoutu do `EmployerShell`/`CandidateShell`), sekcja zgłoszeń pulpitu
   pracodawcy, baner propozycji i podgląd zgłoszeń pulpitu kandydata ukryte (loadery niewołane); powiadomienia
   o zgłoszeniach/propozycjach prowadzą do pulpitu. Blokady RPC i wygaszanie e-maili: #1140/#1145.
+  Konto kandydata bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych (#1142/#1145, migracja `0175`): nawigacja z jednego źródła `src/lib/candidate-nav.ts` (tryb ogłoszeniowy = pulpit, zapisane oferty, zapisane
+  wyszukiwania, ustawienia), pulpit `CandidateAccountDashboard` (zapisane oferty/wyszukiwania; loadery profilu, CV, zgłoszeń,
+  propozycji i wiadomości niewołane), `/candidate/onboarding` i `/candidate/profil` → 404, `saveOnboardingStep` →
+  `RECRUITMENT_DISABLED` przed bazą, stary `next` do kreatora po potwierdzeniu e-maila → pulpit; ustawienia bez sekcji
+  widoczności profilu. Baza: `ensure_candidate_profile` ze strażnikiem (każde RPC profilu), BEFORE INSERT na
+  `candidate_profiles`/`candidate_skills|languages|certificates`, BEFORE UPDATE pól zawodowych przez klienta; trigger
+  `trg_aa_recruitment_mode` na `notifications` pomija typy procesu (`application_*`, `offer_*`, `message_received`,
+  encje `application`/`offer`/`conversation`/`job_terms`, `job_match` spoza zapisanego wyszukiwania); kolejka e-mail
+  wygasza szablony z `email_recruitment_template()` (lustro `src/lib/email/recruitment-templates.ts`) jako
+  `suppressed_feature_disabled` przy claimie i tuż przed wysyłką. Preferencje e-mail w trybie bez kategorii
+  zgłoszeń/propozycji/wiadomości (`emailFieldsFor`; zapis bierze ich wartości z bazy `FOR UPDATE`), linki starych
+  powiadomień → pulpit, demo bez zdarzeń procesu, teksty alertów „z zapisanych wyszukiwań”. Dowód: `rls.sql` sekcje
+  CA1142/NT1145 (kontrole ujemne: bez strażnika krok 3 zapisuje; tryb RECRUITMENT), rollback `0175_…down.sql`
+  (`classifieds-account-rollback.sql`), unit `classifieds-candidate-account`, `classifieds-notifications`, strażnik
+  `legal`, E2E `classifieds-candidate-account` (z `E2E_PORTAL_LEGAL_MODE=`).
 - **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0171`):** singleton `portal_legal_mode`
   (domyślnie `CLASSIFIEDS_ONLY`), `recruitment_enabled()` fail-closed (brak wiersza/błąd = false). Tryb efektywny =
   env `RECRUITMENT` ORAZ baza `RECRUITMENT` (`src/lib/ops/portal-mode.ts`). W trybie ogłoszeniowym baza odrzuca nowe dane
@@ -148,6 +163,19 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
   (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
   segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
+- **AI tylko na treści ogłoszenia, billing bez dostępu do kandydatów (#1152/#1153, migracja `0176` — po 0175,
+  zależna od 0171):** inwentarz AI ma pole `allowedInClassifieds` (`true` tylko dla wejść z
+  `CLASSIFIEDS_ALLOWED_INPUTS` = treść ogłoszenia; strażnik `ai-inventory` z kontrolą ujemną); wspólna bramka
+  `isAiFeatureEnabled(id)` (`src/lib/ai/feature-gate.ts`) = flaga funkcji × tryb, użyta w konfiguracji importu
+  ogłoszeń, asystenta, tłumaczeń i kontroli treści (bez zmian zachowania w trybie ogłoszeniowym; import CV bramkuje
+  #1163). Tłumaczenie profili kandydatów = osobna funkcja `candidate_profile_translation` (`not_wired`, #34; budżet
+  AI rozlicza ją osobno, `translationFeatureFor`), worker odrzuca takie zadanie bez modelu (`recruitment_disabled`).
+  Baza: strażnik `trg_aa_recruitment_mode` na `translation_sources`/`_revisions`/`_jobs` odrzuca encję
+  `candidate_profile`, `claim_translation_jobs` jej nie wydaje (fail-closed), CHECK
+  `plan_entitlements_no_candidate_access` (`candidate_access` zawsze false). (Flaga billingu `isBillingEnabled()`/`BILLING_ENABLED`
+  usunięta razem z kodem billingu w `0177`.) Usunięte martwe klucze `billing.standardFeat3`/`proFeat3`, `dashboard.featCvAccess`. Dowód:
+  `rls.sql` sekcja CLAIB (kontrole ujemne: rollback 0176, CHECK zdjęty), rollback `0176_…down.sql` (w
+  `portal-legal-mode-rollback.sql` przed 0173), unit `ai-feature-gate`, `ai-inventory`, `billing-disabled`.
 - **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0173`, na 0171):** w trybie
   ogłoszeniowym `set_candidate_searchable(true)` → `RECRUITMENT_DISABLED` (wyłączenie działa), strażnik
   `trg_aa_recruitment_mode_searchable` odrzuca `is_searchable = true` każdą ścieżką (wyjątek seedu jak w 0171),
@@ -163,6 +191,50 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+  Stare pytania i przeglądy sprzed trybu ukryte wszędzie (decyzja właściciela 28.09, bez migracji,
+  warstwa aplikacji): w trybie ogłoszeniowym loadery nie wołają zapytań o nie — szczegół publiczny
+  oferty (`getJobBySlug`), kreator (`getJobDraft`, `screeningQuestions: []`, zapis kroku 7 nie rusza
+  wierszy), odpowiedzi w szczegółach zgłoszeń i na liście kandydata (`screeningCount` = 0),
+  kolejka admina (`listScreeningReviews` pusta; dziennik audytu zostaje kompletny w obu trybach),
+  powiadomienia `screening_review` (dzwonek, pełna lista, licznik), błąd publikacji z przeglądem
+  pytań (→ `INTERNAL`, bez odczytu). Wiersze zostają w bazie; tryb `RECRUITMENT` bez zmian. Dowód:
+  unit `classifieds-screening-hidden`, PG16 `portal-screening-banner` (sekcja „stare pytania ukryte”),
+  strażnik `classifieds-only` (bramka `isRecruitmentEnabled('screening')` przy każdym odczycie,
+  kontrola ujemna).
+- **Bez wiadomości i CV (#1134/#1138, migracja `0174`, na 0171):** akcje
+  `messages.ts`/`message-attachments.ts` → `RECRUITMENT_DISABLED` jako pierwszy krok (bez bazy, limitera, bucketu),
+  loadery rozmów bez zapytań (lista pusta, licznik 0), segmenty `candidate|employer/wiadomosci` = 404 (layout,
+  przed `loading.tsx`), `/api/files/message/<id>` = 404, nawigacja bez „Wiadomości”, szczegół oferty bez „Wyślij
+  wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
+  `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
+  `allowUpload` = lista istniejących plików w profilu, pulpit bez sekcji). Import CV przez AI: `cvImportProvider()` =
+  null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
+  `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
+  trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
+  = nakładka ze strażnikiem (`_impl` bez EXECUTE dla klientów). Dowód: `rls.sql` sekcja CL174 (kontrole ujemne),
+  rollback `0174_…down.sql`, unit `classifieds-messaging-cv-off`, strażnik `legal`, E2E `classifieds-messaging-cv-off`.
+- **CI w trybie ogłoszeniowym (#1166, bez migracji):** job `e2e-classifieds` („E2E classifieds (CLASSIFIEDS_ONLY)”,
+  wynik w wymaganym checku „E2E (Playwright)”) — serwer `E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY` na buildzie z jobu
+  build: projekt `chromium` sam wybiera `CLASSIFIEDS_SPECS` z `playwright.config.ts` (`CLASSIFIEDS_ONLY_SPECS` —
+  `classifieds-*`, `job-detail-employer-apply`, poza shardami; `CLASSIFIEDS_SHARED_SPECS` — a11y/SEO/panele, w obu
+  trybach; shard z serwerem ogłoszeniowym = błąd), potem fixture (`CLASSIFIEDS_FIXTURE_SPECS`: lejek „Aplikuj
+  u pracodawcy” w `job-funnel-no-storage` — kliknięcie = `apply_started` tylko po zgodzie, bez cookies/storage).
+  `perf-lab.mjs`: LCP/CLS/TBT i INP listy w `CLASSIFIEDS_ONLY`, INP ApplyModal na drugim serwerze `RECRUITMENT`
+  (tryb sprawdzany na szczególe). Strażnik `check-ci-workflows.mjs` (+ kontrole ujemne w `ci-workflows-guard.test`).
+  Ten sam build w dwóch trybach lokalnie: najpierw `rm -rf .next/cache/isr-handler` (strony ISR drugiego trybu).
+- **Pulpity w trybie ogłoszeniowym (bez migracji):** w miejscu dawnych sekcji rekrutacyjnych — pulpit pracodawcy
+  (`/employer`, kolumna boczna w miejscu „Top dopasowani”): `EmployerListingStats` = skrót statystyk ogłoszeń, do
+  3 najczęściej oglądanych ofert z ostatnich 30 dni z wyświetleniami i kliknięciami „Aplikuj u pracodawcy”
+  (`getTopListingJobs` na `getJobFunnel` = lejek ofert pod RLS, bez tabel procesu; member = `denied`, awaria = `error`
+  z ponowieniem, brak ruchu = osobny komunikat) i jeden odnośnik „Zobacz szczegóły” → `/employer/statystyki` (dawna
+  karta-odnośnik `EmployerFunnelSection` w trybie ogłoszeniowym nic nie renderuje). Pulpit konta kandydata
+  (`CandidateAccountDashboard`, w miejscu polecanych): `CandidateSavedSearchJobs` = do 3 najnowszych ofert z zapisanych wyszukiwań kandydata
+  (`loadSavedSearchJobs`: 3 najnowsze wyszukiwania, filtry z `saved_searches.query` przez `parseJobListQuery`, publiczne
+  `get_public_jobs` dla `candidateId` — firmy zablokowane pomija baza; sort „najnowsze”, bez wyniku/dopasowania), linki
+  „Pokaż oferty: {nazwa}” w języku zapisu (#823), bez wyszukiwań zachęta z linkiem do `/oferty-pracy`, awaria = błąd z
+  ponowieniem (nie pusta lista; wyszukiwania czytane raz, przekazane do `loadSavedSearchJobs`); powitanie pracodawcy bez „rekrutacji”
+  (`employerGreetingSubListing*`). Tryb `RECRUITMENT`: stare sekcje. Dowód: unit `classifieds-employer-stats`, `classifieds-candidate-saved-search-jobs`, `classifieds-candidate-account`, `legal`
+  `classifieds-panels` (kontrole ujemne), E2E `classifieds-dashboards` (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -255,7 +327,7 @@ Tabele (grupy):
 - **Komunikacja:** `conversations`, `conversation_members`, `messages`,
   `notifications`, `notification_preferences`, `email_deliveries`.
 - **Pliki/zgody/zgłoszenia:** `files`, `consents`, `consent_versions`, `reports`.
-- **Płatności:** schemat billingu (`subscriptions`, `payments`, `invoices`, `discount_codes`, `checkout_intents`, `discount_redemptions`) usunięty migracją `0980` (#51); zostaje katalog limitów `plan_entitlements`.
+- **Płatności:** schemat billingu (`subscriptions`, `payments`, `invoices`, `discount_codes`, `checkout_intents`, `discount_redemptions`) usunięty migracją `0177` (#51); zostaje katalog limitów `plan_entitlements`.
 - **Audyt:** `audit_logs`, `system_events`.
 
 Statusy (enumy):
@@ -2646,8 +2718,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
 - [x] Płatności — **USUNIĘTE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Portal bez
   cennika, pakietów, CTA zakupu i sprzedaży; `/employer/platnosci` → przekierowanie na `/employer`,
   brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap, `/api/stripe/webhook` nie istnieje
-  (404). Martwy schemat i kod billingu usunięte (decyzja właściciela 28.09.2026, migracja `0980` —
-  numer tymczasowy, na 0173): tabele `subscriptions`/`payments`/`invoices`/`discount_codes`/
+  (404). Martwy schemat i kod billingu usunięte (decyzja właściciela 28.09.2026, migracja `0177` —
+  na 0176): tabele `subscriptions`/`payments`/`invoices`/`discount_codes`/
   `checkout_intents`/`discount_redemptions`, RPC `reserve/finalize_discount`,
   `release_stale_discount_reservations`, `begin/complete_checkout`, `release_checkout_intent`,
   `release_stale_checkout_intents`, kolumna `companies.provider_customer_id`, typy
@@ -2665,7 +2737,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`scripts/privacy/schema.mjs`) rozumie `drop table` i `drop column`. Powrót monetyzacji = nowa
   decyzja właściciela + osobny projekt. Dowód: `rls.sql` sekcja Z (brak obiektów, `company_plan` =
   free, limit 1, kontrola ujemna w teście rollbacku), `supabase/tests/billing-schema-rollback.sql`
-  (rollback `0980_…down.sql` odtwarza schemat i działanie; wpięty przed 0173/0171 w
+  (rollback `0177_…down.sql` odtwarza schemat i działanie; wpięty przed 0176/0171 w
   `portal-legal-mode-rollback.sql`), unit `billing-disabled` (strażnik: brak plików i odwołań do
   billingu w `src/`, kontrola ujemna wzorca), `ops-sensors`, `privacy-data-map`,
   `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
@@ -3115,6 +3187,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny).
+  Tytuł zawsze obecny (#1032): `htmlLimitedBots: /./` w `next.config.mjs` wyłącza strumieniowanie
+  metadanych Next 15 dla każdego klienta z user-agentem — `<title>` w `<head>`, a po
+  `router.refresh()`/nawigacji podmienia się atomowo (strumieniowane drzewo metadanych ma klucz
+  żądania i montuje się od nowa → dokument chwilowo bez tytułu, flaka axe `document-title`).
+  Strażnik `blocking-metadata-config.test` (z kontrolą ujemną), E2E `offer-trust` (tytuł w `<head>`,
+  zero mutacji bez tytułu podczas odświeżenia).
   Bramka wydajności w CI (#395): kroki „Performance budget (static)” w `build` (JS gzip
   kluczowych tras = layouty + strona, fonty woff2; `scripts/perf-budget-static.mjs`) i
   „Performance budget (lab CWV)” w `e2e-perf` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,

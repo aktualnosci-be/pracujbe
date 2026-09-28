@@ -7,9 +7,12 @@ import {
   AI_FEATURE_IDS,
   AI_FEATURES,
   AI_SDK_PACKAGES,
+  CLASSIFIEDS_ALLOWED_INPUTS,
   containsModelCall,
+  inputsAllowedInClassifieds,
   NON_AI_CANDIDATE_FEATURES,
   undeclaredCallSites,
+  type AiFeature,
 } from '@/lib/ai/inventory';
 
 /**
@@ -81,6 +84,41 @@ describe('inwentarz AI (#489)', () => {
         expect(containsModelCall(readFileSync(join(ROOT, path), 'utf8')), path).toBe(true);
       }
     }
+  });
+
+  describe('tryb ogłoszeniowy (#1152): AI tylko na treści ogłoszenia', () => {
+    /** Funkcje oznaczone jako dozwolone w trybie ogłoszeniowym, a mające wejście spoza treści ogłoszenia. */
+    const violations = (features: readonly AiFeature[]) =>
+      features.filter((f) => f.allowedInClassifieds && !inputsAllowedInClassifieds(f.inputs)).map((f) => f.id);
+
+    it('dozwolone wejścia = wyłącznie treść ogłoszenia', () => {
+      expect([...CLASSIFIEDS_ALLOWED_INPUTS].sort()).toEqual(['job_offer_text', 'third_party_listing']);
+    });
+
+    it('funkcja z wejściem kandydata ma allowedInClassifieds: false', () => {
+      expect(violations(AI_FEATURES)).toEqual([]);
+      for (const feature of AI_FEATURES) {
+        if (feature.inputs.some((i) => i.startsWith('candidate_'))) {
+          expect(feature.allowedInClassifieds, feature.id).toBe(false);
+        }
+      }
+      // Oczekiwany podział: import ogłoszeń, asystent, tłumaczenie ofert i kontrola treści działają.
+      expect(AI_FEATURES.filter((f) => f.allowedInClassifieds).map((f) => f.id).sort()).toEqual(
+        ['content_translation', 'job_fraud_check', 'job_listing_import', 'job_offer_assist'],
+      );
+    });
+
+    it('kontrola ujemna: dopisanie candidate_profile_text do funkcji dozwolonej = wykryte', () => {
+      const tampered = AI_FEATURES.map((f) =>
+        f.id === 'content_translation' ? { ...f, inputs: [...f.inputs, 'candidate_profile_text' as const] } : f,
+      );
+      expect(violations(tampered)).toEqual(['content_translation']);
+      const assist = AI_FEATURES.map((f) =>
+        f.id === 'job_offer_assist' ? { ...f, inputs: ['candidate_cv_text' as const] } : f,
+      );
+      expect(violations(assist)).toEqual(['job_offer_assist']);
+      expect(inputsAllowedInClassifieds([])).toBe(false);
+    });
   });
 
   it('identyfikatory są unikalne i zgodne z listą AI_FEATURE_IDS', () => {
@@ -187,5 +225,18 @@ describe('inwentarz AI (#489)', () => {
     expect(action).toMatch(/withJobImportBudget\(logged, model\)/);
     // Płatny dostawca nie ma ścieżki z pominięciem budżetu: wyjątek tylko dla atrapy bez bazy.
     expect(action).toMatch(/provider === 'fixture' && !isServiceDatabaseConfigured\(\) \? logged : withJobImportBudget/);
+  });
+  it('funkcje wyłączone w trybie ogłoszeniowym sprawdzają tryb w każdym wskazanym pliku (#1138)', () => {
+    const unguarded = (features: readonly { id: string; classifiedsModeGuard?: { feature: string; files: readonly string[] } }[],
+      read: (p: string) => string) =>
+      features.flatMap((f) => (f.classifiedsModeGuard?.files ?? [])
+        .filter((file) => !read(file).includes(`isRecruitmentEnabled('${f.classifiedsModeGuard!.feature}')`))
+        .map((file) => `${f.id}:${file}`));
+    const readRepo = (p: string) => readFileSync(join(ROOT, p), 'utf8');
+    expect(AI_FEATURES.find((f) => f.id === 'cv_profile_import')?.classifiedsModeGuard?.feature).toBe('cvImport');
+    expect(unguarded(AI_FEATURES, readRepo)).toEqual([]);
+    // Kontrola ujemna: plik bez sprawdzenia trybu jest wykrywany.
+    expect(unguarded(AI_FEATURES, (p) => readRepo(p).replaceAll("isRecruitmentEnabled('cvImport')", 'true')))
+      .toEqual(['cv_profile_import:src/lib/cv-import/config.ts', 'cv_profile_import:src/lib/actions/cv-import.ts']);
   });
 });

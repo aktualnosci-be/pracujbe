@@ -6,6 +6,7 @@ import { AiProviderError, createStructuredResponse, type ResponsesClient } from 
 import { estimateMicroUsd, textTokenUpperBound, totalInputTokens, type AiTokenUsage } from '@/lib/ai/pricing';
 import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
 import { translationModel } from '@/lib/translation/config';
+import { translationFeatureFor } from '@/lib/translation/feature';
 import { DO_NOT_TRANSLATE, glossaryFor } from '@/lib/translation/glossary';
 import {
   TranslationProviderError,
@@ -142,12 +143,13 @@ export class OpenAiTranslationProvider implements TranslationProvider {
 
   async translate(request: TranslationRequest): Promise<TranslationResponse> {
     const model = translationModel();
+    const feature = translationFeatureFor(request.entityType);
     try {
       return await withAiBudget(
-        { feature: 'content_translation', model, estimateMicroUsd: estimateTranslationCost(request, model) },
+        { feature, model, estimateMicroUsd: estimateTranslationCost(request, model) },
         (reportUsage) =>
           withAiUsageLog(
-            { feature: 'content_translation', inputKind: 'text', model },
+            { feature, inputKind: 'text', model },
             () => this.call(request, model, reportUsage),
             classifyTranslation,
             this.options.usageSink,

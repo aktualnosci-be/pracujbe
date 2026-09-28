@@ -282,7 +282,7 @@ Komunikacja:
    notifications · notification_preferences (1:1 profil) · email_deliveries
 
 Pliki/zgody/zgłoszenia: files · consents · consent_versions · reports
-Płatności:              (schemat billingu usunięty w 0980; zostaje katalog limitów plan_entitlements)
+Płatności:              (schemat billingu usunięty w 0177; zostaje katalog limitów plan_entitlements)
 Audyt:                  audit_logs · system_events
 ```
 

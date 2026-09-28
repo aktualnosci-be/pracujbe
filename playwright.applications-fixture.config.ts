@@ -56,11 +56,31 @@ for (const spec of FULL_PART_2) {
   if (!FULL_SPECS.includes(spec)) throw new Error(`FULL_PART_2: ${spec} nie należy do trybu full`);
 }
 
+/**
+ * Tryb produktu serwera (#1136, #1166). Domyślnie `RECRUITMENT` (przepływy rekrutacyjne tych
+ * speców). Serwer ogłoszeniowy (`E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY`, job CI `e2e-classifieds`)
+ * uruchamia WYŁĄCZNIE `CLASSIFIEDS_FIXTURE_SPECS` — reszta trybu `full` testuje ApplyModal,
+ * aplikację gościa i historię zgłoszeń, których w trybie ogłoszeniowym nie ma.
+ */
+const PORTAL_LEGAL_MODE = process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT';
+const classifieds = PORTAL_LEGAL_MODE.trim().toUpperCase() !== 'RECRUITMENT';
+const CLASSIFIEDS_FIXTURE_SPECS = [
+  // „Aplikuj u pracodawcy” w lejku tylko po zgodzie, bez cookies i storage (#1161).
+  '**/job-funnel-no-storage.spec.ts',
+];
+for (const spec of CLASSIFIEDS_FIXTURE_SPECS) {
+  if (!FULL_SPECS.includes(spec)) throw new Error(`CLASSIFIEDS_FIXTURE_SPECS: ${spec} nie należy do trybu full`);
+}
+
 const part = process.env.TEST_APPLICATIONS_FIXTURE_PART ?? '';
+if (classifieds && (mode !== 'full' || part)) {
+  throw new Error('E2E_PORTAL_LEGAL_MODE (tryb ogłoszeniowy): tylko tryb full bez TEST_APPLICATIONS_FIXTURE_PART');
+}
 if (part && !(mode === 'full' ? ['1/2', '2/2'] : ['1/1']).includes(part)) {
   throw new Error(`TEST_APPLICATIONS_FIXTURE_PART=${part}: dozwolone 1/2, 2/2 (full) albo 1/1 (error)`);
 }
 function specsFor(): string[] {
+  if (classifieds) return CLASSIFIEDS_FIXTURE_SPECS;
   if (mode === 'error') return ERROR_SPECS;
   if (part === '2/2') return FULL_PART_2;
   if (part === '1/2') return FULL_SPECS.filter((spec) => !FULL_PART_2.includes(spec));
@@ -97,7 +117,7 @@ export default defineConfig({
     env: {
       PLAYWRIGHT_APPLICATIONS_FIXTURE: mode,
       // #1136: przepływy rekrutacyjne — tryb jawnie włączony (domyślnie = tryb ogłoszeniowy).
-      PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT',
+      PORTAL_LEGAL_MODE,
       NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require="${requireShim}"`].filter(Boolean).join(' '),
     },
   },

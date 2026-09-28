@@ -22,6 +22,7 @@ import { prepareCvImport, proposeFromCv } from '@/lib/cv-import/run';
 import type { CvTextProblem } from '@/lib/cv-import/text';
 import type { CvApprovedProposals, CvProposal, CvRedactionSummary } from '@/lib/cv-import/types';
 import { CV_MAX_BYTES } from '@/lib/validation/cv-file';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Import CV przez AI (#487, #498) — trzy osobne akcje, żadna nie zapisuje nic bez decyzji
@@ -76,6 +77,8 @@ async function requireCandidate(provider: 'openai' | 'fixture'): Promise<Gate> {
 }
 
 export async function prepareCvImportAction(formData: FormData): Promise<PrepareCvImportResult> {
+  // #1138: tryb ogłoszeniowy — przed flagą AI, modelem, budżetem i bazą.
+  if (!isRecruitmentEnabled('cvImport')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const provider = cvImportProvider();
   if (!provider) return { ok: false, error: 'NOT_FOUND' };
   if (!(formData instanceof FormData)) return { ok: false, error: 'VALIDATION_FAILED' };
@@ -102,6 +105,8 @@ export async function prepareCvImportAction(formData: FormData): Promise<Prepare
 }
 
 export async function proposeFromCvAction(text: unknown): Promise<ProposeFromCvResult> {
+  // #1138: tryb ogłoszeniowy — przed flagą AI, modelem, budżetem i bazą.
+  if (!isRecruitmentEnabled('cvImport')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const provider = cvImportProvider();
   if (!provider) return { ok: false, error: 'NOT_FOUND' };
   if (typeof text !== 'string') return { ok: false, error: 'VALIDATION_FAILED' };
@@ -161,12 +166,15 @@ export async function proposeFromCvAction(text: unknown): Promise<ProposeFromCvR
 
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (m.includes('PERMISSION_DENIED') || m.includes('UNAUTHENTICATED') || m.includes('JWT')) return 'PERMISSION_DENIED';
   return 'INTERNAL';
 }
 
 export async function applyCvProposals(input: unknown): Promise<ApplyCvProposalsResult> {
+  // #1138: tryb ogłoszeniowy — przed flagą AI, modelem, budżetem i bazą.
+  if (!isRecruitmentEnabled('cvImport')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const provider = cvImportProvider();
   if (!provider) return { ok: false, error: 'NOT_FOUND' };
   const parsed = cvApprovedProposalsSchema.safeParse(input);

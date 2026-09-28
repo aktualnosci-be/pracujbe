@@ -7,12 +7,12 @@ pojedynczych publikacji ofert. Interfejs nie pokazuje cennika ani zachęt do zak
 odrzuca próby rozpoczęcia checkoutu i zdarzenia sprzedażowego webhooka nawet wtedy, gdy w
 środowisku pozostały sekrety Stripe.
 
-Aktualizacja 28.09.2026: martwy schemat billingu został usunięty (migracja 0980 — tabele
+Aktualizacja 28.09.2026: martwy schemat billingu został usunięty (migracja 0177 — tabele
 `subscriptions`, `payments`, `invoices`, `discount_codes`, `checkout_intents`,
 `discount_redemptions`, RPC rabatów i checkoutu, kolumna `companies.provider_customer_id`),
 a z kodu klient Stripe, trasa webhooka, akcje checkoutu i flaga `BILLING_ENABLED`. Portal nigdy
 nie przyjął płatności (brak danych produkcyjnych), więc usunięcie było bezstratne; rollback
-odtwarza pusty schemat (`supabase/rollback/0980_drop_dead_billing_schema.down.sql`). Zostaje
+odtwarza pusty schemat (`supabase/rollback/0177_drop_dead_billing_schema.down.sql`). Zostaje
 katalog limitów `plan_entitlements` (limit aktywnych ofert, każda firma ma plan `free`).
 Powrót do monetyzacji wymaga nowej, jawnej decyzji właściciela oraz osobnego projektu
 (schemat, checkout, testy) — nie wystarczy przywrócenie flagi.
@@ -75,7 +75,12 @@ Portal:
 - nie liczy dopasowania kandydat–oferta, nie tworzy list najlepiej dopasowanych ani
   rekomendacji z profilu;
 - nie wysyła propozycji pracy i nie prowadzi rozmów między kandydatem a pracodawcą;
-- nie zbiera odpowiedzi na pytania screeningowe i nie importuje CV.
+- nie zbiera odpowiedzi na pytania screeningowe i nie importuje CV;
+- nie prowadzi profilu zawodowego kandydata ani onboardingu (profil służył wyłącznie dopasowaniom
+  i przeglądaniu przez firmy): kandydat po rejestracji trafia na pulpit, a ustawienia konta zostają.
+
+Stare pytania screeningowe i ich przeglądy (sprzed tego trybu) są ukryte wszędzie w aplikacji
+— u firmy, kandydata i administratora (decyzja właściciela 28.09.2026); dane zostają w bazie.
 
 Funkcje niezgodne z tym modelem są wyłączone produkcyjnie w trybie fail-closed: jedno źródło
 trybu w `src/lib/portal-mode.ts` (#1136), blokady w bazie (#1140) i strażnik CI (#1146). Kod
@@ -85,6 +90,14 @@ zamrażania ani migracji danych (#1150). Teksty publiczne, SEO, strona dla praco
 opisują wyłącznie portal ogłoszeń (#1149, #1151); odznaka „zweryfikowana firma” znaczy, że
 administrator sprawdził dane rejestrowe (tożsamość) przedsiębiorstwa — nie jest oceną firmy
 ani oferty.
+
+AI i monetyzacja w tym trybie (#1152, #1153): funkcje AI działają wyłącznie na treści ogłoszenia
+(import ogłoszenia, asystent treści, tłumaczenie ofert, kontrola treści) — funkcja z wejściem
+kandydata jest wyłączona niezależnie od własnej flagi (`allowedInClassifieds` w
+`src/lib/ai/inventory.ts`, bramka `src/lib/ai/feature-gate.ts`, kolejka tłumaczeń w bazie nie
+przyjmuje profili kandydatów). Billing nie istnieje (kod i schemat usunięte w migracji 0177), a katalog planów nie daje dostępu do kandydatów (`candidate_access`
+wymuszone na `false` w bazie). Ewentualna monetyzacja portalu ogłoszeń (np. stała opłata za
+publikację lub wyróżnienie ogłoszenia) wymaga osobnego projektu i decyzji właściciela.
 
 Ponowne włączenie funkcji rekrutacyjnych wymaga nowej, jawnej decyzji właściciela i obu kluczy
 trybu (zmienna środowiskowa i stan w bazie, #1143). Zmiana „przy okazji” innej pracy jest

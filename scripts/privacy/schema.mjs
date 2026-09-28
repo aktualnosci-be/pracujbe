@@ -142,7 +142,7 @@ export function parseSchema(files) {
       }
     }
 
-    // Usunięcia (np. 0980 — martwy schemat billingu): tabela albo kolumna znika z wyniku,
+    // Usunięcia (np. 0177 — martwy schemat billingu): tabela albo kolumna znika z wyniku,
     // więc mapa danych nie wymaga wpisów dla obiektów, których produkcyjny schemat już nie ma.
     const dropTableRe =
       /drop\s+table\s+(?:if\s+exists\s+)?((?:(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?[A-Za-z_][A-Za-z0-9_]*"?\s*,\s*)*(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?[A-Za-z_][A-Za-z0-9_]*"?)\s*(?:cascade|restrict)?\s*;/gi;

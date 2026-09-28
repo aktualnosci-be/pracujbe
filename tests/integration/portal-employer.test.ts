@@ -435,7 +435,7 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     expect(await employer.getEmployerApplicationDetail(appsA[0]!)).toEqual({ status: 'not_found' });
   });
 
-  it('plan firmy bez tabel billingu (0980): każda firma ma plan free i limit z katalogu', async () => {
+  it('plan firmy bez tabel billingu (0177): każda firma ma plan free i limit z katalogu', async () => {
     actAs(ownerA);
     expect(await employer.getCompanyEntitlements()).toMatchObject({ plan: 'free', maxActiveJobs: 1 });
     actAs(ownerB);

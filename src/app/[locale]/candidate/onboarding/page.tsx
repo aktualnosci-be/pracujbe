@@ -9,6 +9,7 @@ import {
 import { OnboardingLoadError } from '@/components/candidate/OnboardingLoadError';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, queryRows } from '@/lib/db/sql';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Onboarding kandydata — kreator profilu (makieta 06).
@@ -168,6 +169,8 @@ export default async function CandidateOnboardingPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // #1142: tryb ogłoszeniowy — bez profilu zawodowego (404).
+  notFoundUnlessRecruitment();
   const initialStep = parseStep((await searchParams)['step']);
 
   const result = await loadInitialValues();

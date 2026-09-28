@@ -67,19 +67,35 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
     ['company', 'employer', `/employer/firma?firma=${CONVERSATION}`],
     // Kandydat nie ma panelu firmy — bez identyfikatora w URL (nie ma gdzie go użyć).
     ['company', 'candidate', '/candidate'],
-    ['conversation', 'candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
-    ['conversation', 'employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    // #1145: wiadomości tylko w trybie RECRUITMENT — historyczne powiadomienie → pulpit.
+    ['conversation', 'candidate', '/candidate'],
+    ['conversation', 'employer', '/employer'],
     ['unknown', 'candidate', '/candidate'],
     ['unknown', 'employer', '/employer'],
   ])('%s dla %s → %s', (entityType, role, href) => {
     expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
   });
 
+  describe('tryb rekrutacyjny: rozmowy (#1134 — kontrola ujemna trybu)', () => {
+    recruitmentModeInTests();
+    it.each([
+      ['candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
+      ['employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    ])('conversation dla %s → %s', (role, href) => {
+      expect(resolveHref('conversation', role, CONVERSATION)).toBe(href);
+    });
+    it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
+      'nie wkleja niezweryfikowanego id rozmowy do URL: %j',
+      (entityId) => {
+        expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
+      },
+    );
+  });
+
   it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
     'nie wkleja niezweryfikowanego id do URL: %j',
     (entityId) => {
-      expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
-      // #843: to samo dla firmy — zła/brakująca wartość nie trafia do zapytania.
+      // #843: zła/brakująca wartość nie trafia do zapytania (rozmowy: tryb RECRUITMENT niżej).
       expect(resolveHref('company', 'employer', entityId)).toBe('/employer/firma');
     },
   );
@@ -100,9 +116,18 @@ describe('resolveHref — tryb RECRUITMENT (#148)', () => {
     ['offer', 'candidate', '/candidate/propozycje'],
     ['offer', 'employer', '/employer/aplikacje'],
     ['job', 'candidate', '/candidate/oferty-polecane'],
+    ['conversation', 'candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
+    ['conversation', 'employer', `/employer/wiadomosci?c=${CONVERSATION}`],
   ])('%s dla %s → %s', (entityType, role, href) => {
     expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
   });
+
+  it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
+    'rozmowa: nie wkleja niezweryfikowanego id do URL: %j',
+    (entityId) => {
+      expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
+    },
+  );
 });
 
 const items = [

@@ -128,6 +128,11 @@ export interface MyApplicationsPage {
 
 const APPLICATION_PAGE_SIZE = 10;
 
+/** Liczba odpowiedzi screeningowych zgłoszenia; w trybie ogłoszeniowym stała 0 bez podzapytania. */
+const SCREENING_COUNT_SQL = `(SELECT count(*)::int FROM public.application_screening_answers s
+                  WHERE s.application_id = applications.id)`;
+const SCREENING_COUNT_OFF_SQL = '0';
+
 export interface LatestMessage {
   id: string;
   title: string;
@@ -493,7 +498,7 @@ function demoApplications(locale: Locale): MyApplication[] {
       jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
-      screeningCount: DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0,
+      screeningCount: isRecruitmentEnabled('screening') ? (DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0) : 0,
     };
   });
 }
@@ -608,7 +613,10 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
         `SELECT 1 FROM public.applications
           WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text = ANY($2::text[])`,
         [me.id, [...ACTIVE_APPLICATION_STATUSES]]));
-      const unreadMessages = await attempt(tx, () => countUnreadConversations(tx, me.id));
+      // #1134: tryb ogłoszeniowy — rozmowy wyłączone; licznik bez zapytania (kafelka nie ma).
+      const unreadMessages = isRecruitmentEnabled('messaging')
+        ? await attempt(tx, () => countUnreadConversations(tx, me.id))
+        : ({ ok: true, value: 0 } as const);
       return { newJobs, activeApplications, unreadMessages };
     });
     const settled = (area: string, result: typeof counters.newJobs): number | null => {
@@ -631,6 +639,42 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateOverview' });
     return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
+  }
+}
+
+/**
+ * Pulpit konta w trybie ogłoszeniowym (#1142): imię z `profiles` i liczba aktywnych ofert.
+ * Bez profilu zawodowego, zgłoszeń, propozycji i wiadomości (żaden z tych odczytów nie jest
+ * wołany). Licznik bez udanego odczytu = `null` („—”), nigdy fałszywe zero (#244).
+ */
+export interface CandidateAccountOverview {
+  firstName: string | null;
+  newJobsCount: number | null;
+}
+
+export async function getCandidateAccountOverview(): Promise<CandidateAccountOverview> {
+  if (!isPortalDataConfigured()) {
+    if (isDashboardErrorFixture()) return { firstName: null, newJobsCount: null };
+    return { firstName: null, newJobsCount: DEMO_OVERVIEW.newJobsCount };
+  }
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { firstName: null, newJobsCount: null };
+    return await withPortalTransaction(me, async (tx) => {
+      const name = await attempt(tx, async () => {
+        const row = await queryOne(tx, 'candidate.account-first-name',
+          'SELECT first_name FROM public.profiles WHERE id = $1', [me.id]);
+        const value = row?.['first_name'];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+      });
+      const jobs = await attempt(tx, async () =>
+        asNum(await rpc(tx, 'get_public_jobs_count', { p_keyword: null, p_city: null })));
+      if (!jobs.ok) captureError(jobs.error, { area: 'candidate.getCandidateAccountOverview.newJobs' });
+      return { firstName: name.ok ? name.value : null, newJobsCount: jobs.ok ? jobs.value : null };
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidateAccountOverview' });
+    return { firstName: null, newJobsCount: null };
   }
 }
 
@@ -817,9 +861,11 @@ export async function getMyApplicationsPage(
       // zgłoszenie wybranego etapu jest na pierwszej stronie mimo wielu nowszych innych.
       const statuses = applicationFilterStatuses(filter);
       const rows = await queryRows(tx, 'candidate.applications-page',
-        `SELECT id, job_id, status, submitted_at,
-                (SELECT count(*)::int FROM public.application_screening_answers s
-                  WHERE s.application_id = applications.id) AS screening_count
+        `SELECT id, job_id, status, submitted_at, ${
+          // Stare pytania screeningowe ukryte w trybie ogłoszeniowym: bez podzapytania (0 = brak przycisku).
+          isRecruitmentEnabled('screening')
+            ? SCREENING_COUNT_SQL
+            : SCREENING_COUNT_OFF_SQL} AS screening_count
            FROM public.applications
           WHERE candidate_id = $1
             AND deleted_at IS NULL
@@ -926,6 +972,8 @@ export async function getMyApplicationsPreview(
 const ANSWERS_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function getMyApplicationScreeningAnswers(applicationId: string): Promise<ScreeningAnswer[]> {
+  // Decyzja produktowa: portal ogłoszeniowy — stare pytania i odpowiedzi ukryte, bez zapytania.
+  if (!isRecruitmentEnabled('screening')) return [];
   if (!isPortalDataConfigured()) return DEMO_SCREENING_ANSWERS[applicationId] ?? [];
   if (!ANSWERS_UUID_RE.test(applicationId)) return [];
 
@@ -1041,7 +1089,7 @@ function demoApplicationDetail(locale: Locale, id: string): MyApplicationDetailL
       phone: '',
       availability: 'immediate',
       conversationId: null,
-      screeningAnswers: DEMO_SCREENING_ANSWERS[id] ?? [],
+      screeningAnswers: isRecruitmentEnabled('screening') ? (DEMO_SCREENING_ANSWERS[id] ?? []) : [],
       history,
       historyNextCursor: null,
     },
@@ -1079,9 +1127,11 @@ export async function getMyApplicationDetail(
         `SELECT id, to_status, created_at FROM public.application_status_history
           WHERE application_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2`,
         [id, MY_APPLICATION_HISTORY_PAGE_SIZE + 1]);
-      const answerRows = await queryRows(tx, 'candidate.application-detail-answers',
-        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
-           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      const answerRows = isRecruitmentEnabled('screening')
+        ? await queryRows(tx, 'candidate.application-detail-answers',
+            `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+               FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id])
+        : [];
       // conversations_select_member: tylko rozmowy, których kandydat jest członkiem.
       const conversation = await queryOne(tx, 'candidate.application-detail-conversation',
         `SELECT id FROM public.conversations
@@ -1345,6 +1395,8 @@ export async function getLatestActiveOffer(
 
 /** Ostatnie wiadomości/konwersacje kandydata. Pusta lista tylko po udanym odczycie (#244). */
 export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMessage>> {
+  // #1134: tryb ogłoszeniowy — bez rozmów i bez zapytania (sekcji nie ma na pulpicie).
+  if (!isRecruitmentEnabled('messaging')) return { status: 'ok', items: [] };
   if (!isPortalDataConfigured()) {
     if (isDashboardErrorFixture()) return { status: 'error' };
     return { status: 'ok', items: demoMessages(routing.defaultLocale) };

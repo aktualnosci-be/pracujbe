@@ -557,7 +557,6 @@ async function getListingOverview(now: Date = new Date()): Promise<EmployerOverv
 export interface CompanyEntitlements {
   plan: string;
   maxActiveJobs: number;
-  candidateAccess: boolean;
   activeJobsUsed: number;
 }
 
@@ -579,7 +578,6 @@ export async function getCompanyEntitlements(): Promise<CompanyEntitlements | nu
     return {
       plan: asString(row['plan'], 'free'),
       maxActiveJobs: asNumber(row['max_active_jobs']),
-      candidateAccess: row['candidate_access'] === true,
       activeJobsUsed: asNumber(row['active_jobs_used']),
     };
   } catch (error) {
@@ -842,10 +840,13 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
             WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
-        // job_screening_questions_select (0093): członek firmy oferty.
-        screening: await queryRows(tx, 'employer.job-draft-screening',
-          `SELECT id, position, type, required, prompt, options
-             FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId]),
+        // job_screening_questions_select (0093): członek firmy oferty. Tryb ogłoszeniowy: stare
+        // pytania ukryte — bez zapytania (zapis kroku 7 nie rusza ich, `screeningOff` w `updateJobDraft`).
+        screening: isRecruitmentEnabled('screening')
+          ? await queryRows(tx, 'employer.job-draft-screening',
+              `SELECT id, position, type, required, prompt, options
+                 FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId])
+          : [],
       };
       return { job, jobStatus, relations };
     });
@@ -1561,6 +1562,53 @@ export async function getJobFunnel(
   }
 }
 
+/** Liczba ofert w skrócie statystyk ogłoszeń na pulpicie pracodawcy (tryb ogłoszeniowy). */
+export const TOP_LISTING_JOBS_LIMIT = 3;
+
+/** Oferta w skrócie statystyk ogłoszeń: wyświetlenia i kliknięcia „Aplikuj u pracodawcy”. */
+export interface TopListingJob {
+  jobId: string;
+  title: string;
+  /** Pusty, gdy oferta nie ma publicznej strony (nie jest aktywna). */
+  slug: string;
+  detailViews: number;
+  applyClicks: number;
+}
+
+/**
+ * Jawny stan skrótu statystyk ogłoszeń: brak uprawnień do lejka (zwykły `member`) ≠ błąd ≠ brak
+ * ofert z ruchem. `disabled` = tryb rekrutacyjny (skrót nie istnieje, loader bez zapytań).
+ */
+export type TopListingJobsLoad =
+  | { status: 'ok'; jobs: TopListingJob[] }
+  | { status: 'denied' }
+  | { status: 'error' }
+  | { status: 'disabled' };
+
+/**
+ * Tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy): do {@link TOP_LISTING_JOBS_LIMIT}
+ * najczęściej oglądanych ofert firmy z lejka ofert (#99) za ostatnie {@link FUNNEL_PERIOD_DAYS}
+ * dni — bez zapytań do tabel procesu. Kolejność: wyświetlenia ↓, kliknięcia ↓, tytuł; oferty
+ * bez żadnego ruchu pomijamy.
+ */
+export async function getTopListingJobs(now: Date = new Date()): Promise<TopListingJobsLoad> {
+  if (recruitmentStatsEnabled()) return { status: 'disabled' };
+  const funnel = await getJobFunnel(FUNNEL_PERIOD_DAYS, now);
+  if (funnel.status !== 'ok') return { status: funnel.status };
+  const jobs = funnel.jobs
+    .filter((job) => job.detailViews > 0 || job.applyStarted > 0)
+    .sort((a, b) => b.detailViews - a.detailViews || b.applyStarted - a.applyStarted || a.title.localeCompare(b.title))
+    .slice(0, TOP_LISTING_JOBS_LIMIT)
+    .map((job) => ({
+      jobId: job.jobId,
+      title: job.title,
+      slug: job.status === 'active' ? job.slug : '',
+      detailViews: job.detailViews,
+      applyClicks: job.applyStarted,
+    }));
+  return { status: 'ok', jobs };
+}
+
 /**
  * Lejek rekrutacyjny z ostatnich {@link FUNNEL_PERIOD_DAYS} dni (#302): kohorta aplikacji
  * złożonych w oknie (`submitted_at`), a w niej te, które KIEDYKOLWIEK osiągnęły etap rozmowy
@@ -1750,7 +1798,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         isGuest: false,
         guestEmail: '',
         historyNextCursor: null,
-        screeningAnswers: extra.screeningAnswers ?? [],
+        screeningAnswers: isRecruitmentEnabled('screening') ? (extra.screeningAnswers ?? []) : [],
       },
     };
   }
@@ -1799,9 +1847,11 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
             'SELECT score FROM public.matches WHERE candidate_id = $1 AND job_id = $2', [candidateId, jobId])
         : null;
       // application_screening_answers_select (0093): kandydat albo recruiter+ firmy oferty.
-      const answerData = await queryRows(tx, 'employer.application-detail-answers',
-        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
-           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      const answerData = isRecruitmentEnabled('screening')
+        ? await queryRows(tx, 'employer.application-detail-answers',
+            `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+               FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id])
+        : [];
 
       let relations: { skills: Record<string, unknown>[]; languages: Record<string, unknown>[]; certificates: Record<string, unknown>[] } | null = null;
       if (cpData) {

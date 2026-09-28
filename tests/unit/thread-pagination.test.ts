@@ -16,6 +16,10 @@ import {
   type ThreadMessage,
 } from '@/lib/data/messages';
 import { mergeThreadMessages, toMessageViews } from '@/lib/messaging/thread-view';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 const ME = 'me';
 

@@ -35,7 +35,7 @@ identyfikatorów ani konfiguracji.
 | `auth_email_queue_age` | alarm | najstarszy gotowy e-mail auth (weryfikacja/reset) > 5 min | worker kolejki auth nie działa |
 | `auth_email_lease_abandoned` | alarm | dzierżawa `leased` po `lease_expires_at` | worker auth padł |
 | `webhook_stuck` | alarm | webhook `processing` > 15 min | awaria w trakcie przetwarzania (0038) |
-| `maintenance_lag` | alarm | aktywna oferta > 2 h po `expires_at` (liczniki rabatów i checkoutu usunięte razem ze schematem billingu, 0980) | cron `/api/maintenance` nie działa |
+| `maintenance_lag` | alarm | aktywna oferta > 2 h po `expires_at` (liczniki rabatów i checkoutu usunięte razem ze schematem billingu, 0177) | cron `/api/maintenance` nie działa |
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |

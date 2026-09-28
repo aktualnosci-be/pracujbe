@@ -8,7 +8,7 @@ import { toUserMessageKey } from '@/lib/errors';
 /**
  * Bezpłatny MVP (#51): płatności są usunięte, nie tylko wyłączone. Kod checkoutu, klient Stripe,
  * trasa webhooka, flaga `BILLING_ENABLED` i odczyty tabel billingu zniknęły razem z schematem
- * (migracja 0980). Ten strażnik pilnuje, żeby nie wróciły „przy okazji”; powrót monetyzacji to
+ * (migracja 0177). Ten strażnik pilnuje, żeby nie wróciły „przy okazji”; powrót monetyzacji to
  * nowa decyzja właściciela i osobny projekt.
  */
 
@@ -28,7 +28,7 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-describe('płatności usunięte (#51, migracja 0980)', () => {
+describe('płatności usunięte (#51, migracja 0177)', () => {
   it.each([
     'src/lib/stripe.ts',
     'src/lib/billing/flag.ts',

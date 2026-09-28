@@ -6,6 +6,7 @@ import { NotificationPreferencesForm } from '@/components/settings/NotificationP
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
 import { EYEBROW, H1_EXTENDED, INTRO, PAPER } from '@/components/dashboard/panel-styles';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Panel pracodawcy — Ustawienia (preferencje powiadomień, Etap 6; „Twoje dane i konto” #486).
@@ -53,7 +54,11 @@ export default async function EmployerSettingsPage({
 
       <section className={PAPER}>
         {load.status === 'ready' ? (
-          <NotificationPreferencesForm defaultValues={load.preferences} role="employer" />
+          <NotificationPreferencesForm
+            defaultValues={load.preferences}
+            role="employer"
+            recruitmentEnabled={isRecruitmentEnabled()}
+          />
         ) : (
           <NotificationPreferencesLoadError />
         )}

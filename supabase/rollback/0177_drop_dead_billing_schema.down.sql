@@ -1,9 +1,9 @@
 -- =============================================================================
--- Rollback 0980 (usunięcie martwego schematu billingu) — odtwarza schemat z definicji migracji
+-- Rollback 0177 (usunięcie martwego schematu billingu) — odtwarza schemat z definicji migracji
 -- 0001 (typy), 0007 (tabele), 0008 (triggery updated_at), 0009 (RLS i polityki), 0022 (is_demo),
 -- 0042 (companies.provider_customer_id), 0045, 0050 (rabaty i checkout), 0055 (company_plan)
 -- oraz 0171 (ops_metrics). Tabele wracają PUSTE (danych nie było). Uruchamiać przed rollbackiem
--- migracji, które zależą od stanu po 0980 (kolejność odwrotna do nakładania).
+-- migracji, które zależą od stanu po 0177 (kolejność odwrotna do nakładania).
 -- =============================================================================
 
 -- --- 1. Typy enum (0001) -------------------------------------------------------------------

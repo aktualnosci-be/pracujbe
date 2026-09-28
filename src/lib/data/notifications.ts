@@ -95,6 +95,19 @@ const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
   rejected: 'itemCompanyLinksRejected',
 };
 
+/**
+ * Decyzja produktowa: portal ogłoszeniowy — powiadomienia o przeglądzie pytań screeningowych
+ * (`data.kind = 'screening_review'`, w tym „ukryte”) są ukryte na listach i w liczniku;
+ * wiersze zostają w bazie. Tryb rekrutacyjny bez zmian.
+ */
+function screeningVisible(): boolean {
+  return isRecruitmentEnabled('screening');
+}
+
+const UNREAD_SQL = `SELECT 1 FROM public.notifications
+  WHERE profile_id = $1 AND read_at IS NULL
+    AND ($2::boolean OR data->>'kind' IS DISTINCT FROM 'screening_review')`;
+
 /** Decyzja admina o pytaniu screeningowym (0103, #497): `system` + `data.kind = 'screening_review'`. */
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
@@ -208,6 +221,8 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       if (employer) return '/employer/oferty';
       return recruitment ? '/candidate/aplikacje' : home;
     case 'conversation': {
+      // #1145: wiadomości tylko w trybie RECRUITMENT — historyczne powiadomienie → pulpit.
+      if (!recruitment) return home;
       const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
       return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
     }
@@ -259,6 +274,25 @@ const DEMO_SEEDS: readonly DemoNotificationSeed[] = [
   { id: 'demo-notif-2', type: 'message_received', entityType: 'conversation', minutesAgo: 1440, unread: false },
 ];
 
+/**
+ * #1145 — decyzja produktowa: portal ogłoszeniowy. Demo bez zdarzeń rekrutacyjnych (zgłoszenia,
+ * propozycje, wiadomości, dopasowania do profilu): alerty zapisanych wyszukiwań u kandydata,
+ * status firmy u pracodawcy.
+ */
+const CLASSIFIEDS_DEMO_SEEDS: Readonly<Record<'candidate' | 'employer', readonly DemoNotificationSeed[]>> = {
+  candidate: [
+    { id: 'demo-notif-0', type: 'job_match', entityType: 'saved_search', minutesAgo: 10, unread: true },
+    { id: 'demo-notif-1', type: 'job_match', entityType: 'saved_search', minutesAgo: 1440, unread: false },
+  ],
+  employer: [
+    { id: 'demo-notif-0', type: 'company_verified', entityType: 'company', minutesAgo: 180, unread: true },
+  ],
+};
+
+export function demoNotificationSeeds(role: 'candidate' | 'employer', recruitment: boolean): readonly DemoNotificationSeed[] {
+  return recruitment ? DEMO_SEEDS : CLASSIFIEDS_DEMO_SEEDS[role];
+}
+
 /** Panel, dla którego budujemy powiadomienia DEMO (bez sesji rola nie wynika z profilu). */
 export type DemoRole = 'candidate' | 'employer';
 
@@ -272,9 +306,9 @@ function demoNotifications(
   role: DemoRole,
 ): NotificationsResult {
   const now = Date.now();
-  const items: NotificationView[] = DEMO_SEEDS.map((seed) => ({
+  const items: NotificationView[] = demoNotificationSeeds(role, isRecruitmentEnabled()).map((seed) => ({
     id: seed.id,
-    title: t(titleKeyForType(seed.type)),
+    title: t(titleKeyForType(seed.type, undefined, seed.entityType)),
     meta: formatRelativeTime(new Date(now - seed.minutesAgo * MINUTE).toISOString(), locale),
     unread: seed.unread,
     // Brak sesji/roli: kontekst demo = panel, który renderuje dzwonek.
@@ -316,12 +350,13 @@ export async function getNotifications(
         `SELECT id, type, data, entity_type, entity_id, read_at, created_at
            FROM public.notifications
           WHERE profile_id = $1
+            AND ($2::boolean OR data->>'kind' IS DISTINCT FROM 'screening_review')
           ORDER BY created_at DESC
-          LIMIT 20`, [me.id]),
+          LIMIT 20`, [me.id, screeningVisible()]),
       // Licznik nieprzeczytanych osobnym zapytaniem count — NIE z pobranej listy (limit 20),
       // która zaniżałaby wynik przy >20 nieprzeczytanych.
       unread: await queryCount(tx, 'notifications.unread',
-        'SELECT 1 FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL', [me.id]),
+        UNREAD_SQL, [me.id, screeningVisible()]),
     }));
 
     const items: NotificationView[] = asArr(rows).map((row) => {
@@ -407,7 +442,7 @@ export async function getNotificationsPage(
       const createdAt = new Date(now - seed.minutesAgo * MINUTE).toISOString();
       return {
         id: seed.id,
-        title: t(titleKeyForType(seed.type)),
+        title: t(titleKeyForType(seed.type, undefined, seed.entityType)),
         meta: formatRelativeTime(createdAt, resolvedLocale),
         unread: seed.unread,
         href: resolveHref(seed.entityType, demoRole),
@@ -440,11 +475,11 @@ export async function getNotificationsPage(
           WHERE profile_id = $1
             AND ($2::boolean = false OR read_at IS NULL)
             AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
+            AND ($6::boolean OR data->>'kind' IS DISTINCT FROM 'screening_review')
           ORDER BY created_at DESC, id DESC
           LIMIT $5`,
-        [me.id, unreadOnly, cursor?.createdAt ?? null, cursor?.id ?? null, NOTIFICATION_PAGE_SIZE + 1]),
-      unread: await queryCount(tx, 'notifications.unread',
-        'SELECT 1 FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL', [me.id]),
+        [me.id, unreadOnly, cursor?.createdAt ?? null, cursor?.id ?? null, NOTIFICATION_PAGE_SIZE + 1, screeningVisible()]),
+      unread: await queryCount(tx, 'notifications.unread', UNREAD_SQL, [me.id, screeningVisible()]),
     }));
 
     const visible = asArr(rows).slice(0, NOTIFICATION_PAGE_SIZE);

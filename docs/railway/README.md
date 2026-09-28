@@ -75,7 +75,7 @@ Kolejność włączania `APP_MODE=production`, Better Auth i Resend, rollback (w
 
 Workflow Vercela został usunięty: repozytorium nie publikuje już zielonego
 wyniku „Deploy”, gdy wdrożenie zostało pominięte z powodu braku tokenu.
-`vercel.json` oraz integracje Supabase pozostają (Stripe usunięty w migracji 0980) długiem migracyjnym,
+`vercel.json` oraz integracje Supabase pozostają (Stripe usunięty w migracji 0177) długiem migracyjnym,
 bo ich przepływy są jeszcze używane. Usuwamy je dopiero razem z zastępującym
 je przepływem i testem regresyjnym. Nie konfiguruj sekretów Vercela ani nie
 uruchamiaj drugiej produkcji. IaC usług z tego repo (`pracujbe`, `db-migrator`) jest w

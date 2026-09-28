@@ -7,6 +7,7 @@ import { isProductionMode } from '@/lib/env';
 import { AppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkAttachmentFile, type AttachmentFileProblem } from '@/lib/validation/message-attachment';
 
 /**
@@ -16,7 +17,12 @@ import { checkAttachmentFile, type AttachmentFileProblem } from '@/lib/validatio
  *
  * Bez konfiguracji bucketu/bazy: poza produkcją `DEMO_UNAVAILABLE` (bez fikcyjnego sukcesu),
  * w trybie produkcyjnym `INTERNAL` (fail-closed).
+ *
+ * #1134 — decyzja produktowa: portal ogłoszeniowy. W trybie ogłoszeniowym każda akcja zwraca
+ * `RECRUITMENT_DISABLED` przed walidacją pliku, limiterem, bazą i bucketem (bez PUT/GET).
  */
+const DISABLED = { ok: false, error: 'RECRUITMENT_DISABLED' } as const;
+const messagingOff = () => !isRecruitmentEnabled('messaging');
 
 export type AttachmentUploadActionResult =
   | { ok: true; id: string }
@@ -49,6 +55,7 @@ function unexpected(area: string): { ok: false; error: 'INTERNAL' } {
  * UUID tej operacji: ponowienie po utracie odpowiedzi zwraca ten sam załącznik.
  */
 export async function uploadMessageAttachment(formData: FormData): Promise<AttachmentUploadActionResult> {
+  if (messagingOff()) return DISABLED;
   const conversationId = formData.get('conversationId');
   const clientUploadId = formData.get('clientUploadId');
   const file = formData.get('file');
@@ -80,6 +87,7 @@ export async function uploadMessageAttachment(formData: FormData): Promise<Attac
 
 /** Usuwa własny, jeszcze niewysłany załącznik (przycisk „Usuń” w polu wiadomości). */
 export async function discardMessageAttachment(attachmentId: string): Promise<AttachmentDiscardActionResult> {
+  if (messagingOff()) return DISABLED;
   if (!uuid.safeParse(attachmentId).success) return { ok: false, error: 'NOT_FOUND' };
   try {
     const context = await sessionContext();
@@ -93,6 +101,7 @@ export async function discardMessageAttachment(attachmentId: string): Promise<At
 
 /** Krótki podpisany link do pobrania załącznika z rozmowy (klik w nazwę pliku). */
 export async function prepareMessageAttachmentDownload(attachmentId: string): Promise<AttachmentLinkActionResult> {
+  if (messagingOff()) return DISABLED;
   if (!uuid.safeParse(attachmentId).success) return { ok: false, error: 'NOT_FOUND' };
   try {
     const context = await sessionContext();

@@ -1030,7 +1030,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       'Klucz idempotencji „Kopiuj jako szkic” (0148): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
   },
 
-  // --- Płatności: schemat billingu usunięty (#51, migracja 0980) — zostaje tylko katalog limitów ---
+  // --- Płatności: schemat billingu usunięty (#51, migracja 0177) — zostaje tylko katalog limitów ---
   'public.plan_entitlements': DICTIONARY('limity planów'),
 
   // --- Słowniki i konfiguracja --------------------------------------------------------------
