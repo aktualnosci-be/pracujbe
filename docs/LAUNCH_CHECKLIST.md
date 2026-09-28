@@ -28,6 +28,7 @@ płatności (#51). Powiązane: [`railway/CUTOVER_ROLLBACK.md`](./railway/CUTOVER
 | Cron | **brak usług cron** (limit darmowego planu Railway) — `/api/email/process` i `/api/maintenance` nie są wywoływane; harmonogram zastępczy Cloudflare Worker gotowy w repo, niewdrożony (#690, [`CLOUDFLARE_CRON.md`](./CLOUDFLARE_CRON.md)). E-maile konta wychodzą od razu po akcji (K10), bez harmonogramu |
 | AI | dostawca OpenAI (#677); brak `OPENAI_API_KEY`; funkcje AI za flagami, domyślnie wyłączone |
 | Kopia poza Railwayem | R2 (#569) odłożone — brak zaszyfrowanej kopii poza Railwayem |
+| Tryb produktu | **portal ogłoszeniowy** (decyzja 28.09.2026, #1128, [`PRODUCT_DECISIONS.md`](./PRODUCT_DECISIONS.md)); funkcje rekrutacyjne wyłączane etapami — lista kontrolna §1c |
 | Smoke | `node scripts/railway/prod-smoke.mjs` bez hasła: health i `robots.txt` OK, strony za bramką (oczekiwane) |
 
 ---
@@ -70,6 +71,58 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K8 | P2 | `npm run test:e2e:real` w CI — job `e2e-real` (usługa `postgres:16`), na start informacyjny (`continue-on-error`) | po serii zielonych przebiegów na `main`: check wymagany (repo publiczne — minuty darmowe, decyzja 27.09.2026) |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
 | K10 | ~~P0~~ | **Zrobione:** e-maile konta (potwierdzenie adresu, reset hasła, nowy link przy logowaniu niepotwierdzonego konta) wychodzą zaraz po akcji — jedna paczka workera `auth.email_outbox` po odpowiedzi (`after()`, `src/lib/auth/email-kick.ts`), ten sam claim z dzierżawą, budżet i klucz idempotencji co cron. Wyłącznik: `AUTH_EMAIL_IMMEDIATE_SEND=off` | ponowienia i `email_deliveries` nadal wymagają W1; test `auth-email-kick` (kontrole ujemne) |
+
+### 1c. Tryb ogłoszeniowy (#1128)
+
+Decyzja produktowa: portal ogłoszeniowy ([`PRODUCT_DECISIONS.md`](./PRODUCT_DECISIONS.md), wpis
+28.09.2026). Przed zdjęciem bramki każdy punkt sprawdzamy na produkcji (odczyt, smoke, konto
+testowe operatora). Punkt odsyła do sub-issue epiku #1128, który wprowadza zmianę w kodzie.
+
+**Tryb i strażniki**
+
+- [ ] `PORTAL_LEGAL_MODE` w usłudze web pusty albo `CLASSIFIEDS_ONLY` — nigdy `RECRUITMENT` (#1136).
+- [ ] Stan trybu w bazie = ogłoszeniowy; tryb efektywny = zmienna × baza, `/api/health` (za
+      `HEALTH_CHECK_SECRET`) pokazuje tryb ogłoszeniowy; `/api/maintenance` pomija zadania
+      rekrutacyjne (#1143).
+- [ ] Blokady funkcji rekrutacyjnych w bazie (RPC i triggery) zastosowane migracją (#1140).
+- [ ] Strażnik CI `tests/legal/classifieds-only.test.ts` zielony na SHA wdrożenia (#1146).
+
+**Funkcje wyłączone (brak ścieżki w UI, akcja = `RECRUITMENT_DISABLED`, trasa = 404)**
+
+- [ ] Matching: brak procentów dopasowania, `matches` nie są materializowane, kolejka przeliczeń nie działa (#1131).
+- [ ] Aplikowanie przez portal, także bez konta (#1130, #1132).
+- [ ] Panel pracodawcy bez „Kandydaci” / „Top dopasowani” i liczników dopasowań (#1133).
+- [ ] Wiadomości kandydat ↔ pracodawca i załączniki (#1134).
+- [ ] Wyszukiwalna baza profili i przełącznik widoczności (#1135).
+- [ ] Pytania screeningowe (#1137).
+- [ ] Przesyłanie CV i import CV przez AI (#1138).
+- [ ] Polecane oferty z profilu (#1139).
+- [ ] Propozycje pracy (#1141).
+- [ ] Profil zawodowy w koncie kandydata — konto służy do zapisanych ofert i wyszukiwań (#1142).
+- [ ] Panele zgłoszeń i zmiany statusów u obu stron (#1144).
+- [ ] Powiadomienia in-app i e-mail bez zdarzeń rekrutacyjnych (#1145).
+
+**Co zostaje i jak wygląda**
+
+- [ ] Każda opublikowana oferta ma kanał aplikowania ogłoszeniodawcy (https, e-mail albo telefon — co najmniej jeden) (#1129).
+- [ ] Na szczególe oferty jedyne CTA aplikowania prowadzi poza portal — „Aplikuj u pracodawcy” (#1130).
+- [ ] Statystyki pracodawcy = statystyki ogłoszenia, bez liczników rekrutacyjnych (#1147).
+- [ ] Zapisane wyszukiwania i alerty działają wyłącznie na filtrach użytkownika (#1148).
+- [ ] Teksty publiczne i SEO opisują portal ogłoszeń; strażnik `tests/unit/classifieds-copy.test.ts` zielony (#1149).
+- [ ] „Dla pracodawców”, Pomoc, rejestracja i banery firmy bez funkcji rekrutacyjnych; odznaka = zweryfikowana tożsamość firmy (#1151).
+- [ ] AI tylko na treści ogłoszenia; brak tłumaczeń profili kandydatów (#1152).
+- [ ] Katalog planów i uśpione teksty sprzedaży bez płatnego dostępu do kandydatów (#1153).
+- [ ] Dane: brak realnych danych rekrutacyjnych; dane demo/seed procesów pominięte albo usunięte (#1150).
+- [ ] Decyzja zapisana w `CLAUDE.md`, `PRODUCT_DECISIONS.md` i tej liście (#1154).
+
+**Weryfikacja na produkcji**
+
+- [ ] Smoke `node scripts/railway/prod-smoke.mjs` zielony; trasy wyłączone (np. `/pl/employer/kandydaci`,
+      `/pl/employer/aplikacje`, `/pl/candidate/profil/import-cv`) odpowiadają 404 — ręcznie, dopóki
+      smoke tego nie sprawdza (#1146).
+- [ ] Strona główna, lista ofert, szczegół oferty, `/dla-pracodawcow` i `/pomoc` w 4 językach bez
+      procentów dopasowania, „Top kandydatów” i formularza aplikowania.
+- [ ] Punkty organizacyjne trybu — właściciel, poza repozytorium (#1128).
 
 ---
 

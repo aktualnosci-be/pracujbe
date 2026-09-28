@@ -7,15 +7,17 @@ import { H2_EXTENDED, P_EXTENDED, PAPER } from '@/components/dashboard/panel-sty
 import { Link } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { HELP_ITEM_ANCHORS } from '@/lib/help-anchors';
 import { buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
 
 import { buildInfoMetadata } from '../_info/info-metadata';
 
 /**
  * Pomoc (#61) — pytania i odpowiedzi opisujące WYŁĄCZNIE to, co portal realnie robi
- * (profil bez CV, aplikacja bez konta, deterministyczne dopasowanie, widoczność profilu,
- * alerty, dane konta, bezpłatny etap dla pracodawców, weryfikacja firmy, zespół, e-maile
- * w języku odbiorcy, zgłaszanie ofert). Bez obietnic terminów i bez treści prawnych.
+ * jako portal ogłoszeń (#1151): aplikowanie bezpośrednio u pracodawcy, brak przekazywania
+ * danych konta firmom, konto do zapisywania ofert i wyszukiwań, alerty, dane konta, bezpłatny
+ * etap dla pracodawców, znaczenie weryfikacji firmy (kotwica `#weryfikacja`), zespół, kanał
+ * kontaktu ogłoszeniodawcy, e-maile w języku odbiorcy, zgłaszanie ofert). Bez obietnic terminów i bez treści prawnych.
  * SSG, indeksowalna (canonical + hreflang), w sitemap. Treść: `help.*` (PL/NL/FR/EN).
  *
  * Wygląd złożony z prymitywów prototypu (brak ekranu Pomocy w prototypie): nagłówek
@@ -29,8 +31,8 @@ type PageProps = { params: Promise<{ locale: string }> };
 
 /** Grupy pytań; klucze `help.faq.<id>.q` / `.a`. Kolejność = kolejność na stronie. */
 const HELP_GROUPS = [
-  { id: 'candidates', items: ['noCv', 'guestApply', 'match', 'visibility', 'alerts', 'data'] },
-  { id: 'employers', items: ['free', 'verification', 'drafts', 'team', 'applications'] },
+  { id: 'candidates', items: ['howToApply', 'dataSharing', 'account', 'alerts', 'data'] },
+  { id: 'employers', items: ['free', 'verification', 'drafts', 'team', 'candidateContact'] },
   { id: 'account', items: ['languages', 'emailLanguage', 'noEmail', 'suspicious'] },
 ] as const;
 
@@ -83,7 +85,7 @@ export default async function HelpPage({ params }: PageProps) {
             </h2>
             <ul className="mt-3 divide-y divide-[color:var(--pp-line-soft)]">
               {group.items.map((item) => (
-                <li key={item}>
+                <li key={item} id={HELP_ITEM_ANCHORS[item]}>
                   <details className="group">
                     <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 py-3 text-[15px] font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
                       <span className="min-w-0 break-words">{t(`faq.${item}.q`)}</span>
