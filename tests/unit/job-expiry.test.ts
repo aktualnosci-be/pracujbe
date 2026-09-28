@@ -17,6 +17,10 @@ import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 import { allowedActions } from '@/components/employer/JobLifecycleActions';
 import { POST } from '@/app/api/maintenance/route';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
+withRecruitmentMode();
 
 const NOW = new Date('2026-09-24T12:00:00.000Z');
 

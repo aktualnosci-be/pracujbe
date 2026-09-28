@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
+withRecruitmentMode();
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('next-intl/server', () => ({

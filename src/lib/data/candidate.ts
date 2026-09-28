@@ -30,6 +30,7 @@ import { demoSavedJobs, savedJobsFixture, toSavedJob, type SavedJob } from '@/li
 import { toMatchExplanation, type MatchExplanation } from '@/lib/matching/explanation';
 import { customOfferMessage } from '@/lib/offers/default-message';
 import { parseScreeningAnswers, type ScreeningAnswer } from '@/lib/screening/questions';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import {
   applicationFilterStatuses,
   matchesApplicationFilter,
@@ -714,6 +715,8 @@ async function fetchPublicJobsByIds(
  * Fallback = najnowsze oferty, tylko gdy żadne dopasowanie nie jest już publiczne.
  */
 export async function getRecommendedJobs(locale: string, throwOnError = false): Promise<RecommendedJob[]> {
+  // #1139: tryb ogłoszeniowy — portal nie poleca ofert z profilu; bez zapytań (także do `matches`).
+  if (!isRecruitmentEnabled('matching')) return [];
   const resolvedLocale = toLocale(locale);
   if (!isPortalDataConfigured()) return demoRecommended(resolvedLocale);
 
