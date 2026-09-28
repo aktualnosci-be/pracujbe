@@ -57,6 +57,9 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
     ...(sidebar.accommodation.length === 1 ? { accommodation: sidebar.accommodation.includes('provided') } : {}),
     ...(sidebar.immediate ? { immediate: true } : {}),
     ...(sidebar.noLanguageRequired ? { noLanguageRequired: true } : {}),
+    // 0167: filtr „bezpośrednio od pracodawcy”. Zapisane wyszukiwania go nie przechowują
+    // (etap 2) — `savedSearchFiltersFromQuery` i adres wyszukiwania go pomijają.
+    ...(sidebar.directOnly ? { directOnly: true } : {}),
     ...(since ? { since } : {}),
   };
 
@@ -107,6 +110,8 @@ export function savedSearchFiltersFromQuery(query: JobListQuery): SavedSearchFil
 export function savedSearchQueryString(query: JobListQuery): string {
   const params: Record<string, string> = { ...sidebarFiltersToParams(query.sidebar) };
   delete params['date'];
+  // 0167: filtr „bezpośrednio od pracodawcy” nie jest częścią zapisanego wyszukiwania (etap 2).
+  delete params['direct'];
   if (query.keyword) params['keyword'] = query.keyword;
   if (query.city) params['city'] = query.city;
   const qs = new URLSearchParams(params).toString();

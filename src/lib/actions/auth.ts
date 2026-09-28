@@ -29,6 +29,7 @@ import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
 import { kickAuthEmailQueue } from '@/lib/auth/email-kick';
+import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { companyNameFromMetadata } from '@/lib/auth/signup-company-name';
@@ -609,7 +610,9 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
         const companyName = companyNameFromMetadata(user);
         if (companyName) {
           try {
-            await bootstrapCompany(await getDomainPool(), user.id, companyName);
+            const boot = await bootstrapCompany(await getDomainPool(), user.id, companyName);
+            // VIES po założeniu (26.09.2026): bez numeru VAT/KBO — sprawdzenie pominięte.
+            if (boot.created) scheduleCompanyViesAutoCheck(boot.companyId);
           } catch (e) {
             // Konto działa; panel pracodawcy bez firmy pokaże formularz jej założenia.
             captureError(e, { area: 'auth.confirmEmail.bootstrapCompany' });

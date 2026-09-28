@@ -23,6 +23,7 @@ import {
 import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
+import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
 import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
@@ -101,6 +102,11 @@ export interface JobListItem {
    * oznacza przekład (szczegół: z linkiem do oryginału, karta: dyskretny znacznik).
    */
   machineTranslation?: JobMachineTranslation;
+  /**
+   * 0167: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
+   * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
+   */
+  isAgency?: true;
 }
 
 export interface JobDetail extends JobListItem {
@@ -127,6 +133,8 @@ export interface JobDetail extends JobListItem {
   availableLocales?: Locale[];
   /** Pytania screeningowe do formularza aplikowania (#101); brak = oferta bez pytań. */
   screeningQuestions?: ScreeningQuestion[];
+  /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
+  costs?: JobCosts;
   /**
    * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0159); brak = treść
    * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
@@ -154,6 +162,8 @@ export interface GetJobsParams {
   accommodation?: boolean;
   immediate?: boolean;
   noLanguageRequired?: boolean;
+  /** 0167: tylko oferty spoza agencji pracy tymczasowej. */
+  directOnly?: boolean;
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -457,7 +467,7 @@ async function getJobsFromDb(
     page,
     pageSize,
   }, viewerId);
-  const jobs = result.rows.map(rowToJobListItem);
+  const jobs = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
   return {
     jobs: translateCards ? await withListMachineTranslations(pool, jobs, toLocale(params.locale)) : jobs,
     total: result.total,
@@ -478,14 +488,23 @@ async function getJobBySlugFromDb(
   const pool = await getDomainPool();
   const first = await getPublicJob(pool, slug, locale);
   if (!first) return null;
-  const job = rowToJobDetail(first);
+  const [job] = await withAgencyFlags(pool, [rowToJobDetail(first)]);
+  if (!job) return null;
   // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
-  const { getPublicJobScreeningQuestions } = await import('@/lib/db/public-jobs');
+  const { getPublicJobScreeningQuestions, getPublicJobCosts } = await import('@/lib/db/public-jobs');
   const screeningQuestions = parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id));
+  // 0169: koszty i dodatki — odczyt pomocniczy; awaria zostawia same flagi (bez szczegółów).
+  let costs: JobCosts | undefined;
+  try {
+    costs = parseJobCostsRow(await getPublicJobCosts(pool, job.id));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobCosts' });
+  }
   const requested = toLocale(locale);
   const withLocales: JobDetail = {
     ...job,
+    ...(costs ? { costs } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };
@@ -538,6 +557,26 @@ export async function withListMachineTranslations<T extends JobListItem>(
     return jobs.map((job) => applyJobListMachineTranslation(job, byId.get(job.id) ?? null, locale));
   } catch (error) {
     captureError(error, { area: 'jobs.readListMachineTranslations' });
+    return jobs;
+  }
+}
+
+/**
+ * Etykieta „agencja” (0167) — JEDNO zapytanie na stronę listy (lista id). Odczyt pomocniczy:
+ * awaria = karty bez etykiety + kod obszaru w logu (filtr listy i tak działa w SQL).
+ */
+export async function withAgencyFlags<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { getPublicJobsAgency } = await import('@/lib/db/public-jobs');
+    const agency = await getPublicJobsAgency(pool, jobs.map((job) => job.id));
+    if (agency.size === 0) return jobs;
+    return jobs.map((job) => (agency.has(job.id) ? { ...job, isAgency: true as const } : job));
+  } catch (error) {
+    captureError(error, { area: 'jobs.withAgencyFlags' });
     return jobs;
   }
 }

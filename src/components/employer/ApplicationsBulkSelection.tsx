@@ -26,7 +26,7 @@ import {
 } from '@/components/dashboard/panel-styles';
 
 /**
- * Akcja zbiorcza na liście zgłoszeń (/employer/aplikacje, 0940).
+ * Akcja zbiorcza na liście zgłoszeń (/employer/aplikacje, 0170).
  *
  * `ApplicationsBulkSelection` trzyma zaznaczenie bieżącej strony listy (kontekst) i renderuje
  * pasek akcji: „zaznacz wszystkie na tej stronie”, wybór statusu docelowego, potwierdzenie

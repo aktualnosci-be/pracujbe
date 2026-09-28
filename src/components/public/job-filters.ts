@@ -71,6 +71,8 @@ export interface SidebarFilters {
   accommodation: AccommodationValue[];
   immediate: boolean;
   noLanguageRequired: boolean;
+  /** 0167: tylko oferty spoza agencji pracy tymczasowej (URL `direct=1`). */
+  directOnly: boolean;
   date: DateValue;
 }
 
@@ -85,6 +87,8 @@ export interface FacetItem {
   accommodation: boolean;
   immediate: boolean;
   noLanguageRequired: boolean;
+  /** 0167: oferta agencji pracy tymczasowej. */
+  isAgency?: boolean;
   publishedAt: string;
 }
 
@@ -135,6 +139,7 @@ export function emptySidebarFilters(): SidebarFilters {
     accommodation: [],
     immediate: false,
     noLanguageRequired: false,
+    directOnly: false,
     date: 'any',
   };
 }
@@ -275,6 +280,7 @@ export function parseSidebarFilters(
   );
   f.immediate = sp['immediate'] === '1';
   f.noLanguageRequired = sp['noLang'] === '1';
+  f.directOnly = sp['direct'] === '1';
 
   const date = sp['date'];
   f.date = (DATE_VALUES as readonly string[]).includes(date ?? '')
@@ -341,6 +347,7 @@ export function matchesSidebar(item: FacetItem, f: SidebarFilters): boolean {
 
   if (f.immediate && !item.immediate) return false;
   if (f.noLanguageRequired && !item.noLanguageRequired) return false;
+  if (f.directOnly && item.isAgency) return false;
 
   if (f.date !== 'any') {
     const ts = Date.parse(item.publishedAt);
@@ -375,6 +382,7 @@ export function buildDemoFacets(
     ...(key === 'accommodation' ? { accommodation: [] } : {}),
     ...(key === 'immediate' ? { immediate: false } : {}),
     ...(key === 'noLanguageRequired' ? { noLanguageRequired: false } : {}),
+    ...(key === 'directOnly' ? { directOnly: false } : {}),
   });
   const grouped = (
     field: 'category' | 'city' | 'contractType',
@@ -412,6 +420,9 @@ export function buildDemoFacets(
         matchesSidebar(item, without('noLanguageRequired')) &&
         item.noLanguageRequired,
     ).length,
+    direct: items.filter(
+      (item) => matchesSidebar(item, without('directOnly')) && !item.isAgency,
+    ).length,
   };
 }
 
@@ -427,6 +438,7 @@ export function toFacetItem(job: JobListItem): FacetItem {
     accommodation: job.accommodation,
     immediate: job.immediate,
     noLanguageRequired: job.noLanguageRequired,
+    ...(job.isAgency ? { isAgency: true } : {}),
     publishedAt: job.publishedAt,
   };
 }
@@ -450,6 +462,7 @@ export function sidebarFiltersToParams(
     params['accommodation'] = f.accommodation.join(',');
   if (f.immediate) params['immediate'] = '1';
   if (f.noLanguageRequired) params['noLang'] = '1';
+  if (f.directOnly) params['direct'] = '1';
   if (f.date !== 'any') params['date'] = f.date;
   return params;
 }
@@ -464,6 +477,7 @@ export function countActiveSidebar(f: SidebarFilters): number {
     (f.accommodation.length === 1 ? 1 : 0) +
     (f.immediate ? 1 : 0) +
     (f.noLanguageRequired ? 1 : 0) +
+    (f.directOnly ? 1 : 0) +
     (f.date !== 'any' ? 1 : 0)
   );
 }

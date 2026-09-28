@@ -4,7 +4,7 @@ import { actAs, realSession } from './support/real-portal';
 import { startPortalDb, type PortalDb } from './support/portal-db';
 
 /**
- * Narzędzia rekrutera (0940) na PostgreSQL 16: filtr statusu listy zgłoszeń, akcja zbiorcza
+ * Narzędzia rekrutera (0170) na PostgreSQL 16: filtr statusu listy zgłoszeń, akcja zbiorcza
  * przez `bulk_transition_applications` (firma widoku, recruiter+), scalanie e-maili o statusie
  * (LIM17-01), szablony odpowiedzi i język kandydata w kompozytorze (Invariant #1).
  */
@@ -63,7 +63,7 @@ beforeAll(async () => {
 
 afterAll(async () => { await realSession.db?.stop(); });
 
-describe('narzędzia rekrutera na PostgreSQL (0940)', () => {
+describe('narzędzia rekrutera na PostgreSQL (0170)', () => {
   it('akcja zbiorcza: wynik per zgłoszenie, cudze = not_found; lista filtruje po statusie', async () => {
     actAs(owner);
     const result = await bulkTransitionApplications([apps[0]!, apps[1]!, foreignApp], 'rejected', companyA);

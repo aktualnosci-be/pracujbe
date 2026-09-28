@@ -511,6 +511,17 @@ export interface JobDraftValues {
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
+  /** 0169: koszty i dodatki — surowe wartości z bazy ('' / null = nie podano). */
+  accommodationKind: string;
+  accommodationCost: string;
+  accommodationCostPeriod: string;
+  accommodationDeducted: boolean | null;
+  accommodationRegistration: boolean | null;
+  accommodationAfterContract: string;
+  transportShuttle: boolean;
+  transportReimbursed: boolean;
+  mealVoucherDaily: string;
+  jointCommittee: string;
   companyDescription: string;
   contactEmail: string;
   /** #101: pytania screeningowe — wczytywane, bo krok 7 zapisuje je replace-all. */
@@ -548,6 +559,57 @@ function isEditableJobStatus(status: string): status is EditableJobStatus {
 function numToText(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
 }
+/** Koszty i dodatki szkicu bez wartości (0169). */
+type JobCostsInitial = Pick<
+  JobDraftValues,
+  | 'accommodationKind'
+  | 'accommodationCost'
+  | 'accommodationCostPeriod'
+  | 'accommodationDeducted'
+  | 'accommodationRegistration'
+  | 'accommodationAfterContract'
+  | 'transportShuttle'
+  | 'transportReimbursed'
+  | 'mealVoucherDaily'
+  | 'jointCommittee'
+>;
+
+const EMPTY_JOB_COSTS_INITIAL: JobCostsInitial = {
+  accommodationKind: '',
+  accommodationCost: '',
+  accommodationCostPeriod: '',
+  accommodationDeducted: null,
+  accommodationRegistration: null,
+  accommodationAfterContract: '',
+  transportShuttle: false,
+  transportReimbursed: false,
+  mealVoucherDaily: '',
+  jointCommittee: '',
+};
+
+/** numeric z bazy (jako tekst, np. „125.50”) → tekst pola formularza bez zbędnych zer. */
+function amountToText(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? String(n) : '';
+}
+
+function jobCostsInitial(job: Record<string, unknown>): JobCostsInitial {
+  const optionalBool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
+  return {
+    accommodationKind: asString(job['accommodation_kind']),
+    accommodationCost: amountToText(job['accommodation_cost']),
+    accommodationCostPeriod: asString(job['accommodation_cost_period']),
+    accommodationDeducted: optionalBool(job['accommodation_deducted']),
+    accommodationRegistration: optionalBool(job['accommodation_registration']),
+    accommodationAfterContract: asString(job['accommodation_after_contract']),
+    transportShuttle: job['transport_shuttle'] === true,
+    transportReimbursed: job['transport_reimbursed'] === true,
+    mealVoucherDaily: amountToText(job['meal_voucher_daily']),
+    jointCommittee: asString(job['joint_committee']),
+  };
+}
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
@@ -598,6 +660,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       benefits: [],
       accommodation: false,
       transport: false,
+      ...EMPTY_JOB_COSTS_INITIAL,
       companyDescription: 'Firma demonstracyjna z branży logistycznej.',
       contactEmail: '',
       screeningQuestions: [],
@@ -629,7 +692,11 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 shifts, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
-                expires_at, updated_at
+                expires_at, updated_at,
+                accommodation_kind, accommodation_cost::text AS accommodation_cost,
+                accommodation_cost_period, accommodation_deducted, accommodation_registration,
+                accommodation_after_contract, transport_shuttle, transport_reimbursed,
+                meal_voucher_daily::text AS meal_voucher_daily, joint_committee
            FROM public.jobs
           WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
       if (!job) return null;
@@ -647,7 +714,10 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         skills: await queryRows(tx, 'employer.job-draft-skills',
           'SELECT skill_label, is_mandatory FROM public.job_skills WHERE job_id = $1', [jobId]),
         languages: await queryRows(tx, 'employer.job-draft-languages',
-          'SELECT language_label, level FROM public.job_languages WHERE job_id = $1', [jobId]),
+          `SELECT jl.language_label, jl.level, lg.code AS language_code
+             FROM public.job_languages jl
+             LEFT JOIN public.languages lg ON lg.id = jl.language_id
+            WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
         // job_screening_questions_select (0093): członek firmy oferty.
@@ -714,7 +784,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         languages: languages
           .map((r) => asRecord(r))
           .map((r) => ({
-            language: asString(r['language_label']),
+            // Kod ze słownika (0168); stary wpis spoza słownika zostaje etykietą.
+            language: asString(r['language_code']) || asString(r['language_label']),
             level: asString(r['level'], 'basic'),
           }))
           .filter((l) => l.language !== ''),
@@ -727,6 +798,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         benefits: asStringArray(tr['benefits']),
         accommodation: job['accommodation'] === true,
         transport: job['transport'] === true,
+        ...jobCostsInitial(job),
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
         screeningQuestions: parseScreeningQuestions(screening).map((q) => ({
@@ -1580,8 +1652,10 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
           skills: await queryRows(tx, 'employer.application-detail-skills',
             'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
           languages: await queryRows(tx, 'employer.application-detail-languages',
-            `SELECT language_label, level FROM public.candidate_languages
-              WHERE candidate_profile_id = $1 ORDER BY language_label`, [cpId]),
+            `SELECT cl.language_label, cl.level, lg.code AS language_code
+               FROM public.candidate_languages cl
+               LEFT JOIN public.languages lg ON lg.id = cl.language_id
+              WHERE cl.candidate_profile_id = $1 ORDER BY cl.language_label`, [cpId]),
           certificates: await queryRows(tx, 'employer.application-detail-certificates',
             `SELECT certificate_label FROM public.candidate_certificates
               WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
@@ -1605,7 +1679,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         hasDrivingLicense: cp['has_driving_license'] === true,
         skills: relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
         languages: relations.languages
-          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .map((r) => ({ label: asString(r['language_code']) || asString(r['language_label']), level: asString(r['level']) }))
           .filter((l) => l.label),
         certificates: relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
       };
@@ -1754,8 +1828,10 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
           skills: await queryRows(tx, 'employer.candidate-detail-skills',
             'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
           languages: await queryRows(tx, 'employer.candidate-detail-languages',
-            `SELECT language_label, level FROM public.candidate_languages
-              WHERE candidate_profile_id = $1 ORDER BY language_label`, [cpId]),
+            `SELECT cl.language_label, cl.level, lg.code AS language_code
+               FROM public.candidate_languages cl
+               LEFT JOIN public.languages lg ON lg.id = cl.language_id
+              WHERE cl.candidate_profile_id = $1 ORDER BY cl.language_label`, [cpId]),
           certificates: await queryRows(tx, 'employer.candidate-detail-certificates',
             `SELECT certificate_label FROM public.candidate_certificates
               WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
@@ -1782,7 +1858,7 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
         hasDrivingLicense: cp['has_driving_license'] === true,
         skills: loaded.relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
         languages: loaded.relations.languages
-          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .map((r) => ({ label: asString(r['language_code']) || asString(r['language_label']), level: asString(r['level']) }))
           .filter((l) => l.label),
         certificates: loaded.relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
       };

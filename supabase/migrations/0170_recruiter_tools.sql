@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0940 — Narzędzia rekrutera (numer TYMCZASOWY; ostateczny nada integrator)
+-- 0170 — Narzędzia rekrutera
 -- =============================================================================
 -- 1. Limit e-maili o zmianie statusu (ustalenie audytu LIM17-01).
 --    `application_status_email_gate(application, target)` wołane przez
@@ -144,7 +144,7 @@ begin
   insert into public.notifications (profile_id, type, title, entity_type, entity_id)
     values (v_candidate, 'application_status_changed', 'application_status_changed', 'application', p_application_id);
 
-  -- 0940 (LIM17-01): scalanie + sufit e-maili o statusie tego zgłoszenia.
+  -- 0170 (LIM17-01): scalanie + sufit e-maili o statusie tego zgłoszenia.
   if not public.application_status_email_gate(p_application_id, v_to) then return; end if;
 
   if v_to = 'viewed' then
@@ -212,7 +212,7 @@ begin
   end loop;
 end $$;
 comment on function public.bulk_transition_applications(uuid, uuid[], text) is
-  'Zmiana statusu do 50 zgłoszeń firmy przez transition_application, wynik per wiersz (0940).';
+  'Zmiana statusu do 50 zgłoszeń firmy przez transition_application, wynik per wiersz (0170).';
 revoke all on function public.bulk_transition_applications(uuid, uuid[], text) from public, anon;
 grant execute on function public.bulk_transition_applications(uuid, uuid[], text) to authenticated;
 
@@ -229,7 +229,7 @@ create table if not exists public.company_message_templates (
 create index if not exists idx_company_message_templates_company
   on public.company_message_templates(company_id, lower(name));
 comment on table public.company_message_templates is
-  'Szablony odpowiedzi firmy (0940). Odczyt recruiter+ firmy, zapis tylko RPC.';
+  'Szablony odpowiedzi firmy (0170). Odczyt recruiter+ firmy, zapis tylko RPC.';
 
 create table if not exists public.company_message_template_variants (
   template_id uuid not null references public.company_message_templates(id) on delete cascade,
@@ -240,7 +240,7 @@ create table if not exists public.company_message_template_variants (
     check (char_length(btrim(body)) between 1 and 4000)
 );
 comment on table public.company_message_template_variants is
-  'Wariant językowy szablonu odpowiedzi (pl/nl/fr/en) — wybierany wg języka kandydata (0940).';
+  'Wariant językowy szablonu odpowiedzi (pl/nl/fr/en) — wybierany wg języka kandydata (0170).';
 
 alter table public.company_message_templates enable row level security;
 alter table public.company_message_templates force row level security;

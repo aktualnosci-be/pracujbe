@@ -43,10 +43,10 @@ const STEPS: Record<number, unknown> = {
   9: { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be' },
 };
 
-/** Lista dozwolonych pól z ciała `save_job_draft` w migracji 0083. */
+/** Lista dozwolonych pól z ciała `save_job_draft` w najnowszej migracji (0169, wcześniej 0083). */
 function allowedKeys(): { job: Set<string>; translation: Set<string> } {
   const sql = readFileSync(
-    join(process.cwd(), 'supabase/migrations/0083_save_job_draft_atomic.sql'),
+    join(process.cwd(), 'supabase/migrations/0169_job_costs_benefits.sql'),
     'utf8',
   );
   const lists = [...sql.matchAll(/k not in \(([^)]*)\)/g)].map(

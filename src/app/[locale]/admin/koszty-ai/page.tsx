@@ -41,6 +41,7 @@ const FEATURE_KEY: Record<AiFeatureId, string> = {
   content_translation: 'aiCostsFeatureTranslation',
   job_offer_assist: 'aiCostsFeatureAssist',
   cv_profile_import: 'aiCostsFeatureCvImport',
+  job_fraud_check: 'aiCostsFeatureFraudCheck',
 };
 
 const LEVEL_KEY: Record<AiBudgetLevel, string | null> = {

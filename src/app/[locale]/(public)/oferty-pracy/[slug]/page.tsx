@@ -1,3 +1,4 @@
+import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
 import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
@@ -16,13 +17,24 @@ import {
   Languages as LanguagesIcon,
   MapPin,
   MessageSquare,
+  Scale,
   Truck,
+  Utensils,
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
+import {
+  buildJobBenefitsText,
+  buildJobCostItems,
+  formatEuro,
+  hasJobCostDetails,
+  type JobCostItem,
+  type JobCostLabels,
+} from '@/lib/job-costs';
+import { minimumWagesUrl } from '@/lib/joint-committees';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
 import { getCandidateMinAge } from '@/lib/data/age-policy';
@@ -197,6 +209,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+/** Ikony pozycji „Koszty i dodatki” (dekoracja, `aria-hidden`). */
+const COST_ICONS: Record<JobCostItem['key'], typeof Home> = {
+  accommodation: Home,
+  transport: Truck,
+  mealVouchers: Utensils,
+  jointCommittee: Scale,
+};
+
 export default async function JobDetailPage({ params }: PageProps) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
@@ -206,7 +226,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, format, candidateMinAge] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -215,10 +235,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('apply'),
     getTranslations('contentReport'),
     getTranslations('landing'),
+    getTranslations('languageNames'),
     getFormatter(),
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
+  // I18N-02: wymagane języki w języku widza (kod słownika 0168 / nazwa PL-NL-FR-EN), a nie
+  // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
+  const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
 
   const passportFields = buildJobDetailPassportFields(job, locale, {
     location: tJobs('passport.location'),
@@ -231,6 +255,32 @@ export default async function JobDetailPage({ params }: PageProps) {
   });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
+
+  // 0169: „Koszty i dodatki” — sekcja strony i `jobBenefits` w JSON-LD z jednego źródła.
+  const pageLocale: Locale = (routing.locales as readonly string[]).includes(locale)
+    ? (locale as Locale)
+    : routing.defaultLocale;
+  const costLabels: JobCostLabels = {
+    accommodation: t('accommodation'),
+    transport: t('transport'),
+    mealVouchers: t('mealVouchers'),
+    jointCommittee: t('jointCommittee'),
+    yes: tCommon('yes'),
+    no: tCommon('no'),
+    kind: (kind) => t(`costs.kind.${kind}`),
+    cost: (amount, period) => t('costs.cost', { amount, period }),
+    free: t('costs.free'),
+    deducted: (yes) => t(yes ? 'costs.deductedYes' : 'costs.deductedNo'),
+    registration: (yes) => t(yes ? 'costs.registrationYes' : 'costs.registrationNo'),
+    afterContract: (value) => t(`costs.afterContract.${value}`),
+    shuttle: t('costs.shuttle'),
+    reimbursed: t('costs.reimbursed'),
+    mealPerDay: (amount) => t('costs.mealPerDay', { amount }),
+    committeeCode: (code) => t('costs.committeeCode', { code }),
+    money: (amount) => formatEuro(amount, pageLocale),
+  };
+  const costItems = buildJobCostItems(job, costLabels, pageLocale);
+  const hasCostDetails = hasJobCostDetails(job.costs);
 
   const url = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
   const version = contentLanguage(job, locale);
@@ -245,7 +295,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         conditions: t('conditions'),
         workingHours: t('workingHours'),
         shifts: t('shifts'),
-      });
+      }, { jobBenefits: buildJobBenefitsText(job, costLabels, pageLocale) });
   // BreadcrumbList (SEO): Strona główna → Praca → branża (landing `/praca/kategoria/<klucz>`,
   // jak ścieżka tego landingu) → oferta. Tylko tam, gdzie JobPosting — wersja bez tłumaczenia
   // kanonizuje się do innego języka (#301), a oferta demo jest noindex (#297).
@@ -381,6 +431,16 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                   <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {t('verified')}
+                </span>
+              ) : null}
+              {job.isAgency ? (
+                // 0167: oferta agencji pracy tymczasowej (deklaracja firmy).
+                <span
+                  data-testid="job-detail-agency"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+                >
+                  <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {tJobs('agencyBadge')}
                 </span>
               ) : null}
             </p>
@@ -536,36 +596,50 @@ export default async function JobDetailPage({ params }: PageProps) {
               </Section>
             ) : null}
 
-            <Section title={t('accommodationCommute')}>
+            <Section title={t('costsTitle')}>
               {/*
-                Każda para dt/dd jest bezpośrednio w `div` będącym dzieckiem `dl` (HTML/axe
-                `definition-list`); ikona jest dekoracją wewnątrz `dt`, pozycjonowaną w lewym odstępie.
+                0169: „Koszty i dodatki” (deklaracja pracodawcy). Każda para dt/dd jest bezpośrednio
+                w `div` będącym dzieckiem `dl` (HTML/axe `definition-list`); ikona jest dekoracją
+                wewnątrz `dt`, pozycjonowaną w lewym odstępie.
               */}
-              <dl className="grid gap-4 sm:grid-cols-2">
-                <div className="relative pl-[1.875rem]">
-                  <dt className="text-sm text-muted-foreground">
-                    <Home
-                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    {t('accommodation')}
-                  </dt>
-                  <dd className="font-medium text-foreground">
-                    {job.accommodation ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
-                <div className="relative pl-[1.875rem]">
-                  <dt className="text-sm text-muted-foreground">
-                    <Truck
-                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    {t('transport')}
-                  </dt>
-                  <dd className="font-medium text-foreground">
-                    {job.transport ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
+              <dl className="grid gap-4 sm:grid-cols-2" data-testid="job-costs">
+                {costItems.map((item) => {
+                  const Icon = COST_ICONS[item.key];
+                  return (
+                    <div key={item.key} className="relative pl-[1.875rem]" data-cost-item={item.key}>
+                      <dt className="text-sm text-muted-foreground">
+                        <Icon
+                          className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        {item.label}
+                      </dt>
+                      <dd className="font-medium text-foreground">
+                        {item.value}
+                        {item.details.length > 0 ? (
+                          <ul className="mt-1 space-y-0.5 text-sm font-normal text-muted-foreground">
+                            {item.details.map((detail) => (
+                              <li key={detail}>{detail}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {item.committeeCode ? (
+                          <p className="mt-1 text-sm font-normal text-muted-foreground">
+                            <a
+                              href={minimumWagesUrl(pageLocale)}
+                              className="font-medium text-foreground underline underline-offset-2"
+                              rel="noreferrer"
+                            >
+                              {t('costs.minimumWagesLink')}
+                            </a>
+                            {' '}
+                            {t('costs.minimumWagesNote')}
+                          </p>
+                        ) : null}
+                      </dd>
+                    </div>
+                  );
+                })}
                 {job.languages.length > 0 ? (
                   <div className="relative pl-[1.875rem]">
                     <dt className="text-sm text-muted-foreground">
@@ -575,10 +649,13 @@ export default async function JobDetailPage({ params }: PageProps) {
                       />
                       {t('languages')}
                     </dt>
-                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
+                    <dd className="font-medium text-foreground">{languageNames}</dd>
                   </div>
                 ) : null}
               </dl>
+              {hasCostDetails ? (
+                <p className="mt-3 text-sm text-muted-foreground">{t('costsDeclared')}</p>
+              ) : null}
             </Section>
           </div>
 
@@ -686,7 +763,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               </div>
               {job.languages.length > 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {t('languages')}: {job.languages.join(', ')}
+                  {t('languages')}: {languageNames}
                 </p>
               ) : null}
               {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}

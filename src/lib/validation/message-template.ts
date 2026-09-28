@@ -4,7 +4,7 @@ import { routing, type Locale } from '@/i18n/routing';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 
 /**
- * Szablony odpowiedzi firmy (0940) — walidacja (przeglądarka + Server Action) i czyste
+ * Szablony odpowiedzi firmy (0170) — walidacja (przeglądarka + Server Action) i czyste
  * reguły wstawiania w kompozytorze. Limity = CHECK-i tabel `company_message_templates`
  * (nazwa 1–80) i `company_message_template_variants` (treść 1–4000, jak wiadomość).
  */

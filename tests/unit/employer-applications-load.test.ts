@@ -150,7 +150,7 @@ describe('employer applications page data (P1-05: kursor)', () => {
     expect(encodeTimeCursor({ ts: TS, id: APP(1) })).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
-  it('filters by status in the same keyset query and lists the company jobs for the filter (0940)', async () => {
+  it('filters by status in the same keyset query and lists the company jobs for the filter (0170)', async () => {
     db([row(1)], null, [{ id: JOB, title: 'Operator' }]);
     const result = await getEmployerApplicationsPage(undefined, null, 'rejected');
     expect(result).toMatchObject({
@@ -162,7 +162,7 @@ describe('employer applications page data (P1-05: kursor)', () => {
     expect(fakeDb.callsTo('employer.applications-job-options')[0]?.values).toEqual(['company-1']);
   });
 
-  it('demo data respects the status filter (0940)', async () => {
+  it('demo data respects the status filter (0170)', async () => {
     fakeSession.configured = false;
     const result = await getEmployerApplicationsPage(undefined, null, 'hired');
     if (result.status !== 'ok') throw new Error('expected ok');

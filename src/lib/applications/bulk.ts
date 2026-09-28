@@ -1,5 +1,5 @@
 /**
- * Stałe akcji zbiorczej i limitów zmiany statusu zgłoszeń (LIM17-01, 0940) — współdzielone
+ * Stałe akcji zbiorczej i limitów zmiany statusu zgłoszeń (LIM17-01, 0170) — współdzielone
  * przez Server Action (`src/lib/actions/applications.ts`) i UI panelu pracodawcy.
  */
 

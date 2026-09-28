@@ -17,7 +17,7 @@ import {
 } from '@/lib/validation/message-template';
 
 /**
- * Server Actions szablonów odpowiedzi firmy (0940). Firma = firma WIDOKU (`expectedCompanyId`),
+ * Server Actions szablonów odpowiedzi firmy (0170). Firma = firma WIDOKU (`expectedCompanyId`),
  * sprawdzana względem bieżącej aktywnej firmy (ACTIVE_COMPANY_CHANGED — nic nie zapisujemy).
  * Uprawnienie recruiter+, limit 50 szablonów i CAS po `updated_at` egzekwuje baza.
  */

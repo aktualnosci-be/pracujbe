@@ -7,7 +7,7 @@ import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
 import { BTN_SECONDARY, EYEBROW, H1_EXTENDED, INTRO, PANEL, PANEL_H2, PANEL_P, TAG } from '@/components/dashboard/panel-styles';
 
 /**
- * Szablony odpowiedzi firmy (0940) — noindex, `force-dynamic` (sesja/RLS), guard z layoutu
+ * Szablony odpowiedzi firmy (0170) — noindex, `force-dynamic` (sesja/RLS), guard z layoutu
  * panelu. Tylko recruiter+ aktywnej firmy; rola member widzi wyjaśnienie zamiast formularza.
  */
 

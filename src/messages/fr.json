@@ -180,7 +180,22 @@
     "targetUnavailableTitle": "Cette entreprise n'est plus accessible depuis votre compte",
     "targetUnavailableHint": "Vous n'avez plus d'accès actif à cette entreprise, ou le lien est invalide.",
     "targetSwitchAction": "Définir comme entreprise active",
-    "targetSwitchError": "Impossible de changer l'entreprise active. Réessayez."
+    "targetSwitchError": "Impossible de changer l'entreprise active. Réessayez.",
+    "agencyTitle": "Agence de travail intérimaire",
+    "agencySubtitle": "Si votre entreprise est une agence d’intérim, cochez la case et indiquez le numéro d’agrément régional. Les offres de l’entreprise seront signalées comme offres d’agence. L’équipe du portail vérifie le numéro.",
+    "agencyLabel": "L’entreprise est une agence d’intérim",
+    "agencyNumberLabel": "Numéro d’agrément régional",
+    "agencyNumberHint": "Le numéro figurant dans la décision d’agrément (Flandre, Wallonie, Bruxelles ou Communauté germanophone).",
+    "agencyNumberRequired": "Indiquez le numéro d’agrément.",
+    "agencyNumberTooLong": "Le numéro peut compter au maximum {max} caractères.",
+    "agencyCheckUnchecked": "Le numéro attend la vérification de l’équipe du portail.",
+    "agencyCheckConfirmed": "L’équipe du portail a confirmé le numéro dans le registre régional.",
+    "agencyCheckNotConfirmed": "L’équipe du portail n’a pas pu confirmer le numéro dans le registre régional. Vérifiez le numéro et enregistrez-le à nouveau.",
+    "agencySaved": "Enregistré. L’équipe du portail vérifiera le numéro.",
+    "agencyUnchanged": "Aucune modification.",
+    "agencyDemoNotice": "Mode démo — rien n’a été enregistré.",
+    "agencySaving": "Enregistrement…",
+    "agencySubmit": "Enregistrer"
   },
   "companyProfile": {
     "metaTitle": "Offres d'emploi chez {name}",
@@ -391,7 +406,8 @@
     "demoNoticeBody": "Le site fonctionne en version de démonstration. Les offres et les entreprises de cette page sont fictives, ne sont pas vérifiées et il n'est pas possible d'y postuler.",
     "demoBadge": "Offre d'exemple",
     "machineTranslatedBadge": "Traduction automatique",
-    "translatedBadge": "Traduit"
+    "translatedBadge": "Traduit",
+    "agencyBadge": "Agence d’intérim"
   },
   "job": {
     "apply": "Postuler à ce poste",
@@ -435,7 +451,6 @@
     "seeMoreJobs": "Voir plus d’offres",
     "learnMoreCompany": "En savoir plus sur l’entreprise",
     "industry": "Secteur",
-    "accommodationCommute": "Logement et trajet",
     "error": {
       "titleRequired": "Indiquez un titre pour l'offre.",
       "titleTooShort": "Le titre est trop court (min. 5 caractères).",
@@ -483,7 +498,15 @@
       "screeningOptionRequired": "Saisissez la réponse dans la langue de l'offre.",
       "screeningOptionTooLong": "Une réponse peut contenir 120 caractères au maximum.",
       "screeningOptionsCount": "Une question à choix nécessite de 2 à 10 réponses.",
-      "screeningTooMany": "Une offre peut contenir 10 questions au maximum."
+      "screeningTooMany": "Une offre peut contenir 10 questions au maximum.",
+      "accommodationCostInvalid": "Indiquez un montant entre 0 et 5000 EUR (2 décimales maximum).",
+      "mealVoucherInvalid": "Indiquez un montant entre 0,01 et 20 EUR par jour.",
+      "jointCommitteeInvalid": "Choisissez une commission dans la liste.",
+      "accommodationDetailsProvidedOnly": "Le coût et les conditions du logement ne s'indiquent que si vous fournissez le logement.",
+      "accommodationCostPeriodRequired": "Indiquez si le coût est hebdomadaire ou mensuel.",
+      "accommodationCostRequired": "Indiquez le coût du logement.",
+      "accommodationCostMandatory": "Pour un logement fourni, indiquez le coût — saisissez 0 s'il est gratuit.",
+      "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -495,7 +518,35 @@
     "machineTranslationNotice": "Traduction automatique. Langue d’origine : {language}.",
     "manualTranslationNotice": "Contenu traduit. Langue d’origine : {language}.",
     "translationOriginalLink": "Voir l’original",
-    "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement."
+    "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement.",
+    "costsTitle": "Frais et avantages",
+    "costsDeclared": "Informations fournies par l'employeur.",
+    "mealVouchers": "Chèques-repas",
+    "jointCommittee": "Commission paritaire",
+    "costs": {
+      "kind": {
+        "provided": "Fourni par l'employeur",
+        "assistance": "Aide pour trouver un logement",
+        "none": "Aucun"
+      },
+      "cost": "{amount} / {period, select, week {semaine} other {mois}}",
+      "free": "Gratuit",
+      "deductedYes": "Retenu sur le salaire",
+      "deductedNo": "Non retenu sur le salaire",
+      "registrationYes": "Domiciliation possible",
+      "registrationNo": "Pas de domiciliation possible",
+      "afterContract": {
+        "ends_with_contract": "Logement à quitter à la fin du contrat",
+        "transition_period": "Un délai est prévu pour déménager après le contrat",
+        "can_stay": "Possibilité de rester à ses frais après le contrat"
+      },
+      "shuttle": "Transport jusqu'au travail",
+      "reimbursed": "Remboursement des frais de déplacement",
+      "mealPerDay": "{amount} par jour",
+      "committeeCode": "CP {code}",
+      "minimumWagesLink": "Salaires minimums officiels du secteur",
+      "minimumWagesNote": "Le salaire dépend notamment de la catégorie et de l'ancienneté — vérifiez dans la base officielle."
+    }
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -693,6 +744,7 @@
     "jobNotEditable": "Cette offre ne peut pas être modifiée pour le moment. Seule une offre active ou suspendue peut être corrigée.",
     "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
     "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée.",
+    "jobAccommodationTermsRequired": "Une offre avec logement fourni doit indiquer le coût du logement (0 = gratuit) et s'il est retenu sur le salaire. Complétez l'étape « Conditions et avantages ».",
     "botCheckFailed": "Nous n'avons pas pu confirmer que ce formulaire est envoyé par une personne. Refaites la vérification et envoyez-le à nouveau.",
     "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes.",
     "screeningAnswerRequired": "Répondez aux questions obligatoires de l'employeur.",
@@ -726,7 +778,9 @@
     "cvImportUncertain": "Le CV peut contenir des coordonnées d’autres personnes que nous ne pouvons pas supprimer en toute sécurité ; rien n’a donc été envoyé. Supprimez-les du fichier ou remplissez votre profil manuellement.",
     "cvImportNotACv": "Ce fichier ne ressemble pas à un CV. Remplissez votre profil manuellement ou choisissez un autre fichier.",
     "cvImportNoProposals": "Nous n’avons rien trouvé à proposer dans le CV. Remplissez votre profil manuellement.",
-    "cvImportFailed": "Nous n’avons pas pu préparer de propositions. Réessayez plus tard ou remplissez votre profil manuellement."
+    "cvImportFailed": "Nous n’avons pas pu préparer de propositions. Réessayez plus tard ou remplissez votre profil manuellement.",
+    "jobContentReviewRequired": "Le contenu de l’offre doit d’abord être vérifié par l’équipe du portail. Vous pourrez la publier après acceptation ou après modification du texte.",
+    "jobContentRejected": "Le contenu de l’offre n’a pas été accepté. Modifiez-le pour publier l’offre."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1230,7 +1284,6 @@
     "radiusLabel": "Disposition à faire la navette (km)",
     "currencyLabel": "Devise",
     "languagesLabel": "Langues",
-    "languageNamePlaceholder": "ex. néerlandais",
     "levelBasic": "Basique",
     "levelIntermediate": "Intermédiaire",
     "levelFluent": "Courant",
@@ -1256,7 +1309,8 @@
     "privacyNoticeAckLinks": "J’ai pris connaissance des <privacy>informations sur la vie privée</privacy>.",
     "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
     "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
-    "eyebrow": "PASSEPORT EMPLOI"
+    "eyebrow": "PASSEPORT EMPLOI",
+    "languageSelectPlaceholder": "Choisissez une langue"
   },
   "filters": {
     "title": "Filtres",
@@ -1312,7 +1366,8 @@
     "removeFilter": "Retirer le filtre",
     "showLess": "Afficher moins",
     "noLocations": "Aucun lieu",
-    "close": "Fermer"
+    "close": "Fermer",
+    "directOnly": "Directement chez l’employeur"
   },
   "notifications": {
     "title": "Notifications",
@@ -1360,7 +1415,9 @@
     "listEnd": "Ce sont toutes vos notifications.",
     "moreError": "Impossible de charger plus de notifications. Veuillez réessayer.",
     "itemCompanyLinksApproved": "Site web et logo de l’entreprise approuvés",
-    "itemCompanyLinksRejected": "Site web et logo de l’entreprise non approuvés"
+    "itemCompanyLinksRejected": "Site web et logo de l’entreprise non approuvés",
+    "itemJobContentApproved": "Le contenu de votre offre a été accepté",
+    "itemJobContentRejected": "Le contenu de votre offre n’a pas été accepté"
   },
   "pricing": {
     "standard": "Standard",
@@ -1507,8 +1564,8 @@
       "cityTooLong": "Le nom de la ville est trop long.",
       "regionTooLong": "Le nom de la région est trop long.",
       "radiusInvalid": "Indiquez un rayon de trajet valide (0–300 km).",
-      "languageRequired": "Indiquez une langue.",
-      "languageInvalid": "Indiquez un nom de langue valide.",
+      "languageRequired": "Choisissez une langue.",
+      "languageInvalid": "Choisissez une langue dans la liste.",
       "languagesTooMany": "Trop de langues ajoutées.",
       "certificatesTooMany": "Trop de certificats ajoutés.",
       "certificateExpiryInvalid": "Indiquez une date d’expiration valide pour le certificat.",
@@ -1604,7 +1661,6 @@
     "skillsLabel": "Compétences supplémentaires",
     "skillsPlaceholder": "ex. Travail en équipe",
     "languagesLabel": "Langues",
-    "languageNamePlaceholder": "ex. Néerlandais",
     "addLanguage": "Ajouter une langue",
     "levelBasic": "Débutant",
     "levelIntermediate": "Intermédiaire",
@@ -1618,8 +1674,6 @@
     "conditionsPlaceholder": "ex. CDI",
     "benefitsLabel": "Avantages",
     "benefitsPlaceholder": "ex. Primes et indemnités",
-    "accommodation": "Nous fournissons le logement",
-    "transport": "Nous fournissons le transport",
     "companyDescriptionLabel": "Description de l'entreprise",
     "companyDescriptionPlaceholder": "Présentez brièvement l'entreprise aux candidats.",
     "contactEmailLabel": "E-mail de contact",
@@ -1642,6 +1696,7 @@
     "editSaved": "Modifications enregistrées",
     "editSavedDemo": "Modifications enregistrées (mode démo)",
     "editFixStep": "Les modifications n'ont pas été enregistrées. Corrigez les champs signalés à l'étape {step} : {title}.",
+    "publishFixStep": "L'offre n'a pas été publiée. Corrigez les champs signalés à l'étape {step} : {title}.",
     "screeningTitle": "Questions aux candidats",
     "screeningHint": "Facultatif, {max} questions courtes au maximum, par ex. sur le permis, le VCA ou le trajet. Vous verrez les réponses dans la candidature ; elles ne modifient pas la compatibilité et ne rejettent pas les candidats automatiquement.",
     "screeningReadOnly": "Les questions ne peuvent être modifiées que dans un brouillon — les candidats ont déjà répondu à la version actuelle.",
@@ -1670,7 +1725,43 @@
     "screeningReviewReason": "Motif : {reason}",
     "screeningPublishPending": "La question {n} attend une vérification.",
     "screeningPublishRejected": "La question {n} n’a pas été acceptée.",
-    "screeningGoToQuestions": "Aller aux questions"
+    "screeningGoToQuestions": "Aller aux questions",
+    "costsLegend": "Frais et avantages",
+    "costsHint": "Champs facultatifs. Le candidat les verra sur la page de l'offre comme information de l'employeur.",
+    "costsUnset": "Non précisé",
+    "accommodationKindLabel": "Logement",
+    "accommodationKind": {
+      "provided": "Nous fournissons un logement",
+      "assistance": "Nous aidons à trouver un logement",
+      "none": "Sans logement"
+    },
+    "accommodationCostLabel": "Coût du logement (EUR)",
+    "accommodationCostHint": "Indiquez 0 si le logement est gratuit.",
+    "accommodationCostPeriodLabel": "Coût par",
+    "accommodationCostPeriod": {
+      "week": "semaine",
+      "month": "mois"
+    },
+    "accommodationDeductedLabel": "Coût retenu sur le salaire",
+    "accommodationRegistrationLabel": "Domiciliation possible à cette adresse",
+    "accommodationAfterContractLabel": "Logement après la fin du contrat",
+    "accommodationAfterContract": {
+      "ends_with_contract": "À quitter à la fin du contrat",
+      "transition_period": "Un délai est prévu pour déménager",
+      "can_stay": "Possibilité de rester à ses frais"
+    },
+    "tri": {
+      "yes": "Oui",
+      "no": "Non"
+    },
+    "transportLabel": "Trajet domicile-travail",
+    "transportShuttle": "Nous assurons le transport jusqu'au travail",
+    "transportReimbursed": "Nous remboursons les frais de déplacement",
+    "mealVoucherLabel": "Chèques-repas (EUR par jour)",
+    "jointCommitteeLabel": "Commission paritaire (CP)",
+    "jointCommitteeCode": "CP {code}",
+    "jointCommitteeHint": "La page de l'offre affichera le numéro de la commission et un lien vers la base officielle des salaires minimums. Le portail n'évalue pas le salaire.",
+    "languageSelectPlaceholder": "Choisissez une langue"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -2750,7 +2841,54 @@
     "userApplications": "Candidatures",
     "userOffers": "Propositions reçues",
     "userYes": "Oui",
-    "userNo": "Non"
+    "userNo": "Non",
+    "navJobContent": "Contenu des offres",
+    "jobContentTitle": "Contrôle du contenu des offres",
+    "jobContentSubtitle": "Offres signalées par les règles ou par l’analyse IA. Jusqu’à la décision, l’offre n’est ni publiée ni réactivée.",
+    "jobContentEmpty": "Aucun contenu à vérifier.",
+    "jobContentNotCurrent": "Texte déjà modifié",
+    "jobContentSourceRules": "Règles",
+    "jobContentSourceAi": "Analyse IA",
+    "jobContentAiConfidence": "confiance {value} %",
+    "jobContentAiReason": "Motif IA",
+    "jobContentTexts": "Texte de l’offre au moment du signalement",
+    "jobContentApproved": "Texte accepté.",
+    "jobContentRejected": "Texte refusé.",
+    "jobContentActionApprove": "Accepter",
+    "jobContentActionReject": "Refuser",
+    "jobContentApproveConfirmTitle": "Accepter le texte de l’offre ?",
+    "jobContentRejectConfirmTitle": "Refuser le texte de l’offre ?",
+    "jobContentApproveConfirmHint": "L’acceptation ne publie pas l’offre — l’entreprise la publie ou la réactive.",
+    "jobContentRejectConfirmHint": "L’entreprise verra le motif dans l’assistant de création d’offre.",
+    "jobContentColJob": "Offre",
+    "jobContentColCategories": "Signaux",
+    "jobContentReasonOptionalLabel": "Motif (facultatif)",
+    "jobContentReasonHint": "{max} caractères au maximum.",
+    "sectionAgency": "Agence d’intérim",
+    "agencyStatusUnchecked": "À vérifier",
+    "agencyStatusConfirmed": "Numéro confirmé",
+    "agencyStatusNotConfirmed": "Non confirmé",
+    "agencyCheckNumber": "Numéro d’agrément",
+    "agencyCheckedAt": "Vérifié le",
+    "agencyCheckNoteLabel": "Note (facultative)",
+    "agencyCheckNoteHint": "Par ex. registre et date de vérification. {max} caractères au maximum.",
+    "agencyCheckHint": "Vérifiez le numéro dans le registre public des agences de la région compétente et enregistrez le résultat.",
+    "agencyNoNumber": "L’entreprise s’est déclarée agence sans numéro d’agrément.",
+    "agencyNotDeclared": "L’entreprise n’est pas signalée comme agence d’intérim.",
+    "agencyCheckActionConfirm": "Numéro confirmé",
+    "agencyCheckActionNotConfirmed": "Non confirmé",
+    "agencyCheckConfirmTitle": "Enregistrer : numéro confirmé ?",
+    "agencyCheckNotConfirmedTitle": "Enregistrer : non confirmé ?",
+    "agencyCheckConfirmHint": "L’entreprise voit le résultat. Publiquement, seule l’étiquette « agence » est visible.",
+    "agencyCheckSavedConfirmed": "Enregistré : numéro confirmé.",
+    "agencyCheckSavedNotConfirmed": "Enregistré : non confirmé.",
+    "auditActionJobContentRequested": "Texte d’offre à vérifier (règles)",
+    "auditActionJobContentAiFlagged": "Texte d’offre à vérifier (IA)",
+    "auditActionJobContentReviewed": "Décision sur le texte d’une offre",
+    "auditActionJobPausedForReview": "Offre suspendue pour vérification",
+    "auditActionCompanyAgencyChanged": "Modification de la déclaration d’agence",
+    "auditActionCompanyAgencyChecked": "Vérification du numéro d’agrément",
+    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -3657,5 +3795,35 @@
         "description": "Demande invitée non confirmée — à compter du premier envoi."
       }
     }
+  },
+  "languageNames": {
+    "pl": "Polonais",
+    "nl": "Néerlandais",
+    "fr": "Français",
+    "en": "Anglais",
+    "de": "Allemand",
+    "ro": "Roumain",
+    "bg": "Bulgare",
+    "uk": "Ukrainien",
+    "ru": "Russe",
+    "es": "Espagnol",
+    "it": "Italien",
+    "pt": "Portugais",
+    "tr": "Turc",
+    "ar": "Arabe"
+  },
+  "jobTrust": {
+    "categoryCandidateFee": "paiement demandé au candidat",
+    "categoryOffPlatformContact": "contact par messagerie",
+    "categoryCryptoTasks": "cryptomonnaies ou tâches en ligne",
+    "categoryPaymentRequest": "demande de virement ou de données de carte",
+    "categoryPersonalDataRequest": "demande de documents ou de données",
+    "categoryUnrealisticOffer": "conditions irréalistes",
+    "categoryOther": "autre signal",
+    "wizardHint": "Le texte contient des formulations que l’équipe du portail vérifiera avant la publication ({categories}).",
+    "reviewPending": "Le texte attend la vérification de l’équipe du portail ({categories}).",
+    "reviewRejected": "Le texte n’a pas été accepté ({categories}). Modifiez-le.",
+    "reviewReason": "Motif : {reason}",
+    "editPaused": "Modifications enregistrées. L’offre est suspendue jusqu’à la vérification du texte par l’équipe du portail."
   }
 }

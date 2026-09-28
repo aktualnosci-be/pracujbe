@@ -6,6 +6,7 @@ import { Check, Sparkles } from 'lucide-react';
 
 import { MatchBar } from '@/components/ui/match-bar';
 import { getMyJobMatchAction } from '@/lib/actions/matching';
+import { languageDisplayName } from '@/lib/languages';
 import type { JobMatchLoad } from '@/lib/data/matching';
 
 /**
@@ -43,6 +44,7 @@ const KNOWN_CRITERIA = new Set([
 export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | null {
   const t = useTranslations('match');
   const tCommon = useTranslations('common');
+  const tLang = useTranslations('languageNames');
   const [load, setLoad] = useState<JobMatchLoad | null>(null);
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => {
@@ -87,7 +89,11 @@ export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | 
   }
 
   const result = load.result;
-  const label = (key: string): string => (KNOWN_CRITERIA.has(key) ? t(`criteria.${key}`) : key);
+  // I18N-02: wymagany język oferty nazwą w języku widza (kod słownika / nazwa PL-NL-FR-EN).
+  const languageLabels = new Set(result.languageLabels ?? []);
+  const langName = (value: string): string => languageDisplayName(value, (code) => tLang(code));
+  const label = (key: string): string =>
+    KNOWN_CRITERIA.has(key) ? t(`criteria.${key}`) : languageLabels.has(key) ? langName(key) : key;
   const gaps = [
     ...result.missing.map((m) => ({ key: m, text: label(m) })),
     // Starsza odpowiedź serwera może nie mieć pola — traktujemy jak brak luk.
@@ -95,11 +101,11 @@ export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | 
       key: `language:${g.language}`,
       text: g.actual
         ? t('languageLevelBelow', {
-            language: g.language,
+            language: langName(g.language),
             required: t(`levels.${g.required}`),
             actual: t(`levels.${g.actual}`),
           })
-        : t('languageLevelUnknown', { language: g.language, required: t(`levels.${g.required}`) }),
+        : t('languageLevelUnknown', { language: langName(g.language), required: t(`levels.${g.required}`) }),
     })),
     // Wymagany certyfikat, którego ważność minęła (#96) — nie daje punktów.
     ...(result.expiredCertificates ?? []).map((c) => ({

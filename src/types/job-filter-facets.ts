@@ -6,4 +6,6 @@ export interface JobFilterFacets {
   accommodation: { provided: number; unavailable: number };
   immediate: number;
   noLanguage: number;
+  /** 0167: oferty spoza agencji pracy tymczasowej (filtr „bezpośrednio od pracodawcy”). */
+  direct?: number;
 }

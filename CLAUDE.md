@@ -1302,6 +1302,34 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`warehouse-rich`) nie są migrowane — poprawka zamyka tylko zapis nowych/edytowanych ofert.
   Testy: `job-validation-draft-limits.test.ts` (kontrola ujemna: flaga + niepusta lista odrzucone
   w obu schematach), `update-published-job.test.ts` (fixture bez sprzecznego stanu).
+- [x] Zaufanie ofert (migracja `0167`): **sygnały oszustwa** w treści oferty
+  przed publikacją — deterministyczne reguły PL/NL/FR/EN bez AI (`job_fraud_patterns`, lustro
+  `src/lib/job-trust/fraud-risk.ts`, test `job-fraud-risk` 1:1): opłata od kandydata (praca,
+  szkolenie, dokumenty, zakwaterowanie z góry), kontakt przez komunikator, kryptowaluty/„zadania
+  online”, przelew/dane karty. Migawka treści (`job_trust_content`: tytuł, godziny, tłumaczenia,
+  wymagania) + odcisk md5; odroczone triggery po zapisie kroku/rewizji zakładają przegląd
+  `job_content_reviews` (pending → approved/rejected), aktywną ofertę z nowym sygnałem baza
+  wstrzymuje (`paused`, audyt `job.paused_for_content_review`), strażnik
+  `enforce_job_content_review` blokuje każdą aktywację do akceptacji bieżącej treści
+  (`JOB_CONTENT_REVIEW_REQUIRED`/`JOB_CONTENT_REJECTED` → komunikat i uzasadnienie w kreatorze).
+  Drugi sygnał AI (decyzja właściciela 28.09): `src/lib/job-trust/ai-check.ts`, `gpt-6-luna` za flagą
+  `AI_JOB_FRAUD_CHECK_ENABLED` (atrapa `AI_JOB_FRAUD_CHECK_PROVIDER=fixture` poza produkcją),
+  `withAiBudget` + log użycia bez treści, minimalizacja `redactSensitiveData`, treść jako dane
+  w `<offer_text>`, strict schema; trafienie tylko kieruje do kolejki (`record_job_content_ai_signal`,
+  service_role, odcisk jak CAS), awaria/brak budżetu = same reguły; inwentarz `job_fraud_check`.
+  Podpowiedź w kreatorze (kroki 5, 6, 8), kolejka admina `/admin/tresc-ofert` (źródło reguła/AI,
+  uzasadnienie i pewność AI, treść z chwili zgłoszenia, `admin_decide_job_content_review` z CAS
+  treści, audytem i powiadomieniem). **Agencje pracy tymczasowej** (decyzja właściciela 28.09):
+  `companies.is_agency` + numer uznania regionalnego (tekst ≤ 64) w `/employer/firma`
+  (`set_company_agency`, owner/admin, zmiana zeruje sprawdzenie), ręczne sprawdzenie admina
+  w `/admin/firmy/[id]` (`admin_record_agency_check`, CAS po numerze), strażnik kolumn
+  `guard_company_agency`; etykieta „agencja” na karcie, szczególe i profilu firmy
+  (`get_public_jobs_agency`, bez wyniku sprawdzenia), filtr „bezpośrednio od pracodawcy”
+  (`?direct=1`, `p_direct_only` w liście, liczniku, facetach i kopii filtrów alertów). Dowód:
+  `rls.sql` sekcja FT167 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
+  przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
+  **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
+  na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -1344,6 +1372,30 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`dashboard.duplicateJobModerationLocked`); audyt `job.duplicated`. Dowód: `rls.sql` sekcja
   JD216 (kontrole ujemne: bramka recruiter+, wpis klucza), unit `job-duplicate-draft`, E2E
   `employer-job-duplicate` (demo, 4 języki, axe 320 px).
+- [~] „Koszty i dodatki” w ofercie (migracja `0169`): krok 8 kreatora ma
+  opcjonalne pola deklarowane przez pracodawcę — zakwaterowanie (zapewnione / pomoc / brak; przy
+  „zapewnione”: koszt EUR za tydzień lub miesiąc, 0 = bez kosztów, potrącenie z pensji,
+  zameldowanie, co po końcu umowy), dojazd (dowóz, zwrot kosztów), bony żywieniowe (EUR/dzień),
+  komisja parytetowa ze słownika `joint_committees` (lustro `src/lib/joint-committees.ts`, test
+  zgodności). Flagi filtrów `accommodation`/`transport` wynikają ze szczegółów (CHECK-i w bazie,
+  `jobCostsPatch` w `src/lib/job-costs.ts`); stare oferty (same flagi) bez zmian. Zapis:
+  `save_job_draft` i `update_published_job` (nowe klucze), kopia szkicu przez trigger na
+  `job_duplications`; `job_material_terms` + `accommodation` (rodzaj, koszt, okres, potrącenie) —
+  zmiana kosztu zakwaterowania powiadamia kandydatów z aktywną aplikacją jak 0144. Szczegół
+  oferty: sekcja „Koszty i dodatki” (`get_public_job_costs`, odczyt pomocniczy — awaria = same
+  flagi) z linkiem do oficjalnej bazy stawek minimalnych FOD WASO/SPF ETCS, bez oceny stawki;
+  JobPosting `jobBenefits` (komisja bez odpowiednika w schema.org). Dowód: `rls.sql` sekcja CB169
+  (kontrola ujemna: lista pól z 0144 nie widzi kosztu), unit `job-costs`, `jobs-postgres`, E2E
+  `job-costs` (4 języki, axe). Zakwaterowanie zapewnione (decyzja właściciela 28.09.2026): oferta
+  publiczna MUSI podać koszt (0 = bez kosztów) i czy jest potrącany z pensji; szkic może być
+  niekompletny. Kreator: `step8PublishSchema` przy „Opublikuj” (powrót do kroku 8, błąd przy polu,
+  `jobWizard.publishFixStep`) i w edycji opublikowanej oferty; `updatePublishedJob` odrzuca przed
+  RPC. Baza: strażnik BEFORE `enforce_job_accommodation_terms` na `jobs` (wejście w active/paused
+  albo zmiana pól zakwaterowania — `publish_job`, `update_published_job`, `set_job_status`
+  resume/reopen, bezpośredni DML) → `JOB_ACCOMMODATION_TERMS_REQUIRED` → `errors.jobAccommodationTermsRequired`.
+  Dowód: `rls.sql` CB10 (kontrola ujemna CB10n bez strażnika), unit `job-costs`,
+  `update-published-job`, E2E `job-costs`. **Otwarte (właściciel):** filtry listy po nowych
+  polach, tabela stawek komisji.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”
@@ -1470,7 +1522,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `portal-employer` (granica strony z remisem i nowym zgłoszeniem, cudza firma/member = pusto
   albo 404), unit `employer-list-cursor`, `employer-*-load`, E2E `employer-candidate-detail`,
   `panel-a11y` (nowa trasa).
-- [x] Narzędzia rekrutera (migracja `0940` — numer tymczasowy): filtry `/employer/aplikacje`
+- [x] Narzędzia rekrutera (migracja `0170`): filtry `/employer/aplikacje`
   po ofercie i statusie w adresie (`?oferta=`, `?status=`, formularz GET bez JS; ten sam kursor
   `submitted_at` + `id`, filtry zachowane w stronicowaniu; `parseApplicationStatusFilter`
   w `src/lib/applications/bulk.ts`). Akcja zbiorcza (`ApplicationsBulkSelection`): zaznaczenie
@@ -1489,7 +1541,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rekrutera (`MessageTemplatePicker`): wariant wg języka kandydata z
   `get_conversation_template_context` (`resolve_recipient_locale`, Invariant #1); brak wariantu =
   komunikat „kandydat ma inny język” i świadome wstawienie innej wersji; zmienne `{imie}`,
-  `{stanowisko}`, `{firma}`. Dowód: `rls.sql` sekcja RT940 (kontrole ujemne: bez bramki e-maili,
+  `{stanowisko}`, `{firma}`. Dowód: `rls.sql` sekcja RT170 (kontrole ujemne: bez bramki e-maili,
   polityka bez recruiter+), integracja `portal-recruiter-tools` (PG16), unit `recruiter-tools*`,
   E2E `recruiter-tools` (4 języki, axe 320/1280). **Otwarte:** szablon przy zmianie statusu
   (wysyłka wiadomości zbiorczo), tłumaczenie brakującego wariantu przez AI (#31), filtry
@@ -1618,6 +1670,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
   policzyć” z ponowieniem, nigdy procent z niepełnych danych.
+  Języki ze słownika (I18N-02/CF-02, migracja `0168`): onboarding (krok 5)
+  i kreator (krok 7) wybierają język z listy `public.languages` (kody ISO, nazwy
+  `languageNames.*` w języku interfejsu); pozycja `{language, level}` = kod albo — tylko stary
+  wpis — etykieta. `job_languages.language_id` (nowa kolumna), trigger `fill_language_id`
+  na obu relacjach uzupełnia id z nazwy na każdej ścieżce (import CV, duplikat oferty, seed),
+  `language_aliases` (nazwy PL/NL/FR/EN, lustro `src/lib/languages.ts`, test 1:1) i backfill
+  starych etykiet; niedopasowane zostają etykietą. `set_*_languages` deduplikują po języku
+  (wyższy poziom). `get_job_match_profile`/`match_candidate_input` niosą kod, `scoreMatch`
+  porównuje kod (etykiety bez kodu przez te same aliasy; klucz etykiet NFC + bez diakrytyków
+  + złożone spacje, LIM17-05). Szczegół oferty, karta dopasowania, profil kandydata i widoki
+  pracodawcy pokazują nazwę w języku widza. Dowód: `rls.sql` sekcja LD168 (kontrole ujemne:
+  bez triggera, stara deduplikacja), unit `language-dictionary`. **Etap 2 (otwarte):**
+  zawody/umiejętności na ESCO z propozycją mapowania AI zatwierdzaną przez człowieka
+  (`docs/ESCO.md`).
 - [~] Taksonomia ESCO v1.2.1 (#93, migracja `0097`, `docs/ESCO.md`): zawody/umiejętności z
   przypiętego snapshotu tylko w PL/NL/FR/EN (RO/UK z issue pominięte — decyzja właściciela).
   `esco_uri` = klucz, `occupation_labels`/`skill_labels` (preferred/alternative, FK do
@@ -2194,8 +2260,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
   sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
-  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
-  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+  `VIES_LIVE_SMOKE=1`. Automatyczne sprawdzenie przy zakładaniu firmy (decyzja właściciela
+  26.09.2026, migracja `0164`): po `create_first_company` /
+  `create_additional_company` / `create_company_with_owner` serwer planuje (`after`, po odpowiedzi)
+  `runCompanyViesAutoCheck` (`src/lib/vies/auto-check.ts`: bieżący VAT/KBO → ten sam adapter VIES →
+  zapis tylko `valid`/`invalid` przez `record_company_vies_check_auto` — EXECUTE tylko
+  service_role, bez nadpisywania istniejącego wyniku, tylko dla bieżącego numeru, `checked_by`
+  null, audyt `company.vies_checked` z `source: auto`). Awaria VIES/bazy nie blokuje założenia
+  i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
+  NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
+  (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
@@ -2715,7 +2789,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `messageAttachmentsGc` w odpowiedzi); awaria jednego nie blokuje drugiego. Dowód: unit
   `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
-  `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
+  `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,

@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Narzędzia rekrutera (0940) w trybie demo: filtry listy zgłoszeń w adresie (formularz GET,
+ * Narzędzia rekrutera (0170) w trybie demo: filtry listy zgłoszeń w adresie (formularz GET,
  * działa bez JS) i strona szablonów odpowiedzi — axe WCAG 2.x A/AA (critical/serious +
  * `target-size`) w 4 językach przy 320 i 1280 px. Akcję zbiorczą i szablony na realnej bazie
- * sprawdzają `tests/integration/portal-recruiter-tools.test.ts` i `rls.sql` (RT940).
+ * sprawdzają `tests/integration/portal-recruiter-tools.test.ts` i `rls.sql` (RT170).
  */
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;

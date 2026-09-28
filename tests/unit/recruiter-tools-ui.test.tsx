@@ -50,7 +50,7 @@ function renderComposer(locale: keyof typeof translations = 'pl') {
   );
 }
 
-describe('szablon w kompozytorze (0940, Invariant #1)', () => {
+describe('szablon w kompozytorze (0170, Invariant #1)', () => {
   it.each(['pl', 'nl', 'fr', 'en'] as const)('wersja w języku kandydata jest wstawiana z danymi rozmowy: %s', (locale) => {
     renderComposer(locale);
     const m = translations[locale].messageTemplates;
@@ -82,7 +82,7 @@ describe('szablon w kompozytorze (0940, Invariant #1)', () => {
   });
 });
 
-describe('akcja zbiorcza na liście zgłoszeń (0940)', () => {
+describe('akcja zbiorcza na liście zgłoszeń (0170)', () => {
   const COMPANY = '22222222-2222-4222-8222-222222222222';
   const A = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001';
   const B = 'aaaaaaaa-aaaa-4aaa-8aaa-000000000002';

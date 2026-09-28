@@ -14,7 +14,7 @@ import {
 import { BTN_SMALL, FORM_SELECT, INLINE_LINK } from '@/components/dashboard/panel-styles';
 
 /**
- * Wstawianie szablonu odpowiedzi w kompozytorze rekrutera (0940).
+ * Wstawianie szablonu odpowiedzi w kompozytorze rekrutera (0170).
  *
  * Wariant = język KANDYDATA (Invariant #1, `resolve_recipient_locale` z bazy). Gdy szablon nie
  * ma wersji w tym języku, nic nie jest wstawiane po cichu: komunikat mówi rekruterowi, że

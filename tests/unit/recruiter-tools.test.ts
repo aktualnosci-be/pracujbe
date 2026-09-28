@@ -20,7 +20,7 @@ import {
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * Narzędzia rekrutera (0940): limit zmiany statusu (LIM17-01), akcja zbiorcza przez
+ * Narzędzia rekrutera (0170): limit zmiany statusu (LIM17-01), akcja zbiorcza przez
  * `bulk_transition_applications` z firmą widoku, szablony odpowiedzi z wariantem wg języka
  * kandydata (Invariant #1).
  */

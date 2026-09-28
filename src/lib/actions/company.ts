@@ -12,6 +12,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
+import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
 const UUID_RE =
@@ -241,6 +242,8 @@ export async function createCompany(
     const id = asString(asRecord(data[0])['company_id']);
     if (!id) return { ok: false, error: 'INTERNAL' };
 
+    // VIES po założeniu (26.09.2026): po odpowiedzi, serwerowo; awaria niczego nie blokuje.
+    scheduleCompanyViesAutoCheck(id);
     return { ok: true, id };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.createCompany') };
@@ -301,6 +304,7 @@ export async function createAdditionalCompany(
       maxAge: 60 * 60 * 24 * 365,
     });
     revalidatePath('/employer', 'layout');
+    scheduleCompanyViesAutoCheck(id);
     return { ok: true, id };
   } catch (e) {
     captureError(e, { area: 'company.createAdditionalCompany' });

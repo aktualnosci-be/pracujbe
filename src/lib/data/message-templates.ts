@@ -10,7 +10,7 @@ import { canRecruit } from '@/lib/team/permissions';
 import type { ComposerTemplates, MessageTemplate, TemplateVariants } from '@/lib/validation/message-template';
 
 /**
- * Szablony odpowiedzi firmy (0940) — odczyt pod sesją/RLS (tylko recruiter+ aktywnej firmy).
+ * Szablony odpowiedzi firmy (0170) — odczyt pod sesją/RLS (tylko recruiter+ aktywnej firmy).
  * Strona `/employer/szablony` i kompozytor wiadomości rekrutera.
  */
 

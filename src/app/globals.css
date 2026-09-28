@@ -360,6 +360,22 @@
   /* ---------- Nagłówek listy ofert (.p-list-header) ---------- */
   /* Boczny margines daje `.container` strony; prototyp: padding 32px 5% 27px. Opis pod H1
      (SEO/kontekst) i baner demo to treść aplikacji spoza prototypu. */
+  /* Przewijane listy filtrów (panel boczny i arkusz): bez systemowego paska, który zabierał
+     szerokość kolumny. Przewijanie kółkiem, dotykiem i klawiaturą (fokus pól) bez zmian.
+     Sygnał dalszej treści = cień u górnej/dolnej krawędzi (tło `scroll`), zakrywany przez
+     pasy w kolorze tła (tło `local`), gdy lista dochodzi do końca. */
+  .pp-filter-scroll {
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+    background:
+      linear-gradient(var(--pp-white) 30%, transparent) center top / 100% 28px no-repeat local,
+      linear-gradient(transparent, var(--pp-white) 70%) center bottom / 100% 28px no-repeat local,
+      linear-gradient(var(--pp-line), transparent) center top / 100% 12px no-repeat scroll,
+      linear-gradient(transparent, var(--pp-line)) center bottom / 100% 12px no-repeat scroll;
+    background-color: var(--pp-white);
+  }
+  .pp-filter-scroll::-webkit-scrollbar { display: none; }
+
   .pp-list-header { padding-bottom: 27px; }
   /* `.pp-page-title` — ten sam nagłówek na stronach treściowych bez ekranu w prototypie
      (hub/landing ofert, poradniki, strony informacyjne, zgłoszenie treści); marginesy

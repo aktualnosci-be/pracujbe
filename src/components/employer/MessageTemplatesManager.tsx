@@ -32,7 +32,7 @@ import {
 } from '@/components/dashboard/panel-styles';
 
 /**
- * Zarządzanie szablonami odpowiedzi firmy (/employer/szablony, 0940).
+ * Zarządzanie szablonami odpowiedzi firmy (/employer/szablony, 0170).
  *
  * Formularz: nazwa + treść w każdym języku serwisu (wypełnia się dowolne; kompozytor wybiera
  * wariant wg języka kandydata). Zapis blokuje przycisk (Invariant #11), błąd przy polu

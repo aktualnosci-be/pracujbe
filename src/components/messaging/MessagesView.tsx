@@ -74,7 +74,7 @@ export async function MessagesView({
     threadResult = await getConversationThread(activeId, locale);
     if (threadResult.status === 'ready') {
       reports = await getMyMessageReports(activeId);
-      // 0940: szablony odpowiedzi tylko po stronie firmy (recruiter+ — sprawdza baza).
+      // 0170: szablony odpowiedzi tylko po stronie firmy (recruiter+ — sprawdza baza).
       if (basePath.startsWith('/employer')) templates = await getComposerTemplates(activeId);
       // Oznaczamy tylko wątek, który udało się odczytać; licznik zmieniamy po sukcesie RPC.
       try {

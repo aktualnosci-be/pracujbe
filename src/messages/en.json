@@ -180,7 +180,22 @@
     "targetUnavailableTitle": "This company is no longer available from your account",
     "targetUnavailableHint": "You no longer have active access to this company, or the link is invalid.",
     "targetSwitchAction": "Set as active company",
-    "targetSwitchError": "Could not switch the active company. Please try again."
+    "targetSwitchError": "Could not switch the active company. Please try again.",
+    "agencyTitle": "Temporary employment agency",
+    "agencySubtitle": "If your company is a temporary employment agency, tick the box and enter the regional recognition number. Your company’s jobs will be labelled as agency jobs. The portal team checks the number.",
+    "agencyLabel": "The company is a temporary employment agency",
+    "agencyNumberLabel": "Regional recognition number",
+    "agencyNumberHint": "The number from the recognition decision (Flanders, Wallonia, Brussels or the German-speaking Community).",
+    "agencyNumberRequired": "Enter the recognition number.",
+    "agencyNumberTooLong": "The number can have at most {max} characters.",
+    "agencyCheckUnchecked": "The number is waiting to be checked by the portal team.",
+    "agencyCheckConfirmed": "The portal team confirmed the number in the regional register.",
+    "agencyCheckNotConfirmed": "The portal team could not confirm the number in the regional register. Check the number and save it again.",
+    "agencySaved": "Saved. The portal team will check the number.",
+    "agencyUnchanged": "No changes.",
+    "agencyDemoNotice": "Demo mode — nothing was saved.",
+    "agencySaving": "Saving…",
+    "agencySubmit": "Save"
   },
   "companyProfile": {
     "metaTitle": "Jobs at {name}",
@@ -391,7 +406,8 @@
     "demoNoticeBody": "The site is running as a demo. The job offers and companies on this page are fictional, not verified, and you cannot apply to them.",
     "demoBadge": "Sample offer",
     "machineTranslatedBadge": "Automatic translation",
-    "translatedBadge": "Translated"
+    "translatedBadge": "Translated",
+    "agencyBadge": "Employment agency"
   },
   "job": {
     "apply": "Apply for this job",
@@ -435,7 +451,6 @@
     "seeMoreJobs": "See more jobs",
     "learnMoreCompany": "Learn more about the company",
     "industry": "Industry",
-    "accommodationCommute": "Accommodation and commute",
     "error": {
       "titleRequired": "Enter a job title.",
       "titleTooShort": "The title is too short (min. 5 characters).",
@@ -483,7 +498,15 @@
       "screeningOptionRequired": "Enter the answer in the language of the job.",
       "screeningOptionTooLong": "An answer can have up to 120 characters.",
       "screeningOptionsCount": "A list question needs 2 to 10 answers.",
-      "screeningTooMany": "A job can have up to 10 questions."
+      "screeningTooMany": "A job can have up to 10 questions.",
+      "accommodationCostInvalid": "Enter an amount from 0 to 5000 EUR (at most 2 decimals).",
+      "mealVoucherInvalid": "Enter an amount from 0.01 to 20 EUR per day.",
+      "jointCommitteeInvalid": "Choose a committee from the list.",
+      "accommodationDetailsProvidedOnly": "Housing cost and terms apply only when you provide accommodation.",
+      "accommodationCostPeriodRequired": "Choose whether the cost is weekly or monthly.",
+      "accommodationCostRequired": "Enter the accommodation cost.",
+      "accommodationCostMandatory": "With accommodation provided, enter the cost — enter 0 if it is free.",
+      "accommodationDeductedRequired": "Choose whether the accommodation cost is deducted from wages."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -495,7 +518,35 @@
     "machineTranslationNotice": "Automatic translation. Original language: {language}.",
     "manualTranslationNotice": "Translated content. Original language: {language}.",
     "translationOriginalLink": "View the original",
-    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
+    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual.",
+    "costsTitle": "Costs and extras",
+    "costsDeclared": "Information provided by the employer.",
+    "mealVouchers": "Meal vouchers",
+    "jointCommittee": "Joint committee",
+    "costs": {
+      "kind": {
+        "provided": "Provided by the employer",
+        "assistance": "Help finding housing",
+        "none": "None"
+      },
+      "cost": "{amount} / {period, select, week {week} other {month}}",
+      "free": "Free of charge",
+      "deductedYes": "Deducted from wages",
+      "deductedNo": "Not deducted from wages",
+      "registrationYes": "Address registration possible",
+      "registrationNo": "No address registration",
+      "afterContract": {
+        "ends_with_contract": "Housing must be vacated when the contract ends",
+        "transition_period": "Time to move out after the contract ends",
+        "can_stay": "Can stay at own cost after the contract ends"
+      },
+      "shuttle": "Transport to work",
+      "reimbursed": "Travel costs reimbursed",
+      "mealPerDay": "{amount} per day",
+      "committeeCode": "PC {code}",
+      "minimumWagesLink": "Official sector minimum wages",
+      "minimumWagesNote": "The wage depends on category and seniority, among other things — check the official database."
+    }
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -693,6 +744,7 @@
     "jobNotEditable": "This job can't be edited right now. Only an active or paused job can be changed.",
     "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version.",
     "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date.",
+    "jobAccommodationTermsRequired": "A job with accommodation provided must state the accommodation cost (0 = free) and whether it is deducted from wages. Complete the “Conditions and benefits” step.",
     "botCheckFailed": "We couldn't confirm that a person is sending this form. Complete the check again and resubmit.",
     "botCheckUnavailable": "The security check is temporarily unavailable. Please try again in a few minutes.",
     "screeningAnswerRequired": "Please answer the employer's required questions.",
@@ -726,7 +778,9 @@
     "cvImportUncertain": "The CV may contain other people's contact details that we cannot remove safely, so nothing was sent. Remove them from the file or fill in your profile manually.",
     "cvImportNotACv": "This file does not look like a CV. Fill in your profile manually or choose another file.",
     "cvImportNoProposals": "We found nothing in the CV to suggest. Fill in your profile manually.",
-    "cvImportFailed": "We could not prepare suggestions. Try again later or fill in your profile manually."
+    "cvImportFailed": "We could not prepare suggestions. Try again later or fill in your profile manually.",
+    "jobContentReviewRequired": "The job text must be checked by the portal team before publishing. You can publish it after approval or after changing the text.",
+    "jobContentRejected": "The job text was not approved. Change it to publish the job."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1230,7 +1284,6 @@
     "radiusLabel": "Willing to commute (km)",
     "currencyLabel": "Currency",
     "languagesLabel": "Languages",
-    "languageNamePlaceholder": "e.g. Dutch",
     "levelBasic": "Basic",
     "levelIntermediate": "Intermediate",
     "levelFluent": "Fluent",
@@ -1256,7 +1309,8 @@
     "privacyNoticeAckLinks": "I have read the <privacy>privacy information</privacy>.",
     "opensInNewTab": "(opens in a new tab)",
     "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
-    "eyebrow": "WORK PASSPORT"
+    "eyebrow": "WORK PASSPORT",
+    "languageSelectPlaceholder": "Choose a language"
   },
   "filters": {
     "title": "Filters",
@@ -1312,7 +1366,8 @@
     "removeFilter": "Remove filter",
     "showLess": "Show less",
     "noLocations": "No locations",
-    "close": "Close"
+    "close": "Close",
+    "directOnly": "Directly from the employer"
   },
   "notifications": {
     "title": "Notifications",
@@ -1360,7 +1415,9 @@
     "listEnd": "That's all your notifications.",
     "moreError": "Could not load more notifications. Please try again.",
     "itemCompanyLinksApproved": "Company website and logo approved",
-    "itemCompanyLinksRejected": "Company website and logo not approved"
+    "itemCompanyLinksRejected": "Company website and logo not approved",
+    "itemJobContentApproved": "Your job text has been approved",
+    "itemJobContentRejected": "Your job text was not approved"
   },
   "pricing": {
     "standard": "Standard",
@@ -1507,8 +1564,8 @@
       "cityTooLong": "City name is too long.",
       "regionTooLong": "Region name is too long.",
       "radiusInvalid": "Enter a valid commute radius (0–300 km).",
-      "languageRequired": "Enter a language.",
-      "languageInvalid": "Enter a valid language name.",
+      "languageRequired": "Choose a language.",
+      "languageInvalid": "Choose a language from the list.",
       "languagesTooMany": "Too many languages added.",
       "certificatesTooMany": "Too many certificates added.",
       "certificateExpiryInvalid": "Enter a valid certificate expiry date.",
@@ -1604,7 +1661,6 @@
     "skillsLabel": "Additional skills",
     "skillsPlaceholder": "e.g. Teamwork",
     "languagesLabel": "Languages",
-    "languageNamePlaceholder": "e.g. Dutch",
     "addLanguage": "Add language",
     "levelBasic": "Basic",
     "levelIntermediate": "Intermediate",
@@ -1618,8 +1674,6 @@
     "conditionsPlaceholder": "e.g. Permanent contract",
     "benefitsLabel": "Benefits",
     "benefitsPlaceholder": "e.g. Bonuses and allowances",
-    "accommodation": "We provide accommodation",
-    "transport": "We provide transport",
     "companyDescriptionLabel": "Company description",
     "companyDescriptionPlaceholder": "Briefly introduce the company to candidates.",
     "contactEmailLabel": "Contact email",
@@ -1642,6 +1696,7 @@
     "editSaved": "Changes saved",
     "editSavedDemo": "Changes saved (demo mode)",
     "editFixStep": "Your changes weren't saved. Fix the highlighted fields in step {step}: {title}.",
+    "publishFixStep": "The job wasn't published. Fix the highlighted fields in step {step}: {title}.",
     "screeningTitle": "Questions for candidates",
     "screeningHint": "Optional, up to {max} short questions, e.g. about a driving licence, VCA or commuting. You will see the answers in the application; they don't change the match and don't reject candidates automatically.",
     "screeningReadOnly": "Questions can only be changed in a draft — candidates have already answered the current version.",
@@ -1670,7 +1725,43 @@
     "screeningReviewReason": "Reason: {reason}",
     "screeningPublishPending": "Question {n} is waiting to be checked.",
     "screeningPublishRejected": "Question {n} was not approved.",
-    "screeningGoToQuestions": "Go to questions"
+    "screeningGoToQuestions": "Go to questions",
+    "costsLegend": "Costs and extras",
+    "costsHint": "Optional fields. Candidates see them on the job page as information from the employer.",
+    "costsUnset": "Not specified",
+    "accommodationKindLabel": "Accommodation",
+    "accommodationKind": {
+      "provided": "We provide accommodation",
+      "assistance": "We help find housing",
+      "none": "No accommodation"
+    },
+    "accommodationCostLabel": "Accommodation cost (EUR)",
+    "accommodationCostHint": "Enter 0 if accommodation is free.",
+    "accommodationCostPeriodLabel": "Cost per",
+    "accommodationCostPeriod": {
+      "week": "week",
+      "month": "month"
+    },
+    "accommodationDeductedLabel": "Cost deducted from wages",
+    "accommodationRegistrationLabel": "Registration at this address possible",
+    "accommodationAfterContractLabel": "Housing after the contract ends",
+    "accommodationAfterContract": {
+      "ends_with_contract": "Must be vacated when the contract ends",
+      "transition_period": "There is time to move out",
+      "can_stay": "Can stay at own cost"
+    },
+    "tri": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "transportLabel": "Getting to work",
+    "transportShuttle": "We provide transport to work",
+    "transportReimbursed": "We reimburse travel costs",
+    "mealVoucherLabel": "Meal vouchers (EUR per day)",
+    "jointCommitteeLabel": "Joint committee (PC)",
+    "jointCommitteeCode": "PC {code}",
+    "jointCommitteeHint": "The job page will show the committee number and a link to the official minimum wage database. The portal does not assess the wage.",
+    "languageSelectPlaceholder": "Choose a language"
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -2750,7 +2841,54 @@
     "userApplications": "Applications",
     "userOffers": "Offers received",
     "userYes": "Yes",
-    "userNo": "No"
+    "userNo": "No",
+    "navJobContent": "Job content",
+    "jobContentTitle": "Job content review",
+    "jobContentSubtitle": "Jobs flagged by the rules or the AI analysis. Until a decision, the job is not published or resumed.",
+    "jobContentEmpty": "No content to review.",
+    "jobContentNotCurrent": "Text already changed",
+    "jobContentSourceRules": "Rules",
+    "jobContentSourceAi": "AI analysis",
+    "jobContentAiConfidence": "confidence {value}%",
+    "jobContentAiReason": "AI reason",
+    "jobContentTexts": "Job text at the time of flagging",
+    "jobContentApproved": "Text approved.",
+    "jobContentRejected": "Text rejected.",
+    "jobContentActionApprove": "Approve",
+    "jobContentActionReject": "Reject",
+    "jobContentApproveConfirmTitle": "Approve the job text?",
+    "jobContentRejectConfirmTitle": "Reject the job text?",
+    "jobContentApproveConfirmHint": "Approval does not publish the job — the company publishes or resumes it.",
+    "jobContentRejectConfirmHint": "The company will see the reason in the job wizard.",
+    "jobContentColJob": "Job",
+    "jobContentColCategories": "Signals",
+    "jobContentReasonOptionalLabel": "Reason (optional)",
+    "jobContentReasonHint": "At most {max} characters.",
+    "sectionAgency": "Temporary employment agency",
+    "agencyStatusUnchecked": "To check",
+    "agencyStatusConfirmed": "Number confirmed",
+    "agencyStatusNotConfirmed": "Not confirmed",
+    "agencyCheckNumber": "Recognition number",
+    "agencyCheckedAt": "Checked on",
+    "agencyCheckNoteLabel": "Note (optional)",
+    "agencyCheckNoteHint": "E.g. register and date of the check. At most {max} characters.",
+    "agencyCheckHint": "Check the number in the public agency register of the competent region and save the result.",
+    "agencyNoNumber": "The company declared itself an agency without a recognition number.",
+    "agencyNotDeclared": "The company is not marked as a temporary employment agency.",
+    "agencyCheckActionConfirm": "Number confirmed",
+    "agencyCheckActionNotConfirmed": "Not confirmed",
+    "agencyCheckConfirmTitle": "Save: number confirmed?",
+    "agencyCheckNotConfirmedTitle": "Save: not confirmed?",
+    "agencyCheckConfirmHint": "The company sees the result. Publicly, only the “agency” label is shown.",
+    "agencyCheckSavedConfirmed": "Saved: number confirmed.",
+    "agencyCheckSavedNotConfirmed": "Saved: not confirmed.",
+    "auditActionJobContentRequested": "Job text for review (rules)",
+    "auditActionJobContentAiFlagged": "Job text for review (AI)",
+    "auditActionJobContentReviewed": "Job text decision",
+    "auditActionJobPausedForReview": "Job paused for content review",
+    "auditActionCompanyAgencyChanged": "Agency declaration changed",
+    "auditActionCompanyAgencyChecked": "Agency recognition number checked",
+    "aiCostsFeatureFraudCheck": "Job content check"
   },
   "settings": {
     "title": "Notification preferences",
@@ -3657,5 +3795,35 @@
         "description": "Guest request without confirmation — counted from the first submission."
       }
     }
+  },
+  "languageNames": {
+    "pl": "Polish",
+    "nl": "Dutch",
+    "fr": "French",
+    "en": "English",
+    "de": "German",
+    "ro": "Romanian",
+    "bg": "Bulgarian",
+    "uk": "Ukrainian",
+    "ru": "Russian",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "tr": "Turkish",
+    "ar": "Arabic"
+  },
+  "jobTrust": {
+    "categoryCandidateFee": "fee charged to the candidate",
+    "categoryOffPlatformContact": "contact via a messaging app",
+    "categoryCryptoTasks": "cryptocurrency or online tasks",
+    "categoryPaymentRequest": "request for a transfer or card details",
+    "categoryPersonalDataRequest": "request for documents or data",
+    "categoryUnrealisticOffer": "unrealistic conditions",
+    "categoryOther": "other signal",
+    "wizardHint": "The text contains wording that the portal team will check before publishing ({categories}).",
+    "reviewPending": "The text is waiting to be checked by the portal team ({categories}).",
+    "reviewRejected": "The text was not approved ({categories}). Change it.",
+    "reviewReason": "Reason: {reason}",
+    "editPaused": "Changes saved. The job is paused until the portal team has checked the text."
   }
 }

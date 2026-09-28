@@ -63,7 +63,7 @@ export interface MessageComposerProps {
   /** Nazwa rozmówcy do etykiety pola. */
   recipientName: string;
   /**
-   * Szablony odpowiedzi firmy (0940) — tylko strona firmowa recruiter+; `null`/brak = bez
+   * Szablony odpowiedzi firmy (0170) — tylko strona firmowa recruiter+; `null`/brak = bez
    * wybieraka. Wariant wybierany wg języka kandydata (Invariant #1).
    */
   templates?: ComposerTemplates | null;

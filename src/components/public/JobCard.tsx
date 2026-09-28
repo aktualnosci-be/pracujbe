@@ -1,7 +1,7 @@
 import { formatSalaryParts } from '@/lib/salary';
 
 import * as React from 'react';
-import { ArrowRight, BadgeCheck, Languages } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Building2, Languages } from 'lucide-react';
 import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -99,6 +99,13 @@ export async function JobCard({
         ) : (
           <span>{job.companyName}</span>
         )}
+        {job.isAgency ? (
+          // 0167: oferta agencji pracy tymczasowej (deklaracja firmy) — bez oceny, sama etykieta.
+          <span className="pp-passport-tag" data-testid="job-card-agency">
+            <Building2 className="h-4 w-4" aria-hidden="true" />
+            {t('agencyBadge')}
+          </span>
+        ) : null}
         {job.isDemo ? (
           <span className="pp-passport-tag rounded-full border border-warning/40 bg-warning/10 px-2 font-medium text-warning-text">
             {t('demoBadge')}

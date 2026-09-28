@@ -32,6 +32,8 @@
  * wynik. Brak I/O, brak losowości; bez `options.today` datą odniesienia jest bieżąca data UTC.
  */
 
+import { isLanguageCode, languageAliasKey, resolveLanguageCode } from '@/lib/languages';
+
 export const LANGUAGE_LEVEL_ORDER = ['basic', 'intermediate', 'fluent', 'native'] as const;
 export type LanguageLevel = (typeof LANGUAGE_LEVEL_ORDER)[number];
 
@@ -39,7 +41,7 @@ export type LanguageLevel = (typeof LANGUAGE_LEVEL_ORDER)[number];
  * Język z poziomem. Sam string = sama etykieta: po stronie oferty „poziom dowolny",
  * po stronie kandydata „poziom nieznany".
  */
-export type LanguageEntry = string | { label: string; level?: string | null };
+export type LanguageEntry = string | { label: string; level?: string | null; code?: string | null };
 
 export type LanguageGap = {
   language: string;
@@ -73,6 +75,11 @@ export type MatchResult = {
   languageGaps: LanguageGap[];
   /** Wymagane certyfikaty, które kandydat ma, ale z upływem ważności (#96). */
   expiredCertificates: string[];
+  /**
+   * Etykiety wymaganych języków oferty (tak jak w `matched`/`missing`/`languageGaps`) —
+   * UI pokazuje je nazwą w języku widza (I18N-02), inne pozycje bez zmian.
+   */
+  languageLabels: string[];
 };
 
 export type MatchCandidate = {
@@ -125,8 +132,23 @@ const WEIGHTS = {
   contract: 5,
 } as const;
 
+/**
+ * Klucz porównania etykiet (LIM17-05): NFC, małe litery bez znaków diakrytycznych, złożone
+ * białe znaki — „Wozek  widlowy” = „Wózek widłowy”. Wyświetlana etykieta bez zmian.
+ */
 function norm(value: string): string {
-  return value.trim().toLowerCase();
+  return languageAliasKey(value);
+}
+
+/**
+ * Klucz języka (I18N-02/CF-02): kod ze słownika (z bazy albo rozpoznany z nazwy PL/NL/FR/EN),
+ * dopiero bez kodu — złożona etykieta. „niderlandzki” = „Nederlands” = `nl`.
+ */
+function languageKey(entry: LanguageEntry): string {
+  const label = entryLabel(entry);
+  const code = typeof entry === 'string' ? null : entry.code;
+  const known = (isLanguageCode(code) ? code : null) ?? resolveLanguageCode(label);
+  return known ? `code:${known}` : `label:${norm(label)}`;
 }
 
 function overlap(
@@ -357,7 +379,7 @@ export function scoreMatch(
   } else {
     const candidateLevels = new Map<string, LanguageLevel | null>();
     for (const entry of candidate.languages) {
-      const key = norm(entryLabel(entry));
+      const key = languageKey(entry);
       const level = entryLevel(entry);
       const prev = candidateLevels.get(key);
       // Duplikat etykiety: bierzemy wyższy znany poziom.
@@ -373,7 +395,7 @@ export function scoreMatch(
     for (const entry of job.requiredLanguages) {
       const label = entryLabel(entry);
       const required = entryLevel(entry);
-      const actual = candidateLevels.get(norm(label));
+      const actual = candidateLevels.get(languageKey(entry));
       const share = languageShare(required, actual);
       shares += share;
       if (actual === undefined) {
@@ -455,6 +477,7 @@ export function scoreMatch(
     mandatoryTotal,
     summaryKey,
     languageGaps,
+    languageLabels: job.requiredLanguages.map(entryLabel),
     expiredCertificates: dedupe(expiredCertificates),
   };
 }

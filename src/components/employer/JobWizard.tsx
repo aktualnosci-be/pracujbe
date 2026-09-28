@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { LANGUAGE_CODES, isLanguageCode, languageDisplayName, resolveLanguageCode } from '@/lib/languages';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocale, useTranslations } from 'next-intl';
@@ -72,6 +73,7 @@ import {
   step5Schema,
   step6Schema,
   step7Schema,
+  step8PublishSchema,
   step8Schema,
   step9DraftSchema,
   step9Schema,
@@ -92,11 +94,22 @@ import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
 import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
 import { isScreeningQuestionType, type ScreeningQuestionDraft } from '@/lib/screening/questions';
 import type { ScreeningReviewNotice } from '@/lib/screening/review';
+import { jobFraudRisk } from '@/lib/job-trust/fraud-risk';
+import { JOB_CONTENT_CATEGORY_KEY, type JobContentReviewNotice } from '@/lib/job-trust/review';
 import {
   ScreeningQuestionsEditor,
   screeningErrorFieldId,
   screeningErrorKey,
 } from '@/components/employer/ScreeningQuestionsEditor';
+import {
+  ACCOMMODATION_AFTER_CONTRACT,
+  ACCOMMODATION_COST_PERIODS,
+  ACCOMMODATION_KINDS,
+  type AccommodationAfterContract,
+  type AccommodationCostPeriod,
+  type AccommodationKind,
+} from '@/lib/job-costs';
+import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -124,6 +137,15 @@ type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
 type SalaryPeriod = (typeof SALARY_PERIODS)[number];
 type Currency = 'EUR' | 'PLN';
 const CURRENCIES: readonly Currency[] = ['EUR', 'PLN'];
+/** Pole „tak / nie / nie podano” (0169). */
+type TriState = '' | 'yes' | 'no';
+const TRI_STATES = ['yes', 'no'] as const;
+/** Wartość zastępcza „nie podano” dla Select (API Radix Select nie przyjmuje ''). */
+const UNSET = '__unset';
+
+function isOneOf<T extends string>(list: readonly T[], value: unknown): value is T {
+  return typeof value === 'string' && (list as readonly string[]).includes(value);
+}
 
 interface LanguageEntry {
   language: string;
@@ -172,6 +194,17 @@ interface FormValues {
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
+  // 0169: koszty i dodatki ('' = nie podano)
+  accommodationKind: '' | AccommodationKind;
+  accommodationCost: string;
+  accommodationCostPeriod: AccommodationCostPeriod;
+  accommodationDeducted: TriState;
+  accommodationRegistration: TriState;
+  accommodationAfterContract: '' | AccommodationAfterContract;
+  transportShuttle: boolean;
+  transportReimbursed: boolean;
+  mealVoucherDaily: string;
+  jointCommittee: string;
   // krok 9 — firma i publikacja
   companyDescription: string;
   contactEmail: string;
@@ -213,6 +246,16 @@ const DEFAULT_VALUES: FormValues = {
   benefits: [],
   accommodation: false,
   transport: false,
+  accommodationKind: '',
+  accommodationCost: '',
+  accommodationCostPeriod: 'week',
+  accommodationDeducted: '',
+  accommodationRegistration: '',
+  accommodationAfterContract: '',
+  transportShuttle: false,
+  transportReimbursed: false,
+  mealVoucherDaily: '',
+  jointCommittee: '',
   companyDescription: '',
   contactEmail: '',
   agreePublish: false,
@@ -227,7 +270,16 @@ const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   5: ['description', 'responsibilities'],
   6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
   7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates', 'screeningQuestions'],
-  8: ['conditions', 'benefits'],
+  8: [
+    'conditions',
+    'benefits',
+    'accommodationKind',
+    'accommodationCost',
+    'accommodationCostPeriod',
+    'accommodationDeducted',
+    'mealVoucherDaily',
+    'jointCommittee',
+  ],
   9: ['companyDescription', 'contactEmail', 'agreePublish'],
 };
 
@@ -271,6 +323,17 @@ function domId(field: keyof FormValues): string {
 /** '' → undefined (pole opcjonalne / z wartością domyślną w schemacie). */
 function toOptionalNumber(value: string): number | undefined {
   return value.trim() === '' ? undefined : Number(value);
+}
+
+/** '' → undefined; przecinek dziesiętny dopuszczony (kwoty w EUR, 0169). NaN → błąd Zod. */
+function toOptionalAmount(value: string): number | undefined {
+  const v = value.trim().replace(',', '.');
+  return v === '' ? undefined : Number(v);
+}
+
+/** Pole tak/nie/nie podano → wartość kroku. */
+function triToBool(value: TriState): boolean | undefined {
+  return value === '' ? undefined : value === 'yes';
 }
 
 /** '' → undefined (pole tekstowe opcjonalne). */
@@ -319,13 +382,29 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         screeningQuestions: v.screeningQuestions,
         screeningLocale: contentLocale,
       };
-    case 8:
+    case 8: {
+      // 0169: flagi filtrów wynikają ze szczegółów (jobCostsPatch); szczegóły mieszkania tylko
+      // przy zakwaterowaniu zapewnionym — ukryte pola nie trafiają do zapisu.
+      const provided = v.accommodationKind === 'provided';
+      const cost = provided ? toOptionalAmount(v.accommodationCost) : undefined;
       return {
         conditions: v.conditions,
         benefits: v.benefits,
-        accommodation: v.accommodation,
-        transport: v.transport,
+        accommodation: false,
+        transport: false,
+        accommodationKind: v.accommodationKind === '' ? undefined : v.accommodationKind,
+        accommodationCost: cost,
+        accommodationCostPeriod: cost !== undefined ? v.accommodationCostPeriod : undefined,
+        accommodationDeducted: provided ? triToBool(v.accommodationDeducted) : undefined,
+        accommodationRegistration: provided ? triToBool(v.accommodationRegistration) : undefined,
+        accommodationAfterContract:
+          provided && v.accommodationAfterContract !== '' ? v.accommodationAfterContract : undefined,
+        transportShuttle: v.transportShuttle,
+        transportReimbursed: v.transportReimbursed,
+        mealVoucherDaily: toOptionalAmount(v.mealVoucherDaily),
+        jointCommittee: v.jointCommittee === '' ? undefined : v.jointCommittee,
       };
+    }
     case 9:
       return {
         companyDescription: v.companyDescription,
@@ -363,8 +442,23 @@ function toErrorKey(field: string, message: string): string {
 export interface JobWizardInitialValues
   extends Omit<
     Partial<FormValues>,
-    'category' | 'contractType' | 'currency' | 'salaryPeriod' | 'languages' | 'screeningQuestions'
+    | 'category'
+    | 'contractType'
+    | 'currency'
+    | 'salaryPeriod'
+    | 'languages'
+    | 'screeningQuestions'
+    | 'accommodationKind'
+    | 'accommodationCostPeriod'
+    | 'accommodationDeducted'
+    | 'accommodationRegistration'
+    | 'accommodationAfterContract'
   > {
+  accommodationKind?: string;
+  accommodationCostPeriod?: string;
+  accommodationDeducted?: boolean | null;
+  accommodationRegistration?: boolean | null;
+  accommodationAfterContract?: string;
   category?: string;
   contractType?: string;
   currency?: string;
@@ -441,8 +535,8 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
   requiresDrivingLicense: { step: 7, label: 'requiresDrivingLicense' },
   conditions: { step: 8, label: 'conditionsLabel' },
   benefits: { step: 8, label: 'benefitsLabel' },
-  accommodation: { step: 8, label: 'accommodation' },
-  transport: { step: 8, label: 'transport' },
+  accommodation: { step: 8, label: 'accommodationKindLabel' },
+  transport: { step: 8, label: 'transportLabel' },
   companyDescription: { step: 9, label: 'companyDescriptionLabel' },
   contactEmail: { step: 9, label: 'contactEmailLabel' },
 };
@@ -450,8 +544,41 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
 /** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
 function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> {
   if (!raw) return {};
-  const { category, contractType, currency, salaryPeriod, languages, screeningQuestions, ...rest } = raw;
+  const {
+    category,
+    contractType,
+    currency,
+    salaryPeriod,
+    languages,
+    screeningQuestions,
+    accommodationKind,
+    accommodationCostPeriod,
+    accommodationDeducted,
+    accommodationRegistration,
+    accommodationAfterContract,
+    ...rest
+  } = raw;
   const narrowed: Partial<FormValues> = { ...rest };
+  // 0169: koszty i dodatki. Stara oferta (sama flaga, etykieta „Zapewniamy zakwaterowanie /
+  // transport”) otwiera się jako zakwaterowanie zapewnione / dowóz — bez szczegółów.
+  if (isOneOf(ACCOMMODATION_KINDS, accommodationKind)) narrowed.accommodationKind = accommodationKind;
+  else if (rest.accommodation) narrowed.accommodationKind = 'provided';
+  if (isOneOf(ACCOMMODATION_COST_PERIODS, accommodationCostPeriod)) {
+    narrowed.accommodationCostPeriod = accommodationCostPeriod;
+  }
+  if (isOneOf(ACCOMMODATION_AFTER_CONTRACT, accommodationAfterContract)) {
+    narrowed.accommodationAfterContract = accommodationAfterContract;
+  }
+  const tri = (value: boolean | null | undefined): TriState =>
+    value === true ? 'yes' : value === false ? 'no' : '';
+  narrowed.accommodationDeducted = tri(accommodationDeducted);
+  narrowed.accommodationRegistration = tri(accommodationRegistration);
+  if (rest.transport && !rest.transportShuttle && !rest.transportReimbursed) {
+    narrowed.transportShuttle = true;
+  }
+  if (rest.jointCommittee && !JOINT_COMMITTEE_CODES.includes(rest.jointCommittee)) {
+    narrowed.jointCommittee = '';
+  }
   if (category && (CATEGORY_KEYS as readonly string[]).includes(category)) {
     narrowed.category = category as CategoryKey;
   }
@@ -466,7 +593,8 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     narrowed.languages = languages
       .filter((l) => l.language.trim() !== '')
       .map((l) => ({
-        language: l.language,
+        // Import ogłoszenia (AI) daje nazwę języka — rozpoznana nazwa → kod słownika.
+        language: resolveLanguageCode(l.language) ?? l.language,
         level: ((LANGUAGE_LEVELS as readonly string[]).includes(l.level)
           ? l.level
           : 'basic') as LanguageLevel,
@@ -493,9 +621,11 @@ export function JobWizard({
   const t = useTranslations('jobWizard');
   const tImport = useTranslations('jobImport');
   const tRoot = useTranslations();
+  const tTrust = useTranslations('jobTrust');
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tLang = useTranslations('languageNames');
   const locale = useLocale();
   const router = useRouter();
   const contentLocale: Locale = isLocale(contentLocaleProp)
@@ -552,6 +682,57 @@ export function JobWizard({
     );
   }
 
+  // 0167: podpowiedź przed zapisem — te same wzorce co strażnik w bazie (bez AI). Informacja,
+  // nie blokada: treść z sygnałem trafi do przeglądu zespołu portalu przed publikacją.
+  function renderTrustHint(): React.ReactNode {
+    const categories = jobFraudRisk([
+      values.title,
+      values.workingHours,
+      values.shifts,
+      values.description,
+      ...values.responsibilities,
+      ...values.requirementsMandatory,
+      ...values.requirementsOptional,
+      ...values.conditions,
+      ...values.benefits,
+      values.companyDescription,
+    ]);
+    if (categories.length === 0) return null;
+    return (
+      <p
+        role="note"
+        data-testid="job-trust-hint"
+        className={cn(FORM_WIDE, 'flex min-w-0 items-start gap-2.5 rounded-[16px] border border-warning/40 bg-warning/5 px-[23px] py-4 text-[13px] text-foreground max-[600px]:p-[18px]')}
+      >
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+        <span className="min-w-0">
+          {tTrust('wizardHint', {
+            categories: categories.map((category) => tTrust(JOB_CONTENT_CATEGORY_KEY[category])).join(', '),
+          })}
+        </span>
+      </p>
+    );
+  }
+
+  function renderContentReview(): React.ReactNode {
+    if (!contentReview) return null;
+    const categories = contentReview.categories
+      .map((category) => tTrust(JOB_CONTENT_CATEGORY_KEY[category]))
+      .join(', ');
+    return (
+      <div className="mt-1.5 space-y-1 text-muted-foreground" data-testid="job-content-review-notice">
+        <p className="break-words">
+          {contentReview.status === 'rejected'
+            ? tTrust('reviewRejected', { categories })
+            : tTrust('reviewPending', { categories })}
+        </p>
+        {contentReview.reason ? (
+          <p className="break-words">{tTrust('reviewReason', { reason: contentReview.reason })}</p>
+        ) : null}
+      </div>
+    );
+  }
+
   const [step, setStep] = React.useState<WizardStep>(1);
 
   // P1-10: podpowiedź miasta ze słownika miejscowości (rozpoznana nazwa + propozycje).
@@ -588,12 +769,16 @@ export function JobWizard({
   const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
   // #497: pytania, które blokują publikację (oczekują na przegląd / odrzucone) — z bazy.
   const [screeningReviews, setScreeningReviews] = React.useState<ScreeningReviewNotice[]>([]);
+  // 0167: treść oferty czeka na przegląd albo została odrzucona (publikacja/edycja).
+  const [contentReview, setContentReview] = React.useState<JobContentReviewNotice | null>(null);
   // #325: tryb edycji opublikowanej oferty.
   const isEdit = Boolean(published && initialJobId);
   const [editVersion, setEditVersion] = React.useState<string | null>(published?.updatedAt || null);
   const [publicSlug, setPublicSlug] = React.useState(published?.slug ?? '');
   // Krok z błędami wykryty przy „Zapisz zmiany" (komunikat nad formularzem).
   const [editInvalidStep, setEditInvalidStep] = React.useState<WizardStep | null>(null);
+  /** Krok, który zatrzymał publikację (np. koszt zakwaterowania w kroku 8). */
+  const [publishInvalidStep, setPublishInvalidStep] = React.useState<WizardStep | null>(null);
   const pendingErrorsRef = React.useRef<Set<string> | null>(null);
   const firstScreeningErrorRef = React.useRef<string | null>(null);
   // Tryb edycji: po zapisie każda kolejna zmiana pola znów jest niezapisana — komunikat
@@ -606,7 +791,7 @@ export function JobWizard({
   const showViewLink =
     isEdit && published?.status === 'active' && publicSlug !== '' && !publicSlug.startsWith('draft-');
 
-  // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
+  // Roboczy wiersz dodawania języka: kod ze słownika (0168), nie wolny tekst (I18N-02).
   const [langDraft, setLangDraft] = React.useState('');
   const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
   const [langError, setLangError] = React.useState(false);
@@ -707,7 +892,14 @@ export function JobWizard({
       firstScreeningErrorRef.current = null;
     }
     const data = buildStepData(current, getValues(), contentLocale);
-    const schema = current === 9 && intent === 'draft' ? step9DraftSchema : SCHEMAS[current];
+    // Krok 8 przy publikacji i w edycji opublikowanej oferty: zakwaterowanie zapewnione wymaga
+    // kosztu i informacji o potrąceniu (decyzja właściciela 28.09.2026); szkic może być niepełny.
+    const schema =
+      current === 9 && intent === 'draft'
+        ? step9DraftSchema
+        : current === 8 && (intent === 'publish' || isEdit)
+          ? step8PublishSchema
+          : SCHEMAS[current];
     const result = schema.safeParse(data);
 
     if (!result.success) {
@@ -818,6 +1010,7 @@ export function JobWizard({
       return;
     }
     const ok = await persistStep(step);
+    if (ok && publishInvalidStep === step) setPublishInvalidStep(null);
     if (ok && step < TOTAL_STEPS) setStep((step + 1) as WizardStep);
   }
 
@@ -854,6 +1047,8 @@ export function JobWizard({
       }
       if (res.demo) setDemo(true);
       if (res.updatedAt) setEditVersion(res.updatedAt);
+      // 0167: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu.
+      setContentReview(res.contentReview ?? null);
       if (res.slug) setPublicSlug(res.slug);
       // #829: edycja w trakcie zapisu nie jest zapisana — bez „Zapisano”, przycisk znów aktywny.
       const latest = getValues();
@@ -884,6 +1079,17 @@ export function JobWizard({
   async function handlePublish(): Promise<void> {
     setPublishError(null);
     setScreeningReviews([]);
+    setContentReview(null);
+    // Oferta publiczna z zakwaterowaniem zapewnionym: koszt i potrącenie obowiązkowe — błąd
+    // przy polu w kroku 8 (szkic mógł zostać zapisany bez nich).
+    const costs = validateStep(8, 'publish');
+    if (!costs.ok) {
+      setPublishInvalidStep(8);
+      pendingErrorsRef.current = costs.erroredFields;
+      setStep(8);
+      return;
+    }
+    setPublishInvalidStep(null);
     const ok = await persistStep(9, 'publish');
     if (!ok) return;
 
@@ -899,6 +1105,7 @@ export function JobWizard({
       if (!res.ok) {
         setPublishError(res.error);
         setScreeningReviews(res.screening ?? []);
+        setContentReview(res.contentReview ?? null);
         return;
       }
       router.push('/employer');
@@ -921,6 +1128,51 @@ export function JobWizard({
 
   function errorDescription(name: keyof FormValues): string | undefined {
     return errors[name] ? `${domId(name)}-error` : undefined;
+  }
+
+  /**
+   * Select kroku 8 (0169) z opcją „nie podano” (wartość '' w formularzu). Wywoływany jako
+   * funkcja, nie komponent — stała tożsamość elementów, więc ponowny render nie przemontowuje
+   * listy (fokus i stan otwarcia zostają).
+   */
+  function renderCostSelect(opts: {
+    field: keyof FormValues;
+    label: string;
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (value: string) => void;
+    allowUnset?: boolean;
+    wide?: boolean;
+  }): React.JSX.Element {
+    const { field, label, value, options, onChange, allowUnset = true, wide = false } = opts;
+    const triggerId = `${domId(field)}-trigger`;
+    return (
+      <div className={wide ? `${FORM_FIELD} ${FORM_WIDE}` : FORM_FIELD} id={domId(field)}>
+        <Label htmlFor={triggerId} className={FORM_LABEL_TEXT}>{label}</Label>
+        <Select
+          value={value === '' ? UNSET : value}
+          onValueChange={(next) => onChange(next === UNSET ? '' : next)}
+        >
+          <SelectTrigger
+            className={FORM_SELECT}
+            id={triggerId}
+            aria-invalid={errors[field] ? true : undefined}
+            aria-describedby={errorDescription(field)}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {allowUnset ? <SelectItem value={UNSET}>{t('costsUnset')}</SelectItem> : null}
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FieldError name={field} />
+      </div>
+    );
   }
 
   return (
@@ -984,6 +1236,15 @@ export function JobWizard({
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
           {t('editFixStep', { step: editInvalidStep, title: steps[editInvalidStep - 1]?.title ?? '' })}
+        </p>
+      ) : null}
+      {!isEdit && publishInvalidStep !== null ? (
+        <p
+          role="alert"
+          className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          {t('publishFixStep', { step: publishInvalidStep, title: steps[publishInvalidStep - 1]?.title ?? '' })}
         </p>
       ) : null}
 
@@ -1315,6 +1576,7 @@ export function JobWizard({
                 <FieldError name="responsibilities" />
               </div>
               {renderAssist(5)}
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1371,6 +1633,7 @@ export function JobWizard({
                 <FieldError name="minExperienceYears" />
               </div>
               {renderAssist(6)}
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1414,26 +1677,33 @@ export function JobWizard({
               <div id={domId('languages')} className={`${FORM_FIELD} ${FORM_WIDE}`}>
                 <Label htmlFor="job-language-draft" className={FORM_LABEL_TEXT}>{t('languagesLabel')}</Label>
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
-                  <Input
-                    id="job-language-draft"
-                    className={cn(FORM_INPUT, 'sm:flex-1')}
-                    value={langDraft}
-                    placeholder={t('languageNamePlaceholder')}
-                    aria-invalid={langError || errors.languages ? true : undefined}
-                    aria-describedby={
-                      langError ? 'job-language-draft-error' : errorDescription('languages')
-                    }
-                    onChange={(e) => {
-                      setLangDraft(e.target.value);
-                      if (langError) setLangError(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addLanguage();
-                      }
-                    }}
-                  />
+                  <div className="min-w-0 sm:flex-1">
+                    <Select
+                      value={langDraft}
+                      onValueChange={(val) => {
+                        setLangDraft(val);
+                        if (langError) setLangError(false);
+                      }}
+                    >
+                      <SelectTrigger
+                        id="job-language-draft"
+                        className={FORM_SELECT}
+                        aria-invalid={langError || errors.languages ? true : undefined}
+                        aria-describedby={
+                          langError ? 'job-language-draft-error' : errorDescription('languages')
+                        }
+                      >
+                        <SelectValue placeholder={t('languageSelectPlaceholder')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_CODES.map((code) => (
+                          <SelectItem key={code} value={code}>
+                            {tLang(code)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="w-full sm:w-48">
                     <Select value={levelDraft} onValueChange={(val) => setLevelDraft(val as LanguageLevel)}>
                       <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
@@ -1469,10 +1739,10 @@ export function JobWizard({
                         key={entry.language}
                         className={cn(STATUS, 'inline-flex items-center gap-1 py-0 pr-0 text-[13px] text-foreground')}
                       >
-                        {entry.language} · {LEVEL_LABEL[entry.level]}
+                        {languageDisplayName(entry.language, (code) => tLang(code))} · {LEVEL_LABEL[entry.level]}
                         <button
                           type="button"
-                          aria-label={`${t('remove')}: ${entry.language}`}
+                          aria-label={`${t('remove')}: ${languageDisplayName(entry.language, (code) => tLang(code))}`}
                           onClick={() =>
                             setValue(
                               'languages',
@@ -1580,20 +1850,127 @@ export function JobWizard({
                 />
                 <FieldError name="benefits" />
               </div>
-              <div className="contents">
-                <CheckboxField
-                  id={domId('accommodation')}
-                  label={t('accommodation')}
-                  checked={values.accommodation}
-                  onChange={(c) => setValue('accommodation', c, { shouldDirty: true })}
-                />
-                <CheckboxField
-                  id={domId('transport')}
-                  label={t('transport')}
-                  checked={values.transport}
-                  onChange={(c) => setValue('transport', c, { shouldDirty: true })}
-                />
-              </div>
+              {/* 0169: „Koszty i dodatki” — deklaracja pracodawcy, wszystkie pola opcjonalne. */}
+              <fieldset className={`${FORM_WIDE} ${FORM_GRID} min-w-0`} data-testid="job-costs-fieldset">
+                <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('costsLegend')}</legend>
+                <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('costsHint')}</p>
+                {renderCostSelect({
+                  field: 'accommodationKind',
+                  label: t('accommodationKindLabel'),
+                  value: values.accommodationKind,
+                  options: ACCOMMODATION_KINDS.map((k) => ({ value: k, label: t(`accommodationKind.${k}`) })),
+                  onChange: (v) =>
+                    setValue('accommodationKind', v as FormValues['accommodationKind'], { shouldDirty: true }),
+                })}
+                {values.accommodationKind === 'provided' ? (
+                  <>
+                    <div className={FORM_FIELD}>
+                      <Label htmlFor={domId('accommodationCost')} className={FORM_LABEL_TEXT}>
+                        {t('accommodationCostLabel')}
+                      </Label>
+                      <Input
+                        className={FORM_INPUT}
+                        id={domId('accommodationCost')}
+                        type="text"
+                        inputMode="decimal"
+                        aria-invalid={errors.accommodationCost ? true : undefined}
+                        aria-describedby={[errorDescription('accommodationCost'), `${domId('accommodationCost')}-hint`]
+                          .filter(Boolean)
+                          .join(' ')}
+                        {...register('accommodationCost')}
+                      />
+                      <p id={`${domId('accommodationCost')}-hint`} className="text-[13px] text-muted-foreground">
+                        {t('accommodationCostHint')}
+                      </p>
+                      <FieldError name="accommodationCost" />
+                    </div>
+                    {renderCostSelect({
+                      field: 'accommodationCostPeriod',
+                      label: t('accommodationCostPeriodLabel'),
+                      value: values.accommodationCostPeriod,
+                      allowUnset: false,
+                      options: ACCOMMODATION_COST_PERIODS.map((p) => ({
+                        value: p,
+                        label: t(`accommodationCostPeriod.${p}`),
+                      })),
+                      onChange: (v) =>
+                        setValue('accommodationCostPeriod', v as AccommodationCostPeriod, { shouldDirty: true }),
+                    })}
+                    {renderCostSelect({
+                      field: 'accommodationDeducted',
+                      label: t('accommodationDeductedLabel'),
+                      value: values.accommodationDeducted,
+                      options: TRI_STATES.map((v) => ({ value: v, label: t(`tri.${v}`) })),
+                      onChange: (v) => setValue('accommodationDeducted', v as TriState, { shouldDirty: true }),
+                    })}
+                    {renderCostSelect({
+                      field: 'accommodationRegistration',
+                      label: t('accommodationRegistrationLabel'),
+                      value: values.accommodationRegistration,
+                      options: TRI_STATES.map((v) => ({ value: v, label: t(`tri.${v}`) })),
+                      onChange: (v) => setValue('accommodationRegistration', v as TriState, { shouldDirty: true }),
+                    })}
+                    {renderCostSelect({
+                      field: 'accommodationAfterContract',
+                      label: t('accommodationAfterContractLabel'),
+                      value: values.accommodationAfterContract,
+                      wide: true,
+                      options: ACCOMMODATION_AFTER_CONTRACT.map((v) => ({
+                        value: v,
+                        label: t(`accommodationAfterContract.${v}`),
+                      })),
+                      onChange: (v) =>
+                        setValue('accommodationAfterContract', v as FormValues['accommodationAfterContract'], {
+                          shouldDirty: true,
+                        }),
+                    })}
+                  </>
+                ) : null}
+                <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                  <p className={FORM_LABEL_TEXT} id="job-transport-label">{t('transportLabel')}</p>
+                  <div role="group" aria-labelledby="job-transport-label">
+                    <CheckboxField
+                      id={domId('transportShuttle')}
+                      label={t('transportShuttle')}
+                      checked={values.transportShuttle}
+                      onChange={(c) => setValue('transportShuttle', c, { shouldDirty: true })}
+                    />
+                    <CheckboxField
+                      id={domId('transportReimbursed')}
+                      label={t('transportReimbursed')}
+                      checked={values.transportReimbursed}
+                      onChange={(c) => setValue('transportReimbursed', c, { shouldDirty: true })}
+                    />
+                  </div>
+                </div>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('mealVoucherDaily')} className={FORM_LABEL_TEXT}>
+                    {t('mealVoucherLabel')}
+                  </Label>
+                  <Input
+                    className={FORM_INPUT}
+                    id={domId('mealVoucherDaily')}
+                    type="text"
+                    inputMode="decimal"
+                    aria-invalid={errors.mealVoucherDaily ? true : undefined}
+                    aria-describedby={errorDescription('mealVoucherDaily')}
+                    {...register('mealVoucherDaily')}
+                  />
+                  <FieldError name="mealVoucherDaily" />
+                </div>
+                {renderCostSelect({
+                  field: 'jointCommittee',
+                  label: t('jointCommitteeLabel'),
+                  value: values.jointCommittee,
+                  options: JOINT_COMMITTEES.map((c) => ({
+                    value: c.code,
+                    label: `${t('jointCommitteeCode', { code: c.code })} — ${c.names[isLocale(locale) ? locale : routing.defaultLocale]}`,
+                  })),
+                  onChange: (v) => setValue('jointCommittee', v, { shouldDirty: true }),
+                })}
+                <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('jointCommitteeHint')}</p>
+              </fieldset>
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1714,6 +2091,10 @@ export function JobWizard({
                     {publishError === 'COMPANY_NOT_VERIFIED' ? (
                       <p className="mt-1.5 text-muted-foreground">{t('notVerifiedNote')}</p>
                     ) : null}
+                    {publishError === 'JOB_CONTENT_REVIEW_REQUIRED' ||
+                    publishError === 'JOB_CONTENT_REJECTED'
+                      ? renderContentReview()
+                      : null}
                     {publishError === 'SCREENING_REVIEW_REQUIRED' ||
                     publishError === 'SCREENING_QUESTION_REJECTED' ? (
                       <>
@@ -1764,6 +2145,12 @@ export function JobWizard({
               error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
             }}
           />
+          {isEdit && contentReview && saveState !== 'error' ? (
+            <div role="status" className="max-w-xl text-[13px]">
+              <p className="font-[650] text-foreground">{tTrust('editPaused')}</p>
+              {renderContentReview()}
+            </div>
+          ) : null}
           {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
               da, więc prowadzimy do listy ofert (#363). */}
           {saveState === 'error' &&
@@ -1867,14 +2254,15 @@ export function JobWizard({
   );
 
   function addLanguage(): void {
-    const name = langDraft.trim();
-    if (name.length < 2) {
+    const code = langDraft;
+    if (!isLanguageCode(code)) {
       setLangError(true);
       return;
     }
-    const exists = values.languages.some((l) => l.language.toLowerCase() === name.toLowerCase());
+    // Ten sam język zapisany dawniej nazwą (np. „Nederlands”) = duplikat kodu `nl`.
+    const exists = values.languages.some((l) => resolveLanguageCode(l.language) === code);
     if (!exists) {
-      setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
+      setValue('languages', [...values.languages, { language: code, level: levelDraft }], {
         shouldDirty: true,
       });
       // #910: dodanie wymaganego języka wyklucza „bez znajomości języka" — flaga i lista
