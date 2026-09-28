@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod/v3";
 import { AppError } from "../errors";
+import { extensionOfKey, safeFileName } from "../files/file-type";
 import {
   withUserTransaction,
   type TransactionPool,
@@ -128,7 +129,8 @@ export async function listOwnCandidateFiles(
       const file = readMetadata(value);
       return {
         id: file.id,
-        fileName: file.fileName,
+        // Nazwa jak w nagłówku pobrania: rozszerzenie z typu, bez znaków kierunku (także stare wiersze).
+        fileName: safeFileName(file.fileName, extensionOfKey(file.key)!, "CV"),
         downloadable:
           file.scanStatus === "clean" || file.scanStatus === "skipped",
       };
