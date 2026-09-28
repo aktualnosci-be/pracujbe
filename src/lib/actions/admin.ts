@@ -373,7 +373,7 @@ export async function decideScreeningReview(
   decision: ScreeningReviewDecision,
   reason: string,
 ): Promise<AdminActionResult> {
-  // #1137 — decyzja produktowa: portal ogłoszeniowy (przegląd pytań niedostępny; baza też odrzuca, 0980).
+  // #1137 — decyzja produktowa: portal ogłoszeniowy (przegląd pytań niedostępny; baza też odrzuca, 0173).
   if (!isRecruitmentEnabled('screening')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   if (!isScreeningReviewDecision(decision)) return { ok: false, error: 'VALIDATION_FAILED' };
   const reasonError = screeningReviewReasonError(decision, typeof reason === 'string' ? reason : '');

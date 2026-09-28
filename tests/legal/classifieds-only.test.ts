@@ -318,7 +318,7 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
 });
 
 /**
- * #1135 (brak wyszukiwalnej bazy profili) i #1137 (bez pytań screeningowych), migracja 0980 na 0171.
+ * #1135 (brak wyszukiwalnej bazy profili) i #1137 (bez pytań screeningowych), migracja 0173 na 0171.
  * Sekcje CLVIS/CLSCR w `supabase/tests/rls.sql` wywołują każde RPC poniżej w trybie ogłoszeniowym.
  */
 const VIS_SCREENING_RPCS = [

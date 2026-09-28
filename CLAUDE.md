@@ -130,7 +130,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
   (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
   segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
-- **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0980` — numer tymczasowy, na 0171):** w trybie
+- **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0173`, na 0171):** w trybie
   ogłoszeniowym `set_candidate_searchable(true)` → `RECRUITMENT_DISABLED` (wyłączenie działa), strażnik
   `trg_aa_recruitment_mode_searchable` odrzuca `is_searchable = true` każdą ścieżką (wyjątek seedu jak w 0171),
   `company_can_see_match_candidate` = false; bez jednorazowego zerowania flag (odczyt firm zamyka 0171). Pytania:
@@ -142,7 +142,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   wyłączony) bez edytora pytań w kroku 7 i bez klucza `screening_questions` w zapisie (`updateJobDraft` odrzuca pytania
   przed bazą), `/admin/pytania` = 404 i bez pozycji w nawigacji, `decideScreeningReview` → `RECRUITMENT_DISABLED`.
   Dowód: `rls.sql` sekcje CLVIS/CLSCR (kontrole ujemne: zdjęty strażnik, polityka z 0078, tryb RECRUITMENT blokuje
-  publikację), rollback `supabase/rollback/0980_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
+  publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.

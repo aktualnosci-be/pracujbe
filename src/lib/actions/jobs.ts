@@ -147,7 +147,7 @@ function asString(value: unknown, fallback = ''): string {
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
-  // 0171/0980 (#1137): baza odrzuca pytania screeningowe w trybie ogłoszeniowym.
+  // 0171/0173 (#1137): baza odrzuca pytania screeningowe w trybie ogłoszeniowym.
   if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
   if (m.includes('COMPANY_SUSPENDED')) return 'COMPANY_SUSPENDED';

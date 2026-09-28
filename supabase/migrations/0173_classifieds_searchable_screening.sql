@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0980 (numer TYMCZASOWY — ostateczny nada integrator) — tryb ogłoszeniowy: bez wyszukiwalnej
+-- 0173 — tryb ogłoszeniowy: bez wyszukiwalnej
 -- bazy profili i bez pytań screeningowych (#1135, #1137; epik #1128).
 --
 -- Decyzja produktowa: portal ogłoszeniowy. Buduje na 0171 (`recruitment_enabled()`,
@@ -34,7 +34,7 @@
 --      (`admin_decide_screening_review`) → `RECRUITMENT_DISABLED` w trybie ogłoszeniowym.
 --   Pytania i przeglądy zapisane przed trybem zostają (bez kasowania, decyzja właściciela).
 --
--- Rollback: supabase/rollback/0980_classifieds_searchable_screening.down.sql (przed rollbackiem
+-- Rollback: supabase/rollback/0173_classifieds_searchable_screening.down.sql (przed rollbackiem
 -- 0171; test w supabase/tests/portal-legal-mode-rollback.sql).
 -- =============================================================================
 
@@ -47,7 +47,7 @@ declare
   v_current boolean;
 begin
   if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
-  -- 0980 (#1135): portal ogłoszeniowy — firmy nie przeglądają profili; wyłączenie działa zawsze.
+  -- 0173 (#1135): portal ogłoszeniowy — firmy nie przeglądają profili; wyłączenie działa zawsze.
   if v_target and not public.recruitment_enabled() then
     raise exception 'RECRUITMENT_DISABLED' using errcode = '42501';
   end if;
@@ -132,7 +132,7 @@ begin
   if p_questions is null or jsonb_typeof(p_questions) <> 'array' or jsonb_array_length(p_questions) > 10 then
     raise exception 'VALIDATION_FAILED: lista pytań (maks. 10)' using errcode = '42501';
   end if;
-  -- 0980 (#1137): portal ogłoszeniowy — bez pytań screeningowych; pusta lista czyści szkic.
+  -- 0173 (#1137): portal ogłoszeniowy — bez pytań screeningowych; pusta lista czyści szkic.
   if jsonb_array_length(p_questions) > 0 and not public.recruitment_write_allowed() then
     raise exception 'RECRUITMENT_DISABLED' using errcode = '42501';
   end if;
@@ -214,7 +214,7 @@ create or replace function public.enforce_screening_review()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_position smallint; v_status text;
 begin
-  -- 0980 (#1137): w trybie ogłoszeniowym pytania są niewidoczne — nie blokują publikacji.
+  -- 0173 (#1137): w trybie ogłoszeniowym pytania są niewidoczne — nie blokują publikacji.
   if not public.recruitment_enabled() then
     return new;
   end if;

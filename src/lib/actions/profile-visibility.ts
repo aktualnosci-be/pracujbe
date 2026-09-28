@@ -21,7 +21,7 @@ import { isRecruitmentEnabled } from '@/lib/portal-mode';
  *
  * Decyzja produktowa: portal ogłoszeniowy (#1135) — w trybie ogłoszeniowym firmy nie przeglądają
  * profili: akcja zwraca `RECRUITMENT_DISABLED` bez zapytania do bazy (sekcja nie jest renderowana;
- * baza i tak odrzuca włączenie, 0980).
+ * baza i tak odrzuca włączenie, 0173).
  */
 
 export type SetProfileVisibilityResult =

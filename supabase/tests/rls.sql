@@ -18207,9 +18207,9 @@ reset role;
 
 -- ============================================================================
 -- CLVIS / CLSCR — tryb ogłoszeniowy: bez wyszukiwalnej bazy profili (#1135) i bez pytań
--- screeningowych (#1137); migracja 0980 (numer tymczasowy) na 0171. Start i koniec w RECRUITMENT.
+-- screeningowych (#1137); migracja 0173 na 0171. Start i koniec w RECRUITMENT.
 -- ============================================================================
-\echo '--- CLVIS brak wyszukiwalnej bazy profili w trybie ogłoszeniowym (0980, #1135) ---'
+\echo '--- CLVIS brak wyszukiwalnej bazy profili w trybie ogłoszeniowym (0173, #1135) ---'
 \set CL10C 'c1a10980-0000-0000-0000-0000000000c1'
 reset role; reset app.current_uid;
 select pg_temp.assert(public.recruitment_enabled(), 'CLVIS-pre tryb RECRUITMENT po PLM');
@@ -18311,7 +18311,7 @@ set role authenticated; set app.current_uid = :'CL10C'; select pg_temp.assert_cl
 select pg_temp.assert(public.set_candidate_searchable(true), 'CLVIS-6 w trybie RECRUITMENT włączenie działa');
 reset role; reset app.current_uid;
 
-\echo '--- CLSCR pytania screeningowe wyłączone w trybie ogłoszeniowym (0980, #1137) ---'
+\echo '--- CLSCR pytania screeningowe wyłączone w trybie ogłoszeniowym (0173, #1137) ---'
 \set CSJ  'c1a10980-0000-0000-0000-0000000000b1'
 \set CSJ2 'c1a10980-0000-0000-0000-0000000000b2'
 \set CSJ3 'c1a10980-0000-0000-0000-0000000000b3'

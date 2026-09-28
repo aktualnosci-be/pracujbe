@@ -13,8 +13,8 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- 0980 (#1135, #1137) stoi na 0171 — cofana pierwsza (odwrotna kolejność migracji).
-\ir ../rollback/0980_classifieds_searchable_screening.down.sql
+-- 0173 (#1135, #1137) stoi na 0171 — cofana pierwsza (odwrotna kolejność migracji).
+\ir ../rollback/0173_classifieds_searchable_screening.down.sql
 select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
      where t.tgname like 'trg_aa_recruitment_mode%'
        and c.relname in ('candidate_profiles', 'job_screening_questions', 'screening_question_reviews'))
@@ -23,7 +23,7 @@ select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on 
   and position('recruitment_enabled' in pg_get_functiondef('public.get_public_job_screening_questions(uuid)'::regprocedure)) = 0
   and position('recruitment_enabled' in pg_get_functiondef('public.enforce_screening_review()'::regprocedure)) = 0
   and position('recruitment_enabled' in pg_get_functiondef('public.company_can_see_match_candidate(uuid)'::regprocedure)) = 0,
-  'CL0980-R rollback 0980 usuwa strażniki i przywraca funkcje sprzed 0980');
+  'CL0173-R rollback 0173 usuwa strażniki i przywraca funkcje sprzed 0173');
 \ir ../rollback/0171_portal_legal_mode.down.sql
 select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is null
   and to_regprocedure('public.admin_set_portal_legal_mode(text, text, text)') is null
@@ -40,4 +40,4 @@ rollback;
 select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is not null
   and to_regclass('public.portal_legal_mode') is not null,
   'CL1128-R2 rollback testu cofnięty');
-\echo 'CL0980-R + CL1128-R rollback 0980 i 0171: PASS'
+\echo 'CL0173-R + CL1128-R rollback 0173 i 0171: PASS'

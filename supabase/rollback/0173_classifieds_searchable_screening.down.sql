@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0980 (numer tymczasowy) — tryb ogłoszeniowy: widoczność profili i pytania
+-- Rollback 0173 — tryb ogłoszeniowy: widoczność profili i pytania
 -- screeningowe (#1135, #1137). Uruchamiać ręcznie jako migrator, w jednej transakcji
 -- (psql -1 -f …), PRZED rollbackiem 0171, i dopiero wtedy usunąć wpis z app_migrations.history.
 -- Plik celowo BEZ BEGIN/COMMIT (supabase/tests/portal-legal-mode-rollback.sql wykonuje go
