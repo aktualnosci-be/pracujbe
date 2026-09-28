@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
-import { useClassifiedsMode as withClassifiedsMode } from '../helpers/portal-mode';
+import { withClassifiedsMode } from '../helpers/portal-mode';
 
 /**
  * Tryb ogłoszeniowy (#1148; epik #1128) — decyzja produktowa: portal ogłoszeniowy.
