@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -79,6 +80,8 @@ beforeAll(async () => {
 afterAll(async () => { await realSession.db?.stop(); });
 
 describe('wiadomości na PostgreSQL (#25)', () => {
+  // #1134: rozmowy istnieją tylko w trybie RECRUITMENT.
+  withRecruitmentMode();
   it('get_or_create_conversation: strona aplikacji otwiera rozmowę, ponowienie = ta sama', async () => {
     actAs(anna);
     const first = await messagesActions.openConversation({ applicationId: application });
@@ -228,6 +231,8 @@ describe('zapisane wyszukiwania (#100)', () => {
 });
 
 describe('blokada firmy (#97)', () => {
+  // #1134: rozmowy (a z nimi blokada wiadomości firmy) istnieją tylko w trybie RECRUITMENT.
+  withRecruitmentMode();
   it('kandydatka blokuje firmę: lista, szczegół oferty, blokada wiadomości firmy; inny kandydat bez zmian', async () => {
     actAs(anna);
     expect(await blocksActions.setCompanyBlockAction(companyX, true)).toEqual({ ok: true, blocked: true });
@@ -256,6 +261,8 @@ describe('blokada firmy (#97)', () => {
 });
 
 describe('widoczność profilu (#494)', () => {
+  // #1135: widoczność profilu dla firm istnieje tylko w trybie RECRUITMENT (baza: startPortalDb).
+  withRecruitmentMode();
   it('niekompletny profil nie włączy widoczności; kompletny — tak, stan z bazy, tylko własny', async () => {
     actAs(anna);
     expect(await visibilityData.loadProfileVisibility()).toEqual({

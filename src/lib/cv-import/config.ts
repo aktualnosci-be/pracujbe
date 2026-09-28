@@ -2,6 +2,7 @@ import 'server-only';
 
 import { isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Konfiguracja importu CV przez AI (#487, #498). Czytana leniwie, wyłącznie na serwerze —
@@ -12,7 +13,9 @@ import { isProductionMode } from '@/lib/env';
  * Funkcja jest WIDOCZNA tylko gdy:
  *   - `AI_CV_IMPORT_ENABLED` = `1`/`true` (domyślnie wyłączona, także w produkcji), ORAZ
  *   - jest dostawca: `OPENAI_API_KEY` albo — tylko poza trybem produkcyjnym — atrapa
- *     `AI_CV_IMPORT_PROVIDER=fixture` (E2E i lokalny UX bez kosztów i bez sieci).
+ *     `AI_CV_IMPORT_PROVIDER=fixture` (E2E i lokalny UX bez kosztów i bez sieci), ORAZ
+ *   - tryb produktu to `RECRUITMENT` (#1138 — decyzja produktowa: portal ogłoszeniowy; w trybie
+ *     ogłoszeniowym import CV nie istnieje niezależnie od `AI_CV_IMPORT_ENABLED`, fail-closed).
  */
 
 export type CvImportProvider = 'openai' | 'fixture';
@@ -23,6 +26,7 @@ function flagOn(value: string | undefined): boolean {
 
 /** Dostawca ekstrakcji albo `null`, gdy funkcja jest wyłączona/nieskonfigurowana. */
 export function cvImportProvider(): CvImportProvider | null {
+  if (!isRecruitmentEnabled('cvImport')) return null;
   if (!flagOn(process.env.AI_CV_IMPORT_ENABLED)) return null;
   if (process.env.AI_CV_IMPORT_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';

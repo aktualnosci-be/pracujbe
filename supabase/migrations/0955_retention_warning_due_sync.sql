@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0450_retention_warning_due_sync.sql — numer tymczasowy (integrator nada ostateczny).
+-- 0955_retention_warning_due_sync.sql — numer tymczasowy (integrator nada ostateczny).
 --
 -- #862: `admin_set_retention_policy` zmieniała wyłącznie `retention_policies.period`, nie
 -- dotykając już zapisanych `retention_warnings.due_at`. Wydłużenie okresu retencji PO

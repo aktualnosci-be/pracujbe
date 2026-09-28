@@ -18,6 +18,7 @@ import {
   TAG,
 } from '@/components/dashboard/panel-styles';
 import { DASH_GRID, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
+import { languageDisplayName } from '@/lib/languages';
 import { cn } from '@/lib/utils';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
@@ -29,6 +30,7 @@ import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import { isCvImportEnabled } from '@/lib/cv-import/config';
+import { isRecruitmentEnabled, notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Panel kandydata — Profil. Wygląd: `#people/profile` z prototypu „04 Ludzie i praca”
@@ -71,13 +73,16 @@ export default async function CandidateProfilePage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-
-  const [t, tp, to, tc] = await Promise.all([
+  // #1142: tryb ogłoszeniowy — bez profilu zawodowego (404).
+  notFoundUnlessRecruitment();
+  const [t, tp, to, tc, tLang] = await Promise.all([
     getTranslations({ locale, namespace: 'dashboard' }),
     getTranslations({ locale, namespace: 'candidatePassport' }),
     getTranslations({ locale, namespace: 'onboarding' }),
     getTranslations({ locale, namespace: 'common' }),
+    getTranslations({ locale, namespace: 'languageNames' }),
   ]);
+  const cvUploadOn = isRecruitmentEnabled('cvAccess');
   const [profile, passport, files] = await Promise.all([
     getCandidateProfileSummary(),
     getCandidatePassport(),
@@ -148,7 +153,7 @@ export default async function CandidateProfilePage({
               <h3 className={INFO_LABEL}>{to('availabilityLabel')}</h3>
               {availabilityKey ? <p className={INFO_VALUE}>{to(availabilityKey)}</p> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>
-            {([['skills', to('skillsLabel'), passport.skills], ['languages', to('languagesLabel'), passport.languages], ['certificates', to('certificatesLabel'), passport.certificates]] as const).map(([key, label, values]) => <div key={key} className="col-span-2 min-w-0">
+            {([['skills', to('skillsLabel'), passport.skills], ['languages', to('languagesLabel'), passport.languages.map((l) => languageDisplayName(l, (code) => tLang(code)))], ['certificates', to('certificatesLabel'), passport.certificates]] as const).map(([key, label, values]) => <div key={key} className="col-span-2 min-w-0">
               <h3 className={INFO_LABEL}>{label}</h3>
               {values.length ? <ul className="flex flex-wrap gap-1.5">{values.map((value) => <li key={value} className={cn(TAG, 'text-[13px] text-foreground')}>{value}</li>)}</ul> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>)}
@@ -168,11 +173,15 @@ export default async function CandidateProfilePage({
           <Link href="/candidate/onboarding" className={cn(BTN_SECONDARY, 'w-full')}>{t('completeProfile')}</Link>
         </section>}
 
-        {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-        <CvUpload
-          items={files.status === 'ready' ? files.items : []}
-          loadFailed={files.status === 'error'}
-        />
+        {/* Dokumenty / CV (prywatny bucket + signed URLs). #1138: w trybie ogłoszeniowym bez
+            wgrywania — tylko lista wcześniej wgranych plików (pobranie/usunięcie), gdy istnieją. */}
+        {cvUploadOn || files.status === 'error' || (files.status === 'ready' && files.items.length > 0) ? (
+          <CvUpload
+            items={files.status === 'ready' ? files.items : []}
+            loadFailed={files.status === 'error'}
+            allowUpload={cvUploadOn}
+          />
+        ) : null}
         </div>
       </div>
     </div>

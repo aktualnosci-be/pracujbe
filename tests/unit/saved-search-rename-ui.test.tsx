@@ -17,7 +17,7 @@ import en from '@/messages/en.json';
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ refresh }),
-  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+  Link: ({ href, locale: _locale, children, ...rest }: { href: string; locale?: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>{children}</a>
   ),
 }));
@@ -31,6 +31,7 @@ const SEARCH = {
   id: '5a6b7c8d-1e2f-4a3b-8c4d-5e6f7a8b9c0d',
   name: 'Magazyn Liège',
   query: '?category=warehouse',
+  locale: 'pl' as const,
   frequency: 'daily' as const,
   alertsEnabled: true,
   lastAlertAt: null,
@@ -41,7 +42,7 @@ const SEARCH = {
 function renderList(locale: 'pl' | 'en' = 'pl') {
   return render(
     <NextIntlClientProvider locale={locale} messages={locale === 'pl' ? pl : en}>
-      <SavedSearchList searches={[SEARCH]} />
+      <SavedSearchList currentLocale={locale} searches={[SEARCH]} />
     </NextIntlClientProvider>,
   );
 }

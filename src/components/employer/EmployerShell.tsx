@@ -3,6 +3,7 @@
 import * as React from 'react';
 import {
   Building2,
+  FileText,
   ClipboardList,
   Inbox,
   LayoutDashboard,
@@ -15,6 +16,7 @@ import { useTranslations } from 'next-intl';
 
 import { usePathname, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
+import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { CompanySwitcher, type CompanySwitcherCompany } from '@/components/employer/CompanySwitcher';
@@ -35,6 +37,7 @@ const HREF = {
   candidates: '/employer/kandydaci',
   applications: '/employer/aplikacje',
   messages: '/employer/wiadomosci',
+  templates: '/employer/szablony',
   company: '/employer/firma',
   team: '/employer/zespol',
   settings: '/employer/ustawienia',
@@ -65,6 +68,13 @@ export interface EmployerShellProps {
   activeCompanyName?: string;
   /** Nazwa zalogowanego użytkownika (topbar). */
   userName?: string;
+  /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
+  keepSessionAlive?: boolean;
+  /**
+   * Tryb produktu z serwera (`isRecruitmentEnabled()`, #1128) — komponent kliencki nie liczy go
+   * sam. Domyślnie `false` = tryb ogłoszeniowy (fail-closed): bez pozycji rekrutacyjnych.
+   */
+  recruitmentEnabled?: boolean;
 }
 
 function initialsOf(name: string): string {
@@ -106,6 +116,8 @@ export function EmployerShell({
   activeCompanyId,
   activeCompanyName,
   userName,
+  keepSessionAlive,
+  recruitmentEnabled = false,
 }: EmployerShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
@@ -113,9 +125,16 @@ export function EmployerShell({
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.offers, label: td('navOffers'), icon: <ClipboardList /> },
-    { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
-    { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
-    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
+    // #1133/#1139/#1144: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnych.
+    ...(recruitmentEnabled
+      ? [
+          { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
+          { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
+        ]
+      : []),
+    // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
+    ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
+    { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
     { href: HREF.team, label: td('navTeam'), icon: <UserPlus /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
@@ -164,6 +183,7 @@ export function EmployerShell({
       unreadMessages={unreadMessages}
       notificationsHref="/employer/powiadomienia"
     >
+      {keepSessionAlive ? <SessionKeepAlive /> : null}
       {mode === 'error' ? <ShellLoadError /> : null}
       {children}
     </DashboardShell>

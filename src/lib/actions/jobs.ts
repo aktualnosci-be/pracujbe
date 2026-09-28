@@ -4,14 +4,31 @@ import { randomUUID } from 'node:crypto';
 
 import { revalidatePath } from 'next/cache';
 
-import { getActiveCompanyId } from '@/lib/company-context';
+import { getActiveCompanyId, getExpectedActiveCompany } from '@/lib/company-context';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
-import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
+import {
+  getPortalIdentity,
+  isPortalDataConfigured,
+  isServiceDatabaseConfigured,
+  withPortalTransaction,
+  withServiceRole,
+} from '@/lib/db/portal';
+import { captureError } from '@/lib/error-report';
+import { checkJobContentWithAi, jobFraudCheckProvider } from '@/lib/job-trust/ai-check';
+import {
+  jobContentReviewNotice,
+  parseJobTrustState,
+  type JobContentReviewNotice,
+  type JobTrustState,
+} from '@/lib/job-trust/review';
 import type { PortalIdentity } from '@/lib/auth/session';
 import { execute, jsonArg, queryOne, queryRows, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
+import { jobCostsPatch } from '@/lib/job-costs';
+import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import {
   buildScreeningReviewNotices,
   type ScreeningReviewNotice,
@@ -25,8 +42,10 @@ import {
   step5Schema,
   step6Schema,
   step7Schema,
+  step8PublishSchema,
   step8Schema,
   step9DraftSchema,
+  step9PublishedSchema,
   type JobStep1,
   type JobStep2,
   type JobStep3,
@@ -81,9 +100,22 @@ export type CreateDraftResult =
 export type SaveDraftResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
 export type PublishResult =
   | { ok: true; demo?: boolean }
-  | { ok: false; error: ErrorCode; screening?: ScreeningReviewNotice[] };
+  | {
+      ok: false;
+      error: ErrorCode;
+      screening?: ScreeningReviewNotice[];
+      /** 0167: treść oferty czeka na przegląd albo została odrzucona (z uzasadnieniem). */
+      contentReview?: JobContentReviewNotice;
+    };
 export type UpdatePublishedResult =
-  | { ok: true; demo?: boolean; slug?: string; updatedAt?: string }
+  | {
+      ok: true;
+      demo?: boolean;
+      slug?: string;
+      updatedAt?: string;
+      /** 0167: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu. */
+      contentReview?: JobContentReviewNotice;
+    }
   | { ok: false; error: ErrorCode };
 
 /** Syntetyczny identyfikator szkicu w trybie DEMO (brak env) — przepływ działa bez DB. */
@@ -116,14 +148,20 @@ function asString(value: unknown, fallback = ''): string {
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // 0171/0173 (#1137): baza odrzuca pytania screeningowe w trybie ogłoszeniowym.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
   if (m.includes('COMPANY_SUSPENDED')) return 'COMPANY_SUSPENDED';
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
+  if (m.includes('JOB_ACCOMMODATION_TERMS_REQUIRED')) return 'JOB_ACCOMMODATION_TERMS_REQUIRED';
+  if (m.includes('JOB_APPLY_CHANNEL_REQUIRED')) return 'JOB_APPLY_CHANNEL_REQUIRED';
   if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
   if (m.includes('SCREENING_QUESTION_REJECTED')) return 'SCREENING_QUESTION_REJECTED';
   if (m.includes('SCREENING_REVIEW_REQUIRED')) return 'SCREENING_REVIEW_REQUIRED';
+  if (m.includes('JOB_CONTENT_REJECTED')) return 'JOB_CONTENT_REJECTED';
+  if (m.includes('JOB_CONTENT_REVIEW_REQUIRED')) return 'JOB_CONTENT_REVIEW_REQUIRED';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('ENTITLEMENT_LIMIT')) return 'ENTITLEMENT_LIMIT';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
@@ -196,8 +234,14 @@ function validateJobStep(step: number, data: unknown): unknown | null {
 /**
  * Tworzy szkic oferty dla aktywnej firmy zalogowanego użytkownika i zwraca jego `id`.
  * @param locale locale, w którym pracodawca tworzy ofertę (default_locale oferty).
+ * @param expectedCompanyId firma, dla której wyrenderowano kreator (EMP-02). Gdy aktywna firma
+ *   zmieniła się w międzyczasie (inna karta, przełącznik), szkic NIE powstaje w nowej firmie —
+ *   `ACTIVE_COMPANY_CHANGED`.
  */
-export async function createJobDraft(locale?: string): Promise<CreateDraftResult> {
+export async function createJobDraft(
+  locale: string | undefined,
+  expectedCompanyId: string | null | undefined,
+): Promise<CreateDraftResult> {
   const loc = normalizeLocale(locale);
 
   if (!isPortalDataConfigured()) {
@@ -215,10 +259,14 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    const id = await withPortalTransaction(me, async (tx) => {
-      // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo".
-      const companyId = await getActiveCompanyId(tx, me.id);
-      if (!companyId) return null;
+    const id = await withPortalTransaction(me, async (tx): Promise<string | { error: ErrorCode }> => {
+      // AKTYWNA firma z kontekstu (cookie-aware, zwalidowana — FUN-07), nie „pierwsze członkostwo",
+      // i tylko ta, którą pokazywał kreator (EMP-02).
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) {
+        return { error: expected.error === 'NOT_FOUND' ? 'PERMISSION_DENIED' : expected.error };
+      }
+      const companyId = expected.context.activeId;
       // jobs_insert (RLS, recruiter+ aktywnej firmy); created_by = użytkownik sesji.
       const { rows } = await execute(tx, 'jobs.create-draft',
         `INSERT INTO public.jobs
@@ -228,7 +276,7 @@ export async function createJobDraft(locale?: string): Promise<CreateDraftResult
         [companyId, me.id, `draft-${randomUUID()}`, loc, PLACEHOLDER_CATEGORY, PLACEHOLDER_CONTRACT]);
       return asString(asRecord(rows[0])['id']);
     });
-    if (id === null) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (typeof id !== 'string') return { ok: false, error: id.error };
     if (!id) return { ok: false, error: 'INTERNAL' };
     return { ok: true, id };
   } catch (error) {
@@ -320,6 +368,13 @@ export async function updateJobDraft(
   const parsed = validateJobStep(step, data);
   if (parsed === null) return { ok: false, error: 'VALIDATION_FAILED' };
 
+  // #1137 — decyzja produktowa: portal ogłoszeniowy. Bez pytań screeningowych: niepusta lista
+  // odrzucona przed bazą, pusta nie dotyka pytań w bazie (klucz poza treścią kroku).
+  const screeningOff = step === 7 && !isRecruitmentEnabled('screening');
+  if (screeningOff && (parsed as JobStep7).screeningQuestions.length > 0) {
+    return { ok: false, error: 'RECRUITMENT_DISABLED' };
+  }
+
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
@@ -341,6 +396,7 @@ export async function updateJobDraft(
       // części cofa krok w całości, szkic nie zostaje w stanie mieszanym.
       const content = buildDraftStepContent(step, parsed);
       if (!content) return 'VALIDATION_FAILED';
+      if (screeningOff) delete content['screening_questions'];
       await rpc(tx, 'save_job_draft', { p_job_id: jobId, p_content: jsonArg(content) });
       return null;
     });
@@ -387,9 +443,13 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       min_experience_years: s6.minExperienceYears ?? null,
       requires_driving_license: s7.requiresDrivingLicense,
       no_language_required: s7.noLanguageRequired,
-      accommodation: s8.accommodation,
-      transport: s8.transport,
       contact_email: nullIfEmpty(s9.contactEmail),
+      // #1129 (0172): kanał aplikowania — rewizja bez żadnego jest odrzucana (także w bazie).
+      apply_url: nullIfEmpty(s9.applyUrl),
+      apply_email: nullIfEmpty(s9.applyEmail),
+      apply_phone: nullIfEmpty(s9.applyPhone),
+      // 0169: flagi filtrów + koszty i dodatki (ten sam kształt co zapis kroku 8).
+      ...jobCostsPatch(s8),
     },
     translation: {
       description: s5.description,
@@ -437,6 +497,14 @@ export async function updatePublishedJob(
   for (let i = 0; i < 9; i += 1) {
     const value = validateJobStep(i + 1, steps[i]);
     if (value === null) return { ok: false, error: 'VALIDATION_FAILED' };
+    // Oferta publiczna: zakwaterowanie zapewnione wymaga kosztu i potrącenia (28.09.2026).
+    if (i + 1 === 8 && !step8PublishSchema.safeParse(steps[i]).success) {
+      return { ok: false, error: 'JOB_ACCOMMODATION_TERMS_REQUIRED' };
+    }
+    // Oferta publiczna: co najmniej jeden kanał aplikowania (#1129, decyzja 28.09.2026).
+    if (i + 1 === 9 && !step9PublishedSchema.safeParse(steps[i]).success) {
+      return { ok: false, error: 'JOB_APPLY_CHANNEL_REQUIRED' };
+    }
     parsed.push(value);
   }
   const content = buildPublishedContent(parsed);
@@ -462,16 +530,83 @@ export async function updatePublishedJob(
       }),
     );
 
+    // 0167: drugi sygnał (AI, za flagą) dla nowej treści; reguły działają już w bazie.
+    await runAiContentCheck(me, jobId);
+    const trust = await loadJobTrustState(me, jobId);
+    const contentReview = jobContentReviewNotice(trust) ?? undefined;
+    const version = contentReview ? await readJobVersion(me, jobId) : null;
+
     revalidatePath('/[locale]/employer/oferty', 'page');
     revalidatePath('/[locale]/oferty-pracy/[slug]', 'page');
+    // Wstrzymanie do przeglądu zdejmuje ofertę z publicznych list (ISR).
+    if (contentReview) revalidatePublicJobPaths();
     const saved = asRecord(data);
     return {
       ok: true,
       slug: asString(saved['slug']) || undefined,
-      updatedAt: asString(saved['updated_at']) || undefined,
+      // Wstrzymanie podbija wersję oferty — kolejny zapis musi znać nową (CAS).
+      updatedAt: version ?? (asString(saved['updated_at']) || undefined),
+      ...(contentReview ? { contentReview } : {}),
     };
   } catch (error) {
     return { ok: false, error: failureCode(error) };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Zaufanie ofert (0167): stan przeglądu treści i drugi sygnał AI
+ * ------------------------------------------------------------------------- */
+
+/** Stan treści oferty (`job_trust_state`, pod RLS: członek firmy). Błąd odczytu → null. */
+async function loadJobTrustState(me: PortalIdentity, jobId: string): Promise<JobTrustState | null> {
+  try {
+    return await withPortalTransaction(me, async (tx) =>
+      parseJobTrustState(await rpc(tx, 'job_trust_state', { p_job_id: jobId })),
+    );
+  } catch (error) {
+    captureError(error, { area: 'jobs.loadJobTrustState' });
+    return null;
+  }
+}
+
+async function readJobVersion(me: PortalIdentity, jobId: string): Promise<string | null> {
+  try {
+    const row = await withPortalTransaction(me, (tx) =>
+      queryOne<Record<string, unknown>>(tx, 'jobs.trust-version',
+        'SELECT updated_at FROM public.jobs WHERE id = $1', [jobId]),
+    );
+    const value = row?.['updated_at'];
+    return value instanceof Date ? value.toISOString() : typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Analiza treści przez AI (drugi sygnał, za flagą `AI_JOB_FRAUD_CHECK_ENABLED`). Tylko dla
+ * treści bez przeglądu (przegląd oczekujący/rozstrzygnięty = nic do dodania, bez kosztu).
+ * Trafienie zapisuje RPC service-role `record_job_content_ai_signal` (kolejka admina; aktywną
+ * ofertę baza wstrzymuje). AI niczego nie odrzuca; każda awaria = same reguły (fail-open).
+ */
+async function runAiContentCheck(me: PortalIdentity, jobId: string): Promise<void> {
+  if (!jobFraudCheckProvider() || !isServiceDatabaseConfigured()) return;
+  const state = await loadJobTrustState(me, jobId);
+  if (!state || state.status !== null) return;
+  const signal = await checkJobContentWithAi(state.content);
+  if (!signal) return;
+  try {
+    await withServiceRole((tx) =>
+      rpc(tx, 'record_job_content_ai_signal', {
+        p_job_id: jobId,
+        p_fingerprint: state.fingerprint,
+        p_categories: signal.categories,
+        p_reason: signal.reason || null,
+        p_confidence: signal.confidence,
+        p_actor: me.id,
+      }),
+    );
+  } catch (error) {
+    captureError(error, { area: 'jobs.recordAiContentSignal' });
   }
 }
 
@@ -489,6 +624,7 @@ async function loadScreeningReviewNotices(
   me: PortalIdentity,
   jobId: string,
 ): Promise<ScreeningReviewNotice[]> {
+  if (!isRecruitmentEnabled('screening')) return [];
   try {
     return await withPortalTransaction(me, async (tx) => {
       const questions = await queryRows(tx, 'jobs.screening-questions-review',
@@ -524,6 +660,10 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
+    // 0167: drugi sygnał (AI) przed publikacją — trafienie trafia do kolejki, a strażnik
+    // w bazie zablokuje aktywację do decyzji admina. Oferta obca/nieistniejąca → brak stanu.
+    await runAiContentCheck(me, jobId);
+
     const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
       // Odczyt tytułu (do zbudowania slug-a); pełna walidacja/kompletność/aktywacja atomowo w RPC.
       const job = await queryOne<Record<string, unknown>>(tx, 'jobs.publish-title',
@@ -539,13 +679,24 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
       return null;
     });
     if (outcome) return { ok: false, error: outcome };
+    // #775: publiczne strony (ISR) muszą pokazać nowo opublikowaną ofertę od razu, nie
+    // dopiero po wygaśnięciu okna rewalidacji.
+    revalidatePublicJobPaths();
     return { ok: true };
   } catch (error) {
     const code = failureCode(error);
     // #497: pytanie screeningowe czeka na przegląd albo zostało odrzucone — kreator pokazuje,
     // których pytań to dotyczy (i uzasadnienie odrzucenia), żeby firma mogła je poprawić.
-    if (me && (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED')) {
+    if (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED') {
+      // Decyzja produktowa: portal ogłoszeniowy — stare pytania i przeglądy są ukryte (baza ich
+      // w tym trybie nie egzekwuje); nigdy nie ujawniamy ich treści ani stanu, bez odczytu.
+      if (!me || !isRecruitmentEnabled('screening')) return { ok: false, error: 'INTERNAL' };
       return { ok: false, error: code, screening: await loadScreeningReviewNotices(me, jobId) };
+    }
+    // 0167: treść oferty czeka na przegląd albo została odrzucona — kreator pokazuje stan.
+    if (me && (code === 'JOB_CONTENT_REVIEW_REQUIRED' || code === 'JOB_CONTENT_REJECTED')) {
+      const contentReview = jobContentReviewNotice(await loadJobTrustState(me, jobId));
+      return { ok: false, error: code, ...(contentReview ? { contentReview } : {}) };
     }
     return { ok: false, error: code };
   }
@@ -604,6 +755,9 @@ export async function setJobStatus(
     // Lista ofert firmy i publiczne widoki muszą pokazać nowy stan.
     revalidatePath('/employer/oferty');
     revalidatePath('/employer');
+    // #775: pause/resume/close/reopen zmieniają, czy oferta jest publicznie widoczna —
+    // bez tego wywołania stary stan (albo brakująca `JobPosting`) mógł zostać w cache ISR.
+    revalidatePublicJobPaths();
     return { ok: true, status: typeof data === 'string' ? data : undefined };
   } catch (error) {
     return { ok: false, error: failureCode(error) };

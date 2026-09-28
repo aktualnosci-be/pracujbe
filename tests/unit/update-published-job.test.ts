@@ -39,11 +39,13 @@ function steps(): unknown[] {
       languages: [{ language: 'Angielski', level: 'basic' }],
       requiredCertificates: ['VCA'],
       requiresDrivingLicense: false,
-      noLanguageRequired: true,
+      // #910: flaga i lista wymaganych języków wykluczają się — fixture zachowuje wymagany
+      // język, więc flaga zostaje wyłączona (inaczej krok byłby odrzucony przez walidację).
+      noLanguageRequired: false,
     },
     { conditions: ['Umowa przez agencję'], benefits: ['Dodatek nocny'], accommodation: true, transport: false },
     // Edycja nie wymaga ponownej zgody na publikację (oferta już jest opublikowana).
-    { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be' },
+    { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be', applyUrl: 'https://firma-a.be/praca' },
   ];
 }
 
@@ -73,7 +75,7 @@ describe('updatePublishedJob (#325)', () => {
         salary_min: 16,
         salary_period: 'hour',
         address: null,
-        no_language_required: true,
+        no_language_required: false,
         accommodation: true,
         contact_email: 'hr@firma-a.be',
       },
@@ -113,6 +115,10 @@ describe('updatePublishedJob (#325)', () => {
     ['COMPANY_NOT_VERIFIED: firma nie jest zweryfikowana', 'COMPANY_NOT_VERIFIED'],
     ['VALIDATION_FAILED: brak wymagań obowiązkowych', 'VALIDATION_FAILED'],
     ['PERMISSION_DENIED: edycja oferty wymaga roli recruiter+', 'PERMISSION_DENIED'],
+    [
+      'JOB_ACCOMMODATION_TERMS_REQUIRED: zakwaterowanie zapewnione wymaga kosztu i informacji o potrąceniu z pensji',
+      'JOB_ACCOMMODATION_TERMS_REQUIRED',
+    ],
   ])('błąd bazy „%s” → kod %s bez tekstu technicznego', async (message, code) => {
     rpcResult = () => {
       throw pgError('P0001', message);
@@ -120,6 +126,26 @@ describe('updatePublishedJob (#325)', () => {
     const result = await updatePublishedJob(JOB, steps(), VERSION);
     expect(result).toEqual({ ok: false, error: code });
     expect(JSON.stringify(result)).not.toContain(message.slice(message.indexOf(':') + 1).trim());
+  });
+
+  it('zakwaterowanie zapewnione bez kosztu/potrącenia → JOB_ACCOMMODATION_TERMS_REQUIRED przed RPC (28.09.2026)', async () => {
+    const withoutDeducted = steps();
+    withoutDeducted[7] = {
+      conditions: [], benefits: [], accommodation: true, transport: false,
+      accommodationKind: 'provided', accommodationCost: 0, accommodationCostPeriod: 'week',
+    };
+    expect(await updatePublishedJob(JOB, withoutDeducted, VERSION)).toEqual({
+      ok: false, error: 'JOB_ACCOMMODATION_TERMS_REQUIRED',
+    });
+    expect(calls()).toHaveLength(0);
+
+    // Kontrola dodatnia: koszt 0 i „nie potrącany” przechodzą do RPC.
+    const complete = steps();
+    complete[7] = { ...(withoutDeducted[7] as object), accommodationDeducted: false };
+    expect(await updatePublishedJob(JOB, complete, VERSION)).toMatchObject({ ok: true });
+    expect(JSON.parse(String(calls()[0]!.args.p_content)).job).toMatchObject({
+      accommodation_kind: 'provided', accommodation_cost: 0, accommodation_deducted: false,
+    });
   });
 
   it('bez zalogowanego użytkownika nie wywołuje RPC', async () => {

@@ -48,7 +48,7 @@ describe('eksport danych (#486) pod sesją', () => {
 });
 
 describe('usunięcie konta (#486) i kolejka storage', () => {
-  it('zły adres → mismatch bez zmian; pracodawca → denied; poprawny → konto, sesje i plik do kolejki', async () => {
+  it('zły adres → mismatch bez zmian; pracodawca → ścieżka pracodawcy (0161); poprawny → konto, sesje i plik do kolejki', async () => {
     const admin = realSession.db!.admin;
     const email = (await admin.query('SELECT email FROM auth.users WHERE id = $1', [alice.id])).rows[0].email as string;
     actAs(alice);
@@ -57,7 +57,11 @@ describe('usunięcie konta (#486) i kolejka storage', () => {
 
     actAs(employer);
     const employerEmail = (await admin.query('SELECT email FROM auth.users WHERE id = $1', [employer.id])).rows[0].email as string;
-    expect(await deleteMyAccountAction(employerEmail)).toEqual({ ok: false, error: 'denied' });
+    // 0161: pracodawca bez firmy usuwa konto ścieżką request_employer_account_erasure
+    // (ostatni właściciel firmy → lastOwner, pokrywa rls.sql ER161).
+    expect(await deleteMyAccountAction('inny@example.invalid')).toEqual({ ok: false, error: 'mismatch' });
+    expect(await deleteMyAccountAction(employerEmail)).toEqual({ ok: true });
+    expect((await admin.query('SELECT count(*)::int AS n FROM auth.users WHERE id = $1', [employer.id])).rows[0].n).toBe(0);
 
     actAs(alice);
     expect(await deleteMyAccountAction(email.toUpperCase())).toEqual({ ok: true });

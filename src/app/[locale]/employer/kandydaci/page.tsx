@@ -1,7 +1,9 @@
 import { cn } from "@/lib/utils";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { notFoundUnlessRecruitment } from "@/lib/portal-mode";
 import { Link } from "@/i18n/navigation";
 import { getMatchedCandidatesPage } from "@/lib/data/employer";
 import {
@@ -67,6 +69,8 @@ export default async function EmployerCandidatesPage({
   params: Promise<{ locale: string }>;
   searchParams: Promise<{ po?: string | string[]; przed?: string | string[] }>;
 }) {
+  // #1133/#1139: tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy) — 404 przed odczytem.
+  notFoundUnlessRecruitment("candidateSearch");
   const { locale } = await params;
   const request = listPageRequest(await searchParams, decodeScoreCursor);
   setRequestLocale(locale);
@@ -74,6 +78,7 @@ export default async function EmployerCandidatesPage({
   const td = await getTranslations({ locale, namespace: "dashboard" });
 
   const result = await getMatchedCandidatesPage(request);
+  if (result.status === "disabled") notFound();
   const readFailed = result.status === "error";
   const candidates = result.status === "ok" ? result.items : [];
   const base = "/employer/kandydaci";

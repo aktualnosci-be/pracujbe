@@ -8,6 +8,7 @@
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
+import { isLocale, routing, type Locale } from '@/i18n/routing';
 
 export type SavedSearchFrequency = 'daily' | 'weekly';
 
@@ -15,6 +16,13 @@ export interface SavedSearch {
   id: string;
   name: string;
   query: string;
+  /**
+   * Język zapisany razem z wyszukiwaniem (#823) — worker alertów dopasowuje słowo kluczowe
+   * do tłumaczenia w TYM języku (0092), więc „Pokaż oferty” musi otworzyć listę pod tym samym
+   * locale, a nie pod aktualnym językiem panelu. Nieobsługiwana/pusta wartość z bazy →
+   * bezpieczny fallback do domyślnego locale (routing.defaultLocale), nigdy dowolny ciąg.
+   */
+  locale: Locale;
   frequency: SavedSearchFrequency;
   alertsEnabled: boolean;
   lastAlertAt: string | null;
@@ -39,10 +47,12 @@ export function mapSavedSearchRow(row: unknown): SavedSearch | null {
   const r = typeof row === 'object' && row !== null ? (row as Record<string, unknown>) : {};
   const id = asStr(r['id']);
   if (!id) return null;
+  const rawLocale = r['locale'];
   return {
     id,
     name: asStr(r['name']),
     query: safeQuery(r['query']),
+    locale: isLocale(rawLocale) ? rawLocale : routing.defaultLocale,
     frequency: r['frequency'] === 'weekly' ? 'weekly' : 'daily',
     alertsEnabled: r['alerts_enabled'] === true,
     lastAlertAt: asStr(r['last_alert_at']) || null,
@@ -59,7 +69,7 @@ export async function loadMySavedSearches(): Promise<SavedSearchesLoad> {
     if (!me) return { status: 'ready', searches: [], demo: false };
     const rows = await withPortalTransaction(me, (tx) =>
       queryRows(tx, 'saved-searches.mine',
-        `SELECT id, name, query, frequency, alerts_enabled, last_alert_at, created_at
+        `SELECT id, name, query, locale, frequency, alerts_enabled, last_alert_at, created_at
            FROM public.saved_searches
           WHERE profile_id = $1
           ORDER BY created_at DESC

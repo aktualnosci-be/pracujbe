@@ -46,6 +46,9 @@ const ROUTES = [
   '/admin/kampanie',
   '/admin/kampanie/demo-k3',
   '/admin/kampanie/demo-k2',
+  // Edytor kampanii (#45, 0155): nowa kampania i nowa rewizja istniejącego sluga.
+  '/admin/kampanie/nowa',
+  '/admin/kampanie/demo-k3/nowa-rewizja',
   // Rejestr naruszeń (#490): lista, nowy wpis, wpis demonstracyjny.
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',
@@ -54,6 +57,8 @@ const ROUTES = [
   '/admin/kontakt',
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
+  // Przegląd treści ofert z sygnałem oszustwa (0167).
+  '/admin/tresc-ofert',
   '/admin/dziennik',
   '/admin/odwolania',
   '/admin/raport-dsa',

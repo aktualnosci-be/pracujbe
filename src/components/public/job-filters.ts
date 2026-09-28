@@ -71,6 +71,8 @@ export interface SidebarFilters {
   accommodation: AccommodationValue[];
   immediate: boolean;
   noLanguageRequired: boolean;
+  /** 0167: tylko oferty spoza agencji pracy tymczasowej (URL `direct=1`). */
+  directOnly: boolean;
   date: DateValue;
 }
 
@@ -85,6 +87,8 @@ export interface FacetItem {
   accommodation: boolean;
   immediate: boolean;
   noLanguageRequired: boolean;
+  /** 0167: oferta agencji pracy tymczasowej. */
+  isAgency?: boolean;
   publishedAt: string;
 }
 
@@ -135,6 +139,7 @@ export function emptySidebarFilters(): SidebarFilters {
     accommodation: [],
     immediate: false,
     noLanguageRequired: false,
+    directOnly: false,
     date: 'any',
   };
 }
@@ -146,6 +151,88 @@ export function splitParam(value: string | undefined): string[] {
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean);
+}
+
+/**
+ * Lokalizacja jest jedynym filtrem CSV, którego wartości pochodzą z wolnego tekstu wpisanego
+ * przez pracodawcę w kreatorze (`jobs.city`, #845) — w przeciwieństwie do kategorii/rodzaju
+ * umowy/zakwaterowania (stały słownik bez przecinka) miasto może samo zawierać przecinek, np.
+ * „Bruxelles, Belgique”. `splitParam`/`join(',')` nie rozróżnia wtedy separatora listy od
+ * przecinka należącego do jednej nazwy — zaznaczenie takiej opcji rozbija ją na dwie wartości
+ * i gubi ofertę, dla której opcja się pojawiła. `parseLocationsParam`/`serializeLocations`
+ * escapują przecinek/backslash wewnątrz KAŻDEJ nazwy backslashem przed złączeniem, więc
+ * separator listy (nieescapowany przecinek) zawsze da się odróżnić od przecinka wewnątrz
+ * nazwy. Zgodność wstecz: istniejący adres bez backslashy (`Brussels,Antwerp`) parsuje się
+ * dokładnie jak dawny `splitParam` — nowy escaping tylko dopisuje backslash, nigdy niczego
+ * nie usuwa z nieescapowanego tekstu.
+ */
+function escapeLocationToken(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/,/g, '\\,');
+}
+
+/** Serializuje listę lokalizacji do jednej wartości parametru `location` (#845). */
+export function serializeLocations(locations: readonly string[]): string {
+  return locations.map(escapeLocationToken).join(',');
+}
+
+/**
+ * Odczytuje parametr `location` z URL, respektując backslash-escaping z
+ * {@link serializeLocations} (#845). Nieescapowany przecinek zawsze kończy jedną wartość;
+ * `\,` i `\\` wracają do dosłownego przecinka/backslasha wewnątrz nazwy.
+ */
+export function parseLocationsParam(value: string | undefined): string[] {
+  if (!value) return [];
+  const tokens: string[] = [];
+  let current = '';
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    if (ch === '\\' && i + 1 < value.length) {
+      current += value[i + 1];
+      i += 1;
+    } else if (ch === ',') {
+      tokens.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  tokens.push(current);
+  return tokens.map((token) => token.trim()).filter(Boolean);
+}
+
+/** Surowe `searchParams` Next.js (App Router) — wartość pojedyncza albo powtórzony klucz. */
+export type RawSearchParams = Record<string, string | string[] | undefined>;
+
+/**
+ * Spłaszcza `searchParams` do pojedynczych wartości tekstowych. Powtórzony klucz (np. kilka
+ * zaznaczonych checkboxów o tej samej nazwie w formularzu bez JavaScriptu, #795 — GET
+ * z przeglądarki koduje wybór jako `category=a&category=b`, nie CSV) jest łączony w JEDNĄ
+ * wartość — dokładnie ten sam format, jakiego oczekuje `splitParam`/`parseLocationsParam`
+ * z linków budowanych przez JS (`sidebarFiltersToParams`). Wcześniej brano tylko pierwszą
+ * wartość klucza, więc fallback bez JavaScriptu nie mógł zbudować ani zmienić zestawu
+ * wielowartościowego filtra (kategoria/lokalizacja/rodzaj umowy/zakwaterowanie).
+ *
+ * `location` jest wolnym tekstem i może sam zawierać przecinek (#845) — łączony jest przez
+ * {@link serializeLocations} (ten sam escaping co JS), pozostałe klucze zwykłym CSV.
+ */
+export function flattenSearchParams(
+  sp: RawSearchParams,
+): Record<string, string | undefined> {
+  const flat: Record<string, string | undefined> = {};
+  for (const key of Object.keys(sp)) {
+    const value = sp[key];
+    if (!Array.isArray(value)) {
+      flat[key] = value;
+      continue;
+    }
+    const parts = value.filter((part) => part.length > 0);
+    if (parts.length === 0) {
+      flat[key] = undefined;
+      continue;
+    }
+    flat[key] = key === 'location' ? serializeLocations(parts) : parts.join(',');
+  }
+  return flat;
 }
 
 export function clampSalary(value: number, unit: SalaryUnit = 'month'): number {
@@ -169,7 +256,7 @@ export function parseSidebarFilters(
   f.categories = splitParam(sp['category']).filter((v): v is CategoryKey =>
     (CATEGORY_KEYS as readonly string[]).includes(v),
   );
-  f.locations = splitParam(sp['location']);
+  f.locations = parseLocationsParam(sp['location']);
   f.contractTypes = splitParam(sp['contractType']).filter(
     (v): v is ContractType => (CONTRACT_TYPES as readonly string[]).includes(v),
   );
@@ -193,6 +280,7 @@ export function parseSidebarFilters(
   );
   f.immediate = sp['immediate'] === '1';
   f.noLanguageRequired = sp['noLang'] === '1';
+  f.directOnly = sp['direct'] === '1';
 
   const date = sp['date'];
   f.date = (DATE_VALUES as readonly string[]).includes(date ?? '')
@@ -259,6 +347,7 @@ export function matchesSidebar(item: FacetItem, f: SidebarFilters): boolean {
 
   if (f.immediate && !item.immediate) return false;
   if (f.noLanguageRequired && !item.noLanguageRequired) return false;
+  if (f.directOnly && item.isAgency) return false;
 
   if (f.date !== 'any') {
     const ts = Date.parse(item.publishedAt);
@@ -293,6 +382,7 @@ export function buildDemoFacets(
     ...(key === 'accommodation' ? { accommodation: [] } : {}),
     ...(key === 'immediate' ? { immediate: false } : {}),
     ...(key === 'noLanguageRequired' ? { noLanguageRequired: false } : {}),
+    ...(key === 'directOnly' ? { directOnly: false } : {}),
   });
   const grouped = (
     field: 'category' | 'city' | 'contractType',
@@ -330,6 +420,9 @@ export function buildDemoFacets(
         matchesSidebar(item, without('noLanguageRequired')) &&
         item.noLanguageRequired,
     ).length,
+    direct: items.filter(
+      (item) => matchesSidebar(item, without('directOnly')) && !item.isAgency,
+    ).length,
   };
 }
 
@@ -345,6 +438,7 @@ export function toFacetItem(job: JobListItem): FacetItem {
     accommodation: job.accommodation,
     immediate: job.immediate,
     noLanguageRequired: job.noLanguageRequired,
+    ...(job.isAgency ? { isAgency: true } : {}),
     publishedAt: job.publishedAt,
   };
 }
@@ -355,7 +449,7 @@ export function sidebarFiltersToParams(
 ): Record<string, string> {
   const params: Record<string, string> = {};
   if (f.categories.length) params['category'] = f.categories.join(',');
-  if (f.locations.length) params['location'] = f.locations.join(',');
+  if (f.locations.length) params['location'] = serializeLocations(f.locations);
   if (f.contractTypes.length)
     params['contractType'] = f.contractTypes.join(',');
   if (f.salaryUnit !== 'month') params['salaryUnit'] = f.salaryUnit;
@@ -368,6 +462,7 @@ export function sidebarFiltersToParams(
     params['accommodation'] = f.accommodation.join(',');
   if (f.immediate) params['immediate'] = '1';
   if (f.noLanguageRequired) params['noLang'] = '1';
+  if (f.directOnly) params['direct'] = '1';
   if (f.date !== 'any') params['date'] = f.date;
   return params;
 }
@@ -382,6 +477,7 @@ export function countActiveSidebar(f: SidebarFilters): number {
     (f.accommodation.length === 1 ? 1 : 0) +
     (f.immediate ? 1 : 0) +
     (f.noLanguageRequired ? 1 : 0) +
+    (f.directOnly ? 1 : 0) +
     (f.date !== 'any' ? 1 : 0)
   );
 }

@@ -38,19 +38,22 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+const COMPANY_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const COMPANY_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
 function openPanel(): void {
   fireEvent.click(screen.getByRole('button', { name: 'jobImport.title' }));
 }
 
 describe('NewJobWizard', () => {
   it('bez flagi: brak kroku importu', () => {
-    render(<NewJobWizard importEnabled={false} />);
+    render(<NewJobWizard importEnabled={false} companyId={COMPANY_A} />);
     expect(screen.queryByRole('button', { name: 'jobImport.title' })).toBeNull();
     expect(screen.getByLabelText('jobWizard.titleLabel')).toBeInTheDocument();
   });
 
   it('kontrola ujemna: zły typ pliku zatrzymany w przeglądarce, bez wywołania serwera', async () => {
-    render(<NewJobWizard importEnabled />);
+    render(<NewJobWizard importEnabled companyId={COMPANY_A} />);
     openPanel();
     const input = screen.getByLabelText('jobImport.fileLabel');
     fireEvent.change(input, { target: { files: [new File(['%PDF'], 'ad.pdf', { type: 'application/pdf' })] } });
@@ -62,7 +65,7 @@ describe('NewJobWizard', () => {
 
   it('błąd serwera (adres wewnętrzny) pokazany przy polu, adres zostaje w polu', async () => {
     importJobListing.mockResolvedValue({ ok: false, error: 'JOB_IMPORT_INVALID_URL' });
-    render(<NewJobWizard importEnabled />);
+    render(<NewJobWizard importEnabled companyId={COMPANY_A} />);
     openPanel();
     const url = screen.getByLabelText('jobImport.urlLabel');
     fireEvent.change(url, { target: { value: 'http://169.254.169.254/' } });
@@ -81,7 +84,7 @@ describe('NewJobWizard', () => {
       sourceLanguage: 'nl',
       savedSteps: [],
     });
-    render(<NewJobWizard importEnabled />);
+    render(<NewJobWizard importEnabled companyId={COMPANY_A} />);
     openPanel();
     fireEvent.change(screen.getByLabelText('jobImport.urlLabel'), { target: { value: 'https://jobs.example/1' } });
     fireEvent.click(screen.getByRole('button', { name: 'jobImport.importUrl' }));
@@ -99,5 +102,33 @@ describe('NewJobWizard', () => {
     // `city` należy do kroku 3 — nie jest wymienione na kroku 1.
     expect(within(note).queryByText('jobWizard.cityLabel')).toBeNull();
     expect(publishJob).not.toHaveBeenCalled();
+    // EMP-02: import wysyła firmę, dla której wyrenderowano kreator.
+    expect((importJobListing.mock.calls[0]![0] as FormData).get('companyId')).toBe(COMPANY_A);
+  });
+
+  it('CC25-02: przełączenie aktywnej firmy montuje kreator od nowa (bez szkicu i wartości poprzedniej)', async () => {
+    importJobListing.mockResolvedValue({
+      ok: true,
+      jobId: '11111111-1111-4111-8111-111111111111',
+      values: { title: 'Orderpicker magazijn' },
+      review: [],
+      suspicious: false,
+      sourceLanguage: 'nl',
+      savedSteps: [1],
+    });
+    const { rerender } = render(<NewJobWizard importEnabled companyId={COMPANY_A} />);
+    openPanel();
+    fireEvent.change(screen.getByLabelText('jobImport.urlLabel'), { target: { value: 'https://jobs.example/1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'jobImport.importUrl' }));
+    await waitFor(() => expect(screen.getByLabelText('jobWizard.titleLabel')).toHaveValue('Orderpicker magazijn'));
+
+    // Kontrola ujemna: odświeżenie dla TEJ SAMEJ firmy zachowuje wynik importu (bez remountu).
+    rerender(<NewJobWizard importEnabled companyId={COMPANY_A} />);
+    expect(screen.getByLabelText('jobWizard.titleLabel')).toHaveValue('Orderpicker magazijn');
+
+    // Router.refresh po przełączeniu na firmę B — kreator bez szkicu i wartości firmy A.
+    rerender(<NewJobWizard importEnabled companyId={COMPANY_B} />);
+    expect(screen.getByLabelText('jobWizard.titleLabel')).toHaveValue('');
+    expect(screen.queryByText('jobImport.successTitle')).toBeNull();
   });
 });

@@ -15,7 +15,15 @@ const MAX_DEPTH = 6;
 const MAX_ARRAY = 50;
 const MAX_STRING = 4000;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Wzorzec UUID. Eksportowany, bo dwa miejsca traktują go różnie: `redactPathSegment`
+ * niżej zostawia go jako identyfikator korelacyjny (np. w logach), ale
+ * `src/lib/error-webhook/message.ts` (`safeRoute`) — dla ścieżki wysyłanej NA ZEWNĄTRZ,
+ * do kanału błędów Discorda — zamienia go na szablon `[id]`, bo w prywatnych trasach
+ * (`/candidate/aplikacje/[id]`, `/employer/aplikacje/[id]`…) taki segment jest realnym
+ * identyfikatorem rekordu (#776), nie tokenem diagnostycznym.
+ */
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Kolejność ma znaczenie: najpierw URL-e (query/fragment), potem pojedyncze wartości. */
 const STRING_RULES: ReadonlyArray<readonly [RegExp, string | ((m: string) => string)]> = [

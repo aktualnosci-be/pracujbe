@@ -161,4 +161,53 @@ describe('MessageComposer (#335, #358)', () => {
     await send(field);
     expect(keyOf(1)).not.toBe(keyOf(0));
   });
+
+  const CONV_A = '00000000-0000-4000-8000-0000000000a1';
+  const CONV_B = '00000000-0000-4000-8000-0000000000b2';
+
+  /**
+   * Odwzorowuje dokładnie to, co robi `MessagesView` (#849): `MessageComposer` dostaje
+   * `key={conversationId}` — pełny remount przy przełączeniu rozmowy, zamiast tej samej
+   * instancji z zachowanym stanem pod nowym `conversationId`.
+   */
+  function Switcher({ withKey }: { withKey: boolean }): React.JSX.Element {
+    const [conversationId, setConversationId] = React.useState(CONV_A);
+    return (
+      <NextIntlClientProvider locale="pl" messages={pl}>
+        <button type="button" onClick={() => setConversationId(CONV_B)}>
+          przełącz rozmowę
+        </button>
+        <MessageComposer
+          key={withKey ? conversationId : 'stały-klucz'}
+          conversationId={conversationId}
+          recipientName={conversationId === CONV_A ? 'Firma A' : 'Firma B'}
+        />
+      </NextIntlClientProvider>
+    );
+  }
+
+  it('key={conversationId}: przełączenie rozmowy czyści szkic zamiast przenieść go do innego odbiorcy (#849)', () => {
+    render(<Switcher withKey />);
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'Warunki ustalone poufnie z firmą A' },
+    });
+    expect(screen.getByRole('textbox')).toHaveValue('Warunki ustalone poufnie z firmą A');
+
+    fireEvent.click(screen.getByRole('button', { name: 'przełącz rozmowę' }));
+
+    expect(screen.getByRole('textbox')).toHaveValue('');
+  });
+
+  it('kontrola ujemna: bez key per rozmowa szkic firmy A trafiłby do firmy B', () => {
+    render(<Switcher withKey={false} />);
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'Warunki ustalone poufnie z firmą A' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'przełącz rozmowę' }));
+
+    // Dokumentuje mechanizm błędu sprzed poprawki: bez remountu instancja przetrwała
+    // przełączenie i treść zaadresowana do A zostałaby wysłana do B.
+    expect(screen.getByRole('textbox')).toHaveValue('Warunki ustalone poufnie z firmą A');
+  });
 });

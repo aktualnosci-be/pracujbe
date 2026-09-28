@@ -162,7 +162,7 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 7: wymaganie i umiejętność dodatkowa, język z poziomem, certyfikat, prawo jazdy.
   await addChip(t('requirementsOptionalLabel'), 'Ervaring met WMS');
   await addChip(t('skillsLabel'), 'Reachtruck');
-  await page.getByLabel(t('languagesLabel'), { exact: true }).fill('Nederlands');
+  await chooseOption(page, page.getByRole('combobox', { name: t('languagesLabel'), exact: true }), msg(LOCALE, 'languageNames.nl'));
   await chooseOption(page, page.getByRole('combobox', { name: t('levelBasic'), exact: true }), t('levelFluent'));
   await page.getByRole('button', { name: t('addLanguage'), exact: true }).click();
   await addChip(t('certificatesLabel'), 'VCA Basis');
@@ -172,8 +172,10 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
     .toEqual([{ kind: 'mandatory', content: 'Nauwkeurig werken' }, { kind: 'optional', content: 'Ervaring met WMS' }]);
   expect(await db(`SELECT skill_label, is_mandatory FROM public.job_skills WHERE job_id = $1 ORDER BY skill_label`, [jobId]))
     .toEqual([{ skill_label: 'Heftruck', is_mandatory: true }, { skill_label: 'Reachtruck', is_mandatory: false }]);
-  expect(await db(`SELECT language_label, level::text FROM public.job_languages WHERE job_id = $1`, [jobId]))
-    .toEqual([{ language_label: 'Nederlands', level: 'fluent' }]);
+  // Słownik (0168): kod `nl` → language_id, etykieta zastępcza = nazwa słownikowa.
+  expect(await db(`SELECT lg.code, jl.level::text FROM public.job_languages jl
+                     JOIN public.languages lg ON lg.id = jl.language_id WHERE jl.job_id = $1`, [jobId]))
+    .toEqual([{ code: 'nl', level: 'fluent' }]);
   expect(await db(`SELECT certificate_label FROM public.job_certificates WHERE job_id = $1`, [jobId]))
     .toEqual([{ certificate_label: 'VCA Basis' }]);
   expect(await draft()).toMatchObject({ requires_driving_license: true });
@@ -181,17 +183,20 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 8: warunki i benefity.
   await addChip(t('conditionsLabel'), 'Vast contract na proefperiode');
   await addChip(t('benefitsLabel'), 'Maaltijdcheques');
-  await page.getByRole('checkbox', { name: t('transport'), exact: true }).check();
+  // 0169: dojazd w „Kosztach i dodatkach” (dowóz ustawia też flagę filtra `transport`).
+  await page.getByRole('checkbox', { name: t('transportShuttle'), exact: true }).check();
   await nextStep(9);
   expect(await translation()).toMatchObject({
     conditions: ['Vast contract na proefperiode'],
     benefits: ['Maaltijdcheques'],
   });
-  expect(await draft()).toMatchObject({ transport: true, accommodation: false });
+  expect(await draft()).toMatchObject({ transport: true, transport_shuttle: true, accommodation: false });
 
   // Krok 9: opis firmy i kontakt — zapis szkicu przy próbie publikacji (niżej).
   await page.getByLabel(t('companyDescriptionLabel'), { exact: true }).fill('Familiebedrijf in havenlogistiek sinds 1998.');
   await page.getByLabel(t('contactEmailLabel'), { exact: true }).fill(`jobs-${run}@e2e.invalid`);
+  // #1129 (0172): kanał aplikowania — wymagany przy publikacji.
+  await page.getByLabel(t('applyUrlLabel'), { exact: true }).fill(`https://example.com/jobs/${run}`);
   expect((await draft()).status).toBe('draft');
 });
 

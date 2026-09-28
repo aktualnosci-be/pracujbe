@@ -135,8 +135,9 @@ test('pracodawca: firma zweryfikowana przez admina, oferta opublikowana pod sesj
   jobId = await employer.request(async (tx) => {
     const [draft] = rows<{ id: string }>(await tx.query(
       `INSERT INTO public.jobs (company_id, created_by, slug, default_locale, title, status, category,
-         contract_type, city, region)
-       VALUES ($1, auth.uid(), $2, 'nl', $3, 'draft', 'logistics', 'permanent', 'Antwerpen', 'Vlaanderen')
+         contract_type, city, region, apply_email)
+       VALUES ($1, auth.uid(), $2, 'nl', $3, 'draft', 'logistics', 'permanent', 'Antwerpen', 'Vlaanderen',
+               'jobs@example.com')
        RETURNING id`, [companyId, `draft-${uuid()}`, JOB_TITLE]));
     await tx.query(
       `INSERT INTO public.job_translations (job_id, locale, title, description, responsibilities)
@@ -186,11 +187,14 @@ test('onboarding kandydata w kreatorze: 6 kroków, walidacja pola, „Terminer�
   // Krok 4: lokalizacja.
   await page.getByLabel(t('city'), { exact: true }).fill('Antwerpen');
   await page.getByLabel(t('radiusLabel'), { exact: true }).fill('30');
-  await page.getByRole('button', { name: t('catB'), exact: true }).click();
+  await page
+    .getByRole('group', { name: t('drivingLicense'), exact: true })
+    .getByRole('button', { name: t('yes'), exact: true })
+    .click();
   await next(t('step5Title')).click();
 
   // Krok 5: języki + certyfikat z datą ważności.
-  await page.getByLabel(t('languagesLabel'), { exact: true }).fill('Néerlandais');
+  await chooseOption(page, page.getByRole('combobox', { name: t('languagesLabel'), exact: true }), msg('fr', 'languageNames.nl'));
   await page.getByRole('button', { name: t('addLanguage'), exact: true }).click();
   await page.getByLabel(t('certificatesLabel'), { exact: true }).fill('VCA');
   await page.getByLabel(t('certificatesLabel'), { exact: true }).press('Enter');

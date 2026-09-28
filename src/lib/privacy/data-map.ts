@@ -187,7 +187,7 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     name: 'Bezpieczeństwo, audyt i limity',
     inCode: 'Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów.',
     processors: [...HOSTING, 'discord-webhook', 'cloudflare-turnstile'],
-    retentionInCode: 'Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie.',
+    retentionInCode: '/api/maintenance (0163): rate_limit_gc — okna limitera starsze niż doba; processed_webhooks_gc — rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. audit_logs bez usuwania w kodzie.',
   },
   'ai-job-import': {
     name: 'Import ogłoszenia przez AI',
@@ -374,6 +374,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       is_searchable: 'preferences',
       searchable_changed_at: 'preferences',
     },
+    note:
+      'Odbiorca „zweryfikowana firma” (wyszukiwanie profili, #494) tylko w trybie RECRUITMENT; w trybie ogłoszeniowym (decyzja produktowa, 0171/0173) firmy nie widzą profili, a włączenie widoczności jest odrzucane.',
   },
   'public.candidate_visibility_events': {
     activities: ['candidate-profile'],
@@ -601,6 +603,10 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       city: 'company',
       verified_by: 'reference',
       status_reason: 'moderation',
+      // 0167: deklaracja agencji pracy tymczasowej i ręczne sprawdzenie numeru przez admina.
+      agency_recognition_number: 'company',
+      agency_checked_by: 'reference',
+      agency_check_note: 'moderation',
     },
   },
   'public.company_members': {
@@ -622,6 +628,24 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     },
     note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
+  'public.company_message_templates': {
+    activities: ['employer-contact'],
+    subjects: ['employer'],
+    columns: { created_by: 'reference' },
+    notPersonal: {
+      name: 'Nazwa szablonu odpowiedzi nadana przez firmę.',
+    },
+    note: 'Szablony odpowiedzi firmy (0170): odczyt recruiter+ firmy, zapis RPC; usuwane kaskadą z firmą.',
+  },
+  'public.company_message_template_variants': {
+    activities: ['employer-contact'],
+    subjects: ['employer'],
+    columns: { body: 'correspondence' },
+    notPersonal: {
+      locale: 'Język wariantu szablonu (pl/nl/fr/en).',
+    },
+    note: 'Treść szablonu pisze rekruter (tekst wolny); numer rejestru/dokumentu odrzucany w akcji (#495). Kasowane z szablonem.',
+  },
   'public.company_vies_checks': {
     activities: ['companies'],
     subjects: ['employer'],
@@ -630,8 +654,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.jobs': {
     activities: ['companies'],
     subjects: ['employer'],
-    columns: { created_by: 'reference', contact_email: 'contact', address: 'company' },
-    note: 'Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera.',
+    columns: {
+      created_by: 'reference',
+      contact_email: 'contact',
+      address: 'company',
+      // #1129 (0172): kanał aplikowania — publiczny w ofercie publicznej (get_public_job).
+      apply_url: 'company',
+      apply_email: 'contact',
+      apply_phone: 'contact',
+    },
+    note: 'Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera. Kanał aplikowania (e-mail, telefon) jest publiczny w ofercie i może wskazywać osobę po stronie firmy.',
   },
 
   // --- E-maile i powiadomienia -------------------------------------------------------------
@@ -721,6 +753,12 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['admin'],
     columns: { updated_by: 'reference' },
     note: 'Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.',
+  },
+  'public.portal_legal_mode': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { changed_by: 'reference' },
+    note: 'Tryb portalu jako dane (0171, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.',
   },
   'public.document_acceptances': {
     activities: ['consents', 'account'],
@@ -976,7 +1014,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['companies'],
     subjects: [],
     columns: {},
-    note: 'Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers.',
+    note:
+      'Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0173) nowe pytania nie są zapisywane, a zapisane nie są pokazywane.',
   },
   'public.screening_question_reviews': {
     activities: ['companies'],
@@ -984,6 +1023,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { requested_by: 'reference', decided_by: 'reference', decision_reason: 'moderation' },
     note:
       'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
+  },
+  'public.job_content_reviews': {
+    activities: ['companies'],
+    subjects: ['employer', 'admin'],
+    columns: {
+      requested_by: 'reference',
+      decided_by: 'reference',
+      decision_reason: 'moderation',
+      ai_reason: 'moderation',
+    },
+    note:
+      'Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
   },
   'public.job_duplications': {
     activities: ['companies'],
@@ -1008,6 +1059,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
   'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
+  'public.joint_committees': DICTIONARY('komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169'),
+  'public.language_aliases': DICTIONARY('nazwy języków PL/NL/FR/EN (0168)'),
   'public.occupations': DICTIONARY('zawody'),
   'public.skills': DICTIONARY('umiejętności'),
   'public.occupation_labels': DICTIONARY('etykiety zawodów ESCO'),

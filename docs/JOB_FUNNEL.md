@@ -1,5 +1,9 @@
 # Lejek ofert — dokumentacja techniczna (#99, #499, #575)
 
+> **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy — lejek zostaje wyłącznie
+> jako statystyki ogłoszenia dla pracodawcy (#1147). Liczniki zgłoszeń przez portal nie mają źródła
+> danych, bo portal nie przyjmuje aplikacji (#1130).
+
 Opis tego, co dzieje się z danymi, gdy strona oferty lub lista ofert zgłasza zdarzenie lejka.
 Same fakty z kodu (stan na 2026-09-25). Ocena prawna (ePrivacy, RODO) jest w szkicu
 [`docs/legal-drafts/eprivacy-lejek.md`](legal-drafts/eprivacy-lejek.md).

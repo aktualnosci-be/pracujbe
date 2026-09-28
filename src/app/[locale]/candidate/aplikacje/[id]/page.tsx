@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote';
 import { notFound } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
@@ -22,6 +23,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
+import { isRecruitmentEnabled, notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Szczegół WŁASNEGO zgłoszenia w panelu kandydata (P1-05/P1-06, strona kandydata): dane wysłane
@@ -53,6 +55,8 @@ export default async function CandidateApplicationDetailPage({
 }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('applications');
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
@@ -125,8 +129,11 @@ export default async function CandidateApplicationDetailPage({
               {t('actionView')}
               <ArrowRight className="size-3.5" aria-hidden="true" />
             </Link>
-          ) : null}
-          {application.conversationId ? (
+          ) : (
+            <JobAvailabilityNote availability={application.jobAvailability} />
+          )}
+          {/* #1134: bez rozmów w trybie ogłoszeniowym (trasa wiadomości = 404). */}
+          {application.conversationId && isRecruitmentEnabled('messaging') ? (
             <Link href={`/candidate/wiadomosci?c=${application.conversationId}`} className={TEXT_LINK}>
               {t('candidateApplicationConversation')}
               <ArrowRight className="size-3.5" aria-hidden="true" />

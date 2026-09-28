@@ -39,13 +39,35 @@ import { createAdditionalCompany, createCompany, updateCompany } from '@/lib/act
 
 export interface CompanyFormProps {
   mode: 'create' | 'edit' | 'add';
+  /**
+   * ID firmy, dla której wyrenderowano formularz (WYMAGANE w trybie `edit`, #801) — akcja
+   * zapisu używa TEGO identyfikatora, nie aktywnej firmy z cookie w chwili wysłania, więc
+   * zmiana aktywnej firmy w innej karcie po otwarciu formularza nie może przekierować zapisu
+   * do innego rekordu.
+   */
+  companyId?: string;
   /** Wartości początkowe (tryb edycji). */
   defaultValues?: { name?: string; vatNumber?: string };
   /** Tryb edycji zweryfikowanej firmy: ostrzeżenie, że zmiana nazwy/VAT wraca do weryfikacji. */
   verified?: boolean;
 }
 
-export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFormProps): React.JSX.Element {
+/**
+ * CC25-01: `useForm` czyta `defaultValues` tylko przy montażu. Po przełączeniu aktywnej firmy
+ * w pasku bocznym TEJ SAMEJ karty (`router.refresh`) RSC podaje nowe `companyId` i wartości,
+ * ale bez klucza komponent zostałby w drzewie ze starymi polami — a zapis poszedłby już do
+ * nowej firmy. Klucz = firma: formularz montuje się od nowa z danymi właściwej firmy.
+ */
+export function CompanyForm(props: CompanyFormProps): React.JSX.Element {
+  return <CompanyFormFields key={props.companyId ?? props.mode} {...props} />;
+}
+
+function CompanyFormFields({
+  mode,
+  companyId,
+  defaultValues,
+  verified = false,
+}: CompanyFormProps): React.JSX.Element {
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -96,7 +118,9 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
           ? await createCompany(input)
           : mode === 'add'
             ? await createAdditionalCompany(input)
-            : await updateCompany(input);
+            : companyId
+              ? await updateCompany(companyId, input)
+              : { ok: false as const, error: 'NOT_FOUND' as const };
 
       if (!result.ok) {
         setServerError(result.error);

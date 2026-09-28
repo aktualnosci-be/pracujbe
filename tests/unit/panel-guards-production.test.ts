@@ -85,6 +85,8 @@ function stubProduction() {
   vi.stubEnv('DATABASE_AUTH_URL', 'postgresql://auth:pw@db.internal:5432/app');
   vi.stubEnv('BETTER_AUTH_URL', 'https://pracuj.be');
   vi.stubEnv('BETTER_AUTH_SECRET', 's'.repeat(40));
+  // Kreator onboardingu istnieje tylko w trybie RECRUITMENT (#1142) — tu sprawdzamy guard sesji.
+  vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
 }
 
 beforeEach(() => {
@@ -101,6 +103,14 @@ describe('#12: panele w produkcji bez sesji', () => {
     }
     // Loader demo (`getNotifications(locale, rola)`) nie może zostać wywołany dla gościa.
     expect(m.getNotifications).not.toHaveBeenCalled();
+  });
+
+  it('#1142 tryb ogłoszeniowy: kreator onboardingu → 404 przed odczytem sesji (4 języki)', async () => {
+    stubProduction();
+    vi.stubEnv('PORTAL_LEGAL_MODE', '');
+    for (const locale of ['pl', 'nl', 'fr', 'en']) {
+      expect(await outcome(OnboardingLayout as Layout, locale)).toEqual({ notFound: true });
+    }
   });
 
   it('rola z profilu, nie z adresu: pracodawca i admin nie widzą panelu kandydata', async () => {

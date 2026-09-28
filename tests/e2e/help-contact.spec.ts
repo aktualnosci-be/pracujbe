@@ -15,7 +15,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  */
 
 type Msgs = {
-  help: { title: string; faq: { noCv: { q: string; a: string } } };
+  help: { title: string; faq: { howToApply: { q: string; a: string } } };
   contact: { title: string; formTitle: string; submit: string };
   legal: { placeholder: string };
 };
@@ -48,8 +48,8 @@ for (const locale of LOCALES) {
     }
 
     // Natywne <details>: fokus na <summary> (Tab), Enter rozwija odpowiedź.
-    const question = page.locator('summary', { hasText: t.help.faq.noCv.q });
-    const answerStart = t.help.faq.noCv.a.split('<')[0]!.trim();
+    const question = page.locator('summary', { hasText: t.help.faq.howToApply.q });
+    const answerStart = t.help.faq.howToApply.a.split('<')[0]!.trim();
     await expect(page.getByText(answerStart, { exact: false })).toBeHidden();
     await question.focus();
     await page.keyboard.press('Enter');

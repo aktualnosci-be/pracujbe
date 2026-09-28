@@ -7,6 +7,7 @@ import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Layout panelu administratora (grupa tras `/admin/*`).
@@ -36,6 +37,8 @@ export default async function AdminLayout({
   const { locale } = await params;
 
   let userName: string | undefined;
+  // #864: prawdziwa sesja Better Auth (nie demo) — panel dostaje `SessionKeepAlive`.
+  let hasSession = false;
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
@@ -46,8 +49,13 @@ export default async function AdminLayout({
     if (identity.role !== 'admin') {
       notFound();
     }
+    hasSession = true;
     userName = displayName(await readOwnProfileSummary(identity));
   }
 
-  return <AdminShell userName={userName}>{children}</AdminShell>;
+  return (
+    <AdminShell userName={userName} keepSessionAlive={hasSession} screeningEnabled={isRecruitmentEnabled('screening')}>
+      {children}
+    </AdminShell>
+  );
 }

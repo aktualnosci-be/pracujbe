@@ -1,11 +1,17 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { withUserTransaction } from '../../src/lib/db/transaction';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+import { PORTAL_LEGAL_MODE_ENV } from '../../src/lib/portal-mode';
+
+// Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
+withRecruitmentMode();
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
+vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 // Aktywna firma szczegółu zgłoszenia (#497): bez cookie → pierwsze członkostwo.
@@ -22,6 +28,8 @@ const jobs = await import('../../src/lib/actions/jobs');
 const banner = await import('../../src/lib/campaign-banner/source');
 const employerData = await import('../../src/lib/data/employer');
 const { getPublicJobScreeningQuestions } = await import('../../src/lib/db/public-jobs');
+const notificationsData = await import('../../src/lib/data/notifications');
+const candidateData = await import('../../src/lib/data/candidate');
 
 // #25 po scaleniu #497 i #175: przegląd pytań screeningowych (publikacja zablokowana do decyzji,
 // kolejka admina przez service_role po roli, decyzja pod sesją admina) oraz baner kampanii
@@ -46,8 +54,8 @@ beforeAll(async () => {
   const other = (await pg.admin.query(`INSERT INTO public.companies(name, status) VALUES ('Obca IT', 'verified') RETURNING id`)).rows[0].id;
   await pg.admin.query(`INSERT INTO public.company_members(company_id, profile_id, role, is_active) VALUES ($1, $2, 'owner', true), ($3, $4, 'owner', true)`,
     [company, owner.id, other, outsider.id]);
-  jobId = (await pg.admin.query(`INSERT INTO public.jobs(company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
-    VALUES ($1, $2, 'draft-it-sr', 'Magazynier IT', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl') RETURNING id`, [company, owner.id])).rows[0].id;
+  jobId = (await pg.admin.query(`INSERT INTO public.jobs(company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale, apply_email)
+    VALUES ($1, $2, 'draft-it-sr', 'Magazynier IT', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl', 'praca@example.be') RETURNING id`, [company, owner.id])).rows[0].id;
   await pg.admin.query(`INSERT INTO public.job_translations(job_id, locale, title, description, responsibilities)
     VALUES ($1, 'pl', 'Magazynier IT', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień'])`, [jobId]);
   await pg.admin.query(`INSERT INTO public.job_requirements(job_id, locale, kind, position, content) VALUES ($1, 'pl', 'mandatory', 0, 'Dyspozycyjność')`, [jobId]);
@@ -141,5 +149,86 @@ describe('baner kampanii (#175) pod sesją', () => {
     for (const who of [outsider, candidate]) {
       expect(await banner.loadManagedCampaignJob(who, jobId, 'pl')).toEqual({ status: 'unavailable' });
     }
+  });
+});
+
+// Decyzja produktowa: portal ogłoszeniowy — stare pytania i przeglądy (sprzed trybu) są ukryte
+// w warstwie aplikacji, choć wiersze zostają w bazie (baza w tym pliku jest w trybie RECRUITMENT,
+// dlatego dane powstały wyżej; tryb efektywny aplikacji wybiera env).
+describe('stare pytania screeningowe ukryte w trybie ogłoszeniowym', () => {
+  describe('CLASSIFIEDS_ONLY', () => {
+    beforeEach(() => {
+      vi.stubEnv(PORTAL_LEGAL_MODE_ENV, '');
+    });
+
+    it('kreator: pytania oferty nie są wczytywane (zapytanie nie jest wołane)', async () => {
+      actAs(owner);
+      const draft = await employerData.getJobDraft(jobId);
+      expect(draft.status).toBe('ok');
+      expect(draft.status === 'ok' ? draft.values.screeningQuestions : null).toEqual([]);
+      // Wiersz pytania zostaje w bazie.
+      expect((await realSession.db!.admin.query(`SELECT count(*)::int AS n FROM public.job_screening_questions WHERE job_id = $1`, [jobId])).rows[0].n).toBe(1);
+    });
+
+    it('szczegół zgłoszenia pracodawcy: odpowiedzi nie są wczytywane', async () => {
+      const pg = realSession.db!;
+      const applicationId = (await pg.admin.query(`SELECT application_id AS id FROM public.application_screening_answers LIMIT 1`)).rows[0].id;
+      actAs(owner);
+      const detail = await employerData.getEmployerApplicationDetail(applicationId);
+      expect(detail.status === 'ok' ? detail.application.screeningAnswers : null).toEqual([]);
+    });
+
+    it('kandydat: odpowiedzi i licznik na liście zgłoszeń ukryte', async () => {
+      const pg = realSession.db!;
+      const applicationId = (await pg.admin.query(`SELECT application_id AS id FROM public.application_screening_answers LIMIT 1`)).rows[0].id;
+      actAs(candidate);
+      expect(await candidateData.getMyApplicationScreeningAnswers(applicationId)).toEqual([]);
+      const page = await candidateData.getMyApplicationsPage('pl', null, null);
+      expect(page.items.length).toBeGreaterThan(0);
+      expect(page.items.map((item) => item.screeningCount)).toEqual(page.items.map(() => 0));
+    });
+
+    it('admin: kolejka przeglądu pytań pusta, dziennik audytu nadal kompletny', async () => {
+      actAs(admin);
+      const list = await adminData.listScreeningReviews({ status: 'all' });
+      expect(list).toEqual({ status: 'ok', rows: [], nextCursor: null });
+      // Dziennik to ślad audytowy: wpisy o pytaniach zostają widoczne w obu trybach.
+      const log = await adminData.listAuditLogs({});
+      expect(log.status === 'ok' ? log.rows.some((row) => row.action.startsWith('screening_question.')) : false).toBe(true);
+    });
+
+    it('powiadomienie „pytanie ukryte” nie pojawia się na liście ani w liczniku pracodawcy', async () => {
+      const pg = realSession.db!;
+      const stored = (await pg.admin.query(`SELECT count(*)::int AS n FROM public.notifications WHERE profile_id = $1 AND data->>'kind' = 'screening_review'`, [owner.id])).rows[0].n;
+      expect(stored).toBeGreaterThan(0);
+      actAs(owner);
+      const latest = await notificationsData.getNotifications('pl');
+      const all = (await pg.admin.query(`SELECT count(*)::int AS n FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL`, [owner.id])).rows[0].n;
+      expect(latest.status === 'ready' ? latest.items.some((item) => item.title === 'itemScreeningHidden') : true).toBe(false);
+      expect(latest.status === 'ready' ? latest.unread : -1).toBe(all - stored);
+      const page = await notificationsData.getNotificationsPage('pl');
+      expect(page.status === 'ready' ? page.page.items.some((item) => item.title === 'itemScreeningHidden') : true).toBe(false);
+    });
+  });
+
+  describe('kontrola ujemna: RECRUITMENT', () => {
+    it('te same odczyty pokazują pytania, odpowiedzi, przeglądy i powiadomienie', async () => {
+      const pg = realSession.db!;
+      const applicationId = (await pg.admin.query(`SELECT application_id AS id FROM public.application_screening_answers LIMIT 1`)).rows[0].id;
+      actAs(owner);
+      const draft = await employerData.getJobDraft(jobId);
+      expect(draft.status === 'ok' ? draft.values.screeningQuestions.length : 0).toBe(1);
+      const detail = await employerData.getEmployerApplicationDetail(applicationId);
+      expect(detail.status === 'ok' ? detail.application.screeningAnswers.length : 0).toBeGreaterThan(0);
+      const latest = await notificationsData.getNotifications('pl');
+      expect(latest.status === 'ready' ? latest.items.some((item) => item.title === 'itemScreeningHidden') : false).toBe(true);
+      actAs(candidate);
+      expect((await candidateData.getMyApplicationScreeningAnswers(applicationId)).length).toBeGreaterThan(0);
+      const page = await candidateData.getMyApplicationsPage('pl', null, null);
+      expect(page.items.some((item) => item.screeningCount > 0)).toBe(true);
+      actAs(admin);
+      const reviews = await adminData.listScreeningReviews({ status: 'all' });
+      expect(reviews.status === 'ok' ? reviews.rows.length : 0).toBeGreaterThan(0);
+    });
   });
 });
