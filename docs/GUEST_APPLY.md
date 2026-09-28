@@ -1,5 +1,9 @@
 # Aplikacja bez konta (#98)
 
+> **Wyłączone w trybie ogłoszeniowym** (`PORTAL_LEGAL_MODE` ≠ `RECRUITMENT`, decyzja produktowa: portal
+> ogłoszeniowy, #1132): akcje zwracają `RECRUITMENT_DISABLED` przed limiterem, Turnstile i bazą, a trasy
+> `/aplikacja/potwierdz` i `/aplikacja/przejmij` dają 404. Retencja zapisanych zgłoszeń działa dalej.
+
 Gość może raz zaaplikować na ofertę bez zakładania konta. Aplikacja trafia do pracodawcy
 dopiero po potwierdzeniu adresu e-mail. Później gość może przypisać ją do konta kandydata
 założonego na ten sam adres.

@@ -115,7 +115,10 @@ type GuardedRoute = { segment: string; status: 'enforced' | 'pending'; issue: nu
 const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'employer/kandydaci', status: 'enforced', issue: 1133 },
   { segment: 'candidate/oferty-polecane', status: 'enforced', issue: 1139 },
-  { segment: 'employer/aplikacje', status: 'pending', issue: 1129 },
+  { segment: 'employer/aplikacje', status: 'enforced', issue: 1144 },
+  { segment: 'candidate/aplikacje', status: 'enforced', issue: 1144 },
+  { segment: 'candidate/propozycje', status: 'enforced', issue: 1141 },
+  { segment: '(auth)/aplikacja', status: 'enforced', issue: 1132 },
   { segment: 'candidate/profil/import-cv', status: 'pending', issue: 1129 },
 ];
 
@@ -153,7 +156,9 @@ describe('trasy rekrutacyjne za notFoundUnlessRecruitment()', () => {
 });
 
 describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
-  it.todo('applyToJob, aplikacja gościa, sendOffer, respondToOffer, zmiana statusu, screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129/#1130)');
+  // applyToJob, aplikacja gościa, sendOffer, respondToOffer, zmiana statusu, wycofanie i odczyty
+  // historii zgłoszeń/propozycji: `tests/legal/classifieds-process-off.test.ts` (#1130/#1132/#1141/#1144).
+  it.todo('screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129)');
   it.todo('loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata/aplikacji, /api/files/cv/*) nie zwracają danych (#1129)');
   it.todo('słownik zakazanych etykiet UI na trasach aktywnych w trybie ogłoszeniowym, 4 języki (#1128, teksty)');
   it.todo('pozytywnie: lista ofert, szczegół, kreator/publikacja, zapisane oferty/wyszukiwania, konto nie zwracają RECRUITMENT_DISABLED (#1128)');
