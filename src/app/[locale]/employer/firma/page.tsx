@@ -292,7 +292,7 @@ export default async function EmployerCompanyPage({
                 </div>
               </section>
 
-              {/* 0910: agencja pracy tymczasowej — deklaracja + numer uznania (sprawdza admin). */}
+              {/* 0167: agencja pracy tymczasowej — deklaracja + numer uznania (sprawdza admin). */}
               <section className={PAPER}>
                 <h2 className={H2_EXTENDED}>{t('agencyTitle')}</h2>
                 <p className={INTRO}>{t('agencySubtitle')}</p>

@@ -11,12 +11,12 @@ import {
 } from '@/lib/job-trust/fraud-risk';
 
 /**
- * 0910 — sygnały oszustwa w treści oferty. Decyzja jest w bazie (`job_fraud_patterns`,
+ * 0167 — sygnały oszustwa w treści oferty. Decyzja jest w bazie (`job_fraud_patterns`,
  * `job_fraud_risk`); tu: zachowanie wzorców w 4 językach, brak fałszywych trafień na typowe
  * warunki pracy i zgodność TS ↔ SQL (te same wzorce, ta sama kolejność).
  */
 
-const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/0910_offer_trust.sql'), 'utf8');
+const MIGRATION = readFileSync(join(process.cwd(), 'supabase/migrations/0167_offer_trust.sql'), 'utf8');
 
 const FLAGGED: readonly (readonly [JobFraudCategory, string])[] = [
   // opłaty od kandydata
@@ -80,7 +80,7 @@ const NOT_FLAGGED: readonly string[] = [
   'We offer a sign-on bonus after three months.',
 ];
 
-describe('job fraud risk — trafienia (0910)', () => {
+describe('job fraud risk — trafienia (0167)', () => {
   it.each(FLAGGED)('%s: %s', (category, text) => {
     expect(jobFraudRisk([text])).toContain(category);
   });
@@ -108,7 +108,7 @@ describe('job fraud risk — kontrola ujemna (typowe warunki pracy)', () => {
   });
 });
 
-describe('zgodność z migracją 0910', () => {
+describe('zgodność z migracją 0167', () => {
   it('te same wzorce co job_fraud_patterns (kolejność i treść)', () => {
     const block = MIGRATION.split('-- fraud-patterns:begin')[1]?.split('-- fraud-patterns:end')[0];
     expect(block).toBeDefined();

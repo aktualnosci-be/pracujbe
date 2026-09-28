@@ -327,7 +327,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
   'screening_question.hidden': 'auditActionScreeningHidden',
-  // 0910: zaufanie ofert.
+  // 0167: zaufanie ofert.
   'job_content.review_requested': 'auditActionJobContentRequested',
   'job_content.ai_flagged': 'auditActionJobContentAiFlagged',
   'job_content.reviewed': 'auditActionJobContentReviewed',

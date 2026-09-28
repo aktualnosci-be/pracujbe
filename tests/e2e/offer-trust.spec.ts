@@ -7,11 +7,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
 
 /**
- * Zaufanie ofert (0910) w trybie DEMO (bez bazy): kolejka przeglądu treści ofert z sygnałem
+ * Zaufanie ofert (0167) w trybie DEMO (bez bazy): kolejka przeglądu treści ofert z sygnałem
  * (źródło reguła/AI, odrzucenie wymaga uzasadnienia), formularz deklaracji agencji w panelu
  * pracodawcy (numer wymagany, fokus, błąd przy polu) i filtr „bezpośrednio od pracodawcy”
  * na liście ofert. Egzekwowanie (blokada publikacji, wstrzymanie, CAS numeru, filtr w SQL)
- * dowodzi `supabase/tests/rls.sql` sekcja FT910. Kontrolki po roli i nazwie z `src/messages`.
+ * dowodzi `supabase/tests/rls.sql` sekcja FT167. Kontrolki po roli i nazwie z `src/messages`.
  */
 
 type Messages = {

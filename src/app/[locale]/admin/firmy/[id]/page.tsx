@@ -282,7 +282,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       {/* Weryfikacja VAT w VIES (#92) */}
       <CompanyViesCheck companyId={company.id} initial={company.vies} />
 
-      {/* 0910: agencja pracy tymczasowej — numer uznania sprawdzany ręcznie w rejestrze regionu */}
+      {/* 0167: agencja pracy tymczasowej — numer uznania sprawdzany ręcznie w rejestrze regionu */}
       <section aria-labelledby="company-agency-heading" className={PANEL} data-testid="admin-company-agency">
         <div className={SECTION_HEAD}>
           <h2

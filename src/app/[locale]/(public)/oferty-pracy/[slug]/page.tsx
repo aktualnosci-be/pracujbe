@@ -384,7 +384,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </span>
               ) : null}
               {job.isAgency ? (
-                // 0910: oferta agencji pracy tymczasowej (deklaracja firmy).
+                // 0167: oferta agencji pracy tymczasowej (deklaracja firmy).
                 <span
                   data-testid="job-detail-agency"
                   className="inline-flex items-center gap-1 text-xs font-medium text-foreground"

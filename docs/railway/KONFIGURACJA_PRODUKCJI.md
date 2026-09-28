@@ -85,7 +85,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `OPENAI_API_KEY`, `AI_MODEL` | wspólny klucz i domyślny model funkcji AI (OpenAI, domyślnie `gpt-6-luna` — decyzja właściciela 2026-09-26) |
 | `AI_JOB_IMPORT_ENABLED`, `AI_JOB_IMPORT_MODEL` | import ogłoszeń przez AI (#465), domyślnie wyłączony; `OPENAI_API_KEY` |
 | `AI_JOB_ASSIST_ENABLED`, `AI_JOB_ASSIST_MODEL` | asystent redagowania oferty (#37), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
-| `AI_JOB_FRAUD_CHECK_ENABLED`, `AI_JOB_FRAUD_CHECK_MODEL` | analiza treści oferty przez AI (0910, drugi sygnał obok reguł; tylko kieruje do przeglądu admina), domyślnie wyłączona; ten sam `OPENAI_API_KEY` |
+| `AI_JOB_FRAUD_CHECK_ENABLED`, `AI_JOB_FRAUD_CHECK_MODEL` | analiza treści oferty przez AI (0167, drugi sygnał obok reguł; tylko kieruje do przeglądu admina), domyślnie wyłączona; ten sam `OPENAI_API_KEY` |
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
 | `AI_TRANSLATION_ENABLED`, `AI_TRANSLATION_MODEL` | tłumaczenia AI — rdzeń kolejki (#31, #32, `docs/AI_TRANSLATION.md`), domyślnie wyłączone; ten sam `OPENAI_API_KEY` |
 | `PRACUJBE_RELEASE_VERSION` | tylko przy wydaniu 1.0.0 (#103) |

@@ -601,7 +601,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       city: 'company',
       verified_by: 'reference',
       status_reason: 'moderation',
-      // 0910: deklaracja agencji pracy tymczasowej i ręczne sprawdzenie numeru przez admina.
+      // 0167: deklaracja agencji pracy tymczasowej i ręczne sprawdzenie numeru przez admina.
       agency_recognition_number: 'company',
       agency_checked_by: 'reference',
       agency_check_note: 'moderation',
@@ -999,7 +999,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       ai_reason: 'moderation',
     },
     note:
-      'Przegląd treści oferty z sygnałem oszustwa (0910): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
+      'Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
   },
   'public.job_duplications': {
     activities: ['companies'],

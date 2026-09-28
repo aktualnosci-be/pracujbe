@@ -17,7 +17,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 
 /**
- * Server Actions zaufania ofert (0910):
+ * Server Actions zaufania ofert (0167):
  *   - `decideJobContentReview` — decyzja admina o treści oferty z sygnałem (reguły/AI) przez
  *     RPC `admin_decide_job_content_review` (tylko oczekujące, bieżąca treść, odrzucenie
  *     z uzasadnieniem, audyt, powiadomienie zgłaszającego). Akceptacja nie publikuje.

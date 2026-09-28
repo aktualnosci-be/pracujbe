@@ -102,7 +102,7 @@ export interface JobListItem {
    */
   machineTranslation?: JobMachineTranslation;
   /**
-   * 0910: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
+   * 0167: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
    * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
    */
   isAgency?: true;
@@ -159,7 +159,7 @@ export interface GetJobsParams {
   accommodation?: boolean;
   immediate?: boolean;
   noLanguageRequired?: boolean;
-  /** 0910: tylko oferty spoza agencji pracy tymczasowej. */
+  /** 0167: tylko oferty spoza agencji pracy tymczasowej. */
   directOnly?: boolean;
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
@@ -551,7 +551,7 @@ export async function withListMachineTranslations<T extends JobListItem>(
 }
 
 /**
- * Etykieta „agencja” (0910) — JEDNO zapytanie na stronę listy (lista id). Odczyt pomocniczy:
+ * Etykieta „agencja” (0167) — JEDNO zapytanie na stronę listy (lista id). Odczyt pomocniczy:
  * awaria = karty bez etykiety + kod obszaru w logu (filtr listy i tak działa w SQL).
  */
 export async function withAgencyFlags<T extends JobListItem>(

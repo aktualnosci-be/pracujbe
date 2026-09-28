@@ -1302,7 +1302,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`warehouse-rich`) nie są migrowane — poprawka zamyka tylko zapis nowych/edytowanych ofert.
   Testy: `job-validation-draft-limits.test.ts` (kontrola ujemna: flaga + niepusta lista odrzucone
   w obu schematach), `update-published-job.test.ts` (fixture bez sprzecznego stanu).
-- [x] Zaufanie ofert (migracja `0910` — numer tymczasowy): **sygnały oszustwa** w treści oferty
+- [x] Zaufanie ofert (migracja `0167`): **sygnały oszustwa** w treści oferty
   przed publikacją — deterministyczne reguły PL/NL/FR/EN bez AI (`job_fraud_patterns`, lustro
   `src/lib/job-trust/fraud-risk.ts`, test `job-fraud-risk` 1:1): opłata od kandydata (praca,
   szkolenie, dokumenty, zakwaterowanie z góry), kontakt przez komunikator, kryptowaluty/„zadania
@@ -1326,7 +1326,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `guard_company_agency`; etykieta „agencja” na karcie, szczególe i profilu firmy
   (`get_public_jobs_agency`, bez wyniku sprawdzenia), filtr „bezpośrednio od pracodawcy”
   (`?direct=1`, `p_direct_only` w liście, liczniku, facetach i kopii filtrów alertów). Dowód:
-  `rls.sql` sekcja FT910 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
+  `rls.sql` sekcja FT167 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
   przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
   **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
   na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.

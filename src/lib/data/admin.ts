@@ -1642,7 +1642,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   jobsTotal: number;
   /** Weryfikacja numeru VAT w VIES (#92) — informacja dla admina, nie decyzja. */
   vies: AdminViesState;
-  /** 0910: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia numeru uznania. */
+  /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia numeru uznania. */
   agency: AdminCompanyAgency;
 }
 
@@ -2296,7 +2296,7 @@ export async function listScreeningReviews(
 }
 
 /* ---------------------------------------------------------------------------
- * Przegląd treści ofert z sygnałem oszustwa (0910)
+ * Przegląd treści ofert z sygnałem oszustwa (0167)
  * ------------------------------------------------------------------------- */
 
 export interface AdminJobContentReviewRow {
@@ -2369,7 +2369,7 @@ const DEMO_JOB_CONTENT_REVIEWS: AdminJobContentReviewRow[] = [
 ];
 
 /**
- * Kolejka przeglądu treści ofert (0910): filtr oczekujące (domyślnie) / rozstrzygnięte /
+ * Kolejka przeglądu treści ofert (0167): filtr oczekujące (domyślnie) / rozstrzygnięte /
  * wszystkie, kursor (`created_at`, `id`). „Oczekujące” pokazuje tylko migawki równe bieżącej
  * treści oferty — zapis innej treści zostawia stary wiersz jako historię. Bez env → DEMO.
  */

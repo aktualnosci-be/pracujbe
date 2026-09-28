@@ -100,7 +100,7 @@ export async function JobCard({
           <span>{job.companyName}</span>
         )}
         {job.isAgency ? (
-          // 0910: oferta agencji pracy tymczasowej (deklaracja firmy) — bez oceny, sama etykieta.
+          // 0167: oferta agencji pracy tymczasowej (deklaracja firmy) — bez oceny, sama etykieta.
           <span className="pp-passport-tag" data-testid="job-card-agency">
             <Building2 className="h-4 w-4" aria-hidden="true" />
             {t('agencyBadge')}

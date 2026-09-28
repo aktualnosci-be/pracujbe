@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0910_offer_trust.sql — zaufanie ofert: sygnały oszustwa w treści oferty przed publikacją
--- oraz oznaczenie agencji pracy tymczasowej (numer tymczasowy; ostateczny nada integrator).
+-- 0167_offer_trust.sql — zaufanie ofert: sygnały oszustwa w treści oferty przed publikacją
+-- oraz oznaczenie agencji pracy tymczasowej.
 --
 -- A. Sygnały oszustwa (wzór: kontrola pytań screeningowych #497, 0103/0154)
 --
@@ -55,7 +55,7 @@
 -- A9. Budżet AI (#36): nowa funkcja `job_fraud_check` w CHECK-u `ai_usage_ledger` i w allow-liście
 --    `ai_budget_reserve` (treść funkcji = 0120 poza listą; lista = AI_FEATURE_IDS).
 --
--- Dowód: supabase/tests/rls.sql sekcja FT910 (kontrole ujemne).
+-- Dowód: supabase/tests/rls.sql sekcja FT167 (kontrole ujemne).
 --
 -- Rollback (ręczny, nowa migracja): odtworzyć get_public_jobs/_count/facety z 0153 i
 -- saved_search_jobs_after z 0158 (drop nowych sygnatur); drop triggerów
@@ -666,7 +666,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     and (coalesce(p_immediate, false) = false or j.immediate = true)
     and (coalesce(p_no_language, false) = false or j.no_language_required = true)
     and (p_since is null or j.published_at >= p_since)
-    -- 0910: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
+    -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
     and (coalesce(p_direct_only, false) = false or not c.is_agency)
   order by
     (case when p_sort = 'salary' then public.job_salary_sort_key(

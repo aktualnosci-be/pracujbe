@@ -18,7 +18,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * 0910 — zaufanie ofert po stronie aplikacji: stan przeglądu treści w kreatorze, drugi sygnał
+ * 0167 — zaufanie ofert po stronie aplikacji: stan przeglądu treści w kreatorze, drugi sygnał
  * AI (fail-open, minimalizacja, prompt injection), decyzja admina, deklaracja agencji.
  */
 

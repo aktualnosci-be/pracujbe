@@ -14,7 +14,7 @@ import { AdminPageHeader, AdminPager } from '@/components/admin/AdminListControl
 import { JobContentReviewActions } from '@/components/admin/JobContentReviewActions';
 
 /**
- * Panel administratora — Przegląd treści ofert z sygnałem oszustwa (0910).
+ * Panel administratora — Przegląd treści ofert z sygnałem oszustwa (0167).
  *
  * Oferty, których treść dostała sygnał reguł (wzorce PL/NL/FR/EN w bazie) albo — za flagą —
  * analizy AI. Do decyzji oferta nie zostanie opublikowana ani wznowiona (strażnik w bazie).

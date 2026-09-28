@@ -17,7 +17,7 @@ import {
 import { redactSensitiveData } from '@/lib/privacy/sensitive-data';
 
 /**
- * Analiza treści oferty przez model AI — DRUGI sygnał obok reguł (0910, decyzja właściciela
+ * Analiza treści oferty przez model AI — DRUGI sygnał obok reguł (0167, decyzja właściciela
  * 28.09.2026). Model wyłącznie OpenAI (`gpt-6-luna`, wspólny klient `src/lib/ai/openai.ts`).
  *
  * Zasady:

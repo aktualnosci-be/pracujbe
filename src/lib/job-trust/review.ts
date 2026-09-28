@@ -1,7 +1,7 @@
 import { JOB_FRAUD_CATEGORIES } from '@/lib/job-trust/fraud-risk';
 
 /**
- * Przegląd treści oferty (0910, zaufanie ofert) — wspólne dla kreatora (przeglądarka),
+ * Przegląd treści oferty (0167, zaufanie ofert) — wspólne dla kreatora (przeglądarka),
  * Server Actions i panelu admina. Moduł bez zależności serwerowych.
  */
 
@@ -33,7 +33,7 @@ export const JOB_CONTENT_CATEGORY_KEY: Record<JobContentSignalCategory, string> 
 
 export type JobContentReviewStatus = 'pending' | 'approved' | 'rejected';
 
-/** Stan treści oferty z RPC `job_trust_state` (0910). */
+/** Stan treści oferty z RPC `job_trust_state` (0167). */
 export interface JobTrustState {
   fingerprint: string;
   /** Kanoniczna migawka treści (wejście analizy AI). */

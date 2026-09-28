@@ -71,7 +71,7 @@ export interface SidebarFilters {
   accommodation: AccommodationValue[];
   immediate: boolean;
   noLanguageRequired: boolean;
-  /** 0910: tylko oferty spoza agencji pracy tymczasowej (URL `direct=1`). */
+  /** 0167: tylko oferty spoza agencji pracy tymczasowej (URL `direct=1`). */
   directOnly: boolean;
   date: DateValue;
 }
@@ -87,7 +87,7 @@ export interface FacetItem {
   accommodation: boolean;
   immediate: boolean;
   noLanguageRequired: boolean;
-  /** 0910: oferta agencji pracy tymczasowej. */
+  /** 0167: oferta agencji pracy tymczasowej. */
   isAgency?: boolean;
   publishedAt: string;
 }

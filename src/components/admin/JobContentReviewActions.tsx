@@ -20,7 +20,7 @@ import {
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 /**
- * JobContentReviewActions — decyzja o treści oferty z sygnałem oszustwa (0910; reguły albo AI).
+ * JobContentReviewActions — decyzja o treści oferty z sygnałem oszustwa (0167; reguły albo AI).
  *
  * „Zaakceptuj” i „Odrzuć” otwierają dialog z ofertą i kategoriami; odrzucenie wymaga
  * uzasadnienia (firma widzi je w kreatorze; trafia do dziennika zdarzeń). Te same limity w RPC

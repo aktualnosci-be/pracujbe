@@ -17,7 +17,7 @@ import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 /**
  * AgencyCheckActions — wynik ręcznego sprawdzenia numeru uznania agencji pracy tymczasowej
- * w rejestrze regionu (0910, `/admin/firmy/[id]`). Admin wybiera „Numer potwierdzony” albo
+ * w rejestrze regionu (0167, `/admin/firmy/[id]`). Admin wybiera „Numer potwierdzony” albo
  * „Nie potwierdzono”, notatka opcjonalna (≤ 1000). RPC `admin_record_agency_check` porównuje
  * numer widziany przez admina z bieżącym (`STALE_STATE`, gdy firma zmieniła deklarację).
  */

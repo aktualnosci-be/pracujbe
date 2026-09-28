@@ -100,7 +100,7 @@ export type PublishResult =
       ok: false;
       error: ErrorCode;
       screening?: ScreeningReviewNotice[];
-      /** 0910: treść oferty czeka na przegląd albo została odrzucona (z uzasadnieniem). */
+      /** 0167: treść oferty czeka na przegląd albo została odrzucona (z uzasadnieniem). */
       contentReview?: JobContentReviewNotice;
     };
 export type UpdatePublishedResult =
@@ -109,7 +109,7 @@ export type UpdatePublishedResult =
       demo?: boolean;
       slug?: string;
       updatedAt?: string;
-      /** 0910: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu. */
+      /** 0167: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu. */
       contentReview?: JobContentReviewNotice;
     }
   | { ok: false; error: ErrorCode };
@@ -502,7 +502,7 @@ export async function updatePublishedJob(
       }),
     );
 
-    // 0910: drugi sygnał (AI, za flagą) dla nowej treści; reguły działają już w bazie.
+    // 0167: drugi sygnał (AI, za flagą) dla nowej treści; reguły działają już w bazie.
     await runAiContentCheck(me, jobId);
     const trust = await loadJobTrustState(me, jobId);
     const contentReview = jobContentReviewNotice(trust) ?? undefined;
@@ -526,7 +526,7 @@ export async function updatePublishedJob(
 }
 
 /* ---------------------------------------------------------------------------
- * Zaufanie ofert (0910): stan przeglądu treści i drugi sygnał AI
+ * Zaufanie ofert (0167): stan przeglądu treści i drugi sygnał AI
  * ------------------------------------------------------------------------- */
 
 /** Stan treści oferty (`job_trust_state`, pod RLS: członek firmy). Błąd odczytu → null. */
@@ -631,7 +631,7 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     });
     if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
 
-    // 0910: drugi sygnał (AI) przed publikacją — trafienie trafia do kolejki, a strażnik
+    // 0167: drugi sygnał (AI) przed publikacją — trafienie trafia do kolejki, a strażnik
     // w bazie zablokuje aktywację do decyzji admina. Oferta obca/nieistniejąca → brak stanu.
     await runAiContentCheck(me, jobId);
 
@@ -661,7 +661,7 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     if (me && (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED')) {
       return { ok: false, error: code, screening: await loadScreeningReviewNotices(me, jobId) };
     }
-    // 0910: treść oferty czeka na przegląd albo została odrzucona — kreator pokazuje stan.
+    // 0167: treść oferty czeka na przegląd albo została odrzucona — kreator pokazuje stan.
     if (me && (code === 'JOB_CONTENT_REVIEW_REQUIRED' || code === 'JOB_CONTENT_REJECTED')) {
       const contentReview = jobContentReviewNotice(await loadJobTrustState(me, jobId));
       return { ok: false, error: code, ...(contentReview ? { contentReview } : {}) };

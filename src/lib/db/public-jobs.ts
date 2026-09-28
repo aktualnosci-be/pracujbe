@@ -364,7 +364,7 @@ export async function getPublicJobsMachineTitles(
 }
 
 /**
- * 0910: które z podanych ofert publicznych pochodzą od agencji pracy tymczasowej
+ * 0167: które z podanych ofert publicznych pochodzą od agencji pracy tymczasowej
  * (`get_public_jobs_agency`, pod rolą anon, najwyżej 100 identyfikatorów na wywołanie).
  */
 export async function getPublicJobsAgency(

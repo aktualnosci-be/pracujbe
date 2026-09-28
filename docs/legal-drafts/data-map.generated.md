@@ -508,9 +508,9 @@ Tabele w migracjach: 107; z danymi osobowymi: 71; bez danych osobowych: 36.
 | `city` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
 | `verified_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0002_core_tables.sql` |
 | `status_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0084_admin_company_review.sql` |
-| `agency_recognition_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0910_offer_trust.sql` |
-| `agency_checked_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0910_offer_trust.sql` |
-| `agency_check_note` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0910_offer_trust.sql` |
+| `agency_recognition_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0167_offer_trust.sql` |
+| `agency_checked_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
+| `agency_check_note` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
 
 ### `public.company_invitations`
 
@@ -784,17 +784,17 @@ Tabele w migracjach: 107; z danymi osobowymi: 71; bez danych osobowych: 36.
 
 ### `public.job_content_reviews`
 
-- **Migracja:** `supabase/migrations/0910_offer_trust.sql`
+- **Migracja:** `supabase/migrations/0167_offer_trust.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm, Administratorzy portalu
-- **Uwaga:** Przegląd treści oferty z sygnałem oszustwa (0910): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.
+- **Uwaga:** Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `requested_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0910_offer_trust.sql` |
-| `decided_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0910_offer_trust.sql` |
-| `decision_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0910_offer_trust.sql` |
-| `ai_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0910_offer_trust.sql` |
+| `requested_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
+| `decided_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
+| `decision_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
+| `ai_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
 
 ### `public.job_duplications`
 

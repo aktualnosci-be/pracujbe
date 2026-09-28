@@ -141,7 +141,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
   },
   {
     id: 'job_fraud_check',
-    issues: ['0910'],
+    issues: ['0167'],
     status: 'behind_flag',
     callSites: ['src/lib/ai/openai.ts', 'src/lib/job-trust/ai-check.ts'],
     enableFlag: 'AI_JOB_FRAUD_CHECK_ENABLED',

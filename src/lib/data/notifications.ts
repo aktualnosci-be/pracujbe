@@ -102,7 +102,7 @@ const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   hidden: 'itemScreeningHidden',
 };
 
-/** Decyzja admina o treści oferty z sygnałem oszustwa (0910): `data.kind = 'job_content_review'`. */
+/** Decyzja admina o treści oferty z sygnałem oszustwa (0167): `data.kind = 'job_content_review'`. */
 const JOB_CONTENT_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemJobContentApproved',
   rejected: 'itemJobContentRejected',

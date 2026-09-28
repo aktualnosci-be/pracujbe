@@ -92,7 +92,7 @@ async function getCompanyProfileFromDb(
     // Karty ofert profilu: przekład tytułu w języku strony (#33, 0160), jedno zapytanie.
     jobs: await withListMachineTranslations(
       pool,
-      // 0910: etykieta „agencja” na kartach profilu firmy.
+      // 0167: etykieta „agencja” na kartach profilu firmy.
       await withAgencyFlags(pool, jobsResult.rows.map(rowToJobListItem)),
       toLocale(locale),
     ),

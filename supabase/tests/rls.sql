@@ -16657,7 +16657,7 @@ select pg_temp.assert(
   and (select channel = 'restore_reapply' from public.erasure_tombstones where subject_id = :'ER4')
   and exists (select 1 from public.profiles where id = :'ER3'),
   'ER161-6 restore usuwa pracodawcę (członek), ostatni właściciel zostaje');
--- FT910. Zaufanie ofert (0910): sygnały oszustwa w treści oferty (reguły PL/NL/FR/EN, kolejka
+-- FT167. Zaufanie ofert (0167): sygnały oszustwa w treści oferty (reguły PL/NL/FR/EN, kolejka
 --        przeglądu przy zapisie, blokada aktywacji do decyzji admina, wstrzymanie aktywnej
 --        oferty po edycji z sygnałem, sygnał AI tylko przez service_role) oraz oznaczenie
 --        agencji pracy tymczasowej (deklaracja firmy, sprawdzenie admina, filtr listy).
@@ -16678,7 +16678,7 @@ insert into public.job_requirements(job_id, locale, kind, position, content) val
   (:'FTJOB', 'pl', 'mandatory', 0, 'Dyspozycyjność'),
   (:'FTJOB2', 'pl', 'mandatory', 0, 'Prawo jazdy C');
 
--- FT910-1: detektor w bazie — kategorie w 4 językach; typowe treści bez trafień.
+-- FT167-1: detektor w bazie — kategorie w 4 językach; typowe treści bez trafień.
 select pg_temp.assert(
   public.job_fraud_risk('{"d": "Przed rozpoczęciem wpłać kaucję 200 EUR"}') = array['candidate_fee']
   and public.job_fraud_risk('{"d": "Kontakt wyłącznie przez WhatsApp"}') = array['off_platform_contact']
@@ -16686,97 +16686,97 @@ select pg_temp.assert(
   and public.job_fraud_risk('{"d": "Envoyer un virement via Western Union"}') = array['payment_request']
   and public.job_fraud_risk('{"d": "A small registration fee is required"}') = array['candidate_fee']
   and public.job_fraud_risk('{"t": [{"x": "Frais de dossier : 50 €"}]}') = array['candidate_fee'],
-  'FT910-1 detektor: kategorie w PL/NL/FR/EN, także w zagnieżdżonych listach');
+  'FT167-1 detektor: kategorie w PL/NL/FR/EN, także w zagnieżdżonych listach');
 select pg_temp.assert(
   public.job_fraud_risk('{"d": "Wynagrodzenie przelewem co tydzień, zwrot kosztów dojazdu, zakwaterowanie 80 EUR tygodniowo potrącane z wypłaty"}') = '{}'
   and public.job_fraud_risk('{"d": "Opleiding betaald door de werkgever. Eigen vervoer is een plus."}') = '{}'
   and public.job_fraud_risk('{"d": "Formation payée, salaire versé par virement bancaire chaque semaine."}') = '{}'
   and public.job_fraud_risk('{"d": "Signal the forklift operator; salary paid by bank transfer."}') = '{}',
-  'FT910-1b kontrola ujemna: typowe warunki pracy (przelew wynagrodzenia, zwrot kosztów) bez trafień');
+  'FT167-1b kontrola ujemna: typowe warunki pracy (przelew wynagrodzenia, zwrot kosztów) bez trafień');
 
--- FT910-2: zapis kroku z sygnałem → przegląd pending (zgłaszający, audyt) przy zapisie.
+-- FT167-2: zapis kroku z sygnałem → przegląd pending (zgłaszający, audyt) przy zapisie.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.save_job_draft(:'FTJOB'::uuid, $j${
   "translation": {"description": "Praca w magazynie. Kontakt przez WhatsApp, opłata za szkolenie 50 EUR.",
                   "responsibilities": ["Kompletacja zamówień"]}
 }$j$::jsonb);
 select count(*) = 1 as ok from public.job_content_reviews where job_id = :'FTJOB' and status = 'pending' \gset ft2_
-select pg_temp.assert(:'ft2_ok'::boolean, 'FT910-2 członek firmy widzi oczekujący przegląd treści');
+select pg_temp.assert(:'ft2_ok'::boolean, 'FT167-2 członek firmy widzi oczekujący przegląd treści');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select rule_categories = array['candidate_fee', 'off_platform_contact'] and requested_by = :'EMPA'::uuid
      from public.job_content_reviews where job_id = :'FTJOB')
   and exists (select 1 from public.audit_logs where action = 'job_content.review_requested'
                 and after_data->>'job_id' = :'FTJOB'),
-  'FT910-2b kategorie liczone przez bazę, zgłaszający i audyt zapisane');
+  'FT167-2b kategorie liczone przez bazę, zgłaszający i audyt zapisane');
 
--- FT910-3: publikacja zablokowana; przegląd zostaje po odrzuconej publikacji.
+-- FT167-3: publikacja zablokowana; przegląd zostaje po odrzuconej publikacji.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'FTJOB', 'ft910'),
-  'JOB_CONTENT_REVIEW_REQUIRED', 'FT910-3 publikacja treści z sygnałem odrzucona');
+  'JOB_CONTENT_REVIEW_REQUIRED', 'FT167-3 publikacja treści z sygnałem odrzucona');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select status::text from public.jobs where id = :'FTJOB') = 'draft'
   and (select count(*) from public.job_content_reviews where job_id = :'FTJOB' and status = 'pending') = 1,
-  'FT910-3b oferta pozostaje szkicem, przegląd nadal oczekuje');
+  'FT167-3b oferta pozostaje szkicem, przegląd nadal oczekuje');
 
--- FT910-3c (kontrola ujemna): bez strażnika ta sama publikacja przechodzi (cofnięte).
+-- FT167-3c (kontrola ujemna): bez strażnika ta sama publikacja przechodzi (cofnięte).
 begin;
 alter table public.jobs disable trigger trg_enforce_job_content_review;
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.publish_job(:'FTJOB'::uuid, 'ft910-bez-strażnika') is not null as ok \gset ft3c_
 rollback;
-select pg_temp.assert(:'ft3c_ok'::boolean, 'FT910-3c kontrola ujemna: bez strażnika oferta z sygnałem byłaby publiczna');
+select pg_temp.assert(:'ft3c_ok'::boolean, 'FT167-3c kontrola ujemna: bez strażnika oferta z sygnałem byłaby publiczna');
 
--- FT910-4 (kontrola ujemna): inna firma nie widzi przeglądu; klient nie zatwierdza go sam;
+-- FT167-4 (kontrola ujemna): inna firma nie widzi przeglądu; klient nie zatwierdza go sam;
 -- decyzja i sygnał AI poza zasięgiem firmy.
 set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select count(*) = 0 as ok from public.job_content_reviews where job_id = :'FTJOB' \gset ft4_
-select pg_temp.assert(:'ft4_ok'::boolean, 'FT910-4 inna firma nie czyta przeglądów');
-select pg_temp.assert(public.job_trust_state(:'FTJOB'::uuid) is null, 'FT910-4b inna firma nie czyta stanu treści');
+select pg_temp.assert(:'ft4_ok'::boolean, 'FT167-4 inna firma nie czyta przeglądów');
+select pg_temp.assert(public.job_trust_state(:'FTJOB'::uuid) is null, 'FT167-4b inna firma nie czyta stanu treści');
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('update public.job_content_reviews set status = %L where job_id = %L', 'approved', :'FTJOB'),
-  'permission denied', 'FT910-4c firma nie zatwierdza własnej treści bezpośrednim UPDATE');
+  'permission denied', 'FT167-4c firma nie zatwierdza własnej treści bezpośrednim UPDATE');
 select pg_temp.expect_error(
   format('select public.admin_decide_job_content_review(id, %L, null) from public.job_content_reviews where job_id = %L limit 1', 'approved', :'FTJOB'),
-  'PERMISSION_DENIED', 'FT910-4d decyzja wyłącznie dla admina');
+  'PERMISSION_DENIED', 'FT167-4d decyzja wyłącznie dla admina');
 select pg_temp.expect_error(
   format('select public.record_job_content_ai_signal(%L::uuid, %L, %L, null, null, null)', :'FTJOB', 'x', '{other}'),
-  'permission denied', 'FT910-4e sygnał AI tylko z serwera (service_role)');
+  'permission denied', 'FT167-4e sygnał AI tylko z serwera (service_role)');
 select pg_temp.assert((public.job_trust_state(:'FTJOB'::uuid)->>'status') = 'pending',
-  'FT910-4f firma widzi stan przeglądu swojej oferty');
+  'FT167-4f firma widzi stan przeglądu swojej oferty');
 reset role; reset app.current_uid;
 
--- FT910-5: admin odrzuca (uzasadnienie wymagane) → publikacja JOB_CONTENT_REJECTED,
+-- FT167-5: admin odrzuca (uzasadnienie wymagane) → publikacja JOB_CONTENT_REJECTED,
 -- powiadomienie; poprawiona treść bez sygnału publikuje się bez decyzji.
 select id as ft_rev from public.job_content_reviews where job_id = :'FTJOB' \gset
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.admin_decide_job_content_review(%L::uuid, %L, %L)', :'ft_rev', 'rejected', ' '),
-  'REASON_REQUIRED', 'FT910-5 odrzucenie bez uzasadnienia odrzucone');
+  'REASON_REQUIRED', 'FT167-5 odrzucenie bez uzasadnienia odrzucone');
 select public.admin_decide_job_content_review(:'ft_rev'::uuid, 'rejected', 'Opłata od kandydata — usuń.');
 select pg_temp.expect_error(format('select public.admin_decide_job_content_review(%L::uuid, %L, null)', :'ft_rev', 'approved'),
-  'STALE_STATE', 'FT910-5b druga decyzja odrzucona');
+  'STALE_STATE', 'FT167-5b druga decyzja odrzucona');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   exists (select 1 from public.audit_logs where action = 'job_content.reviewed' and entity_id = :'ft_rev'::uuid
             and after_data->>'status' = 'rejected')
   and exists (select 1 from public.notifications where profile_id = :'EMPA'::uuid and entity_id = :'FTJOB'::uuid
                 and data->>'kind' = 'job_content_review' and data->>'status' = 'rejected'),
-  'FT910-5c audyt i powiadomienie zgłaszającego');
+  'FT167-5c audyt i powiadomienie zgłaszającego');
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'FTJOB', 'ft910'),
-  'JOB_CONTENT_REJECTED', 'FT910-5d publikacja odrzuconej treści odrzucona');
+  'JOB_CONTENT_REJECTED', 'FT167-5d publikacja odrzuconej treści odrzucona');
 select public.save_job_draft(:'FTJOB'::uuid, $j${
   "translation": {"description": "Praca w magazynie w Gandawie, kontakt przez portal.",
                   "responsibilities": ["Kompletacja zamówień"]}
 }$j$::jsonb);
 select pg_temp.assert(public.publish_job(:'FTJOB'::uuid, 'ft910-ok') is not null,
-  'FT910-5e poprawiona treść bez sygnału publikuje się');
+  'FT167-5e poprawiona treść bez sygnału publikuje się');
 reset role; reset app.current_uid;
 
--- FT910-6: edycja AKTYWNEJ oferty dodająca sygnał → oferta wstrzymana do decyzji;
+-- FT167-6: edycja AKTYWNEJ oferty dodająca sygnał → oferta wstrzymana do decyzji;
 -- wznowienie zablokowane; po akceptacji firma wznawia.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.update_published_job(:'FTJOB'::uuid, $j${
@@ -16791,24 +16791,24 @@ select pg_temp.assert(
   (select status::text from public.jobs where id = :'FTJOB') = 'paused'
   and exists (select 1 from public.audit_logs where action = 'job.paused_for_content_review'
                 and entity_id = :'FTJOB'::uuid),
-  'FT910-6 aktywna oferta z nowym sygnałem wstrzymana do decyzji (audyt)');
+  'FT167-6 aktywna oferta z nowym sygnałem wstrzymana do decyzji (audyt)');
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.set_job_status(%L::uuid, %L)', :'FTJOB', 'resume'),
-  'JOB_CONTENT_REVIEW_REQUIRED', 'FT910-6b wznowienie przed decyzją odrzucone');
+  'JOB_CONTENT_REVIEW_REQUIRED', 'FT167-6b wznowienie przed decyzją odrzucone');
 reset role; reset app.current_uid;
 select id as ft_rev2 from public.job_content_reviews where job_id = :'FTJOB' and status = 'pending' \gset
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select public.admin_decide_job_content_review(:'ft_rev2'::uuid, 'approved', null);
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.jobs where id = :'FTJOB') = 'paused',
-  'FT910-6c akceptacja niczego nie wznawia');
+  'FT167-6c akceptacja niczego nie wznawia');
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status(:'FTJOB'::uuid, 'resume');
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.jobs where id = :'FTJOB') = 'active',
-  'FT910-6d po akceptacji bieżącej treści firma wznawia ofertę');
+  'FT167-6d po akceptacji bieżącej treści firma wznawia ofertę');
 
--- FT910-7: sygnał AI (service_role) dla bieżącego odcisku → przegląd; nieaktualny odcisk = stale.
+-- FT167-7: sygnał AI (service_role) dla bieżącego odcisku → przegląd; nieaktualny odcisk = stale.
 select md5(public.job_trust_content(:'FTJOB2'::uuid)::text) as ft_fp2 \gset
 set role service_role;
 select public.record_job_content_ai_signal(:'FTJOB2'::uuid, 'inny-odcisk', array['other'], 'x', 0.5, :'EMPA'::uuid) as ft_stale \gset
@@ -16818,78 +16818,78 @@ reset role;
 select pg_temp.assert(:'ft_stale' = 'stale' and :'ft_ai' = 'pending'
   and (select ai_categories = array['unrealistic_offer'] and rule_categories = '{}' and ai_confidence = 0.81
          from public.job_content_reviews where job_id = :'FTJOB2'),
-  'FT910-7 sygnał AI zapisany tylko dla bieżącej treści, reguły puste');
+  'FT167-7 sygnał AI zapisany tylko dla bieżącej treści, reguły puste');
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'FTJOB2', 'ft910-2'),
-  'JOB_CONTENT_REVIEW_REQUIRED', 'FT910-7b sygnał AI kieruje do przeglądu (blokada do decyzji człowieka)');
+  'JOB_CONTENT_REVIEW_REQUIRED', 'FT167-7b sygnał AI kieruje do przeglądu (blokada do decyzji człowieka)');
 reset role; reset app.current_uid;
 
--- FT910-8: agencja — deklaracja firmy, strażnik kolumn, sprawdzenie admina z CAS.
+-- FT167-8: agencja — deklaracja firmy, strażnik kolumn, sprawdzenie admina z CAS.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('update public.companies set is_agency = true where id = %L', :'FTCOMP'),
-  'PERMISSION_DENIED', 'FT910-8 bezpośredni UPDATE flagi agencji odrzucony');
+  'PERMISSION_DENIED', 'FT167-8 bezpośredni UPDATE flagi agencji odrzucony');
 select pg_temp.assert(public.set_company_agency(:'FTCOMP'::uuid, true, '  VG.1234/BU  ') = 'saved',
-  'FT910-8b owner deklaruje agencję z numerem uznania');
+  'FT167-8b owner deklaruje agencję z numerem uznania');
 select pg_temp.assert(public.set_company_agency(:'FTCOMP'::uuid, true, 'VG.1234/BU') = 'unchanged',
-  'FT910-8c ta sama deklaracja = bez zmian');
+  'FT167-8c ta sama deklaracja = bez zmian');
 select pg_temp.expect_error(
   format('select public.admin_record_agency_check(%L::uuid, %L, %L, null)', :'FTCOMP', 'confirmed', 'VG.1234/BU'),
-  'PERMISSION_DENIED', 'FT910-8d firma nie potwierdza sama numeru');
+  'PERMISSION_DENIED', 'FT167-8d firma nie potwierdza sama numeru');
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.set_company_agency(%L::uuid, false, null)', :'FTCOMP'),
-  'PERMISSION_DENIED', 'FT910-8e inna firma nie zmienia deklaracji');
+  'PERMISSION_DENIED', 'FT167-8e inna firma nie zmienia deklaracji');
 reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('select public.admin_record_agency_check(%L::uuid, %L, %L, null)', :'FTCOMP', 'confirmed', 'VG.9999'),
-  'STALE_STATE', 'FT910-8f sprawdzenie innego numeru niż bieżący odrzucone (CAS)');
+  'STALE_STATE', 'FT167-8f sprawdzenie innego numeru niż bieżący odrzucone (CAS)');
 select public.admin_record_agency_check(:'FTCOMP'::uuid, 'confirmed', 'VG.1234/BU', 'Rejestr VL, 28.09.');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select is_agency and agency_recognition_number = 'VG.1234/BU' and agency_check_status = 'confirmed'
           and agency_checked_by = :'ADMIN'::uuid from public.companies where id = :'FTCOMP')
   and exists (select 1 from public.audit_logs where action = 'company.agency_checked' and entity_id = :'FTCOMP'::uuid),
-  'FT910-8g wynik sprawdzenia zapisany z audytem');
+  'FT167-8g wynik sprawdzenia zapisany z audytem');
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_company_agency(:'FTCOMP'::uuid, true, 'VG.5678/BU');
 reset role; reset app.current_uid;
 select pg_temp.assert(
   (select agency_check_status = 'unchecked' and agency_checked_at is null from public.companies where id = :'FTCOMP'),
-  'FT910-8h zmiana numeru zeruje wynik sprawdzenia');
+  'FT167-8h zmiana numeru zeruje wynik sprawdzenia');
 
--- FT910-9: publicznie — flaga agencji dla ofert publicznych i filtr „bezpośrednio od pracodawcy”.
+-- FT167-9: publicznie — flaga agencji dla ofert publicznych i filtr „bezpośrednio od pracodawcy”.
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   exists (select 1 from public.get_public_jobs_agency(array[:'FTJOB'::uuid, :'JOBA'::uuid]) where job_id = :'FTJOB'::uuid)
   and not exists (select 1 from public.get_public_jobs_agency(array[:'JOBA'::uuid])),
-  'FT910-9 flaga agencji tylko dla ofert agencji');
+  'FT167-9 flaga agencji tylko dla ofert agencji');
 select pg_temp.assert(
   exists (select 1 from public.get_public_jobs(p_keyword => 'Magazynier FT', p_limit => 100) where id = :'FTJOB'::uuid)
   and not exists (select 1 from public.get_public_jobs(p_keyword => 'Magazynier FT', p_limit => 100, p_direct_only => true) where id = :'FTJOB'::uuid)
   and public.get_public_jobs_count(p_keyword => 'Magazynier FT', p_direct_only => true) = 0
   and public.get_public_jobs_count(p_keyword => 'Magazynier FT') >= 1,
-  'FT910-9b filtr „bezpośrednio od pracodawcy” pomija oferty agencji (lista i licznik)');
+  'FT167-9b filtr „bezpośrednio od pracodawcy” pomija oferty agencji (lista i licznik)');
 select pg_temp.assert(
   (select total from public.get_public_job_filter_facets(p_keyword => 'Magazynier FT') where dimension = 'additional' and key = 'direct') = 0,
-  'FT910-9c facet „direct” liczy tylko oferty spoza agencji');
+  'FT167-9c facet „direct” liczy tylko oferty spoza agencji');
 reset role;
 
--- FT910-9d (kontrola ujemna): bez warunku filtra (stan 0153) oferta agencji zostaje na liście.
+-- FT167-9d (kontrola ujemna): bez warunku filtra (stan 0153) oferta agencji zostaje na liście.
 begin;
 do $ft$
 declare
   v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean)'::regprocedure);
 begin
   if position('or not c.is_agency' in v_def) = 0 then
-    raise exception 'ASSERT FAILED: FT910-9d brak warunku agencji w get_public_jobs_count';
+    raise exception 'ASSERT FAILED: FT167-9d brak warunku agencji w get_public_jobs_count';
   end if;
   execute replace(v_def, 'or not c.is_agency', 'or true');
 end $ft$;
 select public.get_public_jobs_count(p_keyword => 'Magazynier FT', p_direct_only => true) as ftneg \gset
 rollback;
-select pg_temp.assert(:ftneg >= 1, 'FT910-9d kontrola ujemna: bez warunku agencja trafia do filtra „bezpośrednio”');
+select pg_temp.assert(:ftneg >= 1, 'FT167-9d kontrola ujemna: bez warunku agencja trafia do filtra „bezpośrednio”');
 
 -- ============================================================================
 -- CMI165. Kolumny tożsamości członkostwa firmy niezmienne poza RPC (0165) oraz dostęp

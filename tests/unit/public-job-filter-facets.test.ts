@@ -76,11 +76,11 @@ describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
     }
     const [listSql, listValues] = calls.find(([sql]) => sql.includes('p_sort'))!;
     expect(listSql).toContain('p_sort => $15::text');
-    // 0910: $14 = p_direct_only (NULL bez filtra), potem sortowanie i stronicowanie.
+    // 0167: $14 = p_direct_only (NULL bez filtra), potem sortowanie i stronicowanie.
     expect(listValues.slice(13)).toEqual([null, 'salary', 12, 0]);
   });
 
-  it('0910: filtr „bezpośrednio od pracodawcy” trafia do listy i licznika jako p_direct_only', async () => {
+  it('0167: filtr „bezpośrednio od pracodawcy” trafia do listy i licznika jako p_direct_only', async () => {
     const calls = await run({ locale: 'pl', directOnly: true });
     expect(calls).toHaveLength(2);
     for (const [sql, values] of calls) {

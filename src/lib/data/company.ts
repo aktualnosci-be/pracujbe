@@ -41,7 +41,7 @@ export interface MyCompany {
    * `logoUrl` powyżej to wartości ZATWIERDZONE (publiczne). Brak propozycji → null.
    */
   linksReview: CompanyLinksReview | null;
-  /** 0910: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia przez admina. */
+  /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia przez admina. */
   agency: CompanyAgency;
   canEdit: boolean;
 }

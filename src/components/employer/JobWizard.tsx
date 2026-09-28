@@ -555,7 +555,7 @@ export function JobWizard({
     );
   }
 
-  // 0910: podpowiedź przed zapisem — te same wzorce co strażnik w bazie (bez AI). Informacja,
+  // 0167: podpowiedź przed zapisem — te same wzorce co strażnik w bazie (bez AI). Informacja,
   // nie blokada: treść z sygnałem trafi do przeglądu zespołu portalu przed publikacją.
   function renderTrustHint(): React.ReactNode {
     const categories = jobFraudRisk([
@@ -642,7 +642,7 @@ export function JobWizard({
   const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
   // #497: pytania, które blokują publikację (oczekują na przegląd / odrzucone) — z bazy.
   const [screeningReviews, setScreeningReviews] = React.useState<ScreeningReviewNotice[]>([]);
-  // 0910: treść oferty czeka na przegląd albo została odrzucona (publikacja/edycja).
+  // 0167: treść oferty czeka na przegląd albo została odrzucona (publikacja/edycja).
   const [contentReview, setContentReview] = React.useState<JobContentReviewNotice | null>(null);
   // #325: tryb edycji opublikowanej oferty.
   const isEdit = Boolean(published && initialJobId);
@@ -910,7 +910,7 @@ export function JobWizard({
       }
       if (res.demo) setDemo(true);
       if (res.updatedAt) setEditVersion(res.updatedAt);
-      // 0910: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu.
+      // 0167: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu.
       setContentReview(res.contentReview ?? null);
       if (res.slug) setPublicSlug(res.slug);
       // #829: edycja w trakcie zapisu nie jest zapisana — bez „Zapisano”, przycisk znów aktywny.

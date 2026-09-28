@@ -1,5 +1,5 @@
 /**
- * Agencje pracy tymczasowej (0910, decyzja właściciela 28.09.2026: agencje dopuszczone
+ * Agencje pracy tymczasowej (0167, decyzja właściciela 28.09.2026: agencje dopuszczone
  * z oznaczeniem). Firma deklaruje „agencja” i numer uznania regionalnego (tekst); admin
  * sprawdza go ręcznie w rejestrze regionu i zapisuje wynik. Publicznie widać tylko etykietę
  * „agencja” (bez wyniku sprawdzenia) i filtr „bezpośrednio od pracodawcy”.

@@ -35,12 +35,12 @@ export function emailCampaignFocusKey(id: string): string {
   return `email-campaign-${id}`;
 }
 
-/** 0910: przegląd treści oferty z sygnałem oszustwa. */
+/** 0167: przegląd treści oferty z sygnałem oszustwa. */
 export function jobContentReviewFocusKey(id: string): string {
   return `job-content-review-${id}`;
 }
 
-/** 0910: sekcja agencji pracy tymczasowej w szczególe firmy. */
+/** 0167: sekcja agencji pracy tymczasowej w szczególe firmy. */
 export function agencyCheckFocusKey(companyId: string): string {
   return `agency-check-${companyId}`;
 }

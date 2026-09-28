@@ -1,7 +1,7 @@
 import { foldScreeningText } from '@/lib/screening/risk';
 
 /**
- * Sygnały oszustwa w treści oferty (0910, zaufanie ofert).
+ * Sygnały oszustwa w treści oferty (0167, zaufanie ofert).
  *
  * Deterministyczny detektor (wzorce PL/NL/FR/EN, bez modelu językowego) wskazuje treść,
  * która MOŻE oznaczać nieuczciwą ofertę: opłatę od kandydata (za pracę, szkolenie, dokumenty,
@@ -11,7 +11,7 @@ import { foldScreeningText } from '@/lib/screening/risk';
  * Brak trafienia nie dowodzi, że oferta jest uczciwa.
  *
  * Decyzję podejmuje BAZA: te same wzorce są w `job_fraud_patterns` (migracja
- * `0910_offer_trust.sql`), a tekst składa `screening_fold` (0103) — test
+ * `0167_offer_trust.sql`), a tekst składa `screening_fold` (0103) — test
  * `job-fraud-risk.test.ts` porównuje oba zestawy 1:1. Ten moduł służy do podpowiedzi
  * w kreatorze (przed zapisem) i do testów. Bez Zoda i bez zależności serwerowych.
  */
@@ -90,7 +90,7 @@ const COMPILED: readonly (readonly [JobFraudCategory, RegExp])[] = JOB_FRAUD_PAT
 
 /**
  * Kategorie sygnałów dla zestawu tekstów (pola oferty) — posortowane, bez powtórzeń.
- * Każdy tekst jest składany osobno i sklejany jak w `job_fraud_risk` (0910).
+ * Każdy tekst jest składany osobno i sklejany jak w `job_fraud_risk` (0167).
  */
 export function jobFraudRisk(texts: readonly (string | null | undefined)[]): JobFraudCategory[] {
   const folded = texts

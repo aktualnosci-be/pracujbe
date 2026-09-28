@@ -23,7 +23,7 @@ import { updateCompanyAgency } from '@/lib/actions/job-trust';
 
 /**
  * CompanyAgencyForm — deklaracja „agencja pracy tymczasowej” i numer uznania regionalnego
- * (0910, w `/employer/firma`, owner/admin firmy). Numer sprawdza ręcznie admin portalu; każda
+ * (0167, w `/employer/firma`, owner/admin firmy). Numer sprawdza ręcznie admin portalu; każda
  * zmiana deklaracji zeruje wynik sprawdzenia. Publicznie oferty firmy dostają etykietę
  * „agencja”. Invariant #11: blokada przycisku podczas zapisu, błąd przy polu z fokusem,
  * zachowanie danych po błędzie, jasny sukces.
