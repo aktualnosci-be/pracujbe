@@ -4,6 +4,7 @@ import en from '../../src/messages/en.json';
 import fr from '../../src/messages/fr.json';
 import nl from '../../src/messages/nl.json';
 import pl from '../../src/messages/pl.json';
+import { AxeBuilder } from './fixtures/axe';
 
 /**
  * Kreator oferty w jawnym trybie demo: krok 9 rozdziela „Zapisz i wyjdź” (szkic, bez zgody na
@@ -57,6 +58,11 @@ async function fillToStep9(page: Page, m: Messages): Promise<void> {
   await page.getByLabel(t.companyDescriptionLabel).fill('Rodzinna firma logistyczna z Antwerpii.');
 }
 
+/** #1129: kanał aplikowania (wymagany dopiero przy publikacji). */
+async function fillApplyChannel(page: Page, m: Messages): Promise<void> {
+  await page.getByLabel(m.jobWizard.applyUrlLabel, { exact: true }).fill('https://example.com/jobs/operator');
+}
+
 for (const [locale, m] of Object.entries(locales)) {
   test.describe(`krok 9 kreatora oferty: ${locale}`, () => {
     test.beforeEach(async ({ page }) => {
@@ -74,7 +80,25 @@ for (const [locale, m] of Object.entries(locales)) {
       await expect(page).toHaveURL(new RegExp(`/${locale}/employer/?$`));
     });
 
+    test('„Opublikuj” bez kanału aplikowania wskazuje pole strony (#1129)', async ({ page }) => {
+      await page.getByRole('checkbox', { name: m.jobWizard.agreePublish }).check();
+      await page.getByRole('button', { name: m.jobWizard.publish, exact: true }).click();
+
+      const url = page.getByLabel(m.jobWizard.applyUrlLabel, { exact: true });
+      await expect(url).toBeFocused();
+      await expect(url).toHaveAttribute('aria-invalid', 'true');
+      await expect(url).toHaveAttribute('aria-describedby', /job-applyUrl-error/);
+      await expect(page.locator('#job-applyUrl-error')).toHaveText(m.job.error.applyChannelRequired);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/employer/oferty/nowa`));
+      const results = await new AxeBuilder({ page })
+        .include('[data-testid="job-apply-channel-fieldset"]')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      expect(results.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
+    });
+
     test('„Opublikuj” bez zgody zostaje na kroku i wskazuje pole zgody', async ({ page }) => {
+      await fillApplyChannel(page, m);
       const consent = page.getByRole('checkbox', { name: m.jobWizard.agreePublish });
 
       const publish = page.getByRole('button', { name: m.jobWizard.publish, exact: true });

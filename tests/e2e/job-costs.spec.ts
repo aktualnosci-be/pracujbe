@@ -111,6 +111,8 @@ test('kreator, krok 8: szczegóły mieszkania tylko przy zakwaterowaniu zapewnio
   // Decyzja właściciela 28.09.2026: szkic przeszedł bez informacji o potrąceniu, ale publikacja
   // wraca do kroku 8 z błędem przy polu „potrącany z wynagrodzenia”.
   await page.getByLabel(t.companyDescriptionLabel).fill('Firma logistyczna z Antwerpii, magazyn centralny.');
+  // #1129: kanał aplikowania wymagany przy publikacji.
+  await page.getByLabel(t.applyEmailLabel, { exact: true }).fill('jobs@example.com');
   await page.getByRole('checkbox', { name: t.agreePublish }).check();
   const publish = page.getByRole('button', { name: t.publish, exact: true });
   await publish.click();

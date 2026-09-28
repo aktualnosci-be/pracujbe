@@ -1376,6 +1376,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
   **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
   na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
+  Kanał aplikowania u ogłoszeniodawcy (#1129, migracja `0172`; decyzja
+  produktowa: portal ogłoszeniowy): `jobs.apply_url` (https, reguła jak `public_https_url` + port
+  1–65535) / `apply_email` (bez parametrów `mailto:`) / `apply_phone` (`+` i 8–15 cyfr) z CHECK-ami
+  (`job_apply_*_ok`), dowolna kombinacja, co najmniej jeden wymagany przez `publish_job`
+  i `update_published_job` → `JOB_APPLY_CHANNEL_REQUIRED` (także poza trybem ogłoszeniowym —
+  flaga #1136 nie istnieje jeszcze w bazie). Szkic bez kanału dozwolony (`save_job_draft`),
+  kopia szkicu przenosi kanał (trigger na `job_duplications`), `get_public_job` zwraca trzy pola
+  tylko dla oferty publicznej (`JobDetail.applyChannel`, drugie sprawdzenie lustrem). Kreator:
+  pola w kroku 9 (błąd przy „Opublikuj” i w edycji przy polu strony, fokus), lustro
+  `src/lib/job-apply-channel.ts` (telefon normalizowany: spacje/kropki/myślniki, `00` → `+`),
+  `contact_email` zostaje kontaktem niepublicznym; import AI kanału nie wypełnia. Demo/seed:
+  kanały w domenie `example.com`. Dowód: `rls.sql` sekcja AC172 (kontrole ujemne: bez CHECK,
+  `publish_job` bez sprawdzenia), unit `job-apply-channel` (TS = wzorce z migracji), E2E
+  `job-wizard-step9-draft`. **Otwarte:** przycisk „Aplikuj u pracodawcy” na szczególe (#1130),
+  kanał w regułach zaufania treści (0167).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,

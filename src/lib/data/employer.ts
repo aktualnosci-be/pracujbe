@@ -558,6 +558,10 @@ export interface JobDraftValues {
   jointCommittee: string;
   companyDescription: string;
   contactEmail: string;
+  /** #1129 (0172): kanał aplikowania u ogłoszeniodawcy (puste = brak). */
+  applyUrl: string;
+  applyEmail: string;
+  applyPhone: string;
   /** #101: pytania screeningowe — wczytywane, bo krok 7 zapisuje je replace-all. */
   screeningQuestions: ScreeningQuestionDraft[];
 }
@@ -697,6 +701,9 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       ...EMPTY_JOB_COSTS_INITIAL,
       companyDescription: 'Firma demonstracyjna z branży logistycznej.',
       contactEmail: '',
+      applyUrl: 'https://example.com/praca',
+      applyEmail: '',
+      applyPhone: '',
       screeningQuestions: [],
     },
   };
@@ -730,7 +737,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 accommodation_kind, accommodation_cost::text AS accommodation_cost,
                 accommodation_cost_period, accommodation_deducted, accommodation_registration,
                 accommodation_after_contract, transport_shuttle, transport_reimbursed,
-                meal_voucher_daily::text AS meal_voucher_daily, joint_committee
+                meal_voucher_daily::text AS meal_voucher_daily, joint_committee,
+                apply_url, apply_email, apply_phone
            FROM public.jobs
           WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
       if (!job) return null;
@@ -835,6 +843,9 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         ...jobCostsInitial(job),
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
+        applyUrl: asString(job['apply_url']),
+        applyEmail: asString(job['apply_email']),
+        applyPhone: asString(job['apply_phone']),
         screeningQuestions: parseScreeningQuestions(screening).map((q) => ({
           type: q.type,
           required: q.required,
