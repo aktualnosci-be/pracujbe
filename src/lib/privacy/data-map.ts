@@ -752,6 +752,12 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { updated_by: 'reference' },
     note: 'Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.',
   },
+  'public.portal_legal_mode': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { changed_by: 'reference' },
+    note: 'Tryb portalu jako dane (0171, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.',
+  },
   'public.document_acceptances': {
     activities: ['consents', 'account'],
     subjects: ['candidate', 'employer'],

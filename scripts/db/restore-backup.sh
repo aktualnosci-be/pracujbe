@@ -21,6 +21,8 @@
 #   RESTORE_AGE_IDENTITY_FILE  — klucz prywatny age (trzymany POZA zadaniem kopii),
 #   RESTORE_TARGET_URL         — pusta baza pracujbe_restore_* (zalecany osobny klaster),
 #   RESTORE_TOMBSTONES_FILE    — (opcjonalnie) rejestr usunięć do ponownego zastosowania.
+#   RESTORE_KEEP_PORTAL_MODE   — #1143: `1` = zachowaj tryb portalu z kopii; domyślnie po
+#                                odtworzeniu wymuszany jest CLASSIFIEDS_ONLY (RPC z audytem).
 #   RESTORE_S3_OBJECT          — #569: zamiast RESTORE_ARCHIVE: nazwa artefaktu w buckecie R2
 #                                albo `latest` (najnowsza kompletna kopia); pobranie kluczem
 #                                ODCZYTU BACKUP_S3_READ_* (scripts/db/lib/backup-s3.mjs).
@@ -148,6 +150,27 @@ if [ -n "$tombstone_array" ]; then
   [ "$remaining" = "0" ] || fail 'Po ponownym usunięciu w bazie zostały osoby z rejestru usunięć.'
   echo "RESTORE: rejestr usunięć zastosowany (liczba identyfikatorów: ${tombstone_count})."
 fi
+
+# #1143 (0171): odtworzona baza wraca w trybie ogłoszeniowym — kopia z RECRUITMENT nie może
+# po cichu przywrócić funkcji rekrutacyjnych. Zachowanie trybu z kopii tylko jawnie
+# (RESTORE_KEEP_PORTAL_MODE=1, decyzja właściciela). Po kontrolach zgodności z manifestem.
+portal_mode='(brak trybu w bazie)'
+if [ "$(dst -c "select to_regprocedure('public.admin_set_portal_legal_mode(text,text,text)') is not null")" = 't' ]; then
+  if [ "${RESTORE_KEEP_PORTAL_MODE:-}" = '1' ]; then
+    portal_mode="$(dst -c "select case when public.recruitment_enabled() then 'RECRUITMENT' else 'CLASSIFIEDS_ONLY' end")" \
+      || fail 'Odczyt trybu portalu nie powiódł się.'
+    portal_mode="${portal_mode} (zachowany: RESTORE_KEEP_PORTAL_MODE=1)"
+  else
+    dst -c "select case when public.recruitment_enabled()
+        then public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY',
+          'restore-backup.sh: tryb po odtworzeniu kopii (#1143)', 'RECRUITMENT') end" >/dev/null \
+      || fail 'Wymuszenie trybu ogłoszeniowego po odtworzeniu nie powiodło się.'
+    [ "$(dst -c 'select public.recruitment_enabled()')" = 'f' ] \
+      || fail 'Po odtworzeniu baza nie jest w trybie ogłoszeniowym.'
+    portal_mode='CLASSIFIEDS_ONLY'
+  fi
+fi
+echo "RESTORE: tryb portalu: ${portal_mode}"
 
 tables="$(printf '%s\n' "$table_list" | grep -c .)"
 migrations="$(dst -c 'select count(*) from app_migrations.history')"
