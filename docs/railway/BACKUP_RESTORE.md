@@ -33,14 +33,30 @@ Kod `0` = kopia odtworzona i zgodna, `1` = niezgodność lub błąd, `2` = zła 
 (np. cel niepusty, cel = źródło, nazwa celu spoza `pracujbe_restore_*`).
 
 Cel musi być osobną, nietrwałą bazą: lokalny kontener albo tymczasowa usługa. Nigdy
-nie wskazuj produkcyjnej bazy Railway jako celu. Polityki RLS odwołują się do ról
-globalnych — skrypt tworzy brakujące role na celu jako `NOLOGIN` bez atrybutów.
+nie wskazuj produkcyjnej bazy Railway jako celu.
+
+### Uprawnienia i role (OPS14-01)
+
+Zrzut i odtworzenie zachowują uprawnienia (GRANT/REVOKE, także odebrane `EXECUTE`
+dla `PUBLIC`), ale nie właścicieli (`--no-owner`): obiekty należą do loginu, który
+odtwarza — uruchamiaj jako migrator `postgres`, jak bootstrap. Role są globalne dla
+klastra i nie ma ich w kopii. Skrypt zbiera nazwy ról z polityk i GRANT/REVOKE archiwum
+i tworzy brakujące wg kontraktu `database/bootstrap` (`scripts/db/lib/restore-roles.sh`):
+`NOLOGIN` bez atrybutów, `BYPASSRLS` tylko `service_role`, `pracujbe_app` członkiem
+`anon` i `authenticated`. Istniejących ról nie zmienia. Loginy runtime i hasła nadaje
+potem operator (`scripts/db/runtime-logins.mjs`).
+
+Kontrola porównuje odcisk uprawnień źródła i celu: wpisy ACL schematów, tabel, kolumn,
+sekwencji, funkcji, typów i uprawnień domyślnych (bez wpisów właściciela), a także
+atrybuty i członkostwa ról, którym nadano uprawnienia. Odtworzenie bez uprawnień albo
+rola runtime z innymi atrybutami na celu (np. `LOGIN`) kończy się kodem `1`.
 
 ### Co jest sprawdzane w CI
 
 Job `rls` uruchamia `scripts/db/test-restore.sh`: źródło z produkcyjnym bootstrapem,
 wszystkimi migracjami i danymi, odtworzenie oraz kontrole ujemne (cel niepusty,
-cel = źródło, niedozwolona nazwa, brak konfiguracji).
+cel = źródło, niedozwolona nazwa, brak konfiguracji) i sprawdzenie, że funkcja tylko
+dla `service_role` nie ma `EXECUTE` dla `PUBLIC`/`anon` po odtworzeniu.
 
 ## Kopia zaszyfrowana z retencją — `scripts/db/backup.sh`
 
@@ -53,8 +69,10 @@ Kopia do przechowywania, nie tylko dowód odtwarzalności:
 4. manifest `pracujbe-<UTC>.json` obok artefaktu `pracujbe-<UTC>.dump.age` zawiera
    rozmiar zrzutu i artefaktu, SHA-256 artefaktu, SHA-256 zapytań kontrolnych
    (historia migracji, tabele z RLS, liczba polityk, liczba wierszy każdej tabeli
-   z tego samego snapshotu), liczbę tabel i migracji, ostatnią migrację i wersję
-   serwera; manifest nie zawiera danych,
+   z tego samego snapshotu), SHA-256 odcisku uprawnień (`aclSha256`, `aclItems`),
+   liczbę tabel i migracji, ostatnią migrację i wersję serwera; manifest nie zawiera
+   danych. Format `pracujbe-backup/2`; kopie formatu 1 (bez uprawnień) są odrzucane
+   przy odtworzeniu — po wdrożeniu zrób nową kopię,
 5. retencja: zostaje `BACKUP_RETENTION` najnowszych kopii; usuwane są wyłącznie
    pliki o dokładnym wzorcu nazwy. Artefakt i manifest mają prawa 0600, katalog 0700,
 6. opcjonalny `BACKUP_HEARTBEAT_URL`: po sukcesie `GET URL`, po błędzie `GET URL/fail`.
@@ -129,9 +147,9 @@ RESTORE_S3_OBJECT           # (#569) zamiast RESTORE_ARCHIVE: `latest` albo nazw
 ```
 
 Kolejne kroki: zgodność SHA-256 artefaktu z manifestem, odszyfrowanie, pełny
-odczyt, utworzenie brakujących ról polityk jako `NOLOGIN`, `pg_restore
---single-transaction --exit-on-error` i porównanie SHA-256 zapytań kontrolnych
-z manifestem. Kody wyjścia jak wyżej. Podmieniony artefakt, zły klucz, zmieniony
+odczyt, utworzenie brakujących ról wg bootstrapu, `pg_restore --no-owner
+--single-transaction --exit-on-error` (z uprawnieniami) i porównanie SHA-256 zapytań
+kontrolnych oraz odcisku uprawnień z manifestem. Kody wyjścia jak wyżej. Podmieniony artefakt, zły klucz, zmieniony
 manifest, niepusty cel i nazwa spoza `pracujbe_restore_*` kończą się błędem.
 
 ### Usunięcia po dacie kopii (#486)
@@ -158,9 +176,13 @@ decyzje: [DATA_RETENTION.md](../DATA_RETENTION.md).
 Test obu skryptów: `sudo -u postgres npm run test:backup` (lokalny PG16) albo
 `PGHOST=… PGUSER=… PGPASSWORD=… npm run test:backup`. Test wykonuje trzy kopie
 przy retencji 2, sprawdza prawa plików, format `age` i brak plaintextu w
-artefakcie, odtwarza najnowszą kopię i wykonuje 8 kontroli ujemnych. Scenariusz #486:
+artefakcie, odtwarza najnowszą kopię i wykonuje kontrole ujemne. Scenariusz #486:
 kandydat usunięty po kopii wraca przy odtworzeniu bez rejestru (kontrola ujemna), z
-rejestrem jest usuwany ponownie, a zły rejestr kończy się odmową bez odtworzenia. Wymaga `age`
+rejestrem jest usuwany ponownie, a zły rejestr kończy się odmową bez odtworzenia. OPS14-01:
+odtworzona baza ma uprawnienia źródła, a kopia bez ACL (jak dawne `--no-acl`) i manifest
+formatu 1 są odrzucane (kontrole ujemne). Z `BACKUP_TEST_FRESH_PGHOST`/`BACKUP_TEST_FRESH_PGPORT`
+(drugi, pusty klaster bez ról runtime) test odtwarza też kopię tam: role powstają wg
+bootstrapu, a rola `anon` z `LOGIN` na celu kończy się odmową. Wymaga `age`
 i `age-keygen`, nie łączy się z internetem. Workflow CI nie uruchamia go
 automatycznie. Gotowy krok dla właściciela jest w [OPERATIONS.md](OPERATIONS.md) §5.
 

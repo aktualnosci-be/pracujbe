@@ -93,7 +93,7 @@ function memoryS3() {
   return { objects, fail, calls, store };
 }
 
-function pdfFile(name = 'Moje CV.pdf', bytes = Buffer.from('%PDF-1.7\nfixture'), declared?: number) {
+function pdfFile(name = 'Moje CV.pdf', bytes = Buffer.from('%PDF-1.7\nfixture\n%%EOF\n'), declared?: number) {
   return {
     name,
     type: 'application/pdf',
@@ -127,7 +127,7 @@ beforeEach(() => {
 
 describe('upload CV do prywatnego bucketu', () => {
   it('zapisuje bajty pod kluczem właściciela z sesji i metadane z checksumą', async () => {
-    const bytes = Buffer.from('%PDF-1.7\nfixture');
+    const bytes = Buffer.from('%PDF-1.7\nfixture\n%%EOF\n');
     vi.mocked(createOwnCandidateCv).mockImplementation(async (_pool, _user, input) =>
       metadata(input.key, { sizeBytes: input.sizeBytes }),
     );
@@ -230,7 +230,7 @@ describe('usuwanie CV', () => {
 
 describe('pobranie CV przez podpisany link aplikacji', () => {
   const key = `${SELF}/cv-22222222-2222-4222-8222-222222222222.pdf`;
-  const bytes = Buffer.from('%PDF-1.7\nfixture');
+  const bytes = Buffer.from('%PDF-1.7\nfixture\n%%EOF\n');
 
   beforeEach(() => {
     s3.objects.set(key, { bytes, type: 'application/pdf' });
@@ -240,6 +240,18 @@ describe('pobranie CV przez podpisany link aplikacji', () => {
   function token(fileId = FILE_ID, userId = SELF, now = NOW) {
     return createPrivateDownloadToken(fileId, userId, { secret: SECRET, now: () => now });
   }
+
+  it('nazwa pobrania = oczyszczona podstawa + rozszerzenie z klucza (stary wiersz z .msi/RLO)', async () => {
+    vi.mocked(getOwnDownloadableCv).mockResolvedValue(
+      metadata(key, { sizeBytes: bytes.length, fileName: 'Umowa\u202Efdp.msi' }),
+    );
+    const response = await openCvDownload(deps, SELF, FILE_ID, token());
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(response.headers.get('content-disposition')).toBe(
+      `attachment; filename="Umowafdp.pdf"; filename*=UTF-8''Umowafdp.pdf`,
+    );
+  });
 
   it('link nie zawiera adresu S3 ani klucza, a jego podpis przyjmuje trasa', async () => {
     const link = await issueCvDownloadLink(deps, SELF, FILE_ID);

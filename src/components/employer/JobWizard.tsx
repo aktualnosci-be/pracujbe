@@ -491,6 +491,13 @@ export interface JobWizardProps {
    * (`isJobAssistEnabled`). Propozycja zmienia pole dopiero po kliknięciu „Użyj propozycji”.
    */
   assistEnabled?: boolean;
+  /**
+   * Firma, dla której wyrenderowano kreator nowej oferty (EMP-02). `createJobDraft` tworzy
+   * szkic tylko wtedy, gdy to nadal aktywna firma — inaczej `ACTIVE_COMPANY_CHANGED`
+   * zamiast szkicu w firmie przełączonej w innej karcie. Wznowienie istniejącego szkicu
+   * (`initialJobId`) zapisuje do firmy tej oferty.
+   */
+  companyId?: string | null;
 }
 
 /** #465: pole formularza → krok i etykieta (lista „Do sprawdzenia" na kroku). */
@@ -603,6 +610,7 @@ export function JobWizard({
   importSlot,
   importReview,
   assistEnabled = false,
+  companyId = null,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
   const tImport = useTranslations('jobImport');
@@ -871,7 +879,7 @@ export function JobWizard({
     try {
       let id = jobId;
       if (!id) {
-        const created = await createJobDraft(locale);
+        const created = await createJobDraft(locale, companyId);
         if (!created.ok) {
           setSaveError(created.error);
           setSaveState('error');

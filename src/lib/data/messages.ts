@@ -20,6 +20,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { queryOne, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
+import { extensionOfMime, safeFileName } from '@/lib/files/file-type';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 
@@ -244,9 +245,11 @@ async function fetchAttachments(
     const size = r['size_bytes'];
     if (!messageId || !id) continue;
     const list = map.get(messageId) ?? [];
+    const ext = extensionOfMime(asStr(r['mime_type']));
     list.push({
       id,
-      fileName: asStr(r['file_name']),
+      // Nazwa jak w nagłówku pobrania: rozszerzenie z typu, bez znaków kierunku (także stare wiersze).
+      fileName: ext ? safeFileName(asStr(r['file_name']), ext, 'file') : asStr(r['file_name']),
       mimeType: asStr(r['mime_type']),
       sizeBytes: typeof size === 'number' ? size : 0,
       downloadable: r['downloadable'] === true,

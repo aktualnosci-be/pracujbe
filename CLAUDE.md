@@ -546,7 +546,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > (szczegół zgłoszenia `/candidate/aplikacje/[id]`, historia stronicowana) i pracodawca (Etap 4, migracja `0152`),
 > P1-10 (kanoniczny model miast — zrobione: `jobs.location_id`, migracja `0153`, patrz Etap 2), P1-14 (realne statystyki/lejek), P1-15 (treść prawna = prawnik), P1-16
 > (receipt akceptacji regulaminu przy rejestracji), P1-17 (eksport/usunięcie konta GDPR — część
-> techniczna dla kandydata zrobiona w #486, patrz Etap 7),
+> techniczna dla kandydata zrobiona w #486, dla pracodawcy w 0161, patrz Etap 7),
 > P1-18 (moderacja zgłoszeń end-to-end — decyzja z egzekucją #42 zrobiona, odwołania #43 otwarte), P1-19 (webhook Resend bounce/complaint = zewn.),
 > P1-20 (harmonogram workera e-mail = cron/infra), P1-21 (reconciliacja faktur + PDF),
 > P1-23/24/25 (twarde bramki CI RLS/E2E + migracje w deployu + ephemeral runners = infra),
@@ -918,6 +918,22 @@ Paszport tożsamości nad siatką `/candidate/profil` (#172, `CandidateIdentity`
 zawód, miasto, znana dostępność; bez zdjęcia i inicjałów, po błędzie odczytu tylko komunikat.
 Kolejne strony są odczytywane pod bieżącą sesją/RLS; błąd i ponowienie nie kasują
 już wczytanych kart. Jest to część etapu wyglądu #5, nie dowód ukończenia całego etapu.
+
+Zapisane oferty bez strony publicznej (migracja `0162`):
+`get_saved_jobs_display` zwraca KAŻDY własny zapis z `job_availability` (`available`/`closed`/
+`expired`/`paused`/`unavailable` — warunki `available` = `get_public_job`; usunięta oferta albo
+firma = `closed`, firma niezweryfikowana/zawieszona = `unavailable`), `slug` tylko dla
+`available`. Dawniej zapis zamkniętej/wygasłej/wstrzymanej oferty znikał z `/candidate/zapisane`
+bez śladu, a wiersz `saved_jobs` zostawał. Mapowanie w jednym miejscu
+`src/lib/saved-job-availability.ts` (`toSavedJob`: nieznany stan albo brak slugu = bez linku);
+karta `SavedJobUnavailableItem`: etykieta stanu (`dashboard.savedState*`), tytuł i firma, bez
+linku i zakładki, „Usuń z zapisanych” (`toggleSavedJob(id, false)`, blokada w trakcie, komunikat
+`role="status"` z fokusem, błąd przy przycisku). Klasyfikacja zgodna z historią zgłoszeń (PR
+#758, `candidate_job_availability`) + stan `paused`; świadomie inline, bez zależności od 0206.
+Dowód: `rls.sql` sekcja SV162 (kontrola ujemna: definicja z 0066 gubi 5 z 6 zapisów),
+`portal-candidate` (PG16: po terminie = `expired` bez slugu, usunięcie pod RLS), unit
+`saved-job-availability` i `candidate-saved-jobs` (kontrole ujemne), E2E `candidate-saved-closed`
+(fixture, 4 języki, 320 px, axe; mutacja strony = czerwony).
 
 Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
 prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
@@ -2170,8 +2186,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
   sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
-  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
-  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+  `VIES_LIVE_SMOKE=1`. Automatyczne sprawdzenie przy zakładaniu firmy (decyzja właściciela
+  26.09.2026, migracja `0164`): po `create_first_company` /
+  `create_additional_company` / `create_company_with_owner` serwer planuje (`after`, po odpowiedzi)
+  `runCompanyViesAutoCheck` (`src/lib/vies/auto-check.ts`: bieżący VAT/KBO → ten sam adapter VIES →
+  zapis tylko `valid`/`invalid` przez `record_company_vies_check_auto` — EXECUTE tylko
+  service_role, bez nadpisywania istniejącego wyniku, tylko dla bieżącego numeru, `checked_by`
+  null, audyt `company.vies_checked` z `source: auto`). Awaria VIES/bazy nie blokuje założenia
+  i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
+  NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
+  (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
@@ -2346,8 +2370,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `candidate-account-data`. Szkic dla prawnika (PROJEKT, nieopublikowany):
   `docs/legal-drafts/retencja-i-prawa-kandydata.md`. **Otwarte:** zatwierdzone okresy i treść
   dla kandydatów (#61), cron `/api/maintenance` i eksport rejestru usunięć (#13),
-  sprostowanie/ograniczenie/sprzeciw, eksport i usunięcie konta pracodawcy,
-  potwierdzenie linkiem e-mail.
+  sprostowanie/ograniczenie/sprzeciw, potwierdzenie linkiem e-mail.
+  Konto pracodawcy (migracja `0161`, `docs/DATA_RETENTION.md` §5a): sekcja
+  „Twoje dane i konto” w `/employer/ustawienia` (ten sam `AccountDataSettings`,
+  `variant="employer"`; trasa `/api/account/export` i `deleteMyAccountAction` wybierają RPC po
+  roli sesji). Eksport `export_my_employer_data` (konto, profil, profil pracodawcy, członkostwa,
+  zaproszenia wysłane i otrzymane, utworzone oferty, akcje audytowe jako aktor — bez
+  `before/after_data`, identyfikator tylko obiektów firmowych; powiadomienia bez treści; bez
+  danych kandydatów; limit i ślad wspólne z kandydatem). Usunięcie
+  `request_employer_account_erasure` (potwierdzenie adresem) → `erase_employer_subject`:
+  ostatni AKTYWNY właściciel którejkolwiek firmy → `COMPANY_LAST_OWNER` (komunikat
+  `accountData.deleteLastOwner`: najpierw przekaż rolę albo zamknij firmę) i nic się nie
+  zmienia; inaczej członkostwa, e-maile do osoby, jej pliki (poza załącznikami rozmów),
+  sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
+  z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
+  wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
+  Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
+  właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
+  `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
+  samoobsługowe zamknięcie firmy, retencja nieaktywnych kont pracodawców.
   Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
   `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
   rozmowy 180 dni od niezmiennego `applications.closed_at` — każdy stan końcowy, także `hired`;
@@ -2664,8 +2705,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`STORAGE_GC_MODE=delete` = kasowanie), same liczniki w odpowiedzi. Opis: `docs/DATA_RETENTION.md` §3a.
   Tryb na produkcji: `dry-run` do obserwacji liczników (decyzja właściciela 26.09.2026,
   `docs/PRODUCT_DECISIONS.md`); `delete` dopiero po nowej decyzji.
+  Załączniki wiadomości w tym samym GC (#833, bez migracji): `runStorageGc` sprząta teraz DWA
+  niezależne logiczne buckety jednego fizycznego bucketu Railway — CV (`candidate-files`,
+  domyślnie) i załączniki rozmów (`message-files`, `bucket`/`pattern: 'attachment'`), każdy
+  własnym przebiegiem (`storage_gc_sweeps` per bucket, generyczne RPC 0117 bez zmian).
+  Wcześniej `list()` adaptera klasyfikował KAŻDY klucz `att-*` jako obcy niezależnie od
+  wywołania — osierocony załącznik po przerwanym uploadzie nigdy nie trafiał do kolejki
+  usuwania nawet po latach. `/api/maintenance` woła oba przebiegi po kolei (osobne `try/catch`,
+  `messageAttachmentsGc` w odpowiedzi); awaria jednego nie blokuje drugiego. Dowód: unit
+  `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
-  `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
+  `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
