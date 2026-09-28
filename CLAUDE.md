@@ -209,6 +209,19 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   `perf-lab.mjs`: LCP/CLS/TBT i INP listy w `CLASSIFIEDS_ONLY`, INP ApplyModal na drugim serwerze `RECRUITMENT`
   (tryb sprawdzany na szczególe). Strażnik `check-ci-workflows.mjs` (+ kontrole ujemne w `ci-workflows-guard.test`).
   Ten sam build w dwóch trybach lokalnie: najpierw `rm -rf .next/cache/isr-handler` (strony ISR drugiego trybu).
+- **Pulpity w trybie ogłoszeniowym (bez migracji):** w miejscu dawnych sekcji rekrutacyjnych — pulpit pracodawcy
+  (`/employer`, kolumna boczna w miejscu „Top dopasowani”): `EmployerListingStats` = skrót statystyk ogłoszeń, do
+  3 najczęściej oglądanych ofert z ostatnich 30 dni z wyświetleniami i kliknięciami „Aplikuj u pracodawcy”
+  (`getTopListingJobs` na `getJobFunnel` = lejek ofert pod RLS, bez tabel procesu; member = `denied`, awaria = `error`
+  z ponowieniem, brak ruchu = osobny komunikat) i jeden odnośnik „Zobacz szczegóły” → `/employer/statystyki` (dawna
+  karta-odnośnik `EmployerFunnelSection` w trybie ogłoszeniowym nic nie renderuje). Pulpit konta kandydata
+  (`CandidateAccountDashboard`, w miejscu polecanych): `CandidateSavedSearchJobs` = do 3 najnowszych ofert z zapisanych wyszukiwań kandydata
+  (`loadSavedSearchJobs`: 3 najnowsze wyszukiwania, filtry z `saved_searches.query` przez `parseJobListQuery`, publiczne
+  `get_public_jobs` dla `candidateId` — firmy zablokowane pomija baza; sort „najnowsze”, bez wyniku/dopasowania), linki
+  „Pokaż oferty: {nazwa}” w języku zapisu (#823), bez wyszukiwań zachęta z linkiem do `/oferty-pracy`, awaria = błąd z
+  ponowieniem (nie pusta lista; wyszukiwania czytane raz, przekazane do `loadSavedSearchJobs`); powitanie pracodawcy bez „rekrutacji”
+  (`employerGreetingSubListing*`). Tryb `RECRUITMENT`: stare sekcje. Dowód: unit `classifieds-employer-stats`, `classifieds-candidate-saved-search-jobs`, `classifieds-candidate-account`, `legal`
+  `classifieds-panels` (kontrole ujemne), E2E `classifieds-dashboards` (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---

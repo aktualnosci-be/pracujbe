@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as candidateData from '@/lib/data/candidate';
 import * as candidateFiles from '@/lib/data/candidate-files';
+import * as savedSearchJobs from '@/lib/data/candidate-saved-search-jobs';
 import { CLASSIFIEDS_CANDIDATE_NAV, candidateNavKeys } from '@/lib/candidate-nav';
 import { withClassifiedsMode, withRecruitmentMode } from '../helpers/portal-mode';
 
@@ -52,6 +53,16 @@ vi.mock('@/components/candidate/CandidateMessagesPreview', () => ({
 }));
 vi.mock('@/components/candidate/CandidateRecommendedPreview', () => ({ CandidateRecommendedPreview: () => null }));
 vi.mock('@/components/candidate/SaveJobButton', () => ({ SaveJobButton: () => null }));
+// Oferty z zapisanych wyszukiwań: asynchroniczny komponent serwerowy — znacznik (treść: unit
+// `classifieds-candidate-saved-search-jobs`); loader owinięty, żeby sprawdzić wywołanie.
+vi.mock('@/components/candidate/CandidateSavedSearchJobs', () => ({
+  CandidateSavedSearchJobs: ({ result }: { result: unknown }) =>
+    result === null ? null : <span data-testid="saved-search-jobs" />,
+}));
+vi.mock('@/lib/data/candidate-saved-search-jobs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/data/candidate-saved-search-jobs')>();
+  return { ...actual, loadSavedSearchJobs: vi.fn(actual.loadSavedSearchJobs) };
+});
 vi.mock('@/lib/data/candidate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/data/candidate')>();
   return {
@@ -132,6 +143,10 @@ describe('pulpit kandydata w trybie ogłoszeniowym', () => {
     expect(candidateData.getLatestMessages).not.toHaveBeenCalled();
     expect(candidateFiles.loadCandidateFiles).not.toHaveBeenCalled();
     expect(candidateData.getCandidateAccountOverview).toHaveBeenCalled();
+    // Oferty z zapisanych wyszukiwań: w miejscu polecanych, na już odczytanej liście wyszukiwań.
+    expect(screen.getByTestId('saved-search-jobs')).toBeTruthy();
+    expect(savedSearchJobs.loadSavedSearchJobs).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(savedSearchJobs.loadSavedSearchJobs).mock.calls[0]![0]).toMatchObject({ status: 'ready' });
   });
 });
 
@@ -144,6 +159,9 @@ describe('kontrola ujemna: pulpit w trybie RECRUITMENT', () => {
     expect(screen.getByTestId('completeness')).toBeTruthy();
     expect(candidateData.getCandidateProfileSummary).toHaveBeenCalled();
     expect(candidateFiles.loadCandidateFiles).toHaveBeenCalled();
+    // Oferty z zapisanych wyszukiwań to tylko pulpit konta trybu ogłoszeniowego.
+    expect(savedSearchJobs.loadSavedSearchJobs).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('saved-search-jobs')).toBeNull();
   });
 });
 
