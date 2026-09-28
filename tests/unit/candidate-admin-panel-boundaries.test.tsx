@@ -127,12 +127,12 @@ describe('CandidateNotFound', () => {
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
       '/candidate',
       '/candidate/aplikacje',
-      '/candidate/oferty-polecane',
+      '/candidate/wyszukiwania',
     ]);
     expect(links.map((a) => a.textContent)).toEqual([
       messages.dashboard.candidatePanelBackToDashboard,
       messages.dashboard.navApplications,
-      messages.dashboard.navRecommended,
+      messages.dashboard.navSearches,
     ]);
     // Kontrola ujemna: żadnego linku publicznego ani do panelu pracodawcy.
     for (const href of links.map((a) => a.getAttribute('href') ?? '')) {

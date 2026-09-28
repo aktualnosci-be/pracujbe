@@ -65,6 +65,8 @@ export default async function EmployerLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  // #1133: tryb produktu z serwera — shell (kliencki) dostaje go w propsach.
+  const recruitmentEnabled = isRecruitmentEnabled('candidateSearch');
 
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
@@ -77,8 +79,6 @@ export default async function EmployerLayout({
   let mode: EmployerShellMode = 'demo';
   // #864: prawdziwa sesja Better Auth (nie demo) — panel dostaje `SessionKeepAlive`.
   let hasSession = false;
-  // #1128: tryb produktu liczony na serwerze i podawany do klienckiego chrome'u.
-  const recruitmentEnabled = isRecruitmentEnabled();
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();

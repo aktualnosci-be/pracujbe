@@ -17,16 +17,14 @@ import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
 import { canRecruit } from '@/lib/team/permissions';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
-import { SendOfferButton } from '@/components/employer/SendOfferButton';
 import { RecentApplicationsError } from '@/components/employer/RecentApplicationsError';
-import { EmployerStatsError } from '@/components/employer/EmployerStatsError';
 import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPreview';
 import { EmployerOverviewStats } from '@/components/employer/EmployerOverviewStats';
 import { EmployerFunnelSection } from '@/components/employer/EmployerFunnelSection';
+import { EmployerTopMatched } from '@/components/employer/EmployerTopMatched';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import {
   BTN_PRIMARY,
-  BTN_SECONDARY,
   BTN_SMALL,
   EMPTY,
   EYEBROW,
@@ -39,7 +37,6 @@ import {
   ROW_META,
   ROW_TITLE,
   SECTION_HEAD,
-  STATUS_GOOD,
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
@@ -90,11 +87,13 @@ export default async function EmployerDashboardPage({
   // #1144 — decyzja produktowa: portal ogłoszeniowy. Bez trybu RECRUITMENT sekcja najnowszych
   // zgłoszeń nie jest renderowana, a jej loader nie jest wołany.
   const recruitment = isRecruitmentEnabled();
+  const matching = isRecruitmentEnabled('matching') && isRecruitmentEnabled('candidateSearch');
   const [overview, jobsLoad, recentApplications, topMatched, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobsLoad(),
     recruitment ? getRecentApplications() : null,
-    getTopMatchedCandidatesLoad(),
+    // #1133: tryb ogłoszeniowy — bez rankingu kandydatów (loader niewywoływany).
+    matching ? getTopMatchedCandidatesLoad() : Promise.resolve({ status: 'disabled' as const }),
     getFunnelStats(),
     getEmployerShellData(),
   ]);
@@ -228,64 +227,14 @@ export default async function EmployerDashboardPage({
           <EmployerFunnelSection locale={locale} funnel={funnel} />
         </div>
 
-        {/* Kolumna boczna */}
-        <div className="flex min-w-0 flex-[1_1_18rem] flex-col gap-[19px]">
-          {/* Top dopasowani kandydaci — wysyłka propozycji (sendOffer) */}
-          <section className={PANEL}>
-            <div className={SECTION_HEAD}>
-              <h2 className={PANEL_H2}>{td('topMatched')}</h2>
-              <Link href="/employer/kandydaci" className={TEXT_LINK}>
-                {td('seeAllCandidates')}
-                <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
-            {/* Błąd, brak uprawnień i firma przed weryfikacją ≠ pusta lista (P1-14). */}
-            {topMatched.status === 'error' ? (
-              <EmployerStatsError message={td('topMatchedLoadError')} retryLabel={tc('retry')} />
-            ) : topMatched.status === 'denied' ? (
-              <p className={EMPTY}>{td('topMatchedDenied')}</p>
-            ) : topMatched.status === 'unverified' ? (
-              <p className={EMPTY}>{td('topMatchedUnverified')}</p>
-            ) : topMatched.candidates.length === 0 ? (
-              <p className={EMPTY}>{td('emptyState')}</p>
-            ) : (
-              <ul>
-                {topMatched.candidates.map((candidate) => (
-                  <li key={candidate.candidateId} className={cn(ROW, 'flex-wrap items-center')}>
-                    <span className={ICON_BOX} aria-hidden="true">
-                      {initials(candidate.name || td('candidateFallback'))}
-                    </span>
-                    <div className="min-w-0 flex-1 basis-32">
-                      <p className={ROW_TITLE}>{candidate.name || td('candidateFallback')}</p>
-                      {candidate.role ? <p className={ROW_META}>{candidate.role}</p> : null}
-                      {candidate.city ? <p className={ROW_META}>{candidate.city}</p> : null}
-                      {candidate.jobTitle ? (
-                        <p className={ROW_META}>{td('offerForJob', { job: candidate.jobTitle })}</p>
-                      ) : null}
-                      <span className={cn(STATUS_GOOD, 'mt-1.5 font-semibold tabular-nums')}>
-                        {candidate.match}%
-                      </span>
-                    </div>
-                    <SendOfferButton
-                      jobId={candidate.jobId}
-                      candidateId={candidate.candidateId}
-                      candidateName={candidate.name || td('candidateFallback')}
-                      jobTitle={candidate.jobTitle}
-                      jobSlug={candidate.jobSlug}
-                      offerSentAt={candidate.offerSentAt}
-                      className="w-full whitespace-normal text-center sm:w-auto"
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="border-t border-border pt-[19px]">
-              <Link href="/employer/kandydaci" className={cn(BTN_SECONDARY, 'w-full')}>
-                {td('goToCandidates')}
-              </Link>
-            </div>
-          </section>
-        </div>
+        {/* Kolumna boczna. #1133: w trybie ogłoszeniowym „Top dopasowani” nie istnieje — kolumny
+            nie ma (bez sekcji zastępczej, decyzja produktowa: portal ogłoszeniowy). */}
+        {topMatched.status !== 'disabled' ? (
+          <div className="flex min-w-0 flex-[1_1_18rem] flex-col gap-[19px]">
+            {/* Top dopasowani kandydaci — wysyłka propozycji (sendOffer) */}
+            <EmployerTopMatched locale={locale} topMatched={topMatched} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -8,9 +8,6 @@ import { resolveHref } from '@/lib/data/notifications';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
 import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
-// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
-recruitmentModeInTests();
-
 const { markNotificationsRead, refresh } = vi.hoisted(() => ({
   markNotificationsRead: vi.fn(),
   refresh: vi.fn(),
@@ -56,11 +53,13 @@ const CONVERSATION = '2f1c1b8e-8c1a-4a4c-9d7e-3a1f0c2b9e11';
 
 describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => {
   it.each([
-    ['application', 'candidate', '/candidate/aplikacje'],
-    ['application', 'employer', '/employer/aplikacje'],
-    ['offer', 'candidate', '/candidate/propozycje'],
-    ['offer', 'employer', '/employer/aplikacje'],
-    ['job', 'candidate', '/candidate/oferty-polecane'],
+    // #1141/#1144/#1139: tryb ogłoszeniowy (domyślny w testach) — panele zgłoszeń, propozycji
+    // i polecanych ofert dają 404, więc powiadomienia prowadzą do pulpitu / listy ofert.
+    ['application', 'candidate', '/candidate'],
+    ['application', 'employer', '/employer'],
+    ['offer', 'candidate', '/candidate'],
+    ['offer', 'employer', '/employer'],
+    ['job', 'candidate', '/oferty-pracy'],
     ['job', 'employer', '/employer/oferty'],
     // #843: decyzja o firmie (weryfikacja/odrzucenie/zawieszenie) niesie identyfikator firmy,
     // której dotyczy — inaczej właściciel kilku firm z inną AKTYWNĄ firmą w cookie widziałby
@@ -89,6 +88,20 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
   // zwracało `/employer/firma` bez identyfikatora — ten test byłby czerwony.
   it('KONTROLA UJEMNA: link firmy niesie identyfikator, nie jest stałym adresem', () => {
     expect(resolveHref('company', 'employer', CONVERSATION)).not.toBe('/employer/firma');
+  });
+});
+
+describe('resolveHref — tryb RECRUITMENT (#148)', () => {
+  recruitmentModeInTests();
+
+  it.each([
+    ['application', 'candidate', '/candidate/aplikacje'],
+    ['application', 'employer', '/employer/aplikacje'],
+    ['offer', 'candidate', '/candidate/propozycje'],
+    ['offer', 'employer', '/employer/aplikacje'],
+    ['job', 'candidate', '/candidate/oferty-polecane'],
+  ])('%s dla %s → %s', (entityType, role, href) => {
+    expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
   });
 });
 

@@ -59,8 +59,8 @@ export interface CandidateShellProps {
   /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
   keepSessionAlive?: boolean;
   /**
-   * Tryb produktu z serwera (`isRecruitmentEnabled()` w layoucie, #1128). W przeglądarce tryb
-   * nie istnieje, więc brak propsa = tryb ogłoszeniowy (fail-closed): pozycje rekrutacyjne ukryte.
+   * Tryb produktu z serwera (`isRecruitmentEnabled()`, #1128) — komponent kliencki nie liczy go
+   * sam. Domyślnie `false` = tryb ogłoszeniowy (fail-closed): bez pozycji rekrutacyjnych.
    */
   recruitmentEnabled?: boolean;
 }
@@ -102,7 +102,8 @@ export function CandidateShell({
 
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
-    { href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> },
+    // #1133/#1139: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnej.
+    ...(recruitmentEnabled ? [{ href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> }] : []),
     { href: HREF.saved, label: td('navSaved'), icon: <Heart /> },
     { href: HREF.searches, label: td('navSearches'), icon: <BellRing /> },
     // #1144/#1141: zgłoszenia i propozycje tylko w trybie RECRUITMENT (portal ogłoszeniowy).

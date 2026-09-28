@@ -192,7 +192,7 @@ export default async function EmployerOffersPage({
                       {offer.city}
                     </p>
                   ) : null}
-                  <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-border py-5">
+                  <dl className={`mt-6 grid gap-4 border-y border-border py-5${offer.matched !== undefined ? " grid-cols-2" : ""}`}>
                     <div className="min-w-0">
                       <dt className={INFO_LABEL}>
                         {td("employerOffersApplicationsLabel")}
@@ -214,14 +214,17 @@ export default async function EmployerOffersPage({
                         </dd>
                       ) : null}
                     </div>
-                    <div className="min-w-0 border-l border-border pl-4">
-                      <dt className={INFO_LABEL}>
-                        {td("colMatched")}
-                      </dt>
-                      <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
-                      </dd>
-                    </div>
+                    {/* #1133: tryb ogłoszeniowy — bez pola dopasowań (loader go nie zwraca). */}
+                    {offer.matched !== undefined ? (
+                      <div className="min-w-0 border-l border-border pl-4">
+                        <dt className={INFO_LABEL}>
+                          {td("colMatched")}
+                        </dt>
+                        <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
+                          <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
+                        </dd>
+                      </div>
+                    ) : null}
                   </dl>
                   <div className="mt-auto flex flex-wrap items-center gap-[9px] pt-[14px]">
                     {/* 0148: kopia oferty w dowolnym statusie jako nowy szkic (recruiter+). */}

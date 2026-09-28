@@ -51,6 +51,9 @@ vi.mock('@/components/employer/ApplicationStatusMenu', () => ({
   ApplicationStatusMenu: () => <span data-testid="status-menu" />,
 }));
 vi.mock('@/components/employer/SendOfferButton', () => ({ SendOfferButton: () => null }));
+// Sekcje matchingu (#1133/#1139, osobny PR) — asynchroniczne komponenty serwerowe; tu znaczniki.
+vi.mock('@/components/employer/EmployerTopMatched', () => ({ EmployerTopMatched: () => null }));
+vi.mock('@/components/candidate/CandidateRecommendedPreview', () => ({ CandidateRecommendedPreview: () => null }));
 vi.mock('@/components/employer/EmployerOverviewStats', () => ({ EmployerOverviewStats: () => null }));
 vi.mock('@/components/employer/EmployerFunnelSection', () => ({ EmployerFunnelSection: () => null }));
 vi.mock('@/components/employer/EmployerOffersPreview', () => ({ EmployerOffersPreview: () => null }));

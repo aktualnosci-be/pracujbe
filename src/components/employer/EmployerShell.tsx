@@ -71,8 +71,8 @@ export interface EmployerShellProps {
   /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
   keepSessionAlive?: boolean;
   /**
-   * Tryb produktu z serwera (`isRecruitmentEnabled()` w layoucie, #1128). W przeglądarce tryb
-   * nie istnieje, więc brak propsa = tryb ogłoszeniowy (fail-closed): pozycje rekrutacyjne ukryte.
+   * Tryb produktu z serwera (`isRecruitmentEnabled()`, #1128) — komponent kliencki nie liczy go
+   * sam. Domyślnie `false` = tryb ogłoszeniowy (fail-closed): bez pozycji rekrutacyjnych.
    */
   recruitmentEnabled?: boolean;
 }
@@ -125,10 +125,12 @@ export function EmployerShell({
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.offers, label: td('navOffers'), icon: <ClipboardList /> },
-    { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
-    // #1144: panel zgłoszeń tylko w trybie RECRUITMENT (decyzja produktowa: portal ogłoszeniowy).
+    // #1133/#1139/#1144: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnych.
     ...(recruitmentEnabled
-      ? [{ href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> }]
+      ? [
+          { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
+          { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
+        ]
       : []),
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },
