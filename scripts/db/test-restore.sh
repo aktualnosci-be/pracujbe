@@ -3,7 +3,8 @@
 # scripts/db/test-restore.sh — test verify-restore.sh na jednorazowym PostgreSQL (#47).
 #
 # Tworzy bazę źródłową z produkcyjnym bootstrapem i migracjami, dodaje dane
-# (użytkownik, profil, firma), sprawdza odtworzenie do pracujbe_restore_ci oraz
+# (użytkownik, profil, firma), sprawdza odtworzenie do pracujbe_restore_ci (z uprawnieniami,
+# OPS14-01) oraz
 # kontrole ujemne: niepusty cel, ta sama baza i niedozwolona nazwa celu.
 # Użycie jak test-rls.sh (PGHOST/PGUSER/PGPASSWORD albo peer auth jako postgres).
 # =============================================================================
@@ -60,6 +61,13 @@ printf '%s\n' "$out"
 grep -q '^RESTORE: PASS' <<<"$out" || { echo 'Brak PASS'; exit 1; }
 [ "$("${psql_base[@]}" -At -d "$DST_DB" -c "select name from public.companies")" = 'Firma kopii' ] \
   || { echo 'Dane nie zostały odtworzone'; exit 1; }
+# OPS14-01: uprawnienia odtworzone (funkcja tylko dla service_role bez EXECUTE dla PUBLIC/anon).
+[ "$("${psql_base[@]}" -At -d "$DST_DB" -c "select concat_ws(',',
+    has_function_privilege('public', 'public.rate_limit_hit(text,integer,integer)', 'execute'),
+    has_function_privilege('anon', 'public.rate_limit_hit(text,integer,integer)', 'execute'),
+    has_function_privilege('service_role', 'public.rate_limit_hit(text,integer,integer)', 'execute'),
+    has_table_privilege('authenticated', 'public.jobs', 'select'))")" = 'f,f,t,t' ] \
+  || { echo 'Odtworzona baza bez uprawnień źródła'; exit 1; }
 
 expect_code() {
   local expected="$1" label="$2" code=0
