@@ -23,7 +23,7 @@ vi.mock('@/lib/env', () => ({
 }));
 vi.mock('@/lib/jobs', () => jobs);
 
-const { default: sitemap, generateSitemaps } = await import('@/app/sitemap');
+const { default: sitemap, generateSitemaps, parseSitemapId } = await import('@/app/sitemap');
 const { default: robots } = await import('@/app/robots');
 
 /**
@@ -199,6 +199,74 @@ describe('sitemap (produkcja)', () => {
     jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
     const entries = await sitemap({ id: 1 });
     expect(entries.some((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))).toBe(false);
+  });
+});
+
+/**
+ * SEO-01: Next.js 15.5 woła `sitemap({ id })` z fragmentem adresu `/sitemap/<id>.xml` jako
+ * TEKSTEM (`'0'`), nie liczbą z `generateSitemaps()`. Stare `id === 0` kierowało `'0'` do
+ * partii ofert nr -1: brak stron statycznych/landingów/poradników w KAŻDYM pliku i 50 zapytań
+ * o tę samą pierwszą stronę ofert. Testy wyżej wołają liczbą, więc tego nie łapały.
+ */
+describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
+  it('loader Next.js przekazuje handlerowi id jako string (fragment adresu bez .xml)', () => {
+    const loader = readFileSync(
+      join(process.cwd(), 'node_modules/next/dist/build/webpack/loaders/next-metadata-route-loader.js'),
+      'utf8',
+    );
+    // Gdy ten kontrakt się zmieni (aktualizacja Next), test wskaże, że założenie trzeba sprawdzić.
+    expect(loader).toContain('id.slice(0, -4)');
+    expect(loader).toContain('handler({ id: targetId })');
+  });
+
+  it("id '0' = strony statyczne, landingi i poradniki; bez odczytu listy ofert", async () => {
+    const urls = (await sitemap({ id: '0' })).map((entry) => entry.url);
+    for (const locale of LOCALES) {
+      expect(urls).toContain(`${SITE}/${locale}`);
+      expect(urls).toContain(`${SITE}/${locale}/praca`);
+      expect(urls).toContain(`${SITE}/${locale}/praca/kategoria/construction`);
+    }
+    expect(urls.some((url) => url.includes('/poradniki/'))).toBe(true);
+    // Kontrola ujemna: stare `id === 0` dawało dla '0' partię ofert (-1) — oferty, getJobs
+    // z numerem strony ≤ 0 i zero stron statycznych; każda z tych asercji byłaby czerwona.
+    expect(urls.some((url) => url.includes('/oferty-pracy/oferta-'))).toBe(false);
+    expect(jobs.getJobs).not.toHaveBeenCalled();
+  });
+
+  it("id '1' = pierwsza partia ofert od strony 1, bez stron statycznych; '0' i '1' się nie dublują", async () => {
+    const shard = await sitemap({ id: '1' });
+    const urls = shard.map((entry) => entry.url);
+    expect(urls).toContain(`${SITE}/pl/oferty-pracy/oferta-a`);
+    expect(urls).not.toContain(`${SITE}/pl/praca`);
+    expect(jobs.getJobs).toHaveBeenCalledTimes(1);
+    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 1, pageSize: 100 }));
+    const core = new Set((await sitemap({ id: '0' })).map((entry) => entry.url));
+    expect(urls.filter((url) => core.has(url))).toEqual([]);
+  });
+
+  it("id '2' zaczyna od strony 51 (partie nie są przesunięte)", async () => {
+    jobs.getJobs.mockResolvedValue({ jobs: [job('z')], total: 12_000, page: 51, pageSize: 100 });
+    await sitemap({ id: '2' });
+    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 51 }));
+  });
+
+  it('niepoprawne id = pusty plik bez zapytań do bazy', async () => {
+    for (const bad of ['-1', 'abc', '', ' 1', '01', '1.5', '1e0', '0x1', '4', '999', undefined, -1, 1.5, NaN]) {
+      expect(await sitemap({ id: bad as string | number | undefined }), String(bad)).toEqual([]);
+    }
+    expect(jobs.getCategoryCounts).not.toHaveBeenCalled();
+    expect(jobs.getJobs).not.toHaveBeenCalled();
+  });
+
+  it('parseSitemapId: liczby i ich kanoniczny zapis dziesiętny w granicy partii', () => {
+    expect(parseSitemapId('0')).toBe(0);
+    expect(parseSitemapId(0)).toBe(0);
+    expect(parseSitemapId('2')).toBe(2);
+    // Granica = ceil((MAX_JOB_LIST_OFFSET + 100) / 5000) = 3 — ta sama, do której dochodzi
+    // `generateSitemaps()` przy największym osiągalnym katalogu (test #599 wyżej: id 0..3).
+    expect(parseSitemapId('3')).toBe(3);
+    expect(parseSitemapId('4')).toBeNull();
+    expect(parseSitemapId(4)).toBeNull();
   });
 });
 
