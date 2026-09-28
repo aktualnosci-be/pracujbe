@@ -150,9 +150,21 @@ export function securityHeaderProblems(headers, { https, expectMode }) {
   if (!csp) {
     problems.push('brak Content-Security-Policy');
   } else {
-    const directives = csp.split(';').map((part) => part.trim().replace(/\s+/g, ' ').toLowerCase());
+    // CSP Level 3 (§ parse a serialized policy): przy duplikacie nazwy dyrektywy przeglądarka
+    // stosuje TYLKO pierwsze wystąpienie, kolejne ignoruje. Sprawdzamy więc pierwszą wartość
+    // każdej nazwy, nie samą obecność wymaganego tekstu gdziekolwiek w nagłówku — inaczej
+    // słabsza pierwsza dyrektywa (np. `frame-ancestors *`) przechodzi test, mimo że to ona,
+    // a nie późniejsza `frame-ancestors 'none'`, obowiązuje w przeglądarce.
+    const firstByName = new Map();
+    for (const part of csp.split(';')) {
+      const normalized = part.trim().replace(/\s+/g, ' ').toLowerCase();
+      if (!normalized) continue;
+      const name = normalized.split(' ', 1)[0];
+      if (!firstByName.has(name)) firstByName.set(name, normalized);
+    }
     for (const directive of REQUIRED_CSP_DIRECTIVES) {
-      if (!directives.includes(directive)) problems.push(`CSP bez ${directive}`);
+      const name = directive.split(' ', 1)[0];
+      if (firstByName.get(name) !== directive) problems.push(`CSP bez ${directive}`);
     }
   }
   if (headers.get('x-content-type-options')?.trim().toLowerCase() !== 'nosniff') problems.push('brak X-Content-Type-Options: nosniff');

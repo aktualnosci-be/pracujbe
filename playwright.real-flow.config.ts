@@ -45,6 +45,8 @@ export default defineConfig({
     env: {
       // Strony publiczne czytają oferty z bazy przez ograniczony login aplikacji (nie demo).
       DATABASE_APP_URL: appUrl,
+      // #1136: przepływy rekrutacyjne — tryb jawnie włączony (domyślnie = tryb ogłoszeniowy).
+      PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT',
       // Konta i sesje (#24): Better Auth na ograniczonym loginie auth, jak w produkcji.
       // Origin kanoniczny = ten sam co w stosie testu (support/stack.ts): akcje wołają
       // `auth.api` bez obiektu Request, więc origin/CSRF SDK nie dotyczy formularzy aplikacji.

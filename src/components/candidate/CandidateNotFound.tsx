@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
+import { isRecruitmentEnabled } from "@/lib/portal-mode";
 import { BTN_PRIMARY, BTN_SECONDARY, EYEBROW, H1, INTRO } from "@/components/dashboard/panel-styles";
 
 /**
@@ -33,11 +34,15 @@ export async function CandidateNotFound() {
         <Link href="/candidate" className={BTN_PRIMARY}>
           {t("candidatePanelBackToDashboard")}
         </Link>
-        <Link href="/candidate/aplikacje" className={BTN_SECONDARY}>
-          {t("navApplications")}
-        </Link>
-        <Link href="/candidate/oferty-polecane" className={BTN_SECONDARY}>
-          {t("navRecommended")}
+        {/* #1144: historia zgłoszeń tylko w trybie RECRUITMENT (portal ogłoszeniowy). */}
+        {isRecruitmentEnabled() ? (
+          <Link href="/candidate/aplikacje" className={BTN_SECONDARY}>
+            {t("navApplications")}
+          </Link>
+        ) : null}
+        {/* #1139: bez linku do polecanych ofert (404 w trybie ogłoszeniowym). */}
+        <Link href="/candidate/wyszukiwania" className={BTN_SECONDARY}>
+          {t("navSearches")}
         </Link>
       </div>
     </section>

@@ -22,6 +22,10 @@ vi.mock('@/i18n/navigation', () => ({
 vi.mock('@/components/public/ApplyModal', () => ({
   ApplyModal: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button" data-testid="apply">{triggerLabel ?? 'apply'}</button>,
 }));
+// #1130: w trybie ogłoszeniowym (domyślny w testach) aplikowanie = kanał ogłoszeniodawcy.
+vi.mock('@/components/public/EmployerApplyChannel', () => ({
+  EmployerApplyChannel: () => <a data-testid="apply" href="https://example.com/apply">apply</a>,
+}));
 vi.mock('@/components/public/JobMatchCard', () => ({ JobMatchCard: () => null }));
 vi.mock('@/components/public/JobCompanyBlockControl', () => ({ JobCompanyBlockControl: () => null }));
 vi.mock('@/components/public/PublicSavedJobs', () => ({

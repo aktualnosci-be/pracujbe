@@ -178,8 +178,11 @@ export async function loadWizard(actor: Actor): Promise<WizardValues> {
     const skills = rows<{ skill_label: string }>(await tx.query(
       'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [c.id]));
     const languages = rows<{ language_label: string; level: string }>(await tx.query(
-      `SELECT language_label, level::text FROM public.candidate_languages
-       WHERE candidate_profile_id = $1 ORDER BY language_label`, [c.id]));
+      // Jak loader kreatora (0168): kod słownika, a etykieta tylko dla wpisu spoza słownika.
+      `SELECT coalesce(lg.code, cl.language_label) AS language_label, cl.level::text AS level
+         FROM public.candidate_languages cl
+         LEFT JOIN public.languages lg ON lg.id = cl.language_id
+        WHERE cl.candidate_profile_id = $1 ORDER BY 1`, [c.id]));
     const certificates = rows<{ certificate_label: string; expires_at: string | null }>(await tx.query(
       `SELECT certificate_label, expires_at::text FROM public.candidate_certificates
        WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [c.id]));

@@ -5,6 +5,10 @@ import { loadOlderMessages, markConversationRead, openConversation, sendMessage 
 import { getOlderThreadMessages } from '@/lib/data/messages';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /**
  * #25 (z #350/#147) — Server Actions wiadomości na transakcji sesji: walidacja i limit przed RPC,
@@ -25,6 +29,7 @@ const CLIENT_MSG = '66666666-6666-4666-8666-666666666666';
 
 const PG_ERRORS: Array<[string, string]> = [
   ['NOT_FOUND: job', 'NOT_FOUND'],
+  ['RECRUITMENT_DISABLED', 'RECRUITMENT_DISABLED'],
   ['VALIDATION_FAILED: body', 'VALIDATION_FAILED'],
   ['PERMISSION_DENIED', 'PERMISSION_DENIED'],
   ['UNAUTHENTICATED', 'PERMISSION_DENIED'],

@@ -4,6 +4,10 @@ import { getEmployerOverview, getFunnelStats, getJobFunnel } from '@/lib/data/em
 import { getActiveCompany } from '@/lib/company-context';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
+withRecruitmentMode();
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));

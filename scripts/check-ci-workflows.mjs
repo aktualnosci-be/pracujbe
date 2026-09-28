@@ -49,7 +49,7 @@ const jobs = new Map(
 
 // Nazwy wyświetlane są checkami — zmiana nazwy wymaganego checka blokuje scalanie i wdrożenie.
 // Joby E2E: 3 shardy + pomiar + fixture'y + przepływ na PostgreSQL; wynik zbiera `e2e`.
-const E2E_PARTS = ['e2e-shard', 'e2e-perf', 'e2e-fixtures'];
+const E2E_PARTS = ['e2e-shard', 'e2e-perf', 'e2e-fixtures', 'e2e-classifieds'];
 const expected = {
   install: ['Install & cache deps', []],
   lint: ['Lint', ['install']],
@@ -62,6 +62,7 @@ const expected = {
   'e2e-shard': ['E2E shard ${{ matrix.shard }}/3', ['build']],
   'e2e-perf': ['E2E perf (lab CWV + INP)', ['build']],
   'e2e-fixtures': ['E2E fixtures (${{ matrix.fixture }} ${{ matrix.part }})', ['build']],
+  'e2e-classifieds': ['E2E classifieds (CLASSIFIEDS_ONLY)', ['build']],
   'e2e-real': ['E2E real flow (PostgreSQL 16)', ['build']],
   e2e: ['E2E (Playwright)', ['build', ...E2E_PARTS]],
 };
@@ -89,7 +90,7 @@ assert.match(unit, /^        run: npm ci --prefer-offline --no-audit --fund=fals
 assert.doesNotMatch(unit, /actions\/cache\/restore@/, 'unit: nie odtwarzaj node_modules');
 assert.match(unit, /require\.resolve\('ms'\)/, 'unit: sprawdź zależność przed Vitest');
 
-const BROWSER_JOBS = ['unit', 'e2e-shard', 'e2e-perf', 'e2e-fixtures', 'e2e-real'];
+const BROWSER_JOBS = ['unit', 'e2e-shard', 'e2e-perf', 'e2e-fixtures', 'e2e-classifieds', 'e2e-real'];
 for (const name of BROWSER_JOBS) {
   assert.match(jobs.get(name), /npx playwright install --with-deps chromium/, `${name}: hostowany runner potrzebuje Chromium i bibliotek systemowych`);
 }
@@ -101,7 +102,8 @@ const buildKey = 'key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.
 const build = jobs.get('build');
 const shard = jobs.get('e2e-shard');
 const perf = jobs.get('e2e-perf');
-for (const [name, body] of [['build', build], ['e2e-shard', shard], ['e2e-perf', perf]]) {
+const classifiedsJob = jobs.get('e2e-classifieds');
+for (const [name, body] of [['build', build], ['e2e-shard', shard], ['e2e-perf', perf], ['e2e-classifieds', classifiedsJob]]) {
   assert.ok(body.includes(buildKey), `${name}: klucz cache builda musi zawierać SHA, run_id i run_attempt`);
   assert.match(body, /^            !\.next\/cache\s*$/m, `${name}: nie zapisuj .next/cache`);
   assert.match(body, /NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000/, `${name}: build z testowym tokenem Cloudflare Web Analytics`);
@@ -109,13 +111,13 @@ for (const [name, body] of [['build', build], ['e2e-shard', shard], ['e2e-perf',
 }
 assert.match(build, /uses: actions\/cache\/save@/, 'build: zapisz .next w cache Actions');
 assert.doesNotMatch(build, /upload-artifact/, 'build: .next przez cache, nie artefakt (limit storage)');
-for (const [name, body] of [['e2e-shard', shard], ['e2e-perf', perf]]) {
+for (const [name, body] of [['e2e-shard', shard], ['e2e-perf', perf], ['e2e-classifieds', classifiedsJob]]) {
   assert.match(body, /uses: actions\/cache\/restore@[\s\S]*restore-keys: next-build-/, `${name}: odtwórz .next z jobu build`);
   assert.match(body, /^        id: next-build\s*$/m, `${name}: krok weryfikacji builda`);
   assert.match(body, /if: steps\.next-build\.outcome != 'success'/, `${name}: fallback build przy braku/niekompletności`);
   assert.match(body, /PLAYWRIGHT_SKIP_BUILD: '1'/, `${name}: Playwright ma użyć gotowego builda`);
 }
-assert.equal((ci.match(/npm run build/g) ?? []).length, 3, 'ci.yml: jeden build + fallback w shardach i pomiarze, bez kolejnych buildów');
+assert.equal((ci.match(/npm run build/g) ?? []).length, 4, 'ci.yml: jeden build + fallback w shardach, pomiarze i trybie ogłoszeniowym, bez kolejnych buildów');
 
 // Shardy: liczba w nazwie = liczba w macierzy = liczba dozwolonych wartości `E2E_DEMO_SHARD`
 // w playwright.config.ts (`DEMO_SHARDS`); projekt `chromium` (pomiar czasu osobno); bez
@@ -184,6 +186,31 @@ assert.deepEqual(quoted(allowedParts[2]), fixtureParts.get('error'), 'fixture co
 assert.match(fixtureConfig, /\['blob', \{ outputDir: 'blob-report'/, 'fixture config: blob do blob-report/');
 assert.match(fixtureConfig, /retries: 0,/, 'fixture config: bez ponowień (retries: 0)');
 
+// Tryb ogłoszeniowy (#1166): tryb produkcyjny portalu. Serwer z jawnym
+// `E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY` w OBU krokach (bez niego zestaw biegłby na serwerze
+// RECRUITMENT i speci ogłoszeniowe byłyby cicho pominięte); demo na buildzie z jobu build
+// (projekt `chromium`, konfiguracja sama wybiera `CLASSIFIEDS_SPECS`), fixture bez części
+// (konfiguracja wybiera `CLASSIFIEDS_FIXTURE_SPECS`); raporty blob zawsze, krok fixture także
+// po czerwonym kroku demo.
+const classifiedsRuns = [...classifiedsJob.matchAll(/^      - name: (Run E2E classifieds \((demo|fixtures)\))\s*\r?\n((?:^        .*\r?\n)+)/gm)];
+assert.deepEqual(classifiedsRuns.map((m) => m[2]), ['demo', 'fixtures'], 'e2e-classifieds: kroki „Run E2E classifieds (demo)” i „(fixtures)”');
+for (const [, step, , body] of classifiedsRuns) {
+  assert.match(body, /^          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY\s*$/m, `e2e-classifieds: ${step} — serwer w trybie ogłoszeniowym (E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY)`);
+  assert.doesNotMatch(body, /E2E_DEMO_SHARD|TEST_APPLICATIONS_FIXTURE_PART|--shard/, `e2e-classifieds: ${step} — bez podziału (zestaw wybiera konfiguracja)`);
+}
+const [demoRun, fixtureRun] = classifiedsRuns.map((m) => m[3]);
+assert.match(demoRun, /PLAYWRIGHT_SKIP_BUILD: '1'/, 'e2e-classifieds: demo na buildzie z jobu build');
+assert.match(demoRun, /^        run: npx playwright test --project=chromium\s*$/m, 'e2e-classifieds: demo = projekt chromium');
+assert.match(demoRun, /E2E_BLOB_NAME: classifieds\s*$/m, 'e2e-classifieds: raport cząstkowy demo');
+assert.match(fixtureRun, /^        if: \$\{\{ !cancelled\(\) \}\}\s*$/m, 'e2e-classifieds: krok fixture także po czerwonym kroku demo');
+assert.match(fixtureRun, /TEST_APPLICATIONS_FIXTURE: full/, 'e2e-classifieds: fixture w trybie full');
+assert.match(fixtureRun, /npx playwright test --config playwright\.applications-fixture\.config\.ts\s*$/m, 'e2e-classifieds: konfiguracja fixture');
+assert.match(fixtureRun, /E2E_BLOB_NAME: classifieds-fixtures/, 'e2e-classifieds: raport cząstkowy fixture');
+for (const artifact of ['blob-report-classifieds', 'blob-report-classifieds-fixtures']) {
+  assert.match(classifiedsJob, new RegExp(`if: \\$\\{\\{ !cancelled\\(\\) \\}\\}\\s*\\r?\\n\\s*with:\\s*\\r?\\n\\s*name: ${artifact}\\s*$`, 'm'), `e2e-classifieds: wyślij ${artifact} także przy porażce`);
+}
+assert.match(fixtureConfig, /if \(classifieds\) return CLASSIFIEDS_FIXTURE_SPECS;/, 'fixture config: serwer ogłoszeniowy = CLASSIFIEDS_FIXTURE_SPECS');
+
 // Przepływ na PostgreSQL 16 (#351, #66): izolowana baza z „e2e” w nazwie, informacyjny
 // (`continue-on-error`), więc NIE jest zależnością wymaganego checka „E2E (Playwright)”.
 const real = jobs.get('e2e-real');
@@ -227,7 +254,7 @@ assert.deepEqual(
 const demoShard1 = listOf('DEMO_SHARD_1_SPECS');
 const demoShard2 = listOf('DEMO_SHARD_2_SPECS');
 assert.ok(demoShard1.length > 0 && demoShard2.length > 0, 'playwright.config.ts: DEMO_SHARD_1/2_SPECS nie mogą być puste');
-const excludedFromChromium = new Set([...listOf('FIXTURE_ONLY_SPECS'), ...listOf('TIMING_SPECS')]);
+const excludedFromChromium = new Set([...listOf('FIXTURE_ONLY_SPECS'), ...listOf('TIMING_SPECS'), ...listOf('CLASSIFIEDS_ONLY_SPECS')]);
 const e2eFiles = new Set(await readdir(new URL('tests/e2e/', root)));
 for (const [name, specs] of [['DEMO_SHARD_1_SPECS', demoShard1], ['DEMO_SHARD_2_SPECS', demoShard2]]) {
   for (const spec of specs) {
@@ -251,10 +278,18 @@ assert.match(
   /DEMO_SHARD === '3' \? \[\.\.\.DEMO_SHARD_1_SPECS, \.\.\.DEMO_SHARD_2_SPECS\] : \[\]/,
   'playwright.config.ts: ostatni shard pomija obie jawne listy (dopełnienie)',
 );
+// Serwer ogłoszeniowy (#1166) = projekt `chromium` z samym zestawem trybu ogłoszeniowego;
+// przy serwerze RECRUITMENT speci wyłącznie ogłoszeniowe są poza projektem (nie w shardach).
+assert.ok(listOf('CLASSIFIEDS_ONLY_SPECS').length > 0, 'playwright.config.ts: CLASSIFIEDS_ONLY_SPECS nie może być puste');
+for (const spec of [...listOf('CLASSIFIEDS_ONLY_SPECS'), ...listOf('CLASSIFIEDS_SHARED_SPECS')]) {
+  assert.ok(e2eFiles.has(spec.replace('**/', '')), `playwright.config.ts: ${spec} (tryb ogłoszeniowy) nie istnieje w tests/e2e`);
+}
+assert.match(playwrightConfig, /CLASSIFIEDS_SERVER \? \{ testMatch: CLASSIFIEDS_SPECS \} : \{\}/, 'playwright.config.ts: serwer ogłoszeniowy = testMatch CLASSIFIEDS_SPECS');
+assert.match(playwrightConfig, /CLASSIFIEDS_SERVER \? \[\] : CLASSIFIEDS_ONLY_SPECS/, 'playwright.config.ts: serwer RECRUITMENT pomija CLASSIFIEDS_ONLY_SPECS');
 const mergeConfig = await readFile(new URL('playwright.merge.config.ts', root), 'utf8');
 assert.match(mergeConfig, /flaky-report\.ts/, 'playwright.merge.config.ts: raport flaków w połączonym raporcie');
 
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
-console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E (podział po czasie) i części fixture’ów z jobem zbiorczym, main bez anulowania.');
+console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E (podział po czasie), części fixture’ów i tryb ogłoszeniowy z jobem zbiorczym, main bez anulowania.');

@@ -24,6 +24,7 @@
 import { createReadStream, createWriteStream, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { pathToFileURL } from 'node:url';
 
 import {
   ARTIFACT_RE,
@@ -184,6 +185,11 @@ async function main(argv) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// #925: porównanie musi przejść przez tę samą normalizację URL po obu stronach — spacje
+// i inne znaki specjalne w ścieżce są kodowane przez `pathToFileURL`, ale `process.argv[1]`
+// jest zwykłym łańcuchem systemowym. Naiwne `file://${process.argv[1]}` nie pasowało do
+// `import.meta.url`, więc bezpośrednie uruchomienie z takiej ścieżki kończyło się cicho
+// kodem 0 zamiast wykonać komendę (fałszywy sukces backupu w `backup.sh`).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main(process.argv.slice(2));
 }

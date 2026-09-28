@@ -178,16 +178,44 @@ async function nonEmptyLandingLocales(
   return { categories, cities };
 }
 
+/**
+ * Górna granica identyfikatora partii ofert, niezależna od bazy: tyle partii wystarcza na
+ * wszystkie oferty osiągalne przez paginację listy (`MAX_JOB_LIST_OFFSET`, jak w
+ * `jobSitemapShardCount`). Wyższe id nie mają treści — bez tej granicy `/sitemap/999.xml`
+ * wykonywał zapytania, które `get_public_jobs` klampuje do ostatniej strony (duplikaty).
+ */
+const MAX_JOB_SITEMAP_SHARDS = Math.ceil(
+  (MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE) / JOBS_PER_SITEMAP_SHARD,
+);
+
+/**
+ * Normalizuje `id` pliku sitemap. Next.js 15.5 (`next-metadata-route-loader`) wywołuje handler
+ * z `{ id: '0' }` — fragmentem adresu `/sitemap/0.xml` jako TEKSTEM, nie liczbą z
+ * `generateSitemaps()`. Dawne `id === 0` było więc zawsze fałszywe: `/sitemap/0.xml` zwracał
+ * partię ofert nr -1 zamiast stron statycznych, landingów i poradników (SEO-01).
+ * Dozwolone: kanoniczna liczba całkowita `0..MAX_JOB_SITEMAP_SHARDS` (liczba albo jej zapis
+ * dziesiętny bez zer wiodących, spacji, znaku, wykładnika). Inaczej `null` = pusty plik.
+ */
+export function parseSitemapId(id: unknown): number | null {
+  const text = typeof id === 'number' ? String(id) : id;
+  if (typeof text !== 'string' || !/^(0|[1-9][0-9]*)$/.test(text)) return null;
+  const n = Number(text);
+  return n <= MAX_JOB_SITEMAP_SHARDS ? n : null;
+}
+
 export default async function sitemap({
   id,
 }: {
-  id: number;
+  // Next.js przekazuje string (fragment adresu); liczba zostaje dla wywołań bezpośrednich.
+  id?: number | string;
 }): Promise<MetadataRoute.Sitemap> {
   // Staging/preview/local: pusty sitemap (spójne z robots.ts Disallow:/ i X-Robots-Tag).
   // JEDNO źródło prawdy o środowisku (P1-19): isProductionDeployment().
   if (!isProductionDeployment()) return [];
 
-  return id === 0 ? coreSitemap() : jobsSitemapShard(id - 1);
+  const shard = parseSitemapId(id);
+  if (shard === null) return [];
+  return shard === 0 ? coreSitemap() : jobsSitemapShard(shard - 1);
 }
 
 /** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji i poradniki. */

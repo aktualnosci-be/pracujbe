@@ -26,9 +26,11 @@ import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
 import { findLatestActiveProposal } from '@/lib/candidate-offers';
+import { demoSavedJobs, savedJobsFixture, toSavedJob, type SavedJob } from '@/lib/saved-job-availability';
 import { toMatchExplanation, type MatchExplanation } from '@/lib/matching/explanation';
 import { customOfferMessage } from '@/lib/offers/default-message';
 import { parseScreeningAnswers, type ScreeningAnswer } from '@/lib/screening/questions';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import {
   applicationFilterStatuses,
   matchesApplicationFilter,
@@ -80,11 +82,30 @@ export interface RecommendedJob {
   applicationId?: string | null;
 }
 
+/**
+ * Stan oferty w historii kandydata (0157, `job_availability` z RPC): `available` = strona
+ * publiczna istnieje; pozostałe stany = brak linku i etykieta w panelu. `null` = nieznany.
+ */
+export type JobAvailability = 'available' | 'expired' | 'closed' | 'unavailable';
+
+const JOB_AVAILABILITY_VALUES: readonly JobAvailability[] = ['available', 'expired', 'closed', 'unavailable'];
+
+/** Oferty demo są zawsze publiczne (strony demo istnieją). */
+const DEMO_JOB_AVAILABLE: JobAvailability = 'available';
+
+export function asJobAvailability(value: unknown): JobAvailability | null {
+  return typeof value === 'string' && (JOB_AVAILABILITY_VALUES as readonly string[]).includes(value)
+    ? (value as JobAvailability)
+    : null;
+}
+
 export interface MyApplication {
   id: string;
   jobTitle: string;
   companyName: string;
   slug: string | null;
+  /** Stan oferty (0157) — steruje etykietą „oferta zamknięta/wygasła” zamiast martwego linku. */
+  jobAvailability?: JobAvailability | null;
   /** Data zgłoszenia (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
   date: string;
   status: string;
@@ -107,6 +128,11 @@ export interface MyApplicationsPage {
 
 const APPLICATION_PAGE_SIZE = 10;
 
+/** Liczba odpowiedzi screeningowych zgłoszenia; w trybie ogłoszeniowym stała 0 bez podzapytania. */
+const SCREENING_COUNT_SQL = `(SELECT count(*)::int FROM public.application_screening_answers s
+                  WHERE s.application_id = applications.id)`;
+const SCREENING_COUNT_OFF_SQL = '0';
+
 export interface LatestMessage {
   id: string;
   title: string;
@@ -121,6 +147,8 @@ export interface MyOffer {
   jobTitle: string;
   companyName: string;
   slug: string | null;
+  /** Stan oferty (0157). */
+  jobAvailability?: JobAvailability | null;
   /** Treść propozycji od pracodawcy (może być pusta w danych DEMO). */
   message: string;
   /** Data wysłania propozycji (ISO). Formatowanie do wyświetlenia robi ekran (locale). */
@@ -217,6 +245,8 @@ const PUBLIC_JOBS_LOOKUP_LIMIT = 100;
 interface PublicJobLite {
   id: string;
   slug: string;
+  /** `get_public_jobs` = zawsze publiczna; RPC historii zwracają `job_availability` (0157). */
+  availability: JobAvailability | null;
   title: string;
   companyName: string;
   city: string;
@@ -253,9 +283,15 @@ function toPublicJobsMap(rows: unknown, idField: 'id' | 'job_id'): Map<string, P
       title: asStr(r['title']),
       companyName: asStr(r['company_name']),
       city: asStr(r['city']),
+      availability: 'job_availability' in r ? asJobAvailability(r['job_availability']) : 'available',
     });
   }
   return map;
+}
+
+/** Pola karty polecanej oferty (bez stanu dostępności — polecamy tylko oferty publiczne). */
+function recommendedFields(job: PublicJobLite): Pick<RecommendedJob, 'id' | 'slug' | 'title' | 'companyName' | 'city'> {
+  return { id: job.id, slug: job.slug, title: job.title, companyName: job.companyName, city: job.city };
 }
 
 /** Mapa job_id → bezpieczne dane publiczne najnowszych ofert (RPC `get_public_jobs`). */
@@ -316,7 +352,7 @@ async function fetchAppliedJobsForPage(
   const ids = [...new Set(jobIds.filter((id) => id.length > 0))];
   if (ids.length === 0) return new Map();
   const rows = await queryRows(tx, 'candidate.applied-jobs-page',
-    `SELECT d.job_id, d.slug, d.title, d.company_name, d.city
+    `SELECT d.job_id, d.slug, d.title, d.company_name, d.city, d.job_availability
        FROM public.get_applied_jobs_display(p_locale => $1, p_job_ids => $2::uuid[]) d`, [locale, ids]);
   return toPublicJobsMap(rows, 'job_id');
 }
@@ -458,10 +494,11 @@ function demoApplications(locale: Locale): MyApplication[] {
       id: `demo-app-${index}`,
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
-      screeningCount: DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0,
+      screeningCount: isRecruitmentEnabled('screening') ? (DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0) : 0,
     };
   });
 }
@@ -479,20 +516,6 @@ const DEMO_SCREENING_ANSWERS: Record<string, ScreeningAnswer[]> = {
   ],
 };
 
-function demoSaved(locale: Locale): RecommendedJob[] {
-  return resolveDemoJobs(locale)
-    .slice(0, 4)
-    .map((job) => ({
-      id: job.id,
-      slug: job.slug,
-      title: job.title,
-      companyName: job.companyName,
-      city: job.city,
-      match: null,
-      saved: true,
-    }));
-}
-
 const DEMO_OFFER_PICKS = [
   { idx: 1, status: 'sent', daysAgo: 1 },
   { idx: 5, status: 'accepted', daysAgo: 7 },
@@ -506,7 +529,8 @@ function demoOffers(locale: Locale): MyOffer[] {
       id: `demo-offer-${index}`,
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       message: '',
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
@@ -589,7 +613,10 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
         `SELECT 1 FROM public.applications
           WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text = ANY($2::text[])`,
         [me.id, [...ACTIVE_APPLICATION_STATUSES]]));
-      const unreadMessages = await attempt(tx, () => countUnreadConversations(tx, me.id));
+      // #1134: tryb ogłoszeniowy — rozmowy wyłączone; licznik bez zapytania (kafelka nie ma).
+      const unreadMessages = isRecruitmentEnabled('messaging')
+        ? await attempt(tx, () => countUnreadConversations(tx, me.id))
+        : ({ ok: true, value: 0 } as const);
       return { newJobs, activeApplications, unreadMessages };
     });
     const settled = (area: string, result: typeof counters.newJobs): number | null => {
@@ -612,6 +639,42 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateOverview' });
     return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
+  }
+}
+
+/**
+ * Pulpit konta w trybie ogłoszeniowym (#1142): imię z `profiles` i liczba aktywnych ofert.
+ * Bez profilu zawodowego, zgłoszeń, propozycji i wiadomości (żaden z tych odczytów nie jest
+ * wołany). Licznik bez udanego odczytu = `null` („—”), nigdy fałszywe zero (#244).
+ */
+export interface CandidateAccountOverview {
+  firstName: string | null;
+  newJobsCount: number | null;
+}
+
+export async function getCandidateAccountOverview(): Promise<CandidateAccountOverview> {
+  if (!isPortalDataConfigured()) {
+    if (isDashboardErrorFixture()) return { firstName: null, newJobsCount: null };
+    return { firstName: null, newJobsCount: DEMO_OVERVIEW.newJobsCount };
+  }
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { firstName: null, newJobsCount: null };
+    return await withPortalTransaction(me, async (tx) => {
+      const name = await attempt(tx, async () => {
+        const row = await queryOne(tx, 'candidate.account-first-name',
+          'SELECT first_name FROM public.profiles WHERE id = $1', [me.id]);
+        const value = row?.['first_name'];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+      });
+      const jobs = await attempt(tx, async () =>
+        asNum(await rpc(tx, 'get_public_jobs_count', { p_keyword: null, p_city: null })));
+      if (!jobs.ok) captureError(jobs.error, { area: 'candidate.getCandidateAccountOverview.newJobs' });
+      return { firstName: name.ok ? name.value : null, newJobsCount: jobs.ok ? jobs.value : null };
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidateAccountOverview' });
+    return { firstName: null, newJobsCount: null };
   }
 }
 
@@ -642,7 +705,9 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
       `SELECT cp.occupations, cp.city, cp.radius_km, cp.experience_years, cp.availability,
               (SELECT coalesce(json_agg(s.skill_label), '[]'::json) FROM public.candidate_skills s
                 WHERE s.candidate_profile_id = cp.id) AS skills,
-              (SELECT coalesce(json_agg(l.language_label), '[]'::json) FROM public.candidate_languages l
+              (SELECT coalesce(json_agg(coalesce(lg.code, l.language_label)), '[]'::json)
+                 FROM public.candidate_languages l
+                 LEFT JOIN public.languages lg ON lg.id = l.language_id
                 WHERE l.candidate_profile_id = cp.id) AS languages,
               (SELECT coalesce(json_agg(c.certificate_label), '[]'::json) FROM public.candidate_certificates c
                 WHERE c.candidate_profile_id = cp.id) AS certificates
@@ -694,6 +759,8 @@ async function fetchPublicJobsByIds(
  * Fallback = najnowsze oferty, tylko gdy żadne dopasowanie nie jest już publiczne.
  */
 export async function getRecommendedJobs(locale: string, throwOnError = false): Promise<RecommendedJob[]> {
+  // #1139: tryb ogłoszeniowy — portal nie poleca ofert z profilu; bez zapytań (także do `matches`).
+  if (!isRecruitmentEnabled('matching')) return [];
   const resolvedLocale = toLocale(locale);
   if (!isPortalDataConfigured()) return demoRecommended(resolvedLocale);
 
@@ -730,7 +797,7 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
         const job = jobsById.get(row.jobId);
         if (!job || seen.has(job.id)) continue;
         seen.add(job.id);
-        matched.push({ ...job, match: row.score, saved: savedIds.has(job.id), explanation: row.explanation });
+        matched.push({ ...recommendedFields(job), match: row.score, saved: savedIds.has(job.id), explanation: row.explanation });
         if (matched.length >= RECOMMENDED_LIMIT) break;
       }
       if (matched.length > 0) return withOwnApplications(tx, me.id, matched);
@@ -742,7 +809,7 @@ export async function getRecommendedJobs(locale: string, throwOnError = false): 
       const latest: RecommendedJob[] = [];
       for (const job of jobsMap.values()) {
         if (!allowed.has(job.id)) continue;
-        latest.push({ ...job, match: null, saved: savedIds.has(job.id), explanation: null });
+        latest.push({ ...recommendedFields(job), match: null, saved: savedIds.has(job.id), explanation: null });
         if (latest.length >= RECOMMENDED_LIMIT) break;
       }
       return withOwnApplications(tx, me.id, latest);
@@ -794,9 +861,11 @@ export async function getMyApplicationsPage(
       // zgłoszenie wybranego etapu jest na pierwszej stronie mimo wielu nowszych innych.
       const statuses = applicationFilterStatuses(filter);
       const rows = await queryRows(tx, 'candidate.applications-page',
-        `SELECT id, job_id, status, submitted_at,
-                (SELECT count(*)::int FROM public.application_screening_answers s
-                  WHERE s.application_id = applications.id) AS screening_count
+        `SELECT id, job_id, status, submitted_at, ${
+          // Stare pytania screeningowe ukryte w trybie ogłoszeniowym: bez podzapytania (0 = brak przycisku).
+          isRecruitmentEnabled('screening')
+            ? SCREENING_COUNT_SQL
+            : SCREENING_COUNT_OFF_SQL} AS screening_count
            FROM public.applications
           WHERE candidate_id = $1
             AND deleted_at IS NULL
@@ -831,7 +900,8 @@ export async function getMyApplicationsPage(
           id: asStr(r['id']),
           jobTitle: job?.title ?? '',
           companyName: job?.companyName ?? '',
-          slug: job?.slug ?? null,
+          slug: job?.slug || null,
+          jobAvailability: job?.availability ?? null,
           date: asStr(r['submitted_at']),
           status: asStr(r['status'], 'submitted'),
           screeningCount: Number(r['screening_count'] ?? 0) || 0,
@@ -859,7 +929,8 @@ function developmentApplicationFixture(
       id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(15 - index).padStart(12, '0')}`,
       jobTitle: job?.title ?? '',
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       date: submittedAt,
       // Najstarsze zgłoszenie jest na etapie rozmowy (#809): filtr „Rozmowa” pokazuje je
       // na pierwszej stronie, choć bez filtra leży dopiero na drugiej.
@@ -901,6 +972,8 @@ export async function getMyApplicationsPreview(
 const ANSWERS_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function getMyApplicationScreeningAnswers(applicationId: string): Promise<ScreeningAnswer[]> {
+  // Decyzja produktowa: portal ogłoszeniowy — stare pytania i odpowiedzi ukryte, bez zapytania.
+  if (!isRecruitmentEnabled('screening')) return [];
   if (!isPortalDataConfigured()) return DEMO_SCREENING_ANSWERS[applicationId] ?? [];
   if (!ANSWERS_UUID_RE.test(applicationId)) return [];
 
@@ -952,6 +1025,8 @@ export interface MyApplicationDetail {
   city: string;
   /** Slug publicznej oferty — `null`, gdy oferta nie ma już publicznego adresu. */
   slug: string | null;
+  /** Stan oferty (0157). */
+  jobAvailability?: JobAvailability | null;
   /** Data wysłania (ISO) albo `null`, gdy nieznana. */
   submittedAt: string | null;
   message: string;
@@ -1008,12 +1083,13 @@ function demoApplicationDetail(locale: Locale, id: string): MyApplicationDetailL
       companyName: base.companyName,
       city: job?.city ?? '',
       slug: base.slug,
+      jobAvailability: base.jobAvailability,
       submittedAt: base.date,
       message: '',
       phone: '',
       availability: 'immediate',
       conversationId: null,
-      screeningAnswers: DEMO_SCREENING_ANSWERS[id] ?? [],
+      screeningAnswers: isRecruitmentEnabled('screening') ? (DEMO_SCREENING_ANSWERS[id] ?? []) : [],
       history,
       historyNextCursor: null,
     },
@@ -1051,9 +1127,11 @@ export async function getMyApplicationDetail(
         `SELECT id, to_status, created_at FROM public.application_status_history
           WHERE application_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2`,
         [id, MY_APPLICATION_HISTORY_PAGE_SIZE + 1]);
-      const answerRows = await queryRows(tx, 'candidate.application-detail-answers',
-        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
-           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      const answerRows = isRecruitmentEnabled('screening')
+        ? await queryRows(tx, 'candidate.application-detail-answers',
+            `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+               FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id])
+        : [];
       // conversations_select_member: tylko rozmowy, których kandydat jest członkiem.
       const conversation = await queryOne(tx, 'candidate.application-detail-conversation',
         `SELECT id FROM public.conversations
@@ -1075,6 +1153,7 @@ export async function getMyApplicationDetail(
         companyName: job?.companyName ?? '',
         city: job?.city ?? '',
         slug: job?.slug || null,
+        jobAvailability: job?.availability ?? null,
         submittedAt: asStr(row['submitted_at']) || null,
         message: asStr(row['message']).trim(),
         phone: asStr(row['phone']).trim(),
@@ -1128,17 +1207,24 @@ export async function getMyApplicationHistoryPage(
 }
 
 /**
- * Zapisane oferty kandydata przez RPC, które łączy własne `saved_jobs` z aktywnymi,
- * publicznymi ofertami przed sortowaniem. Nie ograniczamy się do najnowszych 100 ofert,
- * bo stara, nadal aktywna oferta również może być zapisana.
+ * Zapisane oferty kandydata przez RPC `get_saved_jobs_display` (0162): KAŻDY własny zapis ze
+ * stanem oferty. Oferta zamknięta, wygasła, wstrzymana, usunięta albo firmy bez weryfikacji nie
+ * znika bez śladu — karta pokazuje stan i „Usuń z zapisanych”, a `slug` (link) jest tylko dla
+ * oferty publicznej (`toSavedJob`). Nie ograniczamy się do najnowszych 100 ofert.
  */
 export type SavedJobsResult =
-  | { status: 'ready'; jobs: RecommendedJob[] }
+  | { status: 'ready'; jobs: SavedJob[] }
   | { status: 'error' };
 
 export async function getSavedJobs(locale: string = routing.defaultLocale): Promise<SavedJobsResult> {
   const resolvedLocale = toLocale(locale);
-  if (!isPortalDataConfigured()) return { status: 'ready', jobs: demoSaved(resolvedLocale) };
+  if (!isPortalDataConfigured()) {
+    // Test przeglądarkowy uruchamia osobny serwer Next dev. Ta gałąź nie działa w buildzie produkcyjnym.
+    if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'full') {
+      return { status: 'ready', jobs: savedJobsFixture(resolvedLocale) };
+    }
+    return { status: 'ready', jobs: demoSavedJobs(resolvedLocale) };
+  }
 
   try {
     const me = await getPortalIdentity();
@@ -1146,19 +1232,7 @@ export async function getSavedJobs(locale: string = routing.defaultLocale): Prom
 
     const data = await withPortalTransaction(me, (tx) =>
       rpcRows(tx, 'get_saved_jobs_display', { p_locale: resolvedLocale }));
-    const jobs = data.map((row): RecommendedJob => {
-      const item = asRecord(row);
-      return {
-        id: asStr(item['id']),
-        slug: asStr(item['slug']),
-        title: asStr(item['title']),
-        companyName: asStr(item['company_name']),
-        city: asStr(item['city']),
-        match: null,
-        saved: true,
-      };
-    });
-    return { status: 'ready', jobs };
+    return { status: 'ready', jobs: data.map((row) => toSavedJob(asRecord(row))) };
   } catch (error) {
     captureError(error, { area: 'candidate.getSavedJobs' });
     return { status: 'error' };
@@ -1226,7 +1300,8 @@ export async function getMyOffersPage(
           id: asStr(r['id']),
           jobTitle: job?.title ?? '',
           companyName: job?.companyName ?? '',
-          slug: job?.slug ?? null,
+          slug: job?.slug || null,
+          jobAvailability: job?.availability ?? null,
           // Szablon zapisany w języku nadawcy → '' (UI pokaże zaproszenie w języku kandydata, #289).
           message: customOfferMessage(asStr(r['message'])) ?? '',
           date: sentAt || asStr(r['created_at']),
@@ -1252,7 +1327,8 @@ function developmentOfferFixture(locale: Locale, cursor: OfferCursor | null): My
       id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(21 - index).padStart(12, '0')}`,
       jobTitle: `${job?.title ?? ''} #${21 - index}`,
       companyName: job?.companyName ?? '',
-      slug: job?.slug ?? null,
+      slug: job?.slug || null,
+      jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       message: '',
       date: createdAt,
       status: index === 20 ? 'accepted' : 'declined',
@@ -1303,7 +1379,8 @@ export async function getLatestActiveOffer(
         id: asStr(row['id']),
         jobTitle: job?.title ?? '',
         companyName: job?.companyName ?? '',
-        slug: job?.slug ?? null,
+        slug: job?.slug || null,
+        jobAvailability: job?.availability ?? null,
         message: customOfferMessage(asStr(row['message'])) ?? '',
         date: asStr(row['sent_at']),
         status: asStr(row['status']),
@@ -1318,6 +1395,8 @@ export async function getLatestActiveOffer(
 
 /** Ostatnie wiadomości/konwersacje kandydata. Pusta lista tylko po udanym odczycie (#244). */
 export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMessage>> {
+  // #1134: tryb ogłoszeniowy — bez rozmów i bez zapytania (sekcji nie ma na pulpicie).
+  if (!isRecruitmentEnabled('messaging')) return { status: 'ok', items: [] };
   if (!isPortalDataConfigured()) {
     if (isDashboardErrorFixture()) return { status: 'error' };
     return { status: 'ok', items: demoMessages(routing.defaultLocale) };

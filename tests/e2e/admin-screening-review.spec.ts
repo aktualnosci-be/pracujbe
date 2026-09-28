@@ -6,6 +6,13 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
 
+// #1128: przepływ rekrutacyjny — pomijany przy serwerze w trybie ogłoszeniowym (E2E_PORTAL_LEGAL_MODE=);
+// zachowanie trybu ogłoszeniowego sprawdza classifieds-profile-screening.spec.ts.
+test.skip(
+  (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().toUpperCase() !== 'RECRUITMENT',
+  'serwer testowy w trybie ogłoszeniowym',
+);
+
 /**
  * Panel administratora w trybie DEMO — przegląd pytań screeningowych (#497): kolejka
  * oczekujących pytań (treść we wszystkich językach), odrzucenie wymaga uzasadnienia w dialogu

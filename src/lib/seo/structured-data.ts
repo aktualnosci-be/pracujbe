@@ -143,11 +143,20 @@ export function buildJobPostingDescription(job: JobDetail, labels: JobPostingLab
  * aplikowania na tej samej stronie (zalogowany kandydat albo gość bez konta), więc `true`. Gdy
  * w przyszłości pojawi się oferta bez tego przepływu (np. link zewnętrzny), tę wartość trzeba
  * wyliczać z danych oferty zamiast stałej.
+ *
+ * #1130 (decyzja produktowa: portal ogłoszeniowy): w trybie ogłoszeniowym kandydat aplikuje
+ * u ogłoszeniodawcy (strona/e-mail/telefon), nie na tej stronie — wywołujący podaje
+ * `directApply: false`.
  */
 export function buildJobPostingJsonLd(
   job: JobDetail,
   url: string,
   labels: JobPostingLabels,
+  /**
+   * 0169: `jobBenefits` (tekst schema.org) — świadczenia z „Kosztów i dodatków” w języku strony
+   * (`buildJobBenefitsText`). Brak = pole pominięte.
+   */
+  options: { jobBenefits?: string; directApply?: boolean } = {},
 ): Record<string, unknown> {
   const expiresTs = job.expiresAt ? Date.parse(job.expiresAt) : Number.NaN;
   const validThrough = Number.isNaN(expiresTs) ? undefined : new Date(expiresTs).toISOString();
@@ -211,8 +220,9 @@ export function buildJobPostingJsonLd(
     },
     ...(baseSalary ? { baseSalary } : {}),
     ...(job.startDate ? { jobStartDate: job.startDate } : {}),
+    ...(options.jobBenefits?.trim() ? { jobBenefits: options.jobBenefits.trim() } : {}),
     url,
-    directApply: true,
+    directApply: options.directApply ?? true,
   };
 }
 

@@ -2,12 +2,14 @@
 # =============================================================================
 # scripts/db/backup.sh — zaszyfrowana kopia logiczna PostgreSQL z retencją (#47).
 #
-# 1. pg_dump -Fc ze snapshotu transakcji tylko do odczytu (REPEATABLE READ),
+# 1. pg_dump -Fc ze snapshotu transakcji tylko do odczytu (REPEATABLE READ), z ACL
+#    (GRANT/REVOKE), bez właścicieli,
 # 2. pełny odczyt archiwum przez pg_restore (--list + odtworzenie do /dev/null),
 # 3. szyfrowanie `age` kluczem PUBLICZNYM (zadanie kopii nie zna klucza prywatnego),
 # 4. manifest JSON obok artefaktu: rozmiary, SHA-256 artefaktu, SHA-256 zapytań
 #    kontrolnych (historia migracji + liczba wierszy każdej tabeli z tego samego
-#    snapshotu) — restore-backup.sh porównuje je po odtworzeniu,
+#    snapshotu) oraz SHA-256 odcisku uprawnień (GRANT/REVOKE, atrybuty i członkostwa ról
+#    runtime — OPS14-01) — restore-backup.sh porównuje je po odtworzeniu,
 # 5. retencja: zostaje BACKUP_RETENTION najnowszych kopii w BACKUP_DIR.
 #
 # Wejście wyłącznie ze zmiennych środowiskowych (URL-e i hasła nie są wypisywane):
@@ -110,7 +112,10 @@ snapshot="$(src_tx "begin isolation level repeatable read read only; select pg_e
 [[ "$snapshot" =~ ^[0-9A-F-]+$ ]] || fail 'Nie udało się wyeksportować snapshotu źródła.'
 
 echo 'BACKUP: zrzut źródła (pg_dump -Fc, snapshot transakcji kontrolnej)'
-pg_dump --format=custom --no-owner --no-acl --snapshot="$snapshot" \
+# OPS14-01: z ACL — bez nich odtworzona baza nie ma GRANT dla ról runtime, a funkcje
+# z odebranym EXECUTE wracają do domyślnego EXECUTE dla PUBLIC. Bez właścicieli: przy
+# odtworzeniu obiekty należą do loginu odtwarzającego (migrator), nie do ról z kopii.
+pg_dump --format=custom --no-owner --snapshot="$snapshot" \
   --file="$dump" --dbname="$BACKUP_SOURCE_URL" 2>"$workdir/dump.err" || fail 'pg_dump nie powiódł się.'
 
 # Zapytania kontrolne — identyczny SQL wykonuje restore-backup.sh na celu.
@@ -120,6 +125,8 @@ source "$(dirname "$0")/lib/backup-controls.sh"
 table_list="$(src_tx "$BACKUP_TABLES_SQL")" || fail 'Odczyt listy tabel ze źródła.'
 [ -n "$table_list" ] || fail 'Brak tabel w źródle.'
 controls="$(src_tx "$(backup_controls_sql "$table_list")")" || fail 'Zapytania kontrolne na źródle.'
+acl="$(src_tx "$BACKUP_ACL_SQL")" || fail 'Odcisk uprawnień źródła.'
+grep -q '^acl ' <<<"$acl" || fail 'Źródło bez uprawnień do porównania.'
 migrations="$(src_tx 'select count(*) from app_migrations.history;')" || fail 'Odczyt historii migracji.'
 last_migration="$(src_tx 'select coalesce(max(name), '"''"') from app_migrations.history;')" \
   || fail 'Odczyt historii migracji.'
@@ -146,13 +153,15 @@ enc_bytes="$(stat -c %s "$partial")"
 [ "$enc_bytes" -gt 0 ] || fail 'Pusty artefakt.'
 enc_sha="$(sha256sum "$partial" | cut -d' ' -f1)"
 controls_sha="$(printf '%s' "$controls" | sha256sum | cut -d' ' -f1)"
+acl_sha="$(printf '%s' "$acl" | sha256sum | cut -d' ' -f1)"
+acl_items="$(printf '%s\n' "$acl" | grep -c '^acl ')"
 tables="$(printf '%s\n' "$table_list" | grep -c .)"
 
 json_str() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 manifest_tmp="$BACKUP_DIR/.${name%.dump.age}.json.partial"
 cat >"$manifest_tmp" <<JSON
 {
-  "format": "pracujbe-backup/1",
+  "format": "pracujbe-backup/2",
   "createdAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "artifact": "$name",
   "encryption": "age",
@@ -160,6 +169,8 @@ cat >"$manifest_tmp" <<JSON
   "bytesPlain": $plain_bytes,
   "sha256Encrypted": "$enc_sha",
   "controlsSha256": "$controls_sha",
+  "aclSha256": "$acl_sha",
+  "aclItems": $acl_items,
   "tables": $tables,
   "migrations": $migrations,
   "lastMigration": "$(json_str "$last_migration")",
@@ -194,4 +205,4 @@ if [ -n "$s3" ]; then
 fi
 
 heartbeat ''
-echo "BACKUP: PASS — $name, ${enc_bytes} B zaszyfrowane (${plain_bytes} B zrzutu), ${tables} tabel, ${migrations} migracji; retencja: zachowano ${kept}, usunięto ${removed}${remote}"
+echo "BACKUP: PASS — $name, ${enc_bytes} B zaszyfrowane (${plain_bytes} B zrzutu), ${tables} tabel, ${migrations} migracji, ${acl_items} uprawnień; retencja: zachowano ${kept}, usunięto ${removed}${remote}"

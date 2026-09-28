@@ -19,7 +19,7 @@ describe('docker/backup/Dockerfile', () => {
   it('kopiuje skrypty kopii i ich biblioteki; uruchamia backup.sh jako użytkownik bez uprawnień', () => {
     expect(dockerfile).toContain('COPY scripts/db/backup.sh scripts/db/restore-backup.sh scripts/db/');
     expect(dockerfile).toContain('COPY scripts/db/lib/ scripts/db/lib/');
-    for (const file of ['scripts/db/lib/backup-s3.mjs', 'scripts/db/lib/backup-s3-core.mjs', 'scripts/db/lib/backup-controls.sh']) {
+    for (const file of ['scripts/db/lib/backup-s3.mjs', 'scripts/db/lib/backup-s3-core.mjs', 'scripts/db/lib/backup-controls.sh', 'scripts/db/lib/restore-roles.sh']) {
       expect(existsSync(file), file).toBe(true);
     }
     expect(dockerfile).toMatch(/^USER node$/m);

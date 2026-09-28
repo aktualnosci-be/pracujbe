@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getJobs, getJobBySlug, getCategoryCounts, getCityCounts, getJobFilterFacets } from '@/lib/jobs';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 import { buildJobPostingJsonLd, type JobPostingLabels } from '@/lib/seo/structured-data';
 
 const adapters = vi.hoisted(() => ({
@@ -10,6 +11,7 @@ const adapters = vi.hoisted(() => ({
   filterFacets: vi.fn(),
   translations: vi.fn(),
   screening: vi.fn(async () => [] as unknown[]),
+  costs: vi.fn(async () => null as Record<string, unknown> | null),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -21,6 +23,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobFilterFacets: adapters.filterFacets,
   getPublicJobTranslations: adapters.translations,
   getPublicJobScreeningQuestions: adapters.screening,
+  getPublicJobCosts: adapters.costs,
 }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -92,30 +95,64 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     expect(job).toMatchObject({ title: 'Magazynier' });
     expect(job).not.toHaveProperty('availableLocales');
   });
-  it('detal niesie pytania screeningowe oferty w kolejności (#101)', async () => {
+  // Pytania screeningowe tylko w trybie rekrutacyjnym (ukrycie w ogłoszeniowym: classifieds-screening-hidden).
+  describe('pytania screeningowe (tryb rekrutacyjny)', () => {
+    withRecruitmentMode();
+    it('detal niesie pytania screeningowe oferty w kolejności (#101)', async () => {
+      vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+      adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+      adapters.translations.mockResolvedValue([]);
+      adapters.screening.mockResolvedValueOnce([
+        { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd', xx: 'x' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
+        { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
+      ]);
+
+      const job = await getJobBySlug('kierowca', 'pl');
+
+      expect(adapters.screening).toHaveBeenCalledWith(adapters.pool, 'job-1');
+      expect(job?.screeningQuestions).toEqual([
+        { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
+        { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
+      ]);
+    });
+    it('awaria odczytu pytań screeningowych nie udaje oferty bez pytań (#101)', async () => {
+      vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+      adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+      adapters.translations.mockResolvedValue([]);
+      adapters.screening.mockRejectedValueOnce(new Error('permission denied'));
+
+      await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
+    });
+  });
+  it('0169: detal niesie koszty i dodatki z get_public_job_costs (numeric jako tekst)', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
-    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z', accommodation: true });
     adapters.translations.mockResolvedValue([]);
-    adapters.screening.mockResolvedValueOnce([
-      { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd', xx: 'x' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
-      { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
-    ]);
+    adapters.costs.mockResolvedValueOnce({
+      accommodation_kind: 'provided', accommodation_cost: '120.00', accommodation_cost_period: 'week',
+      accommodation_deducted: true, accommodation_registration: null, accommodation_after_contract: null,
+      transport_shuttle: false, transport_reimbursed: true, meal_voucher_daily: '8.00', joint_committee: '140',
+    });
 
     const job = await getJobBySlug('kierowca', 'pl');
 
-    expect(adapters.screening).toHaveBeenCalledWith(adapters.pool, 'job-1');
-    expect(job?.screeningQuestions).toEqual([
-      { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
-      { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
-    ]);
+    expect(adapters.costs).toHaveBeenCalledWith(adapters.pool, 'job-1');
+    expect(job?.costs).toEqual({
+      accommodationKind: 'provided', accommodationCost: 120, accommodationCostPeriod: 'week',
+      accommodationDeducted: true, transportShuttle: false, transportReimbursed: true,
+      mealVoucherDaily: 8, jointCommittee: '140',
+    });
   });
-  it('awaria odczytu pytań screeningowych nie udaje oferty bez pytań (#101)', async () => {
+  it('0169: awaria odczytu kosztów nie blokuje oferty (same flagi, błąd w kanale)', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
-    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z', accommodation: true });
     adapters.translations.mockResolvedValue([]);
-    adapters.screening.mockRejectedValueOnce(new Error('permission denied'));
+    adapters.costs.mockRejectedValueOnce(new Error('permission denied'));
 
-    await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
+    const job = await getJobBySlug('kierowca', 'pl');
+
+    expect(job?.accommodation).toBe(true);
+    expect(job).not.toHaveProperty('costs');
   });
   describe('JobPosting z wiersza get_public_job (audyt P1-12)', () => {
     const labels: JobPostingLabels = {

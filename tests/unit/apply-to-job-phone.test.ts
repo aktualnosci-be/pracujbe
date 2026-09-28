@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyToJob } from '@/lib/actions/applications';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * #145 — przepływ aplikowania: niepoprawny numer nie dociera do RPC, poprawny trafia do

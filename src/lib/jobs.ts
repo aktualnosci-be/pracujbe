@@ -15,10 +15,23 @@ import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 import { resolveJobContentLocales } from '@/lib/job-content-locale';
+import {
+  applyJobListMachineTranslation,
+  applyJobMachineTranslation,
+  type JobMachineTranslation,
+} from '@/lib/job-machine-translation';
 import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
+import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import {
+  isApplyEmail,
+  isApplyPhone,
+  isApplyUrl,
+  normalizeApplyPhone,
+} from '@/lib/job-apply-channel';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
@@ -97,6 +110,40 @@ export interface JobListItem {
    * Brak = brak publicznego profilu (bezpiecznik) — sitemap i CTA go wtedy pomijają.
    */
   companySlug?: string;
+  /**
+   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33): na szczególe całość
+   * (0159), na karcie listy tytuł i wyróżniki (0160). Brak = treść własna oferty. Strona
+   * oznacza przekład (szczegół: z linkiem do oryginału, karta: dyskretny znacznik).
+   */
+  machineTranslation?: JobMachineTranslation;
+  /**
+   * 0167: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
+   * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
+   */
+  isAgency?: true;
+}
+
+export interface JobApplyChannel {
+  url?: string;
+  email?: string;
+  phone?: string;
+}
+
+/** Kanał z wiersza bazy — drugi raz te same reguły co CHECK (jak `publicHttpsUrl` w JSON-LD). */
+export function parseJobApplyChannel(row: Record<string, unknown>): JobApplyChannel | undefined {
+  const text = (key: string): string | undefined => {
+    const v = row[key];
+    return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+  };
+  const url = text('apply_url');
+  const email = text('apply_email');
+  const phone = text('apply_phone');
+  const channel: JobApplyChannel = {
+    ...(url && isApplyUrl(url) ? { url } : {}),
+    ...(email && isApplyEmail(email) ? { email } : {}),
+    ...(phone && isApplyPhone(phone) ? { phone: normalizeApplyPhone(phone) } : {}),
+  };
+  return Object.keys(channel).length > 0 ? channel : undefined;
 }
 
 export interface JobDetail extends JobListItem {
@@ -123,6 +170,18 @@ export interface JobDetail extends JobListItem {
   availableLocales?: Locale[];
   /** Pytania screeningowe do formularza aplikowania (#101); brak = oferta bez pytań. */
   screeningQuestions?: ScreeningQuestion[];
+  /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
+  costs?: JobCosts;
+  /**
+   * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
+   * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
+   */
+  applyChannel?: JobApplyChannel;
+  /**
+   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0159); brak = treść
+   * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
+   */
+  machineTranslation?: JobMachineTranslation;
 }
 
 export interface GetJobsParams {
@@ -145,6 +204,8 @@ export interface GetJobsParams {
   accommodation?: boolean;
   immediate?: boolean;
   noLanguageRequired?: boolean;
+  /** 0167: tylko oferty spoza agencji pracy tymczasowej. */
+  directOnly?: boolean;
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -431,6 +492,10 @@ function rowToJobDetail(row: unknown): JobDetail {
       ? { companyLogoUrl: asOptString(r['company_logo_url']) }
       : {}),
     // companySlug: już zmapowane przez rowToJobListItem (kolumna wspólna z get_public_jobs).
+    ...(() => {
+      const applyChannel = parseJobApplyChannel(r);
+      return applyChannel ? { applyChannel } : {};
+    })(),
   };
 }
 
@@ -439,18 +504,21 @@ async function getJobsFromDb(
   page: number,
   pageSize: number,
   viewerId: string | null,
+  translateCards: boolean,
 ): Promise<GetJobsResult> {
   const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
     import('@/lib/db/runtime'),
     import('@/lib/db/public-jobs'),
   ]);
-  const result = await getPublicJobs(await getDomainPool(), {
+  const pool = await getDomainPool();
+  const result = await getPublicJobs(pool, {
     ...params,
     page,
     pageSize,
   }, viewerId);
+  const jobs = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
   return {
-    jobs: result.rows.map(rowToJobListItem),
+    jobs: translateCards ? await withListMachineTranslations(pool, jobs, toLocale(params.locale)) : jobs,
     total: result.total,
     page: result.page,
     pageSize: result.pageSize,
@@ -469,16 +537,100 @@ async function getJobBySlugFromDb(
   const pool = await getDomainPool();
   const first = await getPublicJob(pool, slug, locale);
   if (!first) return null;
-  const job = rowToJobDetail(first);
+  const [job] = await withAgencyFlags(pool, [rowToJobDetail(first)]);
+  if (!job) return null;
   // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
-  const { getPublicJobScreeningQuestions } = await import('@/lib/db/public-jobs');
-  const screeningQuestions = parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id));
-  return {
+  const { getPublicJobScreeningQuestions, getPublicJobCosts } = await import('@/lib/db/public-jobs');
+  // Decyzja produktowa: portal ogłoszeniowy — stare pytania ukryte, bez zapytania do bazy.
+  const screeningQuestions = isRecruitmentEnabled('screening')
+    ? parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id))
+    : [];
+  // 0169: koszty i dodatki — odczyt pomocniczy; awaria zostawia same flagi (bez szczegółów).
+  let costs: JobCosts | undefined;
+  try {
+    costs = parseJobCostsRow(await getPublicJobCosts(pool, job.id));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobCosts' });
+  }
+  const requested = toLocale(locale);
+  const withLocales: JobDetail = {
     ...job,
-    ...(await readContentLocales(pool, job, toLocale(locale))),
+    ...(costs ? { costs } : {}),
+    ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };
+  return readMachineTranslation(pool, withLocales, requested);
+}
+
+/**
+ * Przekład na język strony (#33). Tylko za flagą `AI_TRANSLATION_ENABLED`, tylko gdy treść
+ * oferty jest w innym (znanym) języku niż strona. Odczyt pomocniczy: jego awaria zostawia
+ * oryginał i loguje sam kod obszaru (bez treści oferty).
+ */
+async function readMachineTranslation(
+  pool: TransactionPool,
+  job: JobDetail,
+  locale: Locale,
+): Promise<JobDetail> {
+  if (!job.contentLocale || job.contentLocale === locale) return job;
+  if (job.availableLocales?.includes(locale)) return job;
+  try {
+    const { isTranslationDisplayEnabled } = await import('@/lib/translation/config');
+    if (!isTranslationDisplayEnabled()) return job;
+    const { getPublicJobMachineTranslation } = await import('@/lib/db/public-jobs');
+    const row = await getPublicJobMachineTranslation(pool, job.id, locale);
+    return applyJobMachineTranslation(job, row, locale);
+  } catch (error) {
+    captureError(error, { area: 'jobs.readMachineTranslation', jobId: job.id });
+    return job;
+  }
+}
+
+/**
+ * Przekład tytułu i wyróżników kart listy (#33, 0160) — JEDNO zapytanie na stronę (lista id),
+ * nigdy zapytanie na kartę. Tylko za flagą `AI_TRANSLATION_ENABLED`, w tym samym renderze
+ * serwera co lista (strony ISR dostają gotowy HTML). Odczyt pomocniczy: awaria = karty
+ * w oryginale + kod obszaru w logu (bez treści ofert).
+ */
+export async function withListMachineTranslations<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+  locale: Locale,
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { isTranslationDisplayEnabled } = await import('@/lib/translation/config');
+    if (!isTranslationDisplayEnabled()) return jobs;
+    const { getPublicJobsMachineTitles } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobsMachineTitles(pool, jobs.map((job) => job.id), locale);
+    if (rows.length === 0) return jobs;
+    const byId = new Map(rows.map((row) => [row.job_id, row]));
+    return jobs.map((job) => applyJobListMachineTranslation(job, byId.get(job.id) ?? null, locale));
+  } catch (error) {
+    captureError(error, { area: 'jobs.readListMachineTranslations' });
+    return jobs;
+  }
+}
+
+/**
+ * Etykieta „agencja” (0167) — JEDNO zapytanie na stronę listy (lista id). Odczyt pomocniczy:
+ * awaria = karty bez etykiety + kod obszaru w logu (filtr listy i tak działa w SQL).
+ */
+export async function withAgencyFlags<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { getPublicJobsAgency } = await import('@/lib/db/public-jobs');
+    const agency = await getPublicJobsAgency(pool, jobs.map((job) => job.id));
+    if (agency.size === 0) return jobs;
+    return jobs.map((job) => (agency.has(job.id) ? { ...job, isAgency: true as const } : job));
+  } catch (error) {
+    captureError(error, { area: 'jobs.withAgencyFlags' });
+    return jobs;
+  }
 }
 
 /**
@@ -517,9 +669,18 @@ export interface JobsViewer {
   candidateId: string | null;
 }
 
+/**
+ * Opcje odczytu listy. `translateCards` — lista trafia na karty ofert (`JobCard`), więc
+ * dostaje przekład tytułu w języku strony (#33). Sitemap, liczniki i facety go nie potrzebują.
+ */
+export interface GetJobsOptions {
+  translateCards?: boolean;
+}
+
 export async function getJobs(
   params: GetJobsParams,
   viewer?: JobsViewer,
+  options: GetJobsOptions = {},
 ): Promise<GetJobsResult> {
   const locale = toLocale(params.locale);
   const page = Math.max(1, Math.trunc(params.page ?? 1));
@@ -531,7 +692,13 @@ export async function getJobs(
   if (isDatabaseConfigured()) {
     if (isBuildPhase()) return { jobs: [], total: 0, page, pageSize, maxPage: 1 };
     try {
-      return await getJobsFromDb(params, page, pageSize, viewer?.candidateId ?? null);
+      return await getJobsFromDb(
+        params,
+        page,
+        pageSize,
+        viewer?.candidateId ?? null,
+        options.translateCards === true,
+      );
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
       // (fikcyjne oferty indeksowane jako realne). Loguj i propaguj kontrolowany błąd.
@@ -564,7 +731,8 @@ export async function getJobBySlug(
   const job = resolveDemoJobBySlug(slug, resolvedLocale);
   if (!job) return null;
   // Serwer fixture E2E: pytania screeningowe na wybranej ofercie fikcyjnej (#101).
-  const screeningQuestions = isRealJobsFixture() ? fixtureScreeningQuestions(job.id) : [];
+  const screeningQuestions =
+    isRealJobsFixture() && isRecruitmentEnabled('screening') ? fixtureScreeningQuestions(job.id) : [];
   return markDemo(screeningQuestions.length > 0 ? { ...job, screeningQuestions } : job);
 }
 
@@ -610,7 +778,7 @@ export async function getLatestJobs(
   limit: number = DEFAULT_LATEST_LIMIT,
 ): Promise<JobListItem[]> {
   const safeLimit = Math.max(1, Math.trunc(limit));
-  const result = await getJobs({ locale, page: 1, pageSize: safeLimit });
+  const result = await getJobs({ locale, page: 1, pageSize: safeLimit }, undefined, { translateCards: true });
   return result.jobs;
 }
 

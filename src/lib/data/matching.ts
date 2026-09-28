@@ -14,6 +14,7 @@ import {
 import { locationLookupKeys } from '@/lib/matching/locations';
 import { referenceDate } from '@/lib/matching/reference-date';
 import { scoreMatch, type MatchResult } from '@/lib/matching/score';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Warstwa danych dla dopasowania kandydat↔oferta (Etap 5).
@@ -34,9 +35,14 @@ import { scoreMatch, type MatchResult } from '@/lib/matching/score';
  * active+verified i bezpiecznych kolumn.
  */
 
-/** Jawny wynik dopasowania — błąd odczytu nigdy nie udaje wyniku ani braku profilu/oferty. */
+/**
+ * Jawny wynik dopasowania — błąd odczytu nigdy nie udaje wyniku ani braku profilu/oferty.
+ * `disabled` = tryb ogłoszeniowy (#1131, decyzja produktowa: portal ogłoszeniowy) — bez odczytu
+ * profilu, bez `get_job_match_profile`, bez transakcji.
+ */
 export type JobMatchLoad =
   | { status: 'ok'; result: MatchResult }
+  | { status: 'disabled' }
   | { status: 'none' }
   | { status: 'error' };
 
@@ -62,6 +68,8 @@ async function read<T>(source: string, action: () => Promise<T>): Promise<T> {
  * Bezpieczne do wołania także dla anonimów/pracodawców — wtedy zwraca `none`.
  */
 export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
+  // #1131: tryb ogłoszeniowy — portal nie liczy dopasowania (przed jakimkolwiek odczytem).
+  if (!isRecruitmentEnabled('matching')) return { status: 'disabled' };
   if (!isPortalDataConfigured()) {
     // Izolowany serwer dev testów E2E (błąd odczytu). Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
@@ -90,7 +98,10 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
       const skills = await read('candidate_skills', () => queryRows(tx, 'matching.candidate-skills',
         'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1', [profileId]));
       const languages = await read('candidate_languages', () => queryRows(tx, 'matching.candidate-languages',
-        'SELECT language_label, level FROM public.candidate_languages WHERE candidate_profile_id = $1', [profileId]));
+        `SELECT cl.language_label, cl.level, lg.code AS language_code
+           FROM public.candidate_languages cl
+           LEFT JOIN public.languages lg ON lg.id = cl.language_id
+          WHERE cl.candidate_profile_id = $1`, [profileId]));
       const certificates = await read('candidate_certificates', () => queryRows(tx, 'matching.candidate-certificates',
         'SELECT certificate_label, expires_at::text AS expires_at FROM public.candidate_certificates WHERE candidate_profile_id = $1',
         [profileId]));

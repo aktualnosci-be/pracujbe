@@ -31,6 +31,8 @@ beforeEach(() => {
   vi.mocked(updateCompanyLinks).mockReset();
 });
 
+const COMPANY_ID = '11111111-1111-4111-8111-111111111111';
+
 function renderForm(
   website = '',
   logoUrl = '',
@@ -41,6 +43,7 @@ function renderForm(
   return render(
     <NextIntlClientProvider locale="pl" messages={pl}>
       <CompanyLinksForm
+        companyId={COMPANY_ID}
         defaultValues={{ website, logoUrl }}
         published={published}
         review={review}
@@ -93,7 +96,7 @@ describe('CompanyLinksForm', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: pl.company.linksSubmit }));
 
-    await waitFor(() => expect(updateCompanyLinks).toHaveBeenCalledWith({
+    await waitFor(() => expect(updateCompanyLinks).toHaveBeenCalledWith(COMPANY_ID, {
       website: 'https://acme.example',
       logoUrl: '',
     }));

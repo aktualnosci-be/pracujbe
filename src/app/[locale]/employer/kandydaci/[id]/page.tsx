@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 import { Link } from '@/i18n/navigation';
+import { languageDisplayName } from '@/lib/languages';
 import { getEmployerCandidateDetail } from '@/lib/data/employer';
 import { StatusPill } from '@/components/ui/status-pill';
 import { MatchBar } from '@/components/ui/match-bar';
@@ -41,15 +43,18 @@ export default async function EmployerCandidateDetailPage({
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
+  // #1133/#1139: tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy) — 404 przed odczytem.
+  notFoundUnlessRecruitment('candidateSearch');
   const { locale, id } = await params;
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
+  const tLang = await getTranslations({ locale, namespace: 'languageNames' });
   const format = await getFormatter({ locale });
 
   const result = await getEmployerCandidateDetail(id);
-  if (result.status === 'not_found') notFound();
+  if (result.status === 'not_found' || result.status === 'disabled') notFound();
 
   const back = (
     <Link href="/employer/kandydaci" className={TEXT_LINK}>
@@ -110,7 +115,8 @@ export default async function EmployerCandidateDetailPage({
             {field(to('languagesLabel'), profile.languages.length
               ? profile.languages.map((l) => {
                   const levelKey = LEVEL_KEYS[l.level];
-                  return levelKey ? `${l.label} (${to(levelKey)})` : l.label;
+                  const name = languageDisplayName(l.label, (code) => tLang(code));
+                  return levelKey ? `${name} (${to(levelKey)})` : name;
                 }).join(', ')
               : notProvided)}
             {field(to('certificatesLabel'), profile.certificates.length ? profile.certificates.join(', ') : notProvided)}

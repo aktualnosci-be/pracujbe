@@ -73,6 +73,7 @@ describe('company read state', () => {
         website: 'https://acme.example',
         logoUrl: null,
         linksReview: null,
+        agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
         canEdit: true,
       },
     });
@@ -187,6 +188,7 @@ describe('getCompanyById (#843) — firma z linku decyzji, niezależnie od aktyw
         website: null,
         logoUrl: null,
         linksReview: null,
+        agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
         canEdit: true,
       },
     });

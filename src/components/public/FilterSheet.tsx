@@ -16,6 +16,7 @@ import {
   useLiveFacets,
 } from '@/components/public/FilterSidebar';
 import {
+  ACCOMMODATION_VALUES,
   CATEGORY_KEYS,
   CONTRACT_TYPES,
   DATE_VALUES,
@@ -23,7 +24,6 @@ import {
   countActiveSidebar,
   emptySidebarFilters,
   isSalaryNarrowed,
-  serializeLocations,
   sidebarFiltersToParams,
   type SidebarFilters,
   type SortValue,
@@ -89,14 +89,6 @@ function NoScriptFilterForm({
   const controlClass =
     'min-h-12 w-full min-w-0 max-w-full rounded-md border border-input bg-background px-3 text-base text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
   const optionClass = 'flex min-h-12 items-center gap-3';
-  const selectedCategories = initial.categories.join(',');
-  // Wartość natywnego `<select>` bez JS wraca na serwer jako zwykły tekst parametru
-  // `location` — musi więc przejść przez ten sam escaping co JS-owy sidebar (#845),
-  // inaczej miasto z przecinkiem w nazwie (np. „Bruxelles, Belgique”) rozbija się na dwie
-  // wartości po stronie `parseSidebarFilters`.
-  const selectedLocations = serializeLocations(initial.locations);
-  const selectedContracts = initial.contractTypes.join(',');
-  const selectedAccommodation = initial.accommodation.join(',');
   // Bez JS jednostkę można zmienić razem z kwotami, więc pola przyjmują zakres obu
   // jednostek (serwer przycina do widełek wybranej), a puste pole = pełne widełki.
   const salaryNarrowed = isSalaryNarrowed(initial);
@@ -135,47 +127,39 @@ function NoScriptFilterForm({
         </a>
       </div>
 
-      <label className="block space-y-2 text-sm font-semibold text-foreground">
-        <span>{t('category')}</span>
-        <select
-          name="category"
-          defaultValue={selectedCategories}
-          className={controlClass}
-        >
-          <option value="">{t('any')}</option>
-          {initial.categories.length > 1 ? (
-            <option value={selectedCategories}>
-              {initial.categories.map((key) => tCat(key)).join(', ')}
-            </option>
-          ) : null}
-          {CATEGORY_KEYS.map((key) => (
-            <option key={key} value={key}>
-              {tCat(key)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="space-y-1">
+        <legend className="mb-2 text-sm font-semibold text-foreground">
+          {t('category')}
+        </legend>
+        {CATEGORY_KEYS.map((key) => (
+          <label key={key} className={optionClass}>
+            <input
+              type="checkbox"
+              name="category"
+              value={key}
+              defaultChecked={initial.categories.includes(key)}
+            />
+            <span>{tCat(key)}</span>
+          </label>
+        ))}
+      </fieldset>
 
-      <label className="block space-y-2 text-sm font-semibold text-foreground">
-        <span>{t('location')}</span>
-        <select
-          name="location"
-          defaultValue={selectedLocations}
-          className={controlClass}
-        >
-          <option value="">{t('any')}</option>
-          {initial.locations.length > 1 ? (
-            <option value={selectedLocations}>
-              {initial.locations.join(', ')}
-            </option>
-          ) : null}
-          {locations.map((location) => (
-            <option key={location} value={serializeLocations([location])}>
-              {location}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="space-y-1">
+        <legend className="mb-2 text-sm font-semibold text-foreground">
+          {t('location')}
+        </legend>
+        {locations.map((location) => (
+          <label key={location} className={optionClass}>
+            <input
+              type="checkbox"
+              name="location"
+              value={location}
+              defaultChecked={initial.locations.includes(location)}
+            />
+            <span>{location}</span>
+          </label>
+        ))}
+      </fieldset>
 
       <fieldset className="space-y-3 border-t border-border pt-5">
         <legend className="text-sm font-semibold text-foreground">
@@ -224,48 +208,39 @@ function NoScriptFilterForm({
         </label>
       </fieldset>
 
-      <label className="block space-y-2 text-sm font-semibold text-foreground">
-        <span>{t('contractType')}</span>
-        <select
-          name="contractType"
-          defaultValue={selectedContracts}
-          className={controlClass}
-        >
-          <option value="">{t('any')}</option>
-          {initial.contractTypes.length > 1 ? (
-            <option value={selectedContracts}>
-              {initial.contractTypes.map((key) => tContract(key)).join(', ')}
-            </option>
-          ) : null}
-          {CONTRACT_TYPES.map((key) => (
-            <option key={key} value={key}>
-              {tContract(key)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="space-y-1">
+        <legend className="mb-2 text-sm font-semibold text-foreground">
+          {t('contractType')}
+        </legend>
+        {CONTRACT_TYPES.map((key) => (
+          <label key={key} className={optionClass}>
+            <input
+              type="checkbox"
+              name="contractType"
+              value={key}
+              defaultChecked={initial.contractTypes.includes(key)}
+            />
+            <span>{tContract(key)}</span>
+          </label>
+        ))}
+      </fieldset>
 
-      <label className="block space-y-2 text-sm font-semibold text-foreground">
-        <span>{t('accommodation')}</span>
-        <select
-          name="accommodation"
-          defaultValue={selectedAccommodation}
-          className={controlClass}
-        >
-          <option value="">{t('any')}</option>
-          {initial.accommodation.length > 1 ? (
-            <option value={selectedAccommodation}>
-              {initial.accommodation
-                .map((value) =>
-                  value === 'provided' ? t('provided') : t('unavailable'),
-                )
-                .join(', ')}
-            </option>
-          ) : null}
-          <option value="provided">{t('provided')}</option>
-          <option value="unavailable">{t('unavailable')}</option>
-        </select>
-      </label>
+      <fieldset className="space-y-1">
+        <legend className="mb-2 text-sm font-semibold text-foreground">
+          {t('accommodation')}
+        </legend>
+        {ACCOMMODATION_VALUES.map((value) => (
+          <label key={value} className={optionClass}>
+            <input
+              type="checkbox"
+              name="accommodation"
+              value={value}
+              defaultChecked={initial.accommodation.includes(value)}
+            />
+            <span>{value === 'provided' ? t('provided') : t('unavailable')}</span>
+          </label>
+        ))}
+      </fieldset>
 
       <fieldset className="space-y-1 border-t border-border pt-5">
         <legend className="mb-2 text-sm font-semibold text-foreground">
@@ -288,6 +263,15 @@ function NoScriptFilterForm({
             defaultChecked={initial.noLanguageRequired}
           />
           <span>{t('noLanguageRequired')}</span>
+        </label>
+        <label className={optionClass}>
+          <input
+            type="checkbox"
+            name="direct"
+            value="1"
+            defaultChecked={initial.directOnly}
+          />
+          <span>{t('directOnly')}</span>
         </label>
       </fieldset>
 
@@ -437,7 +421,7 @@ export function FilterSheet({
             </div>
           </div>
 
-          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="pp-filter-scroll min-w-0 flex-1 overflow-y-auto px-5 py-5">
             <FilterFields
               facets={liveFacets.facets}
               value={pending}

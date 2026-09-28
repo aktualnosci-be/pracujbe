@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
-import { ArrowRight, BadgeCheck, FileText, Handshake, Inbox, Languages, ListChecks, MessageSquare, Target, UserPlus } from 'lucide-react';
+import { ArrowRight, BadgeCheck, BarChart3, ExternalLink, FileText, Inbox, Languages, ListChecks, UserPlus, UsersRound } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -13,8 +13,10 @@ import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '
  *
  * Pozycja nawigacji „Dla pracodawców” prowadzi tutaj, a nie wprost do formularza. Treść opisuje
  * wyłącznie to, co produkt realnie robi (konto + nazwa firmy, weryfikacja przez administratora,
- * kreator z szkicem, zgłoszenia/wiadomości/propozycje, e-maile w języku odbiorcy, bezpłatny etap
- * z docs/PRODUCT_DECISIONS.md). Bez cen, liczb i treści prawnych. CTA → rejestracja pracodawcy.
+ * kreator z szkicem, kanał aplikowania ogłoszeniodawcy, statystyki ogłoszenia, zespół firmy,
+ * e-maile w języku odbiorcy, bezpłatny etap z docs/PRODUCT_DECISIONS.md). Portal ogłoszeń
+ * (decyzja produktowa #1128/#1151): bez zgłoszeń w panelu, wiadomości, propozycji, dopasowania
+ * i profili kandydatów. Bez cen, liczb i treści prawnych. CTA → rejestracja pracodawcy.
  */
 
 const EMPLOYERS_PATH = '/dla-pracodawcow';
@@ -68,16 +70,16 @@ const STEPS = [
   { key: 'step4', icon: Inbox },
 ] as const;
 
-const CANDIDATES = [
-  { key: 'candidatesProfile', icon: ListChecks },
-  { key: 'candidatesLanguages', icon: Languages },
-  { key: 'candidatesMatch', icon: Target },
+const AD = [
+  { key: 'adPassport', icon: ListChecks },
+  { key: 'adLanguages', icon: Languages },
+  { key: 'adVerified', icon: BadgeCheck },
 ] as const;
 
 const CONTACT = [
-  { key: 'contactApplications', icon: Inbox },
-  { key: 'contactMessages', icon: MessageSquare },
-  { key: 'contactProposals', icon: Handshake },
+  { key: 'contactChannel', icon: ExternalLink },
+  { key: 'contactStats', icon: BarChart3 },
+  { key: 'contactTeam', icon: UsersRound },
 ] as const;
 
 const PRIMARY_CTA =
@@ -185,11 +187,11 @@ export default async function EmployersPage({ params }: PageProps) {
         </div>
       </section>
 
-      {/* Kandydaci + kontakt */}
+      {/* Ogłoszenie + kontakt z kandydatami */}
       <section className="border-t border-border bg-soft">
         <div className="container grid gap-10 py-12 md:py-16 lg:grid-cols-2 lg:gap-12">
           {[
-            { id: 'employers-candidates', title: t('candidatesTitle'), items: CANDIDATES },
+            { id: 'employers-ad', title: t('adTitle'), items: AD },
             { id: 'employers-contact', title: t('contactTitle'), items: CONTACT },
           ].map((group) => (
             <div key={group.id} className="min-w-0">

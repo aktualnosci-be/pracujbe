@@ -46,9 +46,12 @@ const PROBLEM_KEY: Record<ImportImageProblem, string> = {
 export function JobImportPanel({
   result,
   onImported,
+  companyId,
 }: {
   result: JobImportSuccess | null;
   onImported: (result: JobImportSuccess) => void;
+  /** Firma, dla której wyrenderowano kreator — serwer odrzuca import dla innej aktywnej (EMP-02). */
+  companyId?: string | null;
 }): React.JSX.Element {
   const t = useTranslations('jobImport');
   const tRoot = useTranslations();
@@ -82,6 +85,7 @@ export function JobImportPanel({
     setError(null);
     const formData = new FormData();
     formData.set('mode', source);
+    if (companyId) formData.set('companyId', companyId);
     if (source === 'image') {
       const file = fileRef.current?.files?.[0];
       if (!file) {
