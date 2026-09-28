@@ -308,7 +308,7 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
   });
 
   it('#1145 tryb ogłoszeniowy: szablon rekrutacyjny wygaszony tuż przed wysyłką, alert jobMatch wychodzi', async () => {
-    // Baza (0970) zwraca `suppressed_feature_disabled` dla szablonów z listy — worker nic nie wysyła.
+    // Baza (0175) zwraca `suppressed_feature_disabled` dla szablonów z listy — worker nic nie wysyła.
     mockQueue(
       [row('d1', 'jobOffer'), row('d2', 'jobMatch', { entity_type: 'saved_search', entity_id: SEARCH })],
       (id) => (id === 'd1' ? 'suppressed_feature_disabled' : null),

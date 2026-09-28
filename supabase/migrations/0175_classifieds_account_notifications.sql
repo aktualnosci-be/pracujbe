@@ -1,6 +1,6 @@
 -- =============================================================================
--- 0970 — konto bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych
--- (#1142, #1145; epik #1128). NUMER TYMCZASOWY — ostateczny nada integrator.
+-- 0175 — konto bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych
+-- (#1142, #1145; epik #1128).
 --
 -- Decyzja produktowa: portal ogłoszeniowy. W trybie `CLASSIFIEDS_ONLY` (0171,
 -- `recruitment_enabled()` = false) konto kandydata służy do zapisanych ofert, zapisanych
@@ -33,7 +33,7 @@
 --    `suppressed_feature_disabled`; korzystają z niej `claim_email_batch` (0124) i
 --    `email_delivery_send_check` (0131), więc wygaszane są także wiersze już w kolejce.
 --
--- Rollback: supabase/rollback/0970_classifieds_account_notifications.down.sql.
+-- Rollback: supabase/rollback/0175_classifieds_account_notifications.down.sql.
 -- =============================================================================
 
 -- --- 1. Profil zawodowy ----------------------------------------------------------------------

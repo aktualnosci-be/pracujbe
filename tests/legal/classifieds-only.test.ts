@@ -324,7 +324,7 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
 });
 
 /**
- * Konto kandydata nie tworzy profilu zawodowego (#1142, migracja 0970). Zachowanie (akcja bez
+ * Konto kandydata nie tworzy profilu zawodowego (#1142, migracja 0175). Zachowanie (akcja bez
  * zapytań, render pulpitu, nawigacja) sprawdza `tests/unit/classifieds-candidate-account.test.tsx`,
  * baza — `supabase/tests/rls.sql` sekcja CA1142 (kontrola ujemna: bez strażnika krok 3 zapisuje).
  */

@@ -1,6 +1,6 @@
 -- =============================================================================
--- Rollback 0970 (#1142, #1145) — przywraca definicje sprzed trybu ogłoszeniowego konta
--- i komunikacji. Numer tymczasowy (jak migracja). Dane bez zmian (migracja ich nie dotyka).
+-- Rollback 0175 (#1142, #1145) — przywraca definicje sprzed trybu ogłoszeniowego konta
+-- i komunikacji. Dane bez zmian (migracja ich nie dotyka).
 -- Kolejność: przed rollbackiem 0171 (triggery korzystają z `enforce_recruitment_insert`).
 -- =============================================================================
 

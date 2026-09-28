@@ -18394,12 +18394,12 @@ select pg_temp.assert(public.recruitment_enabled(), 'AC172-7d po cofnięciu tryb
 
 -- ============================================================================
 -- CA1142 / NT1145 — konto bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych
--- (#1142, #1145; migracja 0970 — numer tymczasowy). Tryb ogłoszeniowy: każde RPC profilu
+-- (#1142, #1145; migracja 0175). Tryb ogłoszeniowy: każde RPC profilu
 -- zawodowego i bezpośredni zapis pól zawodowych odrzucone; powiadomienia o aplikacjach,
 -- propozycjach, wiadomościach i zmianie warunków pomijane; e-maile procesu wygaszane
 -- w kolejce. Kontrole ujemne: bez strażnika krok 3 zapisuje umiejętności; tryb RECRUITMENT.
 -- ============================================================================
-\echo '--- CA1142 konto kandydata bez profilu zawodowego (0970) ---'
+\echo '--- CA1142 konto kandydata bez profilu zawodowego (0175) ---'
 \set CAC  'e9700000-0000-0000-0000-0000000000c1'
 \set CAC2 'e9700000-0000-0000-0000-0000000000c2'
 reset role; reset app.current_uid;
@@ -18487,7 +18487,7 @@ select pg_temp.assert(exists (select 1 from public.candidate_skills where candid
 rollback;
 reset role; reset app.current_uid;
 
-\echo '--- NT1145 powiadomienia i kolejka e-mail bez zdarzeń rekrutacyjnych (0970) ---'
+\echo '--- NT1145 powiadomienia i kolejka e-mail bez zdarzeń rekrutacyjnych (0175) ---'
 reset role;
 select pg_temp.assert(not public.recruitment_enabled(), 'NT1145-0 tryb ogłoszeniowy');
 insert into public.notifications(profile_id, type, entity_type, entity_id, data) values

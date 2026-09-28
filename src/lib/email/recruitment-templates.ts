@@ -1,6 +1,6 @@
 /**
  * Szablony e-mail procesu rekrutacyjnego (#1145) — lustro `email_recruitment_template()`
- * z migracji 0970. Decyzja produktowa: portal ogłoszeniowy — w trybie `CLASSIFIEDS_ONLY`
+ * z migracji 0175. Decyzja produktowa: portal ogłoszeniowy — w trybie `CLASSIFIEDS_ONLY`
  * kolejka wygasza te wiersze (`suppressed_feature_disabled`) przy claimie i tuż przed wysyłką,
  * także gdy trafiły do kolejki wcześniej. Zgodność listy z SQL pilnuje test
  * `tests/unit/classifieds-notifications.test.ts` (z kontrolą ujemną).

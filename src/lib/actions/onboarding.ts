@@ -96,7 +96,7 @@ export async function saveOnboardingStep(
   options: { finish?: boolean } = {},
 ): Promise<SaveOnboardingResult> {
   // 0) #1142 — decyzja produktowa: portal ogłoszeniowy. Konto nie buduje profilu zawodowego:
-  // każdy krok kreatora odrzucony przed walidacją i bazą (baza ma własny strażnik, migracja 0970).
+  // każdy krok kreatora odrzucony przed walidacją i bazą (baza ma własny strażnik, migracja 0175).
   if (!isRecruitmentEnabled()) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const finish = step === 6 && options.finish === true;
   // 1) Walidacja odpowiednim schematem kroku (identyczna jak na kliencie).

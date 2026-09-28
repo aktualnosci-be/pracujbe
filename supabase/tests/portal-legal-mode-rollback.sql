@@ -13,8 +13,8 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- 0970 (#1142/#1145) korzysta z helperów 0171 — rollback w odwrotnej kolejności migracji.
-\ir ../rollback/0970_classifieds_account_notifications.down.sql
+-- 0175 (#1142/#1145) korzysta z helperów 0171 — rollback w odwrotnej kolejności migracji.
+\ir ../rollback/0175_classifieds_account_notifications.down.sql
 \ir ../rollback/0171_portal_legal_mode.down.sql
 select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is null
   and to_regprocedure('public.admin_set_portal_legal_mode(text, text, text)') is null
