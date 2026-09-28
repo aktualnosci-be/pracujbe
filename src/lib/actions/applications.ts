@@ -4,7 +4,17 @@ import { randomUUID } from 'node:crypto';
 
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { jsonArg, rpc } from '@/lib/db/sql';
+import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
+import { z } from 'zod';
+
+import { MENU_TARGET_STATUSES } from '@/lib/applications/transitions';
+import {
+  BULK_TRANSITION_MAX,
+  BULK_TRANSITION_OUTCOMES,
+  TRANSITION_RATE_LIMITS,
+  type BulkTransitionOutcome,
+} from '@/lib/applications/bulk';
+import { getExpectedActiveCompany } from '@/lib/company-context';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
@@ -151,6 +161,20 @@ export async function transitionApplication(
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (
+      !(await checkRateLimit('application-status', {
+        ...TRANSITION_RATE_LIMITS.perUser,
+        identifier: me.id,
+        perIp: false,
+      })) ||
+      !(await checkRateLimit('application-status-item', {
+        ...TRANSITION_RATE_LIMITS.perApplication,
+        identifier: `${me.id}:${applicationId}`,
+        perIp: false,
+      }))
+    ) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
     await withPortalTransaction(me, (tx) => rpc(tx, 'transition_application', {
       p_application_id: applicationId,
       p_target: target,
@@ -159,6 +183,76 @@ export async function transitionApplication(
   } catch (error) {
     if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'applications.transitionApplication' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+const BULK_OUTCOMES: ReadonlySet<string> = new Set<string>(BULK_TRANSITION_OUTCOMES);
+
+export type BulkTransitionResult =
+  | { ok: true; results: { applicationId: string; outcome: BulkTransitionOutcome }[] }
+  | { ok: false; error: ErrorCode };
+
+const bulkTransitionSchema = z.object({
+  applicationIds: z.array(z.string().uuid()).min(1).max(BULK_TRANSITION_MAX)
+    .refine((ids) => new Set(ids).size === ids.length),
+  target: z.enum(MENU_TARGET_STATUSES),
+  expectedCompanyId: z.string().uuid(),
+});
+
+/**
+ * Akcja zbiorcza: zmiana statusu wielu zgłoszeń AKTYWNEJ firmy jednym działaniem. Firma
+ * przychodzi z widoku (`expectedCompanyId`) i musi być bieżącą aktywną firmą (inaczej
+ * `ACTIVE_COMPANY_CHANGED`, nic nie zapisujemy — jak formularze po przełączeniu firmy).
+ * Każde zgłoszenie przechodzi przez `transition_application` (ta sama macierz przejść) w
+ * osobnym podbloku `bulk_transition_applications`; wynik per wiersz trafia do raportu.
+ */
+export async function bulkTransitionApplications(
+  applicationIds: string[],
+  target: string,
+  expectedCompanyId: string,
+): Promise<BulkTransitionResult> {
+  const parsed = bulkTransitionSchema.safeParse({ applicationIds, target, expectedCompanyId });
+  if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (
+      !(await checkRateLimit('application-status-bulk', {
+        ...TRANSITION_RATE_LIMITS.bulkPerUser,
+        identifier: me.id,
+        perIp: false,
+      }))
+    ) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
+    const outcome = await withPortalTransaction(
+      me,
+      async (tx): Promise<{ ok: false; error: ErrorCode } | { ok: true; rows: unknown[] }> => {
+        const expected = await getExpectedActiveCompany(tx, me.id, parsed.data.expectedCompanyId);
+        if (!expected.ok) return { ok: false, error: expected.error };
+        const rows = await rpcRows(tx, 'bulk_transition_applications', {
+          p_company_id: expected.context.activeId,
+          p_application_ids: parsed.data.applicationIds,
+          p_target: parsed.data.target,
+        });
+        return { ok: true, rows };
+      },
+    );
+    if (!outcome.ok) return { ok: false, error: outcome.error };
+    const results = outcome.rows.map((row) => {
+      const record = row as Record<string, unknown>;
+      const raw = typeof record['outcome'] === 'string' ? record['outcome'] : 'error';
+      return {
+        applicationId: String(record['application_id'] ?? ''),
+        outcome: (BULK_OUTCOMES.has(raw) ? raw : 'error') as BulkTransitionOutcome,
+      };
+    });
+    return { ok: true, results };
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    captureError(error, { area: 'applications.bulkTransitionApplications' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

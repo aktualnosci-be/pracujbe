@@ -38,6 +38,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'jobWizard',
   'jobs',
   'match',
+  'messageTemplates',
   'messages',
   'nav',
   'notifications',

@@ -622,6 +622,24 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     },
     note: 'Język zaproszenia wybiera zapraszający (adres bez konta, 0121); w bazie tylko hash tokenu linku rejestracji, usuwany po rozstrzygnięciu zaproszenia.',
   },
+  'public.company_message_templates': {
+    activities: ['employer-contact'],
+    subjects: ['employer'],
+    columns: { created_by: 'reference' },
+    notPersonal: {
+      name: 'Nazwa szablonu odpowiedzi nadana przez firmę.',
+    },
+    note: 'Szablony odpowiedzi firmy (0940): odczyt recruiter+ firmy, zapis RPC; usuwane kaskadą z firmą.',
+  },
+  'public.company_message_template_variants': {
+    activities: ['employer-contact'],
+    subjects: ['employer'],
+    columns: { body: 'correspondence' },
+    notPersonal: {
+      locale: 'Język wariantu szablonu (pl/nl/fr/en).',
+    },
+    note: 'Treść szablonu pisze rekruter (tekst wolny); numer rejestru/dokumentu odrzucany w akcji (#495). Kasowane z szablonem.',
+  },
   'public.company_vies_checks': {
     activities: ['companies'],
     subjects: ['employer'],

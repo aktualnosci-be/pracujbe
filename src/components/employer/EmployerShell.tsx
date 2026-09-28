@@ -3,6 +3,7 @@
 import * as React from 'react';
 import {
   Building2,
+  FileText,
   ClipboardList,
   Inbox,
   LayoutDashboard,
@@ -36,6 +37,7 @@ const HREF = {
   candidates: '/employer/kandydaci',
   applications: '/employer/aplikacje',
   messages: '/employer/wiadomosci',
+  templates: '/employer/szablony',
   company: '/employer/firma',
   team: '/employer/zespol',
   settings: '/employer/ustawienia',
@@ -120,6 +122,7 @@ export function EmployerShell({
     { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
     { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
+    { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
     { href: HREF.team, label: td('navTeam'), icon: <UserPlus /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },

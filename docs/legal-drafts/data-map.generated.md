@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 106; z danymi osobowymi: 70; bez danych osobowych: 36.
+Tabele w migracjach: 108; z danymi osobowymi: 72; bez danych osobowych: 36.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -18,7 +18,7 @@ Tabele w migracjach: 106; z danymi osobowymi: 70; bez danych osobowych: 36.
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): aplikacja w stanie końcowym (także hired) usuwana 180 dni od niezmiennego closed_at razem z rozmowami, powiadomieniami i e-mailami. |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. Wartości #574 (0127, za RETENTION_MODE): niepotwierdzone 7 dni od pierwszego wysłania, potwierdzone 30 dni od potwierdzenia, IP/UA zgody 7 dni. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.match_recompute_queue`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
-| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
+| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.company_message_template_variants`, `public.company_message_templates`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
 | Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.job_duplications`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach (acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia. |
@@ -539,6 +539,30 @@ Tabele w migracjach: 106; z danymi osobowymi: 70; bez danych osobowych: 36.
 | `is_active` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0002_core_tables.sql` |
 | `invited_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0002_core_tables.sql` |
 | `joined_at` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0002_core_tables.sql` |
+
+### `public.company_message_template_variants`
+
+- **Migracja:** `supabase/migrations/0940_recruiter_tools.sql`
+- **Czynności:** Kontakt pracodawca–kandydat
+- **Osoby:** Pracodawcy i członkowie firm
+- **Uwaga:** Treść szablonu pisze rekruter (tekst wolny); numer rejestru/dokumentu odrzucany w akcji (#495). Kasowane z szablonem.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `body` | Korespondencja i treści swobodne | `supabase/migrations/0940_recruiter_tools.sql` |
+| `locale` | nie dotyczy: Język wariantu szablonu (pl/nl/fr/en). | — |
+
+### `public.company_message_templates`
+
+- **Migracja:** `supabase/migrations/0940_recruiter_tools.sql`
+- **Czynności:** Kontakt pracodawca–kandydat
+- **Osoby:** Pracodawcy i członkowie firm
+- **Uwaga:** Szablony odpowiedzi firmy (0940): odczyt recruiter+ firmy, zapis RPC; usuwane kaskadą z firmą.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0940_recruiter_tools.sql` |
+| `name` | nie dotyczy: Nazwa szablonu odpowiedzi nadana przez firmę. | — |
 
 ### `public.company_vies_checks`
 
