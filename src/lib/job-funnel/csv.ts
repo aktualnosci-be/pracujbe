@@ -2,7 +2,8 @@
  * Eksport lejka ofert (#99) do CSV — formatowanie bez dostępu do bazy.
  *
  * Kolumny = to, co pokazuje `/employer/statystyki`: zakres dat (dni Europe/Brussels, włącznie),
- * tytuł oferty, status (etykieta w języku panelu) i cztery liczniki. Ostatni wiersz = suma
+ * tytuł oferty, status (etykieta w języku panelu) i cztery liczniki (tryb ogłoszeniowy #1147: trzy —
+ * bez wysłanych aplikacji; `applyStarted` = kliknięcia „Aplikuj u pracodawcy”). Ostatni wiersz = suma
  * zakresu. Liczby surowe (bez separatorów tysięcy), żeby arkusz liczył je jako liczby.
  * Komórki przez `csvCell` (RFC 4180 + neutralizacja formuł `= + - @` — tytuł oferty wpisuje
  * pracodawca). Separator `,`, koniec linii CRLF, BOM UTF-8 dla arkuszy.
@@ -16,7 +17,8 @@ export interface JobFunnelCsvMetrics {
   searchAppearances: number;
   detailViews: number;
   applyStarted: number;
-  applicationsSubmitted: number;
+  /** Brak pola = tryb ogłoszeniowy (#1147): CSV bez kolumny wysłanych aplikacji. */
+  applicationsSubmitted?: number;
 }
 
 export interface JobFunnelCsvJob extends JobFunnelCsvMetrics {
@@ -32,7 +34,8 @@ export interface JobFunnelCsvLabels {
   searchAppearances: string;
   detailViews: string;
   applyStarted: string;
-  applicationsSubmitted: string;
+  /** Wymagane tylko w trybie rekrutacyjnym (kolumna istnieje). */
+  applicationsSubmitted?: string;
   total: string;
   untitled: string;
   /** Etykieta statusu oferty w języku panelu; nieznany status → ''. */
@@ -40,9 +43,11 @@ export interface JobFunnelCsvLabels {
 }
 
 const METRIC_KEYS = ['searchAppearances', 'detailViews', 'applyStarted', 'applicationsSubmitted'] as const;
+/** Tryb ogłoszeniowy (#1147): bez kolumny wysłanych aplikacji. */
+const LISTING_METRIC_KEYS = ['searchAppearances', 'detailViews', 'applyStarted'] as const;
 
-function count(value: number): number {
-  return Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+function count(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
 }
 
 function row(cells: readonly unknown[]): string {
@@ -55,17 +60,18 @@ export function jobFunnelCsv(
   totals: JobFunnelCsvMetrics,
   labels: JobFunnelCsvLabels,
 ): string {
+  const keys = totals.applicationsSubmitted === undefined ? LISTING_METRIC_KEYS : METRIC_KEYS;
   const lines = [
-    row([labels.from, labels.to, labels.offer, labels.status, ...METRIC_KEYS.map((key) => labels[key])]),
+    row([labels.from, labels.to, labels.offer, labels.status, ...keys.map((key) => labels[key] ?? '')]),
     ...jobs.map((job) =>
       row([
         range.from,
         range.to,
         job.title.trim() || labels.untitled,
         labels.statusLabel(job.status),
-        ...METRIC_KEYS.map((key) => count(job[key])),
+        ...keys.map((key) => count(job[key])),
       ])),
-    row([range.from, range.to, labels.total, '', ...METRIC_KEYS.map((key) => count(totals[key]))]),
+    row([range.from, range.to, labels.total, '', ...keys.map((key) => count(totals[key]))]),
   ];
   return `﻿${lines.join('\r\n')}\r\n`;
 }

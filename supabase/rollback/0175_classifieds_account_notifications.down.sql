@@ -32,6 +32,42 @@ begin
 end $$;
 revoke all on function public.ensure_candidate_profile() from public;
 
+-- set_candidate_searchable z 0173.
+create or replace function public.set_candidate_searchable(p_searchable boolean)
+returns boolean language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_target boolean := coalesce(p_searchable, false);
+  v_completed boolean;
+  v_current boolean;
+begin
+  if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
+  -- 0173 (#1135): portal ogłoszeniowy — firmy nie przeglądają profili; wyłączenie działa zawsze.
+  if v_target and not public.recruitment_enabled() then
+    raise exception 'RECRUITMENT_DISABLED' using errcode = '42501';
+  end if;
+  perform public.ensure_candidate_profile();
+
+  select profile_completed, is_searchable into v_completed, v_current
+    from public.candidate_profiles where profile_id = auth.uid()
+    for update;
+
+  if v_target and not coalesce(v_completed, false) then
+    raise exception 'VALIDATION_FAILED: profil musi być kompletny, aby był wyszukiwalny'
+      using errcode = '42501';
+  end if;
+
+  if v_current is distinct from v_target then
+    update public.candidate_profiles
+      set is_searchable = v_target, searchable_changed_at = now()
+      where profile_id = auth.uid();
+    insert into public.candidate_visibility_events (candidate_id, searchable)
+      values (auth.uid(), v_target);
+  end if;
+  return v_target;
+end $$;
+revoke all on function public.set_candidate_searchable(boolean) from public, anon;
+grant execute on function public.set_candidate_searchable(boolean) to authenticated;
+
 -- 2. Powiadomienia in-app.
 drop trigger if exists trg_aa_recruitment_mode on public.notifications;
 drop function if exists public.skip_recruitment_notification();

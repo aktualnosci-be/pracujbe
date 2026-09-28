@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { isPortalDataConfigured } from '@/lib/db/portal';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { getEmployerOverview, getFunnelStats, getJobFunnel } from '@/lib/data/employer';
 import { parseFunnelRange } from '@/lib/job-funnel/range';
 import { EmployerFunnelSection } from '@/components/employer/EmployerFunnelSection';
@@ -26,6 +27,10 @@ import {
  * i lejek czyta tylko recruiter+ — zwykły `member` widzi „brak danych” z powodem, nie zera
  * (audyt P1-14). NOINDEX z layoutu panelu. Lejek ofert można pobrać jako CSV dla wybranego
  * zakresu (`/api/employer/job-funnel`); w trybie demo bez przycisku.
+ *
+ * Tryb ogłoszeniowy (#1147, decyzja produktowa: portal ogłoszeniowy): tylko statystyki ogłoszenia —
+ * kafelki aktywnych ofert, wyświetleń i kliknięć „Aplikuj u pracodawcy” oraz lejek ofert bez
+ * wysłanych aplikacji; bez lejka rekrutacyjnego (`getFunnelStats` niewywoływany).
  */
 
 export async function generateMetadata({
@@ -36,7 +41,8 @@ export async function generateMetadata({
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   return {
-    title: t('funnelTitle'),
+    // #1147: tryb ogłoszeniowy — „Statystyki ogłoszeń”, nie „Lejek rekrutacyjny”.
+    title: isRecruitmentEnabled('applications') ? t('funnelTitle') : t('listingStatsTitle'),
     robots: { index: false, follow: false },
   };
 }
@@ -59,9 +65,11 @@ export default async function EmployerStatsPage({
 
   const configured = isPortalDataConfigured();
   const tf = await getTranslations({ locale, namespace: 'jobFunnel' });
+  // #1147: tryb ogłoszeniowy — statystyki ogłoszenia; lejka rekrutacyjnego nie ma i nie jest czytany.
+  const recruitment = isRecruitmentEnabled('applications');
   const [overview, funnel, jobFunnel] = await Promise.all([
     getEmployerOverview(),
-    getFunnelStats(),
+    recruitment ? getFunnelStats() : null,
     getJobFunnel(rangeDays),
   ]);
 
@@ -69,14 +77,14 @@ export default async function EmployerStatsPage({
     <div className="min-w-0 space-y-[19px]">
       <div>
         <p className={EYEBROW}>{td('employerRole')}</p>
-        <h1 className={H1_EXTENDED}>{td('funnelTitle')}</h1>
+        <h1 className={H1_EXTENDED}>{recruitment ? td('funnelTitle') : td('listingStatsTitle')}</h1>
       </div>
 
       {/* Kafelki przeglądowe (liczniki rekrutacyjne tylko recruiter+, inaczej „brak danych”) */}
       <EmployerOverviewStats locale={locale} overview={overview} demo={!configured} />
 
-      {/* Lejek rekrutacyjny */}
-      <EmployerFunnelSection locale={locale} funnel={funnel} />
+      {/* Lejek rekrutacyjny (tylko tryb RECRUITMENT) */}
+      {funnel ? <EmployerFunnelSection locale={locale} funnel={funnel} /> : null}
 
       {/* Lejek ofert (#99): serwerowy agregat bez śledzenia, zakres dat i definicje metryk. */}
       <JobFunnelRangePicker range={jobFunnel.range} />

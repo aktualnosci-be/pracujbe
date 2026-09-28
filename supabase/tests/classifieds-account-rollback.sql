@@ -17,16 +17,20 @@ select pg_temp.assert(
   and to_regprocedure('public.notification_is_recruitment(text, text)') is null
   and to_regprocedure('public.enforce_candidate_profile_update()') is null
   and not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
-                   where t.tgname like 'trg_aa_recruitment_mode%'
+                   where t.tgname in ('trg_aa_recruitment_mode', 'trg_aa_recruitment_mode_update')
                      and c.relname in ('candidate_profiles', 'candidate_skills', 'candidate_languages',
                                        'candidate_certificates', 'notifications'))
-  -- triggery 0171 zostają
+  -- triggery 0171/0173 zostają
+  and exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
+               where t.tgname = 'trg_aa_recruitment_mode_searchable' and c.relname = 'candidate_profiles')
+  and position('recruitment_enabled' in pg_get_functiondef('public.set_candidate_searchable(boolean)'::regprocedure)) > 0
+  and position('0175' in pg_get_functiondef('public.set_candidate_searchable(boolean)'::regprocedure)) = 0
   and exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
                where t.tgname = 'trg_aa_recruitment_mode' and c.relname = 'applications')
   and position('recruitment' in pg_get_functiondef('public.ensure_candidate_profile()'::regprocedure)) = 0
   and position('suppressed_feature_disabled' in pg_get_functiondef(
         'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) = 0,
-  'CA1142-R rollback usuwa tylko obiekty 0175 i przywraca definicje z 0040/0124');
+  'CA1142-R rollback usuwa tylko obiekty 0175 i przywraca definicje z 0040/0124/0173');
 rollback;
 select pg_temp.assert(to_regprocedure('public.email_recruitment_template(text)') is not null,
   'CA1142-R po cofnięciu transakcji migracja 0175 zostaje');

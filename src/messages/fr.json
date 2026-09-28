@@ -1210,7 +1210,9 @@
     "accountNewJobsSub": "Offres actives sur le site",
     "accountSavedJobsSub": "Dans votre liste",
     "accountSearchesSub": "{count, plural, =0 {Sans alerte} one {# avec alerte} other {# avec alerte}}",
-    "accountAlertsOff": "Alertes désactivées"
+    "accountAlertsOff": "Alertes désactivées",
+    "listingStatsTitle": "Statistiques des annonces",
+    "listingStatsText": "Apparitions dans les résultats, vues et clics sur « Postuler auprès de l’employeur » pour chaque offre."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -3306,7 +3308,10 @@
     "csvStatus": "Statut",
     "csvTotal": "Total",
     "exportCsv": "Télécharger le CSV",
-    "exportCsvLabel": "Télécharger l’entonnoir des offres en fichier CSV (période du {from} au {to})"
+    "exportCsvLabel": "Télécharger l’entonnoir des offres en fichier CSV (période du {from} au {to})",
+    "applyClicks": "Clics sur « Postuler auprès de l’employeur »",
+    "applyClicksDefinition": "Nombre de clics sur « Postuler auprès de l’employeur » sur la page de l’offre (site, e-mail ou téléphone de l’annonceur). Nous ne savons pas si la personne a ensuite postulé.",
+    "consentNoteListing": "Les apparitions dans les résultats, les vues et les clics sur « Postuler auprès de l’employeur » ne sont comptés que pour les personnes qui ont accepté les cookies analytiques."
   },
   "savedSearches": {
     "hint": "Enregistrez ces filtres et nous vous préviendrons sur le site et par e-mail des nouvelles offres (au maximum une fois par jour).",

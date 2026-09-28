@@ -25,6 +25,7 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { execute, jsonArg, queryOne, queryRows, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { jobCostsPatch } from '@/lib/job-costs';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
@@ -147,6 +148,8 @@ function asString(value: unknown, fallback = ''): string {
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // 0171/0173 (#1137): baza odrzuca pytania screeningowe w trybie ogłoszeniowym.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
   if (m.includes('COMPANY_SUSPENDED')) return 'COMPANY_SUSPENDED';
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
@@ -365,6 +368,13 @@ export async function updateJobDraft(
   const parsed = validateJobStep(step, data);
   if (parsed === null) return { ok: false, error: 'VALIDATION_FAILED' };
 
+  // #1137 — decyzja produktowa: portal ogłoszeniowy. Bez pytań screeningowych: niepusta lista
+  // odrzucona przed bazą, pusta nie dotyka pytań w bazie (klucz poza treścią kroku).
+  const screeningOff = step === 7 && !isRecruitmentEnabled('screening');
+  if (screeningOff && (parsed as JobStep7).screeningQuestions.length > 0) {
+    return { ok: false, error: 'RECRUITMENT_DISABLED' };
+  }
+
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   try {
@@ -386,6 +396,7 @@ export async function updateJobDraft(
       // części cofa krok w całości, szkic nie zostaje w stanie mieszanym.
       const content = buildDraftStepContent(step, parsed);
       if (!content) return 'VALIDATION_FAILED';
+      if (screeningOff) delete content['screening_questions'];
       await rpc(tx, 'save_job_draft', { p_job_id: jobId, p_content: jsonArg(content) });
       return null;
     });

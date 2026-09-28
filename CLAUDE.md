@@ -163,6 +163,21 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
   (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
   segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
+- **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0173`, na 0171):** w trybie
+  ogłoszeniowym `set_candidate_searchable(true)` → `RECRUITMENT_DISABLED` (wyłączenie działa), strażnik
+  `trg_aa_recruitment_mode_searchable` odrzuca `is_searchable = true` każdą ścieżką (wyjątek seedu jak w 0171),
+  `company_can_see_match_candidate` = false; bez jednorazowego zerowania flag (odczyt firm zamyka 0171). Pytania:
+  `set_job_screening_questions` z niepustą listą → `RECRUITMENT_DISABLED`, wstawienie do `job_screening_questions`
+  pomijane (duplikat oferty powstaje bez pytań), `get_public_job_screening_questions` pusty, `enforce_screening_review`
+  nie blokuje publikacji ofert z pytaniami sprzed trybu, decyzja przeglądu (`screening_question_reviews`) odrzucona;
+  pytania i przeglądy sprzed trybu zostają. Aplikacja: `/candidate/ustawienia` bez sekcji widoczności (akcja
+  `setProfileVisibilityAction` → `RECRUITMENT_DISABLED` bez bazy), kreator (prop `screeningEnabled` z serwera, domyślnie
+  wyłączony) bez edytora pytań w kroku 7 i bez klucza `screening_questions` w zapisie (`updateJobDraft` odrzuca pytania
+  przed bazą), `/admin/pytania` = 404 i bez pozycji w nawigacji, `decideScreeningReview` → `RECRUITMENT_DISABLED`.
+  Dowód: `rls.sql` sekcje CLVIS/CLSCR (kontrole ujemne: zdjęty strażnik, polityka z 0078, tryb RECRUITMENT blokuje
+  publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
+  `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
+  `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -1212,6 +1227,15 @@ ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontro
 bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
 SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
 za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
+Tryb ogłoszeniowy (#1148, bez migracji): zapisane wyszukiwania i alerty działają bez zmian, bo
+wynikają wyłącznie z filtrów użytkownika. Strażnik `tests/legal/classifieds-saved-search.test.ts`:
+najnowsze definicje funkcji `*saved_search*` bez profilu kandydata i dopasowań (wyjątek: blokada
+firmy #97), klucze filtrów v1 = parametry `get_public_jobs` (SQL i lustro TS), kolejność = lista
+publiczna, akcje/strony/trasy bez bramki trybu, `/api/maintenance` woła worker alertów w trybie
+(kontrole ujemne). `rls.sql` sekcja SS1148 (konto bez `candidate_profiles` i z nieukończonym
+profilem: zapis, nazwa, alert, digest, wyłączenie z linku; kontrola ujemna: wymóg onboardingu).
+E2E `tests/e2e-real/saved-search-classifieds.spec.ts` (`E2E_PORTAL_LEGAL_MODE=`, mutacja
+`saved-search-requires-onboarding` = czerwony).
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
@@ -1364,6 +1388,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
   w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
   teraz zgody w teście.
+  Tryb ogłoszeniowy (#1147, decyzja produktowa: portal ogłoszeniowy, bez migracji): statystyki
+  pracodawcy = statystyki ogłoszenia. `getEmployerOverview` zwraca aktywne oferty +
+  `listingDetailViews`/`listingApplyClicks` (lejek ofert, 30 dni; member = „brak danych”) bez
+  zapytań o `applications`/`matches`/`conversations`/`messages`; `getFunnelStats` → `disabled`
+  bez zapytań (pulpit: w miejscu lejka rekrutacyjnego odnośnik „Statystyki ogłoszeń”, strona
+  `/employer/statystyki` go nie woła); `getJobFunnel` i CSV bez `applicationsSubmitted` (kolumnę
+  RPC 0089 loader pomija), `apply_started` = „Kliknięcia »Aplikuj u pracodawcy«” (nowe etykiety
+  `jobFunnel.applyClicks*`, `consentNoteListing`). Tryb `RECRUITMENT` bez zmian. Dowód: unit
+  `classifieds-employer-stats` (kontrole ujemne obu trybów), E2E `classifieds-employer-stats`
+  (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px). Karty ofert (`getCompanyJobsLoad`, pulpit
+  i `/employer/oferty`) w trybie bez licznika zgłoszeń i bez podzapytania do `applications`.
   Eksport CSV lejka (bez migracji): „Pobierz CSV” w sekcji lejka `/employer/statystyki` →
   `GET /api/employer/job-funnel?dni=7|30|90&locale=` — te same dane co strona (`getJobFunnel`
   pod sesją/RLS, recruiter+ aktywnej firmy wg `get_company_job_funnel`), kolumny od/do, oferta,

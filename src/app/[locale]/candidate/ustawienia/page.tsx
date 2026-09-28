@@ -5,6 +5,7 @@ import { loadNotificationPreferences } from '@/lib/data/notification-preferences
 import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
 import { AgeStatusProvider } from '@/components/settings/age-status-context';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
@@ -14,7 +15,6 @@ import { NotificationPreferencesLoadError } from '@/components/settings/Notifica
 import { ProfileVisibilitySettings } from '@/components/settings/ProfileVisibilitySettings';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
-import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; wiek, #492; widoczność
@@ -24,6 +24,9 @@ import { isRecruitmentEnabled } from '@/lib/portal-mode';
  * `@/lib/data/notification-preferences`; bez env — wartości domyślne. Błąd odczytu → stan
  * błędu z ponowieniem zamiast formularza (#309 — zapis nie może nadpisać opt-outów). NOINDEX (panel) +
  * `force-dynamic` (dane zależne od sesji). Guard zalogowania dziedziczony z `candidate/layout.tsx`.
+ *
+ * Decyzja produktowa: portal ogłoszeniowy (#1135) — w trybie ogłoszeniowym firmy nie przeglądają
+ * profili, więc sekcji widoczności profilu nie ma (bez odczytu z bazy).
  */
 
 export const dynamic = 'force-dynamic';
@@ -54,14 +57,14 @@ export default async function CandidateSettingsPage({
   const tDash = await getTranslations({ locale, namespace: 'dashboard' });
   const tVisibility = await getTranslations({ locale, namespace: 'profileVisibility' });
   const tAge = await getTranslations({ locale, namespace: 'ageAttestation' });
-  // #1142/#1145 — decyzja produktowa: portal ogłoszeniowy. Bez profilu zawodowego nie ma
-  // widoczności profilu dla firm (sekcja i jej odczyt pominięte), a preferencje e-mail bez
-  // kategorii rekrutacyjnych.
+  // #1142/#1145 — decyzja produktowa: portal ogłoszeniowy: preferencje e-mail bez kategorii
+  // rekrutacyjnych; widoczność profilu dla firm tylko w trybie RECRUITMENT (#1135).
   const recruitment = isRecruitmentEnabled();
+  const visibilityEnabled = isRecruitmentEnabled('candidateSearch');
   const [load, blocks, visibility, age] = await Promise.all([
     loadNotificationPreferences(),
     loadMyCompanyBlocks(),
-    recruitment ? loadProfileVisibility() : Promise.resolve(null),
+    visibilityEnabled ? loadProfileVisibility() : Promise.resolve(null),
     loadMyAgeAttestation(),
   ]);
   // Jeden stan wieku dla sekcji „Wiek” i widoczności (#828): nieznany = bez blokady w UI.

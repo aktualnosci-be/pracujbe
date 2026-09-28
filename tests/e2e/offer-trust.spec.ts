@@ -82,6 +82,9 @@ test('panel pracodawcy: deklaracja agencji wymaga numeru uznania (demo)', async 
   await number.fill('VG.1234/BU');
   await form.getByRole('button', { name: m.company.agencySubmit }).click();
   await expect(form.getByRole('status')).toContainText(m.company.agencyDemoNotice!);
+  // Po akcji serwera odświeżenie RSC chwilowo podmienia metadane — axe dopiero z tytułem strony
+  // (flaky „document-title” także na main, run 36438276512).
+  await expect(page).toHaveTitle(/\S/);
   expect(await blockingViolations(page)).toEqual([]);
 });
 

@@ -1210,7 +1210,9 @@
     "accountNewJobsSub": "Aktywne oferty w serwisie",
     "accountSavedJobsSub": "Na Twojej liście",
     "accountSearchesSub": "{count, plural, =0 {Bez alertów} one {# z alertem} few {# z alertem} many {# z alertem} other {# z alertem}}",
-    "accountAlertsOff": "Alerty wyłączone"
+    "accountAlertsOff": "Alerty wyłączone",
+    "listingStatsTitle": "Statystyki ogłoszeń",
+    "listingStatsText": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” dla każdej oferty."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -3306,7 +3308,10 @@
     "csvStatus": "Status",
     "csvTotal": "Razem",
     "exportCsv": "Pobierz CSV",
-    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})"
+    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})",
+    "applyClicks": "Kliknięcia „Aplikuj u pracodawcy”",
+    "applyClicksDefinition": "Ile razy na stronie oferty kliknięto „Aplikuj u pracodawcy” (strona, e-mail albo telefon ogłoszeniodawcy). Nie wiemy, czy ktoś potem się zgłosił.",
+    "consentNoteListing": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” liczymy tylko u osób, które zgodziły się na cookies analityczne."
   },
   "savedSearches": {
     "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",

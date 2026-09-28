@@ -54,12 +54,18 @@ export interface AdminShellProps {
   userName?: string;
   /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
   keepSessionAlive?: boolean;
+  /**
+   * #1137: pozycja „Pytania screeningowe” tylko w trybie rekrutacyjnym (tryb liczy serwer,
+   * `isRecruitmentEnabled('screening')`). Domyślnie ukryta (fail-closed).
+   */
+  screeningEnabled?: boolean;
 }
 
 export function AdminShell({
   children,
   userName,
   keepSessionAlive,
+  screeningEnabled = false,
 }: AdminShellProps): React.JSX.Element {
   const t = useTranslations('admin');
   const pathname = usePathname();
@@ -71,7 +77,7 @@ export function AdminShell({
     { href: HREF.reports, label: t('navReports'), icon: <Flag /> },
     { href: HREF.appeals, label: t('navAppeals'), icon: <Scale /> },
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },
-    { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
+    ...(screeningEnabled ? [{ href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> }] : []),
     { href: HREF.jobContent, label: t('navJobContent'), icon: <FileWarning /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
     { href: HREF.contact, label: t('navContact'), icon: <Inbox /> },

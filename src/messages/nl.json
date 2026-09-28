@@ -1210,7 +1210,9 @@
     "accountNewJobsSub": "Actieve vacatures op de site",
     "accountSavedJobsSub": "Op je lijst",
     "accountSearchesSub": "{count, plural, =0 {Geen meldingen} other {# met melding}}",
-    "accountAlertsOff": "Meldingen uit"
+    "accountAlertsOff": "Meldingen uit",
+    "listingStatsTitle": "Statistieken van je vacatures",
+    "listingStatsText": "Verschijningen in zoekresultaten, weergaven en klikken op ‘Solliciteer bij de werkgever’ per vacature."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -3306,7 +3308,10 @@
     "csvStatus": "Status",
     "csvTotal": "Totaal",
     "exportCsv": "CSV downloaden",
-    "exportCsvLabel": "Vacaturetrechter downloaden als CSV-bestand (periode {from} – {to})"
+    "exportCsvLabel": "Vacaturetrechter downloaden als CSV-bestand (periode {from} – {to})",
+    "applyClicks": "Klikken op ‘Solliciteer bij de werkgever’",
+    "applyClicksDefinition": "Hoe vaak er op de vacaturepagina op ‘Solliciteer bij de werkgever’ is geklikt (website, e-mail of telefoon van de adverteerder). We weten niet of iemand daarna echt solliciteert.",
+    "consentNoteListing": "Verschijningen in zoekresultaten, weergaven en klikken op ‘Solliciteer bij de werkgever’ tellen we alleen bij mensen die analytische cookies hebben geaccepteerd."
   },
   "savedSearches": {
     "hint": "Sla deze filters op en we laten je op de site en per e-mail weten wanneer er nieuwe vacatures zijn (hoogstens één keer per dag).",

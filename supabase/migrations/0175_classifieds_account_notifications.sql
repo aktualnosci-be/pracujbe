@@ -11,7 +11,8 @@
 --    * `ensure_candidate_profile()` (0040) + strażnik trybu. Każde RPC profilu zawodowego
 --      woła go na początku — `save_candidate_onboarding_step3/5` (0082),
 --      `set_candidate_skills/languages/certificates` (0028/0079/0168), `finish_onboarding`
---      (0029), `set_candidate_searchable` (0100), `apply_candidate_cv_proposals` (0115) —
+--      (0029), `set_candidate_searchable` (0100/0173 — tylko włączenie; wyłączenie działa zawsze,
+--      bez tworzenia profilu), `apply_candidate_cv_proposals` (0115) —
 --      więc wszystkie dostają `RECRUITMENT_DISABLED` bez przepisywania ich treści
 --      (strażnik nie znika, gdy późniejsza migracja podmieni treść RPC).
 --    * BEFORE INSERT na `candidate_profiles`, `candidate_skills`, `candidate_languages`,
@@ -90,6 +91,47 @@ revoke all on function public.enforce_candidate_profile_update() from public;
 drop trigger if exists trg_aa_recruitment_mode_update on public.candidate_profiles;
 create trigger trg_aa_recruitment_mode_update before update on public.candidate_profiles
   for each row execute function public.enforce_candidate_profile_update();
+
+-- 0173 + wyłączenie widoczności bez tworzenia profilu (decyzja #1135: wyłączenie działa zawsze).
+create or replace function public.set_candidate_searchable(p_searchable boolean)
+returns boolean language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_target boolean := coalesce(p_searchable, false);
+  v_completed boolean;
+  v_current boolean;
+begin
+  if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
+  -- 0173 (#1135): portal ogłoszeniowy — firmy nie przeglądają profili; wyłączenie działa zawsze.
+  if v_target and not public.recruitment_enabled() then
+    raise exception 'RECRUITMENT_DISABLED' using errcode = '42501';
+  end if;
+  -- 0175 (#1142): `ensure_candidate_profile` odrzuca tworzenie profilu w trybie ogłoszeniowym —
+  -- wyłączenie (jedyna dozwolona zmiana w tym trybie) nie tworzy profilu; bez profilu nie ma
+  -- czego ukrywać.
+  if v_target or public.recruitment_enabled() then
+    perform public.ensure_candidate_profile();
+  end if;
+
+  select profile_completed, is_searchable into v_completed, v_current
+    from public.candidate_profiles where profile_id = auth.uid()
+    for update;
+
+  if v_target and not coalesce(v_completed, false) then
+    raise exception 'VALIDATION_FAILED: profil musi być kompletny, aby był wyszukiwalny'
+      using errcode = '42501';
+  end if;
+
+  if v_current is distinct from v_target and (v_current is not null or public.recruitment_enabled()) then
+    update public.candidate_profiles
+      set is_searchable = v_target, searchable_changed_at = now()
+      where profile_id = auth.uid();
+    insert into public.candidate_visibility_events (candidate_id, searchable)
+      values (auth.uid(), v_target);
+  end if;
+  return v_target;
+end $$;
+revoke all on function public.set_candidate_searchable(boolean) from public, anon;
+grant execute on function public.set_candidate_searchable(boolean) to authenticated;
 
 -- --- 2. Powiadomienia in-app -----------------------------------------------------------------
 create or replace function public.notification_is_recruitment(

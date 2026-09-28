@@ -10,6 +10,7 @@ import { createAppDateFormatter } from '@/lib/datetime';
 import { localizedText, type LocalizedText } from '@/lib/screening/questions';
 import { SCREENING_RISK_CATEGORY_KEY } from '@/lib/screening/review';
 import { cn } from '@/lib/utils';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { filterTabClass } from '@/components/admin/admin-styles';
 import { AdminPageHeader, AdminPager } from '@/components/admin/AdminListControls';
@@ -91,6 +92,8 @@ export default async function AdminScreeningReviewsPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // #1137 — decyzja produktowa: portal ogłoszeniowy (bez pytań screeningowych) → 404.
+  notFoundUnlessRecruitment('screening');
 
   const t = await getTranslations({ locale, namespace: 'admin' });
   const tReview = await getTranslations({ locale, namespace: 'screeningReview' });

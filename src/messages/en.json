@@ -1210,7 +1210,9 @@
     "accountNewJobsSub": "Active jobs on the site",
     "accountSavedJobsSub": "On your list",
     "accountSearchesSub": "{count, plural, =0 {No alerts} one {# with alerts} other {# with alerts}}",
-    "accountAlertsOff": "Alerts off"
+    "accountAlertsOff": "Alerts off",
+    "listingStatsTitle": "Listing statistics",
+    "listingStatsText": "Search appearances, views and clicks on “Apply with the employer” for each job."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -3306,7 +3308,10 @@
     "csvStatus": "Status",
     "csvTotal": "Total",
     "exportCsv": "Download CSV",
-    "exportCsvLabel": "Download the job funnel as a CSV file ({from} – {to})"
+    "exportCsvLabel": "Download the job funnel as a CSV file ({from} – {to})",
+    "applyClicks": "Clicks on “Apply with the employer”",
+    "applyClicksDefinition": "How many times “Apply with the employer” was clicked on the job page (the advertiser’s website, email or phone). We do not know whether the person applied afterwards.",
+    "consentNoteListing": "Search appearances, views and clicks on “Apply with the employer” are counted only for people who accepted analytics cookies."
   },
   "savedSearches": {
     "hint": "Save these filters and we will let you know on the site and by email about new jobs (at most once a day).",
