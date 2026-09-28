@@ -256,14 +256,18 @@ export function createRailwayBucket(options: RailwayBucketOptions) {
     },
     /**
      * Jedna strona listy obiektów (#17, GC sierot) w kolejności kluczy, po `startAfter`.
-     * Zwraca tylko klucze w formacie CV (`objects`); inne klucze bucketu (także załączniki
-     * rozmów `att-*`, 0119) liczy (`foreign`) i
-     * pomija — GC nigdy ich nie dotyka. `nextStartAfter` = ostatni klucz strony (także obcy),
-     * `null` = koniec listy.
+     * `pattern` wybiera rozpoznawany format klucza tego przebiegu GC: `'cv'` (domyślnie,
+     * `files.bucket = 'candidate-files'`) albo `'attachment'` (załączniki rozmów `att-*`,
+     * 0119/#833, `files.bucket = 'message-files'`). Tylko klucze zgodne z wybranym wzorcem
+     * trafiają do `objects` — wszystko inne (w tym klucze drugiego wzorca) liczy się jako
+     * `foreign` i jest pomijane przez ten przebieg, żeby nie trafiło do kolejki usuwania jako
+     * „sierota” niewłaściwego bucketu logicznego. `nextStartAfter` = ostatni klucz strony
+     * (także obcy), `null` = koniec listy.
      */
     async list(input: {
       startAfter?: string | null;
       maxKeys?: number;
+      pattern?: "cv" | "attachment";
       signal?: AbortSignal;
     }): Promise<
       StorageResult<{
@@ -299,13 +303,15 @@ export function createRailwayBucket(options: RailwayBucketOptions) {
         const objects: Array<{ key: string; lastModified: Date | null }> = [];
         let foreign = 0;
         let last: string | null = null;
+        const recognized = input.pattern === "attachment" ? ATTACHMENT_KEY : KEY;
         for (const item of result.Contents ?? []) {
           if (typeof item.Key !== "string") continue;
           last = item.Key;
-          // Tylko klucze CV: GC (#17) porównuje je z `files.bucket = 'candidate-files'`.
-          // Załączniki rozmów (0119, `att-*`) mają inny bucket logiczny — dla GC są obce,
-          // inaczej trafiłyby do kolejki usuwania jako „sieroty”.
-          if (!KEY.test(item.Key)) {
+          // Tylko klucze wybranego wzorca: ten przebieg GC (#17/#833) porównuje je z
+          // `files.bucket` odpowiadającym temu wzorcowi. Klucze drugiego wzorca (i wszystko
+          // inne) są dla tego przebiegu obce, inaczej trafiłyby do kolejki usuwania jako
+          // „sieroty” niewłaściwego bucketu logicznego.
+          if (!recognized.test(item.Key)) {
             foreign += 1;
             continue;
           }
