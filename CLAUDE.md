@@ -1624,16 +1624,29 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Odczyt na stronie oferty (migracja `0159`): RPC
   `get_public_job_machine_translation` (anon; tylko oferta publiczna, bieżąca rewizja bez
   `is_stale`, język bez własnego tłumaczenia/wymagań, strona pokazuje treść `default_locale`
-  albo `jobs.title` — ten sam warunek co karty 0226, tylko pola wyświetlane) →
+  albo `jobs.title` — ten sam warunek co karty 0160, tylko pola wyświetlane) →
   `readMachineTranslation` w `getJobBySlug` (za flagą `AI_TRANSLATION_ENABLED`, awaria =
   oryginał + kod obszaru w logu) → `applyJobMachineTranslation`
   (`src/lib/job-machine-translation.ts`: nakładka tylko przy pełnej zgodności list, inaczej
   oryginał — nigdy mieszanka języków) → oznaczenie `job.machineTranslationNotice`/
   `manualTranslationNotice` z linkiem `job.translationOriginalLink` do oryginału. SEO bez zmian
   (canonical do oryginału, bez hreflang i JobPosting). Dowód: `rls.sql` sekcja TM159 (kontrole
-  ujemne TM159-N, TM159-7N), unit `job-machine-translation`. **Otwarte:** przekład w liście ofert,
-  JobPosting/hreflang wersji przetłumaczonych (decyzja SEO), UI korekty ręcznej,
-  `protectedTerms` (nazwa firmy).
+  ujemne TM159-N, TM159-7N), unit `job-machine-translation`.
+  Karty listy (migracja `0160`, zależy od 0159): `get_public_jobs_machine_titles(ids[],
+  locale)` (anon, SECURITY DEFINER; ≤ 100 id, warunki jak 0159 + karta pokazuje treść
+  `default_locale`, z której powstała rewizja; tylko `title` i `highlights.N`) → JEDNO zapytanie
+  na stronę w `withListMachineTranslations` (`src/lib/jobs.ts`, za flagą, w tym samym renderze
+  serwera — ISR bez zmian; awaria = oryginał + `jobs.readListMachineTranslations`) →
+  `applyJobListMachineTranslation` (niepusty tytuł i ta sama liczba wyróżników, inaczej oryginał).
+  Włączane jawnie `getJobs(…, …, { translateCards: true })`: strona główna (`getLatestJobs`),
+  `/oferty-pracy`, landingi kategorii/miasta, profil firmy; sitemap, liczniki, facety i „Podobne
+  oferty” bez przekładu. Znacznik w wierszu firmy `JobCard`: `jobs.machineTranslatedBadge`/
+  `jobs.translatedBadge`. SEO bez zmian (JSON-LD i adresy kart nie zależą od przekładu). Dowód:
+  `rls.sql` sekcja TM160 (kontrola ujemna TM160-N, limit 100 id, oferta wstrzymana/wygasła/firma
+  zawieszona, tekst człowieka), unit `job-list-machine-translation` (flaga wyłączona = brak
+  odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
+  przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
+  ręcznej, `protectedTerms` (nazwa firmy).
 - [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.

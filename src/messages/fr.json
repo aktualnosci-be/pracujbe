@@ -389,7 +389,9 @@
     "saveFailed": "Modification non enregistrée. Réessayez.",
     "demoNoticeTitle": "Données d'exemple — ces offres ne sont pas réelles",
     "demoNoticeBody": "Le site fonctionne en version de démonstration. Les offres et les entreprises de cette page sont fictives, ne sont pas vérifiées et il n'est pas possible d'y postuler.",
-    "demoBadge": "Offre d'exemple"
+    "demoBadge": "Offre d'exemple",
+    "machineTranslatedBadge": "Traduction automatique",
+    "translatedBadge": "Traduit"
   },
   "job": {
     "apply": "Postuler à ce poste",

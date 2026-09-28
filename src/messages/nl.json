@@ -389,7 +389,9 @@
     "saveFailed": "Wijziging opslaan mislukt. Probeer opnieuw.",
     "demoNoticeTitle": "Voorbeeldgegevens — deze vacatures zijn niet echt",
     "demoNoticeBody": "De site draait als demoversie. De vacatures en bedrijven op deze pagina zijn fictief, worden niet geverifieerd en je kunt er niet op solliciteren.",
-    "demoBadge": "Voorbeeldvacature"
+    "demoBadge": "Voorbeeldvacature",
+    "machineTranslatedBadge": "Automatische vertaling",
+    "translatedBadge": "Vertaald"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
