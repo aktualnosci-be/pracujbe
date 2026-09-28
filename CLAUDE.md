@@ -121,6 +121,15 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0171_…down.sql`, unit
   `portal-mode-dual-key`, `maintenance-portal-mode`, `ops-health-route`, `test:backup`. Dane istniejące (#1150): tylko
   blokada nowych danych, bez zamrażania (brak danych produkcyjnych).
+  Matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139, bez migracji): `/api/maintenance` nie woła
+  `runMatchRecompute` (`matches: "disabled"`, sam `runMatchRecompute` też sprawdza tryb), `getMyJobMatch(Action)` →
+  `disabled` bez transakcji, brak `job-match-slot` i `MatchBar` na `JobCard`; `/employer/kandydaci[/id]` i
+  `/candidate/oferty-polecane` → 404 (`notFoundUnlessRecruitment`), loadery rankingu/szczegółu kandydata → `disabled`,
+  przegląd/lista ofert bez pól `matchedCandidatesCount`/`matched` (kafelek i kolumna znikają), pulpit pracodawcy bez
+  „Top dopasowani” (`EmployerTopMatched`), pulpit kandydata bez polecanych (`CandidateRecommendedPreview`), nawigacja
+  shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
+  (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
+  segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
 - **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0980` — numer tymczasowy, na 0171):** w trybie
   ogłoszeniowym `set_candidate_searchable(true)` → `RECRUITMENT_DISABLED` (wyłączenie działa), strażnik
   `trg_aa_recruitment_mode_searchable` odrzuca `is_searchable = true` każdą ścieżką (wyjątek seedu jak w 0171),
