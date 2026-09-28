@@ -206,7 +206,7 @@ export const step7Schema = step7Base.superRefine((data, ctx) => {
   refineNoLanguageConflict(data, ctx);
 });
 
-/** Kwota w EUR z najwyżej dwoma miejscami po przecinku (koszty i bony, 0930). */
+/** Kwota w EUR z najwyżej dwoma miejscami po przecinku (koszty i bony, 0169). */
 const euroAmount = (min: number, max: number, message: string) =>
   z
     .number({ invalid_type_error: message })
@@ -215,7 +215,7 @@ const euroAmount = (min: number, max: number, message: string) =>
     .refine((value) => Number.isFinite(value) && Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, message);
 
 /**
- * Krok 8 — warunki i benefity + „Koszty i dodatki” (0930). Flagi `accommodation`/`transport`
+ * Krok 8 — warunki i benefity + „Koszty i dodatki” (0169). Flagi `accommodation`/`transport`
  * zostają (filtry listy, import AI); gdy podany jest rodzaj zakwaterowania albo szczegóły
  * dojazdu, flagi wynikają z nich (`jobCostsPatch`). Wszystkie nowe pola są opcjonalne —
  * deklaracja pracodawcy, portal jej nie ocenia. Limity = CHECK-i w bazie.
@@ -286,7 +286,7 @@ export const step8Schema = step8Base.superRefine(refineJobCosts);
  * Decyzja właściciela 28.09.2026: oferta PUBLICZNA z zakwaterowaniem zapewnionym musi podać
  * koszt (0 = bez kosztów) i informację, czy koszt jest potrącany z pensji. Szkic może być
  * niekompletny (`step8Schema`); tę regułę sprawdzają publikacja i edycja opublikowanej oferty
- * — w bazie strażnik `enforce_job_accommodation_terms` (0930) → `JOB_ACCOMMODATION_TERMS_REQUIRED`.
+ * — w bazie strażnik `enforce_job_accommodation_terms` (0169) → `JOB_ACCOMMODATION_TERMS_REQUIRED`.
  */
 export function refineAccommodationPublishTerms(
   data: { accommodationKind?: string; accommodationCost?: number; accommodationDeducted?: boolean },

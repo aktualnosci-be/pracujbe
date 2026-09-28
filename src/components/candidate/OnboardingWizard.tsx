@@ -55,6 +55,7 @@ import {
   type SaveOnboardingResult,
 } from '@/lib/actions/onboarding';
 import { referenceDate } from '@/lib/matching/reference-date';
+import { LANGUAGE_CODES, isLanguageCode, languageDisplayName, resolveLanguageCode } from '@/lib/languages';
 import {
   BTN_PRIMARY,
   BTN_RESET,
@@ -307,6 +308,7 @@ export function OnboardingWizard({
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tLang = useTranslations('languageNames');
   const router = useRouter();
 
   const {
@@ -337,7 +339,7 @@ export function OnboardingWizard({
   const [demoSaved, setDemoSaved] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);
 
-  // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
+  // Roboczy wiersz dodawania języka: kod ze słownika (0168), nie wolny tekst (I18N-02).
   const [langDraft, setLangDraft] = React.useState('');
   const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
   const [langError, setLangError] = React.useState(false);
@@ -545,14 +547,15 @@ export function OnboardingWizard({
   }
 
   function addLanguage(): void {
-    const name = langDraft.trim();
-    if (name.length < 2) {
+    const code = langDraft;
+    if (!isLanguageCode(code)) {
       setLangError(true);
       return;
     }
-    const exists = values.languages.some((l) => l.language.toLowerCase() === name.toLowerCase());
+    // Ten sam język zapisany dawniej nazwą (np. „niderlandzki”) = duplikat kodu `nl`.
+    const exists = values.languages.some((l) => resolveLanguageCode(l.language) === code);
     if (!exists) {
-      setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
+      setValue('languages', [...values.languages, { language: code, level: levelDraft }], {
         shouldDirty: true,
       });
     }
@@ -924,28 +927,35 @@ export function OnboardingWizard({
                 <div id={domId('languages')} className={FORM_FIELD}>
                   <Label htmlFor="onb-language-draft" className={FORM_LABEL_TEXT}>{t('languagesLabel')}</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="onb-language-draft"
-                      className={cn(FORM_INPUT, 'flex-1')}
-                      value={langDraft}
-                      placeholder={t('languageNamePlaceholder')}
-                      aria-invalid={langError || errors.languages ? true : undefined}
-                      aria-describedby={
-                        [langError ? 'onb-language-draft-error' : null, describedBy('languages')]
-                          .filter(Boolean)
-                          .join(' ') || undefined
-                      }
-                      onChange={(e) => {
-                        setLangDraft(e.target.value);
-                        if (langError) setLangError(false);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addLanguage();
-                        }
-                      }}
-                    />
+                    <div className="flex-1">
+                      <Select
+                        value={langDraft}
+                        onValueChange={(val) => {
+                          setLangDraft(val);
+                          if (langError) setLangError(false);
+                        }}
+                      >
+                        <SelectTrigger
+                          id="onb-language-draft"
+                          className={FORM_SELECT}
+                          aria-invalid={langError || errors.languages ? true : undefined}
+                          aria-describedby={
+                            [langError ? 'onb-language-draft-error' : null, describedBy('languages')]
+                              .filter(Boolean)
+                              .join(' ') || undefined
+                          }
+                        >
+                          <SelectValue placeholder={t('languageSelectPlaceholder')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LANGUAGE_CODES.map((code) => (
+                            <SelectItem key={code} value={code}>
+                              {tLang(code)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="w-full sm:w-40">
                       <Select
                         value={levelDraft}
@@ -979,10 +989,10 @@ export function OnboardingWizard({
                           key={entry.language}
                           className={CHIP}
                         >
-                          {entry.language} · {LEVEL_LABEL[entry.level]}
+                          {languageDisplayName(entry.language, (code) => tLang(code))} · {LEVEL_LABEL[entry.level]}
                           <button
                             type="button"
-                            aria-label={`${t('remove')}: ${entry.language}`}
+                            aria-label={`${t('remove')}: ${languageDisplayName(entry.language, (code) => tLang(code))}`}
                             onClick={() =>
                               setValue(
                                 'languages',

@@ -90,7 +90,10 @@ export async function getMyJobMatch(jobId: string): Promise<JobMatchLoad> {
       const skills = await read('candidate_skills', () => queryRows(tx, 'matching.candidate-skills',
         'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1', [profileId]));
       const languages = await read('candidate_languages', () => queryRows(tx, 'matching.candidate-languages',
-        'SELECT language_label, level FROM public.candidate_languages WHERE candidate_profile_id = $1', [profileId]));
+        `SELECT cl.language_label, cl.level, lg.code AS language_code
+           FROM public.candidate_languages cl
+           LEFT JOIN public.languages lg ON lg.id = cl.language_id
+          WHERE cl.candidate_profile_id = $1`, [profileId]));
       const certificates = await read('candidate_certificates', () => queryRows(tx, 'matching.candidate-certificates',
         'SELECT certificate_label, expires_at::text AS expires_at FROM public.candidate_certificates WHERE candidate_profile_id = $1',
         [profileId]));

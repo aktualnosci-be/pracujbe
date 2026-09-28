@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0930_job_costs_benefits.sql — „Koszty i dodatki” w ofercie (numer tymczasowy; ostateczny
--- nada integrator).
+-- 0169_job_costs_benefits.sql — „Koszty i dodatki” w ofercie.
 --
 -- Zamiast samych flag `accommodation`/`transport` oferta może podać konkretne, OPCJONALNE
 -- warunki (deklaracja pracodawcy, bez oceny przez portal):
@@ -137,7 +136,7 @@ begin
                     'salary_min', 'salary_max', 'currency', 'salary_period',
                     'min_experience_years', 'requires_driving_license', 'no_language_required',
                     'accommodation', 'transport', 'contact_email',
-                    -- 0930: koszty i dodatki
+                    -- 0169: koszty i dodatki
                     'accommodation_kind', 'accommodation_cost', 'accommodation_cost_period',
                     'accommodation_deducted', 'accommodation_registration',
                     'accommodation_after_contract', 'transport_shuttle', 'transport_reimbursed',
@@ -276,7 +275,7 @@ returns jsonb language sql immutable set search_path = public, pg_temp as $$
     'city', public.search_fold(btrim(coalesce(j.city, ''))),
     'contract_type', j.contract_type,
     'working_hours', j.working_hours,
-    -- 0930: koszt zakwaterowania i potrącenie z pensji zmieniają realny dochód kandydata.
+    -- 0169: koszt zakwaterowania i potrącenie z pensji zmieniają realny dochód kandydata.
     'accommodation', jsonb_build_object('kind', j.accommodation_kind,
                                         'cost', j.accommodation_cost,
                                         'period', j.accommodation_cost_period,
@@ -354,7 +353,7 @@ begin
     accommodation            = coalesce((j->>'accommodation')::boolean, false),
     transport                = coalesce((j->>'transport')::boolean, false),
     contact_email            = nullif(btrim(coalesce(j->>'contact_email', '')), ''),
-    -- 0930: koszty i dodatki (brak klucza = brak wartości, jak pozostałe pola rewizji).
+    -- 0169: koszty i dodatki (brak klucza = brak wartości, jak pozostałe pola rewizji).
     accommodation_kind       = nullif(j->>'accommodation_kind', ''),
     accommodation_cost       = (j->>'accommodation_cost')::numeric,
     accommodation_cost_period = nullif(j->>'accommodation_cost_period', ''),

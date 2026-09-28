@@ -1,5 +1,5 @@
 /**
- * „Koszty i dodatki” oferty (migracja 0930) — jedno źródło dla kreatora (zapis), szczegółu
+ * „Koszty i dodatki” oferty (migracja 0169) — jedno źródło dla kreatora (zapis), szczegółu
  * oferty (sekcja w stylu paszportu) i JobPosting JSON-LD (`jobBenefits`).
  *
  * Pola są deklaracją pracodawcy: portal niczego nie wylicza (brak netto, brak porównania
@@ -85,7 +85,7 @@ export function parseJobCostsRow(row: Record<string, unknown> | null | undefined
 /**
  * Krok 8 → kolumny `jobs` (klucze `save_job_draft`/`update_published_job`). Zawsze komplet
  * kluczy kosztów (patch kroku zastępuje poprzednie wartości), szczegóły mieszkania tylko przy
- * rodzaju „zapewnione”, flagi filtrów zgodne ze szczegółami (CHECK-i 0930).
+ * rodzaju „zapewnione”, flagi filtrów zgodne ze szczegółami (CHECK-i 0169).
  */
 export function jobCostsPatch(v: JobStep8): Record<string, unknown> {
   const kind = v.accommodationKind ?? null;

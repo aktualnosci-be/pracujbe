@@ -1,3 +1,4 @@
+import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
 import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
@@ -225,7 +226,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, format, candidateMinAge] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -234,10 +235,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('apply'),
     getTranslations('contentReport'),
     getTranslations('landing'),
+    getTranslations('languageNames'),
     getFormatter(),
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
+  // I18N-02: wymagane języki w języku widza (kod słownika 0168 / nazwa PL-NL-FR-EN), a nie
+  // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
+  const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
 
   const passportFields = buildJobDetailPassportFields(job, locale, {
     location: tJobs('passport.location'),
@@ -251,7 +256,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
 
-  // 0930: „Koszty i dodatki” — sekcja strony i `jobBenefits` w JSON-LD z jednego źródła.
+  // 0169: „Koszty i dodatki” — sekcja strony i `jobBenefits` w JSON-LD z jednego źródła.
   const pageLocale: Locale = (routing.locales as readonly string[]).includes(locale)
     ? (locale as Locale)
     : routing.defaultLocale;
@@ -428,6 +433,16 @@ export default async function JobDetailPage({ params }: PageProps) {
                   {t('verified')}
                 </span>
               ) : null}
+              {job.isAgency ? (
+                // 0167: oferta agencji pracy tymczasowej (deklaracja firmy).
+                <span
+                  data-testid="job-detail-agency"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+                >
+                  <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {tJobs('agencyBadge')}
+                </span>
+              ) : null}
             </p>
 
             <div className="mt-6 min-w-0 rounded-[24px] border border-[color:var(--pp-line-card)] bg-card px-[26px] pb-5 pt-[22px] max-[500px]:rounded-[20px] max-[500px]:p-[18px]">
@@ -583,7 +598,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
             <Section title={t('costsTitle')}>
               {/*
-                0930: „Koszty i dodatki” (deklaracja pracodawcy). Każda para dt/dd jest bezpośrednio
+                0169: „Koszty i dodatki” (deklaracja pracodawcy). Każda para dt/dd jest bezpośrednio
                 w `div` będącym dzieckiem `dl` (HTML/axe `definition-list`); ikona jest dekoracją
                 wewnątrz `dt`, pozycjonowaną w lewym odstępie.
               */}
@@ -634,7 +649,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                       />
                       {t('languages')}
                     </dt>
-                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
+                    <dd className="font-medium text-foreground">{languageNames}</dd>
                   </div>
                 ) : null}
               </dl>
@@ -748,7 +763,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               </div>
               {job.languages.length > 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {t('languages')}: {job.languages.join(', ')}
+                  {t('languages')}: {languageNames}
                 </p>
               ) : null}
               {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}

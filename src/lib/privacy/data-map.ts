@@ -601,6 +601,10 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       city: 'company',
       verified_by: 'reference',
       status_reason: 'moderation',
+      // 0167: deklaracja agencji pracy tymczasowej i ręczne sprawdzenie numeru przez admina.
+      agency_recognition_number: 'company',
+      agency_checked_by: 'reference',
+      agency_check_note: 'moderation',
     },
   },
   'public.company_members': {
@@ -985,6 +989,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     note:
       'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
   },
+  'public.job_content_reviews': {
+    activities: ['companies'],
+    subjects: ['employer', 'admin'],
+    columns: {
+      requested_by: 'reference',
+      decided_by: 'reference',
+      decision_reason: 'moderation',
+      ai_reason: 'moderation',
+    },
+    note:
+      'Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
+  },
   'public.job_duplications': {
     activities: ['companies'],
     subjects: ['employer'],
@@ -1008,7 +1024,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
   'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
-  'public.joint_committees': DICTIONARY('komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0930'),
+  'public.joint_committees': DICTIONARY('komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169'),
+  'public.language_aliases': DICTIONARY('nazwy języków PL/NL/FR/EN (0168)'),
   'public.occupations': DICTIONARY('zawody'),
   'public.skills': DICTIONARY('umiejętności'),
   'public.occupation_labels': DICTIONARY('etykiety zawodów ESCO'),

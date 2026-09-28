@@ -100,7 +100,7 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
     case 8: {
       const v = parsed as JobStep8;
       return {
-        // 0930: flagi filtrów + koszty i dodatki jednym patchem kroku.
+        // 0169: flagi filtrów + koszty i dodatki jednym patchem kroku.
         job: jobCostsPatch(v),
         translation: { conditions: v.conditions, benefits: v.benefits },
       };

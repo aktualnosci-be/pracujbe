@@ -1,6 +1,6 @@
 /**
  * Słownik komisji parytetowych (PC/CP) — lustro tabeli `public.joint_committees` (migracja
- * 0930). Oferta zapisuje wyłącznie kod (`jobs.joint_committee`, FK do słownika), a nazwę
+ * 0169). Oferta zapisuje wyłącznie kod (`jobs.joint_committee`, FK do słownika), a nazwę
  * w języku strony bierze stąd — bez dodatkowego odczytu bazy na stronie ISR. Zgodność listy
  * z migracją pilnuje `tests/unit/job-costs.test.ts`; zmiana listy = nowa migracja.
  *

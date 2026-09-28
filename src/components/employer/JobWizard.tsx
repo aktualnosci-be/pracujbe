@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { LANGUAGE_CODES, isLanguageCode, languageDisplayName, resolveLanguageCode } from '@/lib/languages';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocale, useTranslations } from 'next-intl';
@@ -93,6 +94,8 @@ import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
 import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
 import { isScreeningQuestionType, type ScreeningQuestionDraft } from '@/lib/screening/questions';
 import type { ScreeningReviewNotice } from '@/lib/screening/review';
+import { jobFraudRisk } from '@/lib/job-trust/fraud-risk';
+import { JOB_CONTENT_CATEGORY_KEY, type JobContentReviewNotice } from '@/lib/job-trust/review';
 import {
   ScreeningQuestionsEditor,
   screeningErrorFieldId,
@@ -134,7 +137,7 @@ type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
 type SalaryPeriod = (typeof SALARY_PERIODS)[number];
 type Currency = 'EUR' | 'PLN';
 const CURRENCIES: readonly Currency[] = ['EUR', 'PLN'];
-/** Pole „tak / nie / nie podano” (0930). */
+/** Pole „tak / nie / nie podano” (0169). */
 type TriState = '' | 'yes' | 'no';
 const TRI_STATES = ['yes', 'no'] as const;
 /** Wartość zastępcza „nie podano” dla Select (API Radix Select nie przyjmuje ''). */
@@ -191,7 +194,7 @@ interface FormValues {
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
-  // 0930: koszty i dodatki ('' = nie podano)
+  // 0169: koszty i dodatki ('' = nie podano)
   accommodationKind: '' | AccommodationKind;
   accommodationCost: string;
   accommodationCostPeriod: AccommodationCostPeriod;
@@ -322,7 +325,7 @@ function toOptionalNumber(value: string): number | undefined {
   return value.trim() === '' ? undefined : Number(value);
 }
 
-/** '' → undefined; przecinek dziesiętny dopuszczony (kwoty w EUR, 0930). NaN → błąd Zod. */
+/** '' → undefined; przecinek dziesiętny dopuszczony (kwoty w EUR, 0169). NaN → błąd Zod. */
 function toOptionalAmount(value: string): number | undefined {
   const v = value.trim().replace(',', '.');
   return v === '' ? undefined : Number(v);
@@ -380,7 +383,7 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         screeningLocale: contentLocale,
       };
     case 8: {
-      // 0930: flagi filtrów wynikają ze szczegółów (jobCostsPatch); szczegóły mieszkania tylko
+      // 0169: flagi filtrów wynikają ze szczegółów (jobCostsPatch); szczegóły mieszkania tylko
       // przy zakwaterowaniu zapewnionym — ukryte pola nie trafiają do zapisu.
       const provided = v.accommodationKind === 'provided';
       const cost = provided ? toOptionalAmount(v.accommodationCost) : undefined;
@@ -556,7 +559,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     ...rest
   } = raw;
   const narrowed: Partial<FormValues> = { ...rest };
-  // 0930: koszty i dodatki. Stara oferta (sama flaga, etykieta „Zapewniamy zakwaterowanie /
+  // 0169: koszty i dodatki. Stara oferta (sama flaga, etykieta „Zapewniamy zakwaterowanie /
   // transport”) otwiera się jako zakwaterowanie zapewnione / dowóz — bez szczegółów.
   if (isOneOf(ACCOMMODATION_KINDS, accommodationKind)) narrowed.accommodationKind = accommodationKind;
   else if (rest.accommodation) narrowed.accommodationKind = 'provided';
@@ -590,7 +593,8 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     narrowed.languages = languages
       .filter((l) => l.language.trim() !== '')
       .map((l) => ({
-        language: l.language,
+        // Import ogłoszenia (AI) daje nazwę języka — rozpoznana nazwa → kod słownika.
+        language: resolveLanguageCode(l.language) ?? l.language,
         level: ((LANGUAGE_LEVELS as readonly string[]).includes(l.level)
           ? l.level
           : 'basic') as LanguageLevel,
@@ -617,9 +621,11 @@ export function JobWizard({
   const t = useTranslations('jobWizard');
   const tImport = useTranslations('jobImport');
   const tRoot = useTranslations();
+  const tTrust = useTranslations('jobTrust');
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tLang = useTranslations('languageNames');
   const locale = useLocale();
   const router = useRouter();
   const contentLocale: Locale = isLocale(contentLocaleProp)
@@ -676,6 +682,57 @@ export function JobWizard({
     );
   }
 
+  // 0167: podpowiedź przed zapisem — te same wzorce co strażnik w bazie (bez AI). Informacja,
+  // nie blokada: treść z sygnałem trafi do przeglądu zespołu portalu przed publikacją.
+  function renderTrustHint(): React.ReactNode {
+    const categories = jobFraudRisk([
+      values.title,
+      values.workingHours,
+      values.shifts,
+      values.description,
+      ...values.responsibilities,
+      ...values.requirementsMandatory,
+      ...values.requirementsOptional,
+      ...values.conditions,
+      ...values.benefits,
+      values.companyDescription,
+    ]);
+    if (categories.length === 0) return null;
+    return (
+      <p
+        role="note"
+        data-testid="job-trust-hint"
+        className={cn(FORM_WIDE, 'flex min-w-0 items-start gap-2.5 rounded-[16px] border border-warning/40 bg-warning/5 px-[23px] py-4 text-[13px] text-foreground max-[600px]:p-[18px]')}
+      >
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+        <span className="min-w-0">
+          {tTrust('wizardHint', {
+            categories: categories.map((category) => tTrust(JOB_CONTENT_CATEGORY_KEY[category])).join(', '),
+          })}
+        </span>
+      </p>
+    );
+  }
+
+  function renderContentReview(): React.ReactNode {
+    if (!contentReview) return null;
+    const categories = contentReview.categories
+      .map((category) => tTrust(JOB_CONTENT_CATEGORY_KEY[category]))
+      .join(', ');
+    return (
+      <div className="mt-1.5 space-y-1 text-muted-foreground" data-testid="job-content-review-notice">
+        <p className="break-words">
+          {contentReview.status === 'rejected'
+            ? tTrust('reviewRejected', { categories })
+            : tTrust('reviewPending', { categories })}
+        </p>
+        {contentReview.reason ? (
+          <p className="break-words">{tTrust('reviewReason', { reason: contentReview.reason })}</p>
+        ) : null}
+      </div>
+    );
+  }
+
   const [step, setStep] = React.useState<WizardStep>(1);
 
   // P1-10: podpowiedź miasta ze słownika miejscowości (rozpoznana nazwa + propozycje).
@@ -712,6 +769,8 @@ export function JobWizard({
   const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
   // #497: pytania, które blokują publikację (oczekują na przegląd / odrzucone) — z bazy.
   const [screeningReviews, setScreeningReviews] = React.useState<ScreeningReviewNotice[]>([]);
+  // 0167: treść oferty czeka na przegląd albo została odrzucona (publikacja/edycja).
+  const [contentReview, setContentReview] = React.useState<JobContentReviewNotice | null>(null);
   // #325: tryb edycji opublikowanej oferty.
   const isEdit = Boolean(published && initialJobId);
   const [editVersion, setEditVersion] = React.useState<string | null>(published?.updatedAt || null);
@@ -732,7 +791,7 @@ export function JobWizard({
   const showViewLink =
     isEdit && published?.status === 'active' && publicSlug !== '' && !publicSlug.startsWith('draft-');
 
-  // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
+  // Roboczy wiersz dodawania języka: kod ze słownika (0168), nie wolny tekst (I18N-02).
   const [langDraft, setLangDraft] = React.useState('');
   const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
   const [langError, setLangError] = React.useState(false);
@@ -988,6 +1047,8 @@ export function JobWizard({
       }
       if (res.demo) setDemo(true);
       if (res.updatedAt) setEditVersion(res.updatedAt);
+      // 0167: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu.
+      setContentReview(res.contentReview ?? null);
       if (res.slug) setPublicSlug(res.slug);
       // #829: edycja w trakcie zapisu nie jest zapisana — bez „Zapisano”, przycisk znów aktywny.
       const latest = getValues();
@@ -1018,6 +1079,7 @@ export function JobWizard({
   async function handlePublish(): Promise<void> {
     setPublishError(null);
     setScreeningReviews([]);
+    setContentReview(null);
     // Oferta publiczna z zakwaterowaniem zapewnionym: koszt i potrącenie obowiązkowe — błąd
     // przy polu w kroku 8 (szkic mógł zostać zapisany bez nich).
     const costs = validateStep(8, 'publish');
@@ -1043,6 +1105,7 @@ export function JobWizard({
       if (!res.ok) {
         setPublishError(res.error);
         setScreeningReviews(res.screening ?? []);
+        setContentReview(res.contentReview ?? null);
         return;
       }
       router.push('/employer');
@@ -1068,7 +1131,7 @@ export function JobWizard({
   }
 
   /**
-   * Select kroku 8 (0930) z opcją „nie podano” (wartość '' w formularzu). Wywoływany jako
+   * Select kroku 8 (0169) z opcją „nie podano” (wartość '' w formularzu). Wywoływany jako
    * funkcja, nie komponent — stała tożsamość elementów, więc ponowny render nie przemontowuje
    * listy (fokus i stan otwarcia zostają).
    */
@@ -1513,6 +1576,7 @@ export function JobWizard({
                 <FieldError name="responsibilities" />
               </div>
               {renderAssist(5)}
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1569,6 +1633,7 @@ export function JobWizard({
                 <FieldError name="minExperienceYears" />
               </div>
               {renderAssist(6)}
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1612,26 +1677,33 @@ export function JobWizard({
               <div id={domId('languages')} className={`${FORM_FIELD} ${FORM_WIDE}`}>
                 <Label htmlFor="job-language-draft" className={FORM_LABEL_TEXT}>{t('languagesLabel')}</Label>
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
-                  <Input
-                    id="job-language-draft"
-                    className={cn(FORM_INPUT, 'sm:flex-1')}
-                    value={langDraft}
-                    placeholder={t('languageNamePlaceholder')}
-                    aria-invalid={langError || errors.languages ? true : undefined}
-                    aria-describedby={
-                      langError ? 'job-language-draft-error' : errorDescription('languages')
-                    }
-                    onChange={(e) => {
-                      setLangDraft(e.target.value);
-                      if (langError) setLangError(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addLanguage();
-                      }
-                    }}
-                  />
+                  <div className="min-w-0 sm:flex-1">
+                    <Select
+                      value={langDraft}
+                      onValueChange={(val) => {
+                        setLangDraft(val);
+                        if (langError) setLangError(false);
+                      }}
+                    >
+                      <SelectTrigger
+                        id="job-language-draft"
+                        className={FORM_SELECT}
+                        aria-invalid={langError || errors.languages ? true : undefined}
+                        aria-describedby={
+                          langError ? 'job-language-draft-error' : errorDescription('languages')
+                        }
+                      >
+                        <SelectValue placeholder={t('languageSelectPlaceholder')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_CODES.map((code) => (
+                          <SelectItem key={code} value={code}>
+                            {tLang(code)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="w-full sm:w-48">
                     <Select value={levelDraft} onValueChange={(val) => setLevelDraft(val as LanguageLevel)}>
                       <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
@@ -1667,10 +1739,10 @@ export function JobWizard({
                         key={entry.language}
                         className={cn(STATUS, 'inline-flex items-center gap-1 py-0 pr-0 text-[13px] text-foreground')}
                       >
-                        {entry.language} · {LEVEL_LABEL[entry.level]}
+                        {languageDisplayName(entry.language, (code) => tLang(code))} · {LEVEL_LABEL[entry.level]}
                         <button
                           type="button"
-                          aria-label={`${t('remove')}: ${entry.language}`}
+                          aria-label={`${t('remove')}: ${languageDisplayName(entry.language, (code) => tLang(code))}`}
                           onClick={() =>
                             setValue(
                               'languages',
@@ -1778,7 +1850,7 @@ export function JobWizard({
                 />
                 <FieldError name="benefits" />
               </div>
-              {/* 0930: „Koszty i dodatki” — deklaracja pracodawcy, wszystkie pola opcjonalne. */}
+              {/* 0169: „Koszty i dodatki” — deklaracja pracodawcy, wszystkie pola opcjonalne. */}
               <fieldset className={`${FORM_WIDE} ${FORM_GRID} min-w-0`} data-testid="job-costs-fieldset">
                 <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('costsLegend')}</legend>
                 <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('costsHint')}</p>
@@ -1898,6 +1970,7 @@ export function JobWizard({
                 })}
                 <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('jointCommitteeHint')}</p>
               </fieldset>
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -2018,6 +2091,10 @@ export function JobWizard({
                     {publishError === 'COMPANY_NOT_VERIFIED' ? (
                       <p className="mt-1.5 text-muted-foreground">{t('notVerifiedNote')}</p>
                     ) : null}
+                    {publishError === 'JOB_CONTENT_REVIEW_REQUIRED' ||
+                    publishError === 'JOB_CONTENT_REJECTED'
+                      ? renderContentReview()
+                      : null}
                     {publishError === 'SCREENING_REVIEW_REQUIRED' ||
                     publishError === 'SCREENING_QUESTION_REJECTED' ? (
                       <>
@@ -2068,6 +2145,12 @@ export function JobWizard({
               error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
             }}
           />
+          {isEdit && contentReview && saveState !== 'error' ? (
+            <div role="status" className="max-w-xl text-[13px]">
+              <p className="font-[650] text-foreground">{tTrust('editPaused')}</p>
+              {renderContentReview()}
+            </div>
+          ) : null}
           {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
               da, więc prowadzimy do listy ofert (#363). */}
           {saveState === 'error' &&
@@ -2171,14 +2254,15 @@ export function JobWizard({
   );
 
   function addLanguage(): void {
-    const name = langDraft.trim();
-    if (name.length < 2) {
+    const code = langDraft;
+    if (!isLanguageCode(code)) {
       setLangError(true);
       return;
     }
-    const exists = values.languages.some((l) => l.language.toLowerCase() === name.toLowerCase());
+    // Ten sam język zapisany dawniej nazwą (np. „Nederlands”) = duplikat kodu `nl`.
+    const exists = values.languages.some((l) => resolveLanguageCode(l.language) === code);
     if (!exists) {
-      setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
+      setValue('languages', [...values.languages, { language: code, level: levelDraft }], {
         shouldDirty: true,
       });
       // #910: dodanie wymaganego języka wyklucza „bez znajomości języka" — flaga i lista

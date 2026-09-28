@@ -19,7 +19,7 @@ import { buildJobPostingJsonLd } from '@/lib/seo/structured-data';
 import type { JobDetail } from '@/lib/jobs';
 
 const MIGRATION = readFileSync(
-  join(process.cwd(), 'supabase/migrations/0930_job_costs_benefits.sql'),
+  join(process.cwd(), 'supabase/migrations/0169_job_costs_benefits.sql'),
   'utf8',
 );
 
@@ -62,7 +62,7 @@ function step8(overrides: Partial<JobStep8> = {}): JobStep8 {
   return step8Schema.parse({ conditions: [], benefits: [], ...overrides });
 }
 
-describe('słownik komisji parytetowych (0930)', () => {
+describe('słownik komisji parytetowych (0169)', () => {
   it('lustro TS jest identyczne z danymi migracji (kod i nazwy w 4 językach)', () => {
     const fromSql = migrationCommittees(MIGRATION);
     expect(fromSql.length).toBe(JOINT_COMMITTEES.length);

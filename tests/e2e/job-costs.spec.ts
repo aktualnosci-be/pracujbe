@@ -7,10 +7,10 @@ import pl from '../../src/messages/pl.json';
 import { AxeBuilder } from './fixtures/axe';
 
 /**
- * „Koszty i dodatki” (0930) w jawnym trybie demo: sekcja szczegółu oferty (dane przykładowe
+ * „Koszty i dodatki” (0169) w jawnym trybie demo: sekcja szczegółu oferty (dane przykładowe
  * oferty 1001) w czterech językach z linkiem do oficjalnej bazy stawek minimalnych, oraz pola
  * kroku 8 kreatora (szczegóły mieszkania tylko przy zakwaterowaniu zapewnionym, błąd przy polu
- * kwoty; publikacja z zakwaterowaniem zapewnionym wymaga kosztu i potrącenia — 28.09.2026). Zapis do PostgreSQL dowodzi `rls.sql` sekcja CB930, mapowanie — `job-costs.test.ts`.
+ * kwoty; publikacja z zakwaterowaniem zapewnionym wymaga kosztu i potrącenia — 28.09.2026). Zapis do PostgreSQL dowodzi `rls.sql` sekcja CB169, mapowanie — `job-costs.test.ts`.
  */
 const locales = { pl, nl, fr, en } as const;
 const DEMO_JOB = '/oferty-pracy/warehouse-worker-antwerp-1001';

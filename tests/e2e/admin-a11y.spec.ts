@@ -57,6 +57,8 @@ const ROUTES = [
   '/admin/kontakt',
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
+  // Przegląd treści ofert z sygnałem oszustwa (0167).
+  '/admin/tresc-ofert',
   '/admin/dziennik',
   '/admin/odwolania',
   '/admin/raport-dsa',

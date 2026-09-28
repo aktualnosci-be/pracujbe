@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Briefcase, Building2, Coins, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Briefcase, Building2, Coins, FileWarning, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
@@ -34,6 +34,7 @@ const HREF = {
   email: '/admin/poczta',
   campaigns: '/admin/kampanie',
   screening: '/admin/pytania',
+  jobContent: '/admin/tresc-ofert',
   breaches: '/admin/naruszenia',
   contact: '/admin/kontakt',
   aiCosts: '/admin/koszty-ai',
@@ -71,6 +72,7 @@ export function AdminShell({
     { href: HREF.appeals, label: t('navAppeals'), icon: <Scale /> },
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },
     { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
+    { href: HREF.jobContent, label: t('navJobContent'), icon: <FileWarning /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
     { href: HREF.contact, label: t('navContact'), icon: <Inbox /> },
     { href: HREF.email, label: t('navEmail'), icon: <MailX /> },

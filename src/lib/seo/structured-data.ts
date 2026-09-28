@@ -149,7 +149,7 @@ export function buildJobPostingJsonLd(
   url: string,
   labels: JobPostingLabels,
   /**
-   * 0930: `jobBenefits` (tekst schema.org) — świadczenia z „Kosztów i dodatków” w języku strony
+   * 0169: `jobBenefits` (tekst schema.org) — świadczenia z „Kosztów i dodatków” w języku strony
    * (`buildJobBenefitsText`). Brak = pole pominięte.
    */
   options: { jobBenefits?: string } = {},

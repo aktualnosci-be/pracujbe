@@ -119,7 +119,7 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
 
     await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
   });
-  it('0930: detal niesie koszty i dodatki z get_public_job_costs (numeric jako tekst)', async () => {
+  it('0169: detal niesie koszty i dodatki z get_public_job_costs (numeric jako tekst)', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z', accommodation: true });
     adapters.translations.mockResolvedValue([]);
@@ -138,7 +138,7 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
       mealVoucherDaily: 8, jointCommittee: '140',
     });
   });
-  it('0930: awaria odczytu kosztów nie blokuje oferty (same flagi, błąd w kanale)', async () => {
+  it('0169: awaria odczytu kosztów nie blokuje oferty (same flagi, błąd w kanale)', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
     adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z', accommodation: true });
     adapters.translations.mockResolvedValue([]);

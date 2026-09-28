@@ -532,7 +532,7 @@ interface DemoJobRaw {
   immediate: boolean;
   noLanguageRequired: boolean;
   transport: boolean;
-  /** 0930: przykładowe „Koszty i dodatki” (dane fikcyjne, jak cała oferta demo). */
+  /** 0169: przykładowe „Koszty i dodatki” (dane fikcyjne, jak cała oferta demo). */
   costs?: JobCosts;
   startDate?: string;
   languageKeys: LangKey[];
