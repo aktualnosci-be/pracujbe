@@ -79,7 +79,9 @@ test('małe akcje kreatora oferty mają dostępny cel dotykowy', async ({
     .click();
   await page.getByRole('button', { name: 'Dalej' }).click();
 
-  await page.getByPlaceholder('np. Niderlandzki').fill('Niderlandzki');
+  // Język ze słownika (0168): lista zamiast pola tekstowego.
+  await page.getByRole('combobox', { name: 'Języki', exact: true }).click();
+  await page.getByRole('option', { name: 'Niderlandzki', exact: true }).click();
   await page.getByRole('button', { name: 'Dodaj język' }).click();
   await expectMinimumTarget(
     page.getByRole('button', { name: 'Usuń: Niderlandzki' }),

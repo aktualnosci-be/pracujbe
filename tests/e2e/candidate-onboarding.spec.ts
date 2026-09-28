@@ -87,7 +87,9 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: /Dalej: Języki i certyfikaty/ }).click();
 
   // Krok 5: małe akcje usunięcia pozostają wygodnym celem dotykowym.
-  await page.getByPlaceholder('np. niderlandzki').fill('Niderlandzki');
+  // Język ze słownika (0168): lista zamiast pola tekstowego.
+  await page.getByRole('combobox', { name: 'Języki', exact: true }).click();
+  await page.getByRole('option', { name: 'Niderlandzki', exact: true }).click();
   await page.getByRole('button', { name: 'Dodaj język' }).click();
   await expectMinimumTarget(page.getByRole('button', { name: 'Usuń: Niderlandzki' }));
   await page.getByPlaceholder('np. VCA, świadectwo kwalifikacji').fill('VCA');
