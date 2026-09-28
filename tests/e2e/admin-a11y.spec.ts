@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { rejectOptionalCookies } from './fixtures/messages';
@@ -28,6 +28,10 @@ const ROUTES = [
   '/admin/firmy',
   // Szczegół firmy (#310) — firma demonstracyjna.
   '/admin/firmy/demo-c2',
+  // Lista ofert wszystkich firm (tylko odczyt): całość, filtr decyzji moderacyjnych, jedna firma.
+  '/admin/oferty',
+  '/admin/oferty?status=moderated',
+  '/admin/oferty?firma=demo-c2',
   // Baner kampanii z oferty (#175) — w demo stan „niedostępny”.
   '/admin/oferty/demo-c2-job-1/baner?firma=demo-c2',
   '/admin/zgloszenia',
@@ -42,6 +46,9 @@ const ROUTES = [
   '/admin/kampanie',
   '/admin/kampanie/demo-k3',
   '/admin/kampanie/demo-k2',
+  // Edytor kampanii (#45, 0155): nowa kampania i nowa rewizja istniejącego sluga.
+  '/admin/kampanie/nowa',
+  '/admin/kampanie/demo-k3/nowa-rewizja',
   // Rejestr naruszeń (#490): lista, nowy wpis, wpis demonstracyjny.
   '/admin/naruszenia',
   '/admin/naruszenia/nowy',
@@ -50,6 +57,8 @@ const ROUTES = [
   '/admin/kontakt',
   // Przegląd pytań screeningowych (#497).
   '/admin/pytania',
+  // Przegląd treści ofert z sygnałem oszustwa (0167).
+  '/admin/tresc-ofert',
   '/admin/dziennik',
   '/admin/odwolania',
   '/admin/raport-dsa',
@@ -60,6 +69,7 @@ const ROUTES = [
   '/admin/wydajnosc?dni=7',
   // Próg wieku kandydatów (#492) — bieżące ustawienie + formularz zmiany.
   '/admin/ustawienia',
+  '/admin/ustawienia/retencja',
 ];
 
 for (const viewport of [

@@ -1,5 +1,8 @@
 # PROJEKT — do weryfikacji prawnika, nieopublikowany
 
+> **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy — widoczność profilu dla firm
+> i aplikowanie przez portal są wyłączone (#1135, #1130). Szkic bez zmian merytorycznych.
+
 > **Status:** szkic roboczy do issue #492. Nie jest opinią prawną, nie rozstrzyga żadnej
 > kwestii i nie może trafić do regulaminu, polityki prywatności ani interfejsu bez przeglądu
 > prawnika i decyzji właściciela produktu. Wszystkie stwierdzenia o przepisach poniżej są

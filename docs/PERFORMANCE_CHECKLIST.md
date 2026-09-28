@@ -173,7 +173,12 @@ w layoucie publicznym już nie (kontrola ujemna w `tests/unit/perf-budget.test.t
 **`E2E perf (lab CWV + INP)` → „Performance budget (lab CWV)”** — `node scripts/perf-lab.mjs`
 (~2–2,5 min z INP-proxy, na osobnym runnerze po specu INP dialogu, na tym samym buildzie
 i Chromium co Playwright; wynik zbiera wymagany check `E2E (Playwright)`; własny
-`next start` na porcie 3100). Strony: `/pl`, `/pl/oferty-pracy`, pierwsza oferta z listy,
+`next start` na porcie 3100). Tryb produktu (#1166): strony i INP-proxy listy (filtry, zapis
+oferty) mierzone na serwerze `PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY` (tryb produkcyjny), INP otwarcia
+ApplyModal — na drugim serwerze `RECRUITMENT` uruchamianym po pierwszym na tym samym porcie
+(przed każdym startem czyszczone `.next/cache/isr-handler`, żeby nie podać stron ISR drugiego
+trybu); tryb serwera sprawdzany na szczególe oferty (zły tryb = błąd). Z `--base` podany serwer
+musi być ogłoszeniowy, a ApplyModal mierzy się tylko z `--recruitment-base <url>`. Strony: `/pl`, `/pl/oferty-pracy`, pierwsza oferta z listy,
 pierwszy poradnik, `/pl/logowanie` × {pierwsza wizyta, z zapisaną zgodą} × 3 próby
 w świeżym kontekście, przeplatane runda po rundzie; liczy się **mediana**. Warunki: CPU 4×
 (CDP), 1,6 Mb/s / 750 kb/s, RTT 150 ms, 412×823 (mobile, DPR 2), żądania spoza serwera
@@ -232,7 +237,8 @@ Lokalnie (po `npm run build`):
 ```bash
 node scripts/perf-budget-static.mjs
 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/perf-lab.mjs   # własny next start :3100
-node scripts/perf-lab.mjs --base http://localhost:3000                         # istniejący serwer
+node scripts/perf-lab.mjs --base http://localhost:3000                         # istniejący serwer (ogłoszeniowy)
+node scripts/perf-lab.mjs --base http://localhost:3000 --recruitment-base http://localhost:3001  # + ApplyModal
 node scripts/perf-lab.mjs --runs 5 --out /tmp/perf-lab.json
 node scripts/perf-lab.mjs --interactions-only --inject-click-delay-ms 300           # kontrola ujemna INP → kod 1
 ```

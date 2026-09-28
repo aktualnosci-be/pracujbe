@@ -87,7 +87,9 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: /Dalej: Języki i certyfikaty/ }).click();
 
   // Krok 5: małe akcje usunięcia pozostają wygodnym celem dotykowym.
-  await page.getByPlaceholder('np. niderlandzki').fill('Niderlandzki');
+  // Język ze słownika (0168): lista zamiast pola tekstowego.
+  await page.getByRole('combobox', { name: 'Języki', exact: true }).click();
+  await page.getByRole('option', { name: 'Niderlandzki', exact: true }).click();
   await page.getByRole('button', { name: 'Dodaj język' }).click();
   await expectMinimumTarget(page.getByRole('button', { name: 'Usuń: Niderlandzki' }));
   await page.getByPlaceholder('np. VCA, świadectwo kwalifikacji').fill('VCA');
@@ -105,7 +107,10 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.getByRole('button', { name: /Dalej: Preferencje i podsumowanie/ }).click();
 
   // Krok 6: wymagane są dostępność, regulamin i (osobno, #493) informacja o prywatności.
-  await page.getByLabel('Dostępność').click();
+  // Rola `combobox` (nie `getByLabel`): po naprawie #819 listbox otwartego Selecta ma
+  // teraz własną, poprawnie rozwiązywalną nazwę — `getByLabel('Dostępność')` łapał wtedy
+  // zarówno trigger, jak i listbox naraz (tryb strict Playwrighta).
+  await page.getByRole('combobox', { name: 'Dostępność' }).click();
   await page.getByRole('option', { name: 'Od zaraz' }).click();
   await page.getByRole('checkbox', { name: /^Akceptuję regulamin/ }).click();
   await page.getByRole('checkbox', { name: /^Zapoznałem\(-am\) się z informacją o prywatności/ }).click();

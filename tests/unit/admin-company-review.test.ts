@@ -281,4 +281,46 @@ describe('#310 e-maile do właściciela firmy w jego języku', () => {
       buildDeliveryData({ template: 'companyVerified', locale: 'de', payload: {} }, SITE).locale,
     ).toBe('en');
   });
+
+  // #843: CTA prowadzi do FIRMY, KTÓREJ DOTYCZY decyzja (`entity_id`), nie do aktywnej firmy
+  // z cookie odbiorcy — właściciel kilku firm inaczej trafiał na dane złej firmy.
+  const COMPANY_ID = '9b7f8e2c-1a4d-4e6b-8c3f-2d5a7e9b1c40';
+
+  it.each(TEMPLATES)('%s: CTA niesie identyfikator firmy z decyzji (#843)', (template) => {
+    const built = buildDeliveryData(
+      {
+        template,
+        locale: 'pl',
+        payload: { companyName: 'Acme BV', reason: template === 'companyVerified' ? undefined : 'x' },
+        entity_type: 'company',
+        entity_id: COMPANY_ID,
+      },
+      SITE,
+    );
+    const url = built.data['actionUrl'];
+    expect(url).toBe(`${SITE}/pl/employer/firma?firma=${COMPANY_ID}`);
+  });
+
+  it('KONTROLA UJEMNA (#843): bez `entity_id` CTA wraca do ogólnego adresu bez identyfikatora', () => {
+    const built = buildDeliveryData(
+      { template: 'companySuspended', locale: 'pl', payload: { companyName: 'Acme', reason: 'x' } },
+      SITE,
+    );
+    expect(built.data['actionUrl']).toBe(`${SITE}/pl/employer/firma`);
+    expect(built.data['actionUrl']).not.toContain('firma=');
+  });
+
+  it('obcy `entity_type` (np. inna decyzja) nie dokleja identyfikatora do CTA firmy', () => {
+    const built = buildDeliveryData(
+      {
+        template: 'companyRejected',
+        locale: 'pl',
+        payload: { companyName: 'Acme', reason: 'x' },
+        entity_type: 'moderation_decision',
+        entity_id: COMPANY_ID,
+      },
+      SITE,
+    );
+    expect(built.data['actionUrl']).toBe(`${SITE}/pl/employer/firma`);
+  });
 });

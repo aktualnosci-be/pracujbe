@@ -147,6 +147,7 @@ export default async function EmployerTeamPage({
             </h2>
             <p className={PANEL_P}>{t('inviteDesc')}</p>
             <TeamInvite
+              companyId={data.companyId}
               actorRole={data.activeRole}
               invitations={data.invitations.map((inv) => ({
                 id: inv.id,

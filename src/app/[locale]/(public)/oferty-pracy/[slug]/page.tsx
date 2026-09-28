@@ -1,3 +1,4 @@
+import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
 import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
@@ -16,13 +17,25 @@ import {
   Languages as LanguagesIcon,
   MapPin,
   MessageSquare,
+  Scale,
   Truck,
+  Utensils,
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { HELP_VERIFICATION_HREF } from '@/lib/help-anchors';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
+import {
+  buildJobBenefitsText,
+  buildJobCostItems,
+  formatEuro,
+  hasJobCostDetails,
+  type JobCostItem,
+  type JobCostLabels,
+} from '@/lib/job-costs';
+import { minimumWagesUrl } from '@/lib/joint-committees';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
 import { getCandidateMinAge } from '@/lib/data/age-policy';
@@ -45,9 +58,12 @@ import {
 } from '@/components/dashboard/panel-styles';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
+import { EmployerApplyChannel } from '@/components/public/EmployerApplyChannel';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
-import { JobMatchCard } from '@/components/public/JobMatchCard';
+// #1130: osobny chunk — karta dopasowania tylko w trybie RECRUITMENT (budżet JS #395).
+import { JobMatchCardLazy as JobMatchCard } from '@/components/public/JobMatchCardLazy';
 import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
@@ -63,6 +79,11 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
  *
  * Oferta demonstracyjna (#297, `job.isDemo`): baner „dane przykładowe”, bez odznaki
  * weryfikacji, bez JobPosting, noindex i modal z komunikatem zamiast formularza aplikacji.
+ *
+ * Tryb ogłoszeniowy (#1130, decyzja produktowa: portal ogłoszeniowy): zamiast `ApplyModal`
+ * przycisk „Aplikuj u pracodawcy” prowadzi do kanału ogłoszeniodawcy (`job.applyChannel`:
+ * strona https w nowej karcie, `mailto:` albo `tel:`), bez „Wyślij wiadomość”. Oferta bez kanału
+ * = brak przycisku i neutralny komunikat. Tryb `RECRUITMENT` — dotychczasowy `ApplyModal`.
  *
  * Uwaga na Invariant #8: nie fabrykujemy danych osobowych kontaktu ani ocen — kontakt jest
  * generyczny (przez platformę), a aplikowanie/zapis wymagają konta (logowanie).
@@ -197,6 +218,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+/** Ikony pozycji „Koszty i dodatki” (dekoracja, `aria-hidden`). */
+const COST_ICONS: Record<JobCostItem['key'], typeof Home> = {
+  accommodation: Home,
+  transport: Truck,
+  mealVouchers: Utensils,
+  jointCommittee: Scale,
+};
+
 export default async function JobDetailPage({ params }: PageProps) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
@@ -205,8 +234,9 @@ export default async function JobDetailPage({ params }: PageProps) {
   if (!job) {
     notFound();
   }
+  const messagingOn = isRecruitmentEnabled('messaging');
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, format, candidateMinAge] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -215,10 +245,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('apply'),
     getTranslations('contentReport'),
     getTranslations('landing'),
+    getTranslations('languageNames'),
     getFormatter(),
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
+  // I18N-02: wymagane języki w języku widza (kod słownika 0168 / nazwa PL-NL-FR-EN), a nie
+  // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
+  const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
 
   const passportFields = buildJobDetailPassportFields(job, locale, {
     location: tJobs('passport.location'),
@@ -232,10 +266,38 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
 
+  // 0169: „Koszty i dodatki” — sekcja strony i `jobBenefits` w JSON-LD z jednego źródła.
+  const pageLocale: Locale = (routing.locales as readonly string[]).includes(locale)
+    ? (locale as Locale)
+    : routing.defaultLocale;
+  const costLabels: JobCostLabels = {
+    accommodation: t('accommodation'),
+    transport: t('transport'),
+    mealVouchers: t('mealVouchers'),
+    jointCommittee: t('jointCommittee'),
+    yes: tCommon('yes'),
+    no: tCommon('no'),
+    kind: (kind) => t(`costs.kind.${kind}`),
+    cost: (amount, period) => t('costs.cost', { amount, period }),
+    free: t('costs.free'),
+    deducted: (yes) => t(yes ? 'costs.deductedYes' : 'costs.deductedNo'),
+    registration: (yes) => t(yes ? 'costs.registrationYes' : 'costs.registrationNo'),
+    afterContract: (value) => t(`costs.afterContract.${value}`),
+    shuttle: t('costs.shuttle'),
+    reimbursed: t('costs.reimbursed'),
+    mealPerDay: (amount) => t('costs.mealPerDay', { amount }),
+    committeeCode: (code) => t('costs.committeeCode', { code }),
+    money: (amount) => formatEuro(amount, pageLocale),
+  };
+  const costItems = buildJobCostItems(job, costLabels, pageLocale);
+  const hasCostDetails = hasJobCostDetails(job.costs);
+
   const url = `${env.siteUrl}/${locale}${BASE_PATH}/${slug}`;
   const version = contentLanguage(job, locale);
   // JobPosting tylko na wersji kanonicznej — wersja bez tłumaczenia nie powiela danych (#301).
   // Fikcyjna oferta demo nie udaje ogłoszenia o pracę w danych strukturalnych (#297).
+  // #1130: tryb czytany przy renderze (ISR na serwerze), nie w przeglądarce — patrz portal-mode.ts.
+  const recruitment = isRecruitmentEnabled('applications');
   const jsonLd = version.fallback || job.isDemo
     ? null
     : buildJobPostingJsonLd(job, url, {
@@ -245,7 +307,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         conditions: t('conditions'),
         workingHours: t('workingHours'),
         shifts: t('shifts'),
-      });
+      }, { jobBenefits: buildJobBenefitsText(job, costLabels, pageLocale), directApply: recruitment });
   // BreadcrumbList (SEO): Strona główna → Praca → branża (landing `/praca/kategoria/<klucz>`,
   // jak ścieżka tego landingu) → oferta. Tylko tam, gdzie JobPosting — wersja bez tłumaczenia
   // kanonizuje się do innego języka (#301), a oferta demo jest noindex (#297).
@@ -261,7 +323,10 @@ export default async function JobDetailPage({ params }: PageProps) {
       )
     : null;
   // Treść w innym języku niż strona → `lang` na fragmentach treści (WCAG 3.1.2).
-  const contentLang = version.fallback ? version.contentLocale : undefined;
+  // Przekład (#33) jest w języku strony — bez `lang`, za to z oznaczeniem i linkiem do oryginału.
+  // SEO bez zmian: wersja z przekładem nadal kanonizuje się do oryginału i nie ma JobPosting.
+  const translation = job.machineTranslation;
+  const contentLang = version.fallback && !translation ? version.contentLocale : undefined;
 
   // Podobne oferty (ta sama kategoria, bez bieżącej). Sekcja pomocnicza: jej błąd odczytu
   // nie przerywa strony — opis, firma i aplikowanie zostają dostępne (#191).
@@ -347,7 +412,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
       {job.isDemo ? <DemoJobsNotice className="mt-6" /> : null}
       {/* Lejek ofert (#99): zliczenie po załadowaniu, bez wpływu na cache ISR tej strony. */}
-      {job.isDemo ? null : <JobFunnelBeacon event="detail_view" jobIds={[job.id]} />}
+      {job.isDemo ? null : <JobFunnelBeacon event="detail_view" jobIds={[job.id]} applyClicks={!recruitment} />}
 
       {/* `.offer-layout` (#7, Z2): treść + panel 300 px, odstęp 36 px; jedna kolumna < 1024 px. */}
       <div className="mt-[30px] grid min-w-0 gap-9 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -375,9 +440,28 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <span className="break-words">{job.companyName}</span>
               )}
               {job.companyVerified && !job.isDemo ? (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
-                  <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {t('verified')}
+                <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium">
+                  <span className="inline-flex items-center gap-1 text-success-text" data-testid="job-detail-verified">
+                    <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {t('verified')}
+                  </span>
+                  {/* #1151: odznaka = zweryfikowane dane rejestrowe firmy; wyjaśnienie w Pomocy. */}
+                  <Link
+                    href={HELP_VERIFICATION_HREF}
+                    className="rounded-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    {t('verifiedHelp')}
+                  </Link>
+                </span>
+              ) : null}
+              {job.isAgency ? (
+                // 0167: oferta agencji pracy tymczasowej (deklaracja firmy).
+                <span
+                  data-testid="job-detail-agency"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+                >
+                  <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {tJobs('agencyBadge')}
                 </span>
               ) : null}
             </p>
@@ -420,6 +504,25 @@ export default async function JobDetailPage({ params }: PageProps) {
               <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
             </p>
+
+            {translation ? (
+              <p data-testid="job-machine-translation" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+                <LanguagesIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="break-words">
+                  {translation.origin === 'ai'
+                    ? t('machineTranslationNotice', { language: t(`contentLanguageNames.${translation.sourceLocale}`) })
+                    : t('manualTranslationNotice', { language: t(`contentLanguageNames.${translation.sourceLocale}`) })}{' '}
+                  <Link
+                    href={`${BASE_PATH}/${slug}`}
+                    locale={translation.sourceLocale}
+                    hrefLang={translation.sourceLocale}
+                    className={TEXT_LINK}
+                  >
+                    {t('translationOriginalLink')}
+                  </Link>
+                </span>
+              </p>
+            ) : null}
 
             {contentLang ? (
               <p data-testid="job-content-language" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
@@ -514,36 +617,50 @@ export default async function JobDetailPage({ params }: PageProps) {
               </Section>
             ) : null}
 
-            <Section title={t('accommodationCommute')}>
+            <Section title={t('costsTitle')}>
               {/*
-                Każda para dt/dd jest bezpośrednio w `div` będącym dzieckiem `dl` (HTML/axe
-                `definition-list`); ikona jest dekoracją wewnątrz `dt`, pozycjonowaną w lewym odstępie.
+                0169: „Koszty i dodatki” (deklaracja pracodawcy). Każda para dt/dd jest bezpośrednio
+                w `div` będącym dzieckiem `dl` (HTML/axe `definition-list`); ikona jest dekoracją
+                wewnątrz `dt`, pozycjonowaną w lewym odstępie.
               */}
-              <dl className="grid gap-4 sm:grid-cols-2">
-                <div className="relative pl-[1.875rem]">
-                  <dt className="text-sm text-muted-foreground">
-                    <Home
-                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    {t('accommodation')}
-                  </dt>
-                  <dd className="font-medium text-foreground">
-                    {job.accommodation ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
-                <div className="relative pl-[1.875rem]">
-                  <dt className="text-sm text-muted-foreground">
-                    <Truck
-                      className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                    {t('transport')}
-                  </dt>
-                  <dd className="font-medium text-foreground">
-                    {job.transport ? tCommon('yes') : tCommon('no')}
-                  </dd>
-                </div>
+              <dl className="grid gap-4 sm:grid-cols-2" data-testid="job-costs">
+                {costItems.map((item) => {
+                  const Icon = COST_ICONS[item.key];
+                  return (
+                    <div key={item.key} className="relative pl-[1.875rem]" data-cost-item={item.key}>
+                      <dt className="text-sm text-muted-foreground">
+                        <Icon
+                          className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        {item.label}
+                      </dt>
+                      <dd className="font-medium text-foreground">
+                        {item.value}
+                        {item.details.length > 0 ? (
+                          <ul className="mt-1 space-y-0.5 text-sm font-normal text-muted-foreground">
+                            {item.details.map((detail) => (
+                              <li key={detail}>{detail}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {item.committeeCode ? (
+                          <p className="mt-1 text-sm font-normal text-muted-foreground">
+                            <a
+                              href={minimumWagesUrl(pageLocale)}
+                              className="font-medium text-foreground underline underline-offset-2"
+                              rel="noreferrer"
+                            >
+                              {t('costs.minimumWagesLink')}
+                            </a>
+                            {' '}
+                            {t('costs.minimumWagesNote')}
+                          </p>
+                        ) : null}
+                      </dd>
+                    </div>
+                  );
+                })}
                 {job.languages.length > 0 ? (
                   <div className="relative pl-[1.875rem]">
                     <dt className="text-sm text-muted-foreground">
@@ -553,10 +670,13 @@ export default async function JobDetailPage({ params }: PageProps) {
                       />
                       {t('languages')}
                     </dt>
-                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
+                    <dd className="font-medium text-foreground">{languageNames}</dd>
                   </div>
                 ) : null}
               </dl>
+              {hasCostDetails ? (
+                <p className="mt-3 text-sm text-muted-foreground">{t('costsDeclared')}</p>
+              ) : null}
             </Section>
           </div>
 
@@ -625,13 +745,19 @@ export default async function JobDetailPage({ params }: PageProps) {
         {/* Panel boczny */}
         <aside className="min-w-0">
           <div className="space-y-5 lg:sticky lg:top-24">
-            {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka) */}
-            <div data-testid="job-match-slot">
-              <JobMatchCard jobId={job.id} />
-            </div>
+            {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka).
+                #1131: w trybie ogłoszeniowym brak slotu — wyspa nie woła akcji dopasowania. */}
+            {isRecruitmentEnabled('matching') ? (
+              <div data-testid="job-match-slot">
+                <JobMatchCard jobId={job.id} />
+              </div>
+            ) : null}
 
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             {/* `.paper.apply-box` — „Twój następny krok”: Aplikuj (`.btn`) i Zapisz (`.btn.secondary`). */}
+            {/* #1130: w trybie ogłoszeniowym ramka widoczna także na mobile — wymienia wszystkie
+                kanały ogłoszeniodawcy (dolny pasek ma tylko przycisk główny). */}
+            {recruitment ? (
             <section className={cn(PAPER, 'my-0 hidden lg:block')}>
               <p className={EYEBROW}>{t('applyBoxEyebrow')}</p>
               <h2 className={cn(H2_EXTENDED, 'mt-2')}>{t('applyBoxTitle')}</h2>
@@ -651,6 +777,22 @@ export default async function JobDetailPage({ params }: PageProps) {
               />
               <PublicSaveJobButton jobId={job.id} passport className="mt-3 w-full" />
             </section>
+            ) : (
+              <section className={cn(PAPER, 'my-0')} id="aplikuj" data-testid="employer-apply-box">
+                <p className={EYEBROW}>{t('applyBoxEyebrow')}</p>
+                <h2 className={cn(H2_EXTENDED, 'mt-2')}>{t('employerApply.boxTitle')}</h2>
+                <p className={cn(P_EXTENDED, 'mt-2')}>{t('employerApply.boxText')}</p>
+                <EmployerApplyChannel
+                  jobId={job.id}
+                  jobTitle={job.title}
+                  channel={job.applyChannel}
+                  demo={job.isDemo}
+                  variant="box"
+                  className="mt-3"
+                />
+                <PublicSaveJobButton jobId={job.id} passport className="mt-3 hidden w-full lg:flex" />
+              </section>
+            )}
 
             {/* Kontakt */}
             <div className={cn(PAPER, 'my-0')}>
@@ -659,16 +801,20 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="break-words font-medium text-foreground">{job.companyName}</p>
-                  <p className="text-sm text-muted-foreground">{t('contactViaPlatform')}</p>
+                  {/* #1134: kontakt przez platformę tylko przy włączonych rozmowach. */}
+                  <p className="text-sm text-muted-foreground">
+                    {messagingOn ? t('contactViaPlatform') : t('employerApply.contact')}
+                  </p>
                 </div>
               </div>
               {job.languages.length > 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {t('languages')}: {job.languages.join(', ')}
+                  {t('languages')}: {languageNames}
                 </p>
               ) : null}
-              {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}
-              {job.isDemo ? null : (
+              {/* Do fikcyjnej firmy demo nie da się napisać (#297). #1134: w trybie ogłoszeniowym
+                  (decyzja produktowa) portal nie prowadzi rozmów — bez „Wyślij wiadomość”. */}
+              {!messagingOn || job.isDemo || !recruitment ? null : (
                 <Link
                   href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
                   className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
@@ -745,6 +891,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_hsl(var(--foreground)/0.08)] backdrop-blur lg:hidden max-lg:[body:has(&)]:pb-24 max-lg:[html:has(&)]:scroll-pb-28"
       >
         <PublicSaveJobButton jobId={job.id} iconOnly />
+        {recruitment ? (
         <ApplyModal
           jobId={job.id}
           companyName={job.companyName}
@@ -756,6 +903,15 @@ export default async function JobDetailPage({ params }: PageProps) {
           triggerSize="passport"
           triggerClassName="min-w-0 flex-1"
         />
+        ) : (
+          <EmployerApplyChannel
+            jobId={job.id}
+            jobTitle={job.title}
+            channel={job.applyChannel}
+            demo={job.isDemo}
+            variant="bar"
+          />
+        )}
       </div>
     </div>
     </PublicSavedJobsProvider>

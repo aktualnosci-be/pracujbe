@@ -71,6 +71,12 @@ const MUTATIONS = {
   // Język e-maila nie z profilu odbiorcy (Invariant #1).
   'recipient-locale-en': `CREATE OR REPLACE FUNCTION public.resolve_recipient_locale(p_profile_id uuid) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT 'en'::text $$`,
+  // #497 (0154): pytanie odrzucone po publikacji wraca do formularza aplikowania.
+  'screening-hidden-off': `CREATE OR REPLACE FUNCTION public.get_public_job_screening_questions(p_job_id uuid)
+    RETURNS TABLE (id uuid, "position" smallint, type text, required boolean, prompt jsonb, options jsonb)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT q.id, q.position, q.type, q.required, q.prompt, q.options FROM public.job_screening_questions q
+     WHERE q.job_id = p_job_id AND public.job_is_public(p_job_id) ORDER BY q.position $$`,
   // Lejek ofert bez deduplikacji po nonce: ponowienie tego samego zgłoszenia liczy się dwa razy (#99).
   'funnel-no-dedup': 'ALTER TABLE public.job_funnel_receipts DROP CONSTRAINT job_funnel_receipts_pkey',
   // UI (#351): odpowiedź na propozycję zwraca sukces bez zmiany stanu — panel pokazuje
@@ -88,6 +94,16 @@ const MUTATIONS = {
       d := pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure);
       IF position($q$v_cstatus <> 'verified'$q$ IN d) = 0 THEN RAISE EXCEPTION 'mutacja: brak warunku weryfikacji'; END IF;
       EXECUTE replace(d, $q$v_cstatus <> 'verified'$q$, 'false');
+    END $mut$`,
+  // #1148: zapis wyszukiwania wymaga ukończonego onboardingu (regresja trybu ogłoszeniowego).
+  'saved-search-requires-onboarding': `DO $mut$ DECLARE d text; BEGIN
+      d := pg_get_functiondef('public.save_saved_search(text, text, jsonb, text, text)'::regprocedure);
+      IF position('v_filters := public.saved_search_canonical_filters(' IN d) = 0 THEN
+        RAISE EXCEPTION 'mutacja: brak kanonizacji filtrów'; END IF;
+      EXECUTE replace(d, 'v_filters := public.saved_search_canonical_filters(',
+        $q$IF NOT EXISTS (SELECT 1 FROM public.candidate_profiles cp WHERE cp.profile_id = v_uid AND cp.profile_completed)
+           THEN RAISE EXCEPTION 'ONBOARDING_REQUIRED' USING errcode = '42501'; END IF;
+         v_filters := public.saved_search_canonical_filters($q$);
     END $mut$`,
   'retry-new-key': null,
 };
@@ -132,6 +148,11 @@ async function prepare() {
     const migrations = await loadProductionMigrations();
     const { applied } = await applyMigrations(c, migrations);
     console.log(`>> migracje produkcyjne: ${applied}`);
+    // #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym; zestaw real-flow sprawdza
+    // przepływ rekrutacyjny, więc włącza RECRUITMENT jawnie (RPC). Serwer aplikacji dostaje
+    // PORTAL_LEGAL_MODE=RECRUITMENT (#1136) — tryb efektywny = env ORAZ baza.
+    await c.query(`SELECT public.admin_set_portal_legal_mode('RECRUITMENT',
+      'e2e-real: przepływ rekrutacyjny', 'CLASSIFIEDS_ONLY')`);
     for (const login of Object.values(logins)) {
       // Nazwy i hasła generujemy sami (hex), więc interpolacja nie przyjmuje danych z zewnątrz.
       await c.query(`CREATE ROLE ${login.name} LOGIN PASSWORD '${login.password}'
@@ -183,6 +204,8 @@ function runPlaywright() {
           E2E_REAL_AUTH_URL: url(logins.auth.name, logins.auth.password, database),
           E2E_REAL_DATABASE: database,
           E2E_REAL_MUTATION: mutation,
+          // #1136: proces testów importuje moduły aplikacji — przepływ rekrutacyjny jawnie włączony.
+          PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT',
           // Proces testów importuje moduły serwerowe aplikacji — patrz server-only-hook.cjs.
           NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${serverOnlyHook}`].filter(Boolean).join(' '),
         },

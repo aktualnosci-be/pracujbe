@@ -35,6 +35,8 @@ type SelectContextValue = {
   labels: Record<string, React.ReactNode>;
   registerLabel: (value: string, label: React.ReactNode) => void;
   triggerId: string;
+  labelledBy: string;
+  registerTriggerId: (id: string) => void;
   contentId: string;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
 };
@@ -79,6 +81,15 @@ function Select({
   const reactId = React.useId();
   const triggerId = `${reactId}trigger`;
   const contentId = `${reactId}content`;
+  // Domyślnie lista odwołuje się do wygenerowanego `triggerId`, ale
+  // `SelectTrigger` może dostać własne `id` z zewnątrz (nadpisujące atrybut
+  // przycisku przez `{...props}`) — `registerTriggerId` synchronizuje wtedy
+  // `aria-labelledby` listy z rzeczywistym, wyrenderowanym identyfikatorem,
+  // żeby odwołanie nigdy nie wskazywało na nieistniejący element (#819).
+  const [labelledBy, setLabelledBy] = React.useState(triggerId);
+  const registerTriggerId = React.useCallback((id: string) => {
+    setLabelledBy((prev) => (prev === id ? prev : id));
+  }, []);
 
   const setOpen = React.useCallback(
     (next: boolean) => {
@@ -128,10 +139,24 @@ function Select({
       labels,
       registerLabel,
       triggerId,
+      labelledBy,
+      registerTriggerId,
       contentId,
       triggerRef,
     }),
-    [value, onSelect, open, setOpen, disabled, labels, registerLabel, triggerId, contentId],
+    [
+      value,
+      onSelect,
+      open,
+      setOpen,
+      disabled,
+      labels,
+      registerLabel,
+      triggerId,
+      labelledBy,
+      registerTriggerId,
+      contentId,
+    ],
   );
 
   return (
@@ -150,16 +175,24 @@ Select.displayName = 'Select';
 const SelectTrigger = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, children, onClick, onKeyDown, ...props }, forwardedRef) => {
-  const { open, setOpen, disabled, triggerId, contentId, triggerRef } =
+>(({ className, children, onClick, onKeyDown, id, ...props }, forwardedRef) => {
+  const { open, setOpen, disabled, triggerId, contentId, triggerRef, registerTriggerId } =
     useSelectContext('SelectTrigger');
   const composedRef = useComposedRefs(forwardedRef, triggerRef);
+  // `id` własne wywołującego ma pierwszeństwo (zgodność z API shadcn/Radix);
+  // bez niego zostaje wygenerowany `triggerId`. Zawsze zgłaszamy do kontekstu
+  // ID faktycznie wyrenderowane na przycisku, żeby `SelectContent` mogło
+  // ustawić na nim `aria-labelledby` (#819).
+  const resolvedId = id ?? triggerId;
+  React.useEffect(() => {
+    registerTriggerId(resolvedId);
+  }, [resolvedId, registerTriggerId]);
 
   return (
     <button
       ref={composedRef}
       type="button"
-      id={triggerId}
+      id={resolvedId}
       role="combobox"
       aria-haspopup="listbox"
       aria-expanded={open}
@@ -224,7 +257,7 @@ const SelectContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, children, onKeyDown, ...props }, forwardedRef) => {
-  const { open, setOpen, value, onSelect, triggerId, contentId, triggerRef } =
+  const { open, setOpen, value, onSelect, labelledBy, contentId, triggerRef } =
     useSelectContext('SelectContent');
   const contentRef = React.useRef<HTMLDivElement | null>(null);
   const composedRef = useComposedRefs(forwardedRef, contentRef);
@@ -274,7 +307,7 @@ const SelectContent = React.forwardRef<
       ref={composedRef}
       id={contentId}
       role="listbox"
-      aria-labelledby={triggerId}
+      aria-labelledby={labelledBy}
       tabIndex={-1}
       hidden={!open}
       data-state={open ? 'open' : 'closed'}

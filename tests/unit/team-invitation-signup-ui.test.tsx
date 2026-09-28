@@ -61,7 +61,7 @@ afterEach(cleanup);
 
 describe('TeamInvite — język zaproszenia', () => {
   it('domyślnie język strony (nl), 4 języki, wybrany język idzie do akcji', async () => {
-    render(withIntl(<TeamInvite actorRole="owner" invitations={[]} />, 'nl'));
+    render(withIntl(<TeamInvite companyId="c0ffee00-0000-4000-8000-000000000001" actorRole="owner" invitations={[]} />, 'nl'));
     const select = screen.getByRole('combobox', { name: nl.team.localeLabel }) as HTMLSelectElement;
     expect(select.value).toBe('nl');
     expect([...select.options].map((o) => o.value)).toEqual(['pl', 'nl', 'fr', 'en']);
@@ -72,6 +72,8 @@ describe('TeamInvite — język zaproszenia', () => {
     fireEvent.click(screen.getByRole('button', { name: nl.team.inviteSubmit }));
     await waitFor(() => expect(inviteTeamMember).toHaveBeenCalledTimes(1));
     expect(vi.mocked(inviteTeamMember).mock.calls[0]![0]).toMatchObject({ email: 'nowy@firma.be', locale: 'fr' });
+    // EMP-02: akcja dostaje firmę, dla której wyrenderowano formularz.
+    expect(vi.mocked(inviteTeamMember).mock.calls[0]![1]).toBe('c0ffee00-0000-4000-8000-000000000001');
     expect(await screen.findByText(nl.team.invitedSent)).toBeVisible();
   });
 });

@@ -95,6 +95,8 @@ const FIXTURE_ONLY_SPECS = [
   '**/candidate-applications-pagination.spec.ts',
   '**/candidate-applications-error.spec.ts',
   '**/candidate-proposals-pagination.spec.ts',
+  // Zapisane oferty zamknięte/wygasłe/wstrzymane (0162) — dane fikcyjne ze wszystkimi stanami.
+  '**/candidate-saved-closed.spec.ts',
   '**/candidate-dashboard-read-errors.spec.ts',
   '**/public-read-failures.spec.ts',
   // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
@@ -122,6 +124,206 @@ const FIXTURE_ONLY_SPECS = [
  * karty nie zabierają im CPU. Pozostałe testy nie mierzą czasu i biegną równolegle.
  */
 const TIMING_SPECS = ['**/dialog-open-inp.spec.ts'];
+
+/**
+ * Podział zestawu demo (projekt `chromium`) na 3 shardy CI PO CZASIE testów, nie po ich
+ * liczbie: `--shard` Playwrighta dzieli PLIKI alfabetycznie, a najdłuższe przeglądy axe
+ * (a11y*, admin-*, cookie-consent-categories, panel-a11y) leżą blisko siebie w alfabecie —
+ * shard 1/3 trwał 7,4 min, 2/3 2,5 min, 3/3 5,1 min (przebieg 36327645914, 27.09.2026).
+ *
+ * Jak część 2 trybu `full` w playwright.applications-fixture.config.ts: jawna lista speców
+ * zamiast `--shard`. Tu DWIE jawne listy (DEMO_SHARD_1_SPECS, DEMO_SHARD_2_SPECS, każda
+ * ~280 s zmierzonego czasu testów z ~836 s całości zestawu, dobrane zachłannie z pomiaru
+ * per-spec tego przebiegu) i shard 3 = CAŁA RESZTA (dopełnienie, bez własnej listy) — nowy
+ * spec trafia tam sam, bez dopisywania. Gdy któryś shard wyraźnie odstaje po kolejnym
+ * pomiarze, przesuń spec między listami/resztą.
+ *
+ * `E2E_DEMO_SHARD=1|2|3` z macierzy `e2e-shard` w .github/workflows/ci.yml (bez `--shard`
+ * w komendzie — dzieli tylko ta konfiguracja, inaczej podwójny podział zgubiłby testy).
+ * Bez zmiennej (lokalnie) — cały zestaw naraz.
+ */
+const DEMO_SHARDS = ['1', '2', '3'];
+const DEMO_SHARD_1_SPECS = [
+  '**/admin-a11y.spec.ts',
+  '**/admin-breaches.spec.ts',
+  '**/admin-campaign-banner.spec.ts',
+  '**/admin-email-campaigns.spec.ts',
+  '**/admin-email-suppressions.spec.ts',
+  '**/auth-error-focus.spec.ts',
+  '**/auth-login-employer-link.spec.ts',
+  '**/auth-next-links.spec.ts',
+  '**/campaign-banner.spec.ts',
+  '**/candidate-application-answers.spec.ts',
+  '**/candidate-company-blocks.spec.ts',
+  '**/candidate-dashboard-contrast.spec.ts',
+  '**/candidate-onboarding-a11y.spec.ts',
+  '**/candidate-onboarding.spec.ts',
+  '**/candidate-profile-passport.spec.ts',
+  '**/candidate-profile-visibility.spec.ts',
+  '**/candidate-real-proposal-banner.spec.ts',
+  '**/candidate-settings-actions.spec.ts',
+  '**/demo-jobs-labelled.spec.ts',
+  '**/employer-application-screening.spec.ts',
+  '**/employer-candidates-passport.spec.ts',
+  '**/employer-dashboard-a11y.spec.ts',
+  '**/employer-job-duplicate.spec.ts',
+  '**/employer-offer-status-flow.spec.ts',
+  '**/employer-offers-passport.spec.ts',
+  '**/employer-wizard-passport.spec.ts',
+  '**/faq-redirect.spec.ts',
+  '**/flows.spec.ts',
+  '**/form-control-border-contrast.spec.ts',
+  '**/guides-breadcrumb.spec.ts',
+  '**/home-hero.spec.ts',
+  '**/job-detail-cta-bar.spec.ts',
+  '**/job-detail-salary.spec.ts',
+  '**/job-detail-sections.spec.ts',
+  '**/job-detail-tabs.spec.ts',
+  '**/job-passport.spec.ts',
+  '**/job-wizard-step9-draft.spec.ts',
+  '**/jobs-hub-text-zoom.spec.ts',
+  '**/jobs-list-results-focus.spec.ts',
+  '**/jobs-list-sidebar-reach.spec.ts',
+  '**/landing-city-redirect.spec.ts',
+  '**/messages-loading.spec.ts',
+  '**/notifications-bell.spec.ts',
+  '**/one-time-link-tracking.spec.ts',
+  '**/panel-noindex.spec.ts',
+  '**/panel-stats-text-zoom.spec.ts',
+  '**/saved-search.spec.ts',
+  '**/shell-footer-guides.spec.ts',
+  '**/shell-locale-switcher.spec.ts',
+  '**/shell-not-found-chrome.spec.ts',
+];
+const DEMO_SHARD_2_SPECS = [
+  '**/a11y.spec.ts',
+  '**/admin-company-review.spec.ts',
+  '**/admin-ux.spec.ts',
+  '**/admin-web-vitals.spec.ts',
+  '**/auth-age-declaration.spec.ts',
+  '**/auth-terms-links.spec.ts',
+  '**/candidate-account-data.spec.ts',
+  '**/candidate-dashboard-polish.spec.ts',
+  '**/candidate-recommended-explanation.spec.ts',
+  '**/consent-separation.spec.ts',
+  '**/cookie-consent-focus.spec.ts',
+  '**/cookie-settings-contrast.spec.ts',
+  '**/cv-upload-size.spec.ts',
+  '**/dialog-open-cost.spec.ts',
+  '**/email-unsubscribe.spec.ts',
+  '**/employer-application-detail.spec.ts',
+  '**/employer-applications-passport.spec.ts',
+  '**/employer-company-passport.spec.ts',
+  '**/employer-entry.spec.ts',
+  '**/employer-job-edit-published.spec.ts',
+  '**/employer-team.spec.ts',
+  '**/employers-page.spec.ts',
+  '**/guides-reflow.spec.ts',
+  '**/help-contact.spec.ts',
+  '**/home-photo.spec.ts',
+  '**/job-assist.spec.ts',
+  '**/job-detail-a11y.spec.ts',
+  '**/job-filter-passport.spec.ts',
+  '**/job-import.spec.ts',
+  '**/job-wizard-screening.spec.ts',
+  '**/job-wizard-step-focus.spec.ts',
+  '**/jobs-list-chip-reflow.spec.ts',
+  '**/jobs-list-filter-navigation.spec.ts',
+  '**/jobs-list-header.spec.ts',
+  '**/jobs-list-salary-unit.spec.ts',
+  '**/landing-breadcrumbs.spec.ts',
+  '**/landing-headings.spec.ts',
+  '**/message-report.spec.ts',
+  '**/messages-back-target.spec.ts',
+  '**/messages-mobile.spec.ts',
+  '**/panel-a11y.spec.ts',
+  '**/passport-panel-a11y.spec.ts',
+  '**/prototype-matrix.spec.ts',
+  '**/pwa-locale-manifest.spec.ts',
+  '**/shell-header-reflow-320.spec.ts',
+  '**/shell-mobile-locale.spec.ts',
+  '**/shell-nav-a11y.spec.ts',
+  '**/shell-offline-fallback.spec.ts',
+  '**/smoke.spec.ts',
+  '**/static-asset-cache.spec.ts',
+  '**/structured-data.spec.ts',
+  '**/wizard-stepper-reflow.spec.ts',
+];
+const DEMO_SHARD = process.env.E2E_DEMO_SHARD ?? '';
+if (DEMO_SHARD && !DEMO_SHARDS.includes(DEMO_SHARD)) {
+  throw new Error(`E2E_DEMO_SHARD=${DEMO_SHARD}: dozwolone ${DEMO_SHARDS.join(', ')}`);
+}
+/**
+ * Tryb produktu serwera testowego (#1136). Istniejące specy pokrywają przepływy rekrutacyjne,
+ * więc serwer dostaje JAWNIE `PORTAL_LEGAL_MODE=RECRUITMENT` (bez tego po wyłączeniach z #1128
+ * straciłyby pokrycie). Specy trybu ogłoszeniowego uruchamia się z `E2E_PORTAL_LEGAL_MODE=`
+ * (pusta = CLASSIFIEDS_ONLY, jak domyślnie w produkcji, demo i dev).
+ */
+const E2E_PORTAL_LEGAL_MODE = process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT';
+const CLASSIFIEDS_SERVER = E2E_PORTAL_LEGAL_MODE.trim().toUpperCase() !== 'RECRUITMENT';
+
+/**
+ * Zestaw trybu ogłoszeniowego (#1166) — tryb produkcyjny portalu. Serwer ogłoszeniowy
+ * (`E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY`, job CI `e2e-classifieds`) uruchamia w projekcie
+ * `chromium` WYŁĄCZNIE te speci (reszta zestawu testuje przepływy rekrutacyjne):
+ * - `CLASSIFIEDS_ONLY_SPECS` — sprawdzają wyłączenia i „Aplikuj u pracodawcy”; przy serwerze
+ *   `RECRUITMENT` są pomijane w projekcie `chromium` (w shardach nie ma ich wcale);
+ * - `CLASSIFIEDS_SHARED_SPECS` — strony publiczne i panele, które mają przechodzić w obu trybach
+ *   (biegną też w shardach demo).
+ */
+const CLASSIFIEDS_ONLY_SPECS = [
+  '**/classifieds-employer-stats.spec.ts',
+  '**/classifieds-matching-off.spec.ts',
+  '**/classifieds-messaging-cv-off.spec.ts',
+  '**/classifieds-process-off.spec.ts',
+  '**/classifieds-profile-screening.spec.ts',
+  '**/job-detail-employer-apply.spec.ts',
+];
+const CLASSIFIEDS_SHARED_SPECS = [
+  '**/a11y.spec.ts',
+  '**/employer-dashboard-a11y.spec.ts',
+  '**/employers-page.spec.ts',
+  '**/free-mvp-no-sales.spec.ts',
+  '**/help-contact.spec.ts',
+  '**/job-detail-a11y.spec.ts',
+  '**/landing-headings.spec.ts',
+  '**/panel-noindex.spec.ts',
+  '**/seo.spec.ts',
+  '**/smoke.spec.ts',
+  '**/structured-data.spec.ts',
+];
+const CLASSIFIEDS_SPECS = [...CLASSIFIEDS_ONLY_SPECS, ...CLASSIFIEDS_SHARED_SPECS];
+for (const spec of CLASSIFIEDS_SPECS) {
+  if (!existsSync(join(__dirname, 'tests', 'e2e', spec.replace('**/', '')))) {
+    throw new Error(`CLASSIFIEDS_SPECS: ${spec} nie istnieje w tests/e2e`);
+  }
+}
+if (CLASSIFIEDS_SERVER && DEMO_SHARD) {
+  // Shardy dzielą zestaw rekrutacyjny; serwer ogłoszeniowy ma własny, mały zestaw.
+  throw new Error('E2E_DEMO_SHARD nie łączy się z trybem ogłoszeniowym (E2E_PORTAL_LEGAL_MODE)');
+}
+
+const EXCLUDED_FROM_CHROMIUM = [...FIXTURE_ONLY_SPECS, ...TIMING_SPECS, ...CLASSIFIEDS_ONLY_SPECS];
+for (const [name, specs] of [
+  ['DEMO_SHARD_1_SPECS', DEMO_SHARD_1_SPECS],
+  ['DEMO_SHARD_2_SPECS', DEMO_SHARD_2_SPECS],
+] as const) {
+  for (const spec of specs) {
+    // Literówka albo usunięty spec = shard cicho mniejszy, reszta i tak go pomija.
+    if (!existsSync(join(__dirname, 'tests', 'e2e', spec.replace('**/', '')))) {
+      throw new Error(`${name}: ${spec} nie istnieje w tests/e2e`);
+    }
+    if (EXCLUDED_FROM_CHROMIUM.includes(spec)) {
+      throw new Error(`${name}: ${spec} nie należy do projektu chromium`);
+    }
+  }
+}
+// Ten sam spec w obu listach trafiłby do dwóch shardów naraz (test uruchomiony podwójnie).
+for (const spec of DEMO_SHARD_1_SPECS) {
+  if (DEMO_SHARD_2_SPECS.includes(spec)) {
+    throw new Error(`DEMO_SHARD_1_SPECS i DEMO_SHARD_2_SPECS: ${spec} w obu listach naraz`);
+  }
+}
 
 /**
  * Równoległość w CI: hostowany runner `ubuntu-latest` ma 4 vCPU; jeden rdzeń zostaje dla
@@ -174,12 +376,24 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: [...FIXTURE_ONLY_SPECS, ...TIMING_SPECS],
+      // Shard 1/2 = jawna lista (testMatch); shard 3 = dopełnienie (testIgnore obu list).
+      ...(DEMO_SHARD === '1' ? { testMatch: DEMO_SHARD_1_SPECS } : {}),
+      ...(DEMO_SHARD === '2' ? { testMatch: DEMO_SHARD_2_SPECS } : {}),
+      // Serwer ogłoszeniowy = tylko zestaw trybu ogłoszeniowego (shard wtedy niedozwolony).
+      ...(CLASSIFIEDS_SERVER ? { testMatch: CLASSIFIEDS_SPECS } : {}),
+      testIgnore: [
+        ...FIXTURE_ONLY_SPECS,
+        ...TIMING_SPECS,
+        ...(CLASSIFIEDS_SERVER ? [] : CLASSIFIEDS_ONLY_SPECS),
+        ...(DEMO_SHARD === '3' ? [...DEMO_SHARD_1_SPECS, ...DEMO_SHARD_2_SPECS] : []),
+      ],
       use: BROWSER,
     },
     {
       name: 'chromium-timing',
       testMatch: TIMING_SPECS,
+      // INP otwarcia ApplyModal (#393) — dialog istnieje tylko przy serwerze RECRUITMENT.
+      ...(CLASSIFIEDS_SERVER ? { testIgnore: TIMING_SPECS } : {}),
       // Jeden worker i start po zakończeniu projektu `chromium` = pomiar bez konkurencji o CPU.
       workers: 1,
       dependencies: ['chromium'],
@@ -196,7 +410,13 @@ export default defineConfig({
       ? `npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`
       : `npm run build && npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`,
     // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
-    env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, ...JOB_ASSIST_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
+    env: {
+      ...TRACKER_ENV,
+      ...JOB_IMPORT_ENV,
+      ...JOB_ASSIST_ENV,
+      EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET,
+      PORTAL_LEGAL_MODE: E2E_PORTAL_LEGAL_MODE,
+    },
     url: BASE_URL,
     // Jawne E2E_REUSE_SERVER=1 (poza CI) — np. własny `npm run dev` na tym porcie.
     reuseExistingServer: e2eReuseServer(),

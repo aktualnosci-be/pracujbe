@@ -42,6 +42,14 @@ export default defineConfig({
         },
       },
       {
+        // Strażnik trybu ogłoszeniowego (#1146): `tests/legal/**`, w tym samym jobie `unit`.
+        extends: true,
+        test: {
+          name: 'legal',
+          include: ['tests/legal/**/*.test.{ts,tsx}'],
+        },
+      },
+      {
         extends: true,
         test: {
           name: 'chromium',

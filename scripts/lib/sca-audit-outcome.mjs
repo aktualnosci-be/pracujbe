@@ -38,6 +38,26 @@ function matchesTransientStderr(stderr) {
 }
 
 /**
+ * Odczytuje jedno pole `metadata.vulnerabilities.<severity>` zgodnie z kontraktem
+ * `npm audit`: brakujące pole liczy się jako 0 (severity bez wpisów), ale KAŻDA
+ * obecna wartość musi być nieujemną, skończoną liczbą całkowitą — inaczej nie mamy
+ * wiarygodnego dowodu wyniku audytu (#643: `Number(value) || 0` maskowało tekst,
+ * `NaN`, `Infinity` i liczby ujemne, zamieniając je cicho w zero).
+ *
+ * @param {unknown} value
+ * @returns {{ ok: true, value: number } | { ok: false }}
+ */
+function readVulnerabilityCount(value) {
+  if (value === undefined || value === null) {
+    return { ok: true, value: 0 };
+  }
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return { ok: true, value };
+  }
+  return { ok: false };
+}
+
+/**
  * @param {{ stdout: string, stderr: string }} result
  * @returns {
  *   | { status: 'clean' | 'vulnerable', high: number, critical: number }
@@ -71,9 +91,21 @@ export function classifyAuditResult({ stdout, stderr }) {
 
   const vulnerabilities = parsed?.metadata?.vulnerabilities;
   if (vulnerabilities && typeof vulnerabilities === 'object') {
-    const high = Number(vulnerabilities.high) || 0;
-    const critical = Number(vulnerabilities.critical) || 0;
-    return { status: high + critical > 0 ? 'vulnerable' : 'clean', high, critical };
+    const high = readVulnerabilityCount(vulnerabilities.high);
+    const critical = readVulnerabilityCount(vulnerabilities.critical);
+    if (!high.ok || !critical.ok) {
+      return {
+        status: 'unrecognized',
+        reason:
+          'metadata.vulnerabilities.high/critical spoza kontraktu npm audit ' +
+          '(oczekiwano nieujemnej liczby całkowitej albo braku pola)',
+      };
+    }
+    return {
+      status: high.value + critical.value > 0 ? 'vulnerable' : 'clean',
+      high: high.value,
+      critical: critical.value,
+    };
   }
 
   if (parsed && typeof parsed.error === 'object' && parsed.error !== null) {

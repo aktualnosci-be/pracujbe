@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
+import { getCompanyById, getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
 import { getActiveCompany } from '@/lib/company-context';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
@@ -72,9 +72,38 @@ describe('company read state', () => {
         statusReason: null,
         website: 'https://acme.example',
         logoUrl: null,
+        linksReview: null,
+        agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
         canEdit: true,
       },
     });
+  });
+
+  it('exposes a pending links proposal separately from the published addresses (0156)', async () => {
+    db([{
+      id: 'company-1', name: 'Acme', status: 'verified', website: 'https://acme.example',
+      website_pending: 'https://nowa.acme.example', logo_url_pending: null,
+      links_review_status: 'pending', links_pending_at: '2026-09-26 10:00:00.123+00',
+      links_review_reason: null,
+    }]);
+    expect(await getMyCompany()).toMatchObject({
+      company: {
+        website: 'https://acme.example',
+        linksReview: {
+          status: 'pending',
+          website: 'https://nowa.acme.example',
+          logoUrl: null,
+          submittedAt: '2026-09-26 10:00:00.123+00',
+          reason: null,
+        },
+      },
+    });
+  });
+
+  it('negative control: an unknown review status is not treated as a proposal', async () => {
+    db([{ id: 'company-1', name: 'Acme', status: 'verified', links_review_status: 'approved',
+          website_pending: 'https://x.example' }]);
+    expect(await getMyCompany()).toMatchObject({ company: { linksReview: null } });
   });
 
   it('shows the admin reason only for rejected/suspended companies', async () => {
@@ -120,6 +149,87 @@ describe('company read state', () => {
     fakeSession.configured = false;
     expect(await getMyCompany()).toMatchObject({ status: 'ok', company: { id: 'demo-company' } });
     expect(fakeDb.calls).toHaveLength(0);
+  });
+});
+
+// #843: odczyt KONKRETNEJ firmy po id — niezależnie od aktywnej firmy z cookie (`getActiveCompany`
+// nie jest tu w ogóle wołane). Link decyzji (e-mail/powiadomienie) musi pokazać dane firmy,
+// której dotyczy, a nie ciszej podstawiać aktywną firmę wywołującego.
+describe('getCompanyById (#843) — firma z linku decyzji, niezależnie od aktywnej', () => {
+  function byIdDb(rows: unknown[] | (() => unknown[])) {
+    fakeDb.rows('company.by-id', typeof rows === 'function' ? rows : () => rows);
+  }
+
+  it('reads the requested company by membership, ignoring the active-company cookie', async () => {
+    byIdDb([
+      {
+        id: 'company-2',
+        name: 'Company B',
+        slug: 'company-b',
+        status: 'suspended',
+        status_reason: 'Suspension reason for B',
+        vat_number: null,
+        verified_at: null,
+        website: null,
+        logo_url: null,
+        role: 'owner',
+      },
+    ]);
+    expect(await getCompanyById('company-2')).toEqual({
+      status: 'ok',
+      company: {
+        id: 'company-2',
+        name: 'Company B',
+        slug: 'company-b',
+        status: 'suspended',
+        vatNumber: null,
+        verifiedAt: null,
+        statusReason: 'Suspension reason for B',
+        website: null,
+        logoUrl: null,
+        linksReview: null,
+        agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
+        canEdit: true,
+      },
+    });
+    // Zapytanie zawężone do sesji i DOKŁADNIE żądanej firmy — nie do aktywnej z cookie.
+    expect(fakeDb.callsTo('company.by-id')[0]).toMatchObject({ as: USER, values: [USER, 'company-2'] });
+    expect(getActiveCompany).not.toHaveBeenCalled();
+  });
+
+  it('a removed/foreign company gives an explicit "not_found", never another company\'s data', async () => {
+    byIdDb([]);
+    expect(await getCompanyById('company-9')).toEqual({ status: 'not_found' });
+  });
+
+  it('hides the status reason unless the company is rejected/suspended', async () => {
+    byIdDb([{ id: 'company-2', name: 'B', status: 'verified', status_reason: 'stale', role: 'member' }]);
+    expect(await getCompanyById('company-2')).toMatchObject({ company: { statusReason: null, canEdit: false } });
+  });
+
+  it('a database failure is distinct from "not found"', async () => {
+    const failure = pgError('08006', 'DATABASE_UNAVAILABLE');
+    byIdDb(() => {
+      throw failure;
+    });
+    expect(await getCompanyById('company-2')).toEqual({ status: 'error' });
+    expect(captureError).toHaveBeenCalledWith(failure, { area: 'company.getCompanyById' });
+  });
+
+  it('without backend configuration there is no per-company demo data', async () => {
+    fakeSession.configured = false;
+    expect(await getCompanyById('company-2')).toEqual({ status: 'not_found' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  // KONTROLA UJEMNA (#843): przed poprawką jedynym sposobem odczytu firmy było `getMyCompany`
+  // (zawsze AKTYWNA z cookie) — ten test byłby czerwony bez nowej, niezależnej ścieżki odczytu.
+  it('KONTROLA UJEMNA: reading a non-active company does not require it to be active', async () => {
+    byIdDb([{ id: 'company-2', name: 'B', status: 'suspended', status_reason: 'x', role: 'owner' }]);
+    vi.mocked(getActiveCompany).mockResolvedValue({ activeId: 'company-1', activeRole: 'owner' } as never);
+    const result = await getCompanyById('company-2');
+    expect(result.status).toBe('ok');
+    expect(getActiveCompany).not.toHaveBeenCalled();
   });
 });
 

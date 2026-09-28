@@ -14,7 +14,9 @@ może uruchomić produkcyjnego wdrożenia.
 CI działa w `.github/workflows/ci.yml` na GitHub-hosted runnerach
 (`ubuntu-latest`) i obejmuje lint, typecheck, testy jednostkowe, testy
 PostgreSQL/RLS, E2E oraz build. Joby niezależne biegną równolegle; build startuje
-po zielonym lint/typecheck/unit, a E2E po buildzie — 3 shardy, pomiary wydajności
+po zielonym lint/typecheck/unit, a E2E po buildzie — 3 shardy (zestaw demo podzielony po
+czasie testów jawnymi listami speców w `playwright.config.ts`, nie po liczbie plików —
+`CLAUDE.md` §10), pomiary wydajności
 i fixture'y (tryb `full` w 2 częściach, `error` w jednej) równolegle; ich wynik zbiera job „E2E (Playwright)” (stała nazwa checka,
 na nią czeka Railway). Przepływ na PostgreSQL 16 („E2E real flow”) jest na razie
 informacyjny (`continue-on-error`) i nie wstrzymuje wdrożenia. Repo jest publiczne,
@@ -34,6 +36,10 @@ deployu jako joba Actions.
 - wymagane wartości: `APP_MODE=production` i
   `NEXT_PUBLIC_SITE_URL=https://pracuj.be`;
 - `PORT` dostarcza Railway;
+- `PORTAL_LEGAL_MODE` (#1136): zostaw pustą — pusta albo dowolna inna wartość niż
+  `RECRUITMENT` = tryb ogłoszeniowy (funkcje rekrutacyjne wyłączone, decyzja produktowa).
+  `RECRUITMENT` ustawia się tylko na decyzję właściciela; tryb widać w `/api/health`
+  (`portalLegalMode`) wyłącznie w szczegółach za `HEALTH_CHECK_SECRET`;
 - do czasu publicznego startu: `SITE_ACCESS_PASSWORD` — każda strona pokazuje
   formularz hasła (503, noindex); po podaniu hasła cookie ważne 30 dni. Zmiana
   hasła unieważnia wydane cookies, usunięcie zmiennej otwiera serwis. `/api/*`

@@ -4,15 +4,17 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getCurrentIdentity } from '@/lib/auth/current';
 import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
 import { isPortalAuthConfigured } from '@/lib/env';
-import { getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
+import { getCompanyById, getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
 import { CompanyModerationDecisions } from '@/components/employer/CompanyModerationDecisions';
 import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
+import { CompanyAgencyForm } from '@/components/employer/CompanyAgencyForm';
 import { env } from '@/lib/env';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
 import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import { CompanyReverifyButton } from '@/components/employer/CompanyReverifyButton';
+import { SwitchToCompanyButton } from '@/components/employer/SwitchToCompanyButton';
 import {
   EYEBROW,
   H1_EXTENDED,
@@ -22,10 +24,16 @@ import {
   INFO_PAIRS,
   INFO_VALUE,
   INTRO,
+  NOTICE,
+  NOTICE_TEXT,
+  NOTICE_TITLE,
   PANEL,
   PAPER,
 } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
+
+/** UUID v4 (parametr `?firma=` w linku decyzji — nigdy nie ufamy mu bez sprawdzenia dostępu). */
+const COMPANY_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Panel pracodawcy — Firma (Etap 4).
@@ -68,8 +76,10 @@ export async function generateMetadata({
 
 export default async function EmployerCompanyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ firma?: string | string[] }>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
@@ -77,6 +87,76 @@ export default async function EmployerCompanyPage({
   const t = await getTranslations({ locale, namespace: 'company' });
   const companyLoad = await getMyCompany();
   const company = companyLoad.status === 'ok' ? companyLoad.company : null;
+
+  // #843: link decyzji (e-mail „Firma odrzucona/zawieszona/zweryfikowana", powiadomienie
+  // in-app) niesie identyfikator firmy, KTÓREJ DOTYCZY zdarzenie — właściciel kilku firm
+  // może mieć w cookie inną AKTYWNĄ firmę. Gdy identyfikatory się różnią, pokazujemy dane
+  // docelowej firmy osobno (read-only + jawne przełączenie kontekstu), zamiast ciszej
+  // podmiany na aktywną firmę z cookie.
+  const rawFirmaParam = (await searchParams)?.firma;
+  const requestedCompanyId =
+    typeof rawFirmaParam === 'string' && COMPANY_ID_RE.test(rawFirmaParam) ? rawFirmaParam : null;
+
+  if (
+    requestedCompanyId &&
+    companyLoad.status === 'ok' &&
+    company &&
+    company.id !== requestedCompanyId
+  ) {
+    const targetLoad = await getCompanyById(requestedCompanyId);
+    const target = targetLoad.status === 'ok' ? targetLoad.company : null;
+    const targetStatusLabel = target && STATUS_KEY[target.status] ? t(STATUS_KEY[target.status]!) : '';
+    const targetVerifiedLabel =
+      target?.verifiedAt != null
+        ? new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(target.verifiedAt))
+        : null;
+
+    return (
+      <div className="min-w-0 max-w-4xl space-y-[22px]">
+        <header className="min-w-0">
+          <p className={EYEBROW}>{t('title')}</p>
+          <h1 className={H1_EXTENDED}>{target ? target.name : t('targetTitle')}</h1>
+          <p className={INTRO}>{t('targetIntro')}</p>
+        </header>
+
+        {targetLoad.status === 'error' ? (
+          <CompanyLoadError />
+        ) : target ? (
+          <>
+            <CompanyStatusBanner status={target.status} reason={target.statusReason} />
+            <section className={PAPER}>
+              <h2 className={H2_EXTENDED}>{t('detailsTitle')}</h2>
+              <dl className={INFO_PAIRS}>
+                <div className="min-w-0">
+                  <dt className={INFO_LABEL}>{t('slug')}</dt>
+                  <dd className={cn(INFO_VALUE, 'break-all')}>{target.slug || '—'}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className={INFO_LABEL}>{t('statusLabel')}</dt>
+                  <dd className={INFO_VALUE}>{targetStatusLabel}</dd>
+                </div>
+                {targetVerifiedLabel ? (
+                  <div className="min-w-0">
+                    <dt className={INFO_LABEL}>{t('verifiedAt')}</dt>
+                    <dd className={INFO_VALUE}>{targetVerifiedLabel}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </section>
+            <SwitchToCompanyButton companyId={target.id} />
+          </>
+        ) : (
+          <section className={cn(NOTICE, 'border-border bg-card')}>
+            <div className="min-w-0">
+              <h2 className={NOTICE_TITLE}>{t('targetUnavailableTitle')}</h2>
+              <p className={NOTICE_TEXT}>{t('targetUnavailableHint')}</p>
+            </div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
   if (companyLoad.status === 'ok' && !company) {
     // #365: nazwa firmy z rejestracji (metadane konta) wypełnia formularz domyślnie.
     // `!company` tylko gdy konta są skonfigurowane (bez env `getMyCompany` zwraca demo) —
@@ -139,7 +219,7 @@ export default async function EmployerCompanyPage({
             status={company.status}
             reason={company.statusReason}
             action={
-              company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton /> : null
+              company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton key={company.id} companyId={company.id} /> : null
             }
           />
 
@@ -180,6 +260,7 @@ export default async function EmployerCompanyPage({
                 <div className="mt-4">
                   <CompanyForm
                     mode="edit"
+                    companyId={company.id}
                     verified={company.status === 'verified'}
                     defaultValues={{
                       name: company.name,
@@ -189,17 +270,38 @@ export default async function EmployerCompanyPage({
                 </div>
               </section>
 
-              {/* Strona WWW i logo (#112) — nie cofa weryfikacji, więc bez ostrzeżenia CompanyForm. */}
+              {/* Strona WWW i logo (#112) — nie cofa weryfikacji; nowy adres zatwierdza admin portalu (0156). */}
               <section className={PAPER}>
                 <h2 className={H2_EXTENDED}>{t('linksTitle')}</h2>
                 <p className={INTRO}>{t('linksSubtitle')}</p>
                 <div className="mt-4">
                   <CompanyLinksForm
-                    defaultValues={{
-                      website: company.website ?? '',
-                      logoUrl: company.logoUrl ?? '',
-                    }}
+                    companyId={company.id}
+                    defaultValues={
+                      company.linksReview
+                        ? {
+                            website: company.linksReview.website ?? '',
+                            logoUrl: company.linksReview.logoUrl ?? '',
+                          }
+                        : { website: company.website ?? '', logoUrl: company.logoUrl ?? '' }
+                    }
+                    published={{ website: company.website, logoUrl: company.logoUrl }}
+                    review={company.linksReview}
                     ownHost={ownHost}
+                  />
+                </div>
+              </section>
+
+              {/* 0167: agencja pracy tymczasowej — deklaracja + numer uznania (sprawdza admin). */}
+              <section className={PAPER}>
+                <h2 className={H2_EXTENDED}>{t('agencyTitle')}</h2>
+                <p className={INTRO}>{t('agencySubtitle')}</p>
+                <div className="mt-4">
+                  <CompanyAgencyForm
+                    companyId={company.id}
+                    isAgency={company.agency.isAgency}
+                    recognitionNumber={company.agency.recognitionNumber}
+                    checkStatus={company.agency.checkStatus}
                   />
                 </div>
               </section>

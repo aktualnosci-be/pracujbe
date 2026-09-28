@@ -1,42 +1,31 @@
 /**
  * Walidacja TREŚCI pliku CV na serwerze (#26, wcześniej w `actions/files.ts`). MIME z klienta
  * jest niezaufany: sprawdzamy sygnaturę (magic bytes) na tych samych bajtach, które trafią do
- * bucketu. DOCX musi być kontenerem OOXML (P1-22), nie dowolnym ZIP-em.
+ * bucketu. DOCX musi być kontenerem OOXML (P1-22), nie dowolnym ZIP-em; reguły formatów
+ * i nazwy pobieranego pliku są w `file-type.ts`.
  * AV/CDR = osobny etap (skaner zewnętrzny); do tego czasu `scan_status='skipped'`.
  */
 
+import { matchesDetectedType, safeFileName } from './file-type';
+
 export type CvExtension = 'pdf' | 'doc' | 'docx';
 
-const SIGNATURES: Record<CvExtension, readonly (readonly number[])[]> = {
-  pdf: [[0x25, 0x50, 0x44, 0x46]], // %PDF
-  docx: [[0x50, 0x4b]], // PK (zip)
-  doc: [[0xd0, 0xcf, 0x11, 0xe0]], // OLE compound file
-};
-
-export function hasValidCvSignature(bytes: Uint8Array, ext: CvExtension): boolean {
-  return SIGNATURES[ext].some(
-    (sig) => sig.length <= bytes.length && sig.every((byte, i) => bytes[i] === byte),
-  );
-}
-
-/** Nazwy wpisów są w nagłówkach lokalnych ZIP jako tekst — skan bufora (latin1) je wykrywa. */
-export function isOoxmlDocx(bytes: Uint8Array): boolean {
-  const text = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('latin1');
-  return text.includes('[Content_Types].xml') && text.includes('word/');
-}
-
+/**
+ * Czy treść jest plikiem danego typu — pełna kontrola struktury (`file-type.ts`): PDF z
+ * `%%EOF`, DOCX jako spójny ZIP z `word/document.xml`, DOC jako plik OLE ze strumieniem
+ * `WordDocument` (inne pliki OLE, np. instalatory, są odrzucane).
+ */
 export function isValidCvContent(bytes: Uint8Array, ext: CvExtension): boolean {
-  if (!hasValidCvSignature(bytes, ext)) return false;
-  return ext !== 'docx' || isOoxmlDocx(bytes);
+  return matchesDetectedType(bytes, ext);
 }
 
 /**
- * Nazwa pokazywana kandydatowi i używana w nagłówku pobrania. Bez znaków sterujących,
- * maks. 200 znaków (kodowych), pusta → `CV.<ext>`. Nie wpływa na klucz obiektu.
+ * Nazwa pokazywana kandydatowi i używana w nagłówku pobrania: oczyszczona podstawa nazwy
+ * (bez znaków sterujących i kierunku tekstu, bez ścieżki) + rozszerzenie z typu wyznaczonego
+ * z treści; ≤ 150 znaków podstawy, pusta → `CV.<ext>`. Nie wpływa na klucz obiektu.
  */
 export function cvDisplayName(name: string, ext: CvExtension): string {
-  const cleaned = Array.from(name.replace(/[\x00-\x1f\x7f]/g, '').trim()).slice(0, 200).join('').trim();
-  return cleaned || `CV.${ext}`;
+  return safeFileName(name, ext, 'CV');
 }
 
 /** `Content-Disposition: attachment` z bezpiecznym fallbackiem ASCII i nazwą UTF-8 (RFC 6266/5987). */

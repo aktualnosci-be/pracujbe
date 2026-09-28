@@ -17,7 +17,13 @@ vi.mock('@/i18n/navigation', () => ({
     <a href={href} {...rest}>{children}</a>
   ),
 }));
-vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
+// `LocaleError` (#851) instaluje jawnie `installClientErrorReporter`, który sięga do
+// `setErrorReporter` z tego modułu — zachowujemy resztę eksportów (importOriginal),
+// mockujemy tylko `captureError`, którego to zachowanie nie testuje.
+vi.mock('@/lib/error-report', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/error-report')>();
+  return { ...actual, captureError: vi.fn() };
+});
 
 beforeEach(() => {
   calls.length = 0;

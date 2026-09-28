@@ -58,6 +58,17 @@ for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
       expect(getMyJobMatchAction).toHaveBeenCalledTimes(2);
     });
 
+    it('brakujący język oferty nazwą w języku widza, etykieta spoza słownika bez zmian (I18N-02)', async () => {
+      const r = scoreMatch(
+        { occupations: [], categories: [], skills: ['Nederlands'], languages: [], certificates: [], preferredContractTypes: [] },
+        { skills: [], requiredLanguages: [{ label: 'Nederlands', level: null }, { label: 'Klingon', level: null }] },
+      );
+      vi.mocked(getMyJobMatchAction).mockResolvedValue({ status: 'ok', result: r });
+      view();
+      expect(await screen.findByText(messages.languageNames.nl)).toBeTruthy();
+      expect(screen.getByText('Klingon')).toBeTruthy();
+    });
+
     it('luka poziomu języka opisana poziomem wymaganym i deklarowanym (#195)', async () => {
       const gaps = scoreMatch(
         { occupations: [], categories: [], skills: [], languages: [{ label: 'NL', level: 'basic' }, 'FR'], certificates: [], preferredContractTypes: [] },
@@ -65,12 +76,13 @@ for (const [locale, messages] of Object.entries({ pl, nl, fr, en })) {
       );
       vi.mocked(getMyJobMatchAction).mockResolvedValue({ status: 'ok', result: gaps });
       view();
+      // I18N-02: język ze słownika nazwą w języku widza (etykieta 'NL' → languageNames.nl).
       const below = messages.match.languageLevelBelow
-        .replace('{language}', 'NL')
+        .replace('{language}', messages.languageNames.nl)
         .replace('{required}', messages.match.levels.fluent)
         .replace('{actual}', messages.match.levels.basic);
       const unknown = messages.match.languageLevelUnknown
-        .replace('{language}', 'FR')
+        .replace('{language}', messages.languageNames.fr)
         .replace('{required}', messages.match.levels.intermediate);
       expect(await screen.findByText(below)).toBeTruthy();
       expect(screen.getByText(unknown)).toBeTruthy();

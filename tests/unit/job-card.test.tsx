@@ -9,6 +9,10 @@ import pl from '@/messages/pl.json';
 import en from '@/messages/en.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
+import { withClassifiedsMode, withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
+withRecruitmentMode();
 
 const intl = vi.hoisted(() => ({ locale: 'en' }));
 vi.mock('next-intl/server', async () => {
@@ -146,5 +150,15 @@ describe('Paszport oferty', () => {
     await renderCard({ companyVerified: true });
     expect(screen.getByText(en.job.verified)).toBeVisible();
     expect(screen.queryByText(en.jobs.demoBadge)).not.toBeInTheDocument();
+  });
+});
+
+describe('tryb ogłoszeniowy (#1131)', () => {
+  withClassifiedsMode();
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)('%s: showMatch + matchScore nie renderują paska ani procentu', async (locale) => {
+    const { container } = await renderCard({}, locale, 82);
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/82\s*%/);
   });
 });

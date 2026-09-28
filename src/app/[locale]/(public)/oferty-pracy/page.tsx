@@ -29,6 +29,9 @@ import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { Pagination } from '@/components/public/Pagination';
 import {
   buildDemoFacets,
+  flattenSearchParams,
+  parseLocationsParam,
+  serializeLocations,
   sidebarFiltersToParams,
   splitParam,
   toFacetItem,
@@ -73,18 +76,6 @@ type PageProps = {
   searchParams: Promise<SearchParams>;
 };
 
-function firstValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function flatten(sp: SearchParams): Record<string, string | undefined> {
-  const flat: Record<string, string | undefined> = {};
-  for (const key of Object.keys(sp)) {
-    flat[key] = firstValue(sp[key]);
-  }
-  return flat;
-}
-
 /** Numer strony z URL (jak w widoku: nieprawidłowy lub < 1 → 1). */
 function parsePage(value: string | undefined): number {
   const raw = Number(value);
@@ -97,7 +88,7 @@ function parsePage(value: string | undefined): number {
  * kanonizujemy do listy bazowej (bez eksplozji kombinacji); `page=1` = lista bazowa.
  */
 function canonicalQuery(sp: SearchParams): string {
-  const flat = flatten(sp);
+  const flat = flattenSearchParams(sp);
   const hasFilters = Object.entries(flat).some(
     ([key, value]) => key !== 'page' && value !== undefined && value.trim() !== '',
   );
@@ -156,7 +147,7 @@ export default async function JobsListPage({
   setRequestLocale(locale);
 
   const sp = await searchParams;
-  const flat = flatten(sp);
+  const flat = flattenSearchParams(sp);
 
   const listQuery = parseJobListQuery(flat, locale);
   const { keyword, city, sort, sidebar: sf, cityFilters, filterParams } = listQuery;
@@ -181,7 +172,7 @@ export default async function JobsListPage({
   // filtruje baza — 0090). Gość i pracodawca dostają wspólny wynik publiczny.
   const viewer = { candidateId: await readCandidateViewerId() };
   const [results, databaseFacets] = await Promise.all([
-    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer),
+    getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer, { translateCards: true }),
     getJobFilterFacets(filterParams, viewer),
   ]);
   const facets = databaseFacets
@@ -243,8 +234,13 @@ export default async function JobsListPage({
   };
   const withoutValue = (key: string, value: string): string => {
     const next = { ...activeParams };
-    const rest = splitParam(next[key]).filter((v) => v !== value);
-    if (rest.length) next[key] = rest.join(',');
+    // Lokalizacja jest wolnym tekstem i może sama zawierać przecinek (#845) — parsuje/serializuje
+    // ją osobna, escapująca para funkcji zamiast generycznego CSV używanego przez inne filtry.
+    const rest =
+      key === 'location'
+        ? parseLocationsParam(next[key]).filter((v) => v !== value)
+        : splitParam(next[key]).filter((v) => v !== value);
+    if (rest.length) next[key] = key === 'location' ? serializeLocations(rest) : rest.join(',');
     else delete next[key];
     return hrefFrom(next);
   };
@@ -395,8 +391,10 @@ export default async function JobsListPage({
       </header>
 
       {/* Układ wyników */}
-      {/* `.p-list-layout` (#7, Z3): kolumna filtrów 190 px (≤ 1050 px: 165 px), odstęp 32 px (≤ 1050 px: 24 px). */}
-      <div className="mt-2.5 lg:grid lg:grid-cols-[165px_minmax(0,1fr)] lg:gap-6 min-[1051px]:grid-cols-[190px_minmax(0,1fr)] min-[1051px]:gap-8">
+      {/* `.p-list-layout` (#7, Z3), odstęp 32 px (≤ 1050 px: 24 px). Kolumna filtrów szersza niż
+          w prototypie (190/165 px → 280/220 px, decyzja właściciela 2026-09-28): etykiety kategorii
+          z licznikiem mieszczą się w jednej linii. */}
+      <div className="mt-2.5 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-6 min-[1051px]:grid-cols-[280px_minmax(0,1fr)] min-[1051px]:gap-8">
         {/* Sidebar (desktop) */}
         <aside className="hidden lg:block">
           <div className="sticky top-24">

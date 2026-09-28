@@ -52,6 +52,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       getTranslations({ locale, namespace: 'jobFunnel' }),
       getTranslations({ locale, namespace: 'status' }),
     ]);
+    // #1147: tryb ogłoszeniowy — loader nie zwraca wysłanych aplikacji, więc nie ma tej kolumny.
+    const listing = funnel.totals.applicationsSubmitted === undefined;
     const csv = jobFunnelCsv(funnel.range, funnel.jobs, funnel.totals, {
       from: t('csvFrom'),
       to: t('csvTo'),
@@ -59,8 +61,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       status: t('csvStatus'),
       searchAppearances: t('searchAppearances'),
       detailViews: t('detailViews'),
-      applyStarted: t('applyStarted'),
-      applicationsSubmitted: t('applicationsSubmitted'),
+      applyStarted: listing ? t('applyClicks') : t('applyStarted'),
+      ...(listing ? {} : { applicationsSubmitted: t('applicationsSubmitted') }),
       total: t('csvTotal'),
       untitled: t('untitled'),
       statusLabel: (status) => (/^[a-z]+$/.test(status) && ts.has(status) ? ts(status) : ''),

@@ -11,6 +11,7 @@ import {
   type AttachmentServiceDeps,
 } from '@/lib/files/message-attachments';
 import { createPrivateDownloadToken } from '@/lib/storage/private-download-token';
+import { buildCfb, MSI_CLSID } from '../helpers/cfb-fixtures';
 import { pgError } from '../helpers/fake-db';
 
 /**
@@ -85,7 +86,7 @@ describe('treść pliku (magic bytes)', () => {
   it('JPG/PNG po sygnaturze; PDF/DOCX jak CV; zmieniony typ odrzucony', () => {
     expect(isValidAttachmentContent(PNG, 'png')).toBe(true);
     expect(isValidAttachmentContent(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]), 'jpg')).toBe(true);
-    expect(isValidAttachmentContent(new TextEncoder().encode('%PDF-1.7'), 'pdf')).toBe(true);
+    expect(isValidAttachmentContent(new TextEncoder().encode('%PDF-1.7\n%%EOF\n'), 'pdf')).toBe(true);
     // Kontrola ujemna: PDF podpisany jako PNG i ZIP bez struktury OOXML jako DOCX.
     expect(isValidAttachmentContent(new TextEncoder().encode('%PDF-1.7'), 'png')).toBe(false);
     expect(isValidAttachmentContent(Uint8Array.from([0x50, 0x4b, 3, 4]), 'docx')).toBe(false);
@@ -119,6 +120,19 @@ describe('storeMessageAttachment', () => {
     expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, big)).toMatchObject({ reason: 'tooLarge' });
     expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, file(PNG, 'image/gif'))).toMatchObject({ reason: 'type' });
     expect(store.put).not.toHaveBeenCalled();
+  });
+
+  it('pakiet OLE spoza Worda jako .doc i nazwa z RLO: odmowa / nazwa z typu', async () => {
+    const msi = Uint8Array.from(buildCfb({ rootClsid: MSI_CLSID, streams: ['Property'] }));
+    expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, file(msi, 'application/msword', 'Umowa.msi'))).toEqual({
+      ok: false, error: 'VALIDATION_FAILED', reason: 'type',
+    });
+    expect(store.put).not.toHaveBeenCalled();
+    const doc = Uint8Array.from(buildCfb());
+    expect(await storeMessageAttachment(deps, SELF, CONV, UPLOAD, file(doc, 'application/msword', 'Umowa\u202Ecod.msi')))
+      .toEqual({ ok: true, id: ATT });
+    expect(vi.mocked(rpcRows).mock.calls[0]![2]).toMatchObject({ p_file_name: 'Umowacod.doc', p_mime_type: 'application/msword' });
+    expect(store.put.mock.calls[0]![0].key).toMatch(/\.doc$/);
   });
 
   it('nazwa pliku z numerem PESEL/eID (#495) — bez kontroli dostępu i zapisu w buckecie', async () => {
@@ -182,6 +196,19 @@ describe('link i pobranie', () => {
     expect(response.headers.get('content-security-policy')).toContain('sandbox');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PNG);
+  });
+
+  it('nazwa i typ pobrania z typu potwierdzonego przy uploadzie, nie z nazwy nadawcy (stary wiersz)', async () => {
+    vi.mocked(rpcRows).mockResolvedValue([{ ...record, file_name: 'Faktura\u202Efdp.exe' }]);
+    const link = await issueAttachmentDownloadLink(deps, SELF, ATT);
+    const token = new URL((link as { url: string }).url, 'https://x').searchParams.get('t')!;
+    const response = await openAttachmentDownload(deps, SELF, ATT, token);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    const disposition = response.headers.get('content-disposition')!;
+    expect(disposition).toBe(`attachment; filename="Fakturafdp.png"; filename*=UTF-8''Fakturafdp.png`);
+    // Kontrola ujemna: bez oczyszczenia nagłówek niósłby RLO i rozszerzenie .exe.
+    expect(disposition).not.toMatch(/%E2%80%AE|\.exe/i);
   });
 
   it('podpis innego użytkownika albo z domeny CV (ten sam sekret) nie otwiera załącznika', async () => {

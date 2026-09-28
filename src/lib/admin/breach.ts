@@ -307,6 +307,90 @@ export function breachNoteError(value: string | null | undefined, max: number): 
 }
 
 /* ---------------------------------------------------------------------------
+ * Zgodność treści przy ponowieniu zapisu (#835) — klucz idempotencji użyty
+ * ponownie (retry po utraconej odpowiedzi) NIE może po cichu odrzucić poprawki
+ * wprowadzonej między próbami. `admin_create_breach_incident` przy trafieniu na
+ * istniejący `client_key` zwraca ten sam wiersz niezależnie od przesłanej treści —
+ * porównanie robimy w aplikacji, żeby rozróżnić zwykły retry (te same dane) od
+ * ponowienia z poprawioną treścią.
+ * ------------------------------------------------------------------------- */
+
+/** Wiersz `breach_incidents` (kolumny snake_case z bazy) → kształt formularza. */
+export function breachFormFromRow(row: Record<string, unknown>): BreachForm {
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+  const categories = Array.isArray(row['data_categories'])
+    ? row['data_categories'].filter((c): c is string => typeof c === 'string')
+    : [];
+  const count = row['affected_count'];
+  return {
+    kind: text(row['kind']),
+    title: text(row['title']),
+    description: text(row['description']),
+    detectedAt: text(row['detected_at']),
+    occurredAt: text(row['occurred_at']),
+    dataCategories: categories,
+    affectedCount: count === null || count === undefined ? '' : String(count),
+    affectedCountEstimated: row['affected_count_estimated'] !== false,
+    riskLevel: text(row['risk_level']),
+    riskAssessment: text(row['risk_assessment']),
+    authorityDecision: text(row['authority_decision']),
+    authorityDecisionReason: text(row['authority_decision_reason']),
+    authorityNotifiedAt: text(row['authority_notified_at']),
+    authorityReference: text(row['authority_reference']),
+    authorityDelayReason: text(row['authority_delay_reason']),
+    subjectsDecision: text(row['subjects_decision']),
+    subjectsDecisionReason: text(row['subjects_decision_reason']),
+    subjectsNotifiedAt: text(row['subjects_notified_at']),
+    actionsTaken: text(row['actions_taken']),
+  };
+}
+
+function sameInstant(a: string, b: string): boolean {
+  const ta = a.trim();
+  const tb = b.trim();
+  if (ta.length === 0 && tb.length === 0) return true;
+  const pa = Date.parse(ta);
+  const pb = Date.parse(tb);
+  if (Number.isNaN(pa) || Number.isNaN(pb)) return ta === tb;
+  return pa === pb;
+}
+
+/**
+ * Czy zapisany wpis (`existing`, po normalizacji `breach_apply_form` w bazie — przycięte
+ * teksty, posortowane kategorie) odpowiada treści właśnie przesłanego formularza
+ * (`submitted`, przed normalizacją serwera). Różnica = ponowienie z tym samym kluczem
+ * idempotencji, ale zmienioną treścią (#835).
+ */
+export function breachFormsMatch(existing: BreachForm, submitted: BreachForm): boolean {
+  const trimmedEq = (a: string, b: string) => a.trim() === b.trim();
+  if (existing.kind !== submitted.kind) return false;
+  if (!trimmedEq(existing.title, submitted.title)) return false;
+  if (!trimmedEq(existing.description, submitted.description)) return false;
+  if (!sameInstant(existing.detectedAt, submitted.detectedAt)) return false;
+  if (!sameInstant(existing.occurredAt, submitted.occurredAt)) return false;
+  const catsA = [...existing.dataCategories].sort();
+  const catsB = [...submitted.dataCategories].sort();
+  if (catsA.length !== catsB.length || catsA.some((c, i) => c !== catsB[i])) return false;
+  const countA = existing.affectedCount.trim();
+  const countB = submitted.affectedCount.trim();
+  if ((countA.length === 0) !== (countB.length === 0)) return false;
+  if (countA.length > 0 && Number(countA) !== Number(countB)) return false;
+  if (existing.affectedCountEstimated !== submitted.affectedCountEstimated) return false;
+  if (existing.riskLevel !== submitted.riskLevel) return false;
+  if (!trimmedEq(existing.riskAssessment, submitted.riskAssessment)) return false;
+  if (existing.authorityDecision !== submitted.authorityDecision) return false;
+  if (!trimmedEq(existing.authorityDecisionReason, submitted.authorityDecisionReason)) return false;
+  if (!sameInstant(existing.authorityNotifiedAt, submitted.authorityNotifiedAt)) return false;
+  if (!trimmedEq(existing.authorityReference, submitted.authorityReference)) return false;
+  if (!trimmedEq(existing.authorityDelayReason, submitted.authorityDelayReason)) return false;
+  if (existing.subjectsDecision !== submitted.subjectsDecision) return false;
+  if (!trimmedEq(existing.subjectsDecisionReason, submitted.subjectsDecisionReason)) return false;
+  if (!sameInstant(existing.subjectsNotifiedAt, submitted.subjectsNotifiedAt)) return false;
+  if (!trimmedEq(existing.actionsTaken, submitted.actionsTaken)) return false;
+  return true;
+}
+
+/* ---------------------------------------------------------------------------
  * Termin 72 h (art. 33 ust. 1) — liczony od stwierdzenia naruszenia
  * ------------------------------------------------------------------------- */
 
@@ -410,14 +494,21 @@ export const BREACH_EXPORT_COLUMNS = [
   'updated_at',
 ] as const;
 
-/** Komórka CSV (RFC 4180) z ochroną przed formułami arkusza (`=`, `+`, `-`, `@`). */
+/**
+ * Komórka CSV (RFC 4180) z ochroną przed formułami arkusza (#523, #876). Neutralizuje pierwszy
+ * znak `= + - @`, tabulator i CR (RFC), a także LF (`\n`) i pełnoszerokie warianty operatorów
+ * (`＝ ＋ － ＠`), które OWASP wymienia jako niebezpieczne początki komórek CSV — arkusz otwiera
+ * je jak zwykły tekst formuły niezależnie od tego, który z tych znaków jest pierwszy.
+ */
+const FORMULA_LEAD = /^[=+\-@\t\r\n＝＋－＠]/;
+
 export function csvCell(value: unknown): string {
   let text: string;
   if (value === null || value === undefined) text = '';
   else if (Array.isArray(value)) text = value.join('; ');
   else if (typeof value === 'object') text = JSON.stringify(value);
   else text = String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (FORMULA_LEAD.test(text)) text = `'${text}`;
   return /[",\n\r;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

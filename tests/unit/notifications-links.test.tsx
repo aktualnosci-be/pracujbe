@@ -5,6 +5,8 @@ import pl from '@/messages/pl.json';
 import { NotificationsDropdown } from '@/components/dashboard/NotificationsDropdown';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { resolveHref } from '@/lib/data/notifications';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 const { markNotificationsRead, refresh } = vi.hoisted(() => ({
   markNotificationsRead: vi.fn(),
@@ -51,23 +53,77 @@ const CONVERSATION = '2f1c1b8e-8c1a-4a4c-9d7e-3a1f0c2b9e11';
 
 describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => {
   it.each([
-    ['application', 'candidate', '/candidate/aplikacje'],
-    ['application', 'employer', '/employer/aplikacje'],
-    ['offer', 'candidate', '/candidate/propozycje'],
-    ['offer', 'employer', '/employer/aplikacje'],
-    ['job', 'candidate', '/candidate/oferty-polecane'],
+    // #1141/#1144/#1139: tryb ogłoszeniowy (domyślny w testach) — panele zgłoszeń, propozycji
+    // i polecanych ofert dają 404, więc powiadomienia prowadzą do pulpitu / listy ofert.
+    ['application', 'candidate', '/candidate'],
+    ['application', 'employer', '/employer'],
+    ['offer', 'candidate', '/candidate'],
+    ['offer', 'employer', '/employer'],
+    ['job', 'candidate', '/oferty-pracy'],
     ['job', 'employer', '/employer/oferty'],
-    ['company', 'employer', '/employer/firma'],
-    ['conversation', 'candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
-    ['conversation', 'employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    // #843: decyzja o firmie (weryfikacja/odrzucenie/zawieszenie) niesie identyfikator firmy,
+    // której dotyczy — inaczej właściciel kilku firm z inną AKTYWNĄ firmą w cookie widziałby
+    // jej dane zamiast tej z decyzji (strona `/employer/firma` czyta `?firma=`, patrz #843).
+    ['company', 'employer', `/employer/firma?firma=${CONVERSATION}`],
+    // Kandydat nie ma panelu firmy — bez identyfikatora w URL (nie ma gdzie go użyć).
+    ['company', 'candidate', '/candidate'],
+    // #1145: wiadomości tylko w trybie RECRUITMENT — historyczne powiadomienie → pulpit.
+    ['conversation', 'candidate', '/candidate'],
+    ['conversation', 'employer', '/employer'],
     ['unknown', 'candidate', '/candidate'],
     ['unknown', 'employer', '/employer'],
   ])('%s dla %s → %s', (entityType, role, href) => {
     expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
   });
 
+  describe('tryb rekrutacyjny: rozmowy (#1134 — kontrola ujemna trybu)', () => {
+    recruitmentModeInTests();
+    it.each([
+      ['candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
+      ['employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    ])('conversation dla %s → %s', (role, href) => {
+      expect(resolveHref('conversation', role, CONVERSATION)).toBe(href);
+    });
+    it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
+      'nie wkleja niezweryfikowanego id rozmowy do URL: %j',
+      (entityId) => {
+        expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
+      },
+    );
+  });
+
   it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
     'nie wkleja niezweryfikowanego id do URL: %j',
+    (entityId) => {
+      // #843: zła/brakująca wartość nie trafia do zapytania (rozmowy: tryb RECRUITMENT niżej).
+      expect(resolveHref('company', 'employer', entityId)).toBe('/employer/firma');
+    },
+  );
+
+  // KONTROLA UJEMNA (#843): bez poprawki `resolveHref('company', 'employer', id)` zawsze
+  // zwracało `/employer/firma` bez identyfikatora — ten test byłby czerwony.
+  it('KONTROLA UJEMNA: link firmy niesie identyfikator, nie jest stałym adresem', () => {
+    expect(resolveHref('company', 'employer', CONVERSATION)).not.toBe('/employer/firma');
+  });
+});
+
+describe('resolveHref — tryb RECRUITMENT (#148)', () => {
+  recruitmentModeInTests();
+
+  it.each([
+    ['application', 'candidate', '/candidate/aplikacje'],
+    ['application', 'employer', '/employer/aplikacje'],
+    ['offer', 'candidate', '/candidate/propozycje'],
+    ['offer', 'employer', '/employer/aplikacje'],
+    ['job', 'candidate', '/candidate/oferty-polecane'],
+    ['conversation', 'candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
+    ['conversation', 'employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+  ])('%s dla %s → %s', (entityType, role, href) => {
+    expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
+  });
+
+  it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
+    'rozmowa: nie wkleja niezweryfikowanego id do URL: %j',
     (entityId) => {
       expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
     },

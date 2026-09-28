@@ -4,10 +4,21 @@ import { randomUUID } from 'node:crypto';
 
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { jsonArg, rpc } from '@/lib/db/sql';
+import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
+import { z } from 'zod';
+
+import { MENU_TARGET_STATUSES } from '@/lib/applications/transitions';
+import {
+  BULK_TRANSITION_MAX,
+  BULK_TRANSITION_OUTCOMES,
+  TRANSITION_RATE_LIMITS,
+  type BulkTransitionOutcome,
+} from '@/lib/applications/bulk';
+import { getExpectedActiveCompany } from '@/lib/company-context';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import {
   applicationPhoneSchema,
   applicationSchema,
@@ -46,6 +57,8 @@ export type TransitionResult = { ok: true } | { ok: false; error: ErrorCode };
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // #1140 (0171): baza w trybie ogłoszeniowym odrzuca nowe dane procesu rekrutacyjnego.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   // apply_to_job (0093): brak odpowiedzi na pytanie wymagane.
   if (m.includes('SCREENING_ANSWER_REQUIRED')) return 'SCREENING_ANSWER_REQUIRED';
@@ -73,11 +86,8 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Kandydat aplikuje na ofertę (idempotentnie). */
 export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> {
-  // Rate limit per IP (20 aplikacji / godz) — ochrona przed spamowaniem ofert.
-  if (!(await checkRateLimit('apply', { max: 20, windowSeconds: 3600 }))) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
+  // #1130/#1144 — decyzja produktowa: portal ogłoszeniowy. Przed walidacją, limiterem i bazą.
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   // Telefon najpierw: błędny numer (#145) wraca jako błąd pola, a nie ogólny komunikat.
   const phone = applicationPhoneSchema.safeParse({
     phone: input.phone,
@@ -93,14 +103,37 @@ export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> 
   // Tryb demo (bez bazy): oferty mają syntetyczne identyfikatory i nic nie zapisujemy.
   if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
 
+  // #852: sesja PRZED limitem — anonimowe wywołanie (bez konta) nie może zużyć wspólnego
+  // budżetu IP/NAT i zablokować prawdziwych kandydatów za tym samym adresem. Brak sesji =
+  // UNAUTHENTICATED (link logowania w modalu), bez dotykania jakiegokolwiek licznika.
+  const me = await getPortalIdentity();
+  if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
+
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
 
+  // Limit biznesowy PER KONTO (20 aplikacji / godz), niezależny od IP (#852): dwa konta za
+  // tym samym adresem (NAT/CGNAT, biuro, dom) mają niezależne budżety, a jedno konto nie
+  // omija swojego limitu zmieniając sieć.
+  if (
+    !(await checkRateLimit('apply', {
+      max: 20,
+      windowSeconds: 3600,
+      identifier: me.id,
+      perIp: false,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  // Dodatkowa, znacznie szersza ochrona sieciowa przed automatyzacją wielu kont z jednego
+  // adresu — próg nie blokuje populacji współdzielącej IP po zwykłym użyciu limitu jednej
+  // osoby (#852).
+  if (!(await checkRateLimit('apply-ip', { max: 200, windowSeconds: 3600 }))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+
   try {
-    // Brak sesji = UNAUTHENTICATED (link logowania); konto innej roli dostaje PERMISSION_DENIED z RPC.
-    const me = await getPortalIdentity();
-    if (!me) return { ok: false, error: 'UNAUTHENTICATED' };
     const data = await withPortalTransaction(me, (tx) => rpc(tx, 'apply_to_job', {
       p_job_id: v.jobId,
       p_idempotency_key: v.idempotencyKey ?? randomUUID(),
@@ -130,9 +163,24 @@ export async function transitionApplication(
   applicationId: string,
   target: string,
 ): Promise<TransitionResult> {
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (
+      !(await checkRateLimit('application-status', {
+        ...TRANSITION_RATE_LIMITS.perUser,
+        identifier: me.id,
+        perIp: false,
+      })) ||
+      !(await checkRateLimit('application-status-item', {
+        ...TRANSITION_RATE_LIMITS.perApplication,
+        identifier: `${me.id}:${applicationId}`,
+        perIp: false,
+      }))
+    ) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
     await withPortalTransaction(me, (tx) => rpc(tx, 'transition_application', {
       p_application_id: applicationId,
       p_target: target,
@@ -141,6 +189,77 @@ export async function transitionApplication(
   } catch (error) {
     if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
     captureError(error, { area: 'applications.transitionApplication' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
+const BULK_OUTCOMES: ReadonlySet<string> = new Set<string>(BULK_TRANSITION_OUTCOMES);
+
+export type BulkTransitionResult =
+  | { ok: true; results: { applicationId: string; outcome: BulkTransitionOutcome }[] }
+  | { ok: false; error: ErrorCode };
+
+const bulkTransitionSchema = z.object({
+  applicationIds: z.array(z.string().uuid()).min(1).max(BULK_TRANSITION_MAX)
+    .refine((ids) => new Set(ids).size === ids.length),
+  target: z.enum(MENU_TARGET_STATUSES),
+  expectedCompanyId: z.string().uuid(),
+});
+
+/**
+ * Akcja zbiorcza: zmiana statusu wielu zgłoszeń AKTYWNEJ firmy jednym działaniem. Firma
+ * przychodzi z widoku (`expectedCompanyId`) i musi być bieżącą aktywną firmą (inaczej
+ * `ACTIVE_COMPANY_CHANGED`, nic nie zapisujemy — jak formularze po przełączeniu firmy).
+ * Każde zgłoszenie przechodzi przez `transition_application` (ta sama macierz przejść) w
+ * osobnym podbloku `bulk_transition_applications`; wynik per wiersz trafia do raportu.
+ */
+export async function bulkTransitionApplications(
+  applicationIds: string[],
+  target: string,
+  expectedCompanyId: string,
+): Promise<BulkTransitionResult> {
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
+  const parsed = bulkTransitionSchema.safeParse({ applicationIds, target, expectedCompanyId });
+  if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    if (
+      !(await checkRateLimit('application-status-bulk', {
+        ...TRANSITION_RATE_LIMITS.bulkPerUser,
+        identifier: me.id,
+        perIp: false,
+      }))
+    ) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
+    const outcome = await withPortalTransaction(
+      me,
+      async (tx): Promise<{ ok: false; error: ErrorCode } | { ok: true; rows: unknown[] }> => {
+        const expected = await getExpectedActiveCompany(tx, me.id, parsed.data.expectedCompanyId);
+        if (!expected.ok) return { ok: false, error: expected.error };
+        const rows = await rpcRows(tx, 'bulk_transition_applications', {
+          p_company_id: expected.context.activeId,
+          p_application_ids: parsed.data.applicationIds,
+          p_target: parsed.data.target,
+        });
+        return { ok: true, rows };
+      },
+    );
+    if (!outcome.ok) return { ok: false, error: outcome.error };
+    const results = outcome.rows.map((row) => {
+      const record = row as Record<string, unknown>;
+      const raw = typeof record['outcome'] === 'string' ? record['outcome'] : 'error';
+      return {
+        applicationId: String(record['application_id'] ?? ''),
+        outcome: (BULK_OUTCOMES.has(raw) ? raw : 'error') as BulkTransitionOutcome,
+      };
+    });
+    return { ok: true, results };
+  } catch (error) {
+    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    captureError(error, { area: 'applications.bulkTransitionApplications' });
     return { ok: false, error: 'INTERNAL' };
   }
 }

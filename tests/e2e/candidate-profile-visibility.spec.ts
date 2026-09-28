@@ -5,6 +5,13 @@ import { resolve } from 'node:path';
 
 import { LOCALES } from './fixtures/messages';
 
+// #1128: przepływ rekrutacyjny — pomijany przy serwerze w trybie ogłoszeniowym (E2E_PORTAL_LEGAL_MODE=);
+// zachowanie trybu ogłoszeniowego sprawdza classifieds-profile-screening.spec.ts.
+test.skip(
+  (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().toUpperCase() !== 'RECRUITMENT',
+  'serwer testowy w trybie ogłoszeniowym',
+);
+
 /**
  * Ustawienia kandydata — widoczność profilu dla firm (#494), tryb DEMO (bez bazy).
  *

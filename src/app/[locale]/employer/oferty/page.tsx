@@ -9,7 +9,15 @@ import { DuplicateJobButton } from "@/components/employer/DuplicateJobButton";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
+import { isRecruitmentEnabled } from "@/lib/portal-mode";
 import { StatValue } from "@/components/dashboard/StatValue";
+import {
+  decodeTimeCursor,
+  encodeTimeCursor,
+  listPageHref,
+  listPageRequest,
+  listRequestHref,
+} from "@/lib/employer/list-cursor";
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -70,30 +78,22 @@ export default async function EmployerOffersPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ po?: string | string[]; przed?: string | string[] }>;
 }) {
   const { locale } = await params;
-  const { page: requestedPage } = await searchParams;
-  const parsedPage =
-    requestedPage && /^[1-9]\d*$/.test(requestedPage)
-      ? Number(requestedPage)
-      : 1;
-  const page =
-    Number.isSafeInteger(parsedPage) &&
-    parsedPage <= Math.floor(Number.MAX_SAFE_INTEGER / 12)
-      ? parsedPage
-      : 1;
+  // P1-05: kursor (created_at, id) w adresie — `?po=` starsze, `?przed=` nowsze.
+  const request = listPageRequest(await searchParams, decodeTimeCursor);
   setRequestLocale(locale);
+  const recruitment = isRecruitmentEnabled();
   const td = await getTranslations("dashboard");
   const tb = await getTranslations("campaignBanner");
   const [result, shell] = await Promise.all([
-    getCompanyJobsLoad(page),
+    getCompanyJobsLoad(request),
     getEmployerShellData(),
   ]);
   // #403: rola member przegląda oferty; tworzenie/edycja/cykl życia wymagają recruiter+.
   const canRecruitHere = shell.status !== "ok" || canRecruit(shell.activeRole);
-  const pageHref = (target: number) =>
-    target === 1 ? "/employer/oferty" : `/employer/oferty?page=${target}`;
+  const base = "/employer/oferty";
 
   return (
     <div className="space-y-7">
@@ -131,19 +131,19 @@ export default async function EmployerOffersPage({
             {td("employerOffersLoadErrorHint")}
           </p>
           <a
-            href={`/${locale}${pageHref(page)}`}
+            href={`/${locale}${listRequestHref(base, request, encodeTimeCursor)}`}
             className={`mt-5 ${BTN_SECONDARY}`}
           >
             {td("employerOffersRetry")}
           </a>
         </section>
-      ) : result.jobs.length === 0 && page > 1 ? (
+      ) : result.jobs.length === 0 && request.cursor ? (
         <section className={PANEL}>
           <h2 className={PANEL_H2}>
             {td("employerOffersPageEmpty")}
           </h2>
           <Link
-            href={pageHref(1)}
+            href={base}
             className={`mt-5 ${BTN_SECONDARY}`}
           >
             {td("employerOffersFirstPage")}
@@ -192,7 +192,10 @@ export default async function EmployerOffersPage({
                       {offer.city}
                     </p>
                   ) : null}
-                  <dl className="mt-6 grid grid-cols-2 gap-4 border-y border-border py-5">
+                  {/* #1147: tryb ogłoszeniowy — bez liczników zgłoszeń i dopasowań (loader ich nie zwraca). */}
+                  {offer.newApplications !== undefined || offer.matched !== undefined ? (
+                  <dl className={`mt-6 grid gap-4 border-y border-border py-5${offer.newApplications !== undefined && offer.matched !== undefined ? " grid-cols-2" : ""}`}>
+                    {offer.newApplications !== undefined ? (
                     <div className="min-w-0">
                       <dt className={INFO_LABEL}>
                         {td("employerOffersApplicationsLabel")}
@@ -200,16 +203,34 @@ export default async function EmployerOffersPage({
                       <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
                         <StatValue value={offer.newApplications} noDataLabel={td("funnelNoData")} />
                       </dd>
+                      {/* P1-05: zgłoszenia tej oferty (recruiter+ — member nie czyta zgłoszeń). */}
+                      {/* #1144: link do panelu zgłoszeń tylko w trybie RECRUITMENT. */}
+                      {recruitment && shell.status === "ok" && canRecruitHere && offer.status !== "draft" ? (
+                        <dd className="mt-1">
+                          <Link
+                            href={`/employer/aplikacje?oferta=${encodeURIComponent(offer.id)}`}
+                            aria-label={td("employerOffersViewApplicationsLabel", { title: offer.title })}
+                            className={TEXT_LINK}
+                          >
+                            {td("employerOffersViewApplications")}
+                          </Link>
+                        </dd>
+                      ) : null}
                     </div>
-                    <div className="min-w-0 border-l border-border pl-4">
-                      <dt className={INFO_LABEL}>
-                        {td("colMatched")}
-                      </dt>
-                      <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
-                        <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
-                      </dd>
-                    </div>
+                    ) : null}
+                    {/* #1133: tryb ogłoszeniowy — bez pola dopasowań (loader go nie zwraca). */}
+                    {offer.matched !== undefined ? (
+                      <div className="min-w-0 border-l border-border pl-4">
+                        <dt className={INFO_LABEL}>
+                          {td("colMatched")}
+                        </dt>
+                        <dd className="mt-1 block text-[22px] font-[650] tracking-[-0.035em] tabular-nums text-foreground">
+                          <StatValue value={offer.matched} noDataLabel={td("funnelNoData")} />
+                        </dd>
+                      </div>
+                    ) : null}
                   </dl>
+                  ) : null}
                   <div className="mt-auto flex flex-wrap items-center gap-[9px] pt-[14px]">
                     {/* 0148: kopia oferty w dowolnym statusie jako nowy szkic (recruiter+). */}
                     {canRecruitHere ? (
@@ -275,29 +296,23 @@ export default async function EmployerOffersPage({
               </li>
             ))}
           </ul>
-          {(page > 1 || result.hasNext) && (
+          {(result.prevCursor || result.nextCursor) && (
             <nav
               aria-label={td("employerOffersPaginationLabel")}
               className="flex flex-wrap items-center justify-center gap-3"
             >
-              {page > 1 && (
+              {result.prevCursor && (
                 <Link
-                  href={pageHref(page - 1)}
+                  href={listPageHref(base, "przed", result.prevCursor)}
                   rel="prev"
                   className={BTN_SECONDARY}
                 >
                   {td("employerOffersPrevious")}
                 </Link>
               )}
-              <span
-                aria-current="page"
-                className="px-2 text-sm text-muted-foreground"
-              >
-                {td("employerOffersPage", { page })}
-              </span>
-              {result.hasNext && (
+              {result.nextCursor && (
                 <Link
-                  href={pageHref(page + 1)}
+                  href={listPageHref(base, "po", result.nextCursor)}
                   rel="next"
                   className={BTN_SECONDARY}
                 >

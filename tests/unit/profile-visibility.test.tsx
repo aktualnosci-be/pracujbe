@@ -9,6 +9,8 @@ import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import type { PortalIdentity } from '@/lib/auth/session';
 import pl from '@/messages/pl.json';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withClassifiedsMode as classifiedsModeInTests, withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -39,6 +41,25 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 afterEach(cleanup);
+
+// Widoczność profilu dla firm (#494) istnieje w trybie RECRUITMENT (#1128); tryb ogłoszeniowy — niżej (#1135).
+recruitmentModeInTests();
+
+/** #1135 — decyzja produktowa: portal ogłoszeniowy (firmy nie przeglądają profili). */
+describe('setProfileVisibilityAction w trybie ogłoszeniowym (#1135)', () => {
+  classifiedsModeInTests();
+  it.each([true, false])('searchable=%s → RECRUITMENT_DISABLED bez zapytania do bazy', async (value) => {
+    dbWith({ rpc: { data: value } });
+    expect(await setProfileVisibilityAction(value)).toEqual({ ok: false, error: 'RECRUITMENT_DISABLED' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('także w trybie demo (bez bazy) — brak udawanego sukcesu', async () => {
+    dbWith({});
+    fakeSession.configured = false;
+    expect(await setProfileVisibilityAction(true)).toEqual({ ok: false, error: 'RECRUITMENT_DISABLED' });
+  });
+});
 
 describe('setProfileVisibilityAction (#494)', () => {
   it('woła set_candidate_searchable pod sesją i zwraca stan ponownie odczytany z bazy', async () => {

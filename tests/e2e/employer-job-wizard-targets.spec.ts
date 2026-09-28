@@ -37,7 +37,11 @@ test('małe akcje kreatora oferty mają dostępny cel dotykowy', async ({
   await expectMinimumTarget(page.getByRole('button', { name: 'Zamknij' }));
   await page.getByRole('button', { name: 'Zamknij' }).click();
 
-  await page.getByLabel('Rodzaj umowy').click();
+  // Rola `combobox` (nie `getByLabel`): po naprawie #819 listbox otwartego Selecta ma
+  // teraz własną, poprawnie rozwiązywalną nazwę (placeholder triggera „Wybierz rodzaj
+  // umowy”), która zawiera etykietę pola — `getByLabel('Rodzaj umowy')` łapał wtedy oba
+  // elementy naraz (tryb strict Playwrighta).
+  await page.getByRole('combobox', { name: 'Rodzaj umowy' }).click();
   await page.getByRole('option', { name: 'Umowa na stałe' }).click();
   await page.getByLabel('Godziny pracy').fill('Pełny etat');
   await page.getByRole('button', { name: 'Dalej' }).click();
@@ -75,7 +79,9 @@ test('małe akcje kreatora oferty mają dostępny cel dotykowy', async ({
     .click();
   await page.getByRole('button', { name: 'Dalej' }).click();
 
-  await page.getByPlaceholder('np. Niderlandzki').fill('Niderlandzki');
+  // Język ze słownika (0168): lista zamiast pola tekstowego.
+  await page.getByRole('combobox', { name: 'Języki', exact: true }).click();
+  await page.getByRole('option', { name: 'Niderlandzki', exact: true }).click();
   await page.getByRole('button', { name: 'Dodaj język' }).click();
   await expectMinimumTarget(
     page.getByRole('button', { name: 'Usuń: Niderlandzki' }),

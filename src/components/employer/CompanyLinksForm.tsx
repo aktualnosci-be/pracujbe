@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,9 +21,9 @@ import {
 } from '@/components/dashboard/panel-styles';
 import { useRouter } from '@/i18n/navigation';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
-import { sameOriginHost } from '@/lib/company-links';
+import { sameOriginHost, type CompanyLinksReview } from '@/lib/company-links';
 import { companyLinksSchema, type CompanyLinksInput } from '@/lib/validation/company';
-import { updateCompanyLinks } from '@/lib/actions/company';
+import { updateCompanyLinks, type CompanyLinksOutcome } from '@/lib/actions/company';
 
 /**
  * CompanyLinksForm — strona WWW i adres logo firmy (#112, w `/employer/firma`).
@@ -33,19 +33,48 @@ import { updateCompanyLinks } from '@/lib/actions/company';
  * puste pole = wyczyszczenie adresu. Realizuje Invariant #11 (blokada przycisku podczas
  * zapisu, błędy przy polach z fokusem na pierwszym, zachowanie danych po błędzie, jasny sukces).
  *
+ * Zatwierdzanie (0156): nowy adres trafia do kolejki admina portalu (`pending`) — publicznie
+ * widać dotychczasowe adresy, które formularz pokazuje obok; odrzucona propozycja wraca z
+ * uzasadnieniem admina do poprawy. Usunięcie adresu wchodzi od razu (`applied`).
+ *
  * Podgląd logo: `next/image` tylko gdy adres wskazuje na WŁASNY host (jedyny dozwolony w
  * `images.remotePatterns`/CSP `img-src`) — CSP nie jest rozszerzane na dowolne hosty. Dla
  * każdego innego poprawnego adresu formularz pokazuje sam link zamiast obrazka.
  */
 
 export interface CompanyLinksFormProps {
+  /**
+   * ID firmy, dla której wyrenderowano formularz (#801) — akcja zapisu używa TEGO
+   * identyfikatora, nie aktywnej firmy z cookie w chwili wysłania, więc zmiana aktywnej
+   * firmy w innej karcie po otwarciu formularza nie może przekierować zapisu do innego
+   * rekordu.
+   */
+  companyId: string;
+  /** Wartości pól: propozycja (gdy jest), inaczej zatwierdzone adresy. */
   defaultValues: { website: string; logoUrl: string };
+  /** Zatwierdzone (publiczne) adresy — pokazywane, gdy propozycja czeka albo została odrzucona. */
+  published: { website: string | null; logoUrl: string | null };
+  /** Stan propozycji (0156) albo null. */
+  review: CompanyLinksReview | null;
   /** Host własnej witryny (`NEXT_PUBLIC_SITE_URL`, bez schematu) — dla podglądu logo. */
   ownHost: string;
 }
 
-export function CompanyLinksForm({
+/**
+ * CC25-01: `useForm` czyta `defaultValues` tylko przy montażu. Po przełączeniu aktywnej firmy
+ * w pasku bocznym TEJ SAMEJ karty (`router.refresh`) RSC podaje nowe `companyId` i wartości,
+ * ale bez klucza komponent zostałby w drzewie ze starymi polami — a zapis poszedłby już do
+ * nowej firmy. Klucz = firma: formularz montuje się od nowa z danymi właściwej firmy.
+ */
+export function CompanyLinksForm(props: CompanyLinksFormProps): React.JSX.Element {
+  return <CompanyLinksFormFields key={props.companyId} {...props} />;
+}
+
+function CompanyLinksFormFields({
+  companyId,
   defaultValues,
+  published,
+  review,
   ownHost,
 }: CompanyLinksFormProps): React.JSX.Element {
   const t = useTranslations('company');
@@ -54,7 +83,7 @@ export function CompanyLinksForm({
   const router = useRouter();
 
   const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
-  const [success, setSuccess] = React.useState(false);
+  const [success, setSuccess] = React.useState<CompanyLinksOutcome | null>(null);
   const [demo, setDemo] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -85,17 +114,17 @@ export function CompanyLinksForm({
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
-    setSuccess(false);
+    setSuccess(null);
     setDemo(false);
 
     try {
-      const result = await updateCompanyLinks(values);
+      const result = await updateCompanyLinks(companyId, values);
       if (!result.ok) {
         setServerError(result.error);
         return;
       }
       setDemo(result.demo === true);
-      setSuccess(true);
+      setSuccess(result.outcome);
       router.refresh();
     } catch {
       setServerError('INTERNAL');
@@ -122,7 +151,53 @@ export function CompanyLinksForm({
           className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-success/30 bg-success/10 text-foreground max-[600px]:flex-row')}
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
-          <p>{demo ? t('linksDemoNotice') : t('linksSavedSuccess')}</p>
+          <p>
+            {demo
+              ? t('linksDemoNotice')
+              : success === 'pending'
+                ? t('linksSubmittedPending')
+                : success === 'unchanged'
+                  ? t('linksUnchanged')
+                  : t('linksSavedSuccess')}
+          </p>
+        </div>
+      ) : null}
+
+      {review && !success ? (
+        <div
+          className={cn(
+            NOTICE,
+            'my-0 items-start justify-start gap-3 max-[600px]:flex-row',
+            review.status === 'rejected'
+              ? 'border-error/30 bg-error/10 text-foreground'
+              : 'border-border bg-muted text-foreground',
+          )}
+          data-testid="company-links-review"
+        >
+          {review.status === 'rejected' ? (
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error-text" aria-hidden="true" />
+          ) : (
+            <Clock className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          )}
+          <div className="min-w-0 space-y-1">
+            <p className="font-semibold">
+              {t(review.status === 'rejected' ? 'linksReviewRejectedTitle' : 'linksReviewPendingTitle')}
+            </p>
+            {review.status === 'rejected' && review.reason ? (
+              <p className="break-words">{t('linksReviewRejectedReason', { reason: review.reason })}</p>
+            ) : null}
+            <p>{t(review.status === 'rejected' ? 'linksReviewRejectedHint' : 'linksReviewPendingBody')}</p>
+            <dl className="grid gap-x-2 text-[13px] sm:grid-cols-[max-content_1fr]">
+              <dt className="text-muted-foreground">
+                {t('linksPublicLabel')} — {t('website')}
+              </dt>
+              <dd className="min-w-0 break-all">{published.website ?? t('linksPublicNone')}</dd>
+              <dt className="text-muted-foreground">
+                {t('linksPublicLabel')} — {t('logoUrl')}
+              </dt>
+              <dd className="min-w-0 break-all">{published.logoUrl ?? t('linksPublicNone')}</dd>
+            </dl>
+          </div>
         </div>
       ) : null}
 
