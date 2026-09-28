@@ -1386,9 +1386,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   ramka widoczna też na mobile, pasek mobilny = sam przycisk główny; bez „Wyślij wiadomość”,
   podpis kontaktu `job.employerApply.contact`, JobPosting `directApply: false`. Oferta bez kanału
   = brak przycisku i neutralny komunikat `job.employerApply.none`. Kliknięcie = `apply_started`
-  tylko po zgodzie analitycznej (demo nie liczone; komponent serwerowy + wyspa `ApplyClickTracker`).
-  Tryb `RECRUITMENT` bez zmian (`ApplyModal`, ładowany osobnym chunkiem przez `ApplyModalLazy` —
-  budżet JS szczegółu oferty, #395).
+  tylko po zgodzie analitycznej (demo nie liczone); komponent serwerowy, kliknięcia liczy istniejąca
+  wyspa `JobFunnelBeacon` (`applyClicks`), a `JobMatchCard` (tylko RECRUITMENT) idzie osobnym
+  chunkiem (`JobMatchCardLazy`, `ssr: false`) — budżet JS szczegółu oferty (#395) bez podnoszenia
+  limitu. Tryb `RECRUITMENT` bez zmian (`ApplyModal`).
   Dowód: unit `employer-apply-channel` (kontrole ujemne: schematy, zgoda), strażnik
   `tests/legal/classifieds-only.test.ts` (ApplyModal/„Wyślij wiadomość” tylko w gałęzi
   `recruitment`, kontrola ujemna), E2E `job-detail-employer-apply` (4 języki, axe 320/1280 px;

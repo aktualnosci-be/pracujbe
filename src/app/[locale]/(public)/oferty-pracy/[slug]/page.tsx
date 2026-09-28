@@ -61,7 +61,8 @@ import { EmployerApplyChannel } from '@/components/public/EmployerApplyChannel';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
-import { JobMatchCard } from '@/components/public/JobMatchCard';
+// #1130: osobny chunk — karta dopasowania tylko w trybie RECRUITMENT (budżet JS #395).
+import { JobMatchCardLazy as JobMatchCard } from '@/components/public/JobMatchCardLazy';
 import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
@@ -409,7 +410,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
       {job.isDemo ? <DemoJobsNotice className="mt-6" /> : null}
       {/* Lejek ofert (#99): zliczenie po załadowaniu, bez wpływu na cache ISR tej strony. */}
-      {job.isDemo ? null : <JobFunnelBeacon event="detail_view" jobIds={[job.id]} />}
+      {job.isDemo ? null : <JobFunnelBeacon event="detail_view" jobIds={[job.id]} applyClicks={!recruitment} />}
 
       {/* `.offer-layout` (#7, Z2): treść + panel 300 px, odstęp 36 px; jedna kolumna < 1024 px. */}
       <div className="mt-[30px] grid min-w-0 gap-9 lg:grid-cols-[minmax(0,1fr)_300px]">

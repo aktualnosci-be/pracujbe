@@ -1,12 +1,9 @@
-'use client';
-
-import * as React from 'react';
+import type * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { ExternalLink, Mail, Phone } from 'lucide-react';
 
 import type { JobApplyChannel } from '@/lib/jobs';
 import { APPLY_LINK_REL, buildApplyLinks, type ApplyLink } from '@/lib/job-apply-links';
-import { reportApplyStarted } from '@/lib/job-funnel/client';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
 
@@ -21,8 +18,10 @@ import { buttonVariants } from '@/components/ui/button';
  * Oferta bez kanału (stara, sprzed 0172): brak przycisku, wariant `box` pokazuje neutralny
  * komunikat, wariant `bar` nic nie renderuje.
  *
- * Lejek ofert (#99): kliknięcie w kanał = `apply_started`, wysyłane wyłącznie po zgodzie
- * analitycznej (#575, bramka w `sendFunnelEvent`); oferta demo nie jest liczona.
+ * Komponent serwerowy (budżet JS szczegółu oferty, #395): kliknięcia liczy istniejąca wyspa
+ * `JobFunnelBeacon` (`applyClicks`). Lejek ofert (#99): kliknięcie w kanał = `apply_started`,
+ * wysyłane wyłącznie po zgodzie analitycznej (#575, bramka w `sendFunnelEvent`); oferta demo
+ * nie jest liczona (bez znacznika `data-apply-job`).
  */
 export interface EmployerApplyChannelProps {
   jobId: string;
@@ -45,9 +44,8 @@ export function EmployerApplyChannel({
 }: EmployerApplyChannelProps): React.JSX.Element | null {
   const t = useTranslations('job.employerApply');
   const links = buildApplyLinks(channel, t('mailSubject', { title: jobTitle }));
-  const onClick = React.useCallback(() => {
-    if (!demo) reportApplyStarted(jobId);
-  }, [demo, jobId]);
+  // Znacznik dla nasłuchu lejka (`JobFunnelBeacon applyClicks`); oferta demo bez znacznika.
+  const track = demo ? {} : ({ 'data-apply-job': jobId } as const);
 
   const [primary, ...others] = links;
   if (!primary) {
@@ -63,7 +61,7 @@ export function EmployerApplyChannel({
     <div className={cn(variant === 'bar' ? 'min-w-0 flex-1' : undefined, className)}>
       <a
         {...linkAttrs(primary)}
-        onClick={onClick}
+        {...track}
         data-testid="employer-apply-primary"
         data-apply-kind={primary.kind}
         className={cn(
@@ -90,7 +88,7 @@ export function EmployerApplyChannel({
                 <li key={link.kind}>
                   <a
                     {...linkAttrs(link)}
-                    onClick={onClick}
+                    {...track}
                     data-apply-kind={link.kind}
                     className="inline-flex min-h-6 items-center gap-2 break-all text-sm font-medium text-foreground underline underline-offset-2 hover:text-accent"
                   >

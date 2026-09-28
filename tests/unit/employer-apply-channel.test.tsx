@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EmployerApplyChannel } from '@/components/public/EmployerApplyChannel';
+import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { CONSENT_COOKIE_NAME, CONSENT_POLICY_VERSION } from '@/lib/consent';
 import { APPLY_LINK_REL, buildApplyLinks, isApplyLinkHref } from '@/lib/job-apply-links';
 import type { JobApplyChannel } from '@/lib/jobs';
@@ -16,7 +17,8 @@ import pl from '@/messages/pl.json';
  * #1130 — „Aplikuj u pracodawcy” (decyzja produktowa: portal ogłoszeniowy). Przycisk prowadzi
  * wyłącznie do kanału ogłoszeniodawcy (https w nowej karcie z `rel` bez opener/referrer/rankingu,
  * `mailto:`, `tel:`), oferta bez kanału = brak przycisku i neutralny komunikat, kliknięcie liczy
- * `apply_started` tylko po zgodzie analitycznej (#575) i nigdy dla oferty demo.
+ * `apply_started` (nasłuch `JobFunnelBeacon applyClicks`) tylko po zgodzie analitycznej (#575)
+ * i nigdy dla oferty demo.
  */
 
 const JOB = '3f1c7a52-6f7e-4d0b-9a55-1a2b3c4d5e6f';
@@ -49,12 +51,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderChannel(props: Partial<React.ComponentProps<typeof EmployerApplyChannel>> = {}, messages = pl) {
+function renderChannel(
+  props: Partial<React.ComponentProps<typeof EmployerApplyChannel>> = {},
+  { beacon = false, applyClicks = true }: { beacon?: boolean; applyClicks?: boolean } = {},
+) {
   return render(
-    <NextIntlClientProvider locale="pl" messages={messages}>
+    <NextIntlClientProvider locale="pl" messages={pl}>
+      {beacon ? <JobFunnelBeacon event="detail_view" jobIds={[JOB]} applyClicks={applyClicks} /> : null}
       <EmployerApplyChannel jobId={JOB} jobTitle="Magazynier & kierowca" channel={FULL} variant="box" {...props} />
     </NextIntlClientProvider>,
   );
+}
+
+function sentEvents(): string[] {
+  return fetchMock.mock.calls.map((call) => {
+    const [, init] = call as unknown as [string, RequestInit];
+    return (JSON.parse(String(init.body)) as { event: string }).event;
+  });
 }
 
 describe('buildApplyLinks', () => {
@@ -137,27 +150,39 @@ describe('EmployerApplyChannel', () => {
   });
 
   it('lejek: bez zgody analitycznej kliknięcie nic nie wysyła', () => {
-    renderChannel();
+    renderChannel({}, { beacon: true });
     fireEvent.click(screen.getByTestId('employer-apply-primary'));
     writeConsentCookie(false);
     fireEvent.click(screen.getByTestId('employer-apply-primary'));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('lejek: po zgodzie kliknięcie = apply_started (kontrola ujemna bramki zgody)', () => {
+  it('lejek: po zgodzie kliknięcie w każdy kanał = apply_started (kontrola ujemna bramki zgody)', () => {
     writeConsentCookie(true);
-    renderChannel();
+    renderChannel({}, { beacon: true });
+    fetchMock.mockClear(); // ewentualne detail_view z montażu
     fireEvent.click(screen.getByTestId('employer-apply-primary'));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('link', { name: /hr@example\.com/ }));
+    expect(sentEvents()).toEqual(['apply_started', 'apply_started']);
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({ event: 'apply_started', jobIds: [JOB] });
   });
 
-  it('lejek: oferta demo nie jest liczona nawet po zgodzie', () => {
+  it('lejek: bez applyClicks nasłuchu nie ma (kontrola ujemna wpięcia)', () => {
     writeConsentCookie(true);
-    renderChannel({ demo: true });
+    renderChannel({}, { beacon: true, applyClicks: false });
+    fetchMock.mockClear();
     fireEvent.click(screen.getByTestId('employer-apply-primary'));
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sentEvents()).not.toContain('apply_started');
+  });
+
+  it('lejek: oferta demo nie jest liczona nawet po zgodzie (link bez znacznika)', () => {
+    writeConsentCookie(true);
+    renderChannel({ demo: true }, { beacon: true });
+    fetchMock.mockClear();
+    expect(screen.getByTestId('employer-apply-primary')).not.toHaveAttribute('data-apply-job');
+    fireEvent.click(screen.getByTestId('employer-apply-primary'));
+    expect(sentEvents()).not.toContain('apply_started');
   });
 
   it.each([['pl', pl], ['nl', nl], ['fr', fr], ['en', en]] as const)('teksty w %s', (_locale, messages) => {

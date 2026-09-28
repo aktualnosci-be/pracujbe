@@ -277,6 +277,8 @@ describe('szczegół oferty: CTA aplikacyjne = kanał ogłoszeniodawcy (#1130)',
     expect(view).toMatch(/variant="box"/);
     expect(view).toMatch(/variant="bar"/);
     expect(view).toMatch(/channel=\{job\.applyChannel\}/);
+    // Kliknięcia kanału liczy wyspa lejka (bramka zgody), tylko w trybie ogłoszeniowym.
+    expect(page).toMatch(/<JobFunnelBeacon event="detail_view" jobIds=\{\[job\.id\]\} applyClicks=\{!recruitment\} \/>/);
   });
 
   it('kontrola ujemna: ApplyModal albo „Wyślij wiadomość” poza gałęzią recruitment są wykrywane', () => {
