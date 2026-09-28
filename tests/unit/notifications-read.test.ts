@@ -7,7 +7,7 @@ import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import { withRecruitmentMode } from '../helpers/portal-mode';
 
-// Pełne przepływy (kategorie rekrutacyjne, linki do rozmów) w trybie RECRUITMENT (#1128); tryb ogłoszeniowy: classifieds-notifications.test.ts.
+// Pełne przepływy (kategorie rekrutacyjne, linki do rozmów) w trybie RECRUITMENT (#1128); zapytania nie ukrywają powiadomień o przeglądzie pytań (ukrycie: classifieds-screening-hidden); tryb ogłoszeniowy: classifieds-notifications.test.ts.
 withRecruitmentMode();
 
 vi.mock('next-intl/server', () => ({
@@ -91,7 +91,7 @@ describe('notifications read', () => {
     // Obie kwerendy są zawężone do właściciela sesji, w jego transakcji.
     for (const name of ['notifications.latest', 'notifications.unread']) {
       const [call] = fakeDb.callsTo(name);
-      expect(call?.values).toEqual([SELF]);
+      expect(call?.values).toEqual([SELF, true]);
       expect(call?.as).toBe(SELF);
     }
   });
