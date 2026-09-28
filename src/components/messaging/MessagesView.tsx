@@ -12,6 +12,8 @@ import {
   type MyMessageReports,
 } from '@/lib/data/messages';
 import { markConversationRead } from '@/lib/actions/messages';
+import { getComposerTemplates } from '@/lib/data/message-templates';
+import type { ComposerTemplates } from '@/lib/validation/message-template';
 import { threadDisplayName } from '@/lib/messaging/thread-view';
 import { captureError } from '@/lib/error-report';
 
@@ -67,10 +69,13 @@ export async function MessagesView({
   let threadResult: ConversationThreadResult = { status: 'not-found' };
   let markedRead = false;
   let reports: MyMessageReports | undefined;
+  let templates: ComposerTemplates | null = null;
   if (activeId) {
     threadResult = await getConversationThread(activeId, locale);
     if (threadResult.status === 'ready') {
       reports = await getMyMessageReports(activeId);
+      // 0170: szablony odpowiedzi tylko po stronie firmy (recruiter+ — sprawdza baza).
+      if (basePath.startsWith('/employer')) templates = await getComposerTemplates(activeId);
       // Oznaczamy tylko wątek, który udało się odczytać; licznik zmieniamy po sukcesie RPC.
       try {
         markedRead = (await markConversationRead(activeId)).ok;
@@ -162,6 +167,8 @@ export async function MessagesView({
                     key={activeId}
                     conversationId={activeId}
                     recipientName={threadDisplayName(threadResult.thread, t('title'))}
+                    templates={templates}
+                    templateCandidateName={threadResult.thread.counterpartyName}
                   />
                 </>
               ) : (

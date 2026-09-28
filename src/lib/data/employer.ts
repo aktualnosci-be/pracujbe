@@ -14,6 +14,7 @@
  * przez stronę mają osobne transakcje, więc każda sekcja pulpitu zawodzi niezależnie.
  */
 
+import type { ApplicationFilterStatus } from '@/lib/applications/bulk';
 import { cache } from 'react';
 
 import type { PortalIdentity } from '@/lib/auth/session';
@@ -947,6 +948,12 @@ export type EmployerApplicationsLoad =
       isDemo: boolean;
       /** Filtr oferty (`?oferta=`) z tytułem — tylko oferta aktywnej firmy widoczna pod RLS. */
       job: { id: string; title: string } | null;
+      /** Filtr statusu (`?status=`) — tylko wartości z `APPLICATION_FILTER_STATUSES`. */
+      statusFilter: ApplicationFilterStatus | null;
+      /** Aktywna firma, dla której wyrenderowano listę (akcja zbiorcza sprawdza ją na serwerze). */
+      companyId: string | null;
+      /** Oferty aktywnej firmy do filtra listy (najnowsze, bez usuniętych). */
+      jobOptions: { id: string; title: string }[];
     }
   | { status: 'not_found' }
   | { status: 'error' };
@@ -961,6 +968,7 @@ export const EMPLOYER_APPLICATIONS_PAGE_SIZE = 12;
 export async function getEmployerApplicationsPage(
   request: ListPageRequest<TimeCursor> = FIRST_PAGE,
   jobId: string | null = null,
+  statusFilter: ApplicationFilterStatus | null = null,
 ): Promise<EmployerApplicationsLoad> {
   if (jobId !== null && !UUID_RE.test(jobId)) return { status: 'not_found' };
 
@@ -968,11 +976,16 @@ export async function getEmployerApplicationsPage(
     if (jobId !== null) return { status: 'not_found' };
     return {
       status: 'ok',
-      applications: request.cursor ? [] : DEMO_APPLICATIONS,
+      applications: request.cursor
+        ? []
+        : DEMO_APPLICATIONS.filter((a) => statusFilter === null || a.status === statusFilter),
       prevCursor: null,
       nextCursor: null,
       isDemo: true,
       job: null,
+      statusFilter,
+      companyId: null,
+      jobOptions: [],
     };
   }
 
@@ -980,7 +993,10 @@ export async function getEmployerApplicationsPage(
     const ctx = await loadContext();
     if (!ctx) {
       return jobId === null
-        ? { status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null }
+        ? {
+            status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false,
+            job: null, statusFilter, companyId: null, jobOptions: [],
+          }
         : { status: 'not_found' };
     }
     const { me, companyId } = ctx;
@@ -1000,10 +1016,18 @@ export async function getEmployerApplicationsPage(
           WHERE a.company_id = $1 AND a.deleted_at IS NULL
             AND ($2::uuid IS NULL OR a.job_id = $2::uuid)
             AND ($3::timestamptz IS NULL OR (a.submitted_at, a.id) ${prev ? '>' : '<'} ($3::timestamptz, $4::uuid))
+            AND ($6::text IS NULL OR a.status::text = $6::text)
           ORDER BY ${prev ? 'a.submitted_at ASC, a.id ASC' : 'a.submitted_at DESC, a.id DESC'}
           LIMIT $5`,
-        [companyId, jobId, request.cursor?.ts ?? null, request.cursor?.id ?? null, EMPLOYER_APPLICATIONS_PAGE_SIZE + 1]);
-      return { job, rows };
+        [companyId, jobId, request.cursor?.ts ?? null, request.cursor?.id ?? null, EMPLOYER_APPLICATIONS_PAGE_SIZE + 1,
+          statusFilter]);
+      // Oferty do filtra: najnowsze 200 ofert aktywnej firmy (także zamknięte — mają zgłoszenia).
+      const jobOptions = await queryRows(tx, 'employer.applications-job-options',
+        `SELECT id, title FROM public.jobs
+          WHERE company_id = $1 AND deleted_at IS NULL AND status <> 'draft'
+          ORDER BY created_at DESC, id DESC
+          LIMIT 200`, [companyId]);
+      return { job, rows, jobOptions };
     });
     if (!loaded) return { status: 'not_found' };
 
@@ -1029,6 +1053,9 @@ export async function getEmployerApplicationsPage(
       prevCursor: page.prevCursor,
       nextCursor: page.nextCursor,
       job: loaded.job ? { id: asString(loaded.job['id']), title: asString(loaded.job['title']) } : null,
+      statusFilter,
+      companyId,
+      jobOptions: asRows(loaded.jobOptions).map((row) => ({ id: asString(row['id']), title: asString(row['title']) })),
     };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerApplicationsPage' });

@@ -1522,6 +1522,30 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `portal-employer` (granica strony z remisem i nowym zgłoszeniem, cudza firma/member = pusto
   albo 404), unit `employer-list-cursor`, `employer-*-load`, E2E `employer-candidate-detail`,
   `panel-a11y` (nowa trasa).
+- [x] Narzędzia rekrutera (migracja `0170`): filtry `/employer/aplikacje`
+  po ofercie i statusie w adresie (`?oferta=`, `?status=`, formularz GET bez JS; ten sam kursor
+  `submitted_at` + `id`, filtry zachowane w stronicowaniu; `parseApplicationStatusFilter`
+  w `src/lib/applications/bulk.ts`). Akcja zbiorcza (`ApplicationsBulkSelection`): zaznaczenie
+  zgłoszeń bieżącej strony, status z menu (`MENU_TARGET_STATUSES`), potwierdzenie i raport per
+  wynik; `bulkTransitionApplications` (firma WIDOKU sprawdzana `getExpectedActiveCompany` →
+  `ACTIVE_COMPANY_CHANGED`, limit 20 operacji/h) → RPC `bulk_transition_applications` (≤ 50
+  różnych zgłoszeń firmy, recruiter+, każde przez `transition_application` w osobnym podbloku —
+  ta sama macierz, błąd wiersza nie cofa reszty; wyniki `changed/unchanged/invalid_transition/
+  not_found/permission_denied/error`). LIM17-01: `transitionApplication` ma limiter per konto
+  (120/h) i per konto × zgłoszenie (20/h); w bazie `application_status_email_gate` scala
+  niewysłany e-mail o statusie (najnowszy status wygrywa, `suppressed_superseded`) i ogranicza
+  przejścia pośrednie do 3 e-maili/zgłoszenie/24 h (końcowe zawsze), także dla gościa. Szablony
+  odpowiedzi (`/employer/szablony`, `MessageTemplatesManager`): `company_message_templates` +
+  warianty pl/nl/fr/en, odczyt RLS recruiter+ firmy, zapis RPC `save_/delete_company_message_template`
+  (limit 50, CAS `updated_at` → `STALE_STATE`, NISS/dokument odrzucany w akcji). Kompozytor
+  rekrutera (`MessageTemplatePicker`): wariant wg języka kandydata z
+  `get_conversation_template_context` (`resolve_recipient_locale`, Invariant #1); brak wariantu =
+  komunikat „kandydat ma inny język” i świadome wstawienie innej wersji; zmienne `{imie}`,
+  `{stanowisko}`, `{firma}`. Dowód: `rls.sql` sekcja RT170 (kontrole ujemne: bez bramki e-maili,
+  polityka bez recruiter+), integracja `portal-recruiter-tools` (PG16), unit `recruiter-tools*`,
+  E2E `recruiter-tools` (4 języki, axe 320/1280). **Otwarte:** szablon przy zmianie statusu
+  (wysyłka wiadomości zbiorczo), tłumaczenie brakującego wariantu przez AI (#31), filtry
+  dopasowania/języków/„bez konta”, zaznaczanie ponad bieżącą stronę.
 - [x] Zespół firmy i kolejna firma (#403, migracja `0086`): `/employer/zespol` — lista członków
   (owner/admin; RPC `get_company_team`), zmiana roli (`set_company_member_role`), odebranie/
   przywrócenie dostępu (`set_company_member_active`, z potwierdzeniem), zaproszenie po e-mailu

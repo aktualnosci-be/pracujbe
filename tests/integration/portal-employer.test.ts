@@ -208,8 +208,9 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
 
   it('zwykły member nie widzi zgłoszeń (recruiter+), ale widzi oferty firmy', async () => {
     actAs(memberA);
-    expect(await employer.getEmployerApplicationsPage()).toEqual({
+    expect(await employer.getEmployerApplicationsPage()).toMatchObject({
       status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+      statusFilter: null, companyId: ids.companyA,
     });
     expect(await employer.getRecentApplications()).toEqual({ status: 'ok', applications: [] });
     const jobs = await employer.getCompanyJobsLoad();
@@ -426,6 +427,7 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     actAs(null);
     expect(await employer.getEmployerApplicationsPage()).toEqual({
       status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+      statusFilter: null, companyId: null, jobOptions: [],
     });
     expect(await employer.getEmployerShellData()).toEqual({ status: 'error' });
     actAs({ id: candidates[0]!, role: 'candidate' });

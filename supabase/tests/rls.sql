@@ -17644,4 +17644,247 @@ select pg_temp.assert(
   'DC166-8c kandydat nadal widzi własne zgłoszenie i dane oferty zawieszonej firmy');
 reset role; reset app.current_uid;
 
+\echo '--- RT170 narzędzia rekrutera: limit e-maili statusu, akcja zbiorcza, szablony (0170) ---'
+\set RTC1 'e9400000-0000-4000-8000-0000000000c1'
+\set RTC2 'e9400000-0000-4000-8000-0000000000c2'
+\set RTC3 'e9400000-0000-4000-8000-0000000000c3'
+\set RTE1 'e9400000-0000-4000-8000-0000000000e1'
+\set RTM1 'e9400000-0000-4000-8000-0000000000e2'
+\set RTE2 'e9400000-0000-4000-8000-0000000000e3'
+\set RTCO 'e9400000-0000-4000-8000-0000000000f1'
+\set RTCO2 'e9400000-0000-4000-8000-0000000000f2'
+\set RTJ1 'e9400000-0000-4000-8000-0000000000b1'
+\set RTJ2 'e9400000-0000-4000-8000-0000000000b2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RTC1','rtc1@test.be','Noor R','{"role":"candidate","first_name":"Noor","last_name":"Raes","locale":"nl"}'),
+  (:'RTC2','rtc2@test.be','Luc R','{"role":"candidate","first_name":"Luc","last_name":"Roux","locale":"fr"}'),
+  (:'RTC3','rtc3@test.be','Ana R','{"role":"candidate","first_name":"Ana","last_name":"Rus","locale":"en"}'),
+  (:'RTE1','rte1@test.be','Piotr R','{"role":"employer","first_name":"Piotr","last_name":"Rekruter","locale":"pl"}'),
+  (:'RTM1','rtm1@test.be','Ewa M','{"role":"employer","first_name":"Ewa","last_name":"Member","locale":"pl"}'),
+  (:'RTE2','rte2@test.be','Jan O','{"role":"employer","first_name":"Jan","last_name":"Obcy","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'RTCO','Firma RT170','verified'), (:'RTCO2','Obca RT170','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'RTCO',:'RTE1','owner',true), (:'RTCO',:'RTM1','member',true), (:'RTCO2',:'RTE2','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'RTJ1',:'RTCO','job-rt170-1','Magazynier RT170','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'RTJ2',:'RTCO2','job-rt170-2','Kierowca RT170','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'RTC1', false), (:'RTC2', false), (:'RTC3', false);
+select set_config('app.current_uid', :'RTC1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RTJ1'::uuid, 'rt170-app-1', null, null, null) as rtapp1 \gset
+reset role;
+select set_config('app.current_uid', :'RTC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RTJ1'::uuid, 'rt170-app-2', null, null, null) as rtapp2 \gset
+reset role;
+select set_config('app.current_uid', :'RTC3', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.apply_to_job(:'RTJ1'::uuid, 'rt170-app-3', null, null, null) as rtapp3 \gset
+select public.apply_to_job(:'RTJ2'::uuid, 'rt170-app-4', null, null, null) as rtapp4 \gset
+reset role;
+
+-- RT170-1: cykl shortlisted ↔ interview bez wysyłki workera = jeden oczekujący e-mail (scalanie).
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp1'::uuid, 'shortlisted');
+select public.transition_application(:'rtapp1'::uuid, 'interview');
+select public.transition_application(:'rtapp1'::uuid, 'shortlisted');
+select public.transition_application(:'rtapp1'::uuid, 'interview');
+select public.transition_application(:'rtapp1'::uuid, 'shortlisted');
+select public.transition_application(:'rtapp1'::uuid, 'interview');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.email_deliveries
+     where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued')
+  and (select count(*) = 5 from public.email_deliveries
+     where entity_id = :'rtapp1'::uuid and error_message = 'suppressed_superseded'),
+  'RT170-1 sześć przejść bez wysyłki = jeden oczekujący e-mail, pięć scalonych');
+select pg_temp.assert(
+  (select payload->>'status' from public.email_deliveries
+     where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued') = 'interview',
+  'RT170-1b oczekujący e-mail niesie najnowszy status');
+select pg_temp.assert(
+  (select count(*) = 6 from public.application_status_history
+     where application_id = :'rtapp1'::uuid and from_status in ('shortlisted','interview','submitted')),
+  'RT170-1c historia i przejścia bez zmian (6 wpisów)');
+
+-- RT170-2: sufit — po 3 wysłanych e-mailach o przejściach pośrednich kolejny nie powstaje,
+-- a przejście końcowe (rejected) zawsze tak.
+update public.email_deliveries set status = 'sent', sent_at = now()
+  where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued';
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp1'::uuid, 'shortlisted');
+reset role;
+update public.email_deliveries set status = 'sent', sent_at = now()
+  where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued';
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp1'::uuid, 'interview');
+reset role;
+update public.email_deliveries set status = 'sent', sent_at = now()
+  where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued';
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp1'::uuid, 'shortlisted');
+reset role;
+select pg_temp.assert(
+  (select count(*) = 3 from public.email_deliveries
+     where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'sent')
+  and (select count(*) = 0 from public.email_deliveries
+     where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued'),
+  'RT170-2 czwarte przejście pośrednie w 24 h nie kolejkuje e-maila');
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp1'::uuid, 'rejected');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) = 1 from public.email_deliveries
+     where entity_id = :'rtapp1'::uuid and template = 'statusChanged' and status = 'queued' and payload->>'status' = 'rejected'),
+  'RT170-2b przejście końcowe (rejected) zawsze kolejkuje e-mail');
+
+-- RT170-3 (kontrola ujemna): bez bramki (zachowanie 0122) każde przejście kolejkuje e-mail.
+begin;
+create or replace function public.application_status_email_gate(
+  p_application_id uuid, p_target public.application_status
+) returns boolean language plpgsql as $neg$ begin return true; end $neg$;
+set local role authenticated; set local app.current_uid = :'RTE1'; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp2'::uuid, 'shortlisted');
+select public.transition_application(:'rtapp2'::uuid, 'interview');
+select public.transition_application(:'rtapp2'::uuid, 'shortlisted');
+reset role;
+select pg_temp.assert(
+  (select count(*) = 3 from public.email_deliveries
+     where entity_id = :'rtapp2'::uuid and template = 'statusChanged' and status = 'queued'),
+  'RT170-3 kontrola ujemna: bez bramki cykl kolejkuje trzy e-maile');
+rollback;
+reset role; reset app.current_uid;
+
+-- RT170-4: akcja zbiorcza — wynik per wiersz, błąd jednego nie cofa pozostałych.
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.transition_application(:'rtapp3'::uuid, 'shortlisted');
+select public.transition_application(:'rtapp3'::uuid, 'hired');
+select jsonb_object_agg(application_id::text, outcome)::text as rtbulk
+  from public.bulk_transition_applications(:'RTCO'::uuid,
+    array[:'rtapp1'::uuid, :'rtapp2'::uuid, :'rtapp3'::uuid, :'rtapp4'::uuid,
+          'e9400000-0000-4000-8000-0000000000ff'::uuid], 'shortlisted') \gset
+select pg_temp.assert(
+  (:'rtbulk'::jsonb ->> :'rtapp1') = 'invalid_transition'
+  and (:'rtbulk'::jsonb ->> :'rtapp2') = 'changed'
+  and (:'rtbulk'::jsonb ->> :'rtapp3') = 'invalid_transition'
+  and (:'rtbulk'::jsonb ->> :'rtapp4') = 'not_found'
+  and (:'rtbulk'::jsonb ->> 'e9400000-0000-4000-8000-0000000000ff') = 'not_found',
+  'RT170-4 wynik per wiersz: changed / invalid_transition / not_found (cudza firma, brak)');
+select pg_temp.assert(
+  (select status::text from public.applications where id = :'rtapp2'::uuid) = 'shortlisted'
+  and (select status::text from public.applications where id = :'rtapp3'::uuid) = 'hired',
+  'RT170-4b zmienione tylko dozwolone; błędny wiersz nie cofnął pozostałych');
+select pg_temp.assert(
+  (select outcome from public.bulk_transition_applications(:'RTCO'::uuid, array[:'rtapp2'::uuid], 'shortlisted')) = 'unchanged',
+  'RT170-4c ponowienie = unchanged (bez drugiego przejścia)');
+select pg_temp.expect_error(
+  format('select * from public.bulk_transition_applications(%L::uuid, array[%L::uuid, %L::uuid], %L)', :'RTCO', :'rtapp2', :'rtapp2', 'rejected'),
+  'VALIDATION_FAILED', 'RT170-4d duplikaty odrzucone');
+select pg_temp.expect_error(
+  format('select * from public.bulk_transition_applications(%L::uuid, (select array_agg(gen_random_uuid()) from generate_series(1,51)), %L)', :'RTCO', 'rejected'),
+  'VALIDATION_FAILED', 'RT170-4e więcej niż 50 zgłoszeń odrzucone');
+select pg_temp.expect_error(
+  format('select * from public.bulk_transition_applications(%L::uuid, array[%L::uuid], %L)', :'RTCO', :'rtapp2', 'withdrawn'),
+  'VALIDATION_FAILED', 'RT170-4f status spoza listy odrzucony');
+reset role;
+select set_config('app.current_uid', :'RTM1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select * from public.bulk_transition_applications(%L::uuid, array[%L::uuid], %L)', :'RTCO', :'rtapp2', 'rejected'),
+  'PERMISSION_DENIED', 'RT170-4g zwykły member nie wykona akcji zbiorczej');
+reset role;
+select set_config('app.current_uid', :'RTE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select * from public.bulk_transition_applications(%L::uuid, array[%L::uuid], %L)', :'RTCO', :'rtapp2', 'rejected'),
+  'PERMISSION_DENIED', 'RT170-4h rekruter innej firmy nie wykona akcji zbiorczej');
+reset role; reset app.current_uid;
+
+-- RT170-5: szablony — zapis RPC, odczyt recruiter+ własnej firmy.
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.save_company_message_template(:'RTCO'::uuid, null, 'Zaproszenie',
+  '{"pl":"Zapraszamy na rozmowę","nl":"We nodigen je uit"}'::jsonb) as rttpl \gset
+select pg_temp.assert(
+  (select count(*) = 2 from public.company_message_template_variants where template_id = :'rttpl'::uuid),
+  'RT170-5 rekruter widzi swój szablon z dwoma wariantami');
+select pg_temp.expect_error('insert into public.company_message_templates(company_id, name) values (''e9400000-0000-4000-8000-0000000000f1'', ''x'')',
+  'permission denied', 'RT170-5b bezpośredni INSERT odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'X', '{"de":"Hallo"}'),
+  'VALIDATION_FAILED', 'RT170-5c język spoza serwisu odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'X', '{"pl":"   "}'),
+  'VALIDATION_FAILED', 'RT170-5d szablon bez treści odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, %L::uuid, %L, %L::jsonb, %L::timestamptz)', :'RTCO', :'rttpl', 'Y', '{"pl":"a"}', '2000-01-01'),
+  'STALE_STATE', 'RT170-5e nieaktualna wersja (CAS) odrzucona');
+select public.save_company_message_template(:'RTCO'::uuid, :'rttpl'::uuid, 'Zaproszenie 2', '{"fr":"Invitation"}'::jsonb);
+select pg_temp.assert(
+  (select array_agg(locale) = array['fr'] from public.company_message_template_variants where template_id = :'rttpl'::uuid)
+  and (select name = 'Zaproszenie 2' from public.company_message_templates where id = :'rttpl'::uuid),
+  'RT170-5f edycja zastępuje warianty (replace-all)');
+do $lim$ begin
+  for i in 1..49 loop
+    perform public.save_company_message_template('e9400000-0000-4000-8000-0000000000f1'::uuid, null, 'T' || i, '{"pl":"x"}'::jsonb);
+  end loop;
+end $lim$;
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'Za dużo', '{"pl":"x"}'),
+  'TEMPLATE_LIMIT', 'RT170-5g limit 50 szablonów na firmę');
+reset role;
+select set_config('app.current_uid', :'RTM1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.company_message_templates)
+  and (select count(*) = 0 from public.company_message_template_variants),
+  'RT170-5h zwykły member nie widzi szablonów');
+reset role;
+select set_config('app.current_uid', :'RTE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.company_message_templates where company_id = :'RTCO'::uuid),
+  'RT170-5i rekruter innej firmy nie widzi szablonów');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, %L::uuid, %L, %L::jsonb)', :'RTCO', :'rttpl', 'Przejęty', '{"pl":"x"}'),
+  'PERMISSION_DENIED', 'RT170-5j obca firma nie edytuje szablonu');
+select pg_temp.expect_error(
+  format('select public.delete_company_message_template(%L::uuid, %L::uuid)', :'RTCO2', :'rttpl'),
+  'NOT_FOUND', 'RT170-5k usunięcie szablonu innej firmy przez własną firmę = NOT_FOUND');
+reset role; reset app.current_uid;
+-- RT170-5l (kontrola ujemna): polityka bez can_manage_jobs odsłania szablony memberowi.
+begin;
+drop policy company_message_templates_select on public.company_message_templates;
+create policy company_message_templates_select on public.company_message_templates
+  for select to authenticated using (true);
+set local role authenticated; set local app.current_uid = :'RTM1'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) > 0 from public.company_message_templates),
+  'RT170-5l kontrola ujemna: bez warunku recruiter+ member widzi szablony');
+rollback;
+reset role; reset app.current_uid;
+
+-- RT170-6: kontekst kompozytora — język KANDYDATA (nl), nie rekrutera (pl).
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'rtapp2'::uuid, null) as rtconv \gset
+select pg_temp.assert(
+  (select candidate_locale from public.get_conversation_template_context(:'rtconv'::uuid)) = 'fr'
+  and (select company_id from public.get_conversation_template_context(:'rtconv'::uuid)) = :'RTCO'::uuid
+  and (select job_title from public.get_conversation_template_context(:'rtconv'::uuid)) = 'Magazynier RT170',
+  'RT170-6 kontekst: język kandydata (fr), firma i oferta rozmowy');
+reset role;
+select set_config('app.current_uid', :'RTC2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.get_conversation_template_context(:'rtconv'::uuid)),
+  'RT170-6b kandydat nie dostaje kontekstu szablonów');
+reset role;
+select set_config('app.current_uid', :'RTE2', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 0 from public.get_conversation_template_context(:'rtconv'::uuid)),
+  'RT170-6c obca firma nie dostaje kontekstu');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
