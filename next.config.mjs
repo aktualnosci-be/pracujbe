@@ -85,6 +85,15 @@ const nextConfig = {
   // w pamięci. Cache obrazów działa bez zmian (isrFlushToDisk zostaje domyślny).
   cacheHandler: fileURLToPath(new URL('./src/lib/cache/isr-cache-handler.mjs', import.meta.url)),
   poweredByHeader: false,
+  // #1032: metadane blokujące dla KAŻDEGO klienta (nie tylko botów z listy Next). Przy
+  // strumieniowaniu (domyślnie od Next 15.2) `<title>` siedzi w ukrytym `<div>` w `<body>`
+  // pod Suspense, a drzewo metadanych w ładunku RSC ma klucz z identyfikatorem żądania — każde
+  // `router.refresh()`/nawigacja montuje je od nowa, więc stary tytuł znika, zanim dotrze nowy
+  // (dokument chwilowo bez tytułu: axe `document-title`, czytnik ekranu). Blokujące metadane
+  // trafiają do `<head>` i podmieniają się atomowo z treścią. ISR/prerender bez zmian
+  // (`isHtmlBot` liczy się osobno); strony dynamiczne czekają tylko na `generateMetadata`.
+  // Strażnik: tests/unit/blocking-metadata-config.test.ts, E2E offer-trust (tytuł po refresh).
+  htmlLimitedBots: /./,
   images: {
     // WebP/AVIF automatycznie; ogranicz rozmiary do sensownych breakpointów (wydajność).
     formats: ['image/avif', 'image/webp'],
