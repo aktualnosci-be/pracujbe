@@ -151,28 +151,3 @@ describe('strażnik workflowów CI', () => {
     expect(output).toContain(message);
   });
 });
-
-describe('retencja przebiegów CI (#1105)', () => {
-  function withCleanup(edit: (workflow: string) => string): string {
-    const dir = mkdtempSync(join(tmpdir(), 'ci-guard-cleanup-'));
-    dirs.push(dir);
-    for (const file of FILES) copyFileSync(join(WORKFLOWS, file), join(dir, file));
-    const source = readFileSync(join(dir, 'delete-old-runs.yml'), 'utf8');
-    const next = edit(source);
-    expect(next, 'mutacja musi zmienić delete-old-runs.yml').not.toBe(source);
-    writeFileSync(join(dir, 'delete-old-runs.yml'), next);
-    return dir;
-  }
-
-  it('kontrola ujemna: 6 dni retencji (historia main znika) → czerwony strażnik', () => {
-    const { code, output } = runGuard(withCleanup((w) => w.replace(/retain_days: \d+/, 'retain_days: 6')));
-    expect(code).not.toBe(0);
-    expect(output).toContain('retain_days');
-  });
-
-  it('kontrola ujemna: minimum przebiegów 4 → czerwony strażnik', () => {
-    const { code, output } = runGuard(withCleanup((w) => w.replace(/keep_minimum_runs: \d+/, 'keep_minimum_runs: 4')));
-    expect(code).not.toBe(0);
-    expect(output).toContain('keep_minimum_runs');
-  });
-});

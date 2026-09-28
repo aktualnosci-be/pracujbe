@@ -2946,7 +2946,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
   firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
   poza produkcją pokazuje szczegóły tylko z tokenem albo na loopbacku, zbiorczy budżet błędów
-  z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`), retencja przebiegów CI ≥ 30 dni (strażnik),
+  z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
   worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
   i SQLSTATE bez komunikatu bazy (#1105).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`

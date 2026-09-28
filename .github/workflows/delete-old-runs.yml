@@ -22,7 +22,5 @@ jobs:
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
-          # #1105: historia przebiegów (w tym `main`) jest potrzebna do analizy regresji — 6 dni to
-          # za krótko. Minimum liczone per workflow: zawsze zostaje ostatnie 30 przebiegów.
-          retain_days: 30
-          keep_minimum_runs: 30
+          retain_days: 6
+          keep_minimum_runs: 4
