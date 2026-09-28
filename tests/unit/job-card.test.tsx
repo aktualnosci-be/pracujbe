@@ -9,7 +9,7 @@ import pl from '@/messages/pl.json';
 import en from '@/messages/en.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
-import { useClassifiedsMode as withClassifiedsMode, useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withClassifiedsMode, withRecruitmentMode } from '../helpers/portal-mode';
 
 // Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
 withRecruitmentMode();

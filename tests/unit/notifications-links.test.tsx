@@ -6,7 +6,7 @@ import { NotificationsDropdown } from '@/components/dashboard/NotificationsDropd
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { resolveHref } from '@/lib/data/notifications';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 const { markNotificationsRead, refresh } = vi.hoisted(() => ({
   markNotificationsRead: vi.fn(),

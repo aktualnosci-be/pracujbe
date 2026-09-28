@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as candidateData from '@/lib/data/candidate';
 import * as employerData from '@/lib/data/employer';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 /**
  * #1141/#1144 — decyzja produktowa: portal ogłoszeniowy. W trybie `CLASSIFIEDS_ONLY` (domyślnym):

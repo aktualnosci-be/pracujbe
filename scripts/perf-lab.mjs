@@ -15,6 +15,8 @@
 //   E2E_PORT=3517 node scripts/perf-lab.mjs                   # własny serwer na 3617
 //   node scripts/perf-lab.mjs --base http://localhost:3000    # istniejący serwer
 // Zajęty port bez --base = błąd (nie mierzymy cudzego serwera).
+// Tryb produktu: własny serwer startuje z PORTAL_LEGAL_MODE=RECRUITMENT (INP otwarcia ApplyModal;
+// E2E_PORTAL_LEGAL_MODE nadpisuje, jak w playwright.config.ts).
 // Chromium: PLAYWRIGHT_CHROMIUM_PATH (np. /opt/pw-browsers/chromium) albo `playwright install`.
 import { spawn } from "node:child_process";
 import {
@@ -415,7 +417,14 @@ async function main() {
       ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)],
       {
         stdio: ["ignore", "ignore", "inherit"],
-        env: { ...process.env, PORT: String(PORT) },
+        // #1136/#1130: INP-proxy mierzy otwarcie ApplyModal, który istnieje tylko w trybie
+        // RECRUITMENT (domyślny tryb ogłoszeniowy pokazuje link do kanału ogłoszeniodawcy) —
+        // serwer dostaje tryb jawnie, jak serwery Playwright. Z --base tryb ustawia właściciel serwera.
+        env: {
+          ...process.env,
+          PORT: String(PORT),
+          PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? "RECRUITMENT",
+        },
       },
     );
     server.on("exit", (code) => {
