@@ -2185,6 +2185,8 @@ export async function listScreeningReviews(
   query: AdminScreeningReviewsQuery = {},
 ): Promise<AdminListResult<AdminScreeningReviewRow>> {
   const filter = parseScreeningReviewFilter(query.status);
+  // Decyzja produktowa: portal ogłoszeniowy — stare przeglądy pytań ukryte, bez zapytania.
+  if (!isRecruitmentEnabled('screening')) return demoList<AdminScreeningReviewRow>([]);
   if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_SCREENING_REVIEWS.filter(

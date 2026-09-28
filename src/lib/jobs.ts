@@ -31,6 +31,7 @@ import {
   normalizeApplyPhone,
 } from '@/lib/job-apply-channel';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
@@ -531,7 +532,10 @@ async function getJobBySlugFromDb(
   // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
   const { getPublicJobScreeningQuestions, getPublicJobCosts } = await import('@/lib/db/public-jobs');
-  const screeningQuestions = parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id));
+  // Decyzja produktowa: portal ogłoszeniowy — stare pytania ukryte, bez zapytania do bazy.
+  const screeningQuestions = isRecruitmentEnabled('screening')
+    ? parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id))
+    : [];
   // 0169: koszty i dodatki — odczyt pomocniczy; awaria zostawia same flagi (bez szczegółów).
   let costs: JobCosts | undefined;
   try {
@@ -717,7 +721,8 @@ export async function getJobBySlug(
   const job = resolveDemoJobBySlug(slug, resolvedLocale);
   if (!job) return null;
   // Serwer fixture E2E: pytania screeningowe na wybranej ofercie fikcyjnej (#101).
-  const screeningQuestions = isRealJobsFixture() ? fixtureScreeningQuestions(job.id) : [];
+  const screeningQuestions =
+    isRealJobsFixture() && isRecruitmentEnabled('screening') ? fixtureScreeningQuestions(job.id) : [];
   return markDemo(screeningQuestions.length > 0 ? { ...job, screeningQuestions } : job);
 }
 

@@ -77,6 +77,9 @@ Portal:
 - nie prowadzi profilu zawodowego kandydata ani onboardingu (profil służył wyłącznie dopasowaniom
   i przeglądaniu przez firmy): kandydat po rejestracji trafia na pulpit, a ustawienia konta zostają.
 
+Stare pytania screeningowe i ich przeglądy (sprzed tego trybu) są ukryte wszędzie w aplikacji
+— u firmy, kandydata i administratora (decyzja właściciela 28.09.2026); dane zostają w bazie.
+
 Funkcje niezgodne z tym modelem są wyłączone produkcyjnie w trybie fail-closed: jedno źródło
 trybu w `src/lib/portal-mode.ts` (#1136), blokady w bazie (#1140) i strażnik CI (#1146). Kod
 i tabele zostają w repozytorium (wyłączone), nie są kasowane. Portal nie działał produkcyjnie
