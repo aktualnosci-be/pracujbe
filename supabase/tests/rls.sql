@@ -4063,7 +4063,7 @@ select pg_temp.expect_error('select * from public.create_additional_company(''A'
   'permission denied', 'TM403-12b anon bez EXECUTE na kolejnej firmie');
 reset role;
 
--- TM403-13 (#893, migracja 0300 — numer tymczasowy): limit 50 oczekujących zaproszeń
+-- TM403-13 (#893, migracja 0953 — numer tymczasowy): limit 50 oczekujących zaproszeń
 -- liczy WYŁĄCZNIE ważne (jak panel `get_company_invitations`), nie dawno wygasłe.
 \set TMIO 'e8700000-0000-0000-0000-0000000000d1'
 \set TMIC 'e8700000-0000-0000-0000-0000000000f3'
@@ -4087,7 +4087,7 @@ select pg_temp.assert(
   (select count(*) from public.get_company_invitations(:'TMIC')) = 0,
   'TM403-13b panel nie pokazuje żadnego z nich (spójne z filtrem expires_at > now())');
 -- Nowe zaproszenie mimo 50 wygasłych w bazie: przed poprawką RPC liczyło je razem
--- z ważnymi i zwracało INVITATION_LIMIT_REACHED (kontrola ujemna: cofnięcie 0300
+-- z ważnymi i zwracało INVITATION_LIMIT_REACHED (kontrola ujemna: cofnięcie 0953
 -- przywraca ten błąd — `count(*) where status='pending'` bez `expires_at > now()`).
 select invitation_id as tmilinv, created as tmilcreated
   from public.invite_company_member(:'TMIC', 'swiezy@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset

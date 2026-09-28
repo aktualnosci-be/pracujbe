@@ -1,4 +1,4 @@
--- 0300_team_invitation_limit_excludes_expired.sql (numer tymczasowy, ostateczny nada integrator)
+-- 0953_team_invitation_limit_excludes_expired.sql (numer tymczasowy, ostateczny nada integrator)
 --
 -- Naprawa #893: limit 50 oczekujących zaproszeń w `invite_company_member` (0121) liczył
 -- WSZYSTKIE wiersze `status = 'pending'`, także te z minionym `expires_at`. Panel
