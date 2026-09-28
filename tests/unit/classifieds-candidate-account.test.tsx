@@ -7,8 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as candidateData from '@/lib/data/candidate';
 import * as candidateFiles from '@/lib/data/candidate-files';
 import { CLASSIFIEDS_CANDIDATE_NAV, candidateNavKeys } from '@/lib/candidate-nav';
-// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useClassifiedsMode as classifiedsModeInTests, useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withClassifiedsMode, withRecruitmentMode } from '../helpers/portal-mode';
 
 /**
  * #1142 — decyzja produktowa: portal ogłoszeniowy. Konto kandydata bez profilu zawodowego:
@@ -112,7 +111,7 @@ describe('nawigacja kandydata: jedno źródło listy', () => {
 });
 
 describe('pulpit kandydata w trybie ogłoszeniowym', () => {
-  classifiedsModeInTests();
+  withClassifiedsMode();
 
   it('bez kompletności, CV i podglądu wiadomości; loadery profilu/CV/wiadomości niewołane', async () => {
     const { default: Page } = await import('@/app/[locale]/candidate/page');
@@ -137,7 +136,7 @@ describe('pulpit kandydata w trybie ogłoszeniowym', () => {
 });
 
 describe('kontrola ujemna: pulpit w trybie RECRUITMENT', () => {
-  recruitmentModeInTests();
+  withRecruitmentMode();
 
   it('czyta profil, CV i wiadomości i pokazuje kompletność', async () => {
     const { default: Page } = await import('@/app/[locale]/candidate/page');
@@ -152,7 +151,7 @@ describe('kreator onboardingu odrzucony przed bazą', () => {
   const step1 = { firstName: 'Anna', lastName: 'Nowak', phone: '' };
 
   describe('tryb ogłoszeniowy', () => {
-    classifiedsModeInTests();
+    withClassifiedsMode();
     beforeEach(() => vi.resetModules());
 
     it.each([1, 2, 3, 4, 5, 6] as const)('krok %s → RECRUITMENT_DISABLED', async (step) => {
@@ -165,7 +164,7 @@ describe('kreator onboardingu odrzucony przed bazą', () => {
   });
 
   describe('kontrola ujemna: tryb RECRUITMENT', () => {
-    recruitmentModeInTests();
+    withRecruitmentMode();
 
     it('krok 1 (demo bez bazy) przechodzi', async () => {
       const { saveOnboardingStep } = await import('@/lib/actions/onboarding');

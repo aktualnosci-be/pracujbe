@@ -27,11 +27,10 @@ vi.mock('next-intl/server', () => ({
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/data/notification-preferences';
 import { getNotifications } from '@/lib/data/notifications';
-// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 // Pełne przepływy (kategorie rekrutacyjne, linki do rozmów) w trybie RECRUITMENT (#1128); tryb ogłoszeniowy: classifieds-notifications.test.ts.
-recruitmentModeInTests();
+withRecruitmentMode();
 
 const translations = { pl, nl, fr, en } as const;
 type Loc = keyof typeof translations;

@@ -8,8 +8,7 @@ import { marketingSenderFromEnv, senderIdentityFromEnv } from '@/lib/email/sende
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import { checkReceivedEml } from '../../scripts/lib/received-eml.mjs';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
-// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 /**
  * #45, etap 2 — dowód zgody (akcja ustawień → RPC z wersją treści), wypisanie ze wszystkich
@@ -217,7 +216,7 @@ describe('wypisanie ze wszystkich kategorii (strona /wypisz)', () => {
 
 describe('ustawienia: zapis z dowodem zgody', () => {
   // Pełny formularz (kategorie rekrutacyjne) w trybie RECRUITMENT; tryb ogłoszeniowy: classifieds-notifications.test.ts.
-  recruitmentModeInTests();
+  withRecruitmentMode();
   const values = {
     emailApplications: true,
     emailOffers: false,

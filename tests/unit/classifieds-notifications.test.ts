@@ -9,8 +9,7 @@ import en from '@/messages/en.json';
 import { RECRUITMENT_EMAIL_TEMPLATES, isRecruitmentEmailTemplate } from '@/lib/email/recruitment-templates';
 import { emailFieldsFor } from '@/lib/settings/email-preference-fields';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
-// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useClassifiedsMode as classifiedsModeInTests, useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withClassifiedsMode, withRecruitmentMode } from '../helpers/portal-mode';
 
 /**
  * #1145 — decyzja produktowa: portal ogłoszeniowy. Powiadomienia i e-maile bez zdarzeń
@@ -87,7 +86,7 @@ const hitsDisabled = (href: string) =>
   DISABLED_PREFIXES.some((p) => href === p || href.startsWith(`${p}/`) || href.startsWith(`${p}?`));
 
 describe('resolveHref: cele powiadomień w trybie ogłoszeniowym', () => {
-  classifiedsModeInTests();
+  withClassifiedsMode();
 
   it('żaden entity_type × rola nie prowadzi do wyłączonej trasy', async () => {
     const { resolveHref } = await import('@/lib/data/notifications');
@@ -113,7 +112,7 @@ describe('resolveHref: cele powiadomień w trybie ogłoszeniowym', () => {
 });
 
 describe('resolveHref: kontrola ujemna w trybie RECRUITMENT', () => {
-  recruitmentModeInTests();
+  withRecruitmentMode();
 
   it('te same cele prowadzą do tras rekrutacyjnych (test wykryłby brak bramki)', async () => {
     const { resolveHref, demoNotificationSeeds } = await import('@/lib/data/notifications');
@@ -132,7 +131,7 @@ describe('preferencje e-mail bez kategorii rekrutacyjnych', () => {
   });
 
   describe('zapis w trybie ogłoszeniowym', () => {
-    classifiedsModeInTests();
+    withClassifiedsMode();
     beforeEach(() => vi.resetModules());
 
     const input = {
@@ -172,7 +171,7 @@ describe('preferencje e-mail bez kategorii rekrutacyjnych', () => {
   });
 
   describe('kontrola ujemna: tryb RECRUITMENT zapisuje wejście', () => {
-    recruitmentModeInTests();
+    withRecruitmentMode();
     beforeEach(() => vi.resetModules());
 
     it('bez odczytu ukrytych kolumn', async () => {
