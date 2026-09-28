@@ -125,9 +125,13 @@ export function EmployerShell({
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.offers, label: td('navOffers'), icon: <ClipboardList /> },
-    // #1133/#1139: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnej.
-    ...(recruitmentEnabled ? [{ href: HREF.candidates, label: td('navCandidates'), icon: <Users /> }] : []),
-    { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
+    // #1133/#1139/#1144: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnych.
+    ...(recruitmentEnabled
+      ? [
+          { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
+          { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
+        ]
+      : []),
     // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
     ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
     { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },

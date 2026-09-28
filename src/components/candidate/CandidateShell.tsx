@@ -106,8 +106,13 @@ export function CandidateShell({
     ...(recruitmentEnabled ? [{ href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> }] : []),
     { href: HREF.saved, label: td('navSaved'), icon: <Heart /> },
     { href: HREF.searches, label: td('navSearches'), icon: <BellRing /> },
-    { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },
-    { href: HREF.proposals, label: td('navProposals'), icon: <MailCheck /> },
+    // #1144/#1141: zgłoszenia i propozycje tylko w trybie RECRUITMENT (portal ogłoszeniowy).
+    ...(recruitmentEnabled
+      ? [
+          { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },
+          { href: HREF.proposals, label: td('navProposals'), icon: <MailCheck /> },
+        ]
+      : []),
     // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
     ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
     { href: HREF.profile, label: td('navProfile'), icon: <User /> },

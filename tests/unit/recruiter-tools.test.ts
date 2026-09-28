@@ -18,6 +18,11 @@ import {
   pickTemplateVariant,
 } from '@/lib/validation/message-template';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * Narzędzia rekrutera (0170): limit zmiany statusu (LIM17-01), akcja zbiorcza przez

@@ -72,6 +72,9 @@ export default async function CandidateDashboardPage({
   const to = await getTranslations({ locale, namespace: 'onboarding' });
   const tm = await getTranslations({ locale, namespace: 'messages' });
 
+  // #1141/#1144 — decyzja produktowa: portal ogłoszeniowy. Bez trybu RECRUITMENT pulpit nie
+  // czyta zgłoszeń ani propozycji (loadery niewołane) i nie pokazuje ich sekcji.
+  const recruitment = isRecruitmentEnabled();
   // #1134/#1138: tryb ogłoszeniowy — bez rozmów i bez wgrywania CV na pulpicie (loadery niewywoływane).
   const messagingOn = isRecruitmentEnabled('messaging');
   const cvUploadOn = isRecruitmentEnabled('cvAccess');
@@ -80,15 +83,15 @@ export default async function CandidateDashboardPage({
     getCandidateProfileSummary(),
     // #1139: tryb ogłoszeniowy — bez rekomendacji (loader niewywoływany).
     isRecruitmentEnabled('matching') ? getRecommendedJobs(locale) : Promise.resolve(null),
-    getMyApplicationsPreview(locale),
+    recruitment ? getMyApplicationsPreview(locale) : null,
     messagingOn ? getLatestMessages() : Promise.resolve(null),
     cvUploadOn ? loadCandidateFiles() : Promise.resolve(null),
-    getLatestActiveOffer(locale),
+    recruitment ? getLatestActiveOffer(locale) : null,
   ]);
 
   const overviewFailed =
     overview.newJobsCount === null ||
-    overview.activeApplicationsCount === null ||
+    (recruitment && overview.activeApplicationsCount === null) ||
     (messagingOn && overview.unreadMessagesCount === null);
 
   const checklist = profileChecklistItems(profile.checklist, td('add'), to);
@@ -125,14 +128,18 @@ export default async function CandidateDashboardPage({
             value: overview.newJobsCount ?? '—',
             sub: overview.newJobsCount === null ? td('candidateStatLoadError') : td('newJobsSub'),
           },
-          {
-            label: td('activeApplications'),
-            value: overview.activeApplicationsCount ?? '—',
-            sub:
-              overview.activeApplicationsCount === null
-                ? td('candidateStatLoadError')
-                : td('activeApplicationsSub'),
-          },
+          ...(recruitment
+            ? [
+                {
+                  label: td('activeApplications'),
+                  value: overview.activeApplicationsCount ?? '—',
+                  sub:
+                    overview.activeApplicationsCount === null
+                      ? td('candidateStatLoadError')
+                      : td('activeApplicationsSub'),
+                },
+              ]
+            : []),
           ...(messagingOn
             ? [{
                 label: td('unreadMessages'),
@@ -156,18 +163,20 @@ export default async function CandidateDashboardPage({
               sekcji nie ma (portal nie wybiera ofert na podstawie profilu; bez sekcji zastępczej). */}
           <CandidateRecommendedPreview locale={locale} recommended={recommended} />
 
-          {/* Moje ostatnie aplikacje */}
-          <CandidateApplicationsPreview
-            result={applications}
-            locale={locale}
-            labels={{
-              title: td('myApplications'),
-              seeAll: td('seeAll'),
-              empty: td('noApplications'),
-              loadError: td('candidateApplicationsLoadError'),
-              retry: td('candidateListRetry'),
-            }}
-          />
+          {/* Moje ostatnie aplikacje (tylko tryb RECRUITMENT, #1144) */}
+          {applications ? (
+            <CandidateApplicationsPreview
+              result={applications}
+              locale={locale}
+              labels={{
+                title: td('myApplications'),
+                seeAll: td('seeAll'),
+                empty: td('noApplications'),
+                loadError: td('candidateApplicationsLoadError'),
+                retry: td('candidateListRetry'),
+              }}
+            />
+          ) : null}
         </div>
 
         {/* Kolumna boczna */}

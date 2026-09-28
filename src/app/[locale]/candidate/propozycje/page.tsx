@@ -5,6 +5,7 @@ import { CandidateProposalsList } from "@/components/candidate/CandidateProposal
 import { isRecruitmentEnabled } from "@/lib/portal-mode";
 import { getMyOffersPage } from "@/lib/data/candidate";
 import { CandidatePageHeader } from "@/components/candidate/CandidatePageHeader";
+import { notFoundUnlessRecruitment } from "@/lib/portal-mode";
 
 /**
  * Panel kandydata — Propozycje pracy (makieta 04, nawigacja „Propozycje").
@@ -38,6 +39,8 @@ export default async function CandidateProposalsPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment("offers");
 
   const t = await getTranslations({ locale, namespace: "dashboard" });
   const initialPage = await getMyOffersPage(locale);

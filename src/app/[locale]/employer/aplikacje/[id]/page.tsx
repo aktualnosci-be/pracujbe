@@ -24,6 +24,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Szczegół zgłoszenia w panelu pracodawcy (#300). Odczyt pod sesją i RLS (recruiter+ firmy —
@@ -48,6 +49,8 @@ export default async function EmployerApplicationDetailPage({
 }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('applications');
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
