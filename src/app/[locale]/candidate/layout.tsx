@@ -8,6 +8,7 @@ import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
@@ -108,6 +109,7 @@ export default async function CandidateLayout({
       unreadMessages={unreadMessages}
       userName={userName}
       keepSessionAlive={hasSession}
+      recruitmentEnabled={isRecruitmentEnabled()}
     >
       {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}

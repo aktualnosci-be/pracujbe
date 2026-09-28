@@ -70,6 +70,11 @@ export interface EmployerShellProps {
   userName?: string;
   /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
   keepSessionAlive?: boolean;
+  /**
+   * Tryb produktu z serwera (`isRecruitmentEnabled()` w layoucie, #1128). W przeglądarce tryb
+   * nie istnieje, więc brak propsa = tryb ogłoszeniowy (fail-closed): pozycje rekrutacyjne ukryte.
+   */
+  recruitmentEnabled?: boolean;
 }
 
 function initialsOf(name: string): string {
@@ -112,6 +117,7 @@ export function EmployerShell({
   activeCompanyName,
   userName,
   keepSessionAlive,
+  recruitmentEnabled = false,
 }: EmployerShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
@@ -120,7 +126,10 @@ export function EmployerShell({
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
     { href: HREF.offers, label: td('navOffers'), icon: <ClipboardList /> },
     { href: HREF.candidates, label: td('navCandidates'), icon: <Users /> },
-    { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
+    // #1144: panel zgłoszeń tylko w trybie RECRUITMENT (decyzja produktowa: portal ogłoszeniowy).
+    ...(recruitmentEnabled
+      ? [{ href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> }]
+      : []),
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
     { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },

@@ -3,6 +3,8 @@
 import { z } from 'zod';
 
 import { getEmployerApplicationHistoryPage, type ApplicationHistoryPage } from '@/lib/data/employer';
+import type { ErrorCode } from '@/lib/errors';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -13,7 +15,7 @@ const cursorSchema = z.object({
 
 export type MoreApplicationHistoryResult =
   | { status: 'ready'; page: ApplicationHistoryPage }
-  | { status: 'error' };
+  | { status: 'error'; error?: Extract<ErrorCode, 'RECRUITMENT_DISABLED'> };
 
 /**
  * Kolejna strona historii statusów zgłoszenia w panelu pracodawcy (#604, „Pokaż więcej").
@@ -28,6 +30,8 @@ export async function loadMoreApplicationHistory(
   applicationId: string,
   cursor: unknown,
 ): Promise<MoreApplicationHistoryResult> {
+  // #1144: portal ogłoszeniowy — bez odczytu bazy.
+  if (!isRecruitmentEnabled('applications')) return { status: 'error', error: 'RECRUITMENT_DISABLED' };
   if (!UUID_RE.test(applicationId)) return { status: 'error' };
   const parsed = cursorSchema.safeParse(cursor);
   if (!parsed.success) return { status: 'error' };

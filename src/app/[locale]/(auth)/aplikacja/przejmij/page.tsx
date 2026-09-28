@@ -11,6 +11,7 @@ import { GuestClaimPanel } from '@/components/public/GuestClaimPanel';
 import { GuestLinkIntake } from '@/components/public/GuestLinkIntake';
 import { readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
 import { getPortalIdentity, isPortalDataConfigured } from '@/lib/db/portal';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Przypisanie aplikacji gościa do konta kandydata (#98) — cel linku z e-maila
@@ -42,6 +43,8 @@ async function hasSession(): Promise<boolean> {
 export default async function GuestClaimPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('guestApply');
   const hasToken = Boolean(await readGuestLinkToken('claim'));
   const t = await getTranslations('guestApply');
   const returnTo = `/${locale}/aplikacja/przejmij`;

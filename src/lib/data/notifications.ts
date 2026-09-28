@@ -20,6 +20,7 @@ import { getTranslations } from 'next-intl/server';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryCount, queryRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { routing, type Locale } from '@/i18n/routing';
 
@@ -196,18 +197,25 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export function resolveHref(entityType: string, role: string, entityId = ''): string {
   const employer = role === 'employer';
+  // #1141/#1144 — decyzja produktowa: portal ogłoszeniowy. Panele zgłoszeń i propozycji dają 404
+  // bez trybu RECRUITMENT, więc powiadomienia historyczne prowadzą do pulpitu panelu.
+  const recruitment = isRecruitmentEnabled();
+  const home = employer ? '/employer' : '/candidate';
   switch (entityType) {
     case 'job_terms':
       // 0144: historia zgłoszeń — oferta wstrzymana/zamknięta/wygasła nie ma publicznej strony
       // (link do /oferty-pracy/{slug} dawałby 404), a zgłoszenie z nową treścią oferty jest tam zawsze.
-      return employer ? '/employer/oferty' : '/candidate/aplikacje';
+      if (employer) return '/employer/oferty';
+      return recruitment ? '/candidate/aplikacje' : home;
     case 'conversation': {
       const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
       return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
     }
     case 'application':
+      if (!recruitment) return home;
       return employer ? '/employer/aplikacje' : '/candidate/aplikacje';
     case 'offer':
+      if (!recruitment) return home;
       // Kandydat: lista propozycji; pracodawca: odpowiedź na propozycję dotyczy zgłoszenia.
       return employer ? '/employer/aplikacje' : '/candidate/propozycje';
     case 'job':

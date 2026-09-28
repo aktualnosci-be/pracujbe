@@ -11,6 +11,7 @@ import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
 import { getDomainPool } from '@/lib/db/runtime';
 import { withUserTransaction } from '@/lib/db/transaction';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { getEmployerShellData } from '@/lib/data/employer';
@@ -76,6 +77,8 @@ export default async function EmployerLayout({
   let mode: EmployerShellMode = 'demo';
   // #864: prawdziwa sesja Better Auth (nie demo) — panel dostaje `SessionKeepAlive`.
   let hasSession = false;
+  // #1128: tryb produktu liczony na serwerze i podawany do klienckiego chrome'u.
+  const recruitmentEnabled = isRecruitmentEnabled();
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
@@ -89,7 +92,7 @@ export default async function EmployerLayout({
     const member = await hasActiveMembership(identity);
     if (member === null) {
       return (
-        <EmployerShell mode="error" keepSessionAlive={hasSession}>
+        <EmployerShell mode="error" keepSessionAlive={hasSession} recruitmentEnabled={recruitmentEnabled}>
           {null}
         </EmployerShell>
       );
@@ -116,7 +119,7 @@ export default async function EmployerLayout({
         };
       });
       return (
-        <EmployerShell mode="ok" keepSessionAlive={hasSession}>
+        <EmployerShell mode="ok" keepSessionAlive={hasSession} recruitmentEnabled={recruitmentEnabled}>
           <CompanyOnboarding
             defaultName={defaultName}
             invitations={invitations}
@@ -170,6 +173,7 @@ export default async function EmployerLayout({
       activeCompanyName={activeCompanyName}
       userName={userName}
       keepSessionAlive={hasSession}
+      recruitmentEnabled={recruitmentEnabled}
     >
       {children}
     </EmployerShell>

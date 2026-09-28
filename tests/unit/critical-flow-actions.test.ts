@@ -5,6 +5,11 @@ import { respondToOffer, sendOffer } from '@/lib/actions/offers';
 import { saveOnboardingStep } from '@/lib/actions/onboarding';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * #350 — cienka warstwa Server Actions przepływu z CLAUDE.md §9 (aplikacja → status →

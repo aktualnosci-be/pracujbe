@@ -5,6 +5,11 @@ import pl from '@/messages/pl.json';
 import { NotificationsDropdown } from '@/components/dashboard/NotificationsDropdown';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { resolveHref } from '@/lib/data/notifications';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 const { markNotificationsRead, refresh } = vi.hoisted(() => ({
   markNotificationsRead: vi.fn(),
