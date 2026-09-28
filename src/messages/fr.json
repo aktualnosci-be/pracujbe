@@ -550,6 +550,21 @@
       "committeeCode": "CP {code}",
       "minimumWagesLink": "Salaires minimums officiels du secteur",
       "minimumWagesNote": "Le salaire dépend notamment de la catégorie et de l'ancienneté — vérifiez dans la base officielle."
+    },
+    "employerApply": {
+      "boxTitle": "Postulez directement auprès de l'employeur.",
+      "boxText": "Vous envoyez votre candidature à l'annonceur — comme indiqué dans l'offre.",
+      "button": "Postuler auprès de l'employeur",
+      "newTab": "(s'ouvre dans un nouvel onglet)",
+      "hint": {
+        "url": "Site : {value}",
+        "email": "E-mail : {value}",
+        "phone": "Téléphone : {value}"
+      },
+      "otherWays": "Autres moyens de contact :",
+      "none": "Cette offre n'indique pas comment postuler.",
+      "mailSubject": "Offre d'emploi : {title}",
+      "contact": "Contact direct avec l'annonceur"
     }
   },
   "landing": {

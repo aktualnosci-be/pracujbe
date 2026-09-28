@@ -3,7 +3,7 @@ import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { withUserTransaction } from '../../src/lib/db/transaction';
-import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 // Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
 withRecruitmentMode();

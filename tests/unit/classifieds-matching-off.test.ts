@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
-import { useClassifiedsMode as withClassifiedsMode } from '../helpers/portal-mode';
+import { withClassifiedsMode } from '../helpers/portal-mode';
 
 /**
  * Tryb ogłoszeniowy (#1131, #1133, #1139; epik #1128) — decyzja produktowa: portal ogłoszeniowy.

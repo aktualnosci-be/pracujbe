@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb, type PortalDb } from './support/portal-db';
-import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 // Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
 withRecruitmentMode();

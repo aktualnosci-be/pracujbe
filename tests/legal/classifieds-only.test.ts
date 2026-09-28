@@ -161,7 +161,6 @@ describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
   it.todo('screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129)');
   it.todo('loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata/aplikacji, /api/files/cv/*) nie zwracają danych (#1129)');
   it.todo('słownik zakazanych etykiet UI na trasach aktywnych w trybie ogłoszeniowym, 4 języki (#1128, teksty)');
-  it.todo('jedyne CTA aplikacyjne na szczególe oferty = zewnętrzny kanał ogłoszeniodawcy (#1129/#1130)');
   it.todo('pozytywnie: lista ofert, szczegół, kreator/publikacja, zapisane oferty/wyszukiwania, konto nie zwracają RECRUITMENT_DISABLED (#1128)');
 });
 
@@ -232,6 +231,75 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
     const src = read('src/app/api/maintenance/route.ts');
     expect(guardedMatches(src.replace('if (!recruitment) {', 'if (false) {'))).toBe(false);
     expect(guardedMatches(`${src}\nawait runMatchRecompute();`)).toBe(false);
+  });
+});
+
+/**
+ * #1130: na szczególe oferty jedynym CTA aplikacyjnym w trybie ogłoszeniowym jest kanał
+ * ogłoszeniodawcy (`EmployerApplyChannel`: https / mailto / tel). `ApplyModal` i „Wyślij
+ * wiadomość” zostają wyłącznie w gałęzi `recruitment` (tryb `RECRUITMENT`).
+ */
+const JOB_DETAIL_PAGE = 'src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx';
+
+/** Usuwa gałęzie JSX renderowane tylko w trybie rekrutacji (`recruitment ? ( … )`, `!recruitment ? null : ( … )`). */
+function stripRecruitmentBranches(src: string): string {
+  const OPENERS = [/\brecruitment \? \(/g, /!recruitment \? null : \(/g];
+  let out = src;
+  for (const re of OPENERS) {
+    for (;;) {
+      re.lastIndex = 0;
+      const m = re.exec(out);
+      if (!m) break;
+      let i = m.index + m[0].length;
+      let depth = 1;
+      while (i < out.length && depth > 0) {
+        if (out[i] === '(') depth += 1;
+        else if (out[i] === ')') depth -= 1;
+        i += 1;
+      }
+      out = out.slice(0, m.index) + out.slice(i);
+    }
+  }
+  return out;
+}
+
+const classifiedsView = (src: string) => stripRecruitmentBranches(src);
+const unguardedRecruitmentCtas = (src: string) =>
+  (classifiedsView(src).match(/<ApplyModal\b|t\('sendMessage'\)/g) ?? []).length;
+
+describe('szczegół oferty: CTA aplikacyjne = kanał ogłoszeniodawcy (#1130)', () => {
+  const page = read(JOB_DETAIL_PAGE);
+
+  it('tryb czytany z portal-mode, ApplyModal i „Wyślij wiadomość” tylko w gałęzi recruitment', () => {
+    expect(page).toMatch(/const recruitment = isRecruitmentEnabled\('applications'\)/);
+    expect(page).toMatch(/<ApplyModal\b/);
+    expect(unguardedRecruitmentCtas(page)).toBe(0);
+  });
+
+  it('widok ogłoszeniowy renderuje EmployerApplyChannel w ramce i w pasku mobilnym', () => {
+    const view = classifiedsView(page);
+    expect(view.match(/<EmployerApplyChannel\b/g) ?? []).toHaveLength(2);
+    expect(view).toMatch(/variant="box"/);
+    expect(view).toMatch(/variant="bar"/);
+    expect(view).toMatch(/channel=\{job\.applyChannel\}/);
+    // Kliknięcia kanału liczy wyspa lejka (bramka zgody), tylko w trybie ogłoszeniowym.
+    expect(page).toMatch(/<JobFunnelBeacon event="detail_view" jobIds=\{\[job\.id\]\} applyClicks=\{!recruitment\} \/>/);
+  });
+
+  it('kontrola ujemna: ApplyModal albo „Wyślij wiadomość” poza gałęzią recruitment są wykrywane', () => {
+    expect(unguardedRecruitmentCtas(`${page}\n<ApplyModal jobId="x" />`)).toBe(1);
+    expect(unguardedRecruitmentCtas(page.replace('job.isDemo || !recruitment ? null : (', 'job.isDemo ? null : ('))).toBe(1);
+    expect(unguardedRecruitmentCtas(page.replaceAll('recruitment ? (', 'true ? ('))).toBeGreaterThan(0);
+  });
+
+  it('komponent kanału: jedyne cele linków to https / mailto / tel (bez innych schematów)', () => {
+    const src = read('src/components/public/EmployerApplyChannel.tsx');
+    // Linki powstają wyłącznie z buildApplyLinks (href z kanału), bez stałych adresów i Link portalu.
+    expect(src).toMatch(/buildApplyLinks\(channel/);
+    expect(src).not.toMatch(/href=["'{]/);
+    expect(src).not.toMatch(/from '@\/i18n\/navigation'|from '@\/components\/public\/ApplyModal'|applyToJob\(/);
+    const links = read('src/lib/job-apply-links.ts');
+    expect(links).toMatch(/export const APPLY_LINK_REL = 'noopener noreferrer nofollow'/);
   });
 });
 
