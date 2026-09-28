@@ -837,13 +837,16 @@ Tabele w migracjach: 112; z danymi osobowymi: 74; bez danych osobowych: 38.
 - **Migracja:** `supabase/migrations/0003_jobs.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm
-- **Uwaga:** Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera.
+- **Uwaga:** Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera. Kanał aplikowania (e-mail, telefon) jest publiczny w ofercie i może wskazywać osobę po stronie firmy.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
 | `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0003_jobs.sql` |
 | `contact_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0003_jobs.sql` |
 | `address` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0003_jobs.sql` |
+| `apply_url` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0172_job_apply_channel.sql` |
+| `apply_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0172_job_apply_channel.sql` |
+| `apply_phone` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0172_job_apply_channel.sql` |
 
 ### `public.match_recompute_queue`
 

@@ -44,6 +44,8 @@ const VALUES: JobWizardInitialValues = {
   requirementsMandatory: ['Uprawnienia UDT'],
   companyDescription: 'Rodzinna firma logistyczna z Antwerpii.',
   contactEmail: 'hr@example.be',
+  // Kanał aplikowania (#1158) wymagany do zapisu opublikowanej oferty.
+  applyEmail: 'praca@example.be',
   screeningQuestions: [{ type: 'yes_no', required: true, prompt: { pl: 'Czy masz uprawnienia UDT?' }, options: [] }],
 };
 

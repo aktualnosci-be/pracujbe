@@ -44,6 +44,7 @@ const PUBLISHED: JobWizardInitialValues = {
   requirementsMandatory: ["Uprawnienia UDT"],
   companyDescription: "Rodzinna firma logistyczna z Antwerpii.",
   contactEmail: "hr@example.be",
+  applyEmail: "praca@example.be",
 };
 
 function renderEdit(values: JobWizardInitialValues = PUBLISHED, status: "active" | "paused" = "active") {
