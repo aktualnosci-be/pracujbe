@@ -528,9 +528,17 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     }
   });
 
+  // 0165: stroną niefirmową rozmowy jest wyłącznie kandydat relacji (aplikacja/propozycja) —
+  // rozmowa testowa musi mieć relację, jak każda założona przez `get_or_create_conversation`.
+  const freeAliceApplication = async () => (await db().admin.query(
+    `SELECT a.id FROM public.applications a
+      WHERE a.candidate_id = $1 AND a.company_id = $2 AND a.deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM public.conversations c WHERE c.application_id = a.id)
+      ORDER BY a.id LIMIT 1`, [alice, companyId])).rows[0].id as string;
+
   it('ostatnie wiadomości i licznik nieprzeczytanych rozmów tylko dla członka', async () => {
-    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
-      VALUES ($1, 'Rozmowa', now()) RETURNING id`, [companyId]);
+    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, application_id, subject, last_message_at)
+      VALUES ($1, $2, 'Rozmowa', now()) RETURNING id`, [companyId, await freeAliceApplication()]);
     const conv = rows[0].id;
     await db().admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id) VALUES ($1, $2), ($1, $3)`, [conv, alice, employer]);
     await db().admin.query(`INSERT INTO public.messages(conversation_id, sender_id, body, created_at)
@@ -549,8 +557,8 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
   });
 
   it('ostatnia wiadomość przy remisie created_at jest deterministyczna (#712, id DESC)', async () => {
-    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
-      VALUES ($1, 'Remis', now()) RETURNING id`, [companyId]);
+    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, application_id, subject, last_message_at)
+      VALUES ($1, $2, 'Remis', now()) RETURNING id`, [companyId, await freeAliceApplication()]);
     const conv = rows[0].id;
     await db().admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id) VALUES ($1, $2), ($1, $3)`, [conv, alice, employer]);
     // Ten sam created_at dla obu wiadomości; wstawiona jako pierwsza ma MNIEJSZY id, druga —
