@@ -18,7 +18,7 @@ import { buttonVariants } from '@/components/ui/button';
  * `box` wymienia pod nim pozostałe kanały. Portal niczego nie zapisuje ani nie przekazuje —
  * zgłoszenie trafia bezpośrednio do ogłoszeniodawcy.
  *
- * Oferta bez kanału (stara, sprzed 0950): brak przycisku, wariant `box` pokazuje neutralny
+ * Oferta bez kanału (stara, sprzed 0172): brak przycisku, wariant `box` pokazuje neutralny
  * komunikat, wariant `bar` nic nie renderuje.
  *
  * Lejek ofert (#99): kliknięcie w kanał = `apply_started`, wysyłane wyłącznie po zgodzie

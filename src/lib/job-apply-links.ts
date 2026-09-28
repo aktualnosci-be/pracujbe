@@ -2,7 +2,7 @@
  * Linki „Aplikuj u pracodawcy” (#1130) — decyzja produktowa: portal ogłoszeniowy.
  *
  * Jedyne cele CTA aplikacyjnego na szczególe oferty w trybie ogłoszeniowym: kanały, które podał
- * ogłoszeniodawca (`JobDetail.applyChannel`, #1129 / 0950). Kolejność = pierwszeństwo przycisku
+ * ogłoszeniodawca (`JobDetail.applyChannel`, #1129 / 0172). Kolejność = pierwszeństwo przycisku
  * głównego: strona (https) → e-mail → telefon.
  *
  * Każda wartość jest sprawdzana trzeci raz (baza CHECK → `parseJobApplyChannel` → tutaj), więc
