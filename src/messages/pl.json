@@ -435,7 +435,6 @@
     "seeMoreJobs": "Zobacz więcej ofert",
     "learnMoreCompany": "Dowiedz się więcej o firmie",
     "industry": "Branża",
-    "accommodationCommute": "Zakwaterowanie i dojazd",
     "error": {
       "titleRequired": "Podaj tytuł oferty.",
       "titleTooShort": "Tytuł jest za krótki (min. 5 znaków).",
@@ -483,7 +482,13 @@
       "screeningOptionRequired": "Wpisz treść odpowiedzi w języku oferty.",
       "screeningOptionTooLong": "Odpowiedź może mieć maksymalnie 120 znaków.",
       "screeningOptionsCount": "Pytanie z listą wymaga od 2 do 10 odpowiedzi.",
-      "screeningTooMany": "Oferta może mieć maksymalnie 10 pytań."
+      "screeningTooMany": "Oferta może mieć maksymalnie 10 pytań.",
+      "accommodationCostInvalid": "Podaj kwotę od 0 do 5000 EUR (najwyżej 2 miejsca po przecinku).",
+      "mealVoucherInvalid": "Podaj kwotę od 0,01 do 20 EUR dziennie.",
+      "jointCommitteeInvalid": "Wybierz komisję z listy.",
+      "accommodationDetailsProvidedOnly": "Koszt i warunki mieszkania podaje się tylko przy zakwaterowaniu zapewnionym.",
+      "accommodationCostPeriodRequired": "Wybierz, czy koszt jest tygodniowy, czy miesięczny.",
+      "accommodationCostRequired": "Podaj koszt zakwaterowania."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
     "contentLanguageNames": {
@@ -495,7 +500,35 @@
     "machineTranslationNotice": "Tłumaczenie automatyczne. Język oryginału: {language}.",
     "manualTranslationNotice": "Przetłumaczona treść. Język oryginału: {language}.",
     "translationOriginalLink": "Zobacz oryginał",
-    "similarJobsLoadError": "Nie udało się wczytać podobnych ofert. Ta oferta i aplikowanie działają normalnie."
+    "similarJobsLoadError": "Nie udało się wczytać podobnych ofert. Ta oferta i aplikowanie działają normalnie.",
+    "costsTitle": "Koszty i dodatki",
+    "costsDeclared": "Informacje podane przez pracodawcę.",
+    "mealVouchers": "Bony żywieniowe",
+    "jointCommittee": "Komisja parytetowa",
+    "costs": {
+      "kind": {
+        "provided": "Zapewnione przez pracodawcę",
+        "assistance": "Pomoc w znalezieniu mieszkania",
+        "none": "Brak"
+      },
+      "cost": "{amount} / {period, select, week {tydzień} other {miesiąc}}",
+      "free": "Bez kosztów",
+      "deductedYes": "Potrącane z wynagrodzenia",
+      "deductedNo": "Niepotrącane z wynagrodzenia",
+      "registrationYes": "Możliwe zameldowanie",
+      "registrationNo": "Bez możliwości zameldowania",
+      "afterContract": {
+        "ends_with_contract": "Po zakończeniu umowy trzeba opuścić mieszkanie",
+        "transition_period": "Po zakończeniu umowy jest czas na wyprowadzkę",
+        "can_stay": "Po zakończeniu umowy można zostać na własny koszt"
+      },
+      "shuttle": "Dowóz do pracy",
+      "reimbursed": "Zwrot kosztów dojazdu",
+      "mealPerDay": "{amount} dziennie",
+      "committeeCode": "PC {code}",
+      "minimumWagesLink": "Oficjalne stawki minimalne w sektorze",
+      "minimumWagesNote": "Stawka zależy m.in. od kategorii i stażu — sprawdź w oficjalnej bazie."
+    }
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1579,8 +1612,6 @@
     "conditionsPlaceholder": "np. Umowa na czas nieokreślony",
     "benefitsLabel": "Benefity",
     "benefitsPlaceholder": "np. Premie i dodatki",
-    "accommodation": "Zapewniamy zakwaterowanie",
-    "transport": "Zapewniamy transport",
     "companyDescriptionLabel": "Opis firmy",
     "companyDescriptionPlaceholder": "Krótko przedstaw firmę kandydatom.",
     "contactEmailLabel": "E-mail kontaktowy",
@@ -1631,7 +1662,42 @@
     "screeningReviewReason": "Uzasadnienie: {reason}",
     "screeningPublishPending": "Pytanie {n} czeka na sprawdzenie.",
     "screeningPublishRejected": "Pytanie {n} nie zostało zaakceptowane.",
-    "screeningGoToQuestions": "Przejdź do pytań"
+    "screeningGoToQuestions": "Przejdź do pytań",
+    "costsLegend": "Koszty i dodatki",
+    "costsHint": "Pola opcjonalne. Kandydat zobaczy je na stronie oferty jako informację od pracodawcy.",
+    "costsUnset": "Nie podano",
+    "accommodationKindLabel": "Zakwaterowanie",
+    "accommodationKind": {
+      "provided": "Zapewniamy zakwaterowanie",
+      "assistance": "Pomagamy znaleźć mieszkanie",
+      "none": "Bez zakwaterowania"
+    },
+    "accommodationCostLabel": "Koszt zakwaterowania (EUR)",
+    "accommodationCostHint": "Wpisz 0, jeśli zakwaterowanie jest bezpłatne.",
+    "accommodationCostPeriodLabel": "Koszt za",
+    "accommodationCostPeriod": {
+      "week": "tydzień",
+      "month": "miesiąc"
+    },
+    "accommodationDeductedLabel": "Koszt potrącany z wynagrodzenia",
+    "accommodationRegistrationLabel": "Możliwe zameldowanie pod tym adresem",
+    "accommodationAfterContractLabel": "Mieszkanie po zakończeniu umowy",
+    "accommodationAfterContract": {
+      "ends_with_contract": "Trzeba je opuścić z końcem umowy",
+      "transition_period": "Jest czas na wyprowadzkę",
+      "can_stay": "Można zostać na własny koszt"
+    },
+    "tri": {
+      "yes": "Tak",
+      "no": "Nie"
+    },
+    "transportLabel": "Dojazd do pracy",
+    "transportShuttle": "Zapewniamy dowóz do pracy",
+    "transportReimbursed": "Zwracamy koszty dojazdu",
+    "mealVoucherLabel": "Bony żywieniowe (EUR dziennie)",
+    "jointCommitteeLabel": "Komisja parytetowa (PC)",
+    "jointCommitteeCode": "PC {code}",
+    "jointCommitteeHint": "Na stronie oferty pokażemy numer komisji i link do oficjalnej bazy stawek minimalnych. Portal nie ocenia wysokości stawki."
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",

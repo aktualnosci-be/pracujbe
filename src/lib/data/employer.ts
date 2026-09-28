@@ -510,6 +510,17 @@ export interface JobDraftValues {
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
+  /** 0930: koszty i dodatki — surowe wartości z bazy ('' / null = nie podano). */
+  accommodationKind: string;
+  accommodationCost: string;
+  accommodationCostPeriod: string;
+  accommodationDeducted: boolean | null;
+  accommodationRegistration: boolean | null;
+  accommodationAfterContract: string;
+  transportShuttle: boolean;
+  transportReimbursed: boolean;
+  mealVoucherDaily: string;
+  jointCommittee: string;
   companyDescription: string;
   contactEmail: string;
   /** #101: pytania screeningowe — wczytywane, bo krok 7 zapisuje je replace-all. */
@@ -547,6 +558,57 @@ function isEditableJobStatus(status: string): status is EditableJobStatus {
 function numToText(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
 }
+/** Koszty i dodatki szkicu bez wartości (0930). */
+type JobCostsInitial = Pick<
+  JobDraftValues,
+  | 'accommodationKind'
+  | 'accommodationCost'
+  | 'accommodationCostPeriod'
+  | 'accommodationDeducted'
+  | 'accommodationRegistration'
+  | 'accommodationAfterContract'
+  | 'transportShuttle'
+  | 'transportReimbursed'
+  | 'mealVoucherDaily'
+  | 'jointCommittee'
+>;
+
+const EMPTY_JOB_COSTS_INITIAL: JobCostsInitial = {
+  accommodationKind: '',
+  accommodationCost: '',
+  accommodationCostPeriod: '',
+  accommodationDeducted: null,
+  accommodationRegistration: null,
+  accommodationAfterContract: '',
+  transportShuttle: false,
+  transportReimbursed: false,
+  mealVoucherDaily: '',
+  jointCommittee: '',
+};
+
+/** numeric z bazy (jako tekst, np. „125.50”) → tekst pola formularza bez zbędnych zer. */
+function amountToText(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? String(n) : '';
+}
+
+function jobCostsInitial(job: Record<string, unknown>): JobCostsInitial {
+  const optionalBool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
+  return {
+    accommodationKind: asString(job['accommodation_kind']),
+    accommodationCost: amountToText(job['accommodation_cost']),
+    accommodationCostPeriod: asString(job['accommodation_cost_period']),
+    accommodationDeducted: optionalBool(job['accommodation_deducted']),
+    accommodationRegistration: optionalBool(job['accommodation_registration']),
+    accommodationAfterContract: asString(job['accommodation_after_contract']),
+    transportShuttle: job['transport_shuttle'] === true,
+    transportReimbursed: job['transport_reimbursed'] === true,
+    mealVoucherDaily: amountToText(job['meal_voucher_daily']),
+    jointCommittee: asString(job['joint_committee']),
+  };
+}
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
@@ -597,6 +659,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       benefits: [],
       accommodation: false,
       transport: false,
+      ...EMPTY_JOB_COSTS_INITIAL,
       companyDescription: 'Firma demonstracyjna z branży logistycznej.',
       contactEmail: '',
       screeningQuestions: [],
@@ -628,7 +691,11 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 shifts, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
-                expires_at, updated_at
+                expires_at, updated_at,
+                accommodation_kind, accommodation_cost::text AS accommodation_cost,
+                accommodation_cost_period, accommodation_deducted, accommodation_registration,
+                accommodation_after_contract, transport_shuttle, transport_reimbursed,
+                meal_voucher_daily::text AS meal_voucher_daily, joint_committee
            FROM public.jobs
           WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
       if (!job) return null;
@@ -726,6 +793,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         benefits: asStringArray(tr['benefits']),
         accommodation: job['accommodation'] === true,
         transport: job['transport'] === true,
+        ...jobCostsInitial(job),
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
         screeningQuestions: parseScreeningQuestions(screening).map((q) => ({

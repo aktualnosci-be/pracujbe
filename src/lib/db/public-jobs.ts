@@ -363,6 +363,27 @@ export async function getPublicJobsMachineTitles(
  * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
  * (0093) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).
  */
+/**
+ * Koszty i dodatki oferty publicznej (0930). RPC pod rolą anon zwraca wiersz tylko dla oferty
+ * publicznej (`job_is_public`); numeric przychodzi jako tekst (parser: `parseJobCostsRow`).
+ */
+export async function getPublicJobCosts(
+  pool: TransactionPool,
+  jobId: string,
+): Promise<PublicJobRow | null> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT accommodation_kind, accommodation_cost::text AS accommodation_cost,
+              accommodation_cost_period, accommodation_deducted, accommodation_registration,
+              accommodation_after_contract, transport_shuttle, transport_reimbursed,
+              meal_voucher_daily::text AS meal_voucher_daily, joint_committee
+       FROM public.get_public_job_costs(p_job_id => $1::uuid)`,
+      [jobId],
+    )) as { rows: PublicJobRow[] };
+    return result.rows[0] ?? null;
+  });
+}
+
 export async function getPublicJobScreeningQuestions(
   pool: TransactionPool,
   jobId: string,

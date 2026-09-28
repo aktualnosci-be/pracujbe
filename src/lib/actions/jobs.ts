@@ -12,6 +12,7 @@ import { execute, jsonArg, queryOne, queryRows, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
+import { jobCostsPatch } from '@/lib/job-costs';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import {
   buildScreeningReviewNotices,
@@ -388,9 +389,9 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       min_experience_years: s6.minExperienceYears ?? null,
       requires_driving_license: s7.requiresDrivingLicense,
       no_language_required: s7.noLanguageRequired,
-      accommodation: s8.accommodation,
-      transport: s8.transport,
       contact_email: nullIfEmpty(s9.contactEmail),
+      // 0930: flagi filtrów + koszty i dodatki (ten sam kształt co zapis kroku 8).
+      ...jobCostsPatch(s8),
     },
     translation: {
       description: s5.description,

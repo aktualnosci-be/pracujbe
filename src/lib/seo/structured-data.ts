@@ -148,6 +148,11 @@ export function buildJobPostingJsonLd(
   job: JobDetail,
   url: string,
   labels: JobPostingLabels,
+  /**
+   * 0930: `jobBenefits` (tekst schema.org) — świadczenia z „Kosztów i dodatków” w języku strony
+   * (`buildJobBenefitsText`). Brak = pole pominięte.
+   */
+  options: { jobBenefits?: string } = {},
 ): Record<string, unknown> {
   const expiresTs = job.expiresAt ? Date.parse(job.expiresAt) : Number.NaN;
   const validThrough = Number.isNaN(expiresTs) ? undefined : new Date(expiresTs).toISOString();
@@ -211,6 +216,7 @@ export function buildJobPostingJsonLd(
     },
     ...(baseSalary ? { baseSalary } : {}),
     ...(job.startDate ? { jobStartDate: job.startDate } : {}),
+    ...(options.jobBenefits?.trim() ? { jobBenefits: options.jobBenefits.trim() } : {}),
     url,
     directApply: true,
   };

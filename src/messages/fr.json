@@ -435,7 +435,6 @@
     "seeMoreJobs": "Voir plus d’offres",
     "learnMoreCompany": "En savoir plus sur l’entreprise",
     "industry": "Secteur",
-    "accommodationCommute": "Logement et trajet",
     "error": {
       "titleRequired": "Indiquez un titre pour l'offre.",
       "titleTooShort": "Le titre est trop court (min. 5 caractères).",
@@ -483,7 +482,13 @@
       "screeningOptionRequired": "Saisissez la réponse dans la langue de l'offre.",
       "screeningOptionTooLong": "Une réponse peut contenir 120 caractères au maximum.",
       "screeningOptionsCount": "Une question à choix nécessite de 2 à 10 réponses.",
-      "screeningTooMany": "Une offre peut contenir 10 questions au maximum."
+      "screeningTooMany": "Une offre peut contenir 10 questions au maximum.",
+      "accommodationCostInvalid": "Indiquez un montant entre 0 et 5000 EUR (2 décimales maximum).",
+      "mealVoucherInvalid": "Indiquez un montant entre 0,01 et 20 EUR par jour.",
+      "jointCommitteeInvalid": "Choisissez une commission dans la liste.",
+      "accommodationDetailsProvidedOnly": "Le coût et les conditions du logement ne s'indiquent que si vous fournissez le logement.",
+      "accommodationCostPeriodRequired": "Indiquez si le coût est hebdomadaire ou mensuel.",
+      "accommodationCostRequired": "Indiquez le coût du logement."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -495,7 +500,35 @@
     "machineTranslationNotice": "Traduction automatique. Langue d’origine : {language}.",
     "manualTranslationNotice": "Contenu traduit. Langue d’origine : {language}.",
     "translationOriginalLink": "Voir l’original",
-    "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement."
+    "similarJobsLoadError": "Impossible de charger les offres similaires. Cette offre et la candidature fonctionnent normalement.",
+    "costsTitle": "Frais et avantages",
+    "costsDeclared": "Informations fournies par l'employeur.",
+    "mealVouchers": "Chèques-repas",
+    "jointCommittee": "Commission paritaire",
+    "costs": {
+      "kind": {
+        "provided": "Fourni par l'employeur",
+        "assistance": "Aide pour trouver un logement",
+        "none": "Aucun"
+      },
+      "cost": "{amount} / {period, select, week {semaine} other {mois}}",
+      "free": "Gratuit",
+      "deductedYes": "Retenu sur le salaire",
+      "deductedNo": "Non retenu sur le salaire",
+      "registrationYes": "Domiciliation possible",
+      "registrationNo": "Pas de domiciliation possible",
+      "afterContract": {
+        "ends_with_contract": "Logement à quitter à la fin du contrat",
+        "transition_period": "Un délai est prévu pour déménager après le contrat",
+        "can_stay": "Possibilité de rester à ses frais après le contrat"
+      },
+      "shuttle": "Transport jusqu'au travail",
+      "reimbursed": "Remboursement des frais de déplacement",
+      "mealPerDay": "{amount} par jour",
+      "committeeCode": "CP {code}",
+      "minimumWagesLink": "Salaires minimums officiels du secteur",
+      "minimumWagesNote": "Le salaire dépend notamment de la catégorie et de l'ancienneté — vérifiez dans la base officielle."
+    }
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1579,8 +1612,6 @@
     "conditionsPlaceholder": "ex. CDI",
     "benefitsLabel": "Avantages",
     "benefitsPlaceholder": "ex. Primes et indemnités",
-    "accommodation": "Nous fournissons le logement",
-    "transport": "Nous fournissons le transport",
     "companyDescriptionLabel": "Description de l'entreprise",
     "companyDescriptionPlaceholder": "Présentez brièvement l'entreprise aux candidats.",
     "contactEmailLabel": "E-mail de contact",
@@ -1631,7 +1662,42 @@
     "screeningReviewReason": "Motif : {reason}",
     "screeningPublishPending": "La question {n} attend une vérification.",
     "screeningPublishRejected": "La question {n} n’a pas été acceptée.",
-    "screeningGoToQuestions": "Aller aux questions"
+    "screeningGoToQuestions": "Aller aux questions",
+    "costsLegend": "Frais et avantages",
+    "costsHint": "Champs facultatifs. Le candidat les verra sur la page de l'offre comme information de l'employeur.",
+    "costsUnset": "Non précisé",
+    "accommodationKindLabel": "Logement",
+    "accommodationKind": {
+      "provided": "Nous fournissons un logement",
+      "assistance": "Nous aidons à trouver un logement",
+      "none": "Sans logement"
+    },
+    "accommodationCostLabel": "Coût du logement (EUR)",
+    "accommodationCostHint": "Indiquez 0 si le logement est gratuit.",
+    "accommodationCostPeriodLabel": "Coût par",
+    "accommodationCostPeriod": {
+      "week": "semaine",
+      "month": "mois"
+    },
+    "accommodationDeductedLabel": "Coût retenu sur le salaire",
+    "accommodationRegistrationLabel": "Domiciliation possible à cette adresse",
+    "accommodationAfterContractLabel": "Logement après la fin du contrat",
+    "accommodationAfterContract": {
+      "ends_with_contract": "À quitter à la fin du contrat",
+      "transition_period": "Un délai est prévu pour déménager",
+      "can_stay": "Possibilité de rester à ses frais"
+    },
+    "tri": {
+      "yes": "Oui",
+      "no": "Non"
+    },
+    "transportLabel": "Trajet domicile-travail",
+    "transportShuttle": "Nous assurons le transport jusqu'au travail",
+    "transportReimbursed": "Nous remboursons les frais de déplacement",
+    "mealVoucherLabel": "Chèques-repas (EUR par jour)",
+    "jointCommitteeLabel": "Commission paritaire (CP)",
+    "jointCommitteeCode": "CP {code}",
+    "jointCommitteeHint": "La page de l'offre affichera le numéro de la commission et un lien vers la base officielle des salaires minimums. Le portail n'évalue pas le salaire."
   },
   "jobImport": {
     "title": "Importer depuis une annonce",

@@ -435,7 +435,6 @@
     "seeMoreJobs": "See more jobs",
     "learnMoreCompany": "Learn more about the company",
     "industry": "Industry",
-    "accommodationCommute": "Accommodation and commute",
     "error": {
       "titleRequired": "Enter a job title.",
       "titleTooShort": "The title is too short (min. 5 characters).",
@@ -483,7 +482,13 @@
       "screeningOptionRequired": "Enter the answer in the language of the job.",
       "screeningOptionTooLong": "An answer can have up to 120 characters.",
       "screeningOptionsCount": "A list question needs 2 to 10 answers.",
-      "screeningTooMany": "A job can have up to 10 questions."
+      "screeningTooMany": "A job can have up to 10 questions.",
+      "accommodationCostInvalid": "Enter an amount from 0 to 5000 EUR (at most 2 decimals).",
+      "mealVoucherInvalid": "Enter an amount from 0.01 to 20 EUR per day.",
+      "jointCommitteeInvalid": "Choose a committee from the list.",
+      "accommodationDetailsProvidedOnly": "Housing cost and terms apply only when you provide accommodation.",
+      "accommodationCostPeriodRequired": "Choose whether the cost is weekly or monthly.",
+      "accommodationCostRequired": "Enter the accommodation cost."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -495,7 +500,35 @@
     "machineTranslationNotice": "Automatic translation. Original language: {language}.",
     "manualTranslationNotice": "Translated content. Original language: {language}.",
     "translationOriginalLink": "View the original",
-    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
+    "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual.",
+    "costsTitle": "Costs and extras",
+    "costsDeclared": "Information provided by the employer.",
+    "mealVouchers": "Meal vouchers",
+    "jointCommittee": "Joint committee",
+    "costs": {
+      "kind": {
+        "provided": "Provided by the employer",
+        "assistance": "Help finding housing",
+        "none": "None"
+      },
+      "cost": "{amount} / {period, select, week {week} other {month}}",
+      "free": "Free of charge",
+      "deductedYes": "Deducted from wages",
+      "deductedNo": "Not deducted from wages",
+      "registrationYes": "Address registration possible",
+      "registrationNo": "No address registration",
+      "afterContract": {
+        "ends_with_contract": "Housing must be vacated when the contract ends",
+        "transition_period": "Time to move out after the contract ends",
+        "can_stay": "Can stay at own cost after the contract ends"
+      },
+      "shuttle": "Transport to work",
+      "reimbursed": "Travel costs reimbursed",
+      "mealPerDay": "{amount} per day",
+      "committeeCode": "PC {code}",
+      "minimumWagesLink": "Official sector minimum wages",
+      "minimumWagesNote": "The wage depends on category and seniority, among other things — check the official database."
+    }
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1579,8 +1612,6 @@
     "conditionsPlaceholder": "e.g. Permanent contract",
     "benefitsLabel": "Benefits",
     "benefitsPlaceholder": "e.g. Bonuses and allowances",
-    "accommodation": "We provide accommodation",
-    "transport": "We provide transport",
     "companyDescriptionLabel": "Company description",
     "companyDescriptionPlaceholder": "Briefly introduce the company to candidates.",
     "contactEmailLabel": "Contact email",
@@ -1631,7 +1662,42 @@
     "screeningReviewReason": "Reason: {reason}",
     "screeningPublishPending": "Question {n} is waiting to be checked.",
     "screeningPublishRejected": "Question {n} was not approved.",
-    "screeningGoToQuestions": "Go to questions"
+    "screeningGoToQuestions": "Go to questions",
+    "costsLegend": "Costs and extras",
+    "costsHint": "Optional fields. Candidates see them on the job page as information from the employer.",
+    "costsUnset": "Not specified",
+    "accommodationKindLabel": "Accommodation",
+    "accommodationKind": {
+      "provided": "We provide accommodation",
+      "assistance": "We help find housing",
+      "none": "No accommodation"
+    },
+    "accommodationCostLabel": "Accommodation cost (EUR)",
+    "accommodationCostHint": "Enter 0 if accommodation is free.",
+    "accommodationCostPeriodLabel": "Cost per",
+    "accommodationCostPeriod": {
+      "week": "week",
+      "month": "month"
+    },
+    "accommodationDeductedLabel": "Cost deducted from wages",
+    "accommodationRegistrationLabel": "Registration at this address possible",
+    "accommodationAfterContractLabel": "Housing after the contract ends",
+    "accommodationAfterContract": {
+      "ends_with_contract": "Must be vacated when the contract ends",
+      "transition_period": "There is time to move out",
+      "can_stay": "Can stay at own cost"
+    },
+    "tri": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "transportLabel": "Getting to work",
+    "transportShuttle": "We provide transport to work",
+    "transportReimbursed": "We reimburse travel costs",
+    "mealVoucherLabel": "Meal vouchers (EUR per day)",
+    "jointCommitteeLabel": "Joint committee (PC)",
+    "jointCommitteeCode": "PC {code}",
+    "jointCommitteeHint": "The job page will show the committee number and a link to the official minimum wage database. The portal does not assess the wage."
   },
   "jobImport": {
     "title": "Import from a job ad",

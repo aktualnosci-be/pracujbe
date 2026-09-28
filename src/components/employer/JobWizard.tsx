@@ -97,6 +97,15 @@ import {
   screeningErrorFieldId,
   screeningErrorKey,
 } from '@/components/employer/ScreeningQuestionsEditor';
+import {
+  ACCOMMODATION_AFTER_CONTRACT,
+  ACCOMMODATION_COST_PERIODS,
+  ACCOMMODATION_KINDS,
+  type AccommodationAfterContract,
+  type AccommodationCostPeriod,
+  type AccommodationKind,
+} from '@/lib/job-costs';
+import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -124,6 +133,15 @@ type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
 type SalaryPeriod = (typeof SALARY_PERIODS)[number];
 type Currency = 'EUR' | 'PLN';
 const CURRENCIES: readonly Currency[] = ['EUR', 'PLN'];
+/** Pole „tak / nie / nie podano” (0930). */
+type TriState = '' | 'yes' | 'no';
+const TRI_STATES = ['yes', 'no'] as const;
+/** Wartość zastępcza „nie podano” dla Select (API Radix Select nie przyjmuje ''). */
+const UNSET = '__unset';
+
+function isOneOf<T extends string>(list: readonly T[], value: unknown): value is T {
+  return typeof value === 'string' && (list as readonly string[]).includes(value);
+}
 
 interface LanguageEntry {
   language: string;
@@ -172,6 +190,17 @@ interface FormValues {
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
+  // 0930: koszty i dodatki ('' = nie podano)
+  accommodationKind: '' | AccommodationKind;
+  accommodationCost: string;
+  accommodationCostPeriod: AccommodationCostPeriod;
+  accommodationDeducted: TriState;
+  accommodationRegistration: TriState;
+  accommodationAfterContract: '' | AccommodationAfterContract;
+  transportShuttle: boolean;
+  transportReimbursed: boolean;
+  mealVoucherDaily: string;
+  jointCommittee: string;
   // krok 9 — firma i publikacja
   companyDescription: string;
   contactEmail: string;
@@ -213,6 +242,16 @@ const DEFAULT_VALUES: FormValues = {
   benefits: [],
   accommodation: false,
   transport: false,
+  accommodationKind: '',
+  accommodationCost: '',
+  accommodationCostPeriod: 'week',
+  accommodationDeducted: '',
+  accommodationRegistration: '',
+  accommodationAfterContract: '',
+  transportShuttle: false,
+  transportReimbursed: false,
+  mealVoucherDaily: '',
+  jointCommittee: '',
   companyDescription: '',
   contactEmail: '',
   agreePublish: false,
@@ -227,7 +266,15 @@ const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   5: ['description', 'responsibilities'],
   6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
   7: ['requirementsOptional', 'skills', 'languages', 'requiredCertificates', 'screeningQuestions'],
-  8: ['conditions', 'benefits'],
+  8: [
+    'conditions',
+    'benefits',
+    'accommodationKind',
+    'accommodationCost',
+    'accommodationCostPeriod',
+    'mealVoucherDaily',
+    'jointCommittee',
+  ],
   9: ['companyDescription', 'contactEmail', 'agreePublish'],
 };
 
@@ -271,6 +318,17 @@ function domId(field: keyof FormValues): string {
 /** '' → undefined (pole opcjonalne / z wartością domyślną w schemacie). */
 function toOptionalNumber(value: string): number | undefined {
   return value.trim() === '' ? undefined : Number(value);
+}
+
+/** '' → undefined; przecinek dziesiętny dopuszczony (kwoty w EUR, 0930). NaN → błąd Zod. */
+function toOptionalAmount(value: string): number | undefined {
+  const v = value.trim().replace(',', '.');
+  return v === '' ? undefined : Number(v);
+}
+
+/** Pole tak/nie/nie podano → wartość kroku. */
+function triToBool(value: TriState): boolean | undefined {
+  return value === '' ? undefined : value === 'yes';
 }
 
 /** '' → undefined (pole tekstowe opcjonalne). */
@@ -319,13 +377,29 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         screeningQuestions: v.screeningQuestions,
         screeningLocale: contentLocale,
       };
-    case 8:
+    case 8: {
+      // 0930: flagi filtrów wynikają ze szczegółów (jobCostsPatch); szczegóły mieszkania tylko
+      // przy zakwaterowaniu zapewnionym — ukryte pola nie trafiają do zapisu.
+      const provided = v.accommodationKind === 'provided';
+      const cost = provided ? toOptionalAmount(v.accommodationCost) : undefined;
       return {
         conditions: v.conditions,
         benefits: v.benefits,
-        accommodation: v.accommodation,
-        transport: v.transport,
+        accommodation: false,
+        transport: false,
+        accommodationKind: v.accommodationKind === '' ? undefined : v.accommodationKind,
+        accommodationCost: cost,
+        accommodationCostPeriod: cost !== undefined ? v.accommodationCostPeriod : undefined,
+        accommodationDeducted: provided ? triToBool(v.accommodationDeducted) : undefined,
+        accommodationRegistration: provided ? triToBool(v.accommodationRegistration) : undefined,
+        accommodationAfterContract:
+          provided && v.accommodationAfterContract !== '' ? v.accommodationAfterContract : undefined,
+        transportShuttle: v.transportShuttle,
+        transportReimbursed: v.transportReimbursed,
+        mealVoucherDaily: toOptionalAmount(v.mealVoucherDaily),
+        jointCommittee: v.jointCommittee === '' ? undefined : v.jointCommittee,
       };
+    }
     case 9:
       return {
         companyDescription: v.companyDescription,
@@ -363,8 +437,23 @@ function toErrorKey(field: string, message: string): string {
 export interface JobWizardInitialValues
   extends Omit<
     Partial<FormValues>,
-    'category' | 'contractType' | 'currency' | 'salaryPeriod' | 'languages' | 'screeningQuestions'
+    | 'category'
+    | 'contractType'
+    | 'currency'
+    | 'salaryPeriod'
+    | 'languages'
+    | 'screeningQuestions'
+    | 'accommodationKind'
+    | 'accommodationCostPeriod'
+    | 'accommodationDeducted'
+    | 'accommodationRegistration'
+    | 'accommodationAfterContract'
   > {
+  accommodationKind?: string;
+  accommodationCostPeriod?: string;
+  accommodationDeducted?: boolean | null;
+  accommodationRegistration?: boolean | null;
+  accommodationAfterContract?: string;
   category?: string;
   contractType?: string;
   currency?: string;
@@ -434,8 +523,8 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
   requiresDrivingLicense: { step: 7, label: 'requiresDrivingLicense' },
   conditions: { step: 8, label: 'conditionsLabel' },
   benefits: { step: 8, label: 'benefitsLabel' },
-  accommodation: { step: 8, label: 'accommodation' },
-  transport: { step: 8, label: 'transport' },
+  accommodation: { step: 8, label: 'accommodationKindLabel' },
+  transport: { step: 8, label: 'transportLabel' },
   companyDescription: { step: 9, label: 'companyDescriptionLabel' },
   contactEmail: { step: 9, label: 'contactEmailLabel' },
 };
@@ -443,8 +532,41 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
 /** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
 function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> {
   if (!raw) return {};
-  const { category, contractType, currency, salaryPeriod, languages, screeningQuestions, ...rest } = raw;
+  const {
+    category,
+    contractType,
+    currency,
+    salaryPeriod,
+    languages,
+    screeningQuestions,
+    accommodationKind,
+    accommodationCostPeriod,
+    accommodationDeducted,
+    accommodationRegistration,
+    accommodationAfterContract,
+    ...rest
+  } = raw;
   const narrowed: Partial<FormValues> = { ...rest };
+  // 0930: koszty i dodatki. Stara oferta (sama flaga, etykieta „Zapewniamy zakwaterowanie /
+  // transport”) otwiera się jako zakwaterowanie zapewnione / dowóz — bez szczegółów.
+  if (isOneOf(ACCOMMODATION_KINDS, accommodationKind)) narrowed.accommodationKind = accommodationKind;
+  else if (rest.accommodation) narrowed.accommodationKind = 'provided';
+  if (isOneOf(ACCOMMODATION_COST_PERIODS, accommodationCostPeriod)) {
+    narrowed.accommodationCostPeriod = accommodationCostPeriod;
+  }
+  if (isOneOf(ACCOMMODATION_AFTER_CONTRACT, accommodationAfterContract)) {
+    narrowed.accommodationAfterContract = accommodationAfterContract;
+  }
+  const tri = (value: boolean | null | undefined): TriState =>
+    value === true ? 'yes' : value === false ? 'no' : '';
+  narrowed.accommodationDeducted = tri(accommodationDeducted);
+  narrowed.accommodationRegistration = tri(accommodationRegistration);
+  if (rest.transport && !rest.transportShuttle && !rest.transportReimbursed) {
+    narrowed.transportShuttle = true;
+  }
+  if (rest.jointCommittee && !JOINT_COMMITTEE_CODES.includes(rest.jointCommittee)) {
+    narrowed.jointCommittee = '';
+  }
   if (category && (CATEGORY_KEYS as readonly string[]).includes(category)) {
     narrowed.category = category as CategoryKey;
   }
@@ -913,6 +1035,51 @@ export function JobWizard({
 
   function errorDescription(name: keyof FormValues): string | undefined {
     return errors[name] ? `${domId(name)}-error` : undefined;
+  }
+
+  /**
+   * Select kroku 8 (0930) z opcją „nie podano” (wartość '' w formularzu). Wywoływany jako
+   * funkcja, nie komponent — stała tożsamość elementów, więc ponowny render nie przemontowuje
+   * listy (fokus i stan otwarcia zostają).
+   */
+  function renderCostSelect(opts: {
+    field: keyof FormValues;
+    label: string;
+    value: string;
+    options: { value: string; label: string }[];
+    onChange: (value: string) => void;
+    allowUnset?: boolean;
+    wide?: boolean;
+  }): React.JSX.Element {
+    const { field, label, value, options, onChange, allowUnset = true, wide = false } = opts;
+    const triggerId = `${domId(field)}-trigger`;
+    return (
+      <div className={wide ? `${FORM_FIELD} ${FORM_WIDE}` : FORM_FIELD} id={domId(field)}>
+        <Label htmlFor={triggerId} className={FORM_LABEL_TEXT}>{label}</Label>
+        <Select
+          value={value === '' ? UNSET : value}
+          onValueChange={(next) => onChange(next === UNSET ? '' : next)}
+        >
+          <SelectTrigger
+            className={FORM_SELECT}
+            id={triggerId}
+            aria-invalid={errors[field] ? true : undefined}
+            aria-describedby={errorDescription(field)}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {allowUnset ? <SelectItem value={UNSET}>{t('costsUnset')}</SelectItem> : null}
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FieldError name={field} />
+      </div>
+    );
   }
 
   return (
@@ -1572,20 +1739,126 @@ export function JobWizard({
                 />
                 <FieldError name="benefits" />
               </div>
-              <div className="contents">
-                <CheckboxField
-                  id={domId('accommodation')}
-                  label={t('accommodation')}
-                  checked={values.accommodation}
-                  onChange={(c) => setValue('accommodation', c, { shouldDirty: true })}
-                />
-                <CheckboxField
-                  id={domId('transport')}
-                  label={t('transport')}
-                  checked={values.transport}
-                  onChange={(c) => setValue('transport', c, { shouldDirty: true })}
-                />
-              </div>
+              {/* 0930: „Koszty i dodatki” — deklaracja pracodawcy, wszystkie pola opcjonalne. */}
+              <fieldset className={`${FORM_WIDE} ${FORM_GRID} min-w-0`} data-testid="job-costs-fieldset">
+                <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('costsLegend')}</legend>
+                <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('costsHint')}</p>
+                {renderCostSelect({
+                  field: 'accommodationKind',
+                  label: t('accommodationKindLabel'),
+                  value: values.accommodationKind,
+                  options: ACCOMMODATION_KINDS.map((k) => ({ value: k, label: t(`accommodationKind.${k}`) })),
+                  onChange: (v) =>
+                    setValue('accommodationKind', v as FormValues['accommodationKind'], { shouldDirty: true }),
+                })}
+                {values.accommodationKind === 'provided' ? (
+                  <>
+                    <div className={FORM_FIELD}>
+                      <Label htmlFor={domId('accommodationCost')} className={FORM_LABEL_TEXT}>
+                        {t('accommodationCostLabel')}
+                      </Label>
+                      <Input
+                        className={FORM_INPUT}
+                        id={domId('accommodationCost')}
+                        type="text"
+                        inputMode="decimal"
+                        aria-invalid={errors.accommodationCost ? true : undefined}
+                        aria-describedby={[errorDescription('accommodationCost'), `${domId('accommodationCost')}-hint`]
+                          .filter(Boolean)
+                          .join(' ')}
+                        {...register('accommodationCost')}
+                      />
+                      <p id={`${domId('accommodationCost')}-hint`} className="text-[13px] text-muted-foreground">
+                        {t('accommodationCostHint')}
+                      </p>
+                      <FieldError name="accommodationCost" />
+                    </div>
+                    {renderCostSelect({
+                      field: 'accommodationCostPeriod',
+                      label: t('accommodationCostPeriodLabel'),
+                      value: values.accommodationCostPeriod,
+                      allowUnset: false,
+                      options: ACCOMMODATION_COST_PERIODS.map((p) => ({
+                        value: p,
+                        label: t(`accommodationCostPeriod.${p}`),
+                      })),
+                      onChange: (v) =>
+                        setValue('accommodationCostPeriod', v as AccommodationCostPeriod, { shouldDirty: true }),
+                    })}
+                    {renderCostSelect({
+                      field: 'accommodationDeducted',
+                      label: t('accommodationDeductedLabel'),
+                      value: values.accommodationDeducted,
+                      options: TRI_STATES.map((v) => ({ value: v, label: t(`tri.${v}`) })),
+                      onChange: (v) => setValue('accommodationDeducted', v as TriState, { shouldDirty: true }),
+                    })}
+                    {renderCostSelect({
+                      field: 'accommodationRegistration',
+                      label: t('accommodationRegistrationLabel'),
+                      value: values.accommodationRegistration,
+                      options: TRI_STATES.map((v) => ({ value: v, label: t(`tri.${v}`) })),
+                      onChange: (v) => setValue('accommodationRegistration', v as TriState, { shouldDirty: true }),
+                    })}
+                    {renderCostSelect({
+                      field: 'accommodationAfterContract',
+                      label: t('accommodationAfterContractLabel'),
+                      value: values.accommodationAfterContract,
+                      wide: true,
+                      options: ACCOMMODATION_AFTER_CONTRACT.map((v) => ({
+                        value: v,
+                        label: t(`accommodationAfterContract.${v}`),
+                      })),
+                      onChange: (v) =>
+                        setValue('accommodationAfterContract', v as FormValues['accommodationAfterContract'], {
+                          shouldDirty: true,
+                        }),
+                    })}
+                  </>
+                ) : null}
+                <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                  <p className={FORM_LABEL_TEXT} id="job-transport-label">{t('transportLabel')}</p>
+                  <div role="group" aria-labelledby="job-transport-label">
+                    <CheckboxField
+                      id={domId('transportShuttle')}
+                      label={t('transportShuttle')}
+                      checked={values.transportShuttle}
+                      onChange={(c) => setValue('transportShuttle', c, { shouldDirty: true })}
+                    />
+                    <CheckboxField
+                      id={domId('transportReimbursed')}
+                      label={t('transportReimbursed')}
+                      checked={values.transportReimbursed}
+                      onChange={(c) => setValue('transportReimbursed', c, { shouldDirty: true })}
+                    />
+                  </div>
+                </div>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('mealVoucherDaily')} className={FORM_LABEL_TEXT}>
+                    {t('mealVoucherLabel')}
+                  </Label>
+                  <Input
+                    className={FORM_INPUT}
+                    id={domId('mealVoucherDaily')}
+                    type="text"
+                    inputMode="decimal"
+                    aria-invalid={errors.mealVoucherDaily ? true : undefined}
+                    aria-describedby={errorDescription('mealVoucherDaily')}
+                    {...register('mealVoucherDaily')}
+                  />
+                  <FieldError name="mealVoucherDaily" />
+                </div>
+                {renderCostSelect({
+                  field: 'jointCommittee',
+                  label: t('jointCommitteeLabel'),
+                  value: values.jointCommittee,
+                  options: JOINT_COMMITTEES.map((c) => ({
+                    value: c.code,
+                    label: `${t('jointCommitteeCode', { code: c.code })} — ${c.names[isLocale(locale) ? locale : routing.defaultLocale]}`,
+                  })),
+                  onChange: (v) => setValue('jointCommittee', v, { shouldDirty: true }),
+                })}
+                <p className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('jointCommitteeHint')}</p>
+              </fieldset>
             </div>
           ) : null}
 

@@ -1328,6 +1328,22 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`dashboard.duplicateJobModerationLocked`); audyt `job.duplicated`. Dowód: `rls.sql` sekcja
   JD216 (kontrole ujemne: bramka recruiter+, wpis klucza), unit `job-duplicate-draft`, E2E
   `employer-job-duplicate` (demo, 4 języki, axe 320 px).
+- [~] „Koszty i dodatki” w ofercie (migracja `0930` — numer tymczasowy): krok 8 kreatora ma
+  opcjonalne pola deklarowane przez pracodawcę — zakwaterowanie (zapewnione / pomoc / brak; przy
+  „zapewnione”: koszt EUR za tydzień lub miesiąc, 0 = bez kosztów, potrącenie z pensji,
+  zameldowanie, co po końcu umowy), dojazd (dowóz, zwrot kosztów), bony żywieniowe (EUR/dzień),
+  komisja parytetowa ze słownika `joint_committees` (lustro `src/lib/joint-committees.ts`, test
+  zgodności). Flagi filtrów `accommodation`/`transport` wynikają ze szczegółów (CHECK-i w bazie,
+  `jobCostsPatch` w `src/lib/job-costs.ts`); stare oferty (same flagi) bez zmian. Zapis:
+  `save_job_draft` i `update_published_job` (nowe klucze), kopia szkicu przez trigger na
+  `job_duplications`; `job_material_terms` + `accommodation` (rodzaj, koszt, okres, potrącenie) —
+  zmiana kosztu zakwaterowania powiadamia kandydatów z aktywną aplikacją jak 0144. Szczegół
+  oferty: sekcja „Koszty i dodatki” (`get_public_job_costs`, odczyt pomocniczy — awaria = same
+  flagi) z linkiem do oficjalnej bazy stawek minimalnych FOD WASO/SPF ETCS, bez oceny stawki;
+  JobPosting `jobBenefits` (komisja bez odpowiednika w schema.org). Dowód: `rls.sql` sekcja CB930
+  (kontrola ujemna: lista pól z 0144 nie widzi kosztu), unit `job-costs`, `jobs-postgres`, E2E
+  `job-costs` (4 języki, axe). **Otwarte (właściciel):** czy wymagać kosztu przy zakwaterowaniu
+  zapewnionym (kontrola w `publish_job`), filtry listy po nowych polach, tabela stawek komisji.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”

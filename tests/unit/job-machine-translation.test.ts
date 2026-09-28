@@ -12,6 +12,7 @@ const adapters = vi.hoisted(() => ({
   detail: vi.fn(),
   translations: vi.fn(),
   screening: vi.fn(async () => [] as unknown[]),
+  costs: vi.fn(async () => null as Record<string, unknown> | null),
   machine: vi.fn(),
   pool: {},
 }));
@@ -20,6 +21,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJob: adapters.detail,
   getPublicJobTranslations: adapters.translations,
   getPublicJobScreeningQuestions: adapters.screening,
+  getPublicJobCosts: adapters.costs,
   getPublicJobMachineTranslation: adapters.machine,
 }));
 const captureError = vi.hoisted(() => vi.fn());
