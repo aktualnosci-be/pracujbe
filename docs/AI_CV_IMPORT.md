@@ -1,5 +1,9 @@
 # Import CV przez AI (#487, #498) — opis techniczny
 
+> **Wyłączone w trybie ogłoszeniowym (#1128).** Decyzja produktowa: portal ogłoszeniowy — import CV
+> i przesyłanie CV nie działają produkcyjnie niezależnie od flagi (fail-closed, #1138). Dokument
+> opisuje zachowany, wyłączony kod.
+
 Stan: 24.09.2026. Funkcja jest za flagą `AI_CV_IMPORT_ENABLED`, **domyślnie wyłączona**, także
 w produkcji. Flaga jest osobna od importu ogłoszeń (`AI_JOB_IMPORT_ENABLED`, `docs/AI_JOB_IMPORT.md`),
 bo import CV ma własną bramkę prawną. Ten dokument opisuje wyłącznie technikę. Wątki prawne

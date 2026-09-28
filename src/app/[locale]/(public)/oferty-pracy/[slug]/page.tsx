@@ -25,6 +25,7 @@ import {
 import { Link } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { HELP_VERIFICATION_HREF } from '@/lib/help-anchors';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
 import {
   buildJobBenefitsText,
@@ -428,9 +429,18 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <span className="break-words">{job.companyName}</span>
               )}
               {job.companyVerified && !job.isDemo ? (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
-                  <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  {t('verified')}
+                <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium">
+                  <span className="inline-flex items-center gap-1 text-success-text" data-testid="job-detail-verified">
+                    <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {t('verified')}
+                  </span>
+                  {/* #1151: odznaka = zweryfikowane dane rejestrowe firmy; wyjaśnienie w Pomocy. */}
+                  <Link
+                    href={HELP_VERIFICATION_HREF}
+                    className="rounded-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    {t('verifiedHelp')}
+                  </Link>
                 </span>
               ) : null}
               {job.isAgency ? (

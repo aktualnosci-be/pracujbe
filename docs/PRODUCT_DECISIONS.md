@@ -56,3 +56,34 @@ propozycję, widzą imię i dane kontaktowe kandydata z konta — także gdy kan
 widoczności profilu dla firm. Firma, którą kandydat zablokował (#97), tego dostępu nie ma.
 Po stronie kandydata propozycja pokazuje firmę; imienia rekrutera w rozmowach nadal nie
 ujawniamy (0023). Decyzja zamyka punkt otwarty w sekcji widoczności profilu (#494).
+
+## 2026-09-28: portal ogłoszeniowy (#1128)
+
+**Decyzja produktowa: portal ogłoszeniowy (#1128).** Pracuj.be działa jako portal ogłoszeń
+o pracę. Pracodawca publikuje ofertę i podaje w niej własny kanał aplikowania — adres strony
+(https), adres e-mail albo telefon, co najmniej jeden (#1129). Kandydat przegląda oferty,
+filtruje je, zapisuje oferty i wyszukiwania (także z powiadomieniami e-mail o nowych ofertach
+według własnych filtrów, #1148) i kontaktuje się **bezpośrednio z ogłoszeniodawcą**, poza
+portalem.
+
+Portal:
+
+- nie przyjmuje aplikacji na oferty (także bez konta), nie prowadzi statusów zgłoszeń;
+- nie udostępnia firmom profili kandydatów ani plików CV i nie prowadzi wyszukiwarki kandydatów;
+- nie liczy dopasowania kandydat–oferta, nie tworzy list najlepiej dopasowanych ani
+  rekomendacji z profilu;
+- nie wysyła propozycji pracy i nie prowadzi rozmów między kandydatem a pracodawcą;
+- nie zbiera odpowiedzi na pytania screeningowe i nie importuje CV.
+
+Funkcje niezgodne z tym modelem są wyłączone produkcyjnie w trybie fail-closed: jedno źródło
+trybu w `src/lib/portal-mode.ts` (#1136), blokady w bazie (#1140) i strażnik CI (#1146). Kod
+i tabele zostają w repozytorium (wyłączone), nie są kasowane. Portal nie działał produkcyjnie
+i nie ma realnych danych rekrutacyjnych, więc wystarcza blokada nowych danych — bez procedury
+zamrażania ani migracji danych (#1150). Teksty publiczne, SEO, strona dla pracodawców i Pomoc
+opisują wyłącznie portal ogłoszeń (#1149, #1151); odznaka „zweryfikowana firma” znaczy, że
+administrator sprawdził dane rejestrowe (tożsamość) przedsiębiorstwa — nie jest oceną firmy
+ani oferty.
+
+Ponowne włączenie funkcji rekrutacyjnych wymaga nowej, jawnej decyzji właściciela i obu kluczy
+trybu (zmienna środowiskowa i stan w bazie, #1143). Zmiana „przy okazji” innej pracy jest
+błędem.

@@ -1,5 +1,9 @@
 # Aplikacja bez konta (#98)
 
+> **Wyłączone w trybie ogłoszeniowym (#1128).** Decyzja produktowa: portal ogłoszeniowy — aplikacja
+> bez konta nie działa produkcyjnie (fail-closed, #1132); kandydat kontaktuje się bezpośrednio
+> z ogłoszeniodawcą. Dokument opisuje zachowany, wyłączony kod.
+
 Gość może raz zaaplikować na ofertę bez zakładania konta. Aplikacja trafia do pracodawcy
 dopiero po potwierdzeniu adresu e-mail. Później gość może przypisać ją do konta kandydata
 założonego na ten sam adres.

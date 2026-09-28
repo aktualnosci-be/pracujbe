@@ -1,5 +1,9 @@
 # PROJEKT — do weryfikacji prawnika, nieopublikowany
 
+> **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy — kategorie danych
+> procesowych (aplikacje, propozycje, rozmowy, dopasowania, CV) nie powstają, dopóki funkcje są
+> wyłączone (#1150). Szkic bez zmian merytorycznych.
+
 > **Status:** roboczy szkic przygotowany przez zespół techniczny (#486). To **nie jest**
 > obowiązująca polityka prywatności ani polityka retencji Pracuj.be i nie może być
 > publikowany, cytowany kandydatom ani traktowany jako zobowiązanie. Okresy w tabeli są

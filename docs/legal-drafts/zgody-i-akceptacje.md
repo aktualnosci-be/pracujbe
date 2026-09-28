@@ -1,5 +1,9 @@
 # PROJEKT — do weryfikacji prawnika, nieopublikowany
 
+> **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy — elementy szkicu dotyczące
+> aplikowania przez portal (także bez konta) nie mają zastosowania, dopóki funkcje są wyłączone.
+> Szkic bez zmian merytorycznych.
+
 > Szkic roboczy do #493. **Nie jest treścią prawną serwisu** i nie trafia na strony
 > `/regulamin` ani `/polityka-prywatnosci`. Strony prawne pozostają placeholderem z `noindex`
 > do czasu zatwierdzenia treści (#61). Brzmienia poniżej opisują, co dziś pokazuje formularz

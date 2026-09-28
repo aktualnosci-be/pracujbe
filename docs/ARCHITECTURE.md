@@ -1,5 +1,10 @@
 # Architektura — Pracuj.be
 
+> **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy. Opisane niżej przepływy
+> aplikacji, propozycji, wiadomości, matchingu i dostępu firm do profili/CV są wyłączone produkcyjnie
+> (fail-closed, `src/lib/portal-mode.ts`, #1136). Aktywny przepływ: publikacja oferty z kanałem
+> aplikowania ogłoszeniodawcy → wyszukiwanie → „Aplikuj u pracodawcy” poza portalem (#1129, #1130).
+
 Dokument opisuje architekturę techniczną, kluczowe decyzje, przepływy krytyczne
 (z diagramami tekstowymi), model danych oraz role i uprawnienia. Uzupełnia
 [`CLAUDE.md`](../CLAUDE.md) (mapa/kontrakt projektu) o szczegóły „jak to działa i dlaczego".
