@@ -9,6 +9,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationHistoryList } from '@/components/employer/ApplicationHistoryList';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { MessageCandidateButton } from '@/components/employer/MessageCandidateButton';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AVAILABILITY_KEYS, LEVEL_KEYS } from '@/components/employer/candidate-labels';
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
@@ -132,7 +133,8 @@ export default async function EmployerApplicationDetailPage({
           <StatusPill status={application.status} />
           <ApplicationStatusMenu applicationId={application.id} status={application.status} candidateName={name} jobTitle={application.jobTitle} />
           {/* #98: rozmowa wymaga konta kandydata — gość dostaje kontakt e-mailowy niżej. */}
-          {application.isGuest ? null : <MessageCandidateButton applicationId={application.id} candidateName={name} />}
+          {/* #1134: bez rozmów w trybie ogłoszeniowym. */}
+          {application.isGuest || !isRecruitmentEnabled('messaging') ? null : <MessageCandidateButton applicationId={application.id} candidateName={name} />}
           {/* P1-06: profil kandydata z kontekstem firmy (dopasowania, inne zgłoszenia). */}
           {application.isGuest || !application.candidateId || isDemo ? null : (
             <Link href={`/employer/kandydaci/${encodeURIComponent(application.candidateId)}`} className={TEXT_LINK}>

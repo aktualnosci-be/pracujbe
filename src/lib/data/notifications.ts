@@ -203,6 +203,8 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       // (link do /oferty-pracy/{slug} dawałby 404), a zgłoszenie z nową treścią oferty jest tam zawsze.
       return employer ? '/employer/oferty' : '/candidate/aplikacje';
     case 'conversation': {
+      // #1134: tryb ogłoszeniowy — trasa wiadomości = 404; stare powiadomienie prowadzi na pulpit.
+      if (!isRecruitmentEnabled('messaging')) return employer ? '/employer' : '/candidate';
       const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
       return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
     }

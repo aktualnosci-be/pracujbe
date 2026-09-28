@@ -72,21 +72,24 @@ export default async function CandidateDashboardPage({
   const to = await getTranslations({ locale, namespace: 'onboarding' });
   const tm = await getTranslations({ locale, namespace: 'messages' });
 
+  // #1134/#1138: tryb ogłoszeniowy — bez rozmów i bez wgrywania CV na pulpicie (loadery niewywoływane).
+  const messagingOn = isRecruitmentEnabled('messaging');
+  const cvUploadOn = isRecruitmentEnabled('cvAccess');
   const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
     // #1139: tryb ogłoszeniowy — bez rekomendacji (loader niewywoływany).
     isRecruitmentEnabled('matching') ? getRecommendedJobs(locale) : Promise.resolve(null),
     getMyApplicationsPreview(locale),
-    getLatestMessages(),
-    loadCandidateFiles(),
+    messagingOn ? getLatestMessages() : Promise.resolve(null),
+    cvUploadOn ? loadCandidateFiles() : Promise.resolve(null),
     getLatestActiveOffer(locale),
   ]);
 
   const overviewFailed =
     overview.newJobsCount === null ||
     overview.activeApplicationsCount === null ||
-    overview.unreadMessagesCount === null;
+    (messagingOn && overview.unreadMessagesCount === null);
 
   const checklist = profileChecklistItems(profile.checklist, td('add'), to);
 
@@ -130,14 +133,16 @@ export default async function CandidateDashboardPage({
                 ? td('candidateStatLoadError')
                 : td('activeApplicationsSub'),
           },
-          {
-            label: td('unreadMessages'),
-            value: overview.unreadMessagesCount ?? '—',
-            sub:
-              overview.unreadMessagesCount === null
-                ? td('candidateStatLoadError')
-                : td('unreadMessagesSub'),
-          },
+          ...(messagingOn
+            ? [{
+                label: td('unreadMessages'),
+                value: overview.unreadMessagesCount ?? '—',
+                sub:
+                  overview.unreadMessagesCount === null
+                    ? td('candidateStatLoadError')
+                    : td('unreadMessagesSub'),
+              }]
+            : []),
           profile.loadFailed
             ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
             : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
@@ -182,14 +187,18 @@ export default async function CandidateDashboardPage({
             </Link>
           </section>}
 
-          {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-          <CvUpload
-            items={files.status === 'ready' ? files.items : []}
-            loadFailed={files.status === 'error'}
-          />
+          {/* Dokumenty / CV (prywatny bucket + signed URLs). #1138: w trybie ogłoszeniowym bez
+              sekcji — istniejące pliki (pobranie/usunięcie) są w profilu. */}
+          {files ? (
+            <CvUpload
+              items={files.status === 'ready' ? files.items : []}
+              loadFailed={files.status === 'error'}
+              allowUpload
+            />
+          ) : null}
 
-          {/* Najnowsze wiadomości */}
-          <CandidateMessagesPreview
+          {/* Najnowsze wiadomości. #1134: w trybie ogłoszeniowym bez sekcji. */}
+          {messages ? <CandidateMessagesPreview
             result={messages}
             locale={locale}
             labels={{
@@ -200,7 +209,7 @@ export default async function CandidateDashboardPage({
               seeAll: td('seeAllMessages'),
               unread: tm('unreadBadge'),
             }}
-          />
+          /> : null}
         </div>
       </div>
     </div>

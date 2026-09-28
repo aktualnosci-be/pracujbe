@@ -10,6 +10,10 @@ vi.mock('@/lib/error-report', () => ({ captureError }));
 
 import { getConversationsResult } from '@/lib/data/messages';
 import * as portal from '@/lib/db/portal';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 const ME = '11111111-1111-4111-8111-111111111111';
 

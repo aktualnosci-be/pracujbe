@@ -5,6 +5,7 @@ import pl from '@/messages/pl.json';
 import { NotificationsDropdown } from '@/components/dashboard/NotificationsDropdown';
 import { DashboardShell } from '@/components/dashboard/DashboardShell';
 import { resolveHref } from '@/lib/data/notifications';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
 
 const { markNotificationsRead, refresh } = vi.hoisted(() => ({
   markNotificationsRead: vi.fn(),
@@ -64,18 +65,34 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
     ['company', 'employer', `/employer/firma?firma=${CONVERSATION}`],
     // Kandydat nie ma panelu firmy — bez identyfikatora w URL (nie ma gdzie go użyć).
     ['company', 'candidate', '/candidate'],
-    ['conversation', 'candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
-    ['conversation', 'employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    // #1134: tryb ogłoszeniowy — trasa wiadomości = 404, stare powiadomienie → pulpit roli.
+    ['conversation', 'candidate', '/candidate'],
+    ['conversation', 'employer', '/employer'],
     ['unknown', 'candidate', '/candidate'],
     ['unknown', 'employer', '/employer'],
   ])('%s dla %s → %s', (entityType, role, href) => {
     expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
   });
 
+  describe('tryb rekrutacyjny: rozmowy (#1134 — kontrola ujemna trybu)', () => {
+    withRecruitmentMode();
+    it.each([
+      ['candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
+      ['employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    ])('conversation dla %s → %s', (role, href) => {
+      expect(resolveHref('conversation', role, CONVERSATION)).toBe(href);
+    });
+    it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
+      'nie wkleja niezweryfikowanego id rozmowy do URL: %j',
+      (entityId) => {
+        expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
+      },
+    );
+  });
+
   it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
     'nie wkleja niezweryfikowanego id do URL: %j',
     (entityId) => {
-      expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
       // #843: to samo dla firmy — zła/brakująca wartość nie trafia do zapytania.
       expect(resolveHref('company', 'employer', entityId)).toBe('/employer/firma');
     },

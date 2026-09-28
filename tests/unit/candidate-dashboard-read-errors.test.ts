@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCandidateOverview, getLatestMessages, getMyApplicationsPreview } from '@/lib/data/candidate';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());

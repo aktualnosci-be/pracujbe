@@ -1950,6 +1950,8 @@
     "upload": "Uploaden",
     "uploading": "Bezig met uploaden…",
     "cvHint": "PDF, DOC of DOCX, max. 5 MB. Bestanden zijn privé.",
+    "existingTitle": "Je eerder geüploade documenten",
+    "existingHint": "Je kunt eerder geüploade bestanden downloaden of verwijderen. Bestanden zijn privé.",
     "empty": "Nog geen documenten geüpload.",
     "delete": "Verwijderen",
     "download": "Downloaden",

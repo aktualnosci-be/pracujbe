@@ -4,6 +4,10 @@ import { applyToJob } from '@/lib/actions/applications';
 import { sendMessage } from '@/lib/actions/messages';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, resetFakeDb } from '../helpers/fake-db';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /**
  * #852 — anonimowy ruch (bez sesji) nie może zużywać limitu aplikacji/wiadomości liczonego

@@ -9,6 +9,10 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { CANDIDATE_ITEM_LIMITS } from '@/lib/validation/candidate';
 import { buildDocx, CV_WITH_REFEREES, DOCX_TYPE, REFEREES } from '../helpers/cv-fixtures';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /**
  * #487 — akcje importu CV: flaga (domyślnie wyłączona), konto kandydata, limit wywołań

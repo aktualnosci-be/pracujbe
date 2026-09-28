@@ -23,6 +23,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Szczegół WŁASNEGO zgłoszenia w panelu kandydata (P1-05/P1-06, strona kandydata): dane wysłane
@@ -129,7 +130,8 @@ export default async function CandidateApplicationDetailPage({
           ) : (
             <JobAvailabilityNote availability={application.jobAvailability} />
           )}
-          {application.conversationId ? (
+          {/* #1134: bez rozmów w trybie ogłoszeniowym (trasa wiadomości = 404). */}
+          {application.conversationId && isRecruitmentEnabled('messaging') ? (
             <Link href={`/candidate/wiadomosci?c=${application.conversationId}`} className={TEXT_LINK}>
               {t('candidateApplicationConversation')}
               <ArrowRight className="size-3.5" aria-hidden="true" />

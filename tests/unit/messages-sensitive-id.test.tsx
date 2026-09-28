@@ -32,6 +32,10 @@ vi.mock('@/lib/data/messages', () => ({ getOlderThreadMessages: vi.fn() }));
 
 import * as actions from '@/lib/actions/messages';
 import { MessageComposer } from '@/components/messaging/MessageComposer';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const CONVERSATION = '55555555-5555-4555-8555-555555555555';

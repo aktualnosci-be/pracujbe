@@ -108,7 +108,8 @@ export function CandidateShell({
     { href: HREF.searches, label: td('navSearches'), icon: <BellRing /> },
     { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },
     { href: HREF.proposals, label: td('navProposals'), icon: <MailCheck /> },
-    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
+    // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
+    ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
     { href: HREF.profile, label: td('navProfile'), icon: <User /> },
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
   ];

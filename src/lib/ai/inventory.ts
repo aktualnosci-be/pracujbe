@@ -11,6 +11,8 @@
  * DPIA) nie należy do tego pliku — to pytania do prawnika w szkicu.
  */
 
+import type { RecruitmentFeature } from '@/lib/portal-mode';
+
 export type AiFeatureStatus =
   /** Kod na `main`, funkcja za flagą środowiskową (domyślnie wyłączona). */
   | 'behind_flag'
@@ -61,6 +63,12 @@ export interface AiFeature {
    * (`true`) dla funkcji ze statusem `behind_flag` — pilnuje `ai-inventory.test.ts`.
    */
   costBudgeted: boolean;
+  /**
+   * Funkcja rekrutacyjna niedostępna w trybie ogłoszeniowym (#1128 — decyzja produktowa: portal
+   * ogłoszeniowy), niezależnie od `enableFlag`. `files` = miejsca, które MUSZĄ sprawdzać tryb
+   * (`isRecruitmentEnabled(feature)`) przed modelem i budżetem — pilnuje `ai-inventory.test.ts`.
+   */
+  classifiedsModeGuard?: { feature: RecruitmentFeature; files: readonly string[] };
 }
 
 export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check'] as const;
@@ -138,6 +146,11 @@ export const AI_FEATURES: readonly AiFeature[] = [
     usageLogged: true,
     // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
     costBudgeted: true,
+    // #1138: w trybie ogłoszeniowym brak importu CV (config → null, akcje → RECRUITMENT_DISABLED).
+    classifiedsModeGuard: {
+      feature: 'cvImport',
+      files: ['src/lib/cv-import/config.ts', 'src/lib/actions/cv-import.ts'],
+    },
   },
   {
     id: 'job_fraud_check',

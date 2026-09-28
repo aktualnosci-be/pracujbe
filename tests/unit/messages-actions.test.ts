@@ -5,6 +5,10 @@ import { loadOlderMessages, markConversationRead, openConversation, sendMessage 
 import { getOlderThreadMessages } from '@/lib/data/messages';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /**
  * #25 (z #350/#147) — Server Actions wiadomości na transakcji sesji: walidacja i limit przed RPC,

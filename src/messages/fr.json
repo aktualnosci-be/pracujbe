@@ -1950,6 +1950,8 @@
     "upload": "Téléverser",
     "uploading": "Téléversement…",
     "cvHint": "PDF, DOC ou DOCX, max. 5 Mo. Les fichiers sont privés.",
+    "existingTitle": "Vos documents déjà envoyés",
+    "existingHint": "Vous pouvez télécharger ou supprimer les fichiers envoyés précédemment. Les fichiers sont privés.",
     "empty": "Aucun document téléversé.",
     "delete": "Supprimer",
     "download": "Télécharger",

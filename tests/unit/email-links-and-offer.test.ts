@@ -7,6 +7,10 @@ import type { Locale } from '@/i18n/routing';
 import type { EmailType } from '@/emails/copy';
 import { renderEmail } from '@/emails/templates';
 import { buildDeliveryData, emailTargetPath } from '@/lib/email/delivery-data';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /**
  * #290 — CTA w e-mailach prowadzi do właściwej sekcji panelu, w locale ODBIORCY.

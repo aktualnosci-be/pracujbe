@@ -130,6 +130,18 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
   (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
   segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
+  Wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138, migracja `0960` — numer tymczasowy): akcje
+  `messages.ts`/`message-attachments.ts` → `RECRUITMENT_DISABLED` jako pierwszy krok (bez bazy, limitera, bucketu),
+  loadery rozmów bez zapytań (lista pusta, licznik 0), segmenty `candidate|employer/wiadomosci` = 404 (layout,
+  przed `loading.tsx`), `/api/files/message/<id>` = 404, nawigacja bez „Wiadomości”, szczegół oferty bez „Wyślij
+  wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
+  `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
+  `allowUpload` = lista istniejących plików w profilu, pulpit bez sekcji). Import CV przez AI: `cvImportProvider()` =
+  null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
+  `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
+  trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
+  = nakładka ze strażnikiem (`_impl` bez EXECUTE dla klientów). Dowód: `rls.sql` sekcja CL960 (kontrole ujemne),
+  rollback `0960_…down.sql`, unit `classifieds-messaging-cv-off`, strażnik `legal`, E2E `classifieds-messaging-cv-off`.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
