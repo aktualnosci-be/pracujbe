@@ -113,7 +113,8 @@ describe('jedno źródło trybu', () => {
  */
 type GuardedRoute = { segment: string; status: 'enforced' | 'pending'; issue: number };
 const GUARDED_ROUTES: GuardedRoute[] = [
-  { segment: 'employer/kandydaci', status: 'pending', issue: 1129 },
+  { segment: 'employer/kandydaci', status: 'enforced', issue: 1133 },
+  { segment: 'candidate/oferty-polecane', status: 'enforced', issue: 1139 },
   { segment: 'employer/aplikacje', status: 'pending', issue: 1129 },
   { segment: 'candidate/profil/import-cv', status: 'pending', issue: 1129 },
 ];
@@ -154,7 +155,6 @@ describe('trasy rekrutacyjne za notFoundUnlessRecruitment()', () => {
 describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
   it.todo('applyToJob, aplikacja gościa, sendOffer, respondToOffer, zmiana statusu, screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129/#1130)');
   it.todo('loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata/aplikacji, /api/files/cv/*) nie zwracają danych (#1129)');
-  it.todo('getMyJobMatch/scoreMatch nie są wołane w ścieżkach stron (#1129)');
   it.todo('słownik zakazanych etykiet UI na trasach aktywnych w trybie ogłoszeniowym, 4 języki (#1128, teksty)');
   it.todo('jedyne CTA aplikacyjne na szczególe oferty = zewnętrzny kanał ogłoszeniodawcy (#1129/#1130)');
   it.todo('pozytywnie: lista ofert, szczegół, kreator/publikacja, zapisane oferty/wyszukiwania, konto nie zwracają RECRUITMENT_DISABLED (#1128)');
@@ -215,7 +215,7 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
 
   /** /api/maintenance: materializacja dopasowań tylko za trybem efektywnym (#1143). */
   const guardedMatches = (src: string) =>
-    /if \(recruitment\) \{\s*try \{\s*matches = await runMatchRecompute\(\)/.test(src)
+    /if \(!recruitment\) \{\s*matches = 'disabled';\s*\} else \{\s*try \{\s*matches = await runMatchRecompute\(\)/.test(src)
     && (src.match(/runMatchRecompute\(\)/g) ?? []).length === 1
     && /recruitmentTasks: \{ skipped: 'classifieds_only'/.test(src);
 
@@ -225,7 +225,93 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
 
   it('kontrola ujemna: wywołanie runMatchRecompute() poza strażnikiem jest wykrywane', () => {
     const src = read('src/app/api/maintenance/route.ts');
-    expect(guardedMatches(src.replace('if (recruitment) {', 'if (true) {'))).toBe(false);
+    expect(guardedMatches(src.replace('if (!recruitment) {', 'if (false) {'))).toBe(false);
     expect(guardedMatches(`${src}\nawait runMatchRecompute();`)).toBe(false);
+  });
+});
+
+/**
+ * Matching i rekomendacje (#1131, #1133, #1139). Statyczne invarianty kodu; zachowanie w trybie
+ * ogłoszeniowym (zero zapytań, `disabled`) sprawdza `tests/unit/classifieds-matching-off.test.ts`.
+ */
+describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () => {
+  const guardedDirs = GUARDED_ROUTES.filter((r) => r.status === 'enforced').map((r) => join(LOCALE_APP, r.segment));
+  const inGuarded = (file: string) => guardedDirs.some((dir) => file === dir || file.startsWith(`${dir}/`));
+  const panelFiles = [join(LOCALE_APP, 'employer'), join(LOCALE_APP, 'candidate')]
+    .flatMap((dir) => walk(dir))
+    .filter((f) => /\.tsx?$/.test(f));
+
+  /** Pliki tras paneli spoza chronionych segmentów importujące komponenty wyniku dopasowania/propozycji. */
+  function unguardedMatchImports(files: { path: string; source: string }[]): string[] {
+    const IMPORT = /from\s+['"]@\/components\/(ui\/match-bar|employer\/SendOfferButton)['"]/;
+    return files.filter((f) => !inGuarded(f.path) && IMPORT.test(f.source)).map((f) => relative(ROOT, f.path));
+  }
+
+  it('trasy paneli poza chronionymi segmentami nie importują MatchBar ani SendOfferButton', () => {
+    const files = panelFiles.map((path) => ({ path, source: readFileSync(path, 'utf8') }));
+    expect(unguardedMatchImports(files)).toEqual([]);
+  });
+
+  it('kontrola ujemna: pulpit z importem MatchBar jest wykrywany', () => {
+    const path = join(LOCALE_APP, 'candidate/page.tsx');
+    expect(unguardedMatchImports([{ path, source: "import { MatchBar } from '@/components/ui/match-bar';" }])).toEqual([
+      'src/app/[locale]/candidate/page.tsx',
+    ]);
+    const guarded = join(LOCALE_APP, 'employer/kandydaci/page.tsx');
+    expect(unguardedMatchImports([{ path: guarded, source: "import { SendOfferButton } from '@/components/employer/SendOfferButton';" }])).toEqual([]);
+  });
+
+  /**
+   * Każde zapytanie do `public.matches` w loaderach paneli leży w funkcji, która PRZED nim
+   * sprawdza tryb (`isRecruitmentEnabled(` albo lokalne `matchingEnabled(`).
+   */
+  function ungatedMatchReads(source: string): number[] {
+    const offenders: number[] = [];
+    for (const m of source.matchAll(/public\.matches\b/g)) {
+      const before = source.slice(0, m.index);
+      const fnStart = Math.max(before.lastIndexOf('\nexport async function'), before.lastIndexOf('\nasync function'), before.lastIndexOf('\nexport const '), before.lastIndexOf('\nconst '));
+      const scope = before.slice(fnStart);
+      if (!/(isRecruitmentEnabled|matchingEnabled)\(/.test(scope)) offenders.push(before.split('\n').length);
+    }
+    return offenders;
+  }
+
+  it.each(['src/lib/data/candidate.ts', 'src/lib/data/employer.ts'])('%s: odczyt public.matches tylko za bramką trybu', (file) => {
+    const source = read(file);
+    // Stała SQL (np. MATCHED_CANDIDATES_SQL) nie jest odczytem — liczą się miejsca użycia w funkcjach.
+    const withoutSqlConstants = source.replace(/\nconst [A-Z_]+_SQL = `[\s\S]*?`;/g, '\n');
+    expect(ungatedMatchReads(withoutSqlConstants)).toEqual([]);
+  });
+
+  it('kontrola ujemna: nowe zapytanie do matches bez bramki jest wykrywane', () => {
+    const gated = "\nexport async function a() {\n  if (!isRecruitmentEnabled('matching')) return [];\n  q('SELECT 1 FROM public.matches');\n}";
+    const ungated = "\nexport async function b() {\n  q('SELECT 1 FROM public.matches');\n}";
+    expect(ungatedMatchReads(gated)).toEqual([]);
+    expect(ungatedMatchReads(gated + ungated)).toHaveLength(1);
+  });
+
+  it('szczegół oferty renderuje JobMatchCard tylko za isRecruitmentEnabled', () => {
+    const page = read('src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx');
+    expect(page).toMatch(/isRecruitmentEnabled\('matching'\)\s*\?\s*\(\s*<div data-testid="job-match-slot">\s*<JobMatchCard/);
+  });
+
+  it('akcja, loader i materializacja dopasowania mają bramkę trybu', () => {
+    expect(read('src/lib/actions/matching.ts')).toMatch(/isRecruitmentEnabled\('matching'\)/);
+    expect(read('src/lib/data/matching.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return \{ status: 'disabled' \}/);
+    expect(read('src/lib/matching/materialize.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return run;/);
+    // #1143: maintenance — tryb efektywny (env `matching` ORAZ baza), jeden kształt odpowiedzi.
+    const maintenance = read('src/app/api/maintenance/route.ts');
+    expect(maintenance).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return false;/);
+    expect(maintenance).toMatch(/if \(!recruitment\) \{\s*matches = 'disabled';/);
+  });
+
+  it('powiadomienia i e-maile nie powstają z tabeli matches (jobMatch = zapisane wyszukiwania)', () => {
+    const migrations = readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => f.endsWith('.sql'));
+    // Wstawienie powiadomienia/e-maila w tym samym bloku co odczyt z `matches`.
+    const notifiesFromMatches = (sql: string) =>
+      /from\s+public\.matches[\s\S]{0,400}(insert\s+into\s+public\.notifications|enqueue_email)/i.test(sql);
+    expect(migrations.filter((f) => notifiesFromMatches(read(`supabase/migrations/${f}`)))).toEqual([]);
+    // Kontrola ujemna: taki wzorzec jest wykrywany.
+    expect(notifiesFromMatches("select m.job_id from public.matches m; perform public.enqueue_email('jobMatch')")).toBe(true);
   });
 });

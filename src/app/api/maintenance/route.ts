@@ -69,6 +69,7 @@ import {
  * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
  * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
  * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.
+ * #1131: w trybie ogłoszeniowym zadanie nie działa (`matches: "disabled"`, bez bazy).
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -113,7 +114,7 @@ function retentionCounters(value: unknown): Record<string, number> {
  * Błąd odczytu bazy = tryb ogłoszeniowy (fail-closed) i zapamiętany błąd (503 dla monitoringu).
  */
 async function recruitmentTasksEnabled(onError: (error: unknown) => void): Promise<boolean> {
-  if (!isRecruitmentEnabled()) return false;
+  if (!isRecruitmentEnabled('matching')) return false;
   try {
     const db = await withServiceRole((tx) => rpc<boolean>(tx, 'recruitment_enabled'));
     return effectiveRecruitmentEnabled(true, db === true);
@@ -191,8 +192,12 @@ async function run(request: Request): Promise<Response> {
   // retencja i czyszczenie (gość, załączniki, storage) działają dalej.
   const recruitment = await recruitmentTasksEnabled((error) => failures.push({ task: 'portalMode', error }));
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
-  let matches: MatchRecomputeRun | null = null;
-  if (recruitment) {
+  // #1131/#1143: tryb ogłoszeniowy (env albo baza) — bez przeliczeń (zero zapytań
+  // `match_recompute_*`); `matches: "disabled"` + `recruitmentTasks.skipped` w odpowiedzi.
+  let matches: MatchRecomputeRun | 'disabled' | null = null;
+  if (!recruitment) {
+    matches = 'disabled';
+  } else {
     try {
       matches = await runMatchRecompute();
     } catch (error) {

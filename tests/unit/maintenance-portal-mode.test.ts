@@ -49,7 +49,7 @@ describe('/api/maintenance a tryb portalu (#1143)', () => {
   it('tryb ogłoszeniowy (brak env): bez zadań rekrutacyjnych i bez pytania bazy o tryb', async () => {
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, matches: null, recruitmentTasks: { skipped: 'classifieds_only' } });
+    expect(await res.json()).toMatchObject({ ok: true, matches: 'disabled', recruitmentTasks: { skipped: 'classifieds_only' } });
     expect(called()).not.toContain('recruitment_enabled');
     for (const fn of RECRUITMENT_RPCS) expect(called()).not.toContain(fn);
     for (const fn of CLEANUP_RPCS) expect(called()).toContain(fn);
@@ -60,7 +60,7 @@ describe('/api/maintenance a tryb portalu (#1143)', () => {
     fakeDb.rpc('recruitment_enabled', false);
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ recruitmentTasks: { skipped: 'classifieds_only' } });
+    expect(await res.json()).toMatchObject({ matches: 'disabled', recruitmentTasks: { skipped: 'classifieds_only' } });
     expect(fakeDb.callsTo('recruitment_enabled')).toEqual([expect.objectContaining({ as: 'service' })]);
     expect(called()).not.toContain('match_recompute_claim');
   });
