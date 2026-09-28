@@ -1212,7 +1212,19 @@
     "accountSearchesSub": "{count, plural, =0 {Bez alertów} one {# z alertem} few {# z alertem} many {# z alertem} other {# z alertem}}",
     "accountAlertsOff": "Alerty wyłączone",
     "listingStatsTitle": "Statystyki ogłoszeń",
-    "listingStatsText": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” dla każdej oferty."
+    "listingStatsText": "Oferty z największą liczbą wyświetleń w ostatnich 30 dniach oraz kliknięcia „Aplikuj u pracodawcy”.",
+    "listingTopJobsEmpty": "Żadna oferta nie ma jeszcze wyświetleń w ostatnich 30 dniach. Statystyki pojawią się, gdy kandydaci zaczną oglądać Twoje ogłoszenia.",
+    "listingTopJobsError": "Nie udało się wczytać statystyk ogłoszeń. Spróbuj ponownie.",
+    "listingTopJobsDenied": "Statystyki ogłoszeń widzą właściciel, administrator i rekruterzy firmy.",
+    "savedSearchJobsTitle": "Nowe oferty z Twoich wyszukiwań",
+    "savedSearchJobsNone": "Zapisz wyszukiwanie z wybranymi filtrami, a tutaj zobaczysz najnowsze oferty spełniające Twoje kryteria.",
+    "savedSearchJobsCta": "Przeglądaj oferty i zapisz wyszukiwanie",
+    "savedSearchJobsNoResults": "Twoje zapisane wyszukiwania nie mają teraz żadnych ofert.",
+    "savedSearchJobsError": "Nie udało się wczytać ofert z Twoich zapisanych wyszukiwań. Spróbuj ponownie.",
+    "savedSearchJobsShow": "Pokaż oferty: {name}",
+    "savedSearchJobsFrom": "Wyszukiwanie: {name}",
+    "employerGreetingSubListing": "Witaj {name}! Sprawdź, jak radzą sobie Twoje ogłoszenia.",
+    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
