@@ -10,7 +10,12 @@
 # usuwany ponownie; zły rejestr = odmowa. #569: ta sama kopia w buckecie S3 (atrapa R2
 # tests/helpers/fake-s3-server.mjs: klucz zapisu i klucz odczytu), retencja w buckecie,
 # odtworzenie z R2 (RESTORE_S3_OBJECT=latest) i kontrole ujemne (klucz odczytu nie wyśle
-# kopii, niepełna konfiguracja R2). Wymaga: psql/pg_dump/pg_restore, age, age-keygen, node.
+# kopii, niepełna konfiguracja R2). OPS14-01: odtworzona baza ma uprawnienia źródła
+# (funkcja tylko dla service_role bez EXECUTE dla PUBLIC/anon, SELECT dla authenticated);
+# kontrola ujemna: kopia bez ACL (jak dawne --no-acl) i manifest formatu 1 są odrzucane.
+# Opcjonalnie BACKUP_TEST_FRESH_PGHOST/BACKUP_TEST_FRESH_PGPORT — drugi, pusty klaster
+# (bez ról runtime): odtworzenie tworzy role wg bootstrapu, a rola z LOGIN = odmowa.
+# Wymaga: psql/pg_dump/pg_restore, age, age-keygen, node.
 # Użycie jak test-rls.sh (PGHOST/PGUSER/PGPASSWORD albo peer auth jako postgres).
 # Nie łączy się z internetem (BACKUP_HEARTBEAT_URL nieustawiony).
 # =============================================================================
@@ -19,6 +24,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC_DB=pracujbe_backup_source_ci
 DST_DB=pracujbe_restore_bk_ci
+STRIP_DB=pracujbe_backup_strip_ci
+FRESH_DB=pracujbe_restore_fresh_ci
 unset BACKUP_HEARTBEAT_URL
 
 for bin in age age-keygen pg_dump pg_restore psql node; do
@@ -39,13 +46,34 @@ url() {
     printf 'postgresql:///%s' "$1"
   fi
 }
+fresh=''
+if [ -n "${BACKUP_TEST_FRESH_PGHOST:-}${BACKUP_TEST_FRESH_PGPORT:-}" ]; then
+  fresh=1
+  fresh_psql=(psql -v ON_ERROR_STOP=1 -X -q -h "${BACKUP_TEST_FRESH_PGHOST:-127.0.0.1}"
+    -p "${BACKUP_TEST_FRESH_PGPORT:-5432}" -U "${PGUSER:-postgres}")
+  fresh_url() {
+    local auth="${PGUSER:-postgres}"
+    [ -n "${PGPASSWORD:-}" ] && auth+=":${PGPASSWORD}"
+    printf 'postgresql://%s@%s:%s/%s' "$auth" "${BACKUP_TEST_FRESH_PGHOST:-127.0.0.1}" \
+      "${BACKUP_TEST_FRESH_PGPORT:-5432}" "$1"
+  }
+  RUNTIME_ROLES="'anon','authenticated','service_role','pracujbe_app','pracujbe_auth','pracujbe_auth_mail','pracujbe_ops','pracujbe_rate_limit'"
+  [ "$("${fresh_psql[@]}" -At -d postgres -c "select count(*) from pg_roles where rolname in ($RUNTIME_ROLES)")" = 0 ] \
+    || { echo 'Klaster BACKUP_TEST_FRESH_* ma już role runtime — użyj pustego klastra.'; exit 2; }
+fi
 
 work="$(mktemp -d)"
 recreate() { "${psql_base[@]}" -d postgres -c "drop database if exists $1;" -c "create database $1;" >/dev/null; }
 fake_pid=''
 cleanup() {
   if [ -n "$fake_pid" ]; then kill "$fake_pid" 2>/dev/null || true; fi
-  for db in "$SRC_DB" "$DST_DB"; do "${psql_base[@]}" -d postgres -c "drop database if exists $db;" >/dev/null 2>&1 || true; done
+  for db in "$SRC_DB" "$DST_DB" "$STRIP_DB"; do "${psql_base[@]}" -d postgres -c "drop database if exists $db;" >/dev/null 2>&1 || true; done
+  if [ -n "$fresh" ]; then
+    "${fresh_psql[@]}" -d postgres -c "drop database if exists $FRESH_DB;" >/dev/null 2>&1 || true
+    for r in $(printf '%s' "$RUNTIME_ROLES" | tr -d "'" | tr ',' ' '); do
+      "${fresh_psql[@]}" -d postgres -c "drop role if exists $r;" >/dev/null 2>&1 || true
+    done
+  fi
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -129,6 +157,23 @@ printf '%s\n' "$out" | tail -1
 grep -q '^RESTORE: PASS' <<<"$out" || { echo 'Brak PASS odtworzenia'; exit 1; }
 [ "$("${psql_base[@]}" -At -d "$DST_DB" -c "select string_agg(name, ',' order by name) from public.companies")" \
   = 'Firma-kopii-zaszyfrowanej' ] || { echo 'Dane nie zostały odtworzone'; exit 1; }
+# OPS14-01: uprawnienia jak w źródle (migracje: funkcje wyłącznie dla service_role).
+privileges() {
+  "${psql_base[@]}" -At -d "$1" -c "select concat_ws(',',
+    has_function_privilege('public', 'public.rate_limit_hit(text,integer,integer)', 'execute'),
+    has_function_privilege('anon', 'public.rate_limit_hit(text,integer,integer)', 'execute'),
+    has_function_privilege('service_role', 'public.rate_limit_hit(text,integer,integer)', 'execute'),
+    has_function_privilege('public', 'public.apply_erasure_tombstones(uuid[])', 'execute'),
+    has_function_privilege('authenticated', 'public.apply_erasure_tombstones(uuid[])', 'execute'),
+    has_table_privilege('authenticated', 'public.jobs', 'select'),
+    has_table_privilege('anon', 'public.jobs', 'insert'),
+    has_table_privilege('service_role', 'public.companies', 'select'))"
+}
+EXPECTED_PRIVILEGES='f,f,t,f,f,t,f,t'
+[ "$(privileges "$SRC_DB")" = "$EXPECTED_PRIVILEGES" ] || { echo "Źródło: nieoczekiwane uprawnienia $(privileges "$SRC_DB")"; exit 1; }
+[ "$(privileges "$DST_DB")" = "$EXPECTED_PRIVILEGES" ] \
+  || { echo "Odtworzona baza bez uprawnień źródła: $(privileges "$DST_DB")"; exit 1; }
+echo '>> uprawnienia odtworzone: funkcje service-only bez EXECUTE dla PUBLIC/anon, granty ról runtime'
 # Kontrola ujemna #486: bez rejestru usunięć osoba usunięta po kopii wraca.
 [ "$(erased_rows)" = 3 ] || { echo 'Kontrola: kandydat z kopii powinien wrócić bez rejestru usunięć'; exit 1; }
 echo '>> kontrola ujemna OK: bez rejestru usunięć dane usuniętej osoby wracają'
@@ -170,6 +215,53 @@ cp "$latest" "$tampered/"
 sed -i -E 's/("controlsSha256": ")[0-9a-f]{64}/\1'"$(printf 'c%.0s' $(seq 64))"'/' "${t_art%.dump.age}.json"
 recreate "$DST_DB"
 expect_code 1 'manifest niezgodny z danymi' restore RESTORE_ARCHIVE="$t_art"
+
+# OPS14-01, kontrola ujemna: kopia bez ACL (jak dawne pg_dump/pg_restore --no-acl) z manifestem
+# źródła. Dane, RLS i liczności są zgodne — odmowa wynika wyłącznie z odcisku uprawnień.
+stripped="$work/stripped"; mkdir -p "$stripped"
+s_art="$stripped/$(basename "$latest")"
+age --decrypt --identity "$work/identity.txt" --output "$work/strip.dump" "$latest"
+recreate "$STRIP_DB"
+pg_restore --no-owner --no-acl --exit-on-error --single-transaction --dbname="$(url "$STRIP_DB")" "$work/strip.dump"
+pg_dump --format=custom --no-owner --file="$work/stripped.dump" --dbname="$(url "$STRIP_DB")"
+age --encrypt --recipients-file "$work/recipients.txt" --output "$s_art" "$work/stripped.dump"
+rm -f "$work/strip.dump" "$work/stripped.dump"
+sed -E 's/("sha256Encrypted": ")[0-9a-f]{64}/\1'"$(sha256sum "$s_art" | cut -d' ' -f1)"'/' \
+  "${latest%.dump.age}.json" >"${s_art%.dump.age}.json"
+recreate "$DST_DB"
+code=0; err="$(restore RESTORE_ARCHIVE="$s_art" 2>&1 >/dev/null)" || code=$?
+[ "$code" = 1 ] && grep -q 'Niezgodność uprawnień' <<<"$err" \
+  || { echo "Kontrola ujemna 'kopia bez ACL': kod $code, $err"; exit 1; }
+[ "$(privileges "$DST_DB")" != "$EXPECTED_PRIVILEGES" ] \
+  || { echo 'Kontrola ujemna bez ACL nie odtworzyła wady (test nic nie sprawdza)'; exit 1; }
+echo '>> kontrola ujemna OK: kopia bez uprawnień (EXECUTE dla PUBLIC) odrzucona'
+
+recreate "$DST_DB"
+cp "$latest" "$tampered/"
+sed -E 's#"pracujbe-backup/2"#"pracujbe-backup/1"#' "${latest%.dump.age}.json" >"${t_art%.dump.age}.json"
+expect_code 2 'manifest formatu 1 (kopia bez uprawnień)' restore RESTORE_ARCHIVE="$t_art"
+
+if [ -n "$fresh" ]; then
+  echo '>> OPS14-01: odtworzenie na pustym klastrze (role tworzone wg bootstrapu)'
+  "${fresh_psql[@]}" -d postgres -c "drop database if exists $FRESH_DB;" -c "create database $FRESH_DB;" >/dev/null
+  out="$(restore RESTORE_TARGET_URL="$(fresh_url "$FRESH_DB")")"
+  printf '%s\n' "$out" | tail -1
+  grep -q '^RESTORE: PASS' <<<"$out" && grep -q '^RESTORE: utworzono role' <<<"$out" \
+    || { echo 'Brak PASS odtworzenia na pustym klastrze'; exit 1; }
+  [ "$("${fresh_psql[@]}" -At -d postgres -c "select string_agg(format('%s:%s%s', rolname, rolcanlogin::int, rolbypassrls::int), ',' order by rolname)
+      from pg_roles where rolname in ('anon','service_role','pracujbe_app')")" = 'anon:00,pracujbe_app:00,service_role:01' ] \
+    && [ "$("${fresh_psql[@]}" -At -d postgres -c "select count(*) from pg_auth_members m join pg_roles r on r.oid = m.member
+      where r.rolname = 'pracujbe_app'")" = 2 ] || { echo 'Role na pustym klastrze niezgodne z bootstrapem'; exit 1; }
+  echo '>> kontrola ujemna: rola runtime z LOGIN na celu'
+  "${fresh_psql[@]}" -d postgres -c "drop database $FRESH_DB;" -c "create database $FRESH_DB;" \
+    -c "alter role anon login" >/dev/null
+  code=0; err="$(restore RESTORE_TARGET_URL="$(fresh_url "$FRESH_DB")" 2>&1 >/dev/null)" || code=$?
+  [ "$code" = 1 ] && grep -q 'Niezgodność uprawnień' <<<"$err" \
+    || { echo "Kontrola ujemna 'rola z LOGIN': kod $code, $err"; exit 1; }
+  echo '>> kontrola ujemna OK: rola runtime z LOGIN na celu = odmowa'
+else
+  echo '>> (pominięto pusty klaster: ustaw BACKUP_TEST_FRESH_PGHOST/BACKUP_TEST_FRESH_PGPORT)'
+fi
 
 recreate "$DST_DB"
 expect_code 2 'niedozwolona nazwa celu' restore RESTORE_TARGET_URL="$(url postgres)"

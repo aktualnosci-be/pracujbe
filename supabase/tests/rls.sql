@@ -4337,6 +4337,75 @@ select pg_temp.expect_error('select * from public.company_vies_checks',
 reset role;
 
 -- ============================================================================
+-- VA164. Automatyczne sprawdzenie VIES po założeniu firmy (0164, decyzja 26.09.2026)
+-- Zapis tylko service_role, tylko wynik rozstrzygający, bez nadpisywania istniejącego
+-- wyniku (np. admina), tylko dla bieżącego numeru firmy; status firmy bez zmian.
+-- ============================================================================
+\set COMPVA '00000000-0000-0000-0000-000000000a97'
+insert into public.companies(id, name, status, vat_number)
+  values (:'COMPVA', 'Firma VA', 'unverified', 'BE 0417.497.106');
+
+-- VA164-1: service_role zapisuje wynik ważny; checked_by = null (system); audyt z source=auto.
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0417497106', 'valid', ' NV VA ', date '2026-09-26') as va_saved \gset
+reset role;
+select pg_temp.assert(:'va_saved' = 't', 'VA164-1 wynik zapisany (true)');
+select pg_temp.assert(
+  (select result = 'valid' and vies_name = 'NV VA' and checked_by is null and vat_number = '0417497106'
+     from public.company_vies_checks where company_id = :'COMPVA'),
+  'VA164-1b wynik z nazwą, bez admina (system)');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPVA') = 'unverified',
+  'VA164-1c automatyczny wynik nie zmienia statusu firmy');
+select pg_temp.assert(
+  (select after_data = '{"result":"valid","source":"auto"}'::jsonb and actor_id is null
+     from public.audit_logs
+    where entity_id = :'COMPVA' and action = 'company.vies_checked'
+    order by created_at desc limit 1),
+  'VA164-1d audyt company.vies_checked z source=auto, bez numeru i nazwy');
+
+-- VA164-2: KONTROLA UJEMNA — nie nadpisuje istniejącego wyniku (np. ręcznego sprawdzenia admina).
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0417497106', 'invalid') as va_again \gset
+reset role;
+select pg_temp.assert(:'va_again' = 'f', 'VA164-2 drugi zapis zwraca false');
+select pg_temp.assert(
+  (select result from public.company_vies_checks where company_id = :'COMPVA') = 'valid',
+  'VA164-2b istniejący wynik zostaje');
+
+-- VA164-3: numer inny niż bieżący VAT firmy → brak zapisu (zmiana numeru w trakcie).
+delete from public.company_vies_checks where company_id = :'COMPVA';
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0403170701', 'valid') as va_stale \gset
+reset role;
+select pg_temp.assert(:'va_stale' = 'f'
+  and not exists (select 1 from public.company_vies_checks where company_id = :'COMPVA'),
+  'VA164-3 numer niezgodny z bieżącym VAT firmy nie jest zapisywany');
+
+-- VA164-4: stan nierozstrzygający i zły format odrzucone.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''unavailable'')', :'COMPVA'),
+  'RESULT_NOT_PERSISTABLE', 'VA164-4 awaria VIES nie jest zapisywana');
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0123456789'', ''valid'')', :'COMPVA'),
+  'VAT_FORMAT', 'VA164-4b zła suma kontrolna odrzucona');
+reset role;
+
+-- VA164-5: KONTROLA UJEMNA — pracodawca i anon bez EXECUTE.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''valid'')', :'COMPVA'),
+  'permission denied', 'VA164-5 pracodawca nie zapisze wyniku VIES');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''valid'')', :'COMPVA'),
+  'permission denied', 'VA164-5b anon bez EXECUTE');
+reset role;
+
+
+-- ============================================================================
 -- ML44 (#44, 0098): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
 -- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
 -- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
@@ -15185,6 +15254,203 @@ select pg_temp.assert(
   (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
+-- GC163. Sprzątanie tabel technicznych z /api/maintenance (K2, migracja 0163).
+--        rate_limit_gc i processed_webhooks_gc: EXECUTE tylko service_role;
+--        limiter nie traci trwających okien (dolna granica doby), inbox webhooków nie
+--        traci wpisów `processing` ani świeżych (dolna granica 7 dni).
+-- ============================================================================
+reset role; reset app.current_uid;
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc193:old',   now() - interval '3 days',  5, now() - interval '2 days'),
+  ('gc193:fresh', now() - interval '2 hours', 1, now() - interval '2 hours');
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc193:done-old',   'emaillabs', 'completed',  now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:failed-old', 'emaillabs', 'failed',     now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:proc-old',   'emaillabs', 'processing', now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:done-3d',    'emaillabs', 'completed',  now() - interval '3 days',  now() - interval '3 days');
+
+-- GC163-1: klient bez EXECUTE.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied', 'GC163-1 anon nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30)', 'permission denied', 'GC163-1b anon nie wywoła processed_webhooks_gc');
+reset role;
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied', 'GC163-1c authenticated nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30)', 'permission denied', 'GC163-1d authenticated nie wywoła processed_webhooks_gc');
+reset role;
+
+-- GC163-2: service_role — nawet z argumentem 1 s limiter usuwa tylko wiersz starszy niż doba.
+set role service_role;
+select public.rate_limit_gc(1);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.rate_limits where key = 'gc193:old')
+  and exists (select 1 from public.rate_limits where key = 'gc193:fresh'),
+  'GC163-2 rate_limit_gc usuwa okno sprzed doby, trwające (2 h) zostaje mimo argumentu 1 s');
+
+-- GC163-3: service_role — z argumentem 1 dzień inbox usuwa tylko rozstrzygnięte wpisy > 7 dni.
+set role service_role;
+select public.processed_webhooks_gc(1);
+reset role;
+select pg_temp.assert(
+  (select array_agg(id order by id) from public.processed_webhooks where id like 'gc193:%')
+  = array['gc193:done-3d', 'gc193:proc-old'],
+  'GC163-3 processed_webhooks_gc usuwa completed/failed > 7 dni, zostawia processing i świeże');
+
+-- KONTROLA UJEMNA: definicje sprzed 0163 — bez grantu service_role dostaje permission denied,
+-- a bez dolnej granicy argument 1 s kasuje trwające okno limitera.
+begin;
+revoke execute on function public.rate_limit_gc(integer) from service_role;
+set local role service_role;
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied',
+  'GC163-N1 bez grantu 0163 maintenance dostaje permission denied');
+reset role;
+create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400)
+returns integer language plpgsql security definer set search_path = public as $gcneg$
+declare v_deleted integer;
+begin
+  delete from public.rate_limits
+    where updated_at < now() - make_interval(secs => p_older_than_seconds);
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end $gcneg$;
+select public.rate_limit_gc(1);
+select pg_temp.assert(
+  not exists (select 1 from public.rate_limits where key = 'gc193:fresh'),
+  'GC163-N2 definicja z 0015 (bez dolnej granicy) kasuje trwające okno — granica z 0163 jest potrzebna');
+rollback;
+reset role;
+delete from public.rate_limits where key like 'gc193:%';
+delete from public.processed_webhooks where id like 'gc193:%';
+
+-- ============================================================================
+-- SV162. Zapisane oferty ze stanem oferty (0162): `get_saved_jobs_display` zwraca KAŻDY
+--        własny zapis z `job_availability` (available/closed/expired/paused/unavailable),
+--        `slug` WYŁĄCZNIE dla oferty publicznej (brak linku do 404), tytuł i firmę dla każdego
+--        stanu; kandydat usuwa zapis oferty niedostępnej pod RLS.
+--        Kontrola ujemna: definicja z 0066 (tylko oferty publiczne) gubi 5 z 6 zapisów.
+-- ============================================================================
+begin;
+reset role; reset app.current_uid;
+\set CANDSV  'e2150000-0000-0000-0000-00000000000c'
+\set CANDSV2 'e2150000-0000-0000-0000-00000000000d'
+\set COMPSV  'e2150000-0000-0000-0000-0000000000f1'
+\set COMPSV2 'e2150000-0000-0000-0000-0000000000f2'
+\set JSV1    'e2150000-0000-0000-0000-0000000000b1'
+\set JSV2    'e2150000-0000-0000-0000-0000000000b2'
+\set JSV3    'e2150000-0000-0000-0000-0000000000b3'
+\set JSV4    'e2150000-0000-0000-0000-0000000000b4'
+\set JSV5    'e2150000-0000-0000-0000-0000000000b5'
+\set JSV6    'e2150000-0000-0000-0000-0000000000b6'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CANDSV','candsv@test.be','Ola S','{"role":"candidate","first_name":"Ola","last_name":"S","locale":"pl"}'),
+  (:'CANDSV2','candsv2@test.be','Ewa S','{"role":"candidate","first_name":"Ewa","last_name":"S","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'COMPSV','Firma SV','verified'),
+  (:'COMPSV2','Firma SV2','verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'JSV1',:'COMPSV','sv-otwarta','Otwarta SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV2',:'COMPSV','sv-zamknieta','Zamknięta SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV3',:'COMPSV','sv-po-terminie','Po terminie SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV4',:'COMPSV','sv-wstrzymana','Wstrzymana SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV5',:'COMPSV','sv-usunieta','Usunięta SV','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'JSV6',:'COMPSV2','sv-firma-zawieszona','Firma zawieszona SV','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- Zapis pod sesją kandydata (RLS saved_jobs_insert_own), gdy wszystkie oferty są publiczne.
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+insert into public.saved_jobs(candidate_id, job_id)
+  select :'CANDSV'::uuid, j from unnest(array[:'JSV1',:'JSV2',:'JSV3',:'JSV4',:'JSV5',:'JSV6']::uuid[]) j;
+reset role; reset app.current_uid;
+
+-- Stany po zapisie (bez crona expire_due_jobs: termin = now()).
+update public.jobs set status = 'closed' where id = :'JSV2';
+update public.jobs set expires_at = now() where id = :'JSV3';
+update public.jobs set status = 'paused' where id = :'JSV4';
+update public.jobs set deleted_at = now() where id = :'JSV5';
+update public.companies set status = 'suspended' where id = :'COMPSV2';
+
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+-- SV1: żaden zapis nie znika.
+select pg_temp.assert(
+  (select count(*) from public.get_saved_jobs_display('pl')) = 6,
+  'SV1 każdy własny zapis wraca, także oferty niedostępne');
+-- SV2: klasyfikacja każdego stanu.
+select pg_temp.assert(
+  (select string_agg(job_availability, ',' order by id) from public.get_saved_jobs_display('pl'))
+    = 'available,closed,expired,paused,closed,unavailable',
+  'SV2 otwarta=available, zamknięta=closed, po terminie=expired, wstrzymana=paused, usunięta=closed, firma zawieszona=unavailable');
+-- SV3: slug tylko dla oferty publicznej; dokładnie wtedy, gdy get_public_job ją pokazuje.
+select pg_temp.assert(
+  (select string_agg(slug, ',') from public.get_saved_jobs_display('pl') where slug is not null) = 'sv-otwarta',
+  'SV3 slug wyłącznie dla oferty publicznej (brak linku do 404)');
+select pg_temp.assert(
+  exists (select 1 from public.get_public_job('sv-otwarta', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-zamknieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-po-terminie', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-wstrzymana', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-usunieta', 'pl'))
+  and not exists (select 1 from public.get_public_job('sv-firma-zawieszona', 'pl')),
+  'SV3b oferty bez slugu nie mają strony publicznej');
+-- SV4: tytuł i firma zostają dla każdego stanu.
+select pg_temp.assert(
+  (select bool_and(title <> '' and company_name like 'Firma SV%') from public.get_saved_jobs_display('pl')),
+  'SV4 tytuł i firma dla każdego stanu');
+reset role; reset app.current_uid;
+
+-- SV5: izolacja — inny kandydat nie widzi cudzych zapisów.
+set role authenticated; set app.current_uid = :'CANDSV2'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_saved_jobs_display('pl')) = 0,
+  'SV5 cudze zapisy niewidoczne');
+-- SV5b: cudzego zapisu nie usunie (RLS saved_jobs_delete_own).
+delete from public.saved_jobs where job_id = :'JSV2';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.saved_jobs where candidate_id = :'CANDSV') = 6,
+  'SV5b inny kandydat nie usuwa cudzego zapisu');
+
+-- SV6: kandydat usuwa zapis oferty zamkniętej pod RLS (akcja „Usuń z zapisanych”).
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+delete from public.saved_jobs where candidate_id = :'CANDSV' and job_id = :'JSV2';
+select pg_temp.assert(
+  not exists (select 1 from public.get_saved_jobs_display('pl') where id = :'JSV2')
+  and (select count(*) from public.get_saved_jobs_display('pl')) = 5,
+  'SV6 usunięty zapis oferty zamkniętej znika z listy');
+reset role; reset app.current_uid;
+
+-- SV7: granty — tylko authenticated.
+select pg_temp.assert(
+  not has_function_privilege('anon', 'public.get_saved_jobs_display(text)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.get_saved_jobs_display(text)', 'EXECUTE'),
+  'SV7 anon bez EXECUTE, authenticated z EXECUTE');
+
+-- SV-N (kontrola ujemna): definicja z 0066 (filtr ofert publicznych) — zapisy niedostępnych
+-- ofert znikają bez śladu; SV1 wykrywa regresję.
+savepoint sv_neg;
+drop function public.get_saved_jobs_display(text);
+create function public.get_saved_jobs_display(p_locale text default 'pl')
+returns table (id uuid, slug text, title text, company_name text, city text)
+language sql stable security definer set search_path = public as $$
+  select j.id, j.slug, j.title, c.name, j.city
+  from public.saved_jobs s
+  join public.jobs j on j.id = s.job_id
+  join public.companies c on c.id = j.company_id
+  where s.candidate_id = auth.uid()
+    and j.status = 'active' and j.deleted_at is null
+    and (j.expires_at is null or j.expires_at > now())
+    and c.status = 'verified' and c.deleted_at is null;
+$$;
+grant execute on function public.get_saved_jobs_display(text) to authenticated;
+set role authenticated; set app.current_uid = :'CANDSV'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_saved_jobs_display('pl')) = 1,
+  'SV-N definicja z 0066 gubi zapisy ofert niedostępnych — SV1 wykrywa regresję');
+reset role; reset app.current_uid;
+rollback to savepoint sv_neg;
+rollback;
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- CN143. Nazwa firmy w wiadomościach kandydata (0143, #25): kandydat czyta nazwę firmy
 --        drugiej strony rozmowy przez `get_conversation_summaries`/`get_conversation_company_name`
@@ -15463,112 +15729,140 @@ reset role;
 rollback;
 reset role; reset app.current_uid;
 
--- ============================================================================
--- AV157. Stan oferty w historii kandydata (0157): `get_applied_jobs_display` i
---        `get_offered_jobs_display` zwracają `job_availability` (available/expired/closed/
---        unavailable), a `slug` WYŁĄCZNIE dla oferty publicznej — panel nie linkuje do strony
---        publicznej, która odpowiada 404. Tytuł i firma zostają dla każdego stanu.
---        Kontrola ujemna: definicja sprzed 0157 (slug bez warunku) daje link do zamkniętej oferty.
--- ============================================================================
+-- =============================================================================
+-- TM160 (#33, 0160): przekład tytułu i wyróżników kart listy ofert.
+-- `get_public_jobs_machine_titles(ids[], locale)` — jedno wywołanie na stronę listy; wiersz
+-- tylko dla oferty publicznej z przekładem bieżącej rewizji, języka bez własnego tłumaczenia;
+-- tylko pola karty (title, highlights.N); najwyżej 100 identyfikatorów. Kontrola ujemna
+-- TM160-N: bez warunku bieżącej rewizji anon dostaje tytuł starej treści po edycji.
+-- =============================================================================
+\echo '--- TM160 public jobs machine titles (list) ---'
+\set TLCO 'f2260000-0000-0000-0000-0000000000c1'
+\set TLJ1 'f2260000-0000-0000-0000-0000000000a1'
+\set TLJ2 'f2260000-0000-0000-0000-0000000000a2'
+reset role; reset app.current_uid;
 begin;
-reset role; reset app.current_uid;
-\set CANDAV 'e2060000-0000-0000-0000-00000000000c'
-\set RECAV  'e2060000-0000-0000-0000-0000000000a1'
-\set COMPAV 'e2060000-0000-0000-0000-0000000000f1'
-\set JAV1   'e2060000-0000-0000-0000-0000000000b1'
-\set JAV2   'e2060000-0000-0000-0000-0000000000b2'
-\set JAV3   'e2060000-0000-0000-0000-0000000000b3'
-\set JAV4   'e2060000-0000-0000-0000-0000000000b4'
-insert into auth.users(id,email,name,raw_user_meta_data) values
-  (:'CANDAV','candav@test.be','Ada V','{"role":"candidate","first_name":"Ada","last_name":"V","locale":"pl"}'),
-  (:'RECAV','recav@test.be','Rik V','{"role":"employer","first_name":"Rik","last_name":"V","locale":"nl"}');
-select test_fixture.attest_candidates();
-insert into public.companies(id,name,status) values (:'COMPAV','Firma AV','verified');
-insert into public.company_members(company_id,profile_id,role,is_active) values (:'COMPAV',:'RECAV','owner',true);
-insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
-  (:'JAV1',:'COMPAV','av-otwarta','Otwarta AV','warehouse','permanent','Gent','Flandria','active','pl'),
-  (:'JAV2',:'COMPAV','av-zamknieta','Zamknięta AV','warehouse','permanent','Gent','Flandria','active','pl'),
-  (:'JAV3',:'COMPAV','av-po-terminie','Po terminie AV','warehouse','permanent','Gent','Flandria','active','pl'),
-  (:'JAV4',:'COMPAV','av-wstrzymana','Wstrzymana AV','warehouse','permanent','Gent','Flandria','active','pl');
-insert into public.candidate_profiles(profile_id, is_searchable) values (:'CANDAV', false);
+set constraints all immediate;
+select count(public.deactivate_translation_source(entity_type, entity_id, false)) from public.translation_sources;
+insert into public.companies(id, name, status) values (:'TLCO', 'Firma TM160', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TLJ1', :'TLCO', 'tm226-oferta-1', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl'),
+         (:'TLJ2', :'TLCO', 'tm226-oferta-2', 'Heftruckchauffeur', 'warehouse', 'permanent', 'Gent', 'Vlaanderen',
+          'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities, highlights)
+  values (:'TLJ1', 'nl', 'Magazijnmedewerker', 'Werk vanaf 8:00.', array['Orders verzamelen'],
+          array['Parking', 'Nachtploeg']),
+         (:'TLJ2', 'nl', 'Heftruckchauffeur', 'Werk vanaf 6:00.', array['Heftruck rijden'], array['Parking']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'TLJ1', 'nl', 'mandatory', 0, 'VCA-certificaat'),
+  (:'TLJ2', 'nl', 'mandatory', 0, 'Heftruckattest');
+update public.jobs set status = 'active', published_at = now() where id in (:'TLJ1', :'TLJ2');
+create temp table tm226_claim on commit drop as select * from public.claim_translation_jobs(100, 300);
+select job_id as tl_en, lease_id as tl_en_lease, fields::text as tl_f1
+  from tm226_claim where entity_id = :'TLJ1' and target_locale = 'en' \gset
+set local role service_role;
+select pg_temp.assert(public.complete_translation_job(:'tl_en', :'tl_en_lease',
+  (:'tl_f1'::jsonb) || jsonb_build_object('title', 'Warehouse worker', 'description', 'Work from 8:00.',
+    'responsibilities.0', 'Order picking', 'requirements_mandatory.0', 'VCA certificate',
+    'highlights.0', 'Parking', 'highlights.1', 'Night shift')) = 'applied', 'TM160-0 przekład en oferty 1 zastosowany');
+reset role;
 
-set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
-select public.apply_to_job(:'JAV1'::uuid, 'av-app-1', null, null, null) is not null as av1 \gset
-select public.apply_to_job(:'JAV2'::uuid, 'av-app-2', null, null, null) is not null as av2 \gset
-select public.apply_to_job(:'JAV3'::uuid, 'av-app-3', null, null, null) is not null as av3 \gset
-select public.apply_to_job(:'JAV4'::uuid, 'av-app-4', null, null, null) is not null as av4 \gset
-reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'RECAV'; select pg_temp.assert_client_role();
-select public.send_offer(:'JAV2'::uuid, :'CANDAV'::uuid, 'av-offer-2', null, null) is not null as avo2 \gset
-reset role; reset app.current_uid;
+-- TM160-1: jedno wywołanie dla całej strony — wiersz tylko dla oferty z przekładem (2 bez
+-- przekładu en = brak wiersza), tylko pola karty.
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) = 1 from public.get_public_jobs_machine_titles(
+    array[:'TLJ1', :'TLJ2']::uuid[], 'en')),
+  'TM160-1a jeden wiersz: tylko oferta z przekładem');
+select pg_temp.assert((select job_id = :'TLJ1' and source_locale = 'nl' and origin = 'ai'
+    and fields = jsonb_build_object('title', 'Warehouse worker', 'highlights.0', 'Parking', 'highlights.1', 'Night shift')
+  from public.get_public_jobs_machine_titles(array[:'TLJ1', :'TLJ2']::uuid[], 'en')),
+  'TM160-1b tylko title i highlights.N (bez opisu, list i wymagań)');
+-- TM160-2: język źródła, język bez przekładu, język spoza serwisu, NULL i pusta tablica = brak wierszy.
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'nl'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'fr'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'de'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles(null, 'en'))
+  and not exists (select 1 from public.get_public_jobs_machine_titles('{}'::uuid[], 'en')),
+  'TM160-2 język źródła / bez przekładu / spoza serwisu / brak id = brak wierszy');
+-- TM160-3: najwyżej 100 identyfikatorów — oferta na 101. pozycji nie jest czytana.
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(
+    array(select gen_random_uuid() from generate_series(1, 100)) || array[:'TLJ1']::uuid[], 'en'))
+  and exists (select 1 from public.get_public_jobs_machine_titles(
+    array(select gen_random_uuid() from generate_series(1, 99)) || array[:'TLJ1']::uuid[], 'en')),
+  'TM160-3 limit 100 identyfikatorów na wywołanie');
+reset role;
 
--- Stany po aplikacji: JAV2 zamknięta, JAV3 z terminem = now() (bez crona expire_due_jobs),
--- JAV4 wstrzymana.
-update public.jobs set status = 'closed' where id = :'JAV2';
-update public.jobs set expires_at = now() where id = :'JAV3';
-update public.jobs set status = 'paused' where id = :'JAV4';
+-- TM160-4: własne tłumaczenie en ma pierwszeństwo.
+savepoint tl_human;
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TLJ1', 'en', 'Warehouse operative', 'Human text.');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-4 własne tłumaczenie en: przekład AI karty nie jest zwracany');
+reset role;
+rollback to savepoint tl_human;
 
-set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
--- AV1: klasyfikacja każdego stanu.
-select pg_temp.assert(
-  (select string_agg(job_availability, ',' order by job_id) from public.get_applied_jobs_display('pl'))
-    = 'available,closed,expired,unavailable',
-  'AV1 job_availability: otwarta=available, wstrzymana=unavailable, zamknięta=closed, po terminie=expired');
--- AV2: slug tylko dla oferty publicznej; tytuł i firma dla każdego stanu.
-select pg_temp.assert(
-  (select slug from public.get_applied_jobs_display('pl') where job_id = :'JAV1') = 'av-otwarta',
-  'AV2 oferta publiczna ma slug');
-select pg_temp.assert(
-  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 1,
-  'AV2b zamknięta/po terminie/wstrzymana bez slugu (brak linku do 404)');
-select pg_temp.assert(
-  (select bool_and(title <> '' and company_name = 'Firma AV') from public.get_applied_jobs_display('pl')),
-  'AV2c tytuł i firma zostają dla każdego stanu');
--- AV3: slug jest dokładnie wtedy, gdy strona publiczna istnieje (get_public_job).
-select pg_temp.assert(
-  exists (select 1 from public.get_public_job('av-otwarta', 'pl'))
-  and not exists (select 1 from public.get_public_job('av-zamknieta', 'pl'))
-  and not exists (select 1 from public.get_public_job('av-po-terminie', 'pl'))
-  and not exists (select 1 from public.get_public_job('av-wstrzymana', 'pl')),
-  'AV3 slug zwracamy dokładnie dla ofert, które get_public_job pokazuje');
--- AV4: historia propozycji — ten sam kontrakt.
-select pg_temp.assert(
-  (select job_availability = 'closed' and slug is null and title = 'Zamknięta AV'
-     from public.get_offered_jobs_display('pl') where job_id = :'JAV2'),
-  'AV4 get_offered_jobs_display: zamknięta oferta bez slugu, z tytułem');
-reset role; reset app.current_uid;
+-- TM160-5: oferta wstrzymana, wygasła i firma zawieszona = brak wiersza (tylko oferty publiczne).
+savepoint tl_paused;
+update public.jobs set status = 'paused' where id = :'TLJ1';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-5a oferta wstrzymana: brak przekładu karty');
+reset role;
+rollback to savepoint tl_paused;
+savepoint tl_expired;
+update public.jobs set expires_at = now() - interval '1 minute' where id = :'TLJ1';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-5b oferta wygasła: brak przekładu karty');
+reset role;
+rollback to savepoint tl_expired;
+savepoint tl_suspended;
+update public.companies set status = 'suspended' where id = :'TLCO';
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-5c firma zawieszona: brak przekładu karty');
+reset role;
+rollback to savepoint tl_suspended;
 
--- AV5: firma zawieszona → unavailable (strona publiczna wymaga firmy verified).
-update public.companies set status = 'suspended' where id = :'COMPAV';
-set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
-select pg_temp.assert(
-  (select job_availability = 'unavailable' and slug is null
-     from public.get_applied_jobs_display('pl') where job_id = :'JAV1'),
-  'AV5 oferta aktywna firmy zawieszonej = unavailable, bez slugu');
-reset role; reset app.current_uid;
-update public.companies set status = 'verified' where id = :'COMPAV';
+-- TM160-6: edycja treści = nowa rewizja; przekład starej treści nie trafia na kartę.
+update public.job_translations set title = 'Magazijnmedewerker nacht' where job_id = :'TLJ1' and locale = 'nl';
+select pg_temp.assert((select is_stale from public.translation_documents
+  where entity_type = 'job' and entity_id = :'TLJ1' and locale = 'en'), 'TM160-6a przekład en oznaczony jako nieaktualny');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-6 po edycji tytuł starej treści nie jest zwracany');
+reset role;
 
--- AV6: granty — tylko authenticated.
-select pg_temp.assert(
-  not has_function_privilege('anon', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.get_offered_jobs_display(text)', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.get_applied_jobs_display(text, uuid[])', 'EXECUTE')
-  and has_function_privilege('authenticated', 'public.get_offered_jobs_display(text)', 'EXECUTE'),
-  'AV6 anon bez EXECUTE, authenticated z EXECUTE');
+-- TM160-7: granty — anon/authenticated tylko EXECUTE RPC; tabele kolejki nadal bez dostępu.
+select pg_temp.assert(has_function_privilege('anon', 'public.get_public_jobs_machine_titles(uuid[], text)', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_machine_titles(uuid[], text)', 'execute')
+  and not has_table_privilege('anon', 'public.translation_documents', 'select'),
+  'TM160-7 anon: EXECUTE RPC, bez SELECT na translation_documents');
 
--- AV-N (kontrola ujemna): slug bez warunku dostępności (jak przed 0157) → link do zamkniętej
--- oferty; AV2b wykrywa regresję.
-savepoint av_neg;
-create or replace function public.candidate_job_availability(
-  p_status public.job_status, p_deleted_at timestamptz, p_expires_at timestamptz,
-  p_company_status public.company_status, p_company_deleted_at timestamptz
-) returns text language sql stable as $$ select 'available'::text $$;
-set role authenticated; set app.current_uid = :'CANDAV'; select pg_temp.assert_client_role();
-select pg_temp.assert(
-  (select count(*) from public.get_applied_jobs_display('pl') where slug is not null) = 4,
-  'AV-N bez klasyfikacji zamknięta oferta dostaje link — AV2b wykrywa regresję');
-reset role; reset app.current_uid;
-rollback to savepoint av_neg;
+-- TM160-N (kontrola ujemna): bez warunku bieżącej rewizji anon dostałby na karcie tytuł
+-- przekładu starej treści (TM160-6 wykrywa taką regresję).
+savepoint tl_neg;
+create or replace function public.get_public_jobs_machine_titles(p_job_ids uuid[], p_locale text)
+returns table (job_id uuid, source_locale text, origin text, fields jsonb)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select j.id, r.source_locale, d.origin, d.fields
+    from public.jobs j
+    join public.translation_sources s on s.entity_type = 'job' and s.entity_id = j.id
+    join public.translation_source_revisions r on r.id = s.current_revision_id
+    join public.translation_documents d on d.entity_type = 'job' and d.entity_id = j.id and d.locale = p_locale
+   where j.id = any (p_job_ids) and j.status = 'active' and s.is_active;
+$$;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-N kontrola ujemna: bez warunku rewizji zwracany jest tytuł starej treści');
+reset role;
+rollback to savepoint tl_neg;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.get_public_jobs_machine_titles(array[:'TLJ1']::uuid[], 'en')),
+  'TM160-Nb poprawna funkcja znów nie zwraca nieaktualnego przekładu');
+reset role;
 rollback;
 reset role; reset app.current_uid;
 
@@ -16117,10 +16411,257 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- CMI900. Kolumny tożsamości członkostwa firmy niezmienne poza RPC (0900) oraz dostęp
+-- ER161. Eksport i usunięcie konta pracodawcy (#486, migracja 0161)
+-- ============================================================================
+\echo '--- ER161 eksport i usunięcie konta pracodawcy ---'
+\set ER1 'e2090000-0000-4000-8000-000000000001'
+\set ER2 'e2090000-0000-4000-8000-000000000002'
+\set ER3 'e2090000-0000-4000-8000-000000000003'
+\set ER4 'e2090000-0000-4000-8000-000000000004'
+\set ERC 'e2090000-0000-4000-8000-0000000000c1'
+\set ERCO1 'e2090000-0000-4000-8000-0000000000a1'
+\set ERCO2 'e2090000-0000-4000-8000-0000000000a2'
+\set ERCO3 'e2090000-0000-4000-8000-0000000000a3'
+\set ERJ 'e2090000-0000-4000-8000-0000000000b1'
+\set ERF 'e2090000-0000-4000-8000-0000000000f1'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ER1','er1@test.be','Ewa R','{"role":"employer","first_name":"Ewa","last_name":"R","locale":"nl"}'),
+  (:'ER2','er2@test.be','Eryk S','{"role":"employer","first_name":"Eryk","last_name":"S","locale":"fr"}'),
+  (:'ER3','er3@test.be','Ela T','{"role":"employer","first_name":"Ela","last_name":"T","locale":"en"}'),
+  (:'ER4','er4@test.be','Emil U','{"role":"employer","first_name":"Emil","last_name":"U","locale":"pl"}'),
+  (:'ERC','erc@test.be','Kandydat Erka','{"role":"candidate","first_name":"Kandydat","last_name":"Erka","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'ERC', false);
+insert into public.companies(id, name, status) values
+  (:'ERCO1', 'Firma ER Wspólna', 'verified'), (:'ERCO2', 'Firma ER Druga', 'verified'),
+  (:'ERCO3', 'Firma ER Solo', 'verified');
+insert into public.employer_profiles(profile_id, primary_company_id, job_title, phone)
+  values (:'ER1', :'ERCO1', 'Kierowniczka HR', '+32 470 00 00 01');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'ERCO1', :'ER1', 'owner', true), (:'ERCO1', :'ER2', 'owner', true),
+  (:'ERCO2', :'ER2', 'owner', true), (:'ERCO2', :'ER1', 'recruiter', true),
+  (:'ERCO3', :'ER3', 'owner', true), (:'ERCO3', :'ER4', 'member', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,created_by) values
+  (:'ERJ', :'ERCO1', 'er-job-1', 'Magazynier ER', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl', :'ER1');
+insert into public.files(id, owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility)
+  values (:'ERF', :'ER1', 'candidate-files', :'ER1' || '/doc-er1.pdf', 'doc-er1.pdf', 'application/pdf', 100, 'employer_document', 'private');
+insert into auth.sessions(id, user_id, token, expires_at)
+  values (gen_random_uuid(), :'ER1', 'er1-session-token', now() + interval '1 day');
+
+-- Proces: kandydat aplikuje, ER1 zmienia status, wysyła propozycję i wiadomość, zaprasza osobę.
+set role authenticated; set app.current_uid = :'ERC'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'ERJ', 'erc-apply', null, null, 'Tekst kandydata ER') as erapp \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select public.transition_application(:'erapp'::uuid, 'viewed');
+select public.send_offer(:'ERJ'::uuid, :'ERC'::uuid, 'er1-offer', 'Propozycja ER', null) as eroff \gset
+select public.get_or_create_conversation(:'erapp'::uuid, null) as erconv \gset
+select public.send_message(:'erconv'::uuid, 'Wiadomość rekruterki ER', gen_random_uuid());
+select invitation_id as erinv
+  from public.invite_company_member(:'ERCO1', 'nowa.osoba@test.be', 'recruiter', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+reset role; reset app.current_uid;
+
+-- ER161-1: role klienta — anon bez dostępu, kandydat nie korzysta ze ścieżek pracodawcy,
+-- funkcja wewnętrzna bez EXECUTE.
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_employer_data()', 'permission denied', 'ER161-1 anon bez eksportu');
+select pg_temp.expect_error('select public.request_employer_account_erasure(''er1@test.be'')', 'permission denied',
+  'ER161-1b anon bez usunięcia');
+reset role;
+set role authenticated; set app.current_uid = :'ERC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_employer_data()', 'PERMISSION_DENIED', 'ER161-1c kandydat bez eksportu pracodawcy');
+select pg_temp.expect_error('select public.request_employer_account_erasure(''erc@test.be'')', 'PERMISSION_DENIED',
+  'ER161-1d kandydat nie usuwa konta ścieżką pracodawcy');
+select pg_temp.expect_error('select public.erase_employer_subject(''' || :'ER1' || ''', ''self_service'', null)',
+  'permission denied', 'ER161-1e funkcja wewnętrzna bez EXECUTE');
+reset role; reset app.current_uid;
+
+-- ER161-2: eksport ER1 — profil, członkostwa, zaproszenia wysłane, oferty, akcje audytowe;
+-- bez danych kandydata (id, imię, adres, treść wiadomości/aplikacji, id aplikacji/propozycji).
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select public.export_my_employer_data()::text as erexp \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (:'erexp')::jsonb ->> 'accountType' = 'employer'
+  and (:'erexp')::jsonb #>> '{account,email}' = 'er1@test.be'
+  and (:'erexp')::jsonb #>> '{employerProfile,job_title}' = 'Kierowniczka HR'
+  and jsonb_array_length((:'erexp')::jsonb -> 'memberships') = 2
+  and (select count(*) from jsonb_array_elements((:'erexp')::jsonb -> 'memberships') m
+        where m->>'companyName' = 'Firma ER Druga' and m->>'role' = 'recruiter') = 1
+  and jsonb_array_length((:'erexp')::jsonb -> 'invitationsSent') = 1
+  and (:'erexp')::jsonb #>> '{invitationsSent,0,email}' = 'nowa.osoba@test.be'
+  and (:'erexp')::jsonb #>> '{jobsCreated,0,title}' = 'Magazynier ER'
+  and jsonb_array_length((:'erexp')::jsonb -> 'auditActions') >= 1
+  and jsonb_typeof((:'erexp')::jsonb -> 'dataRightsRequests') = 'array',
+  'ER161-2 eksport: konto, profil pracodawcy, członkostwa, zaproszenia, oferty, akcje audytowe');
+select pg_temp.assert(
+  position(:'ERC' in :'erexp') = 0 and position('erc@test.be' in :'erexp') = 0
+  and position('Erka' in :'erexp') = 0 and position('Tekst kandydata ER' in :'erexp') = 0
+  and position('Wiadomość rekruterki ER' in :'erexp') = 0
+  and position(:'erapp' in :'erexp') = 0 and position(:'eroff' in :'erexp') = 0
+  and position(:'ER2' in :'erexp') = 0 and position('er1-offer' in :'erexp') = 0,
+  'ER161-2b eksport bez danych kandydata, innego pracodawcy i identyfikatorów procesu');
+select pg_temp.assert(
+  (select count(*) from jsonb_array_elements((:'erexp')::jsonb -> 'auditActions') a
+    where a->>'entityType' = 'application' and a->>'entityId' is null) >= 1
+  and not exists (select 1 from jsonb_array_elements((:'erexp')::jsonb -> 'auditActions') a
+                   where a ? 'before' or a ? 'after' or a ? 'before_data'),
+  'ER161-2c akcje na zgłoszeniach bez identyfikatora i bez danych przed/po');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'data.exported' and entity_id = :'ER1') = 1
+  and (select count(*) from public.data_rights_requests where subject_id = :'ER1' and kind = 'access') = 1,
+  'ER161-2d eksport w audycie i śladzie wniosków');
+-- ER161-2e: wspólny limit 10 eksportów na dobę.
+insert into public.data_rights_requests(subject_id, kind, channel, due_at, completed_at)
+  select :'ER2', 'access', 'self_service', now(), now() from generate_series(1, 10);
+set role authenticated; set app.current_uid = :'ER2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_employer_data()', 'RATE_LIMITED', 'ER161-2e 11. eksport w dobie → RATE_LIMITED');
+reset role; reset app.current_uid;
+
+-- ER161-3: potwierdzenie adresem WŁASNEGO konta; cudzy adres nie usuwa ani swojego, ani cudzego.
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_employer_account_erasure(''er2@test.be'')', 'CONFIRMATION_MISMATCH',
+  'ER161-3 cudze konto (adres ER2) → CONFIRMATION_MISMATCH');
+select pg_temp.expect_error('select public.request_employer_account_erasure(null)', 'CONFIRMATION_MISMATCH',
+  'ER161-3b brak potwierdzenia');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'ER1')
+  and exists (select 1 from public.profiles where id = :'ER2')
+  and (select count(*) from public.company_members where profile_id in (:'ER1', :'ER2')) = 4,
+  'ER161-3c odmowa niczego nie usuwa (ER1 i ER2 nienaruszeni)');
+-- Kandydacka ścieżka nadal odrzuca pracodawcę (DR486-4c bez zmian).
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''er1@test.be'')', 'PERMISSION_DENIED',
+  'ER161-3d pracodawca nie usuwa konta ścieżką kandydata');
+reset role; reset app.current_uid;
+
+-- ER161-4: ostatni aktywny właściciel firmy nie usunie konta; nic się nie zmienia.
+set role authenticated; set app.current_uid = :'ER3'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_employer_account_erasure(''er3@test.be'')', 'COMPANY_LAST_OWNER',
+  'ER161-4 ostatni właściciel → COMPANY_LAST_OWNER');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from auth.users where id = :'ER3')
+  and exists (select 1 from public.company_members where profile_id = :'ER3' and company_id = :'ERCO3' and role = 'owner' and is_active)
+  and not exists (select 1 from public.data_rights_requests where subject_id = :'ER3')
+  and not exists (select 1 from public.erasure_tombstones where subject_id = :'ER3'),
+  'ER161-4b odmowa: konto i członkostwo zostają, brak śladu wniosku i tombstone');
+-- ER161-4c: nieaktywny drugi właściciel się nie liczy — nadal ostatni aktywny.
+insert into public.company_members(company_id, profile_id, role, is_active) values (:'ERCO3', :'ER2', 'owner', false);
+set role authenticated; set app.current_uid = :'ER3'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_employer_account_erasure(''er3@test.be'')', 'COMPANY_LAST_OWNER',
+  'ER161-4c nieaktywny współwłaściciel nie zwalnia z reguły');
+reset role; reset app.current_uid;
+delete from public.company_members where company_id = :'ERCO3' and profile_id = :'ER2';
+-- ER161-4d (kontrola ujemna): bez kontroli w erase_employer_subject konto ostatniego
+-- właściciela znika, a firma zostaje bez aktywnego właściciela (funkcja definer omija trigger).
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.erase_employer_subject(uuid,text,uuid)'::regprocedure);
+  d := replace(d, 'raise exception ''VALIDATION_FAILED: COMPANY_LAST_OWNER''', 'null; --');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ER3'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('er3@test.be');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.company_members
+                                   where company_id = :'ERCO3' and role = 'owner' and is_active),
+  'ER161-4d kontrola ujemna: bez kontroli firma zostaje bez właściciela');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.profiles where id = :'ER3'), 'ER161-4e po kontroli ujemnej stan przywrócony');
+
+-- ER161-4f (kontrola ujemna do 0161 pkt 5): reguła propozycji z 0037 odrzuca odwołanie
+-- nadawcy (sender_id → null) pod sesją usuwanego rekrutera — usunięcie konta by padło.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.enforce_offer_integrity()'::regprocedure);
+  d := replace(d, '(new.sender_id is distinct from old.sender_id and new.sender_id is not null)',
+                  'new.sender_id is distinct from old.sender_id');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_employer_account_erasure(''er1@test.be'')',
+  'nie można zmienić powiązań propozycji', 'ER161-4f kontrola: bez poprawki usunięcie nadawcy propozycji pada');
+rollback;
+reset role; reset app.current_uid;
+-- ER161-4g: poprawka nie otwiera zmiany nadawcy na inną osobę (tylko null).
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('update public.offers set sender_id = ''' || :'ER2' || ''' where id = ''' || :'eroff' || '''',
+  'permission denied', 'ER161-4g klient nie zmienia nadawcy propozycji (brak UPDATE)');
+reset role; reset app.current_uid;
+begin;
+set local app.current_uid = :'ER1';
+select pg_temp.expect_error('update public.offers set sender_id = ''' || :'ER2' || ''' where id = ''' || :'eroff' || '''',
+  'nie można zmienić powiązań propozycji', 'ER161-4h trigger nadal odrzuca zmianę nadawcy na inną osobę');
+rollback;
+
+-- ER161-5: usunięcie konta ER1 (współwłaściciel ERCO1, rekruter ERCO2).
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('  ER1@Test.be ')::text as ererase \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from auth.users where id = :'ER1')
+  and not exists (select 1 from public.profiles where id = :'ER1')
+  and not exists (select 1 from public.employer_profiles where profile_id = :'ER1')
+  and not exists (select 1 from auth.sessions where user_id = :'ER1')
+  and not exists (select 1 from public.company_members where profile_id = :'ER1')
+  and not exists (select 1 from public.conversation_members where profile_id = :'ER1')
+  and not exists (select 1 from public.files where id = :'ERF')
+  and not exists (select 1 from public.email_deliveries where profile_id = :'ER1' or to_email = 'er1@test.be'),
+  'ER161-5 konto, sesje, profil, członkostwa, plik i e-maile osoby usunięte');
+select pg_temp.assert(
+  exists (select 1 from public.companies where id = :'ERCO1')
+  and exists (select 1 from public.companies where id = :'ERCO2')
+  and (select created_by is null and status = 'active' from public.jobs where id = :'ERJ')
+  and (select sender_id is null from public.offers where id = :'eroff')
+  and exists (select 1 from public.applications where id = :'erapp')
+  and (select count(*) from public.messages where conversation_id = :'erconv' and body = 'Wiadomość rekruterki ER' and sender_id is null) = 1
+  and (select invited_by is null and status = 'pending' from public.company_invitations where id = :'erinv')
+  and exists (select 1 from public.company_members where company_id = :'ERCO1' and profile_id = :'ER2' and role = 'owner' and is_active),
+  'ER161-5b dane firmy zostają (oferta, propozycja, zgłoszenie, rozmowa, zaproszenie, drugi właściciel)');
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where actor_id = :'ER1') = 0
+  and (select count(*) from public.audit_logs
+        where actor_id is null and action <> 'account.erased'
+          and entity_id in (:'erapp'::uuid, :'eroff'::uuid)) >= 1,
+  'ER161-5c dziennik audytu zostaje z aktorem = null');
+select pg_temp.assert(
+  (select channel = 'self_service' from public.erasure_tombstones where subject_id = :'ER1')
+  and (select completed_at is not null and (details->>'memberships')::int = 2 and (details->>'files')::int = 1
+         from public.data_rights_requests where subject_id = :'ER1' and kind = 'erasure')
+  and (select after_data->>'role' = 'employer' from public.audit_logs where action = 'account.erased' and entity_id = :'ER1')
+  and exists (select 1 from public.storage_deletion_queue where path = :'ER1' || '/doc-er1.pdf'),
+  'ER161-5d tombstone, ślad wniosku z licznikami, audyt, obiekt pliku w kolejce');
+set role authenticated; set app.current_uid = :'ER1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_employer_data()', 'PERMISSION_DENIED', 'ER161-5e po usunięciu brak dostępu');
+reset role; reset app.current_uid;
+
+-- ER161-6: ponowne usunięcie po restore — pracodawca przez erase_employer_subject;
+-- ostatni właściciel = błąd dla operatora.
+set role service_role;
+select public.apply_erasure_tombstones(array[:'ER4'::uuid])::text as erre \gset
+select pg_temp.expect_error('select public.apply_erasure_tombstones(array[''' || :'ER3' || '''::uuid])', 'COMPANY_LAST_OWNER',
+  'ER161-6b restore ostatniego właściciela → COMPANY_LAST_OWNER');
+reset role;
+select pg_temp.assert(
+  (:'erre')::jsonb ->> 'reapplied' = '1'
+  and not exists (select 1 from public.profiles where id = :'ER4')
+  and not exists (select 1 from public.company_members where profile_id = :'ER4')
+  and (select channel = 'restore_reapply' from public.erasure_tombstones where subject_id = :'ER4')
+  and exists (select 1 from public.profiles where id = :'ER3'),
+  'ER161-6 restore usuwa pracodawcę (członek), ostatni właściciel zostaje');
+
+-- ============================================================================
+-- CMI165. Kolumny tożsamości członkostwa firmy niezmienne poza RPC (0165) oraz dostęp
 -- do rozmów firmy tylko dla bieżącego recruiter+ albo kandydata relacji.
 -- ============================================================================
-\echo '--- CMI900 company_members: tożsamość wiersza + dostęp do rozmów (0900) ---'
+\echo '--- CMI165 company_members: tożsamość wiersza + dostęp do rozmów (0165) ---'
 \set CI9O  'e9000000-0000-0000-0000-0000000000a1'
 \set CI9A  'e9000000-0000-0000-0000-0000000000a2'
 \set CI9R  'e9000000-0000-0000-0000-0000000000a3'
@@ -16148,28 +16689,28 @@ select id as cm_owner_row from public.company_members
 select id as cm_rec_row from public.company_members
   where company_id = :'CI9T'::uuid and profile_id = :'CI9R'::uuid \gset
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
-  (:'CI9J',:'CI9T','job-cmi900','Magazynier CMI900','warehouse','permanent','Gent','Flandria','active','pl');
+  (:'CI9J',:'CI9T','job-cmi165','Magazynier CMI165','warehouse','permanent','Gent','Flandria','active','pl');
 insert into public.candidate_profiles(profile_id, is_searchable) values (:'CI9C', false);
 
--- CMI900-1..4: admin firmy nie przepisze tożsamości wiersza (konto, firma, zaproszenie, daty).
+-- CMI165-1..4: admin firmy nie przepisze tożsamości wiersza (konto, firma, zaproszenie, daty).
 set role authenticated; set app.current_uid = :'CI9A'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
   format('update public.company_members set profile_id = %L where id = %L', :'CI9X', :'cm_owner_row'),
-  'PERMISSION_DENIED', 'CMI900-1 zmiana konta wiersza ownera odrzucona');
+  'PERMISSION_DENIED', 'CMI165-1 zmiana konta wiersza ownera odrzucona');
 select pg_temp.expect_error(
   format('update public.company_members set company_id = %L where id = %L', :'CI9T2', :'cm_owner_row'),
-  'PERMISSION_DENIED', 'CMI900-2 przeniesienie wiersza ownera do innej firmy odrzucone');
+  'PERMISSION_DENIED', 'CMI165-2 przeniesienie wiersza ownera do innej firmy odrzucone');
 select pg_temp.expect_error(
   format('update public.company_members set profile_id = %L where id = %L', :'CI9X', :'cm_rec_row'),
-  'PERMISSION_DENIED', 'CMI900-3 podmiana konta rekrutera (dołączenie bez zaproszenia) odrzucona');
+  'PERMISSION_DENIED', 'CMI165-3 podmiana konta rekrutera (dołączenie bez zaproszenia) odrzucona');
 select pg_temp.expect_error(
   format('update public.company_members set joined_at = now() - interval ''1 year'', invited_by = %L where id = %L',
          :'CI9A', :'cm_rec_row'),
-  'PERMISSION_DENIED', 'CMI900-4 zmiana danych zaproszenia/dat odrzucona');
+  'PERMISSION_DENIED', 'CMI165-4 zmiana danych zaproszenia/dat odrzucona');
 select pg_temp.expect_error(
   format('update public.company_members set created_at = now() - interval ''1 year'' where id = %L', :'cm_rec_row'),
-  'PERMISSION_DENIED', 'CMI900-4b zmiana created_at odrzucona');
--- CMI900-5: rola/aktywność dalej jak w 0086 (bezpośredni UPDATE w hierarchii i RPC).
+  'PERMISSION_DENIED', 'CMI165-4b zmiana created_at odrzucona');
+-- CMI165-5: rola/aktywność dalej jak w 0086 (bezpośredni UPDATE w hierarchii i RPC).
 update public.company_members set is_active = false where id = :'cm_rec_row'::uuid;
 select public.set_company_member_active(:'cm_rec_row'::uuid, true);
 select public.set_company_member_role(:'cm_rec_row'::uuid, 'member');
@@ -16181,9 +16722,9 @@ select pg_temp.assert(
   and (select profile_id = :'CI9R'::uuid and role = 'recruiter' and is_active
      from public.company_members where id = :'cm_rec_row'::uuid)
   and (select count(*) = 0 from public.company_members where profile_id = :'CI9X'::uuid),
-  'CMI900-5 wiersze bez zmian tożsamości; RPC roli/aktywności działają');
+  'CMI165-5 wiersze bez zmian tożsamości; RPC roli/aktywności działają');
 
--- CMI900-6: przyjęcie zaproszenia (RPC) dalej tworzy i reaktywuje członkostwo.
+-- CMI165-6: przyjęcie zaproszenia (RPC) dalej tworzy i reaktywuje członkostwo.
 set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
 select invitation_id as cminv
   from public.invite_company_member(:'CI9T', 'ci9x@test.be', 'recruiter', 'en', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
@@ -16204,16 +16745,16 @@ reset role; reset app.current_uid;
 select pg_temp.assert(
   (select is_active and role = 'member' and invited_by = :'CI9O'::uuid and joined_at is not null
      from public.company_members where id = :'cm_x_row'::uuid),
-  'CMI900-6 respond_to_company_invitation tworzy i reaktywuje członkostwo (kolumny zaproszenia)');
+  'CMI165-6 respond_to_company_invitation tworzy i reaktywuje członkostwo (kolumny zaproszenia)');
 
--- CMI900-7 (kontrola ujemna): trigger z 0086 (bez strażnika tożsamości) przepuszcza podmianę
--- konta wiersza ownera przez admina — dokładnie to, co blokuje CMI900-1.
+-- CMI165-7 (kontrola ujemna): trigger z 0086 (bez strażnika tożsamości) przepuszcza podmianę
+-- konta wiersza ownera przez admina — dokładnie to, co blokuje CMI165-1.
 begin;
 do $cmi$
 declare v_def text := pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure);
 begin
   if position('or new.profile_id is distinct from old.profile_id' in v_def) = 0 then
-    raise exception 'ASSERT FAILED: CMI900-7 brak strażnika tożsamości w enforce_owner_invariants';
+    raise exception 'ASSERT FAILED: CMI165-7 brak strażnika tożsamości w enforce_owner_invariants';
   end if;
   execute replace(v_def, 'or new.profile_id is distinct from old.profile_id', '');
 end $cmi$;
@@ -16222,20 +16763,20 @@ update public.company_members set profile_id = :'CI9C' where id = :'cm_owner_row
 reset role;
 select pg_temp.assert(
   (select profile_id = :'CI9C'::uuid from public.company_members where id = :'cm_owner_row'::uuid),
-  'CMI900-7 kontrola ujemna: bez strażnika admin podmienia konto ownera');
+  'CMI165-7 kontrola ujemna: bez strażnika admin podmienia konto ownera');
 rollback;
 reset role; reset app.current_uid;
 
--- CMI900-8..10: rozmowa firmy — usunięty (DELETE) rekruter traci dostęp, kandydat nie.
+-- CMI165-8..10: rozmowa firmy — usunięty (DELETE) rekruter traci dostęp, kandydat nie.
 set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
-select public.apply_to_job(:'CI9J'::uuid, 'cmi900-app', null, null, null) as cmapp \gset
+select public.apply_to_job(:'CI9J'::uuid, 'cmi165-app', null, null, null) as cmapp \gset
 reset role;
 set role authenticated; set app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
 select public.get_or_create_conversation(:'cmapp'::uuid, null) as cmconv \gset
-select public.send_message(:'cmconv'::uuid, 'Dzień dobry CMI900', gen_random_uuid()) as cmmsg1 \gset
+select public.send_message(:'cmconv'::uuid, 'Dzień dobry CMI165', gen_random_uuid()) as cmmsg1 \gset
 reset role;
 set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
-select public.send_message(:'cmconv'::uuid, 'Odpowiedź CMI900', gen_random_uuid()) as cmmsg2 \gset
+select public.send_message(:'cmconv'::uuid, 'Odpowiedź CMI165', gen_random_uuid()) as cmmsg2 \gset
 reset role;
 -- Owner usuwa członkostwo rekrutera (DELETE w hierarchii); wiersz conversation_members zostaje.
 set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
@@ -16244,30 +16785,30 @@ reset role;
 select pg_temp.assert(
   (select count(*) = 1 from public.conversation_members
      where conversation_id = :'cmconv'::uuid and profile_id = :'CI9R'::uuid),
-  'CMI900-8 wiersz uczestnika usuniętego rekrutera nadal istnieje (warunek scenariusza)');
+  'CMI165-8 wiersz uczestnika usuniętego rekrutera nadal istnieje (warunek scenariusza)');
 set role authenticated; set app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
 select pg_temp.assert(not public.is_conversation_member(:'cmconv'::uuid),
-  'CMI900-8b usunięty rekruter nie jest uczestnikiem rozmowy firmy');
+  'CMI165-8b usunięty rekruter nie jest uczestnikiem rozmowy firmy');
 select pg_temp.assert((select count(*) = 0 from public.messages where conversation_id = :'cmconv'::uuid),
-  'CMI900-8c usunięty rekruter nie czyta wiadomości rozmowy');
+  'CMI165-8c usunięty rekruter nie czyta wiadomości rozmowy');
 select pg_temp.assert(not exists (select 1 from public.get_conversation_summaries() s
                                   where s.conversation_id = :'cmconv'::uuid),
-  'CMI900-8d usunięty rekruter nie widzi rozmowy na liście');
+  'CMI165-8d usunięty rekruter nie widzi rozmowy na liście');
 select pg_temp.expect_error(
   format('select public.send_message(%L::uuid, %L, gen_random_uuid())', :'cmconv', 'Po usunięciu'),
-  'PERMISSION_DENIED', 'CMI900-9 usunięty rekruter nie wysyła wiadomości');
+  'PERMISSION_DENIED', 'CMI165-9 usunięty rekruter nie wysyła wiadomości');
 reset role;
 set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
   and (select count(*) = 2 from public.messages where conversation_id = :'cmconv'::uuid),
-  'CMI900-10 kandydat relacji zachowuje dostęp do rozmowy');
+  'CMI165-10 kandydat relacji zachowuje dostęp do rozmowy');
 reset role;
 set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
 select pg_temp.assert(not public.is_conversation_member(:'cmconv'::uuid),
-  'CMI900-10b aktywny zwykły member (spoza uczestników) bez dostępu');
+  'CMI165-10b aktywny zwykły member (spoza uczestników) bez dostępu');
 reset role; reset app.current_uid;
 
--- CMI900-11 (kontrola ujemna): definicja z 0039 (strona kandydata = brak wiersza członkostwa)
+-- CMI165-11 (kontrola ujemna): definicja z 0039 (strona kandydata = brak wiersza członkostwa)
 -- zwraca usuniętemu rekruterowi dostęp.
 begin;
 create or replace function public.is_conversation_member(p_conversation_id uuid)
@@ -16283,7 +16824,7 @@ $$;
 set local role authenticated; set local app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
   and (select count(*) = 2 from public.messages where conversation_id = :'cmconv'::uuid),
-  'CMI900-11 kontrola ujemna: reguła z 0039 wpuszcza usuniętego rekrutera');
+  'CMI165-11 kontrola ujemna: reguła z 0039 wpuszcza usuniętego rekrutera');
 rollback;
 reset role; reset app.current_uid;
 

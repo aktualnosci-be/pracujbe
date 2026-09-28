@@ -218,7 +218,7 @@ export default async function EmployerCompanyPage({
             status={company.status}
             reason={company.statusReason}
             action={
-              company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton /> : null
+              company.status === 'rejected' && company.canEdit ? <CompanyReverifyButton key={company.id} companyId={company.id} /> : null
             }
           />
 

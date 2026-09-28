@@ -7,10 +7,17 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/headers', () => ({ cookies: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/company-context', () => ({
-  ACTIVE_COMPANY_COOKIE: 'pb_active_company',
-  getActiveCompany: vi.fn(),
-}));
+vi.mock('@/lib/company-context', async () => {
+  // Prawdziwa reguła „firma widoku == aktywna” (EMP-02); atrapa tylko odczytu aktywnej firmy.
+  const actual = await vi.importActual<typeof import('@/lib/company-context')>('@/lib/company-context');
+  const getActiveCompany = vi.fn();
+  return {
+    ACTIVE_COMPANY_COOKIE: 'pb_active_company',
+    getActiveCompany,
+    getExpectedActiveCompany: async (tx: never, userId: string, expected: unknown) =>
+      actual.matchExpectedCompany(await getActiveCompany(tx, userId), expected),
+  };
+});
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
@@ -78,13 +85,13 @@ describe('requestCompanyReverification (#400)', () => {
       activeId: 'company-1',
       activeRole: 'member',
     } as never);
-    expect(await requestCompanyReverification()).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await requestCompanyReverification('company-1')).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     expect(fakeDb.callsTo('request_company_reverification')).toHaveLength(0);
   });
 
   it('zgłasza aktywną firmę owner-a', async () => {
     fakeDb.rpc('request_company_reverification', null);
-    expect(await requestCompanyReverification()).toEqual({ ok: true });
+    expect(await requestCompanyReverification('company-1')).toEqual({ ok: true });
     expect(fakeDb.callsTo('request_company_reverification')[0]?.args).toEqual({
       p_company_id: 'company-1',
     });
@@ -94,12 +101,26 @@ describe('requestCompanyReverification (#400)', () => {
     fakeDb.rpc('request_company_reverification', () => {
       throw pgError('42501', 'COMPANY_STATUS_INVALID');
     });
-    expect(await requestCompanyReverification()).toEqual({ ok: false, error: 'INVALID_TRANSITION' });
+    expect(await requestCompanyReverification('company-1')).toEqual({ ok: false, error: 'INVALID_TRANSITION' });
+  });
+
+  it('EMP-02 KONTROLA UJEMNA: przycisk z widoku innej firmy nie zgłasza firmy aktywnej teraz', async () => {
+    fakeDb.rpc('request_company_reverification', null);
+    // Widok wyrenderowano dla company-2, a aktywna (inna karta) to company-1.
+    expect(await requestCompanyReverification('company-2')).toEqual({
+      ok: false,
+      error: 'ACTIVE_COMPANY_CHANGED',
+    });
+    expect(await requestCompanyReverification(undefined as never)).toEqual({
+      ok: false,
+      error: 'ACTIVE_COMPANY_CHANGED',
+    });
+    expect(fakeDb.callsTo('request_company_reverification')).toHaveLength(0);
   });
 
   it('limit prób zatrzymuje przed zapisem', async () => {
     vi.mocked(checkRateLimit).mockResolvedValue(false);
-    expect(await requestCompanyReverification()).toEqual({ ok: false, error: 'RATE_LIMITED' });
+    expect(await requestCompanyReverification('company-1')).toEqual({ ok: false, error: 'RATE_LIMITED' });
     expect(fakeDb.calls).toHaveLength(0);
   });
 });

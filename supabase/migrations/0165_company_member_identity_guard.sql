@@ -1,7 +1,6 @@
 -- =============================================================================
--- 0900 — kolumny tożsamości członkostwa firmy niezmienne poza RPC
+-- 0165 — kolumny tożsamości członkostwa firmy niezmienne poza RPC
 --        + dostęp do rozmów firmy tylko dla bieżących członków albo kandydata relacji.
---        (numer tymczasowy — ostateczny nada integrator)
 --
 -- 1. `enforce_owner_invariants` (ostatnia definicja: 0086) przy UPDATE sprawdzał tylko
 --    zmianę `role`/`is_active`. Pozostałe kolumny wiersza (firma, konto, dane zaproszenia,
@@ -45,7 +44,7 @@ begin
     return new;
 
   elsif tg_op = 'UPDATE' then
-    -- 0900: tożsamość wiersza (firma, konto, zaproszenie, daty) tylko przez RPC.
+    -- 0165: tożsamość wiersza (firma, konto, zaproszenie, daty) tylko przez RPC.
     if new.id is distinct from old.id
        or new.company_id is distinct from old.company_id
        or new.profile_id is distinct from old.profile_id
