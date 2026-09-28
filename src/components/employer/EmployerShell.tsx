@@ -132,7 +132,8 @@ export function EmployerShell({
           { href: HREF.applications, label: td('navEmployerApplications'), icon: <Inbox /> },
         ]
       : []),
-    { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
+    // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
+    ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
     { href: HREF.templates, label: td('navTemplates'), icon: <FileText /> },
     { href: HREF.company, label: td('navCompany'), icon: <Building2 /> },
     { href: HREF.team, label: td('navTeam'), icon: <UserPlus /> },

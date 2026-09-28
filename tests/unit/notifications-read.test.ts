@@ -5,6 +5,10 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { getNotifications } from '@/lib/data/notifications';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 vi.mock('next-intl/server', () => ({
   getTranslations: vi.fn().mockResolvedValue((key: string) => key),
