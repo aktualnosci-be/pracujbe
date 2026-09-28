@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getJobs, getJobBySlug, getCategoryCounts, getCityCounts, getJobFilterFacets } from '@/lib/jobs';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 import { buildJobPostingJsonLd, type JobPostingLabels } from '@/lib/seo/structured-data';
 
 const adapters = vi.hoisted(() => ({
@@ -94,30 +95,34 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
     expect(job).toMatchObject({ title: 'Magazynier' });
     expect(job).not.toHaveProperty('availableLocales');
   });
-  it('detal niesie pytania screeningowe oferty w kolejności (#101)', async () => {
-    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
-    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
-    adapters.translations.mockResolvedValue([]);
-    adapters.screening.mockResolvedValueOnce([
-      { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd', xx: 'x' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
-      { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
-    ]);
+  // Pytania screeningowe tylko w trybie rekrutacyjnym (ukrycie w ogłoszeniowym: classifieds-screening-hidden).
+  describe('pytania screeningowe (tryb rekrutacyjny)', () => {
+    withRecruitmentMode();
+    it('detal niesie pytania screeningowe oferty w kolejności (#101)', async () => {
+      vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+      adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+      adapters.translations.mockResolvedValue([]);
+      adapters.screening.mockResolvedValueOnce([
+        { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd', xx: 'x' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
+        { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
+      ]);
 
-    const job = await getJobBySlug('kierowca', 'pl');
+      const job = await getJobBySlug('kierowca', 'pl');
 
-    expect(adapters.screening).toHaveBeenCalledWith(adapters.pool, 'job-1');
-    expect(job?.screeningQuestions).toEqual([
-      { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
-      { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
-    ]);
-  });
-  it('awaria odczytu pytań screeningowych nie udaje oferty bez pytań (#101)', async () => {
-    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
-    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
-    adapters.translations.mockResolvedValue([]);
-    adapters.screening.mockRejectedValueOnce(new Error('permission denied'));
+      expect(adapters.screening).toHaveBeenCalledWith(adapters.pool, 'job-1');
+      expect(job?.screeningQuestions).toEqual([
+        { id: 'q-1', position: 0, type: 'yes_no', required: true, prompt: { pl: 'C+E?' }, options: [] },
+        { id: 'q-2', position: 1, type: 'single_choice', required: false, prompt: { pl: 'Dojazd' }, options: [{ id: 'o1', label: { pl: 'Auto' } }] },
+      ]);
+    });
+    it('awaria odczytu pytań screeningowych nie udaje oferty bez pytań (#101)', async () => {
+      vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+      adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+      adapters.translations.mockResolvedValue([]);
+      adapters.screening.mockRejectedValueOnce(new Error('permission denied'));
 
-    await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
+      await expect(getJobBySlug('kierowca', 'pl')).rejects.toMatchObject({ code: 'INTERNAL' });
+    });
   });
   it('0169: detal niesie koszty i dodatki z get_public_job_costs (numeric jako tekst)', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');

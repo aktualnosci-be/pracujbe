@@ -624,6 +624,7 @@ async function loadScreeningReviewNotices(
   me: PortalIdentity,
   jobId: string,
 ): Promise<ScreeningReviewNotice[]> {
+  if (!isRecruitmentEnabled('screening')) return [];
   try {
     return await withPortalTransaction(me, async (tx) => {
       const questions = await queryRows(tx, 'jobs.screening-questions-review',
@@ -686,7 +687,10 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     const code = failureCode(error);
     // #497: pytanie screeningowe czeka na przegląd albo zostało odrzucone — kreator pokazuje,
     // których pytań to dotyczy (i uzasadnienie odrzucenia), żeby firma mogła je poprawić.
-    if (me && (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED')) {
+    if (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED') {
+      // Decyzja produktowa: portal ogłoszeniowy — stare pytania i przeglądy są ukryte (baza ich
+      // w tym trybie nie egzekwuje); nigdy nie ujawniamy ich treści ani stanu, bez odczytu.
+      if (!me || !isRecruitmentEnabled('screening')) return { ok: false, error: 'INTERNAL' };
       return { ok: false, error: code, screening: await loadScreeningReviewNotices(me, jobId) };
     }
     // 0167: treść oferty czeka na przegląd albo została odrzucona — kreator pokazuje stan.

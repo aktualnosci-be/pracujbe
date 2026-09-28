@@ -28,6 +28,7 @@ import {
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
+  isScreeningAuditRow,
   parseBreachFilter,
   parseContactMessageFilter,
   parseEmailSuppressionFilter,
@@ -1360,6 +1361,8 @@ function statusOf(value: unknown): string | null {
 }
 
 interface AuditFilters {
+  /** Ukryj wpisy o przeglądzie pytań screeningowych (tryb ogłoszeniowy). */
+  hideScreening?: boolean;
   entity: string | null;
   action: string | null;
   entityId: string | null;
@@ -1378,10 +1381,14 @@ async function readAuditRows(
   limit: number,
   cursor: string | null | undefined,
 ): Promise<AdminAuditRow[]> {
-  const { entity, action, entityId, actorQuery, fromIso, toIso } = filters;
+  const { entity, action, entityId, actorQuery, fromIso, toIso, hideScreening } = filters;
   const systemActor = actorQuery?.toLowerCase() === AUDIT_ACTOR_SYSTEM;
   const params = new SqlParams();
   const where = whereOf([
+    // Decyzja produktowa: portal ogłoszeniowy — wpisy o pytaniach screeningowych ukryte
+    // (listy i eksport); wiersze zostają w bazie.
+    hideScreening &&
+      "entity_type IS DISTINCT FROM 'screening_question_review' AND action NOT LIKE 'screening\\_question.%'",
     entity && `entity_type = ${params.add(entity)}`,
     action && `action = ${params.add(action)}`,
     entityId && `entity_id = ${params.add(entityId)}::uuid`,
@@ -1492,8 +1499,9 @@ async function readAuditRows(
 export async function listAuditLogs(
   query: AdminAuditQuery = {},
 ): Promise<AdminListResult<AdminAuditRow>> {
-  const entity = parseAuditEntity(query.entity);
-  const action = parseAuditAction(query.action);
+  const screeningVisible = isRecruitmentEnabled('screening');
+  const entity = parseAuditEntity(query.entity, screeningVisible);
+  const action = parseAuditAction(query.action, screeningVisible);
   const entityId = parseUuid(query.entityId);
   const actorQuery = normalizeAdminSearch(query.actor);
   const fromIso = appDayStartUtc(parseYmd(query.from));
@@ -1503,6 +1511,7 @@ export async function listAuditLogs(
     return demoList(
       DEMO_AUDIT.filter(
         (row) =>
+          (screeningVisible || !isScreeningAuditRow(row.entityType, row.action)) &&
           (!entity || row.entityType === entity) &&
           (!action || row.action === action) &&
           (!actorQuery ||
@@ -1516,7 +1525,12 @@ export async function listAuditLogs(
 
   try {
     const page = await withServiceRole((tx) =>
-      readAuditRows(tx, { entity, action, entityId, actorQuery, fromIso, toIso }, ADMIN_PAGE_SIZE + 1, query.cursor),
+      readAuditRows(
+        tx,
+        { entity, action, entityId, actorQuery, fromIso, toIso, hideScreening: !screeningVisible },
+        ADMIN_PAGE_SIZE + 1,
+        query.cursor,
+      ),
     );
     return toPage(page, (row) => row.createdAt);
   } catch (error) {
@@ -1552,8 +1566,8 @@ export async function exportAuditLogs(
 ): Promise<AdminAuditExport | null> {
   const admin = await getPortalIdentity();
   if (admin?.role !== 'admin') return null;
-  const entity = parseAuditEntity(query.entity);
-  const action = parseAuditAction(query.action);
+  const entity = parseAuditEntity(query.entity, isRecruitmentEnabled('screening'));
+  const action = parseAuditAction(query.action, isRecruitmentEnabled('screening'));
   const entityId = parseUuid(query.entityId);
   const actorQuery = normalizeAdminSearch(query.actor);
   const from = parseYmd(query.from);
@@ -1564,7 +1578,7 @@ export async function exportAuditLogs(
   return withServiceRole(async (tx) => {
     const fetched = await readAuditRows(
       tx,
-      { entity, action, entityId, actorQuery, fromIso, toIso },
+      { entity, action, entityId, actorQuery, fromIso, toIso, hideScreening: !isRecruitmentEnabled('screening') },
       limit + 1,
       null,
     );
@@ -2185,6 +2199,8 @@ export async function listScreeningReviews(
   query: AdminScreeningReviewsQuery = {},
 ): Promise<AdminListResult<AdminScreeningReviewRow>> {
   const filter = parseScreeningReviewFilter(query.status);
+  // Decyzja produktowa: portal ogłoszeniowy — stare przeglądy pytań ukryte, bez zapytania.
+  if (!isRecruitmentEnabled('screening')) return demoList<AdminScreeningReviewRow>([]);
   if (!isPortalDataConfigured()) {
     return demoList(
       DEMO_SCREENING_REVIEWS.filter(

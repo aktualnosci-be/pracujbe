@@ -95,6 +95,19 @@ const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
   rejected: 'itemCompanyLinksRejected',
 };
 
+/**
+ * Decyzja produktowa: portal ogłoszeniowy — powiadomienia o przeglądzie pytań screeningowych
+ * (`data.kind = 'screening_review'`, w tym „ukryte”) są ukryte na listach i w liczniku;
+ * wiersze zostają w bazie. Tryb rekrutacyjny bez zmian.
+ */
+function screeningVisible(): boolean {
+  return isRecruitmentEnabled('screening');
+}
+
+const UNREAD_SQL = `SELECT 1 FROM public.notifications
+  WHERE profile_id = $1 AND read_at IS NULL
+    AND ($2::boolean OR data->>'kind' IS DISTINCT FROM 'screening_review')`;
+
 /** Decyzja admina o pytaniu screeningowym (0103, #497): `system` + `data.kind = 'screening_review'`. */
 const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   approved: 'itemScreeningApproved',
@@ -316,12 +329,13 @@ export async function getNotifications(
         `SELECT id, type, data, entity_type, entity_id, read_at, created_at
            FROM public.notifications
           WHERE profile_id = $1
+            AND ($2::boolean OR data->>'kind' IS DISTINCT FROM 'screening_review')
           ORDER BY created_at DESC
-          LIMIT 20`, [me.id]),
+          LIMIT 20`, [me.id, screeningVisible()]),
       // Licznik nieprzeczytanych osobnym zapytaniem count — NIE z pobranej listy (limit 20),
       // która zaniżałaby wynik przy >20 nieprzeczytanych.
       unread: await queryCount(tx, 'notifications.unread',
-        'SELECT 1 FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL', [me.id]),
+        UNREAD_SQL, [me.id, screeningVisible()]),
     }));
 
     const items: NotificationView[] = asArr(rows).map((row) => {
@@ -440,11 +454,11 @@ export async function getNotificationsPage(
           WHERE profile_id = $1
             AND ($2::boolean = false OR read_at IS NULL)
             AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::uuid))
+            AND ($6::boolean OR data->>'kind' IS DISTINCT FROM 'screening_review')
           ORDER BY created_at DESC, id DESC
           LIMIT $5`,
-        [me.id, unreadOnly, cursor?.createdAt ?? null, cursor?.id ?? null, NOTIFICATION_PAGE_SIZE + 1]),
-      unread: await queryCount(tx, 'notifications.unread',
-        'SELECT 1 FROM public.notifications WHERE profile_id = $1 AND read_at IS NULL', [me.id]),
+        [me.id, unreadOnly, cursor?.createdAt ?? null, cursor?.id ?? null, NOTIFICATION_PAGE_SIZE + 1, screeningVisible()]),
+      unread: await queryCount(tx, 'notifications.unread', UNREAD_SQL, [me.id, screeningVisible()]),
     }));
 
     const visible = asArr(rows).slice(0, NOTIFICATION_PAGE_SIZE);

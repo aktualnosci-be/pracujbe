@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, fakeSession, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Tryb rekrutacyjny: dziennik bez ukrywania wpisów o pytaniach (ukrycie: classifieds-screening-hidden).
+withRecruitmentMode();
 
 /**
  * Eksport dziennika zdarzeń (`POST /api/admin/audit-export`): tylko admin (inaczej 404, bez

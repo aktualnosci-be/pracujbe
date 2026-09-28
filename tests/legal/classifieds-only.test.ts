@@ -488,3 +488,67 @@ describe('profile firm i pytania screeningowe w trybie ogłoszeniowym (#1135, #1
     expect(read('src/app/[locale]/admin/layout.tsx')).toMatch(/screeningEnabled=\{isRecruitmentEnabled\('screening'\)\}/);
   });
 });
+
+/**
+ * Stare pytania screeningowe i ich przeglądy (sprzed trybu) są ukryte wszędzie w warstwie
+ * aplikacji (decyzja produktowa: portal ogłoszeniowy). Każdy odczyt takich danych musi mieć
+ * bramkę `isRecruitmentEnabled('screening')` w tej samej funkcji, PRZED zapytaniem (albo tuż
+ * przy nim, gdy zapytanie jest dynamiczne). Dowód zachowania: `classifieds-screening-hidden`
+ * (unit) i `portal-screening-banner` (PG16).
+ */
+describe('ukryte stare pytania screeningowe (odczyty w warstwie aplikacji)', () => {
+  const GATE = "isRecruitmentEnabled('screening')";
+  const READERS: { file: string; fn: string; query: string; near?: boolean }[] = [
+    { file: 'src/lib/data/employer.ts', fn: 'getJobDraft', query: 'employer.job-draft-screening', near: true },
+    { file: 'src/lib/data/employer.ts', fn: 'getEmployerApplicationDetail', query: 'employer.application-detail-answers', near: true },
+    { file: 'src/lib/data/candidate.ts', fn: 'getMyApplicationScreeningAnswers', query: 'candidate.application-screening-answers' },
+    { file: 'src/lib/data/candidate.ts', fn: 'getMyApplicationDetail', query: 'candidate.application-detail-answers', near: true },
+    { file: 'src/lib/data/candidate.ts', fn: 'getMyApplicationsPage', query: 'candidate.applications-page', near: true },
+    { file: 'src/lib/data/admin.ts', fn: 'listScreeningReviews', query: 'admin.screening-reviews' },
+    { file: 'src/lib/actions/jobs.ts', fn: 'loadScreeningReviewNotices', query: 'jobs.screening-questions-review' },
+    { file: 'src/lib/jobs.ts', fn: 'getJobBySlugFromDb', query: 'getPublicJobScreeningQuestions(pool', near: true },
+  ];
+
+  /**
+   * Bramka w funkcji przed zapytaniem (`near`: w promieniu 300 znaków od zapytania — dla
+   * długich funkcji, w których ta sama bramka występuje też przy innych odczytach).
+   */
+  function gatedReader(source: string, fn: string, query: string, near = false): boolean {
+    const start = source.search(new RegExp(`function ${fn}\\b`));
+    if (start < 0) return false;
+    const at = source.indexOf(query, start);
+    if (at < 0) return false;
+    return near
+      ? source.slice(Math.max(start, at - 300), at + 300).includes(GATE)
+      : source.slice(start, at + 700).includes(GATE);
+  }
+
+  it.each(READERS)('$fn ($query) sprawdza tryb przed odczytem', ({ file, fn, query, near }) => {
+    const source = read(file);
+    expect(source.includes(query), `${file}: brak ${query}`).toBe(true);
+    expect(gatedReader(source, fn, query, near)).toBe(true);
+  });
+
+  it('kontrola ujemna: odczyt bez bramki jest wykrywany', () => {
+    for (const { file, fn, query, near } of READERS) {
+      const mutant = read(file).replaceAll(GATE, 'true');
+      expect(gatedReader(mutant, fn, query, near), `${file} ${fn}`).toBe(false);
+    }
+  });
+
+  it('powiadomienia o przeglądzie pytań są filtrowane w liście, pełnej liście i liczniku', () => {
+    const source = read('src/lib/data/notifications.ts');
+    expect(source).toContain("function screeningVisible(): boolean {\n  return isRecruitmentEnabled('screening');");
+    expect(source.match(/IS DISTINCT FROM 'screening_review'/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('dziennik admina: wpisy o pytaniach ukrywane w zapytaniu i w filtrach', () => {
+    const data = read('src/lib/data/admin.ts');
+    expect(data).toContain("entity_type IS DISTINCT FROM 'screening_question_review'");
+    expect(data).toMatch(/hideScreening: !screeningVisible/);
+    expect(data).toMatch(/hideScreening: !isRecruitmentEnabled\('screening'\)/);
+    const page = read('src/app/[locale]/admin/dziennik/page.tsx');
+    expect(page).toContain('visibleAuditEntityTypes(screeningVisible)');
+    expect(page).toContain('visibleAuditActions(screeningVisible)');
+  });
+});

@@ -5,6 +5,10 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { getNotifications } from '@/lib/data/notifications';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Tryb rekrutacyjny: zapytania nie ukrywają powiadomień o przeglądzie pytań (ukrycie: classifieds-screening-hidden).
+withRecruitmentMode();
 
 vi.mock('next-intl/server', () => ({
   getTranslations: vi.fn().mockResolvedValue((key: string) => key),
@@ -87,7 +91,7 @@ describe('notifications read', () => {
     // Obie kwerendy są zawężone do właściciela sesji, w jego transakcji.
     for (const name of ['notifications.latest', 'notifications.unread']) {
       const [call] = fakeDb.callsTo(name);
-      expect(call?.values).toEqual([SELF]);
+      expect(call?.values).toEqual([SELF, true]);
       expect(call?.as).toBe(SELF);
     }
   });

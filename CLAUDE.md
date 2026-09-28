@@ -163,6 +163,16 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+  Stare pytania i przeglądy sprzed trybu ukryte wszędzie (decyzja właściciela 28.09, bez migracji,
+  warstwa aplikacji): w trybie ogłoszeniowym loadery nie wołają zapytań o nie — szczegół publiczny
+  oferty (`getJobBySlug`), kreator (`getJobDraft`, `screeningQuestions: []`, zapis kroku 7 nie rusza
+  wierszy), odpowiedzi w szczegółach zgłoszeń i na liście kandydata (`screeningCount` = 0),
+  kolejka admina (`listScreeningReviews` pusta), wpisy dziennika o pytaniach (lista, filtry, eksport),
+  powiadomienia `screening_review` (dzwonek, pełna lista, licznik), błąd publikacji z przeglądem
+  pytań (→ `INTERNAL`, bez odczytu). Wiersze zostają w bazie; tryb `RECRUITMENT` bez zmian. Dowód:
+  unit `classifieds-screening-hidden`, PG16 `portal-screening-banner` (sekcja „stare pytania ukryte”),
+  strażnik `classifieds-only` (bramka `isRecruitmentEnabled('screening')` przy każdym odczycie,
+  kontrola ujemna).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---

@@ -128,6 +128,11 @@ export interface MyApplicationsPage {
 
 const APPLICATION_PAGE_SIZE = 10;
 
+/** Liczba odpowiedzi screeningowych zgłoszenia; w trybie ogłoszeniowym stała 0 bez podzapytania. */
+const SCREENING_COUNT_SQL = `(SELECT count(*)::int FROM public.application_screening_answers s
+                  WHERE s.application_id = applications.id)`;
+const SCREENING_COUNT_OFF_SQL = '0';
+
 export interface LatestMessage {
   id: string;
   title: string;
@@ -493,7 +498,7 @@ function demoApplications(locale: Locale): MyApplication[] {
       jobAvailability: job ? DEMO_JOB_AVAILABLE : null,
       date: new Date(Date.now() - pick.daysAgo * 86_400_000).toISOString(),
       status: pick.status,
-      screeningCount: DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0,
+      screeningCount: isRecruitmentEnabled('screening') ? (DEMO_SCREENING_ANSWERS[`demo-app-${index}`]?.length ?? 0) : 0,
     };
   });
 }
@@ -817,9 +822,11 @@ export async function getMyApplicationsPage(
       // zgłoszenie wybranego etapu jest na pierwszej stronie mimo wielu nowszych innych.
       const statuses = applicationFilterStatuses(filter);
       const rows = await queryRows(tx, 'candidate.applications-page',
-        `SELECT id, job_id, status, submitted_at,
-                (SELECT count(*)::int FROM public.application_screening_answers s
-                  WHERE s.application_id = applications.id) AS screening_count
+        `SELECT id, job_id, status, submitted_at, ${
+          // Stare pytania screeningowe ukryte w trybie ogłoszeniowym: bez podzapytania (0 = brak przycisku).
+          isRecruitmentEnabled('screening')
+            ? SCREENING_COUNT_SQL
+            : SCREENING_COUNT_OFF_SQL} AS screening_count
            FROM public.applications
           WHERE candidate_id = $1
             AND deleted_at IS NULL
@@ -926,6 +933,8 @@ export async function getMyApplicationsPreview(
 const ANSWERS_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function getMyApplicationScreeningAnswers(applicationId: string): Promise<ScreeningAnswer[]> {
+  // Decyzja produktowa: portal ogłoszeniowy — stare pytania i odpowiedzi ukryte, bez zapytania.
+  if (!isRecruitmentEnabled('screening')) return [];
   if (!isPortalDataConfigured()) return DEMO_SCREENING_ANSWERS[applicationId] ?? [];
   if (!ANSWERS_UUID_RE.test(applicationId)) return [];
 
@@ -1041,7 +1050,7 @@ function demoApplicationDetail(locale: Locale, id: string): MyApplicationDetailL
       phone: '',
       availability: 'immediate',
       conversationId: null,
-      screeningAnswers: DEMO_SCREENING_ANSWERS[id] ?? [],
+      screeningAnswers: isRecruitmentEnabled('screening') ? (DEMO_SCREENING_ANSWERS[id] ?? []) : [],
       history,
       historyNextCursor: null,
     },
@@ -1079,9 +1088,11 @@ export async function getMyApplicationDetail(
         `SELECT id, to_status, created_at FROM public.application_status_history
           WHERE application_id = $1 ORDER BY created_at ASC, id ASC LIMIT $2`,
         [id, MY_APPLICATION_HISTORY_PAGE_SIZE + 1]);
-      const answerRows = await queryRows(tx, 'candidate.application-detail-answers',
-        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
-           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      const answerRows = isRecruitmentEnabled('screening')
+        ? await queryRows(tx, 'candidate.application-detail-answers',
+            `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+               FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id])
+        : [];
       // conversations_select_member: tylko rozmowy, których kandydat jest członkiem.
       const conversation = await queryOne(tx, 'candidate.application-detail-conversation',
         `SELECT id FROM public.conversations
