@@ -191,16 +191,37 @@ export async function renderDelivery(
   return { from: emailFromEnv(env), ...rendered };
 }
 
+/**
+ * #856: chwila wystawienia tokenu — STAŁA dla danego wiersza kolejki, niezależna od tego, ile
+ * razy worker próbuje go wysłać. `created_at` jest zapisywany raz przy wstawieniu wiersza i nie
+ * zmienia się przy ponowieniach (`claim_email_batch` dotyka tylko `locked_at`/`lock_token`/
+ * `updated_at`), więc termin ważności tokenu liczymy od NIEJ, nie od `Date.now()` w chwili
+ * renderu. Bez tego retry po przesunięciu zegara generował inny podpisany token (inny link,
+ * inne nagłówki `List-Unsubscribe`) pod TYM SAMYM kluczem idempotencji — dostawca odrzucał
+ * ponowienie (`invalid_idempotent_request`), a portal tracił `provider_message_id` już wysłanej
+ * wiadomości. Brak/zła wartość `created_at` (np. wiersz atrapy w teście bez tego pola) →
+ * bezpieczny fallback do bieżącego czasu (token wciąż ważny, tylko bez gwarancji identyczności
+ * między próbami).
+ */
+function deliveryIssuedAtMs(row: { created_at?: string | null }): number {
+  const parsed = row.created_at ? Date.parse(row.created_at) : NaN;
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
 /** Linki wypisania dla wiersza; `null` = mail bez kategorii preferencji albo bez sekretu. */
 export function unsubscribeLinksFor(
-  row: { profile_id: string | null; template: string },
+  row: { profile_id: string | null; template: string; created_at?: string | null },
   locale: string,
   site: string,
   secret: string | null,
 ): { pageUrl: string; headers: Record<string, string> } | null {
   const category = emailPreferenceCategory(row.template);
   if (!category || !row.profile_id || !secret) return null;
-  const token = createUnsubscribeToken({ profileId: row.profile_id, category }, secret);
+  const token = createUnsubscribeToken(
+    { profileId: row.profile_id, category },
+    secret,
+    deliveryIssuedAtMs(row),
+  );
   return {
     pageUrl: unsubscribePageUrl(site, locale, token),
     headers: {
@@ -217,13 +238,18 @@ type AlertOffRow = {
   template: string;
   entity_type?: string | null;
   entity_id?: string | null;
+  created_at?: string | null;
 };
 
 /** Token wyłączenia JEDNEGO alertu (digest `jobMatch` zapisanego wyszukiwania) albo `null`. */
 function alertOffTokenFor(row: AlertOffRow, secret: string | null): string | null {
   if (row.template !== 'jobMatch' || row.entity_type !== 'saved_search') return null;
   if (!row.profile_id || !row.entity_id || !UUID_RE.test(row.entity_id) || !secret) return null;
-  return createAlertOffToken({ profileId: row.profile_id, savedSearchId: row.entity_id }, secret);
+  return createAlertOffToken(
+    { profileId: row.profile_id, savedSearchId: row.entity_id },
+    secret,
+    deliveryIssuedAtMs(row),
+  );
 }
 
 /**
@@ -267,6 +293,12 @@ interface DeliveryRow {
   attempts: number;
   /** #615: token dzierżawy nadany przez `claim_email_batch` — CAS na każdej dalszej aktualizacji. */
   lock_token: string;
+  /**
+   * #856: znacznik czasu wstawienia wiersza — STAŁY przez cały jego cykl życia (ponowienia go
+   * nie ruszają). Podstawa terminu ważności tokenów wypisania/alertu, żeby retry generował
+   * dokładnie ten sam token/HTML/nagłówki pod tym samym kluczem idempotencji.
+   */
+  created_at?: string | null;
 }
 
 export interface ProcessResult {

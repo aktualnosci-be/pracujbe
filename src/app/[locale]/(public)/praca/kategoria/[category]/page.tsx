@@ -130,7 +130,7 @@ export default async function CategoryLandingPage({ params }: PageProps) {
   ]);
 
   const name = tCat(category);
-  const result = await getJobs({ locale, category, page: 1, pageSize: LIST_LIMIT });
+  const result = await getJobs({ locale, category, page: 1, pageSize: LIST_LIMIT }, undefined, { translateCards: true });
 
   const otherCategories = CATEGORY_KEYS.filter((key) => key !== category);
 

@@ -119,6 +119,31 @@ function currencyCode(raw: string): string {
   return 'GBP';
 }
 
+/**
+ * Normalizuje wielkość liter adresu URL wyłącznie w schemacie i hoście (case-insensitive
+ * wg RFC 3986 §6.2.2.1); ścieżka, query i fragment zostają dokładnie takie jak w tekście —
+ * mogą rozróżniać wielkość liter (token, slug, parametr). Adres bez rozpoznanego schematu
+ * (dopasowanie „gołej” domeny — regexp dopuszcza tam tylko małe litery) zostaje bez zmian.
+ */
+export function normalizeUrlCase(raw: string): string {
+  const schemeMatch = raw.match(/^https?:\/\//iu);
+  if (schemeMatch) {
+    const scheme = schemeMatch[0].toLowerCase();
+    const rest = raw.slice(schemeMatch[0].length);
+    const hostEnd = rest.search(/[/?#]/u);
+    const host = hostEnd === -1 ? rest : rest.slice(0, hostEnd);
+    const afterHost = hostEnd === -1 ? '' : rest.slice(hostEnd);
+    return scheme + host.toLowerCase() + afterHost;
+  }
+  if (/^www\./iu.test(raw)) {
+    const hostEnd = raw.search(/[/?#]/u);
+    const host = hostEnd === -1 ? raw : raw.slice(0, hostEnd);
+    const afterHost = hostEnd === -1 ? '' : raw.slice(hostEnd);
+    return host.toLowerCase() + afterHost;
+  }
+  return raw.toLowerCase();
+}
+
 const UNIT_RE = new RegExp(`(?<=\\d[\\s\\u00a0\\u202f]?)(%|km/h|km|kg|cm|mm|m²|m2|m³|m3|°C)${NOT_LETTER_AFTER}`, 'giu');
 function unitCode(raw: string): string {
   return raw.toLowerCase().replace('m2', 'm²').replace('m3', 'm³');
@@ -177,7 +202,7 @@ export function extractFacts(input: string, locale: Locale, protectedTerms: read
   const urls = take(
     text,
     /\b(?:https?:\/\/|www\.)[^\s<>"'()]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:be|com|eu|nl|fr|pl|org|net|lu|de|io|uk)\b(?:\/[^\s<>"'()]*)?/giu,
-    (m) => m(0).replace(TRAILING_PUNCT, '').toLowerCase(),
+    (m) => normalizeUrlCase(m(0).replace(TRAILING_PUNCT, '')),
   );
   const dates = [
     ...take(text, /(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/g, (m) => isoDate(+m(1), +m(2), +m(3))),
