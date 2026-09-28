@@ -540,6 +540,13 @@ export function FilterFields({
           checked={value.noLanguageRequired}
           onChange={(checked) => patch({ noLanguageRequired: checked })}
         />
+        <CheckRow
+          id={`${idPrefix}-direct`}
+          label={t('directOnly')}
+          count={facets.direct}
+          checked={value.directOnly}
+          onChange={(checked) => patch({ directOnly: checked })}
+        />
       </section>
 
       {/* Data dodania */}

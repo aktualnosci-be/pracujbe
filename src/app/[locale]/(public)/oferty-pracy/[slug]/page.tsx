@@ -383,6 +383,16 @@ export default async function JobDetailPage({ params }: PageProps) {
                   {t('verified')}
                 </span>
               ) : null}
+              {job.isAgency ? (
+                // 0167: oferta agencji pracy tymczasowej (deklaracja firmy).
+                <span
+                  data-testid="job-detail-agency"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+                >
+                  <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {tJobs('agencyBadge')}
+                </span>
+              ) : null}
             </p>
 
             <div className="mt-6 min-w-0 rounded-[24px] border border-[color:var(--pp-line-card)] bg-card px-[26px] pb-5 pt-[22px] max-[500px]:rounded-[20px] max-[500px]:p-[18px]">
