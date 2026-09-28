@@ -20,8 +20,8 @@ import {
 
 /**
  * #1129: lustro TS reguł kanału aplikowania = CHECK-i i funkcje bazy (migracja z
- * `job_apply_url_ok`; numer tymczasowy 0950 — test szuka pliku po treści, więc przeżyje
- * nadanie ostatecznego numeru). Te same przypadki graniczne co sekcja AC950 w rls.sql.
+ * `job_apply_url_ok`, 0172 — test szuka pliku po treści). Te same przypadki graniczne co
+ * sekcja AC172 w rls.sql.
  */
 const MIGRATIONS_DIR = join(process.cwd(), 'supabase/migrations');
 const MIGRATION_FILE = readdirSync(MIGRATIONS_DIR)
@@ -94,7 +94,7 @@ const PHONE_CASES: [string, boolean][] = [
   ['+32 470', false],
 ];
 
-describe('kanał aplikowania: lustro reguł bazy (0950)', () => {
+describe('kanał aplikowania: lustro reguł bazy (0172)', () => {
   it('migracja z funkcjami reguł istnieje', () => {
     expect(MIGRATION_FILE).toBeDefined();
     expect(MIGRATION).toContain('constraint jobs_apply_url_format');

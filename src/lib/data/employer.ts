@@ -524,7 +524,7 @@ export interface JobDraftValues {
   jointCommittee: string;
   companyDescription: string;
   contactEmail: string;
-  /** #1129 (0950): kanał aplikowania u ogłoszeniodawcy (puste = brak). */
+  /** #1129 (0172): kanał aplikowania u ogłoszeniodawcy (puste = brak). */
   applyUrl: string;
   applyEmail: string;
   applyPhone: string;

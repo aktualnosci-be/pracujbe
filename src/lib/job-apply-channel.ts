@@ -1,6 +1,6 @@
 /**
  * Kanał aplikowania u ogłoszeniodawcy (#1129) — lustro reguł bazy z migracji
- * `0950_job_apply_channel.sql` (`job_apply_url_ok`, `job_apply_email_ok`, `job_apply_phone_ok`,
+ * `0172_job_apply_channel.sql` (`job_apply_url_ok`, `job_apply_email_ok`, `job_apply_phone_ok`,
  * CHECK-i `jobs_apply_*_format`, wymóg co najmniej jednego kanału w `publish_job`
  * i `update_published_job` → `JOB_APPLY_CHANNEL_REQUIRED`).
  *
@@ -8,7 +8,7 @@
  * Oferta podaje stronę (https), e-mail lub telefon; do publikacji wystarczy jeden z nich.
  *
  * Zgodność z bazą pilnuje `tests/unit/job-apply-channel.test.ts` (te same przypadki graniczne
- * co sekcja AC950 w `supabase/tests/rls.sql`). Pusta wartość = brak kanału, nie błąd formatu.
+ * co sekcja AC172 w `supabase/tests/rls.sql`). Pusta wartość = brak kanału, nie błąd formatu.
  */
 
 import { COMPANY_URL_MAX_LENGTH, isPublicHttpsUrl } from '@/lib/company-links';

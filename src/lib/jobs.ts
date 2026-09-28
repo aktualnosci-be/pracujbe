@@ -165,7 +165,7 @@ export interface JobDetail extends JobListItem {
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
   /**
-   * Kanał aplikowania u ogłoszeniodawcy (#1129, 0950 — `get_public_job`). Każde pole osobno
+   * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
    * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
    */
   applyChannel?: JobApplyChannel;

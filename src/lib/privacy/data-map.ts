@@ -656,7 +656,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       created_by: 'reference',
       contact_email: 'contact',
       address: 'company',
-      // #1129 (0950): kanał aplikowania — publiczny w ofercie publicznej (get_public_job).
+      // #1129 (0172): kanał aplikowania — publiczny w ofercie publicznej (get_public_job).
       apply_url: 'company',
       apply_email: 'contact',
       apply_phone: 'contact',

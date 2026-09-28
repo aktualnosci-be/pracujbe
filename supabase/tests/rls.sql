@@ -3616,7 +3616,7 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   (:'EXJ6',:'COMPA','ex72-6','Oferta EX6','warehouse','permanent','Antwerpia','Flandria','active','pl', null),
   (:'EXJ7',:'COMPA','ex72-7','Oferta EX7','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '2 hours'),
   (:'EXJ8',:'COMPA','ex72-8','Oferta EX8','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '3 hours');
--- 0950: kanał aplikowania (publikacja go wymaga — sekcja AC950).
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
 update public.jobs set apply_email = 'praca@example.be' where id in (:'EXJ3');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'EXJ3', 'pl', 'Oferta EX3', 'Opis oferty magazynowej EX3.', array['Kompletacja']),
@@ -7008,7 +7008,7 @@ reset role; reset app.current_uid;
 insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
   (:'SRJOB', :'COMPA', :'EMPA', 'draft-sr497', 'Magazynier SR', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
   (:'SRJOB2', :'COMPA', :'EMPA', 'draft-sr497-2', 'Kierowca SR', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
--- 0950: kanał aplikowania (publikacja go wymaga — sekcja AC950).
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
 update public.jobs set apply_email = 'praca@example.be' where id in (:'SRJOB', :'SRJOB2');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'SRJOB', 'pl', 'Magazynier SR', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień']),
@@ -16193,7 +16193,7 @@ insert into public.jobs(id, company_id, created_by, slug, title, category, contr
           'Flandria', 'draft', 'nl', 16, 18, 'hour', 'hr@jd.be', true, false),
          (:'JOBJD2', :'COMPJD', :'OWNJD', 'draft-jd216-2', 'Kierowca JD', 'transport', 'permanent', 'Gandawa',
           'Flandria', 'draft', 'pl', null, null, 'month', null, false, false);
--- 0950: kanał aplikowania (publikacja go wymaga — sekcja AC950).
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
 update public.jobs set apply_email = 'praca@example.be' where id in (:'JOBJD', :'JOBJD2');
 insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits, highlights, meta_title) values
   (:'JOBJD', 'nl', 'Operator JD', 'Werk in het magazijn.', array['Orderpicking'], array['Nachtpremie'], array['Nachtpremie'], 'SEO JD'),
@@ -16453,7 +16453,7 @@ reset role; reset app.current_uid;
 -- CB2: szkic zapisuje koszty w save_job_draft (krok 8 — jeden patch).
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values (:'CBDRAFT', :'COMPA', 'draft-cb169', 'Magazynier CB169', 'warehouse', 'temporary', 'Gent', 'Flandria', 'draft', 'pl');
--- 0950: kanał aplikowania (publikacja go wymaga — sekcja AC950).
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
 update public.jobs set apply_email = 'praca@example.be' where id in (:'CBDRAFT');
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
@@ -17064,7 +17064,7 @@ insert into public.company_members(company_id, profile_id, role, is_active) valu
 insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
   (:'FTJOB', :'FTCOMP', :'EMPA', 'draft-ft910', 'Magazynier FT', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
   (:'FTJOB2', :'FTCOMP', :'EMPA', 'draft-ft910-2', 'Kierowca FT', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
--- 0950: kanał aplikowania (publikacja go wymaga — sekcja AC950).
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
 update public.jobs set apply_email = 'praca@example.be' where id in (:'FTJOB', :'FTJOB2');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'FTJOB', 'pl', 'Magazynier FT', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień']),
@@ -17900,7 +17900,7 @@ select pg_temp.assert((select count(*) = 0 from public.get_conversation_template
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- AC950. Kanał aplikowania u ogłoszeniodawcy (0950, #1129): CHECK formatu (URL https,
+-- AC172. Kanał aplikowania u ogłoszeniodawcy (0172, #1129): CHECK formatu (URL https,
 --        e-mail bez parametrów mailto, telefon +cyfry), publikacja i rewizja wymagają co
 --        najmniej jednego kanału (JOB_APPLY_CHANNEL_REQUIRED), save_job_draft zapisuje
 --        klucze, get_public_job zwraca kanał wyłącznie dla oferty publicznej.
@@ -17911,7 +17911,7 @@ reset role; reset app.current_uid;
 reset role; reset app.current_uid;
 update public.companies set status = 'verified' where id = :'COMPA';
 insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
-  (:'ACJOB', :'COMPA', :'EMPA', 'draft-ac950', 'Magazynier AC', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+  (:'ACJOB', :'COMPA', :'EMPA', 'draft-ac172', 'Magazynier AC', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'ACJOB', 'pl', 'Magazynier AC', 'Praca w magazynie w Gandawie, zmiana dzienna.', array['Kompletacja zamówień']);
 insert into public.job_requirements(job_id, locale, kind, position, content) values
@@ -17961,7 +17961,7 @@ rollback;
 
 -- AC2: szkic bez kanału nie publikuje się; stan bez zmian.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'ACJOB', 'ac950'),
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'ACJOB', 'ac172'),
   'JOB_APPLY_CHANNEL_REQUIRED', 'AC2 publish_job bez kanału → JOB_APPLY_CHANNEL_REQUIRED');
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.jobs where id = :'ACJOB') = 'draft',
@@ -17978,7 +17978,7 @@ begin
   execute d;
 end $$;
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
-select public.publish_job(:'ACJOB'::uuid, 'ac950-bez-kanalu') is not null as ok \gset ac2c_
+select public.publish_job(:'ACJOB'::uuid, 'ac172-bez-kanalu') is not null as ok \gset ac2c_
 reset role;
 select pg_temp.assert((select status::text from public.jobs where id = :'ACJOB') = 'active',
   'AC2c kontrola ujemna: bez sprawdzenia kanału szkic bez kanału staje się aktywny');
@@ -18000,7 +18000,7 @@ select pg_temp.assert(
 
 -- AC4: z kanałem publikacja przechodzi; get_public_job zwraca kanał.
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
-select public.publish_job(:'ACJOB'::uuid, 'magazynier-ac950') as ac_slug \gset
+select public.publish_job(:'ACJOB'::uuid, 'magazynier-ac172') as ac_slug \gset
 reset role; reset app.current_uid;
 select pg_temp.assert((select status::text from public.jobs where id = :'ACJOB') = 'active',
   'AC4 publish_job z kanałem → active');
@@ -18037,15 +18037,15 @@ select pg_temp.assert((select apply_email from public.jobs where id = :'ACJOB') 
 insert into public.companies(id, name, status) values (:'ACCOMP', 'Firma AC niezweryfikowana', 'pending');
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale,
                         apply_email, published_at) values
-  (:'ACJOB2', :'ACCOMP', 'ac950-pending', 'Oferta AC2', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl',
+  (:'ACJOB2', :'ACCOMP', 'ac172-pending', 'Oferta AC2', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl',
    'praca@ac2.be', now());
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, apply_email)
-  values ('e9500000-0000-0000-0000-0000000000a3', :'COMPA', 'draft-ac950-3', 'Szkic AC3', 'warehouse', 'permanent',
+  values ('e9500000-0000-0000-0000-0000000000a3', :'COMPA', 'draft-ac172-3', 'Szkic AC3', 'warehouse', 'permanent',
           'Gandawa', 'Flandria', 'draft', 'pl', 'praca@firma-a.be');
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
-  (select count(*) from public.get_public_job('ac950-pending', 'pl')) = 0
-  and (select count(*) from public.get_public_job('draft-ac950-3', 'pl')) = 0,
+  (select count(*) from public.get_public_job('ac172-pending', 'pl')) = 0
+  and (select count(*) from public.get_public_job('draft-ac172-3', 'pl')) = 0,
   'AC6 get_public_job bez kanału dla firmy niezweryfikowanej i szkicu');
 reset role;
 

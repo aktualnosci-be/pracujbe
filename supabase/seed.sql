@@ -870,7 +870,7 @@ insert into jobs (id, company_id, created_by, slug, default_locale, title, statu
   ('00000000-0000-0000-0000-000040000050', '00000000-0000-0000-0000-000030000010', '00000000-0000-0000-0000-000010000010', 'packer-brussels-50', 'pl', 'Pakowacz', 'draft'::job_status, 'production'::job_category, 'packer', 'interim'::contract_type, 'Brussels', 'Brussels', 'Werfstraat 50', false, 2500, 3240, 'EUR', 'month'::salary_period, 'Pelny etat, 38-40 godz./tydzien', 'Praca zmianowa (3 zmiany)', true, NULL, 2, false, true, true, true, true, 'jobs@interim-west.be', 200, 0, NULL, NULL, true)
 on conflict (id) do nothing;
 
--- Kanał aplikowania u ogłoszeniodawcy (0950, #1129): strona albo e-mail w zarezerwowanej
+-- Kanał aplikowania u ogłoszeniodawcy (0172, #1129): strona albo e-mail w zarezerwowanej
 -- domenie example.com (bez prawdziwych adresów); co trzecia oferta ma też telefon.
 update jobs set
   apply_url   = case when right(id::text, 1) in ('1', '3', '5', '7', '9') then 'https://example.com/jobs/' || slug end,

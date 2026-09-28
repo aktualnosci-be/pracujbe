@@ -110,7 +110,7 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
       return {
         job: {
           contact_email: nullIfEmpty(v.contactEmail),
-          // #1129 (0950): kanał aplikowania; pusta wartość czyści pole szkicu.
+          // #1129 (0172): kanał aplikowania; pusta wartość czyści pole szkicu.
           apply_url: nullIfEmpty(v.applyUrl),
           apply_email: nullIfEmpty(v.applyEmail),
           apply_phone: nullIfEmpty(v.applyPhone),
