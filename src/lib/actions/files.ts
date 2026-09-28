@@ -6,6 +6,7 @@ import { isProductionMode } from '@/lib/env';
 import { AppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 
 /**
@@ -15,6 +16,10 @@ import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
  *
  * Bez konfiguracji bucketu: poza produkcją `DEMO_UNAVAILABLE` (bez fikcyjnego sukcesu),
  * w trybie produkcyjnym `INTERNAL` (fail-closed).
+ *
+ * #1138 — decyzja produktowa: portal ogłoszeniowy. W trybie ogłoszeniowym nowe CV nie powstają
+ * (`uploadCandidateCv` → `RECRUITMENT_DISABLED` przed limiterem, walidacją, bucketem i bazą);
+ * pobranie i usunięcie WŁASNYCH istniejących plików działają dalej (prawa do danych).
  */
 
 /** `reason` rozróżnia błędy walidacji pliku (rozmiar / format), by UI podało konkretny komunikat. */
@@ -44,6 +49,7 @@ function unexpected(area: string): { ok: false; error: 'INTERNAL' } {
 
 /** Upload CV kandydata (PDF/DOC/DOCX, <=5MB). */
 export async function uploadCandidateCv(formData: FormData): Promise<UploadResult> {
+  if (!isRecruitmentEnabled('cvAccess')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   if (!(await checkRateLimit('upload', { max: 20, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }

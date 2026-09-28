@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
+import { PORTAL_LEGAL_MODE_ENV } from '../../src/lib/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym rozmowy są wyłączone (#1134).
+withRecruitmentMode();
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -27,6 +32,8 @@ function pg() {
 }
 
 beforeAll(async () => {
+  // Hooki `withRecruitmentMode` (beforeEach) nie obejmują przygotowania danych w beforeAll.
+  vi.stubEnv(PORTAL_LEGAL_MODE_ENV, 'RECRUITMENT');
   const db = await startPortalDb();
   realSession.db = db;
   const make = async (role: 'candidate' | 'employer', locale: string) =>
@@ -59,7 +66,7 @@ beforeAll(async () => {
   recruiterMessage = sent.id;
 });
 
-afterAll(async () => { await realSession.db?.stop(); });
+afterAll(async () => { await realSession.db?.stop(); vi.unstubAllEnvs(); });
 
 describe('zgłoszenia wiadomości na PostgreSQL (0116)', () => {
   it('kandydatka zgłasza wiadomość rekrutera; ponowienie = duplicate; nowy klucz = already_open', async () => {

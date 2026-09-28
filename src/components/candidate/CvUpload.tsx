@@ -25,6 +25,10 @@ import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
  * #362: rozmiar i format sprawdzamy w przeglądarce PRZED wysyłką (wspólne reguły z serwerem,
  * `checkCvFile`) — plik > 5 MB nie trafia na limit ciała Server Actions (413 → granica błędu).
  * Wywołanie akcji jest w `try/catch`, więc błąd sieci daje komunikat, a nie wywrócenie strony.
+ *
+ * #1138: `allowUpload` podaje serwer (tryb produktu — komponent kliencki nie zna zmiennej
+ * trybu). Bez niego (domyślnie, fail-closed) komponent jest samą listą istniejących plików
+ * z „Pobierz”/„Usuń” — bez przycisku „Wgraj” i pola pliku (tryb ogłoszeniowy).
  */
 export interface CvItem {
   id: string;
@@ -36,9 +40,11 @@ export interface CvItem {
 export function CvUpload({
   items,
   loadFailed = false,
+  allowUpload = false,
 }: {
   items: CvItem[];
   loadFailed?: boolean;
+  allowUpload?: boolean;
 }): React.JSX.Element {
   const t = useTranslations('files');
   const tErrors = useTranslations('errors');
@@ -46,6 +52,7 @@ export function CvUpload({
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const uploadRef = React.useRef<HTMLButtonElement>(null);
+  const titleRef = React.useRef<HTMLHeadingElement>(null);
   const deleteTriggerRef = React.useRef<HTMLButtonElement | null>(null);
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
@@ -55,7 +62,7 @@ export function CvUpload({
 
   // Po usunięciu kosz znika; fokus idzie do „Wgraj", gdy przestanie być zablokowany zapisem.
   React.useEffect(() => {
-    if (deleted && !pending) uploadRef.current?.focus();
+    if (deleted && !pending) (uploadRef.current ?? titleRef.current)?.focus();
   }, [deleted, pending]);
 
   function onPick(): void {
@@ -161,7 +168,10 @@ export function CvUpload({
   return (
     <div className="min-w-0 rounded-lg border border-border bg-background p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-foreground">{t('cvTitle')}</h3>
+        <h3 ref={titleRef} tabIndex={-1} className="text-sm font-semibold text-foreground">
+          {t(allowUpload ? 'cvTitle' : 'existingTitle')}
+        </h3>
+        {allowUpload ? (<>
         <button
           ref={uploadRef}
           type="button"
@@ -179,9 +189,10 @@ export function CvUpload({
           className="hidden"
           onChange={onChange}
         />
+        </>) : null}
       </div>
 
-      <p className="mb-3 text-xs text-muted-foreground">{t('cvHint')}</p>
+      <p className="mb-3 text-xs text-muted-foreground">{t(allowUpload ? 'cvHint' : 'existingHint')}</p>
 
       {items.length > 0 ? (
         <ul className="space-y-2">
@@ -250,7 +261,7 @@ export function CvUpload({
           if (confirmItem) onDelete(confirmItem.id);
         }}
         pending={pending}
-        getReturnFocus={() => (deletedRef.current ? uploadRef.current : deleteTriggerRef.current)}
+        getReturnFocus={() => (deletedRef.current ? (uploadRef.current ?? titleRef.current) : deleteTriggerRef.current)}
       />
     </div>
   );

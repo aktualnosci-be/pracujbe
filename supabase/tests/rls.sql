@@ -18721,4 +18721,114 @@ set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLSCR: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
 
+-- ============================================================================
+-- CL174 — tryb ogłoszeniowy: wiadomości i CV (#1134, #1138; migracja 0174)
+-- Uzupełnia CL1128 (0171): list newMessage wygaszany w kolejce, brak nowych plików CV,
+-- apply_candidate_cv_proposals ze strażnikiem trybu. Istniejące CV: odczyt i usunięcie zostają.
+-- ============================================================================
+\echo '--- CL174 tryb ogłoszeniowy: newMessage w kolejce, pliki CV, import CV (0174) ---'
+\set CL9C 'e9600000-0000-0000-0000-0000000000c1'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CL174-pre tryb RECRUITMENT na starcie sekcji');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CL9C','cl960-cand@test.be','Cyryl C','{"role":"candidate","first_name":"Cyryl","last_name":"Cand","locale":"pl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id = :'CL9C';
+
+-- Tryb RECRUITMENT: CV i propozycje z CV działają (kontrola dodatnia).
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+insert into public.files(owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility)
+  values (auth.uid(), 'candidate-files', :'CL9C' || '/cv-old.pdf', 'cv-old.pdf', 'application/pdf', 10, 'candidate_cv', 'private')
+  returning id as cvold \gset
+select pg_temp.assert((public.apply_candidate_cv_proposals(array['Magazynier'], array['Wózek CL174'], null, null, null)->>'skills')::int = 1,
+  'CL174-pre apply_candidate_cv_proposals działa w trybie RECRUITMENT');
+reset role;
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CL9C'::uuid, 'newMessage', 'cl960-cand@test.be', null, null, null)
+    is distinct from 'suppressed_recruitment_disabled',
+  'CL174-pre newMessage nie jest wygaszany w trybie RECRUITMENT');
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CL174', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'CL174-0 tryb ogłoszeniowy');
+
+-- CL174-1: list newMessage wygaszany (także wiersz z kolejki sprzed zmiany trybu).
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CL9C'::uuid, 'newMessage', 'cl960-cand@test.be', null, null, null)
+    = 'suppressed_recruitment_disabled',
+  'CL174-1 email_delivery_suppression_reason(newMessage) = suppressed_recruitment_disabled');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CL9C'::uuid, 'companyVerified', 'cl960-cand@test.be', null, null, null)
+    is distinct from 'suppressed_recruitment_disabled',
+  'CL174-1b inne szablony bez nowego powodu');
+insert into public.email_deliveries(profile_id, to_email, template, status, next_attempt_at, lock_token, locked_at, updated_at)
+  values (:'CL9C', 'cl960-cand@test.be', 'newMessage', 'queued', now(), '00000000-0000-4000-8000-00000000c960', now(), now())
+  returning id as cvmail \gset
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'cvmail'::uuid, '00000000-0000-4000-8000-00000000c960') = 'suppressed_recruitment_disabled',
+  'CL174-1c email_delivery_send_check wygasza newMessage z kolejki');
+reset role;
+select pg_temp.assert((select status = 'failed' and suppressed_at is not null
+    and error_message = 'suppressed_recruitment_disabled' from public.email_deliveries where id = :'cvmail'),
+  'CL174-1d wiersz kolejki = failed/suppressed, nie wysłany');
+
+-- CL174-2: nowy plik CV odrzucony dla każdej roli.
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($f$insert into public.files(owner_id, bucket, path, entity_type)
+    values (%L, 'candidate-files', %L, 'candidate_cv')$f$, :'CL9C', :'CL9C' || '/cv-new.pdf'),
+  'RECRUITMENT_DISABLED', 'CL174-2 INSERT CV (kandydat) → RECRUITMENT_DISABLED');
+-- CL174-3: istniejące własne CV — odczyt, zmiana metadanych i usunięcie działają.
+select pg_temp.assert((select count(*) from public.files where id = :'cvold') = 1,
+  'CL174-3 kandydat widzi własne istniejące CV');
+reset role;
+set role service_role;
+select pg_temp.expect_error(format($f$insert into public.files(owner_id, bucket, path, entity_type)
+    values (%L, 'candidate-files', %L, 'candidate_cv')$f$, :'CL9C', :'CL9C' || '/cv-svc.pdf'),
+  'RECRUITMENT_DISABLED', 'CL174-2b INSERT CV (service_role) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format($f$update public.files set path = %L where id = %L$f$, :'CL9C' || '/cv-moved.pdf', :'cvold'),
+  'RECRUITMENT_DISABLED', 'CL174-2c podmiana ścieżki istniejącego CV → RECRUITMENT_DISABLED');
+update public.files set scan_status = 'clean' where id = :'cvold';
+reset role;
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+delete from public.files where id = :'cvold';
+reset role;
+select pg_temp.assert((select count(*) from public.files where id = :'cvold') = 0,
+  'CL174-3b kandydat usuwa własne CV w trybie ogłoszeniowym');
+
+-- CL174-4: import CV przez AI — zapis propozycji odrzucony przed jakimkolwiek zapisem.
+select count(*) as cv_skills0 from public.candidate_skills cs
+  join public.candidate_profiles cp on cp.id = cs.candidate_profile_id where cp.profile_id = :'CL9C' \gset
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.apply_candidate_cv_proposals(null, array['Spawanie CL174'], null, null, null)$$,
+  'RECRUITMENT_DISABLED', 'CL174-4 apply_candidate_cv_proposals → RECRUITMENT_DISABLED');
+select pg_temp.expect_error($$select public.apply_candidate_cv_proposals_impl(null, array['Spawanie CL174'], null, null, null)$$,
+  'permission denied', 'CL174-4b klient nie woła treści bez strażnika (_impl)');
+reset role;
+select pg_temp.assert((select count(*) from public.candidate_skills cs
+  join public.candidate_profiles cp on cp.id = cs.candidate_profile_id where cp.profile_id = :'CL9C') = :cv_skills0,
+  'CL174-4c brak nowych umiejętności po odrzuceniu');
+
+-- CL174-N (kontrole ujemne): bez strażnika pliku CV INSERT przechodzi; treść bez nakładki zapisuje.
+begin;
+drop trigger trg_aa_recruitment_mode_cv on public.files;
+set local role authenticated; select set_config('app.current_uid', :'CL9C', true); select pg_temp.assert_client_role();
+insert into public.files(owner_id, bucket, path, entity_type)
+  values (auth.uid(), 'candidate-files', :'CL9C' || '/cv-neg.pdf', 'candidate_cv');
+reset role;
+select pg_temp.assert((select count(*) from public.files where path = :'CL9C' || '/cv-neg.pdf') = 1,
+  'CL174-N1 kontrola ujemna: bez triggera nowy plik CV powstaje w trybie ogłoszeniowym');
+rollback;
+begin;
+select set_config('app.current_uid', :'CL9C', true);
+select pg_temp.assert((public.apply_candidate_cv_proposals_impl(null, array['Spawanie CL174'], null, null, null)->>'skills')::int = 1,
+  'CL174-N2 kontrola ujemna: bez nakładki ze strażnikiem propozycje z CV zapisują się w trybie ogłoszeniowym');
+rollback;
+reset app.current_uid;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CL174: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -2,6 +2,7 @@ import { emptyAttachmentResponse, openAttachmentDownload } from '@/lib/files/mes
 import { getAttachmentServiceDeps, readSessionUserId } from '@/lib/files/runtime';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Pobranie załącznika wiadomości (0119, Invariant #10). Link wystawia akcja
@@ -9,6 +10,8 @@ import { captureError } from '@/lib/error-report';
  * użytkownikiem). Trasa ponownie sprawdza bieżącą sesję, podpis, dostęp do rozmowy (baza:
  * członkostwo, blokada firmy) i stan skanu, a bajty strumieniuje z prywatnego bucketu — bez
  * przekierowania na adres S3. Każda odmowa = 404 bez treści (bez enumeracji plików).
+ *
+ * #1134: w trybie ogłoszeniowym zawsze 404 — także z ważnym tokenem (bez sesji, bazy i bucketu).
  */
 
 export const runtime = 'nodejs';
@@ -18,6 +21,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  if (!isRecruitmentEnabled('messaging')) return emptyAttachmentResponse(404);
   const { id } = await params;
   const token = new URL(request.url).searchParams.get('t') ?? '';
   try {
