@@ -11,6 +11,7 @@ import {
 import type { TransactionPool } from '@/lib/db/transaction';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import {
   createPrivateDownloadToken,
   verifyPrivateDownloadToken,
@@ -89,6 +90,8 @@ export async function storeCandidateCv(
   userId: string,
   file: CvUploadInput,
 ): Promise<CvUploadResult> {
+  // #1138: druga linia obrony w serwisie (tryb ogłoszeniowy) — bez odczytu pliku, PUT i INSERT.
+  if (!isRecruitmentEnabled('cvAccess')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const problem = checkCvFile(file);
   if (problem) return { ok: false, error: 'VALIDATION_FAILED', reason: problem };
   const ext = CV_ALLOWED_TYPES.get(file.type)!;

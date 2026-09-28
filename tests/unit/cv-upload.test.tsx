@@ -9,6 +9,10 @@ import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
 import en from '@/messages/en.json';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 vi.mock('@/lib/actions/files', () => ({
   uploadCandidateCv: vi.fn(),
@@ -35,7 +39,7 @@ const fileName = 'candidate-cv.pdf';
 function renderCv(locale: keyof typeof messages, items = [{ id: 'fixture-cv', fileName, downloadable: true }]) {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages[locale]}>
-      <CvUpload items={items} />
+      <CvUpload items={items} allowUpload />
     </NextIntlClientProvider>,
   );
 }
@@ -90,7 +94,7 @@ describe('Lista CV', () => {
     (locale) => {
       render(
         <NextIntlClientProvider locale={locale} messages={messages[locale]}>
-          <CvUpload items={[]} loadFailed />
+          <CvUpload items={[]} loadFailed allowUpload />
         </NextIntlClientProvider>,
       );
       const m = messages[locale];
@@ -196,5 +200,42 @@ describe('Wgrywanie CV — rozmiar i format (#362)', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: pl.files.upload })).toBeEnabled();
     });
+  });
+});
+
+describe('CvUpload bez wgrywania (#1138 — tryb ogłoszeniowy)', () => {
+  const uploadLabels = { pl: pl.files.upload, nl: nl.files.upload, fr: fr.files.upload, en: en.files.upload };
+
+  it.each(['pl', 'nl', 'fr', 'en'] as const)('%s: lista istniejących plików z „Pobierz”/„Usuń”, bez „Wgraj”', (locale) => {
+    const { container } = render(
+      <NextIntlClientProvider locale={locale} messages={messages[locale]}>
+        <CvUpload items={[{ id: 'fixture-cv', fileName, downloadable: true }]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.queryByRole('button', { name: uploadLabels[locale] })).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.getByRole('heading', { name: messages[locale].files.existingTitle })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `${removeLabels[locale]}: ${fileName}` })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `${messages[locale].files.download}: ${fileName}` })).toBeInTheDocument();
+  });
+
+  it('kontrola ujemna: z allowUpload przycisk „Wgraj” i pole pliku są', () => {
+    const { container } = renderCv('pl');
+    expect(screen.getByRole('button', { name: pl.files.upload })).toBeInTheDocument();
+    expect(container.querySelector('input[type="file"]')).not.toBeNull();
+  });
+
+  it('usunięcie pliku bez wgrywania: fokus wraca na nagłówek sekcji', async () => {
+    vi.mocked(deleteCandidateFile).mockResolvedValue({ ok: true });
+    render(
+      <NextIntlClientProvider locale="pl" messages={pl}>
+        <CvUpload items={[{ id: 'fixture-cv', fileName, downloadable: true }]} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: `${removeLabels.pl}: ${fileName}` }));
+    fireEvent.click(await screen.findByRole('button', { name: pl.files.delete }));
+    await waitFor(() => expect(deleteCandidateFile).toHaveBeenCalledWith('fixture-cv'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: pl.files.existingTitle })).toHaveFocus());
+    expect(uploadCandidateCv).not.toHaveBeenCalled();
   });
 });

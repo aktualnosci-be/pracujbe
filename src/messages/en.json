@@ -1971,6 +1971,8 @@
     "upload": "Upload",
     "uploading": "Uploading…",
     "cvHint": "PDF, DOC or DOCX, max 5 MB. Files are private.",
+    "existingTitle": "Your previously uploaded documents",
+    "existingHint": "You can download or delete files you uploaded earlier. Files are private.",
     "empty": "No documents uploaded yet.",
     "delete": "Delete",
     "download": "Download",

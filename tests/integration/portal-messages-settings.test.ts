@@ -80,6 +80,8 @@ beforeAll(async () => {
 afterAll(async () => { await realSession.db?.stop(); });
 
 describe('wiadomości na PostgreSQL (#25)', () => {
+  // #1134: rozmowy istnieją tylko w trybie RECRUITMENT.
+  withRecruitmentMode();
   it('get_or_create_conversation: strona aplikacji otwiera rozmowę, ponowienie = ta sama', async () => {
     actAs(anna);
     const first = await messagesActions.openConversation({ applicationId: application });
@@ -229,6 +231,8 @@ describe('zapisane wyszukiwania (#100)', () => {
 });
 
 describe('blokada firmy (#97)', () => {
+  // #1134: rozmowy (a z nimi blokada wiadomości firmy) istnieją tylko w trybie RECRUITMENT.
+  withRecruitmentMode();
   it('kandydatka blokuje firmę: lista, szczegół oferty, blokada wiadomości firmy; inny kandydat bez zmian', async () => {
     actAs(anna);
     expect(await blocksActions.setCompanyBlockAction(companyX, true)).toEqual({ ok: true, blocked: true });
