@@ -158,6 +158,11 @@ describe('submitGuestApplication', () => {
     expect(await submitGuestApplication(input)).toEqual({ ok: false, error: 'AGE_ATTESTATION_REQUIRED', field: 'age' });
   });
 
+  it('#1140: baza w trybie ogłoszeniowym → RECRUITMENT_DISABLED', async () => {
+    failRpc('submit_guest_application', 'RECRUITMENT_DISABLED');
+    expect(await submitGuestApplication(input)).toEqual({ ok: false, error: 'RECRUITMENT_DISABLED' });
+  });
+
   it('maps RPC errors without leaking technical details', async () => {
     failRpc('submit_guest_application', 'JOB_NOT_ACTIVE');
     expect(await submitGuestApplication(input)).toEqual({ ok: false, error: 'JOB_NOT_ACTIVE' });
@@ -191,6 +196,13 @@ describe('confirmGuestApplication', () => {
     expect(fakeDb.calls).toHaveLength(0);
   });
 
+  it('#1140: baza w trybie ogłoszeniowym → RECRUITMENT_DISABLED (bez kanału błędów, bez czyszczenia linku)', async () => {
+    vi.mocked(readGuestLinkToken).mockResolvedValue(token);
+    failRpc('confirm_guest_application', 'RECRUITMENT_DISABLED');
+    expect(await confirmGuestApplication('pl')).toEqual({ ok: false, error: 'RECRUITMENT_DISABLED' });
+    expect(clearGuestLinkToken).not.toHaveBeenCalled();
+  });
+
   it('unknown outcome or unsafe slug is not passed through', async () => {
     vi.mocked(readGuestLinkToken).mockResolvedValue(token);
     fakeDb.rpc('confirm_guest_application', [{ outcome: 'hacked' }]);
@@ -221,6 +233,7 @@ describe('claimGuestApplication', () => {
     ['APPLICATION_ALREADY_EXISTS', 'APPLICATION_ALREADY_EXISTS'],
     ['PERMISSION_DENIED: przejąć aplikację może tylko konto kandydata', 'PERMISSION_DENIED'],
     ['NOT_FOUND', 'NOT_FOUND'],
+    ['RECRUITMENT_DISABLED', 'RECRUITMENT_DISABLED'],
     ['connection reset', 'INTERNAL'],
   ])('%s → %s', async (message, code) => {
     vi.mocked(readGuestLinkToken).mockResolvedValue(token);
