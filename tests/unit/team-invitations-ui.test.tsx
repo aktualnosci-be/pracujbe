@@ -11,7 +11,7 @@ import fr from '@/messages/fr.json';
 import en from '@/messages/en.json';
 
 /**
- * Oczekujące zaproszenia w `/employer/zespol` (0235): język zaproszenia, kto i kiedy
+ * Oczekujące zaproszenia w `/employer/zespol` (0951): język zaproszenia, kto i kiedy
  * zaprosił, „Odnów” bez potwierdzenia (niczego nie odbiera) i „Cofnij” dopiero po
  * potwierdzeniu w dialogu. Przyciski tylko dla ról, którymi zapraszający zarządza.
  */
@@ -51,7 +51,7 @@ const INVITATIONS: TeamInvitationView[] = [
 function renderInvite(actorRole: string, locale: keyof typeof messages = 'pl') {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages[locale]}>
-      <TeamInvite actorRole={actorRole} invitations={INVITATIONS} />
+      <TeamInvite companyId="c-1" actorRole={actorRole} invitations={INVITATIONS} />
     </NextIntlClientProvider>,
   );
 }
@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('oczekujące zaproszenia (0235)', () => {
+describe('oczekujące zaproszenia (0951)', () => {
   it('pokazuje język, autora i datę; brak języka i autora = neutralne etykiety', () => {
     renderInvite('owner');
     const rec = rowOf('rita@firma.be');
@@ -83,7 +83,7 @@ describe('oczekujące zaproszenia (0235)', () => {
         name: t.renewLabel.replace('{email}', 'rita@firma.be'),
       }),
     );
-    await waitFor(() => expect(renewTeamInvitation).toHaveBeenCalledExactlyOnceWith('inv-rec'));
+    await waitFor(() => expect(renewTeamInvitation).toHaveBeenCalledExactlyOnceWith('inv-rec', 'c-1'));
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent(t.renewed);
     await waitFor(() => expect(status).toHaveFocus());

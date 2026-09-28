@@ -1781,16 +1781,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
   TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
   unit `team-invitation-signup-preview`.
-  Oczekujące zaproszenia (migracja `0235` — numer tymczasowy): `get_company_invitations`
+  Oczekujące zaproszenia (migracja `0951` — numer tymczasowy): `get_company_invitations`
   zwraca też `locale` (null dla zaproszeń sprzed 0121) i `inviter_name` (bramka owner/admin
   bez zmian; zmiana typu wyniku = DROP + CREATE). Wiersz listy w `/employer/zespol` pokazuje
-  język zaproszenia, kto i kiedy zaprosił. „Odnów” (`renewTeamInvitation`): klient podaje tylko
+  język zaproszenia, kto i kiedy zaprosił. „Odnów” (`renewTeamInvitation(id, expectedCompanyId)`, firma widoku jak przy
+  zapraszaniu — inna aktywna firma = `ACTIVE_COMPANY_CHANGED`): klient podaje tylko
   id, adres/rolę/język akcja czyta z listy AKTYWNEJ firmy w tej samej transakcji i woła
   `invite_company_member` z nowym tokenem (14 dni, nowy link dla adresu bez konta, limit 3/dobę
   jak dotąd; zaproszenie bez języka → `en`); spoza listy = `NOT_FOUND`. „Cofnij” dopiero po
   potwierdzeniu w `ConfirmDialog` (własna etykieta `team.revokeConfirm` — po francusku „Annuler”
   = także „Anuluj”, test pilnuje różnicy); po sukcesie fokus na komunikacie `role="status"`. Dowód:
-  `rls.sql` sekcja TI235 (kontrola ujemna: definicja z 0086 bez `locale`), unit
+  `rls.sql` sekcja TI951 (kontrola ujemna: definicja z 0086 bez `locale`), unit
   `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
   (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
 

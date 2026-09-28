@@ -1,4 +1,4 @@
--- 0235_team_invitation_details.sql — oczekujące zaproszenia do zespołu: język, autor i data
+-- 0951_team_invitation_details.sql — oczekujące zaproszenia do zespołu: język, autor i data
 -- wysłania na liście w `/employer/zespol` (numer tymczasowy; ostateczny nada integrator).
 --
 -- `get_company_invitations` (0086) zwracał tylko adres, rolę i ważność. Panel zespołu nie

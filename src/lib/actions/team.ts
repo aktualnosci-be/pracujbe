@@ -30,7 +30,7 @@ import {
  *                              zaproszenia i jednorazowy token linku rejestracji dla adresu
  *                              bez konta (0121) — wynik nie zależy od istnienia konta,
  *   - `revokeTeamInvitation` — cofnięcie oczekującego zaproszenia,
- *   - `renewTeamInvitation`  — odnowienie oczekującego zaproszenia (adres/rola/język z bazy, 0235),
+ *   - `renewTeamInvitation`  — odnowienie oczekującego zaproszenia (adres/rola/język z bazy, 0951),
  *   - `setTeamMemberRole`    — zmiana roli członka,
  *   - `setTeamMemberActive`  — dezaktywacja / przywrócenie członka,
  *   - `respondToTeamInvitation` — przyjęcie / odrzucenie zaproszenia przez adresata;
@@ -132,7 +132,7 @@ export async function revokeTeamInvitation(invitationId: string): Promise<TeamAc
 }
 
 /**
- * Odnowienie oczekującego zaproszenia (0235): kolejne 14 dni ważności i nowy link rejestracji
+ * Odnowienie oczekującego zaproszenia (0951): kolejne 14 dni ważności i nowy link rejestracji
  * dla adresu bez konta — bez przepisywania adresu, roli i języka przez zapraszającego.
  *
  * Adres, rolę i język bierzemy z BAZY (`get_company_invitations` aktywnej firmy, owner/admin),
@@ -144,7 +144,10 @@ export async function revokeTeamInvitation(invitationId: string): Promise<TeamAc
  * Konto z profilem nadal dostaje komunikaty w języku swojego konta (bez nowego e-maila — samo
  * zaproszenie czeka w jego panelu). Wynik nie zależy od tego, czy adres ma konto.
  */
-export async function renewTeamInvitation(invitationId: string): Promise<TeamActionResult> {
+export async function renewTeamInvitation(
+  invitationId: string,
+  expectedCompanyId: string,
+): Promise<TeamActionResult> {
   if (!uuidSchema.safeParse(invitationId).success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
   if (await limited('team-invite', INVITE_RATE_MAX)) return fail('RATE_LIMITED');
@@ -157,26 +160,29 @@ export async function renewTeamInvitation(invitationId: string): Promise<TeamAct
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
-    const renewed = await withPortalTransaction(me, async (tx) => {
-      const active = await getActiveCompany(tx, me.id);
-      if (!active.activeId) return false;
-      const pending = await rpcRows(tx, 'get_company_invitations', { p_company_id: active.activeId });
+    const renewed = await withPortalTransaction(me, async (tx): Promise<TeamError | null> => {
+      // Firma widoku (EMP-02, jak przy zapraszaniu): zmiana aktywnej firmy w innej karcie
+      // nie przenosi odnowienia do nowej firmy — `ACTIVE_COMPANY_CHANGED`.
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) return expected.error;
+      const companyId = expected.context.activeId;
+      const pending = await rpcRows(tx, 'get_company_invitations', { p_company_id: companyId });
       const row = pending.find((r) => r['invitation_id'] === invitationId);
       const email = typeof row?.['email'] === 'string' ? row['email'] : '';
       const role = typeof row?.['role'] === 'string' ? row['role'] : '';
-      if (!row || !email || !role) return false;
+      if (!row || !email || !role) return 'NOT_FOUND';
       const locale = isLocale(row['locale']) ? row['locale'] : 'en';
       await rpcRows(tx, 'invite_company_member', {
-        p_company_id: active.activeId,
+        p_company_id: companyId,
         p_email: email,
         p_role: role,
         p_locale: locale,
         p_signup_token_hash: signupToken.hash,
         p_signup_nonce: signupToken.nonce,
       });
-      return true;
+      return null;
     });
-    if (!renewed) return fail('NOT_FOUND');
+    if (renewed) return fail(renewed);
     refreshPanel();
     return { ok: true };
   } catch (e) {

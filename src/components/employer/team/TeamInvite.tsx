@@ -43,7 +43,7 @@ import { cn } from '@/lib/utils';
  * tylko dla adresu bez konta (brak profilu odbiorcy, Invariant #1); konto z profilem dostaje
  * e-mail w swoim języku.
  *
- * Oczekujące zaproszenia (0235): rola, ważność, język zaproszenia, kto i kiedy zaprosił.
+ * Oczekujące zaproszenia (0951): rola, ważność, język zaproszenia, kto i kiedy zaprosił.
  * „Odnów” = kolejne 14 dni i nowy link dla adresu bez konta (adres, rola i język z bazy);
  * „Cofnij” wymaga potwierdzenia w dialogu (link w e-mailu przestaje działać). Jedna operacja
  * naraz; po sukcesie fokus na komunikacie `role="status"` (wiersz może zniknąć).
@@ -279,7 +279,7 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
                       aria-busy={pendingId === inv.id && confirmRevoke === null ? true : undefined}
                       aria-label={t('renewLabel', { email: inv.email })}
                       onClick={() =>
-                        void runInvitation(inv.id, renewTeamInvitation, t('renewed')).then((ok) => {
+                        void runInvitation(inv.id, (id) => renewTeamInvitation(id, companyId), t('renewed')).then((ok) => {
                           if (ok) statusRef.current?.focus();
                         })
                       }

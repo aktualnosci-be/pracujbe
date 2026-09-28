@@ -12,15 +12,23 @@ import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/headers', () => ({ cookies: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
-vi.mock('@/lib/company-context', () => ({
-  ACTIVE_COMPANY_COOKIE: 'pb_active_company',
-  getActiveCompany: vi.fn(),
-}));
+vi.mock('@/lib/company-context', async () => {
+  // Reguła porównania firmy widoku z aktywną jest prawdziwa (matchExpectedCompany) — atrapa
+  // podmienia tylko odczyt aktywnej firmy (cookie + członkostwa).
+  const actual = await vi.importActual<typeof import('@/lib/company-context')>('@/lib/company-context');
+  const getActiveCompany = vi.fn();
+  return {
+    ACTIVE_COMPANY_COOKIE: 'pb_active_company',
+    getActiveCompany,
+    getExpectedActiveCompany: async (tx: never, userId: string, expected: unknown) =>
+      actual.matchExpectedCompany(await getActiveCompany(tx, userId), expected),
+  };
+});
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 /**
- * „Odnów zaproszenie” (0235): klient podaje tylko id; adres, rolę i język akcja bierze
+ * „Odnów zaproszenie” (0951): klient podaje tylko id; adres, rolę i język akcja bierze
  * z `get_company_invitations` AKTYWNEJ firmy i woła ten sam `invite_company_member` co
  * zaproszenie — z nowym tokenem linku rejestracji.
  */
@@ -64,10 +72,10 @@ beforeEach(() => {
   vi.mocked(getActiveCompany).mockResolvedValue({ activeId: COMPANY, activeRole: 'owner' } as never);
 });
 
-describe('renewTeamInvitation (0235)', () => {
+describe('renewTeamInvitation (0951)', () => {
   it('odnawia zaproszenie adresem, rolą i JĘZYKIEM z bazy, z nowym tokenem', async () => {
     const db = setup([pendingRow()]);
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: true });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: true });
     expect(db.calls.map((c) => c.name)).toEqual(['get_company_invitations', 'invite_company_member']);
     expect(db.calls[0]).toMatchObject({ as: USER, args: { p_company_id: COMPANY } });
     const args = db.calls[1]?.args as Record<string, string>;
@@ -85,46 +93,53 @@ describe('renewTeamInvitation (0235)', () => {
 
   it('zaproszenie sprzed 0121 (bez języka) → ostatni stopień fallbacku en', async () => {
     const db = setup([pendingRow({ locale: null })]);
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: true });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: true });
     expect((db.calls[1]?.args as Record<string, string>).p_locale).toBe('en');
   });
 
   it('KONTROLA UJEMNA: zaproszenie spoza listy aktywnej firmy → NOT_FOUND bez zapisu', async () => {
     const db = setup([pendingRow({ invitation_id: OTHER })]);
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: false, error: 'NOT_FOUND' });
     expect(db.calls.map((c) => c.name)).toEqual(['get_company_invitations']);
   });
 
   it('KONTROLA UJEMNA: nie-UUID, brak sesji i brak aktywnej firmy nie docierają do zapisu', async () => {
     const db = setup([pendingRow()]);
-    expect(await renewTeamInvitation("x' or 1=1")).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await renewTeamInvitation("x' or 1=1", COMPANY)).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(db.calls).toHaveLength(0);
 
     vi.mocked(getActiveCompany).mockResolvedValue({ activeId: null, activeRole: 'member' } as never);
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: false, error: 'NOT_FOUND' });
     expect(db.calls).toHaveLength(0);
 
     resetFakeDb(null);
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+  });
+
+  it('KONTROLA UJEMNA: firma widoku ≠ aktywna → ACTIVE_COMPANY_CHANGED, bez żadnego RPC', async () => {
+    const db = setup([pendingRow()]);
+    expect(await renewTeamInvitation(INVITE, OTHER)).toEqual({ ok: false, error: 'ACTIVE_COMPANY_CHANGED' });
+    expect(await renewTeamInvitation(INVITE, '')).toEqual({ ok: false, error: 'ACTIVE_COMPANY_CHANGED' });
+    expect(db.calls).toHaveLength(0);
   });
 
   it('błędy bazy → stabilne kody (bez technikaliów)', async () => {
     setup([pendingRow()], 'MEMBER_ALREADY_EXISTS');
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: false, error: 'MEMBER_ALREADY_EXISTS' });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: false, error: 'MEMBER_ALREADY_EXISTS' });
     setup([pendingRow()], 'PERMISSION_DENIED');
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
   });
 
   it('limit i tryb demo', async () => {
     vi.mocked(checkRateLimit).mockResolvedValue(false);
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: false, error: 'RATE_LIMITED' });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: false, error: 'RATE_LIMITED' });
     fakeSession.configured = false;
-    expect(await renewTeamInvitation(INVITE)).toEqual({ ok: true, demo: true });
+    expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: true, demo: true });
   });
 
-  it('migracja 0235 zwraca język i autora bez zmiany bramki owner/admin', () => {
+  it('migracja 0951 zwraca język i autora bez zmiany bramki owner/admin', () => {
     const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/0235_team_invitation_details.sql'),
+      resolve(process.cwd(), 'supabase/migrations/0951_team_invitation_details.sql'),
       'utf8',
     );
     expect(sql).toMatch(/locale text, inviter_name text/);

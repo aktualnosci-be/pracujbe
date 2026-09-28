@@ -96,7 +96,7 @@ test('odebranie dostępu wymaga potwierdzenia, anulowanie nic nie zmienia (#403)
 });
 
 for (const locale of LOCALES) {
-  test(`oczekujące zaproszenie: język, autor, „Odnów” i „Cofnij” z potwierdzeniem (0235, ${locale})`, async ({ page }) => {
+  test(`oczekujące zaproszenie: język, autor, „Odnów” i „Cofnij” z potwierdzeniem (0951, ${locale})`, async ({ page }) => {
     const t = messages[locale].team;
     const email = 'nowa.osoba@example.be';
     await page.goto(`/${locale}/employer/zespol`);
