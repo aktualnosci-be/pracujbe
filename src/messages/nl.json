@@ -3423,6 +3423,7 @@
       "detailsTooLong": "De beschrijving mag hoogstens 5000 tekens bevatten.",
       "urlInvalid": "Geef een volledig adres dat begint met http:// of https://.",
       "nameTooLong": "De naam mag hoogstens 200 tekens bevatten.",
+      "nameInvalid": "De naam mag alleen letters, spaties en koppeltekens bevatten.",
       "emailRequired": "Vul je e-mailadres in.",
       "emailInvalid": "Vul een geldig e-mailadres in.",
       "goodFaithRequired": "Vink de bevestiging aan om de melding te versturen.",
@@ -3621,6 +3622,7 @@
       "messageTooShort": "Je bericht is te kort — beschrijf je vraag iets uitgebreider.",
       "messageTooLong": "Je bericht is te lang.",
       "nameTooLong": "De voornaam is te lang.",
+      "nameInvalid": "De naam mag alleen letters, spaties en koppeltekens bevatten.",
       "emailRequired": "Vul je e-mailadres in.",
       "emailInvalid": "Vul een geldig e-mailadres in.",
       "sensitiveId": "Verwijder het rijksregisternummer, PESEL of documentnummer — dat is niet nodig om je bericht te beantwoorden."

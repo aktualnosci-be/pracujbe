@@ -11,6 +11,13 @@ const RETRYABLE_PROVIDER_ERRORS: ReadonlySet<string> = new Set([
   'application_error',
   'internal_server_error',
   'concurrent_idempotent_requests',
+  // Konfiguracja konta/klucza i limity dnia/miesiąca dotyczą wszystkich listów naraz i mijają po
+  // poprawce po stronie operatora — nie są odrzuceniem konkretnego listu (nie kończymy wiersza).
+  'missing_api_key',
+  'invalid_api_key',
+  'restricted_api_key',
+  'daily_quota_exceeded',
+  'monthly_quota_exceeded',
 ]);
 
 export function classifyProviderError(name: string | undefined): MailErrorCode {

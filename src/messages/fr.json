@@ -3423,6 +3423,7 @@
       "detailsTooLong": "La description ne peut pas dépasser 5000 caractères.",
       "urlInvalid": "Indiquez une adresse complète commençant par http:// ou https://.",
       "nameTooLong": "Le nom ne peut pas dépasser 200 caractères.",
+      "nameInvalid": "Le nom ne peut contenir que des lettres, des espaces et des tirets.",
       "emailRequired": "Indiquez votre adresse e-mail.",
       "emailInvalid": "Indiquez une adresse e-mail valide.",
       "goodFaithRequired": "Cochez la confirmation pour envoyer le signalement.",
@@ -3621,6 +3622,7 @@
       "messageTooShort": "Votre message est trop court — décrivez votre demande un peu plus en détail.",
       "messageTooLong": "Votre message est trop long.",
       "nameTooLong": "Le prénom est trop long.",
+      "nameInvalid": "Le nom ne peut contenir que des lettres, des espaces et des tirets.",
       "emailRequired": "Indiquez votre adresse e-mail.",
       "emailInvalid": "Indiquez une adresse e-mail valide.",
       "sensitiveId": "Supprimez le numéro de registre national, le PESEL ou le numéro de document — il n’est pas nécessaire pour répondre à votre message."
