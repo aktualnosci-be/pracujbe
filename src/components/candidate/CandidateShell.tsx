@@ -58,6 +58,11 @@ export interface CandidateShellProps {
   userName?: string;
   /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
   keepSessionAlive?: boolean;
+  /**
+   * Tryb produktu z serwera (`isRecruitmentEnabled()`, #1128) — komponent kliencki nie liczy go
+   * sam. Domyślnie `false` = tryb ogłoszeniowy (fail-closed): bez pozycji rekrutacyjnych.
+   */
+  recruitmentEnabled?: boolean;
 }
 
 /** Inicjały z nazwy (max 2 litery); „•", gdy brak nazwy (P1-09: nigdy zmyślona osoba). */
@@ -80,6 +85,7 @@ export function CandidateShell({
   unreadMessages,
   userName,
   keepSessionAlive,
+  recruitmentEnabled = false,
 }: CandidateShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
@@ -96,7 +102,8 @@ export function CandidateShell({
 
   const nav: DashboardNavItem[] = [
     { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
-    { href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> },
+    // #1133/#1139: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnej.
+    ...(recruitmentEnabled ? [{ href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> }] : []),
     { href: HREF.saved, label: td('navSaved'), icon: <Heart /> },
     { href: HREF.searches, label: td('navSearches'), icon: <BellRing /> },
     { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },

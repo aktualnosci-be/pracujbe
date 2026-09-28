@@ -15,6 +15,7 @@ import {
 } from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
 import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { MESSAGE_ATTACHMENTS_BUCKET, runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
@@ -67,6 +68,7 @@ import {
  * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
  * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
  * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.
+ * #1131: w trybie ogłoszeniowym zadanie nie działa (`matches: "disabled"`, bez bazy).
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -168,11 +170,16 @@ async function run(request: Request): Promise<Response> {
     revalidatePublicJobPaths();
   }
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
-  let matches: MatchRecomputeRun | null = null;
-  try {
-    matches = await runMatchRecompute();
-  } catch (error) {
-    failures.push({ task: 'matches', error });
+  // #1131: tryb ogłoszeniowy — bez przeliczeń (zero zapytań `match_recompute_*`), `disabled`.
+  let matches: MatchRecomputeRun | 'disabled' | null = null;
+  if (!isRecruitmentEnabled('matching')) {
+    matches = 'disabled';
+  } else {
+    try {
+      matches = await runMatchRecompute();
+    } catch (error) {
+      failures.push({ task: 'matches', error });
+    }
   }
   const purgedGuestRequests = await task('guestRequests', 'purge_guest_application_requests');
   // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.

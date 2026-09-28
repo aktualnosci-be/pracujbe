@@ -67,7 +67,7 @@ export function JobMatchCard({ jobId }: { jobId: string }): React.JSX.Element | 
   }, [jobId, attempt]);
 
   // Do czasu odpowiedzi oraz dla anonimów/pracodawców/braku profilu — nic nie renderujemy.
-  if (!load || load.status === 'none') return null;
+  if (!load || load.status === 'none' || load.status === 'disabled') return null;
 
   if (load.status === 'error') {
     return (
