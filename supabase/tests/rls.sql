@@ -16828,4 +16828,203 @@ select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+\echo '--- DC166 usunięcie konta po przejęciu aplikacji gościa + job_is_public z firmą (0166) ---'
+-- ============================================================================
+-- DC166. (a) Kandydat, który przejął aplikację gościa (0095), usuwa konto sam
+-- (request_account_erasure, 0105): usunięcie zgłoszenia gościa zeruje FK
+-- applications.guest_request_id, a enforce_application_integrity pod sesją nie może tego
+-- odrzucić. Nadal odrzuca wyzerowanie/zmianę linku przy istniejącym zgłoszeniu.
+-- (b) job_is_public wymaga firmy verified i nieusuniętej: apply_to_job,
+-- submit/confirm_guest_application odrzucają ofertę firmy zawieszonej, oczekującej,
+-- odrzuconej i usuniętej. Kontrole ujemne: trigger z 0095 i job_is_public z 0048.
+-- ============================================================================
+\set DCE  'e9010000-0000-0000-0000-0000000000a1'
+\set DCG  'e9010000-0000-0000-0000-0000000000c1'
+\set DCC  'e9010000-0000-0000-0000-0000000000c2'
+\set DCCO 'e9010000-0000-0000-0000-0000000000f1'
+\set DCCS 'e9010000-0000-0000-0000-0000000000f2'
+\set DCJ1 'e9010000-0000-0000-0000-0000000000b1'
+\set DCJS 'e9010000-0000-0000-0000-0000000000b2'
+\set DCJS2 'e9010000-0000-0000-0000-0000000000b3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'DCE','dce@test.be','Els E','{"role":"employer","first_name":"Els","last_name":"E","locale":"nl"}'),
+  (:'DCG','dc-guest@test.be','Gerda G','{"role":"candidate","first_name":"Gerda","last_name":"G","locale":"nl"}'),
+  (:'DCC','dcc@test.be','Cas C','{"role":"candidate","first_name":"Cas","last_name":"C","locale":"fr"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id in (:'DCE', :'DCG', :'DCC');
+insert into public.companies(id,name,status) values
+  (:'DCCO','Firma DC166','verified'), (:'DCCS','Firma DC166 S','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'DCCO',:'DCE','owner',true), (:'DCCS',:'DCE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'DCJ1',:'DCCO','job-dc901-1','Magazynier DC166','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'DCJS',:'DCCS','job-dc901-s','Kierowca DC166','transport','permanent','Gent','Flandria','active','pl'),
+  (:'DCJS2',:'DCCS','job-dc901-s2','Sprzątanie DC166','cleaning','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'DCC', false);
+
+-- DC166-1: gość aplikuje, potwierdza, przejmuje aplikację na konto DCG.
+set role service_role;
+select public.submit_guest_application(:'DCJ1', 'dc-guest@test.be', 'Gerda Gość', null, null, null, 'nl',
+  'idem-dc901-0001', 'nonce-dc901-0001-aaaaaa', encode(sha256('tok-dc901-1'::bytea), 'hex'),
+  p_age_attested_min => 18) as dcreq \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-dc901-1'::bytea), 'hex'),
+     'nonce-claim-dc901-0001', encode(sha256('claim-dc901-1'::bytea), 'hex'))) = 'confirmed',
+  'DC166-1 zgłoszenie gościa potwierdzone');
+reset role;
+set role authenticated; set app.current_uid = :'DCG'; select pg_temp.assert_client_role();
+select public.claim_guest_application(encode(sha256('claim-dc901-1'::bytea), 'hex')) as dcapp \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select candidate_id = :'DCG'::uuid and guest_request_id = :'dcreq'::uuid from public.applications where id = :'dcapp')
+  and (select claimed_by = :'DCG'::uuid from public.guest_application_requests where id = :'dcreq'),
+  'DC166-1b aplikacja przejęta, link do zgłoszenia gościa zachowany');
+
+-- DC166-2: trigger nadal chroni link, gdy zgłoszenie istnieje (także pod sesją właściciela).
+select set_config('app.current_uid', :'DCG', false);
+select pg_temp.expect_error('update public.applications set guest_request_id = null where id = ''' || :'dcapp' || '''',
+  'niezmienne po wysłaniu', 'DC166-2 wyzerowanie linku przy istniejącym zgłoszeniu → odrzucone');
+select pg_temp.expect_error('update public.applications set guest_request_id = ''' || :'dcapp' || ''' where id = ''' || :'dcapp' || '''',
+  'niezmienne po wysłaniu', 'DC166-2b podmiana linku → odrzucona');
+reset app.current_uid;
+
+-- DC166-3 (kontrola ujemna): z triggerem z 0095 samoobsługowe usunięcie konta pada
+-- (akcja FK ON DELETE SET NULL traktowana jak zmiana niezmiennego pola).
+begin;
+do $dc$
+declare
+  v_def text := pg_get_functiondef('public.enforce_application_integrity()'::regprocedure);
+  v_old text;
+begin
+  v_old := regexp_replace(v_def,
+    'or \(new\.guest_request_id is distinct from old\.guest_request_id.*?where g\.id = old\.guest_request_id\)\)\)',
+    'or new.guest_request_id is distinct from old.guest_request_id');
+  if v_old = v_def then
+    raise exception 'ASSERT FAILED: DC166-3 brak wyjątku FK w enforce_application_integrity';
+  end if;
+  execute v_old;
+end $dc$;
+set local role authenticated; set local app.current_uid = :'DCG'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''dc-guest@test.be'')',
+  'niezmienne po wysłaniu', 'DC166-3 kontrola ujemna: trigger z 0095 cofa usunięcie konta');
+rollback;
+reset role; reset app.current_uid;
+
+-- DC166-4: samoobsługowe usunięcie konta kandydata z przejętą aplikacją gościa działa.
+set role authenticated; set app.current_uid = :'DCG'; select pg_temp.assert_client_role();
+select (public.request_account_erasure('dc-guest@test.be')->>'erased')::boolean as dcerased \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'dcerased'::boolean
+  and not exists (select 1 from auth.users where id = :'DCG')
+  and not exists (select 1 from public.profiles where id = :'DCG')
+  and not exists (select 1 from public.applications where id = :'dcapp')
+  and not exists (select 1 from public.guest_application_requests where id = :'dcreq')
+  and exists (select 1 from public.erasure_tombstones where subject_id = :'DCG'),
+  'DC166-4 konto, przejęta aplikacja i zgłoszenie gościa usunięte, tombstone zapisany');
+
+-- DC166-5: firma verified — oferta publiczna, aplikacja działa (kontrola pozytywna).
+select pg_temp.assert(public.job_is_public(:'DCJS') and public.job_is_public(:'DCJS2'),
+  'DC166-5 oferta zweryfikowanej firmy jest publiczna');
+-- Zgłoszenie gościa wysłane przed zmianą statusu firmy (link potwierdzenia w skrzynce).
+set role service_role;
+select public.submit_guest_application(:'DCJS', 'dc-late@test.be', 'Lars Late', null, null, null, 'fr',
+  'idem-dc901-0002', 'nonce-dc901-0002-aaaaaa', encode(sha256('tok-dc901-2'::bytea), 'hex'),
+  p_age_attested_min => 18) as dcreq2 \gset
+reset role;
+
+-- DC166-6: każdy status firmy poza verified i usunięta firma → oferta niepubliczna,
+-- apply_to_job i gość odrzuceni, potwierdzenie gościa = job_closed.
+do $dc$
+declare v_st text; v_ok boolean;
+begin
+  foreach v_st in array array['suspended', 'pending', 'rejected', 'unverified', 'deleted'] loop
+    if v_st = 'deleted' then
+      update public.companies set status = 'verified', deleted_at = now() where id = 'e9010000-0000-0000-0000-0000000000f2';
+    else
+      update public.companies set status = v_st::public.company_status, deleted_at = null
+       where id = 'e9010000-0000-0000-0000-0000000000f2';
+    end if;
+    if public.job_is_public('e9010000-0000-0000-0000-0000000000b2') then
+      raise exception 'ASSERT FAILED: DC166-6 job_is_public=true dla firmy %', v_st;
+    end if;
+    perform set_config('app.current_uid', 'e9010000-0000-0000-0000-0000000000c2', true);
+    begin
+      perform public.apply_to_job('e9010000-0000-0000-0000-0000000000b2'::uuid, 'dc901-app-' || v_st, null, null, null);
+      raise exception 'ASSERT FAILED: DC166-6b apply_to_job przeszło dla firmy %', v_st;
+    exception when others then
+      if sqlerrm not like '%JOB_NOT_ACTIVE%' then
+        raise exception 'ASSERT FAILED: DC166-6b firma %: oczekiwano JOB_NOT_ACTIVE, jest %', v_st, sqlerrm;
+      end if;
+    end;
+    perform set_config('app.current_uid', '', true);
+    begin
+      perform public.submit_guest_application('e9010000-0000-0000-0000-0000000000b3', 'dc-new@test.be', 'Nel N',
+        null, null, null, 'nl', 'idem-dc901-g-' || v_st, 'nonce-dc901-g-aaaaaaaaa',
+        encode(sha256(('tok-dc901-g-' || v_st)::bytea), 'hex'), p_age_attested_min => 18);
+      raise exception 'ASSERT FAILED: DC166-6c zgłoszenie gościa przeszło dla firmy %', v_st;
+    exception when others then
+      if sqlerrm not like '%JOB_NOT_ACTIVE%' then
+        raise exception 'ASSERT FAILED: DC166-6c firma %: oczekiwano JOB_NOT_ACTIVE, jest %', v_st, sqlerrm;
+      end if;
+    end;
+    select (select outcome from public.confirm_guest_application(encode(sha256('tok-dc901-2'::bytea), 'hex'),
+              'nonce-claim-dc901-0002', encode(sha256('claim-dc901-2'::bytea), 'hex'))) = 'job_closed' into v_ok;
+    if not v_ok then
+      raise exception 'ASSERT FAILED: DC166-6d potwierdzenie gościa dla firmy % nie jest job_closed', v_st;
+    end if;
+    if exists (select 1 from public.get_public_job_screening_questions('e9010000-0000-0000-0000-0000000000b2')) then
+      raise exception 'ASSERT FAILED: DC166-6e pytania oferty firmy % widoczne publicznie', v_st;
+    end if;
+  end loop;
+end $dc$;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where company_id = :'DCCS')
+  and (select status = 'pending' from public.guest_application_requests where id = :'dcreq2')
+  and not exists (select 1 from public.email_deliveries where template = 'newApplication' and profile_id = :'DCE'),
+  'DC166-6f brak aplikacji, powiadomień i e-maili do firmy niezweryfikowanej; zgłoszenie gościa czeka');
+
+-- DC166-7 (kontrola ujemna): job_is_public z 0048 (bez firmy) przepuszcza aplikację do
+-- zawieszonej firmy — dokładnie błąd z audytu.
+begin;
+update public.companies set status = 'suspended', deleted_at = null where id = :'DCCS';
+create or replace function public.job_is_public(p_job_id uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $f$
+  select exists (select 1 from public.jobs j where j.id = p_job_id and j.status = 'active'
+    and j.deleted_at is null and (j.expires_at is null or j.expires_at > now()));
+$f$;
+set local role authenticated; set local app.current_uid = :'DCC'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'DCJS'::uuid, 'dc901-neg-1', null, null, null) as dcneg \gset
+reset role;
+select pg_temp.assert((select c.status::text from public.applications a join public.companies c on c.id = a.company_id
+                        where a.id = :'dcneg') = 'suspended',
+  'DC166-7 kontrola ujemna: bez warunku na firmę aplikacja trafia do zawieszonej firmy');
+rollback;
+reset role; reset app.current_uid;
+
+-- DC166-8: po ponownej weryfikacji firma przyjmuje aplikacje i potwierdzenie gościa.
+update public.companies set status = 'verified', deleted_at = null where id = :'DCCS';
+set role authenticated; set app.current_uid = :'DCC'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'DCJS'::uuid, 'dc901-app-ok', null, null, null) as dcok \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-dc901-2'::bytea), 'hex'),
+     'nonce-claim-dc901-0002', encode(sha256('claim-dc901-2'::bytea), 'hex'))) = 'confirmed',
+  'DC166-8 potwierdzenie gościa po ponownej weryfikacji → confirmed');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.applications where company_id = :'DCCS') = 2
+  and (select candidate_id = :'DCC'::uuid from public.applications where id = :'dcok'),
+  'DC166-8b zweryfikowana firma przyjmuje aplikacje z konta i gościa');
+-- Historia kandydata nie zależy od job_is_public: po zawieszeniu firmy DCC widzi zgłoszenie.
+update public.companies set status = 'suspended' where id = :'DCCS';
+set role authenticated; set app.current_uid = :'DCC'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.applications where id = :'dcok') = 1
+  and exists (select 1 from public.get_applied_jobs_display('pl', array[:'DCJS'::uuid]) d),
+  'DC166-8c kandydat nadal widzi własne zgłoszenie i dane oferty zawieszonej firmy');
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
