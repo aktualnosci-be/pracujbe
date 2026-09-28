@@ -34,6 +34,7 @@ import {
   type TimeCursor,
 } from '@/lib/employer/list-cursor';
 import { canRecruit } from '@/lib/team/permissions';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { captureError } from '@/lib/error-report';
 import {
   parseScreeningAnswers,
@@ -61,8 +62,11 @@ export interface EmployerOverview {
   activeOffersCount: number;
   /** Zgłoszenia w statusie `submitted` (jeszcze nieprzejrzane). */
   newApplicationsCount: number | null;
-  /** RÓŻNI kandydaci dopasowani do ofert firmy (nie wiersze `matches`) — jak lista „Top dopasowani”. */
-  matchedCandidatesCount: number | null;
+  /**
+   * RÓŻNI kandydaci dopasowani do ofert firmy (nie wiersze `matches`) — jak lista „Top dopasowani”.
+   * Brak pola = tryb ogłoszeniowy (#1133): kafelek nie istnieje, zapytania do `matches` nie ma.
+   */
+  matchedCandidatesCount?: number | null;
   /** Rozmowy AKTYWNEJ firmy, w których ostatnia wiadomość jest od kandydata (czekają na odpowiedź). */
   messagesToAnswerCount: number | null;
   /** Rola recruiter+ w aktywnej firmie — gdy `false`, UI wyjaśnia, dlaczego liczników brak. */
@@ -86,8 +90,11 @@ export interface EmployerJob {
   slug: string;
   /** `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). */
   newApplications: number | null;
-  /** `null` = brak uprawnień rekrutera do dopasowań (nie zero). */
-  matched: number | null;
+  /**
+   * `null` = brak uprawnień rekrutera do dopasowań (nie zero). Brak pola = tryb ogłoszeniowy
+   * (#1133): kolumny dopasowań nie ma, lista nie czyta `matches`.
+   */
+  matched?: number | null;
   /** Data utworzenia (ISO) — pokazywana zamiast technicznego identyfikatora (Invariant #8). */
   createdAt: string | null;
 }
@@ -196,6 +203,25 @@ const EMPTY_OVERVIEW: EmployerOverview = {
 };
 
 const EMPTY_FUNNEL: FunnelStats = { views: null, applications: 0, interviews: 0, hired: 0 };
+
+/** #1133: tryb ogłoszeniowy — dopasowania kandydatów nie istnieją w panelu pracodawcy. */
+function matchingEnabled(): boolean {
+  return isRecruitmentEnabled('matching') && isRecruitmentEnabled('candidateSearch');
+}
+
+/** Przegląd bez licznika dopasowań (tryb ogłoszeniowy): pole znika, a nie „0” ani „—”. */
+function withoutMatchedCount(overview: EmployerOverview): EmployerOverview {
+  const { matchedCandidatesCount: _omit, ...rest } = overview;
+  void _omit;
+  return rest;
+}
+
+/** Oferta bez licznika dopasowań (tryb ogłoszeniowy). */
+function withoutMatched(job: EmployerJob): EmployerJob {
+  const { matched: _omit, ...rest } = job;
+  void _omit;
+  return rest;
+}
 
 /** Okno czasowe lejka — musi odpowiadać etykiecie `dashboard.funnelPeriod` („ostatnie 30 dni"). */
 export const FUNNEL_PERIOD_DAYS = 30;
@@ -402,11 +428,14 @@ const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
  * niezweryfikowanej (dostęp do bazy kandydatów dopiero po weryfikacji).
  */
 export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
-  if (!isPortalDataConfigured()) return { status: 'ok', overview: DEMO_OVERVIEW };
+  const matching = matchingEnabled();
+  if (!isPortalDataConfigured()) {
+    return { status: 'ok', overview: matching ? DEMO_OVERVIEW : withoutMatchedCount(DEMO_OVERVIEW) };
+  }
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return { status: 'ok', overview: EMPTY_OVERVIEW };
+    if (!ctx) return { status: 'ok', overview: matching ? EMPTY_OVERVIEW : withoutMatchedCount(EMPTY_OVERVIEW) };
     const { me, companyId, companyStatus, role } = ctx;
     const recruiter = canRecruit(role);
 
@@ -422,9 +451,14 @@ export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
             `SELECT 1 FROM public.applications
               WHERE company_id = $1 AND status = 'submitted' AND deleted_at IS NULL`, [companyId])
         : null,
-      matchedCandidatesCount: recruiter && companyStatus === 'verified'
-        ? await queryCount(tx, 'employer.overview-matched-candidates', MATCHED_CANDIDATES_SQL, [companyId])
-        : null,
+      // #1133: tryb ogłoszeniowy — bez zapytania do `matches` i bez pola.
+      ...(matching
+        ? {
+            matchedCandidatesCount: recruiter && companyStatus === 'verified'
+              ? await queryCount(tx, 'employer.overview-matched-candidates', MATCHED_CANDIDATES_SQL, [companyId])
+              : null,
+          }
+        : {}),
       messagesToAnswerCount: recruiter
         ? await queryCount(tx, 'employer.overview-awaiting-reply', CONVERSATIONS_AWAITING_REPLY_SQL, [companyId])
         : null,
@@ -838,9 +872,10 @@ export async function getCompanyJobsLoad(
       return { status: 'error' };
     }
     // DEMO: jedna strona (identyfikatory demo nie są UUID, więc nie budujemy kursorów).
+    const demoJobs = DEMO_JOBS.slice(0, EMPLOYER_JOBS_PAGE_SIZE);
     return {
       status: 'ok',
-      jobs: request.cursor ? [] : DEMO_JOBS.slice(0, EMPLOYER_JOBS_PAGE_SIZE),
+      jobs: request.cursor ? [] : matchingEnabled() ? demoJobs : demoJobs.map(withoutMatched),
       prevCursor: null,
       nextCursor: null,
     };
@@ -854,6 +889,8 @@ export async function getCompanyJobsLoad(
     // Liczniki zgłoszeń i dopasowań czyta tylko recruiter+ (RLS 0039); zwykły `member` dostałby
     // z bazy 0 udające brak zainteresowania — pokazujemy „brak danych” (`null`).
     const recruiter = canRecruit(ctx.role);
+    // #1133: tryb ogłoszeniowy — bez podzapytania do `matches` i bez pola `matched`.
+    const matching = matchingEnabled();
 
     // Strona + znacznik kolejnej w kierunku odczytu. Liczniki liczone w bazie (count pod RLS) —
     // bez przesyłania wierszy aplikacji/dopasowań; błąd licznika = błąd całej listy.
@@ -862,8 +899,8 @@ export async function getCompanyJobsLoad(
         `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at,
                 (SELECT count(*) FROM public.applications a
                   WHERE a.company_id = $1 AND a.job_id = j.id
-                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications,
-                (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched
+                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications${matching ? `,
+                (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched` : ''}
            FROM public.jobs j
           WHERE j.company_id = $1 AND j.deleted_at IS NULL
             AND ($2::timestamptz IS NULL OR (j.created_at, j.id) ${prev ? '>' : '<'} ($2::timestamptz, $3::uuid))
@@ -887,7 +924,7 @@ export async function getCompanyJobsLoad(
           pastExpiry: isPastExpiry(expiresAt, now),
           slug: asString(r['slug']),
           newApplications: recruiter ? asNumber(r['new_applications']) : null,
-          matched: recruiter ? asNumber(r['matched']) : null,
+          ...(matching ? { matched: recruiter ? asNumber(r['matched']) : null } : {}),
           createdAt: asString(r['created_at']) || null,
         };
       },
@@ -1167,6 +1204,8 @@ async function matchedCandidateCards(tx: TransactionQuery, winners: MatchWinner[
 
 /** Top dopasowani kandydaci (matches × candidate_profiles). Tylko dla firmy zweryfikowanej. */
 export async function getTopMatchedCandidates(options?: { throwOnError?: boolean }): Promise<EmployerMatchedCandidate[]> {
+  // #1133: tryb ogłoszeniowy — bez rankingu kandydatów i bez zapytań (także w demo).
+  if (!matchingEnabled()) return [];
   if (!isPortalDataConfigured()) return DEMO_CANDIDATES;
 
   try {
@@ -1198,6 +1237,7 @@ export const EMPLOYER_CANDIDATES_PAGE_SIZE = 10;
 
 export type MatchedCandidatesLoad =
   | ({ status: 'ok' } & ListPage<EmployerMatchedCandidate>)
+  | { status: 'disabled' }
   | { status: 'denied' }
   | { status: 'unverified' }
   | { status: 'error' };
@@ -1211,6 +1251,8 @@ export type MatchedCandidatesLoad =
 export async function getMatchedCandidatesPage(
   request: ListPageRequest<ScoreCursor> = FIRST_PAGE,
 ): Promise<MatchedCandidatesLoad> {
+  // #1133: tryb ogłoszeniowy — bez listy kandydatów i bez zapytań (strona i tak daje 404).
+  if (!matchingEnabled()) return { status: 'disabled' };
   const empty = { status: 'ok' as const, items: [], prevCursor: null, nextCursor: null };
   if (!isPortalDataConfigured()) {
     return request.cursor ? empty : { ...empty, items: DEMO_CANDIDATES };
@@ -1256,11 +1298,14 @@ export async function getMatchedCandidatesPage(
  */
 export type TopMatchedCandidatesLoad =
   | { status: 'ok'; candidates: EmployerMatchedCandidate[] }
+  | { status: 'disabled' }
   | { status: 'denied' }
   | { status: 'unverified' }
   | { status: 'error' };
 
 export async function getTopMatchedCandidatesLoad(): Promise<TopMatchedCandidatesLoad> {
+  // #1133: tryb ogłoszeniowy — sekcja „Top dopasowani” nie istnieje, zapytań brak.
+  if (!matchingEnabled()) return { status: 'disabled' };
   if (!isPortalDataConfigured()) return { status: 'ok', candidates: DEMO_CANDIDATES };
   try {
     const ctx = await loadContext();
@@ -1636,7 +1681,8 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
             `SELECT id, headline, city, experience_years, has_driving_license
                FROM public.candidate_profiles WHERE profile_id = $1 AND deleted_at IS NULL`, [candidateId])
         : null;
-      const matchData = withAccount
+      // #1131: tryb ogłoszeniowy — wynik dopasowania nie jest czytany ani pokazywany.
+      const matchData = withAccount && matchingEnabled()
         ? await queryOne(tx, 'employer.application-detail-match',
             'SELECT score FROM public.matches WHERE candidate_id = $1 AND job_id = $2', [candidateId, jobId])
         : null;
@@ -1753,6 +1799,7 @@ export interface EmployerCandidateDetail {
 
 export type EmployerCandidateDetailLoad =
   | { status: 'ok'; candidate: EmployerCandidateDetail; isDemo: boolean }
+  | { status: 'disabled' }
   | { status: 'not_found' }
   | { status: 'error' };
 
@@ -1764,6 +1811,8 @@ export type EmployerCandidateDetailLoad =
  * `company_can_view_candidate`, blokady #97); CV i kontakt z konta nie są tu pokazywane.
  */
 export async function getEmployerCandidateDetail(candidateId: string): Promise<EmployerCandidateDetailLoad> {
+  // #1133: tryb ogłoszeniowy — bez szczegółu kandydata i bez zapytań (strona i tak daje 404).
+  if (!matchingEnabled()) return { status: 'disabled' };
   if (!isPortalDataConfigured()) {
     const demo = DEMO_CANDIDATES.find((c) => c.candidateId === candidateId);
     if (!demo) return { status: 'not_found' };

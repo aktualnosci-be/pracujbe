@@ -11,6 +11,7 @@ import { isPortalAuthConfigured } from '@/lib/env';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Layout panelu kandydata (grupa tras `/candidate/*`).
@@ -108,6 +109,7 @@ export default async function CandidateLayout({
       unreadMessages={unreadMessages}
       userName={userName}
       keepSessionAlive={hasSession}
+      recruitmentEnabled={isRecruitmentEnabled('matching')}
     >
       {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}

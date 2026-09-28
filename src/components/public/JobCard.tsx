@@ -10,6 +10,7 @@ import { MatchBar } from '@/components/ui/match-bar';
 import { PublicSaveJobButton } from './PublicSavedJobs';
 import type { JobListItem } from '@/lib/jobs';
 import { formatPublishedRelative, PUBLISHED_DATE_TIME_ZONE } from '@/lib/relative-date';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Paszport oferty: lokalizacja, opcjonalna stawka i warunki z rzeczywistych danych.
@@ -64,7 +65,8 @@ export async function JobCard({
   });
   const highlights = job.highlights.slice(0, 2);
   const relative = formatPublishedRelative(job.publishedAt, locale);
-  const withMatch = showMatch === true && typeof matchScore === 'number';
+  // #1131: tryb ogłoszeniowy — brak paska dopasowania niezależnie od propsów.
+  const withMatch = showMatch === true && typeof matchScore === 'number' && isRecruitmentEnabled('matching');
   const showRegion = job.region.length > 0 && job.region !== job.city;
   // Fikcyjna firma demo nie dostaje odznaki weryfikacji (#297).
   const verified = job.companyVerified && !job.isDemo;
