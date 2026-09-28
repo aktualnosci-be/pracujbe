@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { isPortalDataConfigured } from '@/lib/db/portal';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import {
   getCompanyJobsLoad,
   getEmployerOverview,
@@ -21,7 +22,6 @@ import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPrevi
 import { EmployerOverviewStats } from '@/components/employer/EmployerOverviewStats';
 import { EmployerFunnelSection } from '@/components/employer/EmployerFunnelSection';
 import { EmployerTopMatched } from '@/components/employer/EmployerTopMatched';
-import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import {
   BTN_PRIMARY,
@@ -84,11 +84,14 @@ export default async function EmployerDashboardPage({
   const tc = await getTranslations({ locale, namespace: 'common' });
 
   const configured = isPortalDataConfigured();
+  // #1144 — decyzja produktowa: portal ogłoszeniowy. Bez trybu RECRUITMENT sekcja najnowszych
+  // zgłoszeń nie jest renderowana, a jej loader nie jest wołany.
+  const recruitment = isRecruitmentEnabled();
   const matching = isRecruitmentEnabled('matching') && isRecruitmentEnabled('candidateSearch');
   const [overview, jobsLoad, recentApplications, topMatched, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobsLoad(),
-    getRecentApplications(),
+    recruitment ? getRecentApplications() : null,
     // #1133: tryb ogłoszeniowy — bez rankingu kandydatów (loader niewywoływany).
     matching ? getTopMatchedCandidatesLoad() : Promise.resolve({ status: 'disabled' as const }),
     getFunnelStats(),
@@ -161,62 +164,64 @@ export default async function EmployerDashboardPage({
       <div className="mt-6 flex min-w-0 flex-wrap gap-[19px]">
         <div className="flex min-w-0 flex-[1.4_1_36rem] flex-col gap-[19px]">
           {/* Najnowsze aplikacje — zmiana statusu (transitionApplication); wiersze `.job` */}
-          <section className={PANEL}>
-            <div className={SECTION_HEAD}>
-              <h2 className={PANEL_H2}>{td('recentApplications')}</h2>
-              <Link href="/employer/aplikacje" className={TEXT_LINK}>
-                {td('seeAll')}
-                <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
-            {recentApplications.status === 'error' ? (
-              <RecentApplicationsError message={td('recentApplicationsError')} retryLabel={tc('retry')} />
-            ) : recentApplications.applications.length === 0 ? (
-              <p className={EMPTY}>{td('emptyState')}</p>
-            ) : (
-              <ul>
-                {recentApplications.applications.map((application) => (
-                  <li key={application.id} className={cn(ROW, 'flex-wrap items-center')}>
-                    <span className={ICON_BOX} aria-hidden="true">
-                      {initials(application.candidateName || td('candidateFallback'))}
-                    </span>
-                    <div className="min-w-0 flex-1 basis-40">
-                      <p className={ROW_TITLE}>
-                        {application.candidateName || td('candidateFallback')}
-                      </p>
-                      <p className={ROW_META}>{application.jobTitle}</p>
-                      {application.isGuest ? (
-                        <p className={cn(TAG, 'mt-1.5 font-semibold text-foreground')}>
-                          {td('employerApplicationGuestBadge')}
+          {recentApplications ? (
+            <section className={PANEL}>
+              <div className={SECTION_HEAD}>
+                <h2 className={PANEL_H2}>{td('recentApplications')}</h2>
+                <Link href="/employer/aplikacje" className={TEXT_LINK}>
+                  {td('seeAll')}
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </Link>
+              </div>
+              {recentApplications.status === 'error' ? (
+                <RecentApplicationsError message={td('recentApplicationsError')} retryLabel={tc('retry')} />
+              ) : recentApplications.applications.length === 0 ? (
+                <p className={EMPTY}>{td('emptyState')}</p>
+              ) : (
+                <ul>
+                  {recentApplications.applications.map((application) => (
+                    <li key={application.id} className={cn(ROW, 'flex-wrap items-center')}>
+                      <span className={ICON_BOX} aria-hidden="true">
+                        {initials(application.candidateName || td('candidateFallback'))}
+                      </span>
+                      <div className="min-w-0 flex-1 basis-40">
+                        <p className={ROW_TITLE}>
+                          {application.candidateName || td('candidateFallback')}
                         </p>
-                      ) : null}
-                      <div className="mt-1.5">
-                        <StatusPill status={application.status} />
+                        <p className={ROW_META}>{application.jobTitle}</p>
+                        {application.isGuest ? (
+                          <p className={cn(TAG, 'mt-1.5 font-semibold text-foreground')}>
+                            {td('employerApplicationGuestBadge')}
+                          </p>
+                        ) : null}
+                        <div className="mt-1.5">
+                          <StatusPill status={application.status} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <Link
-                        href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
-                        aria-label={td('employerApplicationViewLabel', {
-                          name: application.candidateName || td('candidateFallback'),
-                          job: application.jobTitle || td('applicationUnknownJob'),
-                        })}
-                        className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
-                      >
-                        {td('employerApplicationView')}
-                      </Link>
-                      <ApplicationStatusMenu
-                        applicationId={application.id}
-                        status={application.status}
-                        candidateName={application.candidateName || td('candidateFallback')}
-                        jobTitle={application.jobTitle}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <Link
+                          href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
+                          aria-label={td('employerApplicationViewLabel', {
+                            name: application.candidateName || td('candidateFallback'),
+                            job: application.jobTitle || td('applicationUnknownJob'),
+                          })}
+                          className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
+                        >
+                          {td('employerApplicationView')}
+                        </Link>
+                        <ApplicationStatusMenu
+                          applicationId={application.id}
+                          status={application.status}
+                          candidateName={application.candidateName || td('candidateFallback')}
+                          jobTitle={application.jobTitle}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
 
           {/* Lejek rekrutacyjny („Rekrutacja w liczbach”) */}
           <EmployerFunnelSection locale={locale} funnel={funnel} />

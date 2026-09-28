@@ -17,6 +17,7 @@ import type { ErrorCode } from '@/lib/errors';
 import { trustedClientIp } from '@/lib/http/trusted-ip';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   hashGuestToken,
@@ -122,6 +123,8 @@ export async function submitGuestApplication(
   input: GuestApplicationInput,
   botCheckToken?: string | null,
 ): Promise<GuestApplyResult> {
+  // #1132 — decyzja produktowa: portal ogłoszeniowy. Przed limiterem, Turnstile i bazą.
+  if (!isRecruitmentEnabled('guestApply')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   // Rate limit per IP (fail-safe) — publiczny formularz bez konta wysyłający e-maile.
   if (!(await checkRateLimit('guest-apply', { max: 10, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
@@ -203,6 +206,7 @@ export async function submitGuestApplication(
 
 /** Potwierdzenie adresu e-mail tokenem z linku — dopiero teraz aplikacja trafia do firmy. */
 export async function confirmGuestApplication(locale: string): Promise<GuestConfirmResult> {
+  if (!isRecruitmentEnabled('guestApply')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   if (!(await checkRateLimit('guest-apply-confirm', { max: 30, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
@@ -246,6 +250,7 @@ export async function confirmGuestApplication(locale: string): Promise<GuestConf
 
 /** Zalogowany kandydat przejmuje aplikację gościa (ten sam, zweryfikowany adres e-mail). */
 export async function claimGuestApplication(locale: string): Promise<GuestClaimResult> {
+  if (!isRecruitmentEnabled('guestApply')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   if (!(await checkRateLimit('guest-apply-claim', { max: 20, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }

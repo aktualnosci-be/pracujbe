@@ -7,6 +7,7 @@ import { getPortalIdentity, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { offerSchema, type OfferInput } from '@/lib/validation/offer';
 
 /**
@@ -45,6 +46,8 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Pracodawca wysyła propozycję (idempotentnie). Błąd e-maila NIE cofa propozycji. */
 export async function sendOffer(input: OfferInput): Promise<SendOfferResult> {
+  // #1141 — decyzja produktowa: portal ogłoszeniowy. Tryb sprawdzany przed walidacją i bazą.
+  if (!isRecruitmentEnabled('offers')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const parsed = offerSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   const v = parsed.data;
@@ -72,6 +75,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** Kandydat akceptuje lub odrzuca propozycję. */
 export async function respondToOffer(offerId: string, accept: boolean): Promise<RespondResult> {
+  if (!isRecruitmentEnabled('offers')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   // P1-23/P2-19: walidacja UUID PRZED RPC (błędny input → VALIDATION_FAILED, nie „INTERNAL").
   if (typeof offerId !== 'string' || !UUID_RE.test(offerId)) {
     return { ok: false, error: 'VALIDATION_FAILED' };

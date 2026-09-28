@@ -12,6 +12,11 @@ import { clearGuestLinkToken, readGuestLinkToken } from '@/lib/guest-apply/link-
 import { checkRateLimit } from '@/lib/rate-limit';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * #98 — Server Actions aplikacji bez konta: kolejność ochron (limit, Turnstile, walidacja),
