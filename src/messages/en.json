@@ -1212,7 +1212,19 @@
     "accountSearchesSub": "{count, plural, =0 {No alerts} one {# with alerts} other {# with alerts}}",
     "accountAlertsOff": "Alerts off",
     "listingStatsTitle": "Listing statistics",
-    "listingStatsText": "Search appearances, views and clicks on “Apply with the employer” for each job."
+    "listingStatsText": "The jobs with the most views in the last 30 days and clicks on “Apply with the employer”.",
+    "listingTopJobsEmpty": "No job has had any views in the last 30 days yet. Statistics will appear once candidates start viewing your listings.",
+    "listingTopJobsError": "Could not load the listing statistics. Try again.",
+    "listingTopJobsDenied": "Listing statistics are visible to the company owner, administrators and recruiters.",
+    "savedSearchJobsTitle": "New jobs from your searches",
+    "savedSearchJobsNone": "Save a search with the filters of your choice and you will see the newest jobs that meet your criteria here.",
+    "savedSearchJobsCta": "Browse jobs and save a search",
+    "savedSearchJobsNoResults": "Your saved searches have no jobs right now.",
+    "savedSearchJobsError": "Could not load jobs from your saved searches. Try again.",
+    "savedSearchJobsShow": "Show jobs: {name}",
+    "savedSearchJobsFrom": "Search: {name}",
+    "employerGreetingSubListing": "Welcome {name}! See how your listings are doing.",
+    "employerGreetingSubListingGeneric": "See how your listings are doing."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",

@@ -1212,7 +1212,19 @@
     "accountSearchesSub": "{count, plural, =0 {Sans alerte} one {# avec alerte} other {# avec alerte}}",
     "accountAlertsOff": "Alertes désactivées",
     "listingStatsTitle": "Statistiques des annonces",
-    "listingStatsText": "Apparitions dans les résultats, vues et clics sur « Postuler auprès de l’employeur » pour chaque offre."
+    "listingStatsText": "Les offres les plus consultées ces 30 derniers jours et les clics sur « Postuler auprès de l’employeur ».",
+    "listingTopJobsEmpty": "Aucune offre n’a encore été consultée ces 30 derniers jours. Les statistiques apparaîtront dès que des candidats consulteront vos annonces.",
+    "listingTopJobsError": "Impossible de charger les statistiques des annonces. Réessayez.",
+    "listingTopJobsDenied": "Les statistiques des annonces sont visibles par le propriétaire, les administrateurs et les recruteurs de l’entreprise.",
+    "savedSearchJobsTitle": "Nouvelles offres de vos recherches",
+    "savedSearchJobsNone": "Enregistrez une recherche avec les filtres de votre choix et vous verrez ici les offres les plus récentes correspondant à vos critères.",
+    "savedSearchJobsCta": "Voir les offres et enregistrer une recherche",
+    "savedSearchJobsNoResults": "Vos recherches enregistrées n’ont actuellement aucune offre.",
+    "savedSearchJobsError": "Impossible de charger les offres de vos recherches enregistrées. Réessayez.",
+    "savedSearchJobsShow": "Voir les offres : {name}",
+    "savedSearchJobsFrom": "Recherche : {name}",
+    "employerGreetingSubListing": "Bonjour {name} ! Découvrez les résultats de vos annonces.",
+    "employerGreetingSubListingGeneric": "Découvrez les résultats de vos annonces."
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",

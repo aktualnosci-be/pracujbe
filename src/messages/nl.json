@@ -1212,7 +1212,19 @@
     "accountSearchesSub": "{count, plural, =0 {Geen meldingen} other {# met melding}}",
     "accountAlertsOff": "Meldingen uit",
     "listingStatsTitle": "Statistieken van je vacatures",
-    "listingStatsText": "Verschijningen in zoekresultaten, weergaven en klikken op ‘Solliciteer bij de werkgever’ per vacature."
+    "listingStatsText": "Vacatures met de meeste weergaven in de afgelopen 30 dagen en klikken op ‘Solliciteer bij de werkgever’.",
+    "listingTopJobsEmpty": "Geen enkele vacature heeft de afgelopen 30 dagen weergaven gehad. De statistieken verschijnen zodra kandidaten je vacatures gaan bekijken.",
+    "listingTopJobsError": "De vacaturestatistieken konden niet worden geladen. Probeer het opnieuw.",
+    "listingTopJobsDenied": "De vacaturestatistieken zijn zichtbaar voor de eigenaar, beheerders en recruiters van het bedrijf.",
+    "savedSearchJobsTitle": "Nieuwe vacatures uit je zoekopdrachten",
+    "savedSearchJobsNone": "Sla een zoekopdracht op met de filters van je keuze en hier zie je de nieuwste vacatures die aan jouw criteria voldoen.",
+    "savedSearchJobsCta": "Vacatures bekijken en zoekopdracht opslaan",
+    "savedSearchJobsNoResults": "Je opgeslagen zoekopdrachten hebben op dit moment geen vacatures.",
+    "savedSearchJobsError": "De vacatures uit je opgeslagen zoekopdrachten konden niet worden geladen. Probeer het opnieuw.",
+    "savedSearchJobsShow": "Vacatures tonen: {name}",
+    "savedSearchJobsFrom": "Zoekopdracht: {name}",
+    "employerGreetingSubListing": "Welkom {name}! Bekijk hoe je vacatures presteren.",
+    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren."
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
