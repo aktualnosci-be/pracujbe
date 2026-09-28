@@ -433,7 +433,7 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
     }
     const page = read('src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx');
     expect(page).toMatch(/\{messagingOn \? t\('contactViaPlatform'\) : t\('employerApply\.contact'\)\}/);
-    expect(page).toMatch(/\{job\.isDemo \|\| !messagingOn \? null : \(/);
+    expect(page).toMatch(/\{!messagingOn \|\| job\.isDemo \|\| !recruitment \? null : \(/);
   });
 
   it('CV nie może zostać przesłane: akcja i serwis mają bramkę; pobranie/usunięcie bez bramki', () => {

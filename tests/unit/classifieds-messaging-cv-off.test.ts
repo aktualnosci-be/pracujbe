@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PortalIdentity } from '@/lib/auth/session';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
-import { useClassifiedsMode as withClassifiedsMode } from '../helpers/portal-mode';
+import { withClassifiedsMode } from '../helpers/portal-mode';
 
 /**
  * #1134 / #1138 — decyzja produktowa: portal ogłoszeniowy. W trybie ogłoszeniowym (domyślnym):

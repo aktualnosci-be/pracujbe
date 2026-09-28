@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
-import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 // Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym rozmowy są wyłączone (#1134).
 withRecruitmentMode();

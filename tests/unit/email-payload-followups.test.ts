@@ -9,7 +9,7 @@ import { buildDeliveryData, deliverySalary } from '@/lib/email/delivery-data';
 
 import { extractEmailPayloads } from '../../scripts/privacy/email-payloads.mjs';
 import { loadMigrationFiles } from '../../scripts/privacy/schema.mjs';
-import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 // Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
 withRecruitmentMode();

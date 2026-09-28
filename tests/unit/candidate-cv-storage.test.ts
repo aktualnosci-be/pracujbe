@@ -19,7 +19,7 @@ import {
 } from '@/lib/files/candidate-cv';
 import { createPrivateDownloadToken } from '@/lib/storage/private-download-token';
 import { createRailwayBucket } from '@/lib/storage/railway-bucket';
-import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 // Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
 withRecruitmentMode();

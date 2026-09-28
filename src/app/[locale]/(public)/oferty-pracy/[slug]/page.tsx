@@ -814,7 +814,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               ) : null}
               {/* Do fikcyjnej firmy demo nie da się napisać (#297). #1134: w trybie ogłoszeniowym
                   (decyzja produktowa) portal nie prowadzi rozmów — bez „Wyślij wiadomość”. */}
-              {job.isDemo || !messagingOn ? null : (
+              {!messagingOn || job.isDemo || !recruitment ? null : (
                 <Link
                   href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
                   className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
