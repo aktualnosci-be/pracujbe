@@ -55,7 +55,8 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
     ['application', 'employer', '/employer/aplikacje'],
     ['offer', 'candidate', '/candidate/propozycje'],
     ['offer', 'employer', '/employer/aplikacje'],
-    ['job', 'candidate', '/candidate/oferty-polecane'],
+    // #1139: tryb ogłoszeniowy (domyślny w testach) — polecane oferty nie istnieją.
+    ['job', 'candidate', '/oferty-pracy'],
     ['job', 'employer', '/employer/oferty'],
     // #843: decyzja o firmie (weryfikacja/odrzucenie/zawieszenie) niesie identyfikator firmy,
     // której dotyczy — inaczej właściciel kilku firm z inną AKTYWNĄ firmą w cookie widziałby

@@ -56,11 +56,16 @@ export async function EmployerOverviewStats({
           value: o.newApplicationsCount,
           sub: demo ? td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.newApplications }) : recruiterOnly,
         },
-        {
-          label: td('matchedCandidates'),
-          value: o.matchedCandidatesCount,
-          sub: demo ? td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.matched }) : matchedReason,
-        },
+        // #1133: tryb ogłoszeniowy — loader nie zwraca pola, kafelka nie ma (bez „—”).
+        ...(o.matchedCandidatesCount !== undefined
+          ? [
+              {
+                label: td('matchedCandidates'),
+                value: o.matchedCandidatesCount,
+                sub: demo ? td('sinceLastWeek', { count: DEMO_OVERVIEW_DELTAS.matched }) : matchedReason,
+              },
+            ]
+          : []),
         {
           label: td('messagesToAnswer'),
           value: o.messagesToAnswerCount,

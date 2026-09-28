@@ -69,6 +69,7 @@ import {
  * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
  * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
  * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.
+ * #1131: w trybie ogłoszeniowym zadanie nie działa (`matches: "disabled"`, bez bazy).
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -191,7 +192,11 @@ async function run(request: Request): Promise<Response> {
   // retencja i czyszczenie (gość, załączniki, storage) działają dalej.
   const recruitment = await recruitmentTasksEnabled((error) => failures.push({ task: 'portalMode', error }));
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
-  let matches: MatchRecomputeRun | null = null;
+  // #1131: tryb ogłoszeniowy (env) — odpowiedź `matches: disabled`; przeliczenie tylko w trybie efektywnym.
+  let matches: MatchRecomputeRun | 'disabled' | null = null;
+  if (!isRecruitmentEnabled('matching')) {
+    matches = 'disabled';
+  }
   if (recruitment) {
     try {
       matches = await runMatchRecompute();

@@ -36,8 +36,9 @@ export async function CandidateNotFound() {
         <Link href="/candidate/aplikacje" className={BTN_SECONDARY}>
           {t("navApplications")}
         </Link>
-        <Link href="/candidate/oferty-polecane" className={BTN_SECONDARY}>
-          {t("navRecommended")}
+        {/* #1139: bez linku do polecanych ofert (404 w trybie ogłoszeniowym). */}
+        <Link href="/candidate/wyszukiwania" className={BTN_SECONDARY}>
+          {t("navSearches")}
         </Link>
       </div>
     </section>
