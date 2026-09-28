@@ -601,6 +601,10 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       city: 'company',
       verified_by: 'reference',
       status_reason: 'moderation',
+      // 0910: deklaracja agencji pracy tymczasowej i ręczne sprawdzenie numeru przez admina.
+      agency_recognition_number: 'company',
+      agency_checked_by: 'reference',
+      agency_check_note: 'moderation',
     },
   },
   'public.company_members': {
@@ -984,6 +988,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { requested_by: 'reference', decided_by: 'reference', decision_reason: 'moderation' },
     note:
       'Przegląd pytania oznaczonego przez detektor (#497, 0103): kopia treści pytania firmy, kto zapisał pytanie i kto zdecydował, uzasadnienie admina. Bez odpowiedzi kandydatów.',
+  },
+  'public.job_content_reviews': {
+    activities: ['companies'],
+    subjects: ['employer', 'admin'],
+    columns: {
+      requested_by: 'reference',
+      decided_by: 'reference',
+      decision_reason: 'moderation',
+      ai_reason: 'moderation',
+    },
+    note:
+      'Przegląd treści oferty z sygnałem oszustwa (0910): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
   },
   'public.job_duplications': {
     activities: ['companies'],

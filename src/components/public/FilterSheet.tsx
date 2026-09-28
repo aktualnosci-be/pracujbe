@@ -264,6 +264,15 @@ function NoScriptFilterForm({
           />
           <span>{t('noLanguageRequired')}</span>
         </label>
+        <label className={optionClass}>
+          <input
+            type="checkbox"
+            name="direct"
+            value="1"
+            defaultChecked={initial.directOnly}
+          />
+          <span>{t('directOnly')}</span>
+        </label>
       </fieldset>
 
       <label className="block space-y-2 text-sm font-semibold text-foreground">

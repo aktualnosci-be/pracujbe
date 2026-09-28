@@ -1302,6 +1302,34 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`warehouse-rich`) nie są migrowane — poprawka zamyka tylko zapis nowych/edytowanych ofert.
   Testy: `job-validation-draft-limits.test.ts` (kontrola ujemna: flaga + niepusta lista odrzucone
   w obu schematach), `update-published-job.test.ts` (fixture bez sprzecznego stanu).
+- [x] Zaufanie ofert (migracja `0910` — numer tymczasowy): **sygnały oszustwa** w treści oferty
+  przed publikacją — deterministyczne reguły PL/NL/FR/EN bez AI (`job_fraud_patterns`, lustro
+  `src/lib/job-trust/fraud-risk.ts`, test `job-fraud-risk` 1:1): opłata od kandydata (praca,
+  szkolenie, dokumenty, zakwaterowanie z góry), kontakt przez komunikator, kryptowaluty/„zadania
+  online”, przelew/dane karty. Migawka treści (`job_trust_content`: tytuł, godziny, tłumaczenia,
+  wymagania) + odcisk md5; odroczone triggery po zapisie kroku/rewizji zakładają przegląd
+  `job_content_reviews` (pending → approved/rejected), aktywną ofertę z nowym sygnałem baza
+  wstrzymuje (`paused`, audyt `job.paused_for_content_review`), strażnik
+  `enforce_job_content_review` blokuje każdą aktywację do akceptacji bieżącej treści
+  (`JOB_CONTENT_REVIEW_REQUIRED`/`JOB_CONTENT_REJECTED` → komunikat i uzasadnienie w kreatorze).
+  Drugi sygnał AI (decyzja właściciela 28.09): `src/lib/job-trust/ai-check.ts`, `gpt-6-luna` za flagą
+  `AI_JOB_FRAUD_CHECK_ENABLED` (atrapa `AI_JOB_FRAUD_CHECK_PROVIDER=fixture` poza produkcją),
+  `withAiBudget` + log użycia bez treści, minimalizacja `redactSensitiveData`, treść jako dane
+  w `<offer_text>`, strict schema; trafienie tylko kieruje do kolejki (`record_job_content_ai_signal`,
+  service_role, odcisk jak CAS), awaria/brak budżetu = same reguły; inwentarz `job_fraud_check`.
+  Podpowiedź w kreatorze (kroki 5, 6, 8), kolejka admina `/admin/tresc-ofert` (źródło reguła/AI,
+  uzasadnienie i pewność AI, treść z chwili zgłoszenia, `admin_decide_job_content_review` z CAS
+  treści, audytem i powiadomieniem). **Agencje pracy tymczasowej** (decyzja właściciela 28.09):
+  `companies.is_agency` + numer uznania regionalnego (tekst ≤ 64) w `/employer/firma`
+  (`set_company_agency`, owner/admin, zmiana zeruje sprawdzenie), ręczne sprawdzenie admina
+  w `/admin/firmy/[id]` (`admin_record_agency_check`, CAS po numerze), strażnik kolumn
+  `guard_company_agency`; etykieta „agencja” na karcie, szczególe i profilu firmy
+  (`get_public_jobs_agency`, bez wyniku sprawdzenia), filtr „bezpośrednio od pracodawcy”
+  (`?direct=1`, `p_direct_only` w liście, liczniku, facetach i kopii filtrów alertów). Dowód:
+  `rls.sql` sekcja FT910 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
+  przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
+  **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
+  na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,

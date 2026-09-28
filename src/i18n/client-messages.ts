@@ -47,6 +47,8 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'profileVisibility',
   'savedSearches',
   'screeningReview',
+  // 0910: podpowiedź i stan przeglądu treści w kreatorze oferty.
+  'jobTrust',
   'settings',
   'status',
   'team',

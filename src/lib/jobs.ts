@@ -101,6 +101,11 @@ export interface JobListItem {
    * oznacza przekład (szczegół: z linkiem do oryginału, karta: dyskretny znacznik).
    */
   machineTranslation?: JobMachineTranslation;
+  /**
+   * 0910: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
+   * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
+   */
+  isAgency?: true;
 }
 
 export interface JobDetail extends JobListItem {
@@ -154,6 +159,8 @@ export interface GetJobsParams {
   accommodation?: boolean;
   immediate?: boolean;
   noLanguageRequired?: boolean;
+  /** 0910: tylko oferty spoza agencji pracy tymczasowej. */
+  directOnly?: boolean;
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -457,7 +464,7 @@ async function getJobsFromDb(
     page,
     pageSize,
   }, viewerId);
-  const jobs = result.rows.map(rowToJobListItem);
+  const jobs = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
   return {
     jobs: translateCards ? await withListMachineTranslations(pool, jobs, toLocale(params.locale)) : jobs,
     total: result.total,
@@ -478,7 +485,8 @@ async function getJobBySlugFromDb(
   const pool = await getDomainPool();
   const first = await getPublicJob(pool, slug, locale);
   if (!first) return null;
-  const job = rowToJobDetail(first);
+  const [job] = await withAgencyFlags(pool, [rowToJobDetail(first)]);
+  if (!job) return null;
   // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
   const { getPublicJobScreeningQuestions } = await import('@/lib/db/public-jobs');
@@ -538,6 +546,26 @@ export async function withListMachineTranslations<T extends JobListItem>(
     return jobs.map((job) => applyJobListMachineTranslation(job, byId.get(job.id) ?? null, locale));
   } catch (error) {
     captureError(error, { area: 'jobs.readListMachineTranslations' });
+    return jobs;
+  }
+}
+
+/**
+ * Etykieta „agencja” (0910) — JEDNO zapytanie na stronę listy (lista id). Odczyt pomocniczy:
+ * awaria = karty bez etykiety + kod obszaru w logu (filtr listy i tak działa w SQL).
+ */
+export async function withAgencyFlags<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { getPublicJobsAgency } = await import('@/lib/db/public-jobs');
+    const agency = await getPublicJobsAgency(pool, jobs.map((job) => job.id));
+    if (agency.size === 0) return jobs;
+    return jobs.map((job) => (agency.has(job.id) ? { ...job, isAgency: true as const } : job));
+  } catch (error) {
+    captureError(error, { area: 'jobs.withAgencyFlags' });
     return jobs;
   }
 }

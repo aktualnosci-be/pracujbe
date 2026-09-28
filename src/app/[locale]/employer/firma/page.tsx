@@ -8,6 +8,7 @@ import { getCompanyById, getCompanyModerationDecisions, getMyCompany } from '@/l
 import { CompanyModerationDecisions } from '@/components/employer/CompanyModerationDecisions';
 import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
+import { CompanyAgencyForm } from '@/components/employer/CompanyAgencyForm';
 import { env } from '@/lib/env';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
@@ -287,6 +288,20 @@ export default async function EmployerCompanyPage({
                     published={{ website: company.website, logoUrl: company.logoUrl }}
                     review={company.linksReview}
                     ownHost={ownHost}
+                  />
+                </div>
+              </section>
+
+              {/* 0910: agencja pracy tymczasowej — deklaracja + numer uznania (sprawdza admin). */}
+              <section className={PAPER}>
+                <h2 className={H2_EXTENDED}>{t('agencyTitle')}</h2>
+                <p className={INTRO}>{t('agencySubtitle')}</p>
+                <div className="mt-4">
+                  <CompanyAgencyForm
+                    companyId={company.id}
+                    isAgency={company.agency.isAgency}
+                    recognitionNumber={company.agency.recognitionNumber}
+                    checkStatus={company.agency.checkStatus}
                   />
                 </div>
               </section>

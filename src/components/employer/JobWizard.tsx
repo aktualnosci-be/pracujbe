@@ -92,6 +92,8 @@ import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
 import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
 import { isScreeningQuestionType, type ScreeningQuestionDraft } from '@/lib/screening/questions';
 import type { ScreeningReviewNotice } from '@/lib/screening/review';
+import { jobFraudRisk } from '@/lib/job-trust/fraud-risk';
+import { JOB_CONTENT_CATEGORY_KEY, type JobContentReviewNotice } from '@/lib/job-trust/review';
 import {
   ScreeningQuestionsEditor,
   screeningErrorFieldId,
@@ -493,6 +495,7 @@ export function JobWizard({
   const t = useTranslations('jobWizard');
   const tImport = useTranslations('jobImport');
   const tRoot = useTranslations();
+  const tTrust = useTranslations('jobTrust');
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
@@ -552,6 +555,57 @@ export function JobWizard({
     );
   }
 
+  // 0910: podpowiedź przed zapisem — te same wzorce co strażnik w bazie (bez AI). Informacja,
+  // nie blokada: treść z sygnałem trafi do przeglądu zespołu portalu przed publikacją.
+  function renderTrustHint(): React.ReactNode {
+    const categories = jobFraudRisk([
+      values.title,
+      values.workingHours,
+      values.shifts,
+      values.description,
+      ...values.responsibilities,
+      ...values.requirementsMandatory,
+      ...values.requirementsOptional,
+      ...values.conditions,
+      ...values.benefits,
+      values.companyDescription,
+    ]);
+    if (categories.length === 0) return null;
+    return (
+      <p
+        role="note"
+        data-testid="job-trust-hint"
+        className={cn(FORM_WIDE, 'flex min-w-0 items-start gap-2.5 rounded-[16px] border border-warning/40 bg-warning/5 px-[23px] py-4 text-[13px] text-foreground max-[600px]:p-[18px]')}
+      >
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+        <span className="min-w-0">
+          {tTrust('wizardHint', {
+            categories: categories.map((category) => tTrust(JOB_CONTENT_CATEGORY_KEY[category])).join(', '),
+          })}
+        </span>
+      </p>
+    );
+  }
+
+  function renderContentReview(): React.ReactNode {
+    if (!contentReview) return null;
+    const categories = contentReview.categories
+      .map((category) => tTrust(JOB_CONTENT_CATEGORY_KEY[category]))
+      .join(', ');
+    return (
+      <div className="mt-1.5 space-y-1 text-muted-foreground" data-testid="job-content-review-notice">
+        <p className="break-words">
+          {contentReview.status === 'rejected'
+            ? tTrust('reviewRejected', { categories })
+            : tTrust('reviewPending', { categories })}
+        </p>
+        {contentReview.reason ? (
+          <p className="break-words">{tTrust('reviewReason', { reason: contentReview.reason })}</p>
+        ) : null}
+      </div>
+    );
+  }
+
   const [step, setStep] = React.useState<WizardStep>(1);
 
   // P1-10: podpowiedź miasta ze słownika miejscowości (rozpoznana nazwa + propozycje).
@@ -588,6 +642,8 @@ export function JobWizard({
   const [publishError, setPublishError] = React.useState<ErrorCode | null>(null);
   // #497: pytania, które blokują publikację (oczekują na przegląd / odrzucone) — z bazy.
   const [screeningReviews, setScreeningReviews] = React.useState<ScreeningReviewNotice[]>([]);
+  // 0910: treść oferty czeka na przegląd albo została odrzucona (publikacja/edycja).
+  const [contentReview, setContentReview] = React.useState<JobContentReviewNotice | null>(null);
   // #325: tryb edycji opublikowanej oferty.
   const isEdit = Boolean(published && initialJobId);
   const [editVersion, setEditVersion] = React.useState<string | null>(published?.updatedAt || null);
@@ -854,6 +910,8 @@ export function JobWizard({
       }
       if (res.demo) setDemo(true);
       if (res.updatedAt) setEditVersion(res.updatedAt);
+      // 0910: nowa treść ma sygnał bez akceptacji — oferta wstrzymana do przeglądu.
+      setContentReview(res.contentReview ?? null);
       if (res.slug) setPublicSlug(res.slug);
       // #829: edycja w trakcie zapisu nie jest zapisana — bez „Zapisano”, przycisk znów aktywny.
       const latest = getValues();
@@ -884,6 +942,7 @@ export function JobWizard({
   async function handlePublish(): Promise<void> {
     setPublishError(null);
     setScreeningReviews([]);
+    setContentReview(null);
     const ok = await persistStep(9, 'publish');
     if (!ok) return;
 
@@ -899,6 +958,7 @@ export function JobWizard({
       if (!res.ok) {
         setPublishError(res.error);
         setScreeningReviews(res.screening ?? []);
+        setContentReview(res.contentReview ?? null);
         return;
       }
       router.push('/employer');
@@ -1315,6 +1375,7 @@ export function JobWizard({
                 <FieldError name="responsibilities" />
               </div>
               {renderAssist(5)}
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1371,6 +1432,7 @@ export function JobWizard({
                 <FieldError name="minExperienceYears" />
               </div>
               {renderAssist(6)}
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1594,6 +1656,7 @@ export function JobWizard({
                   onChange={(c) => setValue('transport', c, { shouldDirty: true })}
                 />
               </div>
+              {renderTrustHint()}
             </div>
           ) : null}
 
@@ -1714,6 +1777,10 @@ export function JobWizard({
                     {publishError === 'COMPANY_NOT_VERIFIED' ? (
                       <p className="mt-1.5 text-muted-foreground">{t('notVerifiedNote')}</p>
                     ) : null}
+                    {publishError === 'JOB_CONTENT_REVIEW_REQUIRED' ||
+                    publishError === 'JOB_CONTENT_REJECTED'
+                      ? renderContentReview()
+                      : null}
                     {publishError === 'SCREENING_REVIEW_REQUIRED' ||
                     publishError === 'SCREENING_QUESTION_REJECTED' ? (
                       <>
@@ -1764,6 +1831,12 @@ export function JobWizard({
               error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
             }}
           />
+          {isEdit && contentReview && saveState !== 'error' ? (
+            <div role="status" className="max-w-xl text-[13px]">
+              <p className="font-[650] text-foreground">{tTrust('editPaused')}</p>
+              {renderContentReview()}
+            </div>
+          ) : null}
           {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
               da, więc prowadzimy do listy ofert (#363). */}
           {saveState === 'error' &&

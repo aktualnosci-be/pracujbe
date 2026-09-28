@@ -30,6 +30,8 @@ import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
+import { AgencyCheckActions } from '@/components/admin/AgencyCheckActions';
+import { agencyCheckFocusKey } from '@/lib/admin/focus';
 import { CompanyLinksReviewActions } from '@/components/admin/CompanyLinksReviewActions';
 
 /**
@@ -279,6 +281,67 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
 
       {/* Weryfikacja VAT w VIES (#92) */}
       <CompanyViesCheck companyId={company.id} initial={company.vies} />
+
+      {/* 0910: agencja pracy tymczasowej — numer uznania sprawdzany ręcznie w rejestrze regionu */}
+      <section aria-labelledby="company-agency-heading" className={PANEL} data-testid="admin-company-agency">
+        <div className={SECTION_HEAD}>
+          <h2
+            id="company-agency-heading"
+            tabIndex={-1}
+            data-admin-focus={agencyCheckFocusKey(company.id)}
+            className={cn(PANEL_H2, 'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+          >
+            {t('sectionAgency')}
+          </h2>
+          {company.agency.isAgency ? (
+            <span
+              className={cn(
+                TAG,
+                company.agency.checkStatus === 'confirmed'
+                  ? 'bg-success/10 text-success-text'
+                  : company.agency.checkStatus === 'not_confirmed'
+                    ? 'bg-error/10 text-error-text'
+                    : 'bg-warning/10 text-warning-text',
+              )}
+            >
+              {t(
+                company.agency.checkStatus === 'confirmed'
+                  ? 'agencyStatusConfirmed'
+                  : company.agency.checkStatus === 'not_confirmed'
+                    ? 'agencyStatusNotConfirmed'
+                    : 'agencyStatusUnchecked',
+              )}
+            </span>
+          ) : null}
+        </div>
+        {company.agency.isAgency ? (
+          <>
+            <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label={t('agencyCheckNumber')} value={company.agency.recognitionNumber ?? dash} />
+              <Field
+                label={t('agencyCheckedAt')}
+                value={company.agency.checkedAt ? formatDate(company.agency.checkedAt) : dash}
+              />
+              {company.agency.checkNote ? (
+                <Field label={t('agencyCheckNoteLabel')} value={company.agency.checkNote} />
+              ) : null}
+            </dl>
+            {company.agency.recognitionNumber ? (
+              <div className="mt-6 border-t border-border pt-5">
+                <p className={cn(PANEL_P, 'mb-3')}>{t('agencyCheckHint')}</p>
+                <AgencyCheckActions
+                  companyId={company.id}
+                  recognitionNumber={company.agency.recognitionNumber}
+                />
+              </div>
+            ) : (
+              <p className={cn(PANEL_P, 'mt-4')}>{t('agencyNoNumber')}</p>
+            )}
+          </>
+        ) : (
+          <p className={PANEL_P}>{t('agencyNotDeclared')}</p>
+        )}
+      </section>
 
       <div className="grid min-w-0 grid-cols-[1.4fr_1fr] gap-[19px] max-[1050px]:grid-cols-1">
         {/* Członkowie (`.panel` z wierszami `.job`) */}

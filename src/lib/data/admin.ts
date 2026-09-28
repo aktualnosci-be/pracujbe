@@ -57,6 +57,12 @@ import {
   type ScreeningQuestionType,
 } from '@/lib/screening/questions';
 import { isScreeningRiskCategory, type ScreeningRiskCategory } from '@/lib/screening/risk';
+import { isAgencyCheckStatus, type AgencyCheckStatus } from '@/lib/job-trust/agency';
+import {
+  isJobContentSignalCategory,
+  jobTrustContentTexts,
+  type JobContentSignalCategory,
+} from '@/lib/job-trust/review';
 import {
   buildViesState,
   companyVatSource,
@@ -1636,6 +1642,16 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   jobsTotal: number;
   /** Weryfikacja numeru VAT w VIES (#92) — informacja dla admina, nie decyzja. */
   vies: AdminViesState;
+  /** 0910: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia numeru uznania. */
+  agency: AdminCompanyAgency;
+}
+
+export interface AdminCompanyAgency {
+  isAgency: boolean;
+  recognitionNumber: string | null;
+  checkStatus: AgencyCheckStatus;
+  checkedAt: string | null;
+  checkNote: string | null;
 }
 
 export type AdminCompanyDetailResult =
@@ -1686,6 +1702,7 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
         vatSource: companyVatSource(row.vatNumber, row.registrationNumber),
         stored: null,
       }),
+      agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked', checkedAt: null, checkNote: null },
     },
   };
 }
@@ -1744,7 +1761,9 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         `SELECT id, name, status, status_reason, created_at, verified_at, vat_number,
                 registration_number, email, phone, website, address, postal_code, city, region,
                 country, industry, description, logo_url, website_pending, logo_url_pending,
-                links_review_status, links_pending_at, links_review_reason
+                links_review_status, links_pending_at, links_review_reason,
+                is_agency, agency_recognition_number, agency_check_status, agency_checked_at,
+                agency_check_note
            FROM public.companies
           WHERE id = $1 AND deleted_at IS NULL`, [uuid]);
       if (!company) return null;
@@ -1826,6 +1845,13 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         }),
         jobs,
         jobsTotal: loaded.jobsTotal,
+        agency: {
+          isAgency: c['is_agency'] === true,
+          recognitionNumber: asNullableString(c['agency_recognition_number']),
+          checkStatus: isAgencyCheckStatus(c['agency_check_status']) ? c['agency_check_status'] : 'unchecked',
+          checkedAt: asNullableString(c['agency_checked_at']),
+          checkNote: asNullableString(c['agency_check_note']),
+        },
         vies: buildViesState({
           companyName: asString(c['name']),
           vatSource,
@@ -2265,6 +2291,180 @@ export async function listScreeningReviews(
     return { status: 'ok', rows, nextCursor };
   } catch (error) {
     captureError(error, { area: 'admin.listScreeningReviews' });
+    return { status: 'error' };
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Przegląd treści ofert z sygnałem oszustwa (0910)
+ * ------------------------------------------------------------------------- */
+
+export interface AdminJobContentReviewRow {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  jobStatus: string;
+  jobSlug: string | null;
+  companyId: string;
+  companyName: string;
+  ruleCategories: JobContentSignalCategory[];
+  aiCategories: JobContentSignalCategory[];
+  aiReason: string | null;
+  aiConfidence: number | null;
+  /** Teksty treści oferty z chwili zgłoszenia (migawka). */
+  texts: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string | null;
+  requestedByName: string | null;
+  decidedAt: string | null;
+  decidedByName: string | null;
+  reason: string | null;
+  /** Migawka = bieżąca treść oferty (inaczej decyzja nieaktualna — RPC zwróci STALE_STATE). */
+  current: boolean;
+}
+
+const DEMO_JOB_CONTENT_REVIEWS: AdminJobContentReviewRow[] = [
+  {
+    id: 'demo-jc1',
+    jobId: 'demo-job-1',
+    jobTitle: 'Magazynier / Magazynierka',
+    jobStatus: 'draft',
+    jobSlug: null,
+    companyId: 'demo-c1',
+    companyName: 'Logistiek Gent BV',
+    ruleCategories: ['candidate_fee', 'off_platform_contact'],
+    aiCategories: [],
+    aiReason: null,
+    aiConfidence: null,
+    texts: ['Magazynier / Magazynierka', 'Kontakt przez WhatsApp. Opłata za szkolenie 50 EUR przed startem.'],
+    status: 'pending',
+    createdAt: '2025-01-21T08:15:00.000Z',
+    requestedByName: 'Anna Nowak',
+    decidedAt: null,
+    decidedByName: null,
+    reason: null,
+    current: true,
+  },
+  {
+    id: 'demo-jc2',
+    jobId: 'demo-job-2',
+    jobTitle: 'Pakowanie produktów w domu',
+    jobStatus: 'paused',
+    jobSlug: null,
+    companyId: 'demo-c2',
+    companyName: 'Transport Liège SA',
+    ruleCategories: [],
+    aiCategories: ['unrealistic_offer'],
+    aiReason: 'Pay far above the norm with vague duties.',
+    aiConfidence: 0.8,
+    texts: ['Pakowanie produktów w domu', 'Zarabiaj 900 EUR tygodniowo bez doświadczenia.'],
+    status: 'pending',
+    createdAt: '2025-01-20T10:40:00.000Z',
+    requestedByName: 'Marc Dubois',
+    decidedAt: null,
+    decidedByName: null,
+    reason: null,
+    current: true,
+  },
+];
+
+/**
+ * Kolejka przeglądu treści ofert (0910): filtr oczekujące (domyślnie) / rozstrzygnięte /
+ * wszystkie, kursor (`created_at`, `id`). „Oczekujące” pokazuje tylko migawki równe bieżącej
+ * treści oferty — zapis innej treści zostawia stary wiersz jako historię. Bez env → DEMO.
+ */
+export async function listJobContentReviews(
+  query: AdminScreeningReviewsQuery = {},
+): Promise<AdminListResult<AdminJobContentReviewRow>> {
+  const filter = parseScreeningReviewFilter(query.status);
+  if (!isPortalDataConfigured()) {
+    return demoList(
+      DEMO_JOB_CONTENT_REVIEWS.filter(
+        (row) => filter === 'all' || (filter === 'pending') === (row.status === 'pending'),
+      ),
+    );
+  }
+  await requireAdmin();
+
+  try {
+    const params = new SqlParams();
+    const where = whereOf([
+      filter === 'pending' && "r.status = 'pending'",
+      filter === 'decided' && "r.status IN ('approved', 'rejected')",
+      cursorCondition(params, query.cursor, 'r'),
+    ]);
+    const limit = params.add(ADMIN_PAGE_SIZE + 1);
+    const { raw, profiles } = await withServiceRole(async (tx) => {
+      const reviews = asRows(
+        await queryRows(tx, 'admin.job-content-reviews',
+          `SELECT r.id, r.job_id, r.rule_categories, r.ai_categories, r.ai_reason, r.ai_confidence,
+                  r.content, r.status, r.created_at, r.requested_by, r.decided_by, r.decided_at,
+                  r.decision_reason, j.title AS job_title, j.status::text AS job_status, j.slug AS job_slug,
+                  j.company_id, c.name AS company_name,
+                  (j.deleted_at IS NULL
+                   AND md5(public.job_trust_content(r.job_id)::text) = r.content_fingerprint) AS is_current
+             FROM public.job_content_reviews r
+             JOIN public.jobs j ON j.id = r.job_id
+             LEFT JOIN public.companies c ON c.id = j.company_id
+             ${where}
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT ${limit}`, params.values),
+      );
+      const pageRows = reviews.slice(0, ADMIN_PAGE_SIZE);
+      const profileIds = uniqueIds(
+        pageRows.flatMap((r) => [asString(r['requested_by']), asString(r['decided_by'])]),
+      );
+      return {
+        raw: reviews,
+        profiles: asRows(await readProfileNames(tx, 'admin.job-content-review-profiles', profileIds)),
+      };
+    });
+    const page = raw.slice(0, ADMIN_PAGE_SIZE);
+    const lastRaw = page[page.length - 1];
+    const lastCreatedAt = lastRaw ? asNullableString(lastRaw['created_at']) : null;
+    const nextCursor =
+      raw.length > ADMIN_PAGE_SIZE && lastRaw && lastCreatedAt
+        ? encodeAdminCursor({ createdAt: lastCreatedAt, id: asString(lastRaw['id']) })
+        : null;
+    const nameById = new Map(profiles.map((profile) => [asString(profile['id']), fullName(profile)]));
+    const nameOf = (id: string): string | null => {
+      const name = id ? nameById.get(id) : undefined;
+      return name && name.length > 0 ? name : null;
+    };
+    const categories = (value: unknown): JobContentSignalCategory[] =>
+      (Array.isArray(value) ? value : []).filter(isJobContentSignalCategory);
+
+    const rows = page
+      .map((row): AdminJobContentReviewRow => {
+        const status = row['status'];
+        const confidence = Number(row['ai_confidence']);
+        return {
+          id: asString(row['id']),
+          jobId: asString(row['job_id']),
+          jobTitle: asString(row['job_title']),
+          jobStatus: asString(row['job_status']),
+          jobSlug: asNullableString(row['job_slug']),
+          companyId: asString(row['company_id']),
+          companyName: asString(row['company_name']),
+          ruleCategories: categories(row['rule_categories']),
+          aiCategories: categories(row['ai_categories']),
+          aiReason: asNullableString(row['ai_reason']),
+          aiConfidence: row['ai_confidence'] == null || !Number.isFinite(confidence) ? null : confidence,
+          texts: jobTrustContentTexts(row['content']),
+          status: status === 'approved' || status === 'rejected' ? status : 'pending',
+          createdAt: asNullableString(row['created_at']),
+          requestedByName: nameOf(asString(row['requested_by'])),
+          decidedAt: asNullableString(row['decided_at']),
+          decidedByName: nameOf(asString(row['decided_by'])),
+          reason: asNullableString(row['decision_reason']),
+          current: row['is_current'] === true,
+        };
+      })
+      .filter((row) => filter !== 'pending' || row.current);
+
+    return { status: 'ok', rows, nextCursor };
+  } catch (error) {
+    captureError(error, { area: 'admin.listJobContentReviews' });
     return { status: 'error' };
   }
 }

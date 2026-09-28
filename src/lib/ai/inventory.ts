@@ -63,7 +63,7 @@ export interface AiFeature {
   costBudgeted: boolean;
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import'] as const;
+export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check'] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -137,6 +137,24 @@ export const AI_FEATURES: readonly AiFeature[] = [
     decidesAboutPerson: false,
     usageLogged: true,
     // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
+  },
+  {
+    id: 'job_fraud_check',
+    issues: ['0910'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/job-trust/ai-check.ts'],
+    enableFlag: 'AI_JOB_FRAUD_CHECK_ENABLED',
+    provider: 'openai',
+    inputs: ['job_offer_text'],
+    output:
+      'Sygnał „możliwe oszustwo” dla treści oferty (kategorie ze schematu, krótkie uzasadnienie, pewność); trafienie zapisuje record_job_content_ai_signal jako wiersz kolejki przeglądu admina (job_content_reviews) — drugi sygnał obok deterministycznych reguł w bazie.',
+    humanInTheLoop: true,
+    humanStep:
+      'Model niczego nie publikuje ani nie odrzuca: sygnał tylko kieruje ofertę do kolejki /admin/tresc-ofert, decyzję podejmuje admin (admin_decide_job_content_review); awaria/brak budżetu = same reguły.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/job-trust/ai-check.ts (#36): rezerwacja przed wywołaniem modelu.
     costBudgeted: true,
   },
 ];
