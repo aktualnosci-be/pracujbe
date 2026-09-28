@@ -400,16 +400,6 @@ async function computeProfileSummary(
 ): Promise<CandidateProfileSummary> {
   const profile = asRecord(await queryOne(tx, 'candidate.profile-name',
     'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [userId]));
-  // Decyzja produktowa: portal ogłoszeniowy (#1128) — bez profilu kandydata: czytamy tylko imię
-  // (powitanie), nie liczymy kompletności i nie dotykamy `candidate_profiles`.
-  if (!isRecruitmentEnabled('candidateProfile')) {
-    return {
-      loadFailed: false,
-      firstName: asStr(profile['first_name']) || null,
-      completionPct: 0,
-      checklist: EMPTY_PROFILE_CHECKLIST,
-    };
-  }
   // Liczniki relacji (języki/certyfikaty) w tym samym wierszu profilu kandydata — brak
   // profilu kandydata = zera, jak dotąd.
   const cp = asRecord(await queryOne(tx, 'candidate.profile-completeness',
@@ -644,6 +634,42 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateOverview' });
     return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
+  }
+}
+
+/**
+ * Pulpit konta w trybie ogłoszeniowym (#1142): imię z `profiles` i liczba aktywnych ofert.
+ * Bez profilu zawodowego, zgłoszeń, propozycji i wiadomości (żaden z tych odczytów nie jest
+ * wołany). Licznik bez udanego odczytu = `null` („—”), nigdy fałszywe zero (#244).
+ */
+export interface CandidateAccountOverview {
+  firstName: string | null;
+  newJobsCount: number | null;
+}
+
+export async function getCandidateAccountOverview(): Promise<CandidateAccountOverview> {
+  if (!isPortalDataConfigured()) {
+    if (isDashboardErrorFixture()) return { firstName: null, newJobsCount: null };
+    return { firstName: null, newJobsCount: DEMO_OVERVIEW.newJobsCount };
+  }
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { firstName: null, newJobsCount: null };
+    return await withPortalTransaction(me, async (tx) => {
+      const name = await attempt(tx, async () => {
+        const row = await queryOne(tx, 'candidate.account-first-name',
+          'SELECT first_name FROM public.profiles WHERE id = $1', [me.id]);
+        const value = row?.['first_name'];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+      });
+      const jobs = await attempt(tx, async () =>
+        asNum(await rpc(tx, 'get_public_jobs_count', { p_keyword: null, p_city: null })));
+      if (!jobs.ok) captureError(jobs.error, { area: 'candidate.getCandidateAccountOverview.newJobs' });
+      return { firstName: name.ok ? name.value : null, newJobsCount: jobs.ok ? jobs.value : null };
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidateAccountOverview' });
+    return { firstName: null, newJobsCount: null };
   }
 }
 

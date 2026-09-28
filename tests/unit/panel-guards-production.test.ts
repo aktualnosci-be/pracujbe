@@ -85,6 +85,8 @@ function stubProduction() {
   vi.stubEnv('DATABASE_AUTH_URL', 'postgresql://auth:pw@db.internal:5432/app');
   vi.stubEnv('BETTER_AUTH_URL', 'https://pracuj.be');
   vi.stubEnv('BETTER_AUTH_SECRET', 's'.repeat(40));
+  // Kreator onboardingu istnieje tylko w trybie RECRUITMENT (#1142) — tu sprawdzamy guard sesji.
+  vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
 }
 
 beforeEach(() => {
@@ -96,8 +98,6 @@ afterEach(() => vi.unstubAllEnvs());
 describe('#12: panele w produkcji bez sesji', () => {
   it.each(Object.entries(LAYOUTS))('%s: gość → logowanie, bez odczytu danych demo', async (_name, layout) => {
     stubProduction();
-    // Kreator onboardingu istnieje tylko w trybie rekrutacyjnym (tryb ogłoszeniowy: 404, niżej).
-    vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
     for (const locale of ['pl', 'nl', 'fr', 'en']) {
       expect(await outcome(layout as Layout, locale)).toEqual({ redirect: `/${locale}/logowanie` });
     }
@@ -105,14 +105,12 @@ describe('#12: panele w produkcji bez sesji', () => {
     expect(m.getNotifications).not.toHaveBeenCalled();
   });
 
-  it('tryb ogłoszeniowy: onboarding kandydata = 404 także dla gościa (kontrola ujemna: RECRUITMENT → logowanie)', async () => {
+  it('#1142 tryb ogłoszeniowy: kreator onboardingu → 404 przed odczytem sesji (4 języki)', async () => {
     stubProduction();
     vi.stubEnv('PORTAL_LEGAL_MODE', '');
     for (const locale of ['pl', 'nl', 'fr', 'en']) {
       expect(await outcome(OnboardingLayout as Layout, locale)).toEqual({ notFound: true });
     }
-    vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
-    expect(await outcome(OnboardingLayout as Layout)).toEqual({ redirect: '/pl/logowanie' });
   });
 
   it('rola z profilu, nie z adresu: pracodawca i admin nie widzą panelu kandydata', async () => {

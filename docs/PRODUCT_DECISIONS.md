@@ -74,8 +74,8 @@ Portal:
   rekomendacji z profilu;
 - nie wysyła propozycji pracy i nie prowadzi rozmów między kandydatem a pracodawcą;
 - nie zbiera odpowiedzi na pytania screeningowe i nie importuje CV;
-- nie prowadzi profilu kandydata ani onboardingu (profil służył wyłącznie dopasowaniom i przeglądaniu
-  przez firmy): kandydat po rejestracji trafia na pulpit, a ustawienia konta zostają.
+- nie prowadzi profilu zawodowego kandydata ani onboardingu (profil służył wyłącznie dopasowaniom
+  i przeglądaniu przez firmy): kandydat po rejestracji trafia na pulpit, a ustawienia konta zostają.
 
 Funkcje niezgodne z tym modelem są wyłączone produkcyjnie w trybie fail-closed: jedno źródło
 trybu w `src/lib/portal-mode.ts` (#1136), blokady w bazie (#1140) i strażnik CI (#1146). Kod

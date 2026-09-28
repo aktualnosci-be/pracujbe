@@ -14,8 +14,8 @@ import { execute, jsonArg, rpc } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
-import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { consentWordingVersions } from '@/lib/signup-consents';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { Locale } from '@/i18n/routing';
 import {
   step1Schema,
@@ -48,9 +48,6 @@ import {
  * i normalizacja z `set_candidate_*`, 0028/0079) — koniec cichej utraty danych z FUN-04.
  * Bezpośredni DML na tych tabelach jest odebrany klientowi (0028), więc RPC to jedyna ścieżka zapisu.
  *
- * Tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy, #1128): akcja zwraca
- * `RECRUITMENT_DISABLED` przed walidacją i bazą; trasy `/candidate/onboarding` i `/candidate/profil` = 404.
- *
  * TRYB DEMO (Invariant: panele działają bez env): gdy baza nie jest skonfigurowana,
  * walidujemy dane, ale NIE zapisujemy — zwracamy `{ ok: true, demo: true }`. Dzięki temu
  * build i UX działają bez backendu.
@@ -66,6 +63,7 @@ export type SaveOnboardingResult =
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
@@ -97,11 +95,9 @@ export async function saveOnboardingStep(
   data: unknown,
   options: { finish?: boolean } = {},
 ): Promise<SaveOnboardingResult> {
-  // Decyzja produktowa: portal ogłoszeniowy (#1128) — profil kandydata nie ma odbiorcy (brak
-  // dopasowań i przeglądania profili przez firmy), więc kreator nic nie zapisuje: bez walidacji,
-  // trybu demo i bazy. Baza i tak nie ma ścieżki, która ten zapis wykorzystuje.
-  if (!isRecruitmentEnabled('candidateProfile')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
-
+  // 0) #1142 — decyzja produktowa: portal ogłoszeniowy. Konto nie buduje profilu zawodowego:
+  // każdy krok kreatora odrzucony przed walidacją i bazą (baza ma własny strażnik, migracja 0175).
+  if (!isRecruitmentEnabled()) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const finish = step === 6 && options.finish === true;
   // 1) Walidacja odpowiednim schematem kroku (identyczna jak na kliencie).
   const parsed = validateStep(step, data, finish);

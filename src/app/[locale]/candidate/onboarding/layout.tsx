@@ -34,9 +34,9 @@ export default async function OnboardingLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-
-  // Decyzja produktowa: portal ogłoszeniowy (#1128) — profil kandydata wyłączony (404).
-  notFoundUnlessRecruitment('candidateProfile');
+  // #1142 — decyzja produktowa: portal ogłoszeniowy. Konto nie buduje profilu zawodowego:
+  // kreator (każdy `?step=`) = 404 przed odczytem sesji i danych.
+  notFoundUnlessRecruitment();
 
   if (isPortalAuthConfigured() && !(await getCurrentIdentity())) {
     redirect({ href: '/logowanie', locale: locale as Locale });

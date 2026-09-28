@@ -14,6 +14,7 @@ import {
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { cn } from '@/lib/utils';
 import { CandidateRecommendedPreview } from '@/components/candidate/CandidateRecommendedPreview';
+import { CandidateAccountDashboard } from '@/components/candidate/CandidateAccountDashboard';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
@@ -66,6 +67,11 @@ export default async function CandidateDashboardPage({
   const { locale } = await params;
   setRequestLocale(locale);
 
+  // #1142 — decyzja produktowa: portal ogłoszeniowy. Konto bez profilu zawodowego: pulpit
+  // z zapisanymi ofertami i wyszukiwaniami; loadery profilu, CV, zgłoszeń, propozycji
+  // i wiadomości nie są wołane.
+  if (!isRecruitmentEnabled()) return <CandidateAccountDashboard locale={locale} />;
+
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
   const tc = await getTranslations({ locale, namespace: 'common' });
@@ -89,16 +95,12 @@ export default async function CandidateDashboardPage({
     recruitment ? getLatestActiveOffer(locale) : null,
   ]);
 
-  // Decyzja produktowa: portal ogłoszeniowy (#1128) — bez profilu kandydata: pulpit nie pokazuje
-  // wskaźnika kompletności, checklisty ani linków do profilu/onboardingu.
-  const showProfile = isRecruitmentEnabled('candidateProfile');
-
   const overviewFailed =
     overview.newJobsCount === null ||
     (recruitment && overview.activeApplicationsCount === null) ||
     (messagingOn && overview.unreadMessagesCount === null);
 
-  const checklist = showProfile ? profileChecklistItems(profile.checklist, td('add'), to) : [];
+  const checklist = profileChecklistItems(profile.checklist, td('add'), to);
 
   return (
     <div className="min-w-0">
@@ -154,13 +156,9 @@ export default async function CandidateDashboardPage({
                     : td('unreadMessagesSub'),
               }]
             : []),
-          ...(showProfile
-            ? [
-                profile.loadFailed
-                  ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
-                  : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
-              ]
-            : []),
+          profile.loadFailed
+            ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
+            : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
         ]}
       />
 
@@ -190,25 +188,19 @@ export default async function CandidateDashboardPage({
         {/* Kolumna boczna */}
         <div className={DASH_GRID_SIDE}>
           {/* Kompletność profilu — `.panel`: h2, opis, `.progress`, `.checklist`, `.btn`. */}
-          {showProfile ? (
-            profile.loadFailed ? (
-              <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} />
-            ) : (
-              <section className={PANEL}>
-                <h2 className={PANEL_H2}>{td('profileCompleteness')}</h2>
-                <ProfileCompleteness
-                  className="mt-2"
-                  value={profile.completionPct}
-                  title={getProfileLevelTitle(profile.completionPct, td('goodLevel'))}
-                  hint={td('completenessHint')}
-                />
-                <ProfileChecklist items={checklist} />
-                <Link href="/candidate/profil" className={cn(BTN_PRIMARY, 'w-full')}>
-                  {td('completeProfile')}
-                </Link>
-              </section>
-            )
-          ) : null}
+          {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className={PANEL}>
+            <h2 className={PANEL_H2}>{td('profileCompleteness')}</h2>
+            <ProfileCompleteness
+              className="mt-2"
+              value={profile.completionPct}
+              title={getProfileLevelTitle(profile.completionPct, td('goodLevel'))}
+              hint={td('completenessHint')}
+            />
+            <ProfileChecklist items={checklist} />
+            <Link href="/candidate/profil" className={cn(BTN_PRIMARY, 'w-full')}>
+              {td('completeProfile')}
+            </Link>
+          </section>}
 
           {/* Dokumenty / CV (prywatny bucket + signed URLs). #1138: w trybie ogłoszeniowym bez
               sekcji — istniejące pliki (pobranie/usunięcie) są w profilu. */}
