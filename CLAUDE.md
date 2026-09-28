@@ -2935,6 +2935,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   pomijany).
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
+- [x] Prywatność i obserwowalność (paczka audytu 2026-09-28, bez migracji): beacon Cloudflare
+  z `spa: false` i pełnym przeładowaniem przy przejściu z trasy publicznej na prywatną (link
+  albo `router.push`; `src/lib/analytics/beacon.ts`, #1046, E2E `one-time-link-tracking`);
+  kanał błędów niesie obszar (`Obszar:` z `area`/`task` kontekstu `captureError`, walidowany
+  `safeErrorArea`) i SQLSTATE, deduplikacja po (kod, obszar, SQLSTATE), maintenance zgłasza każde
+  nieudane zadanie osobno (#1066); `reportUnmappedDbError` (`src/lib/db/errors.ts`) zgłasza
+  `INTERNAL` z nieznanego błędu bazy w akcjach (kandydat, onboarding, ustawienia powiadomień,
+  zespół, firma, zapisane wyszukiwania; bez akcji rekrutacyjnych i `jobs.ts`, #1068); cookie aktywnej
+  firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
+  firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
+  poza produkcją pokazuje szczegóły tylko z tokenem albo na loopbacku, zbiorczy budżet błędów
+  z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`), retencja przebiegów CI ≥ 30 dni (strażnik),
+  worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
+  i SQLSTATE bez komunikatu bazy (#1105).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`

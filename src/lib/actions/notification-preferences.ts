@@ -3,7 +3,8 @@
 import { z } from 'zod/v3';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureError } from '@/lib/error-report';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { jsonArg, queryOne, rpc } from '@/lib/db/sql';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/data/notification-preferences';
@@ -122,7 +123,11 @@ export async function updateNotificationPreferences(
     return { ok: true };
   } catch (error) {
     // Błąd bazy → kod użytkowy; nieoczekiwany błąd — bez technikaliów (Invariant #8).
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'notification-preferences.save', mapPgError(databaseErrorMessage(error))) };
+    }
+    // Wyjątek spoza bazy (sieć, konfiguracja) też trafia do kanału błędów (#1068).
+    captureError(error, { area: 'notification-preferences.save' });
     return { ok: false, error: 'INTERNAL' };
   }
 }
