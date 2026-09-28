@@ -291,8 +291,6 @@ describe('odczyt listy i szczegółu', () => {
 
 describe('/api/maintenance — kolejkowanie kampanii tylko z nadawcą', () => {
   const TASKS = [
-    'release_stale_discount_reservations',
-    'release_stale_checkout_intents',
     'ai_budget_release_stale_reservations',
     'expire_due_jobs',
     'match_recompute_claim',

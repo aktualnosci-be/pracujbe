@@ -1038,46 +1038,46 @@ select pg_temp.assert(
   'Y2d IP zapisane w receipcie');
 
 -- ============================================================================
--- Z. Audyt produkcyjny 0045 (P1-15) — realizacja kodów rabatowych (rezerwacja + limit)
+-- Z. Migracja 0980 (#51) — martwy schemat billingu usunięty (dawne sekcje Z/DD: rabaty, checkout)
 -- ============================================================================
 reset role;
-insert into public.discount_codes(id, code, percent_off, max_redemptions, is_active)
-  values ('dc000000-0000-0000-0000-0000000000dc', 'ZTEST10', 10, 1, true);
-
--- Z1: klient nie ma dostępu do tabeli realizacji (RPC-only).
-set role authenticated; reset app.current_uid; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select count(*) from public.discount_redemptions',
-  'permission denied', 'Z1 authenticated nie widzi discount_redemptions');
-reset role;
-
--- Z2: rezerwacja (service_role) zwraca zniżkę; ponowna dla tej samej firmy jest idempotentna.
-set role service_role;
-select (public.reserve_discount('ZTEST10', :'COMPA') ->> 'percent_off') as z_pct \gset
-select public.reserve_discount('ZTEST10', :'COMPA'); -- idempotentny retry (bez błędu, bez dubletu)
-reset role;
-select pg_temp.assert(:'z_pct' = '10', 'Z2 reserve_discount zwraca zniżkę 10%');
+-- Z1: tabele, kolumna, funkcje i typy billingu nie istnieją.
 select pg_temp.assert(
-  (select count(*) from public.discount_redemptions
-     where company_id = :'COMPA' and discount_code_id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
-  'Z2b jedna rezerwacja mimo retry (idempotencja per firma)');
-
--- Z3: limit=1 wyczerpany → inna firma nie zarezerwuje.
-set role service_role;
-select pg_temp.expect_error(
-  'select public.reserve_discount(''ZTEST10'', '''|| :'COMPB' ||''')',
-  'VALIDATION_FAILED', 'Z3 limit wykorzystania kodu (druga firma odrzucona)');
-reset role;
-
--- Z4: finalizacja inkrementuje times_redeemed; po niej ta firma nie zarezerwuje ponownie.
-set role service_role;
-select public.finalize_discount('dc000000-0000-0000-0000-0000000000dc', :'COMPA', 'sess-1');
-select pg_temp.expect_error(
-  'select public.reserve_discount(''ZTEST10'', '''|| :'COMPA' ||''')',
-  'VALIDATION_FAILED', 'Z4 kod już zrealizowany przez firmę (finalized)');
-reset role;
+  to_regclass('public.subscriptions') is null and to_regclass('public.payments') is null
+  and to_regclass('public.invoices') is null and to_regclass('public.discount_codes') is null
+  and to_regclass('public.checkout_intents') is null and to_regclass('public.discount_redemptions') is null,
+  'Z1 tabele billingu usunięte (0980)');
 select pg_temp.assert(
-  (select times_redeemed from public.discount_codes where id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
-  'Z4b times_redeemed=1 po finalizacji');
+  not exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'companies' and column_name = 'provider_customer_id'),
+  'Z1b companies.provider_customer_id usunięta');
+select pg_temp.assert(
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname in ('reserve_discount', 'finalize_discount', 'release_stale_discount_reservations',
+                                   'begin_checkout', 'complete_checkout', 'release_checkout_intent',
+                                   'release_stale_checkout_intents')),
+  'Z1c funkcje rabatów i checkoutu usunięte');
+select pg_temp.assert(
+  not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
+               where n.nspname = 'public'
+                 and t.typname in ('subscription_status', 'payment_status', 'invoice_status')),
+  'Z1d typy enum billingu usunięte');
+-- Z2: ops_metrics nie liczy już checkoutu i rabatów, ale nadal działa (przeterminowane oferty).
+select pg_temp.assert(
+  not (public.ops_metrics() -> 'maintenance' ? 'staleDiscountReservations')
+  and not (public.ops_metrics() -> 'maintenance' ? 'staleCheckoutIntents')
+  and (public.ops_metrics() -> 'maintenance' ? 'overdueActiveJobs'),
+  'Z2 ops_metrics.maintenance bez liczników billingu, z overdueActiveJobs');
+-- Z3: aktywne uprawnienia planów zostają — katalog jest, plan efektywny to zawsze 'free'.
+select pg_temp.assert(
+  to_regclass('public.plan_entitlements') is not null
+  and public.company_plan(:'COMPA'::uuid) = 'free'
+  and public.company_max_active_jobs(:'COMPA'::uuid) = 1,
+  'Z3 plan_entitlements zostaje; company_plan = free, limit 1 (ENTITLEMENT_LIMIT aktywny)');
+-- Z4: processed_webhooks (inbox poczty) zostaje.
+select pg_temp.assert(to_regclass('public.processed_webhooks') is not null,
+  'Z4 processed_webhooks zostaje (inbox webhooków poczty)');
 
 -- ============================================================================
 -- AA. Audyt produkcyjny 0046 (P1-12) — filtry/sort/paginacja get_public_jobs w SQL
@@ -1144,54 +1144,8 @@ select pg_temp.assert(public.job_is_public(:'JOBA'::uuid) is false,
   'CC3 job_is_public=false dla wygasłej oferty (blokuje apply_to_job)');
 
 -- ============================================================================
--- DD. AUDIT_REPORT 0050 (P0-02) — serwerowa idempotencja checkoutu (checkout_intents)
+-- DD. (usunięta w 0980 — checkout_intents/begin_checkout; brak obiektów potwierdza sekcja Z)
 -- ============================================================================
--- DD1: DML na checkout_intents odebrany anon/authenticated (RPC-only).
-set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(
-  'insert into public.checkout_intents (company_id, plan) values ('''|| :'COMPA' ||''', ''standard'')',
-  'permission denied', 'DD1 authenticated nie pisze checkout_intents (RPC-only)');
-select pg_temp.expect_error(
-  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
-  'permission denied', 'DD1b begin_checkout tylko service_role');
-reset role; reset app.current_uid;
-
--- DD2: begin_checkout tworzy 'pending'; drugi otwarty dla tej samej firmy → CHECKOUT_IN_PROGRESS.
-set role service_role;
-select public.begin_checkout(:'COMPA'::uuid, 'standard') as cintent \gset
-select pg_temp.assert(:'cintent' is not null, 'DD2 begin_checkout zwraca intent_id');
--- (rola nadal service_role) expect_error wywoła begin_checkout jako service_role.
-select pg_temp.expect_error(
-  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
-  'CHECKOUT_IN_PROGRESS', 'DD3 drugi otwarty checkout tej samej firmy odrzucony');
-reset role;
-
--- DD4: complete_checkout domyka 'pending'→'completed' (idempotentnie); po tym nowy checkout możliwy.
-set role service_role;
-select public.complete_checkout(:'cintent'::uuid, 'sess-cc-1');
-select public.complete_checkout(:'cintent'::uuid, 'sess-cc-1'); -- idempotentny reprocessing
-reset role;
-select pg_temp.assert(
-  (select status from public.checkout_intents where id = :'cintent') = 'completed',
-  'DD4 complete_checkout oznacza completed');
-set role service_role;
-select public.begin_checkout(:'COMPA'::uuid, 'standard') as cintent2 \gset
-reset role;
-select pg_temp.assert(:'cintent2' is not null and :'cintent2' <> :'cintent',
-  'DD5 po ukończeniu można rozpocząć nowy checkout');
-
--- DD6: aktywna subskrypcja blokuje begin_checkout (ACTIVE_SUBSCRIPTION).
-set role service_role;
-select public.release_checkout_intent(:'cintent2'::uuid); -- zwolnij otwarty, by test dotyczył sub
-insert into public.subscriptions (company_id, plan, status, provider)
-  values (:'COMPA', 'standard', 'active', 'stripe');
--- (rola nadal service_role) begin_checkout jako service_role — powinno odrzucić przez aktywną sub.
-select pg_temp.expect_error(
-  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
-  'ACTIVE_SUBSCRIPTION', 'DD6 aktywna subskrypcja blokuje nowy checkout');
--- sprzątanie: usuń testową subskrypcję, by nie zaburzać ewentualnych kolejnych sekcji
-delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe' and status = 'active';
-reset role;
 
 -- ============================================================================
 -- EE. AUDIT_REPORT 0051 (P1-08) — umiejętność realnie przechodzi mandatory↔optional

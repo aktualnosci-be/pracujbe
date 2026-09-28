@@ -13,6 +13,8 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
+-- 0980 (usunięcie schematu billingu) stoi na 0171 (ops_metrics) — cofane pierwsze.
+\ir ../rollback/0980_drop_dead_billing_schema.down.sql
 -- 0173 (#1135, #1137) stoi na 0171 — cofana pierwsza (odwrotna kolejność migracji).
 \ir ../rollback/0173_classifieds_searchable_screening.down.sql
 select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid

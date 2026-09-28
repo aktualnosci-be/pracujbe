@@ -8,7 +8,6 @@
  * Wartości NEXT_PUBLIC_* są wstrzykiwane do bundle'a klienta w czasie builda — nie umieszczaj
  * tam sekretów (service-role key czytany jest osobno, tylko po stronie serwera).
  */
-import { isBillingEnabled } from '@/lib/billing/flag';
 import { cronSecretChecks } from '@/lib/cron/secrets';
 import { emailProviderFromEnv, resendApiKeyFromEnv } from '@/lib/email/transport/select';
 import { errorWebhookFromEnv } from '@/lib/error-webhook/url';
@@ -228,8 +227,6 @@ export function readinessChecks(): Record<string, boolean> {
     rateLimit: isRateLimitDatabaseConfigured(),
     authMail: isAuthMailConfigured(),
     httpsSiteUrl: hasPublicHttpsUrl(),
-    // #51: sprzedaż wyłączona flagą — sekrety Stripe bez `BILLING_ENABLED` nie liczą się.
-    stripe: isBillingEnabled() && Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
     // #587: placeholder .env.example (`re_YOUR_KEY`) nie może dać fałszywej gotowości.
     resend: Boolean(resendApiKeyFromEnv()),
     // Dostawca wybrany przez `EMAIL_PROVIDER` (albo domyślny) ma komplet kluczy — nazwa

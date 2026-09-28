@@ -4,7 +4,7 @@ import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
 
 /**
  * #51 — bezpłatny MVP: w żadnym języku użytkownik nie widzi cennika, pakietów ani CTA zakupu,
- * a trasy sprzedażowe są nieosiągalne (flaga `BILLING_ENABLED` domyślnie wyłączona).
+ * a trasy sprzedażowe są nieosiągalne (kod i schemat billingu usunięte, #51 / migracja 0980).
  *
  * Zakazane teksty pochodzą z plików tłumaczeń (dawne klucze sprzedaży, które zostały w
  * `src/messages` bez użycia) oraz z ogólnych słów sprzedażowych w danym języku.
@@ -88,7 +88,7 @@ for (const locale of LOCALES) {
   });
 }
 
-test('webhook Stripe nie istnieje przy wyłączonej fladze', async ({ request }) => {
+test('webhook Stripe nie istnieje (trasa usunięta)', async ({ request }) => {
   const response = await request.post('/api/stripe/webhook', {
     data: { id: 'evt_test', type: 'checkout.session.completed' },
     headers: { 'stripe-signature': 't=1,v1=deadbeef' },
