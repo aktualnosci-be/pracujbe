@@ -676,6 +676,7 @@
     "rateLimited": "Trop de tentatives. Patientez un instant et réessayez.",
     "companyNotVerified": "Votre entreprise n'a pas encore été vérifiée.",
     "companySuspended": "Votre entreprise est suspendue : vous ne pouvez pas créer de nouvelles offres.",
+    "activeCompanyChanged": "L'entreprise active a changé après l'ouverture de cette page (par exemple dans un autre onglet). Rien n'a été enregistré. Actualisez la page et vérifiez l'entreprise concernée.",
     "onboardingIncomplete": "Complétez tous les champs requis du profil pour terminer la configuration.",
     "jobNotDraft": "Cette offre est déjà publiée. Modifiez-la avec « Modifier » dans la liste des offres.",
     "billingUnavailable": "Les paiements sont momentanément indisponibles. Réessayez plus tard.",

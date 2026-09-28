@@ -676,6 +676,7 @@
     "rateLimited": "Too many attempts. Please wait a moment and try again.",
     "companyNotVerified": "Your company hasn't been verified yet.",
     "companySuspended": "Your company is suspended, so you can't create new job offers.",
+    "activeCompanyChanged": "The active company changed after you opened this page (for example in another tab). Nothing was saved. Refresh the page and check which company the change is for.",
     "onboardingIncomplete": "Complete all required profile fields to finish setup.",
     "jobNotDraft": "This job is already published. Edit it with “Edit” in the jobs list.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",

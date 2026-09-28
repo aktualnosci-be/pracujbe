@@ -52,7 +52,17 @@ export interface CompanyFormProps {
   verified?: boolean;
 }
 
-export function CompanyForm({
+/**
+ * CC25-01: `useForm` czyta `defaultValues` tylko przy montażu. Po przełączeniu aktywnej firmy
+ * w pasku bocznym TEJ SAMEJ karty (`router.refresh`) RSC podaje nowe `companyId` i wartości,
+ * ale bez klucza komponent zostałby w drzewie ze starymi polami — a zapis poszedłby już do
+ * nowej firmy. Klucz = firma: formularz montuje się od nowa z danymi właściwej firmy.
+ */
+export function CompanyForm(props: CompanyFormProps): React.JSX.Element {
+  return <CompanyFormFields key={props.companyId ?? props.mode} {...props} />;
+}
+
+function CompanyFormFields({
   mode,
   companyId,
   defaultValues,

@@ -676,6 +676,7 @@
     "rateLimited": "Zbyt wiele prób. Odczekaj chwilę i spróbuj ponownie.",
     "companyNotVerified": "Twoja firma nie została jeszcze zweryfikowana.",
     "companySuspended": "Firma jest zawieszona, więc nie można tworzyć nowych ofert.",
+    "activeCompanyChanged": "Aktywna firma zmieniła się po otwarciu tej strony (na przykład w innej karcie). Nic nie zapisaliśmy. Odśwież stronę i sprawdź, której firmy dotyczy zmiana.",
     "onboardingIncomplete": "Uzupełnij wszystkie wymagane pola profilu, aby zakończyć konfigurację.",
     "jobNotDraft": "Ta oferta jest już opublikowana. Popraw ją przyciskiem „Edytuj” na liście ofert.",
     "billingUnavailable": "Płatności są chwilowo niedostępne. Spróbuj ponownie później.",

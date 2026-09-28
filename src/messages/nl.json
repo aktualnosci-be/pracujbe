@@ -676,6 +676,7 @@
     "rateLimited": "Te veel pogingen. Wacht even en probeer opnieuw.",
     "companyNotVerified": "Je bedrijf is nog niet geverifieerd.",
     "companySuspended": "Je bedrijf is geschorst, dus je kunt geen nieuwe vacatures aanmaken.",
+    "activeCompanyChanged": "Het actieve bedrijf is gewijzigd nadat je deze pagina opende (bijvoorbeeld in een ander tabblad). Er is niets opgeslagen. Vernieuw de pagina en controleer voor welk bedrijf je de wijziging doet.",
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
     "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
