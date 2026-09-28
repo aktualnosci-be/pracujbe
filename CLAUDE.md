@@ -129,6 +129,22 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   → 404; nawigacja (`recruitmentEnabled` z layoutu do `EmployerShell`/`CandidateShell`), sekcja zgłoszeń pulpitu
   pracodawcy, baner propozycji i podgląd zgłoszeń pulpitu kandydata ukryte (loadery niewołane); powiadomienia
   o zgłoszeniach/propozycjach prowadzą do pulpitu. Blokady RPC i wygaszanie e-maili: #1140/#1145.
+  Konto kandydata bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych (#1142/#1145, migracja `0970` — numer
+  tymczasowy): nawigacja z jednego źródła `src/lib/candidate-nav.ts` (tryb ogłoszeniowy = pulpit, zapisane oferty, zapisane
+  wyszukiwania, ustawienia), pulpit `CandidateAccountDashboard` (zapisane oferty/wyszukiwania; loadery profilu, CV, zgłoszeń,
+  propozycji i wiadomości niewołane), `/candidate/onboarding` i `/candidate/profil` → 404, `saveOnboardingStep` →
+  `RECRUITMENT_DISABLED` przed bazą, stary `next` do kreatora po potwierdzeniu e-maila → pulpit; ustawienia bez sekcji
+  widoczności profilu. Baza: `ensure_candidate_profile` ze strażnikiem (każde RPC profilu), BEFORE INSERT na
+  `candidate_profiles`/`candidate_skills|languages|certificates`, BEFORE UPDATE pól zawodowych przez klienta; trigger
+  `trg_aa_recruitment_mode` na `notifications` pomija typy procesu (`application_*`, `offer_*`, `message_received`,
+  encje `application`/`offer`/`conversation`/`job_terms`, `job_match` spoza zapisanego wyszukiwania); kolejka e-mail
+  wygasza szablony z `email_recruitment_template()` (lustro `src/lib/email/recruitment-templates.ts`) jako
+  `suppressed_feature_disabled` przy claimie i tuż przed wysyłką. Preferencje e-mail w trybie bez kategorii
+  zgłoszeń/propozycji/wiadomości (`emailFieldsFor`; zapis bierze ich wartości z bazy `FOR UPDATE`), linki starych
+  powiadomień → pulpit, demo bez zdarzeń procesu, teksty alertów „z zapisanych wyszukiwań”. Dowód: `rls.sql` sekcje
+  CA1142/NT1145 (kontrole ujemne: bez strażnika krok 3 zapisuje; tryb RECRUITMENT), rollback `0970_…down.sql`
+  (`classifieds-account-rollback.sql`), unit `classifieds-candidate-account`, `classifieds-notifications`, strażnik
+  `legal`, E2E `classifieds-candidate-account` (z `E2E_PORTAL_LEGAL_MODE=`).
   Matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139, bez migracji): `/api/maintenance` nie woła
   `runMatchRecompute` (`matches: "disabled"`, sam `runMatchRecompute` też sprawdza tryb), `getMyJobMatch(Action)` →
   `disabled` bez transakcji, brak `job-match-slot` i `MatchBar` na `JobCard`; `/employer/kandydaci[/id]` i

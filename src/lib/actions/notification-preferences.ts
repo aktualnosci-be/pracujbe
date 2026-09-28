@@ -4,7 +4,9 @@ import { z } from 'zod/v3';
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
-import { jsonArg, rpc } from '@/lib/db/sql';
+import { jsonArg, queryOne, rpc } from '@/lib/db/sql';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '@/lib/data/notification-preferences';
 import { routing } from '@/i18n/routing';
 import { emailConsentWordingVersion } from '@/lib/email/consent-wording';
 import type { ErrorCode } from '@/lib/errors';
@@ -83,21 +85,40 @@ export async function updateNotificationPreferences(
     if (!role) return { ok: false, error: 'PERMISSION_DENIED' };
 
     // 4) RPC: upsert własnego wiersza + dowód zmiany zgody (0101).
-    await withPortalTransaction(me, (tx) =>
-      rpc(tx, 'set_notification_preferences', {
+    // #1145: w trybie ogłoszeniowym formularz nie pokazuje kategorii rekrutacyjnych — ich
+    // wartości bierzemy z bazy (w tej samej transakcji, `FOR UPDATE`), nie z wejścia klienta.
+    const recruitment = isRecruitmentEnabled();
+    await withPortalTransaction(me, async (tx) => {
+      let hidden = {
+        email_applications: prefs.emailApplications,
+        email_offers: prefs.emailOffers,
+        email_messages: prefs.emailMessages,
+      };
+      if (!recruitment) {
+        const row = await queryOne<{ email_applications: boolean; email_offers: boolean; email_messages: boolean }>(
+          tx, 'notification-preferences.recruitment-columns',
+          `SELECT email_applications, email_offers, email_messages
+             FROM public.notification_preferences WHERE profile_id = $1 FOR UPDATE`, [me.id]);
+        hidden = row
+          ? { email_applications: row.email_applications, email_offers: row.email_offers, email_messages: row.email_messages }
+          : {
+              email_applications: DEFAULT_NOTIFICATION_PREFERENCES.emailApplications,
+              email_offers: DEFAULT_NOTIFICATION_PREFERENCES.emailOffers,
+              email_messages: DEFAULT_NOTIFICATION_PREFERENCES.emailMessages,
+            };
+      }
+      await rpc(tx, 'set_notification_preferences', {
         p_prefs: jsonArg({
-          email_applications: prefs.emailApplications,
-          email_offers: prefs.emailOffers,
-          email_messages: prefs.emailMessages,
+          ...hidden,
           email_job_matches: prefs.emailJobMatches,
           email_marketing: prefs.emailMarketing,
           push_enabled: prefs.pushEnabled,
           in_app_enabled: prefs.inAppEnabled,
         }),
         p_locale: prefs.locale,
-        p_wording_version: emailConsentWordingVersion(prefs.locale, role),
-      }),
-    );
+        p_wording_version: emailConsentWordingVersion(prefs.locale, role, recruitment),
+      });
+    });
     return { ok: true };
   } catch (error) {
     // Błąd bazy → kod użytkowy; nieoczekiwany błąd — bez technikaliów (Invariant #8).

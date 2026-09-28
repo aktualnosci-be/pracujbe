@@ -15,6 +15,7 @@ import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { consentWordingVersions } from '@/lib/signup-consents';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { Locale } from '@/i18n/routing';
 import {
   step1Schema,
@@ -62,6 +63,7 @@ export type SaveOnboardingResult =
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
@@ -93,6 +95,9 @@ export async function saveOnboardingStep(
   data: unknown,
   options: { finish?: boolean } = {},
 ): Promise<SaveOnboardingResult> {
+  // 0) #1142 — decyzja produktowa: portal ogłoszeniowy. Konto nie buduje profilu zawodowego:
+  // każdy krok kreatora odrzucony przed walidacją i bazą (baza ma własny strażnik, migracja 0970).
+  if (!isRecruitmentEnabled()) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const finish = step === 6 && options.finish === true;
   // 1) Walidacja odpowiednim schematem kroku (identyczna jak na kliencie).
   const parsed = validateStep(step, data, finish);

@@ -14,6 +14,7 @@ import { NotificationPreferencesLoadError } from '@/components/settings/Notifica
 import { ProfileVisibilitySettings } from '@/components/settings/ProfileVisibilitySettings';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Panel kandydata — Ustawienia (preferencje powiadomień, Etap 6; wiek, #492; widoczność
@@ -53,10 +54,14 @@ export default async function CandidateSettingsPage({
   const tDash = await getTranslations({ locale, namespace: 'dashboard' });
   const tVisibility = await getTranslations({ locale, namespace: 'profileVisibility' });
   const tAge = await getTranslations({ locale, namespace: 'ageAttestation' });
+  // #1142/#1145 — decyzja produktowa: portal ogłoszeniowy. Bez profilu zawodowego nie ma
+  // widoczności profilu dla firm (sekcja i jej odczyt pominięte), a preferencje e-mail bez
+  // kategorii rekrutacyjnych.
+  const recruitment = isRecruitmentEnabled();
   const [load, blocks, visibility, age] = await Promise.all([
     loadNotificationPreferences(),
     loadMyCompanyBlocks(),
-    loadProfileVisibility(),
+    recruitment ? loadProfileVisibility() : Promise.resolve(null),
     loadMyAgeAttestation(),
   ]);
   // Jeden stan wieku dla sekcji „Wiek” i widoczności (#828): nieznany = bez blokady w UI.
@@ -68,7 +73,7 @@ export default async function CandidateSettingsPage({
 
       <section className={PAPER}>
         {load.status === 'ready' ? (
-          <NotificationPreferencesForm defaultValues={load.preferences} />
+          <NotificationPreferencesForm defaultValues={load.preferences} recruitmentEnabled={recruitment} />
         ) : (
           <NotificationPreferencesLoadError />
         )}
@@ -88,7 +93,7 @@ export default async function CandidateSettingsPage({
           </section>
         )}
 
-        {visibility.status === 'ready' ? (
+        {visibility === null ? null : visibility.status === 'ready' ? (
           <ProfileVisibilitySettings
             initial={visibility}
             adult={initialAdult}

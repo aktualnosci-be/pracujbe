@@ -634,6 +634,42 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
   }
 }
 
+/**
+ * Pulpit konta w trybie ogłoszeniowym (#1142): imię z `profiles` i liczba aktywnych ofert.
+ * Bez profilu zawodowego, zgłoszeń, propozycji i wiadomości (żaden z tych odczytów nie jest
+ * wołany). Licznik bez udanego odczytu = `null` („—”), nigdy fałszywe zero (#244).
+ */
+export interface CandidateAccountOverview {
+  firstName: string | null;
+  newJobsCount: number | null;
+}
+
+export async function getCandidateAccountOverview(): Promise<CandidateAccountOverview> {
+  if (!isPortalDataConfigured()) {
+    if (isDashboardErrorFixture()) return { firstName: null, newJobsCount: null };
+    return { firstName: null, newJobsCount: DEMO_OVERVIEW.newJobsCount };
+  }
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { firstName: null, newJobsCount: null };
+    return await withPortalTransaction(me, async (tx) => {
+      const name = await attempt(tx, async () => {
+        const row = await queryOne(tx, 'candidate.account-first-name',
+          'SELECT first_name FROM public.profiles WHERE id = $1', [me.id]);
+        const value = row?.['first_name'];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+      });
+      const jobs = await attempt(tx, async () =>
+        asNum(await rpc(tx, 'get_public_jobs_count', { p_keyword: null, p_city: null })));
+      if (!jobs.ok) captureError(jobs.error, { area: 'candidate.getCandidateAccountOverview.newJobs' });
+      return { firstName: name.ok ? name.value : null, newJobsCount: jobs.ok ? jobs.value : null };
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidateAccountOverview' });
+    return { firstName: null, newJobsCount: null };
+  }
+}
+
 /** Imię + kompletność profilu (pierścień) + checklista sekcji. */
 export async function getCandidateProfileSummary(): Promise<CandidateProfileSummary> {
   if (!isPortalDataConfigured()) return DEMO_PROFILE_SUMMARY;

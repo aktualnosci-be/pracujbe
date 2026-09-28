@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ErrorCodes, toUserMessageKey } from '@/lib/errors';
 import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
+import { CLASSIFIEDS_CANDIDATE_NAV, candidateNavKeys } from '@/lib/candidate-nav';
 import {
   PORTAL_LEGAL_MODE_ENV,
   RECRUITMENT_FEATURES,
@@ -119,6 +120,7 @@ const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'candidate/aplikacje', status: 'enforced', issue: 1144 },
   { segment: 'candidate/propozycje', status: 'enforced', issue: 1141 },
   { segment: '(auth)/aplikacja', status: 'enforced', issue: 1132 },
+  { segment: 'candidate/onboarding', status: 'enforced', issue: 1142 },
   { segment: 'candidate/profil/import-cv', status: 'pending', issue: 1129 },
 ];
 
@@ -319,4 +321,63 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
     // Kontrola ujemna: taki wzorzec jest wykrywany.
     expect(notifiesFromMatches("select m.job_id from public.matches m; perform public.enqueue_email('jobMatch')")).toBe(true);
   });
+});
+
+/**
+ * Konto kandydata nie tworzy profilu zawodowego (#1142, migracja 0970). Zachowanie (akcja bez
+ * zapytań, render pulpitu, nawigacja) sprawdza `tests/unit/classifieds-candidate-account.test.tsx`,
+ * baza — `supabase/tests/rls.sql` sekcja CA1142 (kontrola ujemna: bez strażnika krok 3 zapisuje).
+ */
+describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
+  const account = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .filter((sql) => sql.includes('create or replace function public.ensure_candidate_profile()'))
+    .at(-1) ?? '';
+  /** Najnowsza definicja `ensure_candidate_profile` zaczyna się od strażnika trybu. */
+  const ensureGuarded = (sql: string) => {
+    const fn = sql.slice(sql.lastIndexOf('create or replace function public.ensure_candidate_profile()'));
+    const guard = fn.indexOf('recruitment_write_allowed()');
+    return guard > 0 && guard < fn.indexOf('insert into public.candidate_profiles');
+  };
+
+  it('ensure_candidate_profile (wołane przez każde RPC profilu) ma strażnik trybu', () => {
+    expect(ensureGuarded(account)).toBe(true);
+    for (const t of ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates']) {
+      expect(account, t).toContain(`'${t}'`);
+    }
+  });
+
+  it('kontrola ujemna: definicja bez strażnika jest wykrywana', () => {
+    expect(ensureGuarded(account.replace(/if not public\.recruitment_write_allowed\(\) then[\s\S]*?end if;/, ''))).toBe(false);
+  });
+
+  it('saveOnboardingStep i strona profilu mają bramkę trybu', () => {
+    const action = read('src/lib/actions/onboarding.ts');
+    const body = action.slice(action.indexOf('export async function saveOnboardingStep('));
+    expect(body.indexOf("isRecruitmentEnabled()")).toBeGreaterThan(0);
+    expect(body.indexOf("isRecruitmentEnabled()")).toBeLessThan(body.indexOf('validateStep('));
+    expect(read('src/app/[locale]/candidate/profil/page.tsx')).toMatch(/notFoundUnlessRecruitment\(\)/);
+  });
+
+  it('nawigacja w trybie ogłoszeniowym = pulpit, zapisane oferty, zapisane wyszukiwania, ustawienia', () => {
+    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'settings']);
+    expect(candidateNavKeys(false)).toBe(CLASSIFIEDS_CANDIDATE_NAV);
+  });
+});
+
+describe('powiadomienia i e-maile bez zdarzeń rekrutacyjnych (#1145)', () => {
+  const sql = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .filter((s) => s.includes('function public.skip_recruitment_notification()'))
+    .at(-1) ?? '';
+
+  it('trigger BEFORE INSERT na notifications pomija typy procesu w trybie ogłoszeniowym', () => {
+    expect(sql).toMatch(/create trigger trg_aa_recruitment_mode before insert on public\.notifications/);
+    for (const t of ['application_received', 'application_status_changed', 'offer_received',
+      'offer_status_changed', 'message_received', 'job_terms']) {
+      expect(sql, t).toContain(`'${t}'`);
+    }
+    expect(sql).toMatch(/p_type = 'job_match' and p_entity_type is distinct from 'saved_search'/);
+  });
+  // Lista szablonów SQL ↔ TS, cele linków, preferencje, teksty: tests/unit/classifieds-notifications.test.ts.
 });

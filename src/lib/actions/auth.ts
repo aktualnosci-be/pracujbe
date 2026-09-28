@@ -50,6 +50,7 @@ import { env, isPortalAuthConfigured } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   loginSchema,
@@ -621,7 +622,10 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       }
 
       const store = await cookies();
-      const next = role === 'candidate' ? safeNextPath(store.get(VERIFY_NEXT_COOKIE)?.value) : null;
+      const nextPath = role === 'candidate' ? safeNextPath(store.get(VERIFY_NEXT_COOKIE)?.value) : null;
+      // #1142: tryb ogłoszeniowy — bez kreatora profilu; stary adres `next` do kreatora → pulpit.
+      const next =
+        nextPath && !isRecruitmentEnabled() && /\/candidate\/onboarding(?:[/?#]|$)/.test(nextPath) ? null : nextPath;
       store.delete(VERIFY_NEXT_COOKIE);
       target = next ? { path: next } : { panel: role };
     }

@@ -6,6 +6,11 @@ import { getNotificationsPage, NOTIFICATION_PAGE_SIZE, parseUnreadFilter } from 
 import { loadMoreNotifications } from '@/lib/actions/notifications';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Pełne przepływy (kategorie rekrutacyjne, linki do rozmów) w trybie RECRUITMENT (#1128); tryb ogłoszeniowy: classifieds-notifications.test.ts.
+recruitmentModeInTests();
 
 vi.mock('next-intl/server', () => ({
   getTranslations: vi.fn().mockResolvedValue((key: string) => key),

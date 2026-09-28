@@ -30,6 +30,7 @@ import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import { isCvImportEnabled } from '@/lib/cv-import/config';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Panel kandydata — Profil. Wygląd: `#people/profile` z prototypu „04 Ludzie i praca”
@@ -72,7 +73,8 @@ export default async function CandidateProfilePage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-
+  // #1142: tryb ogłoszeniowy — bez profilu zawodowego (404).
+  notFoundUnlessRecruitment();
   const [t, tp, to, tc, tLang] = await Promise.all([
     getTranslations({ locale, namespace: 'dashboard' }),
     getTranslations({ locale, namespace: 'candidatePassport' }),

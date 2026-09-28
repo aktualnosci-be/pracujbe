@@ -1195,7 +1195,12 @@
     "bulkConfirmTitle": "{count, plural, one {Status van # sollicitatie wijzigen?} other {Status van # sollicitaties wijzigen?}}",
     "bulkConfirmDescription": "Nieuwe status: {status}. We wijzigen elke sollicitatie apart en slaan de sollicitaties over waarvoor deze wijziging niet is toegestaan. Kandidaten krijgen een melding van de wijziging.",
     "bulkConfirm": "Status wijzigen",
-    "bulkStatusUncertain": "We weten niet of de wijziging gelukt is (bijvoorbeeld door een verbroken verbinding). Vernieuw de pagina en controleer de statussen."
+    "bulkStatusUncertain": "We weten niet of de wijziging gelukt is (bijvoorbeeld door een verbroken verbinding). Vernieuw de pagina en controleer de statussen.",
+    "accountIntro": "Bewaarde vacatures, opgeslagen zoekopdrachten en accountinstellingen — op één plek.",
+    "accountNewJobsSub": "Actieve vacatures op de site",
+    "accountSavedJobsSub": "Op je lijst",
+    "accountSearchesSub": "{count, plural, =0 {Geen meldingen} other {# met melding}}",
+    "accountAlertsOff": "Meldingen uit"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1379,7 +1384,7 @@
     "itemOfferReceived": "Je hebt een werkaanbod ontvangen",
     "itemOfferStatusChanged": "De status van het werkaanbod is gewijzigd",
     "itemMessageReceived": "Je hebt een nieuw bericht",
-    "itemJobMatch": "Nieuwe vacature afgestemd op je profiel",
+    "itemJobMatch": "Nieuwe vacature uit een opgeslagen zoekopdracht",
     "itemCompanyVerified": "Je bedrijf is geverifieerd",
     "itemSystem": "Systeemmelding",
     "empty": "Geen meldingen",
@@ -2902,8 +2907,8 @@
     "emailOffersDescription": "Wanneer een werkgever je een werkaanbod stuurt.",
     "emailMessagesLabel": "Berichten",
     "emailMessagesDescription": "Nieuwe berichten in je gesprekken.",
-    "emailJobMatchesLabel": "Passende vacatures",
-    "emailJobMatchesDescription": "Vacatures die goed bij je profiel passen.",
+    "emailJobMatchesLabel": "Nieuwe vacatures uit opgeslagen zoekopdrachten",
+    "emailJobMatchesDescription": "Meldingen over nieuwe vacatures die passen bij de filters die je in de vacaturelijst hebt opgeslagen.",
     "emailMarketingLabel": "Nieuws en tips",
     "emailMarketingDescription": "Nieuws, tips en informatie over Pracuj.be.",
     "channelsSectionTitle": "Andere kanalen",
@@ -3250,7 +3255,7 @@
       "applications": "over sollicitaties en hun status",
       "offers": "over jobaanbiedingen",
       "messages": "over nieuwe berichten",
-      "job_matches": "met passende vacatures",
+      "job_matches": "over nieuwe vacatures uit opgeslagen zoekopdrachten",
       "marketing": "met de nieuwsbrief en marketinginformatie"
     }
   },
