@@ -1207,7 +1207,21 @@
     "bulkConfirm": "Change status",
     "bulkStatusUncertain": "We don’t know whether the change went through (for example, the connection dropped). Refresh the page and check the statuses.",
     "listingStatsTitle": "Listing statistics",
-    "listingStatsText": "Search appearances, views and clicks on “Apply with the employer” for each job."
+    "listingStatsText": "The jobs with the most views in the last 30 days and clicks on “Apply with the employer”.",
+    "listingTopJobsEmpty": "No job has had any views in the last 30 days yet. Statistics will appear once candidates start viewing your listings.",
+    "listingTopJobsError": "Could not load the listing statistics. Try again.",
+    "listingTopJobsDenied": "Listing statistics are visible to the company owner, administrators and recruiters.",
+    "newJobsSubListing": "Listings on the site",
+    "savedSearchJobsTitle": "New jobs from your searches",
+    "savedSearchJobsNone": "Save a search with the filters of your choice and you will see the newest jobs that meet your criteria here.",
+    "savedSearchJobsCta": "Browse jobs and save a search",
+    "savedSearchJobsNoResults": "Your saved searches have no jobs right now.",
+    "savedSearchJobsError": "Could not load jobs from your saved searches. Try again.",
+    "savedSearchJobsShow": "Show jobs: {name}",
+    "savedSearchJobsFrom": "Search: {name}",
+    "candidateIntroListing": "New jobs and your saved searches — in one place.",
+    "employerGreetingSubListing": "Welcome {name}! See how your listings are doing.",
+    "employerGreetingSubListingGeneric": "See how your listings are doing."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",

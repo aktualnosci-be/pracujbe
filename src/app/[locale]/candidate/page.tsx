@@ -14,6 +14,7 @@ import {
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { cn } from '@/lib/utils';
 import { CandidateRecommendedPreview } from '@/components/candidate/CandidateRecommendedPreview';
+import { CandidateSavedSearchJobs } from '@/components/candidate/CandidateSavedSearchJobs';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
@@ -34,6 +35,7 @@ import {
   getRecommendedJobs,
 } from '@/lib/data/candidate';
 import { loadCandidateFiles } from '@/lib/data/candidate-files';
+import { loadSavedSearchJobs } from '@/lib/data/candidate-saved-search-jobs';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 
 /**
@@ -75,11 +77,15 @@ export default async function CandidateDashboardPage({
   // #1141/#1144 — decyzja produktowa: portal ogłoszeniowy. Bez trybu RECRUITMENT pulpit nie
   // czyta zgłoszeń ani propozycji (loadery niewołane) i nie pokazuje ich sekcji.
   const recruitment = isRecruitmentEnabled();
-  const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
+  const matching = isRecruitmentEnabled('matching');
+  const [overview, profile, recommended, savedSearchJobs, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
     // #1139: tryb ogłoszeniowy — bez rekomendacji (loader niewywoływany).
-    isRecruitmentEnabled('matching') ? getRecommendedJobs(locale) : Promise.resolve(null),
+    matching ? getRecommendedJobs(locale) : Promise.resolve(null),
+    // Tryb ogłoszeniowy: w miejscu polecanych najnowsze oferty z zapisanych wyszukiwań kandydata
+    // (filtry użytkownika, bez dopasowania); w trybie RECRUITMENT loader niewywoływany.
+    matching ? Promise.resolve(null) : loadSavedSearchJobs(),
     recruitment ? getMyApplicationsPreview(locale) : null,
     getLatestMessages(),
     loadCandidateFiles(),
@@ -101,7 +107,9 @@ export default async function CandidateDashboardPage({
         <h1 className={H1}>
           {profile.firstName ? td('greeting', { name: profile.firstName }) : td('greetingNoName')}
         </h1>
-        <p className={cn(INTRO, 'mb-[25px] mt-2')}>{td('candidateIntro')}</p>
+        <p className={cn(INTRO, 'mb-[25px] mt-2')}>
+          {td(recruitment ? 'candidateIntro' : 'candidateIntroListing')}
+        </p>
       </header>
 
       {/* Baner wyłącznie dla rzeczywistej propozycji oczekującej na odpowiedź (`.notice`). */}
@@ -123,7 +131,10 @@ export default async function CandidateDashboardPage({
           {
             label: td('newJobs'),
             value: overview.newJobsCount ?? '—',
-            sub: overview.newJobsCount === null ? td('candidateStatLoadError') : td('newJobsSub'),
+            sub:
+              overview.newJobsCount === null
+                ? td('candidateStatLoadError')
+                : td(matching ? 'newJobsSub' : 'newJobsSubListing'),
           },
           ...(recruitment
             ? [
@@ -155,8 +166,10 @@ export default async function CandidateDashboardPage({
       <div className={DASH_GRID}>
         <div className={DASH_GRID_MAIN}>
           {/* Polecane oferty pracy — `.panel` z wierszami `.job`. #1139: w trybie ogłoszeniowym
-              sekcji nie ma (portal nie wybiera ofert na podstawie profilu; bez sekcji zastępczej). */}
+              portal nie wybiera ofert na podstawie profilu — w tym miejscu oferty z zapisanych
+              wyszukiwań kandydata (jego własne filtry, bez wyniku). */}
           <CandidateRecommendedPreview locale={locale} recommended={recommended} />
+          <CandidateSavedSearchJobs locale={locale} result={savedSearchJobs} />
 
           {/* Moje ostatnie aplikacje (tylko tryb RECRUITMENT, #1144) */}
           {applications ? (

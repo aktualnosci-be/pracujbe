@@ -1561,6 +1561,53 @@ export async function getJobFunnel(
   }
 }
 
+/** Liczba ofert w skrócie statystyk ogłoszeń na pulpicie pracodawcy (tryb ogłoszeniowy). */
+export const TOP_LISTING_JOBS_LIMIT = 3;
+
+/** Oferta w skrócie statystyk ogłoszeń: wyświetlenia i kliknięcia „Aplikuj u pracodawcy”. */
+export interface TopListingJob {
+  jobId: string;
+  title: string;
+  /** Pusty, gdy oferta nie ma publicznej strony (nie jest aktywna). */
+  slug: string;
+  detailViews: number;
+  applyClicks: number;
+}
+
+/**
+ * Jawny stan skrótu statystyk ogłoszeń: brak uprawnień do lejka (zwykły `member`) ≠ błąd ≠ brak
+ * ofert z ruchem. `disabled` = tryb rekrutacyjny (skrót nie istnieje, loader bez zapytań).
+ */
+export type TopListingJobsLoad =
+  | { status: 'ok'; jobs: TopListingJob[] }
+  | { status: 'denied' }
+  | { status: 'error' }
+  | { status: 'disabled' };
+
+/**
+ * Tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy): do {@link TOP_LISTING_JOBS_LIMIT}
+ * najczęściej oglądanych ofert firmy z lejka ofert (#99) za ostatnie {@link FUNNEL_PERIOD_DAYS}
+ * dni — bez zapytań do tabel procesu. Kolejność: wyświetlenia ↓, kliknięcia ↓, tytuł; oferty
+ * bez żadnego ruchu pomijamy.
+ */
+export async function getTopListingJobs(now: Date = new Date()): Promise<TopListingJobsLoad> {
+  if (recruitmentStatsEnabled()) return { status: 'disabled' };
+  const funnel = await getJobFunnel(FUNNEL_PERIOD_DAYS, now);
+  if (funnel.status !== 'ok') return { status: funnel.status };
+  const jobs = funnel.jobs
+    .filter((job) => job.detailViews > 0 || job.applyStarted > 0)
+    .sort((a, b) => b.detailViews - a.detailViews || b.applyStarted - a.applyStarted || a.title.localeCompare(b.title))
+    .slice(0, TOP_LISTING_JOBS_LIMIT)
+    .map((job) => ({
+      jobId: job.jobId,
+      title: job.title,
+      slug: job.status === 'active' ? job.slug : '',
+      detailViews: job.detailViews,
+      applyClicks: job.applyStarted,
+    }));
+  return { status: 'ok', jobs };
+}
+
 /**
  * Lejek rekrutacyjny z ostatnich {@link FUNNEL_PERIOD_DAYS} dni (#302): kohorta aplikacji
  * złożonych w oknie (`submitted_at`), a w niej te, które KIEDYKOLWIEK osiągnęły etap rozmowy

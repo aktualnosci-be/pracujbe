@@ -163,6 +163,19 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+- **Pulpity w trybie ogłoszeniowym (bez migracji):** w miejscu dawnych sekcji rekrutacyjnych — pulpit pracodawcy
+  (`/employer`, kolumna boczna w miejscu „Top dopasowani”): `EmployerListingStats` = skrót statystyk ogłoszeń, do
+  3 najczęściej oglądanych ofert z ostatnich 30 dni z wyświetleniami i kliknięciami „Aplikuj u pracodawcy”
+  (`getTopListingJobs` na `getJobFunnel` = lejek ofert pod RLS, bez tabel procesu; member = `denied`, awaria = `error`
+  z ponowieniem, brak ruchu = osobny komunikat) i jeden odnośnik „Zobacz szczegóły” → `/employer/statystyki` (dawna
+  karta-odnośnik `EmployerFunnelSection` w trybie ogłoszeniowym nic nie renderuje). Pulpit kandydata (`/candidate`, w
+  miejscu polecanych): `CandidateSavedSearchJobs` = do 3 najnowszych ofert z zapisanych wyszukiwań kandydata
+  (`loadSavedSearchJobs`: 3 najnowsze wyszukiwania, filtry z `saved_searches.query` przez `parseJobListQuery`, publiczne
+  `get_public_jobs` dla `candidateId` — firmy zablokowane pomija baza; sort „najnowsze”, bez wyniku/dopasowania), linki
+  „Pokaż oferty: {nazwa}” w języku zapisu (#823), bez wyszukiwań zachęta z linkiem do `/oferty-pracy`, awaria = błąd z
+  ponowieniem (nie pusta lista); podpis kafelka „Nowe oferty” bez „dopasowane do Ciebie” (`newJobsSubListing`). Tryb
+  `RECRUITMENT`: stare sekcje. Dowód: unit `classifieds-employer-stats`, `classifieds-candidate-saved-search-jobs`, `legal`
+  `classifieds-panels` (kontrole ujemne), E2E `classifieds-dashboards` (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
