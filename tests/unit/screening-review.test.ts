@@ -10,7 +10,7 @@ import { SCREENING_REVIEW_REASON_MAX } from '@/lib/screening/risk';
 import { buildScreeningReviewNotices, screeningReviewReasonError } from '@/lib/screening/review';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useClassifiedsMode as classifiedsModeInTests, useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withClassifiedsMode as classifiedsModeInTests, withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 /**
  * #497 — przegląd pytań screeningowych po stronie aplikacji: stan pytań blokujących publikację
