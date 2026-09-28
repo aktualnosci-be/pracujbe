@@ -613,7 +613,10 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
         `SELECT 1 FROM public.applications
           WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text = ANY($2::text[])`,
         [me.id, [...ACTIVE_APPLICATION_STATUSES]]));
-      const unreadMessages = await attempt(tx, () => countUnreadConversations(tx, me.id));
+      // #1134: tryb ogłoszeniowy — rozmowy wyłączone; licznik bez zapytania (kafelka nie ma).
+      const unreadMessages = isRecruitmentEnabled('messaging')
+        ? await attempt(tx, () => countUnreadConversations(tx, me.id))
+        : ({ ok: true, value: 0 } as const);
       return { newJobs, activeApplications, unreadMessages };
     });
     const settled = (area: string, result: typeof counters.newJobs): number | null => {
@@ -1356,6 +1359,8 @@ export async function getLatestActiveOffer(
 
 /** Ostatnie wiadomości/konwersacje kandydata. Pusta lista tylko po udanym odczycie (#244). */
 export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMessage>> {
+  // #1134: tryb ogłoszeniowy — bez rozmów i bez zapytania (sekcji nie ma na pulpicie).
+  if (!isRecruitmentEnabled('messaging')) return { status: 'ok', items: [] };
   if (!isPortalDataConfigured()) {
     if (isDashboardErrorFixture()) return { status: 'error' };
     return { status: 'ok', items: demoMessages(routing.defaultLocale) };

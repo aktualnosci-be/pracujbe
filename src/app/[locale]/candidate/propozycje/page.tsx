@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { CandidateProposalsList } from "@/components/candidate/CandidateProposalsList";
+import { isRecruitmentEnabled } from "@/lib/portal-mode";
 import { getMyOffersPage } from "@/lib/data/candidate";
 import { CandidatePageHeader } from "@/components/candidate/CandidatePageHeader";
 import { notFoundUnlessRecruitment } from "@/lib/portal-mode";
@@ -53,6 +54,7 @@ export default async function CandidateProposalsPage({
       />
 
       <CandidateProposalsList
+        messagesEnabled={isRecruitmentEnabled("messaging")}
         locale={locale}
         initialPage={initialPage}
         now={new Date().toISOString()}

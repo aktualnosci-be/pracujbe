@@ -221,6 +221,8 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       if (employer) return '/employer/oferty';
       return recruitment ? '/candidate/aplikacje' : home;
     case 'conversation': {
+      // #1134: tryb ogłoszeniowy — trasa wiadomości = 404; stare powiadomienie prowadzi na pulpit.
+      if (!isRecruitmentEnabled('messaging')) return employer ? '/employer' : '/candidate';
       const path = employer ? '/employer/wiadomosci' : '/candidate/wiadomosci';
       return UUID_RE.test(entityId) ? `${path}?c=${entityId.toLowerCase()}` : path;
     }
