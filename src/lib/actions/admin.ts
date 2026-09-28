@@ -23,6 +23,7 @@ import {
 } from '@/lib/screening/review';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkBelgianVatInVies, type ViesCheckResult } from '@/lib/vies/client';
 import { compareCompanyNames, type CompanyNameComparison } from '@/lib/vies/name-match';
 import { companyVatSource } from '@/lib/vies/state';
@@ -372,6 +373,8 @@ export async function decideScreeningReview(
   decision: ScreeningReviewDecision,
   reason: string,
 ): Promise<AdminActionResult> {
+  // #1137 — decyzja produktowa: portal ogłoszeniowy (przegląd pytań niedostępny; baza też odrzuca, 0173).
+  if (!isRecruitmentEnabled('screening')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   if (!isScreeningReviewDecision(decision)) return { ok: false, error: 'VALIDATION_FAILED' };
   const reasonError = screeningReviewReasonError(decision, typeof reason === 'string' ? reason : '');
   if (reasonError) {

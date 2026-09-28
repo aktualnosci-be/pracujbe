@@ -81,7 +81,10 @@ export function EmployerOffersPreview({
                     {offer.city}
                   </p>
                 ) : null}
-                <dl className={cn('mt-5 grid gap-4 border-t border-border pt-[14px]', offer.matched !== undefined && 'grid-cols-2')}>
+                {/* #1147: tryb ogłoszeniowy — bez liczników zgłoszeń i dopasowań (loader ich nie zwraca). */}
+                {offer.newApplications !== undefined || offer.matched !== undefined ? (
+                <dl className={cn('mt-5 grid gap-4 border-t border-border pt-[14px]', offer.newApplications !== undefined && offer.matched !== undefined && 'grid-cols-2')}>
+                  {offer.newApplications !== undefined ? (
                   <div className="min-w-0">
                     <dt className="break-words hyphens-auto text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
                       {labels.newApplications}
@@ -90,6 +93,7 @@ export function EmployerOffersPreview({
                       <StatValue value={offer.newApplications} noDataLabel={labels.noData} />
                     </dd>
                   </div>
+                  ) : null}
                   {/* #1133: tryb ogłoszeniowy — bez pola dopasowań (loader go nie zwraca). */}
                   {offer.matched !== undefined ? (
                     <div className="min-w-0 border-l border-border pl-4">
@@ -102,6 +106,7 @@ export function EmployerOffersPreview({
                     </div>
                   ) : null}
                 </dl>
+                ) : null}
               </article>
             </li>
           ))}
