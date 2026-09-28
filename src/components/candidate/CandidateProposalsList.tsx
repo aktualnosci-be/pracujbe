@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useTranslations } from 'next-intl';
+import { JobAvailabilityNote } from '@/components/candidate/JobAvailabilityNote';
 
 import { Link } from '@/i18n/navigation';
 import { ProposalStatusPill } from '@/components/candidate/ProposalStatusPill';
@@ -44,10 +45,13 @@ export function CandidateProposalsList({
   locale,
   initialPage,
   now,
+  messagesEnabled = false,
 }: {
   locale: string;
   initialPage: MyOffersPage;
   now: string;
+  /** #1134: tryb produktu z serwera — link do wiadomości tylko w trybie rekrutacyjnym. */
+  messagesEnabled?: boolean;
 }) {
   const t = useTranslations('dashboard');
   const [items, setItems] = useState(initialPage.items);
@@ -133,6 +137,7 @@ export function CandidateProposalsList({
                         {offer.jobTitle || t('applicationUnknownJob')}
                       </h2>
                     )}
+                    <JobAvailabilityNote availability={offer.jobAvailability} className="mt-1.5" />
                     {date ? (
                       <p className={cn(P_EXTENDED, 'mt-1')}>{t('proposalSentOn', { date })}</p>
                     ) : null}
@@ -162,9 +167,11 @@ export function CandidateProposalsList({
                     status={offer.status}
                     onExpire={() => markExpired(offer.id)}
                   />
-                  <Link href="/candidate/wiadomosci" className={TEXT_LINK}>
-                    {t('navMessages')}
-                  </Link>
+                  {messagesEnabled ? (
+                    <Link href="/candidate/wiadomosci" className={TEXT_LINK}>
+                      {t('navMessages')}
+                    </Link>
+                  ) : null}
                 </div>
               </article>
             </li>

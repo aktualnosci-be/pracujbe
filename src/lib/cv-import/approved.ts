@@ -16,9 +16,21 @@ import { candidateLanguageSchema, step2Schema, step3Schema, step5Schema } from '
  * zapisać niczego, czego nie przyjąłby kreator; RPC 0115 sprawdza te same granice w bazie.
  * Dodatkowo: wartość z kontaktem, linkiem, osobą trzecią, kategorią szczególną albo
  * identyfikatorem jest odrzucana także po edycji (`isDisallowedProposalText`).
+ *
+ * Duplikaty języka (#805): RPC `apply_candidate_cv_proposals` (0115) deduplikuje języki po
+ * `lower(btrim(language))` i zachowuje tylko jeden (niezdefiniowany) poziom bez ostrzeżenia,
+ * jeśli kandydat zatwierdzi dwie propozycje, których nazwa po normalizacji jest identyczna, ale
+ * poziom różny. `cvApprovedProposalsSchema` odrzuca takie wejście PRZED wysłaniem do bazy
+ * (`VALIDATION_FAILED`), a `findDuplicateLanguageIds` pozwala UI wskazać konflikt przy polu,
+ * zanim akcja w ogóle zostanie wywołana.
  */
 
 const allowed = (v: string) => !isDisallowedProposalText(v);
+
+/** Normalizacja nazwy języka do porównań duplikatów — jak `lower(btrim(...))` w RPC 0115. */
+export function normalizeLanguageName(value: string): string {
+  return value.trim().toLowerCase();
+}
 
 /** Pojedyncze pozycje — elementy schematów kroków kreatora + zakaz danych spoza profilu. */
 export const cvProposalItemSchemas = {
@@ -37,10 +49,52 @@ export const cvApprovedProposalsSchema = z
     certificates: z.array(cvProposalItemSchemas.certificate).max(CV_PROPOSAL_LIMITS.certificates).default([]),
     experienceYears: cvProposalItemSchemas.experienceYears.nullable().default(null),
   })
-  .strict();
+  .strict()
+  .superRefine((v, ctx) => {
+    // #805: dwie zatwierdzone pozycje o tej samej znormalizowanej nazwie języka (niezależnie od
+    // poziomu) nie mają jednoznacznego wyniku w RPC — odrzucamy je tu, zanim dojdzie do zapisu.
+    const seenAt = new Map<string, number>();
+    v.languages.forEach((item, index) => {
+      const key = normalizeLanguageName(item.language);
+      const firstIndex = seenAt.get(key);
+      if (firstIndex !== undefined) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['languages', index, 'language'], message: 'duplicate' });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['languages', firstIndex, 'language'], message: 'duplicate' });
+      } else {
+        seenAt.set(key, index);
+      }
+    });
+  });
 
 /** Rodzaj błędu pola (klucz komunikatu wybiera UI). */
-export type CvProposalValueProblem = 'required' | 'tooLong' | 'disallowed' | 'languageInvalid' | 'experienceInvalid';
+export type CvProposalValueProblem =
+  | 'required'
+  | 'tooLong'
+  | 'disallowed'
+  | 'languageInvalid'
+  | 'experienceInvalid'
+  | 'languageDuplicate';
+
+/**
+ * Identyfikatory propozycji języka wśród `items`, których znormalizowana nazwa się powtarza
+ * (#805) — do wskazania konfliktu w UI PRZED wysłaniem (`applyCvProposals` i tak odrzuci je
+ * ponownie w `cvApprovedProposalsSchema`, jako obrona w głębi).
+ */
+export function findDuplicateLanguageIds(items: { id: string; language: string }[]): Set<string> {
+  const idsByName = new Map<string, string[]>();
+  for (const item of items) {
+    const key = normalizeLanguageName(item.language);
+    if (!key) continue;
+    const ids = idsByName.get(key) ?? [];
+    ids.push(item.id);
+    idsByName.set(key, ids);
+  }
+  const duplicates = new Set<string>();
+  for (const ids of idsByName.values()) {
+    if (ids.length > 1) for (const id of ids) duplicates.add(id);
+  }
+  return duplicates;
+}
 
 /**
  * Lata doświadczenia z pola tekstowego: tylko cyfry (bez „5,5”, „-1”, „5 lat”); pusty = brak

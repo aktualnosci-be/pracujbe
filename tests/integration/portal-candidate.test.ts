@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
+withRecruitmentMode();
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('next-intl/server', () => ({
@@ -151,7 +155,8 @@ describe('onboarding i profil kandydata (#25)', () => {
       availability: 'immediate', certificates: ['VCA'],
     });
     expect([...passport.skills].sort()).toEqual(['Kompletacja', 'Wózek widłowy']);
-    expect([...passport.languages].sort()).toEqual(['Niderlandzki', 'Polski']);
+    // 0168: języki ze słownika jako kody (nazwę w języku widza składa UI).
+    expect([...passport.languages].sort()).toEqual(['nl', 'pl']);
 
     const page = await OnboardingPage({ params: Promise.resolve({ locale: 'pl' }), searchParams: Promise.resolve({}) });
     const values = (page as { props: { initialValues?: Record<string, unknown> } }).props.initialValues;
@@ -427,7 +432,21 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     expect(await toggleSavedJob(jobIds[3]!)).toEqual({ ok: true, saved: false });
     expect(await toggleSavedJob(jobIds[3]!, false)).toEqual({ ok: true, saved: false });
     const saved = await candidateData.getSavedJobs('pl');
-    expect(saved).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', saved: true })] });
+    expect(saved).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', availability: 'available' })] });
+    expect(saved.status === 'ready' && saved.jobs[0]?.slug).toBeTruthy();
+
+    // 0162: zapisana oferta po terminie nie znika — stan `expired`, bez slugu (brak linku do 404),
+    // a kandydat usuwa zapis pod RLS. `expires_at` zamiast statusu: przywrócenie nie omija strażnika publikacji.
+    await db().admin.query('UPDATE public.jobs SET expires_at = now() WHERE id = $1', [jobIds[2]]);
+    try {
+      const expired = await candidateData.getSavedJobs('pl');
+      expect(expired).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', availability: 'expired', slug: null })] });
+      expect(await toggleSavedJob(jobIds[2]!, false)).toEqual({ ok: true, saved: false });
+      expect(await candidateData.getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
+      expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: true, saved: true });
+    } finally {
+      await db().admin.query('UPDATE public.jobs SET expires_at = NULL WHERE id = $1', [jobIds[2]]);
+    }
     expect(await getPublicSavedJobs([jobIds[2]!, jobIds[3]!])).toEqual({ status: 'candidate', savedIds: [jobIds[2]] });
 
     actAs({ id: bob, role: 'candidate' });
@@ -514,9 +533,17 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     }
   });
 
+  // 0165: stroną niefirmową rozmowy jest wyłącznie kandydat relacji (aplikacja/propozycja) —
+  // rozmowa testowa musi mieć relację, jak każda założona przez `get_or_create_conversation`.
+  const freeAliceApplication = async () => (await db().admin.query(
+    `SELECT a.id FROM public.applications a
+      WHERE a.candidate_id = $1 AND a.company_id = $2 AND a.deleted_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM public.conversations c WHERE c.application_id = a.id)
+      ORDER BY a.id LIMIT 1`, [alice, companyId])).rows[0].id as string;
+
   it('ostatnie wiadomości i licznik nieprzeczytanych rozmów tylko dla członka', async () => {
-    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
-      VALUES ($1, 'Rozmowa', now()) RETURNING id`, [companyId]);
+    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, application_id, subject, last_message_at)
+      VALUES ($1, $2, 'Rozmowa', now()) RETURNING id`, [companyId, await freeAliceApplication()]);
     const conv = rows[0].id;
     await db().admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id) VALUES ($1, $2), ($1, $3)`, [conv, alice, employer]);
     await db().admin.query(`INSERT INTO public.messages(conversation_id, sender_id, body, created_at)
@@ -535,8 +562,8 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
   });
 
   it('ostatnia wiadomość przy remisie created_at jest deterministyczna (#712, id DESC)', async () => {
-    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, subject, last_message_at)
-      VALUES ($1, 'Remis', now()) RETURNING id`, [companyId]);
+    const { rows } = await db().admin.query(`INSERT INTO public.conversations(company_id, application_id, subject, last_message_at)
+      VALUES ($1, $2, 'Remis', now()) RETURNING id`, [companyId, await freeAliceApplication()]);
     const conv = rows[0].id;
     await db().admin.query(`INSERT INTO public.conversation_members(conversation_id, profile_id) VALUES ($1, $2), ($1, $3)`, [conv, alice, employer]);
     // Ten sam created_at dla obu wiadomości; wstawiona jako pierwsza ma MNIEJSZY id, druga —

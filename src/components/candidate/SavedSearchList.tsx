@@ -15,6 +15,7 @@ import {
 } from '@/lib/actions/saved-searches';
 import type { SavedSearch, SavedSearchFrequency } from '@/lib/data/saved-searches';
 import { toUserMessageKey } from '@/lib/errors';
+import { localeNames, type Locale } from '@/i18n/routing';
 import { BTN_SECONDARY, FORM_CONTROL, H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
@@ -23,15 +24,33 @@ import { cn } from '@/lib/utils';
  * włączenie/wyłączenie alertu, częstotliwość digestu, usunięcie z potwierdzeniem. Zapis przez RPC (własność
  * i walidacja w bazie). Invariant #11: jedna operacja naraz, wynik w regionie `status`/`alert`,
  * po usunięciu fokus wraca do komunikatu (wiersz znika).
+ *
+ * #823: „Pokaż oferty” otwiera listę pod locale ZAPISANYM z wyszukiwaniem (`search.locale`),
+ * nie pod aktualnym językiem panelu — tytuły ofert dopasowane do słowa kluczowego przez worker
+ * alertów pochodzą z tego samego locale (0092: `saved_search_canonical_filters`). Gdy wyszukiwanie
+ * ma słowo kluczowe i jego locale różni się od bieżącego języka panelu, pokazujemy krótką notatkę
+ * z nazwą języka, żeby kandydat wiedział, czemu zobaczy listę w innym języku.
  */
 export interface SavedSearchListProps {
+  /** Bieżący język panelu (z adresu strony) — do porównania z `search.locale`. */
+  currentLocale: Locale;
   /** `filterLabels` = filtry wyszukiwania w języku widza (serwer, `savedSearchFilterLabels`). */
   searches: Array<SavedSearch & { lastAlertLabel: string | null; filterLabels?: string[] }>;
 }
 
+/** Zapisany adres zaczyna się od `?` — locale ma znaczenie wyłącznie przy słowie kluczowym (0092). */
+function hasKeywordFilter(query: string): boolean {
+  try {
+    const keyword = new URLSearchParams(query.slice(1)).get('keyword');
+    return typeof keyword === 'string' && keyword.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 type Feedback = { tone: 'ok' | 'error'; text: string } | null;
 
-export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.Element {
+export function SavedSearchList({ currentLocale, searches }: SavedSearchListProps): React.JSX.Element {
   const t = useTranslations('savedSearches');
   const tRoot = useTranslations();
   const router = useRouter();
@@ -184,9 +203,15 @@ export function SavedSearchList({ searches }: SavedSearchListProps): React.JSX.E
                   <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">
                     {search.lastAlertLabel ? t('lastAlert', { date: search.lastAlertLabel }) : t('noAlertYet')}
                   </p>
+                  {search.locale !== currentLocale && hasKeywordFilter(search.query) ? (
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      {t('openLocaleNote', { language: localeNames[search.locale] })}
+                    </p>
+                  ) : null}
                 </div>
                 <Link
                   href={`/oferty-pracy${search.query}`}
+                  locale={search.locale}
                   className={cn(BTN_SECONDARY, 'min-h-11 shrink-0 px-[17px] py-[11px] text-xs')}
                 >
                   <Search className="h-4 w-4" aria-hidden="true" />

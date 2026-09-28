@@ -10,6 +10,7 @@ import type {
   JobStep9Draft,
 } from '@/lib/validation/job';
 import { cleanLocalizedText } from '@/lib/screening/questions';
+import { jobCostsPatch } from '@/lib/job-costs';
 
 /** Puste/whitespace → null (kolumny nullable), w innym wypadku wartość surowa. */
 function nullIfEmpty(value: string | undefined | null): string | null {
@@ -99,14 +100,21 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
     case 8: {
       const v = parsed as JobStep8;
       return {
-        job: { accommodation: v.accommodation, transport: v.transport },
+        // 0169: flagi filtrów + koszty i dodatki jednym patchem kroku.
+        job: jobCostsPatch(v),
         translation: { conditions: v.conditions, benefits: v.benefits },
       };
     }
     case 9: {
       const v = parsed as JobStep9Draft;
       return {
-        job: { contact_email: nullIfEmpty(v.contactEmail) },
+        job: {
+          contact_email: nullIfEmpty(v.contactEmail),
+          // #1129 (0172): kanał aplikowania; pusta wartość czyści pole szkicu.
+          apply_url: nullIfEmpty(v.applyUrl),
+          apply_email: nullIfEmpty(v.applyEmail),
+          apply_phone: nullIfEmpty(v.applyPhone),
+        },
         translation: { company_description: v.companyDescription },
       };
     }

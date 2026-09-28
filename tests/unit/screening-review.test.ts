@@ -9,6 +9,8 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { SCREENING_REVIEW_REASON_MAX } from '@/lib/screening/risk';
 import { buildScreeningReviewNotices, screeningReviewReasonError } from '@/lib/screening/review';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withClassifiedsMode as classifiedsModeInTests, withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 /**
  * #497 — przegląd pytań screeningowych po stronie aplikacji: stan pytań blokujących publikację
@@ -71,6 +73,8 @@ describe('uzasadnienie decyzji', () => {
 });
 
 describe('publishJob — pytania blokujące publikację', () => {
+  recruitmentModeInTests();
+
   function mockPublish(message: string) {
     fakeDb
       .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Magazynier' }])
@@ -108,6 +112,8 @@ describe('publishJob — pytania blokujące publikację', () => {
 });
 
 describe('decideScreeningReview (admin)', () => {
+  // Przegląd pytań (#497) działa w trybie RECRUITMENT (#1128).
+  recruitmentModeInTests();
   function mockRpc(result: { error: string | null } = { error: null }) {
     const rpc = vi.fn();
     resetFakeDb({ id: '22222222-2222-4222-8222-222222222222', role: 'admin' });
@@ -170,12 +176,34 @@ describe('powiązania UI', () => {
     expect(titleKeyForType('system', { kind: 'screening_review', status: 'rejected' }, 'job')).toBe(
       'itemScreeningRejected',
     );
+    // #497 (0154): pytanie opublikowanej oferty odrzucone = ukryte, osobny tytuł z prośbą o poprawkę.
+    expect(titleKeyForType('system', { kind: 'screening_review', status: 'hidden' }, 'job')).toBe(
+      'itemScreeningHidden',
+    );
+    // Kontrola ujemna: nieznany status nie dostaje tytułu decyzji.
+    expect(titleKeyForType('system', { kind: 'screening_review', status: 'unknown' }, 'job')).not.toMatch(
+      /^itemScreening/,
+    );
   });
 
   it('dziennik zna akcje audytu z migracji 0103, filtr kolejki domyślnie oczekujące', () => {
     expect(AUDIT_ACTION_KEY['screening_question.review_requested']).toBeDefined();
     expect(AUDIT_ACTION_KEY['screening_question.reviewed']).toBeDefined();
+    expect(AUDIT_ACTION_KEY['screening_question.hidden']).toBe('auditActionScreeningHidden');
     expect(parseScreeningReviewFilter('xxx')).toBe('pending');
     expect(parseScreeningReviewFilter('decided')).toBe('decided');
+  });
+});
+
+/** #1137 — decyzja produktowa: portal ogłoszeniowy (przegląd pytań niedostępny). */
+describe('decideScreeningReview w trybie ogłoszeniowym (#1137)', () => {
+  classifiedsModeInTests();
+  it('RECRUITMENT_DISABLED bez zapytania do bazy', async () => {
+    resetFakeDb({ id: '22222222-2222-4222-8222-222222222222', role: 'admin' });
+    await expect(decideScreeningReview(REVIEW_ID, 'approved', '')).resolves.toEqual({
+      ok: false,
+      error: 'RECRUITMENT_DISABLED',
+    });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 });

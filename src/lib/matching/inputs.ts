@@ -8,7 +8,7 @@ import type { CertificateEntry, LanguageEntry, MatchCandidate, MatchJob } from '
  * szczególe oferty liczy ten sam kod z tych samych pól.
  *
  * Kandydat: kolumny `candidate_profiles` + relacje `skills` ({skill_label}), `languages`
- * ({language_label, level}), `certificates` ({certificate_label, expires_at}).
+ * ({language_label, level, language_code}), `certificates` ({certificate_label, expires_at}).
  * Oferta: wiersz `get_job_match_profile` (0074).
  */
 
@@ -42,12 +42,20 @@ function asIsoDate(value: unknown): string {
   }
   return asStr(value).slice(0, 10);
 }
-/** Języki z poziomem: wiersze relacji {language_label, level} albo jsonb {label, level} z RPC. */
-function languagesFrom(rows: unknown, labelField: string): LanguageEntry[] {
+/**
+ * Języki z poziomem: wiersze relacji {language_label, level, language_code} albo jsonb
+ * {label, level, code} z RPC. Kod ze słownika (0168) decyduje o dopasowaniu; bez kodu
+ * (stary wpis) — etykieta.
+ */
+function languagesFrom(rows: unknown, labelField: string, codeField: string): LanguageEntry[] {
   return asArr(rows)
     .map((r) => {
       const rec = asRecord(r);
-      return { label: asStr(rec[labelField]), level: asStr(rec['level']) || null };
+      return {
+        label: asStr(rec[labelField]),
+        level: asStr(rec['level']) || null,
+        code: asStr(rec[codeField]) || null,
+      };
     })
     .filter((entry) => entry.label.length > 0);
 }
@@ -107,7 +115,7 @@ export function buildMatchCandidate(
     coordinates: resolveCoordinates(city, locations),
     experienceYears: asNum(cp['experience_years']),
     availability: asStr(cp['availability']) || undefined,
-    languages: languagesFrom(relations.languages, 'language_label'),
+    languages: languagesFrom(relations.languages, 'language_label', 'language_code'),
     certificates: certificatesFrom(relations.certificates),
     hasDrivingLicense: cp['has_driving_license'] === true,
     hasCar: cp['has_car'] === true,
@@ -120,7 +128,7 @@ export function buildMatchJob(row: unknown, locations: readonly LocationAliasRow
   const city = asStr(jr['city']) || undefined;
   // Poziomy wymagane przez ofertę (0074); starsze RPC bez kolumny → same etykiety (poziom dowolny).
   const requiredLanguages: LanguageEntry[] = Array.isArray(jr['language_requirements'])
-    ? languagesFrom(jr['language_requirements'], 'label')
+    ? languagesFrom(jr['language_requirements'], 'label', 'code')
     : asStrArr(jr['languages']);
   return {
     occupation: asStr(jr['occupation']) || undefined,

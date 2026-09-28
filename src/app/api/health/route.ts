@@ -1,8 +1,9 @@
-import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import { env, isAppReady, isDatabaseConfigured, isProductionMode, readinessChecks } from '@/lib/env';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
+import { DATABASE_PING_CACHE_KEY, pingCache } from '@/lib/ops/health-ping-cache';
 import { emailProviderFromEnv } from '@/lib/email/transport/select';
 import { isTurnstileEnabled } from '@/lib/turnstile/verify';
+import { portalLegalMode } from '@/lib/portal-mode';
 
 /**
  * Readiness/health endpoint (SEC-19 + P1-18 + #429) — dla monitoringu i healthchecku Railway.
@@ -18,6 +19,8 @@ import { isTurnstileEnabled } from '@/lib/turnstile/verify';
  * `x-health-token`). Nigdy nie ujawnia sekretów ani treści błędu bazy.
  * `emailProvider` = wybrany dostawca poczty, `checks.emailProviderReady` = ma komplet kluczy.
  * `checks.turnstile` (#46) = czy ochrona formularzy jest włączona — sam boolean, bez kluczy.
+ * `portalLegalMode` (#1136) = tryb produktu (`CLASSIFIEDS_ONLY` | `RECRUITMENT`) — tylko w szczegółach,
+ * nie wpływa na gotowość (`isAppReady`).
  * Czujki operacyjne (kolejki, webhooki, maintenance, połączenia) — `/api/health/ops` (#47).
  */
 
@@ -28,50 +31,44 @@ export const dynamic = 'force-dynamic';
 const DATABASE_PING_TIMEOUT_MS = 2_000;
 
 /**
- * `ttlMs: 0` — celowo BEZ ponownego użycia rozstrzygniętego wyniku (healthcheck ma odzwierciedlać
- * realny, BIEŻĄCY stan bazy na każde odrębne żądanie — patrz komentarz na górze pliku). Cache
- * chroni wyłącznie przed RÓWNOLEGŁYMI żądaniami (#600): dopóki jedno `pool.query('SELECT 1')`
- * trwa, kolejne żądania (nawet setki naraz) czekają na TEN SAM wynik zamiast otwierać nowe
- * zapytanie — to jest właściwa ochrona przed zalewem. Gdy zapytanie się zakończy, następne,
- * odrębne żądanie zawsze sprawdza bazę od nowa.
+ * `true` = baza odpowiedziała; `false` = błąd. BEZ timeoutu wewnątrz — to jest właśnie
+ * obietnica, którą `pingCache` trzyma jako `inFlight` (patrz `pingDatabase` niżej): musi żyć
+ * dokładnie tak długo, jak realne `pool.query`, inaczej single-flight przestaje chronić pulę
+ * (#645 — timeout lokalny kończył `factory()` wcześniej niż zapytanie, więc `finally` w
+ * `ttl-single-flight.ts` zdejmował wpis `inFlight`, zanim `pool.query` faktycznie się skończyło,
+ * i kolejne, POZORNIE odrębne żądanie otwierało NASTĘPNE zapytanie na tej samej niedostępnej puli).
  */
-const DATABASE_PING_CACHE_KEY = 'ping';
+async function pingDatabaseQuery(): Promise<boolean> {
+  const { getDomainPool } = await import('@/lib/db/runtime');
+  const pool = await getDomainPool();
+  const result = await pool.query<{ ok: number }>('SELECT 1 AS ok');
+  return result.rows[0]?.ok === 1;
+}
 
-const pingCache = createTtlSingleFlightCache<boolean>({
-  ttlMs: 0,
-  maxEntries: 1,
-});
-
-/** `true` = baza odpowiedziała; `false` = błąd/timeout. Wołane tylko, gdy baza jest skonfigurowana. */
-async function pingDatabaseOnce(): Promise<boolean> {
+/**
+ * Single-flight dla całego procesu (#600), poprawione po #645: dowolna liczba RÓWNOLEGŁYCH
+ * publicznych żądań `GET /api/health` dzieli NAJWYŻEJ jedno trwające `pool.query('SELECT 1')`
+ * — reszta czeka na ten sam wynik zamiast otwierać nowe zapytanie. `pingCache.run` trzyma
+ * BEZ TIMEOUTU realną obietnicę zapytania (`pingDatabaseQuery`), więc wpis `inFlight` znika
+ * dopiero, gdy zapytanie FAKTYCZNIE się zakończy (sukcesem albo błędem) — nie wcześniej.
+ *
+ * Timeout (`DATABASE_PING_TIMEOUT_MS`) dotyczy WYŁĄCZNIE odpowiedzi TEGO żądania: `Promise.race`
+ * jest tutaj, na zewnątrz `pingCache.run`, więc przegrana wyścigu z timeoutem nie odłącza ani
+ * nie kończy dzielonej obietnicy zapytania — ona nadal trwa w tle i nadal jest tym, na co czekają
+ * (i co blokuje nowe zapytanie dla) kolejne żądania, dopóki `pool.query` się nie rozstrzygnie.
+ */
+async function pingDatabase(): Promise<boolean | null> {
+  if (!isDatabaseConfigured()) return null;
+  const shared = pingCache.run(DATABASE_PING_CACHE_KEY, () => pingDatabaseQuery().catch(() => false));
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<false>((resolve) => {
     timer = setTimeout(() => resolve(false), DATABASE_PING_TIMEOUT_MS);
   });
-  const ping = (async () => {
-    const { getDomainPool } = await import('@/lib/db/runtime');
-    const pool = await getDomainPool();
-    const result = await pool.query<{ ok: number }>('SELECT 1 AS ok');
-    return result.rows[0]?.ok === 1;
-  })().catch(() => false);
   try {
-    return await Promise.race([ping, timeout]);
+    return await Promise.race([shared, timeout]);
   } finally {
     clearTimeout(timer);
   }
-}
-
-/**
- * Single-flight dla całego procesu (#600): dowolna liczba RÓWNOLEGŁYCH publicznych żądań
- * `GET /api/health` dzieli NAJWYŻEJ jedno trwające `pool.query('SELECT 1')` — reszta czeka na
- * ten sam wynik zamiast otwierać nowe zapytanie. Timeout lokalny nie anuluje zapytania po
- * stronie bazy, ale bez deduplikacji zalew żądań (zwłaszcza przy wolnej/niedostępnej bazie,
- * gdy każde czeka pełne `DATABASE_PING_TIMEOUT_MS`) mnożyłby zapytania i zajęte połączenia puli
- * bez ograniczenia — to właśnie jest tu ograniczane.
- */
-async function pingDatabase(): Promise<boolean | null> {
-  if (!isDatabaseConfigured()) return null;
-  return pingCache.run(DATABASE_PING_CACHE_KEY, pingDatabaseOnce);
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -99,6 +96,8 @@ export async function GET(request: Request): Promise<Response> {
         },
         // Nazwa dostawcy poczty (`emaillabs` | `resend` | `none`) — bez kluczy i adresów.
         emailProvider: emailProviderFromEnv().provider ?? 'none',
+        // Tryb produktu (#1136): sama nazwa trybu, bez wpływu na status.
+        portalLegalMode: portalLegalMode(),
       },
       { status: httpStatus, headers },
     );

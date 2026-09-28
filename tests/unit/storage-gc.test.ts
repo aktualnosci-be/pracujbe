@@ -14,12 +14,15 @@ const bucket = vi.hoisted(() => ({ config: null as unknown, store: null as unkno
 vi.mock('@/lib/env', () => ({ isProductionMode: () => true, fileBucketConfig: () => bucket.config }));
 vi.mock('@/lib/storage/railway-bucket', () => ({ createRailwayBucket: () => bucket.store }));
 
-const { runStorageGc, storageGcDryRun, StorageGcError } = await import('@/lib/storage-gc');
+const { runStorageGc, storageGcDryRun, StorageGcError, CV_FILES_BUCKET, MESSAGE_ATTACHMENTS_BUCKET } = await import(
+  '@/lib/storage-gc'
+);
 const { POST } = await import('@/app/api/maintenance/route');
 const { captureError } = await import('@/lib/error-report');
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const key = (n: number) => `${OWNER}/cv-${String(n).padStart(8, '0')}-2222-4222-8222-222222222222.pdf`;
+const attKey = (n: number) => `${OWNER}/att-${String(n).padStart(8, '0')}-4222-8222-8222-222222222222.png`;
 const NOW = new Date('2026-09-25T02:30:00Z');
 const OLD = new Date(NOW.getTime() - 48 * 3_600_000);
 const FRESH = new Date(NOW.getTime() - 3_600_000);
@@ -27,7 +30,7 @@ const FRESH = new Date(NOW.getTime() - 3_600_000);
 type Page = { objects: Array<{ key: string; lastModified: Date | null }>; foreign: number; nextStartAfter: string | null };
 
 function store(pages: Page[]) {
-  const list = vi.fn(async (_input: { startAfter?: string | null; maxKeys?: number }) => {
+  const list = vi.fn(async (_input: { startAfter?: string | null; maxKeys?: number; pattern?: 'cv' | 'attachment' }) => {
     const page = pages.shift();
     return page ? { ok: true as const, value: page } : { ok: false as const, error: 'UNAVAILABLE' as const, retryable: true };
   });
@@ -95,8 +98,8 @@ describe('runStorageGc', () => {
     ]);
     const result = await runStorageGc(s, { dryRun: false, now: () => NOW, pageSize: 1, maxPages: 2 });
     expect(s.list.mock.calls.map(([input]) => input)).toEqual([
-      { startAfter: key(0), maxKeys: 1 },
-      { startAfter: key(1), maxKeys: 1 },
+      { startAfter: key(0), maxKeys: 1, pattern: 'cv' },
+      { startAfter: key(1), maxKeys: 1, pattern: 'cv' },
     ]);
     expect(fakeDb.callsTo('storage_gc_page').map((call) => [call.args.p_last_key, call.args.p_final, call.args.p_release]))
       .toEqual([[key(1), false, false], [key(2), false, true]]);
@@ -120,6 +123,28 @@ describe('runStorageGc', () => {
     expect((error as Error).message).toBe('STORAGE_GC_UNAVAILABLE');
     expect(fakeDb.callsTo('storage_gc_page')).toHaveLength(0);
   });
+
+  it('#833: bucket/pattern niestandardowe (załączniki wiadomości) trafiają do RPC i store.list()', async () => {
+    begin('started');
+    const s = store([{ objects: [{ key: attKey(1), lastModified: OLD }], foreign: 0, nextStartAfter: null }]);
+    const result = await runStorageGc(s, {
+      dryRun: true,
+      now: () => NOW,
+      bucket: MESSAGE_ATTACHMENTS_BUCKET,
+      pattern: 'attachment',
+    });
+    expect(fakeDb.callsTo('storage_gc_begin')[0]).toMatchObject({ args: { p_bucket: 'message-files' } });
+    expect(s.list.mock.calls[0]![0]).toMatchObject({ pattern: 'attachment' });
+    expect(result).toMatchObject({ status: 'done', orphanObjects: 1 });
+  });
+
+  it('kontrola ujemna: bez opcji bucket/pattern GC nadal sprząta domyślny bucket CV', async () => {
+    begin('started');
+    const s = store([{ objects: [{ key: key(1), lastModified: OLD }], foreign: 0, nextStartAfter: null }]);
+    await runStorageGc(s, { dryRun: true, now: () => NOW });
+    expect(fakeDb.callsTo('storage_gc_begin')[0]).toMatchObject({ args: { p_bucket: CV_FILES_BUCKET } });
+    expect(s.list.mock.calls[0]![0]).toMatchObject({ pattern: 'cv' });
+  });
 });
 
 describe('/api/maintenance + GC (#17)', () => {
@@ -130,6 +155,8 @@ describe('/api/maintenance + GC (#17)', () => {
     'run_retention_purge',
     'purge_job_funnel_data',
     'purge_stale_message_attachments',
+    'rate_limit_gc',
+    'processed_webhooks_gc',
   ];
   const request = () => new Request('http://web.internal/api/maintenance', {
     method: 'POST', headers: { authorization: 'Bearer maintenance-secret' },
@@ -145,26 +172,44 @@ describe('/api/maintenance + GC (#17)', () => {
 
   it('GC w dry-run przed kolejką usuwania; odpowiedź i logi bez kluczy obiektów', async () => {
     begin('started');
-    bucket.store = { ...store([{ objects: [{ key: key(1), lastModified: OLD }], foreign: 0, nextStartAfter: null }]), delete: vi.fn() };
+    // Pierwsza strona = przebieg CV, druga = przebieg załączników wiadomości (#833) —
+    // ten sam fizyczny bucket, ale dwa niezależne przebiegi jeden po drugim.
+    bucket.store = {
+      ...store([
+        { objects: [{ key: key(1), lastModified: OLD }], foreign: 0, nextStartAfter: null },
+        { objects: [{ key: attKey(2), lastModified: OLD }], foreign: 0, nextStartAfter: null },
+      ]),
+      delete: vi.fn(),
+    };
     const log = vi.spyOn(console, 'log');
     const error = vi.spyOn(console, 'error');
     const res = await POST(request());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.storageGc).toMatchObject({ status: 'done', dryRun: true, orphanObjects: 1, missingObjects: 2 });
+    expect(body.messageAttachmentsGc).toMatchObject({ status: 'done', dryRun: true, orphanObjects: 1, missingObjects: 2 });
     const names = fakeDb.calls.map((call) => call.name);
     expect(names.indexOf('storage_gc_page')).toBeLessThan(names.indexOf('claim_storage_deletions'));
-    expect(fakeDb.callsTo('storage_gc_begin')[0]!.args.p_dry_run).toBe(true);
+    const beginCalls = fakeDb.callsTo('storage_gc_begin');
+    expect(beginCalls[0]!.args.p_dry_run).toBe(true);
+    expect(beginCalls.map((call) => call.args.p_bucket)).toEqual(['candidate-files', 'message-files']);
     const printed = JSON.stringify([body, log.mock.calls, error.mock.calls]);
     expect(printed).not.toContain(OWNER);
   });
 
-  it('STORAGE_GC_MODE=delete przekazuje tryb kasowania', async () => {
+  it('STORAGE_GC_MODE=delete przekazuje tryb kasowania (oba przebiegi)', async () => {
     process.env.STORAGE_GC_MODE = 'delete';
     begin('started');
-    bucket.store = { ...store([{ objects: [], foreign: 0, nextStartAfter: null }]), delete: vi.fn() };
+    bucket.store = {
+      ...store([
+        { objects: [], foreign: 0, nextStartAfter: null },
+        { objects: [], foreign: 0, nextStartAfter: null },
+      ]),
+      delete: vi.fn(),
+    };
     expect((await POST(request())).status).toBe(200);
-    expect(fakeDb.callsTo('storage_gc_begin')[0]!.args.p_dry_run).toBe(false);
+    const beginCalls = fakeDb.callsTo('storage_gc_begin');
+    expect(beginCalls.map((call) => call.args.p_dry_run)).toEqual([false, false]);
   });
 
   it('awaria listy bucketu → 503 z zadaniem storageGc; kolejka usuwania mimo to przetworzona', async () => {
@@ -175,14 +220,35 @@ describe('/api/maintenance + GC (#17)', () => {
     expect(await res.json()).toEqual({ error: 'gc failed' });
     expect(captureError).toHaveBeenCalledWith(expect.any(StorageGcError), { area: 'maintenance.gc', task: 'storageGc' });
     expect(fakeDb.callsTo('claim_storage_deletions')).toHaveLength(1);
+    // Przebieg CV padł jako pierwszy — przebieg załączników wiadomości nie jest nawet próbowany.
+    expect(fakeDb.callsTo('storage_gc_begin')).toHaveLength(1);
   });
 
-  it('bez bucketu Railway GC pominięty (storageGc: null)', async () => {
+  it('#833: awaria listy TYLKO przebiegu załączników → 503 z zadaniem messageAttachmentsGc; CV zliczony', async () => {
+    begin('started');
+    // Jedna strona: wystarcza na przebieg CV, przebieg załączników już nie ma czego wylistować.
+    bucket.store = {
+      ...store([{ objects: [{ key: key(1), lastModified: OLD }], foreign: 0, nextStartAfter: null }]),
+      delete: vi.fn(),
+    };
+    const res = await POST(request());
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'gc failed' });
+    expect(captureError).toHaveBeenCalledWith(expect.any(StorageGcError), {
+      area: 'maintenance.gc',
+      task: 'messageAttachmentsGc',
+    });
+    expect(fakeDb.callsTo('storage_gc_begin')).toHaveLength(2);
+  });
+
+  it('bez bucketu Railway oba GC pominięte (storageGc/messageAttachmentsGc: null)', async () => {
     bucket.config = null;
     vi.doMock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({}) }));
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect((await res.json()).storageGc).toBeNull();
+    const body = await res.json();
+    expect(body.storageGc).toBeNull();
+    expect(body.messageAttachmentsGc).toBeNull();
     expect(fakeDb.callsTo('storage_gc_begin')).toHaveLength(0);
   });
 });

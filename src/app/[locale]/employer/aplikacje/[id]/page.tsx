@@ -3,11 +3,13 @@ import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
+import { languageDisplayName } from '@/lib/languages';
 import { getEmployerApplicationDetail } from '@/lib/data/employer';
 import { StatusPill } from '@/components/ui/status-pill';
 import { ApplicationHistoryList } from '@/components/employer/ApplicationHistoryList';
 import { ApplicationStatusMenu } from '@/components/employer/ApplicationStatusMenu';
 import { MessageCandidateButton } from '@/components/employer/MessageCandidateButton';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AVAILABILITY_KEYS, LEVEL_KEYS } from '@/components/employer/candidate-labels';
 import { localizedText, type ScreeningAnswer } from '@/lib/screening/questions';
 import {
@@ -22,6 +24,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Szczegół zgłoszenia w panelu pracodawcy (#300). Odczyt pod sesją i RLS (recruiter+ firmy —
@@ -46,9 +49,12 @@ export default async function EmployerApplicationDetailPage({
 }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('applications');
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
+  const tLang = await getTranslations({ locale, namespace: 'languageNames' });
   const format = await getFormatter({ locale });
 
   const result = await getEmployerApplicationDetail(id);
@@ -130,7 +136,8 @@ export default async function EmployerApplicationDetailPage({
           <StatusPill status={application.status} />
           <ApplicationStatusMenu applicationId={application.id} status={application.status} candidateName={name} jobTitle={application.jobTitle} />
           {/* #98: rozmowa wymaga konta kandydata — gość dostaje kontakt e-mailowy niżej. */}
-          {application.isGuest ? null : <MessageCandidateButton applicationId={application.id} candidateName={name} />}
+          {/* #1134: bez rozmów w trybie ogłoszeniowym. */}
+          {application.isGuest || !isRecruitmentEnabled('messaging') ? null : <MessageCandidateButton applicationId={application.id} candidateName={name} />}
           {/* P1-06: profil kandydata z kontekstem firmy (dopasowania, inne zgłoszenia). */}
           {application.isGuest || !application.candidateId || isDemo ? null : (
             <Link href={`/employer/kandydaci/${encodeURIComponent(application.candidateId)}`} className={TEXT_LINK}>
@@ -195,7 +202,8 @@ export default async function EmployerApplicationDetailPage({
             {field(to('languagesLabel'), profile.languages.length
               ? profile.languages.map((l) => {
                   const levelKey = LEVEL_KEYS[l.level];
-                  return levelKey ? `${l.label} (${to(levelKey)})` : l.label;
+                  const name = languageDisplayName(l.label, (code) => tLang(code));
+                  return levelKey ? `${name} (${to(levelKey)})` : name;
                 }).join(', ')
               : notProvided)}
             {field(to('certificatesLabel'), profile.certificates.length ? profile.certificates.join(', ') : notProvided)}

@@ -13,9 +13,11 @@
  * użytkownika. Eksport `demoJobs` to gotowa lista `JobDetail[]` w domyślnym języku.
  */
 
+import type { JobCosts } from '@/lib/job-costs';
 import type {
   CategoryKey,
   ContractType,
+  JobApplyChannel,
   JobDetail,
   JobListItem,
   LocationKey,
@@ -531,6 +533,8 @@ interface DemoJobRaw {
   immediate: boolean;
   noLanguageRequired: boolean;
   transport: boolean;
+  /** 0169: przykładowe „Koszty i dodatki” (dane fikcyjne, jak cała oferta demo). */
+  costs?: JobCosts;
   startDate?: string;
   languageKeys: LangKey[];
   responsibilityKeys: RespKey[];
@@ -549,6 +553,11 @@ const RAW_JOBS: DemoJobRaw[] = [
   {
     id: '1001', occKey: 'warehouseWorker', companyId: 'c1', locationKey: 'antwerp', category: 'warehouse', contractType: 'interim',
     salaryMin: 2400, salaryMax: 2800, postedDaysAgo: 1, accommodation: true, immediate: true, noLanguageRequired: true, transport: true,
+    costs: {
+      accommodationKind: 'provided', accommodationCost: 120, accommodationCostPeriod: 'week', accommodationDeducted: true,
+      accommodationRegistration: true, accommodationAfterContract: 'transition_period', transportShuttle: true,
+      transportReimbursed: false, mealVoucherDaily: 8, jointCommittee: '322',
+    },
     languageKeys: [], responsibilityKeys: ['loadUnload', 'orderPick', 'stock'], mandatoryKeys: ['physical', 'reliable', 'workPermit'],
     optionalKeys: ['forklift', 'experienceBonus'], conditionKeys: ['weekly', 'accommodation', 'ppe'], highlightKeys: ['immediate', 'accommodation', 'noLang'],
     workingHoursKey: 'fulltime', shiftsKey: 'earlyLate', contextKeys: ['immediate', 'accommodation', 'noLang'],
@@ -754,6 +763,18 @@ function composeDescription(raw: DemoJobRaw, locale: Locale, companyName: string
   return extra ? `${lead} ${extra}` : lead;
 }
 
+/**
+ * Kanał aplikowania ofert demonstracyjnych (#1129): zarezerwowana domena `example.com`
+ * i nieprzydzielony numer — żadnych prawdziwych adresów. Warianty rotują po numerze oferty
+ * (strona / e-mail / e-mail + telefon), żeby widoki pokazywały każdy rodzaj.
+ */
+function demoApplyChannel(id: string): JobApplyChannel {
+  const n = Number.parseInt(id, 10) || 0;
+  if (n % 3 === 0) return { url: `https://example.com/jobs/${id}` };
+  if (n % 3 === 1) return { email: `jobs+${id}@example.com` };
+  return { email: `jobs+${id}@example.com`, phone: '+32000000000' };
+}
+
 function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
   const company = COMPANY_MAP[raw.companyId];
   const regionKey = REGION_OF[raw.locationKey];
@@ -798,6 +819,8 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     shifts: raw.shiftsKey ? SH[raw.shiftsKey][content] : undefined,
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
+    ...(raw.costs ? { costs: raw.costs } : {}),
+    applyChannel: demoApplyChannel(raw.id),
     startDate: raw.startDate,
     companyDescription: company.description[content],
     contentLocale: content,

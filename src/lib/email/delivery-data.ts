@@ -4,6 +4,7 @@ import { ACCESS_CODE_RE, CASE_NUMBER_RE } from '@/lib/validation/content-report'
 import { salaryLabelsFor } from '@/lib/salary-labels';
 import { buildMessageExcerpt } from '@/lib/email/message-excerpt';
 import { minimizeEmailPayload } from '@/lib/email/payload-fields';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Dane szablonu dla wiersza kolejki `email_deliveries` (czysta funkcja, bez I/O — testowalna).
@@ -122,6 +123,8 @@ export function emailTargetPath(
       return payload?.['panel'] === 'employer' ? '/employer/ustawienia' : '/candidate/ustawienia';
     case 'newMessage': {
       const panel = payload?.['panel'] === 'employer' ? 'employer' : 'candidate';
+      // #1134: tryb ogłoszeniowy — trasa wiadomości = 404 (e-mail i tak jest wygaszany w kolejce).
+      if (!isRecruitmentEnabled('messaging')) return `/${panel}`;
       const conversationId = payload?.['conversationId'];
       const query =
         typeof conversationId === 'string' && UUID_RE.test(conversationId)

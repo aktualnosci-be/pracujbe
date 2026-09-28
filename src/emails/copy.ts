@@ -157,7 +157,7 @@ export interface LayoutCopy {
 
 export const layoutCopy: Record<Locale, LayoutCopy> = {
   pl: {
-    tagline: 'Praca w Belgii bez CV i barier językowych.',
+    tagline: 'Oferty pracy w Belgii. Serwis w czterech językach.',
     footerNote: 'Otrzymujesz tę wiadomość, ponieważ masz konto w serwisie Pracuj.be.',
     rights: '© {year} Pracuj.be. Wszelkie prawa zastrzeżone.',
     help: 'Pytania i odpowiedzi',
@@ -168,7 +168,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     buttonFallback: 'Jeśli przycisk nie działa, skopiuj i wklej ten adres do przeglądarki:',
   },
   nl: {
-    tagline: 'Werk in België zonder cv en zonder taaldrempels.',
+    tagline: 'Vacatures in België. Een website in vier talen.',
     footerNote: 'Je ontvangt dit bericht omdat je een account hebt op Pracuj.be.',
     rights: '© {year} Pracuj.be. Alle rechten voorbehouden.',
     help: 'Veelgestelde vragen',
@@ -179,7 +179,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     buttonFallback: 'Werkt de knop niet? Kopieer en plak deze link in je browser:',
   },
   fr: {
-    tagline: 'Du travail en Belgique sans CV ni barrière de langue.',
+    tagline: 'Offres d’emploi en Belgique. Un site en quatre langues.',
     footerNote: 'Vous recevez ce message car vous avez un compte sur Pracuj.be.',
     rights: '© {year} Pracuj.be. Tous droits réservés.',
     help: 'Questions fréquentes',
@@ -190,7 +190,7 @@ export const layoutCopy: Record<Locale, LayoutCopy> = {
     buttonFallback: 'Le bouton ne fonctionne pas ? Copiez-collez ce lien dans votre navigateur :',
   },
   en: {
-    tagline: 'Work in Belgium without a CV or language barriers.',
+    tagline: 'Jobs in Belgium. A site in four languages.',
     footerNote: 'You are receiving this email because you have an account on Pracuj.be.',
     rights: '© {year} Pracuj.be. All rights reserved.',
     help: 'FAQ',
@@ -363,7 +363,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Witaj w Pracuj.be!',
       preview: 'Twoje konto jest gotowe — zacznij już teraz.',
       heading: 'Witaj w Pracuj.be!',
-      body: 'Cieszymy się, że jesteś z nami.\n\nUzupełnij swój profil, aby pracodawcy mogli szybciej Cię znaleźć i zaprosić do pracy — bez CV i bez barier językowych.',
+      body: 'Cieszymy się, że jesteś z nami.\n\nNa koncie zapiszesz oferty i wyszukiwania oraz włączysz powiadomienia e-mail o nowych ofertach.',
       cta: 'Przejdź do panelu',
       outro: 'Masz pytania? Chętnie pomożemy.',
     },
@@ -371,7 +371,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Welkom bij Pracuj.be!',
       preview: 'Je account is klaar — begin meteen.',
       heading: 'Welkom bij Pracuj.be!',
-      body: 'Fijn dat je erbij bent.\n\nVul je profiel aan zodat werkgevers je sneller vinden en uitnodigen — zonder cv en zonder taaldrempels.',
+      body: 'Fijn dat je erbij bent.\n\nIn je account bewaar je vacatures en zoekopdrachten en zet je e-mailmeldingen over nieuwe vacatures aan.',
       cta: 'Naar het dashboard',
       outro: 'Vragen? We helpen je graag.',
     },
@@ -379,7 +379,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Bienvenue sur Pracuj.be !',
       preview: 'Votre compte est prêt — commencez dès maintenant.',
       heading: 'Bienvenue sur Pracuj.be !',
-      body: 'Ravis de vous compter parmi nous.\n\nComplétez votre profil pour que les employeurs vous trouvent plus vite et vous proposent du travail — sans CV et sans barrière de langue.',
+      body: 'Ravis de vous compter parmi nous.\n\nDans votre compte, vous enregistrez des offres et des recherches et activez les alertes e-mail pour les nouvelles offres.',
       cta: 'Accéder au tableau de bord',
       outro: 'Des questions ? Nous sommes là pour vous aider.',
     },
@@ -387,7 +387,7 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Welcome to Pracuj.be!',
       preview: 'Your account is ready — get started now.',
       heading: 'Welcome to Pracuj.be!',
-      body: 'We are glad to have you on board.\n\nComplete your profile so employers can find you faster and invite you to work — no CV and no language barriers.',
+      body: 'We are glad to have you on board.\n\nIn your account you can save jobs and searches and turn on email alerts for new jobs.',
       cta: 'Go to dashboard',
       outro: 'Questions? We are happy to help.',
     },

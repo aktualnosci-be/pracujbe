@@ -6,6 +6,7 @@ import { getMyApplicationsPage } from "@/lib/data/candidate";
 import { CandidatePageHeader } from "@/components/candidate/CandidatePageHeader";
 import { CandidateApplicationsFilter } from "@/components/candidate/CandidateApplicationsFilter";
 import { APPLICATION_FILTER_PARAM, parseApplicationFilter } from "@/lib/candidate-application-filter";
+import { notFoundUnlessRecruitment } from "@/lib/portal-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export default async function CandidateApplicationsPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment("applications");
   const t = await getTranslations({ locale, namespace: "dashboard" });
   // #809: filtr etapu z URL (`?etap=`); nieznana wartość = wszystkie zgłoszenia.
   const filter = parseApplicationFilter((await searchParams)[APPLICATION_FILTER_PARAM]);

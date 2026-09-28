@@ -98,6 +98,27 @@ więc nie da się go zautomatyzować z CI ani z sesji bez skrzynki pocztowej.
 
 Import można powtarzać: ten sam manifest daje status `repeat` i zero zmian.
 
+### Po imporcie — kontrola i dalsze kroki (właściciel, decyzja 28.09.2026: pełny import TAK)
+
+7. Sprawdź liczby na bazie docelowej (tylko odczyt, dowolny login z prawem SELECT):
+   ```sql
+   select count(*) from public.occupations where esco_uri is not null;          -- ok. 3 000
+   select count(*) from public.skills where esco_uri is not null;               -- ok. 13 900
+   select locale, count(*) from public.occupation_labels group by locale;       -- pl/nl/fr/en
+   select count(*) from public.occupation_skills where source = 'esco';
+   ```
+   Wynik i SHA-256 manifestu wpisz w opisie PR z manifestem (`data/esco/…manifest.json`).
+8. Na Railway import uruchamiasz lokalnie z `ESCO_IMPORT_DATABASE_URL` wskazującym bazę
+   produkcyjną przez publiczny proxy TCP (login migratora); po imporcie zamknij proxy.
+   Import nie wymaga wdrożenia aplikacji ani flagi — dopasowanie nadal działa na etykietach,
+   dopóki nie wejdzie etap 2.
+
+**Etap 2 (osobny PR, nie w 0168):** podpowiedzi zawodów/umiejętności z `occupation_labels`/
+`skill_labels` w onboardingu i kreatorze (zapis id ESCO obok etykiety), dopasowanie po id,
+a dla starych etykiet — propozycja mapowania przez OpenAI (za flagą, `withAiBudget`)
+zatwierdzana przez człowieka; AI nie wpływa na wynik dopasowania. Języki są już słownikiem
+(`public.languages` + `language_aliases`, migracja 0168) — bez ESCO.
+
 Parser i sumy kontrolne sprawdziły tylko fragment testowy zbudowany z API ESCO
 (niżej). Nazwy kolumn oficjalnych CSV v1.2.1 nie zostały porównane z prawdziwymi
 plikami. Jeśli w pliku brakuje wymaganej kolumny, `verify` zakończy się błędem

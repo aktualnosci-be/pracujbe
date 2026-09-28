@@ -1,7 +1,7 @@
 import { formatSalaryParts } from '@/lib/salary';
 
 import * as React from 'react';
-import { ArrowRight, BadgeCheck } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Building2, Languages } from 'lucide-react';
 import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -10,6 +10,7 @@ import { MatchBar } from '@/components/ui/match-bar';
 import { PublicSaveJobButton } from './PublicSavedJobs';
 import type { JobListItem } from '@/lib/jobs';
 import { formatPublishedRelative, PUBLISHED_DATE_TIME_ZONE } from '@/lib/relative-date';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Paszport oferty: lokalizacja, opcjonalna stawka i warunki z rzeczywistych danych.
@@ -64,7 +65,8 @@ export async function JobCard({
   });
   const highlights = job.highlights.slice(0, 2);
   const relative = formatPublishedRelative(job.publishedAt, locale);
-  const withMatch = showMatch === true && typeof matchScore === 'number';
+  // #1131: tryb ogłoszeniowy — brak paska dopasowania niezależnie od propsów.
+  const withMatch = showMatch === true && typeof matchScore === 'number' && isRecruitmentEnabled('matching');
   const showRegion = job.region.length > 0 && job.region !== job.city;
   // Fikcyjna firma demo nie dostaje odznaki weryfikacji (#297).
   const verified = job.companyVerified && !job.isDemo;
@@ -99,9 +101,24 @@ export async function JobCard({
         ) : (
           <span>{job.companyName}</span>
         )}
+        {job.isAgency ? (
+          // 0167: oferta agencji pracy tymczasowej (deklaracja firmy) — bez oceny, sama etykieta.
+          <span className="pp-passport-tag" data-testid="job-card-agency">
+            <Building2 className="h-4 w-4" aria-hidden="true" />
+            {t('agencyBadge')}
+          </span>
+        ) : null}
         {job.isDemo ? (
           <span className="pp-passport-tag rounded-full border border-warning/40 bg-warning/10 px-2 font-medium text-warning-text">
             {t('demoBadge')}
+          </span>
+        ) : null}
+        {job.machineTranslation ? (
+          // Tytuł i wyróżniki przetłumaczone na język strony (#33, 0160) — dyskretny znacznik
+          // w wierszu firmy, jak inne stany karty; oryginał jest na stronie oferty.
+          <span className="pp-passport-tag" data-testid="job-card-translation">
+            <Languages className="h-4 w-4" aria-hidden="true" />
+            {job.machineTranslation.origin === 'ai' ? t('machineTranslatedBadge') : t('translatedBadge')}
           </span>
         ) : null}
         {job.isNew ? (

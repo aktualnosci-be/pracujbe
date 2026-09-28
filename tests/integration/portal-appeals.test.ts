@@ -203,6 +203,30 @@ describe('odwołania na PostgreSQL (#25) — panel admina', () => {
     expect(after.decided).toEqual([expect.objectContaining({ id: appeal.id, status: 'reversed', reasoning: REASONING, sameReviewer: false })]);
   });
 
+  it('raport przejrzystości, eksport bez danych osobowych i podgląd retencji dla admina', async () => {
+    actAs(reviewer);
+    const from = new Date(Date.now() - 86_400_000);
+    const to = new Date(Date.now() + 86_400_000);
+    const result = await dsa.getTransparencyReport(from, to);
+    if (result.status !== 'ok') throw new Error('expected ok');
+    expect(result.report.notices.total).toBe(2);
+    expect(result.report.decisions.total).toBe(2);
+    expect(result.report.appeals.total).toBe(2);
+    expect(result.report.restorations.viaAppeal).toBe(1);
+
+    const exported = await dsa.getStatementsExport(from, to);
+    if (exported.status !== 'ok') throw new Error('expected ok');
+    expect(exported.rows).toHaveLength(2);
+    expect(exported.rows.map((r) => r.decision).sort()).toEqual(['job_removed', 'no_action']);
+    expect(Object.keys(exported.rows[0]!)).toEqual([...dsa.DSA_EXPORT_COLUMNS]);
+
+    const retention = await dsa.getRetentionOverview();
+    if (retention.status !== 'ok') throw new Error('expected ok');
+    expect(retention.overview.appealWindowDays).toBeGreaterThan(0);
+    expect(retention.overview.runs).toEqual([]);
+  });
+
+  // Ostatni w pliku: dokłada trzecią sprawę/decyzję/odwołanie, więc nie może wyprzedzać raportu wyżej.
   it('#909: administrator WYŁĄCZONY (is_active = false) nie liczy się jako inny recenzent', async () => {
     // Firma i sprawa niezależne od pozostałych testów tego pliku.
     const company = (await db().admin.query(
@@ -238,28 +262,5 @@ describe('odwołania na PostgreSQL (#25) — panel admina', () => {
     } finally {
       await db().admin.query(`UPDATE public.profiles SET is_active = true WHERE id = $1`, [reviewer.id]);
     }
-  });
-
-  it('raport przejrzystości, eksport bez danych osobowych i podgląd retencji dla admina', async () => {
-    actAs(reviewer);
-    const from = new Date(Date.now() - 86_400_000);
-    const to = new Date(Date.now() + 86_400_000);
-    const result = await dsa.getTransparencyReport(from, to);
-    if (result.status !== 'ok') throw new Error('expected ok');
-    expect(result.report.notices.total).toBe(2);
-    expect(result.report.decisions.total).toBe(2);
-    expect(result.report.appeals.total).toBe(2);
-    expect(result.report.restorations.viaAppeal).toBe(1);
-
-    const exported = await dsa.getStatementsExport(from, to);
-    if (exported.status !== 'ok') throw new Error('expected ok');
-    expect(exported.rows).toHaveLength(2);
-    expect(exported.rows.map((r) => r.decision).sort()).toEqual(['job_removed', 'no_action']);
-    expect(Object.keys(exported.rows[0]!)).toEqual([...dsa.DSA_EXPORT_COLUMNS]);
-
-    const retention = await dsa.getRetentionOverview();
-    if (retention.status !== 'ok') throw new Error('expected ok');
-    expect(retention.overview.appealWindowDays).toBeGreaterThan(0);
-    expect(retention.overview.runs).toEqual([]);
   });
 });

@@ -24,7 +24,16 @@ import { LOCALES, cookieBanner, messages, rejectOptionalCookies } from './fixtur
  *
  * Serwer fixture (`playwright.applications-fixture.config.ts`, tryb full): oferty fikcyjne nie
  * mają flagi demo, więc wyspa `JobFunnelBeacon` wysyła zdarzenia jak przy ofertach z bazy.
+ *
+ * Tryb produktu (#1136, #1166): „Aplikuj teraz” (ApplyModal) istnieje tylko przy serwerze
+ * `RECRUITMENT` (domyślny serwer fixture) — te testy są pomijane przy serwerze ogłoszeniowym.
+ * Przy serwerze ogłoszeniowym (`E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY`, job CI
+ * `e2e-classifieds`) biegną testy przycisku „Aplikuj u pracodawcy” (#1161): kliknięcie w kanał
+ * ogłoszeniodawcy = `apply_started` wyłącznie po zgodzie analitycznej, bez cookies i storage.
+ * Testy bez „Aplikuj” (lista ofert, zgoda po wyświetleniu, kontrola ujemna) biegną w obu trybach.
  */
+
+const classifieds = (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().toUpperCase() !== 'RECRUITMENT';
 
 const JOB_SLUG = 'warehouse-worker-antwerp-1001';
 const JOB_PATH = `/pl/oferty-pracy/${JOB_SLUG}`;
@@ -194,99 +203,139 @@ test.afterEach(async ({ context }) => {
   await context.unrouteAll({ behavior: 'wait' });
 });
 
-for (const locale of LOCALES) {
-  const job = `/${locale}/oferty-pracy/${JOB_SLUG}`;
-  const list = `/${locale}/oferty-pracy`;
+test.describe('tryb rekrutacyjny: „Aplikuj teraz” (ApplyModal)', () => {
+  test.skip(classifieds, 'serwer testowy w trybie ogłoszeniowym — ApplyModal nie istnieje');
 
-  test(`(${locale}) przed decyzją zero żądań lejka: szczegół, „Aplikuj”, zmiana strony i opuszczenie`, async ({ page, context }) => {
-    test.setTimeout(240_000);
-    const captured = await watchFunnel(context);
-    await page.goto(job);
-    await expect(page.getByRole('button', { name: messages(locale).cookies.acceptAll })).toBeVisible();
-    await openApply(page, locale);
-    await settle(page);
-    await page.goto(list);
-    await settle(page);
-    await page.goto(job);
-    await settle(page);
-    expect(captured, 'przed decyzją').toEqual([]);
-  });
+  for (const locale of LOCALES) {
+    const job = `/${locale}/oferty-pracy/${JOB_SLUG}`;
+    const list = `/${locale}/oferty-pracy`;
 
-  test(`(${locale}) po „Tylko niezbędne” zero żądań lejka: „Aplikuj”, zmiana strony, odświeżenie`, async ({ page, context }) => {
-    test.setTimeout(240_000);
-    const captured = await watchFunnel(context);
-    await page.goto(job);
-    await rejectOptionalCookies(page, locale);
-    await openApply(page, locale);
-    await settle(page);
-    await page.goto(list);
-    await settle(page);
-    await page.reload();
-    await settle(page);
-    expect(captured, 'po odmowie').toEqual([]);
-  });
+    test(`(${locale}) przed decyzją zero żądań lejka: szczegół, „Aplikuj”, zmiana strony i opuszczenie`, async ({ page, context }) => {
+      test.setTimeout(240_000);
+      const captured = await watchFunnel(context);
+      await page.goto(job);
+      await expect(page.getByRole('button', { name: messages(locale).cookies.acceptAll })).toBeVisible();
+      await openApply(page, locale);
+      await settle(page);
+      await page.goto(list);
+      await settle(page);
+      await page.goto(job);
+      await settle(page);
+      expect(captured, 'przed decyzją').toEqual([]);
+    });
 
-  test(`(${locale}) restart przeglądarki z zapisaną odmową: zero żądań lejka`, async ({ browser, baseURL }) => {
-    test.setTimeout(240_000);
-    const restarted = await browser.newContext();
-    try {
-      await restarted.addCookies([{ ...PROBE_COOKIE, url: baseURL! }]);
-      await storeConsent(restarted, baseURL!, false);
-      const captured = await watchFunnel(restarted);
-      const tab = await restarted.newPage();
-      await tab.goto(job);
-      await openApply(tab, locale);
-      await settle(tab);
-      await tab.goto(list);
-      await settle(tab);
-      expect(captured, 'po restarcie z odmową').toEqual([]);
-    } finally {
-      await restarted.unrouteAll({ behavior: 'wait' });
-      await restarted.close();
-    }
-  });
+    test(`(${locale}) po „Tylko niezbędne” zero żądań lejka: „Aplikuj”, zmiana strony, odświeżenie`, async ({ page, context }) => {
+      test.setTimeout(240_000);
+      const captured = await watchFunnel(context);
+      await page.goto(job);
+      await rejectOptionalCookies(page, locale);
+      await openApply(page, locale);
+      await settle(page);
+      await page.goto(list);
+      await settle(page);
+      await page.reload();
+      await settle(page);
+      expect(captured, 'po odmowie').toEqual([]);
+    });
 
-  test(`(${locale}) wycofanie zgody: w tej karcie i w drugiej karcie — kolejne zdarzenia nie wychodzą`, async ({ page, context, baseURL }) => {
-    test.setTimeout(240_000);
+    test(`(${locale}) restart przeglądarki z zapisaną odmową: zero żądań lejka`, async ({ browser, baseURL }) => {
+      test.setTimeout(240_000);
+      const restarted = await browser.newContext();
+      try {
+        await restarted.addCookies([{ ...PROBE_COOKIE, url: baseURL! }]);
+        await storeConsent(restarted, baseURL!, false);
+        const captured = await watchFunnel(restarted);
+        const tab = await restarted.newPage();
+        await tab.goto(job);
+        await openApply(tab, locale);
+        await settle(tab);
+        await tab.goto(list);
+        await settle(tab);
+        expect(captured, 'po restarcie z odmową').toEqual([]);
+      } finally {
+        await restarted.unrouteAll({ behavior: 'wait' });
+        await restarted.close();
+      }
+    });
+
+    test(`(${locale}) wycofanie zgody: w tej karcie i w drugiej karcie — kolejne zdarzenia nie wychodzą`, async ({ page, context, baseURL }) => {
+      test.setTimeout(240_000);
+      await storeConsent(context, baseURL!, true);
+      const captured = await watchFunnel(context);
+      const sent = () => captured.map((c) => c.body.event);
+
+      // Kontrola ujemna obserwatora: ze zgodą wyświetlenie wychodzi.
+      await page.goto(job);
+      await expect.poll(() => sent().length).toBe(1);
+
+      // Wycofanie w tej karcie (centrum w stopce): „Aplikuj” nie wysyła apply_started.
+      await setAnalyticsFromFooter(page, locale, false);
+      await openApply(page, locale);
+      await settle(page);
+      expect(sent()).toEqual(['detail_view']);
+
+      // Ponowna zgoda w tej karcie, odświeżenie = nowe wyświetlenie.
+      await setAnalyticsFromFooter(page, locale, true);
+      await page.reload();
+      await expect.poll(() => sent().length).toBe(2);
+
+      // Druga karta wycofuje zgodę; pierwsza (bez zdarzenia zgody w swojej karcie) nie wysyła.
+      const second = await context.newPage();
+      await second.goto(list);
+      await expect.poll(() => sent().filter((e) => e === 'search_appearance').length).toBe(1);
+      await setAnalyticsFromFooter(second, locale, false);
+      await openApply(page, locale);
+      await settle(page);
+      await second.close();
+      expect(sent().sort()).toEqual(['detail_view', 'detail_view', 'search_appearance']);
+
+      // Po wycofaniu: zmiana strony, powrót i odświeżenie — nadal nic.
+      await page.goto(list);
+      await settle(page);
+      await page.goto(job);
+      await openApply(page, locale);
+      await page.reload();
+      await settle(page);
+      expect(captured).toHaveLength(3);
+    });
+  }
+
+  test('po zgodzie: detail_view i apply_started bez cookies i storage (#499)', async ({ page, context, baseURL }) => {
     await storeConsent(context, baseURL!, true);
     const captured = await watchFunnel(context);
-    const sent = () => captured.map((c) => c.body.event);
 
-    // Kontrola ujemna obserwatora: ze zgodą wyświetlenie wychodzi.
-    await page.goto(job);
-    await expect.poll(() => sent().length).toBe(1);
+    await page.goto(JOB_PATH);
+    await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(1);
+    const afterView = await deviceState(page, context);
 
-    // Wycofanie w tej karcie (centrum w stopce): „Aplikuj” nie wysyła apply_started.
-    await setAnalyticsFromFooter(page, locale, false);
-    await openApply(page, locale);
-    await settle(page);
-    expect(sent()).toEqual(['detail_view']);
+    // Otwarcie formularza = `apply_started` (ten sam nonce co wyświetlenie).
+    await page.getByRole('button', { name: messages('pl').jobs.applyNow }).first().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect.poll(() => captured.filter((c) => c.body.event === 'apply_started').length).toBe(1);
+    const afterApply = await deviceState(page, context);
 
-    // Ponowna zgoda w tej karcie, odświeżenie = nowe wyświetlenie.
-    await setAnalyticsFromFooter(page, locale, true);
+    expect(afterApply).toEqual(afterView);
+    expect(afterView).toEqual(captured[0]!.before);
+    // Jedyne cookies w urządzeniu: sonda testu, zgoda i `NEXT_LOCALE` z odpowiedzi strony
+    // (middleware next-intl, niezależne od lejka — opis w docs/legal-drafts/eprivacy-lejek.md).
+    expect(
+      afterView.cookies.map((c) => c.split('=')[0]).filter((n) => n !== 'NEXT_LOCALE').sort(),
+    ).toEqual([PROBE_COOKIE.name, CONSENT_COOKIE].sort());
+    for (const entry of captured) {
+      await expectRequestClean(entry);
+      expect(contains(afterApply, entry.body.nonce), 'nonce nie może trafić do urządzenia').toBe(false);
+    }
+    const [view, apply] = captured;
+    expect(apply!.body.nonce).toBe(view!.body.nonce);
+
+    // Odświeżenie = nowe wyświetlenie z nowym nonce — nic nie przetrwało w urządzeniu.
     await page.reload();
-    await expect.poll(() => sent().length).toBe(2);
-
-    // Druga karta wycofuje zgodę; pierwsza (bez zdarzenia zgody w swojej karcie) nie wysyła.
-    const second = await context.newPage();
-    await second.goto(list);
-    await expect.poll(() => sent().filter((e) => e === 'search_appearance').length).toBe(1);
-    await setAnalyticsFromFooter(second, locale, false);
-    await openApply(page, locale);
-    await settle(page);
-    await second.close();
-    expect(sent().sort()).toEqual(['detail_view', 'detail_view', 'search_appearance']);
-
-    // Po wycofaniu: zmiana strony, powrót i odświeżenie — nadal nic.
-    await page.goto(list);
-    await settle(page);
-    await page.goto(job);
-    await openApply(page, locale);
-    await page.reload();
-    await settle(page);
-    expect(captured).toHaveLength(3);
+    await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(2);
+    expect(captured.filter((c) => c.body.event === 'detail_view')[1]!.body.nonce).not.toBe(view!.body.nonce);
+    // Także żądanie po odświeżeniu: bez cookies w obie strony (i zakończone przed końcem testu).
+    for (const entry of captured) await expectRequestClean(entry);
   });
-}
+});
 
 test('wyświetlenie sprzed decyzji wychodzi dopiero po zgodzie analitycznej, raz', async ({ page, context }) => {
   const captured = await watchFunnel(context);
@@ -302,42 +351,6 @@ test('wyświetlenie sprzed decyzji wychodzi dopiero po zgodzie analitycznej, raz
   await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(1);
   await settle(page);
   expect(captured).toHaveLength(1);
-});
-
-test('po zgodzie: detail_view i apply_started bez cookies i storage (#499)', async ({ page, context, baseURL }) => {
-  await storeConsent(context, baseURL!, true);
-  const captured = await watchFunnel(context);
-
-  await page.goto(JOB_PATH);
-  await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(1);
-  const afterView = await deviceState(page, context);
-
-  // Otwarcie formularza = `apply_started` (ten sam nonce co wyświetlenie).
-  await page.getByRole('button', { name: messages('pl').jobs.applyNow }).first().click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect.poll(() => captured.filter((c) => c.body.event === 'apply_started').length).toBe(1);
-  const afterApply = await deviceState(page, context);
-
-  expect(afterApply).toEqual(afterView);
-  expect(afterView).toEqual(captured[0]!.before);
-  // Jedyne cookies w urządzeniu: sonda testu, zgoda i `NEXT_LOCALE` z odpowiedzi strony
-  // (middleware next-intl, niezależne od lejka — opis w docs/legal-drafts/eprivacy-lejek.md).
-  expect(
-    afterView.cookies.map((c) => c.split('=')[0]).filter((n) => n !== 'NEXT_LOCALE').sort(),
-  ).toEqual([PROBE_COOKIE.name, CONSENT_COOKIE].sort());
-  for (const entry of captured) {
-    await expectRequestClean(entry);
-    expect(contains(afterApply, entry.body.nonce), 'nonce nie może trafić do urządzenia').toBe(false);
-  }
-  const [view, apply] = captured;
-  expect(apply!.body.nonce).toBe(view!.body.nonce);
-
-  // Odświeżenie = nowe wyświetlenie z nowym nonce — nic nie przetrwało w urządzeniu.
-  await page.reload();
-  await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(2);
-  expect(captured.filter((c) => c.body.event === 'detail_view')[1]!.body.nonce).not.toBe(view!.body.nonce);
-  // Także żądanie po odświeżeniu: bez cookies w obie strony (i zakończone przed końcem testu).
-  for (const entry of captured) await expectRequestClean(entry);
 });
 
 test('po zgodzie: lista ofert — search_appearance bez cookies i storage (#499)', async ({ page, context, baseURL }) => {
@@ -364,4 +377,115 @@ test('kontrola ujemna: porównanie stanu urządzenia wykrywa zapis w storage i c
   const after = await deviceState(page, context);
   expect(after).not.toEqual(before);
   expect(contains(after, 'leak')).toBe(true);
+});
+
+/**
+ * Tryb ogłoszeniowy (#1161, #1166) — decyzja produktowa: portal ogłoszeniowy. Szczegół oferty ma
+ * „Aplikuj u pracodawcy” (link do kanału ogłoszeniodawcy) zamiast ApplyModal; kliknięcie liczy
+ * `JobFunnelBeacon` (`applyClicks`) jako `apply_started` — tylko po zgodzie analitycznej.
+ * Oferta 1001 ma kanał e-mail (`mailto:`): domyślna akcja linku jest w teście blokowana
+ * (`preventDefault` w fazie przechwytywania), żeby przeglądarka nie otwierała klienta poczty —
+ * nasłuch lejka (faza bąbelkowania na `document`) działa jak przy prawdziwym kliknięciu.
+ */
+test.describe('tryb ogłoszeniowy: „Aplikuj u pracodawcy”', () => {
+  test.skip(!classifieds, 'serwer testowy w trybie RECRUITMENT (E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY)');
+
+  const employerApply = (page: Page) =>
+    page.getByTestId('employer-apply-box').getByTestId('employer-apply-primary');
+
+  async function blockLinkNavigation(context: BrowserContext) {
+    await context.addInitScript(() => {
+      window.addEventListener(
+        'click',
+        (e) => {
+          if (e.target instanceof Element && e.target.closest('a[data-apply-job]')) e.preventDefault();
+        },
+        true,
+      );
+    });
+  }
+
+  async function clickEmployerApply(page: Page) {
+    const link = employerApply(page);
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('data-apply-job', /.+/);
+    await link.click();
+  }
+
+  test.beforeEach(async ({ context }) => {
+    await blockLinkNavigation(context);
+  });
+
+  for (const locale of LOCALES) {
+    test(`(${locale}) bez zgody zero żądań lejka: kliknięcie przed decyzją, po „Tylko niezbędne”, po odświeżeniu`, async ({ page, context }) => {
+      test.setTimeout(240_000);
+      const captured = await watchFunnel(context);
+      await page.goto(`/${locale}/oferty-pracy/${JOB_SLUG}`);
+      await expect(page.getByRole('button', { name: messages(locale).cookies.acceptAll })).toBeVisible();
+      // ApplyModal nie istnieje w trybie ogłoszeniowym.
+      await expect(page.getByRole('button', { name: messages(locale).jobs.applyNow })).toHaveCount(0);
+      await clickEmployerApply(page);
+      await settle(page);
+      expect(captured, 'przed decyzją').toEqual([]);
+
+      await rejectOptionalCookies(page, locale);
+      await clickEmployerApply(page);
+      await settle(page);
+      await page.reload();
+      await clickEmployerApply(page);
+      await settle(page);
+      expect(captured, 'po odmowie').toEqual([]);
+    });
+  }
+
+  test('kliknięcie przed decyzją nie czeka w kolejce: po zgodzie wychodzi samo wyświetlenie', async ({ page, context }) => {
+    const captured = await watchFunnel(context);
+    await page.goto(JOB_PATH);
+    await clickEmployerApply(page);
+    await settle(page);
+    expect(captured).toEqual([]);
+
+    const t = cookieTexts('pl');
+    await cookieBanner(page).getByRole('button', { name: t.customize, exact: true }).click();
+    const dialog = funnelSettings(page, 'pl');
+    await dialog.getByRole('switch', { name: t.analyticsName }).click();
+    await dialog.getByRole('button', { name: t.save, exact: true }).click();
+    await expect.poll(() => captured.filter((c) => c.body.event === 'detail_view').length).toBe(1);
+    await settle(page);
+    expect(captured.map((c) => c.body.event)).toEqual(['detail_view']);
+  });
+
+  test('po zgodzie: kliknięcie = apply_started bez cookies i storage (#499), po wycofaniu nic', async ({ page, context, baseURL }) => {
+    await storeConsent(context, baseURL!, true);
+    const captured = await watchFunnel(context);
+    const sent = () => captured.map((c) => c.body.event);
+
+    await page.goto(JOB_PATH);
+    await expect.poll(() => sent().filter((e) => e === 'detail_view').length).toBe(1);
+    const afterView = await deviceState(page, context);
+
+    await clickEmployerApply(page);
+    await expect.poll(() => sent().filter((e) => e === 'apply_started').length).toBe(1);
+    const afterClick = await deviceState(page, context);
+
+    expect(afterClick).toEqual(afterView);
+    expect(afterView).toEqual(captured[0]!.before);
+    expect(
+      afterView.cookies.map((c) => c.split('=')[0]).filter((n) => n !== 'NEXT_LOCALE').sort(),
+    ).toEqual([PROBE_COOKIE.name, CONSENT_COOKIE].sort());
+    for (const entry of captured) {
+      await expectRequestClean(entry);
+      expect(contains(afterClick, entry.body.nonce), 'nonce nie może trafić do urządzenia').toBe(false);
+    }
+    const [view, click] = captured;
+    expect(click!.body.nonce).toBe(view!.body.nonce);
+    expect(click!.body.jobIds).toEqual(view!.body.jobIds);
+
+    // Wycofanie zgody w tej karcie (centrum w stopce): kolejne kliknięcia nie wychodzą.
+    await setAnalyticsFromFooter(page, 'pl', false);
+    await clickEmployerApply(page);
+    await clickEmployerApply(page);
+    await settle(page);
+    expect(sent()).toEqual(['detail_view', 'apply_started']);
+  });
 });

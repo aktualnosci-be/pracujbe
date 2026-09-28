@@ -37,6 +37,13 @@ type PageProps = {
   params: Promise<{ locale: string; slug: string }>;
 };
 
+/** Jak w szczególe oferty (`oferty-pracy/[slug]/page.tsx`): jedna linia, granica słowa, wielokropek. */
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max - 1).trimEnd()}…`;
+}
+
 function initials(name: string): string {
   const letters = name
     .trim()
@@ -67,7 +74,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const path = `${BASE_PATH}/${slug}`;
   const url = `${base}/${locale}${path}`;
   const title = t('metaTitle', { name: result.company.name });
-  const description = t('metaDescription', { name: result.company.name });
+  // #647: opis firmy różnicuje profile w wynikach wyszukiwania i podglądach linków — bez niego
+  // wszystkie profile miały identyczny opis z podmienioną tylko nazwą. Fallback zostaje dla
+  // firmy bez opisu (Invariant #8: nic technicznego, sam tłumaczony tekst ogólny).
+  const rawDescription = result.company.description.trim();
+  const description = rawDescription
+    ? truncate(rawDescription, 160)
+    : t('metaDescription', { name: result.company.name });
   const shareImage = brandShareImageUrl(base);
   const languages: Record<string, string> = {};
   for (const supported of routing.locales) {
