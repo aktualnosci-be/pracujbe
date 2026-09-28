@@ -13,6 +13,20 @@ import { cronSecretChecks } from '@/lib/cron/secrets';
 import { emailProviderFromEnv, resendApiKeyFromEnv } from '@/lib/email/transport/select';
 import { errorWebhookFromEnv } from '@/lib/error-webhook/url';
 
+/**
+ * #1115 (DVP-05): `APP_MODE` jest normalizowany (białe znaki na brzegach, wielkość liter), więc
+ * `Production` albo `production ` wklejone w panelu Railway nie degraduje po cichu aplikacji do
+ * demo. Wartość spoza `production`/`demo`/pustej zostaje trybem demo (fail-closed dla funkcji
+ * wymagających produkcji), ale `recognized: false` — widoczne w szczegółach `/api/health`.
+ * `next.config.mjs` (build-time, bez importu TS) powiela tę normalizację — zmieniając ją,
+ * zaktualizuj OBA miejsca.
+ */
+export function parseAppMode(raw: string | undefined): { mode: 'production' | 'demo'; recognized: boolean } {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === 'production') return { mode: 'production', recognized: true };
+  return { mode: 'demo', recognized: value === '' || value === 'demo' };
+}
+
 export const env = {
   /** Publiczny URL aplikacji (kanoniczne linki, e-maile). Fallback: localhost. */
   get siteUrl(): string {
@@ -28,8 +42,7 @@ export const env = {
    * konfiguracji cicho degraduje do trybu demo (fikcyjne panele).
    */
   get appMode(): 'production' | 'demo' {
-    const m = process.env.APP_MODE;
-    return m === 'production' ? 'production' : 'demo';
+    return parseAppMode(process.env.APP_MODE).mode;
   },
   /** Ograniczone połączenie używane wyłącznie przez runtime Better Auth. */
   get authDatabaseUrl(): string | undefined {
