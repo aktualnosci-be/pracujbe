@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
-import { useRouter } from '@/i18n/navigation';
+import { Link, useRouter } from '@/i18n/navigation';
 import { createBreachIncident, updateBreachIncident } from '@/lib/actions/breaches';
 import {
   BREACH_AUTHORITY_DECISIONS,
@@ -138,6 +138,12 @@ export function BreachIncidentForm({
   const [values, setValues] = React.useState<LocalForm>(() => toLocal(initial));
   const [errors, setErrors] = React.useState<BreachFormErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
+  /**
+   * #835: klucz idempotencji trafił na wpis z INNĄ treścią (retry po edycji formularza).
+   * Zamiast po cichu porzucić poprawkę, admin dostaje wybór — zobaczyć istniejący wpis albo
+   * zapisać bieżącą treść formularza jako jego jawną edycję (CAS po wersji).
+   */
+  const [conflict, setConflict] = React.useState<{ id: string; version: number } | null>(null);
   const clientKey = React.useRef<string>('');
   const formRef = React.useRef<HTMLFormElement | null>(null);
   const idBase = React.useId();
@@ -178,6 +184,7 @@ export function BreachIncidentForm({
     }
     setErrors({});
     setFormError(null);
+    setConflict(null);
     if (!clientKey.current) clientKey.current = newKey();
     startTransition(async () => {
       try {
@@ -190,6 +197,11 @@ export function BreachIncidentForm({
               return;
             }
             router.push(`/admin/naruszenia/${res.id}`);
+            return;
+          }
+          if (res.problem === 'clientKeyReused' && res.id && typeof res.existingVersion === 'number') {
+            setConflict({ id: res.id, version: res.existingVersion });
+            setFormError(t('breachErrorClientKeyReused'));
             return;
           }
           handleError(res);
@@ -206,6 +218,33 @@ export function BreachIncidentForm({
         handleError(res);
       } catch {
         // Sieć: ten sam klucz przy ponowieniu (create) — bez duplikatu.
+        setFormError(tRoot(toUserMessageKey('INTERNAL')));
+      }
+    });
+  };
+
+  /** #835: zapisz bieżącą treść formularza jako edycję wpisu znalezionego przez konflikt klucza. */
+  const reconcile = () => {
+    if (disabled || !conflict) return;
+    const form = toForm(values);
+    const found = breachFormErrors(form);
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      setFormError(t('breachFormHasErrors'));
+      focusFirstError(found);
+      return;
+    }
+    setErrors({});
+    setFormError(null);
+    startTransition(async () => {
+      try {
+        const res = await updateBreachIncident(conflict.id, conflict.version, form);
+        if (res.ok) {
+          router.push(`/admin/naruszenia/${conflict.id}`);
+          return;
+        }
+        handleError(res);
+      } catch {
         setFormError(tRoot(toUserMessageKey('INTERNAL')));
       }
     });
@@ -462,6 +501,17 @@ export function BreachIncidentForm({
       <div role="alert" className="min-h-0">
         {formError ? <p className={cn(FORM_ERROR, 'font-semibold')}>{formError}</p> : null}
       </div>
+
+      {conflict ? (
+        <div className={cn(PANEL, 'flex flex-wrap items-center gap-3')}>
+          <Link href={`/admin/naruszenia/${conflict.id}`} className="underline">
+            {t('breachReconcileOpenExisting')}
+          </Link>
+          <button type="button" disabled={pending} className={BTN_PRIMARY} onClick={reconcile}>
+            {pending ? t('confirmSaving') : t('breachReconcileSubmit')}
+          </button>
+        </div>
+      ) : null}
 
       {readOnly ? null : (
         <button type="submit" disabled={pending} className={BTN_PRIMARY}>

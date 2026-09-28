@@ -464,6 +464,7 @@
       "skillsTooMany": "Te veel vaardigheden.",
       "experienceInvalid": "Ongeldig aantal jaren ervaring.",
       "languagesTooMany": "Te veel talen.",
+      "noLanguageConflict": "Je hebt „Werk zonder taalvereiste” aangevinkt, maar de lijst bevat een vereiste taal. Verwijder de vereiste talen of vink het vakje uit.",
       "certificatesTooMany": "Te veel certificaten.",
       "conditionsTooMany": "Te veel voorwaarden.",
       "benefitsTooMany": "Te veel voordelen.",
@@ -489,6 +490,9 @@
       "fr": "Frans",
       "en": "Engels"
     },
+    "machineTranslationNotice": "Automatische vertaling. Oorspronkelijke taal: {language}.",
+    "manualTranslationNotice": "Vertaalde inhoud. Oorspronkelijke taal: {language}.",
+    "translationOriginalLink": "Bekijk het origineel",
     "similarJobsLoadError": "Vergelijkbare vacatures konden niet worden geladen. Deze vacature en solliciteren werken gewoon."
   },
   "landing": {
@@ -1156,10 +1160,6 @@
     "workPermitYes": "Ja, ik heb er een",
     "additionalInfo": "Aanvullende informatie",
     "drivingLicense": "Rijbewijs",
-    "noLicense": "Ik heb er geen",
-    "catB": "Categorie B",
-    "catC": "Categorie C",
-    "catCE": "Categorie C+E",
     "ownCar": "Eigen wagen",
     "yes": "Ja",
     "no": "Nee",
@@ -2356,6 +2356,9 @@
     "breachErrorConflictsWithRisk": "Deze beslissing past niet bij de risicobeoordeling.",
     "breachErrorClosed": "De registerregel is afgesloten. Vernieuw de pagina.",
     "breachErrorStale": "De registerregel is intussen gewijzigd. Vernieuw de pagina en voer je wijzigingen opnieuw in.",
+    "breachErrorClientKeyReused": "Deze registerregel bestaat al met andere inhoud (de vorige poging is gelukt). Open ze of sla je aanpassingen op als bewerking.",
+    "breachReconcileOpenExisting": "Open bestaande registerregel",
+    "breachReconcileSubmit": "Aanpassingen opslaan als bewerking",
     "breachLanguagePl": "Pools",
     "breachLanguageNl": "Nederlands",
     "breachLanguageFr": "Frans",
@@ -3452,6 +3455,7 @@
     "errorValueTooLong": "De waarde is te lang. Maximaal {max} tekens.",
     "errorValueDisallowed": "Verwijder contactgegevens, links, gegevens van andere personen en gevoelige informatie.",
     "errorLanguageInvalid": "De naam van de taal moet 2 tot 40 tekens lang zijn.",
+    "errorLanguageDuplicate": "Dezelfde taal is twee keer geselecteerd met een ander niveau. Vink een van de voorstellen uit of gebruik andere namen.",
     "errorExperienceInvalid": "Vul een aantal jaren van 0 tot 60 in.",
     "errorFieldsInvalid": "Pas de gemarkeerde velden aan voordat je opslaat."
   },

@@ -36,6 +36,8 @@ export default async function AdminLayout({
   const { locale } = await params;
 
   let userName: string | undefined;
+  // #864: prawdziwa sesja Better Auth (nie demo) — panel dostaje `SessionKeepAlive`.
+  let hasSession = false;
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
@@ -46,8 +48,13 @@ export default async function AdminLayout({
     if (identity.role !== 'admin') {
       notFound();
     }
+    hasSession = true;
     userName = displayName(await readOwnProfileSummary(identity));
   }
 
-  return <AdminShell userName={userName}>{children}</AdminShell>;
+  return (
+    <AdminShell userName={userName} keepSessionAlive={hasSession}>
+      {children}
+    </AdminShell>
+  );
 }

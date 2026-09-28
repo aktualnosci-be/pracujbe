@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
+import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { AdminFeedbackProvider } from '@/components/admin/AdminFeedback';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 
@@ -50,9 +51,15 @@ export interface AdminShellProps {
   children: React.ReactNode;
   /** Nazwa zalogowanego admina (z sesji); brak → etykieta i18n `admin.adminName`. */
   userName?: string;
+  /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
+  keepSessionAlive?: boolean;
 }
 
-export function AdminShell({ children, userName }: AdminShellProps): React.JSX.Element {
+export function AdminShell({
+  children,
+  userName,
+  keepSessionAlive,
+}: AdminShellProps): React.JSX.Element {
   const t = useTranslations('admin');
   const pathname = usePathname();
 
@@ -99,6 +106,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
       user={{ name: displayName, subtitle: t('brandTag'), initials: initialsOf(displayName) }}
       showNotifications={false}
     >
+      {keepSessionAlive ? <SessionKeepAlive /> : null}
       <AdminFeedbackProvider>{children}</AdminFeedbackProvider>
     </DashboardShell>
   );

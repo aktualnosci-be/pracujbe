@@ -385,6 +385,35 @@ describe('prod smoke — nagłówki bezpieczeństwa (LAUNCH_CHECKLIST §12)', ()
     expect(securityHeaderProblems(headers, { https: false, expectMode: 'production' })).not.toContain(`brak HSTS z max-age ≥ ${HSTS_MIN_MAX_AGE}`);
   });
 
+  it('#900: duplikat wymaganej dyrektywy CSP ze słabszą pierwszą wartością jest problemem', () => {
+    // CSP Level 3: przeglądarka stosuje wyłącznie PIERWSZE wystąpienie danej nazwy dyrektywy.
+    // Słaba wartość na pierwszym miejscu obowiązuje, mimo że gdzieś dalej w nagłówku występuje
+    // też poprawna — samo sprawdzenie „czy wymagany tekst jest obecny” to false positive.
+    const headers = new Headers({
+      'content-security-policy':
+        "frame-ancestors *; object-src *; base-uri *; default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'strict-transport-security': `max-age=${HSTS_MIN_MAX_AGE}`,
+    });
+    const problems = securityHeaderProblems(headers, { https: true, expectMode: 'production' });
+    expect(problems).toEqual(["CSP bez frame-ancestors 'none'", "CSP bez object-src 'none'", "CSP bez base-uri 'self'"]);
+  });
+
+  it('kontrola ujemna: poprawna kolejność (bez duplikatów) wciąż przechodzi', () => {
+    // Ten sam zestaw dyrektyw, ale bez duplikatów przed poprawnymi wartościami — musi zostać zielony,
+    // żeby test #900 nie stał się fałszywie zbyt surowy.
+    const headers = new Headers({
+      'content-security-policy': "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'strict-transport-security': `max-age=${HSTS_MIN_MAX_AGE}`,
+    });
+    expect(securityHeaderProblems(headers, { https: true, expectMode: 'production' })).toEqual([]);
+  });
+
   it('atrapa: strona bez X-Frame-Options = kod 1 ze ścieżką', async () => {
     site = await startFakeSite({ faults: { '/fr/kontakt': { dropHeader: 'x-frame-options' } } });
     const logs = logger();

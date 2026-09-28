@@ -15,6 +15,7 @@ import {
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
+import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 
@@ -55,6 +56,8 @@ export interface CandidateShellProps {
   unreadMessages?: number;
   /** Nazwa zalogowanego kandydata (topbar). Puste → neutralna etykieta „Twoje konto". */
   userName?: string;
+  /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
+  keepSessionAlive?: boolean;
 }
 
 /** Inicjały z nazwy (max 2 litery); „•", gdy brak nazwy (P1-09: nigdy zmyślona osoba). */
@@ -76,13 +79,19 @@ export function CandidateShell({
   notificationError,
   unreadMessages,
   userName,
+  keepSessionAlive,
 }: CandidateShellProps): React.JSX.Element {
   const td = useTranslations('dashboard');
   const pathname = usePathname();
 
   // Onboarding ma własny (lekki) layout — nie owijaj panelem.
   if (pathname === '/candidate/onboarding' || pathname.startsWith('/candidate/onboarding/')) {
-    return <>{children}</>;
+    return (
+      <>
+        {keepSessionAlive ? <SessionKeepAlive /> : null}
+        {children}
+      </>
+    );
   }
 
   const nav: DashboardNavItem[] = [
@@ -118,6 +127,7 @@ export function CandidateShell({
       unreadMessages={unreadMessages}
       notificationsHref="/candidate/powiadomienia"
     >
+      {keepSessionAlive ? <SessionKeepAlive /> : null}
       {children}
     </DashboardShell>
   );

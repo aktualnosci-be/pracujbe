@@ -6,13 +6,22 @@
  * nawiasów kątowych, najwyżej 2048 znaków po przycięciu białych znaków. Pusty tekst = brak
  * adresu (czyszczenie pola), nie błąd walidacji — o tym decyduje osobno `required`.
  *
- * Ten sam wzorzec w Zod (`src/lib/validation/company.ts`) i w bazie — jedno źródło reguły,
- * żeby formularz i baza zgadzały się co do tego, co jest poprawnym adresem (test
- * `company-links.test.ts` porównuje oba 1:1).
+ * Port (#745): baza (`public_https_url`) wciąż dopuszcza dowolne 1–5 cyfr, więc `:0`/`:65536`/
+ * `:99999` przechodzą jej CHECK — to osobna zmiana bazy (migracja), świadomie odłożona. Tutaj,
+ * na jedynej ścieżce, którą pracodawca faktycznie zapisuje nowy adres (ten Zod przed RPC
+ * `submit_company_links`), port musi być prawidłowym portem TCP `1–65535`: brak portu jest
+ * nadal dozwolony, `:0` i wartości > 65535 są odrzucane, zanim adres w ogóle trafi do bazy.
+ *
+ * Ten sam wzorzec w Zod (`src/lib/validation/company.ts`) — jedno źródło reguły dla formularza
+ * (test `company-links.test.ts` sprawdza granice portu 1:1).
  */
 
-const HTTPS_URL_RE =
-  /^https:\/\/[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+(:[0-9]{1,5})?([/?#][A-Za-z0-9._~!$&'()*+,;=:@%/?#-]*)?$/;
+// Port TCP 1–65535 (bez 0), bez wiodących zer: 1–9999 wprost, 10000–65535 rozpisane po cyfrach.
+const PORT_RE = '(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3})';
+
+const HTTPS_URL_RE = new RegExp(
+  `^https://[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+(:${PORT_RE})?([/?#][A-Za-z0-9._~!$&'()*+,;=:@%/?#-]*)?$`,
+);
 
 export const COMPANY_URL_MAX_LENGTH = 2048;
 const COMPANY_URL_MIN_LENGTH = 12;

@@ -78,4 +78,47 @@ describe('GET /api/health — cache + single-flight ping bazy (#600)', () => {
     await Promise.all([queryMock(), queryMock(), queryMock()]);
     expect(queryMock).toHaveBeenCalledTimes(3);
   });
+
+  it('po lokalnym timeoncie trwające zapytanie NADAL blokuje nowe zapytanie, dopóki się nie zakończy (#645)', async () => {
+    // Regresja #645: `pool.query('SELECT 1')` przekraczające 2 s lokalnego timeoutu nie może być
+    // „zgubione” dla single-flight — kolejne, pozornie odrębne żądanie w tym oknie nie powinno
+    // otwierać drugiego zapytania na tej samej (być może zablokowanej) puli.
+    vi.useFakeTimers();
+    try {
+      const GET = await loadGet();
+      let resolveQuery!: (value: unknown) => void;
+      queryMock.mockImplementation(
+        () => new Promise((resolve) => { resolveQuery = resolve; }),
+      );
+
+      const first = GET(request());
+      // Zanim `pool.query` (za dynamicznym importem) w ogóle zostanie wywołane.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(queryMock).toHaveBeenCalledTimes(1);
+
+      // Lokalny timeout żądania mija — odpowiedź wraca jako niedostępna — ale zapytanie nadal trwa.
+      await vi.advanceTimersByTimeAsync(2_000);
+      const firstResponse = await first;
+      expect(firstResponse.status).toBe(503);
+
+      // Nowe, „odrębne” żądanie w tym samym oknie NIE otwiera drugiego zapytania (regresja #645).
+      const second = GET(request());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(queryMock).toHaveBeenCalledTimes(1);
+
+      // Zapytanie faktycznie się kończy — dopiero teraz single-flight zwalnia wpis.
+      resolveQuery({ rows: [{ ok: 1 }] });
+      const secondResponse = await second;
+      expect(secondResponse.status).toBe(200);
+      expect(queryMock).toHaveBeenCalledTimes(1);
+
+      // Kolejne, naprawdę odrębne żądanie po zakończeniu poprzedniego zapytania — nowe zapytanie.
+      queryMock.mockResolvedValueOnce({ rows: [{ ok: 1 }] });
+      const third = await GET(request());
+      expect(third.status).toBe(200);
+      expect(queryMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

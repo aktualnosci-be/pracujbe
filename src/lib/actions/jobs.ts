@@ -12,6 +12,7 @@ import { execute, jsonArg, queryOne, queryRows, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
+import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import {
   buildScreeningReviewNotices,
   type ScreeningReviewNotice,
@@ -539,6 +540,9 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
       return null;
     });
     if (outcome) return { ok: false, error: outcome };
+    // #775: publiczne strony (ISR) muszą pokazać nowo opublikowaną ofertę od razu, nie
+    // dopiero po wygaśnięciu okna rewalidacji.
+    revalidatePublicJobPaths();
     return { ok: true };
   } catch (error) {
     const code = failureCode(error);
@@ -604,6 +608,9 @@ export async function setJobStatus(
     // Lista ofert firmy i publiczne widoki muszą pokazać nowy stan.
     revalidatePath('/employer/oferty');
     revalidatePath('/employer');
+    // #775: pause/resume/close/reopen zmieniają, czy oferta jest publicznie widoczna —
+    // bez tego wywołania stary stan (albo brakująca `JobPosting`) mógł zostać w cache ISR.
+    revalidatePublicJobPaths();
     return { ok: true, status: typeof data === 'string' ? data : undefined };
   } catch (error) {
     return { ok: false, error: failureCode(error) };
