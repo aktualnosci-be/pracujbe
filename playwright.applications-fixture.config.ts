@@ -96,6 +96,8 @@ export default defineConfig({
     reuseExistingServer: false,
     env: {
       PLAYWRIGHT_APPLICATIONS_FIXTURE: mode,
+      // #1136: przepływy rekrutacyjne — tryb jawnie włączony (domyślnie = tryb ogłoszeniowy).
+      PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT',
       NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require="${requireShim}"`].filter(Boolean).join(' '),
     },
   },

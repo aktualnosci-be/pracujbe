@@ -732,6 +732,7 @@
     "jobNotDraft": "Cette offre est déjà publiée. Modifiez-la avec « Modifier » dans la liste des offres.",
     "billingUnavailable": "Les paiements sont momentanément indisponibles. Réessayez plus tard.",
     "billingDisabled": "Pracuj.be est actuellement gratuit. Les paiements et les forfaits ne sont pas disponibles.",
+    "recruitmentDisabled": "Cette fonctionnalité n’est pas disponible sur Pracuj.be.",
     "checkoutInProgress": "Un paiement est déjà en cours. Terminez-le ou réessayez dans un instant.",
     "entitlementLimit": "Vous avez atteint la limite d'offres actives de votre formule. Changez de formule pour en publier davantage.",
     "activeJobLimit": "La limite d'offres actives de l'entreprise est atteinte. Mettez en pause ou clôturez une offre pour en publier une nouvelle.",

@@ -732,6 +732,7 @@
     "jobNotDraft": "Ta oferta jest już opublikowana. Popraw ją przyciskiem „Edytuj” na liście ofert.",
     "billingUnavailable": "Płatności są chwilowo niedostępne. Spróbuj ponownie później.",
     "billingDisabled": "Pracuj.be jest obecnie bezpłatny. Płatności i pakiety nie są dostępne.",
+    "recruitmentDisabled": "Ta funkcja nie jest dostępna w Pracuj.be.",
     "checkoutInProgress": "Masz już rozpoczętą płatność. Dokończ ją lub spróbuj ponownie za chwilę.",
     "entitlementLimit": "Osiągnięto limit aktywnych ofert w Twoim planie. Zmień plan, aby opublikować więcej.",
     "activeJobLimit": "Osiągnięto limit aktywnych ofert dla firmy. Wstrzymaj lub zamknij jedną z ofert, aby opublikować kolejną.",

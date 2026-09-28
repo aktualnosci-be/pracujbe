@@ -732,6 +732,7 @@
     "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
     "billingDisabled": "Pracuj.be is momenteel gratis. Betalingen en pakketten zijn niet beschikbaar.",
+    "recruitmentDisabled": "Deze functie is niet beschikbaar op Pracuj.be.",
     "checkoutInProgress": "Je hebt al een betaling gestart. Rond die af of probeer het zo opnieuw.",
     "entitlementLimit": "Je hebt de limiet van actieve vacatures in je plan bereikt. Upgrade om er meer te plaatsen.",
     "activeJobLimit": "Het maximale aantal actieve vacatures voor dit bedrijf is bereikt. Pauzeer of sluit een vacature om een nieuwe te publiceren.",
