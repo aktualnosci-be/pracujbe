@@ -7,6 +7,7 @@ import type { Locale } from '@/i18n/routing';
 import { Logo } from '@/components/brand/Logo';
 import { getCurrentIdentity } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Layout kreatora onboardingu kandydata (makieta 06).
@@ -33,6 +34,9 @@ export default async function OnboardingLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  // #1142 — decyzja produktowa: portal ogłoszeniowy. Konto nie buduje profilu zawodowego:
+  // kreator (każdy `?step=`) = 404 przed odczytem sesji i danych.
+  notFoundUnlessRecruitment();
 
   if (isPortalAuthConfigured() && !(await getCurrentIdentity())) {
     redirect({ href: '/logowanie', locale: locale as Locale });

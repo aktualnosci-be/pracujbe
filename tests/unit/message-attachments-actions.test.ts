@@ -17,6 +17,10 @@ import {
 } from '@/lib/files/message-attachments';
 import { getAttachmentServiceDeps, readSessionUserId } from '@/lib/files/runtime';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 /** Granica akcji i trasy pobrania załączników (0119): tożsamość tylko z sesji, odmowy bez szczegółów. */
 

@@ -154,7 +154,8 @@ describe('CandidateSavedSearchJobs', () => {
       ['/oferty-pracy?keyword=magazynier', 'nl'],
       ['/oferty-pracy?category=driver', 'fr'],
     ]);
-    expect(screen.getByRole('link', { name: t.dashboard.navSearches })).toHaveAttribute('href', '/candidate/wyszukiwania');
+    // Odnośnik do zarządzania wyszukiwaniami jest w panelu wyszukiwań pulpitu konta — tu go nie dublujemy.
+    expect(screen.queryByRole('link', { name: t.dashboard.navSearches })).toBeNull();
     expect(container.textContent).not.toMatch(/%/);
     expect(screen.queryByRole('progressbar')).toBeNull();
   });

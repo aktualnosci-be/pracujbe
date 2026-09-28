@@ -12,7 +12,7 @@ import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { captureError } from '@/lib/error-report';
 import { getJobs, type JobListItem } from '@/lib/jobs';
 import { parseJobListQuery, type FlatSearchParams } from '@/lib/job-list-query';
-import { loadMySavedSearches, type SavedSearch } from '@/lib/data/saved-searches';
+import { loadMySavedSearches, type SavedSearch, type SavedSearchesLoad } from '@/lib/data/saved-searches';
 
 /** Ile najnowszych zapisanych wyszukiwań bierzemy pod uwagę (koszt: jedno zapytanie na wyszukiwanie). */
 export const DASHBOARD_SEARCHES_LIMIT = 3;
@@ -60,9 +60,12 @@ function byNewest(a: JobListItem, b: JobListItem): number {
   return Date.parse(b.publishedAt) - Date.parse(a.publishedAt) || b.id.localeCompare(a.id);
 }
 
-export async function loadSavedSearchJobs(): Promise<SavedSearchJobsLoad> {
+/**
+ * `preloaded` — już odczytana lista wyszukiwań (pulpit konta czyta ją sam), żeby nie pytać bazy drugi raz.
+ */
+export async function loadSavedSearchJobs(preloaded?: SavedSearchesLoad): Promise<SavedSearchJobsLoad> {
   try {
-    const saved = await loadMySavedSearches();
+    const saved = preloaded ?? (await loadMySavedSearches());
     if (saved.status === 'error') return { status: 'error' };
     const searches = saved.searches.slice(0, DASHBOARD_SEARCHES_LIMIT);
     if (searches.length === 0) return { status: 'none' };

@@ -17,8 +17,8 @@ import {
 } from '@/components/dashboard/panel-styles';
 
 /**
- * „Nowe oferty z Twoich wyszukiwań” na pulpicie kandydata w trybie ogłoszeniowym (decyzja
- * produktowa: portal ogłoszeniowy) — w miejscu dawnych polecanych ofert. Bez wyniku i dopasowania:
+ * „Nowe oferty z Twoich wyszukiwań” na pulpicie konta kandydata w trybie ogłoszeniowym
+ * (`CandidateAccountDashboard`; decyzja produktowa: portal ogłoszeniowy) — w miejscu dawnych polecanych ofert. Bez wyniku i dopasowania:
  * oferty zwrócone przez publiczną listę dla filtrów zapisanych wyszukiwań. `result === null` =
  * tryb rekrutacyjny (sekcji nie ma). Trzy różne stany: brak zapisanych wyszukiwań (zachęta),
  * błąd odczytu (ponowienie) i brak ofert.
@@ -46,10 +46,6 @@ export async function CandidateSavedSearchJobs({
     <section className={PANEL} data-testid="candidate-saved-search-jobs">
       <div className={SECTION_HEAD}>
         <h2 className={PANEL_H2}>{td('savedSearchJobsTitle')}</h2>
-        <Link href="/candidate/wyszukiwania" className={TEXT_LINK}>
-          {td('navSearches')}
-          <ArrowRight className="size-3.5" aria-hidden="true" />
-        </Link>
       </div>
       {result.status === 'error' ? (
         <CandidateSectionError message={td('savedSearchJobsError')} retry={tc('retry')} />

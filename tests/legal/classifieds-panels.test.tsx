@@ -3,7 +3,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as candidateData from '@/lib/data/candidate';
-import * as savedSearchJobs from '@/lib/data/candidate-saved-search-jobs';
 import * as employerData from '@/lib/data/employer';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
 import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
@@ -55,18 +54,10 @@ vi.mock('@/components/employer/SendOfferButton', () => ({ SendOfferButton: () =>
 // Sekcje matchingu (#1133/#1139, osobny PR) — asynchroniczne komponenty serwerowe; tu znaczniki.
 vi.mock('@/components/employer/EmployerTopMatched', () => ({ EmployerTopMatched: () => null }));
 vi.mock('@/components/candidate/CandidateRecommendedPreview', () => ({ CandidateRecommendedPreview: () => null }));
-// Skrót statystyk ogłoszeń i oferty z zapisanych wyszukiwań (tryb ogłoszeniowy) — znaczniki; ich treść
-// pokrywają unit `classifieds-employer-stats` i `classifieds-candidate-saved-search-jobs`.
+// Skrót statystyk ogłoszeń (tryb ogłoszeniowy) — znacznik; treść pokrywa unit `classifieds-employer-stats`.
 vi.mock('@/components/employer/EmployerListingStats', () => ({
   EmployerListingStats: ({ top }: { top: { status: string } }) =>
     top.status === 'disabled' ? null : <span data-testid="listing-stats" />,
-}));
-vi.mock('@/components/candidate/CandidateSavedSearchJobs', () => ({
-  CandidateSavedSearchJobs: ({ result }: { result: unknown }) =>
-    result === null ? null : <span data-testid="saved-search-jobs" />,
-}));
-vi.mock('@/lib/data/candidate-saved-search-jobs', () => ({
-  loadSavedSearchJobs: vi.fn(async () => ({ status: 'none' })),
 }));
 vi.mock('@/components/employer/EmployerOverviewStats', () => ({ EmployerOverviewStats: () => null }));
 vi.mock('@/components/employer/EmployerFunnelSection', () => ({ EmployerFunnelSection: () => null }));
@@ -148,25 +139,13 @@ describe('tryb ogłoszeniowy (domyślny)', () => {
   });
 });
 
-describe('tryb ogłoszeniowy: pulpity zamiast sekcji rekrutacyjnych', () => {
+describe('tryb ogłoszeniowy: pulpit pracodawcy zamiast sekcji rekrutacyjnych', () => {
   it('pulpit pracodawcy: skrót statystyk ogłoszeń w miejscu „Top dopasowani”', async () => {
     await renderEmployerDashboard();
     expect(screen.getByTestId('listing-stats')).toBeInTheDocument();
     // Podtytuł bez „rekrutacji”.
     expect(screen.getByText('employerGreetingSubListingGeneric')).toBeInTheDocument();
     expect(screen.queryByText('employerGreetingSubGeneric')).toBeNull();
-  });
-
-  it('pulpit kandydata: oferty z zapisanych wyszukiwań w miejscu polecanych', async () => {
-    await renderCandidateDashboard();
-    expect(savedSearchJobs.loadSavedSearchJobs).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('saved-search-jobs')).toBeInTheDocument();
-    // Stat „Nowe oferty” bez obietnicy dopasowania.
-    expect(screen.getByText('newJobsSubListing')).toBeInTheDocument();
-    expect(screen.queryByText('newJobsSub')).toBeNull();
-    // Wstęp bez aplikacji i propozycji.
-    expect(screen.getByText('candidateIntroListing')).toBeInTheDocument();
-    expect(screen.queryByText('candidateIntro')).toBeNull();
   });
 });
 
@@ -201,15 +180,9 @@ describe('kontrola ujemna: tryb RECRUITMENT', () => {
     expect(screen.getByTestId('applications-preview')).toBeInTheDocument();
   });
 
-  it('pulpity: bez skrótu statystyk ogłoszeń i bez ofert z zapisanych wyszukiwań', async () => {
+  it('pulpit pracodawcy: bez skrótu statystyk ogłoszeń, stary podtytuł', async () => {
     await renderEmployerDashboard();
     expect(screen.queryByTestId('listing-stats')).toBeNull();
     expect(screen.getByText('employerGreetingSubGeneric')).toBeInTheDocument();
-    cleanup();
-    await renderCandidateDashboard();
-    expect(savedSearchJobs.loadSavedSearchJobs).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('saved-search-jobs')).toBeNull();
-    expect(screen.getByText('newJobsSub')).toBeInTheDocument();
-    expect(screen.getByText('candidateIntro')).toBeInTheDocument();
   });
 });

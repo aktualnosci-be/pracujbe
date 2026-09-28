@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ErrorCodes, toUserMessageKey } from '@/lib/errors';
 import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
+import { CLASSIFIEDS_CANDIDATE_NAV, candidateNavKeys } from '@/lib/candidate-nav';
 import {
   PORTAL_LEGAL_MODE_ENV,
   RECRUITMENT_FEATURES,
@@ -119,7 +120,10 @@ const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'candidate/aplikacje', status: 'enforced', issue: 1144 },
   { segment: 'candidate/propozycje', status: 'enforced', issue: 1141 },
   { segment: '(auth)/aplikacja', status: 'enforced', issue: 1132 },
-  { segment: 'candidate/profil/import-cv', status: 'pending', issue: 1129 },
+  { segment: 'candidate/onboarding', status: 'enforced', issue: 1142 },
+  { segment: 'candidate/profil/import-cv', status: 'enforced', issue: 1138 },
+  { segment: 'candidate/wiadomosci', status: 'enforced', issue: 1134 },
+  { segment: 'employer/wiadomosci', status: 'enforced', issue: 1134 },
   { segment: 'admin/pytania', status: 'enforced', issue: 1137 },
 ];
 
@@ -387,6 +391,142 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
     expect(migrations.filter((f) => notifiesFromMatches(read(`supabase/migrations/${f}`)))).toEqual([]);
     // Kontrola ujemna: taki wzorzec jest wykrywany.
     expect(notifiesFromMatches("select m.job_id from public.matches m; perform public.enqueue_email('jobMatch')")).toBe(true);
+  });
+});
+
+/**
+ * Konto kandydata nie tworzy profilu zawodowego (#1142, migracja 0175). Zachowanie (akcja bez
+ * zapytań, render pulpitu, nawigacja) sprawdza `tests/unit/classifieds-candidate-account.test.tsx`,
+ * baza — `supabase/tests/rls.sql` sekcja CA1142 (kontrola ujemna: bez strażnika krok 3 zapisuje).
+ */
+describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
+  const account = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .filter((sql) => sql.includes('create or replace function public.ensure_candidate_profile()'))
+    .at(-1) ?? '';
+  /** Najnowsza definicja `ensure_candidate_profile` zaczyna się od strażnika trybu. */
+  const ensureGuarded = (sql: string) => {
+    const fn = sql.slice(sql.lastIndexOf('create or replace function public.ensure_candidate_profile()'));
+    const guard = fn.indexOf('recruitment_write_allowed()');
+    return guard > 0 && guard < fn.indexOf('insert into public.candidate_profiles');
+  };
+
+  it('ensure_candidate_profile (wołane przez każde RPC profilu) ma strażnik trybu', () => {
+    expect(ensureGuarded(account)).toBe(true);
+    for (const t of ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates']) {
+      expect(account, t).toContain(`'${t}'`);
+    }
+  });
+
+  it('kontrola ujemna: definicja bez strażnika jest wykrywana', () => {
+    expect(ensureGuarded(account.replace(/if not public\.recruitment_write_allowed\(\) then[\s\S]*?end if;/, ''))).toBe(false);
+  });
+
+  it('saveOnboardingStep i strona profilu mają bramkę trybu', () => {
+    const action = read('src/lib/actions/onboarding.ts');
+    const body = action.slice(action.indexOf('export async function saveOnboardingStep('));
+    expect(body.indexOf("isRecruitmentEnabled()")).toBeGreaterThan(0);
+    expect(body.indexOf("isRecruitmentEnabled()")).toBeLessThan(body.indexOf('validateStep('));
+    expect(read('src/app/[locale]/candidate/profil/page.tsx')).toMatch(/notFoundUnlessRecruitment\(\)/);
+  });
+
+  it('nawigacja w trybie ogłoszeniowym = pulpit, zapisane oferty, zapisane wyszukiwania, ustawienia', () => {
+    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'settings']);
+    expect(candidateNavKeys(false)).toBe(CLASSIFIEDS_CANDIDATE_NAV);
+  });
+});
+
+describe('powiadomienia i e-maile bez zdarzeń rekrutacyjnych (#1145)', () => {
+  const sql = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .filter((s) => s.includes('function public.skip_recruitment_notification()'))
+    .at(-1) ?? '';
+
+  it('trigger BEFORE INSERT na notifications pomija typy procesu w trybie ogłoszeniowym', () => {
+    expect(sql).toMatch(/create trigger trg_aa_recruitment_mode before insert on public\.notifications/);
+    for (const t of ['application_received', 'application_status_changed', 'offer_received',
+      'offer_status_changed', 'message_received', 'job_terms']) {
+      expect(sql, t).toContain(`'${t}'`);
+    }
+    expect(sql).toMatch(/p_type = 'job_match' and p_entity_type is distinct from 'saved_search'/);
+  });
+  // Lista szablonów SQL ↔ TS, cele linków, preferencje, teksty: tests/unit/classifieds-notifications.test.ts.
+});
+
+/**
+ * Wiadomości i CV (#1134, #1138). Zachowanie (zero zapytań, bez bucketu, bez modelu) sprawdza
+ * `tests/unit/classifieds-messaging-cv-off.test.ts`; baza — `rls.sql` sekcje CL1128/CL174.
+ */
+describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', () => {
+  /** Każda eksportowana akcja pliku zaczyna się od bramki trybu (pierwsza instrukcja ciała). */
+  function ungatedActions(src: string, feature: string, names: readonly string[]): string[] {
+    return names.filter((name) => {
+      const start = src.indexOf(`export async function ${name}(`);
+      if (start < 0) return true;
+      const body = src.slice(src.indexOf('{\n', src.indexOf(')', start)) + 2).trimStart();
+      return !(body.startsWith(`if (messagingOff())`)
+        || body.startsWith(`if (!isRecruitmentEnabled('${feature}'))`)
+        || body.startsWith('// #1138') && body.includes(`if (!isRecruitmentEnabled('${feature}'))`));
+    });
+  }
+
+  it('rozmowa kandydat–pracodawca nie może zostać rozpoczęta: akcje wiadomości i załączników mają bramkę na starcie', () => {
+    expect(ungatedActions(read('src/lib/actions/messages.ts'), 'messaging',
+      ['openConversation', 'sendMessage', 'markConversationRead', 'loadOlderMessages'])).toEqual([]);
+    expect(ungatedActions(read('src/lib/actions/message-attachments.ts'), 'messaging',
+      ['uploadMessageAttachment', 'discardMessageAttachment', 'prepareMessageAttachmentDownload'])).toEqual([]);
+  });
+
+  it('kontrola ujemna: akcja bez bramki na starcie jest wykrywana', () => {
+    const src = read('src/lib/actions/messages.ts').replace(
+      /(export async function sendMessage\([\s\S]*?\{\n)\s*if \(messagingOff\(\)\) return DISABLED;\n/, '$1');
+    expect(ungatedActions(src, 'messaging', ['sendMessage'])).toEqual(['sendMessage']);
+  });
+
+  it('/api/files/message/<id>: 404 przed sesją i bucketem', () => {
+    expect(read('src/app/api/files/message/[id]/route.ts'))
+      .toMatch(/\): Promise<Response> \{\s*if \(!isRecruitmentEnabled\('messaging'\)\) return emptyAttachmentResponse\(404\);/);
+  });
+
+  it('nawigacja paneli bez „Wiadomości” poza trybem rekrutacyjnym; szczegół oferty bez kontaktu przez platformę', () => {
+    // Panel kandydata: lista pozycji z jednego źródła `candidateNavKeys` (#1142) — „messages” tylko w pełnym panelu.
+    expect(read('src/components/candidate/CandidateShell.tsx')).toMatch(/candidateNavKeys\(recruitmentEnabled\)/);
+    expect([...candidateNavKeys(false)]).not.toContain('messages');
+    expect([...candidateNavKeys(true)]).toContain('messages');
+    expect(read('src/components/employer/EmployerShell.tsx'))
+      .toMatch(/\.\.\.\(recruitmentEnabled \? \[\{ href: HREF\.messages,/);
+    const page = read('src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx');
+    expect(page).toMatch(/\{messagingOn \? t\('contactViaPlatform'\) : t\('employerApply\.contact'\)\}/);
+    expect(page).toMatch(/\{!messagingOn \|\| job\.isDemo \|\| !recruitment \? null : \(/);
+  });
+
+  it('CV nie może zostać przesłane: akcja i serwis mają bramkę; pobranie/usunięcie bez bramki', () => {
+    const action = read('src/lib/actions/files.ts');
+    expect(ungatedActions(action, 'cvAccess', ['uploadCandidateCv'])).toEqual([]);
+    expect(ungatedActions(action, 'cvAccess', ['prepareCvDownload', 'deleteCandidateFile']))
+      .toEqual(['prepareCvDownload', 'deleteCandidateFile']);
+    expect(read('src/lib/files/candidate-cv.ts'))
+      .toMatch(/storeCandidateCv\([\s\S]*?\): Promise<CvUploadResult> \{\s*\/\/ #1138[^\n]*\n\s*if \(!isRecruitmentEnabled\('cvAccess'\)\)/);
+  });
+
+  it('AI CV import niedostępny: konfiguracja i każda akcja sprawdzają tryb przed flagą AI', () => {
+    expect(read('src/lib/cv-import/config.ts'))
+      .toMatch(/cvImportProvider\(\): CvImportProvider \| null \{\s*if \(!isRecruitmentEnabled\('cvImport'\)\) return null;/);
+    expect(ungatedActions(read('src/lib/actions/cv-import.ts'), 'cvImport',
+      ['prepareCvImportAction', 'proposeFromCvAction', 'applyCvProposals'])).toEqual([]);
+  });
+
+  it('baza (0174): strażnik plików CV i nakładka apply_candidate_cv_proposals, list newMessage wygaszany', () => {
+    const migration = readdirSync(join(ROOT, 'supabase/migrations'))
+      .map((f) => read(`supabase/migrations/${f}`))
+      .find((sql) => sql.includes('function public.enforce_recruitment_cv_file()')) ?? '';
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode_cv before insert or update on public\.files/);
+    expect(migration).toMatch(/perform public\.assert_recruitment_enabled\(\);\s*return public\.apply_candidate_cv_proposals_impl\(/);
+    expect(migration).toMatch(/when p_template = 'newMessage' and not public\.recruitment_enabled\(\)\s*then 'suppressed_recruitment_disabled'/);
+    const rls = read('supabase/tests/rls.sql');
+    for (const id of ['CL174-1c', 'CL174-2', 'CL174-2b', 'CL174-3b', 'CL174-4', 'CL174-N1', 'CL174-N2']) {
+      expect(rls, id).toContain(`'${id} `);
+    }
   });
 });
 

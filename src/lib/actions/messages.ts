@@ -11,6 +11,7 @@ import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
 import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
@@ -24,7 +25,13 @@ import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
  * strona firmowa rozmowy (aktywny członek recruiter+) i uczestnictwo ustala baza.
  *
  * Tryb demo (brak konfiguracji bazy/sesji) zwraca sukces-atrapę, aby UI działało bez backendu.
+ *
+ * #1134 — decyzja produktowa: portal ogłoszeniowy. W trybie ogłoszeniowym każda akcja zwraca
+ * `RECRUITMENT_DISABLED` jako PIERWSZY krok (przed walidacją, limiterem, sesją i bazą; także
+ * w demo). Baza (0171) i tak odrzuca nowe rozmowy i wiadomości — to pierwsza linia obrony.
  */
+const DISABLED = { ok: false, error: 'RECRUITMENT_DISABLED' } as const;
+const messagingOff = () => !isRecruitmentEnabled('messaging');
 
 export type MsgResult = { ok: true; id: string } | { ok: false; error: ErrorCode };
 /**
@@ -68,6 +75,7 @@ export async function openConversation(input: {
   applicationId?: string;
   offerId?: string;
 }): Promise<MsgResult> {
+  if (messagingOff()) return DISABLED;
   const applicationId = input.applicationId || undefined;
   const offerId = input.offerId || undefined;
 
@@ -117,6 +125,7 @@ export async function sendMessage(
   clientMessageId: string,
   attachmentIds: string[] = [],
 ): Promise<SendMessageResult> {
+  if (messagingOff()) return DISABLED;
   // #495: NISS/BIS, PESEL ani numer dokumentu nie są potrzebne w rozmowie z firmą — odmowa
   // przy polu, zanim cokolwiek trafi do bazy (także w trybie demo i przed limitem).
   if (typeof body === 'string' && containsPersonalIdentifier(body)) {
@@ -176,6 +185,7 @@ export async function sendMessage(
 
 /** Oznacza konwersację jako przeczytaną (ustawia `last_read_at`, wygasza powiadomienia). */
 export async function markConversationRead(conversationId: string): Promise<OkResult> {
+  if (messagingOff()) return DISABLED;
   if (!isPortalDataConfigured()) return { ok: true };
 
   try {
@@ -213,6 +223,7 @@ export async function loadOlderMessages(
   conversationId: string,
   cursor: unknown,
 ): Promise<OlderMessagesActionResult> {
+  if (messagingOff()) return { status: 'not-found' };
   const parsed = olderMessagesInput.safeParse({ locale, conversationId, cursor });
   if (!parsed.success) return { status: 'error' };
 

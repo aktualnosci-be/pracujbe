@@ -13,7 +13,11 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- 0173 (#1135, #1137) stoi na 0171 — cofana pierwsza (odwrotna kolejność migracji).
+-- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0175 → 0174 → 0173 → 0171).
+-- 0175 (#1142/#1145) korzysta z helperów 0171 i stoi na 0174.
+\ir ../rollback/0175_classifieds_account_notifications.down.sql
+\ir ../rollback/0174_classifieds_messaging_cv_off.down.sql
+-- 0173 (#1135, #1137) stoi na 0171 — cofana po 0174.
 \ir ../rollback/0173_classifieds_searchable_screening.down.sql
 select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
      where t.tgname like 'trg_aa_recruitment_mode%'

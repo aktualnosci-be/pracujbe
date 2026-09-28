@@ -121,6 +121,21 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   → 404; nawigacja (`recruitmentEnabled` z layoutu do `EmployerShell`/`CandidateShell`), sekcja zgłoszeń pulpitu
   pracodawcy, baner propozycji i podgląd zgłoszeń pulpitu kandydata ukryte (loadery niewołane); powiadomienia
   o zgłoszeniach/propozycjach prowadzą do pulpitu. Blokady RPC i wygaszanie e-maili: #1140/#1145.
+  Konto kandydata bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych (#1142/#1145, migracja `0175`): nawigacja z jednego źródła `src/lib/candidate-nav.ts` (tryb ogłoszeniowy = pulpit, zapisane oferty, zapisane
+  wyszukiwania, ustawienia), pulpit `CandidateAccountDashboard` (zapisane oferty/wyszukiwania; loadery profilu, CV, zgłoszeń,
+  propozycji i wiadomości niewołane), `/candidate/onboarding` i `/candidate/profil` → 404, `saveOnboardingStep` →
+  `RECRUITMENT_DISABLED` przed bazą, stary `next` do kreatora po potwierdzeniu e-maila → pulpit; ustawienia bez sekcji
+  widoczności profilu. Baza: `ensure_candidate_profile` ze strażnikiem (każde RPC profilu), BEFORE INSERT na
+  `candidate_profiles`/`candidate_skills|languages|certificates`, BEFORE UPDATE pól zawodowych przez klienta; trigger
+  `trg_aa_recruitment_mode` na `notifications` pomija typy procesu (`application_*`, `offer_*`, `message_received`,
+  encje `application`/`offer`/`conversation`/`job_terms`, `job_match` spoza zapisanego wyszukiwania); kolejka e-mail
+  wygasza szablony z `email_recruitment_template()` (lustro `src/lib/email/recruitment-templates.ts`) jako
+  `suppressed_feature_disabled` przy claimie i tuż przed wysyłką. Preferencje e-mail w trybie bez kategorii
+  zgłoszeń/propozycji/wiadomości (`emailFieldsFor`; zapis bierze ich wartości z bazy `FOR UPDATE`), linki starych
+  powiadomień → pulpit, demo bez zdarzeń procesu, teksty alertów „z zapisanych wyszukiwań”. Dowód: `rls.sql` sekcje
+  CA1142/NT1145 (kontrole ujemne: bez strażnika krok 3 zapisuje; tryb RECRUITMENT), rollback `0175_…down.sql`
+  (`classifieds-account-rollback.sql`), unit `classifieds-candidate-account`, `classifieds-notifications`, strażnik
+  `legal`, E2E `classifieds-candidate-account` (z `E2E_PORTAL_LEGAL_MODE=`).
 - **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0171`):** singleton `portal_legal_mode`
   (domyślnie `CLASSIFIEDS_ONLY`), `recruitment_enabled()` fail-closed (brak wiersza/błąd = false). Tryb efektywny =
   env `RECRUITMENT` ORAZ baza `RECRUITMENT` (`src/lib/ops/portal-mode.ts`). W trybie ogłoszeniowym baza odrzuca nowe dane
@@ -163,6 +178,27 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+- **Bez wiadomości i CV (#1134/#1138, migracja `0174`, na 0171):** akcje
+  `messages.ts`/`message-attachments.ts` → `RECRUITMENT_DISABLED` jako pierwszy krok (bez bazy, limitera, bucketu),
+  loadery rozmów bez zapytań (lista pusta, licznik 0), segmenty `candidate|employer/wiadomosci` = 404 (layout,
+  przed `loading.tsx`), `/api/files/message/<id>` = 404, nawigacja bez „Wiadomości”, szczegół oferty bez „Wyślij
+  wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
+  `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
+  `allowUpload` = lista istniejących plików w profilu, pulpit bez sekcji). Import CV przez AI: `cvImportProvider()` =
+  null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
+  `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
+  trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
+  = nakładka ze strażnikiem (`_impl` bez EXECUTE dla klientów). Dowód: `rls.sql` sekcja CL174 (kontrole ujemne),
+  rollback `0174_…down.sql`, unit `classifieds-messaging-cv-off`, strażnik `legal`, E2E `classifieds-messaging-cv-off`.
+- **CI w trybie ogłoszeniowym (#1166, bez migracji):** job `e2e-classifieds` („E2E classifieds (CLASSIFIEDS_ONLY)”,
+  wynik w wymaganym checku „E2E (Playwright)”) — serwer `E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY` na buildzie z jobu
+  build: projekt `chromium` sam wybiera `CLASSIFIEDS_SPECS` z `playwright.config.ts` (`CLASSIFIEDS_ONLY_SPECS` —
+  `classifieds-*`, `job-detail-employer-apply`, poza shardami; `CLASSIFIEDS_SHARED_SPECS` — a11y/SEO/panele, w obu
+  trybach; shard z serwerem ogłoszeniowym = błąd), potem fixture (`CLASSIFIEDS_FIXTURE_SPECS`: lejek „Aplikuj
+  u pracodawcy” w `job-funnel-no-storage` — kliknięcie = `apply_started` tylko po zgodzie, bez cookies/storage).
+  `perf-lab.mjs`: LCP/CLS/TBT i INP listy w `CLASSIFIEDS_ONLY`, INP ApplyModal na drugim serwerze `RECRUITMENT`
+  (tryb sprawdzany na szczególe). Strażnik `check-ci-workflows.mjs` (+ kontrole ujemne w `ci-workflows-guard.test`).
+  Ten sam build w dwóch trybach lokalnie: najpierw `rm -rf .next/cache/isr-handler` (strony ISR drugiego trybu).
 - **Pulpity w trybie ogłoszeniowym (bez migracji):** w miejscu dawnych sekcji rekrutacyjnych — pulpit pracodawcy
   (`/employer`, kolumna boczna w miejscu „Top dopasowani”): `EmployerListingStats` = skrót statystyk ogłoszeń, do
   3 najczęściej oglądanych ofert z ostatnich 30 dni z wyświetleniami i kliknięciami „Aplikuj u pracodawcy”

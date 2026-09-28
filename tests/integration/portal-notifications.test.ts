@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) => key }));
@@ -40,7 +41,18 @@ describe('powiadomienia na PostgreSQL (#25)', () => {
     actAs({ id: bob, role: 'employer' });
     const result = await getNotifications('pl');
     expect(result).toMatchObject({ status: 'ready', unread: 1 });
-    if (result.status === 'ready') expect(result.items.map((i) => i.href)).toEqual(['/employer/wiadomosci']);
+    // #1134: w trybie ogłoszeniowym trasa wiadomości nie istnieje — powiadomienie prowadzi na pulpit.
+    if (result.status === 'ready') expect(result.items.map((i) => i.href)).toEqual(['/employer']);
+  });
+
+  describe('tryb RECRUITMENT (#1134 — kontrola ujemna trybu ogłoszeniowego)', () => {
+    withRecruitmentMode();
+    it('powiadomienie o rozmowie prowadzi do wiadomości', async () => {
+      actAs({ id: bob, role: 'employer' });
+      const result = await getNotifications('pl');
+      expect(result).toMatchObject({ status: 'ready', unread: 1 });
+      if (result.status === 'ready') expect(result.items.map((i) => i.href)).toEqual(['/employer/wiadomosci']);
+    });
   });
 
   it('pełna lista (#148): kursor przechodzi przez wszystkie 25 bez duplikatów, także przy równym created_at', async () => {
@@ -73,7 +85,7 @@ describe('powiadomienia na PostgreSQL (#25)', () => {
 
     actAs({ id: bob, role: 'employer' });
     const bobs = await loadMoreNotifications('pl', { createdAt: '2999-01-01T00:00:00Z', id: 'ffffffff-ffff-4fff-8fff-ffffffffffff' }, false);
-    expect(bobs.status === 'ready' && bobs.page.items.map((i) => i.href)).toEqual(['/employer/wiadomosci']);
+    expect(bobs.status === 'ready' && bobs.page.items.map((i) => i.href)).toEqual(['/employer']);
   });
 
   it('mark_notifications_read oznacza tylko własne; cudze ID nie zmienia cudzego stanu', async () => {
