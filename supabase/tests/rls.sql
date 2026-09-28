@@ -16658,6 +16658,177 @@ select pg_temp.assert(
   'ER161-6 restore usuwa pracodawcę (członek), ostatni właściciel zostaje');
 
 -- ============================================================================
+-- CMI165. Kolumny tożsamości członkostwa firmy niezmienne poza RPC (0165) oraz dostęp
+-- do rozmów firmy tylko dla bieżącego recruiter+ albo kandydata relacji.
+-- ============================================================================
+\echo '--- CMI165 company_members: tożsamość wiersza + dostęp do rozmów (0165) ---'
+\set CI9O  'e9000000-0000-0000-0000-0000000000a1'
+\set CI9A  'e9000000-0000-0000-0000-0000000000a2'
+\set CI9R  'e9000000-0000-0000-0000-0000000000a3'
+\set CI9X  'e9000000-0000-0000-0000-0000000000a4'
+\set CI9C  'e9000000-0000-0000-0000-0000000000c1'
+\set CI9T  'e9000000-0000-0000-0000-0000000000f1'
+\set CI9T2 'e9000000-0000-0000-0000-0000000000f2'
+\set CI9J  'e9000000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CI9O','ci9o@test.be','Olaf O','{"role":"employer","first_name":"Olaf","last_name":"Owner","locale":"pl"}'),
+  (:'CI9A','ci9a@test.be','Ada A','{"role":"employer","first_name":"Ada","last_name":"Admin","locale":"nl"}'),
+  (:'CI9R','ci9r@test.be','Rik R','{"role":"employer","first_name":"Rik","last_name":"Recruiter","locale":"fr"}'),
+  (:'CI9X','ci9x@test.be','Xavier X','{"role":"employer","first_name":"Xavier","last_name":"X","locale":"en"}'),
+  (:'CI9C','ci9c@test.be','Cleo C','{"role":"candidate","first_name":"Cleo","last_name":"Cand","locale":"pl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id in (:'CI9O', :'CI9A', :'CI9R', :'CI9X', :'CI9C');
+insert into public.companies(id,name,status) values
+  (:'CI9T','Firma CMI T','verified'), (:'CI9T2','Firma CMI T2','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'CI9T',:'CI9O','owner',true), (:'CI9T',:'CI9A','admin',true), (:'CI9T',:'CI9R','recruiter',true),
+  (:'CI9T2',:'CI9A','owner',true);
+select id as cm_owner_row from public.company_members
+  where company_id = :'CI9T'::uuid and profile_id = :'CI9O'::uuid \gset
+select id as cm_rec_row from public.company_members
+  where company_id = :'CI9T'::uuid and profile_id = :'CI9R'::uuid \gset
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'CI9J',:'CI9T','job-cmi165','Magazynier CMI165','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CI9C', false);
+
+-- CMI165-1..4: admin firmy nie przepisze tożsamości wiersza (konto, firma, zaproszenie, daty).
+set role authenticated; set app.current_uid = :'CI9A'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.company_members set profile_id = %L where id = %L', :'CI9X', :'cm_owner_row'),
+  'PERMISSION_DENIED', 'CMI165-1 zmiana konta wiersza ownera odrzucona');
+select pg_temp.expect_error(
+  format('update public.company_members set company_id = %L where id = %L', :'CI9T2', :'cm_owner_row'),
+  'PERMISSION_DENIED', 'CMI165-2 przeniesienie wiersza ownera do innej firmy odrzucone');
+select pg_temp.expect_error(
+  format('update public.company_members set profile_id = %L where id = %L', :'CI9X', :'cm_rec_row'),
+  'PERMISSION_DENIED', 'CMI165-3 podmiana konta rekrutera (dołączenie bez zaproszenia) odrzucona');
+select pg_temp.expect_error(
+  format('update public.company_members set joined_at = now() - interval ''1 year'', invited_by = %L where id = %L',
+         :'CI9A', :'cm_rec_row'),
+  'PERMISSION_DENIED', 'CMI165-4 zmiana danych zaproszenia/dat odrzucona');
+select pg_temp.expect_error(
+  format('update public.company_members set created_at = now() - interval ''1 year'' where id = %L', :'cm_rec_row'),
+  'PERMISSION_DENIED', 'CMI165-4b zmiana created_at odrzucona');
+-- CMI165-5: rola/aktywność dalej jak w 0086 (bezpośredni UPDATE w hierarchii i RPC).
+update public.company_members set is_active = false where id = :'cm_rec_row'::uuid;
+select public.set_company_member_active(:'cm_rec_row'::uuid, true);
+select public.set_company_member_role(:'cm_rec_row'::uuid, 'member');
+select public.set_company_member_role(:'cm_rec_row'::uuid, 'recruiter');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select profile_id = :'CI9O'::uuid and company_id = :'CI9T'::uuid and role = 'owner' and is_active
+     from public.company_members where id = :'cm_owner_row'::uuid)
+  and (select profile_id = :'CI9R'::uuid and role = 'recruiter' and is_active
+     from public.company_members where id = :'cm_rec_row'::uuid)
+  and (select count(*) = 0 from public.company_members where profile_id = :'CI9X'::uuid),
+  'CMI165-5 wiersze bez zmian tożsamości; RPC roli/aktywności działają');
+
+-- CMI165-6: przyjęcie zaproszenia (RPC) dalej tworzy i reaktywuje członkostwo.
+set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
+select invitation_id as cminv
+  from public.invite_company_member(:'CI9T', 'ci9x@test.be', 'recruiter', 'en', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'cminv'::uuid, true);
+reset role;
+set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
+select id as cm_x_row from public.company_members
+  where company_id = :'CI9T'::uuid and profile_id = :'CI9X'::uuid \gset
+select public.set_company_member_active(:'cm_x_row'::uuid, false);
+select invitation_id as cminv2
+  from public.invite_company_member(:'CI9T', 'ci9x@test.be', 'member', 'en', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'cminv2'::uuid, true);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select is_active and role = 'member' and invited_by = :'CI9O'::uuid and joined_at is not null
+     from public.company_members where id = :'cm_x_row'::uuid),
+  'CMI165-6 respond_to_company_invitation tworzy i reaktywuje członkostwo (kolumny zaproszenia)');
+
+-- CMI165-7 (kontrola ujemna): trigger z 0086 (bez strażnika tożsamości) przepuszcza podmianę
+-- konta wiersza ownera przez admina — dokładnie to, co blokuje CMI165-1.
+begin;
+do $cmi$
+declare v_def text := pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure);
+begin
+  if position('or new.profile_id is distinct from old.profile_id' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: CMI165-7 brak strażnika tożsamości w enforce_owner_invariants';
+  end if;
+  execute replace(v_def, 'or new.profile_id is distinct from old.profile_id', '');
+end $cmi$;
+set local role authenticated; set local app.current_uid = :'CI9A'; select pg_temp.assert_client_role();
+update public.company_members set profile_id = :'CI9C' where id = :'cm_owner_row'::uuid;
+reset role;
+select pg_temp.assert(
+  (select profile_id = :'CI9C'::uuid from public.company_members where id = :'cm_owner_row'::uuid),
+  'CMI165-7 kontrola ujemna: bez strażnika admin podmienia konto ownera');
+rollback;
+reset role; reset app.current_uid;
+
+-- CMI165-8..10: rozmowa firmy — usunięty (DELETE) rekruter traci dostęp, kandydat nie.
+set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'CI9J'::uuid, 'cmi165-app', null, null, null) as cmapp \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'cmapp'::uuid, null) as cmconv \gset
+select public.send_message(:'cmconv'::uuid, 'Dzień dobry CMI165', gen_random_uuid()) as cmmsg1 \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
+select public.send_message(:'cmconv'::uuid, 'Odpowiedź CMI165', gen_random_uuid()) as cmmsg2 \gset
+reset role;
+-- Owner usuwa członkostwo rekrutera (DELETE w hierarchii); wiersz conversation_members zostaje.
+set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
+delete from public.company_members where id = :'cm_rec_row'::uuid;
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 from public.conversation_members
+     where conversation_id = :'cmconv'::uuid and profile_id = :'CI9R'::uuid),
+  'CMI165-8 wiersz uczestnika usuniętego rekrutera nadal istnieje (warunek scenariusza)');
+set role authenticated; set app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_conversation_member(:'cmconv'::uuid),
+  'CMI165-8b usunięty rekruter nie jest uczestnikiem rozmowy firmy');
+select pg_temp.assert((select count(*) = 0 from public.messages where conversation_id = :'cmconv'::uuid),
+  'CMI165-8c usunięty rekruter nie czyta wiadomości rozmowy');
+select pg_temp.assert(not exists (select 1 from public.get_conversation_summaries() s
+                                  where s.conversation_id = :'cmconv'::uuid),
+  'CMI165-8d usunięty rekruter nie widzi rozmowy na liście');
+select pg_temp.expect_error(
+  format('select public.send_message(%L::uuid, %L, gen_random_uuid())', :'cmconv', 'Po usunięciu'),
+  'PERMISSION_DENIED', 'CMI165-9 usunięty rekruter nie wysyła wiadomości');
+reset role;
+set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
+  and (select count(*) = 2 from public.messages where conversation_id = :'cmconv'::uuid),
+  'CMI165-10 kandydat relacji zachowuje dostęp do rozmowy');
+reset role;
+set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_conversation_member(:'cmconv'::uuid),
+  'CMI165-10b aktywny zwykły member (spoza uczestników) bez dostępu');
+reset role; reset app.current_uid;
+
+-- CMI165-11 (kontrola ujemna): definicja z 0039 (strona kandydata = brak wiersza członkostwa)
+-- zwraca usuniętemu rekruterowi dostęp.
+begin;
+create or replace function public.is_conversation_member(p_conversation_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.conversation_members m
+    join public.conversations c on c.id = m.conversation_id
+    where m.conversation_id = p_conversation_id and m.profile_id = auth.uid()
+      and (c.company_id is null or public.can_manage_jobs(c.company_id)
+           or not exists (select 1 from public.company_members cm
+                          where cm.company_id = c.company_id and cm.profile_id = auth.uid())));
+$$;
+set local role authenticated; set local app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
+  and (select count(*) = 2 from public.messages where conversation_id = :'cmconv'::uuid),
+  'CMI165-11 kontrola ujemna: reguła z 0039 wpuszcza usuniętego rekrutera');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 \echo '--- DC901 usunięcie konta po przejęciu aplikacji gościa + job_is_public z firmą (0901) ---'
 -- ============================================================================
 -- DC901. (a) Kandydat, który przejął aplikację gościa (0095), usuwa konto sam
