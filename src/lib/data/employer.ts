@@ -840,10 +840,13 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
             WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
-        // job_screening_questions_select (0093): członek firmy oferty.
-        screening: await queryRows(tx, 'employer.job-draft-screening',
-          `SELECT id, position, type, required, prompt, options
-             FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId]),
+        // job_screening_questions_select (0093): członek firmy oferty. Tryb ogłoszeniowy: stare
+        // pytania ukryte — bez zapytania (zapis kroku 7 nie rusza ich, `screeningOff` w `updateJobDraft`).
+        screening: isRecruitmentEnabled('screening')
+          ? await queryRows(tx, 'employer.job-draft-screening',
+              `SELECT id, position, type, required, prompt, options
+                 FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId])
+          : [],
       };
       return { job, jobStatus, relations };
     });
@@ -1748,7 +1751,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         isGuest: false,
         guestEmail: '',
         historyNextCursor: null,
-        screeningAnswers: extra.screeningAnswers ?? [],
+        screeningAnswers: isRecruitmentEnabled('screening') ? (extra.screeningAnswers ?? []) : [],
       },
     };
   }
@@ -1797,9 +1800,11 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
             'SELECT score FROM public.matches WHERE candidate_id = $1 AND job_id = $2', [candidateId, jobId])
         : null;
       // application_screening_answers_select (0093): kandydat albo recruiter+ firmy oferty.
-      const answerData = await queryRows(tx, 'employer.application-detail-answers',
-        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
-           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      const answerData = isRecruitmentEnabled('screening')
+        ? await queryRows(tx, 'employer.application-detail-answers',
+            `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+               FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id])
+        : [];
 
       let relations: { skills: Record<string, unknown>[]; languages: Record<string, unknown>[]; certificates: Record<string, unknown>[] } | null = null;
       if (cpData) {

@@ -73,6 +73,8 @@ describe('uzasadnienie decyzji', () => {
 });
 
 describe('publishJob — pytania blokujące publikację', () => {
+  recruitmentModeInTests();
+
   function mockPublish(message: string) {
     fakeDb
       .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Magazynier' }])
