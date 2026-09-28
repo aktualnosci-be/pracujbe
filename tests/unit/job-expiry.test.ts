@@ -67,6 +67,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'run_retention_purge',
     'purge_job_funnel_data',
     'purge_stale_message_attachments',
+    'rate_limit_gc',
+    'processed_webhooks_gc',
     'claim_storage_deletions',
   ];
 
@@ -114,8 +116,11 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       // #575: terminy lejka ofert (0128).
       jobFunnel: {},
       purgedMessageAttachments: 0,
-      // #17: bez bucketu Railway GC bucketu pominięty.
+      purgedRateLimits: 0,
+      purgedWebhookInbox: 0,
+      // #17/#833: bez bucketu Railway oba GC bucketu (CV i załączników wiadomości) pominięte.
       storageGc: null,
+      messageAttachmentsGc: null,
       // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.
       dsaRetention: { mode: 'off' },
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
