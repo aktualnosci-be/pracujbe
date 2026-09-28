@@ -488,7 +488,9 @@
       "jointCommitteeInvalid": "Choisissez une commission dans la liste.",
       "accommodationDetailsProvidedOnly": "Le coût et les conditions du logement ne s'indiquent que si vous fournissez le logement.",
       "accommodationCostPeriodRequired": "Indiquez si le coût est hebdomadaire ou mensuel.",
-      "accommodationCostRequired": "Indiquez le coût du logement."
+      "accommodationCostRequired": "Indiquez le coût du logement.",
+      "accommodationCostMandatory": "Pour un logement fourni, indiquez le coût — saisissez 0 s'il est gratuit.",
+      "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -726,6 +728,7 @@
     "jobNotEditable": "Cette offre ne peut pas être modifiée pour le moment. Seule une offre active ou suspendue peut être corrigée.",
     "jobEditConflict": "Quelqu'un a modifié cette offre entre-temps. Rouvrez-la depuis la liste des offres pour voir la version actuelle.",
     "jobExpired": "La date d'expiration de cette offre est dépassée. Rouvrez-la depuis la liste des offres — la réouverture supprime la date passée.",
+    "jobAccommodationTermsRequired": "Une offre avec logement fourni doit indiquer le coût du logement (0 = gratuit) et s'il est retenu sur le salaire. Complétez l'étape « Conditions et avantages ».",
     "botCheckFailed": "Nous n'avons pas pu confirmer que ce formulaire est envoyé par une personne. Refaites la vérification et envoyez-le à nouveau.",
     "botCheckUnavailable": "La vérification de sécurité est momentanément indisponible. Réessayez dans quelques minutes.",
     "screeningAnswerRequired": "Répondez aux questions obligatoires de l'employeur.",
@@ -1645,6 +1648,7 @@
     "editSaved": "Modifications enregistrées",
     "editSavedDemo": "Modifications enregistrées (mode démo)",
     "editFixStep": "Les modifications n'ont pas été enregistrées. Corrigez les champs signalés à l'étape {step} : {title}.",
+    "publishFixStep": "L'offre n'a pas été publiée. Corrigez les champs signalés à l'étape {step} : {title}.",
     "screeningTitle": "Questions aux candidats",
     "screeningHint": "Facultatif, {max} questions courtes au maximum, par ex. sur le permis, le VCA ou le trajet. Vous verrez les réponses dans la candidature ; elles ne modifient pas la compatibilité et ne rejettent pas les candidats automatiquement.",
     "screeningReadOnly": "Les questions ne peuvent être modifiées que dans un brouillon — les candidats ont déjà répondu à la version actuelle.",

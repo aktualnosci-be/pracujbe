@@ -283,6 +283,38 @@ function refineJobCosts(
 export const step8Schema = step8Base.superRefine(refineJobCosts);
 
 /**
+ * Decyzja właściciela 28.09.2026: oferta PUBLICZNA z zakwaterowaniem zapewnionym musi podać
+ * koszt (0 = bez kosztów) i informację, czy koszt jest potrącany z pensji. Szkic może być
+ * niekompletny (`step8Schema`); tę regułę sprawdzają publikacja i edycja opublikowanej oferty
+ * — w bazie strażnik `enforce_job_accommodation_terms` (0930) → `JOB_ACCOMMODATION_TERMS_REQUIRED`.
+ */
+export function refineAccommodationPublishTerms(
+  data: { accommodationKind?: string; accommodationCost?: number; accommodationDeducted?: boolean },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.accommodationKind !== 'provided') return;
+  if (data.accommodationCost === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationCost'],
+      message: 'job.error.accommodationCostMandatory',
+    });
+  }
+  if (data.accommodationDeducted === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationDeducted'],
+      message: 'job.error.accommodationDeductedRequired',
+    });
+  }
+}
+
+/** Krok 8 przy publikacji i edycji opublikowanej oferty (szkic: `step8Schema`). */
+export const step8PublishSchema = step8Base
+  .superRefine(refineJobCosts)
+  .superRefine(refineAccommodationPublishTerms);
+
+/**
  * Krok 9 — firma i publikacja. Szkic (`step9DraftSchema`) zapisuje opis firmy i kontakt BEZ
  * zgody na publikację (#193) — zgoda nie jest polem szkicu, tylko decyzją o publikacji, więc
  * wymaga jej wyłącznie `step9Schema` (ścieżka „Publikuj").
@@ -321,7 +353,8 @@ export const jobSchema = step1Base
     message: 'job.error.salaryRangeInvalid',
   })
   .superRefine(refineNoLanguageConflict)
-  .superRefine(refineJobCosts);
+  .superRefine(refineJobCosts)
+  .superRefine(refineAccommodationPublishTerms);
 
 export type JobStep1 = z.infer<typeof step1Schema>;
 export type JobStep2 = z.infer<typeof step2Schema>;

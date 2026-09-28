@@ -16582,6 +16582,82 @@ select pg_temp.assert(
   (select count(*) from public.get_public_job_costs(:'CBDRAFT'::uuid)) = 0,
   'CB9b szkic nie zwraca kosztów');
 reset role;
+
+-- CB10 (decyzja właściciela 28.09.2026): zakwaterowanie zapewnione w ofercie publicznej wymaga
+-- kosztu (0 = bez kosztów) i informacji o potrąceniu z pensji; szkic może być niekompletny.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'CBJOB',
+    (current_setting('pb.cb_base')::jsonb #- '{job,accommodation_deducted}')::text),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10 edycja opublikowanej oferty bez informacji o potrąceniu odrzucona');
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'CBJOB',
+    (current_setting('pb.cb_base')::jsonb #- '{job,accommodation_cost}' #- '{job,accommodation_cost_period}')::text),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10b edycja opublikowanej oferty bez kosztu zakwaterowania odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_cost = 150 and accommodation_deducted from public.jobs where id = :'CBJOB'),
+  'CB10c odrzucona rewizja nie zmienia oferty');
+
+-- CB10d: szkic zapisuje zakwaterowanie zapewnione bez kosztu i potrącenia.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
+  "accommodation": true, "accommodation_kind": "provided", "accommodation_cost": null,
+  "accommodation_cost_period": null, "accommodation_deducted": null}}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'draft' and accommodation_kind = 'provided' and accommodation_cost is null
+          and accommodation_deducted is null from public.jobs where id = :'CBDRAFT'),
+  'CB10d szkic może mieć zakwaterowanie zapewnione bez kosztu i potrącenia');
+
+-- CB10e: publikacja takiego szkicu odrzucona czytelnym kodem, oferta zostaje szkicem.
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'CBDRAFT', 'pl', 'Magazynier CB930', 'Opis', array['Kompletacja'])
+  on conflict (job_id, locale) do update set description = excluded.description,
+    responsibilities = excluded.responsibilities;
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'CBDRAFT', 'pl', 'mandatory', 0, 'Praca w nocy');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.publish_job(%L::uuid, %L)', :'CBDRAFT', 'cb930-szkic'),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10e publikacja bez kosztu i potrącenia odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status = 'draft' from public.jobs where id = :'CBDRAFT'),
+  'CB10e2 odrzucona publikacja zostawia szkic');
+
+-- CB10f: koszt 0 (bez kosztów) + „nie potrącany” wystarcza do publikacji.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
+  "accommodation_cost": 0, "accommodation_cost_period": "week", "accommodation_deducted": false}}$j$::jsonb);
+select public.publish_job(:'CBDRAFT'::uuid, 'cb930-szkic') is not null as cb_pub \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'active' and accommodation_cost = 0 and accommodation_deducted = false
+     from public.jobs where id = :'CBDRAFT'),
+  'CB10f koszt 0 i brak potrącenia = oferta publikowana');
+
+-- CB10g: ponowne otwarcie zamkniętej oferty z niekompletnym zakwaterowaniem odrzucone
+-- (stan przygotowany z pominięciem strażników — np. oferta sprzed reguły).
+set local session_replication_role = replica;
+update public.jobs set status = 'closed', accommodation_deducted = null where id = :'CBDRAFT';
+set local session_replication_role = origin;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_status(%L::uuid, %L)', :'CBDRAFT', 'reopen'),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10g reopen bez informacji o potrąceniu odrzucony');
+reset role; reset app.current_uid;
+
+-- CB10n (KONTROLA UJEMNA): bez strażnika ta sama rewizja bez potrącenia przechodzi.
+savepoint cb10_neg;
+drop trigger trg_jobs_accommodation_terms on public.jobs;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'CBJOB'::uuid,
+  current_setting('pb.cb_base')::jsonb #- '{job,accommodation_deducted}');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_deducted is null from public.jobs where id = :'CBJOB'),
+  'CB10n KONTROLA UJEMNA: bez trg_jobs_accommodation_terms oferta publiczna traci potrącenie (CB10 łapie brak)');
+rollback to savepoint cb10_neg;
 rollback;
 reset role; reset app.current_uid;
 

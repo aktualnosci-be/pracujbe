@@ -10,7 +10,7 @@ import { AxeBuilder } from './fixtures/axe';
  * „Koszty i dodatki” (0930) w jawnym trybie demo: sekcja szczegółu oferty (dane przykładowe
  * oferty 1001) w czterech językach z linkiem do oficjalnej bazy stawek minimalnych, oraz pola
  * kroku 8 kreatora (szczegóły mieszkania tylko przy zakwaterowaniu zapewnionym, błąd przy polu
- * kwoty). Zapis do PostgreSQL dowodzi `rls.sql` sekcja CB930, mapowanie — `job-costs.test.ts`.
+ * kwoty; publikacja z zakwaterowaniem zapewnionym wymaga kosztu i potrącenia — 28.09.2026). Zapis do PostgreSQL dowodzi `rls.sql` sekcja CB930, mapowanie — `job-costs.test.ts`.
  */
 const locales = { pl, nl, fr, en } as const;
 const DEMO_JOB = '/oferty-pracy/warehouse-worker-antwerp-1001';
@@ -107,4 +107,26 @@ test('kreator, krok 8: szczegóły mieszkania tylko przy zakwaterowaniu zapewnio
   await costField.fill('120,50');
   await next.click();
   await expect(page.getByRole('heading', { level: 2, name: t.step9Title })).toBeVisible();
+
+  // Decyzja właściciela 28.09.2026: szkic przeszedł bez informacji o potrąceniu, ale publikacja
+  // wraca do kroku 8 z błędem przy polu „potrącany z wynagrodzenia”.
+  await page.getByLabel(t.companyDescriptionLabel).fill('Firma logistyczna z Antwerpii, magazyn centralny.');
+  await page.getByRole('checkbox', { name: t.agreePublish }).check();
+  const publish = page.getByRole('button', { name: t.publish, exact: true });
+  await publish.click();
+  await expect(page.getByRole('heading', { level: 2, name: t.step8Title })).toBeVisible();
+  await expect(page.getByRole('alert').filter({
+    hasText: t.publishFixStep.replace('{step}', '8').replace('{title}', t.step8Title),
+  })).toBeVisible();
+  await expect(page.getByText(pl.job.error.accommodationDeductedRequired)).toBeVisible();
+  const deducted = page.getByRole('combobox', { name: t.accommodationDeductedLabel });
+  await expect(deducted).toHaveAttribute('aria-invalid', 'true');
+  await expect(page).toHaveURL(/\/pl\/employer\/oferty\/nowa/);
+
+  await deducted.click();
+  await page.getByRole('option', { name: t.tri.no, exact: true }).click();
+  await next.click();
+  await expect(page.getByRole('heading', { level: 2, name: t.step9Title })).toBeVisible();
+  await publish.click();
+  await expect(page).toHaveURL(/\/pl\/employer$/);
 });

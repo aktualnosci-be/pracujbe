@@ -1358,8 +1358,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   flagi) z linkiem do oficjalnej bazy stawek minimalnych FOD WASO/SPF ETCS, bez oceny stawki;
   JobPosting `jobBenefits` (komisja bez odpowiednika w schema.org). Dowód: `rls.sql` sekcja CB930
   (kontrola ujemna: lista pól z 0144 nie widzi kosztu), unit `job-costs`, `jobs-postgres`, E2E
-  `job-costs` (4 języki, axe). **Otwarte (właściciel):** czy wymagać kosztu przy zakwaterowaniu
-  zapewnionym (kontrola w `publish_job`), filtry listy po nowych polach, tabela stawek komisji.
+  `job-costs` (4 języki, axe). Zakwaterowanie zapewnione (decyzja właściciela 28.09.2026): oferta
+  publiczna MUSI podać koszt (0 = bez kosztów) i czy jest potrącany z pensji; szkic może być
+  niekompletny. Kreator: `step8PublishSchema` przy „Opublikuj” (powrót do kroku 8, błąd przy polu,
+  `jobWizard.publishFixStep`) i w edycji opublikowanej oferty; `updatePublishedJob` odrzuca przed
+  RPC. Baza: strażnik BEFORE `enforce_job_accommodation_terms` na `jobs` (wejście w active/paused
+  albo zmiana pól zakwaterowania — `publish_job`, `update_published_job`, `set_job_status`
+  resume/reopen, bezpośredni DML) → `JOB_ACCOMMODATION_TERMS_REQUIRED` → `errors.jobAccommodationTermsRequired`.
+  Dowód: `rls.sql` CB10 (kontrola ujemna CB10n bez strażnika), unit `job-costs`,
+  `update-published-job`, E2E `job-costs`. **Otwarte (właściciel):** filtry listy po nowych
+  polach, tabela stawek komisji.
 - [x] Status weryfikacji firmy w panelu (#399/#400/#365/#368/#401, migracja `0072`): baner statusu
   na pulpicie (checklista „Pierwsze kroki”) i nad kreatorem (szkic teraz, publikacja po
   weryfikacji); zweryfikowana firma bez baneru. Odrzucona firma: „Wyślij ponownie do weryfikacji”

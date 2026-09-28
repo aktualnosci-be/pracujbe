@@ -72,6 +72,7 @@ import {
   step5Schema,
   step6Schema,
   step7Schema,
+  step8PublishSchema,
   step8Schema,
   step9DraftSchema,
   step9Schema,
@@ -272,6 +273,7 @@ const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
     'accommodationKind',
     'accommodationCost',
     'accommodationCostPeriod',
+    'accommodationDeducted',
     'mealVoucherDaily',
     'jointCommittee',
   ],
@@ -716,6 +718,8 @@ export function JobWizard({
   const [publicSlug, setPublicSlug] = React.useState(published?.slug ?? '');
   // Krok z błędami wykryty przy „Zapisz zmiany" (komunikat nad formularzem).
   const [editInvalidStep, setEditInvalidStep] = React.useState<WizardStep | null>(null);
+  /** Krok, który zatrzymał publikację (np. koszt zakwaterowania w kroku 8). */
+  const [publishInvalidStep, setPublishInvalidStep] = React.useState<WizardStep | null>(null);
   const pendingErrorsRef = React.useRef<Set<string> | null>(null);
   const firstScreeningErrorRef = React.useRef<string | null>(null);
   // Tryb edycji: po zapisie każda kolejna zmiana pola znów jest niezapisana — komunikat
@@ -829,7 +833,14 @@ export function JobWizard({
       firstScreeningErrorRef.current = null;
     }
     const data = buildStepData(current, getValues(), contentLocale);
-    const schema = current === 9 && intent === 'draft' ? step9DraftSchema : SCHEMAS[current];
+    // Krok 8 przy publikacji i w edycji opublikowanej oferty: zakwaterowanie zapewnione wymaga
+    // kosztu i informacji o potrąceniu (decyzja właściciela 28.09.2026); szkic może być niepełny.
+    const schema =
+      current === 9 && intent === 'draft'
+        ? step9DraftSchema
+        : current === 8 && (intent === 'publish' || isEdit)
+          ? step8PublishSchema
+          : SCHEMAS[current];
     const result = schema.safeParse(data);
 
     if (!result.success) {
@@ -940,6 +951,7 @@ export function JobWizard({
       return;
     }
     const ok = await persistStep(step);
+    if (ok && publishInvalidStep === step) setPublishInvalidStep(null);
     if (ok && step < TOTAL_STEPS) setStep((step + 1) as WizardStep);
   }
 
@@ -1006,6 +1018,16 @@ export function JobWizard({
   async function handlePublish(): Promise<void> {
     setPublishError(null);
     setScreeningReviews([]);
+    // Oferta publiczna z zakwaterowaniem zapewnionym: koszt i potrącenie obowiązkowe — błąd
+    // przy polu w kroku 8 (szkic mógł zostać zapisany bez nich).
+    const costs = validateStep(8, 'publish');
+    if (!costs.ok) {
+      setPublishInvalidStep(8);
+      pendingErrorsRef.current = costs.erroredFields;
+      setStep(8);
+      return;
+    }
+    setPublishInvalidStep(null);
     const ok = await persistStep(9, 'publish');
     if (!ok) return;
 
@@ -1151,6 +1173,15 @@ export function JobWizard({
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
           {t('editFixStep', { step: editInvalidStep, title: steps[editInvalidStep - 1]?.title ?? '' })}
+        </p>
+      ) : null}
+      {!isEdit && publishInvalidStep !== null ? (
+        <p
+          role="alert"
+          className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          {t('publishFixStep', { step: publishInvalidStep, title: steps[publishInvalidStep - 1]?.title ?? '' })}
         </p>
       ) : null}
 

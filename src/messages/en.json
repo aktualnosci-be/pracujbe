@@ -488,7 +488,9 @@
       "jointCommitteeInvalid": "Choose a committee from the list.",
       "accommodationDetailsProvidedOnly": "Housing cost and terms apply only when you provide accommodation.",
       "accommodationCostPeriodRequired": "Choose whether the cost is weekly or monthly.",
-      "accommodationCostRequired": "Enter the accommodation cost."
+      "accommodationCostRequired": "Enter the accommodation cost.",
+      "accommodationCostMandatory": "With accommodation provided, enter the cost — enter 0 if it is free.",
+      "accommodationDeductedRequired": "Choose whether the accommodation cost is deducted from wages."
     },
     "contentLanguageNotice": "This job’s content is only available in {language}.",
     "contentLanguageNames": {
@@ -726,6 +728,7 @@
     "jobNotEditable": "This job can't be edited right now. Only an active or paused job can be changed.",
     "jobEditConflict": "Someone changed this job in the meantime. Open it again from the jobs list to see the current version.",
     "jobExpired": "This job's expiry date has passed. Reopen it from the jobs list — reopening removes the past date.",
+    "jobAccommodationTermsRequired": "A job with accommodation provided must state the accommodation cost (0 = free) and whether it is deducted from wages. Complete the “Conditions and benefits” step.",
     "botCheckFailed": "We couldn't confirm that a person is sending this form. Complete the check again and resubmit.",
     "botCheckUnavailable": "The security check is temporarily unavailable. Please try again in a few minutes.",
     "screeningAnswerRequired": "Please answer the employer's required questions.",
@@ -1645,6 +1648,7 @@
     "editSaved": "Changes saved",
     "editSavedDemo": "Changes saved (demo mode)",
     "editFixStep": "Your changes weren't saved. Fix the highlighted fields in step {step}: {title}.",
+    "publishFixStep": "The job wasn't published. Fix the highlighted fields in step {step}: {title}.",
     "screeningTitle": "Questions for candidates",
     "screeningHint": "Optional, up to {max} short questions, e.g. about a driving licence, VCA or commuting. You will see the answers in the application; they don't change the match and don't reject candidates automatically.",
     "screeningReadOnly": "Questions can only be changed in a draft — candidates have already answered the current version.",

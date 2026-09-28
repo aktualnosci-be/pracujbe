@@ -27,6 +27,7 @@ import {
   step5Schema,
   step6Schema,
   step7Schema,
+  step8PublishSchema,
   step8Schema,
   step9DraftSchema,
   type JobStep1,
@@ -123,6 +124,7 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('JOB_EDIT_CONFLICT')) return 'JOB_EDIT_CONFLICT';
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
+  if (m.includes('JOB_ACCOMMODATION_TERMS_REQUIRED')) return 'JOB_ACCOMMODATION_TERMS_REQUIRED';
   if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
   if (m.includes('SCREENING_QUESTION_REJECTED')) return 'SCREENING_QUESTION_REJECTED';
   if (m.includes('SCREENING_REVIEW_REQUIRED')) return 'SCREENING_REVIEW_REQUIRED';
@@ -449,6 +451,10 @@ export async function updatePublishedJob(
   for (let i = 0; i < 9; i += 1) {
     const value = validateJobStep(i + 1, steps[i]);
     if (value === null) return { ok: false, error: 'VALIDATION_FAILED' };
+    // Oferta publiczna: zakwaterowanie zapewnione wymaga kosztu i potrącenia (28.09.2026).
+    if (i + 1 === 8 && !step8PublishSchema.safeParse(steps[i]).success) {
+      return { ok: false, error: 'JOB_ACCOMMODATION_TERMS_REQUIRED' };
+    }
     parsed.push(value);
   }
   const content = buildPublishedContent(parsed);

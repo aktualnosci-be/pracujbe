@@ -488,7 +488,9 @@
       "jointCommitteeInvalid": "Kies een comité uit de lijst.",
       "accommodationDetailsProvidedOnly": "Kosten en voorwaarden van de woning vul je alleen in als je huisvesting biedt.",
       "accommodationCostPeriodRequired": "Kies of de kosten per week of per maand zijn.",
-      "accommodationCostRequired": "Vul de kosten van de huisvesting in."
+      "accommodationCostRequired": "Vul de kosten van de huisvesting in.",
+      "accommodationCostMandatory": "Vul bij voorziene huisvesting de kosten in — vul 0 in als de huisvesting gratis is.",
+      "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -726,6 +728,7 @@
     "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
     "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
     "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
+    "jobAccommodationTermsRequired": "Een vacature met voorziene huisvesting moet de kosten van de huisvesting vermelden (0 = gratis) en of ze worden ingehouden op het loon. Vul de stap „Voorwaarden en voordelen” aan.",
     "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
     "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
     "screeningAnswerRequired": "Beantwoord de verplichte vragen van de werkgever.",
@@ -1645,6 +1648,7 @@
     "editSaved": "Wijzigingen opgeslagen",
     "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
     "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}.",
+    "publishFixStep": "De vacature is niet gepubliceerd. Corrigeer de gemarkeerde velden in stap {step}: {title}.",
     "screeningTitle": "Vragen aan kandidaten",
     "screeningHint": "Optioneel, maximaal {max} korte vragen, bijv. over rijbewijs, VCA of vervoer. Je ziet de antwoorden in de sollicitatie; ze veranderen de match niet en wijzen kandidaten niet automatisch af.",
     "screeningReadOnly": "Vragen kun je alleen in een concept wijzigen — kandidaten hebben de huidige versie al beantwoord.",

@@ -28,7 +28,11 @@
 -- 6. `get_public_job_costs(p_job_id)` — pola sekcji dla oferty publicznej (`job_is_public`),
 --    jak `get_public_job_screening_questions` (0093). `get_public_job` bez zmian.
 --
--- Rollback: nowa migracja — `create or replace` save_job_draft z 0093, update_published_job
+-- 7. Strażnik `enforce_job_accommodation_terms` (decyzja właściciela 28.09.2026): oferta
+--    active/paused z zakwaterowaniem zapewnionym musi mieć koszt i informację o potrąceniu
+--    → `JOB_ACCOMMODATION_TERMS_REQUIRED`; szkic może być niekompletny.
+--
+-- Rollback: nowa migracja — drop trigger trg_jobs_accommodation_terms + funkcja; `create or replace` save_job_draft z 0093, update_published_job
 -- i job_material_terms z 0144; drop function get_public_job_costs(uuid),
 -- drop trigger trg_job_duplications_copy_costs + funkcja; alter table jobs drop constraint
 -- jobs_accommodation_* / jobs_transport_details_flag, drop column dla 10 kolumn; drop table
@@ -479,3 +483,34 @@ language sql stable security definer set search_path = public, pg_temp as $$
 $$;
 revoke all on function public.get_public_job_costs(uuid) from public;
 grant execute on function public.get_public_job_costs(uuid) to anon, authenticated, service_role;
+
+-- --- 7. Zakwaterowanie zapewnione: koszt i potrącenie obowiązkowe w ofercie publicznej -------
+-- Decyzja właściciela 28.09.2026: gdy pracodawca deklaruje „zakwaterowanie zapewnione”, oferta
+-- opublikowana MUSI podać koszt (0 = bez kosztów, zawsze z okresem — CHECK
+-- jobs_accommodation_cost_period) i informację, czy koszt jest potrącany z pensji. Szkic może
+-- być niekompletny (kreator zapisuje krok po kroku). Jeden strażnik BEFORE na `jobs` obejmuje
+-- każdą ścieżkę do stanu publicznego: `publish_job` (draft → active), `update_published_job`
+-- (rewizja active/paused), `set_job_status` (resume, reopen) i bezpośredni DML. Odpala się
+-- tylko przy wejściu w stan active/paused albo zmianie pól zakwaterowania, więc zmiany
+-- niezwiązane (np. wygaszanie, liczniki) nie zależą od tej reguły.
+create or replace function public.enforce_job_accommodation_terms()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if new.status::text in ('active', 'paused')
+     and new.accommodation_kind is not distinct from 'provided'
+     and (new.accommodation_cost is null or new.accommodation_deducted is null)
+     and (tg_op = 'INSERT'
+          or old.status is distinct from new.status
+          or old.accommodation_kind is distinct from new.accommodation_kind
+          or old.accommodation_cost is distinct from new.accommodation_cost
+          or old.accommodation_deducted is distinct from new.accommodation_deducted) then
+    raise exception 'JOB_ACCOMMODATION_TERMS_REQUIRED: zakwaterowanie zapewnione wymaga kosztu i informacji o potrąceniu z pensji'
+      using errcode = '23514';
+  end if;
+  return new;
+end $$;
+revoke all on function public.enforce_job_accommodation_terms() from public;
+
+create trigger trg_jobs_accommodation_terms
+  before insert or update on public.jobs
+  for each row execute function public.enforce_job_accommodation_terms();

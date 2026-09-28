@@ -14,7 +14,7 @@ import {
 } from '@/lib/job-costs';
 import { JOINT_COMMITTEES, findJointCommittee, minimumWagesUrl } from '@/lib/joint-committees';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
-import { step8Schema, type JobStep8 } from '@/lib/validation/job';
+import { step8PublishSchema, step8Schema, type JobStep8 } from '@/lib/validation/job';
 import { buildJobPostingJsonLd } from '@/lib/seo/structured-data';
 import type { JobDetail } from '@/lib/jobs';
 
@@ -126,6 +126,62 @@ describe('krok 8 — walidacja kosztów', () => {
     ];
     for (const input of bad) expect(step8Schema.safeParse(input).success, JSON.stringify(input)).toBe(false);
     expect(step8Schema.safeParse({ accommodationKind: 'provided', accommodationCost: 0, accommodationCostPeriod: 'month' }).success).toBe(true);
+  });
+});
+
+describe('krok 8 — zakwaterowanie zapewnione w ofercie publicznej (decyzja 28.09.2026)', () => {
+  const provided = { accommodationKind: 'provided' as const };
+
+  it('szkic przyjmuje „zapewnione” bez kosztu i potrącenia (szkic może być niekompletny)', () => {
+    expect(step8Schema.safeParse(provided).success).toBe(true);
+  });
+
+  it('publikacja/edycja: brak kosztu i brak potrącenia = błąd przy każdym z pól', () => {
+    const r = step8PublishSchema.safeParse(provided);
+    expect(r.success).toBe(false);
+    const byPath = Object.fromEntries((r.error?.issues ?? []).map((i) => [i.path.join('.'), i.message]));
+    expect(byPath).toEqual({
+      accommodationCost: 'job.error.accommodationCostMandatory',
+      accommodationDeducted: 'job.error.accommodationDeductedRequired',
+    });
+  });
+
+  it('koszt 0 (bez kosztów) + „nie potrącany” wystarcza; inne rodzaje nie wymagają kosztu', () => {
+    expect(
+      step8PublishSchema.safeParse({
+        ...provided, accommodationCost: 0, accommodationCostPeriod: 'week', accommodationDeducted: false,
+      }).success,
+    ).toBe(true);
+    expect(step8PublishSchema.safeParse({ ...provided, accommodationCost: 0, accommodationCostPeriod: 'week' }).success).toBe(false);
+    expect(step8PublishSchema.safeParse({ ...provided, accommodationDeducted: true }).success).toBe(false);
+    expect(step8PublishSchema.safeParse({ accommodationKind: 'assistance' }).success).toBe(true);
+    expect(step8PublishSchema.safeParse({ accommodationKind: 'none' }).success).toBe(true);
+    expect(step8PublishSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('komunikaty błędów są w 4 językach (NL w formie je/jouw, bez „u”)', () => {
+    for (const locale of ['pl', 'nl', 'fr', 'en']) {
+      const messages = JSON.parse(readFileSync(join(process.cwd(), `src/messages/${locale}.json`), 'utf8'));
+      for (const key of ['accommodationCostMandatory', 'accommodationDeductedRequired']) {
+        expect(typeof messages.job.error[key], `${locale}.job.error.${key}`).toBe('string');
+      }
+      expect(typeof messages.errors.jobAccommodationTermsRequired, `${locale}.errors`).toBe('string');
+      if (locale === 'nl') {
+        const texts = [
+          messages.job.error.accommodationCostMandatory,
+          messages.job.error.accommodationDeductedRequired,
+          messages.errors.jobAccommodationTermsRequired,
+        ].join(' ');
+        expect(texts).not.toMatch(/\b(u|uw)\b/i);
+      }
+    }
+  });
+
+  it('baza: strażnik publikacji w migracji i mapowanie kodu w akcjach', () => {
+    expect(MIGRATION).toMatch(/create trigger trg_jobs_accommodation_terms\s+before insert or update on public\.jobs/);
+    expect(MIGRATION).toContain("'JOB_ACCOMMODATION_TERMS_REQUIRED:");
+    const actions = readFileSync(join(process.cwd(), 'src/lib/actions/jobs.ts'), 'utf8');
+    expect(actions).toContain("m.includes('JOB_ACCOMMODATION_TERMS_REQUIRED')) return 'JOB_ACCOMMODATION_TERMS_REQUIRED'");
   });
 });
 

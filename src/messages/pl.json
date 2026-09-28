@@ -488,7 +488,9 @@
       "jointCommitteeInvalid": "Wybierz komisję z listy.",
       "accommodationDetailsProvidedOnly": "Koszt i warunki mieszkania podaje się tylko przy zakwaterowaniu zapewnionym.",
       "accommodationCostPeriodRequired": "Wybierz, czy koszt jest tygodniowy, czy miesięczny.",
-      "accommodationCostRequired": "Podaj koszt zakwaterowania."
+      "accommodationCostRequired": "Podaj koszt zakwaterowania.",
+      "accommodationCostMandatory": "Przy zakwaterowaniu zapewnionym podaj koszt — wpisz 0, jeśli jest bezpłatne.",
+      "accommodationDeductedRequired": "Wybierz, czy koszt zakwaterowania jest potrącany z wynagrodzenia."
     },
     "contentLanguageNotice": "Treść tej oferty jest dostępna tylko w języku: {language}.",
     "contentLanguageNames": {
@@ -726,6 +728,7 @@
     "jobNotEditable": "Tej oferty nie można teraz edytować. Poprawić można ofertę aktywną lub wstrzymaną.",
     "jobEditConflict": "Ktoś zmienił tę ofertę w międzyczasie. Otwórz ją ponownie z listy ofert, aby zobaczyć aktualną wersję.",
     "jobExpired": "Termin ważności tej oferty minął. Otwórz ją ponownie z listy ofert — ponowne otwarcie usuwa minioną datę.",
+    "jobAccommodationTermsRequired": "Oferta z zakwaterowaniem zapewnionym musi podawać koszt zakwaterowania (0 = bez kosztów) i informację, czy jest potrącany z wynagrodzenia. Uzupełnij krok „Warunki i benefity”.",
     "botCheckFailed": "Nie udało się potwierdzić, że formularz wysyła człowiek. Zaznacz weryfikację jeszcze raz i wyślij ponownie.",
     "botCheckUnavailable": "Weryfikacja bezpieczeństwa jest chwilowo niedostępna. Spróbuj ponownie za kilka minut.",
     "screeningAnswerRequired": "Odpowiedz na wymagane pytania pracodawcy.",
@@ -1645,6 +1648,7 @@
     "editSaved": "Zmiany zapisane",
     "editSavedDemo": "Zmiany zapisane (tryb demo)",
     "editFixStep": "Nie zapisaliśmy zmian. Popraw zaznaczone pola w kroku {step}: {title}.",
+    "publishFixStep": "Nie opublikowaliśmy oferty. Popraw zaznaczone pola w kroku {step}: {title}.",
     "screeningTitle": "Pytania do kandydatów",
     "screeningHint": "Opcjonalnie, maksymalnie {max} krótkich pytań, np. o prawo jazdy, VCA czy dojazd. Odpowiedzi zobaczysz w zgłoszeniu; nie zmieniają dopasowania i nie odrzucają kandydatów automatycznie.",
     "screeningReadOnly": "Pytania można zmieniać tylko w szkicu oferty — kandydaci odpowiadali już na obecną wersję.",
