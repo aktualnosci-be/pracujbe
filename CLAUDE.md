@@ -1578,6 +1578,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
   policzyć” z ponowieniem, nigdy procent z niepełnych danych.
+  Języki ze słownika (I18N-02/CF-02, migracja `0920` — numer tymczasowy): onboarding (krok 5)
+  i kreator (krok 7) wybierają język z listy `public.languages` (kody ISO, nazwy
+  `languageNames.*` w języku interfejsu); pozycja `{language, level}` = kod albo — tylko stary
+  wpis — etykieta. `job_languages.language_id` (nowa kolumna), trigger `fill_language_id`
+  na obu relacjach uzupełnia id z nazwy na każdej ścieżce (import CV, duplikat oferty, seed),
+  `language_aliases` (nazwy PL/NL/FR/EN, lustro `src/lib/languages.ts`, test 1:1) i backfill
+  starych etykiet; niedopasowane zostają etykietą. `set_*_languages` deduplikują po języku
+  (wyższy poziom). `get_job_match_profile`/`match_candidate_input` niosą kod, `scoreMatch`
+  porównuje kod (etykiety bez kodu przez te same aliasy; klucz etykiet NFC + bez diakrytyków
+  + złożone spacje, LIM17-05). Szczegół oferty, karta dopasowania, profil kandydata i widoki
+  pracodawcy pokazują nazwę w języku widza. Dowód: `rls.sql` sekcja LD920 (kontrole ujemne:
+  bez triggera, stara deduplikacja), unit `language-dictionary`. **Etap 2 (otwarte):**
+  zawody/umiejętności na ESCO z propozycją mapowania AI zatwierdzaną przez człowieka
+  (`docs/ESCO.md`).
 - [~] Taksonomia ESCO v1.2.1 (#93, migracja `0097`, `docs/ESCO.md`): zawody/umiejętności z
   przypiętego snapshotu tylko w PL/NL/FR/EN (RO/UK z issue pominięte — decyzja właściciela).
   `esco_uri` = klucz, `occupation_labels`/`skill_labels` (preferred/alternative, FK do

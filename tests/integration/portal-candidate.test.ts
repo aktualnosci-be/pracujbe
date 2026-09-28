@@ -151,7 +151,8 @@ describe('onboarding i profil kandydata (#25)', () => {
       availability: 'immediate', certificates: ['VCA'],
     });
     expect([...passport.skills].sort()).toEqual(['Kompletacja', 'Wózek widłowy']);
-    expect([...passport.languages].sort()).toEqual(['Niderlandzki', 'Polski']);
+    // 0920: języki ze słownika jako kody (nazwę w języku widza składa UI).
+    expect([...passport.languages].sort()).toEqual(['nl', 'pl']);
 
     const page = await OnboardingPage({ params: Promise.resolve({ locale: 'pl' }), searchParams: Promise.resolve({}) });
     const values = (page as { props: { initialValues?: Record<string, unknown> } }).props.initialValues;

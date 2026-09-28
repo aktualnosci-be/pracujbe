@@ -1191,7 +1191,6 @@
     "radiusLabel": "Gotowość do dojazdu (km)",
     "currencyLabel": "Waluta",
     "languagesLabel": "Języki",
-    "languageNamePlaceholder": "np. niderlandzki",
     "levelBasic": "Podstawowy",
     "levelIntermediate": "Średni",
     "levelFluent": "Biegły",
@@ -1217,7 +1216,8 @@
     "privacyNoticeAckLinks": "Zapoznałem(-am) się z <privacy>informacją o prywatności</privacy>.",
     "opensInNewTab": "(otwiera się w nowej karcie)",
     "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
-    "eyebrow": "PASZPORT PRACY"
+    "eyebrow": "PASZPORT PRACY",
+    "languageSelectPlaceholder": "Wybierz język"
   },
   "filters": {
     "title": "Filtry",
@@ -1468,8 +1468,8 @@
       "cityTooLong": "Nazwa miasta jest za długa.",
       "regionTooLong": "Nazwa regionu jest za długa.",
       "radiusInvalid": "Podaj poprawny promień dojazdu (0–300 km).",
-      "languageRequired": "Podaj język.",
-      "languageInvalid": "Podaj poprawną nazwę języka.",
+      "languageRequired": "Wybierz język.",
+      "languageInvalid": "Wybierz język z listy.",
       "languagesTooMany": "Dodano zbyt wiele języków.",
       "certificatesTooMany": "Dodano zbyt wiele certyfikatów.",
       "certificateExpiryInvalid": "Podaj poprawną datę ważności certyfikatu.",
@@ -1565,7 +1565,6 @@
     "skillsLabel": "Dodatkowe umiejętności",
     "skillsPlaceholder": "np. Praca w zespole",
     "languagesLabel": "Języki",
-    "languageNamePlaceholder": "np. Niderlandzki",
     "addLanguage": "Dodaj język",
     "levelBasic": "Podstawowy",
     "levelIntermediate": "Średnio zaawansowany",
@@ -1631,7 +1630,8 @@
     "screeningReviewReason": "Uzasadnienie: {reason}",
     "screeningPublishPending": "Pytanie {n} czeka na sprawdzenie.",
     "screeningPublishRejected": "Pytanie {n} nie zostało zaakceptowane.",
-    "screeningGoToQuestions": "Przejdź do pytań"
+    "screeningGoToQuestions": "Przejdź do pytań",
+    "languageSelectPlaceholder": "Wybierz język"
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",
@@ -3568,5 +3568,21 @@
         "description": "Zgłoszenie gościa bez potwierdzenia — liczone od pierwszego wysłania."
       }
     }
+  },
+  "languageNames": {
+    "pl": "Polski",
+    "nl": "Niderlandzki",
+    "fr": "Francuski",
+    "en": "Angielski",
+    "de": "Niemiecki",
+    "ro": "Rumuński",
+    "bg": "Bułgarski",
+    "uk": "Ukraiński",
+    "ru": "Rosyjski",
+    "es": "Hiszpański",
+    "it": "Włoski",
+    "pt": "Portugalski",
+    "tr": "Turecki",
+    "ar": "Arabski"
   }
 }

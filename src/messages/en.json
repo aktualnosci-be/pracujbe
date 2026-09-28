@@ -1191,7 +1191,6 @@
     "radiusLabel": "Willing to commute (km)",
     "currencyLabel": "Currency",
     "languagesLabel": "Languages",
-    "languageNamePlaceholder": "e.g. Dutch",
     "levelBasic": "Basic",
     "levelIntermediate": "Intermediate",
     "levelFluent": "Fluent",
@@ -1217,7 +1216,8 @@
     "privacyNoticeAckLinks": "I have read the <privacy>privacy information</privacy>.",
     "opensInNewTab": "(opens in a new tab)",
     "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
-    "eyebrow": "WORK PASSPORT"
+    "eyebrow": "WORK PASSPORT",
+    "languageSelectPlaceholder": "Choose a language"
   },
   "filters": {
     "title": "Filters",
@@ -1468,8 +1468,8 @@
       "cityTooLong": "City name is too long.",
       "regionTooLong": "Region name is too long.",
       "radiusInvalid": "Enter a valid commute radius (0–300 km).",
-      "languageRequired": "Enter a language.",
-      "languageInvalid": "Enter a valid language name.",
+      "languageRequired": "Choose a language.",
+      "languageInvalid": "Choose a language from the list.",
       "languagesTooMany": "Too many languages added.",
       "certificatesTooMany": "Too many certificates added.",
       "certificateExpiryInvalid": "Enter a valid certificate expiry date.",
@@ -1565,7 +1565,6 @@
     "skillsLabel": "Additional skills",
     "skillsPlaceholder": "e.g. Teamwork",
     "languagesLabel": "Languages",
-    "languageNamePlaceholder": "e.g. Dutch",
     "addLanguage": "Add language",
     "levelBasic": "Basic",
     "levelIntermediate": "Intermediate",
@@ -1631,7 +1630,8 @@
     "screeningReviewReason": "Reason: {reason}",
     "screeningPublishPending": "Question {n} is waiting to be checked.",
     "screeningPublishRejected": "Question {n} was not approved.",
-    "screeningGoToQuestions": "Go to questions"
+    "screeningGoToQuestions": "Go to questions",
+    "languageSelectPlaceholder": "Choose a language"
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -3568,5 +3568,21 @@
         "description": "Guest request without confirmation — counted from the first submission."
       }
     }
+  },
+  "languageNames": {
+    "pl": "Polish",
+    "nl": "Dutch",
+    "fr": "French",
+    "en": "English",
+    "de": "German",
+    "ro": "Romanian",
+    "bg": "Bulgarian",
+    "uk": "Ukrainian",
+    "ru": "Russian",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "tr": "Turkish",
+    "ar": "Arabic"
   }
 }

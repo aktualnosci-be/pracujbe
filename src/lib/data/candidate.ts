@@ -673,7 +673,9 @@ export async function getCandidatePassport(): Promise<CandidatePassport> {
       `SELECT cp.occupations, cp.city, cp.radius_km, cp.experience_years, cp.availability,
               (SELECT coalesce(json_agg(s.skill_label), '[]'::json) FROM public.candidate_skills s
                 WHERE s.candidate_profile_id = cp.id) AS skills,
-              (SELECT coalesce(json_agg(l.language_label), '[]'::json) FROM public.candidate_languages l
+              (SELECT coalesce(json_agg(coalesce(lg.code, l.language_label)), '[]'::json)
+                 FROM public.candidate_languages l
+                 LEFT JOIN public.languages lg ON lg.id = l.language_id
                 WHERE l.candidate_profile_id = cp.id) AS languages,
               (SELECT coalesce(json_agg(c.certificate_label), '[]'::json) FROM public.candidate_certificates c
                 WHERE c.candidate_profile_id = cp.id) AS certificates

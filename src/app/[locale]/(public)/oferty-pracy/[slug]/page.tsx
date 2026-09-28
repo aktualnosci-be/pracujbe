@@ -1,3 +1,4 @@
+import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
 import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
@@ -206,7 +207,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, format, candidateMinAge] = await Promise.all([
+  const [t, tJobs, tContract, tCategory, tCommon, tApply, tReport, tLanding, tLang, format, candidateMinAge] = await Promise.all([
     getTranslations('job'),
     getTranslations('jobs'),
     getTranslations('contractTypes'),
@@ -215,10 +216,14 @@ export default async function JobDetailPage({ params }: PageProps) {
     getTranslations('apply'),
     getTranslations('contentReport'),
     getTranslations('landing'),
+    getTranslations('languageNames'),
     getFormatter(),
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
+  // I18N-02: wymagane języki w języku widza (kod słownika 0920 / nazwa PL-NL-FR-EN), a nie
+  // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
+  const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
 
   const passportFields = buildJobDetailPassportFields(job, locale, {
     location: tJobs('passport.location'),
@@ -575,7 +580,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                       />
                       {t('languages')}
                     </dt>
-                    <dd className="font-medium text-foreground">{job.languages.join(', ')}</dd>
+                    <dd className="font-medium text-foreground">{languageNames}</dd>
                   </div>
                 ) : null}
               </dl>
@@ -686,7 +691,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               </div>
               {job.languages.length > 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {t('languages')}: {job.languages.join(', ')}
+                  {t('languages')}: {languageNames}
                 </p>
               ) : null}
               {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}

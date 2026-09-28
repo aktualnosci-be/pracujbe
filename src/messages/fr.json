@@ -1191,7 +1191,6 @@
     "radiusLabel": "Disposition à faire la navette (km)",
     "currencyLabel": "Devise",
     "languagesLabel": "Langues",
-    "languageNamePlaceholder": "ex. néerlandais",
     "levelBasic": "Basique",
     "levelIntermediate": "Intermédiaire",
     "levelFluent": "Courant",
@@ -1217,7 +1216,8 @@
     "privacyNoticeAckLinks": "J’ai pris connaissance des <privacy>informations sur la vie privée</privacy>.",
     "opensInNewTab": "(s’ouvre dans un nouvel onglet)",
     "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
-    "eyebrow": "PASSEPORT EMPLOI"
+    "eyebrow": "PASSEPORT EMPLOI",
+    "languageSelectPlaceholder": "Choisissez une langue"
   },
   "filters": {
     "title": "Filtres",
@@ -1468,8 +1468,8 @@
       "cityTooLong": "Le nom de la ville est trop long.",
       "regionTooLong": "Le nom de la région est trop long.",
       "radiusInvalid": "Indiquez un rayon de trajet valide (0–300 km).",
-      "languageRequired": "Indiquez une langue.",
-      "languageInvalid": "Indiquez un nom de langue valide.",
+      "languageRequired": "Choisissez une langue.",
+      "languageInvalid": "Choisissez une langue dans la liste.",
       "languagesTooMany": "Trop de langues ajoutées.",
       "certificatesTooMany": "Trop de certificats ajoutés.",
       "certificateExpiryInvalid": "Indiquez une date d’expiration valide pour le certificat.",
@@ -1565,7 +1565,6 @@
     "skillsLabel": "Compétences supplémentaires",
     "skillsPlaceholder": "ex. Travail en équipe",
     "languagesLabel": "Langues",
-    "languageNamePlaceholder": "ex. Néerlandais",
     "addLanguage": "Ajouter une langue",
     "levelBasic": "Débutant",
     "levelIntermediate": "Intermédiaire",
@@ -1631,7 +1630,8 @@
     "screeningReviewReason": "Motif : {reason}",
     "screeningPublishPending": "La question {n} attend une vérification.",
     "screeningPublishRejected": "La question {n} n’a pas été acceptée.",
-    "screeningGoToQuestions": "Aller aux questions"
+    "screeningGoToQuestions": "Aller aux questions",
+    "languageSelectPlaceholder": "Choisissez une langue"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -3568,5 +3568,21 @@
         "description": "Demande invitée non confirmée — à compter du premier envoi."
       }
     }
+  },
+  "languageNames": {
+    "pl": "Polonais",
+    "nl": "Néerlandais",
+    "fr": "Français",
+    "en": "Anglais",
+    "de": "Allemand",
+    "ro": "Roumain",
+    "bg": "Bulgare",
+    "uk": "Ukrainien",
+    "ru": "Russe",
+    "es": "Espagnol",
+    "it": "Italien",
+    "pt": "Portugais",
+    "tr": "Turc",
+    "ar": "Arabe"
   }
 }
