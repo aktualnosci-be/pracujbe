@@ -6,6 +6,7 @@ import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { getEmployerShellData } from '@/lib/data/employer';
 import { isJobImportEnabled } from '@/lib/ai-import/config';
 import { isJobAssistEnabled } from '@/lib/ai-assist/config';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Kreator oferty pracy — nowa oferta (Etap 5, makieta panelu pracodawcy).
@@ -59,6 +60,7 @@ export default async function NewJobPage({
         companyId={companyId}
         importEnabled={isJobImportEnabled()}
         assistEnabled={isJobAssistEnabled()}
+        screeningEnabled={isRecruitmentEnabled('screening')}
       />
     </>
   );

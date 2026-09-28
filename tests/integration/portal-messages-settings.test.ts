@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
+import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -256,6 +257,8 @@ describe('blokada firmy (#97)', () => {
 });
 
 describe('widoczność profilu (#494)', () => {
+  // #1135: widoczność profilu dla firm istnieje tylko w trybie RECRUITMENT (baza: startPortalDb).
+  withRecruitmentMode();
   it('niekompletny profil nie włączy widoczności; kompletny — tak, stan z bazy, tylko własny', async () => {
     actAs(anna);
     expect(await visibilityData.loadProfileVisibility()).toEqual({

@@ -20,6 +20,8 @@ export interface NewJobWizardProps {
   importEnabled: boolean;
   /** #37: asystent redagowania treści na krokach 5–6. */
   assistEnabled?: boolean;
+  /** #1137: pytania screeningowe tylko w trybie rekrutacyjnym (tryb liczy serwer). */
+  screeningEnabled?: boolean;
   companyId: string | null;
 }
 
@@ -32,17 +34,19 @@ export function NewJobWizard(props: NewJobWizardProps): React.JSX.Element {
 function NewJobWizardForCompany({
   importEnabled,
   assistEnabled = false,
+  screeningEnabled = false,
   companyId,
 }: NewJobWizardProps): React.JSX.Element {
   const [imported, setImported] = React.useState<{ result: JobImportSuccess; key: number } | null>(null);
 
-  if (!importEnabled) return <JobWizard assistEnabled={assistEnabled} companyId={companyId} />;
+  if (!importEnabled) return <JobWizard assistEnabled={assistEnabled} screeningEnabled={screeningEnabled} companyId={companyId} />;
 
   const result = imported?.result ?? null;
   return (
     <JobWizard
       key={imported?.key ?? 0}
       assistEnabled={assistEnabled}
+      screeningEnabled={screeningEnabled}
       companyId={companyId}
       initialJobId={result?.jobId ?? undefined}
       initialValues={result?.values}

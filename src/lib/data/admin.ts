@@ -48,6 +48,7 @@ import { getPortalIdentity, isPortalDataConfigured, withServiceRole } from '@/li
 import { attempt, execute, queryCount, queryOne, queryRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { Locale } from '@/i18n/routing';
 import { resolveRecipientLocale } from '@/lib/i18n/recipient-locale';
 import {
@@ -1452,7 +1453,8 @@ async function readAuditRows(
     } else if (entityType === 'email_suppression') {
       entityHref = { pathname: '/admin/poczta', query: { status: 'all' } };
     } else if (entityType === 'screening_question_review') {
-      entityHref = { pathname: '/admin/pytania', query: { status: 'all' } };
+      // #1137: `/admin/pytania` istnieje tylko w trybie rekrutacyjnym (inaczej 404) — bez linku.
+      entityHref = isRecruitmentEnabled('screening') ? { pathname: '/admin/pytania', query: { status: 'all' } } : null;
     } else if (entityType === 'breach_incident' && id) {
       const uuid = parseUuid(id);
       entityHref = uuid ? { pathname: `/admin/naruszenia/${uuid}` } : null;

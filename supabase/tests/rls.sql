@@ -18392,4 +18392,224 @@ rollback;
 reset role; reset app.current_uid;
 select pg_temp.assert(public.recruitment_enabled(), 'AC172-7d po cofnięciu tryb testów bez zmian');
 
+-- ============================================================================
+-- CLVIS / CLSCR — tryb ogłoszeniowy: bez wyszukiwalnej bazy profili (#1135) i bez pytań
+-- screeningowych (#1137); migracja 0173 na 0171. Start i koniec w RECRUITMENT.
+-- ============================================================================
+\echo '--- CLVIS brak wyszukiwalnej bazy profili w trybie ogłoszeniowym (0173, #1135) ---'
+\set CL10C 'c1a10980-0000-0000-0000-0000000000c1'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CLVIS-pre tryb RECRUITMENT po PLM');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CL10C','cl10-cvc@test.be','Wiktor V','{"role":"candidate","first_name":"Wiktor","last_name":"Vis","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'CL10C', false, true);
+select id as clcp2 from public.candidate_profiles where profile_id = :'CLC2' \gset
+insert into public.candidate_skills(candidate_profile_id, skill_label) values (:'clcp2', 'Spawanie TIG');
+
+-- Stan sprzed trybu: zweryfikowana firma widzi wyszukiwalny profil i jego relacje.
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.candidate_profiles where profile_id = :'CLC2') = 1
+  and (select count(*) from public.candidate_skills where candidate_profile_id = :'clcp2') = 1,
+  'CLVIS-pre w trybie RECRUITMENT firma widzi wyszukiwalny profil i umiejętności');
+reset role; reset app.current_uid;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CLVIS', 'RECRUITMENT');
+reset role;
+select count(*) as clvis_ev0 from public.candidate_visibility_events \gset
+
+-- CLVIS-1: zweryfikowana firma nie widzi żadnego profilu ani relacji (także wyszukiwalnego sprzed trybu).
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.candidate_profiles) = 0
+  and (select count(*) from public.candidate_skills where candidate_profile_id = :'clcp2') = 0
+  and (select count(*) from public.candidate_languages where candidate_profile_id = :'clcp2') = 0
+  and (select count(*) from public.candidate_certificates where candidate_profile_id = :'clcp2') = 0
+  and not public.company_can_see_match_candidate(:'CLC2'::uuid)
+  and not public.candidate_profile_is_searchable(:'clcp2'::uuid),
+  'CLVIS-1 rekruter nie otwiera profilu dowolnego kandydata (profil, relacje, dopasowania)');
+reset role; reset app.current_uid;
+
+-- CLVIS-2: włączenie widoczności odrzucone (nowe i ponowne); wyłączenie działa.
+set role authenticated; set app.current_uid = :'CL10C'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'RECRUITMENT_DISABLED', 'CLVIS-2 set_candidate_searchable(true) → RECRUITMENT_DISABLED');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CLC2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.set_candidate_searchable(true)',
+  'RECRUITMENT_DISABLED', 'CLVIS-2b ponowne włączenie (profil już wyszukiwalny) też odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not (select is_searchable from public.candidate_profiles where profile_id = :'CL10C')
+  and (select count(*) from public.candidate_visibility_events) = :clvis_ev0,
+  'CLVIS-2c bez zmiany flagi i bez wpisu historii');
+
+-- CLVIS-3: bezpośredni zapis is_searchable = true odrzucony każdą rolą (także superuser bez wyjątku seedu).
+set role service_role;
+select pg_temp.expect_error(format('update public.candidate_profiles set is_searchable = true where profile_id = %L', :'CL10C'),
+  'RECRUITMENT_DISABLED', 'CLVIS-3 UPDATE is_searchable = true (service_role) odrzucony');
+select pg_temp.expect_error(
+  format('insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (%L, true, true) on conflict do nothing', :'CANDA'),
+  'RECRUITMENT_DISABLED', 'CLVIS-3b INSERT z is_searchable = true (service_role) odrzucony');
+reset role;
+select pg_temp.expect_error(format('update public.candidate_profiles set is_searchable = true where profile_id = %L', :'CL10C'),
+  'RECRUITMENT_DISABLED', 'CLVIS-3c UPDATE superusera bez wyjątku seedu odrzucony');
+begin;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+update public.candidate_profiles set is_searchable = true where profile_id = :'CL10C';
+select pg_temp.assert((select is_searchable from public.candidate_profiles where profile_id = :'CL10C'),
+  'CLVIS-3d seed demo (superuser + jawny wyjątek) ustawia widoczność');
+rollback;
+
+-- CLVIS-4 (kontrole ujemne): bez strażnika bezpośredni UPDATE przechodzi; bez polityki 0171
+-- (sama polityka z 0078) rekruter widzi profil sprzed trybu.
+begin;
+drop trigger trg_aa_recruitment_mode_searchable on public.candidate_profiles;
+set local role service_role;
+update public.candidate_profiles set is_searchable = true where profile_id = :'CL10C';
+reset role;
+select pg_temp.assert((select is_searchable from public.candidate_profiles where profile_id = :'CL10C'),
+  'CLVIS-4 kontrola ujemna: bez strażnika profil staje się wyszukiwalny');
+rollback;
+begin;
+drop policy candidate_profiles_recruitment_mode on public.candidate_profiles;
+set local role authenticated; set local app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_profiles where profile_id = :'CLC2') = 1,
+  'CLVIS-4b kontrola ujemna: polityka z 0078 bez warunku trybu przepuszcza profil');
+rollback;
+reset role; reset app.current_uid;
+
+-- CLVIS-5: wyłączenie działa w trybie ogłoszeniowym (ślad w historii).
+set role authenticated; set app.current_uid = :'CLC2'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(false) = false, 'CLVIS-5 set_candidate_searchable(false) działa');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not (select is_searchable from public.candidate_profiles where profile_id = :'CLC2')
+  and (select count(*) from public.candidate_visibility_events where candidate_id = :'CLC2' and not searchable) >= 1,
+  'CLVIS-5b flaga wyłączona, wpis w candidate_visibility_events');
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLVIS: powrót', 'CLASSIFIEDS_ONLY');
+reset role;
+-- CLVIS-6: tryb RECRUITMENT — włączenie znowu działa (VIS494 bez zmian).
+set role authenticated; set app.current_uid = :'CL10C'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(true), 'CLVIS-6 w trybie RECRUITMENT włączenie działa');
+reset role; reset app.current_uid;
+
+\echo '--- CLSCR pytania screeningowe wyłączone w trybie ogłoszeniowym (0173, #1137) ---'
+\set CSJ  'c1a10980-0000-0000-0000-0000000000b1'
+\set CSJ2 'c1a10980-0000-0000-0000-0000000000b2'
+\set CSJ3 'c1a10980-0000-0000-0000-0000000000b3'
+-- Kanał aplikowania (0172, #1158) wymagany do publikacji — ustawiony, żeby testy dotyczyły pytań.
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale, apply_email) values
+  (:'CSJ',  :'CLT', :'CLO', 'draft-clscr-1', 'Magazynier CLSCR', 'warehouse', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', 'praca@clscr.be'),
+  (:'CSJ2', :'CLT', :'CLO', 'draft-clscr-2', 'Kierowca CLSCR',   'transport', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', 'praca@clscr.be'),
+  (:'CSJ3', :'CLT', :'CLO', 'draft-clscr-3', 'Operator CLSCR',   'production', 'permanent', 'Gent', 'Flandria', 'draft', 'pl', 'praca@clscr.be');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'CSJ',  'pl', 'Magazynier CLSCR', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień']),
+  (:'CSJ2', 'pl', 'Kierowca CLSCR', 'Transport międzynarodowy.', array['Dostawy']),
+  (:'CSJ3', 'pl', 'Operator CLSCR', 'Praca na linii produkcyjnej.', array['Obsługa maszyn']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'CSJ', 'pl', 'mandatory', 0, 'Dyspozycyjność'),
+  (:'CSJ2', 'pl', 'mandatory', 0, 'Prawo jazdy C+E'),
+  (:'CSJ3', 'pl', 'mandatory', 0, 'Praca zmianowa');
+
+-- Stan sprzed trybu: szkice z pytaniem ryzykownym (przegląd pending) i neutralnym.
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'CSJ'::uuid, $j${"screening_questions": [
+  {"type": "yes_no", "required": true, "prompt": {"pl": "Czy masz certyfikat VCA?"}},
+  {"type": "date", "prompt": {"pl": "Podaj datę urodzenia"}}]}$j$::jsonb);
+select public.save_job_draft(:'CSJ3'::uuid, $j${"screening_questions": [
+  {"type": "date", "prompt": {"pl": "Podaj datę urodzenia"}}]}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.job_screening_questions where job_id = :'CSJ') = 2
+  and (select count(*) from public.screening_question_reviews where job_id = :'CSJ' and status = 'pending') = 1,
+  'CLSCR-pre szkic z pytaniami i otwartym przeglądem (tryb RECRUITMENT)');
+select id as csrev from public.screening_question_reviews where job_id = :'CSJ' limit 1 \gset
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CLSCR', 'RECRUITMENT');
+reset role;
+
+-- CLSCR-1: zapis pytań odrzucony (RPC i krok kreatora); pusta lista działa.
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($q$select public.set_job_screening_questions(%L::uuid, '[{"type": "yes_no", "prompt": {"pl": "Czy masz VCA?"}}]'::jsonb)$q$, :'CSJ2'),
+  'RECRUITMENT_DISABLED', 'CLSCR-1 set_job_screening_questions z niepustą listą → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"screening_questions": [{"type": "yes_no", "prompt": {"pl": "Czy masz VCA?"}}]}'::jsonb)$q$, :'CSJ2'),
+  'RECRUITMENT_DISABLED', 'CLSCR-1b save_job_draft z pytaniami → RECRUITMENT_DISABLED');
+select public.set_job_screening_questions(:'CSJ2'::uuid, '[]'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.job_screening_questions where job_id = :'CSJ2') = 0,
+  'CLSCR-1c brak pytań; pusta lista przyjęta');
+
+-- CLSCR-2: bezpośredni INSERT (service_role, superuser) pomijany; kopia oferty bez pytań.
+set role service_role;
+insert into public.job_screening_questions(job_id, position, type, required, prompt, options)
+  values (:'CSJ2', 0, 'yes_no', false, '{"pl": "Czy masz VCA?"}', '[]');
+reset role;
+insert into public.job_screening_questions(job_id, position, type, required, prompt, options)
+  values (:'CSJ2', 1, 'yes_no', false, '{"pl": "Czy masz VCA?"}', '[]');
+select pg_temp.assert((select count(*) from public.job_screening_questions where job_id = :'CSJ2') = 0,
+  'CLSCR-2 bezpośredni INSERT pytania pominięty (service_role i superuser)');
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'CSJ'::uuid, gen_random_uuid()) as csdup \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.job_screening_questions where job_id = :'csdup') = 0
+  and (select status::text from public.jobs where id = :'csdup') = 'draft',
+  'CLSCR-2b duplikat oferty z pytaniami powstaje bez pytań');
+
+-- CLSCR-3: oferta z pytaniami sprzed trybu i otwartym przeglądem publikuje się.
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select public.publish_job(:'CSJ'::uuid, 'clscr-3') is not null as ok \gset cs3_
+reset role; reset app.current_uid;
+select pg_temp.assert(:'cs3_ok'::boolean and (select status::text from public.jobs where id = :'CSJ') = 'active',
+  'CLSCR-3 publikacja bez SCREENING_REVIEW_REQUIRED w trybie ogłoszeniowym');
+
+-- CLSCR-4: publiczne pytania = pusty wynik mimo zapisanych pytań.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_public_job_screening_questions(:'CSJ'::uuid)) = 0,
+  'CLSCR-4 get_public_job_screening_questions → 0 wierszy');
+reset role;
+select pg_temp.assert((select count(*) from public.job_screening_questions where job_id = :'CSJ') = 2,
+  'CLSCR-4b pytania sprzed trybu zostają w bazie');
+
+-- CLSCR-5: decyzja przeglądu pytań niedostępna (RPC admina i bezpośredni UPDATE).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_decide_screening_review(%L::uuid, %L, null)', :'csrev', 'approved'),
+  'RECRUITMENT_DISABLED', 'CLSCR-5 admin_decide_screening_review → RECRUITMENT_DISABLED');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(format($q$update public.screening_question_reviews set status = 'approved' where id = %L$q$, :'csrev'),
+  'RECRUITMENT_DISABLED', 'CLSCR-5b bezpośredni UPDATE statusu przeglądu odrzucony');
+
+-- CLSCR-6 (kontrole ujemne): bez strażnika tabeli pytanie powstaje; w trybie RECRUITMENT
+-- (strażnik przeglądu z 0154 bez warunku trybu) ta sama publikacja jest blokowana,
+-- a publiczne pytania wracają.
+begin;
+drop trigger trg_aa_recruitment_mode on public.job_screening_questions;
+insert into public.job_screening_questions(job_id, position, type, required, prompt, options)
+  values (:'CSJ2', 0, 'yes_no', false, '{"pl": "Czy masz VCA?"}', '[]');
+select pg_temp.assert((select count(*) from public.job_screening_questions where job_id = :'CSJ2') = 1,
+  'CLSCR-6 kontrola ujemna: bez strażnika pytanie zapisuje się w trybie ogłoszeniowym');
+rollback;
+begin;
+set local role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'CLSCR-6b', 'CLASSIFIEDS_ONLY');
+reset role;
+set local role authenticated; set local app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'CSJ3', 'clscr-6b'),
+  'SCREENING_REVIEW_REQUIRED', 'CLSCR-6b kontrola ujemna: bez warunku trybu otwarty przegląd blokuje publikację');
+reset role;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_public_job_screening_questions(:'CSJ'::uuid)) = 2,
+  'CLSCR-6c kontrola ujemna: w trybie RECRUITMENT pytania publicznej oferty są zwracane');
+rollback;
+reset role; reset app.current_uid;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLSCR: powrót', 'CLASSIFIEDS_ONLY');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

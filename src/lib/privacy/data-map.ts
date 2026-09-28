@@ -374,6 +374,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       is_searchable: 'preferences',
       searchable_changed_at: 'preferences',
     },
+    note:
+      'Odbiorca „zweryfikowana firma” (wyszukiwanie profili, #494) tylko w trybie RECRUITMENT; w trybie ogłoszeniowym (decyzja produktowa, 0171/0173) firmy nie widzą profili, a włączenie widoczności jest odrzucane.',
   },
   'public.candidate_visibility_events': {
     activities: ['candidate-profile'],
@@ -1012,7 +1014,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['companies'],
     subjects: [],
     columns: {},
-    note: 'Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers.',
+    note:
+      'Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0173) nowe pytania nie są zapisywane, a zapisane nie są pokazywane.',
   },
   'public.screening_question_reviews': {
     activities: ['companies'],

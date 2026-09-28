@@ -508,6 +508,13 @@ export interface JobWizardProps {
    */
   assistEnabled?: boolean;
   /**
+   * #1137 — decyzja produktowa: portal ogłoszeniowy. Pytania screeningowe (#101) tylko w trybie
+   * rekrutacyjnym; tryb liczy serwer (`isRecruitmentEnabled('screening')`) i podaje w propsach.
+   * Domyślnie wyłączone (fail-closed): bez edytora w kroku 7, krok wysyła pustą listę, a pytania
+   * zapisane w szkicu sprzed trybu nie trafiają do formularza.
+   */
+  screeningEnabled?: boolean;
+  /**
    * Firma, dla której wyrenderowano kreator nowej oferty (EMP-02). `createJobDraft` tworzy
    * szkic tylko wtedy, gdy to nadal aktywna firma — inaczej `ACTIVE_COMPANY_CHANGED`
    * zamiast szkicu w firmie przełączonej w innej karcie. Wznowienie istniejącego szkicu
@@ -630,6 +637,7 @@ export function JobWizard({
   importSlot,
   importReview,
   assistEnabled = false,
+  screeningEnabled = false,
   companyId = null,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
@@ -660,7 +668,11 @@ export function JobWizard({
     formState: { errors },
   } = useForm<FormValues>({
     // Wznowienie szkicu: zapisane wartości nadpisują domyślne (pola nieuzupełnione zostają puste).
-    defaultValues: { ...DEFAULT_VALUES, ...narrowInitialValues(initialValues) },
+    defaultValues: {
+      ...DEFAULT_VALUES,
+      ...narrowInitialValues(initialValues),
+      ...(screeningEnabled ? {} : { screeningQuestions: [] }),
+    },
     mode: 'onSubmit',
   });
 
@@ -1831,19 +1843,21 @@ export function JobWizard({
                 />
               </div>
 
-              <ScreeningQuestionsEditor
-                value={values.screeningQuestions}
-                onChange={(next) => {
-                  setValue('screeningQuestions', next, { shouldDirty: true });
-                  if (Object.keys(screeningErrors).length > 0) setScreeningErrors({});
-                  // Zmieniona treść = nowy przegląd w bazie; stan z poprzedniej publikacji nieaktualny.
-                  if (screeningReviews.length > 0) setScreeningReviews([]);
-                }}
-                contentLocale={contentLocale}
-                readOnly={isEdit}
-                errors={screeningErrors}
-                reviews={screeningReviews}
-              />
+              {screeningEnabled ? (
+                <ScreeningQuestionsEditor
+                  value={values.screeningQuestions}
+                  onChange={(next) => {
+                    setValue('screeningQuestions', next, { shouldDirty: true });
+                    if (Object.keys(screeningErrors).length > 0) setScreeningErrors({});
+                    // Zmieniona treść = nowy przegląd w bazie; stan z poprzedniej publikacji nieaktualny.
+                    if (screeningReviews.length > 0) setScreeningReviews([]);
+                  }}
+                  contentLocale={contentLocale}
+                  readOnly={isEdit}
+                  errors={screeningErrors}
+                  reviews={screeningReviews}
+                />
+              ) : null}
             </div>
           ) : null}
 
