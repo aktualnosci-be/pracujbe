@@ -542,13 +542,9 @@ describe('ukryte stare pytania screeningowe (odczyty w warstwie aplikacji)', () 
     expect(source.match(/IS DISTINCT FROM 'screening_review'/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('dziennik admina: wpisy o pytaniach ukrywane w zapytaniu i w filtrach', () => {
+  it('dziennik audytu nie zależy od trybu (ślad audytowy, nie UI funkcji)', () => {
     const data = read('src/lib/data/admin.ts');
-    expect(data).toContain("entity_type IS DISTINCT FROM 'screening_question_review'");
-    expect(data).toMatch(/hideScreening: !screeningVisible/);
-    expect(data).toMatch(/hideScreening: !isRecruitmentEnabled\('screening'\)/);
-    const page = read('src/app/[locale]/admin/dziennik/page.tsx');
-    expect(page).toContain('visibleAuditEntityTypes(screeningVisible)');
-    expect(page).toContain('visibleAuditActions(screeningVisible)');
+    expect(data).not.toContain('hideScreening');
+    expect(read('src/lib/admin/list-params.ts')).not.toContain('includeScreening');
   });
 });

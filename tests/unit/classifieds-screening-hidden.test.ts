@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { publishJob } from '@/lib/actions/jobs';
-import { parseAuditAction, parseAuditEntity, visibleAuditActions, visibleAuditEntityTypes, isScreeningAuditRow } from '@/lib/admin/list-params';
 import { getMyApplicationScreeningAnswers, getMyApplicationsPage } from '@/lib/data/candidate';
 import { listAuditLogs, listScreeningReviews } from '@/lib/data/admin';
 import { getNotifications, getNotificationsPage } from '@/lib/data/notifications';
@@ -183,43 +182,24 @@ describe('panel admina', () => {
       expect(fakeDb.calls).toHaveLength(0);
     });
 
-    it('dziennik: zapytanie pomija wpisy o pytaniach, filtr o pytaniach jest ignorowany', async () => {
-      fakeDb.rows('admin.audit-logs', []).rows('admin.audit-actors', []).rows('admin.audit-companies', []);
-      await listAuditLogs({ entity: 'screening_question_review', action: 'screening_question.hidden' });
-      const [call] = fakeDb.callsTo('admin.audit-logs');
-      expect(call?.text).toContain("entity_type IS DISTINCT FROM 'screening_question_review'");
-      expect(call?.text).toContain("action NOT LIKE 'screening\\_question.%'");
-      // Wartości filtrów spoza widocznej listy odpadają (jak nieznane), zostaje tylko limit.
-      expect(call?.values).toEqual([51]);
-    });
-
-    it('filtry dziennika nie oferują przeglądu pytań', () => {
-      expect(visibleAuditEntityTypes(false)).not.toContain('screening_question_review');
-      expect(visibleAuditActions(false).map(([action]) => action).filter((action) => action.startsWith('screening_question.'))).toEqual([]);
-      expect(parseAuditEntity('screening_question_review', false)).toBeNull();
-      expect(parseAuditAction('screening_question.reviewed', false)).toBeNull();
-      expect(parseAuditEntity('company', false)).toBe('company');
-    });
-  });
-
-  describe('kontrola ujemna: RECRUITMENT', () => {
-    withRecruitmentMode();
-
-    it('dziennik bez ukrywania wpisów o pytaniach', async () => {
+    it('dziennik audytu pozostaje kompletny: filtry o pytaniach działają, zapytanie nic nie ukrywa', async () => {
       fakeDb.rows('admin.audit-logs', []).rows('admin.audit-actors', []).rows('admin.audit-companies', []);
       await listAuditLogs({ entity: 'screening_question_review', action: 'screening_question.hidden' });
       const [call] = fakeDb.callsTo('admin.audit-logs');
       expect(call?.text).not.toContain('IS DISTINCT FROM');
       expect(call?.values).toEqual(['screening_question_review', 'screening_question.hidden', 51]);
     });
+  });
 
-    it('filtry oferują przegląd pytań (domyślnie także bez argumentu)', () => {
-      expect(visibleAuditEntityTypes(true)).toContain('screening_question_review');
-      expect(parseAuditEntity('screening_question_review')).toBe('screening_question_review');
-      expect(parseAuditAction('screening_question.reviewed')).toBe('screening_question.reviewed');
-      expect(isScreeningAuditRow('screening_question_review', null)).toBe(true);
-      expect(isScreeningAuditRow('job', 'screening_question.hidden')).toBe(true);
-      expect(isScreeningAuditRow('job', 'job.duplicated')).toBe(false);
+  describe('RECRUITMENT', () => {
+    withRecruitmentMode();
+
+    it('dziennik audytu identyczny jak w trybie ogłoszeniowym', async () => {
+      fakeDb.rows('admin.audit-logs', []).rows('admin.audit-actors', []).rows('admin.audit-companies', []);
+      await listAuditLogs({ entity: 'screening_question_review', action: 'screening_question.hidden' });
+      const [call] = fakeDb.callsTo('admin.audit-logs');
+      expect(call?.text).not.toContain('IS DISTINCT FROM');
+      expect(call?.values).toEqual(['screening_question_review', 'screening_question.hidden', 51]);
     });
   });
 });

@@ -167,7 +167,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   warstwa aplikacji): w trybie ogłoszeniowym loadery nie wołają zapytań o nie — szczegół publiczny
   oferty (`getJobBySlug`), kreator (`getJobDraft`, `screeningQuestions: []`, zapis kroku 7 nie rusza
   wierszy), odpowiedzi w szczegółach zgłoszeń i na liście kandydata (`screeningCount` = 0),
-  kolejka admina (`listScreeningReviews` pusta), wpisy dziennika o pytaniach (lista, filtry, eksport),
+  kolejka admina (`listScreeningReviews` pusta; dziennik audytu zostaje kompletny w obu trybach),
   powiadomienia `screening_review` (dzwonek, pełna lista, licznik), błąd publikacji z przeglądem
   pytań (→ `INTERNAL`, bez odczytu). Wiersze zostają w bazie; tryb `RECRUITMENT` bez zmian. Dowód:
   unit `classifieds-screening-hidden`, PG16 `portal-screening-banner` (sekcja „stare pytania ukryte”),

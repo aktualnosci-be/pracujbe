@@ -188,15 +188,13 @@ describe('stare pytania screeningowe ukryte w trybie ogłoszeniowym', () => {
       expect(page.items.map((item) => item.screeningCount)).toEqual(page.items.map(() => 0));
     });
 
-    it('admin: kolejka przeglądu pytań pusta, wpisy dziennika o pytaniach ukryte', async () => {
+    it('admin: kolejka przeglądu pytań pusta, dziennik audytu nadal kompletny', async () => {
       actAs(admin);
       const list = await adminData.listScreeningReviews({ status: 'all' });
       expect(list).toEqual({ status: 'ok', rows: [], nextCursor: null });
+      // Dziennik to ślad audytowy: wpisy o pytaniach zostają widoczne w obu trybach.
       const log = await adminData.listAuditLogs({});
-      expect(log.status).toBe('ok');
-      const rows = log.status === 'ok' ? log.rows : [];
-      expect(rows.length).toBeGreaterThan(0);
-      expect(rows.filter((row) => row.entityType === 'screening_question_review' || row.action.startsWith('screening_question.'))).toEqual([]);
+      expect(log.status === 'ok' ? log.rows.some((row) => row.action.startsWith('screening_question.')) : false).toBe(true);
     });
 
     it('powiadomienie „pytanie ukryte” nie pojawia się na liście ani w liczniku pracodawcy', async () => {
@@ -231,8 +229,6 @@ describe('stare pytania screeningowe ukryte w trybie ogłoszeniowym', () => {
       actAs(admin);
       const reviews = await adminData.listScreeningReviews({ status: 'all' });
       expect(reviews.status === 'ok' ? reviews.rows.length : 0).toBeGreaterThan(0);
-      const log = await adminData.listAuditLogs({});
-      expect(log.status === 'ok' ? log.rows.some((row) => row.action.startsWith('screening_question.')) : false).toBe(true);
     });
   });
 });

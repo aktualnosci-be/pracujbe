@@ -339,40 +339,14 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',
 };
 
-/** Typ obiektu i akcje dziennika o pytaniach screeningowych (#497) — ukrywane w trybie ogłoszeniowym. */
-const SCREENING_AUDIT_ENTITY: AuditEntityType = 'screening_question_review';
-const SCREENING_AUDIT_ACTION_PREFIX = 'screening_question.';
-
-export function isScreeningAuditRow(entityType: string | null, action: string | null): boolean {
-  return entityType === SCREENING_AUDIT_ENTITY || (action ?? '').startsWith(SCREENING_AUDIT_ACTION_PREFIX);
-}
-
-/**
- * Typy obiektów widoczne w filtrze dziennika. Decyzja produktowa: portal ogłoszeniowy —
- * `includeScreening = false` ukrywa przegląd pytań screeningowych (tryb liczy serwer).
- */
-export function visibleAuditEntityTypes(includeScreening = true): readonly AuditEntityType[] {
-  return includeScreening ? AUDIT_ENTITY_TYPES : AUDIT_ENTITY_TYPES.filter((type) => type !== SCREENING_AUDIT_ENTITY);
-}
-
-/** Akcje widoczne w filtrze dziennika (jak wyżej). */
-export function visibleAuditActions(includeScreening = true): [string, string][] {
-  return Object.entries(AUDIT_ACTION_KEY).filter(
-    ([action]) => includeScreening || !action.startsWith(SCREENING_AUDIT_ACTION_PREFIX),
-  );
-}
-
-export function parseAuditEntity(
-  raw: string | undefined | null,
-  includeScreening = true,
-): AuditEntityType | null {
-  return raw && (visibleAuditEntityTypes(includeScreening) as readonly string[]).includes(raw)
+export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {
+  return raw && (AUDIT_ENTITY_TYPES as readonly string[]).includes(raw)
     ? (raw as AuditEntityType)
     : null;
 }
 
-export function parseAuditAction(raw: string | undefined | null, includeScreening = true): string | null {
-  return raw && visibleAuditActions(includeScreening).some(([action]) => action === raw) ? raw : null;
+export function parseAuditAction(raw: string | undefined | null): string | null {
+  return raw && Object.hasOwn(AUDIT_ACTION_KEY, raw) ? raw : null;
 }
 
 /** UUID z URL (np. `?id=` historii jednej firmy) albo null. */

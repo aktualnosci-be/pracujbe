@@ -5,12 +5,11 @@ import { Link } from '@/i18n/navigation';
 import { CAMPAIGN_STATUS_KEY, isCampaignStatus } from '@/lib/admin/campaigns';
 import {
   AUDIT_ACTION_KEY,
+  AUDIT_ENTITY_TYPES,
   EMAIL_SUPPRESSION_REASON_KEY,
   normalizeAdminSearch,
   parseAuditAction,
   parseAuditEntity,
-  visibleAuditActions,
-  visibleAuditEntityTypes,
   parseUuid,
   parseYmd,
 } from '@/lib/admin/list-params';
@@ -21,7 +20,6 @@ import {
   type AdminAuditRow,
 } from '@/lib/data/admin';
 import { isPortalDataConfigured } from '@/lib/db/portal';
-import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import { AuditExportButton } from '@/components/admin/AuditExportButton';
@@ -112,9 +110,8 @@ export default async function AdminAuditPage({
   const tOffer = await getTranslations({ locale, namespace: 'offerStatus' });
 
   const sp = await searchParams;
-  const screeningVisible = isRecruitmentEnabled('screening');
-  const entity = parseAuditEntity(firstValue(sp['entity']), screeningVisible);
-  const action = parseAuditAction(firstValue(sp['action']), screeningVisible);
+  const entity = parseAuditEntity(firstValue(sp['entity']));
+  const action = parseAuditAction(firstValue(sp['action']));
   const entityId = parseUuid(firstValue(sp['id']));
   const actor = normalizeAdminSearch(firstValue(sp['actor']));
   const from = parseYmd(firstValue(sp['from']));
@@ -201,7 +198,7 @@ export default async function AdminAuditPage({
           </label>
           <select id="audit-entity" name="entity" defaultValue={entity ?? ''} className={fieldClass}>
             <option value="">{t('auditEntityAll')}</option>
-            {visibleAuditEntityTypes(screeningVisible).map((value) => (
+            {AUDIT_ENTITY_TYPES.map((value) => (
               <option key={value} value={value}>
                 {t(ENTITY_LABEL[value] ?? 'targetUnknown')}
               </option>
@@ -214,7 +211,7 @@ export default async function AdminAuditPage({
           </label>
           <select id="audit-action" name="action" defaultValue={action ?? ''} className={fieldClass}>
             <option value="">{t('auditActionAll')}</option>
-            {visibleAuditActions(screeningVisible).map(([value, key]) => (
+            {Object.entries(AUDIT_ACTION_KEY).map(([value, key]) => (
               <option key={value} value={value}>
                 {t(key)}
               </option>
