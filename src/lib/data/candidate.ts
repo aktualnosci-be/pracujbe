@@ -608,7 +608,10 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
         `SELECT 1 FROM public.applications
           WHERE candidate_id = $1 AND deleted_at IS NULL AND status::text = ANY($2::text[])`,
         [me.id, [...ACTIVE_APPLICATION_STATUSES]]));
-      const unreadMessages = await attempt(tx, () => countUnreadConversations(tx, me.id));
+      // #1134: tryb ogłoszeniowy — rozmowy wyłączone; licznik bez zapytania (kafelka nie ma).
+      const unreadMessages = isRecruitmentEnabled('messaging')
+        ? await attempt(tx, () => countUnreadConversations(tx, me.id))
+        : ({ ok: true, value: 0 } as const);
       return { newJobs, activeApplications, unreadMessages };
     });
     const settled = (area: string, result: typeof counters.newJobs): number | null => {
@@ -631,6 +634,42 @@ export async function getCandidateOverview(): Promise<CandidateOverview> {
   } catch (error) {
     captureError(error, { area: 'candidate.getCandidateOverview' });
     return { newJobsCount: null, activeApplicationsCount: null, unreadMessagesCount: null, profileCompletionPct: 0 };
+  }
+}
+
+/**
+ * Pulpit konta w trybie ogłoszeniowym (#1142): imię z `profiles` i liczba aktywnych ofert.
+ * Bez profilu zawodowego, zgłoszeń, propozycji i wiadomości (żaden z tych odczytów nie jest
+ * wołany). Licznik bez udanego odczytu = `null` („—”), nigdy fałszywe zero (#244).
+ */
+export interface CandidateAccountOverview {
+  firstName: string | null;
+  newJobsCount: number | null;
+}
+
+export async function getCandidateAccountOverview(): Promise<CandidateAccountOverview> {
+  if (!isPortalDataConfigured()) {
+    if (isDashboardErrorFixture()) return { firstName: null, newJobsCount: null };
+    return { firstName: null, newJobsCount: DEMO_OVERVIEW.newJobsCount };
+  }
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { firstName: null, newJobsCount: null };
+    return await withPortalTransaction(me, async (tx) => {
+      const name = await attempt(tx, async () => {
+        const row = await queryOne(tx, 'candidate.account-first-name',
+          'SELECT first_name FROM public.profiles WHERE id = $1', [me.id]);
+        const value = row?.['first_name'];
+        return typeof value === 'string' && value.trim() ? value.trim() : null;
+      });
+      const jobs = await attempt(tx, async () =>
+        asNum(await rpc(tx, 'get_public_jobs_count', { p_keyword: null, p_city: null })));
+      if (!jobs.ok) captureError(jobs.error, { area: 'candidate.getCandidateAccountOverview.newJobs' });
+      return { firstName: name.ok ? name.value : null, newJobsCount: jobs.ok ? jobs.value : null };
+    });
+  } catch (error) {
+    captureError(error, { area: 'candidate.getCandidateAccountOverview' });
+    return { firstName: null, newJobsCount: null };
   }
 }
 
@@ -1345,6 +1384,8 @@ export async function getLatestActiveOffer(
 
 /** Ostatnie wiadomości/konwersacje kandydata. Pusta lista tylko po udanym odczycie (#244). */
 export async function getLatestMessages(): Promise<CandidateSectionLoad<LatestMessage>> {
+  // #1134: tryb ogłoszeniowy — bez rozmów i bez zapytania (sekcji nie ma na pulpicie).
+  if (!isRecruitmentEnabled('messaging')) return { status: 'ok', items: [] };
   if (!isPortalDataConfigured()) {
     if (isDashboardErrorFixture()) return { status: 'error' };
     return { status: 'ok', items: demoMessages(routing.defaultLocale) };

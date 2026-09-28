@@ -307,6 +307,19 @@ describe('worker: link alertu i kontrola tuż przed wysyłką', () => {
     expect(fakeDb.calls.filter((c) => c.kind === 'exec').map((c) => c.values[0])).toEqual(['d2']);
   });
 
+  it('#1145 tryb ogłoszeniowy: szablon rekrutacyjny wygaszony tuż przed wysyłką, alert jobMatch wychodzi', async () => {
+    // Baza (0175) zwraca `suppressed_feature_disabled` dla szablonów z listy — worker nic nie wysyła.
+    mockQueue(
+      [row('d1', 'jobOffer'), row('d2', 'jobMatch', { entity_type: 'saved_search', entity_id: SEARCH })],
+      (id) => (id === 'd1' ? 'suppressed_feature_disabled' : null),
+    );
+    const { processEmailQueue } = await import('@/lib/email/outbox');
+    expect(await processEmailQueue()).toMatchObject({ processed: 2, sent: 1, suppressed: 1, ok: true });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0].to).toBe('d2@example.test');
+    expect(fakeDb.callsTo('take_email_send_budget')).toHaveLength(1);
+  });
+
   it('KONTROLA UJEMNA: bez przyczyny wygaszenia ten sam wiersz wychodzi', async () => {
     mockQueue([row('d1', 'jobMatch', { entity_type: 'saved_search', entity_id: SEARCH })]);
     const { processEmailQueue } = await import('@/lib/email/outbox');

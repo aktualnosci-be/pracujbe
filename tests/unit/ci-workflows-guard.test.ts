@@ -73,7 +73,7 @@ describe('strażnik workflowów CI', () => {
     ['zmieniona nazwa wymaganego checka', (ci) => ci.replace('name: E2E (Playwright)', 'name: E2E'), 'E2E (Playwright)'],
     ['job zbiorczy bez always()', (ci) => ci.replace('if: always() && (', 'if: ('), 'always()'],
     ['job zbiorczy nie sprawdza wyniku części', (ci) => ci.replace('job.result !== "success"', 'job.result === "failure"'), 'success'],
-    ['job zbiorczy bez shardów w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures]', 'needs: [build, e2e-perf, e2e-fixtures]'), 'zależności'],
+    ['job zbiorczy bez shardów w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds]', 'needs: [build, e2e-perf, e2e-fixtures, e2e-classifieds]'), 'zależności'],
     ['mianownik shardu ≠ macierz', (ci) => ci.replace('E2E_DEMO_SHARD: ${{ matrix.shard }}', 'E2E_DEMO_SHARD: 9'), 'E2E_DEMO_SHARD'],
     ['shard bez E2E_DEMO_SHARD', (ci) => ci.replace('          E2E_DEMO_SHARD: ${{ matrix.shard }}\n', ''), 'E2E_DEMO_SHARD'],
     // Podwójny podział (konfiguracja jawnymi listami + CLI `--shard`) zgubiłby część testów.
@@ -87,7 +87,14 @@ describe('strażnik workflowów CI', () => {
     ['fixture full w 3 częściach (niezgodne z konfiguracją)', (ci) => ci.replace('          - { fixture: full, part: 2/2 }\n', '          - { fixture: full, part: 2/2 }\n          - { fixture: full, part: 3/3 }\n'), 'częściach 1/2 i 2/2'],
     ['fixture bez części z macierzy', (ci) => ci.replace('          TEST_APPLICATIONS_FIXTURE_PART: ${{ matrix.part }}\n', ''), 'część z macierzy'],
     ['blob fixture tylko przy zielonej części', (ci) => ci.replace("        if: ${{ !cancelled() }}\n        with:\n          name: blob-report-fixtures-", "        if: success()\n        with:\n          name: blob-report-fixtures-"), 'czerwonej części'],
-    ['job zbiorczy bez fixture w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures]', 'needs: [build, e2e-shard, e2e-perf]'), 'zależności'],
+    ['job zbiorczy bez fixture w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds]', 'needs: [build, e2e-shard, e2e-perf, e2e-classifieds]'), 'zależności'],
+    // Tryb ogłoszeniowy (#1166): wynik w wymaganym checku, serwer jawnie w trybie ogłoszeniowym.
+    ['job zbiorczy bez trybu ogłoszeniowego w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds]', 'needs: [build, e2e-shard, e2e-perf, e2e-fixtures]'), 'zależności'],
+    ['tryb ogłoszeniowy (demo) bez E2E_PORTAL_LEGAL_MODE', (ci) => ci.replace("          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY\n          E2E_BLOB_NAME: classifieds\n", '          E2E_BLOB_NAME: classifieds\n'), 'Run E2E classifieds (demo) — serwer w trybie ogłoszeniowym'],
+    ['tryb ogłoszeniowy (fixtures) w trybie RECRUITMENT', (ci) => ci.replace("          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY\n          TEST_APPLICATIONS_FIXTURE: full\n", "          E2E_PORTAL_LEGAL_MODE: RECRUITMENT\n          TEST_APPLICATIONS_FIXTURE: full\n"), 'Run E2E classifieds (fixtures) — serwer w trybie ogłoszeniowym'],
+    ['tryb ogłoszeniowy (demo) z shardem', (ci) => ci.replace("          E2E_BLOB_NAME: classifieds\n", "          E2E_BLOB_NAME: classifieds\n          E2E_DEMO_SHARD: 1\n"), 'bez podziału'],
+    ['krok fixture trybu ogłoszeniowego tylko po zielonym demo', (ci) => ci.replace("      - name: Run E2E classifieds (fixtures)\n        if: ${{ !cancelled() }}\n", '      - name: Run E2E classifieds (fixtures)\n'), 'po czerwonym kroku demo'],
+    ['tryb ogłoszeniowy bez fallbacku builda', (ci) => ci.replace(/(E2E classifieds \(CLASSIFIEDS_ONLY\)[\s\S]*?)        if: steps\.next-build\.outcome != 'success'\n/, '$1'), 'fallback build'],
     ['self-hosted runner', (ci) => ci.replace('runs-on: ubuntu-latest', 'runs-on: [self-hosted, linux]'), 'self-hosted'],
     ['job bez limitu czasu', (ci) => ci.replace('    timeout-minutes: 20\n    strategy:', '    strategy:'), 'timeout-minutes'],
   ];
@@ -125,6 +132,16 @@ describe('strażnik workflowów CI', () => {
       'shard 2 bez testMatch (uruchamia cały zestaw)',
       (config) => config.replace("...(DEMO_SHARD === '2' ? { testMatch: DEMO_SHARD_2_SPECS } : {}),\n      ", ''),
       'testMatch DEMO_SHARD_2_SPECS',
+    ],
+    [
+      'serwer ogłoszeniowy uruchamia cały zestaw demo (#1166)',
+      (config) => config.replace('      ...(CLASSIFIEDS_SERVER ? { testMatch: CLASSIFIEDS_SPECS } : {}),\n', ''),
+      'testMatch CLASSIFIEDS_SPECS',
+    ],
+    [
+      'spec trybu ogłoszeniowego w shardzie 1',
+      (config) => config.replace("  '**/admin-a11y.spec.ts',\n", "  '**/admin-a11y.spec.ts',\n  '**/classifieds-process-off.spec.ts',\n"),
+      'fixture/pomiaru',
     ],
   ];
 

@@ -57,6 +57,9 @@ export default async function CandidateSettingsPage({
   const tDash = await getTranslations({ locale, namespace: 'dashboard' });
   const tVisibility = await getTranslations({ locale, namespace: 'profileVisibility' });
   const tAge = await getTranslations({ locale, namespace: 'ageAttestation' });
+  // #1142/#1145 — decyzja produktowa: portal ogłoszeniowy: preferencje e-mail bez kategorii
+  // rekrutacyjnych; widoczność profilu dla firm tylko w trybie RECRUITMENT (#1135).
+  const recruitment = isRecruitmentEnabled();
   const visibilityEnabled = isRecruitmentEnabled('candidateSearch');
   const [load, blocks, visibility, age] = await Promise.all([
     loadNotificationPreferences(),
@@ -73,7 +76,7 @@ export default async function CandidateSettingsPage({
 
       <section className={PAPER}>
         {load.status === 'ready' ? (
-          <NotificationPreferencesForm defaultValues={load.preferences} />
+          <NotificationPreferencesForm defaultValues={load.preferences} recruitmentEnabled={recruitment} />
         ) : (
           <NotificationPreferencesLoadError />
         )}

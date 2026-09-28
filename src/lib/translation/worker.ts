@@ -76,7 +76,7 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
     return fail('unsupported_locale', false);
   }
 
-  // #1152: w trybie ogłoszeniowym profil kandydata nie trafia do modelu. Baza (0990) i tak nie
+  // #1152: w trybie ogłoszeniowym profil kandydata nie trafia do modelu. Baza (0176) i tak nie
   // wydaje takich zadań — to druga linia obrony (np. baza w trybie RECRUITMENT, env nie).
   if (!isAiFeatureAllowedInPortalMode(translationFeatureFor(job.entity_type))) {
     return fail('recruitment_disabled', false);

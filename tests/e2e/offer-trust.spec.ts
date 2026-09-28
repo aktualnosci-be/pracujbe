@@ -79,12 +79,24 @@ test('panel pracodawcy: deklaracja agencji wymaga numeru uznania (demo)', async 
   await expect(number).toBeFocused();
   await expect(number).toHaveAttribute('aria-invalid', 'true');
 
+  // #1032: dokument ma tytuł także w trakcie `router.refresh()` po akcji — rejestr każdej
+  // mutacji DOM od wysłania do końca odświeżenia, bez czekania na „powrót” tytułu.
+  await page.evaluate(() => {
+    const w = window as unknown as { __untitled: number };
+    w.__untitled = 0;
+    new MutationObserver(() => {
+      if (document.title.trim() === '') w.__untitled += 1;
+    }).observe(document.documentElement, { subtree: true, childList: true, characterData: true });
+  });
   await number.fill('VG.1234/BU');
   await form.getByRole('button', { name: m.company.agencySubmit }).click();
   await expect(form.getByRole('status')).toContainText(m.company.agencyDemoNotice!);
-  // Po akcji serwera odświeżenie RSC chwilowo podmienia metadane — axe dopiero z tytułem strony
-  // (flaky „document-title” także na main, run 36438276512).
-  await expect(page).toHaveTitle(/\S/);
+  await expect(form.getByRole('button', { name: m.company.agencySubmit })).toBeEnabled();
+  await page.waitForLoadState('networkidle');
+  // Metadane blokujące: `<title>` w `<head>`, nie strumieniowany do `<body>` (next.config.mjs).
+  await expect(page.locator('head > title')).toHaveCount(1);
+  await expect(page.locator('body title')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { __untitled: number }).__untitled)).toBe(0);
   expect(await blockingViolations(page)).toEqual([]);
 });
 

@@ -18391,7 +18391,12 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'SXE','sxe@test.be','Xander E','{"role":"employer","first_name":"Xander","last_name":"E","locale":"pl"}');
 select test_fixture.attest_candidates();
 -- SXA: profil kandydata nieukończony; SXB: bez wiersza candidate_profiles (onboarding nie ruszony).
+-- 0175 (#1142): w trybie ogłoszeniowym nowy profil zawodowy odrzuca baza — fikstura (profil sprzed
+-- trybu) wstawiana z wyjątkiem seedu superusera.
+begin;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
 insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'SXA', false, false);
+commit;
 select pg_temp.assert(
   not exists (select 1 from public.candidate_profiles where profile_id in (:'SXA', :'SXB') and profile_completed)
   and not exists (select 1 from public.candidate_profiles where profile_id = :'SXB'),
@@ -18502,6 +18507,7 @@ reset role; reset app.current_uid;
 select pg_temp.assert(public.recruitment_enabled(), 'AC172-7d po cofnięciu tryb testów bez zmian');
 
 -- ============================================================================
+-- =====================================================================
 -- CLVIS / CLSCR — tryb ogłoszeniowy: bez wyszukiwalnej bazy profili (#1135) i bez pytań
 -- screeningowych (#1137); migracja 0173 na 0171. Start i koniec w RECRUITMENT.
 -- ============================================================================
@@ -18721,11 +18727,309 @@ set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLSCR: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
 
-\echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0990, #1152, #1153) ---'
+-- ============================================================================
+-- CL174 — tryb ogłoszeniowy: wiadomości i CV (#1134, #1138; migracja 0174)
+-- Uzupełnia CL1128 (0171): list newMessage wygaszany w kolejce, brak nowych plików CV,
+-- apply_candidate_cv_proposals ze strażnikiem trybu. Istniejące CV: odczyt i usunięcie zostają.
+-- ============================================================================
+\echo '--- CL174 tryb ogłoszeniowy: newMessage w kolejce, pliki CV, import CV (0174) ---'
+\set CL9C 'e9600000-0000-0000-0000-0000000000c1'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CL174-pre tryb RECRUITMENT na starcie sekcji');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CL9C','cl960-cand@test.be','Cyryl C','{"role":"candidate","first_name":"Cyryl","last_name":"Cand","locale":"pl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id = :'CL9C';
+
+-- Tryb RECRUITMENT: CV i propozycje z CV działają (kontrola dodatnia).
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+insert into public.files(owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility)
+  values (auth.uid(), 'candidate-files', :'CL9C' || '/cv-old.pdf', 'cv-old.pdf', 'application/pdf', 10, 'candidate_cv', 'private')
+  returning id as cvold \gset
+select pg_temp.assert((public.apply_candidate_cv_proposals(array['Magazynier'], array['Wózek CL174'], null, null, null)->>'skills')::int = 1,
+  'CL174-pre apply_candidate_cv_proposals działa w trybie RECRUITMENT');
+reset role;
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CL9C'::uuid, 'newMessage', 'cl960-cand@test.be', null, null, null)
+    is distinct from 'suppressed_recruitment_disabled',
+  'CL174-pre newMessage nie jest wygaszany w trybie RECRUITMENT');
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CL174', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'CL174-0 tryb ogłoszeniowy');
+
+-- CL174-1: list newMessage wygaszany (także wiersz z kolejki sprzed zmiany trybu).
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CL9C'::uuid, 'newMessage', 'cl960-cand@test.be', null, null, null)
+    = 'suppressed_recruitment_disabled',
+  'CL174-1 email_delivery_suppression_reason(newMessage) = suppressed_recruitment_disabled');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CL9C'::uuid, 'companyVerified', 'cl960-cand@test.be', null, null, null)
+    is distinct from 'suppressed_recruitment_disabled',
+  'CL174-1b inne szablony bez nowego powodu');
+insert into public.email_deliveries(profile_id, to_email, template, status, next_attempt_at, lock_token, locked_at, updated_at)
+  values (:'CL9C', 'cl960-cand@test.be', 'newMessage', 'queued', now(), '00000000-0000-4000-8000-00000000c960', now(), now())
+  returning id as cvmail \gset
+set role service_role;
+select pg_temp.assert(
+  public.email_delivery_send_check(:'cvmail'::uuid, '00000000-0000-4000-8000-00000000c960') = 'suppressed_recruitment_disabled',
+  'CL174-1c email_delivery_send_check wygasza newMessage z kolejki');
+reset role;
+select pg_temp.assert((select status = 'failed' and suppressed_at is not null
+    and error_message = 'suppressed_recruitment_disabled' from public.email_deliveries where id = :'cvmail'),
+  'CL174-1d wiersz kolejki = failed/suppressed, nie wysłany');
+
+-- CL174-2: nowy plik CV odrzucony dla każdej roli.
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($f$insert into public.files(owner_id, bucket, path, entity_type)
+    values (%L, 'candidate-files', %L, 'candidate_cv')$f$, :'CL9C', :'CL9C' || '/cv-new.pdf'),
+  'RECRUITMENT_DISABLED', 'CL174-2 INSERT CV (kandydat) → RECRUITMENT_DISABLED');
+-- CL174-3: istniejące własne CV — odczyt, zmiana metadanych i usunięcie działają.
+select pg_temp.assert((select count(*) from public.files where id = :'cvold') = 1,
+  'CL174-3 kandydat widzi własne istniejące CV');
+reset role;
+set role service_role;
+select pg_temp.expect_error(format($f$insert into public.files(owner_id, bucket, path, entity_type)
+    values (%L, 'candidate-files', %L, 'candidate_cv')$f$, :'CL9C', :'CL9C' || '/cv-svc.pdf'),
+  'RECRUITMENT_DISABLED', 'CL174-2b INSERT CV (service_role) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format($f$update public.files set path = %L where id = %L$f$, :'CL9C' || '/cv-moved.pdf', :'cvold'),
+  'RECRUITMENT_DISABLED', 'CL174-2c podmiana ścieżki istniejącego CV → RECRUITMENT_DISABLED');
+update public.files set scan_status = 'clean' where id = :'cvold';
+reset role;
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+delete from public.files where id = :'cvold';
+reset role;
+select pg_temp.assert((select count(*) from public.files where id = :'cvold') = 0,
+  'CL174-3b kandydat usuwa własne CV w trybie ogłoszeniowym');
+
+-- CL174-4: import CV przez AI — zapis propozycji odrzucony przed jakimkolwiek zapisem.
+select count(*) as cv_skills0 from public.candidate_skills cs
+  join public.candidate_profiles cp on cp.id = cs.candidate_profile_id where cp.profile_id = :'CL9C' \gset
+set role authenticated; set app.current_uid = :'CL9C'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.apply_candidate_cv_proposals(null, array['Spawanie CL174'], null, null, null)$$,
+  'RECRUITMENT_DISABLED', 'CL174-4 apply_candidate_cv_proposals → RECRUITMENT_DISABLED');
+select pg_temp.expect_error($$select public.apply_candidate_cv_proposals_impl(null, array['Spawanie CL174'], null, null, null)$$,
+  'permission denied', 'CL174-4b klient nie woła treści bez strażnika (_impl)');
+reset role;
+select pg_temp.assert((select count(*) from public.candidate_skills cs
+  join public.candidate_profiles cp on cp.id = cs.candidate_profile_id where cp.profile_id = :'CL9C') = :cv_skills0,
+  'CL174-4c brak nowych umiejętności po odrzuceniu');
+
+-- CL174-N (kontrole ujemne): bez strażnika pliku CV INSERT przechodzi; treść bez nakładki zapisuje.
+begin;
+drop trigger trg_aa_recruitment_mode_cv on public.files;
+set local role authenticated; select set_config('app.current_uid', :'CL9C', true); select pg_temp.assert_client_role();
+insert into public.files(owner_id, bucket, path, entity_type)
+  values (auth.uid(), 'candidate-files', :'CL9C' || '/cv-neg.pdf', 'candidate_cv');
+reset role;
+select pg_temp.assert((select count(*) from public.files where path = :'CL9C' || '/cv-neg.pdf') = 1,
+  'CL174-N1 kontrola ujemna: bez triggera nowy plik CV powstaje w trybie ogłoszeniowym');
+rollback;
+begin;
+select set_config('app.current_uid', :'CL9C', true);
+-- 0175 (#1142) dokłada własne strażniki profilu zawodowego (ensure_candidate_profile + triggery na
+-- tabelach profilu) — zdejmujemy je tu, żeby kontrola dotyczyła wyłącznie nakładki z 0174.
+drop trigger trg_aa_recruitment_mode on public.candidate_profiles;
+drop trigger trg_aa_recruitment_mode on public.candidate_skills;
+drop trigger trg_aa_recruitment_mode on public.candidate_languages;
+drop trigger trg_aa_recruitment_mode on public.candidate_certificates;
+create or replace function public.ensure_candidate_profile()
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_cp uuid;
+begin
+  insert into public.candidate_profiles(profile_id) values (auth.uid()) on conflict (profile_id) do nothing;
+  select id into v_cp from public.candidate_profiles where profile_id = auth.uid();
+  return v_cp;
+end $$;
+select pg_temp.assert((public.apply_candidate_cv_proposals_impl(null, array['Spawanie CL174'], null, null, null)->>'skills')::int = 1,
+  'CL174-N2 kontrola ujemna: bez nakładki ze strażnikiem propozycje z CV zapisują się w trybie ogłoszeniowym');
+rollback;
+reset app.current_uid;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CL174: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
+
+-- ============================================================================
+-- CA1142 / NT1145 — konto bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych
+-- (#1142, #1145; migracja 0175). Tryb ogłoszeniowy: każde RPC profilu
+-- zawodowego i bezpośredni zapis pól zawodowych odrzucone; powiadomienia o aplikacjach,
+-- propozycjach, wiadomościach i zmianie warunków pomijane; e-maile procesu wygaszane
+-- w kolejce. Kontrole ujemne: bez strażnika krok 3 zapisuje umiejętności; tryb RECRUITMENT.
+-- ============================================================================
+\echo '--- CA1142 konto kandydata bez profilu zawodowego (0175) ---'
+\set CAC  'e9700000-0000-0000-0000-0000000000c1'
+\set CAC2 'e9700000-0000-0000-0000-0000000000c2'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CA1142-pre start w trybie RECRUITMENT (po PLM)');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CAC','cac@test.be','Cyryl C','{"role":"candidate","first_name":"Cyryl","last_name":"Cand","locale":"pl"}'),
+  (:'CAC2','cac2@test.be','Cecylia C','{"role":"candidate","first_name":"Cecylia","last_name":"Cand","locale":"nl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id in (:'CAC', :'CAC2');
+insert into public.candidate_profiles(profile_id, city, is_searchable) values (:'CAC', 'Gent', true);
+select id as cacp from public.candidate_profiles where profile_id = :'CAC' \gset
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CA1142', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'CA1142-0 tryb ogłoszeniowy');
+
+set role authenticated; set app.current_uid = :'CAC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.save_candidate_onboarding_step3(3, array['Wózek widłowy'])$$,
+  'RECRUITMENT_DISABLED', 'CA1142-1 krok 3 (doświadczenie + umiejętności) odrzucony');
+select pg_temp.expect_error($$select public.save_candidate_onboarding_step5('[]'::jsonb, '[]'::jsonb)$$,
+  'RECRUITMENT_DISABLED', 'CA1142-1b krok 5 (języki + certyfikaty) odrzucony, także pusta lista');
+select pg_temp.expect_error($$select public.set_candidate_skills(array[]::text[])$$,
+  'RECRUITMENT_DISABLED', 'CA1142-1c set_candidate_skills (replace-all pustą listą) odrzucone');
+select pg_temp.expect_error($$select public.set_candidate_languages('[]'::jsonb)$$,
+  'RECRUITMENT_DISABLED', 'CA1142-1d set_candidate_languages odrzucone');
+select pg_temp.expect_error($$select public.set_candidate_certificates('[]'::jsonb)$$,
+  'RECRUITMENT_DISABLED', 'CA1142-1e set_candidate_certificates odrzucone');
+select pg_temp.expect_error($$select public.finish_onboarding()$$,
+  'RECRUITMENT_DISABLED', 'CA1142-1f finish_onboarding odrzucone');
+select pg_temp.assert(public.set_candidate_searchable(false) = false,
+  'CA1142-1g wyłączenie widoczności działa zawsze (0173), bez tworzenia profilu');
+-- Bezpośredni zapis kroków 2/4/6 (UPSERT pod RLS) — pola zawodowe odrzucone.
+select pg_temp.expect_error(format($$update public.candidate_profiles set city = 'Brugge' where profile_id = %L$$, :'CAC'),
+  'RECRUITMENT_DISABLED', 'CA1142-2 UPDATE pola zawodowego przez klienta odrzucony');
+select pg_temp.expect_error(format($$update public.candidate_profiles set occupations = array['Magazynier'] where profile_id = %L$$, :'CAC'),
+  'RECRUITMENT_DISABLED', 'CA1142-2b UPDATE zawodów przez klienta odrzucony');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CAC2'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_candidate_searchable(false) = false,
+  'CA1142-1h wyłączenie widoczności bez profilu: bez błędu (profil nie powstaje — CA1142-4)');
+select pg_temp.expect_error(format($$insert into public.candidate_profiles(profile_id, city) values (%L, 'Gent')$$, :'CAC2'),
+  'RECRUITMENT_DISABLED', 'CA1142-2c INSERT profilu zawodowego przez klienta odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.expect_error(format($$insert into public.candidate_skills(candidate_profile_id, skill_label) values (%L, 'Spawanie')$$, :'cacp'),
+  'RECRUITMENT_DISABLED', 'CA1142-3 INSERT relacji profilu (superuser bez wyjątku seedu) odrzucony');
+set role service_role;
+select pg_temp.expect_error(format($$insert into public.candidate_profiles(profile_id) values (%L)$$, :'CAC2'),
+  'RECRUITMENT_DISABLED', 'CA1142-3b INSERT profilu jako service_role odrzucony');
+-- Ścieżki serwerowe bez zmian: ukrycie profilu (retencja/próg wieku) działa.
+update public.candidate_profiles set is_searchable = false, searchable_changed_at = now() where profile_id = :'CAC';
+reset role;
+select pg_temp.assert(
+  (select not is_searchable and city = 'Gent' from public.candidate_profiles where profile_id = :'CAC')
+  and not exists (select 1 from public.candidate_skills where candidate_profile_id = :'cacp')
+  and not exists (select 1 from public.candidate_profiles where profile_id = :'CAC2'),
+  'CA1142-4 dane profilu bez zmian po odrzuconych próbach; ukrycie profilu (serwer) działa');
+-- Konto działa: zapisane wyszukiwanie w trybie ogłoszeniowym.
+set role authenticated; set app.current_uid = :'CAC2'; select pg_temp.assert_client_role();
+select saved_search_id as cass from public.save_saved_search(
+  'Magazyn CA1142', 'nl', '{"keyword":"magazijn ca1142"}', '?keyword=magazijn+ca1142') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.saved_searches where id = :'cass'),
+  'CA1142-5 zapisane wyszukiwanie działa w trybie ogłoszeniowym');
+-- CA1142-6 (kontrola ujemna): bez strażnika (treść ensure_candidate_profile z 0040 i bez
+-- triggerów INSERT na profilu i relacjach) krok 3 zapisuje umiejętności także w trybie ogłoszeniowym.
+begin;
+create or replace function public.ensure_candidate_profile()
+returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_cp uuid;
+begin
+  if auth.uid() is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
+  if public.current_profile_role() <> 'candidate' then
+    raise exception 'PERMISSION_DENIED: profil kandydata tylko dla konta kandydata' using errcode = '42501';
+  end if;
+  insert into public.candidate_profiles(profile_id) values (auth.uid()) on conflict (profile_id) do nothing;
+  select id into v_cp from public.candidate_profiles where profile_id = auth.uid();
+  return v_cp;
+end $$;
+drop trigger trg_aa_recruitment_mode on public.candidate_skills;
+drop trigger trg_aa_recruitment_mode on public.candidate_profiles;
+set local role authenticated; set local app.current_uid = :'CAC'; select pg_temp.assert_client_role();
+select public.save_candidate_onboarding_step3(3, array['Wózek widłowy']);
+reset role;
+select pg_temp.assert(exists (select 1 from public.candidate_skills where candidate_profile_id = :'cacp'),
+  'CA1142-6 kontrola ujemna: bez strażnika krok 3 zapisuje umiejętności');
+rollback;
+reset role; reset app.current_uid;
+
+\echo '--- NT1145 powiadomienia i kolejka e-mail bez zdarzeń rekrutacyjnych (0175) ---'
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'NT1145-0 tryb ogłoszeniowy');
+insert into public.notifications(profile_id, type, entity_type, entity_id, data) values
+  (:'CAC', 'application_status_changed', 'application', gen_random_uuid(), '{}'),
+  (:'CAC', 'application_received', 'application', gen_random_uuid(), '{}'),
+  (:'CAC', 'offer_received', 'offer', gen_random_uuid(), '{}'),
+  (:'CAC', 'offer_status_changed', 'offer', gen_random_uuid(), '{}'),
+  (:'CAC', 'message_received', 'conversation', gen_random_uuid(), '{}'),
+  (:'CAC', 'system', 'job_terms', gen_random_uuid(), '{"kind":"job_terms_changed"}'),
+  (:'CAC', 'job_match', 'job', gen_random_uuid(), '{}'),
+  (:'CAC', 'job_match', null, null, '{}');
+select pg_temp.assert(not exists (select 1 from public.notifications where profile_id = :'CAC'),
+  'NT1145-1 powiadomienia o aplikacjach/propozycjach/wiadomościach/warunkach i dopasowaniach pominięte (bez błędu)');
+insert into public.notifications(profile_id, type, entity_type, entity_id, data) values
+  (:'CAC2', 'job_match', 'saved_search', :'cass', '{}'),
+  (:'CAC2', 'system', 'company_invitation', gen_random_uuid(), '{}'),
+  (:'CAC2', 'company_verified', 'company', gen_random_uuid(), '{}');
+select pg_temp.assert((select count(*) from public.notifications where profile_id = :'CAC2') = 3,
+  'NT1145-2 alert zapisanego wyszukiwania, zaproszenie i status firmy powstają (kontrola ujemna listy)');
+
+-- Kolejka: każdy szablon z listy wygaszany, szablony ogłoszeniowe nie.
+set role service_role;
+select pg_temp.assert(bool_and(public.email_delivery_suppression_reason(
+    :'CAC', t, 'cac@test.be', null, null, null) = 'suppressed_feature_disabled'),
+  'NT1145-3 każdy szablon rekrutacyjny → suppressed_feature_disabled')
+  from unnest(array['newApplication', 'applicationViewed', 'statusChanged', 'jobOffer', 'offerAccepted',
+                    'offerDeclined', 'guestApplicationConfirm', 'guestApplicationSent',
+                    'guestStatusChanged']) t;
+-- newMessage: przyczyna z 0174 (#1134) zostaje pierwsza — 0175 jej nie nadpisuje.
+select pg_temp.assert(public.email_delivery_suppression_reason(
+    :'CAC', 'newMessage', 'cac@test.be', null, null, null) = 'suppressed_recruitment_disabled',
+  'NT1145-3b newMessage → suppressed_recruitment_disabled (0174 zachowane po 0175)');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'CAC2', 'jobMatch', 'cac2@test.be', null, 'saved_search', :'cass') is null
+  and public.email_delivery_suppression_reason(:'CAC2', 'companyVerified', 'cac2@test.be', null, null, null)
+        is distinct from 'suppressed_feature_disabled'
+  and public.email_delivery_suppression_reason(:'CAC2', 'accountConfirmation', 'cac2@test.be', null, null, null)
+        is distinct from 'suppressed_feature_disabled',
+  'NT1145-4 kontrola ujemna: jobMatch z alertu, companyVerified i e-mail konta wychodzą');
+reset role;
+begin;
+insert into public.email_deliveries(profile_id, to_email, template, status, next_attempt_at, locale, entity_type, entity_id)
+values (:'CAC', 'nt1145-app@test.invalid', 'newApplication', 'queued', now() - interval '1 minute', 'pl', null, null),
+       (:'CAC2', 'nt1145-alert@test.invalid', 'jobMatch', 'queued', now() - interval '1 minute', 'nl', 'saved_search', :'cass');
+set local role service_role;
+select count(*) from public.claim_email_batch(10000, 300);
+reset role;
+select pg_temp.assert(
+  (select status = 'failed' and suppressed_at is not null and error_message = 'suppressed_feature_disabled'
+     from public.email_deliveries where to_email = 'nt1145-app@test.invalid')
+  and (select status = 'queued' and locked_at is not null and suppressed_at is null
+     from public.email_deliveries where to_email = 'nt1145-alert@test.invalid'),
+  'NT1145-5 wiersz newApplication już w kolejce wygaszony przy claimie; alert jobMatch pobrany do wysyłki');
+rollback;
+select pg_temp.assert(
+  position('email_delivery_suppression_reason' in pg_get_functiondef(
+    (select p.oid from pg_proc p where p.proname = 'email_delivery_send_check' limit 1))) > 0,
+  'NT1145-6 kontrola tuż przed wysyłką korzysta z tej samej funkcji przyczyn');
+
+-- Kontrola ujemna: w trybie RECRUITMENT te same zdarzenia działają.
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql NT1145: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+select pg_temp.assert(public.email_delivery_suppression_reason(:'CAC', 'newApplication', 'cac@test.be', null, null, null)
+    is distinct from 'suppressed_feature_disabled',
+  'NT1145-7 kontrola ujemna: w trybie RECRUITMENT newApplication nie jest wygaszany przez tryb');
+reset role;
+insert into public.notifications(profile_id, type, entity_type, entity_id, data) values
+  (:'CAC', 'application_status_changed', 'application', gen_random_uuid(), '{}');
+select pg_temp.assert((select count(*) from public.notifications where profile_id = :'CAC') = 1,
+  'NT1145-8 kontrola ujemna: w trybie RECRUITMENT powiadomienie o statusie aplikacji powstaje');
+set role authenticated; set app.current_uid = :'CAC'; select pg_temp.assert_client_role();
+select public.save_candidate_onboarding_step3(4, array['Wózek widłowy']);
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.candidate_skills where candidate_profile_id = :'cacp'),
+  'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
+
+\echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0176, #1152, #1153) ---'
 -- Start i koniec w RECRUITMENT. Encje kolejki = identyfikatory bez wierszy w jobs (jak TR31).
-\set CLAIP1 'c1a10990-0000-0000-0000-0000000000c1'
-\set CLAIP2 'c1a10990-0000-0000-0000-0000000000c2'
-\set CLAIJ1 'c1a10990-0000-0000-0000-0000000000d1'
+\set CLAIP1 'c1a10176-0000-0000-0000-0000000000c1'
+\set CLAIP2 'c1a10176-0000-0000-0000-0000000000c2'
+\set CLAIJ1 'c1a10176-0000-0000-0000-0000000000d1'
 \set CLAIF '{"title":"Magazynier","description":"Szukam pracy na zmianie nocnej."}'
 reset role; reset app.current_uid;
 select set_config('pracujbe.allow_recruitment_write', '', false);
@@ -18772,15 +19076,15 @@ select pg_temp.assert(:clai_prof = 0
   and (select count(*) from public.translation_jobs where entity_id = :'CLAIP1' and status = 'queued') = 3,
   'CLAIB-3 claim pomija zadania candidate_profile (czekają w kolejce)');
 
--- CLAIB-4 (kontrola ujemna): definicje z 0145 (rollback 0990) przyjmują profil kandydata
+-- CLAIB-4 (kontrola ujemna): definicje z 0145 (rollback 0176) przyjmują profil kandydata
 -- i wydają jego zadania w trybie ogłoszeniowym.
 begin;
-\ir ../rollback/0990_classifieds_ai_billing.down.sql
+\ir ../rollback/0176_classifieds_ai_billing.down.sql
 set local role service_role;
 select pg_temp.assert(((public.record_translation_source('candidate_profile', :'CLAIP2', 'pl', :'CLAIF'::jsonb, 'tr-v1'))->>'status') = 'created',
-  'CLAIB-4 kontrola ujemna: bez 0990 profil kandydata trafia do kolejki w trybie ogłoszeniowym');
+  'CLAIB-4 kontrola ujemna: bez 0176 profil kandydata trafia do kolejki w trybie ogłoszeniowym');
 select pg_temp.assert(exists (select 1 from public.claim_translation_jobs(100, 300) where entity_type = 'candidate_profile'),
-  'CLAIB-4b kontrola ujemna: bez 0990 claim wydaje zadania profilu');
+  'CLAIB-4b kontrola ujemna: bez 0176 claim wydaje zadania profilu');
 rollback;
 reset role;
 

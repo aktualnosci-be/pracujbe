@@ -11,8 +11,9 @@ name: CI
 # - joby E2E startują po zielonym buildzie (build po lint/typecheck/unit);
 # - każdy job ma `timeout-minutes`, więc zawieszony krok nie blokuje przebiegu;
 # - joby E2E odtwarzają `.next` z jobu build (cache Actions) zamiast budować drugi raz (#127);
-# - E2E: 3 shardy + pomiar + fixture'y (full w 2 częściach) równolegle, wynik zbiera wymagany check
-#   „E2E (Playwright)”; przepływ na PostgreSQL 16 (`e2e-real`) na razie informacyjny.
+# - E2E: 3 shardy + pomiar + fixture'y (full w 2 częściach) + tryb ogłoszeniowy (produkcyjny,
+#   `e2e-classifieds`) równolegle, wynik zbiera wymagany check „E2E (Playwright)”; przepływ
+#   na PostgreSQL 16 (`e2e-real`) na razie informacyjny.
 
 on:
   push:
@@ -539,6 +540,92 @@ jobs:
           path: test-results/
           retention-days: 2
 
+  e2e-classifieds:
+    name: E2E classifieds (CLASSIFIEDS_ONLY)
+    # Tryb produkcyjny portalu (#1166, epik #1128) — decyzja produktowa: portal ogłoszeniowy.
+    # Pozostałe joby E2E testują przepływy rekrutacyjne na serwerze `PORTAL_LEGAL_MODE=RECRUITMENT`;
+    # tutaj serwer ma `CLASSIFIEDS_ONLY` (jak produkcja): zestaw demo trybu ogłoszeniowego
+    # (`CLASSIFIEDS_SPECS` w playwright.config.ts — wyłączenia tras, „Aplikuj u pracodawcy”,
+    # panele, a11y stron publicznych) na buildzie z jobu build, potem lejek „Aplikuj u pracodawcy”
+    # na serwerze fixture (`CLASSIFIEDS_FIXTURE_SPECS`). Wynik zbiera wymagany check
+    # „E2E (Playwright)” — ten job nie jest osobnym wymaganym checkiem.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Restore node_modules
+        id: node-modules
+        uses: actions/cache/restore@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
+      - name: Install dependencies (cache miss)
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Restore build from build job
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .next
+            !.next/cache
+          key: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: next-build-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-
+      - name: Verify restored build
+        id: next-build
+        continue-on-error: true
+        run: node scripts/check-next-build.mjs
+      - name: Build application for E2E (fallback)
+        if: steps.next-build.outcome != 'success'
+        timeout-minutes: 15
+        env:
+          NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN: e2e-cf-analytics-token-00000000
+        run: rm -rf .next && npm run build
+      # Tryb nie jest wklejany do builda (czytany w runtime), więc ten sam build co w shardach.
+      - name: Run E2E classifieds (demo)
+        env:
+          PLAYWRIGHT_SKIP_BUILD: '1'
+          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY
+          E2E_BLOB_NAME: classifieds
+        run: npx playwright test --project=chromium
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-classifieds
+          path: blob-report/
+          retention-days: 2
+      # Także po czerwonym kroku demo — raport ma pokazać oba zestawy.
+      - name: Run E2E classifieds (fixtures)
+        if: ${{ !cancelled() }}
+        env:
+          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY
+          TEST_APPLICATIONS_FIXTURE: full
+          E2E_BLOB_NAME: classifieds-fixtures
+        run: rm -rf blob-report && npx playwright test --config playwright.applications-fixture.config.ts
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-classifieds-fixtures
+          path: blob-report/
+          retention-days: 2
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: classifieds-test-results
+          path: test-results/
+          retention-days: 2
+
   e2e-real:
     name: E2E real flow (PostgreSQL 16)
     # Przepływ kandydat ↔ pracodawca na prawdziwym PostgreSQL 16 i sesjach Better Auth
@@ -609,7 +696,7 @@ jobs:
     # pomiar albo fixture zawsze daje czerwony „E2E (Playwright)”. Łączy raporty cząstkowe
     # w jeden raport html + raport flaków (#375).
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [build, e2e-shard, e2e-perf, e2e-fixtures]
+    needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

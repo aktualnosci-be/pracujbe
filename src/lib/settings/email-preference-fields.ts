@@ -20,6 +20,25 @@ export const EMAIL_FIELDS: Record<NotificationPreferencesRole, readonly ToggleFi
   employer: ['emailApplications', 'emailOffers', 'emailMessages', 'emailMarketing'],
 };
 
+/**
+ * Kategorie e-mail procesu rekrutacyjnego (#1145) — decyzja produktowa: portal ogłoszeniowy.
+ * W trybie `CLASSIFIEDS_ONLY` formularz ich nie pokazuje, a zapis zachowuje wartości z bazy
+ * (`updateNotificationPreferences` czyta je pod sesją) — nigdy nie nadpisuje ich po cichu.
+ */
+export const RECRUITMENT_EMAIL_FIELDS: ReadonlySet<ToggleField> = new Set([
+  'emailApplications',
+  'emailOffers',
+  'emailMessages',
+]);
+
+/** Pola e-mail widoczne w formularzu dla roli i trybu (tryb przychodzi z serwera). */
+export function emailFieldsFor(
+  role: NotificationPreferencesRole,
+  recruitmentEnabled: boolean,
+): readonly ToggleField[] {
+  return recruitmentEnabled ? EMAIL_FIELDS[role] : EMAIL_FIELDS[role].filter((f) => !RECRUITMENT_EMAIL_FIELDS.has(f));
+}
+
 /** Pola z opisem z perspektywy pracodawcy (`employer<Field>Description`). */
 const EMPLOYER_DESCRIPTION_FIELDS: ReadonlySet<ToggleField> = new Set([
   'emailApplications',

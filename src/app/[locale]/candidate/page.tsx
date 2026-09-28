@@ -14,6 +14,7 @@ import {
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { cn } from '@/lib/utils';
 import { CandidateRecommendedPreview } from '@/components/candidate/CandidateRecommendedPreview';
+import { CandidateAccountDashboard } from '@/components/candidate/CandidateAccountDashboard';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
@@ -66,6 +67,11 @@ export default async function CandidateDashboardPage({
   const { locale } = await params;
   setRequestLocale(locale);
 
+  // #1142 — decyzja produktowa: portal ogłoszeniowy. Konto bez profilu zawodowego: pulpit
+  // z zapisanymi ofertami i wyszukiwaniami; loadery profilu, CV, zgłoszeń, propozycji
+  // i wiadomości nie są wołane.
+  if (!isRecruitmentEnabled()) return <CandidateAccountDashboard locale={locale} />;
+
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
   const tc = await getTranslations({ locale, namespace: 'common' });
@@ -75,21 +81,24 @@ export default async function CandidateDashboardPage({
   // #1141/#1144 — decyzja produktowa: portal ogłoszeniowy. Bez trybu RECRUITMENT pulpit nie
   // czyta zgłoszeń ani propozycji (loadery niewołane) i nie pokazuje ich sekcji.
   const recruitment = isRecruitmentEnabled();
+  // #1134/#1138: tryb ogłoszeniowy — bez rozmów i bez wgrywania CV na pulpicie (loadery niewywoływane).
+  const messagingOn = isRecruitmentEnabled('messaging');
+  const cvUploadOn = isRecruitmentEnabled('cvAccess');
   const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
     // #1139: tryb ogłoszeniowy — bez rekomendacji (loader niewywoływany).
     isRecruitmentEnabled('matching') ? getRecommendedJobs(locale) : Promise.resolve(null),
     recruitment ? getMyApplicationsPreview(locale) : null,
-    getLatestMessages(),
-    loadCandidateFiles(),
+    messagingOn ? getLatestMessages() : Promise.resolve(null),
+    cvUploadOn ? loadCandidateFiles() : Promise.resolve(null),
     recruitment ? getLatestActiveOffer(locale) : null,
   ]);
 
   const overviewFailed =
     overview.newJobsCount === null ||
     (recruitment && overview.activeApplicationsCount === null) ||
-    overview.unreadMessagesCount === null;
+    (messagingOn && overview.unreadMessagesCount === null);
 
   const checklist = profileChecklistItems(profile.checklist, td('add'), to);
 
@@ -137,14 +146,16 @@ export default async function CandidateDashboardPage({
                 },
               ]
             : []),
-          {
-            label: td('unreadMessages'),
-            value: overview.unreadMessagesCount ?? '—',
-            sub:
-              overview.unreadMessagesCount === null
-                ? td('candidateStatLoadError')
-                : td('unreadMessagesSub'),
-          },
+          ...(messagingOn
+            ? [{
+                label: td('unreadMessages'),
+                value: overview.unreadMessagesCount ?? '—',
+                sub:
+                  overview.unreadMessagesCount === null
+                    ? td('candidateStatLoadError')
+                    : td('unreadMessagesSub'),
+              }]
+            : []),
           profile.loadFailed
             ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
             : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
@@ -191,14 +202,18 @@ export default async function CandidateDashboardPage({
             </Link>
           </section>}
 
-          {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-          <CvUpload
-            items={files.status === 'ready' ? files.items : []}
-            loadFailed={files.status === 'error'}
-          />
+          {/* Dokumenty / CV (prywatny bucket + signed URLs). #1138: w trybie ogłoszeniowym bez
+              sekcji — istniejące pliki (pobranie/usunięcie) są w profilu. */}
+          {files ? (
+            <CvUpload
+              items={files.status === 'ready' ? files.items : []}
+              loadFailed={files.status === 'error'}
+              allowUpload
+            />
+          ) : null}
 
-          {/* Najnowsze wiadomości */}
-          <CandidateMessagesPreview
+          {/* Najnowsze wiadomości. #1134: w trybie ogłoszeniowym bez sekcji. */}
+          {messages ? <CandidateMessagesPreview
             result={messages}
             locale={locale}
             labels={{
@@ -209,7 +224,7 @@ export default async function CandidateDashboardPage({
               seeAll: td('seeAllMessages'),
               unread: tm('unreadBadge'),
             }}
-          />
+          /> : null}
         </div>
       </div>
     </div>

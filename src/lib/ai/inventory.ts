@@ -11,6 +11,8 @@
  * DPIA) nie należy do tego pliku — to pytania do prawnika w szkicu.
  */
 
+import type { RecruitmentFeature } from '@/lib/portal-mode';
+
 export type AiFeatureStatus =
   /** Kod na `main`, funkcja za flagą środowiskową (domyślnie wyłączona). */
   | 'behind_flag'
@@ -84,6 +86,12 @@ export interface AiFeature {
    * (`true`) dla funkcji ze statusem `behind_flag` — pilnuje `ai-inventory.test.ts`.
    */
   costBudgeted: boolean;
+  /**
+   * Funkcja rekrutacyjna niedostępna w trybie ogłoszeniowym (#1128 — decyzja produktowa: portal
+   * ogłoszeniowy), niezależnie od `enableFlag`. `files` = miejsca, które MUSZĄ sprawdzać tryb
+   * (`isRecruitmentEnabled(feature)`) przed modelem i budżetem — pilnuje `ai-inventory.test.ts`.
+   */
+  classifiedsModeGuard?: { feature: RecruitmentFeature; files: readonly string[] };
 }
 
 export const AI_FEATURE_IDS = [
@@ -173,6 +181,11 @@ export const AI_FEATURES: readonly AiFeature[] = [
     usageLogged: true,
     // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
     costBudgeted: true,
+    // #1138: w trybie ogłoszeniowym brak importu CV (config → null, akcje → RECRUITMENT_DISABLED).
+    classifiedsModeGuard: {
+      feature: 'cvImport',
+      files: ['src/lib/cv-import/config.ts', 'src/lib/actions/cv-import.ts'],
+    },
   },
   {
     id: 'job_fraud_check',
@@ -203,7 +216,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
     inputs: ['candidate_profile_text'],
     allowedInClassifieds: false,
     output:
-      'Tłumaczenie pól profilu kandydata (encja candidate_profile kolejki 0145) — ten sam adapter i walidacja faktów co oferty. Żaden kod nie kolejkuje dziś tej encji (#34); w trybie ogłoszeniowym baza jej nie przyjmuje ani nie wydaje workerowi (migracja 0990), a worker odrzuca ją bez wywołania modelu.',
+      'Tłumaczenie pól profilu kandydata (encja candidate_profile kolejki 0145) — ten sam adapter i walidacja faktów co oferty. Żaden kod nie kolejkuje dziś tej encji (#34); w trybie ogłoszeniowym baza jej nie przyjmuje ani nie wydaje workerowi (migracja 0176), a worker odrzuca ją bez wywołania modelu.',
     humanInTheLoop: false,
     humanStep:
       'Jak tłumaczenie ofert: walidacja automatyczna i korekta ręczna po fakcie; wpięcie profili (#34) wymaga osobnej decyzji właściciela.',

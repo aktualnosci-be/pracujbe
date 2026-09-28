@@ -226,4 +226,17 @@ describe('inwentarz AI (#489)', () => {
     // Płatny dostawca nie ma ścieżki z pominięciem budżetu: wyjątek tylko dla atrapy bez bazy.
     expect(action).toMatch(/provider === 'fixture' && !isServiceDatabaseConfigured\(\) \? logged : withJobImportBudget/);
   });
+  it('funkcje wyłączone w trybie ogłoszeniowym sprawdzają tryb w każdym wskazanym pliku (#1138)', () => {
+    const unguarded = (features: readonly { id: string; classifiedsModeGuard?: { feature: string; files: readonly string[] } }[],
+      read: (p: string) => string) =>
+      features.flatMap((f) => (f.classifiedsModeGuard?.files ?? [])
+        .filter((file) => !read(file).includes(`isRecruitmentEnabled('${f.classifiedsModeGuard!.feature}')`))
+        .map((file) => `${f.id}:${file}`));
+    const readRepo = (p: string) => readFileSync(join(ROOT, p), 'utf8');
+    expect(AI_FEATURES.find((f) => f.id === 'cv_profile_import')?.classifiedsModeGuard?.feature).toBe('cvImport');
+    expect(unguarded(AI_FEATURES, readRepo)).toEqual([]);
+    // Kontrola ujemna: plik bez sprawdzenia trybu jest wykrywany.
+    expect(unguarded(AI_FEATURES, (p) => readRepo(p).replaceAll("isRecruitmentEnabled('cvImport')", 'true')))
+      .toEqual(['cv_profile_import:src/lib/cv-import/config.ts', 'cv_profile_import:src/lib/actions/cv-import.ts']);
+  });
 });
