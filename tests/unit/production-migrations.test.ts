@@ -93,6 +93,22 @@ describe('Diagnostyka nieudanej migracji (#1105)', () => {
     expect(c.queries.at(-1)).toBe('ROLLBACK');
   });
 
+  it('P0001 (RAISE z migracji) pokazuje własny komunikat, oryginał zostaje w cause; inne SQLSTATE nie', async () => {
+    const { applyMigrations, describeMigrationError } = await import('../../scripts/db/migrate.mjs');
+    const raise = client('INSERT INTO t VALUES (1)', { code: 'P0001' });
+    const error = await applyMigrations(raise, migrations).catch((e: unknown) => e) as Error & { cause?: Error };
+    expect(error.message).toContain(SECRET);
+    expect(error.cause).toBeInstanceOf(Error);
+    expect(describeMigrationError(error)).toContain(SECRET);
+
+    // Kontrola ujemna: ten sam komunikat przy innym SQLSTATE nie trafia do message ani do linii.
+    const other = client('INSERT INTO t VALUES (1)', { code: '23505' });
+    const otherError = await applyMigrations(other, migrations).catch((e: unknown) => e) as Error & { cause?: Error };
+    expect(otherError.message).not.toContain('example.com');
+    expect(describeMigrationError(otherError)).not.toContain('example.com');
+    expect(otherError.cause?.message).toContain('example.com');
+  });
+
   it('wartości spoza wzorców identyfikatorów nie trafiają do diagnostyki', async () => {
     const { describeMigrationError, MigrationFailure } = await import('../../scripts/db/migrate.mjs');
     // Wartości spoza wzorców (np. cudzysłowy, spacje) nie trafiają do diagnostyki.

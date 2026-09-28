@@ -6,16 +6,26 @@ import { loadMigrations } from './migration-files.mjs';
 /**
  * Błąd konkretnej migracji (#1105): niesie nazwę pliku i strukturalne pola błędu bazy
  * (SQLSTATE, tabela, kolumna, ograniczenie — nazwy schematu, nie dane). Komunikat sterownika
- * i `detail` mogą zawierać wartości z wierszy, więc nie są kopiowane.
+ * i `detail` mogą zawierać wartości z wierszy, więc nie trafiają do `message` ani do logów
+ * (oryginał jest w `cause`); wyjątek: SQLSTATE P0001 — komunikat `RAISE` z samej migracji.
  */
 export class MigrationFailure extends Error {
   /** @param {string} migration @param {unknown} cause */
   constructor(migration, cause) {
-    super(`Migracja ${migration} nie powiodła się.`);
+    const source = typeof cause === 'object' && cause !== null ? /** @type {Record<string, unknown>} */ (cause) : {};
+    const sqlstate = safeToken(source.code, /^[0-9A-Z]{5}$/);
+    // P0001 = `RAISE EXCEPTION` napisany w samej migracji (np. „niezgodne uprawnienia roli”) —
+    // komunikat jest własny i nie niesie danych z wierszy, więc wolno go wypisać. Dla pozostałych
+    // SQLSTATE komunikat sterownika (może zawierać wartości) nie jest kopiowany.
+    const raised = sqlstate === 'P0001' && typeof source.message === 'string'
+      ? source.message.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 300)
+      : '';
+    // `cause` zachowuje oryginalny błąd dla kodu wołającego i testów; `main` go nie drukuje.
+    super(`Migracja ${migration} nie powiodła się${raised ? `: ${raised}` : '.'}`, { cause });
     this.name = 'MigrationFailure';
     this.migration = migration;
-    const source = typeof cause === 'object' && cause !== null ? /** @type {Record<string, unknown>} */ (cause) : {};
-    this.sqlstate = safeToken(source.code, /^[0-9A-Z]{5}$/);
+    this.raised = raised || undefined;
+    this.sqlstate = sqlstate;
     this.table = safeToken(source.table, /^[A-Za-z0-9_$]{1,63}$/);
     this.column = safeToken(source.column, /^[A-Za-z0-9_$]{1,63}$/);
     this.constraint = safeToken(source.constraint, /^[A-Za-z0-9_$]{1,63}$/);
@@ -38,7 +48,7 @@ export function describeMigrationError(error) {
     if (error.table) parts.push(`tabela ${error.table}`);
     if (error.column) parts.push(`kolumna ${error.column}`);
     if (error.constraint) parts.push(`ograniczenie ${error.constraint}`);
-    return `przy migracji ${error.migration} (${parts.join(', ')})`;
+    return `przy migracji ${error.migration} (${parts.join(', ')})${error.raised ? `: ${error.raised}` : ''}`;
   }
   const code = safeToken(typeof error === 'object' && error !== null ? /** @type {Record<string, unknown>} */ (error).code : undefined, /^[0-9A-Z_]{3,20}$/);
   if (error instanceof Error && error.message.startsWith('Historia migracji różni się')) {
