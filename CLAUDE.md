@@ -2558,6 +2558,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Wiadomość „błąd w przeglądarce”, osobne okno deduplikacji. Dowód: `client-error` (kontrole
   ujemne: payload z PII, obcy Origin, spoofowany `X-Forwarded-For`/brak nagłówka proxy,
   strażnik grafu importów klienta), `client-error-capture`.
+  Kolejność montowania (#851): w `[locale]/layout` `{children}` montuje się PRZED
+  `<ClientErrorReporter />` (React 19 wykonuje efekty potomków przed rodzicem tego samego
+  commitu), więc pierwszy błąd klienta złapany przez `[locale]/error.tsx` mógł trafić do
+  `captureError`, zanim reporter zdążył się zainstalować w swoim `useEffect` — `captureError`
+  bez reportera cicho nic nie robi i nie ponawia zgłoszenia po instalacji. `LocaleError`
+  wywołuje teraz `installClientErrorReporter()` (idempotentny, jak w `global-error.tsx`) tuż
+  przed `captureError`, więc pierwszy błąd na pierwszej stronie po starcie karty też dociera.
+  Dowód: `locale-error-reporter-order` (pozytyw + kontrola ujemna: błąd z `digest` nadal
+  pomijany).
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
