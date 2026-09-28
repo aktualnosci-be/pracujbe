@@ -60,7 +60,7 @@ describe('/api/maintenance a tryb portalu (#1143)', () => {
     fakeDb.rpc('recruitment_enabled', false);
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ recruitmentTasks: { skipped: 'classifieds_only' } });
+    expect(await res.json()).toMatchObject({ matches: 'disabled', recruitmentTasks: { skipped: 'classifieds_only' } });
     expect(fakeDb.callsTo('recruitment_enabled')).toEqual([expect.objectContaining({ as: 'service' })]);
     expect(called()).not.toContain('match_recompute_claim');
   });

@@ -114,7 +114,7 @@ function retentionCounters(value: unknown): Record<string, number> {
  * Błąd odczytu bazy = tryb ogłoszeniowy (fail-closed) i zapamiętany błąd (503 dla monitoringu).
  */
 async function recruitmentTasksEnabled(onError: (error: unknown) => void): Promise<boolean> {
-  if (!isRecruitmentEnabled()) return false;
+  if (!isRecruitmentEnabled('matching')) return false;
   try {
     const db = await withServiceRole((tx) => rpc<boolean>(tx, 'recruitment_enabled'));
     return effectiveRecruitmentEnabled(true, db === true);
@@ -192,12 +192,12 @@ async function run(request: Request): Promise<Response> {
   // retencja i czyszczenie (gość, załączniki, storage) działają dalej.
   const recruitment = await recruitmentTasksEnabled((error) => failures.push({ task: 'portalMode', error }));
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
-  // #1131: tryb ogłoszeniowy (env) — odpowiedź `matches: disabled`; przeliczenie tylko w trybie efektywnym.
+  // #1131/#1143: tryb ogłoszeniowy (env albo baza) — bez przeliczeń (zero zapytań
+  // `match_recompute_*`); `matches: "disabled"` + `recruitmentTasks.skipped` w odpowiedzi.
   let matches: MatchRecomputeRun | 'disabled' | null = null;
-  if (!isRecruitmentEnabled('matching')) {
+  if (!recruitment) {
     matches = 'disabled';
-  }
-  if (recruitment) {
+  } else {
     try {
       matches = await runMatchRecompute();
     } catch (error) {

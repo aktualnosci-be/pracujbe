@@ -217,7 +217,7 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
 
   /** /api/maintenance: materializacja dopasowań tylko za trybem efektywnym (#1143). */
   const guardedMatches = (src: string) =>
-    /if \(recruitment\) \{\s*try \{\s*matches = await runMatchRecompute\(\)/.test(src)
+    /if \(!recruitment\) \{\s*matches = 'disabled';\s*\} else \{\s*try \{\s*matches = await runMatchRecompute\(\)/.test(src)
     && (src.match(/runMatchRecompute\(\)/g) ?? []).length === 1
     && /recruitmentTasks: \{ skipped: 'classifieds_only'/.test(src);
 
@@ -227,7 +227,7 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
 
   it('kontrola ujemna: wywołanie runMatchRecompute() poza strażnikiem jest wykrywane', () => {
     const src = read('src/app/api/maintenance/route.ts');
-    expect(guardedMatches(src.replace('if (recruitment) {', 'if (true) {'))).toBe(false);
+    expect(guardedMatches(src.replace('if (!recruitment) {', 'if (false) {'))).toBe(false);
     expect(guardedMatches(`${src}\nawait runMatchRecompute();`)).toBe(false);
   });
 });
@@ -301,7 +301,10 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
     expect(read('src/lib/actions/matching.ts')).toMatch(/isRecruitmentEnabled\('matching'\)/);
     expect(read('src/lib/data/matching.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return \{ status: 'disabled' \}/);
     expect(read('src/lib/matching/materialize.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return run;/);
-    expect(read('src/app/api/maintenance/route.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) \{\s*matches = 'disabled';/);
+    // #1143: maintenance — tryb efektywny (env `matching` ORAZ baza), jeden kształt odpowiedzi.
+    const maintenance = read('src/app/api/maintenance/route.ts');
+    expect(maintenance).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return false;/);
+    expect(maintenance).toMatch(/if \(!recruitment\) \{\s*matches = 'disabled';/);
   });
 
   it('powiadomienia i e-maile nie powstają z tabeli matches (jobMatch = zapisane wyszukiwania)', () => {

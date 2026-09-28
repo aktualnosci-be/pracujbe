@@ -44,6 +44,10 @@ done | LC_ALL=C sort | cut -f2)
 echo ">> model ról i kontrole ujemne"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/role-guard.sql"
 
+echo ">> #1140 (0171): świeża baza = tryb ogłoszeniowy (CL1128-0)"
+[ "$("${psql_base[@]}" -d "$DB" -At -c "select public.recruitment_enabled()")" = "f" ] \
+  || { echo "CL1128-0 FAIL: świeża baza nie jest w trybie ogłoszeniowym" >&2; exit 1; }
+
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 

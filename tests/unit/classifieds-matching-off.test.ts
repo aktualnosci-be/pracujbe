@@ -84,7 +84,7 @@ afterEach(() => {
 describe('#1131: maintenance nie przelicza dopasowań', () => {
   beforeEach(() => {
     for (const fn of MAINTENANCE_RPCS) fakeDb.rpc(fn, fn === 'match_recompute_claim' ? [] : 0);
-    // #1143: tryb efektywny = env × baza — kontrola ujemna potrzebuje obu kluczy.
+    // #1143: w trybie RECRUITMENT (env) maintenance pyta też bazę — dwuklucz.
     fakeDb.rpc('recruitment_enabled', true);
   });
 

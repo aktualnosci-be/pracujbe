@@ -41,12 +41,16 @@ end $$;
 -- (supabase/tests/role-assert.sql; kontrole ujemne w role-guard.sql).
 \ir role-assert.sql
 
--- #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym (CLASSIFIEDS_ONLY). Sekcje sprzed
--- trybu testują przepływy rekrutacyjne, więc na czas testu włączamy RECRUITMENT jedyną drogą
--- zmiany (RPC); sekcja CL1128 na końcu sprawdza tryb ogłoszeniowy i przywraca RECRUITMENT.
-select pg_temp.assert(not public.recruitment_enabled(), 'CL1128-0 świeża baza = tryb ogłoszeniowy');
+-- #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym (CLASSIFIEDS_ONLY; sprawdza to
+-- scripts/test-rls.sh przed tym plikiem — CL1128-0). Sekcje sprzed trybu testują przepływy
+-- rekrutacyjne, więc na czas testu włączamy RECRUITMENT jedyną drogą zmiany (RPC); sekcja
+-- CL1128 na końcu sprawdza tryb ogłoszeniowy i przywraca RECRUITMENT. Idempotentnie: harness,
+-- który uruchamia plik w zewnętrznej transakcji (tests/integration/rate-limit.test.ts —
+-- pierwszy wewnętrzny ROLLBACK cofa wszystko wcześniejsze), włącza tryb trwale przed plikiem.
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql: sekcje przepływów rekrutacyjnych',
-  'CLASSIFIEDS_ONLY');
+  'CLASSIFIEDS_ONLY')
+ where not public.recruitment_enabled();
+select pg_temp.assert(public.recruitment_enabled(), 'CL1128-0b tryb RECRUITMENT na czas sekcji rekrutacyjnych');
 
 \set CANDA '11111111-1111-1111-1111-111111111111'
 \set CANDB '22222222-2222-2222-2222-222222222222'
