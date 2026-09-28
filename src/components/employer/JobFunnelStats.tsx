@@ -11,16 +11,34 @@ import { BTN_SECONDARY, PANEL, PANEL_H2, STAT_LABEL, STAT_VALUE, chipClass } fro
 
 /**
  * Lejek ofert panelu pracodawcy (#99): pojawienia w wynikach → wyświetlenia → rozpoczęte
- * aplikowanie → wysłane aplikacje. Pokazuje zakres dat (dni Europe/Brussels), definicję każdej
+ * aplikowanie → wysłane aplikacje (tryb ogłoszeniowy #1147: pojawienia → wyświetlenia →
+ * kliknięcia „Aplikuj u pracodawcy”). Pokazuje zakres dat (dni Europe/Brussels), definicję każdej
  * metryki i rozbicie per oferta (karty zawijane przy 200% tekstu — bez poziomego przewijania, #318). Dane z serwerowego agregatu bez śledzenia osób (0089).
  */
 
-const METRICS = [
+type Metric = { key: keyof JobFunnelMetrics; label: string; definition: string };
+
+const RECRUITMENT_METRICS = [
   { key: 'searchAppearances', label: 'searchAppearances', definition: 'searchAppearancesDefinition' },
   { key: 'detailViews', label: 'detailViews', definition: 'detailViewsDefinition' },
   { key: 'applyStarted', label: 'applyStarted', definition: 'applyStartedDefinition' },
   { key: 'applicationsSubmitted', label: 'applicationsSubmitted', definition: 'applicationsSubmittedDefinition' },
-] as const satisfies ReadonlyArray<{ key: keyof JobFunnelMetrics; label: string; definition: string }>;
+] as const satisfies ReadonlyArray<Metric>;
+
+/**
+ * Tryb ogłoszeniowy (#1147): statystyki ogłoszenia — bez wysłanych aplikacji (portal ich nie
+ * przyjmuje), a `apply_started` = kliknięcia „Aplikuj u pracodawcy”.
+ */
+const LISTING_METRICS = [
+  { key: 'searchAppearances', label: 'searchAppearances', definition: 'searchAppearancesDefinition' },
+  { key: 'detailViews', label: 'detailViews', definition: 'detailViewsDefinition' },
+  { key: 'applyStarted', label: 'applyClicks', definition: 'applyClicksDefinition' },
+] as const satisfies ReadonlyArray<Metric>;
+
+/** Tryb wynika z danych: loader w trybie ogłoszeniowym nie zwraca `applicationsSubmitted`. */
+function isListing(totals: JobFunnelMetrics): boolean {
+  return totals.applicationsSubmitted === undefined;
+}
 
 export function JobFunnelRangePicker({ range }: { range: FunnelDateRange }): React.JSX.Element {
   const t = useTranslations('jobFunnel');
@@ -67,6 +85,8 @@ export function JobFunnelStats({
   const format = useFormatter();
   const formatDay = createAppDateFormatter(locale);
   const day = (ymd: string) => formatDay(`${ymd}T12:00:00Z`);
+  const listing = isListing(totals);
+  const METRICS: readonly Metric[] = listing ? LISTING_METRICS : RECRUITMENT_METRICS;
 
   return (
     <section aria-labelledby="job-funnel-title" className={cn(PANEL, 'space-y-4')}>
@@ -79,7 +99,7 @@ export function JobFunnelStats({
         </p>
         {/* #575: zdarzenia lejka pochodzą tylko od osób ze zgodą analityczną. */}
         <p className="text-sm text-muted-foreground" data-testid="job-funnel-consent-note">
-          {t('consentNote')}
+          {listing ? t('consentNoteListing') : t('consentNote')}
         </p>
         {exportHref ? (
           // Zwykły link do pobrania (nie `Link` next-intl): trasa API bez prefiksu języka, bez prefetchu.
@@ -100,7 +120,7 @@ export function JobFunnelStats({
           <div key={metric.key} className="min-w-0 rounded-[14px] border border-border bg-card p-4">
             <dt className={STAT_LABEL}>{t(metric.label)}</dt>
             <dd className={cn(STAT_VALUE, 'mb-0 tabular-nums')}>
-              {format.number(totals[metric.key])}
+              {format.number(totals[metric.key] ?? 0)}
             </dd>
           </div>
         ))}
@@ -136,7 +156,7 @@ export function JobFunnelStats({
                   <div key={metric.key} className="min-w-0">
                     <dt className="break-words text-xs text-muted-foreground">{t(metric.label)}</dt>
                     <dd className="text-base font-semibold tabular-nums text-foreground">
-                      {format.number(job[metric.key])}
+                      {format.number(job[metric.key] ?? 0)}
                     </dd>
                   </div>
                 ))}

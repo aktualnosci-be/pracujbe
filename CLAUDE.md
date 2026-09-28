@@ -1145,6 +1145,15 @@ ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontro
 bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
 SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
 za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
+Tryb ogłoszeniowy (#1148, bez migracji): zapisane wyszukiwania i alerty działają bez zmian, bo
+wynikają wyłącznie z filtrów użytkownika. Strażnik `tests/legal/classifieds-saved-search.test.ts`:
+najnowsze definicje funkcji `*saved_search*` bez profilu kandydata i dopasowań (wyjątek: blokada
+firmy #97), klucze filtrów v1 = parametry `get_public_jobs` (SQL i lustro TS), kolejność = lista
+publiczna, akcje/strony/trasy bez bramki trybu, `/api/maintenance` woła worker alertów w trybie
+(kontrole ujemne). `rls.sql` sekcja SS1148 (konto bez `candidate_profiles` i z nieukończonym
+profilem: zapis, nazwa, alert, digest, wyłączenie z linku; kontrola ujemna: wymóg onboardingu).
+E2E `tests/e2e-real/saved-search-classifieds.spec.ts` (`E2E_PORTAL_LEGAL_MODE=`, mutacja
+`saved-search-requires-onboarding` = czerwony).
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
@@ -1297,6 +1306,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
   w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
   teraz zgody w teście.
+  Tryb ogłoszeniowy (#1147, decyzja produktowa: portal ogłoszeniowy, bez migracji): statystyki
+  pracodawcy = statystyki ogłoszenia. `getEmployerOverview` zwraca aktywne oferty +
+  `listingDetailViews`/`listingApplyClicks` (lejek ofert, 30 dni; member = „brak danych”) bez
+  zapytań o `applications`/`matches`/`conversations`/`messages`; `getFunnelStats` → `disabled`
+  bez zapytań (pulpit: w miejscu lejka rekrutacyjnego odnośnik „Statystyki ogłoszeń”, strona
+  `/employer/statystyki` go nie woła); `getJobFunnel` i CSV bez `applicationsSubmitted` (kolumnę
+  RPC 0089 loader pomija), `apply_started` = „Kliknięcia »Aplikuj u pracodawcy«” (nowe etykiety
+  `jobFunnel.applyClicks*`, `consentNoteListing`). Tryb `RECRUITMENT` bez zmian. Dowód: unit
+  `classifieds-employer-stats` (kontrole ujemne obu trybów), E2E `classifieds-employer-stats`
+  (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px). **Otwarte:** liczniki „Nowe aplikacje” przy
+  kartach ofert (`getCompanyJobsLoad`, pulpit i `/employer/oferty`) — obszar #1144.
   Eksport CSV lejka (bez migracji): „Pobierz CSV” w sekcji lejka `/employer/statystyki` →
   `GET /api/employer/job-funnel?dni=7|30|90&locale=` — te same dane co strona (`getJobFunnel`
   pod sesją/RLS, recruiter+ aktywnej firmy wg `get_company_job_funnel`), kolumny od/do, oferta,
