@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCandidateOverview, getCandidateProfileSummary } from '@/lib/data/candidate';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
@@ -34,6 +35,8 @@ function db(failed?: string, empty = false, candidate: Record<string, unknown> =
     .count('candidate.active-applications', 4)
     .count('candidate.unread-conversations', 0);
 }
+
+withRecruitmentMode();
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -86,12 +86,16 @@ export default async function CandidateDashboardPage({
     recruitment ? getLatestActiveOffer(locale) : null,
   ]);
 
+  // Decyzja produktowa: portal ogłoszeniowy (#1128) — bez profilu kandydata: pulpit nie pokazuje
+  // wskaźnika kompletności, checklisty ani linków do profilu/onboardingu.
+  const showProfile = isRecruitmentEnabled('candidateProfile');
+
   const overviewFailed =
     overview.newJobsCount === null ||
     (recruitment && overview.activeApplicationsCount === null) ||
     overview.unreadMessagesCount === null;
 
-  const checklist = profileChecklistItems(profile.checklist, td('add'), to);
+  const checklist = showProfile ? profileChecklistItems(profile.checklist, td('add'), to) : [];
 
   return (
     <div className="min-w-0">
@@ -145,9 +149,13 @@ export default async function CandidateDashboardPage({
                 ? td('candidateStatLoadError')
                 : td('unreadMessagesSub'),
           },
-          profile.loadFailed
-            ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
-            : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
+          ...(showProfile
+            ? [
+                profile.loadFailed
+                  ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
+                  : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
+              ]
+            : []),
         ]}
       />
 
@@ -177,19 +185,25 @@ export default async function CandidateDashboardPage({
         {/* Kolumna boczna */}
         <div className={DASH_GRID_SIDE}>
           {/* Kompletność profilu — `.panel`: h2, opis, `.progress`, `.checklist`, `.btn`. */}
-          {profile.loadFailed ? <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} /> : <section className={PANEL}>
-            <h2 className={PANEL_H2}>{td('profileCompleteness')}</h2>
-            <ProfileCompleteness
-              className="mt-2"
-              value={profile.completionPct}
-              title={getProfileLevelTitle(profile.completionPct, td('goodLevel'))}
-              hint={td('completenessHint')}
-            />
-            <ProfileChecklist items={checklist} />
-            <Link href="/candidate/profil" className={cn(BTN_PRIMARY, 'w-full')}>
-              {td('completeProfile')}
-            </Link>
-          </section>}
+          {showProfile ? (
+            profile.loadFailed ? (
+              <ProfileSummaryError message={tp('loadError')} retry={tc('retry')} />
+            ) : (
+              <section className={PANEL}>
+                <h2 className={PANEL_H2}>{td('profileCompleteness')}</h2>
+                <ProfileCompleteness
+                  className="mt-2"
+                  value={profile.completionPct}
+                  title={getProfileLevelTitle(profile.completionPct, td('goodLevel'))}
+                  hint={td('completenessHint')}
+                />
+                <ProfileChecklist items={checklist} />
+                <Link href="/candidate/profil" className={cn(BTN_PRIMARY, 'w-full')}>
+                  {td('completeProfile')}
+                </Link>
+              </section>
+            )
+          ) : null}
 
           {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
           <CvUpload

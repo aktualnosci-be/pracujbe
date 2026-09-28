@@ -114,7 +114,8 @@ export function CandidateShell({
         ]
       : []),
     { href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> },
-    { href: HREF.profile, label: td('navProfile'), icon: <User /> },
+    // Profil kandydata służył dopasowaniom i firmom — w trybie ogłoszeniowym go nie ma (#1128).
+    ...(recruitmentEnabled ? [{ href: HREF.profile, label: td('navProfile'), icon: <User /> }] : []),
     { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
   ];
 
@@ -132,7 +133,11 @@ export function CandidateShell({
     <DashboardShell
       nav={nav}
       active={active}
-      user={{ name: displayName, subtitle: td('viewProfile'), initials: initialsOf(displayName) }}
+      user={{
+        name: displayName,
+        subtitle: recruitmentEnabled ? td('viewProfile') : undefined,
+        initials: initialsOf(displayName),
+      }}
       notifications={notifUnread}
       notificationError={notificationError}
       notifItems={notifItems}

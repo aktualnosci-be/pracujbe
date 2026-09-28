@@ -400,6 +400,16 @@ async function computeProfileSummary(
 ): Promise<CandidateProfileSummary> {
   const profile = asRecord(await queryOne(tx, 'candidate.profile-name',
     'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [userId]));
+  // Decyzja produktowa: portal ogłoszeniowy (#1128) — bez profilu kandydata: czytamy tylko imię
+  // (powitanie), nie liczymy kompletności i nie dotykamy `candidate_profiles`.
+  if (!isRecruitmentEnabled('candidateProfile')) {
+    return {
+      loadFailed: false,
+      firstName: asStr(profile['first_name']) || null,
+      completionPct: 0,
+      checklist: EMPTY_PROFILE_CHECKLIST,
+    };
+  }
   // Liczniki relacji (języki/certyfikaty) w tym samym wierszu profilu kandydata — brak
   // profilu kandydata = zera, jak dotąd.
   const cp = asRecord(await queryOne(tx, 'candidate.profile-completeness',

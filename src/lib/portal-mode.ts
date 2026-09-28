@@ -40,6 +40,7 @@ export const RECRUITMENT_FEATURES = [
   'offers',
   'screening',
   'matching',
+  'candidateProfile',
   'candidateSearch',
   'messaging',
   'cvAccess',

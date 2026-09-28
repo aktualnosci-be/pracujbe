@@ -76,7 +76,7 @@ describe('flaga trybu: fail-closed', () => {
 
   it('lista funkcji rekrutacyjnych jest kompletna (strażnik pokrycia)', () => {
     expect([...RECRUITMENT_FEATURES].sort()).toEqual(
-      ['applications', 'candidateSearch', 'cvAccess', 'cvImport', 'guestApply', 'matching', 'messaging', 'offers', 'screening'],
+      ['applications', 'candidateProfile', 'candidateSearch', 'cvAccess', 'cvImport', 'guestApply', 'matching', 'messaging', 'offers', 'screening'],
     );
   });
 });
@@ -119,6 +119,8 @@ const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'candidate/aplikacje', status: 'enforced', issue: 1144 },
   { segment: 'candidate/propozycje', status: 'enforced', issue: 1141 },
   { segment: '(auth)/aplikacja', status: 'enforced', issue: 1132 },
+  { segment: 'candidate/profil', status: 'enforced', issue: 1135 },
+  { segment: 'candidate/onboarding', status: 'enforced', issue: 1135 },
   { segment: 'candidate/profil/import-cv', status: 'pending', issue: 1129 },
   { segment: 'admin/pytania', status: 'enforced', issue: 1137 },
 ];

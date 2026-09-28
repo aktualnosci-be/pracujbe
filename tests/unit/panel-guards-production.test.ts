@@ -96,11 +96,23 @@ afterEach(() => vi.unstubAllEnvs());
 describe('#12: panele w produkcji bez sesji', () => {
   it.each(Object.entries(LAYOUTS))('%s: gość → logowanie, bez odczytu danych demo', async (_name, layout) => {
     stubProduction();
+    // Kreator onboardingu istnieje tylko w trybie rekrutacyjnym (tryb ogłoszeniowy: 404, niżej).
+    vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
     for (const locale of ['pl', 'nl', 'fr', 'en']) {
       expect(await outcome(layout as Layout, locale)).toEqual({ redirect: `/${locale}/logowanie` });
     }
     // Loader demo (`getNotifications(locale, rola)`) nie może zostać wywołany dla gościa.
     expect(m.getNotifications).not.toHaveBeenCalled();
+  });
+
+  it('tryb ogłoszeniowy: onboarding kandydata = 404 także dla gościa (kontrola ujemna: RECRUITMENT → logowanie)', async () => {
+    stubProduction();
+    vi.stubEnv('PORTAL_LEGAL_MODE', '');
+    for (const locale of ['pl', 'nl', 'fr', 'en']) {
+      expect(await outcome(OnboardingLayout as Layout, locale)).toEqual({ notFound: true });
+    }
+    vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
+    expect(await outcome(OnboardingLayout as Layout)).toEqual({ redirect: '/pl/logowanie' });
   });
 
   it('rola z profilu, nie z adresu: pracodawca i admin nie widzą panelu kandydata', async () => {

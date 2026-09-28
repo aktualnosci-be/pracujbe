@@ -163,6 +163,14 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+- **Profil i onboarding kandydata wyłączone (#1128, warstwa aplikacji, bez migracji):** cecha `candidateProfile`
+  w `RECRUITMENT_FEATURES`. W trybie ogłoszeniowym `/candidate/profil` (z `import-cv`) i `/candidate/onboarding` → 404
+  (layouty segmentów, `notFoundUnlessRecruitment('candidateProfile')`), `saveOnboardingStep` → `RECRUITMENT_DISABLED`
+  przed walidacją i bazą, `computeProfileSummary` czyta tylko imię (powitanie; bez `candidate_profiles`, kompletność 0),
+  pulpit bez kafla/panelu kompletności i linków do profilu, `CandidateShell` bez pozycji „Profil” i podpisu „Zobacz profil”.
+  Rejestracja kieruje na `/candidate` (bez przekierowań do onboardingu); `/candidate/ustawienia` zostaje. Dowód: unit
+  `classifieds-candidate-profile-off` (kontrole ujemne w `RECRUITMENT`), `GUARDED_ROUTES` (`candidate/profil`,
+  `candidate/onboarding`), E2E `classifieds-candidate-profile-off` (`E2E_PORTAL_LEGAL_MODE=`).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---

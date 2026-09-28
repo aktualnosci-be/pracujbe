@@ -7,6 +7,7 @@ import type { Locale } from '@/i18n/routing';
 import { Logo } from '@/components/brand/Logo';
 import { getCurrentIdentity } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Layout kreatora onboardingu kandydata (makieta 06).
@@ -33,6 +34,9 @@ export default async function OnboardingLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+
+  // Decyzja produktowa: portal ogłoszeniowy (#1128) — profil kandydata wyłączony (404).
+  notFoundUnlessRecruitment('candidateProfile');
 
   if (isPortalAuthConfigured() && !(await getCurrentIdentity())) {
     redirect({ href: '/logowanie', locale: locale as Locale });
