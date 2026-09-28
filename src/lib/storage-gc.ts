@@ -5,7 +5,8 @@ import { rpcRows } from '@/lib/db/sql';
 import type { createRailwayBucket } from '@/lib/storage/railway-bucket';
 
 /**
- * Dzienny GC prywatnego bucketu CV (#17, migracja 0117).
+ * Dzienny GC prywatnego bucketu Railway (#17, migracja 0117; rozszerzony o załączniki
+ * wiadomości w #833).
  *
  * Przebieg porównuje listę obiektów bucketu z wierszami `files` partiami (strona listy =
  * jedna krótka transakcja `storage_gc_page`, kursor w bazie):
@@ -15,6 +16,15 @@ import type { createRailwayBucket } from '@/lib/storage/railway-bucket';
  * Nowy przebieg najwcześniej 23 h po poprzednim (dzienny rytm przy cronie co godzinę);
  * przebieg przerwany limitem stron albo awarią jest kontynuowany w kolejnym wywołaniu.
  *
+ * Jeden fizyczny bucket Railway trzyma dwa niezależne buckety logiczne (`files.bucket`):
+ * CV kandydata (`candidate-files`, klucz `cv-*`) i załączniki rozmów (`message-files`,
+ * klucz `att-*`, 0119). `runStorageGc` sprząta jeden logiczny bucket na wywołanie — `options`
+ * wskazuje który (domyślnie CV, zachowanie sprzed #833); każdy ma własny, niezależny przebieg
+ * (`storage_gc_sweeps.bucket`, osobny kursor/dzierżawa) i własne wywołanie z `/api/maintenance`.
+ * `store.list()` klasyfikuje klucze według `options.pattern` — klucze drugiego wzorca są dla
+ * danego przebiegu obce (`foreign`), więc nigdy nie trafiają do kolejki usuwania niewłaściwego
+ * bucketu logicznego.
+ *
  * Tryb: dry-run domyślnie. Kasowanie wymaga jawnego `STORAGE_GC_MODE=delete` (produkcyjne
  * kasowanie danych = osobne zatwierdzenie, #17). Wynik i logi zawierają tylko liczniki —
  * nigdy klucz obiektu, ścieżkę ani nazwę pliku.
@@ -22,6 +32,8 @@ import type { createRailwayBucket } from '@/lib/storage/railway-bucket';
 
 /** Nazwa bucketu w `files.bucket` dla CV (niezależna od nazwy bucketu Railway). */
 export const CV_FILES_BUCKET = 'candidate-files';
+/** Nazwa bucketu w `files.bucket` dla załączników wiadomości (0119, #833). */
+export const MESSAGE_ATTACHMENTS_BUCKET = 'message-files';
 
 export type StorageGcStore = Pick<ReturnType<typeof createRailwayBucket>, 'list'>;
 
@@ -34,6 +46,10 @@ export interface StorageGcOptions {
   maxPages?: number;
   minIntervalHours?: number;
   now?: () => Date;
+  /** Logiczny bucket `files.bucket` do sprzątania (#833). Domyślnie `CV_FILES_BUCKET`. */
+  bucket?: string;
+  /** Wzorzec klucza rozpoznawany przez `store.list()` dla tego bucketu. Domyślnie `'cv'`. */
+  pattern?: 'cv' | 'attachment';
 }
 
 export type StorageGcRun =
@@ -72,10 +88,12 @@ export async function runStorageGc(store: StorageGcStore, options: StorageGcOpti
   const pageSize = options.pageSize ?? 500;
   const maxPages = options.maxPages ?? 20;
   const now = options.now ?? (() => new Date());
+  const bucket = options.bucket ?? CV_FILES_BUCKET;
+  const pattern = options.pattern ?? 'cv';
 
   const [begin] = await withServiceRole((tx) =>
     rpcRows<{ status: string; sweep_id: string | null; cursor_key: string | null }>(tx, 'storage_gc_begin', {
-      p_bucket: CV_FILES_BUCKET,
+      p_bucket: bucket,
       p_min_interval_hours: options.minIntervalHours ?? 23,
       p_dry_run: options.dryRun,
     }));
@@ -98,7 +116,7 @@ export async function runStorageGc(store: StorageGcStore, options: StorageGcOpti
   let finished = false;
 
   while (totals.pages < maxPages) {
-    const page = await store.list({ startAfter: cursor, maxKeys: pageSize });
+    const page = await store.list({ startAfter: cursor, maxKeys: pageSize, pattern });
     if (!page.ok) throw new StorageGcError(page.error);
     const threshold = now().getTime() - graceHours * 3_600_000;
     const keys = page.value.objects.map((object) => object.key);

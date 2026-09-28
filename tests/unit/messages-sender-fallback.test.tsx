@@ -33,6 +33,10 @@ import { resolveDemoJobs } from '@/lib/data/demo';
 import { ThreadMessageList } from '@/components/messaging/ThreadMessageList';
 import { ConversationList } from '@/components/messaging/ConversationList';
 import type { ThreadMessageView } from '@/lib/messaging/thread-view';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+withRecruitmentMode();
 
 afterEach(cleanup);
 
@@ -70,7 +74,9 @@ function fakeClient(opts: { uid: string; team: string[]; visibleProfiles: Record
       viewerIsMember
         ? (values[1] as string[]).filter((id) => opts.team.includes(id)).map((profile_id) => ({ profile_id }))
         : [],
-    );
+    )
+    // Brak wiersza = firma nie jest zablokowana (#832) — nieużywane po stronie firmy.
+    .rows('messages.company-block', []);
 }
 
 describe('nadawca wiadomości pod RLS (#355)', () => {

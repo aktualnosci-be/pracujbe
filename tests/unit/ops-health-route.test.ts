@@ -61,6 +61,34 @@ describe('GET /api/health/ops (#47)', () => {
     expect(typeof body.checkedAt).toBe('string');
   });
 
+  it('#1143: tryb bazy = env → 200; opis trybów w odpowiedzi', async () => {
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics: { ...metrics, portalLegalMode: { recruitmentEnabled: 0 } } });
+    const res = await call(SECRET);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      status: 'ok', alerts: [],
+      portalLegalMode: { env: 'CLASSIFIEDS_ONLY', database: 'CLASSIFIEDS_ONLY', effective: 'CLASSIFIEDS_ONLY' },
+    });
+    vi.stubEnv('PORTAL_LEGAL_MODE', 'RECRUITMENT');
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics: { ...metrics, portalLegalMode: { recruitmentEnabled: 1 } } });
+    const both = await call(SECRET);
+    expect(both.status).toBe(200);
+    expect((await both.json()).portalLegalMode.effective).toBe('RECRUITMENT');
+  });
+
+  it.each([
+    ['', 1],
+    ['RECRUITMENT', 0],
+  ] as const)('#1143: env %j, baza %i → 503 portal_legal_mode_mismatch', async (env, db) => {
+    vi.stubEnv('PORTAL_LEGAL_MODE', env);
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics: { ...metrics, portalLegalMode: { recruitmentEnabled: db } } });
+    const res = await call(SECRET);
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({ status: 'alert', alerts: ['portal_legal_mode_mismatch'] });
+    expect(body.portalLegalMode.effective).toBe('CLASSIFIEDS_ONLY');
+  });
+
   it('przekroczony próg → 503 alert z kodem sygnału', async () => {
     readOpsMetrics.mockResolvedValue({
       kind: 'ok', metrics: { ...metrics, webhooks: { stuckProcessing: 2, failedLast24h: 0 } },

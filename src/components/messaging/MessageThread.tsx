@@ -4,6 +4,7 @@ import type { Locale } from '@/i18n/routing';
 import type { ConversationThread, MyMessageReports } from '@/lib/data/messages';
 import { threadDisplayName, toMessageViews } from '@/lib/messaging/thread-view';
 
+import { ConversationCompanyBlockControl } from './ConversationCompanyBlockControl';
 import { ReportContentButton } from './ReportContentButton';
 import { ThreadMessageList } from './ThreadMessageList';
 import { CONVERSATION_HEAD } from '@/components/candidate/candidate-styles';
@@ -31,9 +32,22 @@ export interface MessageThreadProps {
   headingId: string;
   /** Otwarte zgłoszenia bieżącego użytkownika w tej rozmowie (0116). */
   reports?: MyMessageReports;
+  /**
+   * Blokada firmy z wątku (#832) — tylko strona kandydacka rozmowy. `MessagesView` przekazuje
+   * `true` wyłącznie na `/candidate/wiadomosci`; domyślne `false` jest bezpiecznikiem, gdyby
+   * `thread.companyBlock` kiedyś było ustawione po stronie pracodawcy (np. dane DEMO, które nie
+   * rozróżniają widza — w przeciwieństwie do odczytu pod sesją, gdzie o tym decyduje RLS).
+   */
+  allowCompanyBlock?: boolean;
 }
 
-export async function MessageThread({ thread, locale, headingId, reports }: MessageThreadProps) {
+export async function MessageThread({
+  thread,
+  locale,
+  headingId,
+  reports,
+  allowCompanyBlock = false,
+}: MessageThreadProps) {
   const t = await getTranslations({ locale, namespace: 'messages' });
   const displayName = threadDisplayName(thread, t('title'));
 
@@ -62,6 +76,16 @@ export async function MessageThread({ thread, locale, headingId, reports }: Mess
             label={t('reportConversationLabel', { name: displayName })}
           />
         </div>
+        {/* Blokada firmy z wątku (#832) — tylko strona kandydacka, gdy firma rozwiązywalna. */}
+        {allowCompanyBlock && thread.companyBlock ? (
+          <div className="mt-4">
+            <ConversationCompanyBlockControl
+              companyId={thread.companyBlock.companyId}
+              companyName={thread.companyBlock.companyName}
+              initialBlocked={thread.companyBlock.blocked}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* `key` = nowy stan listy przy zmianie rozmowy (bez przenoszenia starszych stron). */}

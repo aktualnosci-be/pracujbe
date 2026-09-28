@@ -21,6 +21,7 @@ import middleware from '@/middleware';
 import { GET } from '@/app/api/health/route';
 import { isAppReady } from '@/lib/env';
 import * as sitemapModule from '@/app/sitemap';
+import * as robotsModule from '@/app/robots';
 
 const SITE = 'https://pracuj.be';
 const SECRET = 's'.repeat(40);
@@ -121,5 +122,11 @@ describe('#429: produkcja na samym PostgreSQL', () => {
     // Kontrola: build z APP_MODE=production i zmiennymi Railway bez tej linii kończył się
     // „sitemap: brak liczników kategorii” (odtworzone lokalnie, #429).
     expect(sitemapModule.dynamic).toBe('force-dynamic');
+  });
+
+  it('robots.txt nie jest prerenderowany w buildzie (PERF-03: wskazywałby tylko /sitemap/0.xml)', () => {
+    // Kontrola: bez tej linii Next generował robots.txt statycznie w `next build`, gdzie
+    // `getJobs` zwraca total 0 (`isBuildPhase`) — plik bez partii ofert do następnego wdrożenia.
+    expect(robotsModule.dynamic).toBe('force-dynamic');
   });
 });

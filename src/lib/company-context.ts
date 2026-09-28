@@ -95,3 +95,44 @@ export async function getActiveCompanyId(
 ): Promise<string | null> {
   return (await getActiveCompany(tx, userId)).activeId;
 }
+
+/**
+ * Wynik powiązania zapisu z firmą WIDOKU (EMP-02, CC25-01/02).
+ *   - `ok`: firma widoku jest bieżącą aktywną firmą — kontekst do użycia w akcji,
+ *   - `ACTIVE_COMPANY_CHANGED`: widok wyrenderowano dla innej firmy niż bieżąca aktywna
+ *     (przełączenie w innej karcie albo formularz sprzed przełączenia) — akcja NIC nie zapisuje,
+ *   - `NOT_FOUND`: użytkownik nie ma żadnego aktywnego członkostwa.
+ */
+export type ExpectedCompanyResult =
+  | { ok: true; context: ActiveCompanyContext & { activeId: string } }
+  | { ok: false; error: 'ACTIVE_COMPANY_CHANGED' | 'NOT_FOUND' };
+
+/**
+ * Aktywna firma, ale TYLKO gdy jest tą samą firmą, dla której wyrenderowano widok
+ * (`expectedCompanyId` przychodzi z formularza/przycisku, a ten z odpowiedzi RSC).
+ *
+ * Wybór aktywnej firmy (cookie) jest wspólny dla wszystkich kart przeglądarki i zmienia się
+ * w trakcie życia formularza. Akcja, która czyta tylko cookie w chwili zapisu, mogłaby więc
+ * po cichu utworzyć szkic, zaprosić osobę albo zgłosić do weryfikacji INNĄ firmę niż ta
+ * pokazana na ekranie. Rozbieżność = jawny błąd, nigdy zapis do „nowej” firmy.
+ */
+export async function getExpectedActiveCompany(
+  tx: TransactionQuery,
+  userId: string,
+  expectedCompanyId: unknown,
+): Promise<ExpectedCompanyResult> {
+  return matchExpectedCompany(await getActiveCompany(tx, userId), expectedCompanyId);
+}
+
+/** Czysta reguła porównania „firma widoku == bieżąca aktywna firma” (bez bazy i cookie). */
+export function matchExpectedCompany(
+  context: ActiveCompanyContext,
+  expectedCompanyId: unknown,
+): ExpectedCompanyResult {
+  const activeId = context.activeId;
+  if (!activeId) return { ok: false, error: 'NOT_FOUND' };
+  if (typeof expectedCompanyId !== 'string' || expectedCompanyId !== activeId) {
+    return { ok: false, error: 'ACTIVE_COMPANY_CHANGED' };
+  }
+  return { ok: true, context: { ...context, activeId } };
+}

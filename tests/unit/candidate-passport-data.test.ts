@@ -31,7 +31,7 @@ describe('paszport zawodowy kandydata', () => {
     expect(call!.text).toContain('cp.profile_id = $1 AND cp.deleted_at IS NULL');
     // Relacje wyłącznie po id tego profilu.
     for (const table of ['candidate_skills', 'candidate_languages', 'candidate_certificates']) {
-      expect(call!.text).toMatch(new RegExp(`${table} \\w+\\s+WHERE \\w+\\.candidate_profile_id = cp\\.id`));
+      expect(call!.text).toMatch(new RegExp(`${table} \\w+(?:\\s+LEFT JOIN public\\.languages [^\\n]+)?\\s+WHERE \\w+\\.candidate_profile_id = cp\\.id`));
     }
   });
 

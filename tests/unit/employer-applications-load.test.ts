@@ -15,14 +15,17 @@ const JOB = '22222222-2222-4222-8222-222222222222';
 const APP = (n: number) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, '0')}`;
 const TS = '2026-09-20T09:00:00.123456+00:00';
 
-function db(rows: unknown[], error: unknown = null) {
+function db(rows: unknown[], error: unknown = null, jobOptions: unknown[] = []) {
   for (const name of ['employer.applications-page', 'employer.applications-page-prev']) {
     fakeDb.rows(name, () => {
       if (error) throw error;
       return rows;
     });
   }
+  fakeDb.rows('employer.applications-job-options', () => jobOptions);
 }
+
+const EMPTY_EXTRA = { statusFilter: null, companyId: 'company-1', jobOptions: [] };
 
 function row(n: number) {
   return {
@@ -60,7 +63,7 @@ describe('employer applications page data (P1-05: kursor)', () => {
     // Kursor = ostatnia WIDOCZNA pozycja (nie znacznik), czas z pełną precyzją.
     expect(decodeTimeCursor(result.nextCursor)).toEqual({ ts: TS, id: APP(20 - EMPLOYER_APPLICATIONS_PAGE_SIZE + 1) });
     const [call] = fakeDb.callsTo('employer.applications-page');
-    expect(call?.values).toEqual(['company-1', null, null, null, 13]);
+    expect(call?.values).toEqual(['company-1', null, null, null, 13, null]);
     expect(call?.text).toContain('ORDER BY a.submitted_at DESC, a.id DESC');
     expect(call?.text).toContain('(a.submitted_at, a.id) < ($3::timestamptz, $4::uuid)');
     expect(call?.text).not.toContain('OFFSET');
@@ -73,7 +76,7 @@ describe('employer applications page data (P1-05: kursor)', () => {
     const cursor = { ts: TS, id: APP(4) };
     const result = await getEmployerApplicationsPage({ cursor, direction: 'next' });
     if (result.status !== 'ok') throw new Error('expected ok');
-    expect(fakeDb.callsTo('employer.applications-page')[0]?.values).toEqual(['company-1', null, TS, APP(4), 13]);
+    expect(fakeDb.callsTo('employer.applications-page')[0]?.values).toEqual(['company-1', null, TS, APP(4), 13, null]);
     expect(result.nextCursor).toBeNull();
     expect(decodeTimeCursor(result.prevCursor)).toEqual({ ts: TS, id: APP(3) });
   });
@@ -116,7 +119,7 @@ describe('employer applications page data (P1-05: kursor)', () => {
   it('shows an actual empty state after a successful read', async () => {
     db([]);
     expect(await getEmployerApplicationsPage()).toEqual({
-      status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+      status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null, ...EMPTY_EXTRA,
     });
   });
 
@@ -127,6 +130,7 @@ describe('employer applications page data (P1-05: kursor)', () => {
     });
     expect(await getEmployerApplicationsPage()).toEqual({
       status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+      statusFilter: null, companyId: null, jobOptions: [],
     });
     expect(fakeDb.calls).toHaveLength(0);
   });
@@ -140,8 +144,28 @@ describe('employer applications page data (P1-05: kursor)', () => {
     expect(first.applications.length).toBeGreaterThan(0);
     expect(await getEmployerApplicationsPage({ cursor: { ts: TS, id: APP(1) }, direction: 'next' })).toEqual({
       status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: true, job: null,
+      statusFilter: null, companyId: null, jobOptions: [],
     });
     expect(fakeDb.calls).toHaveLength(0);
     expect(encodeTimeCursor({ ts: TS, id: APP(1) })).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('filters by status in the same keyset query and lists the company jobs for the filter (0170)', async () => {
+    db([row(1)], null, [{ id: JOB, title: 'Operator' }]);
+    const result = await getEmployerApplicationsPage(undefined, null, 'rejected');
+    expect(result).toMatchObject({
+      status: 'ok', statusFilter: 'rejected', companyId: 'company-1', jobOptions: [{ id: JOB, title: 'Operator' }],
+    });
+    const [call] = fakeDb.callsTo('employer.applications-page');
+    expect(call?.values).toEqual(['company-1', null, null, null, 13, 'rejected']);
+    expect(call?.text).toContain('($6::text IS NULL OR a.status::text = $6::text)');
+    expect(fakeDb.callsTo('employer.applications-job-options')[0]?.values).toEqual(['company-1']);
+  });
+
+  it('demo data respects the status filter (0170)', async () => {
+    fakeSession.configured = false;
+    const result = await getEmployerApplicationsPage(undefined, null, 'hired');
+    if (result.status !== 'ok') throw new Error('expected ok');
+    expect(result.applications.every((a) => a.status === 'hired')).toBe(true);
   });
 });

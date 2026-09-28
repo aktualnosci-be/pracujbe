@@ -238,7 +238,7 @@ test('link potwierdzenia: prywatne nagłówki, bez tokenu w URL, zły token → 
   await expect(page.getByRole('button', { name: t.guestApply.confirmButton })).toHaveCount(0);
 });
 
-test('stary link przejęcia z ?token= jest odrzucany: czysty URL, bez cookie, komunikat (#505)', async ({ page }) => {
+test('stary link przejęcia z ?token= jest odrzucany: czysty URL, bez cookie, komunikat (#505)', async ({ page, baseURL }) => {
   const t = msgs('en');
   const token = 'A'.repeat(43);
   const requests: string[] = [];
@@ -246,7 +246,7 @@ test('stary link przejęcia z ?token= jest odrzucany: czysty URL, bez cookie, ko
   const response = await page.goto(`/en/aplikacja/przejmij?token=${token}`);
   expect(response?.headers()['cache-control']).toContain('no-store');
   expect(response?.headers()['referrer-policy']).toBe('no-referrer');
-  expect(page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
+  expect(page.url()).toBe(`${baseURL}/en/aplikacja/przejmij`);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/);
   await expect(page.getByRole('heading', { level: 1, name: t.guestApply.claimTitle })).toBeVisible();
   await expect(page.getByRole('heading', { name: t.guestApply.invalidTitle })).toBeVisible();
@@ -258,7 +258,7 @@ test('stary link przejęcia z ?token= jest odrzucany: czysty URL, bez cookie, ko
   expect(requests.slice(1).every((url) => !url.includes(token))).toBe(true);
 });
 
-test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie HttpOnly', async ({ page }) => {
+test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie HttpOnly', async ({ page, baseURL }) => {
   const token = 'B'.repeat(43);
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
@@ -266,7 +266,7 @@ test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie Ht
   await page.goto(`/en/aplikacja/przejmij#token=${token}`);
   await expect(page.getByRole('main').getByRole('link', { name: msgs('en').guestApply.claimLogin })).toBeVisible();
 
-  expect(page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
+  expect(page.url()).toBe(`${baseURL}/en/aplikacja/przejmij`);
   expect(requests.every((url) => !url.includes(token))).toBe(true);
   const cookies = await page.context().cookies();
   const staged = cookies.find((cookie) => cookie.name === 'pb_guest_claim');
@@ -277,10 +277,59 @@ test('nowy link przejęcia: fragment znika z historii, token zostaje w cookie Ht
   // A second email link must replace the staged credential even while the first cookie exists.
   const second = 'C'.repeat(43);
   await page.goto(`/en/aplikacja/przejmij#token=${second}`);
-  await expect.poll(() => page.url()).toBe('http://127.0.0.1:4319/en/aplikacja/przejmij');
+  await expect.poll(() => page.url()).toBe(`${baseURL}/en/aplikacja/przejmij`);
   await expect.poll(async () => {
     const current = await page.context().cookies();
     return current.find((cookie) => cookie.name === 'pb_guest_claim')?.value;
   }).toBe(second);
   expect(requests.every((url) => !url.includes(second))).toBe(true);
+});
+
+/**
+ * #913 — zamknięcie dialogu (X/Escape) przed wysłaniem nie może wymazać niewysłanego
+ * formularza gościa. Reopen przez ponowne kliknięcie „Aplikuj” NA TEJ SAMEJ stronie (bez
+ * `page.goto` — pełne przeładowanie strony odmontowuje cały `ApplyModal`, więc szkic
+ * przetrwałby tylko przypadkiem, gdyby żył w localStorage; test celowo tego nie robi).
+ * Kontrola ujemna: po udanej wysyłce ponowne otwarcie NIE odtwarza już zapisanych danych.
+ */
+test('#913: zamknięcie X/Escape zachowuje niewysłany formularz gościa, sukces go czyści', async ({ page }) => {
+  const t = msgs('pl');
+  const { dialog } = await openGuestForm(page, 'pl', 1280);
+  const reopen = async () => {
+    await page.getByRole('button', { name: t.jobs.applyNow }).click();
+    const form = dialog.getByTestId('guest-apply-form');
+    await expect(form).toBeVisible();
+    return form;
+  };
+
+  let form = dialog.getByTestId('guest-apply-form');
+  await form.getByRole('textbox', { name: t.guestApply.fullName }).fill('Anna Nowak');
+  await form.getByRole('textbox', { name: t.guestApply.email }).fill('anna@example.com');
+  await form.getByRole('radio', { name: ageLabel(t) }).click();
+
+  await dialog.getByRole('button', { name: t.apply.close }).click();
+  await expect(dialog).toBeHidden();
+
+  form = await reopen();
+  await expect(form.getByRole('textbox', { name: t.guestApply.fullName })).toHaveValue('Anna Nowak');
+  await expect(form.getByRole('textbox', { name: t.guestApply.email })).toHaveValue('anna@example.com');
+  await expect(form.getByRole('radio', { name: ageLabel(t) })).toBeChecked();
+
+  // Escape zamyka tym samym uchwytem (`onOpenChange`) — szkic zostaje po raz drugi.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  form = await reopen();
+  await expect(form.getByRole('textbox', { name: t.guestApply.fullName })).toHaveValue('Anna Nowak');
+
+  // Kontrola ujemna: po UDANEJ wysyłce ponowne otwarcie nie pokazuje już wysłanych danych.
+  await form.getByRole('checkbox', { name: privacyAckName(t) }).click();
+  await form.getByRole('button', { name: t.apply.submit }).click();
+  await expect(dialog.getByTestId('guest-apply-sent')).toBeVisible();
+  await dialog.getByRole('button', { name: t.apply.close }).click();
+  await expect(dialog).toBeHidden();
+
+  const afterSuccess = await reopen();
+  await expect(afterSuccess.getByRole('textbox', { name: t.guestApply.fullName })).toHaveValue('');
+  await expect(afterSuccess.getByRole('textbox', { name: t.guestApply.email })).toHaveValue('');
 });

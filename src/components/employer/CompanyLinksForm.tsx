@@ -43,6 +43,13 @@ import { updateCompanyLinks, type CompanyLinksOutcome } from '@/lib/actions/comp
  */
 
 export interface CompanyLinksFormProps {
+  /**
+   * ID firmy, dla której wyrenderowano formularz (#801) — akcja zapisu używa TEGO
+   * identyfikatora, nie aktywnej firmy z cookie w chwili wysłania, więc zmiana aktywnej
+   * firmy w innej karcie po otwarciu formularza nie może przekierować zapisu do innego
+   * rekordu.
+   */
+  companyId: string;
   /** Wartości pól: propozycja (gdy jest), inaczej zatwierdzone adresy. */
   defaultValues: { website: string; logoUrl: string };
   /** Zatwierdzone (publiczne) adresy — pokazywane, gdy propozycja czeka albo została odrzucona. */
@@ -53,7 +60,18 @@ export interface CompanyLinksFormProps {
   ownHost: string;
 }
 
-export function CompanyLinksForm({
+/**
+ * CC25-01: `useForm` czyta `defaultValues` tylko przy montażu. Po przełączeniu aktywnej firmy
+ * w pasku bocznym TEJ SAMEJ karty (`router.refresh`) RSC podaje nowe `companyId` i wartości,
+ * ale bez klucza komponent zostałby w drzewie ze starymi polami — a zapis poszedłby już do
+ * nowej firmy. Klucz = firma: formularz montuje się od nowa z danymi właściwej firmy.
+ */
+export function CompanyLinksForm(props: CompanyLinksFormProps): React.JSX.Element {
+  return <CompanyLinksFormFields key={props.companyId} {...props} />;
+}
+
+function CompanyLinksFormFields({
+  companyId,
   defaultValues,
   published,
   review,
@@ -100,7 +118,7 @@ export function CompanyLinksForm({
     setDemo(false);
 
     try {
-      const result = await updateCompanyLinks(values);
+      const result = await updateCompanyLinks(companyId, values);
       if (!result.ok) {
         setServerError(result.error);
         return;

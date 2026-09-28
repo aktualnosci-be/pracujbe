@@ -93,6 +93,11 @@ describe('JobPosting JSON-LD (#313)', () => {
     expect(data.directApply).toBe(true);
   });
 
+  it('#1130: tryb ogłoszeniowy — aplikowanie u ogłoszeniodawcy, directApply false', () => {
+    expect(buildJobPostingJsonLd(job(), 'u', labels, { directApply: false }).directApply).toBe(false);
+    expect(buildJobPostingJsonLd(job(), 'u', labels, { directApply: true }).directApply).toBe(true);
+  });
+
   // #842 — umowa na stałe nie mówi nic o wymiarze etatu (patrz `job.workingHours`, wolny tekst);
   // fałszywe `FULL_TIME` przy realnej ofercie na część etatu wprowadzało w błąd wyszukiwarki.
   it('#842: umowa na stałe (permanent) NIE emituje employmentType — wymiar etatu nieznany', () => {

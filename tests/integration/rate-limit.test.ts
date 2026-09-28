@@ -180,6 +180,14 @@ describe('Limiter PostgreSQL — atomowość i wąska rola', () => {
   it('przechodzi cały istniejący zestaw RLS po migracjach domenowych i auth', () => {
     // psql czyta zestaw ze stdin, więc \ir nie ma katalogu bazowego — strażnik roli
     // (role-assert.sql) wstawiamy w miejsce dyrektywy, bez zmiany samych asercji.
+    // #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym. Zestaw działa w jednej
+    // zewnętrznej transakcji, a jego pierwszy wewnętrzny ROLLBACK cofnąłby włączenie trybu
+    // z nagłówka rls.sql — dlatego RECRUITMENT włączamy trwale (RPC) przed zestawem.
+    execFileSync(process.platform === 'win32' ? 'wsl.exe' : 'docker',
+      [...(process.platform === 'win32' ? ['-d', 'Ubuntu', '--', 'docker'] : []),
+        'exec', '-i', container, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'limiter_test',
+        '-c', "SELECT public.admin_set_portal_legal_mode('RECRUITMENT', 'rate-limit.test: zestaw RLS', 'CLASSIFIEDS_ONLY')"],
+      { encoding: 'utf8', timeout: 30_000 });
     const guard = readFileSync(new URL('../../supabase/tests/role-assert.sql', import.meta.url), 'utf8');
     const suite = readFileSync(new URL('../../supabase/tests/rls.sql', import.meta.url), 'utf8');
     expect(suite).toContain('\\ir role-assert.sql');

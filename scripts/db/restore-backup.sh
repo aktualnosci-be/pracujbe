@@ -5,10 +5,13 @@
 # 1. manifest obok artefaktu (<nazwa>.json): format i SHA-256 artefaktu,
 # 2. odszyfrowanie `age` kluczem prywatnym do katalogu roboczego 0700,
 # 3. pełny odczyt archiwum (pg_restore --list),
-# 4. odtworzenie do PUSTEJ, izolowanej bazy pracujbe_restore_* (bez właścicieli i ACL;
-#    brakujące role polityk RLS tworzone na celu jako NOLOGIN bez atrybutów),
+# 4. odtworzenie do PUSTEJ, izolowanej bazy pracujbe_restore_* z uprawnieniami (ACL), bez
+#    właścicieli (obiekty należą do loginu odtwarzającego); brakujące role z polityk
+#    i GRANT/REVOKE tworzone wg kontraktu database/bootstrap (scripts/db/lib/restore-roles.sh),
 # 5. zapytania kontrolne (scripts/db/lib/backup-controls.sh) — SHA-256 wyniku musi być
-#    równy `controlsSha256` z manifestu: historia migracji, RLS, polityki, liczności tabel,
+#    równy `controlsSha256` z manifestu: historia migracji, RLS, polityki, liczności tabel;
+#    a odcisk uprawnień — `aclSha256` (OPS14-01: GRANT/REVOKE tabel, kolumn, funkcji, typów,
+#    schematów i domyślnych, atrybuty i członkostwa ról runtime),
 # 6. (opcjonalnie, #486) ponowne usunięcie osób z rejestru usunięć NOWSZEGO niż kopia
 #    (plik z scripts/db/export-erasure-tombstones.sh) — public.apply_erasure_tombstones,
 #    potem kontrola, że żadna z nich nie istnieje w odtworzonej bazie.
@@ -18,6 +21,8 @@
 #   RESTORE_AGE_IDENTITY_FILE  — klucz prywatny age (trzymany POZA zadaniem kopii),
 #   RESTORE_TARGET_URL         — pusta baza pracujbe_restore_* (zalecany osobny klaster),
 #   RESTORE_TOMBSTONES_FILE    — (opcjonalnie) rejestr usunięć do ponownego zastosowania.
+#   RESTORE_KEEP_PORTAL_MODE   — #1143: `1` = zachowaj tryb portalu z kopii; domyślnie po
+#                                odtworzeniu wymuszany jest CLASSIFIEDS_ONLY (RPC z audytem).
 #   RESTORE_S3_OBJECT          — #569: zamiast RESTORE_ARCHIVE: nazwa artefaktu w buckecie R2
 #                                albo `latest` (najnowsza kompletna kopia); pobranie kluczem
 #                                ODCZYTU BACKUP_S3_READ_* (scripts/db/lib/backup-s3.mjs).
@@ -63,12 +68,16 @@ manifest="$(dirname "$RESTORE_ARCHIVE")/${archive_name%.dump.age}.json"
 
 # Manifest pisze backup.sh: płaski JSON, jeden klucz w wierszu.
 field() { sed -nE "s/^  \"$1\": \"?([^\",]*)\"?,?$/\1/p" "$manifest" | head -1; }
-[ "$(field format)" = 'pracujbe-backup/1' ] || fail 'Nieobsługiwany format manifestu.' 2
+# Format 1 (sprzed OPS14-01) nie ma uprawnień — odtworzona baza nie nadaje się do użycia.
+[ "$(field format)" != 'pracujbe-backup/1' ] \
+  || fail 'Kopia w formacie 1 nie zawiera uprawnień (GRANT/REVOKE) — wykonaj nową kopię.' 2
+[ "$(field format)" = 'pracujbe-backup/2' ] || fail 'Nieobsługiwany format manifestu.' 2
 [ "$(field artifact)" = "$archive_name" ] || fail 'Manifest dotyczy innego artefaktu.'
 expected_sha="$(field sha256Encrypted)"
 expected_controls="$(field controlsSha256)"
-[[ "$expected_sha" =~ ^[0-9a-f]{64}$ && "$expected_controls" =~ ^[0-9a-f]{64}$ ]] \
-  || fail 'Manifest bez sum kontrolnych.'
+expected_acl="$(field aclSha256)"
+[[ "$expected_sha" =~ ^[0-9a-f]{64}$ && "$expected_controls" =~ ^[0-9a-f]{64}$ \
+   && "$expected_acl" =~ ^[0-9a-f]{64}$ ]] || fail 'Manifest bez sum kontrolnych.'
 
 url_db() { local u="${1%%\?*}"; printf '%s' "${u##*/}"; }
 [[ "$(url_db "$RESTORE_TARGET_URL")" =~ ^pracujbe_restore_[a-z0-9_]+$ ]] \
@@ -110,19 +119,12 @@ echo 'RESTORE: pełny odczyt archiwum'
 pg_restore --list "$dump" >"$workdir/toc.txt" 2>/dev/null || fail 'Archiwum jest nieczytelne.'
 [ -s "$workdir/toc.txt" ] || fail 'Archiwum jest puste.'
 
-# Role z klauzul TO polityk (CREATE POLICY … TO a, b USING …) — tylko prawidłowe nazwy.
-roles="$(pg_restore --schema-only --file=- "$dump" 2>/dev/null \
-  | sed -nE 's/^CREATE POLICY .* TO ([a-z_][a-z0-9_]*( *, *[a-z_][a-z0-9_]*)*)( USING| WITH CHECK|;).*/\1/p' \
-  | tr ',' '\n' | tr -d ' ' | grep -v '^public$' | LC_ALL=C sort -u || true)"
-for role in $roles; do
-  [[ "$role" =~ ^[a-z_][a-z0-9_]*$ ]] || fail 'Nieoczekiwana nazwa roli w polityce.'
-  if [ -z "$(dst -c "select 1 from pg_roles where rolname = '$role'")" ]; then
-    dst -c "create role \"$role\" nologin" >/dev/null || fail 'Nie można utworzyć roli na celu.' 2
-  fi
-done
+# shellcheck source=scripts/db/lib/restore-roles.sh
+source "$(dirname "$0")/lib/restore-roles.sh"
+restore_prepare_roles "$(restore_dump_roles "$dump")"
 
 echo 'RESTORE: odtwarzanie do izolowanej bazy'
-pg_restore --no-owner --no-acl --exit-on-error --single-transaction \
+pg_restore --no-owner --exit-on-error --single-transaction \
   --dbname="$RESTORE_TARGET_URL" "$dump" 2>"$workdir/restore.err" || fail 'pg_restore nie powiódł się.'
 rm -f "$dump"
 
@@ -133,6 +135,9 @@ table_list="$(dst -c "$BACKUP_TABLES_SQL")" || fail 'Odczyt listy tabel celu.'
 controls="$(backup_controls_sql "$table_list" | dst)" || fail 'Zapytania kontrolne na celu.'
 [ "$(printf '%s' "$controls" | sha256sum | cut -d' ' -f1)" = "$expected_controls" ] \
   || fail 'Niezgodność po odtworzeniu: historia migracji, RLS, polityki lub liczności tabel.'
+acl="$(dst -c "$BACKUP_ACL_SQL")" || fail 'Odcisk uprawnień celu.'
+[ "$(printf '%s' "$acl" | sha256sum | cut -d' ' -f1)" = "$expected_acl" ] \
+  || fail 'Niezgodność uprawnień po odtworzeniu: GRANT/REVOKE albo role runtime różnią się od źródła.'
 
 if [ -n "$tombstone_array" ]; then
   echo 'RESTORE: ponowne usunięcie osób z rejestru usunięć'
@@ -146,6 +151,28 @@ if [ -n "$tombstone_array" ]; then
   echo "RESTORE: rejestr usunięć zastosowany (liczba identyfikatorów: ${tombstone_count})."
 fi
 
+# #1143 (0171): odtworzona baza wraca w trybie ogłoszeniowym — kopia z RECRUITMENT nie może
+# po cichu przywrócić funkcji rekrutacyjnych. Zachowanie trybu z kopii tylko jawnie
+# (RESTORE_KEEP_PORTAL_MODE=1, decyzja właściciela). Po kontrolach zgodności z manifestem.
+portal_mode='(brak trybu w bazie)'
+if [ "$(dst -c "select to_regprocedure('public.admin_set_portal_legal_mode(text,text,text)') is not null")" = 't' ]; then
+  if [ "${RESTORE_KEEP_PORTAL_MODE:-}" = '1' ]; then
+    portal_mode="$(dst -c "select case when public.recruitment_enabled() then 'RECRUITMENT' else 'CLASSIFIEDS_ONLY' end")" \
+      || fail 'Odczyt trybu portalu nie powiódł się.'
+    portal_mode="${portal_mode} (zachowany: RESTORE_KEEP_PORTAL_MODE=1)"
+  else
+    dst -c "select case when public.recruitment_enabled()
+        then public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY',
+          'restore-backup.sh: tryb po odtworzeniu kopii (#1143)', 'RECRUITMENT') end" >/dev/null \
+      || fail 'Wymuszenie trybu ogłoszeniowego po odtworzeniu nie powiodło się.'
+    [ "$(dst -c 'select public.recruitment_enabled()')" = 'f' ] \
+      || fail 'Po odtworzeniu baza nie jest w trybie ogłoszeniowym.'
+    portal_mode='CLASSIFIEDS_ONLY'
+  fi
+fi
+echo "RESTORE: tryb portalu: ${portal_mode}"
+
 tables="$(printf '%s\n' "$table_list" | grep -c .)"
 migrations="$(dst -c 'select count(*) from app_migrations.history')"
-echo "RESTORE: PASS — $archive_name: ${tables} tabel, ${migrations} migracji; zgodne z manifestem kopii."
+acl_items="$(printf '%s\n' "$acl" | grep -c '^acl ' || true)"
+echo "RESTORE: PASS — $archive_name: ${tables} tabel, ${migrations} migracji, ${acl_items} uprawnień; zgodne z manifestem kopii."

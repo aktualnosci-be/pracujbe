@@ -1,26 +1,20 @@
 import * as React from 'react';
-import {
-  ChevronRight,
-  type LucideIcon,
-  MessagesSquare,
-  MousePointerClick,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronRight, ClipboardList, type LucideIcon, Search, Send, Sparkles } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
 /**
  * HowItWorks — blok „Jak to działa?" w 4 krokach (wg makiety `01-home`).
  *
- * Każdy krok: ikona w kółku, numerowany tytuł i krótki opis (namespace `home`, klucze stepN*).
+ * Kroki portalu ogłoszeń (#1149): znajdź ofertę → sprawdź warunki → aplikuj u pracodawcy
+ * (kanał podany w ogłoszeniu) → zacznij pracę. Każdy krok: ikona w kółku, numerowany tytuł i krótki opis (namespace `home`, klucze stepN*).
  * Na desktopie kroki w jednym rzędzie z lekkimi strzałkami między nimi; na mobile stackują się.
  * Komponent serwerowy; renderowany w kolumnie obok „Jesteś pracodawcą?" przez `page.tsx`.
  */
 
 const STEPS: { titleKey: string; descKey: string; Icon: LucideIcon }[] = [
   { titleKey: 'step1Title', descKey: 'step1Desc', Icon: Search },
-  { titleKey: 'step2Title', descKey: 'step2Desc', Icon: MousePointerClick },
-  { titleKey: 'step3Title', descKey: 'step3Desc', Icon: MessagesSquare },
+  { titleKey: 'step2Title', descKey: 'step2Desc', Icon: ClipboardList },
+  { titleKey: 'step3Title', descKey: 'step3Desc', Icon: Send },
   { titleKey: 'step4Title', descKey: 'step4Desc', Icon: Sparkles },
 ];
 

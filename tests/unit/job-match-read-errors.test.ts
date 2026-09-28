@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getMyJobMatch } from '@/lib/data/matching';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
+withRecruitmentMode();
 
 /**
  * #197: dopasowanie nie jest liczone z niepełnych danych. Błąd KAŻDEGO z sześciu odczytów

@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Briefcase, Building2, Coins, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
+import { BarChart3, Briefcase, Building2, Coins, FileWarning, Flag, Gauge, History, Inbox, LayoutDashboard, ListChecks, MailX, Megaphone, Scale, Settings, ShieldAlert, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { usePathname } from '@/i18n/navigation';
 import { Logo } from '@/components/brand/Logo';
+import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { AdminFeedbackProvider } from '@/components/admin/AdminFeedback';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 
@@ -33,6 +34,7 @@ const HREF = {
   email: '/admin/poczta',
   campaigns: '/admin/kampanie',
   screening: '/admin/pytania',
+  jobContent: '/admin/tresc-ofert',
   breaches: '/admin/naruszenia',
   contact: '/admin/kontakt',
   aiCosts: '/admin/koszty-ai',
@@ -50,9 +52,21 @@ export interface AdminShellProps {
   children: React.ReactNode;
   /** Nazwa zalogowanego admina (z sesji); brak → etykieta i18n `admin.adminName`. */
   userName?: string;
+  /** Prawdziwa sesja Better Auth (layout) — dołącza `SessionKeepAlive` (#864). */
+  keepSessionAlive?: boolean;
+  /**
+   * #1137: pozycja „Pytania screeningowe” tylko w trybie rekrutacyjnym (tryb liczy serwer,
+   * `isRecruitmentEnabled('screening')`). Domyślnie ukryta (fail-closed).
+   */
+  screeningEnabled?: boolean;
 }
 
-export function AdminShell({ children, userName }: AdminShellProps): React.JSX.Element {
+export function AdminShell({
+  children,
+  userName,
+  keepSessionAlive,
+  screeningEnabled = false,
+}: AdminShellProps): React.JSX.Element {
   const t = useTranslations('admin');
   const pathname = usePathname();
 
@@ -63,7 +77,8 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
     { href: HREF.reports, label: t('navReports'), icon: <Flag /> },
     { href: HREF.appeals, label: t('navAppeals'), icon: <Scale /> },
     { href: HREF.dsaReport, label: t('navDsaReport'), icon: <BarChart3 /> },
-    { href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> },
+    ...(screeningEnabled ? [{ href: HREF.screening, label: t('navScreening'), icon: <ListChecks /> }] : []),
+    { href: HREF.jobContent, label: t('navJobContent'), icon: <FileWarning /> },
     { href: HREF.users, label: t('navUsers'), icon: <Users /> },
     { href: HREF.contact, label: t('navContact'), icon: <Inbox /> },
     { href: HREF.email, label: t('navEmail'), icon: <MailX /> },
@@ -99,6 +114,7 @@ export function AdminShell({ children, userName }: AdminShellProps): React.JSX.E
       user={{ name: displayName, subtitle: t('brandTag'), initials: initialsOf(displayName) }}
       showNotifications={false}
     >
+      {keepSessionAlive ? <SessionKeepAlive /> : null}
       <AdminFeedbackProvider>{children}</AdminFeedbackProvider>
     </DashboardShell>
   );
