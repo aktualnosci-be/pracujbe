@@ -209,7 +209,7 @@ interface FormValues {
   // krok 9 — firma i publikacja
   companyDescription: string;
   contactEmail: string;
-  // #1129 (0950): kanał aplikowania u ogłoszeniodawcy
+  // #1129 (0172): kanał aplikowania u ogłoszeniodawcy
   applyUrl: string;
   applyEmail: string;
   applyPhone: string;
@@ -2020,7 +2020,7 @@ export function JobWizard({
                 />
                 <FieldError name="companyDescription" />
               </div>
-              {/* #1129 (0950): kanał aplikowania u ogłoszeniodawcy — co najmniej jeden przy publikacji. */}
+              {/* #1129 (0172): kanał aplikowania u ogłoszeniodawcy — co najmniej jeden przy publikacji. */}
               <fieldset className={`${FORM_WIDE} ${FORM_GRID} min-w-0`} data-testid="job-apply-channel-fieldset">
                 <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('applyChannelLegend')}</legend>
                 <p id={`${domId('applyUrl')}-hint`} className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('applyChannelHint')}</p>

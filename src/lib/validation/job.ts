@@ -336,7 +336,7 @@ const step9DraftBase = z.object({
     .min(20, 'job.error.companyDescriptionTooShort')
     .max(3000, 'job.error.companyDescriptionTooLong'),
   contactEmail: z.string().trim().email('job.error.contactEmailInvalid').optional(),
-  // #1129 (0950): kanał aplikowania u ogłoszeniodawcy — reguły 1:1 z CHECK-ami bazy
+  // #1129 (0172): kanał aplikowania u ogłoszeniodawcy — reguły 1:1 z CHECK-ami bazy
   // (`src/lib/job-apply-channel.ts`). W szkicu każdy opcjonalny; wymóg „co najmniej jeden”
   // sprawdza publikacja i edycja opublikowanej oferty (`refineApplyChannel`).
   applyUrl: z

@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0950_job_apply_channel.sql — kanał aplikowania u ogłoszeniodawcy (numer TYMCZASOWY;
--- ostateczny nada integrator).
+-- 0172_job_apply_channel.sql — kanał aplikowania u ogłoszeniodawcy.
 --
 -- Decyzja produktowa: portal ogłoszeniowy — kandydat aplikuje bezpośrednio u autora
 -- ogłoszenia. Oferta niesie więc kanał wskazany przez pracodawcę: strona (https), e-mail
@@ -74,11 +73,11 @@ alter table public.jobs
   add constraint jobs_apply_phone_format check (apply_phone is null or public.job_apply_phone_ok(apply_phone));
 
 comment on column public.jobs.apply_url is
-  '0950: strona aplikowania u ogłoszeniodawcy (https). Publiczna dla oferty publicznej.';
+  '0172: strona aplikowania u ogłoszeniodawcy (https). Publiczna dla oferty publicznej.';
 comment on column public.jobs.apply_email is
-  '0950: e-mail do aplikowania u ogłoszeniodawcy. Publiczny dla oferty publicznej.';
+  '0172: e-mail do aplikowania u ogłoszeniodawcy. Publiczny dla oferty publicznej.';
 comment on column public.jobs.apply_phone is
-  '0950: telefon do aplikowania (+ i cyfry). Publiczny dla oferty publicznej.';
+  '0172: telefon do aplikowania (+ i cyfry). Publiczny dla oferty publicznej.';
 
 create or replace function public.job_has_apply_channel(j public.jobs)
 returns boolean language sql immutable set search_path = public, pg_temp as $$
@@ -113,7 +112,7 @@ begin
                     'accommodation_deducted', 'accommodation_registration',
                     'accommodation_after_contract', 'transport_shuttle', 'transport_reimbursed',
                     'meal_voucher_daily', 'joint_committee',
-                    -- 0950: kanał aplikowania u ogłoszeniodawcy
+                    -- 0172: kanał aplikowania u ogłoszeniodawcy
                     'apply_url', 'apply_email', 'apply_phone')
     limit 1;
   if v_bad is null then
@@ -323,7 +322,7 @@ begin
     transport_reimbursed     = coalesce((j->>'transport_reimbursed')::boolean, false),
     meal_voucher_daily       = (j->>'meal_voucher_daily')::numeric,
     joint_committee          = nullif(j->>'joint_committee', ''),
-    -- 0950: kanał aplikowania (brak klucza = brak wartości; co najmniej jeden wymagany niżej).
+    -- 0172: kanał aplikowania (brak klucza = brak wartości; co najmniej jeden wymagany niżej).
     apply_url                = nullif(btrim(coalesce(j->>'apply_url', '')), ''),
     apply_email              = nullif(btrim(coalesce(j->>'apply_email', '')), ''),
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
@@ -331,7 +330,7 @@ begin
   where id = p_job_id;
   perform set_config('pracujbe.job_terms_notify', '', true);
 
-  -- 0950: oferta opublikowana nie może stracić kanału aplikowania (błąd cofa całą rewizję).
+  -- 0172: oferta opublikowana nie może stracić kanału aplikowania (błąd cofa całą rewizję).
   if not exists (select 1 from public.jobs where id = p_job_id and public.job_has_apply_channel(jobs)) then
     raise exception 'JOB_APPLY_CHANNEL_REQUIRED: oferta wymaga adresu strony, e-maila albo telefonu do aplikowania'
       using errcode = '23514';
@@ -469,7 +468,7 @@ begin
     raise exception 'VALIDATION_FAILED: brak wymagań obowiązkowych' using errcode = '42501';
   end if;
 
-  -- 0950: kandydat aplikuje u ogłoszeniodawcy — oferta publiczna musi wskazać kanał.
+  -- 0172: kandydat aplikuje u ogłoszeniodawcy — oferta publiczna musi wskazać kanał.
   if not v_has_channel then
     raise exception 'JOB_APPLY_CHANNEL_REQUIRED: oferta wymaga adresu strony, e-maila albo telefonu do aplikowania'
       using errcode = '23514';
@@ -558,7 +557,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     case when c.status = 'verified' then public.public_https_url(c.website) end as company_website,
     case when c.status = 'verified' then public.public_https_url(c.logo_url) end as company_logo_url,
     case when c.status = 'verified' then c.slug end as company_slug,
-    -- 0950: kanał aplikowania (bramki oferty publicznej bez zmian — warunki WHERE niżej).
+    -- 0172: kanał aplikowania (bramki oferty publicznej bez zmian — warunki WHERE niżej).
     j.apply_url, j.apply_email, j.apply_phone
   from public.jobs j
   join public.companies c on c.id = j.company_id

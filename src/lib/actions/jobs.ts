@@ -433,7 +433,7 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       requires_driving_license: s7.requiresDrivingLicense,
       no_language_required: s7.noLanguageRequired,
       contact_email: nullIfEmpty(s9.contactEmail),
-      // #1129 (0950): kanał aplikowania — rewizja bez żadnego jest odrzucana (także w bazie).
+      // #1129 (0172): kanał aplikowania — rewizja bez żadnego jest odrzucana (także w bazie).
       apply_url: nullIfEmpty(s9.applyUrl),
       apply_email: nullIfEmpty(s9.applyEmail),
       apply_phone: nullIfEmpty(s9.applyPhone),

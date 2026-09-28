@@ -843,9 +843,9 @@ Tabele w migracjach: 111; z danymi osobowymi: 73; bez danych osobowych: 38.
 | `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0003_jobs.sql` |
 | `contact_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0003_jobs.sql` |
 | `address` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0003_jobs.sql` |
-| `apply_url` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0950_job_apply_channel.sql` |
-| `apply_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0950_job_apply_channel.sql` |
-| `apply_phone` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0950_job_apply_channel.sql` |
+| `apply_url` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0172_job_apply_channel.sql` |
+| `apply_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0172_job_apply_channel.sql` |
+| `apply_phone` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0172_job_apply_channel.sql` |
 
 ### `public.match_recompute_queue`
 
