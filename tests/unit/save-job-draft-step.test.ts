@@ -7,7 +7,7 @@ import { updateJobDraft } from '@/lib/actions/jobs';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useClassifiedsMode as classifiedsModeInTests, useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withClassifiedsMode as classifiedsModeInTests, withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 /** Najnowsza migracja definiująca `save_job_draft` (numer tymczasowy nie psuje testu). */
 function latestSaveJobDraftMigration(): string {

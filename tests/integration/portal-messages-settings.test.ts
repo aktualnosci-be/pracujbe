@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
-import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
+import { withRecruitmentMode } from '../helpers/portal-mode';
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
