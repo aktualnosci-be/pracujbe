@@ -646,7 +646,10 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         skills: await queryRows(tx, 'employer.job-draft-skills',
           'SELECT skill_label, is_mandatory FROM public.job_skills WHERE job_id = $1', [jobId]),
         languages: await queryRows(tx, 'employer.job-draft-languages',
-          'SELECT language_label, level FROM public.job_languages WHERE job_id = $1', [jobId]),
+          `SELECT jl.language_label, jl.level, lg.code AS language_code
+             FROM public.job_languages jl
+             LEFT JOIN public.languages lg ON lg.id = jl.language_id
+            WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
         // job_screening_questions_select (0093): członek firmy oferty.
@@ -713,7 +716,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         languages: languages
           .map((r) => asRecord(r))
           .map((r) => ({
-            language: asString(r['language_label']),
+            // Kod ze słownika (0168); stary wpis spoza słownika zostaje etykietą.
+            language: asString(r['language_code']) || asString(r['language_label']),
             level: asString(r['level'], 'basic'),
           }))
           .filter((l) => l.language !== ''),
@@ -1553,8 +1557,10 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
           skills: await queryRows(tx, 'employer.application-detail-skills',
             'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
           languages: await queryRows(tx, 'employer.application-detail-languages',
-            `SELECT language_label, level FROM public.candidate_languages
-              WHERE candidate_profile_id = $1 ORDER BY language_label`, [cpId]),
+            `SELECT cl.language_label, cl.level, lg.code AS language_code
+               FROM public.candidate_languages cl
+               LEFT JOIN public.languages lg ON lg.id = cl.language_id
+              WHERE cl.candidate_profile_id = $1 ORDER BY cl.language_label`, [cpId]),
           certificates: await queryRows(tx, 'employer.application-detail-certificates',
             `SELECT certificate_label FROM public.candidate_certificates
               WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
@@ -1578,7 +1584,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         hasDrivingLicense: cp['has_driving_license'] === true,
         skills: relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
         languages: relations.languages
-          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .map((r) => ({ label: asString(r['language_code']) || asString(r['language_label']), level: asString(r['level']) }))
           .filter((l) => l.label),
         certificates: relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
       };
@@ -1727,8 +1733,10 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
           skills: await queryRows(tx, 'employer.candidate-detail-skills',
             'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
           languages: await queryRows(tx, 'employer.candidate-detail-languages',
-            `SELECT language_label, level FROM public.candidate_languages
-              WHERE candidate_profile_id = $1 ORDER BY language_label`, [cpId]),
+            `SELECT cl.language_label, cl.level, lg.code AS language_code
+               FROM public.candidate_languages cl
+               LEFT JOIN public.languages lg ON lg.id = cl.language_id
+              WHERE cl.candidate_profile_id = $1 ORDER BY cl.language_label`, [cpId]),
           certificates: await queryRows(tx, 'employer.candidate-detail-certificates',
             `SELECT certificate_label FROM public.candidate_certificates
               WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
@@ -1755,7 +1763,7 @@ export async function getEmployerCandidateDetail(candidateId: string): Promise<E
         hasDrivingLicense: cp['has_driving_license'] === true,
         skills: loaded.relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
         languages: loaded.relations.languages
-          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .map((r) => ({ label: asString(r['language_code']) || asString(r['language_label']), level: asString(r['level']) }))
           .filter((l) => l.label),
         certificates: loaded.relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
       };

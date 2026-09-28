@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { LANGUAGE_CODES, isLanguageCode, languageDisplayName, resolveLanguageCode } from '@/lib/languages';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { useLocale, useTranslations } from 'next-intl';
@@ -468,7 +469,8 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     narrowed.languages = languages
       .filter((l) => l.language.trim() !== '')
       .map((l) => ({
-        language: l.language,
+        // Import ogłoszenia (AI) daje nazwę języka — rozpoznana nazwa → kod słownika.
+        language: resolveLanguageCode(l.language) ?? l.language,
         level: ((LANGUAGE_LEVELS as readonly string[]).includes(l.level)
           ? l.level
           : 'basic') as LanguageLevel,
@@ -499,6 +501,7 @@ export function JobWizard({
   const tn = useTranslations('nav');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tLang = useTranslations('languageNames');
   const locale = useLocale();
   const router = useRouter();
   const contentLocale: Locale = isLocale(contentLocaleProp)
@@ -662,7 +665,7 @@ export function JobWizard({
   const showViewLink =
     isEdit && published?.status === 'active' && publicSlug !== '' && !publicSlug.startsWith('draft-');
 
-  // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
+  // Roboczy wiersz dodawania języka: kod ze słownika (0168), nie wolny tekst (I18N-02).
   const [langDraft, setLangDraft] = React.useState('');
   const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
   const [langError, setLangError] = React.useState(false);
@@ -1476,26 +1479,33 @@ export function JobWizard({
               <div id={domId('languages')} className={`${FORM_FIELD} ${FORM_WIDE}`}>
                 <Label htmlFor="job-language-draft" className={FORM_LABEL_TEXT}>{t('languagesLabel')}</Label>
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start">
-                  <Input
-                    id="job-language-draft"
-                    className={cn(FORM_INPUT, 'sm:flex-1')}
-                    value={langDraft}
-                    placeholder={t('languageNamePlaceholder')}
-                    aria-invalid={langError || errors.languages ? true : undefined}
-                    aria-describedby={
-                      langError ? 'job-language-draft-error' : errorDescription('languages')
-                    }
-                    onChange={(e) => {
-                      setLangDraft(e.target.value);
-                      if (langError) setLangError(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addLanguage();
-                      }
-                    }}
-                  />
+                  <div className="min-w-0 sm:flex-1">
+                    <Select
+                      value={langDraft}
+                      onValueChange={(val) => {
+                        setLangDraft(val);
+                        if (langError) setLangError(false);
+                      }}
+                    >
+                      <SelectTrigger
+                        id="job-language-draft"
+                        className={FORM_SELECT}
+                        aria-invalid={langError || errors.languages ? true : undefined}
+                        aria-describedby={
+                          langError ? 'job-language-draft-error' : errorDescription('languages')
+                        }
+                      >
+                        <SelectValue placeholder={t('languageSelectPlaceholder')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {LANGUAGE_CODES.map((code) => (
+                          <SelectItem key={code} value={code}>
+                            {tLang(code)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="w-full sm:w-48">
                     <Select value={levelDraft} onValueChange={(val) => setLevelDraft(val as LanguageLevel)}>
                       <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
@@ -1531,10 +1541,10 @@ export function JobWizard({
                         key={entry.language}
                         className={cn(STATUS, 'inline-flex items-center gap-1 py-0 pr-0 text-[13px] text-foreground')}
                       >
-                        {entry.language} · {LEVEL_LABEL[entry.level]}
+                        {languageDisplayName(entry.language, (code) => tLang(code))} · {LEVEL_LABEL[entry.level]}
                         <button
                           type="button"
-                          aria-label={`${t('remove')}: ${entry.language}`}
+                          aria-label={`${t('remove')}: ${languageDisplayName(entry.language, (code) => tLang(code))}`}
                           onClick={() =>
                             setValue(
                               'languages',
@@ -1940,14 +1950,15 @@ export function JobWizard({
   );
 
   function addLanguage(): void {
-    const name = langDraft.trim();
-    if (name.length < 2) {
+    const code = langDraft;
+    if (!isLanguageCode(code)) {
       setLangError(true);
       return;
     }
-    const exists = values.languages.some((l) => l.language.toLowerCase() === name.toLowerCase());
+    // Ten sam język zapisany dawniej nazwą (np. „Nederlands”) = duplikat kodu `nl`.
+    const exists = values.languages.some((l) => resolveLanguageCode(l.language) === code);
     if (!exists) {
-      setValue('languages', [...values.languages, { language: name, level: levelDraft }], {
+      setValue('languages', [...values.languages, { language: code, level: levelDraft }], {
         shouldDirty: true,
       });
       // #910: dodanie wymaganego języka wyklucza „bez znajomości języka" — flaga i lista

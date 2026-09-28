@@ -14,7 +14,9 @@ import { localeSchema } from '@/lib/validation/auth';
 const ROOT = join(__dirname, '../..');
 const SRC = join(ROOT, 'src');
 // Tłumaczenia i dane demonstracyjne zawierają kody języków jako treść, nie jako listę języków serwisu.
-const EXCLUDED = ['src/messages/', 'src/lib/data/demo.ts', 'src/i18n/routing.ts'];
+// `src/lib/languages.ts` = słownik języków ZNANYCH przez kandydata/wymaganych w ofercie (lustro
+// `public.languages`, 0168) — inna lista niż języki interfejsu.
+const EXCLUDED = ['src/messages/', 'src/lib/data/demo.ts', 'src/i18n/routing.ts', 'src/lib/languages.ts'];
 // Dwa kolejne literały kodów języka serwisu w liście, np. ['pl', 'nl' … lub "fr","en".
 const LIST_LITERAL = /(['"])(pl|nl|fr|en)\1\s*,\s*(['"])(pl|nl|fr|en)\3/;
 

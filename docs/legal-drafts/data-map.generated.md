@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 107; z danymi osobowymi: 71; bez danych osobowych: 36.
+Tabele w migracjach: 108; z danymi osobowymi: 71; bez danych osobowych: 37.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -1279,6 +1279,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. |
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
 | `public.job_translations` | Treść ogłoszenia (dane firmy). |
+| `public.language_aliases` | Słownik/konfiguracja (nazwy języków PL/NL/FR/EN (0168)) — bez danych osobowych. |
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |
 | `public.location_aliases` | Słownik/konfiguracja (nazwy miejscowości PL/NL/FR/EN) — bez danych osobowych. |
 | `public.locations` | Słownik/konfiguracja (miejscowości) — bez danych osobowych. |

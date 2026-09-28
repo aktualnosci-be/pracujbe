@@ -18,6 +18,7 @@ import {
   TAG,
 } from '@/components/dashboard/panel-styles';
 import { DASH_GRID, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
+import { languageDisplayName } from '@/lib/languages';
 import { cn } from '@/lib/utils';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
@@ -72,11 +73,12 @@ export default async function CandidateProfilePage({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const [t, tp, to, tc] = await Promise.all([
+  const [t, tp, to, tc, tLang] = await Promise.all([
     getTranslations({ locale, namespace: 'dashboard' }),
     getTranslations({ locale, namespace: 'candidatePassport' }),
     getTranslations({ locale, namespace: 'onboarding' }),
     getTranslations({ locale, namespace: 'common' }),
+    getTranslations({ locale, namespace: 'languageNames' }),
   ]);
   const [profile, passport, files] = await Promise.all([
     getCandidateProfileSummary(),
@@ -148,7 +150,7 @@ export default async function CandidateProfilePage({
               <h3 className={INFO_LABEL}>{to('availabilityLabel')}</h3>
               {availabilityKey ? <p className={INFO_VALUE}>{to(availabilityKey)}</p> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>
-            {([['skills', to('skillsLabel'), passport.skills], ['languages', to('languagesLabel'), passport.languages], ['certificates', to('certificatesLabel'), passport.certificates]] as const).map(([key, label, values]) => <div key={key} className="col-span-2 min-w-0">
+            {([['skills', to('skillsLabel'), passport.skills], ['languages', to('languagesLabel'), passport.languages.map((l) => languageDisplayName(l, (code) => tLang(code)))], ['certificates', to('certificatesLabel'), passport.certificates]] as const).map(([key, label, values]) => <div key={key} className="col-span-2 min-w-0">
               <h3 className={INFO_LABEL}>{label}</h3>
               {values.length ? <ul className="flex flex-wrap gap-1.5">{values.map((value) => <li key={value} className={cn(TAG, 'text-[13px] text-foreground')}>{value}</li>)}</ul> : <p className={INFO_EMPTY}>{tp('emptyField')}</p>}
             </div>)}

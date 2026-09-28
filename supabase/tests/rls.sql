@@ -1825,8 +1825,8 @@ select set_config('app.current_uid', :'CANDL', false);
 set role authenticated; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select language_requirements from public.get_job_match_profile(:'JOBO'::uuid))
-    = '[{"label":"Angielski","level":null},{"label":"Niderlandzki","level":"fluent"}]'::jsonb,
-  'OO2 get_job_match_profile zwraca poziomy języków (null = poziom dowolny)');
+    = '[{"code":"en","label":"Angielski","level":null},{"code":"nl","label":"Niderlandzki","level":"fluent"}]'::jsonb,
+  'OO2 get_job_match_profile zwraca poziomy języków (null = poziom dowolny) i kod słownika (0168)');
 select pg_temp.assert(
   (select count(*) from public.get_job_match_profile(:'JOBOX'::uuid)) = 0,
   'OO2b wygasła oferta nie ma profilu dopasowania');
@@ -16408,6 +16408,138 @@ set local role authenticated; set local app.current_uid = :'SKE'; select pg_temp
 select public.send_offer(:'SKJ2'::uuid, :'SKC2'::uuid, 'sk853-key-1', null, null) as skneg \gset
 select pg_temp.assert(:'skneg' = :'skoff1',
   'SK853-5 kontrola ujemna: bez porównania celu klucz zwraca cudzą propozycję');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- LD168. Języki ze słownika w dopasowaniu (I18N-02 / CF-02, 0168): kod albo nazwa PL/NL/FR/EN
+--        → languages.id; trigger uzupełnia id na każdej ścieżce zapisu; backfill bez utraty
+--        etykiet; get_job_match_profile / match_candidate_input niosą kod.
+-- ============================================================================
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  public.language_id_for_label('niderlandzki') = (select id from public.languages where code = 'nl')
+  and public.language_id_for_label('Nederlands') = (select id from public.languages where code = 'nl')
+  and public.language_id_for_label(' NÉERLANDAIS ') = (select id from public.languages where code = 'nl')
+  and public.language_id_for_label('Dutch') = (select id from public.languages where code = 'nl')
+  and public.language_id_for_label('nl') = (select id from public.languages where code = 'nl')
+  and public.language_id_for_label('bulgarski') = (select id from public.languages where code = 'bg'),
+  'LD168-1 kod i nazwy PL/NL/FR/EN (bez diakrytyków, wielkości liter) → ten sam język');
+select pg_temp.assert(public.language_id_for_label('Klingon') is null,
+  'LD168-1b nazwa spoza słownika → brak id (zostaje etykietą)');
+
+-- Onboarding: kod + nazwa tego samego języka = jeden wiersz z wyższym poziomem; etykieta spoza
+-- słownika zostaje tekstem.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.set_candidate_languages(
+  '[{"language":"nl","level":"fluent"},{"language":"niderlandzki","level":"basic"},{"language":"Klingon","level":"basic"}]'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.candidate_languages cl
+     join public.candidate_profiles cp on cp.id = cl.candidate_profile_id
+    where cp.profile_id = :'CANDA') = 2
+  and (select cl.level::text || '|' || cl.language_label from public.candidate_languages cl
+         join public.candidate_profiles cp on cp.id = cl.candidate_profile_id
+        where cp.profile_id = :'CANDA' and cl.language_id = (select id from public.languages where code = 'nl'))
+      = 'fluent|' || (select name from public.languages where code = 'nl')
+  and (select cl.language_id is null from public.candidate_languages cl
+         join public.candidate_profiles cp on cp.id = cl.candidate_profile_id
+        where cp.profile_id = :'CANDA' and cl.language_label = 'Klingon'),
+  'LD168-2 set_candidate_languages: kod, deduplikacja po języku (wyższy poziom), etykieta spoza słownika');
+select pg_temp.assert(
+  (select public.match_candidate_input(:'CANDA'::uuid) -> 'languages') @> '[{"language_code":"nl","level":"fluent"}]'::jsonb,
+  'LD168-2b match_candidate_input niesie kod języka');
+
+-- Kreator: nazwa NL → id; dopasowanie oferty niesie kod.
+update public.jobs set status = 'draft' where id = :'JOBA';
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.set_job_languages(:'JOBA'::uuid, '[{"language":"Nederlands","level":"intermediate"}]'::jsonb);
+reset role; reset app.current_uid;
+update public.jobs set status = 'active' where id = :'JOBA';
+select pg_temp.assert(
+  (select language_id from public.job_languages where job_id = :'JOBA') = (select id from public.languages where code = 'nl')
+  and (select language_label from public.job_languages where job_id = :'JOBA') = 'Nederlands',
+  'LD168-3 set_job_languages: nazwa → language_id, etykieta zachowana');
+begin;
+update public.jobs set expires_at = null where id = :'JOBA';  -- wcześniejsze sekcje ustawiają termin
+set local role authenticated; set local app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select language_requirements from public.get_job_match_profile(:'JOBA'::uuid))
+    = '[{"code":"nl","label":"Nederlands","level":"intermediate"}]'::jsonb,
+  'LD168-3b get_job_match_profile.language_requirements z kodem');
+rollback;
+reset role; reset app.current_uid;
+
+-- Ścieżka poza RPC (duplikat oferty, import CV, seed): trigger uzupełnia id.
+begin;
+insert into public.job_languages (job_id, language_label) values (:'JOBA', 'néerlandais ');
+select pg_temp.assert(
+  (select language_id from public.job_languages where job_id = :'JOBA' and language_label = 'néerlandais ')
+  = (select id from public.languages where code = 'nl'),
+  'LD168-4 bezpośredni INSERT: trigger uzupełnia language_id z nazwy');
+rollback;
+
+-- Backfill (instrukcja migracji): stary wiersz bez id dostaje id, nieznany zostaje etykietą.
+begin;
+alter table public.candidate_languages disable trigger trg_candidate_languages_fill_id;
+insert into public.candidate_languages (candidate_profile_id, language_label, level)
+  select id, 'Francuski', 'basic' from public.candidate_profiles where profile_id = :'CANDA';
+insert into public.candidate_languages (candidate_profile_id, language_label, level)
+  select id, 'Sindarin', 'basic' from public.candidate_profiles where profile_id = :'CANDA';
+alter table public.candidate_languages enable trigger trg_candidate_languages_fill_id;
+update public.candidate_languages
+   set language_id = public.language_id_for_label(language_label)
+ where language_id is null and public.language_id_for_label(language_label) is not null;
+select pg_temp.assert(
+  (select language_id from public.candidate_languages where language_label = 'Francuski'
+     and candidate_profile_id = (select id from public.candidate_profiles where profile_id = :'CANDA'))
+    = (select id from public.languages where code = 'fr')
+  and (select language_id is null from public.candidate_languages where language_label = 'Sindarin'),
+  'LD168-5 backfill: nazwa → kod, niedopasowana etykieta bez zmian (bez utraty danych)');
+rollback;
+
+-- Aliasy: odczyt publiczny, zapis tylko serwisowy.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.language_aliases where alias_key = 'neerlandais') = 1,
+  'LD168-6 anon czyta aliasy języków');
+select pg_temp.expect_error('delete from public.language_aliases', 'permission denied',
+  'LD168-6b anon nie usuwa aliasów');
+reset role;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'insert into public.language_aliases (alias_key, alias, language_id) select ''hollands'', ''Hollands'', id from public.languages where code = ''nl''',
+  'permission denied', 'LD168-6c zalogowany nie dodaje aliasu');
+reset role; reset app.current_uid;
+
+-- Kontrola ujemna: bez triggera bezpośredni INSERT zostawia etykietę bez kodu — dopasowanie
+-- wróciłoby do porównania napisów (dowód, że LD168-4 wykrywa regresję).
+begin;
+drop trigger trg_job_languages_fill_id on public.job_languages;
+insert into public.job_languages (job_id, language_label) values (:'JOBA', 'néerlandais ');
+select pg_temp.assert(
+  (select language_id is null from public.job_languages where job_id = :'JOBA' and language_label = 'néerlandais '),
+  'LD168-7 kontrola ujemna: bez triggera etykieta bez language_id');
+rollback;
+-- Kontrola ujemna: RPC z 0077 (deduplikacja po napisie) zapisuje dwa wiersze jednego języka.
+begin;
+update public.jobs set status = 'draft' where id = :'JOBA';
+create or replace function public.set_job_languages(p_job_id uuid, p_languages jsonb)
+returns void language plpgsql security definer set search_path = public, pg_temp as $ld$
+begin
+  delete from public.job_languages where job_id = p_job_id;
+  insert into public.job_languages (job_id, language_label, level)
+    select p_job_id, label, lvl from (
+      select distinct on (lower(left(btrim(e->>'language'), 80)))
+             left(btrim(e->>'language'), 80) as label, (e->>'level')::public.language_level as lvl
+      from jsonb_array_elements(coalesce(p_languages, '[]'::jsonb)) e
+      where btrim(coalesce(e->>'language', '')) <> '' limit 30) q
+  on conflict (job_id, language_label) do nothing;
+end $ld$;
+select public.set_job_languages(:'JOBA'::uuid, '[{"language":"nl","level":"basic"},{"language":"Nederlands","level":"fluent"}]'::jsonb);
+select pg_temp.assert(
+  (select count(*) from public.job_languages where job_id = :'JOBA'
+      and language_id = (select id from public.languages where code = 'nl')) = 2,
+  'LD168-8 kontrola ujemna: stara deduplikacja po napisie daje dwa wiersze tego samego języka');
 rollback;
 reset role; reset app.current_uid;
 

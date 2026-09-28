@@ -193,7 +193,7 @@ test('onboarding kandydata w kreatorze: 6 kroków, walidacja pola, „Terminer�
   await next(t('step5Title')).click();
 
   // Krok 5: języki + certyfikat z datą ważności.
-  await page.getByLabel(t('languagesLabel'), { exact: true }).fill('Néerlandais');
+  await chooseOption(page, page.getByRole('combobox', { name: t('languagesLabel'), exact: true }), msg('fr', 'languageNames.nl'));
   await page.getByRole('button', { name: t('addLanguage'), exact: true }).click();
   await page.getByLabel(t('certificatesLabel'), { exact: true }).fill('VCA');
   await page.getByLabel(t('certificatesLabel'), { exact: true }).press('Enter');

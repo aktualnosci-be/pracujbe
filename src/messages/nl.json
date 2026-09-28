@@ -1220,7 +1220,6 @@
     "radiusLabel": "Bereid te pendelen (km)",
     "currencyLabel": "Munteenheid",
     "languagesLabel": "Talen",
-    "languageNamePlaceholder": "bijv. Nederlands",
     "levelBasic": "Basis",
     "levelIntermediate": "Gemiddeld",
     "levelFluent": "Vloeiend",
@@ -1246,7 +1245,8 @@
     "privacyNoticeAckLinks": "Ik heb de <privacy>privacy-informatie</privacy> gelezen.",
     "opensInNewTab": "(opent in een nieuw tabblad)",
     "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
-    "eyebrow": "WERKPASPOORT"
+    "eyebrow": "WERKPASPOORT",
+    "languageSelectPlaceholder": "Kies een taal"
   },
   "filters": {
     "title": "Filters",
@@ -1500,8 +1500,8 @@
       "cityTooLong": "Plaatsnaam is te lang.",
       "regionTooLong": "Regionaam is te lang.",
       "radiusInvalid": "Geef een geldige pendelafstand op (0–300 km).",
-      "languageRequired": "Vul een taal in.",
-      "languageInvalid": "Vul een geldige taalnaam in.",
+      "languageRequired": "Kies een taal.",
+      "languageInvalid": "Kies een taal uit de lijst.",
       "languagesTooMany": "Te veel talen toegevoegd.",
       "certificatesTooMany": "Te veel certificaten toegevoegd.",
       "certificateExpiryInvalid": "Vul een geldige vervaldatum van het certificaat in.",
@@ -1597,7 +1597,6 @@
     "skillsLabel": "Extra vaardigheden",
     "skillsPlaceholder": "bijv. Teamwork",
     "languagesLabel": "Talen",
-    "languageNamePlaceholder": "bijv. Nederlands",
     "addLanguage": "Taal toevoegen",
     "levelBasic": "Basis",
     "levelIntermediate": "Gemiddeld",
@@ -1663,7 +1662,8 @@
     "screeningReviewReason": "Motivering: {reason}",
     "screeningPublishPending": "Vraag {n} wacht op controle.",
     "screeningPublishRejected": "Vraag {n} is niet goedgekeurd.",
-    "screeningGoToQuestions": "Naar de vragen"
+    "screeningGoToQuestions": "Naar de vragen",
+    "languageSelectPlaceholder": "Kies een taal"
   },
   "jobImport": {
     "title": "Importeren uit een vacature",
@@ -3650,6 +3650,22 @@
         "description": "Gastaanvraag zonder bevestiging — geteld vanaf de eerste verzending."
       }
     }
+  },
+  "languageNames": {
+    "pl": "Pools",
+    "nl": "Nederlands",
+    "fr": "Frans",
+    "en": "Engels",
+    "de": "Duits",
+    "ro": "Roemeens",
+    "bg": "Bulgaars",
+    "uk": "Oekraïens",
+    "ru": "Russisch",
+    "es": "Spaans",
+    "it": "Italiaans",
+    "pt": "Portugees",
+    "tr": "Turks",
+    "ar": "Arabisch"
   },
   "jobTrust": {
     "categoryCandidateFee": "betaling door de kandidaat",

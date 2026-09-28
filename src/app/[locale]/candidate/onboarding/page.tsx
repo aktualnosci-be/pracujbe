@@ -90,8 +90,13 @@ async function loadInitialValues(): Promise<LoadResult> {
       if (!c?.id) return { p, c, relations: null };
       const skills = await queryRows<{ skill_label: string }>(tx, 'onboarding.load-skills',
         'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1', [c.id]);
-      const langs = await queryRows<{ language_label: string; level: string }>(tx, 'onboarding.load-languages',
-        'SELECT language_label, level FROM public.candidate_languages WHERE candidate_profile_id = $1', [c.id]);
+      // Kod ze słownika (0168) zamiast etykiety; stary wpis spoza słownika zostaje etykietą.
+      const langs = await queryRows<{ language_label: string; level: string; language_code: string | null }>(
+        tx, 'onboarding.load-languages',
+        `SELECT cl.language_label, cl.level, lg.code AS language_code
+           FROM public.candidate_languages cl
+           LEFT JOIN public.languages lg ON lg.id = cl.language_id
+          WHERE cl.candidate_profile_id = $1`, [c.id]);
       const certs = await queryRows<{ certificate_label: string; expires_at: string | null }>(
         tx, 'onboarding.load-certificates',
         'SELECT certificate_label, expires_at FROM public.candidate_certificates WHERE candidate_profile_id = $1',
@@ -107,7 +112,7 @@ async function loadInitialValues(): Promise<LoadResult> {
     if (relations) {
       skills = relations.skills.map((r) => r.skill_label);
       languages = relations.langs.map((row) => ({
-        language: row.language_label,
+        language: row.language_code ?? row.language_label,
         level: row.level,
       })) as OnboardingInitialValues['languages'];
       certificates = relations.certs.map((r) => r.certificate_label);

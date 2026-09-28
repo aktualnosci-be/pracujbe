@@ -162,7 +162,7 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 7: wymaganie i umiejętność dodatkowa, język z poziomem, certyfikat, prawo jazdy.
   await addChip(t('requirementsOptionalLabel'), 'Ervaring met WMS');
   await addChip(t('skillsLabel'), 'Reachtruck');
-  await page.getByLabel(t('languagesLabel'), { exact: true }).fill('Nederlands');
+  await chooseOption(page, page.getByRole('combobox', { name: t('languagesLabel'), exact: true }), msg(LOCALE, 'languageNames.nl'));
   await chooseOption(page, page.getByRole('combobox', { name: t('levelBasic'), exact: true }), t('levelFluent'));
   await page.getByRole('button', { name: t('addLanguage'), exact: true }).click();
   await addChip(t('certificatesLabel'), 'VCA Basis');
@@ -172,8 +172,10 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
     .toEqual([{ kind: 'mandatory', content: 'Nauwkeurig werken' }, { kind: 'optional', content: 'Ervaring met WMS' }]);
   expect(await db(`SELECT skill_label, is_mandatory FROM public.job_skills WHERE job_id = $1 ORDER BY skill_label`, [jobId]))
     .toEqual([{ skill_label: 'Heftruck', is_mandatory: true }, { skill_label: 'Reachtruck', is_mandatory: false }]);
-  expect(await db(`SELECT language_label, level::text FROM public.job_languages WHERE job_id = $1`, [jobId]))
-    .toEqual([{ language_label: 'Nederlands', level: 'fluent' }]);
+  // Słownik (0168): kod `nl` → language_id, etykieta zastępcza = nazwa słownikowa.
+  expect(await db(`SELECT lg.code, jl.level::text FROM public.job_languages jl
+                     JOIN public.languages lg ON lg.id = jl.language_id WHERE jl.job_id = $1`, [jobId]))
+    .toEqual([{ code: 'nl', level: 'fluent' }]);
   expect(await db(`SELECT certificate_label FROM public.job_certificates WHERE job_id = $1`, [jobId]))
     .toEqual([{ certificate_label: 'VCA Basis' }]);
   expect(await draft()).toMatchObject({ requires_driving_license: true });

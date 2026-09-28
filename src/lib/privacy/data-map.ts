@@ -1024,6 +1024,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.languages': DICTIONARY('języki'),
   'public.locations': DICTIONARY('miejscowości'),
   'public.location_aliases': DICTIONARY('nazwy miejscowości PL/NL/FR/EN'),
+  'public.language_aliases': DICTIONARY('nazwy języków PL/NL/FR/EN (0168)'),
   'public.occupations': DICTIONARY('zawody'),
   'public.skills': DICTIONARY('umiejętności'),
   'public.occupation_labels': DICTIONARY('etykiety zawodów ESCO'),
