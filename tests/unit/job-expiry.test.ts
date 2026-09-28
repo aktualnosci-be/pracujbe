@@ -81,6 +81,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     resetFakeDb(null);
     for (const fn of TASKS) fakeDb.rpc(fn, 0);
     fakeDb.rpc('claim_storage_deletions', []);
+    // #1143: tryb efektywny = env (plik: RECRUITMENT) ORAZ baza — baza też RECRUITMENT.
+    fakeDb.rpc('recruitment_enabled', true);
     process.env.MAINTENANCE_SECRET = 'maintenance-secret';
     delete process.env.CRON_SECRET;
     // Kampanie (#45) kolejkują się tylko z kompletem nadawcy marketingu i sekretem wypisania.
@@ -104,7 +106,10 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     expect(fakeDb.callsTo('expire_due_jobs')).toEqual([expect.objectContaining({ args: {}, as: 'service' })]);
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
     // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
-    expect(fakeDb.calls.map((c) => c.name)).toEqual(TASKS.filter((t) => t !== 'run_retention_purge'));
+    // #1143: tryb bazy sprawdzany tuż przed materializacją dopasowań.
+    const expected = TASKS.filter((t) => t !== 'run_retention_purge');
+    expected.splice(expected.indexOf('match_recompute_claim'), 0, 'recruitment_enabled');
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(expected);
     expect(await res.json()).toEqual({
       ok: true,
       releasedDiscounts: 0,

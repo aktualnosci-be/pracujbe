@@ -42,6 +42,9 @@ begin
   if c < 10 then raise exception 'seed: za mało firm: %', c; end if;
   if j < 50 then raise exception 'seed: za mało ofert: %', j; end if;
   if k < 40 then raise exception 'seed: za mało kandydatów: %', k; end if;
+  -- #1140: seed wstawia dane procesu jawnym wyjątkiem, a tryb portalu zostaje ogłoszeniowy.
+  if (select count(*) from public.applications) = 0 then raise exception 'seed: brak aplikacji demo'; end if;
+  if public.recruitment_enabled() then raise exception 'seed: seed zmienił tryb portalu'; end if;
   raise notice 'seed OK: % firm, % ofert, % kandydatów', c, j, k;
 end $$;
 SQL

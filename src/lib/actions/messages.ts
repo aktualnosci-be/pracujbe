@@ -39,6 +39,8 @@ export type OkResult = { ok: true } | { ok: false; error: ErrorCode };
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // #1140 (0171): baza w trybie ogłoszeniowym odrzuca nowe dane procesu rekrutacyjnego.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (

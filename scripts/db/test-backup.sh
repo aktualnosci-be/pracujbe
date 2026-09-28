@@ -100,6 +100,8 @@ insert into auth.users(id, email, name, raw_user_meta_data) values
 insert into public.candidate_profiles(profile_id) values ('0f000000-0000-4000-8000-0000000000c1');
 insert into public.files(owner_id, bucket, path, entity_type) values
   ('0f000000-0000-4000-8000-0000000000c1', 'candidate-files', '0f000000-0000-4000-8000-0000000000c1/cv.pdf', 'candidate_cv');
+-- #1143: kopia z włączonym trybem RECRUITMENT (po odtworzeniu ma wrócić ogłoszeniowy).
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'test-backup: źródło w trybie rekrutacji', 'CLASSIFIEDS_ONLY');
 SQL
 
 age-keygen -o "$work/identity.txt" 2>/dev/null
@@ -177,6 +179,20 @@ echo '>> uprawnienia odtworzone: funkcje service-only bez EXECUTE dla PUBLIC/ano
 # Kontrola ujemna #486: bez rejestru usunięć osoba usunięta po kopii wraca.
 [ "$(erased_rows)" = 3 ] || { echo 'Kontrola: kandydat z kopii powinien wrócić bez rejestru usunięć'; exit 1; }
 echo '>> kontrola ujemna OK: bez rejestru usunięć dane usuniętej osoby wracają'
+# #1143: kopia z RECRUITMENT po odtworzeniu = CLASSIFIEDS_ONLY (RPC z audytem).
+portal_mode() {
+  "${psql_base[@]}" -At -d "$1" -c "select mode || ':' || (select count(*) from public.audit_logs
+    where action = 'portal_legal_mode.changed') from public.portal_legal_mode"
+}
+[ "$(portal_mode "$SRC_DB")" = 'RECRUITMENT:1' ] || { echo "Źródło: tryb $(portal_mode "$SRC_DB")"; exit 1; }
+[ "$(portal_mode "$DST_DB")" = 'CLASSIFIEDS_ONLY:2' ] && grep -q '^RESTORE: tryb portalu: CLASSIFIEDS_ONLY$' <<<"$out" \
+  || { echo "Po odtworzeniu tryb portalu $(portal_mode "$DST_DB") zamiast CLASSIFIEDS_ONLY"; exit 1; }
+echo '>> #1143: kopia z RECRUITMENT odtworzona w trybie ogłoszeniowym (z wpisem audytu)'
+recreate "$DST_DB"
+out="$(restore RESTORE_KEEP_PORTAL_MODE=1)"
+grep -q '^RESTORE: PASS' <<<"$out" && [ "$(portal_mode "$DST_DB")" = 'RECRUITMENT:1' ] \
+  || { echo 'Kontrola: RESTORE_KEEP_PORTAL_MODE=1 powinien zachować tryb z kopii'; exit 1; }
+echo '>> kontrola ujemna OK: tylko jawne RESTORE_KEEP_PORTAL_MODE=1 zachowuje RECRUITMENT z kopii'
 
 echo '>> odtworzenie z rejestrem usunięć (#486)'
 recreate "$DST_DB"

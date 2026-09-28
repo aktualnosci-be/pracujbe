@@ -138,6 +138,11 @@ async function prepare() {
     const migrations = await loadProductionMigrations();
     const { applied } = await applyMigrations(c, migrations);
     console.log(`>> migracje produkcyjne: ${applied}`);
+    // #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym; zestaw real-flow sprawdza
+    // przepływ rekrutacyjny, więc włącza RECRUITMENT jawnie (RPC). Serwer aplikacji dostaje
+    // PORTAL_LEGAL_MODE=RECRUITMENT (#1136) — tryb efektywny = env ORAZ baza.
+    await c.query(`SELECT public.admin_set_portal_legal_mode('RECRUITMENT',
+      'e2e-real: przepływ rekrutacyjny', 'CLASSIFIEDS_ONLY')`);
     for (const login of Object.values(logins)) {
       // Nazwy i hasła generujemy sami (hex), więc interpolacja nie przyjmuje danych z zewnątrz.
       await c.query(`CREATE ROLE ${login.name} LOGIN PASSWORD '${login.password}'

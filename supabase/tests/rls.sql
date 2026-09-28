@@ -41,6 +41,17 @@ end $$;
 -- (supabase/tests/role-assert.sql; kontrole ujemne w role-guard.sql).
 \ir role-assert.sql
 
+-- #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym (CLASSIFIEDS_ONLY; sprawdza to
+-- scripts/test-rls.sh przed tym plikiem — CL1128-0). Sekcje sprzed trybu testują przepływy
+-- rekrutacyjne, więc na czas testu włączamy RECRUITMENT jedyną drogą zmiany (RPC); sekcja
+-- CL1128 na końcu sprawdza tryb ogłoszeniowy i przywraca RECRUITMENT. Idempotentnie: harness,
+-- który uruchamia plik w zewnętrznej transakcji (tests/integration/rate-limit.test.ts —
+-- pierwszy wewnętrzny ROLLBACK cofa wszystko wcześniejsze), włącza tryb trwale przed plikiem.
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql: sekcje przepływów rekrutacyjnych',
+  'CLASSIFIEDS_ONLY')
+ where not public.recruitment_enabled();
+select pg_temp.assert(public.recruitment_enabled(), 'CL1128-0b tryb RECRUITMENT na czas sekcji rekrutacyjnych');
+
 \set CANDA '11111111-1111-1111-1111-111111111111'
 \set CANDB '22222222-2222-2222-2222-222222222222'
 \set EMPA  '33333333-3333-3333-3333-333333333333'
@@ -18047,6 +18058,313 @@ select pg_temp.assert(
   (select count(*) from public.get_public_job('ac172-pending', 'pl')) = 0
   and (select count(*) from public.get_public_job('draft-ac172-3', 'pl')) = 0,
   'AC6 get_public_job bez kanału dla firmy niezweryfikowanej i szkicu');
+reset role;
+
+-- ============================================================================
+-- CL1128 / PLM — tryb portalu ogłoszeniowego w bazie (#1140, #1143; migracja 0171)
+-- Tryb ogłoszeniowy (CLASSIFIEDS_ONLY): nowe dane procesu rekrutacyjnego odrzucane przez
+-- bazę (RPC i bezpośredni INSERT, także service_role), firma nie widzi danych procesu,
+-- kandydat widzi własną historię. PLM: zmiana trybu tylko RPC service_role.
+-- ============================================================================
+\echo '--- CL1128 tryb ogłoszeniowy: blokada nowych danych rekrutacyjnych (0171) ---'
+\set CLO  'e9400000-0000-0000-0000-0000000000a1'
+\set CLC  'e9400000-0000-0000-0000-0000000000c1'
+\set CLC2 'e9400000-0000-0000-0000-0000000000c2'
+\set CLG  'e9400000-0000-0000-0000-0000000000c3'
+\set CLT  'e9400000-0000-0000-0000-0000000000f1'
+\set CLJ  'e9400000-0000-0000-0000-0000000000b1'
+\set CLJ2 'e9400000-0000-0000-0000-0000000000b2'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CL1128-pre sekcje rekrutacyjne działały w trybie RECRUITMENT');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CLO','clo@test.be','Olga O','{"role":"employer","first_name":"Olga","last_name":"Owner","locale":"nl"}'),
+  (:'CLC','clc@test.be','Cezary C','{"role":"candidate","first_name":"Cezary","last_name":"Cand","locale":"pl"}'),
+  (:'CLC2','clc2@test.be','Celina C','{"role":"candidate","first_name":"Celina","last_name":"Cand","locale":"fr"}'),
+  (:'CLG','clg@test.be','Gerda G','{"role":"candidate","first_name":"Gerda","last_name":"Guest","locale":"en"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id in (:'CLO', :'CLC', :'CLC2', :'CLG');
+insert into public.companies(id,name,status) values (:'CLT','Firma CL1128','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'CLT',:'CLO','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'CLJ',:'CLT','job-cl1128','Magazynier CL1128','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'CLJ2',:'CLT','job-cl1128-2','Kierowca CL1128','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed)
+  values (:'CLC', true, true), (:'CLC2', true, true);
+select id as clcp from public.candidate_profiles where profile_id = :'CLC' \gset
+insert into public.candidate_skills(candidate_profile_id, skill_label) values (:'clcp', 'Wózek widłowy');
+
+-- Historia z trybu RECRUITMENT: aplikacja, propozycja, rozmowa, dopasowanie, gość.
+set role authenticated; set app.current_uid = :'CLC'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'CLJ'::uuid, 'cl1128-app-1', null, null, null) as clapp \gset
+reset role;
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select public.transition_application(:'clapp'::uuid, 'viewed');
+select public.send_offer(:'CLJ'::uuid, :'CLC'::uuid, 'cl1128-off-1') as cloff \gset
+select public.get_or_create_conversation(:'clapp'::uuid, null) as clconv \gset
+select public.send_message(:'clconv'::uuid, 'Dzień dobry CL1128', gen_random_uuid());
+select pg_temp.assert((select count(*) from public.applications where job_id = :'CLJ') = 1
+  and (select count(*) from public.application_status_history where application_id = :'clapp') = 1
+  and (select count(*) from public.messages where conversation_id = :'clconv') = 1
+  and public.company_can_view_candidate(:'CLC'::uuid),
+  'CL1128-pre rekruter widzi aplikację, historię, rozmowę i profil w trybie RECRUITMENT');
+reset role; reset app.current_uid;
+insert into public.matches(candidate_id, job_id, score) values (:'CLC', :'CLJ', 80);
+set role service_role;
+select public.submit_guest_application(:'CLJ2', 'guest-cl@test.be', 'Gość CL', null, null, null, 'pl',
+  'idem-cl1128-g1', 'nonce-cl1128-g1-aaaaaaa', encode(sha256('tok-cl-1'::bytea), 'hex'), p_age_attested_min => 18) as clgreq1 \gset
+select public.submit_guest_application(:'CLJ', 'clg@test.be', 'Gerda G', null, null, null, 'en',
+  'idem-cl1128-g2', 'nonce-cl1128-g2-aaaaaaa', encode(sha256('tok-cl-2'::bytea), 'hex'), p_age_attested_min => 18) as clgreq2 \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-cl-2'::bytea), 'hex'),
+     'nonce-claim-cl-00002', encode(sha256('claim-cl-2'::bytea), 'hex'))) = 'confirmed',
+  'CL1128-pre aplikacja gościa potwierdzona w trybie RECRUITMENT');
+reset role;
+select id as clgapp from public.applications where job_id = :'CLJ' and candidate_id is null \gset
+
+-- Przełączenie w tryb ogłoszeniowy jedyną drogą (RPC service_role).
+set role service_role;
+select pg_temp.assert(
+  public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CL1128', 'RECRUITMENT') = 'CLASSIFIEDS_ONLY',
+  'CL1128-0b RPC przełącza w tryb ogłoszeniowy');
+select pg_temp.assert(not public.recruitment_enabled(), 'CL1128-0c recruitment_enabled() = false');
+reset role;
+select count(*) as cl_n_notif from public.notifications \gset
+select count(*) as cl_n_mail from public.email_deliveries \gset
+
+-- CL1128-1..3: kandydat — nowa aplikacja, odpowiedź na propozycję, nowa wiadomość.
+set role authenticated; set app.current_uid = :'CLC2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.apply_to_job(%L::uuid, %L, null, null, null)', :'CLJ', 'cl1128-app-2'),
+  'RECRUITMENT_DISABLED', 'CL1128-1 apply_to_job (kandydat) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format('select public.apply_to_job(%L::uuid, %L, null, null, null, %L::jsonb)', :'CLJ2', 'cl1128-app-3', '{}'),
+  'RECRUITMENT_DISABLED', 'CL1128-1b apply_to_job z odpowiedziami → RECRUITMENT_DISABLED');
+reset role;
+set role authenticated; set app.current_uid = :'CLC'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.respond_to_offer(%L::uuid, true)', :'cloff'),
+  'RECRUITMENT_DISABLED', 'CL1128-2 respond_to_offer (akceptacja) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format('select public.respond_to_offer(%L::uuid, false)', :'cloff'),
+  'RECRUITMENT_DISABLED', 'CL1128-2b respond_to_offer (odmowa) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format('select public.send_message(%L::uuid, %L, gen_random_uuid())', :'clconv', 'nowa'),
+  'RECRUITMENT_DISABLED', 'CL1128-3 send_message (kandydat) → RECRUITMENT_DISABLED');
+select pg_temp.assert(not public.can_attach_in_conversation(:'clconv'::uuid),
+  'CL1128-3b can_attach_in_conversation = false');
+select pg_temp.expect_error(format($$select * from public.stage_message_attachment(%L, gen_random_uuid(), %L, 'a.pdf', 'application/pdf', 10, %L)$$,
+  :'clconv', :'clconv' || '/att-' || gen_random_uuid() || '.pdf', repeat('a', 64)),
+  'PERMISSION_DENIED', 'CL1128-3c stage_message_attachment → brak uploadu');
+select pg_temp.assert(not exists (select 1 from public.get_job_match_profile(:'CLJ'::uuid)),
+  'CL1128-3d get_job_match_profile bez wiersza');
+reset role;
+
+-- CL1128-4..6: rekruter — propozycja, zmiana statusu, nowa rozmowa, wiadomość, top dopasowania.
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.send_offer(%L::uuid, %L::uuid, %L)', :'CLJ2', :'CLC', 'cl1128-off-2'),
+  'RECRUITMENT_DISABLED', 'CL1128-4 send_offer → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format('select public.transition_application(%L::uuid, %L)', :'clapp', 'shortlisted'),
+  'RECRUITMENT_DISABLED', 'CL1128-5 transition_application → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format('select public.get_or_create_conversation(null, %L::uuid)', :'cloff'),
+  'RECRUITMENT_DISABLED', 'CL1128-6 get_or_create_conversation (nowa rozmowa) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format('select public.send_message(%L::uuid, %L, gen_random_uuid())', :'clconv', 'firma'),
+  'PERMISSION_DENIED', 'CL1128-6b send_message (firma) → brak dostępu do rozmowy');
+select pg_temp.assert(not exists (select 1 from public.get_company_top_matches(:'CLT'::uuid, 5)),
+  'CL1128-6c get_company_top_matches bez wierszy');
+-- 0170: akcja zbiorcza (invoker) nie widzi zgłoszeń firmy → nic nie zmienia.
+select pg_temp.assert(
+  (select bool_and(outcome = 'not_found') from public.bulk_transition_applications(:'CLT'::uuid, array[:'clapp'::uuid], 'rejected')),
+  'CL1128-6d bulk_transition_applications bez dostępu do zgłoszeń');
+select pg_temp.assert(not exists (select 1 from public.get_conversation_template_context(:'clconv'::uuid)),
+  'CL1128-6e get_conversation_template_context bez kontekstu rozmowy');
+reset role;
+
+-- CL1128-7..9: gość i service_role — zgłoszenie, potwierdzenie, przejęcie.
+set role service_role;
+select pg_temp.expect_error(format($$select public.submit_guest_application(%L, 'guest-cl3@test.be', 'Gość 3', null, null, null, 'pl',
+  'idem-cl1128-g3', 'nonce-cl1128-g3-aaaaaaa', %L, p_age_attested_min => 18)$$, :'CLJ', encode(sha256('tok-cl-3'::bytea), 'hex')),
+  'RECRUITMENT_DISABLED', 'CL1128-7 submit_guest_application → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(format($$select * from public.confirm_guest_application(%L, 'nonce-claim-cl-00001', %L)$$,
+  encode(sha256('tok-cl-1'::bytea), 'hex'), encode(sha256('claim-cl-1'::bytea), 'hex')),
+  'RECRUITMENT_DISABLED', 'CL1128-8 confirm_guest_application → RECRUITMENT_DISABLED');
+reset role;
+set role authenticated; set app.current_uid = :'CLG'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.claim_guest_application(%L)', encode(sha256('claim-cl-2'::bytea), 'hex')),
+  'RECRUITMENT_DISABLED', 'CL1128-9 claim_guest_application → RECRUITMENT_DISABLED');
+reset role; reset app.current_uid;
+
+-- CL1128-10: bezpośredni INSERT jako service_role do każdej tabeli procesu.
+set role service_role;
+select pg_temp.expect_error(format('insert into public.applications(job_id, company_id, candidate_id, status) values (%L, %L, %L, %L)',
+  :'CLJ2', :'CLT', :'CLC2', 'submitted'), 'RECRUITMENT_DISABLED', 'CL1128-10a INSERT applications');
+select pg_temp.expect_error(format('insert into public.offers(job_id, candidate_id, status) values (%L, %L, %L)',
+  :'CLJ2', :'CLC2', 'sent'), 'RECRUITMENT_DISABLED', 'CL1128-10b INSERT offers');
+select pg_temp.expect_error(format('insert into public.matches(candidate_id, job_id, score) values (%L, %L, 90)',
+  :'CLC2', :'CLJ2'), 'RECRUITMENT_DISABLED', 'CL1128-10c INSERT matches');
+select pg_temp.expect_error(format('insert into public.conversations(company_id, application_id) values (%L, %L)',
+  :'CLT', :'clapp'), 'RECRUITMENT_DISABLED', 'CL1128-10d INSERT conversations');
+select pg_temp.expect_error(format('insert into public.messages(conversation_id, sender_id, body) values (%L, %L, %L)',
+  :'clconv', :'CLC', 'x'), 'RECRUITMENT_DISABLED', 'CL1128-10e INSERT messages');
+select pg_temp.expect_error(format('insert into public.message_attachments(conversation_id, uploader_id, file_id, client_upload_id) values (%L, %L, gen_random_uuid(), gen_random_uuid())',
+  :'clconv', :'CLC'), 'RECRUITMENT_DISABLED', 'CL1128-10f INSERT message_attachments');
+select pg_temp.expect_error(format($$insert into public.application_screening_answers(application_id, position, type, required, prompt) values (%L, 0, 'yes_no', false, '{"pl":"x"}')$$,
+  :'clapp'), 'RECRUITMENT_DISABLED', 'CL1128-10g INSERT application_screening_answers');
+select pg_temp.expect_error(format($$insert into public.guest_application_requests(job_id, email, full_name, locale, idempotency_key, confirm_token_hash, confirm_nonce, confirm_expires_at, consent_accepted_at)
+  values (%L, 'x@test.be', 'X', 'pl', 'cl-direct', repeat('a', 64), repeat('n', 32), now() + interval '1 day', now())$$, :'CLJ'),
+  'RECRUITMENT_DISABLED', 'CL1128-10h INSERT guest_application_requests');
+reset role;
+
+-- CL1128-11: żadne wywołanie nie zostawiło wiersza, powiadomienia ani e-maila.
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id in (:'CLJ', :'CLJ2')) = 2
+  and (select count(*) from public.applications where candidate_id = :'CLC2') = 0
+  and (select count(*) from public.offers where candidate_id = :'CLC') = 1
+  and (select status::text from public.offers where id = :'cloff') = 'sent'
+  and (select status::text from public.applications where id = :'clapp') = 'viewed'
+  and (select candidate_id is null from public.applications where id = :'clgapp')
+  and (select count(*) from public.conversations where company_id = :'CLT') = 1
+  and (select count(*) from public.messages where conversation_id = :'clconv') = 1
+  and (select count(*) from public.matches where job_id in (:'CLJ', :'CLJ2')) = 1
+  and (select count(*) from public.guest_application_requests where job_id in (:'CLJ', :'CLJ2')) = 2
+  and (select count(*) from public.notifications) = :cl_n_notif
+  and (select count(*) from public.email_deliveries) = :cl_n_mail,
+  'CL1128-11 brak nowych wierszy procesu, powiadomień i e-maili');
+
+-- CL1128-12: rekruter nie widzi danych procesu ani profili kandydatów.
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.applications where job_id in (:'CLJ', :'CLJ2')) = 0
+  and (select count(*) from public.offers where job_id = :'CLJ') = 0
+  and (select count(*) from public.matches where job_id = :'CLJ') = 0
+  and (select count(*) from public.application_status_history where application_id = :'clapp') = 0
+  and (select count(*) from public.application_status_history) = 0
+  and (select count(*) from public.offer_status_history where offer_id = :'cloff') = 0
+  and (select count(*) from public.candidate_profiles where profile_id in (:'CLC', :'CLC2')) = 0
+  and (select count(*) from public.candidate_skills where candidate_profile_id = :'clcp') = 0
+  and (select count(*) from public.profiles where id = :'CLC') = 0
+  and (select count(*) from public.conversations where id = :'clconv') = 0
+  and (select count(*) from public.messages where conversation_id = :'clconv') = 0
+  and not public.company_can_view_candidate(:'CLC'::uuid)
+  and not exists (select 1 from public.get_conversation_summaries()),
+  'CL1128-12 rekruter bez dostępu do aplikacji, propozycji, dopasowań, profili i rozmów');
+reset role;
+
+-- CL1128-13: kandydat widzi własną historię (i nic cudzego).
+set role authenticated; set app.current_uid = :'CLC'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.applications where id = :'clapp') = 1
+  and (select count(*) from public.applications where id = :'clgapp') = 0
+  and (select count(*) from public.offers where id = :'cloff') = 1
+  and (select count(*) from public.matches where candidate_id = :'CLC') = 1
+  and (select count(*) from public.application_status_history where application_id = :'clapp') = 1
+  and (select count(*) from public.candidate_profiles where profile_id = :'CLC') = 1
+  and (select count(*) from public.candidate_skills where candidate_profile_id = :'clcp') = 1
+  and (select count(*) from public.conversations where id = :'clconv') = 1
+  and (select count(*) from public.messages where conversation_id = :'clconv') = 1,
+  'CL1128-13 kandydat widzi własne aplikacje, propozycje, dopasowania, profil i rozmowę');
+-- CL1128-14: wycofanie istniejącej aplikacji zostaje (decyzja do akceptacji właściciela).
+select public.withdraw_application(:'clapp'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.applications where id = :'clapp') = 'withdrawn',
+  'CL1128-14 kandydat wycofuje istniejącą aplikację');
+
+-- CL1128-15: wyjątek seedu tylko dla superusera; login aplikacji (service_role) go nie ma.
+begin;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+insert into public.matches(candidate_id, job_id, score) values (:'CLC2', :'CLJ2', 70);
+select pg_temp.assert((select count(*) from public.matches where candidate_id = :'CLC2') = 1,
+  'CL1128-15 seed (superuser + jawny wyjątek) zapisuje dane demo');
+set local session authorization service_role;
+select pg_temp.expect_error(format('insert into public.matches(candidate_id, job_id, score) values (%L, %L, 71)',
+  :'CLC2', :'CLJ'), 'RECRUITMENT_DISABLED', 'CL1128-15b wyjątek ignorowany dla loginu spoza superuserów');
+rollback;
+
+-- CL1128-16 (kontrola ujemna a): brak wiersza trybu blokuje, nie odblokowuje — także gdy
+-- wcześniej był RECRUITMENT.
+begin;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'CL1128-16', 'CLASSIFIEDS_ONLY');
+alter table public.portal_legal_mode disable trigger trg_portal_legal_mode_guard;
+delete from public.portal_legal_mode;
+select pg_temp.assert(not public.recruitment_enabled(), 'CL1128-16 brak wiersza = recruitment_enabled() false');
+set local role authenticated; set local app.current_uid = :'CLC2'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.apply_to_job(%L::uuid, %L, null, null, null)', :'CLJ', 'cl1128-neg-a'),
+  'RECRUITMENT_DISABLED', 'CL1128-16b brak wiersza blokuje apply_to_job');
+rollback;
+reset role; reset app.current_uid;
+
+-- CL1128-17 (kontrola ujemna b): bez strażnika na offers send_offer zapisuje propozycję.
+begin;
+drop trigger trg_aa_recruitment_mode on public.offers;
+set local role authenticated; set local app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select public.send_offer(:'CLJ2'::uuid, :'CLC'::uuid, 'cl1128-neg-b') as clnegoff \gset
+reset role;
+select pg_temp.assert(exists (select 1 from public.offers where id = :'clnegoff'),
+  'CL1128-17 kontrola ujemna: bez strażnika propozycja powstaje w trybie ogłoszeniowym');
+rollback;
+reset role; reset app.current_uid;
+
+-- CL1128-18 (kontrola ujemna c): bez polityki restrykcyjnej rekruter widzi aplikacje.
+begin;
+drop policy applications_recruitment_mode on public.applications;
+set local role authenticated; set local app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where job_id = :'CLJ') > 0,
+  'CL1128-18 kontrola ujemna: bez polityki trybu rekruter widzi aplikacje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ---------------- PLM: zmiana trybu (#1143) ----------------
+\echo '--- PLM zmiana trybu portalu: RPC service_role, uzasadnienie, CAS, audyt (0171) ---'
+select count(*) as plm_audit0 from public.audit_logs where action = 'portal_legal_mode.changed' \gset
+set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.admin_set_portal_legal_mode('RECRUITMENT', 'x', 'CLASSIFIEDS_ONLY')$$,
+  'permission denied', 'PLM-1 authenticated bez EXECUTE');
+select pg_temp.expect_error('select * from public.portal_legal_mode', 'permission denied',
+  'PLM-1b authenticated nie czyta tabeli trybu');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.admin_set_portal_legal_mode('RECRUITMENT', 'x', 'CLASSIFIEDS_ONLY')$$,
+  'permission denied', 'PLM-1c anon bez EXECUTE');
+reset role;
+set role service_role;
+select pg_temp.expect_error($$select public.admin_set_portal_legal_mode('RECRUITMENT', '   ', 'CLASSIFIEDS_ONLY')$$,
+  'VALIDATION_FAILED', 'PLM-2 bez uzasadnienia odrzucone');
+select pg_temp.expect_error(format($$select public.admin_set_portal_legal_mode('RECRUITMENT', %L, 'CLASSIFIEDS_ONLY')$$, repeat('x', 1001)),
+  'VALIDATION_FAILED', 'PLM-2b uzasadnienie > 1000 znaków odrzucone');
+select pg_temp.expect_error($$select public.admin_set_portal_legal_mode('recruitment', 'x', 'CLASSIFIEDS_ONLY')$$,
+  'VALIDATION_FAILED', 'PLM-2c wartość spoza listy odrzucona');
+select pg_temp.expect_error($$select public.admin_set_portal_legal_mode('RECRUITMENT', 'x', 'RECRUITMENT')$$,
+  'STALE_STATE', 'PLM-3 nieaktualny p_expected_mode → STALE_STATE');
+select pg_temp.expect_error($$update public.portal_legal_mode set mode = 'RECRUITMENT'$$,
+  'PERMISSION_DENIED', 'PLM-4 bezpośredni UPDATE jako service_role odrzucony');
+select pg_temp.expect_error($$select set_config('pracujbe.allow_recruitment_write', 'on', false); update public.portal_legal_mode set mode = 'RECRUITMENT'$$,
+  'PERMISSION_DENIED', 'PLM-4b wyjątek seedu nie otwiera tabeli trybu');
+reset role;
+select set_config('pracujbe.allow_recruitment_write', '', false);
+select pg_temp.expect_error('delete from public.portal_legal_mode', 'PERMISSION_DENIED',
+  'PLM-4c DELETE (nawet superuser) odrzucony');
+select pg_temp.expect_error('truncate public.portal_legal_mode', 'PERMISSION_DENIED',
+  'PLM-4d TRUNCATE odrzucony');
+select pg_temp.expect_error($$insert into public.portal_legal_mode(id, mode) values (true, 'RECRUITMENT') on conflict (id) do update set mode = excluded.mode$$,
+  'PERMISSION_DENIED', 'PLM-4e INSERT … ON CONFLICT odrzucony');
+select pg_temp.assert(not public.recruitment_enabled()
+  and (select (public.ops_metrics()->'portalLegalMode'->>'recruitmentEnabled')::int) = 0,
+  'PLM-5 tryb bez zmian po odrzuconych próbach; ops_metrics = 0');
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql PLM: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+select pg_temp.assert((select (public.ops_metrics()->'portalLegalMode'->>'recruitmentEnabled')::int) = 1,
+  'PLM-5b ops_metrics = 1 w trybie RECRUITMENT');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'portal_legal_mode.changed') = :plm_audit0 + 1
+  and (select after_data->>'mode' = 'RECRUITMENT' and before_data->>'mode' = 'CLASSIFIEDS_ONLY'
+            and after_data->>'reason' like 'rls.sql PLM%'
+         from public.audit_logs where action = 'portal_legal_mode.changed' order by created_at desc limit 1)
+  and (select mode = 'RECRUITMENT' and reason like 'rls.sql PLM%' from public.portal_legal_mode),
+  'PLM-6 każda zmiana ma wpis audytu (przed/po, uzasadnienie); odrzucone próby bez wpisu');
+-- PLM-7 (kontrola ujemna): bez triggera ochronnego bezpośredni UPDATE przechodzi.
+begin;
+drop trigger trg_portal_legal_mode_guard on public.portal_legal_mode;
+set local role service_role;
+update public.portal_legal_mode set mode = 'CLASSIFIEDS_ONLY';
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(),
+  'PLM-7 kontrola ujemna: bez triggera service_role zmienia tryb z pominięciem RPC i audytu');
+rollback;
 reset role;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

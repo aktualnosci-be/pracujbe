@@ -5,6 +5,7 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ErrorCodes, toUserMessageKey } from '@/lib/errors';
+import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
 import {
   PORTAL_LEGAL_MODE_ENV,
   RECRUITMENT_FEATURES,
@@ -154,11 +155,78 @@ describe('trasy rekrutacyjne za notFoundUnlessRecruitment()', () => {
 describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
   it.todo('applyToJob, aplikacja gościa, sendOffer, respondToOffer, zmiana statusu, screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129/#1130)');
   it.todo('loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata/aplikacji, /api/files/cv/*) nie zwracają danych (#1129)');
-  it.todo('/api/maintenance nie woła zadań rekrutacyjnych, odpowiedź skipped: classifieds_only (#1143)');
   it.todo('słownik zakazanych etykiet UI na trasach aktywnych w trybie ogłoszeniowym, 4 języki (#1128, teksty)');
   it.todo('pozytywnie: lista ofert, szczegół, kreator/publikacja, zapisane oferty/wyszukiwania, konto nie zwracają RECRUITMENT_DISABLED (#1128)');
-  it.todo('sekcja CL1128 w supabase/tests/rls.sql obejmuje każde RPC z listy w src/lib/portal-mode.ts (#1140)');
-  it.todo('tryb efektywny = env × baza, tylko RECRUITMENT × true włącza (#1143)');
+});
+
+/**
+ * Baza (#1140/#1143, migracja 0171): tryb portalu w bazie, strażniki zapisu i dwuklucz.
+ * RPC procesu rekrutacyjnego, które sekcja CL1128 w `supabase/tests/rls.sql` musi wywołać
+ * w trybie ogłoszeniowym (każde z oczekiwanym odrzuceniem albo pustym wynikiem).
+ */
+const RECRUITMENT_DB_RPCS = [
+  'apply_to_job', 'submit_guest_application', 'confirm_guest_application', 'claim_guest_application',
+  'send_offer', 'respond_to_offer', 'transition_application', 'withdraw_application',
+  'get_or_create_conversation', 'send_message', 'stage_message_attachment', 'can_attach_in_conversation',
+  'get_company_top_matches', 'get_job_match_profile', 'company_can_view_candidate',
+  'bulk_transition_applications', 'get_conversation_template_context',
+] as const;
+/** Tabele procesu z triggerem BEFORE INSERT `trg_aa_recruitment_mode`. */
+const RECRUITMENT_TABLES = [
+  'applications', 'offers', 'matches', 'conversations', 'messages', 'message_attachments',
+  'application_screening_answers', 'guest_application_requests',
+] as const;
+
+function cl1128Section(rls: string): string {
+  const start = rls.indexOf("\\echo '--- CL1128");
+  const end = rls.indexOf("\\echo '--- PLM", start);
+  return start >= 0 && end > start ? rls.slice(start, end) : '';
+}
+const missingRpcs = (section: string) =>
+  RECRUITMENT_DB_RPCS.filter((fn) => !new RegExp(`public\\.${fn}\\(`).test(section));
+
+describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
+  const migration = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .find((sql) => sql.includes('function public.enforce_recruitment_insert()')) ?? '';
+
+  it('migracja trybu: singleton domyślnie CLASSIFIEDS_ONLY i strażnik na każdej tabeli procesu', () => {
+    expect(migration).toMatch(/insert into public\.portal_legal_mode \(id, mode, reason\)\s+values \(true, 'CLASSIFIEDS_ONLY'/);
+    const list = /foreach t in array array\[([^\]]+)\]/.exec(migration)?.[1] ?? '';
+    for (const table of RECRUITMENT_TABLES) expect(list, table).toContain(`'${table}'`);
+  });
+
+  it('sekcja CL1128 w rls.sql wywołuje każde RPC procesu rekrutacyjnego', () => {
+    const section = cl1128Section(read('supabase/tests/rls.sql'));
+    expect(section.length).toBeGreaterThan(0);
+    expect(missingRpcs(section)).toEqual([]);
+  });
+
+  it('kontrola ujemna: sekcja bez send_offer jest wykrywana', () => {
+    const section = cl1128Section(read('supabase/tests/rls.sql')).replaceAll('public.send_offer(', 'public.x(');
+    expect(missingRpcs(section)).toEqual(['send_offer']);
+  });
+
+  it('tryb efektywny = env × baza: tylko RECRUITMENT × RECRUITMENT włącza', () => {
+    expect([[false, false], [false, true], [true, false], [true, true]].map(([e, d]) => effectiveRecruitmentEnabled(e!, d!)))
+      .toEqual([false, false, false, true]);
+  });
+
+  /** /api/maintenance: materializacja dopasowań tylko za trybem efektywnym (#1143). */
+  const guardedMatches = (src: string) =>
+    /if \(!recruitment\) \{\s*matches = 'disabled';\s*\} else \{\s*try \{\s*matches = await runMatchRecompute\(\)/.test(src)
+    && (src.match(/runMatchRecompute\(\)/g) ?? []).length === 1
+    && /recruitmentTasks: \{ skipped: 'classifieds_only'/.test(src);
+
+  it('/api/maintenance nie woła zadań rekrutacyjnych w trybie ogłoszeniowym (skipped: classifieds_only)', () => {
+    expect(guardedMatches(read('src/app/api/maintenance/route.ts'))).toBe(true);
+  });
+
+  it('kontrola ujemna: wywołanie runMatchRecompute() poza strażnikiem jest wykrywane', () => {
+    const src = read('src/app/api/maintenance/route.ts');
+    expect(guardedMatches(src.replace('if (!recruitment) {', 'if (false) {'))).toBe(false);
+    expect(guardedMatches(`${src}\nawait runMatchRecompute();`)).toBe(false);
+  });
 });
 
 /**
@@ -297,7 +365,10 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
     expect(read('src/lib/actions/matching.ts')).toMatch(/isRecruitmentEnabled\('matching'\)/);
     expect(read('src/lib/data/matching.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return \{ status: 'disabled' \}/);
     expect(read('src/lib/matching/materialize.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return run;/);
-    expect(read('src/app/api/maintenance/route.ts')).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) \{\s*matches = 'disabled';/);
+    // #1143: maintenance — tryb efektywny (env `matching` ORAZ baza), jeden kształt odpowiedzi.
+    const maintenance = read('src/app/api/maintenance/route.ts');
+    expect(maintenance).toMatch(/if \(!isRecruitmentEnabled\('matching'\)\) return false;/);
+    expect(maintenance).toMatch(/if \(!recruitment\) \{\s*matches = 'disabled';/);
   });
 
   it('powiadomienia i e-maile nie powstają z tabeli matches (jobMatch = zapisane wyszukiwania)', () => {
