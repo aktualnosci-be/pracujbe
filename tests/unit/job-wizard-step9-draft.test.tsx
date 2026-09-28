@@ -49,6 +49,7 @@ const FULL_DRAFT: JobWizardInitialValues = {
   requirementsMandatory: ["Uprawnienia UDT"],
   companyDescription: "Rodzinna firma logistyczna z Antwerpii.",
   contactEmail: "hr@example.be",
+  applyEmail: "praca@example.be",
 };
 
 function installDomShims(): void {
@@ -194,6 +195,70 @@ describe("JobWizard krok 9: szkic bez zgody na publikację (#193)", () => {
     fireEvent.click(screen.getByRole("button", { name: "saveExit" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("errors.internal");
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe("JobWizard krok 9: kanał aplikowania (#1129)", () => {
+  const NO_CHANNEL: JobWizardInitialValues = { ...FULL_DRAFT, applyEmail: "" };
+
+  it("„Publikuj” bez kanału: błąd przy polu strony, fokus, bez zapisu i publikacji", async () => {
+    render(<JobWizard initialJobId="job-1" initialValues={NO_CHANNEL} />);
+    await goToStep(9);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "agreePublish" }));
+    fireEvent.click(screen.getByRole("button", { name: "publish" }));
+
+    const url = screen.getByLabelText("applyUrlLabel");
+    await waitFor(() => expect(url).toHaveFocus());
+    expect(url).toHaveAttribute("aria-invalid", "true");
+    expect(url.getAttribute("aria-describedby")).toContain("job-applyUrl-error");
+    expect(url.getAttribute("aria-describedby")).toContain("job-applyUrl-hint");
+    expect(document.getElementById("job-applyUrl-error")).toHaveTextContent("applyChannelRequired");
+    expect(step9Calls()).toHaveLength(0);
+    expect(publishJob).not.toHaveBeenCalled();
+  });
+
+  it("„Zapisz i wyjdź” bez kanału zapisuje szkic (kanał wymagany dopiero przy publikacji)", async () => {
+    render(<JobWizard initialJobId="job-1" initialValues={NO_CHANNEL} />);
+    await goToStep(9);
+
+    fireEvent.click(screen.getByRole("button", { name: "saveExit" }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/employer"));
+    expect(step9Calls()).toHaveLength(1);
+    expect(step9Calls()[0]?.[2]).not.toHaveProperty("applyEmail", expect.any(String));
+  });
+
+  it("telefon w zapisie lokalnym z 00 trafia do akcji; niepoprawny format = błąd przy polu", async () => {
+    render(<JobWizard initialJobId="job-1" initialValues={NO_CHANNEL} />);
+    await goToStep(9);
+    const phone = screen.getByLabelText("applyPhoneLabel");
+
+    fireEvent.change(phone, { target: { value: "0470 12 34 56" } });
+    fireEvent.click(screen.getByRole("button", { name: "saveExit" }));
+    await waitFor(() => expect(phone).toHaveAttribute("aria-invalid", "true"));
+    expect(document.getElementById("job-applyPhone-error")).toHaveTextContent("applyPhoneInvalid");
+    expect(step9Calls()).toHaveLength(0);
+
+    fireEvent.change(phone, { target: { value: "0032 470 12 34 56" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "agreePublish" }));
+    fireEvent.click(screen.getByRole("button", { name: "publish" }));
+    await waitFor(() => expect(publishJob).toHaveBeenCalledWith("job-1"));
+    expect(step9Calls()[0]?.[2]).toMatchObject({ applyPhone: "0032 470 12 34 56" });
+  });
+
+  it("odmowa bazy JOB_APPLY_CHANNEL_REQUIRED wraca komunikatem przy polu", async () => {
+    publishJob.mockResolvedValueOnce({ ok: false, error: "JOB_APPLY_CHANNEL_REQUIRED" });
+    render(<JobWizard initialJobId="job-1" initialValues={FULL_DRAFT} />);
+    await goToStep(9);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "agreePublish" }));
+    fireEvent.click(screen.getByRole("button", { name: "publish" }));
+
+    const url = screen.getByLabelText("applyUrlLabel");
+    await waitFor(() => expect(url).toHaveAttribute("aria-invalid", "true"));
+    expect(document.getElementById("job-applyUrl-error")).toHaveTextContent("applyChannelRequired");
     expect(push).not.toHaveBeenCalled();
   });
 });

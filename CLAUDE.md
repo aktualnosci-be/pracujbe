@@ -113,6 +113,41 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   sekretem. Vitest domyślnie ogłoszeniowy (`useRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
   (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
+  Wyłączone w trybie ogłoszeniowym (#1141/#1144/#1132, warstwa aplikacji, bez migracji): akcje `sendOffer`/`respondToOffer`/
+  `loadMoreProposals`, `applyToJob`/`transitionApplication`/`withdrawApplication`, odczyty historii zgłoszeń kandydata
+  i pracodawcy, aplikacja gościa (`submit`/`confirm`/`claimGuestApplication`, `stageGuestLink`) → `RECRUITMENT_DISABLED`
+  przed limiterem/Turnstile/bazą (`tests/legal/classifieds-process-off.test.ts`, kontrola ujemna w trybie RECRUITMENT);
+  trasy `/employer/aplikacje[/id]`, `/candidate/aplikacje[/id]`, `/candidate/propozycje`, `/aplikacja/potwierdz|przejmij`
+  → 404; nawigacja (`recruitmentEnabled` z layoutu do `EmployerShell`/`CandidateShell`), sekcja zgłoszeń pulpitu
+  pracodawcy, baner propozycji i podgląd zgłoszeń pulpitu kandydata ukryte (loadery niewołane); powiadomienia
+  o zgłoszeniach/propozycjach prowadzą do pulpitu. Blokady RPC i wygaszanie e-maili: #1140/#1145.
+- **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0171`):** singleton `portal_legal_mode`
+  (domyślnie `CLASSIFIEDS_ONLY`), `recruitment_enabled()` fail-closed (brak wiersza/błąd = false). Tryb efektywny =
+  env `RECRUITMENT` ORAZ baza `RECRUITMENT` (`src/lib/ops/portal-mode.ts`). W trybie ogłoszeniowym baza odrzuca nowe dane
+  procesu (`RECRUITMENT_DISABLED`): BEFORE INSERT na `applications`/`offers`/`matches`/`conversations`/`messages`/
+  `message_attachments`/`application_screening_answers`/`guest_application_requests` (także service_role; wyjątek
+  `pracujbe.allow_recruitment_write` tylko dla superusera — seed), BEFORE UPDATE (zmiana statusu aplikacji poza
+  wycofaniem, przejęcie aplikacji gościa, odpowiedź na propozycję); polityki RESTRICTIVE + `company_can_view_candidate`/
+  `candidate_profile_is_searchable`/`is_conversation_member`/`can_attach_in_conversation`/`get_job_match_profile` —
+  firma nie widzi danych procesu ani profili, kandydat widzi własną historię. Zmiana trybu tylko RPC
+  `admin_set_portal_legal_mode` (service_role, uzasadnienie, CAS `STALE_STATE`, audyt; trigger blokuje bezpośredni zapis),
+  skrypt `scripts/db/set-portal-legal-mode.mjs`, procedura `docs/railway/OPERATIONS.md` §6. `/api/health/ops`: alarm
+  `portal_legal_mode_mismatch` (env ≠ baza, `ops_metrics().portalLegalMode`); `/api/maintenance` pomija materializację
+  dopasowań (`recruitmentTasks: { skipped: 'classifieds_only' }`); `restore-backup.sh` wymusza `CLASSIFIEDS_ONLY`
+  (chyba że `RESTORE_KEEP_PORTAL_MODE=1`). Testy przepływów rekrutacyjnych włączają `RECRUITMENT` jawnie (rls.sql na
+  starcie, `startPortalDb`, `test-e2e-real`). Dowód: `rls.sql` sekcje CL1128/PLM (kontrole ujemne: brak wiersza, zdjęty
+  strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0171_…down.sql`, unit
+  `portal-mode-dual-key`, `maintenance-portal-mode`, `ops-health-route`, `test:backup`. Dane istniejące (#1150): tylko
+  blokada nowych danych, bez zamrażania (brak danych produkcyjnych).
+  Matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139, bez migracji): `/api/maintenance` nie woła
+  `runMatchRecompute` (`matches: "disabled"`, sam `runMatchRecompute` też sprawdza tryb), `getMyJobMatch(Action)` →
+  `disabled` bez transakcji, brak `job-match-slot` i `MatchBar` na `JobCard`; `/employer/kandydaci[/id]` i
+  `/candidate/oferty-polecane` → 404 (`notFoundUnlessRecruitment`), loadery rankingu/szczegółu kandydata → `disabled`,
+  przegląd/lista ofert bez pól `matchedCandidatesCount`/`matched` (kafelek i kolumna znikają), pulpit pracodawcy bez
+  „Top dopasowani” (`EmployerTopMatched`), pulpit kandydata bez polecanych (`CandidateRecommendedPreview`), nawigacja
+  shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
+  (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
+  segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -305,7 +340,7 @@ wyznacz locale odbiorcy (fallback) → wstaw `email_deliveries(status=queued)` �
 worker/route handler renderuje React Email w locale odbiorcy → Resend → zapisz
 `status/provider_id/attempts/last_error`. Błąd = retry, nie usuwa rekordu źródłowego.
 
-**Propozycja (idempotentnie):** patrz Invariant #3. Kolejność w server action:
+**Propozycja (idempotentnie; tylko tryb `RECRUITMENT`, #1141):** patrz Invariant #3. Kolejność w server action:
 autoryzacja → status firmy `verified` → status oferty `active` → walidacja kandydata →
 `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING RETURNING *` w transakcji →
 historia → notyfikacja → enqueue e-mail.
@@ -1381,6 +1416,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
   **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
   na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
+  Kanał aplikowania u ogłoszeniodawcy (#1129, migracja `0172`; decyzja
+  produktowa: portal ogłoszeniowy): `jobs.apply_url` (https, reguła jak `public_https_url` + port
+  1–65535) / `apply_email` (bez parametrów `mailto:`) / `apply_phone` (`+` i 8–15 cyfr) z CHECK-ami
+  (`job_apply_*_ok`), dowolna kombinacja, co najmniej jeden wymagany przez `publish_job`
+  i `update_published_job` → `JOB_APPLY_CHANNEL_REQUIRED` (także poza trybem ogłoszeniowym —
+  flaga #1136 nie istnieje jeszcze w bazie). Szkic bez kanału dozwolony (`save_job_draft`),
+  kopia szkicu przenosi kanał (trigger na `job_duplications`), `get_public_job` zwraca trzy pola
+  tylko dla oferty publicznej (`JobDetail.applyChannel`, drugie sprawdzenie lustrem). Kreator:
+  pola w kroku 9 (błąd przy „Opublikuj” i w edycji przy polu strony, fokus), lustro
+  `src/lib/job-apply-channel.ts` (telefon normalizowany: spacje/kropki/myślniki, `00` → `+`),
+  `contact_email` zostaje kontaktem niepublicznym; import AI kanału nie wypełnia. Demo/seed:
+  kanały w domenie `example.com`. Dowód: `rls.sql` sekcja AC172 (kontrole ujemne: bez CHECK,
+  `publish_job` bez sprawdzenia), unit `job-apply-channel` (TS = wzorce z migracji), E2E
+  `job-wizard-step9-draft`. **Otwarte:** przycisk „Aplikuj u pracodawcy” na szczególe (#1130),
+  kanał w regułach zaufania treści (0167).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,

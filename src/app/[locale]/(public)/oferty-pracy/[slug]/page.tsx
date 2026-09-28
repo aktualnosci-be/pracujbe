@@ -61,6 +61,7 @@ import { ApplyModal } from '@/components/public/ApplyModal';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { JobCompanyBlockControl } from '@/components/public/JobCompanyBlockControl';
 import { SimilarJobsError } from '@/components/public/SimilarJobsError';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
@@ -734,10 +735,13 @@ export default async function JobDetailPage({ params }: PageProps) {
         {/* Panel boczny */}
         <aside className="min-w-0">
           <div className="space-y-5 lg:sticky lg:top-24">
-            {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka) */}
-            <div data-testid="job-match-slot">
-              <JobMatchCard jobId={job.id} />
-            </div>
+            {/* Dopasowanie do profilu (tylko dla zalogowanego kandydata; wyspa kliencka).
+                #1131: w trybie ogłoszeniowym brak slotu — wyspa nie woła akcji dopasowania. */}
+            {isRecruitmentEnabled('matching') ? (
+              <div data-testid="job-match-slot">
+                <JobMatchCard jobId={job.id} />
+              </div>
+            ) : null}
 
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             {/* `.paper.apply-box` — „Twój następny krok”: Aplikuj (`.btn`) i Zapisz (`.btn.secondary`). */}

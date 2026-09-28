@@ -31,6 +31,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,8 @@ export default async function EmployerApplicationsPage({
   const { locale } = await params;
   const query = await searchParams;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('applications');
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const ts = await getTranslations({ locale, namespace: 'status' });

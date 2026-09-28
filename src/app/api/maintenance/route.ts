@@ -15,6 +15,8 @@ import {
 } from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
 import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
 import { MESSAGE_ATTACHMENTS_BUCKET, runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
@@ -67,6 +69,7 @@ import {
  * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
  * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
  * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.
+ * #1131: w trybie ogłoszeniowym zadanie nie działa (`matches: "disabled"`, bez bazy).
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -105,6 +108,22 @@ function retentionCounters(value: unknown): Record<string, number> {
   );
 }
 
+/**
+ * Tryb efektywny dla zadań rekrutacyjnych (#1143): env `PORTAL_LEGAL_MODE=RECRUITMENT` (#1136)
+ * ORAZ `recruitment_enabled()` w bazie (0171). Bez klucza env baza nie jest pytana.
+ * Błąd odczytu bazy = tryb ogłoszeniowy (fail-closed) i zapamiętany błąd (503 dla monitoringu).
+ */
+async function recruitmentTasksEnabled(onError: (error: unknown) => void): Promise<boolean> {
+  if (!isRecruitmentEnabled('matching')) return false;
+  try {
+    const db = await withServiceRole((tx) => rpc<boolean>(tx, 'recruitment_enabled'));
+    return effectiveRecruitmentEnabled(true, db === true);
+  } catch (error) {
+    onError(error);
+    return false;
+  }
+}
+
 async function run(request: Request): Promise<Response> {
   if (!isCronAuthorized(request, 'maintenance')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -120,6 +139,7 @@ async function run(request: Request): Promise<Response> {
     | 'checkouts'
     | 'aiBudgetReservations'
     | 'jobExpiry'
+    | 'portalMode'
     | 'matches'
     | 'guestRequests'
     | 'savedSearchAlerts'
@@ -167,12 +187,22 @@ async function run(request: Request): Promise<Response> {
   if (typeof expiredJobs === 'number' && expiredJobs > 0) {
     revalidatePublicJobPaths();
   }
+  // #1143: zadania procesu rekrutacyjnego tylko w trybie efektywnym RECRUITMENT (env ORAZ baza).
+  // W trybie ogłoszeniowym nie wołamy ich wcale (baza i tak odrzuciłaby zapis — 503 bez sensu);
+  // retencja i czyszczenie (gość, załączniki, storage) działają dalej.
+  const recruitment = await recruitmentTasksEnabled((error) => failures.push({ task: 'portalMode', error }));
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
-  let matches: MatchRecomputeRun | null = null;
-  try {
-    matches = await runMatchRecompute();
-  } catch (error) {
-    failures.push({ task: 'matches', error });
+  // #1131/#1143: tryb ogłoszeniowy (env albo baza) — bez przeliczeń (zero zapytań
+  // `match_recompute_*`); `matches: "disabled"` + `recruitmentTasks.skipped` w odpowiedzi.
+  let matches: MatchRecomputeRun | 'disabled' | null = null;
+  if (!recruitment) {
+    matches = 'disabled';
+  } else {
+    try {
+      matches = await runMatchRecompute();
+    } catch (error) {
+      failures.push({ task: 'matches', error });
+    }
   }
   const purgedGuestRequests = await task('guestRequests', 'purge_guest_application_requests');
   // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.
@@ -288,6 +318,7 @@ async function run(request: Request): Promise<Response> {
     releasedAiBudgetReservations: releasedAiBudgetReservations ?? 0,
     expiredJobs: expiredJobs ?? 0,
     matches,
+    ...(recruitment ? {} : { recruitmentTasks: { skipped: 'classifieds_only' as const } }),
     purgedGuestRequests: purgedGuestRequests ?? 0,
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,

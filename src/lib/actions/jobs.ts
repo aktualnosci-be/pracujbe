@@ -44,6 +44,7 @@ import {
   step8PublishSchema,
   step8Schema,
   step9DraftSchema,
+  step9PublishedSchema,
   type JobStep1,
   type JobStep2,
   type JobStep3,
@@ -152,6 +153,7 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('JOB_NOT_EDITABLE')) return 'JOB_NOT_EDITABLE';
   if (m.includes('JOB_EXPIRED')) return 'JOB_EXPIRED';
   if (m.includes('JOB_ACCOMMODATION_TERMS_REQUIRED')) return 'JOB_ACCOMMODATION_TERMS_REQUIRED';
+  if (m.includes('JOB_APPLY_CHANNEL_REQUIRED')) return 'JOB_APPLY_CHANNEL_REQUIRED';
   if (m.includes('JOB_NOT_DRAFT')) return 'JOB_NOT_DRAFT';
   if (m.includes('SCREENING_QUESTION_REJECTED')) return 'SCREENING_QUESTION_REJECTED';
   if (m.includes('SCREENING_REVIEW_REQUIRED')) return 'SCREENING_REVIEW_REQUIRED';
@@ -431,6 +433,10 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       requires_driving_license: s7.requiresDrivingLicense,
       no_language_required: s7.noLanguageRequired,
       contact_email: nullIfEmpty(s9.contactEmail),
+      // #1129 (0172): kanał aplikowania — rewizja bez żadnego jest odrzucana (także w bazie).
+      apply_url: nullIfEmpty(s9.applyUrl),
+      apply_email: nullIfEmpty(s9.applyEmail),
+      apply_phone: nullIfEmpty(s9.applyPhone),
       // 0169: flagi filtrów + koszty i dodatki (ten sam kształt co zapis kroku 8).
       ...jobCostsPatch(s8),
     },
@@ -483,6 +489,10 @@ export async function updatePublishedJob(
     // Oferta publiczna: zakwaterowanie zapewnione wymaga kosztu i potrącenia (28.09.2026).
     if (i + 1 === 8 && !step8PublishSchema.safeParse(steps[i]).success) {
       return { ok: false, error: 'JOB_ACCOMMODATION_TERMS_REQUIRED' };
+    }
+    // Oferta publiczna: co najmniej jeden kanał aplikowania (#1129, decyzja 28.09.2026).
+    if (i + 1 === 9 && !step9PublishedSchema.safeParse(steps[i]).success) {
+      return { ok: false, error: 'JOB_APPLY_CHANNEL_REQUIRED' };
     }
     parsed.push(value);
   }

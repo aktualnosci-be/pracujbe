@@ -1,8 +1,9 @@
 # Aplikacja bez konta (#98)
 
-> **Wyłączone w trybie ogłoszeniowym (#1128).** Decyzja produktowa: portal ogłoszeniowy — aplikacja
-> bez konta nie działa produkcyjnie (fail-closed, #1132); kandydat kontaktuje się bezpośrednio
-> z ogłoszeniodawcą. Dokument opisuje zachowany, wyłączony kod.
+> **Wyłączone w trybie ogłoszeniowym (#1128)** (`PORTAL_LEGAL_MODE` ≠ `RECRUITMENT`, decyzja produktowa: portal
+> ogłoszeniowy, #1132): akcje zwracają `RECRUITMENT_DISABLED` przed limiterem, Turnstile i bazą, a trasy
+> `/aplikacja/potwierdz` i `/aplikacja/przejmij` dają 404. Retencja zapisanych zgłoszeń działa dalej.
+> Kandydat kontaktuje się bezpośrednio z ogłoszeniodawcą; dokument opisuje zachowany, wyłączony kod.
 
 Gość może raz zaaplikować na ofertę bez zakładania konta. Aplikacja trafia do pracodawcy
 dopiero po potwierdzeniu adresu e-mail. Później gość może przypisać ją do konta kandydata

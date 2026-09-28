@@ -2,6 +2,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb, type PortalDb } from './support/portal-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Narzędzia rekrutera testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * Narzędzia rekrutera (0170) na PostgreSQL 16: filtr statusu listy zgłoszeń, akcja zbiorcza

@@ -79,7 +79,13 @@ export async function startPortalDb(): Promise<PortalDb> {
   await waitFor(admin);
   const migrations = await loadProductionMigrations();
   const migrator = await admin.connect();
-  try { await applyMigrations(migrator, migrations); }
+  try {
+    await applyMigrations(migrator, migrations);
+    // #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym. Testy portalu sprawdzają
+    // przepływy rekrutacyjne, więc włączają RECRUITMENT jawnie (jedyną drogą zmiany — RPC).
+    await migrator.query(`SELECT public.admin_set_portal_legal_mode('RECRUITMENT',
+      'integration: przepływy rekrutacyjne', 'CLASSIFIEDS_ONLY')`);
+  }
   finally { migrator.release(); }
 
   const suffix = randomUUID().replaceAll('-', '').slice(0, 10);

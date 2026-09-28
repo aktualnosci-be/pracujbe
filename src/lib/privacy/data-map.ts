@@ -652,8 +652,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.jobs': {
     activities: ['companies'],
     subjects: ['employer'],
-    columns: { created_by: 'reference', contact_email: 'contact', address: 'company' },
-    note: 'Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera.',
+    columns: {
+      created_by: 'reference',
+      contact_email: 'contact',
+      address: 'company',
+      // #1129 (0172): kanał aplikowania — publiczny w ofercie publicznej (get_public_job).
+      apply_url: 'company',
+      apply_email: 'contact',
+      apply_phone: 'contact',
+    },
+    note: 'Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera. Kanał aplikowania (e-mail, telefon) jest publiczny w ofercie i może wskazywać osobę po stronie firmy.',
   },
 
   // --- E-maile i powiadomienia -------------------------------------------------------------
@@ -743,6 +751,12 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['admin'],
     columns: { updated_by: 'reference' },
     note: 'Próg konta kandydata jako dane (0126, #492/#576: 16 albo 18); zmienia go administrator z uzasadnieniem i audytem.',
+  },
+  'public.portal_legal_mode': {
+    activities: ['security-audit'],
+    subjects: ['admin'],
+    columns: { changed_by: 'reference' },
+    note: 'Tryb portalu jako dane (0171, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.',
   },
   'public.document_acceptances': {
     activities: ['consents', 'account'],

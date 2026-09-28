@@ -10,6 +10,7 @@ import {
 import { GuestConfirmPanel } from '@/components/public/GuestConfirmPanel';
 import { GuestLinkIntake } from '@/components/public/GuestLinkIntake';
 import { readGuestLinkToken } from '@/lib/guest-apply/link-cookie';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Potwierdzenie jednorazowej aplikacji bez konta (#98) — cel linku z e-maila
@@ -29,6 +30,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function GuestConfirmPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('guestApply');
   const hasToken = Boolean(await readGuestLinkToken('confirm'));
   const t = await getTranslations('guestApply');
 
