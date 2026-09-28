@@ -89,7 +89,11 @@ Pełny opis: [BACKUP_RESTORE.md](BACKUP_RESTORE.md). W skrócie:
   i manifest do prywatnego bucketu Cloudflare R2 i przycina retencję w buckecie (#569);
 - `scripts/db/restore-backup.sh` odtwarza artefakt do izolowanej bazy
   `pracujbe_restore_*` i porównuje wynik z manifestem (także prosto z R2:
-  `RESTORE_S3_OBJECT=latest`, klucz tylko do odczytu);
+  `RESTORE_S3_OBJECT=latest`, klucz tylko do odczytu); kopia i odtworzenie zachowują
+  uprawnienia (GRANT/REVOKE) bez właścicieli, brakujące role powstają wg
+  `database/bootstrap`, a odcisk uprawnień musi być zgodny ze źródłem (OPS14-01,
+  [BACKUP_RESTORE.md](BACKUP_RESTORE.md) „Uprawnienia i role”); kopie formatu 1
+  (sprzed tej zmiany) są odrzucane — po wdrożeniu wykonaj nową kopię;
 - czujka `backup` w `GET /api/health/ops`: wiek ostatniej kompletnej kopii w R2 (klucz
   odczytu `BACKUP_S3_READ_*`); stany `ok`, `stale` (> 26 h), `missing`, `unavailable`,
   `misconfigured` (np. klucz zapisu w usłudze web) i `unconfigured` — **każdy poza `ok`
