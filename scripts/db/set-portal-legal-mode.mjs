@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// scripts/db/set-portal-legal-mode.mjs — zmiana trybu portalu w bazie (#1143, migracja 0940).
+// scripts/db/set-portal-legal-mode.mjs — zmiana trybu portalu w bazie (#1143, migracja 0171).
 //
 // Poza CI. Tryb efektywny aplikacji = env PORTAL_LEGAL_MODE=RECRUITMENT (#1136) ORAZ tryb
 // w bazie; ten skrypt zmienia wyłącznie część bazodanową, jedyną drogą zapisu — RPC

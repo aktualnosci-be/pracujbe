@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0940 — tryb portalu w bazie (#1140, #1143; epik #1128). NUMER TYMCZASOWY — ostateczny
---        nada integrator.
+-- 0171 — tryb portalu w bazie (#1140, #1143; epik #1128).
 --
 -- Decyzja produktowa: portal ogłoszeniowy. Funkcje rekrutacyjne (aplikacje, aplikacje
 -- gości, propozycje, pytania screeningowe, dopasowania, wyszukiwanie profili przez firmy,
@@ -52,7 +51,7 @@
 -- 6. `ops_metrics()` (ostatnio 0127) + sekcja `portalLegalMode.recruitmentEnabled` (0/1) —
 --    czujka `portal_legal_mode_mismatch` w `/api/health/ops` porównuje ją z env.
 --
--- Rollback: supabase/rollback/0940_portal_legal_mode.down.sql. Migracja nie zmienia danych
+-- Rollback: supabase/rollback/0171_portal_legal_mode.down.sql. Migracja nie zmienia danych
 -- procesu (portal nie ma danych produkcyjnych, #1150: tylko blokada nowych danych).
 -- =============================================================================
 

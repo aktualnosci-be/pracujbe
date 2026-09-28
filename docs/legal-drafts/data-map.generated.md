@@ -1000,14 +1000,14 @@ Tabele w migracjach: 112; z danymi osobowymi: 74; bez danych osobowych: 38.
 
 ### `public.portal_legal_mode`
 
-- **Migracja:** `supabase/migrations/0940_portal_legal_mode.sql`
+- **Migracja:** `supabase/migrations/0171_portal_legal_mode.sql`
 - **Czynności:** Bezpieczeństwo, audyt i limity
 - **Osoby:** Administratorzy portalu
-- **Uwaga:** Tryb portalu jako dane (0940, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.
+- **Uwaga:** Tryb portalu jako dane (0171, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `changed_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0940_portal_legal_mode.sql` |
+| `changed_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0171_portal_legal_mode.sql` |
 
 ### `public.profiles`
 

@@ -186,7 +186,7 @@ export async function submitGuestApplication(
   } catch (e) {
     if (isDatabaseError(e)) {
       const message = databaseErrorMessage(e);
-      // #1140 (0940): tryb ogłoszeniowy w bazie — brak nowych zgłoszeń gości.
+      // #1140 (0171): tryb ogłoszeniowy w bazie — brak nowych zgłoszeń gości.
       if (message.includes('RECRUITMENT_DISABLED')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
       if (message.includes('JOB_NOT_ACTIVE')) return { ok: false, error: 'JOB_NOT_ACTIVE' };
       if (message.includes('AGE_ATTESTATION_REQUIRED')) {
@@ -235,7 +235,7 @@ export async function confirmGuestApplication(locale: string): Promise<GuestConf
     }
     return { ok: true, outcome: outcome as GuestConfirmOutcome, ...(slug ? { jobSlug: slug } : {}) };
   } catch (e) {
-    // #1140 (0940): tryb ogłoszeniowy w bazie — potwierdzenie nie tworzy aplikacji.
+    // #1140 (0171): tryb ogłoszeniowy w bazie — potwierdzenie nie tworzy aplikacji.
     if (isDatabaseError(e) && databaseErrorMessage(e).includes('RECRUITMENT_DISABLED')) {
       return { ok: false, error: 'RECRUITMENT_DISABLED' };
     }

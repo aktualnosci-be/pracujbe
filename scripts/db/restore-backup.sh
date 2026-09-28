@@ -151,7 +151,7 @@ if [ -n "$tombstone_array" ]; then
   echo "RESTORE: rejestr usunięć zastosowany (liczba identyfikatorów: ${tombstone_count})."
 fi
 
-# #1143 (0940): odtworzona baza wraca w trybie ogłoszeniowym — kopia z RECRUITMENT nie może
+# #1143 (0171): odtworzona baza wraca w trybie ogłoszeniowym — kopia z RECRUITMENT nie może
 # po cichu przywrócić funkcji rekrutacyjnych. Zachowanie trybu z kopii tylko jawnie
 # (RESTORE_KEEP_PORTAL_MODE=1, decyzja właściciela). Po kontrolach zgodności z manifestem.
 portal_mode='(brak trybu w bazie)'

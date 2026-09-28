@@ -103,7 +103,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   sekretem. Vitest domyślnie ogłoszeniowy (`useRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
   (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
-- **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0940` — numer tymczasowy):** singleton `portal_legal_mode`
+- **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0171`):** singleton `portal_legal_mode`
   (domyślnie `CLASSIFIEDS_ONLY`), `recruitment_enabled()` fail-closed (brak wiersza/błąd = false). Tryb efektywny =
   env `RECRUITMENT` ORAZ baza `RECRUITMENT` (`src/lib/ops/portal-mode.ts`). W trybie ogłoszeniowym baza odrzuca nowe dane
   procesu (`RECRUITMENT_DISABLED`): BEFORE INSERT na `applications`/`offers`/`matches`/`conversations`/`messages`/
@@ -118,7 +118,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   dopasowań (`recruitmentTasks: { skipped: 'classifieds_only' }`); `restore-backup.sh` wymusza `CLASSIFIEDS_ONLY`
   (chyba że `RESTORE_KEEP_PORTAL_MODE=1`). Testy przepływów rekrutacyjnych włączają `RECRUITMENT` jawnie (rls.sql na
   starcie, `startPortalDb`, `test-e2e-real`). Dowód: `rls.sql` sekcje CL1128/PLM (kontrole ujemne: brak wiersza, zdjęty
-  strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0940_…down.sql`, unit
+  strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0171_…down.sql`, unit
   `portal-mode-dual-key`, `maintenance-portal-mode`, `ops-health-route`, `test:backup`. Dane istniejące (#1150): tylko
   blokada nowych danych, bez zamrażania (brak danych produkcyjnych).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.

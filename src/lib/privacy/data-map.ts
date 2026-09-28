@@ -748,7 +748,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['security-audit'],
     subjects: ['admin'],
     columns: { changed_by: 'reference' },
-    note: 'Tryb portalu jako dane (0940, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.',
+    note: 'Tryb portalu jako dane (0171, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.',
   },
   'public.document_acceptances': {
     activities: ['consents', 'account'],

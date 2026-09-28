@@ -48,7 +48,7 @@ describe('czujka portal_legal_mode_mismatch (#1143)', () => {
     expect(portalLegalModeAlerts(0, true)).toEqual(['portal_legal_mode_mismatch']);
   });
 
-  it('baza bez sekcji trybu (sprzed 0940) = tryb ogłoszeniowy bazy (fail-closed)', () => {
+  it('baza bez sekcji trybu (sprzed 0171) = tryb ogłoszeniowy bazy (fail-closed)', () => {
     expect(portalLegalModeAlerts(undefined, false)).toEqual([]);
     expect(portalLegalModeAlerts(null, true)).toEqual(['portal_legal_mode_mismatch']);
   });

@@ -41,7 +41,7 @@ end $$;
 -- (supabase/tests/role-assert.sql; kontrole ujemne w role-guard.sql).
 \ir role-assert.sql
 
--- #1140/#1143 (0940): baza startuje w trybie ogłoszeniowym (CLASSIFIEDS_ONLY). Sekcje sprzed
+-- #1140/#1143 (0171): baza startuje w trybie ogłoszeniowym (CLASSIFIEDS_ONLY). Sekcje sprzed
 -- trybu testują przepływy rekrutacyjne, więc na czas testu włączamy RECRUITMENT jedyną drogą
 -- zmiany (RPC); sekcja CL1128 na końcu sprawdza tryb ogłoszeniowy i przywraca RECRUITMENT.
 select pg_temp.assert(not public.recruitment_enabled(), 'CL1128-0 świeża baza = tryb ogłoszeniowy');
@@ -17895,12 +17895,12 @@ select pg_temp.assert((select count(*) = 0 from public.get_conversation_template
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- CL1128 / PLM — tryb portalu ogłoszeniowego w bazie (#1140, #1143; migracja 0940)
+-- CL1128 / PLM — tryb portalu ogłoszeniowego w bazie (#1140, #1143; migracja 0171)
 -- Tryb ogłoszeniowy (CLASSIFIEDS_ONLY): nowe dane procesu rekrutacyjnego odrzucane przez
 -- bazę (RPC i bezpośredni INSERT, także service_role), firma nie widzi danych procesu,
 -- kandydat widzi własną historię. PLM: zmiana trybu tylko RPC service_role.
 -- ============================================================================
-\echo '--- CL1128 tryb ogłoszeniowy: blokada nowych danych rekrutacyjnych (0940) ---'
+\echo '--- CL1128 tryb ogłoszeniowy: blokada nowych danych rekrutacyjnych (0171) ---'
 \set CLO  'e9400000-0000-0000-0000-0000000000a1'
 \set CLC  'e9400000-0000-0000-0000-0000000000c1'
 \set CLC2 'e9400000-0000-0000-0000-0000000000c2'
@@ -18142,7 +18142,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ---------------- PLM: zmiana trybu (#1143) ----------------
-\echo '--- PLM zmiana trybu portalu: RPC service_role, uzasadnienie, CAS, audyt (0940) ---'
+\echo '--- PLM zmiana trybu portalu: RPC service_role, uzasadnienie, CAS, audyt (0171) ---'
 select count(*) as plm_audit0 from public.audit_logs where action = 'portal_legal_mode.changed' \gset
 set role authenticated; set app.current_uid = :'CLO'; select pg_temp.assert_client_role();
 select pg_temp.expect_error($$select public.admin_set_portal_legal_mode('RECRUITMENT', 'x', 'CLASSIFIEDS_ONLY')$$,

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0940 — tryb portalu w bazie (#1140, #1143). NUMER TYMCZASOWY (jak migracja).
+-- Rollback 0171 — tryb portalu w bazie (#1140, #1143).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/portal-legal-mode-rollback.sql wykonuje go w transakcji i cofa).

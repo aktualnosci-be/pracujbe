@@ -27,7 +27,7 @@ export type RespondResult = { ok: true } | { ok: false; error: ErrorCode };
 
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
-  // #1140 (0940): baza w trybie ogłoszeniowym odrzuca nowe dane procesu rekrutacyjnego.
+  // #1140 (0171): baza w trybie ogłoszeniowym odrzuca nowe dane procesu rekrutacyjnego.
   if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   if (m.includes('JOB_NOT_ACTIVE')) return 'JOB_NOT_ACTIVE';

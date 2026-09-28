@@ -49,7 +49,7 @@ identyfikatorów ani konfiguracji.
 | `mail_complaint_rising` | alarm | odsetek skarg 24 h > 0,1% i > 2× odsetka z 7 dób bazowych | nowa kampania/szablon |
 | `mail_suppressions_new` | alarm | > 20 nowych blokad adresów w 24 h | nagły skok odbić lub skarg |
 | `mail_suppressions_active` | ostrzeżenie | > 1000 aktywnych blokad | przegląd listy w `/admin/poczta` |
-| `portal_legal_mode_mismatch` | alarm | env `PORTAL_LEGAL_MODE` i tryb w bazie (`ops_metrics().portalLegalMode`, 0940) różnią się | zmieniono jeden klucz bez drugiego, odtworzona kopia; tryb efektywny i tak ogłoszeniowy — procedura w §6 |
+| `portal_legal_mode_mismatch` | alarm | env `PORTAL_LEGAL_MODE` i tryb w bazie (`ops_metrics().portalLegalMode`, 0171) różnią się | zmieniono jeden klucz bez drugiego, odtworzona kopia; tryb efektywny i tak ogłoszeniowy — procedura w §6 |
 
 Liczby pochodzą z `public.ops_metrics()` (migracja `0096`, `SECURITY DEFINER`,
 EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
@@ -270,7 +270,7 @@ izolowanego celu i sprawdzić jej zawartość.
          "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/db/test-backup.sh
    ```
 
-## 6. Tryb portalu (#1143, migracja `0940`)
+## 6. Tryb portalu (#1143, migracja `0171`)
 
 Decyzja produktowa: portal ogłoszeniowy. Funkcje rekrutacyjne (aplikacje, propozycje,
 dopasowania, wyszukiwanie profili, wiadomości, pytania screeningowe, aplikacje gości) działają

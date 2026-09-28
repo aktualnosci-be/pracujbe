@@ -2,7 +2,7 @@
  * Dwuklucz trybu portalu (#1143, epik #1128) — decyzja produktowa: portal ogłoszeniowy.
  *
  * Rekrutacja działa WYŁĄCZNIE, gdy oba klucze ją włączają: env `PORTAL_LEGAL_MODE=RECRUITMENT`
- * (`src/lib/portal-mode.ts`, #1136) ORAZ `recruitment_enabled()` w bazie (migracja 0940).
+ * (`src/lib/portal-mode.ts`, #1136) ORAZ `recruitment_enabled()` w bazie (migracja 0171).
  * Każda rozbieżność = tryb ogłoszeniowy; czujka `/api/health/ops` zgłasza ją jako alarm
  * `portal_legal_mode_mismatch` (monitoring widzi, że jeden klucz zmieniono bez drugiego).
  *
@@ -18,7 +18,7 @@ export function effectiveRecruitmentEnabled(envRecruitment: boolean, dbRecruitme
 
 /**
  * @param dbRecruitmentEnabled `ops_metrics().portalLegalMode.recruitmentEnabled` (0/1); brak
- *   sekcji (baza sprzed 0940) = tryb ogłoszeniowy bazy — fail-closed, jak `recruitment_enabled()`.
+ *   sekcji (baza sprzed 0171) = tryb ogłoszeniowy bazy — fail-closed, jak `recruitment_enabled()`.
  * @param envRecruitment klucz środowiskowy (`isRecruitmentEnabled()`).
  */
 export function portalLegalModeAlerts(

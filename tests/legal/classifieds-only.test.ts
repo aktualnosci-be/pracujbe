@@ -161,7 +161,7 @@ describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
 });
 
 /**
- * Baza (#1140/#1143, migracja 0940): tryb portalu w bazie, strażniki zapisu i dwuklucz.
+ * Baza (#1140/#1143, migracja 0171): tryb portalu w bazie, strażniki zapisu i dwuklucz.
  * RPC procesu rekrutacyjnego, które sekcja CL1128 w `supabase/tests/rls.sql` musi wywołać
  * w trybie ogłoszeniowym (każde z oczekiwanym odrzuceniem albo pustym wynikiem).
  */

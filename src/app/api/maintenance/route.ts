@@ -109,7 +109,7 @@ function retentionCounters(value: unknown): Record<string, number> {
 
 /**
  * Tryb efektywny dla zadań rekrutacyjnych (#1143): env `PORTAL_LEGAL_MODE=RECRUITMENT` (#1136)
- * ORAZ `recruitment_enabled()` w bazie (0940). Bez klucza env baza nie jest pytana.
+ * ORAZ `recruitment_enabled()` w bazie (0171). Bez klucza env baza nie jest pytana.
  * Błąd odczytu bazy = tryb ogłoszeniowy (fail-closed) i zapamiętany błąd (503 dla monitoringu).
  */
 async function recruitmentTasksEnabled(onError: (error: unknown) => void): Promise<boolean> {

@@ -1,5 +1,5 @@
 -- =============================================================================
--- CL1128-R — rollback migracji 0940 (#1140, #1143). Uruchamiany przez scripts/test-rls.sh
+-- CL1128-R — rollback migracji 0171 (#1140, #1143). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -13,7 +13,7 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
-\ir ../rollback/0940_portal_legal_mode.down.sql
+\ir ../rollback/0171_portal_legal_mode.down.sql
 select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is null
   and to_regprocedure('public.admin_set_portal_legal_mode(text, text, text)') is null
   and to_regclass('public.portal_legal_mode') is null
@@ -24,9 +24,9 @@ select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is null
   and position('recruitment_enabled' in pg_get_functiondef('public.get_job_match_profile(uuid)'::regprocedure)) = 0
   and not (public.ops_metrics() ? 'portalLegalMode')
   and (select count(*) from public.applications) = :clr_apps,
-  'CL1128-R rollback usuwa tylko obiekty 0940 i przywraca helpery sprzed trybu');
+  'CL1128-R rollback usuwa tylko obiekty 0171 i przywraca helpery sprzed trybu');
 rollback;
 select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is not null
   and to_regclass('public.portal_legal_mode') is not null,
   'CL1128-R2 rollback testu cofnięty');
-\echo 'CL1128-R rollback 0940: PASS'
+\echo 'CL1128-R rollback 0171: PASS'
