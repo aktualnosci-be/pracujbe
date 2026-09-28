@@ -163,6 +163,19 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
   (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
   segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
+- **AI tylko na treści ogłoszenia, billing bez dostępu do kandydatów (#1152/#1153, migracja `0176` — po 0175,
+  zależna od 0171):** inwentarz AI ma pole `allowedInClassifieds` (`true` tylko dla wejść z
+  `CLASSIFIEDS_ALLOWED_INPUTS` = treść ogłoszenia; strażnik `ai-inventory` z kontrolą ujemną); wspólna bramka
+  `isAiFeatureEnabled(id)` (`src/lib/ai/feature-gate.ts`) = flaga funkcji × tryb, użyta w konfiguracji importu
+  ogłoszeń, asystenta, tłumaczeń i kontroli treści (bez zmian zachowania w trybie ogłoszeniowym; import CV bramkuje
+  #1163). Tłumaczenie profili kandydatów = osobna funkcja `candidate_profile_translation` (`not_wired`, #34; budżet
+  AI rozlicza ją osobno, `translationFeatureFor`), worker odrzuca takie zadanie bez modelu (`recruitment_disabled`).
+  Baza: strażnik `trg_aa_recruitment_mode` na `translation_sources`/`_revisions`/`_jobs` odrzuca encję
+  `candidate_profile`, `claim_translation_jobs` jej nie wydaje (fail-closed), CHECK
+  `plan_entitlements_no_candidate_access` (`candidate_access` zawsze false). `isBillingEnabled()` = tryb `RECRUITMENT`
+  × `BILLING_ENABLED`. Usunięte martwe klucze `billing.standardFeat3`/`proFeat3`, `dashboard.featCvAccess`. Dowód:
+  `rls.sql` sekcja CLAIB (kontrole ujemne: rollback 0176, CHECK zdjęty), rollback `0176_…down.sql` (w
+  `portal-legal-mode-rollback.sql` przed 0173), unit `ai-feature-gate`, `ai-inventory`, `billing-disabled`.
 - **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0173`, na 0171):** w trybie
   ogłoszeniowym `set_candidate_searchable(true)` → `RECRUITMENT_DISABLED` (wyłączenie działa), strażnik
   `trg_aa_recruitment_mode_searchable` odrzuca `is_searchable = true` każdą ścieżką (wyjątek seedu jak w 0171),

@@ -3,6 +3,7 @@ import 'server-only';
 import { withAiUsageLog, type AiUsageOutcome, type AiUsageSink } from '@/lib/ai/usage-log';
 import { OpenAiTranslationProvider } from '@/lib/translation/openai-provider';
 import { translationProvider } from '@/lib/translation/config';
+import { translationFeatureFor } from '@/lib/translation/feature';
 import {
   FixtureTranslationProvider,
   TranslationProviderError,
@@ -42,7 +43,7 @@ export function withTranslationUsageLog(
   return {
     translate: (request) =>
       withAiUsageLog(
-        { feature: 'content_translation', inputKind: 'text', model },
+        { feature: translationFeatureFor(request.entityType), inputKind: 'text', model },
         () => provider.translate(request),
         classifyTranslationUsage,
         sink,
