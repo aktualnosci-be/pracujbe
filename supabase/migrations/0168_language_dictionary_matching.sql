@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0920_language_dictionary_matching.sql  (numer TYMCZASOWY — ostateczny nada integrator)
+-- 0168_language_dictionary_matching.sql
 --
 -- Języki ze słownika `public.languages` zamiast wolnego tekstu (audyt I18N-02 / CF-02,
 -- część LIM17-05). Dotąd kandydat w UI PL zapisywał „niderlandzki”, firma w UI NL wymagała

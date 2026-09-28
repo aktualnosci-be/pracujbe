@@ -221,7 +221,7 @@ export default async function JobDetailPage({ params }: PageProps) {
     // #492: próg deklaracji wieku w formularzu gościa (dane z bazy, odczyt bez cookies — ISR).
     job.isDemo ? Promise.resolve(undefined) : getCandidateMinAge(),
   ]);
-  // I18N-02: wymagane języki w języku widza (kod słownika 0920 / nazwa PL-NL-FR-EN), a nie
+  // I18N-02: wymagane języki w języku widza (kod słownika 0168 / nazwa PL-NL-FR-EN), a nie
   // etykieta w języku pracodawcy; stary wpis spoza słownika bez zmian.
   const languageNames = job.languages.map((l) => languageDisplayName(l, (code) => tLang(code))).join(', ');
 
@@ -386,6 +386,16 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-success-text">
                   <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {t('verified')}
+                </span>
+              ) : null}
+              {job.isAgency ? (
+                // 0167: oferta agencji pracy tymczasowej (deklaracja firmy).
+                <span
+                  data-testid="job-detail-agency"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+                >
+                  <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  {tJobs('agencyBadge')}
                 </span>
               ) : null}
             </p>

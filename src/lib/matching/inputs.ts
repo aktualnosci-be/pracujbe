@@ -44,7 +44,7 @@ function asIsoDate(value: unknown): string {
 }
 /**
  * Języki z poziomem: wiersze relacji {language_label, level, language_code} albo jsonb
- * {label, level, code} z RPC. Kod ze słownika (0920) decyduje o dopasowaniu; bez kodu
+ * {label, level, code} z RPC. Kod ze słownika (0168) decyduje o dopasowaniu; bez kodu
  * (stary wpis) — etykieta.
  */
 function languagesFrom(rows: unknown, labelField: string, codeField: string): LanguageEntry[] {

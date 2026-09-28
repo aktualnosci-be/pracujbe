@@ -327,6 +327,13 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'screening_question.review_requested': 'auditActionScreeningRequested',
   'screening_question.reviewed': 'auditActionScreeningReviewed',
   'screening_question.hidden': 'auditActionScreeningHidden',
+  // 0167: zaufanie ofert.
+  'job_content.review_requested': 'auditActionJobContentRequested',
+  'job_content.ai_flagged': 'auditActionJobContentAiFlagged',
+  'job_content.reviewed': 'auditActionJobContentReviewed',
+  'job.paused_for_content_review': 'auditActionJobPausedForReview',
+  'company.agency_changed': 'auditActionCompanyAgencyChanged',
+  'company.agency_checked': 'auditActionCompanyAgencyChecked',
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
   'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',

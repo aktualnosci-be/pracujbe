@@ -72,7 +72,7 @@ async function verifyEmail(id: string) {
 /** Zaproszenie przez akcję (owner/admin) i przyjęcie przez adresata (zweryfikowany e-mail). */
 async function join(inviter: string, invitee: string, role: 'admin' | 'recruiter' | 'member') {
   actAs(as(inviter));
-  expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role, locale: 'pl' })).toEqual({ ok: true });
+  expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role, locale: 'pl' }, companyA)).toEqual({ ok: true });
   const [inv] = await admin(`SELECT id FROM public.company_invitations
     WHERE email = $1 AND status = 'pending'`, [`${invitee}@example.invalid`]);
   actAs(as(invitee));
@@ -184,12 +184,12 @@ describe('firma (#25)', () => {
 
   it('requestCompanyReverification: tylko odrzucona firma i tylko owner/admin', async () => {
     actAs(as(ownerA));
-    expect(await company.requestCompanyReverification()).toEqual({ ok: false, error: 'INVALID_TRANSITION' });
+    expect(await company.requestCompanyReverification(companyA)).toEqual({ ok: false, error: 'INVALID_TRANSITION' });
     await admin("UPDATE public.companies SET status = 'rejected' WHERE id = $1", [companyA]);
     actAs(as(memberA));
-    expect(await company.requestCompanyReverification()).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await company.requestCompanyReverification(companyA)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     actAs(as(ownerA));
-    expect(await company.requestCompanyReverification()).toEqual({ ok: true });
+    expect(await company.requestCompanyReverification(companyA)).toEqual({ ok: true });
     expect(await admin('SELECT status FROM public.companies WHERE id = $1', [companyA])).toEqual([{ status: 'pending' }]);
   });
 
@@ -233,6 +233,36 @@ describe('firma (#25)', () => {
     cookieJar.clear();
   });
 
+  it('EMP-02: akcje z widoku firmy A po przełączeniu aktywnej firmy (inna karta) nie piszą do nowej', async () => {
+    actAs(as(ownerA));
+    const [other] = await admin(`SELECT m.company_id FROM public.company_members m
+      WHERE m.profile_id = $1 AND m.company_id <> $2 AND m.is_active ORDER BY m.created_at LIMIT 1`, [ownerA, companyA]);
+    const otherId = other!['company_id'] as string;
+    expect(await company.setActiveCompany(otherId)).toEqual({ ok: true });
+    const jobsBefore = await admin('SELECT count(*)::int AS n FROM public.jobs WHERE company_id IN ($1, $2)', [companyA, otherId]);
+
+    // Kreator, zaproszenie i ponowna weryfikacja wyrenderowane dla companyA.
+    expect(await jobs.createJobDraft('pl', companyA)).toEqual({ ok: false, error: 'ACTIVE_COMPANY_CHANGED' });
+    expect(await team.inviteTeamMember({ email: 'emp02@example.invalid', role: 'admin', locale: 'pl' }, companyA))
+      .toEqual({ ok: false, error: 'ACTIVE_COMPANY_CHANGED' });
+    expect(await company.requestCompanyReverification(companyA)).toEqual({ ok: false, error: 'ACTIVE_COMPANY_CHANGED' });
+
+    expect(await admin('SELECT count(*)::int AS n FROM public.jobs WHERE company_id IN ($1, $2)', [companyA, otherId]))
+      .toEqual(jobsBefore);
+    expect(await admin("SELECT company_id FROM public.company_invitations WHERE email = 'emp02@example.invalid'"))
+      .toEqual([]);
+
+    // Kontrola: widok nowej aktywnej firmy tworzy szkic właśnie w niej.
+    const draft = await jobs.createJobDraft('pl', otherId);
+    expect(draft).toMatchObject({ ok: true });
+    expect(await admin('SELECT company_id FROM public.jobs WHERE id = $1', [(draft as { id: string }).id]))
+      .toEqual([{ company_id: otherId }]);
+    await admin('DELETE FROM public.jobs WHERE id = $1', [(draft as { id: string }).id]);
+
+    expect(await company.setActiveCompany(companyA)).toEqual({ ok: true });
+    cookieJar.clear();
+  });
+
   it('decyzje moderacyjne: odczyt RPC pod sesją (owner — pusta lista, gość — błąd)', async () => {
     actAs(as(ownerA));
     expect(await getCompanyModerationDecisions(companyA)).toEqual({ status: 'ok', decisions: [] });
@@ -244,10 +274,10 @@ describe('firma (#25)', () => {
 describe('kreator ofert (#25)', () => {
   it('member nie tworzy szkicu (RLS insert recruiter+); recruiter tworzy szkic aktywnej firmy', async () => {
     actAs(as(memberA));
-    expect(await jobs.createJobDraft('pl')).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(await jobs.createJobDraft('pl', companyA)).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
 
     actAs(as(recruiterA));
-    const draft = await jobs.createJobDraft('nl');
+    const draft = await jobs.createJobDraft('nl', companyA);
     expect(draft).toMatchObject({ ok: true });
     draftA = (draft as { id: string }).id;
     expect(await admin('SELECT company_id, created_by, status, default_locale FROM public.jobs WHERE id = $1', [draftA]))
@@ -326,16 +356,19 @@ describe('kreator ofert (#25)', () => {
     process.env.AI_JOB_IMPORT_PROVIDER = 'fixture';
     try {
       const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
-      const form = () => {
+      const form = (companyId: string = companyA) => {
         const fd = new FormData();
         fd.set('mode', 'image');
         fd.set('file', new File([Buffer.from(png)], 'ad.png', { type: 'image/png' }));
+        fd.set('companyId', companyId);
         return fd;
       };
       actAs(as(memberA));
       expect(await importJobListing(form(), 'nl')).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
 
       actAs(as(recruiterA));
+      // EMP-02: kreator wyrenderowany dla innej firmy niż aktywna — bez importu i bez szkicu.
+      expect(await importJobListing(form(companyB), 'nl')).toEqual({ ok: false, error: 'ACTIVE_COMPANY_CHANGED' });
       const res = await importJobListing(form(), 'nl');
       expect(res).toMatchObject({ ok: true });
       const { jobId, savedSteps } = res as { jobId: string; savedSteps: number[] };
@@ -355,9 +388,9 @@ describe('zespół — hierarchia ról (#25)', () => {
 
   it('getTeamPageData: owner widzi zespół i zaproszenia; member — tylko własną rolę', async () => {
     actAs(as(ownerA));
-    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member', locale: 'pl' })).toEqual({ ok: true });
+    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member', locale: 'pl' }, companyA)).toEqual({ ok: true });
     // Powtórka zaproszenia na ten sam adres — idempotentnie jedno oczekujące.
-    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member', locale: 'pl' })).toEqual({ ok: true });
+    expect(await team.inviteTeamMember({ email: 'nowa@example.invalid', role: 'member', locale: 'pl' }, companyA)).toEqual({ ok: true });
     const data = await getTeamPageData();
     expect(data).toMatchObject({ status: 'ok', demo: false, activeRole: 'owner' });
     if (data.status !== 'ok') return;
@@ -377,7 +410,7 @@ describe('zespół — hierarchia ról (#25)', () => {
     const invitee = await realSession.db!.createUser('employer');
     await verifyEmail(invitee);
     actAs(as(ownerB));
-    expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role: 'recruiter', locale: 'pl' })).toEqual({ ok: true });
+    expect(await team.inviteTeamMember({ email: `${invitee}@example.invalid`, role: 'recruiter', locale: 'pl' }, companyB)).toEqual({ ok: true });
     actAs(as(invitee));
     expect(await getMyTeamInvitations()).toMatchObject({
       status: 'ok', invitations: [{ companyName: 'Firma B Nowa', role: 'recruiter' }],
@@ -398,7 +431,7 @@ describe('zespół — hierarchia ról (#25)', () => {
     expect(await team.setTeamMemberRole(recruiterRow, 'member')).toEqual({ ok: true });
     expect(await team.setTeamMemberRole(recruiterRow, 'admin')).toMatchObject({ ok: false });
     expect(await team.setTeamMemberActive(ownerRow, false)).toMatchObject({ ok: false });
-    expect(await team.inviteTeamMember({ email: 'adm@example.invalid', role: 'admin', locale: 'pl' })).toMatchObject({ ok: false });
+    expect(await team.inviteTeamMember({ email: 'adm@example.invalid', role: 'admin', locale: 'pl' }, companyA)).toMatchObject({ ok: false });
     actAs(as(memberA));
     // RPC nie ujawnia członków komuś bez prawa zarządzania (NOT_FOUND), stan bez zmian.
     expect(await team.setTeamMemberRole(recruiterRow, 'recruiter')).toEqual({ ok: false, error: 'NOT_FOUND' });

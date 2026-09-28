@@ -1,8 +1,8 @@
 import { searchFold } from '@/lib/search-fold';
 
 /**
- * Słownik języków (I18N-02/CF-02, migracja 0920) — lustro `public.languages` (0010)
- * i `public.language_aliases` (0920). Czysty moduł bez I/O: działa w przeglądarce
+ * Słownik języków (I18N-02/CF-02, migracja 0168) — lustro `public.languages` (0010)
+ * i `public.language_aliases` (0168). Czysty moduł bez I/O: działa w przeglądarce
  * (wybór w onboardingu/kreatorze), w matchingu i na serwerze.
  *
  * Pozycja języka w formularzach i w payloadach RPC (`{ language, level }`) to KOD ze słownika

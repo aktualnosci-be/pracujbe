@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OnboardingWizard } from '@/components/candidate/OnboardingWizard';
 
 /**
- * I18N-02 / CF-02 (0920): krok 5 onboardingu wybiera język ze słownika (kod ISO), a nie
+ * I18N-02 / CF-02 (0168): krok 5 onboardingu wybiera język ze słownika (kod ISO), a nie
  * wpisuje wolny tekst. Stary wpis rozpoznany z nazwy pokazuje nazwę słownikową i nie daje
  * duplikatu; wpis spoza słownika zostaje etykietą (bez utraty danych).
  */
@@ -61,7 +61,7 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-describe('OnboardingWizard krok 5: języki ze słownika (0920)', () => {
+describe('OnboardingWizard krok 5: języki ze słownika (0168)', () => {
   it('lista zamiast pola tekstowego; stary wpis rozpoznany → nazwa słownikowa, spoza słownika → etykieta', () => {
     render(<OnboardingWizard initialValues={INITIAL} initialStep={5} />);
     expect(screen.queryByRole('textbox', { name: 'languagesLabel' })).toBeNull();

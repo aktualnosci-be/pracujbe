@@ -14,9 +14,10 @@ import { requestCompanyReverification } from '@/lib/actions/company';
 /**
  * Ponowne zgłoszenie odrzuconej firmy do weryfikacji (#400). Blokada przycisku podczas
  * zapisu, komunikat błędu z klucza i18n, jasny sukces i odświeżenie widoku (status
- * `pending` → baner „czeka na weryfikację").
+ * `pending` → baner „czeka na weryfikację"). `companyId` = firma widoku: serwer odrzuca
+ * zgłoszenie, gdy aktywna firma zmieniła się w innej karcie (EMP-02).
  */
-export function CompanyReverifyButton(): React.JSX.Element {
+export function CompanyReverifyButton({ companyId }: { companyId: string }): React.JSX.Element {
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -30,7 +31,7 @@ export function CompanyReverifyButton(): React.JSX.Element {
     setPending(true);
     setError(null);
     try {
-      const result = await requestCompanyReverification();
+      const result = await requestCompanyReverification(companyId);
       if (!result.ok) {
         setError(result.error);
         return;

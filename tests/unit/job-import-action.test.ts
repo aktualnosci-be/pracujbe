@@ -25,7 +25,16 @@ vi.mock('@/lib/env', () => ({
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
-vi.mock('@/lib/company-context', () => ({ getActiveCompany: vi.fn() }));
+vi.mock('@/lib/company-context', async () => {
+  // Prawdziwa reguła „firma widoku == aktywna” (EMP-02); atrapa tylko odczytu aktywnej firmy.
+  const actual = await vi.importActual<typeof import('@/lib/company-context')>('@/lib/company-context');
+  const getActiveCompany = vi.fn();
+  return {
+    getActiveCompany,
+    getExpectedActiveCompany: async (tx: never, userId: string, expected: unknown) =>
+      actual.matchExpectedCompany(await getActiveCompany(tx, userId), expected),
+  };
+});
 vi.mock('@/lib/actions/jobs', () => ({ createJobDraft: vi.fn() }));
 vi.mock('@/lib/ai-import/extract', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/lib/ai-import/extract')>();
@@ -81,9 +90,10 @@ const GOOD = {
   contactEmail: '',
 };
 
-function imageForm(bytes: Uint8Array = PNG, type = 'image/png'): FormData {
+function imageForm(bytes: Uint8Array = PNG, type = 'image/png', companyId: string | null = COMPANY): FormData {
   const fd = new FormData();
   fd.set('mode', 'image');
+  if (companyId !== null) fd.set('companyId', companyId);
   fd.set('file', new File([Buffer.from(bytes)], 'ad.png', { type }));
   return fd;
 }
@@ -92,6 +102,7 @@ function urlForm(url: string): FormData {
   const fd = new FormData();
   fd.set('mode', 'url');
   fd.set('url', url);
+  fd.set('companyId', COMPANY);
   return fd;
 }
 
@@ -174,6 +185,21 @@ describe('autoryzacja i limity', () => {
     expect(extract).not.toHaveBeenCalled();
   });
 
+  it('EMP-02 KONTROLA UJEMNA: formularz innej firmy albo bez firmy — bez wywołania AI i bez szkicu', async () => {
+    const OTHER = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+    expect(await importJobListing(imageForm(PNG, 'image/png', OTHER))).toEqual({
+      ok: false,
+      error: 'ACTIVE_COMPANY_CHANGED',
+    });
+    expect(await importJobListing(imageForm(PNG, 'image/png', null))).toEqual({
+      ok: false,
+      error: 'ACTIVE_COMPANY_CHANGED',
+    });
+    expect(extract).not.toHaveBeenCalled();
+    expect(createJobDraft).not.toHaveBeenCalled();
+    expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
   it('limit per firma (bez IP w kluczu); przekroczenie = brak wywołania AI', async () => {
     await importJobListing(imageForm());
     expect(checkRateLimit).toHaveBeenCalledWith('job-import', expect.objectContaining({ identifier: COMPANY, perIp: false }));
@@ -235,7 +261,7 @@ describe('wynik i zapis szkicu', () => {
       review: ['category'],
       values: { title: 'Heftruckchauffeur (m/v/x)', city: 'Gent' },
     });
-    expect(createJobDraft).toHaveBeenCalledWith('nl');
+    expect(createJobDraft).toHaveBeenCalledWith('nl', COMPANY);
     // Poza rezerwacją/rozliczeniem budżetu AI (#36, service_role) — jedno RPC zapisu.
     const rpcCalls = fakeDb.calls.filter(
       (c) => (c.kind === 'rpc' || c.kind === 'rpcrows') && !c.name.startsWith('ai_budget_'),

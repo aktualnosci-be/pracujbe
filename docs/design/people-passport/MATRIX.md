@@ -34,7 +34,7 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium node scripts/design/compare-p
 | Grupa | Ekran prototypu | Trasa aplikacji | % różnicy 1280 | % różnicy 390 | style 1280 | style 390 | Status | Uzasadnienie / odstępstwa |
 |---|---|---|---|---|---|---|---|---|
 | public | `home` | `/pl` | 7.6% | 10.7% | 100% | 100% | ~ | Różnice = teksty aplikacji („Zaloguj się”, podpis zdjęcia), stany demo i sekcje spoza prototypu pod „W czym jesteś dobry?”. ([#484](https://github.com/aktualnosci-be/pracujbe/pull/484)) |
-| public | `jobs` | `/pl/oferty-pracy` | 7.3% | 16.3% | 100% | 98% | ~ | Nagłówek i wyszukiwarka = kalka; panel filtrów = `.p-list-layout` 190/165 px i `.people .filters` (Z3). Różnica: dane demo, baner demo, breadcrumb, opis pod H1, liczniki i „Pokaż więcej” w filtrach (funkcje aplikacji); 390 px — H1 w jednym wierszu zamiast dwóch (krótszy tekst). |
+| public | `jobs` | `/pl/oferty-pracy` | 7.3% | 16.3% | 100% | 98% | ~ | Nagłówek i wyszukiwarka = kalka; panel filtrów = `.p-list-layout` 280/220 px (prototyp 190/165 px, decyzja właściciela 2026-09-28) i `.people .filters` (Z3). Różnica: dane demo, baner demo, breadcrumb, opis pod H1, liczniki i „Pokaż więcej” w filtrach (funkcje aplikacji); 390 px — H1 w jednym wierszu zamiast dwóch (krótszy tekst). |
 | public | `detail` | `/pl/oferty-pracy/[slug]` | 7.6% | 15.4% | 94% | 89% | ~ | `offer-layout` prototypu (Z2): nadtytuł „kategoria / miasto”, H1 `.extended`, karta-paszport, treść w `.paper`, panel 300 px „Twój następny krok” (`.btn` + `.btn.secondary`). Różnice: „przyciskiem głównym” prototypu jest CTA karty (12 px), kotwice sekcji, dopasowanie, kontakt i podobne oferty w panelu, dolny pasek aplikowania < 1024 px (prototyp: panel pod treścią < 950 px). |
 | public | `jobs` | `/pl/praca` | — | — | 94% | 94% | ✓ | Brak ekranu; nagłówek `.pp-page-title` = `.p-list-header h1` (ten PR). Bez nadtytułu (treść bez odpowiednika). |
 | public | `jobs` | `/pl/praca/kategoria/logistics` | — | — | 94% | 94% | ✓ | jw. |
@@ -164,7 +164,8 @@ favicon prototypu (`#C23D22`, Arial) był szkicem kierunku i nie jest wzorcem.
   (także w dolnym pasku). Zostają: kotwice sekcji (#3), dopasowanie, kontakt, podobne oferty,
   zgłoszenie DSA, dolny pasek < 1024 px.
 - ~~**Z3 — panel filtrów listy**~~ — zrobione (pomiar 2026-09-25): kolumna 190 px (≤ 1050 px:
-  165 px, odstęp 32/24 px), linia `--pp-line-data` (#e8e8e8), h3 15 px/700 bez wersalików,
+  165 px, odstęp 32/24 px; od 2026-09-28 świadomie 280/220 px, lista pól bez systemowego paska —
+  `.pp-filter-scroll`, cień u krawędzi), linia `--pp-line-data` (#e8e8e8), h3 15 px/700 bez wersalików,
   etykiety 13 px, checkbox 16 px, przełącznik jednostki i „Pokaż N ofert” w geometrii `.btn`.
   Liczniki, wyszukiwarka miejscowości i „Pokaż więcej” zostają (funkcje aplikacji, #188/#216).
   Panel boczny od 1024 px, poniżej — arkusz filtrów (jak dotąd); 200% tekstu = arkusz.

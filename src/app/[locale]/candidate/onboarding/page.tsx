@@ -90,7 +90,7 @@ async function loadInitialValues(): Promise<LoadResult> {
       if (!c?.id) return { p, c, relations: null };
       const skills = await queryRows<{ skill_label: string }>(tx, 'onboarding.load-skills',
         'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1', [c.id]);
-      // Kod ze słownika (0920) zamiast etykiety; stary wpis spoza słownika zostaje etykietą.
+      // Kod ze słownika (0168) zamiast etykiety; stary wpis spoza słownika zostaje etykietą.
       const langs = await queryRows<{ language_label: string; level: string; language_code: string | null }>(
         tx, 'onboarding.load-languages',
         `SELECT cl.language_label, cl.level, lg.code AS language_code

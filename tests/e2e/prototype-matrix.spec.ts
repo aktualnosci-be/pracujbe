@@ -14,8 +14,9 @@ import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
  * - Z2: szczegół oferty = `.offer-page` + `.offer-layout` (treść + panel 300 px): nadtytuł
  *   „kategoria / miasto”, H1 `.extended` 40/30 px, karta `.job-passport` (promień 24 px),
  *   treść w `.paper` (h2 23 px), panel „Twój następny krok” z `.btn` i `.btn.secondary`.
- * - Z3: panel filtrów listy ofert = `.p-list-layout` (kolumna 190 px, ≤ 1050 px: 165 px) i
- *   `.people .filters` (h3 15 px/700, etykiety 13 px, linia #e8e8e8).
+ * - Z3: panel filtrów listy ofert = `.p-list-layout` (kolumna 280 px, ≤ 1050 px: 220 px — szersza
+ *   niż prototyp 190/165 px, decyzja właściciela 2026-09-28) i `.people .filters` (h3 15 px/700,
+ *   etykiety 13 px, linia #e8e8e8); lista pól bez systemowego paska przewijania.
  * - Z4: strony auth = nagłówek witryny `.pp-nav` + `.extended h1` (40/30 px, 750) + karta
  *   `.paper` (promień 22 px) z przyciskiem `.people .btn`.
  *
@@ -110,7 +111,7 @@ for (const locale of LOCALES) {
 
 for (const locale of LOCALES) {
   test(`Z3: panel filtrów = .p-list-layout + .people .filters (${locale})`, async ({ page }) => {
-    for (const [width, column] of [[1280, 190], [1040, 165]] as const) {
+    for (const [width, column] of [[1280, 280], [1040, 220]] as const) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/${locale}/oferty-pracy`);
       if (width === 1280) await rejectOptionalCookies(page, locale);
@@ -120,6 +121,12 @@ for (const locale of LOCALES) {
       expect(Math.abs((box?.width ?? 0) - column), `${width} px: szerokość kolumny`).toBeLessThanOrEqual(1);
       await expectStyle(panel.locator('h3').first(), { fontSize: '15px', fontWeight: '700', textTransform: 'none' }, 'h3');
       await expectStyle(panel.locator('[data-filter-target="checkbox-label"]').first(), { fontSize: '13px' }, 'etykieta');
+      // Pasek przewijania nie zabiera szerokości kolumny (lista nadal przewijalna).
+      const scroll = await panel.locator('[data-filter-scroll="desktop"]').evaluate((el) => ({
+        scrollbarWidth: getComputedStyle(el).scrollbarWidth,
+        overflowY: getComputedStyle(el).overflowY,
+      }));
+      expect(scroll, `${width} px: lista filtrów`).toEqual({ scrollbarWidth: 'none', overflowY: 'auto' });
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `${width} px: poziome przewijanie`).toBeLessThanOrEqual(0);
     }

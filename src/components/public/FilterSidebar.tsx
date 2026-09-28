@@ -540,6 +540,13 @@ export function FilterFields({
           checked={value.noLanguageRequired}
           onChange={(checked) => patch({ noLanguageRequired: checked })}
         />
+        <CheckRow
+          id={`${idPrefix}-direct`}
+          label={t('directOnly')}
+          count={facets.direct}
+          checked={value.directOnly}
+          onChange={(checked) => patch({ directOnly: checked })}
+        />
       </section>
 
       {/* Data dodania */}
@@ -685,10 +692,11 @@ export function FilterSidebar({
         </button>
       </div>
 
-      {/* Pola przewijają się wewnątrz panelu; zatwierdzenie zostaje widoczne pod nimi (#216). */}
+      {/* Pola przewijają się wewnątrz panelu; zatwierdzenie zostaje widoczne pod nimi (#216).
+          `.pp-filter-scroll`: bez paska systemowego, cień u krawędzi sygnalizuje dalszą treść. */}
       <div
         data-filter-scroll="desktop"
-        className="-mx-1 min-h-0 flex-1 overflow-y-auto border-b border-border px-1 pb-5 pt-1"
+        className="pp-filter-scroll -mx-1 min-h-0 flex-1 overflow-y-auto border-b border-border px-1 pb-5 pt-1"
       >
         <FilterFields
           facets={liveFacets.facets}

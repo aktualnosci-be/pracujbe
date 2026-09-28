@@ -339,7 +339,7 @@ export function OnboardingWizard({
   const [demoSaved, setDemoSaved] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);
 
-  // Roboczy wiersz dodawania języka: kod ze słownika (0920), nie wolny tekst (I18N-02).
+  // Roboczy wiersz dodawania języka: kod ze słownika (0168), nie wolny tekst (I18N-02).
   const [langDraft, setLangDraft] = React.useState('');
   const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
   const [langError, setLangError] = React.useState(false);

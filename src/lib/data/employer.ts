@@ -716,7 +716,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         languages: languages
           .map((r) => asRecord(r))
           .map((r) => ({
-            // Kod ze słownika (0920); stary wpis spoza słownika zostaje etykietą.
+            // Kod ze słownika (0168); stary wpis spoza słownika zostaje etykietą.
             language: asString(r['language_code']) || asString(r['language_label']),
             level: asString(r['level'], 'basic'),
           }))

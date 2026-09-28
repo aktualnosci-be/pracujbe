@@ -113,11 +113,11 @@ Import można powtarzać: ten sam manifest daje status `repeat` i zero zmian.
    Import nie wymaga wdrożenia aplikacji ani flagi — dopasowanie nadal działa na etykietach,
    dopóki nie wejdzie etap 2.
 
-**Etap 2 (osobny PR, nie w 0920):** podpowiedzi zawodów/umiejętności z `occupation_labels`/
+**Etap 2 (osobny PR, nie w 0168):** podpowiedzi zawodów/umiejętności z `occupation_labels`/
 `skill_labels` w onboardingu i kreatorze (zapis id ESCO obok etykiety), dopasowanie po id,
 a dla starych etykiet — propozycja mapowania przez OpenAI (za flagą, `withAiBudget`)
 zatwierdzana przez człowieka; AI nie wpływa na wynik dopasowania. Języki są już słownikiem
-(`public.languages` + `language_aliases`, migracja 0920) — bez ESCO.
+(`public.languages` + `language_aliases`, migracja 0168) — bez ESCO.
 
 Parser i sumy kontrolne sprawdziły tylko fragment testowy zbudowany z API ESCO
 (niżej). Nazwy kolumn oficjalnych CSV v1.2.1 nie zostały porównane z prawdziwymi

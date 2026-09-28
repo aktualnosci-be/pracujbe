@@ -180,7 +180,22 @@
     "targetUnavailableTitle": "Dit bedrijf is niet meer beschikbaar vanaf je account",
     "targetUnavailableHint": "Je hebt geen actieve toegang meer tot dit bedrijf, of de link is ongeldig.",
     "targetSwitchAction": "Instellen als actief bedrijf",
-    "targetSwitchError": "Het actieve bedrijf wisselen is niet gelukt. Probeer het opnieuw."
+    "targetSwitchError": "Het actieve bedrijf wisselen is niet gelukt. Probeer het opnieuw.",
+    "agencyTitle": "Uitzendbureau",
+    "agencySubtitle": "Is je bedrijf een uitzendbureau? Vink dit aan en vul het erkenningsnummer van het gewest in. De vacatures van je bedrijf krijgen het label uitzendbureau. Het team van het portaal controleert het nummer.",
+    "agencyLabel": "Het bedrijf is een uitzendbureau",
+    "agencyNumberLabel": "Erkenningsnummer van het gewest",
+    "agencyNumberHint": "Het nummer uit de erkenningsbeslissing (Vlaanderen, Wallonië, Brussel of de Duitstalige Gemeenschap).",
+    "agencyNumberRequired": "Vul het erkenningsnummer in.",
+    "agencyNumberTooLong": "Het nummer mag maximaal {max} tekens hebben.",
+    "agencyCheckUnchecked": "Het nummer wacht op controle door het team van het portaal.",
+    "agencyCheckConfirmed": "Het team van het portaal heeft het nummer in het register van het gewest bevestigd.",
+    "agencyCheckNotConfirmed": "Het team van het portaal kon het nummer niet bevestigen in het register van het gewest. Controleer het nummer en sla het opnieuw op.",
+    "agencySaved": "Opgeslagen. Het team van het portaal controleert het nummer.",
+    "agencyUnchanged": "Geen wijzigingen.",
+    "agencyDemoNotice": "Demomodus — er is niets opgeslagen.",
+    "agencySaving": "Opslaan…",
+    "agencySubmit": "Opslaan"
   },
   "companyProfile": {
     "metaTitle": "Vacatures bij {name}",
@@ -391,7 +406,8 @@
     "demoNoticeBody": "De site draait als demoversie. De vacatures en bedrijven op deze pagina zijn fictief, worden niet geverifieerd en je kunt er niet op solliciteren.",
     "demoBadge": "Voorbeeldvacature",
     "machineTranslatedBadge": "Automatische vertaling",
-    "translatedBadge": "Vertaald"
+    "translatedBadge": "Vertaald",
+    "agencyBadge": "Uitzendbureau"
   },
   "job": {
     "apply": "Solliciteer op deze functie",
@@ -676,6 +692,7 @@
     "rateLimited": "Te veel pogingen. Wacht even en probeer opnieuw.",
     "companyNotVerified": "Je bedrijf is nog niet geverifieerd.",
     "companySuspended": "Je bedrijf is geschorst, dus je kunt geen nieuwe vacatures aanmaken.",
+    "activeCompanyChanged": "Het actieve bedrijf is gewijzigd nadat je deze pagina opende (bijvoorbeeld in een ander tabblad). Er is niets opgeslagen. Vernieuw de pagina en controleer voor welk bedrijf je de wijziging doet.",
     "onboardingIncomplete": "Vul alle vereiste profielvelden in om de configuratie te voltooien.",
     "jobNotDraft": "Deze vacature is al geplaatst. Pas ze aan met „Bewerken” in de vacaturelijst.",
     "billingUnavailable": "Betalingen zijn tijdelijk niet beschikbaar. Probeer het later opnieuw.",
@@ -725,7 +742,9 @@
     "cvImportUncertain": "Het cv kan contactgegevens van andere personen bevatten die we niet veilig kunnen verwijderen, daarom is niets verzonden. Verwijder ze uit het bestand of vul je profiel handmatig in.",
     "cvImportNotACv": "Dit bestand lijkt geen cv. Vul je profiel handmatig in of kies een ander bestand.",
     "cvImportNoProposals": "We vonden in het cv niets om voor te stellen. Vul je profiel handmatig in.",
-    "cvImportFailed": "We konden geen voorstellen voorbereiden. Probeer het later opnieuw of vul je profiel handmatig in."
+    "cvImportFailed": "We konden geen voorstellen voorbereiden. Probeer het later opnieuw of vul je profiel handmatig in.",
+    "jobContentReviewRequired": "De inhoud van de vacature moet eerst door het team van het portaal worden nagekeken. Je kunt ze publiceren na goedkeuring of na aanpassing van de tekst.",
+    "jobContentRejected": "De inhoud van de vacature is niet goedgekeurd. Pas ze aan om de vacature te publiceren."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1283,7 +1302,8 @@
     "removeFilter": "Filter verwijderen",
     "showLess": "Minder tonen",
     "noLocations": "Geen locaties",
-    "close": "Sluiten"
+    "close": "Sluiten",
+    "directOnly": "Rechtstreeks bij de werkgever"
   },
   "notifications": {
     "title": "Meldingen",
@@ -1331,7 +1351,9 @@
     "listEnd": "Dat zijn al je meldingen.",
     "moreError": "Meer meldingen laden is mislukt. Probeer het opnieuw.",
     "itemCompanyLinksApproved": "Website en logo van het bedrijf goedgekeurd",
-    "itemCompanyLinksRejected": "Website en logo van het bedrijf niet goedgekeurd"
+    "itemCompanyLinksRejected": "Website en logo van het bedrijf niet goedgekeurd",
+    "itemJobContentApproved": "De inhoud van je vacature is goedgekeurd",
+    "itemJobContentRejected": "De inhoud van je vacature is niet goedgekeurd"
   },
   "pricing": {
     "standard": "Standaard",
@@ -2674,7 +2696,54 @@
     "userApplications": "Sollicitaties",
     "userOffers": "Ontvangen voorstellen",
     "userYes": "Ja",
-    "userNo": "Nee"
+    "userNo": "Nee",
+    "navJobContent": "Inhoud vacatures",
+    "jobContentTitle": "Controle van vacatureteksten",
+    "jobContentSubtitle": "Vacatures met een signaal van de regels of van de AI-analyse. Tot de beslissing wordt de vacature niet gepubliceerd of hervat.",
+    "jobContentEmpty": "Geen teksten om na te kijken.",
+    "jobContentNotCurrent": "Tekst al gewijzigd",
+    "jobContentSourceRules": "Regels",
+    "jobContentSourceAi": "AI-analyse",
+    "jobContentAiConfidence": "zekerheid {value}%",
+    "jobContentAiReason": "Motivering AI",
+    "jobContentTexts": "Tekst van de vacature bij de melding",
+    "jobContentApproved": "Tekst goedgekeurd.",
+    "jobContentRejected": "Tekst afgewezen.",
+    "jobContentActionApprove": "Goedkeuren",
+    "jobContentActionReject": "Afwijzen",
+    "jobContentApproveConfirmTitle": "Tekst van de vacature goedkeuren?",
+    "jobContentRejectConfirmTitle": "Tekst van de vacature afwijzen?",
+    "jobContentApproveConfirmHint": "Goedkeuring publiceert de vacature niet — het bedrijf publiceert of hervat ze.",
+    "jobContentRejectConfirmHint": "Het bedrijf ziet de motivering in de vacaturewizard.",
+    "jobContentColJob": "Vacature",
+    "jobContentColCategories": "Signalen",
+    "jobContentReasonOptionalLabel": "Motivering (optioneel)",
+    "jobContentReasonHint": "Maximaal {max} tekens.",
+    "sectionAgency": "Uitzendbureau",
+    "agencyStatusUnchecked": "Te controleren",
+    "agencyStatusConfirmed": "Nummer bevestigd",
+    "agencyStatusNotConfirmed": "Niet bevestigd",
+    "agencyCheckNumber": "Erkenningsnummer",
+    "agencyCheckedAt": "Gecontroleerd op",
+    "agencyCheckNoteLabel": "Notitie (optioneel)",
+    "agencyCheckNoteHint": "Bijv. register en datum van controle. Maximaal {max} tekens.",
+    "agencyCheckHint": "Controleer het nummer in het openbare register van uitzendbureaus van het bevoegde gewest en sla het resultaat op.",
+    "agencyNoNumber": "Het bedrijf gaf aan een uitzendbureau te zijn, zonder erkenningsnummer.",
+    "agencyNotDeclared": "Het bedrijf is niet aangeduid als uitzendbureau.",
+    "agencyCheckActionConfirm": "Nummer bevestigd",
+    "agencyCheckActionNotConfirmed": "Niet bevestigd",
+    "agencyCheckConfirmTitle": "Opslaan: nummer bevestigd?",
+    "agencyCheckNotConfirmedTitle": "Opslaan: niet bevestigd?",
+    "agencyCheckConfirmHint": "Het bedrijf ziet het resultaat. Publiek is alleen het label „uitzendbureau” zichtbaar.",
+    "agencyCheckSavedConfirmed": "Opgeslagen: nummer bevestigd.",
+    "agencyCheckSavedNotConfirmed": "Opgeslagen: niet bevestigd.",
+    "auditActionJobContentRequested": "Vacaturetekst ter controle (regels)",
+    "auditActionJobContentAiFlagged": "Vacaturetekst ter controle (AI)",
+    "auditActionJobContentReviewed": "Beslissing over vacaturetekst",
+    "auditActionJobPausedForReview": "Vacature gepauzeerd voor controle",
+    "auditActionCompanyAgencyChanged": "Wijziging aangifte uitzendbureau",
+    "auditActionCompanyAgencyChecked": "Controle erkenningsnummer uitzendbureau",
+    "aiCostsFeatureFraudCheck": "Controle vacatureteksten"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -3597,5 +3666,19 @@
     "pt": "Portugees",
     "tr": "Turks",
     "ar": "Arabisch"
+  },
+  "jobTrust": {
+    "categoryCandidateFee": "betaling door de kandidaat",
+    "categoryOffPlatformContact": "contact via een chatapp",
+    "categoryCryptoTasks": "crypto of online opdrachten",
+    "categoryPaymentRequest": "vraag om een betaling of kaartgegevens",
+    "categoryPersonalDataRequest": "vraag om documenten of gegevens",
+    "categoryUnrealisticOffer": "onrealistische voorwaarden",
+    "categoryOther": "ander signaal",
+    "wizardHint": "De tekst bevat formuleringen die het team van het portaal vóór publicatie nakijkt ({categories}).",
+    "reviewPending": "De tekst wacht op controle door het team van het portaal ({categories}).",
+    "reviewRejected": "De tekst is niet goedgekeurd ({categories}). Pas hem aan.",
+    "reviewReason": "Motivering: {reason}",
+    "editPaused": "Wijzigingen opgeslagen. De vacature is gepauzeerd tot het team van het portaal de tekst heeft nagekeken."
   }
 }

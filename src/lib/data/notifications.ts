@@ -102,6 +102,12 @@ const SCREENING_REVIEW_TITLE_KEY: Record<string, string> = {
   hidden: 'itemScreeningHidden',
 };
 
+/** Decyzja admina o treści oferty z sygnałem oszustwa (0167): `data.kind = 'job_content_review'`. */
+const JOB_CONTENT_REVIEW_TITLE_KEY: Record<string, string> = {
+  approved: 'itemJobContentApproved',
+  rejected: 'itemJobContentRejected',
+};
+
 /**
  * Decyzja moderacyjna (0099, #42): `system` z `data.kind = 'moderation'` — tytuł wg
  * `data.decision` (wycofanie oferty, zawieszenie firmy, cofnięcie ograniczenia).
@@ -142,6 +148,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   }
   if (d['kind'] === 'screening_review') {
     const key = SCREENING_REVIEW_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'job_content_review') {
+    const key = JOB_CONTENT_REVIEW_TITLE_KEY[asStr(d['status'])];
     if (key) return key;
   }
   if (d['kind'] === 'moderation') {

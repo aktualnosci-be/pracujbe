@@ -13,14 +13,14 @@ import {
 } from '@/lib/languages';
 
 /**
- * Słownik języków w dopasowaniu (I18N-02 / CF-02 / LIM17-05, migracja 0920).
+ * Słownik języków w dopasowaniu (I18N-02 / CF-02 / LIM17-05, migracja 0168).
  * - lista aliasów w kodzie = wiersze `language_aliases` w migracji (1:1, z kontrolą ujemną),
  * - kody = słownik `languages` z 0010, nazwy w `languageNames` we wszystkich językach,
  * - `scoreMatch` dopasowuje „niderlandzki” (UI PL) do „Nederlands” (UI NL) po kodzie.
  */
 
 const ROOT = process.cwd();
-const MIGRATION = readFileSync(resolve(ROOT, 'supabase/migrations/0920_language_dictionary_matching.sql'), 'utf8');
+const MIGRATION = readFileSync(resolve(ROOT, 'supabase/migrations/0168_language_dictionary_matching.sql'), 'utf8');
 const SEED_0010 = readFileSync(resolve(ROOT, 'supabase/migrations/0010_seed_dictionaries.sql'), 'utf8');
 
 function migrationAliases(sql: string): string[] {
@@ -32,7 +32,7 @@ function codeAliases(aliases: Readonly<Record<string, readonly string[]>>): stri
 }
 
 describe('słownik języków — lustro bazy', () => {
-  it('aliasy w kodzie = wiersze language_aliases w migracji 0920', () => {
+  it('aliasy w kodzie = wiersze language_aliases w migracji 0168', () => {
     expect(migrationAliases(MIGRATION).sort()).toEqual(codeAliases(LANGUAGE_ALIASES).sort());
   });
 

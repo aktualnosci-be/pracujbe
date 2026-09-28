@@ -180,7 +180,22 @@
     "targetUnavailableTitle": "This company is no longer available from your account",
     "targetUnavailableHint": "You no longer have active access to this company, or the link is invalid.",
     "targetSwitchAction": "Set as active company",
-    "targetSwitchError": "Could not switch the active company. Please try again."
+    "targetSwitchError": "Could not switch the active company. Please try again.",
+    "agencyTitle": "Temporary employment agency",
+    "agencySubtitle": "If your company is a temporary employment agency, tick the box and enter the regional recognition number. Your company’s jobs will be labelled as agency jobs. The portal team checks the number.",
+    "agencyLabel": "The company is a temporary employment agency",
+    "agencyNumberLabel": "Regional recognition number",
+    "agencyNumberHint": "The number from the recognition decision (Flanders, Wallonia, Brussels or the German-speaking Community).",
+    "agencyNumberRequired": "Enter the recognition number.",
+    "agencyNumberTooLong": "The number can have at most {max} characters.",
+    "agencyCheckUnchecked": "The number is waiting to be checked by the portal team.",
+    "agencyCheckConfirmed": "The portal team confirmed the number in the regional register.",
+    "agencyCheckNotConfirmed": "The portal team could not confirm the number in the regional register. Check the number and save it again.",
+    "agencySaved": "Saved. The portal team will check the number.",
+    "agencyUnchanged": "No changes.",
+    "agencyDemoNotice": "Demo mode — nothing was saved.",
+    "agencySaving": "Saving…",
+    "agencySubmit": "Save"
   },
   "companyProfile": {
     "metaTitle": "Jobs at {name}",
@@ -391,7 +406,8 @@
     "demoNoticeBody": "The site is running as a demo. The job offers and companies on this page are fictional, not verified, and you cannot apply to them.",
     "demoBadge": "Sample offer",
     "machineTranslatedBadge": "Automatic translation",
-    "translatedBadge": "Translated"
+    "translatedBadge": "Translated",
+    "agencyBadge": "Employment agency"
   },
   "job": {
     "apply": "Apply for this job",
@@ -676,6 +692,7 @@
     "rateLimited": "Too many attempts. Please wait a moment and try again.",
     "companyNotVerified": "Your company hasn't been verified yet.",
     "companySuspended": "Your company is suspended, so you can't create new job offers.",
+    "activeCompanyChanged": "The active company changed after you opened this page (for example in another tab). Nothing was saved. Refresh the page and check which company the change is for.",
     "onboardingIncomplete": "Complete all required profile fields to finish setup.",
     "jobNotDraft": "This job is already published. Edit it with “Edit” in the jobs list.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",
@@ -725,7 +742,9 @@
     "cvImportUncertain": "The CV may contain other people's contact details that we cannot remove safely, so nothing was sent. Remove them from the file or fill in your profile manually.",
     "cvImportNotACv": "This file does not look like a CV. Fill in your profile manually or choose another file.",
     "cvImportNoProposals": "We found nothing in the CV to suggest. Fill in your profile manually.",
-    "cvImportFailed": "We could not prepare suggestions. Try again later or fill in your profile manually."
+    "cvImportFailed": "We could not prepare suggestions. Try again later or fill in your profile manually.",
+    "jobContentReviewRequired": "The job text must be checked by the portal team before publishing. You can publish it after approval or after changing the text.",
+    "jobContentRejected": "The job text was not approved. Change it to publish the job."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1283,7 +1302,8 @@
     "removeFilter": "Remove filter",
     "showLess": "Show less",
     "noLocations": "No locations",
-    "close": "Close"
+    "close": "Close",
+    "directOnly": "Directly from the employer"
   },
   "notifications": {
     "title": "Notifications",
@@ -1331,7 +1351,9 @@
     "listEnd": "That's all your notifications.",
     "moreError": "Could not load more notifications. Please try again.",
     "itemCompanyLinksApproved": "Company website and logo approved",
-    "itemCompanyLinksRejected": "Company website and logo not approved"
+    "itemCompanyLinksRejected": "Company website and logo not approved",
+    "itemJobContentApproved": "Your job text has been approved",
+    "itemJobContentRejected": "Your job text was not approved"
   },
   "pricing": {
     "standard": "Standard",
@@ -2674,7 +2696,54 @@
     "userApplications": "Applications",
     "userOffers": "Offers received",
     "userYes": "Yes",
-    "userNo": "No"
+    "userNo": "No",
+    "navJobContent": "Job content",
+    "jobContentTitle": "Job content review",
+    "jobContentSubtitle": "Jobs flagged by the rules or the AI analysis. Until a decision, the job is not published or resumed.",
+    "jobContentEmpty": "No content to review.",
+    "jobContentNotCurrent": "Text already changed",
+    "jobContentSourceRules": "Rules",
+    "jobContentSourceAi": "AI analysis",
+    "jobContentAiConfidence": "confidence {value}%",
+    "jobContentAiReason": "AI reason",
+    "jobContentTexts": "Job text at the time of flagging",
+    "jobContentApproved": "Text approved.",
+    "jobContentRejected": "Text rejected.",
+    "jobContentActionApprove": "Approve",
+    "jobContentActionReject": "Reject",
+    "jobContentApproveConfirmTitle": "Approve the job text?",
+    "jobContentRejectConfirmTitle": "Reject the job text?",
+    "jobContentApproveConfirmHint": "Approval does not publish the job — the company publishes or resumes it.",
+    "jobContentRejectConfirmHint": "The company will see the reason in the job wizard.",
+    "jobContentColJob": "Job",
+    "jobContentColCategories": "Signals",
+    "jobContentReasonOptionalLabel": "Reason (optional)",
+    "jobContentReasonHint": "At most {max} characters.",
+    "sectionAgency": "Temporary employment agency",
+    "agencyStatusUnchecked": "To check",
+    "agencyStatusConfirmed": "Number confirmed",
+    "agencyStatusNotConfirmed": "Not confirmed",
+    "agencyCheckNumber": "Recognition number",
+    "agencyCheckedAt": "Checked on",
+    "agencyCheckNoteLabel": "Note (optional)",
+    "agencyCheckNoteHint": "E.g. register and date of the check. At most {max} characters.",
+    "agencyCheckHint": "Check the number in the public agency register of the competent region and save the result.",
+    "agencyNoNumber": "The company declared itself an agency without a recognition number.",
+    "agencyNotDeclared": "The company is not marked as a temporary employment agency.",
+    "agencyCheckActionConfirm": "Number confirmed",
+    "agencyCheckActionNotConfirmed": "Not confirmed",
+    "agencyCheckConfirmTitle": "Save: number confirmed?",
+    "agencyCheckNotConfirmedTitle": "Save: not confirmed?",
+    "agencyCheckConfirmHint": "The company sees the result. Publicly, only the “agency” label is shown.",
+    "agencyCheckSavedConfirmed": "Saved: number confirmed.",
+    "agencyCheckSavedNotConfirmed": "Saved: not confirmed.",
+    "auditActionJobContentRequested": "Job text for review (rules)",
+    "auditActionJobContentAiFlagged": "Job text for review (AI)",
+    "auditActionJobContentReviewed": "Job text decision",
+    "auditActionJobPausedForReview": "Job paused for content review",
+    "auditActionCompanyAgencyChanged": "Agency declaration changed",
+    "auditActionCompanyAgencyChecked": "Agency recognition number checked",
+    "aiCostsFeatureFraudCheck": "Job content check"
   },
   "settings": {
     "title": "Notification preferences",
@@ -3597,5 +3666,19 @@
     "pt": "Portuguese",
     "tr": "Turkish",
     "ar": "Arabic"
+  },
+  "jobTrust": {
+    "categoryCandidateFee": "fee charged to the candidate",
+    "categoryOffPlatformContact": "contact via a messaging app",
+    "categoryCryptoTasks": "cryptocurrency or online tasks",
+    "categoryPaymentRequest": "request for a transfer or card details",
+    "categoryPersonalDataRequest": "request for documents or data",
+    "categoryUnrealisticOffer": "unrealistic conditions",
+    "categoryOther": "other signal",
+    "wizardHint": "The text contains wording that the portal team will check before publishing ({categories}).",
+    "reviewPending": "The text is waiting to be checked by the portal team ({categories}).",
+    "reviewRejected": "The text was not approved ({categories}). Change it.",
+    "reviewReason": "Reason: {reason}",
+    "editPaused": "Changes saved. The job is paused until the portal team has checked the text."
   }
 }

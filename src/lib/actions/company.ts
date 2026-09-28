@@ -10,8 +10,9 @@ import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { ACTIVE_COMPANY_COOKIE, getActiveCompany } from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
+import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
 const UUID_RE =
@@ -241,6 +242,8 @@ export async function createCompany(
     const id = asString(asRecord(data[0])['company_id']);
     if (!id) return { ok: false, error: 'INTERNAL' };
 
+    // VIES po założeniu (26.09.2026): po odpowiedzi, serwerowo; awaria niczego nie blokuje.
+    scheduleCompanyViesAutoCheck(id);
     return { ok: true, id };
   } catch (e) {
     return { ok: false, error: failureCode(e, 'company.createCompany') };
@@ -301,6 +304,7 @@ export async function createAdditionalCompany(
       maxAge: 60 * 60 * 24 * 365,
     });
     revalidatePath('/employer', 'layout');
+    scheduleCompanyViesAutoCheck(id);
     return { ok: true, id };
   } catch (e) {
     captureError(e, { area: 'company.createAdditionalCompany' });
@@ -488,7 +492,9 @@ export async function updateCompanyLinks(
  * firma wraca do kolejki admina. Tylko owner/admin firmy; inne stany → `INVALID_TRANSITION`
  * (zawieszenie zdejmuje wyłącznie administrator). Autoryzację i przejście egzekwuje RPC.
  */
-export async function requestCompanyReverification(): Promise<ReverificationResult> {
+export async function requestCompanyReverification(
+  expectedCompanyId: string,
+): Promise<ReverificationResult> {
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
   if (
@@ -505,8 +511,10 @@ export async function requestCompanyReverification(): Promise<ReverificationResu
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
     const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
-      const active = await getActiveCompany(tx, me.id);
-      if (!active.activeId) return 'NOT_FOUND';
+      // EMP-02: zgłaszamy firmę pokazaną na ekranie, nie firmę przełączoną w innej karcie.
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) return expected.error;
+      const active = expected.context;
       if (active.activeRole !== 'owner' && active.activeRole !== 'admin') {
         return 'PERMISSION_DENIED';
       }

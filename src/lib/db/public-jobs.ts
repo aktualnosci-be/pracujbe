@@ -41,7 +41,8 @@ const FILTER_ARGUMENTS = `
   p_immediate => $10::boolean,
   p_no_language => $11::boolean,
   p_since => $12::timestamptz,
-  p_salary_unit => $13::text`;
+  p_salary_unit => $13::text,
+  p_direct_only => $14::boolean`;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -68,6 +69,7 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.noLanguageRequired ?? null,
     params.since ?? null,
     params.salaryUnit ?? 'month',
+    params.directOnly ? true : null,
   ];
 }
 
@@ -124,7 +126,7 @@ export async function getPublicJobs(
           (await transaction.query(
             `SELECT to_jsonb(job) AS job
             FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-              p_sort => $14::text, p_limit => $15::integer, p_offset => $16::integer) AS job`,
+              p_sort => $15::text, p_limit => $16::integer, p_offset => $17::integer) AS job`,
             [
               ...values,
               params.sort ?? 'newest',
@@ -196,6 +198,8 @@ export async function getPublicJobFilterFacets(
         facets.immediate = row.total;
       else if (row.dimension === 'additional' && row.key === 'no_language')
         facets.noLanguage = row.total;
+      else if (row.dimension === 'additional' && row.key === 'direct')
+        facets.direct = row.total;
       else throw new Error('Nieznany wymiar facetów publicznych ofert.');
     }
     facets.locations.sort(
@@ -356,6 +360,24 @@ export async function getPublicJobsMachineTitles(
       [jobIds.slice(0, MACHINE_TITLES_BATCH_LIMIT), requestedLocale],
     )) as { rows: PublicJobListMachineTitleRow[] };
     return result.rows;
+  });
+}
+
+/**
+ * 0167: które z podanych ofert publicznych pochodzą od agencji pracy tymczasowej
+ * (`get_public_jobs_agency`, pod rolą anon, najwyżej 100 identyfikatorów na wywołanie).
+ */
+export async function getPublicJobsAgency(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+): Promise<Set<string>> {
+  if (jobIds.length === 0) return new Set();
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id FROM public.get_public_jobs_agency(p_job_ids => $1::uuid[])`,
+      [jobIds.slice(0, 100)],
+    )) as { rows: { job_id: string }[] };
+    return new Set(result.rows.map((row) => row.job_id));
   });
 }
 
