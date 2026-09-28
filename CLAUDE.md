@@ -103,24 +103,6 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   sekretem. Vitest domyślnie ogłoszeniowy (`useRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
   (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
-- **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0171`):** singleton `portal_legal_mode`
-  (domyślnie `CLASSIFIEDS_ONLY`), `recruitment_enabled()` fail-closed (brak wiersza/błąd = false). Tryb efektywny =
-  env `RECRUITMENT` ORAZ baza `RECRUITMENT` (`src/lib/ops/portal-mode.ts`). W trybie ogłoszeniowym baza odrzuca nowe dane
-  procesu (`RECRUITMENT_DISABLED`): BEFORE INSERT na `applications`/`offers`/`matches`/`conversations`/`messages`/
-  `message_attachments`/`application_screening_answers`/`guest_application_requests` (także service_role; wyjątek
-  `pracujbe.allow_recruitment_write` tylko dla superusera — seed), BEFORE UPDATE (zmiana statusu aplikacji poza
-  wycofaniem, przejęcie aplikacji gościa, odpowiedź na propozycję); polityki RESTRICTIVE + `company_can_view_candidate`/
-  `candidate_profile_is_searchable`/`is_conversation_member`/`can_attach_in_conversation`/`get_job_match_profile` —
-  firma nie widzi danych procesu ani profili, kandydat widzi własną historię. Zmiana trybu tylko RPC
-  `admin_set_portal_legal_mode` (service_role, uzasadnienie, CAS `STALE_STATE`, audyt; trigger blokuje bezpośredni zapis),
-  skrypt `scripts/db/set-portal-legal-mode.mjs`, procedura `docs/railway/OPERATIONS.md` §6. `/api/health/ops`: alarm
-  `portal_legal_mode_mismatch` (env ≠ baza, `ops_metrics().portalLegalMode`); `/api/maintenance` pomija materializację
-  dopasowań (`recruitmentTasks: { skipped: 'classifieds_only' }`); `restore-backup.sh` wymusza `CLASSIFIEDS_ONLY`
-  (chyba że `RESTORE_KEEP_PORTAL_MODE=1`). Testy przepływów rekrutacyjnych włączają `RECRUITMENT` jawnie (rls.sql na
-  starcie, `startPortalDb`, `test-e2e-real`). Dowód: `rls.sql` sekcje CL1128/PLM (kontrole ujemne: brak wiersza, zdjęty
-  strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0171_…down.sql`, unit
-  `portal-mode-dual-key`, `maintenance-portal-mode`, `ops-health-route`, `test:backup`. Dane istniejące (#1150): tylko
-  blokada nowych danych, bez zamrażania (brak danych produkcyjnych).
   Wyłączone w trybie ogłoszeniowym (#1141/#1144/#1132, warstwa aplikacji, bez migracji): akcje `sendOffer`/`respondToOffer`/
   `loadMoreProposals`, `applyToJob`/`transitionApplication`/`withdrawApplication`, odczyty historii zgłoszeń kandydata
   i pracodawcy, aplikacja gościa (`submit`/`confirm`/`claimGuestApplication`, `stageGuestLink`) → `RECRUITMENT_DISABLED`
@@ -145,6 +127,24 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   CA1142/NT1145 (kontrole ujemne: bez strażnika krok 3 zapisuje; tryb RECRUITMENT), rollback `0970_…down.sql`
   (`classifieds-account-rollback.sql`), unit `classifieds-candidate-account`, `classifieds-notifications`, strażnik
   `legal`, E2E `classifieds-candidate-account` (z `E2E_PORTAL_LEGAL_MODE=`).
+- **Tryb w bazie i dwuklucz (#1140/#1143, migracja `0171`):** singleton `portal_legal_mode`
+  (domyślnie `CLASSIFIEDS_ONLY`), `recruitment_enabled()` fail-closed (brak wiersza/błąd = false). Tryb efektywny =
+  env `RECRUITMENT` ORAZ baza `RECRUITMENT` (`src/lib/ops/portal-mode.ts`). W trybie ogłoszeniowym baza odrzuca nowe dane
+  procesu (`RECRUITMENT_DISABLED`): BEFORE INSERT na `applications`/`offers`/`matches`/`conversations`/`messages`/
+  `message_attachments`/`application_screening_answers`/`guest_application_requests` (także service_role; wyjątek
+  `pracujbe.allow_recruitment_write` tylko dla superusera — seed), BEFORE UPDATE (zmiana statusu aplikacji poza
+  wycofaniem, przejęcie aplikacji gościa, odpowiedź na propozycję); polityki RESTRICTIVE + `company_can_view_candidate`/
+  `candidate_profile_is_searchable`/`is_conversation_member`/`can_attach_in_conversation`/`get_job_match_profile` —
+  firma nie widzi danych procesu ani profili, kandydat widzi własną historię. Zmiana trybu tylko RPC
+  `admin_set_portal_legal_mode` (service_role, uzasadnienie, CAS `STALE_STATE`, audyt; trigger blokuje bezpośredni zapis),
+  skrypt `scripts/db/set-portal-legal-mode.mjs`, procedura `docs/railway/OPERATIONS.md` §6. `/api/health/ops`: alarm
+  `portal_legal_mode_mismatch` (env ≠ baza, `ops_metrics().portalLegalMode`); `/api/maintenance` pomija materializację
+  dopasowań (`recruitmentTasks: { skipped: 'classifieds_only' }`); `restore-backup.sh` wymusza `CLASSIFIEDS_ONLY`
+  (chyba że `RESTORE_KEEP_PORTAL_MODE=1`). Testy przepływów rekrutacyjnych włączają `RECRUITMENT` jawnie (rls.sql na
+  starcie, `startPortalDb`, `test-e2e-real`). Dowód: `rls.sql` sekcje CL1128/PLM (kontrole ujemne: brak wiersza, zdjęty
+  strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0171_…down.sql`, unit
+  `portal-mode-dual-key`, `maintenance-portal-mode`, `ops-health-route`, `test:backup`. Dane istniejące (#1150): tylko
+  blokada nowych danych, bez zamrażania (brak danych produkcyjnych).
   Matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139, bez migracji): `/api/maintenance` nie woła
   `runMatchRecompute` (`matches: "disabled"`, sam `runMatchRecompute` też sprawdza tryb), `getMyJobMatch(Action)` →
   `disabled` bez transakcji, brak `job-match-slot` i `MatchBar` na `JobCard`; `/employer/kandydaci[/id]` i
