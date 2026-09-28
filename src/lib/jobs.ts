@@ -24,6 +24,12 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import {
+  isApplyEmail,
+  isApplyPhone,
+  isApplyUrl,
+  normalizeApplyPhone,
+} from '@/lib/job-apply-channel';
 import { fixtureScreeningQuestions } from '@/lib/screening/fixture';
 import { fixtureCompanySlug } from '@/lib/company-fixture';
 import { searchFold } from '@/lib/search-fold';
@@ -109,6 +115,29 @@ export interface JobListItem {
   isAgency?: true;
 }
 
+export interface JobApplyChannel {
+  url?: string;
+  email?: string;
+  phone?: string;
+}
+
+/** Kanał z wiersza bazy — drugi raz te same reguły co CHECK (jak `publicHttpsUrl` w JSON-LD). */
+export function parseJobApplyChannel(row: Record<string, unknown>): JobApplyChannel | undefined {
+  const text = (key: string): string | undefined => {
+    const v = row[key];
+    return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+  };
+  const url = text('apply_url');
+  const email = text('apply_email');
+  const phone = text('apply_phone');
+  const channel: JobApplyChannel = {
+    ...(url && isApplyUrl(url) ? { url } : {}),
+    ...(email && isApplyEmail(email) ? { email } : {}),
+    ...(phone && isApplyPhone(phone) ? { phone: normalizeApplyPhone(phone) } : {}),
+  };
+  return Object.keys(channel).length > 0 ? channel : undefined;
+}
+
 export interface JobDetail extends JobListItem {
   description: string;
   responsibilities: string[];
@@ -135,6 +164,11 @@ export interface JobDetail extends JobListItem {
   screeningQuestions?: ScreeningQuestion[];
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
+  /**
+   * Kanał aplikowania u ogłoszeniodawcy (#1129, 0950 — `get_public_job`). Każde pole osobno
+   * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
+   */
+  applyChannel?: JobApplyChannel;
   /**
    * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0159); brak = treść
    * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
@@ -447,6 +481,10 @@ function rowToJobDetail(row: unknown): JobDetail {
       ? { companyLogoUrl: asOptString(r['company_logo_url']) }
       : {}),
     // companySlug: już zmapowane przez rowToJobListItem (kolumna wspólna z get_public_jobs).
+    ...(() => {
+      const applyChannel = parseJobApplyChannel(r);
+      return applyChannel ? { applyChannel } : {};
+    })(),
   };
 }
 

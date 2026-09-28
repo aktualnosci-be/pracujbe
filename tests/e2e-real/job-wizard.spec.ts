@@ -195,6 +195,8 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 9: opis firmy i kontakt — zapis szkicu przy próbie publikacji (niżej).
   await page.getByLabel(t('companyDescriptionLabel'), { exact: true }).fill('Familiebedrijf in havenlogistiek sinds 1998.');
   await page.getByLabel(t('contactEmailLabel'), { exact: true }).fill(`jobs-${run}@e2e.invalid`);
+  // #1129 (0950): kanał aplikowania — wymagany przy publikacji.
+  await page.getByLabel(t('applyUrlLabel'), { exact: true }).fill(`https://example.com/jobs/${run}`);
   expect((await draft()).status).toBe('draft');
 });
 

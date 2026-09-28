@@ -45,7 +45,7 @@ function steps(): unknown[] {
     },
     { conditions: ['Umowa przez agencję'], benefits: ['Dodatek nocny'], accommodation: true, transport: false },
     // Edycja nie wymaga ponownej zgody na publikację (oferta już jest opublikowana).
-    { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be' },
+    { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be', applyUrl: 'https://firma-a.be/praca' },
   ];
 }
 

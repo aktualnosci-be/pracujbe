@@ -652,8 +652,16 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.jobs': {
     activities: ['companies'],
     subjects: ['employer'],
-    columns: { created_by: 'reference', contact_email: 'contact', address: 'company' },
-    note: 'Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera.',
+    columns: {
+      created_by: 'reference',
+      contact_email: 'contact',
+      address: 'company',
+      // #1129 (0950): kanał aplikowania — publiczny w ofercie publicznej (get_public_job).
+      apply_url: 'company',
+      apply_email: 'contact',
+      apply_phone: 'contact',
+    },
+    note: 'Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera. Kanał aplikowania (e-mail, telefon) jest publiczny w ofercie i może wskazywać osobę po stronie firmy.',
   },
 
   // --- E-maile i powiadomienia -------------------------------------------------------------

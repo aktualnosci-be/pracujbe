@@ -8,6 +8,15 @@ import { localeSchema } from '@/lib/validation/auth';
 import { refineScreeningPrimaryLocale, screeningQuestionsSchema } from '@/lib/validation/screening';
 import { JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 import {
+  APPLY_EMAIL_MAX_LENGTH,
+  APPLY_URL_MAX_LENGTH,
+  hasApplyChannel,
+  isApplyEmail,
+  isApplyPhone,
+  isApplyUrl,
+  normalizeApplyPhone,
+} from '@/lib/job-apply-channel';
+import {
   ACCOMMODATION_AFTER_CONTRACT,
   ACCOMMODATION_COST_PERIODS,
   ACCOMMODATION_KINDS,
@@ -327,16 +336,56 @@ const step9DraftBase = z.object({
     .min(20, 'job.error.companyDescriptionTooShort')
     .max(3000, 'job.error.companyDescriptionTooLong'),
   contactEmail: z.string().trim().email('job.error.contactEmailInvalid').optional(),
+  // #1129 (0950): kanał aplikowania u ogłoszeniodawcy — reguły 1:1 z CHECK-ami bazy
+  // (`src/lib/job-apply-channel.ts`). W szkicu każdy opcjonalny; wymóg „co najmniej jeden”
+  // sprawdza publikacja i edycja opublikowanej oferty (`refineApplyChannel`).
+  applyUrl: z
+    .string()
+    .trim()
+    .max(APPLY_URL_MAX_LENGTH, 'job.error.applyUrlInvalid')
+    .refine(isApplyUrl, 'job.error.applyUrlInvalid')
+    .optional(),
+  applyEmail: z
+    .string()
+    .trim()
+    .max(APPLY_EMAIL_MAX_LENGTH, 'job.error.applyEmailInvalid')
+    .refine(isApplyEmail, 'job.error.applyEmailInvalid')
+    .optional(),
+  applyPhone: z
+    .string()
+    .transform(normalizeApplyPhone)
+    .refine(isApplyPhone, 'job.error.applyPhoneInvalid')
+    .optional(),
   agreePublish: z.boolean().optional(),
 });
 export const step9DraftSchema = step9DraftBase;
+
+/**
+ * Oferta PUBLICZNA musi wskazać co najmniej jeden kanał aplikowania (decyzja właściciela
+ * 28.09.2026) — w bazie `publish_job`/`update_published_job` → `JOB_APPLY_CHANNEL_REQUIRED`.
+ * Błąd przy pierwszym polu kanału (fokus i `aria-describedby` w kreatorze).
+ */
+export function refineApplyChannel(
+  data: { applyUrl?: string; applyEmail?: string; applyPhone?: string },
+  ctx: z.RefinementCtx,
+): void {
+  if (hasApplyChannel(data)) return;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['applyUrl'],
+    message: 'job.error.applyChannelRequired',
+  });
+}
+
+/** Krok 9 w edycji opublikowanej oferty: bez zgody na publikację, z wymaganym kanałem. */
+export const step9PublishedSchema = step9DraftBase.superRefine(refineApplyChannel);
 
 const step9Base = step9DraftBase.extend({
   agreePublish: z.literal(true, {
     errorMap: () => ({ message: 'job.error.publishAgreementRequired' }),
   }),
 });
-export const step9Schema = step9Base;
+export const step9Schema = step9Base.superRefine(refineApplyChannel);
 
 /** Pełna oferta — złączenie wszystkich kroków + reguła zakresu wynagrodzenia. */
 export const jobSchema = step1Base
@@ -354,7 +403,8 @@ export const jobSchema = step1Base
   })
   .superRefine(refineNoLanguageConflict)
   .superRefine(refineJobCosts)
-  .superRefine(refineAccommodationPublishTerms);
+  .superRefine(refineAccommodationPublishTerms)
+  .superRefine(refineApplyChannel);
 
 export type JobStep1 = z.infer<typeof step1Schema>;
 export type JobStep2 = z.infer<typeof step2Schema>;
