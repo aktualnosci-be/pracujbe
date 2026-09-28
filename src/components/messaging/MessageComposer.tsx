@@ -17,7 +17,10 @@ import {
   checkAttachmentFile,
   type AttachmentFileProblem,
 } from '@/lib/validation/message-attachment';
+import type { ComposerTemplates } from '@/lib/validation/message-template';
 import { BTN_PRIMARY, BTN_SMALL, FORM_CONTROL } from '@/components/dashboard/panel-styles';
+
+import { MessageTemplatePicker } from './MessageTemplatePicker';
 
 /**
  * MessageComposer — pole tworzenia wiadomości (Etap 6).
@@ -59,11 +62,20 @@ export interface MessageComposerProps {
   conversationId: string;
   /** Nazwa rozmówcy do etykiety pola. */
   recipientName: string;
+  /**
+   * Szablony odpowiedzi firmy (0170) — tylko strona firmowa recruiter+; `null`/brak = bez
+   * wybieraka. Wariant wybierany wg języka kandydata (Invariant #1).
+   */
+  templates?: ComposerTemplates | null;
+  /** Imię kandydata do zmiennej `{imie}` (pusty = znacznik zostaje do uzupełnienia). */
+  templateCandidateName?: string;
 }
 
 export function MessageComposer({
   conversationId,
   recipientName,
+  templates = null,
+  templateCandidateName = '',
 }: MessageComposerProps): React.JSX.Element {
   const t = useTranslations('messages');
   const tRoot = useTranslations();
@@ -226,6 +238,18 @@ export function MessageComposer({
 
   return (
     <div className="shrink-0 border-t border-border px-7 py-5 max-[600px]:px-5">
+      {templates ? (
+        <MessageTemplatePicker
+          context={templates}
+          candidateName={templateCandidateName}
+          disabled={pending}
+          onInsert={(text) => {
+            setValue((current) => (current.trim().length > 0 ? `${current.trimEnd()}\n\n${text}` : text));
+            if (error) setError(null);
+            textareaRef.current?.focus();
+          }}
+        />
+      ) : null}
       <label htmlFor={fieldId} className="sr-only">
         {t('composerLabel', { name: recipientName })}
       </label>

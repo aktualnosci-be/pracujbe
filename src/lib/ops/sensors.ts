@@ -34,6 +34,8 @@ export const opsMetricsSchema = z.object({
   storageDeletion: z
     .object({ pending: count, oldestPendingAgeSeconds: count, deadLetters: count })
     .optional(),
+  /** #1143 (0171): tryb portalu w bazie (1 = RECRUITMENT); brak = baza sprzed 0171. */
+  portalLegalMode: z.object({ recruitmentEnabled: z.union([z.literal(0), z.literal(1)]) }).optional(),
   // #44 (0118). Brak sekcji = baza sprzed migracji: czujki poczty milczą zamiast 503.
   mail: z.object({
     sentLast24h: count,
@@ -50,7 +52,7 @@ export const opsMetricsSchema = z.object({
 export type OpsMetrics = z.infer<typeof opsMetricsSchema>;
 
 /**
- * Ostatni przebieg `/api/maintenance` (0213, `ops_last_maintenance_run()`). `ageSeconds = null`
+ * Ostatni przebieg `/api/maintenance` (0950, `ops_last_maintenance_run()`). `ageSeconds = null`
  * = baza nie zna żadnego przebiegu (cron jeszcze nie działa). Same liczby i stały identyfikator
  * zadania z kodu (`failedTask`) — bez treści i danych osobowych.
  */
@@ -133,7 +135,8 @@ export type OpsSignal =
   | 'mail_complaint_rate'
   | 'mail_complaint_rising'
   | 'mail_suppressions_new'
-  | 'mail_suppressions_active';
+  | 'mail_suppressions_active'
+  | 'portal_legal_mode_mismatch';
 
 export interface OpsEvaluation {
   status: 'ok' | 'alert';
@@ -149,8 +152,8 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
 /**
  * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0120): `null` = odczyt się nie
  *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
- * @param maintenanceRun ostatni przebieg maintenance (0213): `null` = odczyt się nie udał
- *   (ostrzeżenie), `undefined` = nie mierzono (baza sprzed 0213 — bez sygnału).
+ * @param maintenanceRun ostatni przebieg maintenance (0950): `null` = odczyt się nie udał
+ *   (ostrzeżenie), `undefined` = nie mierzono (baza sprzed 0950 — bez sygnału).
  */
 export function evaluateOps(
   metrics: OpsMetrics,
@@ -180,7 +183,7 @@ export function evaluateOps(
     alerts.push('maintenance_lag');
   }
 
-  // 0213: brak jakiegokolwiek przebiegu (cron jeszcze nie działa) = ostrzeżenie, nie alarm —
+  // 0950: brak jakiegokolwiek przebiegu (cron jeszcze nie działa) = ostrzeżenie, nie alarm —
   // świeża baza nie może stale zwracać 503. Stary ostatni przebieg = alarm; nieudany = ostrzeżenie
   // (cron i tak dostał 503 z nazwą zadania w kanale błędów).
   if (maintenanceRun === null) {

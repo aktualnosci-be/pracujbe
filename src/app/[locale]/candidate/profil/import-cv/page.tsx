@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { CvImportPanel } from '@/components/candidate/CvImportPanel';
 import { isCvImportEnabled } from '@/lib/cv-import/config';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Panel kandydata — import CV przez AI (#487, #498). Za flagą `AI_CV_IMPORT_ENABLED`
@@ -29,6 +30,8 @@ export default async function CandidateCvImportPage({
 }: {
   params: Promise<{ locale: string }>;
 }) {
+  // #1138: tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy) — 404 niezależnie od flagi AI.
+  notFoundUnlessRecruitment('cvImport');
   const { locale } = await params;
   setRequestLocale(locale);
   if (!isCvImportEnabled()) notFound();

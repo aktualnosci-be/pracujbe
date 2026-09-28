@@ -65,6 +65,7 @@ const ROUTES = [
   'employer/ustawienia',
   'employer/wiadomosci',
   'employer/wiadomosci?c=demo-conv-0',
+  'employer/szablony',
   'employer/zespol',
 ] as const;
 

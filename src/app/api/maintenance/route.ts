@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { campaignSendingReady } from '@/lib/admin/campaigns';
 import { dsaRetentionMode } from '@/lib/admin/dsa-retention-mode';
 import { isCronAuthorized } from '@/lib/cron/auth';
+import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc, type RpcArgs } from '@/lib/db/sql';
 import { isProductionMode } from '@/lib/env';
@@ -14,7 +15,9 @@ import {
 } from '@/lib/retention/mode';
 import { captureError } from '@/lib/error-report';
 import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
-import { runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
+import { MESSAGE_ATTACHMENTS_BUCKET, runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
   railwayDeleter,
@@ -48,6 +51,9 @@ import {
  * #17: dzienny GC bucketu CV (`runStorageGc`, 0117) — obiekty bez wiersza `files` do kolejki
  * usuwania (tylko przy `STORAGE_GC_MODE=delete`; domyślnie dry-run z samymi licznikami),
  * wiersze bez obiektu tylko liczone. Bez bucketu Railway — pominięty (`storageGc: null`).
+ * #833: analogiczny GC dla załączników wiadomości (`messageAttachmentsGc`, ten sam bucket
+ * Railway, logiczny bucket `message-files`, wzorzec klucza `att-*`) — do #833 był pomijany
+ * przez GC CV jako „obcy” i nigdy nie trafiał do kolejki usuwania, nawet po awarii uploadu.
  * #45: kampanie e-mail (`process_email_campaigns`, 0101) — rezerwacja „rewizja + odbiorca”
  * przed kolejkowaniem, zgoda sprawdzana teraz; restart crona nie tworzy drugiego listu.
  * #575: twarde terminy lejka ofert (`purge_job_funnel_data`, 0128) — receipts deduplikacji
@@ -63,6 +69,7 @@ import {
  * `match_recompute_queue` (triggery ofert/profili/blokad/wieku), wynik `scoreMatch` zapisany
  * przez service_role; baza kwalifikuje każdą parę. Po wygaszeniu ofert (wygasła = bez wiersza).
  * Błąd pojedynczego podmiotu to ponowienie (licznik `failed`), nie błąd zadania.
+ * #1131: w trybie ogłoszeniowym zadanie nie działa (`matches: "disabled"`, bez bazy).
  *
  * Wyłącznie `POST` (#581): `GET` jest metodą bezpieczną i zwraca `405` bez autoryzacji
  * ani żadnego efektu ubocznego — mutacje nie są dostępne przez bezpieczną metodę HTTP.
@@ -102,9 +109,9 @@ function retentionCounters(value: unknown): Record<string, number> {
 }
 
 /**
- * 0213: ostatni przebieg dla czujek (`ops_last_maintenance_run`, panel `/admin/operacje`).
+ * 0950: ostatni przebieg dla czujek (`ops_last_maintenance_run`, panel `/admin/operacje`).
  * Tylko czas, wynik i stała nazwa zadania z błędem. Awaria zapisu nie zmienia wyniku przebiegu
- * (baza sprzed 0213 = brak funkcji) — tylko kanał błędów.
+ * (baza sprzed 0950 = brak funkcji) — tylko kanał błędów.
  */
 async function recordRun(durationMs: number, failedTask: string | null): Promise<void> {
   try {
@@ -118,6 +125,22 @@ async function recordRun(durationMs: number, failedTask: string | null): Promise
     );
   } catch (error) {
     captureError(error, { area: 'maintenance.record_run' });
+  }
+}
+
+/**
+ * Tryb efektywny dla zadań rekrutacyjnych (#1143): env `PORTAL_LEGAL_MODE=RECRUITMENT` (#1136)
+ * ORAZ `recruitment_enabled()` w bazie (0171). Bez klucza env baza nie jest pytana.
+ * Błąd odczytu bazy = tryb ogłoszeniowy (fail-closed) i zapamiętany błąd (503 dla monitoringu).
+ */
+async function recruitmentTasksEnabled(onError: (error: unknown) => void): Promise<boolean> {
+  if (!isRecruitmentEnabled('matching')) return false;
+  try {
+    const db = await withServiceRole((tx) => rpc<boolean>(tx, 'recruitment_enabled'));
+    return effectiveRecruitmentEnabled(true, db === true);
+  } catch (error) {
+    onError(error);
+    return false;
   }
 }
 
@@ -137,6 +160,7 @@ async function run(request: Request): Promise<Response> {
     | 'checkouts'
     | 'aiBudgetReservations'
     | 'jobExpiry'
+    | 'portalMode'
     | 'matches'
     | 'guestRequests'
     | 'savedSearchAlerts'
@@ -144,7 +168,10 @@ async function run(request: Request): Promise<Response> {
     | 'retention'
     | 'jobFunnel'
     | 'messageAttachments'
+    | 'rateLimits'
+    | 'webhookInbox'
     | 'storageGc'
+    | 'messageAttachmentsGc'
     | 'dsaRetention'
     | 'storageDeletions';
   const failures: Array<{ task: Task; error: unknown }> = [];
@@ -174,12 +201,29 @@ async function run(request: Request): Promise<Response> {
     { p_older_than_minutes: 60, p_limit: 200 },
   );
   const expiredJobs = await task('jobExpiry', 'expire_due_jobs');
+  // #775: oferty wygaszone w tym przebiegu (`active` → `expired`) muszą natychmiast zniknąć
+  // z publicznych stron cache'owanych przez ISR (szczegół, strona główna, landingi kategorii
+  // i miasta) — inaczej mogłyby zostać widoczne razem z `JobPosting` jeszcze przez okno
+  // rewalidacji (do 60 s). Bez zmienionych wierszy (0 albo błąd RPC) nic nie unieważniamy.
+  if (typeof expiredJobs === 'number' && expiredJobs > 0) {
+    revalidatePublicJobPaths();
+  }
+  // #1143: zadania procesu rekrutacyjnego tylko w trybie efektywnym RECRUITMENT (env ORAZ baza).
+  // W trybie ogłoszeniowym nie wołamy ich wcale (baza i tak odrzuciłaby zapis — 503 bez sensu);
+  // retencja i czyszczenie (gość, załączniki, storage) działają dalej.
+  const recruitment = await recruitmentTasksEnabled((error) => failures.push({ task: 'portalMode', error }));
   // P1-03: po `expire_due_jobs` — oferty wygaszone w tym przebiegu tracą wiersze od razu.
-  let matches: MatchRecomputeRun | null = null;
-  try {
-    matches = await runMatchRecompute();
-  } catch (error) {
-    failures.push({ task: 'matches', error });
+  // #1131/#1143: tryb ogłoszeniowy (env albo baza) — bez przeliczeń (zero zapytań
+  // `match_recompute_*`); `matches: "disabled"` + `recruitmentTasks.skipped` w odpowiedzi.
+  let matches: MatchRecomputeRun | 'disabled' | null = null;
+  if (!recruitment) {
+    matches = 'disabled';
+  } else {
+    try {
+      matches = await runMatchRecompute();
+    } catch (error) {
+      failures.push({ task: 'matches', error });
+    }
   }
   const purgedGuestRequests = await task('guestRequests', 'purge_guest_application_requests');
   // Po wygaszeniu ofert: alert nie może zgłosić oferty, która właśnie wygasła.
@@ -232,14 +276,32 @@ async function run(request: Request): Promise<Response> {
   const purgedMessageAttachments = await task('messageAttachments', 'purge_stale_message_attachments', {
     p_older_than_hours: 24,
   });
-  // #17: GC sierot bucketu CV przed workerem kolejki — sieroty znikają w tym samym przebiegu.
+  // K2/#17 (0163): tabele techniczne — okna limitera starsze niż doba (dolna granica w bazie)
+  // i rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. Bez danych do decyzji o
+  // retencji: e-maile (`email_deliveries_gc`) czekają na #574.
+  const purgedRateLimits = await task('rateLimits', 'rate_limit_gc', { p_older_than_seconds: 86_400 });
+  const purgedWebhookInbox = await task('webhookInbox', 'processed_webhooks_gc', { p_older_than_days: 30 });
+  // #17/#833: GC sierot bucketu Railway przed workerem kolejki — sieroty znikają w tym samym
+  // przebiegu. Dwa niezależne, logiczne buckety (CV i załączniki wiadomości) na jednym fizycznym
+  // buckecie: awaria jednego przebiegu nie blokuje drugiego (osobne try/catch, osobne zadanie).
   let storageGc: StorageGcRun | null = null;
+  let messageAttachmentsGc: StorageGcRun | null = null;
   try {
     const { fileBucketConfig } = await import('@/lib/env');
     const config = fileBucketConfig();
     if (config) {
       const { createRailwayBucket } = await import('@/lib/storage/railway-bucket');
-      storageGc = await runStorageGc(createRailwayBucket(config), { dryRun: storageGcDryRun() });
+      const bucketStore = createRailwayBucket(config);
+      storageGc = await runStorageGc(bucketStore, { dryRun: storageGcDryRun() });
+      try {
+        messageAttachmentsGc = await runStorageGc(bucketStore, {
+          dryRun: storageGcDryRun(),
+          bucket: MESSAGE_ATTACHMENTS_BUCKET,
+          pattern: 'attachment',
+        });
+      } catch (error) {
+        failures.push({ task: 'messageAttachmentsGc', error });
+      }
     }
   } catch (error) {
     failures.push({ task: 'storageGc', error });
@@ -278,13 +340,17 @@ async function run(request: Request): Promise<Response> {
     releasedAiBudgetReservations: releasedAiBudgetReservations ?? 0,
     expiredJobs: expiredJobs ?? 0,
     matches,
+    ...(recruitment ? {} : { recruitmentTasks: { skipped: 'classifieds_only' as const } }),
     purgedGuestRequests: purgedGuestRequests ?? 0,
     savedSearchDigests: savedSearchDigests ?? 0,
     campaignEmailsQueued: campaignEmailsQueued ?? 0,
     retention,
     jobFunnel,
     purgedMessageAttachments: purgedMessageAttachments ?? 0,
+    purgedRateLimits: purgedRateLimits ?? 0,
+    purgedWebhookInbox: purgedWebhookInbox ?? 0,
     storageGc,
+    messageAttachmentsGc,
     dsaRetention,
     storageDeletions,
   });

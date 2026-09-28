@@ -4,6 +4,7 @@ import { jobCityAssist } from '@/lib/actions/job-location';
 import { captureError } from '@/lib/error-report';
 import { LOCATION_KEYS, cityAliases, resolveLocationKey } from '@/lib/locations/city-aliases';
 import {
+  JOB_CITY_SUGGESTION_LIMIT,
   cityKeyPrefixPattern,
   demoJobCityAssist,
   pickSuggestions,
@@ -87,6 +88,24 @@ describe('podpowiedź miasta w kreatorze — logika', () => {
     expect(pickSuggestions([{ locationId: 'c', alias: 'charleroi', sortOrder: 80 }])).toEqual(['charleroi']);
   });
 
+  it('#807: zamiana na nazwę lokalizowaną nie może zgubić wpisanego prefiksu', () => {
+    // Ghent: jedyny alias pasujący do „Ghe" to techniczny „ghent" (małymi literami); nazwa
+    // spolszczona „Gandawa" nie zaczyna się od „ghe" — podpowiedź musi zostać przy aliasie,
+    // inaczej natywny <datalist> odfiltruje ją jako niepasującą do wpisu.
+    expect(
+      pickSuggestions([{ locationId: 'ghent', alias: 'ghent', sortOrder: 30, name: 'Gandawa' }], JOB_CITY_SUGGESTION_LIMIT, 'ghe'),
+    ).toEqual(['ghent']);
+    // Kontrola pozytywna: gdy lokalizowana nazwa nadal zaczyna się od wpisu, zamiana zostaje.
+    expect(
+      pickSuggestions([{ locationId: 'c', alias: 'charleroi', sortOrder: 80, name: 'Charleroi' }], JOB_CITY_SUGGESTION_LIMIT, 'char'),
+    ).toEqual(['Charleroi']);
+    // Kontrola ujemna: bez `matchKey` zachowanie sprzed poprawki (zamiana bez sprawdzenia
+    // prefiksu) — dokumentuje, że regresję łapie wyłącznie przekazanie klucza wyszukiwania.
+    expect(
+      pickSuggestions([{ locationId: 'ghent', alias: 'ghent', sortOrder: 30, name: 'Gandawa' }]),
+    ).toEqual(['Gandawa']);
+  });
+
   it('tryb demo: lista kanoniczna w kodzie, ta sama reguła klucza', () => {
     expect(demoJobCityAssist('antwerpia').slug).toBe('antwerp');
     expect(demoJobCityAssist(' ANVERS ').slug).toBe('antwerp');
@@ -123,6 +142,15 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     // Odczyt pod sesją (RLS), nie service_role; akcja niczego nie zapisuje.
     expect(new Set(fakeDb.calls.map((c) => c.as))).toEqual(new Set([USER]));
     expect(fakeDb.calls.every((c) => c.kind === 'rows')).toBe(true);
+  });
+
+  it('#807: alias „ghent" pasujący do wpisanego „Ghe" zostaje podpowiedzią zamiast nazwy „Gandawa"', async () => {
+    dictionary({
+      prefix: [{ location_id: 'l-ghent', alias: 'ghent', slug: 'ghent', name: 'Ghent', sort_order: 30 }],
+    });
+    expect(await jobCityAssist({ city: 'Ghe', locale: 'pl' })).toEqual({
+      status: 'ok', match: null, suggestions: ['ghent'],
+    });
   });
 
   it('gmina spoza 10 tłumaczonych miast: nazwa ze słownika', async () => {

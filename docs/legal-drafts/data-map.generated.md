@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
+Tabele w migracjach: 113; z danymi osobowymi: 74; bez danych osobowych: 39.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -18,13 +18,13 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 | Aplikacje na oferty (`applications`) | Aplikowanie (idempotentne), zmiany statusu przez firmę, historia statusów, odpowiedzi na pytania screeningowe. | `public.application_screening_answers`, `public.application_status_history`, `public.applications` | Railway, Resend, EmailLabs | Wartości #574 (0127, harmonogram za RETENTION_MODE, domyślnie wyłączony): aplikacja w stanie końcowym (także hired) usuwana 180 dni od niezmiennego closed_at razem z rozmowami, powiadomieniami i e-mailami. |
 | Aplikacja bez konta (`guest-applications`) | Formularz gościa, potwierdzenie e-mailem, aplikacja ze snapshotem zgody, e-mail o zmianie statusu (język formularza), przejęcie przez konto. | `public.application_screening_answers`, `public.applications`, `public.guest_application_requests` | Railway, Resend, EmailLabs, Cloudflare Turnstile | purge_guest_application_requests (/api/maintenance): niepotwierdzone 7 dni po ostatnim linku, duplikaty 7 dni po potwierdzeniu, token przejęcia zerowany po 30 dniach. Wartości #574 (0127, za RETENTION_MODE): niepotwierdzone 7 dni od pierwszego wysłania, potwierdzone 30 dni od potwierdzenia, IP/UA zgody 7 dni. |
 | Dopasowanie i zapisane wyszukiwania (`matching-search`) | Deterministyczny scoring (src/lib/matching), materializacja matches, zapisane wyszukiwania i alerty e-mail. | `public.candidate_certificates`, `public.candidate_languages`, `public.candidate_profiles`, `public.candidate_skills`, `public.match_recompute_queue`, `public.matches`, `public.saved_search_alerts`, `public.saved_searches` | Railway, Resend, EmailLabs | Kod nie usuwa danych — do ustalenia |
-| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
-| Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.job_duplications`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
+| Kontakt pracodawca–kandydat (`employer-contact`) | Propozycje pracy, rozmowy i wiadomości z załącznikami (PDF/DOC/DOCX/JPG/PNG w prywatnym buckecie), blokowanie firm przez kandydata. | `public.candidate_company_blocks`, `public.company_message_template_variants`, `public.company_message_templates`, `public.conversation_members`, `public.conversations`, `public.files`, `public.message_attachments`, `public.messages`, `public.offer_status_history`, `public.offers` | Railway, Resend, EmailLabs | Propozycje wygasają (expires_at), dane nie są usuwane. Niewysłane załączniki wiadomości usuwane po 24 h (purge_stale_message_attachments); załączniki znikają z wiadomością/rozmową (także z kontem), obiekt przez storage_deletion_queue. |
+| Konta firm, zespół i weryfikacja (`companies`) | Zakładanie firmy, członkowie i zaproszenia, weryfikacja przez administratora, sprawdzenie VAT w VIES, oferty pracy. | `public.companies`, `public.company_invitations`, `public.company_members`, `public.company_vies_checks`, `public.employer_profiles`, `public.job_content_reviews`, `public.job_duplications`, `public.jobs`, `public.screening_question_reviews` | Railway, Resend, EmailLabs, VIES (Komisja Europejska) | Zaproszenia wygasają po 14 dniach (status), nie są usuwane. |
 | E-maile i powiadomienia (`email-notifications`) | Kolejka email_deliveries, worker wysyłki, powiadomienia in-app, preferencje z dowodem zmiany zgody, wypisanie, budżet na odbiorcę, kampanie, blokady adresów po odbiciach/skargach. | `auth.email_outbox`, `public.breach_notice_recipients`, `public.breach_notices`, `public.email_campaign_recipients`, `public.email_consent_events`, `public.email_deliveries`, `public.email_recipient_windows`, `public.email_suppressions`, `public.notification_preferences`, `public.notifications`, `public.saved_search_alerts` | Railway, Resend, EmailLabs | email_send_windows czyszczone po 1 dniu; email_recipient_windows odbiorcy starsze niż 31 dni usuwane przy kolejkowaniu; kod nie usuwa email_deliveries ani email_consent_events (retencja odłożona — CLAUDE.md). |
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach (acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia. |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
-| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | Funkcja processed_webhooks_gc (30 dni) istnieje, ale kod jej nie wywołuje; audit_logs i rate_limits bez usuwania w kodzie. |
+| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.portal_legal_mode`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | /api/maintenance (0163): rate_limit_gc — okna limitera starsze niż doba; processed_webhooks_gc — rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. audit_logs bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, OpenAI (Responses API, model GPT-6 Luna) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Tłumaczenia AI (rdzeń) (`ai-translation`) | Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0145). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone. | `public.translation_documents`, `public.translation_jobs`, `public.translation_source_revisions`, `public.translation_sources` | Railway, OpenAI (Responses API, model GPT-6 Luna) | deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej). |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575). | — | Railway | job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance). |
@@ -444,6 +444,7 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 - **Migracja:** `supabase/migrations/0002_core_tables.sql`
 - **Czynności:** Profil zawodowy kandydata, Dopasowanie i zapisane wyszukiwania
 - **Osoby:** Kandydaci (konto)
+- **Uwaga:** Odbiorca „zweryfikowana firma” (wyszukiwanie profili, #494) tylko w trybie RECRUITMENT; w trybie ogłoszeniowym (decyzja produktowa, 0171/0173) firmy nie widzą profili, a włączenie widoczności jest odrzucane.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -508,6 +509,9 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 | `city` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
 | `verified_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0002_core_tables.sql` |
 | `status_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0084_admin_company_review.sql` |
+| `agency_recognition_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0167_offer_trust.sql` |
+| `agency_checked_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
+| `agency_check_note` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
 
 ### `public.company_invitations`
 
@@ -539,6 +543,30 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 | `is_active` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0002_core_tables.sql` |
 | `invited_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0002_core_tables.sql` |
 | `joined_at` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0002_core_tables.sql` |
+
+### `public.company_message_template_variants`
+
+- **Migracja:** `supabase/migrations/0170_recruiter_tools.sql`
+- **Czynności:** Kontakt pracodawca–kandydat
+- **Osoby:** Pracodawcy i członkowie firm
+- **Uwaga:** Treść szablonu pisze rekruter (tekst wolny); numer rejestru/dokumentu odrzucany w akcji (#495). Kasowane z szablonem.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `body` | Korespondencja i treści swobodne | `supabase/migrations/0170_recruiter_tools.sql` |
+| `locale` | nie dotyczy: Język wariantu szablonu (pl/nl/fr/en). | — |
+
+### `public.company_message_templates`
+
+- **Migracja:** `supabase/migrations/0170_recruiter_tools.sql`
+- **Czynności:** Kontakt pracodawca–kandydat
+- **Osoby:** Pracodawcy i członkowie firm
+- **Uwaga:** Szablony odpowiedzi firmy (0170): odczyt recruiter+ firmy, zapis RPC; usuwane kaskadą z firmą.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0170_recruiter_tools.sql` |
+| `name` | nie dotyczy: Nazwa szablonu odpowiedzi nadana przez firmę. | — |
 
 ### `public.company_vies_checks`
 
@@ -779,6 +807,20 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 | `age_attested_min` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0126_candidate_age_policy.sql` |
 | `age_attested_at` | Identyfikacja (imię, nazwisko, zdjęcie, rola) | `supabase/migrations/0126_candidate_age_policy.sql` |
 
+### `public.job_content_reviews`
+
+- **Migracja:** `supabase/migrations/0167_offer_trust.sql`
+- **Czynności:** Konta firm, zespół i weryfikacja
+- **Osoby:** Pracodawcy i członkowie firm, Administratorzy portalu
+- **Uwaga:** Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `requested_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
+| `decided_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
+| `decision_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
+| `ai_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
+
 ### `public.job_duplications`
 
 - **Migracja:** `supabase/migrations/0148_job_duplicate_draft.sql`
@@ -795,13 +837,16 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 - **Migracja:** `supabase/migrations/0003_jobs.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm
-- **Uwaga:** Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera.
+- **Uwaga:** Treść oferty to dane firmy; kontaktowy e-mail i autor mogą identyfikować rekrutera. Kanał aplikowania (e-mail, telefon) jest publiczny w ofercie i może wskazywać osobę po stronie firmy.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
 | `created_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0003_jobs.sql` |
 | `contact_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0003_jobs.sql` |
 | `address` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0003_jobs.sql` |
+| `apply_url` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0172_job_apply_channel.sql` |
+| `apply_email` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0172_job_apply_channel.sql` |
+| `apply_phone` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0172_job_apply_channel.sql` |
 
 ### `public.match_recompute_queue`
 
@@ -956,6 +1001,17 @@ Tabele w migracjach: 107; z danymi osobowymi: 70; bez danych osobowych: 37.
 | `status` | Proces rekrutacyjny (statusy, dopasowanie, odpowiedzi screeningowe) | `supabase/migrations/0005_processes.sql` |
 | `message` | Korespondencja i treści swobodne | `supabase/migrations/0005_processes.sql` |
 | `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0005_processes.sql` |
+
+### `public.portal_legal_mode`
+
+- **Migracja:** `supabase/migrations/0171_portal_legal_mode.sql`
+- **Czynności:** Bezpieczeństwo, audyt i limity
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Tryb portalu jako dane (0171, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `changed_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0171_portal_legal_mode.sql` |
 
 ### `public.profiles`
 
@@ -1259,16 +1315,18 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.job_funnel_receipts` | Losowy nonce jednego załadowania strony — nie identyfikuje osoby. |
 | `public.job_languages` | Treść ogłoszenia (dane firmy). |
 | `public.job_requirements` | Treść ogłoszenia (dane firmy). |
-| `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. |
+| `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0173) nowe pytania nie są zapisywane, a zapisane nie są pokazywane. |
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
 | `public.job_translations` | Treść ogłoszenia (dane firmy). |
+| `public.joint_committees` | Słownik/konfiguracja (komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169) — bez danych osobowych. |
+| `public.language_aliases` | Słownik/konfiguracja (nazwy języków PL/NL/FR/EN (0168)) — bez danych osobowych. |
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |
 | `public.location_aliases` | Słownik/konfiguracja (nazwy miejscowości PL/NL/FR/EN) — bez danych osobowych. |
 | `public.locations` | Słownik/konfiguracja (miejscowości) — bez danych osobowych. |
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |
 | `public.occupations` | Słownik/konfiguracja (zawody) — bez danych osobowych. |
-| `public.ops_job_runs` | Ostatni przebieg zadań utrzymaniowych (0213, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych. |
+| `public.ops_job_runs` | Ostatni przebieg zadań utrzymaniowych (0950, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych. |
 | `public.payments` | Martwy schemat billingu. |
 | `public.plan_entitlements` | Słownik/konfiguracja (limity planów) — bez danych osobowych. |
 | `public.processed_webhooks` | Identyfikatory zdarzeń webhooków do deduplikacji — bez danych osobowych. |

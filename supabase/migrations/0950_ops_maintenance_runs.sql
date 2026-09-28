@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0213_ops_maintenance_runs.sql — ostatni przebieg /api/maintenance dla czujek (#47).
+-- 0950_ops_maintenance_runs.sql — ostatni przebieg /api/maintenance dla czujek (#47).
 --
 -- Numer migracji tymczasowy (sesja potomna) — koordynator nadaje ostateczny.
 --

@@ -60,6 +60,7 @@ export type OpsRowId =
   | 'aiStaleReservations'
   | 'dbConnections'
   | 'appPoolWaiting'
+  | 'portalModeMismatch'
   | 'backupAge';
 
 /**
@@ -242,6 +243,9 @@ export function buildOpsRows(input: OpsDashboardInput): OpsRow[] {
       maxOf(percent(t.connectionsRatio * 100)), ['db_connections'], true,
       { key: 'connections', used: m.connections.used, available }),
     row('appPoolWaiting', 'database', count(input.appPool?.waiting ?? 0), POSITIVE, ['app_pool_waiting'], input.appPool !== null),
+    // #1143: env i baza mówią co innego o trybie portalu (sygnał z `status.ts`; wartość = 0/1).
+    row('portalModeMismatch', 'database', count(alerts.has('portal_legal_mode_mismatch') ? 1 : 0), POSITIVE,
+      ['portal_legal_mode_mismatch']),
   );
 
   // --- Kopia bazy (#569) -------------------------------------------------------------------------

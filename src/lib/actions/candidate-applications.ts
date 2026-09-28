@@ -10,8 +10,14 @@ import {
   type MyApplicationHistoryPage,
   type MyApplicationsPage,
 } from '@/lib/data/candidate';
+import type { ErrorCode } from '@/lib/errors';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { ScreeningAnswer } from '@/lib/screening/questions';
 import { APPLICATION_FILTERS } from '@/lib/candidate-application-filter';
+
+/** #1144 — decyzja produktowa: portal ogłoszeniowy (historia zgłoszeń niedostępna). */
+type Disabled = Extract<ErrorCode, 'RECRUITMENT_DISABLED'>;
+const DISABLED = { status: 'error', error: 'RECRUITMENT_DISABLED' } as const;
 
 const cursorSchema = z.object({
   submittedAt: z.iso.datetime({ offset: true }),
@@ -20,7 +26,7 @@ const cursorSchema = z.object({
 
 export type MoreApplicationsResult =
   | { status: 'ready'; page: MyApplicationsPage }
-  | { status: 'error' };
+  | { status: 'error'; error?: Disabled };
 
 /** Filtr etapu z klienta (#809): brak = wszystkie; wartość spoza listy = błąd, nie „wszystkie”. */
 const filterSchema = z.enum(APPLICATION_FILTERS).nullable().optional();
@@ -31,6 +37,7 @@ export async function loadMoreApplications(
   cursor: unknown,
   filter?: unknown,
 ): Promise<MoreApplicationsResult> {
+  if (!isRecruitmentEnabled('applications')) return DISABLED;
   if (!routing.locales.some((available) => available === locale)) return { status: 'error' };
   const parsed = cursorSchema.safeParse(cursor);
   const parsedFilter = filterSchema.safeParse(filter);
@@ -45,13 +52,14 @@ export async function loadMoreApplications(
 
 export type ApplicationAnswersResult =
   | { status: 'ready'; answers: ScreeningAnswer[] }
-  | { status: 'error' };
+  | { status: 'error'; error?: Disabled };
 
 /** Identyfikator zgłoszenia: UUID z bazy albo zgłoszenie DEMO (`demo-app-N`, tylko bez bazy). */
 const applicationIdSchema = z.union([z.uuid(), z.string().regex(/^demo-app-\d{1,2}$/)]);
 
 /** #101: odpowiedzi na pytania własnego zgłoszenia — odczyt pod bieżącą sesją i RLS. */
 export async function loadApplicationScreeningAnswers(applicationId: unknown): Promise<ApplicationAnswersResult> {
+  if (!isRecruitmentEnabled('applications')) return DISABLED;
   const parsed = applicationIdSchema.safeParse(applicationId);
   if (!parsed.success) return { status: 'error' };
 
@@ -69,7 +77,7 @@ const historyCursorSchema = z.object({
 
 export type MoreMyApplicationHistoryResult =
   | { status: 'ready'; page: MyApplicationHistoryPage }
-  | { status: 'error' };
+  | { status: 'error'; error?: Disabled };
 
 /**
  * Kolejna strona historii statusów własnego zgłoszenia („Pokaż więcej" w szczególe).
@@ -80,6 +88,7 @@ export async function loadMoreMyApplicationHistory(
   applicationId: unknown,
   cursor: unknown,
 ): Promise<MoreMyApplicationHistoryResult> {
+  if (!isRecruitmentEnabled('applications')) return DISABLED;
   const parsedId = z.uuid().safeParse(applicationId);
   const parsedCursor = historyCursorSchema.safeParse(cursor);
   if (!parsedId.success || !parsedCursor.success) return { status: 'error' };

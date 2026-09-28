@@ -136,6 +136,17 @@ describe('mapowanie czujek na wiersze', () => {
     expect(opsOverallState(data.alerts, data.warnings)).toBe(state);
   });
 
+  it('#1143: niezgodność trybu portalu (env vs baza) = alarm w wierszu portalModeMismatch; zgodność = ok', () => {
+    const data = input();
+    const mismatch = { ...data, alerts: [...data.alerts, 'portal_legal_mode_mismatch' as const] };
+    const rows = buildOpsRows(mismatch);
+    expect(byId(rows, 'portalModeMismatch')).toMatchObject({ state: 'alert', value: { kind: 'count', value: 1 } });
+    expect(rows.filter((r) => r.id !== 'portalModeMismatch' && r.state !== 'ok')).toEqual([]);
+    expect(opsOverallState(mismatch.alerts, mismatch.warnings)).toBe('alert');
+    // Kontrola ujemna: bez sygnału wiersz jest ok.
+    expect(byId(buildOpsRows(data), 'portalModeMismatch')).toMatchObject({ state: 'ok', value: { kind: 'count', value: 0 } });
+  });
+
   it('stan każdego wiersza wynika z list alerts/warnings (panel nie liczy progów sam)', () => {
     const data = input({
       metrics: { ...healthy, email: { ...healthy.email, oldestReadyAgeSeconds: 5000, failedLast24h: 1 } },

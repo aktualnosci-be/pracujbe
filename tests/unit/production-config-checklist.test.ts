@@ -53,6 +53,7 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
   E2E_REAL_KEEP: 'npm run test:e2e:real — zostawia bazę po teście (diagnostyka)',
   E2E_REAL_MUTATION: 'npm run test:e2e:real — kontrole ujemne (mutacje)',
   E2E_PORT: 'port serwera E2E przy równoległych przebiegach lokalnych (scripts/lib/e2e-server.mjs, #921)',
+  E2E_PORTAL_LEGAL_MODE: 'tryb produktu serwerów E2E (#1136): domyślnie RECRUITMENT, pusta = tryb ogłoszeniowy',
   E2E_REUSE_SERVER: 'jawne ponowne użycie działającego serwera E2E lokalnie (#921); w CI zawsze wyłączone',
   CI: 'ustawia GitHub Actions (wykrycie przebiegu CI w konfiguracji Playwright)',
   AUTH_SCHEMA_TEST_DATABASE_URL: 'test schematu Better Auth na jednorazowej bazie',

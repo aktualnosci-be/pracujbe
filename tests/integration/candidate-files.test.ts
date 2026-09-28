@@ -42,6 +42,12 @@ async function createUser(role = "candidate") {
   );
   return id;
 }
+async function setPortalMode(mode: string, expected: string) {
+  await admin!.query(
+    "SELECT public.admin_set_portal_legal_mode($1, 'integration: pliki CV', $2)",
+    [mode, expected],
+  );
+}
 function input(
   id: string,
   fields: Partial<CreateCandidateCvInput> = {},
@@ -154,6 +160,9 @@ beforeAll(async () => {
   } finally {
     checksumMigrator.release();
   }
+  // #1134/#1138 (0174): baza startuje w trybie ogłoszeniowym i odrzuca nowe pliki CV.
+  // Ten plik sprawdza przepływ CV, więc włącza RECRUITMENT jawnie (jedyną drogą zmiany — RPC).
+  await setPortalMode("RECRUITMENT", "CLASSIFIEDS_ONLY");
   await admin.query(`CREATE ROLE candidate_files_web LOGIN PASSWORD '${password}'
     NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
     GRANT pracujbe_app TO candidate_files_web;`);
@@ -568,6 +577,42 @@ describe("Metadane prywatnych CV — produkcyjne migracje i PostgreSQL 16", () =
     expect(await createOwnCandidateCv(app!, id, data)).toMatchObject({
       key: data.key,
     });
+  });
+  it("tryb ogłoszeniowy (0174): nowe CV odrzucone dla każdej ścieżki zapisu; istniejące własne CV można pobrać i usunąć", async () => {
+    const id = await createUser();
+    const existing = await createOwnCandidateCv(app!, id, input(id));
+    await setPortalMode("CLASSIFIEDS_ONLY", "RECRUITMENT");
+    try {
+      const data = input(id, { fileName: "Ogłoszeniowy.pdf" });
+      await expect(createOwnCandidateCv(app!, id, data)).rejects.toMatchObject({
+        code: "INTERNAL",
+        message: "INTERNAL",
+      });
+      // Także superużytkownik/service_role: strażnik działa w bazie, nie tylko w aplikacji.
+      await expect(fixture(id)).rejects.toMatchObject({
+        message: "RECRUITMENT_DISABLED",
+      });
+      expect(
+        (
+          await admin!.query("SELECT id FROM public.files WHERE path=$1", [
+            data.key,
+          ])
+        ).rows,
+      ).toHaveLength(0);
+      // Prawa do danych: istniejący plik zostaje dostępny i usuwalny.
+      expect(await getOwnDownloadableCv(app!, id, existing.id)).toEqual(
+        existing,
+      );
+      expect(await deleteOwnCandidateCv(app!, id, existing.id)).toEqual(
+        existing,
+      );
+    } finally {
+      await setPortalMode("RECRUITMENT", "CLASSIFIEDS_ONLY");
+    }
+    // Kontrola ujemna: po powrocie do RECRUITMENT zapis znów działa.
+    expect(
+      await createOwnCandidateCv(app!, id, input(id, { fileName: "Znów.pdf" })),
+    ).toMatchObject({ ownerId: id, bucket: "candidate-files" });
   });
   it("błąd COMMIT usunięcia nie zwraca klucza do S3 i przywraca rekord", async () => {
     const id = await createUser();

@@ -14,10 +14,13 @@ import { readOpsStatus } from '@/lib/ops/status';
  * HTTP 503 `unavailable` — metryk nie da się odczytać (baza/konfiguracja; szczegół w kanale błędów);
  * HTTP 503 `unconfigured` — brak źródła metryk (`DATABASE_OPS_URL` ani service-role).
  *
+ * #1143: `portal_legal_mode_mismatch` — env `PORTAL_LEGAL_MODE` i tryb w bazie (0171) różnią się
+ * (503 `alert`); `portalLegalMode` = nazwy trybów env/bazy/efektywnego.
+ *
  * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
  * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
  *
- * 0213: `maintenanceRun` = ostatni przebieg `/api/maintenance` (brak = ostrzeżenie, > 2 h = alarm).
+ * 0950: `maintenanceRun` = ostatni przebieg `/api/maintenance` (brak = ostrzeżenie, > 2 h = alarm).
  * Ten sam odczyt (`readOpsStatus`) pokazuje panel `/admin/operacje`.
  */
 
@@ -37,9 +40,9 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ status: result.kind, checkedAt, backup: result.backup }, { status: 503, headers });
   }
 
-  const { status, alerts, warnings, metrics, appPool, aiBudget, maintenanceRun, backup } = result;
+  const { status, alerts, warnings, metrics, appPool, aiBudget, maintenanceRun, backup, portalLegalMode } = result;
   return Response.json(
-    { status, alerts, warnings, checkedAt, metrics, appPool, aiBudget, maintenanceRun: maintenanceRun ?? null, backup },
+    { status, alerts, warnings, checkedAt, metrics, appPool, aiBudget, maintenanceRun: maintenanceRun ?? null, backup, portalLegalMode },
     { status: status === 'ok' ? 200 : 503, headers },
   );
 }

@@ -26,7 +26,9 @@ import { LocationGrid } from '@/components/public/LocationGrid';
  * Lekka, mobile-first, w większości serwerowa (RSC). Wygląd i kolejność sekcji to kalka
  * prototypu „Ludzie i praca” (`people.js` + `conditions.css`, klasy `.pp-*` w globals.css):
  * hero (teza + fotografia) → wyszukiwarka → najnowsze oferty w siatce paszportów → „W czym
- * jesteś dobry?” (dwie branże + „Profil zamiast CV”). Niżej sekcje aplikacji, których
+ * jesteś dobry?” (dwie branże + karta „Zapisane wyszukiwania” w slocie `.p-profile-note`).
+ * Treść = portal ogłoszeń (decyzja produktowa #1128/#1149): bez obietnic dopasowania,
+ * aplikowania przez portal ani widoczności profilu. Niżej sekcje aplikacji, których
  * prototyp nie ma (wejścia, pasek zaufania, kategorie, lokalizacje, „Jak to działa?”,
  * karta pracodawcy) — funkcje i linki bez zmian. Stopka jest w layoucie `(public)`.
  *
@@ -184,7 +186,8 @@ export default async function HomePage({ params }: HomePageProps) {
         )}
       </section>
 
-      {/* „W czym jesteś dobry?” — `.p-fields`: dwie branże ze zdjęciem + „Profil zamiast CV”. */}
+      {/* „W czym jesteś dobry?” — `.p-fields`: dwie branże ze zdjęciem + karta zapisanych wyszukiwań
+          (slot `.p-profile-note` prototypu; link do listy ofert, gdzie zapisuje się filtry). */}
       <section className="pp-fields">
         <div className="pp-section-head">
           <div className="min-w-0">
@@ -212,7 +215,7 @@ export default async function HomePage({ params }: HomePageProps) {
               {t.rich('profileNoteTitle', { br: () => <br className="max-[760px]:hidden" /> })}
             </h2>
             <p>{t('profileNoteBody')}</p>
-            <Link href="/rejestracja" className="pp-btn">
+            <Link href={JOBS_PATH} className="pp-btn">
               {t('profileNoteCta')}
             </Link>
           </aside>

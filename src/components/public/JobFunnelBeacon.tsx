@@ -6,6 +6,7 @@ import type { FunnelEvent } from '@/lib/job-funnel/events';
 import {
   beginDetailView,
   newFunnelNonce,
+  reportApplyStarted,
   sendFunnelEvent,
   whenFunnelConsent,
   whenPageVisible,
@@ -18,13 +19,19 @@ import {
  * w trybie deweloperskim), więc ponowienie nie dubluje zliczenia.
  * #575: wysyłka tylko po zgodzie analitycznej (`whenFunnelConsent`) — przed decyzją zdarzenie
  * czeka w pamięci karty, odmowa/wycofanie je usuwa, odmontowanie widoku anuluje.
+ *
+ * `applyClicks` (#1130, tryb ogłoszeniowy): kliknięcie w link kanału ogłoszeniodawcy
+ * (`a[data-apply-job="<id>"]`, renderowany na serwerze przez `EmployerApplyChannel`) =
+ * `apply_started` — ta sama bramka zgody. Nasłuch w tej wyspie zamiast osobnej (budżet JS #395).
  */
 export function JobFunnelBeacon({
   event,
   jobIds,
+  applyClicks = false,
 }: {
   event: Extract<FunnelEvent, 'search_appearance' | 'detail_view'>;
   jobIds: readonly string[];
+  applyClicks?: boolean;
 }): null {
   const key = jobIds.join(',');
   const sent = React.useRef<{ key: string; nonce: string } | null>(null);
@@ -48,6 +55,20 @@ export function JobFunnelBeacon({
       cancelConsent();
     };
   }, [event, key]);
+
+  React.useEffect(() => {
+    if (!applyClicks) return;
+    const onClick = (e: MouseEvent) => {
+      const id = e.target instanceof Element ? e.target.closest('a[data-apply-job]')?.getAttribute('data-apply-job') : null;
+      if (id && key.split(',').includes(id)) reportApplyStarted(id);
+    };
+    document.addEventListener('click', onClick);
+    document.addEventListener('auxclick', onClick);
+    return () => {
+      document.removeEventListener('click', onClick);
+      document.removeEventListener('auxclick', onClick);
+    };
+  }, [applyClicks, key]);
 
   return null;
 }

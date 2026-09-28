@@ -20,8 +20,10 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { queryOne, queryRows, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
+import { extensionOfMime, safeFileName } from '@/lib/files/file-type';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoCompanies, resolveDemoJobs } from '@/lib/data/demo';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt danych komunikacji
@@ -81,6 +83,18 @@ export interface ThreadCursor {
 /** Liczba wiadomości na stronę wątku (pierwsza strona = najnowsze, kolejne = starsze). */
 export const THREAD_PAGE_SIZE = 50;
 
+/**
+ * Stan blokady firmy tej rozmowy dla kandydata (#97, #832) — pozwala zablokować firmę
+ * z istniejącego wątku, niezależnie od tego, czy ma jeszcze publiczną ofertę. `null` = rozmowa
+ * nie jest firmowa, widz jest po stronie firmy (pracodawca nie blokuje sam siebie), albo nazwa
+ * firmy nierozwiązywalna — kontrolka się wtedy nie renderuje.
+ */
+export interface ConversationCompanyBlock {
+  companyId: string;
+  companyName: string;
+  blocked: boolean;
+}
+
 export interface ConversationThread {
   id: string;
   subject: string;
@@ -89,6 +103,8 @@ export interface ConversationThread {
   messages: ThreadMessage[];
   /** Kursor do doładowania starszych; `null` = to już początek rozmowy. */
   olderCursor: ThreadCursor | null;
+  /** Blokada firmy tej rozmowy widziana przez kandydata (#832); `undefined`/`null` = brak kontrolki. */
+  companyBlock?: ConversationCompanyBlock | null;
 }
 
 export type ConversationThreadResult =
@@ -230,9 +246,11 @@ async function fetchAttachments(
     const size = r['size_bytes'];
     if (!messageId || !id) continue;
     const list = map.get(messageId) ?? [];
+    const ext = extensionOfMime(asStr(r['mime_type']));
     list.push({
       id,
-      fileName: asStr(r['file_name']),
+      // Nazwa jak w nagłówku pobrania: rozszerzenie z typu, bez znaków kierunku (także stare wiersze).
+      fileName: ext ? safeFileName(asStr(r['file_name']), ext, 'file') : asStr(r['file_name']),
       mimeType: asStr(r['mime_type']),
       sizeBytes: typeof size === 'number' ? size : 0,
       downloadable: r['downloadable'] === true,
@@ -291,6 +309,27 @@ async function fetchSenderContext(
     teamIds: memberIds,
     viewerIsCompany: memberIds.has(uid),
   };
+}
+
+/**
+ * Stan blokady firmy tej rozmowy dla KANDYDATA (#832): tylko gdy rozmowa jest firmowa,
+ * widz nie jest jej członkiem (`ctx.viewerIsCompany`) i nazwa firmy jest rozwiązywalna
+ * (inaczej neutralnie brak kontrolki, jak przy nierozwiązywalnym nadawcy). Odczyt bezpośrednio
+ * z `candidate_company_blocks` pod RLS — polityka `candidate_company_blocks_select_own` (0078)
+ * zwraca wyłącznie wiersz bieżącego `auth.uid()`; zapis zostaje przez `set_company_block`
+ * (RPC już przyjmuje dowolną nieusuniętą firmę, bez wymogu aktywnej publicznej oferty).
+ */
+async function fetchCompanyBlock(
+  tx: TransactionQuery,
+  uid: string,
+  companyId: string,
+  ctx: SenderContext,
+): Promise<ConversationCompanyBlock | null> {
+  if (!companyId || ctx.viewerIsCompany || !ctx.companyName) return null;
+  const row = await queryOne(tx, 'messages.company-block',
+    `SELECT 1 AS blocked FROM public.candidate_company_blocks
+      WHERE candidate_id = $1 AND company_id = $2`, [uid, companyId]);
+  return { companyId, companyName: ctx.companyName, blocked: row !== null };
 }
 
 /**
@@ -420,12 +459,15 @@ function buildDemo(locale: Locale): {
       unread: seed.unread,
       unreadCount: seed.unread ? 1 : 0,
     });
+    const companyId = demoCompanies[seed.companyIdx]?.id ?? '';
     threads.set(seed.id, {
       id: seed.id,
       subject,
       counterpartyName: companyName,
       messages,
       olderCursor: null,
+      // Demo (#12): kontrolka blokady widoczna też bez env, zawsze nie zablokowane na start.
+      companyBlock: companyId && companyName ? { companyId, companyName, blocked: false } : null,
     });
   }
 
@@ -453,6 +495,9 @@ function toLocale(locale: string | undefined): Locale {
  * wyłącznie treścią DEMO (#359); realne wiadomości to dane użytkowników, bez tłumaczenia.
  */
 export async function getConversationsResult(locale?: string): Promise<ConversationsResult> {
+  // #1134: tryb ogłoszeniowy — rozmowy kandydat ↔ pracodawca wyłączone; bez zapytań do bazy
+  // (licznik nieprzeczytanych = 0, bez plakietki, także w demo).
+  if (!isRecruitmentEnabled('messaging')) return { status: 'ready', items: [] };
   if (!isPortalDataConfigured()) return { status: 'ready', items: buildDemo(toLocale(locale)).list };
 
   try {
@@ -561,6 +606,7 @@ export async function getConversationThread(
   conversationId: string,
   locale?: string,
 ): Promise<ConversationThreadResult> {
+  if (!isRecruitmentEnabled('messaging')) return { status: 'not-found' }; // #1134
   if (!isPortalDataConfigured()) {
     const thread = buildDemo(toLocale(locale)).threads.get(conversationId);
     return thread ? { status: 'ready', thread } : { status: 'not-found' };
@@ -599,6 +645,7 @@ export async function getConversationThread(
       const companyId = asStr(conv['company_id']);
       const ctx = await fetchSenderContext(tx, uid, cid, companyId, senderIds);
       const messages = toThreadMessages(messageRows, uid, ctx);
+      const companyBlock = await fetchCompanyBlock(tx, uid, companyId, ctx);
 
       return {
         status: 'ready',
@@ -608,6 +655,7 @@ export async function getConversationThread(
           counterpartyName: resolveCounterparty(otherIds, ctx.nameByProfile, ctx.companyName),
           messages,
           olderCursor,
+          companyBlock,
         },
       };
     });
@@ -625,6 +673,7 @@ export async function getOlderThreadMessages(
   conversationId: string,
   cursor: ThreadCursor,
 ): Promise<OlderMessagesResult> {
+  if (!isRecruitmentEnabled('messaging')) return { status: 'not-found' }; // #1134
   if (!isPortalDataConfigured()) {
     // Demo ma krótkie wątki (bez kursora), więc starsza strona zawsze jest pusta.
     return DEMO_SEEDS.some((seed) => seed.id === conversationId)
@@ -673,7 +722,7 @@ const NO_REPORTS: MyMessageReports = { messageIds: [], conversationReported: fal
  * ponownie. Awaria = brak oznaczeń (przycisk zgłoszenia zostaje; baza i tak nie zdubluje sprawy).
  */
 export async function getMyMessageReports(conversationId: string): Promise<MyMessageReports> {
-  if (!isPortalDataConfigured()) return NO_REPORTS;
+  if (!isRecruitmentEnabled('messaging') || !isPortalDataConfigured()) return NO_REPORTS;
   try {
     const me = await getPortalIdentity();
     if (!me) return NO_REPORTS;

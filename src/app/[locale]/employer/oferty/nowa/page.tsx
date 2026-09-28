@@ -6,6 +6,7 @@ import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { getEmployerShellData } from '@/lib/data/employer';
 import { isJobImportEnabled } from '@/lib/ai-import/config';
 import { isJobAssistEnabled } from '@/lib/ai-assist/config';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Kreator oferty pracy — nowa oferta (Etap 5, makieta panelu pracodawcy).
@@ -41,6 +42,7 @@ export default async function NewJobPage({
   setRequestLocale(locale);
 
   const shell = await getEmployerShellData();
+  const companyId = shell.status === 'ok' ? shell.activeId : null;
   return (
     <>
       {shell.status === 'ok' ? (
@@ -52,7 +54,14 @@ export default async function NewJobPage({
       ) : null}
       {/* #465: krok importu z ogłoszenia tylko przy włączonej fladze i skonfigurowanym dostawcy;
           #37: asystent redagowania treści — ta sama zasada (osobna flaga). */}
-      <NewJobWizard importEnabled={isJobImportEnabled()} assistEnabled={isJobAssistEnabled()} />
+      {/* CC25-02/EMP-02: kreator wie, dla której firmy go wyrenderowano (szkic tylko w niej,
+          po przełączeniu firmy montuje się od nowa — klucz w NewJobWizard). */}
+      <NewJobWizard
+        companyId={companyId}
+        importEnabled={isJobImportEnabled()}
+        assistEnabled={isJobAssistEnabled()}
+        screeningEnabled={isRecruitmentEnabled('screening')}
+      />
     </>
   );
 }

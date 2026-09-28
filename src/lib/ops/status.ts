@@ -10,12 +10,18 @@ import {
 } from '@/lib/ops/backup-freshness';
 import { readOpsMetrics } from '@/lib/ops/metrics-source';
 import {
+  portalLegalModeAlerts,
+  portalLegalModeSummary,
+  type PortalLegalModeSignal,
+} from '@/lib/ops/portal-mode';
+import {
   evaluateOps,
   type AppPoolStats,
   type MaintenanceRun,
   type OpsMetrics,
   type OpsSignal,
 } from '@/lib/ops/sensors';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Jeden odczyt stanu czujek (#47) dla `/api/health/ops` i panelu `/admin/operacje` — oba widoki
@@ -26,14 +32,16 @@ export type OpsStatus =
   | {
       kind: 'ok';
       status: 'ok' | 'alert';
-      alerts: Array<OpsSignal | BackupSignal>;
+      alerts: Array<OpsSignal | BackupSignal | PortalLegalModeSignal>;
       warnings: OpsSignal[];
       metrics: OpsMetrics;
       appPool: AppPoolStats | null;
       aiBudget: AiBudgetStatus | null;
-      /** `undefined` = baza sprzed 0213 (czujka nie mierzy), `null` = odczyt się nie udał. */
+      /** `undefined` = baza sprzed 0950 (czujka nie mierzy), `null` = odczyt się nie udał. */
       maintenanceRun: MaintenanceRun | null | undefined;
       backup: BackupFreshness;
+      /** #1143: nazwy trybów env/bazy/efektywnego (dwuklucz), bez konfiguracji. */
+      portalLegalMode: ReturnType<typeof portalLegalModeSummary>;
     }
   | { kind: 'unconfigured'; backup: BackupFreshness }
   | { kind: 'unavailable'; backup: BackupFreshness };
@@ -45,7 +53,14 @@ export async function readOpsStatus(): Promise<OpsStatus> {
   }
   const appPool = domainPoolStats();
   const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget, result.maintenanceRun);
-  const alerts = [...evaluation.alerts, ...backupAlerts(backup)];
+  // #1143: env i baza muszą mówić to samo; rozbieżność = alarm (tryb efektywny i tak ogłoszeniowy).
+  const envRecruitment = isRecruitmentEnabled();
+  const dbRecruitment = result.metrics.portalLegalMode?.recruitmentEnabled;
+  const alerts = [
+    ...evaluation.alerts,
+    ...portalLegalModeAlerts(dbRecruitment, envRecruitment),
+    ...backupAlerts(backup),
+  ];
   return {
     kind: 'ok',
     status: alerts.length ? 'alert' : 'ok',
@@ -56,5 +71,6 @@ export async function readOpsStatus(): Promise<OpsStatus> {
     aiBudget: result.aiBudget ?? null,
     maintenanceRun: result.maintenanceRun,
     backup,
+    portalLegalMode: portalLegalModeSummary(dbRecruitment, envRecruitment),
   };
 }

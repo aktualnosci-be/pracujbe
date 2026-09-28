@@ -8,6 +8,7 @@ import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
@@ -42,6 +43,8 @@ export default async function CandidateLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  // #1128/#1142: tryb produktu liczony na serwerze i podawany do klienckiego chrome'u.
+  const recruitmentEnabled = isRecruitmentEnabled();
 
   let notifItems: NotificationItem[] | undefined;
   let notifUnread: number | undefined;
@@ -50,6 +53,8 @@ export default async function CandidateLayout({
   let userName: string | undefined;
   // #576: konto 16–17 → lejek ofert wyłączony na tym urządzeniu; nieznany stan → bez zmian.
   let knownMinor: boolean | undefined;
+  // #864: prawdziwa sesja Better Auth (nie demo) — panel dostaje `SessionKeepAlive`.
+  let hasSession = false;
 
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
@@ -57,6 +62,7 @@ export default async function CandidateLayout({
       redirect({ href: '/logowanie', locale: locale as Locale });
       return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
+    hasSession = true;
     // Pracodawca → jego panel; administrator → panel admina. Twarda granica roli kandydata
     // jest dodatkowo w RPC (ensure_candidate_profile/apply_to_job, P1-04).
     if (identity.role === 'employer') {
@@ -71,7 +77,8 @@ export default async function CandidateLayout({
     // Realne powiadomienia + licznik nieprzeczytanych konwersacji (pod sesją/RLS).
     const [notif, unread, age] = await Promise.all([
       getNotifications(locale),
-      getUnreadConversationsCount(),
+      // #1142: w trybie ogłoszeniowym panel nie ma pozycji „Wiadomości” — bez licznika.
+      recruitmentEnabled ? getUnreadConversationsCount() : Promise.resolve(undefined),
       loadMyAgeAttestation().catch(() => null),
     ]);
     if (age?.status === 'ready' && !age.demo && age.attestedMinAge !== null) {
@@ -104,6 +111,8 @@ export default async function CandidateLayout({
       notificationError={notificationError}
       unreadMessages={unreadMessages}
       userName={userName}
+      keepSessionAlive={hasSession}
+      recruitmentEnabled={recruitmentEnabled}
     >
       {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}

@@ -9,12 +9,18 @@ vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fake
 vi.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/actions/jobs', () => ({ setJobStatus: vi.fn() }));
+const { revalidatePath } = vi.hoisted(() => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ revalidatePath }));
 
 import { isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 import { allowedActions } from '@/components/employer/JobLifecycleActions';
 import { POST } from '@/app/api/maintenance/route';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
+withRecruitmentMode();
 
 const NOW = new Date('2026-09-24T12:00:00.000Z');
 
@@ -65,6 +71,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'run_retention_purge',
     'purge_job_funnel_data',
     'purge_stale_message_attachments',
+    'rate_limit_gc',
+    'processed_webhooks_gc',
     'claim_storage_deletions',
   ];
 
@@ -73,6 +81,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     resetFakeDb(null);
     for (const fn of TASKS) fakeDb.rpc(fn, 0);
     fakeDb.rpc('claim_storage_deletions', []);
+    // #1143: tryb efektywny = env (plik: RECRUITMENT) ORAZ baza — baza też RECRUITMENT.
+    fakeDb.rpc('recruitment_enabled', true);
     process.env.MAINTENANCE_SECRET = 'maintenance-secret';
     delete process.env.CRON_SECRET;
     // Kampanie (#45) kolejkują się tylko z kompletem nadawcy marketingu i sekretem wypisania.
@@ -96,11 +106,11 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     expect(fakeDb.callsTo('expire_due_jobs')).toEqual([expect.objectContaining({ args: {}, as: 'service' })]);
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
     // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
-    // 0213: na końcu przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
-    expect(fakeDb.calls.map((c) => c.name)).toEqual([
-      ...TASKS.filter((t) => t !== 'run_retention_purge'),
-      'record_ops_job_run',
-    ]);
+    // #1143: tryb bazy sprawdzany tuż przed materializacją dopasowań.
+    // 0950: na końcu przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
+    const expected = TASKS.filter((t) => t !== 'run_retention_purge');
+    expected.splice(expected.indexOf('match_recompute_claim'), 0, 'recruitment_enabled');
+    expect(fakeDb.calls.map((c) => c.name)).toEqual([...expected, 'record_ops_job_run']);
     expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
       expect.objectContaining({
         args: expect.objectContaining({ p_job: 'maintenance', p_ok: true, p_failed_task: null }),
@@ -122,12 +132,33 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       // #575: terminy lejka ofert (0128).
       jobFunnel: {},
       purgedMessageAttachments: 0,
-      // #17: bez bucketu Railway GC bucketu pominięty.
+      purgedRateLimits: 0,
+      purgedWebhookInbox: 0,
+      // #17/#833: bez bucketu Railway oba GC bucketu (CV i załączników wiadomości) pominięte.
       storageGc: null,
+      messageAttachmentsGc: null,
       // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.
       dsaRetention: { mode: 'off' },
       storageDeletions: { claimed: 0, deleted: 0, failed: 0 },
     });
+    // #775: oferty wygaszone w tym przebiegu muszą zniknąć z publicznych stron ISR od razu,
+    // nie dopiero po 60 s okna rewalidacji.
+    expect(revalidatePath.mock.calls).toEqual(
+      expect.arrayContaining([
+        ['/[locale]', 'page'],
+        ['/[locale]/oferty-pracy/[slug]', 'page'],
+        ['/[locale]/praca/kategoria/[category]', 'page'],
+        ['/[locale]/praca/miasto/[city]', 'page'],
+      ]),
+    );
+  });
+
+  it('kontrola ujemna: bez wygaszonych ofert (0) nie rewaliduje publicznych stron', async () => {
+    fakeDb.rpc('expire_due_jobs', 0);
+    const res = await POST(request('Bearer maintenance-secret'));
+    expect(res.status).toBe(200);
+    expect((await res.json()).expiredJobs).toBe(0);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('błąd wygaszania → 503 bez pozornego sukcesu i bez szczegółów w odpowiedzi', async () => {
@@ -139,7 +170,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // Bez wygaszenia nie wysyłamy alertów; pozostałe zadania idą dalej (osobne transakcje).
     expect(fakeDb.callsTo('process_saved_search_alerts')).toHaveLength(0);
     expect(fakeDb.callsTo('process_email_campaigns')).toHaveLength(1);
-    // 0213: nieudany przebieg też jest zapisany — z samą nazwą zadania (bez treści błędu).
+    // 0950: nieudany przebieg też jest zapisany — z samą nazwą zadania (bez treści błędu).
     expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
       expect.objectContaining({ args: expect.objectContaining({ p_ok: false, p_failed_task: 'jobExpiry' }) }),
     ]);
@@ -150,5 +181,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       area: 'maintenance.gc',
       task: 'jobExpiry',
     });
+    // #775: błąd RPC nie zwraca liczby wygaszonych ofert (`task()` łapie wyjątek → null),
+    // więc nic nie jest unieważniane.
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

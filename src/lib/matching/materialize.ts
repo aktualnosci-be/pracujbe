@@ -14,6 +14,7 @@ import {
 import { locationLookupKeys } from '@/lib/matching/locations';
 import { referenceDate } from '@/lib/matching/reference-date';
 import { scoreMatch } from '@/lib/matching/score';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Materializacja dopasowań `matches` (audyt P1-03, migracja 0147).
@@ -127,6 +128,9 @@ export async function runMatchRecompute(
   const pairLimit = options.pairLimit ?? MATCH_PAIR_LIMIT;
   const today = referenceDate(options.now?.() ?? new Date());
   const run: MatchRecomputeRun = { subjects: 0, failed: 0, upserted: 0, deleted: 0, skipped: 0 };
+  // #1131: tryb ogłoszeniowy — druga linia obrony (maintenance i tak nie woła): bez
+  // `match_recompute_claim`, bez połączenia z bazą.
+  if (!isRecruitmentEnabled('matching')) return run;
 
   while (run.subjects < maxSubjects) {
     const claimed = await withServiceRole((tx) =>

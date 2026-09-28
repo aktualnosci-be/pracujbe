@@ -95,6 +95,8 @@ const FIXTURE_ONLY_SPECS = [
   '**/candidate-applications-pagination.spec.ts',
   '**/candidate-applications-error.spec.ts',
   '**/candidate-proposals-pagination.spec.ts',
+  // Zapisane oferty zamknięte/wygasłe/wstrzymane (0162) — dane fikcyjne ze wszystkimi stanami.
+  '**/candidate-saved-closed.spec.ts',
   '**/candidate-dashboard-read-errors.spec.ts',
   '**/public-read-failures.spec.ts',
   // Formularz aplikowania i JobPosting ofert „realnych” — od #297 tryb demo pokazuje zamiast
@@ -251,7 +253,57 @@ const DEMO_SHARD = process.env.E2E_DEMO_SHARD ?? '';
 if (DEMO_SHARD && !DEMO_SHARDS.includes(DEMO_SHARD)) {
   throw new Error(`E2E_DEMO_SHARD=${DEMO_SHARD}: dozwolone ${DEMO_SHARDS.join(', ')}`);
 }
-const EXCLUDED_FROM_CHROMIUM = [...FIXTURE_ONLY_SPECS, ...TIMING_SPECS];
+/**
+ * Tryb produktu serwera testowego (#1136). Istniejące specy pokrywają przepływy rekrutacyjne,
+ * więc serwer dostaje JAWNIE `PORTAL_LEGAL_MODE=RECRUITMENT` (bez tego po wyłączeniach z #1128
+ * straciłyby pokrycie). Specy trybu ogłoszeniowego uruchamia się z `E2E_PORTAL_LEGAL_MODE=`
+ * (pusta = CLASSIFIEDS_ONLY, jak domyślnie w produkcji, demo i dev).
+ */
+const E2E_PORTAL_LEGAL_MODE = process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT';
+const CLASSIFIEDS_SERVER = E2E_PORTAL_LEGAL_MODE.trim().toUpperCase() !== 'RECRUITMENT';
+
+/**
+ * Zestaw trybu ogłoszeniowego (#1166) — tryb produkcyjny portalu. Serwer ogłoszeniowy
+ * (`E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY`, job CI `e2e-classifieds`) uruchamia w projekcie
+ * `chromium` WYŁĄCZNIE te speci (reszta zestawu testuje przepływy rekrutacyjne):
+ * - `CLASSIFIEDS_ONLY_SPECS` — sprawdzają wyłączenia i „Aplikuj u pracodawcy”; przy serwerze
+ *   `RECRUITMENT` są pomijane w projekcie `chromium` (w shardach nie ma ich wcale);
+ * - `CLASSIFIEDS_SHARED_SPECS` — strony publiczne i panele, które mają przechodzić w obu trybach
+ *   (biegną też w shardach demo).
+ */
+const CLASSIFIEDS_ONLY_SPECS = [
+  '**/classifieds-employer-stats.spec.ts',
+  '**/classifieds-matching-off.spec.ts',
+  '**/classifieds-messaging-cv-off.spec.ts',
+  '**/classifieds-process-off.spec.ts',
+  '**/classifieds-profile-screening.spec.ts',
+  '**/job-detail-employer-apply.spec.ts',
+];
+const CLASSIFIEDS_SHARED_SPECS = [
+  '**/a11y.spec.ts',
+  '**/employer-dashboard-a11y.spec.ts',
+  '**/employers-page.spec.ts',
+  '**/free-mvp-no-sales.spec.ts',
+  '**/help-contact.spec.ts',
+  '**/job-detail-a11y.spec.ts',
+  '**/landing-headings.spec.ts',
+  '**/panel-noindex.spec.ts',
+  '**/seo.spec.ts',
+  '**/smoke.spec.ts',
+  '**/structured-data.spec.ts',
+];
+const CLASSIFIEDS_SPECS = [...CLASSIFIEDS_ONLY_SPECS, ...CLASSIFIEDS_SHARED_SPECS];
+for (const spec of CLASSIFIEDS_SPECS) {
+  if (!existsSync(join(__dirname, 'tests', 'e2e', spec.replace('**/', '')))) {
+    throw new Error(`CLASSIFIEDS_SPECS: ${spec} nie istnieje w tests/e2e`);
+  }
+}
+if (CLASSIFIEDS_SERVER && DEMO_SHARD) {
+  // Shardy dzielą zestaw rekrutacyjny; serwer ogłoszeniowy ma własny, mały zestaw.
+  throw new Error('E2E_DEMO_SHARD nie łączy się z trybem ogłoszeniowym (E2E_PORTAL_LEGAL_MODE)');
+}
+
+const EXCLUDED_FROM_CHROMIUM = [...FIXTURE_ONLY_SPECS, ...TIMING_SPECS, ...CLASSIFIEDS_ONLY_SPECS];
 for (const [name, specs] of [
   ['DEMO_SHARD_1_SPECS', DEMO_SHARD_1_SPECS],
   ['DEMO_SHARD_2_SPECS', DEMO_SHARD_2_SPECS],
@@ -327,9 +379,12 @@ export default defineConfig({
       // Shard 1/2 = jawna lista (testMatch); shard 3 = dopełnienie (testIgnore obu list).
       ...(DEMO_SHARD === '1' ? { testMatch: DEMO_SHARD_1_SPECS } : {}),
       ...(DEMO_SHARD === '2' ? { testMatch: DEMO_SHARD_2_SPECS } : {}),
+      // Serwer ogłoszeniowy = tylko zestaw trybu ogłoszeniowego (shard wtedy niedozwolony).
+      ...(CLASSIFIEDS_SERVER ? { testMatch: CLASSIFIEDS_SPECS } : {}),
       testIgnore: [
         ...FIXTURE_ONLY_SPECS,
         ...TIMING_SPECS,
+        ...(CLASSIFIEDS_SERVER ? [] : CLASSIFIEDS_ONLY_SPECS),
         ...(DEMO_SHARD === '3' ? [...DEMO_SHARD_1_SPECS, ...DEMO_SHARD_2_SPECS] : []),
       ],
       use: BROWSER,
@@ -337,6 +392,8 @@ export default defineConfig({
     {
       name: 'chromium-timing',
       testMatch: TIMING_SPECS,
+      // INP otwarcia ApplyModal (#393) — dialog istnieje tylko przy serwerze RECRUITMENT.
+      ...(CLASSIFIEDS_SERVER ? { testIgnore: TIMING_SPECS } : {}),
       // Jeden worker i start po zakończeniu projektu `chromium` = pomiar bez konkurencji o CPU.
       workers: 1,
       dependencies: ['chromium'],
@@ -353,7 +410,13 @@ export default defineConfig({
       ? `npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`
       : `npm run build && npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`,
     // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
-    env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, ...JOB_ASSIST_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
+    env: {
+      ...TRACKER_ENV,
+      ...JOB_IMPORT_ENV,
+      ...JOB_ASSIST_ENV,
+      EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET,
+      PORTAL_LEGAL_MODE: E2E_PORTAL_LEGAL_MODE,
+    },
     url: BASE_URL,
     // Jawne E2E_REUSE_SERVER=1 (poza CI) — np. własny `npm run dev` na tym porcie.
     reuseExistingServer: e2eReuseServer(),

@@ -2,6 +2,13 @@ import { expect, test, type Page } from '@playwright/test';
 
 import pl from '../../src/messages/pl.json';
 
+// #1128: przepływ rekrutacyjny — pomijany przy serwerze w trybie ogłoszeniowym (E2E_PORTAL_LEGAL_MODE=);
+// zachowanie trybu ogłoszeniowego sprawdza classifieds-profile-screening.spec.ts.
+test.skip(
+  (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().toUpperCase() !== 'RECRUITMENT',
+  'serwer testowy w trybie ogłoszeniowym',
+);
+
 /**
  * #101 — pytania screeningowe w kroku 7 kreatora (tryb demo: zapis nie trafia do bazy —
  * zapis, atomowość i blokadę po publikacji dowodzi `rls.sql` sekcja SQ101).

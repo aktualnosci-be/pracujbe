@@ -5,6 +5,11 @@ import { respondToOffer, sendOffer } from '@/lib/actions/offers';
 import { saveOnboardingStep } from '@/lib/actions/onboarding';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * #350 — cienka warstwa Server Actions przepływu z CLAUDE.md §9 (aplikacja → status →
@@ -31,6 +36,8 @@ const USER = '66666666-6666-4666-8666-666666666666';
 const PG_ERRORS: Array<[string, string]> = [
   ['COMPANY_NOT_VERIFIED: company 7 is pending', 'COMPANY_NOT_VERIFIED'],
   ['JOB_NOT_ACTIVE', 'JOB_NOT_ACTIVE'],
+  // #1140 (0171): baza w trybie ogłoszeniowym odrzuca nowe dane procesu (kod 42501).
+  ['RECRUITMENT_DISABLED', 'RECRUITMENT_DISABLED'],
   ['NOT_FOUND: job', 'NOT_FOUND'],
   ['PERMISSION_DENIED', 'PERMISSION_DENIED'],
   ['UNAUTHENTICATED', 'PERMISSION_DENIED'],

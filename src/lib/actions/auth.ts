@@ -29,6 +29,7 @@ import { redirect } from '@/i18n/navigation';
 import { routing, type Locale } from '@/i18n/routing';
 import { bootstrapCompany } from '@/lib/auth/bootstrap-company';
 import { kickAuthEmailQueue } from '@/lib/auth/email-kick';
+import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 import { mapAuthError } from '@/lib/auth/map-auth-error';
 import { safeNextPath } from '@/lib/auth/next-path';
 import { companyNameFromMetadata } from '@/lib/auth/signup-company-name';
@@ -49,6 +50,7 @@ import { env, isPortalAuthConfigured } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import {
   loginSchema,
@@ -104,6 +106,15 @@ export type AuthActionResult = { ok: true } | { ok: false; error: ErrorCode };
  */
 const VERIFY_NEXT_COOKIE = 'pb_verify_next';
 const VERIFY_NEXT_MAX_AGE = 60 * 60 * 24;
+
+/**
+ * Tolerancja zegara przy porównaniu `iat` tokenu potwierdzenia z `created_at` konta (#872):
+ * token jest samodzielnym JWT bez rekordu w bazie (SDK sprawdza tylko podpis i datę ważności),
+ * więc po usunięciu konta i ponownej rejestracji pod tym samym adresem stary, jeszcze ważny
+ * link mógłby potwierdzić i zalogować NOWE konto. Token wystawiony PRZED powstaniem konta,
+ * które ma potwierdzać (poza tolerancją zegara), jest odrzucany.
+ */
+const TOKEN_ACCOUNT_CLOCK_SKEW_MS = 5000;
 
 /** Ścieżka panelu wg roli (bez prefiksu locale — dokłada go `redirect`). */
 function panelPath(role: ProfileRole): string {
@@ -545,6 +556,26 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
 
   try {
     const auth = await portalAuth();
+    const context = await auth.$context;
+
+    // Dekodujemy token WCZEŚNIEJ niż wywołanie SDK: `iat` musi poprzedzać powstanie konta
+    // pod tym adresem (z tolerancją zegara), inaczej link z poprzedniego cyklu konta
+    // (usuniętego i założonego ponownie pod tym samym e-mailem) mógłby potwierdzić i
+    // zalogować NOWE konto, zanim SDK w ogóle oznaczy je jako zweryfikowane (#872).
+    const { verifyJWT } = await import('better-auth/crypto');
+    const payload = await verifyJWT<{ email?: unknown; iat?: unknown }>(parsedToken.data, env.authSecret ?? '');
+    const email = typeof payload?.email === 'string' ? payload.email : null;
+    const issuedAtMs = typeof payload?.iat === 'number' ? payload.iat * 1000 : null;
+    if (email && issuedAtMs !== null) {
+      const existing = await context.internalAdapter.findUserByEmail(email);
+      const createdAt = (existing?.user as { createdAt?: unknown } | undefined)?.createdAt;
+      const createdAtMs =
+        createdAt instanceof Date ? createdAt.getTime() : typeof createdAt === 'string' ? Date.parse(createdAt) : null;
+      if (createdAtMs !== null && Number.isFinite(createdAtMs) && createdAtMs > issuedAtMs + TOKEN_ACCOUNT_CLOCK_SKEW_MS) {
+        return { ok: false, error: 'AUTH_LINK_INVALID' };
+      }
+    }
+
     let sessionIssued = false;
     try {
       const verified = await auth.api.verifyEmail({
@@ -552,7 +583,6 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
         headers: await headers(),
         returnHeaders: true,
       });
-      const context = await auth.$context;
       const sessionCookie = context.authCookies.sessionToken.name;
       sessionIssued = verified.headers.getSetCookie().some((c) => c.startsWith(`${sessionCookie}=`));
       await applyAuthCookies(verified.headers);
@@ -564,10 +594,6 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       target = { login: true };
     } else {
       // Token przeszedł weryfikację podpisu w SDK; e-mail z jego treści wskazuje konto.
-      const { verifyJWT } = await import('better-auth/crypto');
-      const payload = await verifyJWT<{ email?: unknown }>(parsedToken.data, env.authSecret ?? '');
-      const email = typeof payload?.email === 'string' ? payload.email : null;
-      const context = await auth.$context;
       const found = email ? await context.internalAdapter.findUserByEmail(email) : null;
       if (!found) throw new AppError('INTERNAL', { context: { reason: 'verified_user_missing' } });
       const user = found.user as unknown as Record<string, unknown> & { id: string };
@@ -585,7 +611,9 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
         const companyName = companyNameFromMetadata(user);
         if (companyName) {
           try {
-            await bootstrapCompany(await getDomainPool(), user.id, companyName);
+            const boot = await bootstrapCompany(await getDomainPool(), user.id, companyName);
+            // VIES po założeniu (26.09.2026): bez numeru VAT/KBO — sprawdzenie pominięte.
+            if (boot.created) scheduleCompanyViesAutoCheck(boot.companyId);
           } catch (e) {
             // Konto działa; panel pracodawcy bez firmy pokaże formularz jej założenia.
             captureError(e, { area: 'auth.confirmEmail.bootstrapCompany' });
@@ -594,7 +622,10 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       }
 
       const store = await cookies();
-      const next = role === 'candidate' ? safeNextPath(store.get(VERIFY_NEXT_COOKIE)?.value) : null;
+      const nextPath = role === 'candidate' ? safeNextPath(store.get(VERIFY_NEXT_COOKIE)?.value) : null;
+      // #1142: tryb ogłoszeniowy — bez kreatora profilu; stary adres `next` do kreatora → pulpit.
+      const next =
+        nextPath && !isRecruitmentEnabled() && /\/candidate\/onboarding(?:[/?#]|$)/.test(nextPath) ? null : nextPath;
       store.delete(VERIFY_NEXT_COOKIE);
       target = next ? { path: next } : { panel: role };
     }

@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb } from './support/portal-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
+withRecruitmentMode();
 
 /**
  * #25 — zadania serwerowe i poczta na PostgreSQL 16: pula `service` (service_role) dla workera
@@ -265,10 +269,13 @@ describe('/api/maintenance', () => {
     const body = await res.json();
     expect(body).toMatchObject({ ok: true });
     expect(body.expiredJobs).toBeGreaterThanOrEqual(1);
+    // 0163: prawdziwy login service_role ma EXECUTE na GC tabel technicznych (bez grantu = 503).
+    expect(typeof body.purgedRateLimits).toBe('number');
+    expect(typeof body.purgedWebhookInbox).toBe('number');
     const statuses = await db().admin.query(`SELECT id, status::text FROM public.jobs WHERE id = ANY($1::uuid[])`, [[due, jobId]]);
     const byId = Object.fromEntries(statuses.rows.map((r) => [r.id, r.status]));
     expect(byId).toEqual({ [due]: 'expired', [jobId]: 'active' });
-    // 0213: przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
+    // 0950: przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
     const run = await db().admin.query(
       `SELECT last_ok, last_failed_task, last_duration_ms >= 0 AS timed FROM public.ops_job_runs WHERE job = 'maintenance'`,
     );
@@ -413,7 +420,7 @@ describe('ops_metrics przez pulę service (bez DATABASE_OPS_URL)', () => {
     delete process.env.DATABASE_OPS_URL;
     const result = await readOpsMetrics();
     expect(result).toMatchObject({ kind: 'ok' });
-    // 0213: ostatni przebieg maintenance (zapisany w teście /api/maintenance wyżej).
+    // 0950: ostatni przebieg maintenance (zapisany w teście /api/maintenance wyżej).
     if (result.kind !== 'ok') throw new Error('oczekiwano ok');
     expect(result.maintenanceRun).toMatchObject({ ok: true, failedTask: null });
     expect(result.maintenanceRun?.ageSeconds).toBeLessThan(600);

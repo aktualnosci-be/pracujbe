@@ -41,7 +41,8 @@ const FILTER_ARGUMENTS = `
   p_immediate => $10::boolean,
   p_no_language => $11::boolean,
   p_since => $12::timestamptz,
-  p_salary_unit => $13::text`;
+  p_salary_unit => $13::text,
+  p_direct_only => $14::boolean`;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -68,6 +69,7 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.noLanguageRequired ?? null,
     params.since ?? null,
     params.salaryUnit ?? 'month',
+    params.directOnly ? true : null,
   ];
 }
 
@@ -124,7 +126,7 @@ export async function getPublicJobs(
           (await transaction.query(
             `SELECT to_jsonb(job) AS job
             FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-              p_sort => $14::text, p_limit => $15::integer, p_offset => $16::integer) AS job`,
+              p_sort => $15::text, p_limit => $16::integer, p_offset => $17::integer) AS job`,
             [
               ...values,
               params.sort ?? 'newest',
@@ -196,6 +198,8 @@ export async function getPublicJobFilterFacets(
         facets.immediate = row.total;
       else if (row.dimension === 'additional' && row.key === 'no_language')
         facets.noLanguage = row.total;
+      else if (row.dimension === 'additional' && row.key === 'direct')
+        facets.direct = row.total;
       else throw new Error('Nieznany wymiar facetów publicznych ofert.');
     }
     facets.locations.sort(
@@ -304,10 +308,104 @@ export async function getPublicJobTranslations(
   });
 }
 
+export interface PublicJobMachineTranslationRow {
+  source_locale: string;
+  origin: string;
+  fields: Record<string, unknown>;
+}
+
+/**
+ * Przekład oferty w języku widza (#33, 0159). RPC pod rolą anon zwraca wiersz tylko dla
+ * oferty publicznej, bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola
+ * wyświetlane na stronie. Brak wiersza = brak aktualnego przekładu.
+ */
+export async function getPublicJobMachineTranslation(
+  pool: TransactionPool,
+  jobId: string,
+  requestedLocale: string,
+): Promise<PublicJobMachineTranslationRow | null> {
+  if (!isLocale(requestedLocale)) return null;
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT source_locale, origin, fields
+       FROM public.get_public_job_machine_translation(p_job_id => $1::uuid, p_locale => $2::text)`,
+      [jobId, requestedLocale],
+    )) as { rows: PublicJobMachineTranslationRow[] };
+    return result.rows[0] ?? null;
+  });
+}
+
+export interface PublicJobListMachineTitleRow extends PublicJobMachineTranslationRow {
+  job_id: string;
+}
+
+/** Najwięcej ofert w jednym odczycie przekładów listy — tyle, ile zwraca `get_public_jobs`. */
+export const MACHINE_TITLES_BATCH_LIMIT = 100;
+
+/**
+ * Przekłady tytułu i wyróżników kart ofert (#33, 0160) — JEDNO zapytanie na stronę listy.
+ * RPC pod rolą anon zwraca wiersz tylko dla oferty publicznej z aktualnym przekładem w języku
+ * bez własnego tłumaczenia; tylko pola karty. Brak wiersza = karta w oryginale.
+ */
+export async function getPublicJobsMachineTitles(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+  requestedLocale: string,
+): Promise<PublicJobListMachineTitleRow[]> {
+  if (jobIds.length === 0 || !isLocale(requestedLocale)) return [];
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id, source_locale, origin, fields
+       FROM public.get_public_jobs_machine_titles(p_job_ids => $1::uuid[], p_locale => $2::text)`,
+      [jobIds.slice(0, MACHINE_TITLES_BATCH_LIMIT), requestedLocale],
+    )) as { rows: PublicJobListMachineTitleRow[] };
+    return result.rows;
+  });
+}
+
+/**
+ * 0167: które z podanych ofert publicznych pochodzą od agencji pracy tymczasowej
+ * (`get_public_jobs_agency`, pod rolą anon, najwyżej 100 identyfikatorów na wywołanie).
+ */
+export async function getPublicJobsAgency(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+): Promise<Set<string>> {
+  if (jobIds.length === 0) return new Set();
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id FROM public.get_public_jobs_agency(p_job_ids => $1::uuid[])`,
+      [jobIds.slice(0, 100)],
+    )) as { rows: { job_id: string }[] };
+    return new Set(result.rows.map((row) => row.job_id));
+  });
+}
+
 /**
  * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
  * (0093) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).
  */
+/**
+ * Koszty i dodatki oferty publicznej (0169). RPC pod rolą anon zwraca wiersz tylko dla oferty
+ * publicznej (`job_is_public`); numeric przychodzi jako tekst (parser: `parseJobCostsRow`).
+ */
+export async function getPublicJobCosts(
+  pool: TransactionPool,
+  jobId: string,
+): Promise<PublicJobRow | null> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT accommodation_kind, accommodation_cost::text AS accommodation_cost,
+              accommodation_cost_period, accommodation_deducted, accommodation_registration,
+              accommodation_after_contract, transport_shuttle, transport_reimbursed,
+              meal_voucher_daily::text AS meal_voucher_daily, joint_committee
+       FROM public.get_public_job_costs(p_job_id => $1::uuid)`,
+      [jobId],
+    )) as { rows: PublicJobRow[] };
+    return result.rows[0] ?? null;
+  });
+}
+
 export async function getPublicJobScreeningQuestions(
   pool: TransactionPool,
   jobId: string,

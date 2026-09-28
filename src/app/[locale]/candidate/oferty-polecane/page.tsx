@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ArrowRight, BriefcaseBusiness, Check } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 import { Link } from '@/i18n/navigation';
 import { MatchBar } from '@/components/ui/match-bar';
 import { CandidateJobPassport } from '@/components/candidate/CandidateJobPassport';
@@ -41,6 +42,8 @@ export default async function CandidateRecommendedPage({
 }: {
   params: Promise<{ locale: string }>;
 }) {
+  // #1133/#1139: tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy) — 404 przed odczytem.
+  notFoundUnlessRecruitment('matching');
   const { locale } = await params;
   setRequestLocale(locale);
 

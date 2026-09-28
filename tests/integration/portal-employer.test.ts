@@ -3,6 +3,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { actAs, realSession } from './support/real-portal';
 import { startPortalDb, type PortalDb } from './support/portal-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływy rekrutacyjne (#1128): w trybie ogłoszeniowym te ścieżki są wyłączone.
+withRecruitmentMode();
 
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
@@ -208,8 +212,9 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
 
   it('zwykły member nie widzi zgłoszeń (recruiter+), ale widzi oferty firmy', async () => {
     actAs(memberA);
-    expect(await employer.getEmployerApplicationsPage()).toEqual({
+    expect(await employer.getEmployerApplicationsPage()).toMatchObject({
       status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+      statusFilter: null, companyId: ids.companyA,
     });
     expect(await employer.getRecentApplications()).toEqual({ status: 'ok', applications: [] });
     const jobs = await employer.getCompanyJobsLoad();
@@ -426,6 +431,7 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     actAs(null);
     expect(await employer.getEmployerApplicationsPage()).toEqual({
       status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false, job: null,
+      statusFilter: null, companyId: null, jobOptions: [],
     });
     expect(await employer.getEmployerShellData()).toEqual({ status: 'error' });
     actAs({ id: candidates[0]!, role: 'candidate' });

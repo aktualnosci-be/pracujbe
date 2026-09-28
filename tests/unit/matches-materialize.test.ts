@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { withRecruitmentMode } from '../helpers/portal-mode';
+
+// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona.
+withRecruitmentMode();
 
 /**
  * P1-03 (0147): worker materializacji `matches`. Wynik = `scoreMatch` z tych samych wejść co
