@@ -50,8 +50,8 @@ beforeAll(async () => {
   const other = (await pg.admin.query(`INSERT INTO public.companies(name, status) VALUES ('Obca IT', 'verified') RETURNING id`)).rows[0].id;
   await pg.admin.query(`INSERT INTO public.company_members(company_id, profile_id, role, is_active) VALUES ($1, $2, 'owner', true), ($3, $4, 'owner', true)`,
     [company, owner.id, other, outsider.id]);
-  jobId = (await pg.admin.query(`INSERT INTO public.jobs(company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale)
-    VALUES ($1, $2, 'draft-it-sr', 'Magazynier IT', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl') RETURNING id`, [company, owner.id])).rows[0].id;
+  jobId = (await pg.admin.query(`INSERT INTO public.jobs(company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale, apply_email)
+    VALUES ($1, $2, 'draft-it-sr', 'Magazynier IT', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl', 'praca@example.be') RETURNING id`, [company, owner.id])).rows[0].id;
   await pg.admin.query(`INSERT INTO public.job_translations(job_id, locale, title, description, responsibilities)
     VALUES ($1, 'pl', 'Magazynier IT', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień'])`, [jobId]);
   await pg.admin.query(`INSERT INTO public.job_requirements(job_id, locale, kind, position, content) VALUES ($1, 'pl', 'mandatory', 0, 'Dyspozycyjność')`, [jobId]);

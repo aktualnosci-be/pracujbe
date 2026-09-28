@@ -43,6 +43,7 @@ const DRAFT: JobWizardInitialValues = {
   requirementsMandatory: ["Uprawnienia UDT"],
   companyDescription: "Rodzinna firma logistyczna z Antwerpii.",
   contactEmail: "hr@example.be",
+  applyEmail: "praca@example.be",
 };
 
 type SaveResult = { ok: true; demo: false } | { ok: false; error: string };
