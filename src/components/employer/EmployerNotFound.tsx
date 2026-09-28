@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
+import { isRecruitmentEnabled } from "@/lib/portal-mode";
 import {
   BTN_PRIMARY,
   BTN_SECONDARY,
@@ -40,9 +41,12 @@ export async function EmployerNotFound() {
         <Link href="/employer" className={BTN_PRIMARY}>
           {t("employerPanelBackToDashboard")}
         </Link>
-        <Link href="/employer/aplikacje" className={BTN_SECONDARY}>
-          {t("navEmployerApplications")}
-        </Link>
+        {/* #1144: panel zgłoszeń tylko w trybie RECRUITMENT (portal ogłoszeniowy). */}
+        {isRecruitmentEnabled() ? (
+          <Link href="/employer/aplikacje" className={BTN_SECONDARY}>
+            {t("navEmployerApplications")}
+          </Link>
+        ) : null}
         <Link href="/employer/oferty" className={BTN_SECONDARY}>
           {t("navOffers")}
         </Link>

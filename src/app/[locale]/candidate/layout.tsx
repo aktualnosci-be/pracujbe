@@ -8,10 +8,10 @@ import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { getNotifications } from '@/lib/data/notifications';
 import { getUnreadConversationsCount } from '@/lib/data/messages';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
-import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Layout panelu kandydata (grupa tras `/candidate/*`).
@@ -109,7 +109,7 @@ export default async function CandidateLayout({
       unreadMessages={unreadMessages}
       userName={userName}
       keepSessionAlive={hasSession}
-      recruitmentEnabled={isRecruitmentEnabled('matching')}
+      recruitmentEnabled={isRecruitmentEnabled()}
     >
       {knownMinor !== undefined ? <FunnelMinorMarker minor={knownMinor} /> : null}
       {children}

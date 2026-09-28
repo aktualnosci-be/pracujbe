@@ -18,6 +18,7 @@ import { getExpectedActiveCompany } from '@/lib/company-context';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import {
   applicationPhoneSchema,
   applicationSchema,
@@ -85,6 +86,8 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Kandydat aplikuje na ofertę (idempotentnie). */
 export async function applyToJob(input: ApplicationInput): Promise<ApplyResult> {
+  // #1130/#1144 — decyzja produktowa: portal ogłoszeniowy. Przed walidacją, limiterem i bazą.
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   // Telefon najpierw: błędny numer (#145) wraca jako błąd pola, a nie ogólny komunikat.
   const phone = applicationPhoneSchema.safeParse({
     phone: input.phone,
@@ -160,6 +163,7 @@ export async function transitionApplication(
   applicationId: string,
   target: string,
 ): Promise<TransitionResult> {
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
@@ -214,6 +218,7 @@ export async function bulkTransitionApplications(
   target: string,
   expectedCompanyId: string,
 ): Promise<BulkTransitionResult> {
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   const parsed = bulkTransitionSchema.safeParse({ applicationIds, target, expectedCompanyId });
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
   if (!isPortalDataConfigured()) return { ok: false, error: 'DEMO_UNAVAILABLE' };
