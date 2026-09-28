@@ -57,6 +57,8 @@ import {
 } from '@/components/dashboard/panel-styles';
 import { buttonVariants } from '@/components/ui/button';
 import { ApplyModal } from '@/components/public/ApplyModal';
+import { EmployerApplyChannel } from '@/components/public/EmployerApplyChannel';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { loginHref } from '@/lib/auth/next-path';
 import { JobMatchCard } from '@/components/public/JobMatchCard';
@@ -75,6 +77,11 @@ import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
  *
  * Oferta demonstracyjna (#297, `job.isDemo`): baner „dane przykładowe”, bez odznaki
  * weryfikacji, bez JobPosting, noindex i modal z komunikatem zamiast formularza aplikacji.
+ *
+ * Tryb ogłoszeniowy (#1130, decyzja produktowa: portal ogłoszeniowy): zamiast `ApplyModal`
+ * przycisk „Aplikuj u pracodawcy” prowadzi do kanału ogłoszeniodawcy (`job.applyChannel`:
+ * strona https w nowej karcie, `mailto:` albo `tel:`), bez „Wyślij wiadomość”. Oferta bez kanału
+ * = brak przycisku i neutralny komunikat. Tryb `RECRUITMENT` — dotychczasowy `ApplyModal`.
  *
  * Uwaga na Invariant #8: nie fabrykujemy danych osobowych kontaktu ani ocen — kontakt jest
  * generyczny (przez platformę), a aplikowanie/zapis wymagają konta (logowanie).
@@ -286,6 +293,8 @@ export default async function JobDetailPage({ params }: PageProps) {
   const version = contentLanguage(job, locale);
   // JobPosting tylko na wersji kanonicznej — wersja bez tłumaczenia nie powiela danych (#301).
   // Fikcyjna oferta demo nie udaje ogłoszenia o pracę w danych strukturalnych (#297).
+  // #1130: tryb czytany przy renderze (ISR na serwerze), nie w przeglądarce — patrz portal-mode.ts.
+  const recruitment = isRecruitmentEnabled('applications');
   const jsonLd = version.fallback || job.isDemo
     ? null
     : buildJobPostingJsonLd(job, url, {
@@ -295,7 +304,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         conditions: t('conditions'),
         workingHours: t('workingHours'),
         shifts: t('shifts'),
-      }, { jobBenefits: buildJobBenefitsText(job, costLabels, pageLocale) });
+      }, { jobBenefits: buildJobBenefitsText(job, costLabels, pageLocale), directApply: recruitment });
   // BreadcrumbList (SEO): Strona główna → Praca → branża (landing `/praca/kategoria/<klucz>`,
   // jak ścieżka tego landingu) → oferta. Tylko tam, gdzie JobPosting — wersja bez tłumaczenia
   // kanonizuje się do innego języka (#301), a oferta demo jest noindex (#297).
@@ -731,6 +740,9 @@ export default async function JobDetailPage({ params }: PageProps) {
 
             {/* Aplikuj (desktop — mobile ma dolny pasek) */}
             {/* `.paper.apply-box` — „Twój następny krok”: Aplikuj (`.btn`) i Zapisz (`.btn.secondary`). */}
+            {/* #1130: w trybie ogłoszeniowym ramka widoczna także na mobile — wymienia wszystkie
+                kanały ogłoszeniodawcy (dolny pasek ma tylko przycisk główny). */}
+            {recruitment ? (
             <section className={cn(PAPER, 'my-0 hidden lg:block')}>
               <p className={EYEBROW}>{t('applyBoxEyebrow')}</p>
               <h2 className={cn(H2_EXTENDED, 'mt-2')}>{t('applyBoxTitle')}</h2>
@@ -750,6 +762,22 @@ export default async function JobDetailPage({ params }: PageProps) {
               />
               <PublicSaveJobButton jobId={job.id} passport className="mt-3 w-full" />
             </section>
+            ) : (
+              <section className={cn(PAPER, 'my-0')} id="aplikuj" data-testid="employer-apply-box">
+                <p className={EYEBROW}>{t('applyBoxEyebrow')}</p>
+                <h2 className={cn(H2_EXTENDED, 'mt-2')}>{t('employerApply.boxTitle')}</h2>
+                <p className={cn(P_EXTENDED, 'mt-2')}>{t('employerApply.boxText')}</p>
+                <EmployerApplyChannel
+                  jobId={job.id}
+                  jobTitle={job.title}
+                  channel={job.applyChannel}
+                  demo={job.isDemo}
+                  variant="box"
+                  className="mt-3"
+                />
+                <PublicSaveJobButton jobId={job.id} passport className="mt-3 hidden w-full lg:flex" />
+              </section>
+            )}
 
             {/* Kontakt */}
             <div className={cn(PAPER, 'my-0')}>
@@ -758,7 +786,9 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <Building2 className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <div className="min-w-0">
                   <p className="break-words font-medium text-foreground">{job.companyName}</p>
-                  <p className="text-sm text-muted-foreground">{t('contactViaPlatform')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {recruitment ? t('contactViaPlatform') : t('employerApply.contact')}
+                  </p>
                 </div>
               </div>
               {job.languages.length > 0 ? (
@@ -767,7 +797,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </p>
               ) : null}
               {/* Do fikcyjnej firmy demo nie da się napisać (#297). */}
-              {job.isDemo ? null : (
+              {job.isDemo || !recruitment ? null : (
                 <Link
                   href={loginHref(`/${locale}${BASE_PATH}/${slug}`)}
                   className={cn(buttonVariants({ variant: 'outline' }), 'mt-4 h-auto min-h-12 w-full whitespace-normal text-center')}
@@ -844,6 +874,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-border bg-background/95 p-3 shadow-[0_-4px_12px_hsl(var(--foreground)/0.08)] backdrop-blur lg:hidden max-lg:[body:has(&)]:pb-24 max-lg:[html:has(&)]:scroll-pb-28"
       >
         <PublicSaveJobButton jobId={job.id} iconOnly />
+        {recruitment ? (
         <ApplyModal
           jobId={job.id}
           companyName={job.companyName}
@@ -855,6 +886,15 @@ export default async function JobDetailPage({ params }: PageProps) {
           triggerSize="passport"
           triggerClassName="min-w-0 flex-1"
         />
+        ) : (
+          <EmployerApplyChannel
+            jobId={job.id}
+            jobTitle={job.title}
+            channel={job.applyChannel}
+            demo={job.isDemo}
+            variant="bar"
+          />
+        )}
       </div>
     </div>
     </PublicSavedJobsProvider>

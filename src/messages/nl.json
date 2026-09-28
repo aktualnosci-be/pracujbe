@@ -550,6 +550,21 @@
       "committeeCode": "PC {code}",
       "minimumWagesLink": "Officiële minimumlonen in de sector",
       "minimumWagesNote": "Het loon hangt onder meer af van categorie en anciënniteit — controleer het in de officiële databank."
+    },
+    "employerApply": {
+      "boxTitle": "Solliciteer rechtstreeks bij de werkgever.",
+      "boxText": "Je stuurt je sollicitatie naar de adverteerder — zoals vermeld in de vacature.",
+      "button": "Solliciteer bij de werkgever",
+      "newTab": "(opent in een nieuw tabblad)",
+      "hint": {
+        "url": "Website: {value}",
+        "email": "E-mail: {value}",
+        "phone": "Telefoon: {value}"
+      },
+      "otherWays": "Andere manieren om contact op te nemen:",
+      "none": "Deze vacature vermeldt geen manier om te solliciteren.",
+      "mailSubject": "Vacature: {title}",
+      "contact": "Rechtstreeks contact met de adverteerder"
     }
   },
   "landing": {

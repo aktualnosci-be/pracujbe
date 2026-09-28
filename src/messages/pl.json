@@ -550,6 +550,21 @@
       "committeeCode": "PC {code}",
       "minimumWagesLink": "Oficjalne stawki minimalne w sektorze",
       "minimumWagesNote": "Stawka zależy m.in. od kategorii i stażu — sprawdź w oficjalnej bazie."
+    },
+    "employerApply": {
+      "boxTitle": "Aplikuj bezpośrednio u pracodawcy.",
+      "boxText": "Zgłoszenie wysyłasz ogłoszeniodawcy — tak, jak podał w ofercie.",
+      "button": "Aplikuj u pracodawcy",
+      "newTab": "(otwiera się w nowej karcie)",
+      "hint": {
+        "url": "Strona: {value}",
+        "email": "E-mail: {value}",
+        "phone": "Telefon: {value}"
+      },
+      "otherWays": "Inne sposoby kontaktu:",
+      "none": "Ta oferta nie podaje sposobu aplikowania.",
+      "mailSubject": "Oferta pracy: {title}",
+      "contact": "Kontakt bezpośrednio z ogłoszeniodawcą"
     }
   },
   "landing": {

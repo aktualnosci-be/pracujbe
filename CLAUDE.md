@@ -100,7 +100,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   funkcje rekrutacyjne, każda inna wartość/brak = `CLASSIFIEDS_ONLY` (decyzja produktowa: portal ogłoszeniowy, fail-closed
   także w demo/dev/testach). API: `isRecruitmentEnabled()`, `assertRecruitmentEnabled()` (`AppError(RECRUITMENT_DISABLED)`,
   `errors.recruitmentDisabled`), `notFoundUnlessRecruitment()`; lista `RECRUITMENT_FEATURES`. Tryb w `/api/health` tylko za
-  sekretem. Vitest domyślnie ogłoszeniowy (`useRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
+  sekretem. Vitest domyślnie ogłoszeniowy (`withRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
   (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
@@ -1350,8 +1350,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `contact_email` zostaje kontaktem niepublicznym; import AI kanału nie wypełnia. Demo/seed:
   kanały w domenie `example.com`. Dowód: `rls.sql` sekcja AC950 (kontrole ujemne: bez CHECK,
   `publish_job` bez sprawdzenia), unit `job-apply-channel` (TS = wzorce z migracji), E2E
-  `job-wizard-step9-draft`. **Otwarte:** przycisk „Aplikuj u pracodawcy” na szczególe (#1130),
-  kanał w regułach zaufania treści (0167).
+  `job-wizard-step9-draft`. **Otwarte:** kanał w regułach zaufania treści (0167).
+  „Aplikuj u pracodawcy” na szczególe (#1130, bez migracji): w trybie ogłoszeniowym
+  (`isRecruitmentEnabled('applications')` = false) zamiast `ApplyModal` wyspa
+  `EmployerApplyChannel` — przycisk główny = pierwszy kanał (strona https w nowej karcie,
+  `rel="noopener noreferrer nofollow"` → `mailto:` z tematem → `tel:`), w ramce pozostałe kanały;
+  linki wyłącznie z `buildApplyLinks` (`src/lib/job-apply-links.ts`, trzecie sprawdzenie reguł);
+  ramka widoczna też na mobile, pasek mobilny = sam przycisk główny; bez „Wyślij wiadomość”,
+  podpis kontaktu `job.employerApply.contact`, JobPosting `directApply: false`. Oferta bez kanału
+  = brak przycisku i neutralny komunikat `job.employerApply.none`. Kliknięcie = `apply_started`
+  tylko po zgodzie analitycznej (demo nie liczone). Tryb `RECRUITMENT` bez zmian (`ApplyModal`).
+  Dowód: unit `employer-apply-channel` (kontrole ujemne: schematy, zgoda), strażnik
+  `tests/legal/classifieds-only.test.ts` (ApplyModal/„Wyślij wiadomość” tylko w gałęzi
+  `recruitment`, kontrola ujemna), E2E `job-detail-employer-apply` (4 języki, axe 320/1280 px;
+  uruchamiany z `E2E_PORTAL_LEGAL_MODE=`). Helper Vitest: `withRecruitmentMode`/`withClassifiedsMode`.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,

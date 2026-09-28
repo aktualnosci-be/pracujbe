@@ -550,6 +550,21 @@
       "committeeCode": "PC {code}",
       "minimumWagesLink": "Official sector minimum wages",
       "minimumWagesNote": "The wage depends on category and seniority, among other things — check the official database."
+    },
+    "employerApply": {
+      "boxTitle": "Apply directly with the employer.",
+      "boxText": "You send your application to the advertiser — as stated in the job ad.",
+      "button": "Apply with the employer",
+      "newTab": "(opens in a new tab)",
+      "hint": {
+        "url": "Website: {value}",
+        "email": "Email: {value}",
+        "phone": "Phone: {value}"
+      },
+      "otherWays": "Other ways to get in touch:",
+      "none": "This job ad does not say how to apply.",
+      "mailSubject": "Job ad: {title}",
+      "contact": "Direct contact with the advertiser"
     }
   },
   "landing": {
