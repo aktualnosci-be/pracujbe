@@ -19076,17 +19076,8 @@ select pg_temp.assert(:clai_prof = 0
   and (select count(*) from public.translation_jobs where entity_id = :'CLAIP1' and status = 'queued') = 3,
   'CLAIB-3 claim pomija zadania candidate_profile (czekają w kolejce)');
 
--- CLAIB-4 (kontrola ujemna): definicje z 0145 (rollback 0176) przyjmują profil kandydata
--- i wydają jego zadania w trybie ogłoszeniowym.
-begin;
-\ir ../rollback/0176_classifieds_ai_billing.down.sql
-set local role service_role;
-select pg_temp.assert(((public.record_translation_source('candidate_profile', :'CLAIP2', 'pl', :'CLAIF'::jsonb, 'tr-v1'))->>'status') = 'created',
-  'CLAIB-4 kontrola ujemna: bez 0176 profil kandydata trafia do kolejki w trybie ogłoszeniowym');
-select pg_temp.assert(exists (select 1 from public.claim_translation_jobs(100, 300) where entity_type = 'candidate_profile'),
-  'CLAIB-4b kontrola ujemna: bez 0176 claim wydaje zadania profilu');
-rollback;
-reset role;
+-- CLAIB-4 (kontrola ujemna: definicje sprzed 0176 przyjmują profil kandydata) jest w
+-- supabase/tests/portal-legal-mode-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
 
 -- CLAIB-5: katalog planów bez dostępu do kandydatów (CHECK dla każdej roli).
 select pg_temp.assert((select bool_and(not candidate_access) from public.plan_entitlements)

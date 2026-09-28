@@ -23,6 +23,18 @@ select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on 
   and position('candidate_profile_translation' in pg_get_functiondef('public.ai_budget_reserve(text, text, bigint)'::regprocedure)) = 0
   and not exists (select 1 from pg_constraint where conname = 'plan_entitlements_no_candidate_access'),
   'CL0176-R rollback 0176 usuwa strażnik kolejki tłumaczeń, CHECK planów i przywraca funkcje sprzed 0176');
+-- CLAIB-4 (kontrola ujemna): definicje sprzed 0176 przyjmują profil kandydata i wydają jego zadania
+-- w trybie ogłoszeniowym (w rls.sql: CLAIB-1..3 — z 0176 odrzucone/pominięte). Tryb przełączany
+-- w tej samej transakcji, więc cofa go końcowy rollback.
+set local role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rollback test CLAIB-4', 'RECRUITMENT');
+select pg_temp.assert(((public.record_translation_source('candidate_profile', 'c1a10176-0000-0000-0000-0000000000e1'::uuid, 'pl',
+    '{"title":"Magazynier","description":"Szukam pracy."}'::jsonb, 'tr-v1'))->>'status') = 'created',
+  'CLAIB-4 kontrola ujemna: bez 0176 profil kandydata trafia do kolejki w trybie ogłoszeniowym');
+select pg_temp.assert(exists (select 1 from public.claim_translation_jobs(100, 300) where entity_type = 'candidate_profile'),
+  'CLAIB-4b kontrola ujemna: bez 0176 claim wydaje zadania profilu');
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rollback test CLAIB-4: powrót', 'CLASSIFIEDS_ONLY');
+reset role;
 -- 0175 (#1142/#1145) korzysta z helperów 0171 i stoi na 0174.
 \ir ../rollback/0175_classifieds_account_notifications.down.sql
 \ir ../rollback/0174_classifieds_messaging_cv_off.down.sql
