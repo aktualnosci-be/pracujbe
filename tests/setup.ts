@@ -10,7 +10,9 @@
  * Opt-in test VIES na żywo (`VIES_LIVE_SMOKE=1`) dopuszcza wyłącznie host VIES.
  */
 import '@testing-library/jest-dom';
+import { beforeEach } from 'vitest';
 import { installNetworkGuard } from './helpers/network-guard';
+import { clearSitemapCaches } from '@/lib/cache/sitemap-cache';
 
 if (process.env.VIES_LIVE_SMOKE === '1') {
   process.env.TEST_NETWORK_ALLOW = [process.env.TEST_NETWORK_ALLOW, 'ec.europa.eu']
@@ -19,3 +21,9 @@ if (process.env.VIES_LIVE_SMOKE === '1') {
 }
 
 installNetworkGuard();
+
+// Cache sitemap (#1042) żyje 3600 s w pamięci procesu — każdy test zaczyna z pustym, bo kolejne
+// testy podstawiają różne odpowiedzi atrap `getJobs` dla tego samego pliku sitemap.
+beforeEach(() => {
+  clearSitemapCaches();
+});

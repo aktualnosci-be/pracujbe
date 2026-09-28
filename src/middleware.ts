@@ -36,7 +36,7 @@ const MAINTENANCE_HTML =
  * (`getCurrentIdentity`). Middleware działa na Edge, więc NIE łączy się z bazą, nie czyta ani
  * nie odświeża cookie sesji i nie podejmuje decyzji o dostępie — nie ma tu też żadnego
  * `Set-Cookie` zależnego od użytkownika. Matcher wyklucza api, auth, pliki wewnętrzne
- * Next/Vercel oraz assety (wszystko z kropką).
+ * Next/Vercel oraz jawnie wymienione assety (patrz `config` niżej, #1035).
  */
 const handleIntl = createIntlMiddleware(routing);
 
@@ -166,8 +166,23 @@ export default async function middleware(request: NextRequest) {
   return response;
 }
 
+/**
+ * Matcher (#1035). Dawny wzorzec `.*\\..*` pomijał middleware dla KAŻDEJ ścieżki z kropką w
+ * dowolnym segmencie — także dla `/pl/oferty-pracy/dowolny.slug`, który trafia do tras
+ * dynamicznych (`[slug]`), a wraz z nim Server Action z publicznych formularzy. Bramka hasła
+ * i tryb „niegotowe” (503) były wtedy omijane. Teraz pomijamy wyłącznie:
+ * - katalogi bez stron: `api`, `auth` (dawny callback), `_next`, `_vercel`, `images`,
+ *   `.well-known` (granica segmentu, nie prefiks nazwy),
+ * - jawnie wymienione pliki z korzenia (`public/` + trasy metadanych) — strażnik
+ *   `tests/unit/middleware-matcher.test.ts` pilnuje, że każdy plik z `public/` jest na liście,
+ * - pliki sitemap (`/sitemap/<n>.xml`) i manifest per język (`/<locale>/manifest.webmanifest`).
+ * Drugi matcher przepuszcza przez middleware każde żądanie Server Action (nagłówek
+ * `next-action`), niezależnie od ścieżki — druga linia obrony.
+ */
 export const config = {
-  // Pomijamy: api (w tym /api/auth), auth (dawny callback — ścieżki bez locale nie są
-  // przekierowywane), pliki wewnętrzne Next/Vercel oraz wszystko z kropką (assety, .xml, .txt).
-  matcher: ['/((?!api|auth|_next|_vercel|.*\\..*).*)'],
+  // Literał (nie składany z zmiennych): Next analizuje `config` statycznie w czasie builda (#1035).
+  matcher: [
+    '/((?!(?:api|auth|_next|_vercel|images|\\.well-known)(?:/|$)|(?:favicon\\.ico|robots\\.txt|sitemap\\.xml|sw\\.js|offline\\.html|manifest\\.webmanifest|og\\.png|apple-touch-icon\\.png|icon\\.svg|icon-[a-z0-9-]+\\.png)$|sitemap/[0-9]+\\.xml$|(?:pl|nl|fr|en)/manifest\\.webmanifest$).*)',
+    { source: '/:path*', has: [{ type: 'header', key: 'next-action' }] },
+  ],
 };
