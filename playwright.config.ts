@@ -272,6 +272,8 @@ const CLASSIFIEDS_SERVER = E2E_PORTAL_LEGAL_MODE.trim().toUpperCase() !== 'RECRU
  *   (biegną też w shardach demo).
  */
 const CLASSIFIEDS_ONLY_SPECS = [
+  '**/classifieds-candidate-account.spec.ts',
+  '**/classifieds-dashboards.spec.ts',
   '**/classifieds-employer-stats.spec.ts',
   '**/classifieds-matching-off.spec.ts',
   '**/classifieds-messaging-cv-off.spec.ts',

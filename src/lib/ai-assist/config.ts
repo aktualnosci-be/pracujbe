@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isAiFeatureEnabled } from '@/lib/ai/feature-gate';
 import { DEFAULT_AI_MODEL, isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
@@ -18,13 +19,11 @@ export const DEFAULT_JOB_ASSIST_MODEL = DEFAULT_AI_MODEL;
 
 export type JobAssistProvider = 'openai' | 'fixture';
 
-function flagOn(value: string | undefined): boolean {
-  return value === '1' || value?.toLowerCase() === 'true';
-}
 
 /** Dostawca albo `null`, gdy asystent jest wyłączony/nieskonfigurowany. */
 export function jobAssistProvider(): JobAssistProvider | null {
-  if (!flagOn(process.env.AI_JOB_ASSIST_ENABLED)) return null;
+  // #1152: flaga funkcji × tryb produktu (wspólna bramka `src/lib/ai/feature-gate.ts`).
+  if (!isAiFeatureEnabled('job_offer_assist')) return null;
   if (process.env.AI_JOB_ASSIST_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }
