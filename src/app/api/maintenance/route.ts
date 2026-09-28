@@ -124,6 +124,8 @@ async function run(request: Request): Promise<Response> {
     | 'retention'
     | 'jobFunnel'
     | 'messageAttachments'
+    | 'rateLimits'
+    | 'webhookInbox'
     | 'storageGc'
     | 'dsaRetention'
     | 'storageDeletions';
@@ -219,6 +221,11 @@ async function run(request: Request): Promise<Response> {
   const purgedMessageAttachments = await task('messageAttachments', 'purge_stale_message_attachments', {
     p_older_than_hours: 24,
   });
+  // K2/#17 (0163): tabele techniczne — okna limitera starsze niż doba (dolna granica w bazie)
+  // i rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. Bez danych do decyzji o
+  // retencji: e-maile (`email_deliveries_gc`) czekają na #574.
+  const purgedRateLimits = await task('rateLimits', 'rate_limit_gc', { p_older_than_seconds: 86_400 });
+  const purgedWebhookInbox = await task('webhookInbox', 'processed_webhooks_gc', { p_older_than_days: 30 });
   // #17: GC sierot bucketu CV przed workerem kolejki — sieroty znikają w tym samym przebiegu.
   let storageGc: StorageGcRun | null = null;
   try {
@@ -270,6 +277,8 @@ async function run(request: Request): Promise<Response> {
     retention,
     jobFunnel,
     purgedMessageAttachments: purgedMessageAttachments ?? 0,
+    purgedRateLimits: purgedRateLimits ?? 0,
+    purgedWebhookInbox: purgedWebhookInbox ?? 0,
     storageGc,
     dsaRetention,
     storageDeletions,

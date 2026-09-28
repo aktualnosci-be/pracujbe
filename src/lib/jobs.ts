@@ -15,7 +15,11 @@ import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
 import { resolveJobContentLocales } from '@/lib/job-content-locale';
-import { applyJobMachineTranslation, type JobMachineTranslation } from '@/lib/job-machine-translation';
+import {
+  applyJobListMachineTranslation,
+  applyJobMachineTranslation,
+  type JobMachineTranslation,
+} from '@/lib/job-machine-translation';
 import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-compare';
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
@@ -91,6 +95,12 @@ export interface JobListItem {
    * Brak = brak publicznego profilu (bezpiecznik) — sitemap i CTA go wtedy pomijają.
    */
   companySlug?: string;
+  /**
+   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33): na szczególe całość
+   * (0159), na karcie listy tytuł i wyróżniki (0160). Brak = treść własna oferty. Strona
+   * oznacza przekład (szczegół: z linkiem do oryginału, karta: dyskretny znacznik).
+   */
+  machineTranslation?: JobMachineTranslation;
 }
 
 export interface JobDetail extends JobListItem {
@@ -435,18 +445,21 @@ async function getJobsFromDb(
   page: number,
   pageSize: number,
   viewerId: string | null,
+  translateCards: boolean,
 ): Promise<GetJobsResult> {
   const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
     import('@/lib/db/runtime'),
     import('@/lib/db/public-jobs'),
   ]);
-  const result = await getPublicJobs(await getDomainPool(), {
+  const pool = await getDomainPool();
+  const result = await getPublicJobs(pool, {
     ...params,
     page,
     pageSize,
   }, viewerId);
+  const jobs = result.rows.map(rowToJobListItem);
   return {
-    jobs: result.rows.map(rowToJobListItem),
+    jobs: translateCards ? await withListMachineTranslations(pool, jobs, toLocale(params.locale)) : jobs,
     total: result.total,
     page: result.page,
     pageSize: result.pageSize,
@@ -504,6 +517,32 @@ async function readMachineTranslation(
 }
 
 /**
+ * Przekład tytułu i wyróżników kart listy (#33, 0160) — JEDNO zapytanie na stronę (lista id),
+ * nigdy zapytanie na kartę. Tylko za flagą `AI_TRANSLATION_ENABLED`, w tym samym renderze
+ * serwera co lista (strony ISR dostają gotowy HTML). Odczyt pomocniczy: awaria = karty
+ * w oryginale + kod obszaru w logu (bez treści ofert).
+ */
+export async function withListMachineTranslations<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+  locale: Locale,
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { isTranslationDisplayEnabled } = await import('@/lib/translation/config');
+    if (!isTranslationDisplayEnabled()) return jobs;
+    const { getPublicJobsMachineTitles } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobsMachineTitles(pool, jobs.map((job) => job.id), locale);
+    if (rows.length === 0) return jobs;
+    const byId = new Map(rows.map((row) => [row.job_id, row]));
+    return jobs.map((job) => applyJobListMachineTranslation(job, byId.get(job.id) ?? null, locale));
+  } catch (error) {
+    captureError(error, { area: 'jobs.readListMachineTranslations' });
+    return jobs;
+  }
+}
+
+/**
  * Języki treści oferty (#301). Odczyt pomocniczy: jego awaria nie może zablokować strony oferty,
  * więc błąd jest logowany, a oferta zachowuje się jak dotąd (język nieznany).
  */
@@ -539,9 +578,18 @@ export interface JobsViewer {
   candidateId: string | null;
 }
 
+/**
+ * Opcje odczytu listy. `translateCards` — lista trafia na karty ofert (`JobCard`), więc
+ * dostaje przekład tytułu w języku strony (#33). Sitemap, liczniki i facety go nie potrzebują.
+ */
+export interface GetJobsOptions {
+  translateCards?: boolean;
+}
+
 export async function getJobs(
   params: GetJobsParams,
   viewer?: JobsViewer,
+  options: GetJobsOptions = {},
 ): Promise<GetJobsResult> {
   const locale = toLocale(params.locale);
   const page = Math.max(1, Math.trunc(params.page ?? 1));
@@ -553,7 +601,13 @@ export async function getJobs(
   if (isDatabaseConfigured()) {
     if (isBuildPhase()) return { jobs: [], total: 0, page, pageSize, maxPage: 1 };
     try {
-      return await getJobsFromDb(params, page, pageSize, viewer?.candidateId ?? null);
+      return await getJobsFromDb(
+        params,
+        page,
+        pageSize,
+        viewer?.candidateId ?? null,
+        options.translateCards === true,
+      );
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
       // (fikcyjne oferty indeksowane jako realne). Loguj i propaguj kontrolowany błąd.
@@ -632,7 +686,7 @@ export async function getLatestJobs(
   limit: number = DEFAULT_LATEST_LIMIT,
 ): Promise<JobListItem[]> {
   const safeLimit = Math.max(1, Math.trunc(limit));
-  const result = await getJobs({ locale, page: 1, pageSize: safeLimit });
+  const result = await getJobs({ locale, page: 1, pageSize: safeLimit }, undefined, { translateCards: true });
   return result.jobs;
 }
 

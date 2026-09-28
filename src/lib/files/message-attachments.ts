@@ -16,7 +16,8 @@ import {
   type AttachmentExtension,
   type AttachmentFileProblem,
 } from '@/lib/validation/message-attachment';
-import { attachmentDisposition, isValidCvContent } from './cv-content';
+import { attachmentDisposition } from './cv-content';
+import { DETECTED_MIME, extensionOfKey, matchesDetectedType, safeFileName } from './file-type';
 
 /**
  * Załączniki wiadomości na prywatnym buckecie Railway (0119, Invariant #10).
@@ -98,20 +99,18 @@ async function discardObject(store: AttachmentObjectStore, key: string, area: st
   captureError(new AppError('INTERNAL'), { area });
 }
 
-/** Dozwolony typ i sygnatura treści (MIME klienta jest niezaufany). */
+/** Dozwolony typ i struktura treści (MIME klienta jest niezaufany) — reguły w `file-type.ts`. */
 export function isValidAttachmentContent(bytes: Uint8Array, ext: AttachmentExtension): boolean {
-  if (ext === 'jpg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  if (ext === 'png') {
-    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-    return bytes.length >= signature.length && signature.every((byte, i) => bytes[i] === byte);
-  }
-  return isValidCvContent(bytes, ext);
+  return matchesDetectedType(bytes, ext);
 }
 
-/** Nazwa pokazywana w wątku i w nagłówku pobrania: bez znaków sterujących, ≤ 200 znaków. */
+/**
+ * Nazwa pokazywana w wątku i w nagłówku pobrania: oczyszczona podstawa nazwy od nadawcy
+ * (bez znaków sterujących i kierunku tekstu, bez ścieżki) + rozszerzenie z typu wyznaczonego
+ * z treści (nie z nazwy nadawcy). Pusta podstawa → `file.<ext>`.
+ */
 export function attachmentDisplayName(name: string, ext: AttachmentExtension): string {
-  const cleaned = Array.from(name.replace(/[\x00-\x1f\x7f]/g, '').trim()).slice(0, 200).join('').trim();
-  return cleaned || `file.${ext}`;
+  return safeFileName(name, ext, 'file');
 }
 
 /** Upload: walidacja bajtów → kontrola dostępu → PUT → metadane w bazie (idempotentnie). */
@@ -147,7 +146,8 @@ export async function storeMessageAttachment(
   } catch {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
-  const contentType = file.type as Parameters<AttachmentObjectStore['put']>[0]['contentType'];
+  // MIME z typu potwierdzonego treścią (= deklaracja klienta, bo `ext` pochodzi z jej mapy).
+  const contentType = DETECTED_MIME[ext] as Parameters<AttachmentObjectStore['put']>[0]['contentType'];
   const put = await deps.store.put({ key, bytes, contentType });
   if (!put.ok) {
     if (put.error === 'TIMEOUT' || put.error === 'UNAVAILABLE' || put.error === 'CANCELLED') {
@@ -321,14 +321,17 @@ export async function openAttachmentDownload(
     captureError(new AppError('INTERNAL'), { area: 'attachments.download.mismatch' });
     return emptyAttachmentResponse(503);
   }
+  // Typ i rozszerzenie pobieranego pliku = typ potwierdzony przy uploadzie (klucz obiektu),
+  // także dla wierszy zapisanych przed oczyszczaniem nazw.
+  const ext = extensionOfKey(record.key)!;
   return new Response(body, {
     status: 200,
     headers: {
       ...NO_STORE,
-      'content-type': record.mimeType,
+      'content-type': DETECTED_MIME[ext],
       'content-length': String(contentLength),
       // Zawsze jako plik do zapisania (także zdjęcia) — przeglądarka nie renderuje treści.
-      'content-disposition': attachmentDisposition(record.fileName),
+      'content-disposition': attachmentDisposition(attachmentDisplayName(record.fileName, ext)),
       'content-security-policy': "default-src 'none'; sandbox",
     },
   });

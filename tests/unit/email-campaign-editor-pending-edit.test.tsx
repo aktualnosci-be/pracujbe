@@ -111,6 +111,6 @@ describe('EmailCampaignEditor: pola w trakcie zapisu (#820)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'campaignEditorSave' }));
     await screen.findByText('errors.internal');
-    expect(slugInput()).toBeEnabled();
+    await waitFor(() => expect(slugInput()).toBeEnabled());
   });
 });

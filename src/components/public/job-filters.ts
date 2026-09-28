@@ -195,6 +195,41 @@ export function parseLocationsParam(value: string | undefined): string[] {
   return tokens.map((token) => token.trim()).filter(Boolean);
 }
 
+/** Surowe `searchParams` Next.js (App Router) — wartość pojedyncza albo powtórzony klucz. */
+export type RawSearchParams = Record<string, string | string[] | undefined>;
+
+/**
+ * Spłaszcza `searchParams` do pojedynczych wartości tekstowych. Powtórzony klucz (np. kilka
+ * zaznaczonych checkboxów o tej samej nazwie w formularzu bez JavaScriptu, #795 — GET
+ * z przeglądarki koduje wybór jako `category=a&category=b`, nie CSV) jest łączony w JEDNĄ
+ * wartość — dokładnie ten sam format, jakiego oczekuje `splitParam`/`parseLocationsParam`
+ * z linków budowanych przez JS (`sidebarFiltersToParams`). Wcześniej brano tylko pierwszą
+ * wartość klucza, więc fallback bez JavaScriptu nie mógł zbudować ani zmienić zestawu
+ * wielowartościowego filtra (kategoria/lokalizacja/rodzaj umowy/zakwaterowanie).
+ *
+ * `location` jest wolnym tekstem i może sam zawierać przecinek (#845) — łączony jest przez
+ * {@link serializeLocations} (ten sam escaping co JS), pozostałe klucze zwykłym CSV.
+ */
+export function flattenSearchParams(
+  sp: RawSearchParams,
+): Record<string, string | undefined> {
+  const flat: Record<string, string | undefined> = {};
+  for (const key of Object.keys(sp)) {
+    const value = sp[key];
+    if (!Array.isArray(value)) {
+      flat[key] = value;
+      continue;
+    }
+    const parts = value.filter((part) => part.length > 0);
+    if (parts.length === 0) {
+      flat[key] = undefined;
+      continue;
+    }
+    flat[key] = key === 'location' ? serializeLocations(parts) : parts.join(',');
+  }
+  return flat;
+}
+
 export function clampSalary(value: number, unit: SalaryUnit = 'month'): number {
   const { min, max, step } = salaryBounds(unit);
   const stepped = Math.round(value / step) * step;

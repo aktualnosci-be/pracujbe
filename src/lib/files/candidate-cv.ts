@@ -17,7 +17,8 @@ import {
 } from '@/lib/storage/private-download-token';
 import { createCandidateCvKey, type createRailwayBucket } from '@/lib/storage/railway-bucket';
 import { CV_ALLOWED_TYPES, checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
-import { attachmentDisposition, cvDisplayName, isValidCvContent } from './cv-content';
+import { attachmentDisposition, cvDisplayName, isValidCvContent, type CvExtension } from './cv-content';
+import { DETECTED_MIME, extensionOfKey } from './file-type';
 
 /**
  * Pliki CV kandydata na prywatnym buckecie Railway (#26, Invariant #10).
@@ -103,7 +104,8 @@ export async function storeCandidateCv(
   } catch {
     return { ok: false, error: 'PERMISSION_DENIED' };
   }
-  const mimeType = file.type as CreateCandidateCvInput['mimeType'];
+  // MIME z typu potwierdzonego treścią (= deklaracja klienta, bo `ext` pochodzi z jej mapy).
+  const mimeType = DETECTED_MIME[ext] as CreateCandidateCvInput['mimeType'];
   const put = await deps.store.put({ key, bytes, contentType: mimeType });
   if (!put.ok) {
     // Timeout/awaria: nie wiemy, czy obiekt powstał — sprzątamy ten sam klucz, bez sukcesu.
@@ -230,13 +232,16 @@ export async function openCvDownload(
     captureError(new AppError('INTERNAL'), { area: 'files.download.mismatch' });
     return emptyDownloadResponse(503);
   }
+  // Typ i rozszerzenie pobieranego pliku = typ potwierdzony przy uploadzie (klucz obiektu),
+  // także dla wierszy zapisanych przed oczyszczaniem nazw.
+  const ext = extensionOfKey(record.key) as CvExtension;
   return new Response(body, {
     status: 200,
     headers: {
       ...NO_STORE,
-      'content-type': record.mimeType,
+      'content-type': DETECTED_MIME[ext],
       'content-length': String(contentLength),
-      'content-disposition': attachmentDisposition(record.fileName),
+      'content-disposition': attachmentDisposition(cvDisplayName(record.fileName, ext)),
       'content-security-policy': "default-src 'none'; sandbox",
     },
   });

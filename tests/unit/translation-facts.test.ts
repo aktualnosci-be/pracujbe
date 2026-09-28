@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canonicalNumber, compareFacts, extractFacts } from '@/lib/translation/facts';
+import { canonicalNumber, compareFacts, extractFacts, normalizeEmailCase, normalizeUrlCase } from '@/lib/translation/facts';
 import type { Locale } from '@/i18n/routing';
 
 /** #32 — deterministyczna niezmienność faktów: te same fakty → null, każda zmiana → kategoria. */
@@ -106,5 +106,55 @@ describe('compareFacts — rozbieżność odrzucana', () => {
   });
   it('liczba zapisana słownie = odrzucenie (fail-closed)', () => {
     expect(diff('2 lata doświadczenia', 'pl', 'two years of experience', 'en')).toBe('numbers');
+  });
+  // #803 — case-insensitive tylko schemat/host; ścieżka/query/fragment rozróżniają wielkość liter.
+  it('zmieniona wielkość liter w ścieżce URL', () => {
+    expect(diff('Aplikuj: https://example.com/Apply', 'pl', 'Apply at https://example.com/apply', 'en')).toBe('urls');
+  });
+  it('zmieniona wielkość liter w tokenie query', () => {
+    expect(
+      diff(
+        'Aplikuj: https://example.com/apply?token=AbCdEf',
+        'pl',
+        'Apply at https://example.com/apply?token=abcdef',
+        'en',
+      ),
+    ).toBe('urls');
+  });
+  it('zmieniona wielkość liter fragmentu URL', () => {
+    expect(diff('Zobacz https://example.com/oferta#Sekcja', 'pl', 'See https://example.com/oferta#sekcja', 'en')).toBe(
+      'urls',
+    );
+  });
+  it('sama zmiana wielkości liter schematu/hosta to ten sam adres', () => {
+    expect(diff('Aplikuj: HTTPS://Example.COM/apply', 'pl', 'Apply at https://example.com/apply', 'en')).toBeNull();
+  });
+  // #808 — local-part e-maila rozróżnia wielkość liter (RFC 5321 §2.4); domena nie.
+  it('zmieniona wielkość liter w local-part e-maila', () => {
+    expect(diff('Kontakt: Alice.Smith@company.be', 'pl', 'Contact: alice.smith@company.be', 'en')).toBe('emails');
+  });
+  it('sama zmiana wielkości liter domeny e-maila to ten sam adres', () => {
+    expect(diff('Kontakt: alice.smith@Company.BE', 'pl', 'Contact: alice.smith@company.be', 'en')).toBeNull();
+  });
+});
+
+describe('normalizeUrlCase', () => {
+  it('normalizuje schemat i host, zachowuje ścieżkę/query/fragment', () => {
+    expect(normalizeUrlCase('HTTPS://Example.COM/Apply?Token=AbC#Frag')).toBe('https://example.com/Apply?Token=AbC#Frag');
+  });
+  it('www. bez schematu — host małymi literami, reszta bez zmian', () => {
+    expect(normalizeUrlCase('WWW.Example.COM/Path')).toBe('www.example.com/Path');
+  });
+  it('brak schematu/www — bez zmian zachowania (cała wartość małymi literami)', () => {
+    expect(normalizeUrlCase('Example.COM')).toBe('example.com');
+  });
+});
+
+describe('normalizeEmailCase', () => {
+  it('zachowuje local-part, normalizuje tylko domenę', () => {
+    expect(normalizeEmailCase('Alice.Smith@Company.BE')).toBe('Alice.Smith@company.be');
+  });
+  it('bez @ — kontrola ujemna: cała wartość małymi literami (dopasowanie zawsze ma @)', () => {
+    expect(normalizeEmailCase('NoAt')).toBe('noat');
   });
 });
