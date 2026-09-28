@@ -188,7 +188,7 @@ export function NewPasswordForm(): React.JSX.Element {
           {t('passwordHint')}
         </p>
         {errors.password?.message ? (
-          <p id="password-error" className="text-sm text-error">
+          <p id="password-error" className="text-sm text-error-text">
             {tRoot(String(errors.password.message))}
           </p>
         ) : null}
@@ -206,7 +206,7 @@ export function NewPasswordForm(): React.JSX.Element {
           {...register('passwordConfirm')}
         />
         {errors.passwordConfirm?.message ? (
-          <p id="passwordConfirm-error" className="text-sm text-error">
+          <p id="passwordConfirm-error" className="text-sm text-error-text">
             {tRoot(String(errors.passwordConfirm.message))}
           </p>
         ) : null}

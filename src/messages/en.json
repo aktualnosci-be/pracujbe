@@ -1306,6 +1306,7 @@
     "levelIntermediate": "Intermediate",
     "levelFluent": "Fluent",
     "levelNative": "Native",
+    "languageLevelLabel": "Language level",
     "addLanguage": "Add language",
     "certificatesLabel": "Certificates and qualifications",
     "certificatesPlaceholder": "e.g. VCA, qualification certificate",
@@ -3351,7 +3352,8 @@
     "renameSave": "Save name",
     "renameCancel": "Cancel",
     "renamed": "We renamed the search.",
-    "renameHint": "1 to 80 characters."
+    "renameHint": "1 to 80 characters.",
+    "renameErrorRequired": "Enter a name for the search (1 to 80 characters)."
   },
   "contentReport": {
     "metaTitle": "Report content",
@@ -3388,6 +3390,7 @@
     "successTitle": "Report received",
     "successBody": "Your case has the number shown below. We will send a confirmation to the email address you gave.",
     "successDuplicate": "This report had already been received — the same case is shown below.",
+    "successDuplicateEdited": "This report was already received — the same case is shown below. Later changes to the text were not added to it.",
     "caseNumberLabel": "Case number",
     "accessCodeLabel": "Access code",
     "accessCodeHint": "Keep the case number and access code — you need them to check the status. The code is also in the confirmation email.",

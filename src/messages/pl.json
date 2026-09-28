@@ -1306,6 +1306,7 @@
     "levelIntermediate": "Średni",
     "levelFluent": "Biegły",
     "levelNative": "Ojczysty",
+    "languageLevelLabel": "Poziom znajomości języka",
     "addLanguage": "Dodaj język",
     "certificatesLabel": "Certyfikaty i uprawnienia",
     "certificatesPlaceholder": "np. VCA, świadectwo kwalifikacji",
@@ -3351,7 +3352,8 @@
     "renameSave": "Zapisz nazwę",
     "renameCancel": "Anuluj",
     "renamed": "Zmieniliśmy nazwę wyszukiwania.",
-    "renameHint": "Od 1 do 80 znaków."
+    "renameHint": "Od 1 do 80 znaków.",
+    "renameErrorRequired": "Wpisz nazwę wyszukiwania (od 1 do 80 znaków)."
   },
   "contentReport": {
     "metaTitle": "Zgłoś treść",
@@ -3388,6 +3390,7 @@
     "successTitle": "Zgłoszenie przyjęte",
     "successBody": "Twoja sprawa ma numer podany poniżej. Potwierdzenie wyślemy na podany adres e-mail.",
     "successDuplicate": "To zgłoszenie zostało już przyjęte wcześniej — poniżej ta sama sprawa.",
+    "successDuplicateEdited": "To zgłoszenie zostało już przyjęte wcześniej — poniżej ta sama sprawa. Późniejsze zmiany treści nie zostały do niej dopisane.",
     "caseNumberLabel": "Numer sprawy",
     "accessCodeLabel": "Kod dostępu",
     "accessCodeHint": "Zapisz numer sprawy i kod dostępu — są potrzebne do sprawdzenia statusu. Kod jest też w e-mailu z potwierdzeniem.",

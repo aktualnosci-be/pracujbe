@@ -1277,7 +1277,7 @@ export function JobWizard({
           role="alert"
           className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error-text" aria-hidden="true" />
           {t('editFixStep', { step: editInvalidStep, title: steps[editInvalidStep - 1]?.title ?? '' })}
         </p>
       ) : null}
@@ -1286,7 +1286,7 @@ export function JobWizard({
           role="alert"
           className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error-text" aria-hidden="true" />
           {t('publishFixStep', { step: publishInvalidStep, title: steps[publishInvalidStep - 1]?.title ?? '' })}
         </p>
       ) : null}
@@ -2396,7 +2396,7 @@ function SaveIndicator({
   }
   if (state === 'error') {
     return (
-      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error">
+      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error-text">
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
         {labels.error}
       </p>

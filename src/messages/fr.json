@@ -1306,6 +1306,7 @@
     "levelIntermediate": "Intermédiaire",
     "levelFluent": "Courant",
     "levelNative": "Langue maternelle",
+    "languageLevelLabel": "Niveau de langue",
     "addLanguage": "Ajouter une langue",
     "certificatesLabel": "Certificats et attestations",
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
@@ -3351,7 +3352,8 @@
     "renameSave": "Enregistrer le nom",
     "renameCancel": "Annuler",
     "renamed": "Nous avons renommé la recherche.",
-    "renameHint": "De 1 à 80 caractères."
+    "renameHint": "De 1 à 80 caractères.",
+    "renameErrorRequired": "Saisissez un nom pour la recherche (de 1 à 80 caractères)."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -3388,6 +3390,7 @@
     "successTitle": "Signalement reçu",
     "successBody": "Votre dossier porte le numéro ci-dessous. Nous enverrons une confirmation à l’adresse e-mail indiquée.",
     "successDuplicate": "Ce signalement avait déjà été reçu — voici le même dossier.",
+    "successDuplicateEdited": "Ce signalement a déjà été enregistré — voici le même dossier. Les modifications apportées ensuite au texte n’y ont pas été ajoutées.",
     "caseNumberLabel": "Numéro de dossier",
     "accessCodeLabel": "Code d’accès",
     "accessCodeHint": "Conservez le numéro de dossier et le code d’accès — ils sont nécessaires pour consulter le statut. Le code figure aussi dans l’e-mail de confirmation.",

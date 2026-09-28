@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { useRouter } from '@/i18n/navigation';
 import { ADMIN_PAGE_HEADING_FOCUS } from '@/lib/admin/focus';
-import { Toast } from '@/components/ui/toast';
+import { ToastRegion } from '@/components/ui/toast';
 
 /**
  * AdminFeedbackProvider — komunikaty i fokus po akcjach panelu admina (#415, WCAG 2.4.3).
@@ -21,7 +21,6 @@ import { Toast } from '@/components/ui/toast';
  *      (`[data-admin-focus="page-heading"]`). Fokus nigdy nie spada na `<body>`.
  */
 
-const TOAST_MS = 4000;
 
 
 type ToastState = { tone: 'success' | 'error'; message: string; id: number };
@@ -69,12 +68,6 @@ export function AdminFeedbackProvider({
   );
   const seq = React.useRef(0);
 
-  React.useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), TOAST_MS);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
   // Fokus dopiero po zakończeniu odświeżenia — wtedy DOM odpowiada nowym danym.
   React.useEffect(() => {
     if (refreshing || !focusRequest) return;
@@ -101,16 +94,11 @@ export function AdminFeedbackProvider({
   return (
     <AdminFeedbackContext.Provider value={value}>
       {children}
-      {toast ? (
-        <div className="fixed bottom-20 right-4 z-[80] w-[calc(100vw-2rem)] max-w-sm lg:bottom-4">
-          <Toast
-            key={toast.id}
-            message={toast.message}
-            tone={toast.tone}
-            onClose={() => setToast(null)}
-          />
-        </div>
-      ) : null}
+      <ToastRegion
+        toast={toast}
+        onClose={() => setToast(null)}
+        className="bottom-20 z-[80] lg:bottom-4"
+      />
     </AdminFeedbackContext.Provider>
   );
 }
