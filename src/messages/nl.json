@@ -451,7 +451,6 @@
     "seeMoreJobs": "Meer vacatures bekijken",
     "learnMoreCompany": "Meer over het bedrijf",
     "industry": "Sector",
-    "accommodationCommute": "Huisvesting en vervoer",
     "error": {
       "titleRequired": "Geef een vacaturetitel op.",
       "titleTooShort": "De titel is te kort (min. 5 tekens).",
@@ -499,7 +498,15 @@
       "screeningOptionRequired": "Vul het antwoord in de taal van de vacature in.",
       "screeningOptionTooLong": "Een antwoord mag maximaal 120 tekens hebben.",
       "screeningOptionsCount": "Een lijstvraag heeft 2 tot 10 antwoorden nodig.",
-      "screeningTooMany": "Een vacature kan maximaal 10 vragen hebben."
+      "screeningTooMany": "Een vacature kan maximaal 10 vragen hebben.",
+      "accommodationCostInvalid": "Vul een bedrag in tussen 0 en 5000 EUR (maximaal 2 decimalen).",
+      "mealVoucherInvalid": "Vul een bedrag in tussen 0,01 en 20 EUR per dag.",
+      "jointCommitteeInvalid": "Kies een comité uit de lijst.",
+      "accommodationDetailsProvidedOnly": "Kosten en voorwaarden van de woning vul je alleen in als je huisvesting biedt.",
+      "accommodationCostPeriodRequired": "Kies of de kosten per week of per maand zijn.",
+      "accommodationCostRequired": "Vul de kosten van de huisvesting in.",
+      "accommodationCostMandatory": "Vul bij voorziene huisvesting de kosten in — vul 0 in als de huisvesting gratis is.",
+      "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -511,7 +518,35 @@
     "machineTranslationNotice": "Automatische vertaling. Oorspronkelijke taal: {language}.",
     "manualTranslationNotice": "Vertaalde inhoud. Oorspronkelijke taal: {language}.",
     "translationOriginalLink": "Bekijk het origineel",
-    "similarJobsLoadError": "Vergelijkbare vacatures konden niet worden geladen. Deze vacature en solliciteren werken gewoon."
+    "similarJobsLoadError": "Vergelijkbare vacatures konden niet worden geladen. Deze vacature en solliciteren werken gewoon.",
+    "costsTitle": "Kosten en extra's",
+    "costsDeclared": "Informatie van de werkgever.",
+    "mealVouchers": "Maaltijdcheques",
+    "jointCommittee": "Paritair comité",
+    "costs": {
+      "kind": {
+        "provided": "Voorzien door de werkgever",
+        "assistance": "Hulp bij het zoeken naar woonruimte",
+        "none": "Geen"
+      },
+      "cost": "{amount} / {period, select, week {week} other {maand}}",
+      "free": "Gratis",
+      "deductedYes": "Ingehouden op het loon",
+      "deductedNo": "Niet ingehouden op het loon",
+      "registrationYes": "Domiciliëring mogelijk",
+      "registrationNo": "Geen domiciliëring mogelijk",
+      "afterContract": {
+        "ends_with_contract": "Na het einde van het contract moet je de woning verlaten",
+        "transition_period": "Na het einde van het contract heb je tijd om te verhuizen",
+        "can_stay": "Na het einde van het contract kun je blijven op eigen kosten"
+      },
+      "shuttle": "Vervoer naar het werk",
+      "reimbursed": "Terugbetaling van vervoerskosten",
+      "mealPerDay": "{amount} per dag",
+      "committeeCode": "PC {code}",
+      "minimumWagesLink": "Officiële minimumlonen in de sector",
+      "minimumWagesNote": "Het loon hangt onder meer af van categorie en anciënniteit — controleer het in de officiële databank."
+    }
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -709,6 +744,7 @@
     "jobNotEditable": "Deze vacature kan nu niet worden bewerkt. Alleen een actieve of gepauzeerde vacature kan worden aangepast.",
     "jobEditConflict": "Iemand heeft deze vacature intussen gewijzigd. Open ze opnieuw via de vacaturelijst om de actuele versie te zien.",
     "jobExpired": "De vervaldatum van deze vacature is verstreken. Open ze opnieuw via de vacaturelijst — heropenen verwijdert de verstreken datum.",
+    "jobAccommodationTermsRequired": "Een vacature met voorziene huisvesting moet de kosten van de huisvesting vermelden (0 = gratis) en of ze worden ingehouden op het loon. Vul de stap „Voorwaarden en voordelen” aan.",
     "botCheckFailed": "We konden niet bevestigen dat een mens dit formulier verstuurt. Voltooi de verificatie opnieuw en verstuur het nog eens.",
     "botCheckUnavailable": "De beveiligingscontrole is tijdelijk niet beschikbaar. Probeer het over enkele minuten opnieuw.",
     "screeningAnswerRequired": "Beantwoord de verplichte vragen van de werkgever.",
@@ -1610,8 +1646,6 @@
     "conditionsPlaceholder": "bijv. Contract van onbepaalde duur",
     "benefitsLabel": "Voordelen",
     "benefitsPlaceholder": "bijv. Premies en toeslagen",
-    "accommodation": "Wij voorzien huisvesting",
-    "transport": "Wij voorzien vervoer",
     "companyDescriptionLabel": "Bedrijfsomschrijving",
     "companyDescriptionPlaceholder": "Stel het bedrijf kort voor aan kandidaten.",
     "contactEmailLabel": "Contact-e-mail",
@@ -1634,6 +1668,7 @@
     "editSaved": "Wijzigingen opgeslagen",
     "editSavedDemo": "Wijzigingen opgeslagen (demomodus)",
     "editFixStep": "De wijzigingen zijn niet opgeslagen. Corrigeer de gemarkeerde velden in stap {step}: {title}.",
+    "publishFixStep": "De vacature is niet gepubliceerd. Corrigeer de gemarkeerde velden in stap {step}: {title}.",
     "screeningTitle": "Vragen aan kandidaten",
     "screeningHint": "Optioneel, maximaal {max} korte vragen, bijv. over rijbewijs, VCA of vervoer. Je ziet de antwoorden in de sollicitatie; ze veranderen de match niet en wijzen kandidaten niet automatisch af.",
     "screeningReadOnly": "Vragen kun je alleen in een concept wijzigen — kandidaten hebben de huidige versie al beantwoord.",
@@ -1663,6 +1698,41 @@
     "screeningPublishPending": "Vraag {n} wacht op controle.",
     "screeningPublishRejected": "Vraag {n} is niet goedgekeurd.",
     "screeningGoToQuestions": "Naar de vragen",
+    "costsLegend": "Kosten en extra's",
+    "costsHint": "Optionele velden. De kandidaat ziet ze op de vacaturepagina als informatie van de werkgever.",
+    "costsUnset": "Niet opgegeven",
+    "accommodationKindLabel": "Huisvesting",
+    "accommodationKind": {
+      "provided": "Wij bieden huisvesting",
+      "assistance": "Wij helpen bij het zoeken naar woonruimte",
+      "none": "Geen huisvesting"
+    },
+    "accommodationCostLabel": "Kosten huisvesting (EUR)",
+    "accommodationCostHint": "Vul 0 in als de huisvesting gratis is.",
+    "accommodationCostPeriodLabel": "Kosten per",
+    "accommodationCostPeriod": {
+      "week": "week",
+      "month": "maand"
+    },
+    "accommodationDeductedLabel": "Kosten worden ingehouden op het loon",
+    "accommodationRegistrationLabel": "Domiciliëring op dit adres mogelijk",
+    "accommodationAfterContractLabel": "Woning na het einde van het contract",
+    "accommodationAfterContract": {
+      "ends_with_contract": "Moet verlaten worden bij het einde van het contract",
+      "transition_period": "Er is tijd om te verhuizen",
+      "can_stay": "Blijven kan op eigen kosten"
+    },
+    "tri": {
+      "yes": "Ja",
+      "no": "Nee"
+    },
+    "transportLabel": "Woon-werkverkeer",
+    "transportShuttle": "Wij voorzien vervoer naar het werk",
+    "transportReimbursed": "Wij betalen de vervoerskosten terug",
+    "mealVoucherLabel": "Maaltijdcheques (EUR per dag)",
+    "jointCommitteeLabel": "Paritair comité (PC)",
+    "jointCommitteeCode": "PC {code}",
+    "jointCommitteeHint": "Op de vacaturepagina tonen we het nummer van het comité en een link naar de officiële databank met minimumlonen. Het portaal beoordeelt het loon niet.",
     "languageSelectPlaceholder": "Kies een taal"
   },
   "jobImport": {

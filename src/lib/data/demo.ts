@@ -13,6 +13,7 @@
  * użytkownika. Eksport `demoJobs` to gotowa lista `JobDetail[]` w domyślnym języku.
  */
 
+import type { JobCosts } from '@/lib/job-costs';
 import type {
   CategoryKey,
   ContractType,
@@ -531,6 +532,8 @@ interface DemoJobRaw {
   immediate: boolean;
   noLanguageRequired: boolean;
   transport: boolean;
+  /** 0169: przykładowe „Koszty i dodatki” (dane fikcyjne, jak cała oferta demo). */
+  costs?: JobCosts;
   startDate?: string;
   languageKeys: LangKey[];
   responsibilityKeys: RespKey[];
@@ -549,6 +552,11 @@ const RAW_JOBS: DemoJobRaw[] = [
   {
     id: '1001', occKey: 'warehouseWorker', companyId: 'c1', locationKey: 'antwerp', category: 'warehouse', contractType: 'interim',
     salaryMin: 2400, salaryMax: 2800, postedDaysAgo: 1, accommodation: true, immediate: true, noLanguageRequired: true, transport: true,
+    costs: {
+      accommodationKind: 'provided', accommodationCost: 120, accommodationCostPeriod: 'week', accommodationDeducted: true,
+      accommodationRegistration: true, accommodationAfterContract: 'transition_period', transportShuttle: true,
+      transportReimbursed: false, mealVoucherDaily: 8, jointCommittee: '322',
+    },
     languageKeys: [], responsibilityKeys: ['loadUnload', 'orderPick', 'stock'], mandatoryKeys: ['physical', 'reliable', 'workPermit'],
     optionalKeys: ['forklift', 'experienceBonus'], conditionKeys: ['weekly', 'accommodation', 'ppe'], highlightKeys: ['immediate', 'accommodation', 'noLang'],
     workingHoursKey: 'fulltime', shiftsKey: 'earlyLate', contextKeys: ['immediate', 'accommodation', 'noLang'],
@@ -798,6 +806,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     shifts: raw.shiftsKey ? SH[raw.shiftsKey][content] : undefined,
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
+    ...(raw.costs ? { costs: raw.costs } : {}),
     startDate: raw.startDate,
     companyDescription: company.description[content],
     contentLocale: content,

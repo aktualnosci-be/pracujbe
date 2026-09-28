@@ -183,13 +183,14 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 8: warunki i benefity.
   await addChip(t('conditionsLabel'), 'Vast contract na proefperiode');
   await addChip(t('benefitsLabel'), 'Maaltijdcheques');
-  await page.getByRole('checkbox', { name: t('transport'), exact: true }).check();
+  // 0169: dojazd w „Kosztach i dodatkach” (dowóz ustawia też flagę filtra `transport`).
+  await page.getByRole('checkbox', { name: t('transportShuttle'), exact: true }).check();
   await nextStep(9);
   expect(await translation()).toMatchObject({
     conditions: ['Vast contract na proefperiode'],
     benefits: ['Maaltijdcheques'],
   });
-  expect(await draft()).toMatchObject({ transport: true, accommodation: false });
+  expect(await draft()).toMatchObject({ transport: true, transport_shuttle: true, accommodation: false });
 
   // Krok 9: opis firmy i kontakt — zapis szkicu przy próbie publikacji (niżej).
   await page.getByLabel(t('companyDescriptionLabel'), { exact: true }).fill('Familiebedrijf in havenlogistiek sinds 1998.');

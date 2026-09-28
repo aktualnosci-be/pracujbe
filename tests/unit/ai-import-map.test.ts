@@ -159,7 +159,7 @@ describe('mapExtraction', () => {
 describe('buildImportDraftContent', () => {
   /** Lista dozwolonych pól z ciała `save_job_draft` (0083). */
   function allowedKeys(): { job: Set<string>; translation: Set<string> } {
-    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0083_save_job_draft_atomic.sql'), 'utf8');
+    const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0169_job_costs_benefits.sql'), 'utf8');
     const lists = [...sql.matchAll(/k not in \(([^)]*)\)/g)].map(
       (x) => new Set([...x[1]!.matchAll(/'([a-z_]+)'/g)].map((y) => y[1]!)),
     );

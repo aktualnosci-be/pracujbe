@@ -6,6 +6,12 @@ import {
 } from '@/lib/validation/candidate';
 import { localeSchema } from '@/lib/validation/auth';
 import { refineScreeningPrimaryLocale, screeningQuestionsSchema } from '@/lib/validation/screening';
+import { JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
+import {
+  ACCOMMODATION_AFTER_CONTRACT,
+  ACCOMMODATION_COST_PERIODS,
+  ACCOMMODATION_KINDS,
+} from '@/lib/job-costs';
 
 /**
  * Walidacja kreatora oferty pracy — dziewięć kroków + pełny jobSchema.
@@ -200,14 +206,113 @@ export const step7Schema = step7Base.superRefine((data, ctx) => {
   refineNoLanguageConflict(data, ctx);
 });
 
-/** Krok 8 — warunki i benefity. */
+/** Kwota w EUR z najwyżej dwoma miejscami po przecinku (koszty i bony, 0169). */
+const euroAmount = (min: number, max: number, message: string) =>
+  z
+    .number({ invalid_type_error: message })
+    .min(min, message)
+    .max(max, message)
+    .refine((value) => Number.isFinite(value) && Math.abs(value * 100 - Math.round(value * 100)) < 1e-6, message);
+
+/**
+ * Krok 8 — warunki i benefity + „Koszty i dodatki” (0169). Flagi `accommodation`/`transport`
+ * zostają (filtry listy, import AI); gdy podany jest rodzaj zakwaterowania albo szczegóły
+ * dojazdu, flagi wynikają z nich (`jobCostsPatch`). Wszystkie nowe pola są opcjonalne —
+ * deklaracja pracodawcy, portal jej nie ocenia. Limity = CHECK-i w bazie.
+ */
 const step8Base = z.object({
   conditions: z.array(textLine).max(20, 'job.error.conditionsTooMany').default([]),
   benefits: z.array(textLine).max(20, 'job.error.benefitsTooMany').default([]),
   accommodation: z.boolean().default(false),
   transport: z.boolean().default(false),
+  accommodationKind: z.enum(ACCOMMODATION_KINDS).optional(),
+  accommodationCost: euroAmount(0, 5000, 'job.error.accommodationCostInvalid').optional(),
+  accommodationCostPeriod: z.enum(ACCOMMODATION_COST_PERIODS).optional(),
+  accommodationDeducted: z.boolean().optional(),
+  accommodationRegistration: z.boolean().optional(),
+  accommodationAfterContract: z.enum(ACCOMMODATION_AFTER_CONTRACT).optional(),
+  transportShuttle: z.boolean().optional(),
+  transportReimbursed: z.boolean().optional(),
+  mealVoucherDaily: euroAmount(0.01, 20, 'job.error.mealVoucherInvalid').optional(),
+  jointCommittee: z
+    .string()
+    .refine((code) => JOINT_COMMITTEE_CODES.includes(code), 'job.error.jointCommitteeInvalid')
+    .optional(),
 });
-export const step8Schema = step8Base;
+
+function refineJobCosts(
+  data: {
+    accommodationKind?: string;
+    accommodationCost?: number;
+    accommodationCostPeriod?: string;
+    accommodationDeducted?: boolean;
+    accommodationRegistration?: boolean;
+    accommodationAfterContract?: string;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const hasDetails =
+    data.accommodationCost !== undefined ||
+    data.accommodationCostPeriod !== undefined ||
+    data.accommodationDeducted !== undefined ||
+    data.accommodationRegistration !== undefined ||
+    data.accommodationAfterContract !== undefined;
+  if (hasDetails && data.accommodationKind !== 'provided') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationKind'],
+      message: 'job.error.accommodationDetailsProvidedOnly',
+    });
+  }
+  if (data.accommodationCost !== undefined && data.accommodationCostPeriod === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationCostPeriod'],
+      message: 'job.error.accommodationCostPeriodRequired',
+    });
+  }
+  if (data.accommodationCost === undefined && data.accommodationCostPeriod !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationCost'],
+      message: 'job.error.accommodationCostRequired',
+    });
+  }
+}
+
+export const step8Schema = step8Base.superRefine(refineJobCosts);
+
+/**
+ * Decyzja właściciela 28.09.2026: oferta PUBLICZNA z zakwaterowaniem zapewnionym musi podać
+ * koszt (0 = bez kosztów) i informację, czy koszt jest potrącany z pensji. Szkic może być
+ * niekompletny (`step8Schema`); tę regułę sprawdzają publikacja i edycja opublikowanej oferty
+ * — w bazie strażnik `enforce_job_accommodation_terms` (0169) → `JOB_ACCOMMODATION_TERMS_REQUIRED`.
+ */
+export function refineAccommodationPublishTerms(
+  data: { accommodationKind?: string; accommodationCost?: number; accommodationDeducted?: boolean },
+  ctx: z.RefinementCtx,
+): void {
+  if (data.accommodationKind !== 'provided') return;
+  if (data.accommodationCost === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationCost'],
+      message: 'job.error.accommodationCostMandatory',
+    });
+  }
+  if (data.accommodationDeducted === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['accommodationDeducted'],
+      message: 'job.error.accommodationDeductedRequired',
+    });
+  }
+}
+
+/** Krok 8 przy publikacji i edycji opublikowanej oferty (szkic: `step8Schema`). */
+export const step8PublishSchema = step8Base
+  .superRefine(refineJobCosts)
+  .superRefine(refineAccommodationPublishTerms);
 
 /**
  * Krok 9 — firma i publikacja. Szkic (`step9DraftSchema`) zapisuje opis firmy i kontakt BEZ
@@ -247,7 +352,9 @@ export const jobSchema = step1Base
     path: ['salaryMax'],
     message: 'job.error.salaryRangeInvalid',
   })
-  .superRefine(refineNoLanguageConflict);
+  .superRefine(refineNoLanguageConflict)
+  .superRefine(refineJobCosts)
+  .superRefine(refineAccommodationPublishTerms);
 
 export type JobStep1 = z.infer<typeof step1Schema>;
 export type JobStep2 = z.infer<typeof step2Schema>;

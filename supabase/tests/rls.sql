@@ -16411,6 +16411,257 @@ select pg_temp.assert(:'skneg' = :'skoff1',
 rollback;
 reset role; reset app.current_uid;
 
+
+-- ============================================================================
+-- CB169 (0169): „Koszty i dodatki” w ofercie — słownik komisji
+--       parytetowych, kolumny kosztów w save_job_draft/update_published_job, spójność
+--       z flagami filtrów, powiadomienie o zmianie kosztu zakwaterowania (0144),
+--       odczyt publiczny get_public_job_costs, kopia szkicu
+-- ============================================================================
+\set CBDRAFT 'e8000000-0000-0000-0000-000000930a01'
+\set CBJOB   'e8000000-0000-0000-0000-000000930a02'
+\set CBAPP   'e8000000-0000-0000-0000-000000930b01'
+reset role; reset app.current_uid;
+begin;
+update public.companies set status = 'verified', moderation_decision_id = null where id = :'COMPA';
+update public.notification_preferences set in_app_enabled = true where profile_id = :'CANDA';
+
+-- CB1: słownik czytelny publicznie, zapis tylko service_role.
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select name_nl from public.joint_committees where code = '124') = 'Bouwbedrijf'
+  and (select count(*) from public.joint_committees) >= 20,
+  'CB1 anon czyta słownik komisji parytetowych');
+select pg_temp.expect_error(
+  $q$insert into public.joint_committees(code, name_pl, name_nl, name_fr, name_en) values ('999', 'x', 'x', 'x', 'x')$q$,
+  'permission denied', 'CB1b anon nie dopisuje komisji');
+reset role;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  $q$update public.joint_committees set name_pl = 'x' where code = '124'$q$,
+  'permission denied', 'CB1c rekruter nie zmienia słownika');
+reset role; reset app.current_uid;
+
+-- CB2: szkic zapisuje koszty w save_job_draft (krok 8 — jeden patch).
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'CBDRAFT', :'COMPA', 'draft-cb169', 'Magazynier CB169', 'warehouse', 'temporary', 'Gent', 'Flandria', 'draft', 'pl');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
+  "accommodation": true, "transport": true, "accommodation_kind": "provided",
+  "accommodation_cost": 125.5, "accommodation_cost_period": "week", "accommodation_deducted": true,
+  "accommodation_registration": false, "accommodation_after_contract": "transition_period",
+  "transport_shuttle": true, "transport_reimbursed": false, "meal_voucher_daily": 8,
+  "joint_committee": "124"}, "translation": {"conditions": [], "benefits": []}}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_kind = 'provided' and accommodation_cost = 125.50 and accommodation_cost_period = 'week'
+          and accommodation_deducted and not accommodation_registration
+          and accommodation_after_contract = 'transition_period' and transport_shuttle
+          and not transport_reimbursed and meal_voucher_daily = 8 and joint_committee = '124'
+          and accommodation and transport
+     from public.jobs where id = :'CBDRAFT'),
+  'CB2 save_job_draft zapisuje wszystkie pola kosztów i dodatków');
+
+-- CB3: spójność w bazie niezależnie od klienta (CHECK) i słownik (FK).
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'CBDRAFT',
+    '{"job": {"accommodation": true, "accommodation_kind": "assistance"}}'),
+  'jobs_accommodation_details_provided', 'CB3 koszt mieszkania tylko przy zakwaterowaniu zapewnionym');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'CBDRAFT',
+    '{"job": {"accommodation": false}}'),
+  'jobs_accommodation_kind_flag', 'CB3b flaga filtra zgodna z rodzajem zakwaterowania');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'CBDRAFT',
+    '{"job": {"transport": false}}'),
+  'jobs_transport_details_flag', 'CB3c dowóz bez flagi transportu odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'CBDRAFT',
+    '{"job": {"joint_committee": "999"}}'),
+  'foreign key', 'CB3d kod spoza słownika komisji odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'CBDRAFT',
+    '{"job": {"meal_voucher_daily": 50}}'),
+  'check constraint', 'CB3e bon żywieniowy ponad limit odrzucony');
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'CBDRAFT',
+    '{"job": {"accommodation_rent": 10}}'),
+  'VALIDATION_FAILED', 'CB3f nieznany klucz nadal odrzucany');
+reset role; reset app.current_uid;
+
+-- CB4: kopia szkicu przenosi koszty (trigger na job_duplications).
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.duplicate_job_as_draft(:'CBDRAFT'::uuid, 'e8000000-0000-0000-0000-000000930c01'::uuid) as cb_copy \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_cost = 125.50 and joint_committee = '124' and meal_voucher_daily = 8 and transport_shuttle
+     from public.jobs where id = :'cb_copy'),
+  'CB4 kopia oferty jako szkic zachowuje koszty i dodatki');
+
+-- CB5: opublikowana oferta z aktywną aplikacją — zmiana kosztu zakwaterowania powiadamia.
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status,
+                        default_locale, published_at, salary_min, salary_max, salary_period, working_hours)
+  values (:'CBJOB', :'COMPA', 'cb169-magazynier', 'Magazynier CB169', 'warehouse', 'temporary', 'Gandawa',
+          'Flandria', 'active', 'pl', now() - interval '1 day', 16, 18, 'hour', '40 h');
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'CBJOB', 'pl', 'Magazynier CB169', 'Opis', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'CBJOB', 'pl', 'mandatory', 0, 'Praca w nocy');
+set local session_replication_role = replica;
+insert into public.applications(id, candidate_id, job_id, status, submitted_at)
+  values (:'CBAPP', :'CANDA', :'CBJOB', 'submitted', now());
+set local session_replication_role = origin;
+
+select set_config('pb.cb_base', jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job}',
+  (current_setting('pb.rr_ok')::jsonb -> 'job') || $j${"title": "Magazynier CB169", "city": "Gandawa",
+   "contract_type": "temporary", "salary_min": 16, "salary_max": 18, "working_hours": "40 h",
+   "accommodation": true, "transport": false, "accommodation_kind": "provided",
+   "accommodation_cost": 120, "accommodation_cost_period": "week", "accommodation_deducted": true,
+   "meal_voucher_daily": 8, "joint_committee": "124"}$j$::jsonb)::text, true);
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'CBJOB'::uuid, current_setting('pb.cb_base')::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_cost = 120 and joint_committee = '124' from public.jobs where id = :'CBJOB'),
+  'CB5 update_published_job zapisuje koszty i dodatki');
+select count(*) as cb_n0 from public.notifications where entity_type = 'job_terms' and entity_id = :'CBJOB' \gset
+
+-- CB5b: sam kod komisji/bony to nie „istotne warunki” (lista w job_material_terms) — bez powiadomienia.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'CBJOB'::uuid, jsonb_set(jsonb_set(current_setting('pb.cb_base')::jsonb,
+  '{job,joint_committee}', '"140"'), '{job,meal_voucher_daily}', '7'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'CBJOB') = :'cb_n0'::int,
+  'CB5b zmiana komisji i bonów nie tworzy powiadomienia');
+
+savepoint cb_neg;
+-- CB6 (kontrola ujemna): lista pól z 0144 (bez zakwaterowania) nie widzi zmiany kosztu.
+create or replace function public.job_material_terms(j public.jobs)
+returns jsonb language sql immutable set search_path = public, pg_temp as $$
+  select jsonb_build_object(
+    'salary', jsonb_build_object('min', j.salary_min, 'max', j.salary_max,
+                                 'period', j.salary_period, 'currency', j.currency),
+    'city', public.search_fold(btrim(coalesce(j.city, ''))),
+    'contract_type', j.contract_type, 'working_hours', j.working_hours)
+$$;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'CBJOB'::uuid,
+  jsonb_set(current_setting('pb.cb_base')::jsonb, '{job,accommodation_cost}', '150'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'CBJOB') = :'cb_n0'::int,
+  'CB6 KONTROLA UJEMNA: bez klucza accommodation zmiana kosztu nie powiadamia (CB7 łapie brak)');
+rollback to savepoint cb_neg;
+
+-- CB7: zmiana kosztu zakwaterowania → powiadomienie z polem accommodation.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'CBJOB'::uuid,
+  jsonb_set(current_setting('pb.cb_base')::jsonb, '{job,accommodation_cost}', '150'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+           where entity_type = 'job_terms' and entity_id = :'CBJOB' and profile_id = :'CANDA'
+             and data->'fields' = '["accommodation"]'::jsonb),
+  'CB7 zmiana kosztu zakwaterowania powiadamia kandydata z aktywną aplikacją');
+
+-- CB8: bezpośredni zapis kosztów opublikowanej oferty przez klienta = strażnik 0077.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.jobs set accommodation_cost = 1 where id = %L', :'CBJOB'),
+  'JOB_NOT_DRAFT', 'CB8 koszt opublikowanej oferty tylko przez update_published_job');
+reset role; reset app.current_uid;
+
+-- CB9: odczyt publiczny tylko dla oferty publicznej.
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select accommodation_cost = 150 and accommodation_cost_period = 'week' and joint_committee = '124'
+     from public.get_public_job_costs(:'CBJOB'::uuid)),
+  'CB9 anon czyta koszty oferty publicznej');
+select pg_temp.assert(
+  (select count(*) from public.get_public_job_costs(:'CBDRAFT'::uuid)) = 0,
+  'CB9b szkic nie zwraca kosztów');
+reset role;
+
+-- CB10 (decyzja właściciela 28.09.2026): zakwaterowanie zapewnione w ofercie publicznej wymaga
+-- kosztu (0 = bez kosztów) i informacji o potrąceniu z pensji; szkic może być niekompletny.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'CBJOB',
+    (current_setting('pb.cb_base')::jsonb #- '{job,accommodation_deducted}')::text),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10 edycja opublikowanej oferty bez informacji o potrąceniu odrzucona');
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'CBJOB',
+    (current_setting('pb.cb_base')::jsonb #- '{job,accommodation_cost}' #- '{job,accommodation_cost_period}')::text),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10b edycja opublikowanej oferty bez kosztu zakwaterowania odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_cost = 150 and accommodation_deducted from public.jobs where id = :'CBJOB'),
+  'CB10c odrzucona rewizja nie zmienia oferty');
+
+-- CB10d: szkic zapisuje zakwaterowanie zapewnione bez kosztu i potrącenia.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
+  "accommodation": true, "accommodation_kind": "provided", "accommodation_cost": null,
+  "accommodation_cost_period": null, "accommodation_deducted": null}}$j$::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'draft' and accommodation_kind = 'provided' and accommodation_cost is null
+          and accommodation_deducted is null from public.jobs where id = :'CBDRAFT'),
+  'CB10d szkic może mieć zakwaterowanie zapewnione bez kosztu i potrącenia');
+
+-- CB10e: publikacja takiego szkicu odrzucona czytelnym kodem, oferta zostaje szkicem.
+insert into public.job_translations(job_id, locale, title, description, responsibilities)
+  values (:'CBDRAFT', 'pl', 'Magazynier CB169', 'Opis', array['Kompletacja'])
+  on conflict (job_id, locale) do update set description = excluded.description,
+    responsibilities = excluded.responsibilities;
+insert into public.job_requirements(job_id, locale, kind, position, content)
+  values (:'CBDRAFT', 'pl', 'mandatory', 0, 'Praca w nocy');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.publish_job(%L::uuid, %L)', :'CBDRAFT', 'cb169-szkic'),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10e publikacja bez kosztu i potrącenia odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status = 'draft' from public.jobs where id = :'CBDRAFT'),
+  'CB10e2 odrzucona publikacja zostawia szkic');
+
+-- CB10f: koszt 0 (bez kosztów) + „nie potrącany” wystarcza do publikacji.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
+  "accommodation_cost": 0, "accommodation_cost_period": "week", "accommodation_deducted": false}}$j$::jsonb);
+select public.publish_job(:'CBDRAFT'::uuid, 'cb169-szkic') is not null as cb_pub \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'active' and accommodation_cost = 0 and accommodation_deducted = false
+     from public.jobs where id = :'CBDRAFT'),
+  'CB10f koszt 0 i brak potrącenia = oferta publikowana');
+
+-- CB10g: ponowne otwarcie zamkniętej oferty z niekompletnym zakwaterowaniem odrzucone
+-- (stan przygotowany z pominięciem strażników — np. oferta sprzed reguły).
+set local session_replication_role = replica;
+update public.jobs set status = 'closed', accommodation_deducted = null where id = :'CBDRAFT';
+set local session_replication_role = origin;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_job_status(%L::uuid, %L)', :'CBDRAFT', 'reopen'),
+  'JOB_ACCOMMODATION_TERMS_REQUIRED', 'CB10g reopen bez informacji o potrąceniu odrzucony');
+reset role; reset app.current_uid;
+
+-- CB10n (KONTROLA UJEMNA): bez strażnika ta sama rewizja bez potrącenia przechodzi.
+savepoint cb10_neg;
+drop trigger trg_jobs_accommodation_terms on public.jobs;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'CBJOB'::uuid,
+  current_setting('pb.cb_base')::jsonb #- '{job,accommodation_deducted}');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select accommodation_deducted is null from public.jobs where id = :'CBJOB'),
+  'CB10n KONTROLA UJEMNA: bez trg_jobs_accommodation_terms oferta publiczna traci potrącenie (CB10 łapie brak)');
+rollback to savepoint cb10_neg;
+rollback;
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- LD168. Języki ze słownika w dopasowaniu (I18N-02 / CF-02, 0168): kod albo nazwa PL/NL/FR/EN
 --        → languages.id; trigger uzupełnia id na każdej ścieżce zapisu; backfill bez utraty
