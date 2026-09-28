@@ -1,7 +1,7 @@
 import { formatSalaryParts } from '@/lib/salary';
 
 import * as React from 'react';
-import { ArrowRight, BadgeCheck } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Languages } from 'lucide-react';
 import { getFormatter, getLocale, getTranslations } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
@@ -102,6 +102,14 @@ export async function JobCard({
         {job.isDemo ? (
           <span className="pp-passport-tag rounded-full border border-warning/40 bg-warning/10 px-2 font-medium text-warning-text">
             {t('demoBadge')}
+          </span>
+        ) : null}
+        {job.machineTranslation ? (
+          // Tytuł i wyróżniki przetłumaczone na język strony (#33, 0160) — dyskretny znacznik
+          // w wierszu firmy, jak inne stany karty; oryginał jest na stronie oferty.
+          <span className="pp-passport-tag" data-testid="job-card-translation">
+            <Languages className="h-4 w-4" aria-hidden="true" />
+            {job.machineTranslation.origin === 'ai' ? t('machineTranslatedBadge') : t('translatedBadge')}
           </span>
         ) : null}
         {job.isNew ? (
