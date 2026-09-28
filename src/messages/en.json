@@ -464,6 +464,7 @@
       "skillsTooMany": "Too many skills.",
       "experienceInvalid": "Invalid number of years of experience.",
       "languagesTooMany": "Too many languages.",
+      "noLanguageConflict": "You checked “No language required”, but the list still has a required language. Remove the required languages or uncheck the box.",
       "certificatesTooMany": "Too many certificates.",
       "conditionsTooMany": "Too many conditions.",
       "benefitsTooMany": "Too many benefits.",
@@ -489,6 +490,9 @@
       "fr": "French",
       "en": "English"
     },
+    "machineTranslationNotice": "Automatic translation. Original language: {language}.",
+    "manualTranslationNotice": "Translated content. Original language: {language}.",
+    "translationOriginalLink": "View the original",
     "similarJobsLoadError": "Similar jobs could not be loaded. This job and applying work as usual."
   },
   "landing": {
@@ -1156,10 +1160,6 @@
     "workPermitYes": "Yes, I have one",
     "additionalInfo": "Additional information",
     "drivingLicense": "Driving licence",
-    "noLicense": "I don't have one",
-    "catB": "Category B",
-    "catC": "Category C",
-    "catCE": "Category C+E",
     "ownCar": "Own car",
     "yes": "Yes",
     "no": "No",
@@ -2356,6 +2356,9 @@
     "breachErrorConflictsWithRisk": "This decision does not match the risk assessment.",
     "breachErrorClosed": "The entry is closed. Refresh the page.",
     "breachErrorStale": "The entry changed in the meantime. Refresh the page and make your changes again.",
+    "breachErrorClientKeyReused": "This entry already exists with different content (the previous attempt succeeded). Open it or save your corrections as an edit.",
+    "breachReconcileOpenExisting": "Open existing entry",
+    "breachReconcileSubmit": "Save corrections as an edit",
     "breachLanguagePl": "Polish",
     "breachLanguageNl": "Dutch",
     "breachLanguageFr": "French",
@@ -3452,6 +3455,7 @@
     "errorValueTooLong": "The value is too long. Maximum {max} characters.",
     "errorValueDisallowed": "Remove contact details, links, other people's data and sensitive information.",
     "errorLanguageInvalid": "The language name must be 2 to 40 characters long.",
+    "errorLanguageDuplicate": "The same language is selected twice with different levels. Uncheck one of the proposals or use different names.",
     "errorExperienceInvalid": "Enter a number of years from 0 to 60.",
     "errorFieldsInvalid": "Correct the highlighted fields before saving."
   },
