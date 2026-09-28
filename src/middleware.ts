@@ -175,14 +175,15 @@ export default async function middleware(request: NextRequest) {
  *   `.well-known` (granica segmentu, nie prefiks nazwy),
  * - jawnie wymienione pliki z korzenia (`public/` + trasy metadanych) — strażnik
  *   `tests/unit/middleware-matcher.test.ts` pilnuje, że każdy plik z `public/` jest na liście,
- * - pliki sitemap (`/sitemap/<n>.xml`) i manifest per język (`/<locale>/manifest.webmanifest`).
+ * - pliki sitemap (`/sitemap/<n>.xml`) i manifest per język (`/<dowolny-segment-bez-kropki>/manifest.webmanifest`;
+ *   trasa sama zwraca 404 dla nieobsługiwanego języka, bez przekierowania next-intl).
  * Drugi matcher przepuszcza przez middleware każde żądanie Server Action (nagłówek
  * `next-action`), niezależnie od ścieżki — druga linia obrony.
  */
 export const config = {
   // Literał (nie składany z zmiennych): Next analizuje `config` statycznie w czasie builda (#1035).
   matcher: [
-    '/((?!(?:api|auth|_next|_vercel|images|\\.well-known)(?:/|$)|(?:favicon\\.ico|robots\\.txt|sitemap\\.xml|sw\\.js|offline\\.html|manifest\\.webmanifest|og\\.png|apple-touch-icon\\.png|icon\\.svg|icon-[a-z0-9-]+\\.png)$|sitemap/[0-9]+\\.xml$|(?:pl|nl|fr|en)/manifest\\.webmanifest$).*)',
+    '/((?!(?:api|auth|_next|_vercel|images|\\.well-known)(?:/|$)|(?:favicon\\.ico|robots\\.txt|sitemap\\.xml|sw\\.js|offline\\.html|manifest\\.webmanifest|og\\.png|apple-touch-icon\\.png|icon\\.svg|icon-[a-z0-9-]+\\.png)$|sitemap/[0-9]+\\.xml$|[^/.]+/manifest\\.webmanifest$).*)',
     { source: '/:path*', has: [{ type: 'header', key: 'next-action' }] },
   ],
 };

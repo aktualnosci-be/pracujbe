@@ -88,9 +88,15 @@ describe('matcher middleware (#1035)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('nieznany język w manifeście nie omija middleware (kontrola ujemna)', () => {
-    expect(runsMiddleware('/de/manifest.webmanifest')).toBe(true);
+  it('manifest z nieobsługiwanym językiem omija middleware (trasa zwraca 404, bez przekierowania next-intl)', () => {
+    expect(runsMiddleware('/xx/manifest.webmanifest')).toBe(false);
+    expect(runsMiddleware('/de/manifest.webmanifest')).toBe(false);
+  });
+
+  it('kontrola ujemna: manifest głębiej w ścieżce lub segment z kropką nie omija middleware (#1035)', () => {
     expect(runsMiddleware('/pl/oferty-pracy/manifest.webmanifest')).toBe(true);
+    expect(runsMiddleware('/a.b/manifest.webmanifest')).toBe(true);
+    expect(runsMiddleware('/pl/manifest.webmanifest.x')).toBe(true);
   });
 
   it('żądanie Server Action (nagłówek next-action) zawsze przechodzi przez middleware', () => {
