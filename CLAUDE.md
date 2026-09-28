@@ -190,6 +190,15 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
   = nakładka ze strażnikiem (`_impl` bez EXECUTE dla klientów). Dowód: `rls.sql` sekcja CL174 (kontrole ujemne),
   rollback `0174_…down.sql`, unit `classifieds-messaging-cv-off`, strażnik `legal`, E2E `classifieds-messaging-cv-off`.
+- **CI w trybie ogłoszeniowym (#1166, bez migracji):** job `e2e-classifieds` („E2E classifieds (CLASSIFIEDS_ONLY)”,
+  wynik w wymaganym checku „E2E (Playwright)”) — serwer `E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY` na buildzie z jobu
+  build: projekt `chromium` sam wybiera `CLASSIFIEDS_SPECS` z `playwright.config.ts` (`CLASSIFIEDS_ONLY_SPECS` —
+  `classifieds-*`, `job-detail-employer-apply`, poza shardami; `CLASSIFIEDS_SHARED_SPECS` — a11y/SEO/panele, w obu
+  trybach; shard z serwerem ogłoszeniowym = błąd), potem fixture (`CLASSIFIEDS_FIXTURE_SPECS`: lejek „Aplikuj
+  u pracodawcy” w `job-funnel-no-storage` — kliknięcie = `apply_started` tylko po zgodzie, bez cookies/storage).
+  `perf-lab.mjs`: LCP/CLS/TBT i INP listy w `CLASSIFIEDS_ONLY`, INP ApplyModal na drugim serwerze `RECRUITMENT`
+  (tryb sprawdzany na szczególe). Strażnik `check-ci-workflows.mjs` (+ kontrole ujemne w `ci-workflows-guard.test`).
+  Ten sam build w dwóch trybach lokalnie: najpierw `rm -rf .next/cache/isr-handler` (strony ISR drugiego trybu).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
