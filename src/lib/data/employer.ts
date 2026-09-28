@@ -557,7 +557,6 @@ async function getListingOverview(now: Date = new Date()): Promise<EmployerOverv
 export interface CompanyEntitlements {
   plan: string;
   maxActiveJobs: number;
-  candidateAccess: boolean;
   activeJobsUsed: number;
 }
 
@@ -579,7 +578,6 @@ export async function getCompanyEntitlements(): Promise<CompanyEntitlements | nu
     return {
       plan: asString(row['plan'], 'free'),
       maxActiveJobs: asNumber(row['max_active_jobs']),
-      candidateAccess: row['candidate_access'] === true,
       activeJobsUsed: asNumber(row['active_jobs_used']),
     };
   } catch (error) {

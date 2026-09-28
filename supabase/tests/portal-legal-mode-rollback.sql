@@ -13,6 +13,15 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
+-- 0990 (#1152, #1153; numer tymczasowy) stoi na 0171 — cofana przed 0173.
+\ir ../rollback/0990_classifieds_ai_billing.down.sql
+select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
+     where t.tgname like 'trg_aa_recruitment_mode%' and c.relname like 'translation\_%')
+  and to_regprocedure('public.enforce_translation_entity_mode()') is null
+  and position('recruitment_enabled' in pg_get_functiondef('public.claim_translation_jobs(integer, integer)'::regprocedure)) = 0
+  and position('candidate_profile_translation' in pg_get_functiondef('public.ai_budget_reserve(text, text, bigint)'::regprocedure)) = 0
+  and not exists (select 1 from pg_constraint where conname = 'plan_entitlements_no_candidate_access'),
+  'CL0990-R rollback 0990 usuwa strażnik kolejki tłumaczeń, CHECK planów i przywraca funkcje sprzed 0990');
 -- 0173 (#1135, #1137) stoi na 0171 — cofana pierwsza (odwrotna kolejność migracji).
 \ir ../rollback/0173_classifieds_searchable_screening.down.sql
 select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid

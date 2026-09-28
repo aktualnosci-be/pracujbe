@@ -15,7 +15,12 @@ export type AiFeatureStatus =
   /** Kod na `main`, funkcja za flagą środowiskową (domyślnie wyłączona). */
   | 'behind_flag'
   /** Kod w otwartym PR — plik może jeszcze nie istnieć na tej gałęzi. */
-  | 'in_progress';
+  | 'in_progress'
+  /**
+   * Ścieżka wywołania istnieje (wspólny adapter), ale nic nie zasila funkcji danymi — np. tłumaczenie
+   * profili kandydatów: kolejka przyjmuje encję, lecz żaden kod jej nie kolejkuje (#34).
+   */
+  | 'not_wired';
 
 export type AiInputSubject =
   /** Treść ogłoszenia osoby trzeciej (zrzut ekranu, tekst strony). */
@@ -26,6 +31,17 @@ export type AiInputSubject =
   | 'candidate_profile_text'
   /** Tekst CV kandydata wgrany przez kandydata, po lokalnej minimalizacji (#487, #498). */
   | 'candidate_cv_text';
+
+/**
+ * Wejścia dozwolone w trybie ogłoszeniowym (#1152 — decyzja produktowa: portal ogłoszeniowy):
+ * wyłącznie treść ogłoszenia. Dane kandydatów nie trafiają do modelu w tym trybie.
+ */
+export const CLASSIFIEDS_ALLOWED_INPUTS: readonly AiInputSubject[] = ['job_offer_text', 'third_party_listing'];
+
+/** Czy wszystkie wejścia funkcji to treść ogłoszenia (warunek `allowedInClassifieds: true`). */
+export function inputsAllowedInClassifieds(inputs: readonly AiInputSubject[]): boolean {
+  return inputs.length > 0 && inputs.every((input) => CLASSIFIEDS_ALLOWED_INPUTS.includes(input));
+}
 
 export interface AiFeature {
   /** Stały identyfikator — trafia do logu użycia (`src/lib/ai/usage-log.ts`). */
@@ -42,6 +58,13 @@ export interface AiFeature {
    */
   provider: 'openai';
   inputs: readonly AiInputSubject[];
+  /**
+   * Czy funkcja działa w trybie ogłoszeniowym (#1152). `true` wyłącznie, gdy wszystkie `inputs`
+   * należą do `CLASSIFIEDS_ALLOWED_INPUTS` (pilnuje `ai-inventory.test.ts`). `false` = funkcja
+   * wyłączona w tym trybie niezależnie od `enableFlag` — bramka `isAiFeatureEnabled`
+   * (`src/lib/ai/feature-gate.ts`).
+   */
+  allowedInClassifieds: boolean;
   /** Co model zwraca i gdzie to trafia. */
   output: string;
   /**
@@ -63,7 +86,14 @@ export interface AiFeature {
   costBudgeted: boolean;
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check'] as const;
+export const AI_FEATURE_IDS = [
+  'job_listing_import',
+  'content_translation',
+  'job_offer_assist',
+  'cv_profile_import',
+  'job_fraud_check',
+  'candidate_profile_translation',
+] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -75,6 +105,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
     enableFlag: 'AI_JOB_IMPORT_ENABLED',
     provider: 'openai',
     inputs: ['third_party_listing'],
+    allowedInClassifieds: true,
     output:
       'Pola kreatora oferty (JSON ze schematu) + lista pól do sprawdzenia; zapis wyłącznie do szkicu oferty przez save_job_draft.',
     humanInTheLoop: true,
@@ -91,9 +122,11 @@ export const AI_FEATURES: readonly AiFeature[] = [
     callSites: ['src/lib/ai/openai.ts', 'src/lib/translation/openai-provider.ts'],
     enableFlag: 'AI_TRANSLATION_ENABLED',
     provider: 'openai',
-    inputs: ['job_offer_text', 'candidate_profile_text'],
+    // #1152: tylko treść ofert; tłumaczenie profili kandydatów = osobna pozycja niżej.
+    inputs: ['job_offer_text'],
+    allowedInClassifieds: true,
     output:
-      'Tłumaczenie pól tekstowych na inne języki portalu; przed zapisem walidacja faktów (liczby, kwoty, certyfikaty). Oferty (#33): kolejkę zasilają odroczone triggery po każdej zatwierdzonej zmianie treści publicznej oferty (migracja job_translation_sync), worker `/api/translation/process` (src/lib/translation/run.ts) zapisuje wynik do translation_documents; widok publiczny przekładów = osobny krok (UI/SEO).',
+      'Tłumaczenie pól tekstowych oferty na inne języki portalu; przed zapisem walidacja faktów (liczby, kwoty, certyfikaty). Oferty (#33): kolejkę zasilają odroczone triggery po każdej zatwierdzonej zmianie treści publicznej oferty (migracja job_translation_sync), worker `/api/translation/process` (src/lib/translation/run.ts) zapisuje wynik do translation_documents; widok publiczny przekładów = osobny krok (UI/SEO).',
     humanInTheLoop: false,
     humanStep:
       'Walidacja automatyczna i korekta ręczna po fakcie (PR #514) — do potwierdzenia po scaleniu, czy tłumaczenie jest publikowane bez przeglądu.',
@@ -111,6 +144,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
     enableFlag: 'AI_JOB_ASSIST_ENABLED',
     provider: 'openai',
     inputs: ['job_offer_text'],
+    allowedInClassifieds: true,
     output:
       'Propozycja nowego brzmienia opisu, obowiązków i wymagań oferty (JSON ze schematu) w języku oferty; propozycje z nowymi liczbami/linkami albo danymi kontaktowymi są odrzucane przez serwer.',
     humanInTheLoop: true,
@@ -129,6 +163,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
     enableFlag: 'AI_CV_IMPORT_ENABLED',
     provider: 'openai',
     inputs: ['candidate_cv_text'],
+    allowedInClassifieds: false,
     output:
       'Propozycje pól profilu (zawody, umiejętności, języki, certyfikaty, lata doświadczenia) ze źródłem i niepewnością; nic nie jest zapisywane bez zatwierdzenia.',
     humanInTheLoop: true,
@@ -147,6 +182,7 @@ export const AI_FEATURES: readonly AiFeature[] = [
     enableFlag: 'AI_JOB_FRAUD_CHECK_ENABLED',
     provider: 'openai',
     inputs: ['job_offer_text'],
+    allowedInClassifieds: true,
     output:
       'Sygnał „możliwe oszustwo” dla treści oferty (kategorie ze schematu, krótkie uzasadnienie, pewność); trafienie zapisuje record_job_content_ai_signal jako wiersz kolejki przeglądu admina (job_content_reviews) — drugi sygnał obok deterministycznych reguł w bazie.',
     humanInTheLoop: true,
@@ -155,6 +191,25 @@ export const AI_FEATURES: readonly AiFeature[] = [
     decidesAboutPerson: false,
     usageLogged: true,
     // `withAiBudget` w src/lib/job-trust/ai-check.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
+  },
+  {
+    id: 'candidate_profile_translation',
+    issues: ['#34', '#1152'],
+    status: 'not_wired',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/translation/openai-provider.ts'],
+    enableFlag: 'AI_TRANSLATION_ENABLED',
+    provider: 'openai',
+    inputs: ['candidate_profile_text'],
+    allowedInClassifieds: false,
+    output:
+      'Tłumaczenie pól profilu kandydata (encja candidate_profile kolejki 0145) — ten sam adapter i walidacja faktów co oferty. Żaden kod nie kolejkuje dziś tej encji (#34); w trybie ogłoszeniowym baza jej nie przyjmuje ani nie wydaje workerowi (migracja 0990), a worker odrzuca ją bez wywołania modelu.',
+    humanInTheLoop: false,
+    humanStep:
+      'Jak tłumaczenie ofert: walidacja automatyczna i korekta ręczna po fakcie; wpięcie profili (#34) wymaga osobnej decyzji właściciela.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // Adapter tłumaczeń (`withAiBudget`) rozlicza zadanie tej encji pod własnym identyfikatorem.
     costBudgeted: true,
   },
 ];

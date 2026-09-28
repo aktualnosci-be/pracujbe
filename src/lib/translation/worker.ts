@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { isLocale } from '@/i18n/routing';
+import { isAiFeatureAllowedInPortalMode } from '@/lib/ai/feature-gate';
+import { translationFeatureFor } from '@/lib/translation/feature';
 import { TranslationProviderError, type TranslationProvider } from '@/lib/translation/provider';
 import type { ClaimedTranslationJob, TranslationQueueStore } from '@/lib/translation/store';
 import { validateTranslation } from '@/lib/translation/validate';
@@ -74,12 +76,19 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
     return fail('unsupported_locale', false);
   }
 
+  // #1152: w trybie ogłoszeniowym profil kandydata nie trafia do modelu. Baza (0990) i tak nie
+  // wydaje takich zadań — to druga linia obrony (np. baza w trybie RECRUITMENT, env nie).
+  if (!isAiFeatureAllowedInPortalMode(translationFeatureFor(job.entity_type))) {
+    return fail('recruitment_disabled', false);
+  }
+
   let response;
   try {
     response = await provider.translate({
       sourceLocale: job.source_locale,
       targetLocale: job.target_locale,
       fields: job.fields,
+      entityType: job.entity_type,
     });
   } catch (e) {
     if (e instanceof TranslationProviderError && e.deferred && (e.reason === 'budget_exceeded' || e.reason === 'budget_unavailable')) {
