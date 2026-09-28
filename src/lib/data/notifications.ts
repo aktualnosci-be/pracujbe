@@ -22,6 +22,7 @@ import { queryCount, queryRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { routing, type Locale } from '@/i18n/routing';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /* ---------------------------------------------------------------------------
  * Kontrakt danych
@@ -211,7 +212,10 @@ export function resolveHref(entityType: string, role: string, entityId = ''): st
       // Kandydat: lista propozycji; pracodawca: odpowiedź na propozycję dotyczy zgłoszenia.
       return employer ? '/employer/aplikacje' : '/candidate/propozycje';
     case 'job':
-      return employer ? '/employer/oferty' : '/candidate/oferty-polecane';
+      // #1139: polecane oferty istnieją tylko w trybie rekrutacyjnym; inaczej lista ofert.
+      return employer
+        ? '/employer/oferty'
+        : isRecruitmentEnabled('matching') ? '/candidate/oferty-polecane' : '/oferty-pracy';
     case 'company': {
       // #843: decyzja dotyczy TEJ firmy (`entity_id`), niezależnie od aktywnej firmy z cookie
       // (właściciel kilku firm) — `?firma=` pozwala stronie pokazać właściwe dane bez cichej

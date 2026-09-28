@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/server';
 
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 import { Link } from '@/i18n/navigation';
 import { languageDisplayName } from '@/lib/languages';
 import { getEmployerCandidateDetail } from '@/lib/data/employer';
@@ -42,6 +43,8 @@ export default async function EmployerCandidateDetailPage({
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
+  // #1133/#1139: tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy) — 404 przed odczytem.
+  notFoundUnlessRecruitment('candidateSearch');
   const { locale, id } = await params;
   setRequestLocale(locale);
 
@@ -51,7 +54,7 @@ export default async function EmployerCandidateDetailPage({
   const format = await getFormatter({ locale });
 
   const result = await getEmployerCandidateDetail(id);
-  if (result.status === 'not_found') notFound();
+  if (result.status === 'not_found' || result.status === 'disabled') notFound();
 
   const back = (
     <Link href="/employer/kandydaci" className={TEXT_LINK}>
