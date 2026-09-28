@@ -3,6 +3,7 @@ import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token'
 import { DATABASE_PING_CACHE_KEY, pingCache } from '@/lib/ops/health-ping-cache';
 import { emailProviderFromEnv } from '@/lib/email/transport/select';
 import { isTurnstileEnabled } from '@/lib/turnstile/verify';
+import { portalLegalMode } from '@/lib/portal-mode';
 
 /**
  * Readiness/health endpoint (SEC-19 + P1-18 + #429) — dla monitoringu i healthchecku Railway.
@@ -18,6 +19,8 @@ import { isTurnstileEnabled } from '@/lib/turnstile/verify';
  * `x-health-token`). Nigdy nie ujawnia sekretów ani treści błędu bazy.
  * `emailProvider` = wybrany dostawca poczty, `checks.emailProviderReady` = ma komplet kluczy.
  * `checks.turnstile` (#46) = czy ochrona formularzy jest włączona — sam boolean, bez kluczy.
+ * `portalLegalMode` (#1136) = tryb produktu (`CLASSIFIEDS_ONLY` | `RECRUITMENT`) — tylko w szczegółach,
+ * nie wpływa na gotowość (`isAppReady`).
  * Czujki operacyjne (kolejki, webhooki, maintenance, połączenia) — `/api/health/ops` (#47).
  */
 
@@ -93,6 +96,8 @@ export async function GET(request: Request): Promise<Response> {
         },
         // Nazwa dostawcy poczty (`emaillabs` | `resend` | `none`) — bez kluczy i adresów.
         emailProvider: emailProviderFromEnv().provider ?? 'none',
+        // Tryb produktu (#1136): sama nazwa trybu, bez wpływu na status.
+        portalLegalMode: portalLegalMode(),
       },
       { status: httpStatus, headers },
     );

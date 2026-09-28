@@ -732,6 +732,7 @@
     "jobNotDraft": "This job is already published. Edit it with “Edit” in the jobs list.",
     "billingUnavailable": "Payments are temporarily unavailable. Please try again later.",
     "billingDisabled": "Pracuj.be is currently free. Payments and plans are not available.",
+    "recruitmentDisabled": "This feature is not available on Pracuj.be.",
     "checkoutInProgress": "You already have a checkout in progress. Finish it or try again shortly.",
     "entitlementLimit": "You've reached your plan's active job limit. Upgrade your plan to publish more.",
     "activeJobLimit": "Your company has reached the limit of active jobs. Pause or close a job to publish another one.",

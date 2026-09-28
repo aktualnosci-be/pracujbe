@@ -287,6 +287,14 @@ const CI_WORKERS = 3;
  */
 const BLOB_NAME = (process.env.E2E_BLOB_NAME ?? '').replace(/[^a-z0-9-]/gi, '');
 
+/**
+ * Tryb produktu serwera testowego (#1136). Istniejące specy pokrywają przepływy rekrutacyjne,
+ * więc serwer dostaje JAWNIE `PORTAL_LEGAL_MODE=RECRUITMENT` (bez tego po wyłączeniach z #1128
+ * straciłyby pokrycie). Specy trybu ogłoszeniowego uruchamia się z `E2E_PORTAL_LEGAL_MODE=`
+ * (pusta = CLASSIFIEDS_ONLY, jak domyślnie w produkcji, demo i dev).
+ */
+const E2E_PORTAL_LEGAL_MODE = process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT';
+
 export default defineConfig({
   testDir: './tests/e2e',
   // Te scenariusze wymagają serwera z danymi fikcyjnymi (playwright.applications-fixture.config.ts);
@@ -355,7 +363,13 @@ export default defineConfig({
       ? `npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`
       : `npm run build && npm run start -- -p ${PORT} --keepAliveTimeout ${SERVER_KEEP_ALIVE_MS}`,
     // Sekret linków wypisania (#45) i atrapa importu AI (#465) czytane w runtime — bez przebudowy.
-    env: { ...TRACKER_ENV, ...JOB_IMPORT_ENV, ...JOB_ASSIST_ENV, EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET },
+    env: {
+      ...TRACKER_ENV,
+      ...JOB_IMPORT_ENV,
+      ...JOB_ASSIST_ENV,
+      EMAIL_UNSUBSCRIBE_SECRET: E2E_UNSUBSCRIBE_SECRET,
+      PORTAL_LEGAL_MODE: E2E_PORTAL_LEGAL_MODE,
+    },
     url: BASE_URL,
     // Jawne E2E_REUSE_SERVER=1 (poza CI) — np. własny `npm run dev` na tym porcie.
     reuseExistingServer: e2eReuseServer(),

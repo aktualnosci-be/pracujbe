@@ -96,6 +96,13 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
 - **Błędy/monitoring:** webhook Discorda `ERROR_WEBHOOK_URL` (#571, `src/lib/error-webhook`, tylko serwer; Sentry usunięte; błędy przeglądarki przez `POST /api/client-error`). Centralny system błędów `src/lib/errors`, `captureError` w `src/lib/error-report.ts`.
 - **Testy:** **Vitest** (unit/integration) + **Playwright** (e2e). Patrz `tests/`.
 - **Hosting:** **Railway**, jedna produkcja z `main`; natywne `Wait for CI` blokuje wdrożenie do zielonego CI. Migracje SQL są wersjonowane w repozytorium.
+- **Tryb produktu (#1136):** jedno źródło `src/lib/portal-mode.ts` — `PORTAL_LEGAL_MODE=RECRUITMENT` (dokładnie) włącza
+  funkcje rekrutacyjne, każda inna wartość/brak = `CLASSIFIEDS_ONLY` (decyzja produktowa: portal ogłoszeniowy, fail-closed
+  także w demo/dev/testach). API: `isRecruitmentEnabled()`, `assertRecruitmentEnabled()` (`AppError(RECRUITMENT_DISABLED)`,
+  `errors.recruitmentDisabled`), `notFoundUnlessRecruitment()`; lista `RECRUITMENT_FEATURES`. Tryb w `/api/health` tylko za
+  sekretem. Vitest domyślnie ogłoszeniowy (`useRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
+  serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
+  (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
