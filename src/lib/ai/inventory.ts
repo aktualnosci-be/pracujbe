@@ -11,6 +11,8 @@
  * DPIA) nie należy do tego pliku — to pytania do prawnika w szkicu.
  */
 
+import type { RecruitmentFeature } from '@/lib/portal-mode';
+
 export type AiFeatureStatus =
   /** Kod na `main`, funkcja za flagą środowiskową (domyślnie wyłączona). */
   | 'behind_flag'
@@ -61,9 +63,15 @@ export interface AiFeature {
    * (`true`) dla funkcji ze statusem `behind_flag` — pilnuje `ai-inventory.test.ts`.
    */
   costBudgeted: boolean;
+  /**
+   * Funkcja rekrutacyjna niedostępna w trybie ogłoszeniowym (#1128 — decyzja produktowa: portal
+   * ogłoszeniowy), niezależnie od `enableFlag`. `files` = miejsca, które MUSZĄ sprawdzać tryb
+   * (`isRecruitmentEnabled(feature)`) przed modelem i budżetem — pilnuje `ai-inventory.test.ts`.
+   */
+  classifiedsModeGuard?: { feature: RecruitmentFeature; files: readonly string[] };
 }
 
-export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import'] as const;
+export const AI_FEATURE_IDS = ['job_listing_import', 'content_translation', 'job_offer_assist', 'cv_profile_import', 'job_fraud_check'] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
 export const AI_FEATURES: readonly AiFeature[] = [
@@ -137,6 +145,29 @@ export const AI_FEATURES: readonly AiFeature[] = [
     decidesAboutPerson: false,
     usageLogged: true,
     // `withAiBudget` w src/lib/actions/cv-import.ts (#36): rezerwacja przed wywołaniem modelu.
+    costBudgeted: true,
+    // #1138: w trybie ogłoszeniowym brak importu CV (config → null, akcje → RECRUITMENT_DISABLED).
+    classifiedsModeGuard: {
+      feature: 'cvImport',
+      files: ['src/lib/cv-import/config.ts', 'src/lib/actions/cv-import.ts'],
+    },
+  },
+  {
+    id: 'job_fraud_check',
+    issues: ['0167'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/job-trust/ai-check.ts'],
+    enableFlag: 'AI_JOB_FRAUD_CHECK_ENABLED',
+    provider: 'openai',
+    inputs: ['job_offer_text'],
+    output:
+      'Sygnał „możliwe oszustwo” dla treści oferty (kategorie ze schematu, krótkie uzasadnienie, pewność); trafienie zapisuje record_job_content_ai_signal jako wiersz kolejki przeglądu admina (job_content_reviews) — drugi sygnał obok deterministycznych reguł w bazie.',
+    humanInTheLoop: true,
+    humanStep:
+      'Model niczego nie publikuje ani nie odrzuca: sygnał tylko kieruje ofertę do kolejki /admin/tresc-ofert, decyzję podejmuje admin (admin_decide_job_content_review); awaria/brak budżetu = same reguły.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/job-trust/ai-check.ts (#36): rezerwacja przed wywołaniem modelu.
     costBudgeted: true,
   },
 ];

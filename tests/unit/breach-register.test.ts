@@ -16,6 +16,8 @@ import {
   breachFieldFromDbMessage,
   breachFieldOfColumn,
   breachFormErrors,
+  breachFormFromRow,
+  breachFormsMatch,
   csvCell,
   emptyBreachForm,
   parseBreachRecipients,
@@ -53,6 +55,36 @@ function validForm(overrides: Partial<BreachForm> = {}): BreachForm {
     title: 'Błędny adresat',
     description: 'Powiadomienie trafiło do niewłaściwej osoby.',
     detectedAt: '2026-09-24T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** Wiersz `breach_incidents` (kolumny bazy) odpowiadający zapisanemu formularzowi (#835). */
+function dbRow(form: BreachForm, version = 1, overrides: Record<string, unknown> = {}) {
+  return {
+    id: ID,
+    reference: 'NAR-2026-AAAAAAAAAA',
+    kind: form.kind,
+    title: form.title,
+    description: form.description,
+    detected_at: form.detectedAt,
+    occurred_at: form.occurredAt.trim().length > 0 ? form.occurredAt : null,
+    data_categories: [...form.dataCategories].sort(),
+    affected_count: form.affectedCount.trim().length > 0 ? Number(form.affectedCount) : null,
+    affected_count_estimated: form.affectedCountEstimated,
+    risk_level: form.riskLevel,
+    risk_assessment: form.riskAssessment,
+    authority_decision: form.authorityDecision,
+    authority_decision_reason: form.authorityDecisionReason,
+    authority_notified_at: form.authorityNotifiedAt.trim().length > 0 ? form.authorityNotifiedAt : null,
+    authority_reference: form.authorityReference,
+    authority_delay_reason: form.authorityDelayReason,
+    subjects_decision: form.subjectsDecision,
+    subjects_decision_reason: form.subjectsDecisionReason,
+    subjects_notified_at: form.subjectsNotifiedAt.trim().length > 0 ? form.subjectsNotifiedAt : null,
+    actions_taken: form.actionsTaken,
+    status: 'open',
+    version,
     ...overrides,
   };
 }
@@ -235,6 +267,17 @@ describe('#490 odbiorcy zawiadomienia i eksport', () => {
   it('CSV: ochrona przed formułami, cudzysłowy, bez client_key', () => {
     expect(csvCell('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`);
     expect(csvCell('a,b')).toBe('"a,b"');
+    // #876: LF przed formułą (OWASP CSV Injection) — bez ochrony arkusz otwiera to jako formułę.
+    expect(csvCell('\n=HYPERLINK(https://example.invalid,test)')).toBe(
+      `"'\n=HYPERLINK(https://example.invalid,test)"`,
+    );
+    // #876: pełnoszerokie warianty operatorów formuł (＝ ＋ － ＠).
+    expect(csvCell('＝1+1')).toBe(`'＝1+1`);
+    expect(csvCell('＋1')).toBe(`'＋1`);
+    expect(csvCell('－1')).toBe(`'－1`);
+    expect(csvCell('＠SUM(1,2)')).toBe(`"'＠SUM(1,2)"`);
+    // Kontrola ujemna: zwykły tekst bez wiodącego znaku formuły zostaje bez zmian.
+    expect(csvCell('zwykły tekst =nie na początku')).toBe('zwykły tekst =nie na początku');
     const csv = breachExportCsv({
       incident: { reference: 'NAR-2026-ABC', client_key: KEY, title: 'T', data_categories: ['contact', 'cv_files'] },
       events: [{ version: 1, eventType: 'created', createdAt: 'x', actor: null, changes: {}, note: '' }],
@@ -311,6 +354,60 @@ describe('#490 Server Actions', () => {
     expect(call!.args['p_client_key']).toBe(KEY);
     expect(call!.args['p_recipients']).toEqual(['a@test.be']);
     expect(json(call!.args['p_content'])).toEqual({ pl: { subject: 'Temat', body: 'Treść' } });
+  });
+});
+
+describe('#835 breachFormsMatch — treść zapisanego wpisu vs właśnie wysłany formularz', () => {
+  it('ta sama treść po normalizacji bazy (przycięte teksty, posortowane kategorie) = zgodne', () => {
+    const submitted = validForm({ dataCategories: ['identity', 'contact'], title: '  Błędny adresat  ' });
+    const stored = breachFormFromRow(dbRow(validForm({ dataCategories: ['contact', 'identity'] })));
+    expect(breachFormsMatch(stored, submitted)).toBe(true);
+  });
+
+  it('zmieniony tytuł = niezgodne', () => {
+    const stored = breachFormFromRow(dbRow(validForm()));
+    expect(breachFormsMatch(stored, validForm({ title: 'Poprawiony tytuł' }))).toBe(false);
+  });
+
+  it('zmieniona liczba osób i decyzja o zgłoszeniu = niezgodne (kontrola: identyczne pola = zgodne)', () => {
+    const base = validForm({ affectedCount: '5' });
+    const stored = breachFormFromRow(dbRow(base));
+    expect(breachFormsMatch(stored, base)).toBe(true);
+    expect(breachFormsMatch(stored, validForm({ affectedCount: '50' }))).toBe(false);
+    expect(
+      breachFormsMatch(stored, validForm({ affectedCount: '5', authorityDecision: 'not_required' })),
+    ).toBe(false);
+  });
+});
+
+describe('#835 ponowienie klucza idempotencji po edycji formularza (Server Action)', () => {
+  it('retry z NIEZMIENIONĄ treścią → zwykły sukces, bez konfliktu', async () => {
+    const calls = mockSession('admin_create_breach_incident', { data: ID });
+    fakeDb.rows('admin.breach-retry-compare', () => [dbRow(validForm(), 3)]);
+    const res = await createBreachIncident(KEY, validForm());
+    expect(res).toEqual({ ok: true, id: ID });
+    expect(calls()).toHaveLength(1);
+  });
+
+  it('retry z ZMIENIONĄ treścią → konflikt z id i wersją istniejącego wpisu, bez utraty poprawki', async () => {
+    mockSession('admin_create_breach_incident', { data: ID });
+    fakeDb.rows('admin.breach-retry-compare', () => [dbRow(validForm(), 4)]);
+    const res = await createBreachIncident(KEY, validForm({ title: 'Poprawiony tytuł' }));
+    expect(res).toEqual({
+      ok: false,
+      error: 'STALE_STATE',
+      problem: 'clientKeyReused',
+      id: ID,
+      existingVersion: 4,
+    });
+  });
+
+  it('kontrola: bez wykrytej różnicy (odczyt porównawczy się nie udał) zapis nadal się kończy sukcesem', async () => {
+    mockSession('admin_create_breach_incident', { data: ID });
+    // Brak zarejestrowanego handlera dla `admin.breach-retry-compare` = symulacja awarii odczytu;
+    // fetchBreachRecordForCompare łapie wyjątek i zwraca null, więc porównanie się nie odbywa.
+    const res = await createBreachIncident(KEY, validForm({ title: 'Cokolwiek innego' }));
+    expect(res).toEqual({ ok: true, id: ID });
   });
 });
 

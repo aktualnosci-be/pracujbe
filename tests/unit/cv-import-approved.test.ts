@@ -3,6 +3,8 @@ import { z } from 'zod/v3';
 
 import {
   cvApprovedProposalsSchema,
+  findDuplicateLanguageIds,
+  normalizeLanguageName,
   parseExperienceYears,
   proposalValueMaxLength,
   proposalValueProblem,
@@ -66,5 +68,62 @@ describe('limity = kreator onboardingu', () => {
       expect(proposalValueProblem('skill', bad), bad).toBe('disallowed');
     }
     expect(proposalValueProblem('language', 'Nederlands jan@example.com')).toBe('disallowed');
+  });
+});
+
+/**
+ * #805 — dwa zatwierdzone języki, których nazwa jest po normalizacji identyczna (np. inny zapis
+ * wielkości liter/spacji), ale poziom różny: RPC 0115 (`DISTINCT ON (lower(btrim(language)))`)
+ * zachowałby tylko jeden z nich bez ostrzeżenia. `findDuplicateLanguageIds` pozwala UI wskazać
+ * konflikt PRZED wysyłką, a schemat serwera go odrzuca jako obronę w głębi.
+ */
+describe('duplikat języka po normalizacji (#805)', () => {
+  it('normalizeLanguageName ujednolica wielkość liter i białe znaki brzegowe', () => {
+    expect(normalizeLanguageName('  English ')).toBe('english');
+    expect(normalizeLanguageName('ENGLISH')).toBe('english');
+    expect(normalizeLanguageName('English')).toBe(normalizeLanguageName('english'));
+  });
+
+  it('findDuplicateLanguageIds oznacza obie pozycje o tej samej znormalizowanej nazwie', () => {
+    const duplicates = findDuplicateLanguageIds([
+      { id: 'language-0', language: 'English' },
+      { id: 'language-1', language: '  english ' },
+      { id: 'language-2', language: 'Nederlands' },
+    ]);
+    expect(duplicates).toEqual(new Set(['language-0', 'language-1']));
+  });
+
+  it('kontrola ujemna: różne nazwy albo jedna pozycja nie dają duplikatu', () => {
+    expect(findDuplicateLanguageIds([{ id: 'a', language: 'English' }])).toEqual(new Set());
+    expect(
+      findDuplicateLanguageIds([
+        { id: 'a', language: 'English' },
+        { id: 'b', language: 'Nederlands' },
+      ]),
+    ).toEqual(new Set());
+  });
+
+  it('cvApprovedProposalsSchema odrzuca dwa języki z tą samą znormalizowaną nazwą i różnym poziomem', () => {
+    const withDuplicate = {
+      occupations: [],
+      skills: [],
+      languages: [
+        { language: 'English', level: 'basic' },
+        { language: '  english ', level: 'fluent' },
+      ],
+      certificates: [],
+      experienceYears: null,
+    };
+    expect(cvApprovedProposalsSchema.safeParse(withDuplicate).success).toBe(false);
+
+    // Kontrola ujemna: te same dwie pozycje, ale nazwy rozróżnialne po normalizacji, przechodzą.
+    const withoutDuplicate = {
+      ...withDuplicate,
+      languages: [
+        { language: 'English', level: 'basic' },
+        { language: 'Nederlands', level: 'fluent' },
+      ],
+    };
+    expect(cvApprovedProposalsSchema.safeParse(withoutDuplicate).success).toBe(true);
   });
 });

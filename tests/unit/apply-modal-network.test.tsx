@@ -93,6 +93,53 @@ describe('ApplyModal — błąd sieci (#360)', () => {
   });
 });
 
+describe('ApplyModal — ponowienie z edytowanymi danymi (#926)', () => {
+  it('edycja formularza po utraconej odpowiedzi wysyła NOWY klucz i nie udaje zapisania edycji', async () => {
+    vi.mocked(applyToJob)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ ok: false, error: 'APPLICATION_ALREADY_EXISTS' });
+    await submit('470123456');
+    await screen.findByRole('alert');
+
+    // Kandydat edytuje wiadomość po błędzie sieci (pierwsza próba mogła się już zapisać).
+    fireEvent.change(document.getElementById('apply-message')!, {
+      target: { value: 'Wersja B' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: en.apply.submit }));
+    await waitFor(() => expect(applyToJob).toHaveBeenCalledTimes(2));
+
+    const [first, second] = vi.mocked(applyToJob).mock.calls;
+    // Inne dane = inna, świadoma próba: nowy klucz, nie ślepe ponowienie starego.
+    expect(second![0].idempotencyKey).toBeTruthy();
+    expect(second![0].idempotencyKey).not.toBe(first![0].idempotencyKey);
+    expect(second![0].message).toBe('Wersja B');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(en.apply.alreadyAppliedEdited);
+    // Nigdy jako sukces — edytowane dane nie zostały potwierdzone jako zapisane.
+    expect(screen.queryByText(en.apply.success)).toBeNull();
+  });
+
+  it('kontrola ujemna: ponowienie BEZ edycji zachowuje ten sam klucz i zwykły komunikat „już aplikowałeś”', async () => {
+    vi.mocked(applyToJob)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ ok: false, error: 'APPLICATION_ALREADY_EXISTS' });
+    await submit('470123456');
+    await screen.findByRole('alert');
+
+    // Bez żadnej edycji — zwykłe ponowienie tej samej próby.
+    fireEvent.click(screen.getByRole('button', { name: en.apply.submit }));
+    await waitFor(() => expect(applyToJob).toHaveBeenCalledTimes(2));
+
+    const [first, second] = vi.mocked(applyToJob).mock.calls;
+    expect(second![0].idempotencyKey).toBe(first![0].idempotencyKey);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(en.apply.alreadyApplied);
+    expect(alert).not.toHaveTextContent(en.apply.alreadyAppliedEdited);
+  });
+});
+
 describe('ApplyModal — komunikaty wyniku (#361)', () => {
   it('ponowna aplikacja: „Już aplikowałeś” z linkiem do historii, bez toastu sukcesu', async () => {
     vi.mocked(applyToJob).mockResolvedValue({ ok: false, error: 'APPLICATION_ALREADY_EXISTS' });

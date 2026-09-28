@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -267,12 +267,20 @@ describe('rezerwacja w bazie (databaseBudgetStore)', () => {
     });
   });
 
-  it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0120', async () => {
-    const sql = readFileSync(join(__dirname, '..', '..', 'supabase/migrations/0120_ai_budget.sql'), 'utf8');
+  it('wyniki i funkcje w TS zgadzają się z CHECK-ami migracji 0120 (lista funkcji: najnowsza migracja)', async () => {
+    const dir = join(__dirname, '..', '..', 'supabase/migrations');
+    const sql = readFileSync(join(dir, '0120_ai_budget.sql'), 'utf8');
+    // Lista funkcji rośnie z kolejnymi funkcjami AI — obowiązuje najnowsza migracja z CHECK-iem.
+    const latest = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql') && readFileSync(join(dir, f), 'utf8').includes('ai_usage_ledger_feature'))
+      .sort()
+      .pop()!;
+    const featureSql = readFileSync(join(dir, latest), 'utf8');
     const { AI_USAGE_OUTCOMES } = await import('@/lib/ai/usage-log');
     const { AI_FEATURE_IDS } = await import('@/lib/ai/inventory');
     const list = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
-    expect(sql).toContain(`feature in (${list(AI_FEATURE_IDS)})`);
+    expect(featureSql).toContain(`feature in (${list(AI_FEATURE_IDS)})`);
+    expect(featureSql).toContain(`p_feature not in (${list(AI_FEATURE_IDS)})`);
     expect(sql).toContain(`outcome in (${list(AI_USAGE_OUTCOMES)})`);
   });
 

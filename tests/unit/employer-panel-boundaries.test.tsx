@@ -12,6 +12,11 @@ import en from '@/messages/en.json';
 import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * Granica błędu i strona 404 panelu pracodawcy leżą POD layoutem `/employer` (chrome panelu

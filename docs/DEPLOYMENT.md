@@ -36,6 +36,10 @@ deployu jako joba Actions.
 - wymagane wartości: `APP_MODE=production` i
   `NEXT_PUBLIC_SITE_URL=https://pracuj.be`;
 - `PORT` dostarcza Railway;
+- `PORTAL_LEGAL_MODE` (#1136): zostaw pustą — pusta albo dowolna inna wartość niż
+  `RECRUITMENT` = tryb ogłoszeniowy (funkcje rekrutacyjne wyłączone, decyzja produktowa).
+  `RECRUITMENT` ustawia się tylko na decyzję właściciela; tryb widać w `/api/health`
+  (`portalLegalMode`) wyłącznie w szczegółach za `HEALTH_CHECK_SECRET`;
 - do czasu publicznego startu: `SITE_ACCESS_PASSWORD` — każda strona pokazuje
   formularz hasła (503, noindex); po podaniu hasła cookie ważne 30 dni. Zmiana
   hasła unieważnia wydane cookies, usunięcie zmiennej otwiera serwis. `/api/*`

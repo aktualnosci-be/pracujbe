@@ -5,6 +5,11 @@ import { loadMoreMyApplicationHistory } from '@/lib/actions/candidate-applicatio
 import { screeningAnswerText } from '@/lib/screening/answer-text';
 import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: (fn: unknown) => fn }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());

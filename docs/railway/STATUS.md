@@ -77,6 +77,14 @@ Rejestracja, logowanie, wylogowanie, reset hasła, potwierdzenie adresu i sesje 
 - Guardy paneli (`candidate`, `employer`, `admin`, onboarding) i `getCurrentIdentity()` (`src/lib/auth/current.ts`) — jedyne wejście tożsamości dla #25/#26. Middleware nie czyta sesji (Edge, bez bazy).
 - Dowód: `tests/integration/auth-actions.test.ts` na PostgreSQL 16 (rejestracja → list → potwierdzenie → firma/panel, równoległe kliknięcia = jedna firma, wylogowanie unieważnia sesję, reset raz i unieważnia sesje, zawieszenie od następnego żądania, sfałszowane cookie, brak enumeracji). Unit: `auth-*`, `rate-limit-postgres`, `railway-env`. E2E: `auth-link-token`, `auth-error-focus`, `auth-heading`, `one-time-link-tracking`.
 
+### Tryb produktu `PORTAL_LEGAL_MODE` (#1136)
+
+Decyzja produktowa: portal ogłoszeniowy. Zmienna w usłudze `production` zostaje **pusta** — pusta
+albo dowolna inna wartość niż `RECRUITMENT` daje tryb `CLASSIFIEDS_ONLY` (fail-closed, jedno źródło:
+`src/lib/portal-mode.ts`). `RECRUITMENT` wyłącznie na decyzję właściciela; po #1143 wymaga też
+zgodnego stanu w bazie. Kontrola: `/api/health` z `x-health-token` → `portalLegalMode`. Tryb nie
+wpływa na status gotowości.
+
 ### Decyzja #429: kiedy `APP_MODE=production` przestaje dawać 503
 
 `isAppReady()` w produkcji wymaga teraz PostgreSQL zamiast Supabase: `DATABASE_APP_URL`, `DATABASE_AUTH_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (= origin `NEXT_PUBLIC_SITE_URL`, HTTPS), `DATABASE_RATE_LIMIT_URL` + `RATE_LIMIT_KEY_SECRET` i publiczny https URL. `/api/health` dodatkowo wykonuje `SELECT 1` przez pulę domeny (limit 2 s) — niedostępna baza = 503 `unavailable`, więc healthcheck Railway odzwierciedla realną dostępność PostgreSQL. `checks` (za `HEALTH_CHECK_SECRET`) raportują `database`, `auth`, `authUrl`, `rateLimit`, `authMail`, `databaseReachable`.

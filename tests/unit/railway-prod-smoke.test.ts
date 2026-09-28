@@ -11,6 +11,7 @@ import {
   LOCALIZED_PAGES,
   SITEMAP_STATIC_ID,
   buildChecks,
+  parseRobotsSitemapShardPaths,
   readConfig,
   runSmoke,
   securityHeaderProblems,
@@ -34,9 +35,18 @@ const DEMO_PAGE_HEADERS: Record<string, string> = {
 const HEALTH_SECRET = 'health-secret-value-0123456789abcdef';
 
 /** Atrapa serwisu: bramka hasła jak `src/lib/site-access.ts` + trasy aplikacji. */
-function startFakeSite(options: { gate?: boolean; faults?: Record<string, Fault>; version?: string } = {}) {
+function startFakeSite(
+  options: {
+    gate?: boolean;
+    faults?: Record<string, Fault>;
+    version?: string;
+    /** #689: identyfikatory partii ofert (`id ≥ 1`) wskazane w `/robots.txt`, jak `generateSitemaps()`. */
+    jobSitemapShards?: number[];
+  } = {},
+) {
   const gate = options.gate ?? true;
   const faults = options.faults ?? {};
+  const jobSitemapShards = options.jobSitemapShards ?? [];
   const requests: { method: string; path: string; body: string; healthToken?: string }[] = [];
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
     let body = '';
@@ -65,7 +75,14 @@ function startFakeSite(options: { gate?: boolean; faults?: Record<string, Fault>
         const detailed = options.version !== undefined && req.headers[HEALTH_TOKEN_HEADER] === HEALTH_SECRET;
         return res.end(JSON.stringify(detailed ? { status, version: options.version } : { status }));
       }
-      if (path === '/robots.txt' || path === '/sitemap/0.xml') {
+      if (path === '/robots.txt') {
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        if (jobSitemapShards.length === 0) return res.end('ok');
+        const base = `http://${req.headers.host}`;
+        const lines = [`Sitemap: ${base}/sitemap/0.xml`, ...jobSitemapShards.map((id) => `Sitemap: ${base}/sitemap/${id}.xml`)];
+        return res.end(lines.join('\n'));
+      }
+      if (path === '/sitemap/0.xml' || (jobSitemapShards.includes(Number(/^\/sitemap\/(\d+)\.xml$/.exec(path)?.[1])) && /^\/sitemap\/\d+\.xml$/.test(path))) {
         res.writeHead(200);
         return res.end('ok');
       }
@@ -143,6 +160,57 @@ describe('prod smoke — lista sprawdzeń', () => {
     for (const path of buildChecks().map((check) => check.path)) {
       expect(path).not.toMatch(/\/(candidate|employer|admin)(\/|$)|\/api\/(?!health$)/);
     }
+  });
+});
+
+describe('prod smoke — partie sitemap ofert z robots.txt (#689)', () => {
+  const base = new URL('https://pracuj.be');
+
+  it('wyodrębnia partie ofert (id ≥ 1), pomija id=0, obcy origin i wiersze spoza wzorca', () => {
+    const text = [
+      'User-agent: *',
+      'Allow: /',
+      'Sitemap: https://pracuj.be/sitemap/0.xml',
+      'sitemap:   https://pracuj.be/sitemap/1.xml  ',
+      'Sitemap: https://pracuj.be/sitemap/2.xml',
+      'Sitemap: https://pracuj.be/sitemap/2.xml', // duplikat — nie podwaja sprawdzenia
+      'Sitemap: https://evil.example/sitemap/9.xml', // obcy origin
+      'Sitemap: https://pracuj.be/sitemap-images.xml', // spoza wzorca partii
+      'Host: https://pracuj.be',
+    ].join('\n');
+    expect(parseRobotsSitemapShardPaths(text, base)).toEqual(['/sitemap/1.xml', '/sitemap/2.xml']);
+  });
+
+  it('kontrola ujemna: bez linii Sitemap albo tylko id=0 — brak partii do dopisania', () => {
+    expect(parseRobotsSitemapShardPaths('ok', base)).toEqual([]);
+    expect(parseRobotsSitemapShardPaths('Sitemap: https://pracuj.be/sitemap/0.xml', base)).toEqual([]);
+  });
+
+  it('atrapa: dopisuje sprawdzenie każdej partii wskazanej w /robots.txt i zwraca 0, gdy wszystkie 200', async () => {
+    site = await startFakeSite({ jobSitemapShards: [1, 2] });
+    const logs = logger();
+    expect(await runSmoke({ env: { PROD_SMOKE_BASE_URL: site.url, SITE_ACCESS_PASSWORD: PASSWORD }, logger: logs })).toBe(0);
+    const paths = site.requests.filter((request) => request.method === 'GET').map((request) => request.path);
+    expect(paths).toContain('/sitemap/1.xml');
+    expect(paths).toContain('/sitemap/2.xml');
+    // Dokładnie jedno żądanie na partię — brak podwójnego pobrania /robots.txt.
+    expect(paths.filter((path) => path === '/robots.txt')).toHaveLength(1);
+    expect(logs.error).not.toHaveBeenCalled();
+  });
+
+  it('kontrola ujemna: awaria jednej partii ofert psuje smoke mimo zielonego id=0', async () => {
+    site = await startFakeSite({ jobSitemapShards: [1], faults: { '/sitemap/1.xml': { status: 500 } } });
+    const logs = logger();
+    expect(await runSmoke({ env: { PROD_SMOKE_BASE_URL: site.url, SITE_ACCESS_PASSWORD: PASSWORD }, logger: logs })).toBe(1);
+    const errors = JSON.stringify(logs.error.mock.calls);
+    expect(errors).toContain('/sitemap/1.xml');
+    expect(errors).toContain('błąd serwera 5xx');
+  });
+
+  it('katalog bez partii ofert (samo id=0) nie dopisuje żadnego sprawdzenia', async () => {
+    site = await startFakeSite();
+    expect(await runSmoke({ env: { PROD_SMOKE_BASE_URL: site.url, SITE_ACCESS_PASSWORD: PASSWORD }, logger: logger() })).toBe(0);
+    expect(site.requests.filter((request) => request.method === 'GET')).toHaveLength(buildChecks().length);
   });
 });
 
@@ -315,6 +383,35 @@ describe('prod smoke — nagłówki bezpieczeństwa (LAUNCH_CHECKLIST §12)', ()
     ]);
     // http://localhost (testy lokalne): HSTS nie jest wymagany.
     expect(securityHeaderProblems(headers, { https: false, expectMode: 'production' })).not.toContain(`brak HSTS z max-age ≥ ${HSTS_MIN_MAX_AGE}`);
+  });
+
+  it('#900: duplikat wymaganej dyrektywy CSP ze słabszą pierwszą wartością jest problemem', () => {
+    // CSP Level 3: przeglądarka stosuje wyłącznie PIERWSZE wystąpienie danej nazwy dyrektywy.
+    // Słaba wartość na pierwszym miejscu obowiązuje, mimo że gdzieś dalej w nagłówku występuje
+    // też poprawna — samo sprawdzenie „czy wymagany tekst jest obecny” to false positive.
+    const headers = new Headers({
+      'content-security-policy':
+        "frame-ancestors *; object-src *; base-uri *; default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'strict-transport-security': `max-age=${HSTS_MIN_MAX_AGE}`,
+    });
+    const problems = securityHeaderProblems(headers, { https: true, expectMode: 'production' });
+    expect(problems).toEqual(["CSP bez frame-ancestors 'none'", "CSP bez object-src 'none'", "CSP bez base-uri 'self'"]);
+  });
+
+  it('kontrola ujemna: poprawna kolejność (bez duplikatów) wciąż przechodzi', () => {
+    // Ten sam zestaw dyrektyw, ale bez duplikatów przed poprawnymi wartościami — musi zostać zielony,
+    // żeby test #900 nie stał się fałszywie zbyt surowy.
+    const headers = new Headers({
+      'content-security-policy': "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'strict-transport-security': `max-age=${HSTS_MIN_MAX_AGE}`,
+    });
+    expect(securityHeaderProblems(headers, { https: true, expectMode: 'production' })).toEqual([]);
   });
 
   it('atrapa: strona bez X-Frame-Options = kod 1 ze ścieżką', async () => {

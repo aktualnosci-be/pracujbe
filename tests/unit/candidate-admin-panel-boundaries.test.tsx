@@ -14,6 +14,11 @@ import en from '@/messages/en.json';
 import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 /**
  * Granice błędu i strony 404 paneli kandydata i administratora leżą POD layoutem panelu
@@ -122,12 +127,12 @@ describe('CandidateNotFound', () => {
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
       '/candidate',
       '/candidate/aplikacje',
-      '/candidate/oferty-polecane',
+      '/candidate/wyszukiwania',
     ]);
     expect(links.map((a) => a.textContent)).toEqual([
       messages.dashboard.candidatePanelBackToDashboard,
       messages.dashboard.navApplications,
-      messages.dashboard.navRecommended,
+      messages.dashboard.navSearches,
     ]);
     // Kontrola ujemna: żadnego linku publicznego ani do panelu pracodawcy.
     for (const href of links.map((a) => a.getAttribute('href') ?? '')) {

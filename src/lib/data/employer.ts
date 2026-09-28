@@ -14,6 +14,7 @@
  * przez stronę mają osobne transakcje, więc każda sekcja pulpitu zawodzi niezależnie.
  */
 
+import type { ApplicationFilterStatus } from '@/lib/applications/bulk';
 import { cache } from 'react';
 
 import type { PortalIdentity } from '@/lib/auth/session';
@@ -23,7 +24,17 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { attempt, queryCount, queryOne, queryRows, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { effectiveJobStatus, isPastExpiry } from '@/lib/job-expiry';
+import {
+  encodeScoreCursor,
+  encodeTimeCursor,
+  toListPage,
+  type ListPage,
+  type ListPageRequest,
+  type ScoreCursor,
+  type TimeCursor,
+} from '@/lib/employer/list-cursor';
 import { canRecruit } from '@/lib/team/permissions';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { captureError } from '@/lib/error-report';
 import {
   parseScreeningAnswers,
@@ -49,12 +60,28 @@ import {
  */
 export interface EmployerOverview {
   activeOffersCount: number;
-  /** Zgłoszenia w statusie `submitted` (jeszcze nieprzejrzane). */
-  newApplicationsCount: number | null;
-  /** RÓŻNI kandydaci dopasowani do ofert firmy (nie wiersze `matches`) — jak lista „Top dopasowani”. */
-  matchedCandidatesCount: number | null;
-  /** Rozmowy AKTYWNEJ firmy, w których ostatnia wiadomość jest od kandydata (czekają na odpowiedź). */
-  messagesToAnswerCount: number | null;
+  /**
+   * Zgłoszenia w statusie `submitted` (jeszcze nieprzejrzane). Brak pola = tryb ogłoszeniowy
+   * (#1147): kafelka nie ma, zapytania do `applications` nie ma.
+   */
+  newApplicationsCount?: number | null;
+  /**
+   * RÓŻNI kandydaci dopasowani do ofert firmy (nie wiersze `matches`) — jak lista „Top dopasowani”.
+   * Brak pola = tryb ogłoszeniowy (#1133): kafelek nie istnieje, zapytania do `matches` nie ma.
+   */
+  matchedCandidatesCount?: number | null;
+  /**
+   * Rozmowy AKTYWNEJ firmy, w których ostatnia wiadomość jest od kandydata (czekają na odpowiedź).
+   * Brak pola = tryb ogłoszeniowy (#1147): bez zapytania do `conversations`/`messages`.
+   */
+  messagesToAnswerCount?: number | null;
+  /**
+   * Tryb ogłoszeniowy (#1147): statystyki ogłoszeń z lejka ofert (#99) za {@link FUNNEL_PERIOD_DAYS}
+   * dni — wyświetlenia szczegółów i kliknięcia „Aplikuj u pracodawcy” (`apply_started`). `null` =
+   * brak uprawnień do lejka (zwykły `member`), nie zero. Brak pól = tryb rekrutacyjny.
+   */
+  listingDetailViews?: number | null;
+  listingApplyClicks?: number | null;
   /** Rola recruiter+ w aktywnej firmie — gdy `false`, UI wyjaśnia, dlaczego liczników brak. */
   recruiterAccess: boolean;
   /** Firma zweryfikowana — gdy `false`, dopasowani kandydaci czekają na weryfikację. */
@@ -74,10 +101,16 @@ export interface EmployerJob {
   pastExpiry: boolean;
   /** Publiczny adres oferty (link „Zobacz ofertę" dla aktywnej, #325). */
   slug: string;
-  /** `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). */
-  newApplications: number | null;
-  /** `null` = brak uprawnień rekrutera do dopasowań (nie zero). */
-  matched: number | null;
+  /**
+   * `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). Brak pola = tryb ogłoszeniowy
+   * (#1147/#1144): licznika zgłoszeń przy ofercie nie ma, lista nie czyta `applications`.
+   */
+  newApplications?: number | null;
+  /**
+   * `null` = brak uprawnień rekrutera do dopasowań (nie zero). Brak pola = tryb ogłoszeniowy
+   * (#1133): kolumny dopasowań nie ma, lista nie czyta `matches`.
+   */
+  matched?: number | null;
   /** Data utworzenia (ISO) — pokazywana zamiast technicznego identyfikatora (Invariant #8). */
   createdAt: string | null;
 }
@@ -176,6 +209,15 @@ const DEMO_CANDIDATES: EmployerMatchedCandidate[] = [
 
 const DEMO_FUNNEL: FunnelStats = { views: 4126, applications: 287, interviews: 38, hired: 6 };
 
+/** Tryb ogłoszeniowy (#1147): kafelki demo = statystyki ogłoszeń (sumy {@link DEMO_JOB_FUNNEL}). */
+const DEMO_LISTING_OVERVIEW: EmployerOverview = {
+  activeOffersCount: 8,
+  listingDetailViews: 875,
+  listingApplyClicks: 120,
+  recruiterAccess: true,
+  companyVerified: true,
+};
+
 const EMPTY_OVERVIEW: EmployerOverview = {
   activeOffersCount: 0,
   newApplicationsCount: 0,
@@ -186,6 +228,40 @@ const EMPTY_OVERVIEW: EmployerOverview = {
 };
 
 const EMPTY_FUNNEL: FunnelStats = { views: null, applications: 0, interviews: 0, hired: 0 };
+
+/**
+ * #1147: tryb ogłoszeniowy — statystyki pracodawcy = statystyki ogłoszenia. Liczniki procesu
+ * (zgłoszenia, rozmowy, lejek rekrutacyjny, wysłane aplikacje) nie są liczone ani zwracane.
+ */
+function recruitmentStatsEnabled(): boolean {
+  return isRecruitmentEnabled('applications');
+}
+
+/** #1133: tryb ogłoszeniowy — dopasowania kandydatów nie istnieją w panelu pracodawcy. */
+function matchingEnabled(): boolean {
+  return isRecruitmentEnabled('matching') && isRecruitmentEnabled('candidateSearch');
+}
+
+/** Przegląd bez licznika dopasowań (tryb ogłoszeniowy): pole znika, a nie „0” ani „—”. */
+function withoutMatchedCount(overview: EmployerOverview): EmployerOverview {
+  const { matchedCandidatesCount: _omit, ...rest } = overview;
+  void _omit;
+  return rest;
+}
+
+/** Oferta bez licznika dopasowań (tryb ogłoszeniowy). */
+function withoutMatched(job: EmployerJob): EmployerJob {
+  const { matched: _omit, ...rest } = job;
+  void _omit;
+  return rest;
+}
+
+/** Oferta bez licznika zgłoszeń (tryb ogłoszeniowy, #1147). */
+function withoutNewApplications(job: EmployerJob): EmployerJob {
+  const { newApplications: _omit, ...rest } = job;
+  void _omit;
+  return rest;
+}
 
 /** Okno czasowe lejka — musi odpowiadać etykiecie `dashboard.funnelPeriod` („ostatnie 30 dni"). */
 export const FUNNEL_PERIOD_DAYS = 30;
@@ -202,7 +278,9 @@ export type EmployerOverviewLoad =
 export type FunnelStatsLoad =
   | { status: 'ok'; funnel: FunnelStats }
   | { status: 'denied' }
-  | { status: 'error' };
+  | { status: 'error' }
+  /** #1147: tryb ogłoszeniowy — lejka rekrutacyjnego nie ma (loader bez zapytań). */
+  | { status: 'disabled' };
 
 /**
  * Statusy z `application_status_history` traktowane jako „osiągnięto etap rozmowy".
@@ -221,6 +299,8 @@ const FUNNEL_INTERVIEW_STAGES = [
 /* ---------------------------------------------------------------------------
  * Pomocnicze parsowanie (wiersze JSON z bazy → `unknown`)
  * ------------------------------------------------------------------------- */
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
@@ -383,6 +463,11 @@ const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
       AND NOT EXISTS (SELECT 1 FROM public.company_members cm
                        WHERE cm.company_id = $1 AND cm.profile_id = last.sender_id)`;
 
+/** Aktywne oferty firmy. #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance. */
+const ACTIVE_JOBS_SQL = `SELECT 1 FROM public.jobs
+     WHERE company_id = $1 AND status = 'active' AND deleted_at IS NULL
+       AND (expires_at IS NULL OR expires_at > now())`;
+
 /**
  * Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi).
  * Liczniki rekrutacyjne tylko dla recruiter+ — dla zwykłego `member` `null` („brak danych”),
@@ -390,29 +475,34 @@ const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
  * niezweryfikowanej (dostęp do bazy kandydatów dopiero po weryfikacji).
  */
 export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
-  if (!isPortalDataConfigured()) return { status: 'ok', overview: DEMO_OVERVIEW };
+  if (!recruitmentStatsEnabled()) return getListingOverview();
+  const matching = matchingEnabled();
+  if (!isPortalDataConfigured()) {
+    return { status: 'ok', overview: matching ? DEMO_OVERVIEW : withoutMatchedCount(DEMO_OVERVIEW) };
+  }
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return { status: 'ok', overview: EMPTY_OVERVIEW };
+    if (!ctx) return { status: 'ok', overview: matching ? EMPTY_OVERVIEW : withoutMatchedCount(EMPTY_OVERVIEW) };
     const { me, companyId, companyStatus, role } = ctx;
     const recruiter = canRecruit(role);
 
     // Liczniki w jednej transakcji: błąd któregokolwiek = stan błędu kafelków (#304).
     const overview = await withPortalTransaction(me, async (tx): Promise<EmployerOverview> => ({
-      activeOffersCount: await queryCount(tx, 'employer.overview-active-jobs',
-        `SELECT 1 FROM public.jobs
-          WHERE company_id = $1 AND status = 'active' AND deleted_at IS NULL
-            -- #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance.
-            AND (expires_at IS NULL OR expires_at > now())`, [companyId]),
+      activeOffersCount: await queryCount(tx, 'employer.overview-active-jobs', ACTIVE_JOBS_SQL, [companyId]),
       newApplicationsCount: recruiter
         ? await queryCount(tx, 'employer.overview-new-applications',
             `SELECT 1 FROM public.applications
               WHERE company_id = $1 AND status = 'submitted' AND deleted_at IS NULL`, [companyId])
         : null,
-      matchedCandidatesCount: recruiter && companyStatus === 'verified'
-        ? await queryCount(tx, 'employer.overview-matched-candidates', MATCHED_CANDIDATES_SQL, [companyId])
-        : null,
+      // #1133: tryb ogłoszeniowy — bez zapytania do `matches` i bez pola.
+      ...(matching
+        ? {
+            matchedCandidatesCount: recruiter && companyStatus === 'verified'
+              ? await queryCount(tx, 'employer.overview-matched-candidates', MATCHED_CANDIDATES_SQL, [companyId])
+              : null,
+          }
+        : {}),
       messagesToAnswerCount: recruiter
         ? await queryCount(tx, 'employer.overview-awaiting-reply', CONVERSATIONS_AWAITING_REPLY_SQL, [companyId])
         : null,
@@ -420,6 +510,42 @@ export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
       companyVerified: companyStatus === 'verified',
     }));
 
+    return { status: 'ok', overview };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerOverview' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Kafelki w trybie ogłoszeniowym (#1147): aktywne oferty + wyświetlenia i kliknięcia „Aplikuj
+ * u pracodawcy” z lejka ofert (#99, ostatnie {@link FUNNEL_PERIOD_DAYS} dni). Bez zapytań do
+ * `applications`, `matches`, `conversations` i `messages`. Kolumnę `applications_submitted`
+ * zwracaną przez RPC lejka pomijamy (portal nie przyjmuje zgłoszeń).
+ */
+async function getListingOverview(now: Date = new Date()): Promise<EmployerOverviewLoad> {
+  if (!isPortalDataConfigured()) return { status: 'ok', overview: DEMO_LISTING_OVERVIEW };
+  try {
+    const ctx = await loadContext();
+    if (!ctx) {
+      return {
+        status: 'ok',
+        overview: { activeOffersCount: 0, listingDetailViews: 0, listingApplyClicks: 0, recruiterAccess: true, companyVerified: true },
+      };
+    }
+    const { me, companyId, companyStatus, role } = ctx;
+    const overview = await withPortalTransaction(me, async (tx): Promise<EmployerOverview> => {
+      const activeOffersCount = await queryCount(tx, 'employer.overview-active-jobs', ACTIVE_JOBS_SQL, [companyId]);
+      const rows = await readJobFunnelRows(tx, companyId, funnelDateRange(FUNNEL_PERIOD_DAYS, now));
+      const denied = rows === 'denied';
+      return {
+        activeOffersCount,
+        listingDetailViews: denied ? null : rows.reduce((sum, row) => sum + funnelCount(row.detail_views), 0),
+        listingApplyClicks: denied ? null : rows.reduce((sum, row) => sum + funnelCount(row.apply_started), 0),
+        recruiterAccess: canRecruit(role),
+        companyVerified: companyStatus === 'verified',
+      };
+    });
     return { status: 'ok', overview };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerOverview' });
@@ -499,8 +625,23 @@ export interface JobDraftValues {
   benefits: string[];
   accommodation: boolean;
   transport: boolean;
+  /** 0169: koszty i dodatki — surowe wartości z bazy ('' / null = nie podano). */
+  accommodationKind: string;
+  accommodationCost: string;
+  accommodationCostPeriod: string;
+  accommodationDeducted: boolean | null;
+  accommodationRegistration: boolean | null;
+  accommodationAfterContract: string;
+  transportShuttle: boolean;
+  transportReimbursed: boolean;
+  mealVoucherDaily: string;
+  jointCommittee: string;
   companyDescription: string;
   contactEmail: string;
+  /** #1129 (0172): kanał aplikowania u ogłoszeniodawcy (puste = brak). */
+  applyUrl: string;
+  applyEmail: string;
+  applyPhone: string;
   /** #101: pytania screeningowe — wczytywane, bo krok 7 zapisuje je replace-all. */
   screeningQuestions: ScreeningQuestionDraft[];
 }
@@ -536,6 +677,57 @@ function isEditableJobStatus(status: string): status is EditableJobStatus {
 function numToText(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : '';
 }
+/** Koszty i dodatki szkicu bez wartości (0169). */
+type JobCostsInitial = Pick<
+  JobDraftValues,
+  | 'accommodationKind'
+  | 'accommodationCost'
+  | 'accommodationCostPeriod'
+  | 'accommodationDeducted'
+  | 'accommodationRegistration'
+  | 'accommodationAfterContract'
+  | 'transportShuttle'
+  | 'transportReimbursed'
+  | 'mealVoucherDaily'
+  | 'jointCommittee'
+>;
+
+const EMPTY_JOB_COSTS_INITIAL: JobCostsInitial = {
+  accommodationKind: '',
+  accommodationCost: '',
+  accommodationCostPeriod: '',
+  accommodationDeducted: null,
+  accommodationRegistration: null,
+  accommodationAfterContract: '',
+  transportShuttle: false,
+  transportReimbursed: false,
+  mealVoucherDaily: '',
+  jointCommittee: '',
+};
+
+/** numeric z bazy (jako tekst, np. „125.50”) → tekst pola formularza bez zbędnych zer. */
+function amountToText(value: unknown): string {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? String(n) : '';
+}
+
+function jobCostsInitial(job: Record<string, unknown>): JobCostsInitial {
+  const optionalBool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null);
+  return {
+    accommodationKind: asString(job['accommodation_kind']),
+    accommodationCost: amountToText(job['accommodation_cost']),
+    accommodationCostPeriod: asString(job['accommodation_cost_period']),
+    accommodationDeducted: optionalBool(job['accommodation_deducted']),
+    accommodationRegistration: optionalBool(job['accommodation_registration']),
+    accommodationAfterContract: asString(job['accommodation_after_contract']),
+    transportShuttle: job['transport_shuttle'] === true,
+    transportReimbursed: job['transport_reimbursed'] === true,
+    mealVoucherDaily: amountToText(job['meal_voucher_daily']),
+    jointCommittee: asString(job['joint_committee']),
+  };
+}
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
@@ -586,8 +778,12 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       benefits: [],
       accommodation: false,
       transport: false,
+      ...EMPTY_JOB_COSTS_INITIAL,
       companyDescription: 'Firma demonstracyjna z branży logistycznej.',
       contactEmail: '',
+      applyUrl: 'https://example.com/praca',
+      applyEmail: '',
+      applyPhone: '',
       screeningQuestions: [],
     },
   };
@@ -617,7 +813,12 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 shifts, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
-                expires_at, updated_at
+                expires_at, updated_at,
+                accommodation_kind, accommodation_cost::text AS accommodation_cost,
+                accommodation_cost_period, accommodation_deducted, accommodation_registration,
+                accommodation_after_contract, transport_shuttle, transport_reimbursed,
+                meal_voucher_daily::text AS meal_voucher_daily, joint_committee,
+                apply_url, apply_email, apply_phone
            FROM public.jobs
           WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
       if (!job) return null;
@@ -635,13 +836,19 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         skills: await queryRows(tx, 'employer.job-draft-skills',
           'SELECT skill_label, is_mandatory FROM public.job_skills WHERE job_id = $1', [jobId]),
         languages: await queryRows(tx, 'employer.job-draft-languages',
-          'SELECT language_label, level FROM public.job_languages WHERE job_id = $1', [jobId]),
+          `SELECT jl.language_label, jl.level, lg.code AS language_code
+             FROM public.job_languages jl
+             LEFT JOIN public.languages lg ON lg.id = jl.language_id
+            WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
-        // job_screening_questions_select (0093): członek firmy oferty.
-        screening: await queryRows(tx, 'employer.job-draft-screening',
-          `SELECT id, position, type, required, prompt, options
-             FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId]),
+        // job_screening_questions_select (0093): członek firmy oferty. Tryb ogłoszeniowy: stare
+        // pytania ukryte — bez zapytania (zapis kroku 7 nie rusza ich, `screeningOff` w `updateJobDraft`).
+        screening: isRecruitmentEnabled('screening')
+          ? await queryRows(tx, 'employer.job-draft-screening',
+              `SELECT id, position, type, required, prompt, options
+                 FROM public.job_screening_questions WHERE job_id = $1 ORDER BY position`, [jobId])
+          : [],
       };
       return { job, jobStatus, relations };
     });
@@ -702,7 +909,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         languages: languages
           .map((r) => asRecord(r))
           .map((r) => ({
-            language: asString(r['language_label']),
+            // Kod ze słownika (0168); stary wpis spoza słownika zostaje etykietą.
+            language: asString(r['language_code']) || asString(r['language_label']),
             level: asString(r['level'], 'basic'),
           }))
           .filter((l) => l.language !== ''),
@@ -715,8 +923,12 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         benefits: asStringArray(tr['benefits']),
         accommodation: job['accommodation'] === true,
         transport: job['transport'] === true,
+        ...jobCostsInitial(job),
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
+        applyUrl: asString(job['apply_url']),
+        applyEmail: asString(job['apply_email']),
+        applyPhone: asString(job['apply_phone']),
         screeningQuestions: parseScreeningQuestions(screening).map((q) => ({
           type: q.type,
           required: q.required,
@@ -733,63 +945,91 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
 
 /** Jawny stan odczytu dla ekranu ofert — błąd bazy nie może udawać pustej listy. */
 export type CompanyJobsLoad =
-  | { status: 'ok'; jobs: EmployerJob[]; hasNext: boolean }
+  | { status: 'ok'; jobs: EmployerJob[]; prevCursor: string | null; nextCursor: string | null }
   | { status: 'error' };
 
-/** Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. */
-export async function getCompanyJobsLoad(page = 1): Promise<CompanyJobsLoad> {
-  const safePage = Number.isSafeInteger(page) && page > 0 && page <= Math.floor(Number.MAX_SAFE_INTEGER / 12) ? page : 1;
-  const start = (safePage - 1) * 12;
+export const EMPLOYER_JOBS_PAGE_SIZE = 12;
+
+const FIRST_PAGE: ListPageRequest<never> = { cursor: null, direction: 'next' };
+
+/**
+ * Lista ofert firmy z liczbą nowych aplikacji i dopasowań na ofertę. Stronicowanie kursorem
+ * (created_at, id) w obu kierunkach (P1-05) — bez OFFSET, więc oferta dodana między stronami
+ * nie dubluje ani nie ukrywa rekordu na granicy.
+ */
+export async function getCompanyJobsLoad(
+  request: ListPageRequest<TimeCursor> = FIRST_PAGE,
+): Promise<CompanyJobsLoad> {
   if (!isPortalDataConfigured()) {
     // Izolowany serwer dev testów E2E (błąd odczytu, #185). Ta gałąź nie działa w buildzie produkcyjnym.
     if (process.env.NODE_ENV === 'development' && process.env.PLAYWRIGHT_APPLICATIONS_FIXTURE === 'error') {
       return { status: 'error' };
     }
-    return { status: 'ok', jobs: DEMO_JOBS.slice(start, start + 12), hasNext: DEMO_JOBS.length > start + 12 };
+    // DEMO: jedna strona (identyfikatory demo nie są UUID, więc nie budujemy kursorów).
+    const demoJobs = DEMO_JOBS.slice(0, EMPLOYER_JOBS_PAGE_SIZE);
+    return {
+      status: 'ok',
+      jobs: request.cursor
+        ? []
+        : demoJobs
+            .map((job) => (matchingEnabled() ? job : withoutMatched(job)))
+            .map((job) => (recruitmentStatsEnabled() ? job : withoutNewApplications(job))),
+      prevCursor: null,
+      nextCursor: null,
+    };
   }
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return { status: 'ok', jobs: [], hasNext: false };
+    if (!ctx) return { status: 'ok', jobs: [], prevCursor: null, nextCursor: null };
     const { me, companyId } = ctx;
+    const prev = request.direction === 'prev';
     // Liczniki zgłoszeń i dopasowań czyta tylko recruiter+ (RLS 0039); zwykły `member` dostałby
     // z bazy 0 udające brak zainteresowania — pokazujemy „brak danych” (`null`).
     const recruiter = canRecruit(ctx.role);
+    // #1133: tryb ogłoszeniowy — bez podzapytania do `matches` i bez pola `matched`.
+    const matching = matchingEnabled();
+    // #1147: tryb ogłoszeniowy — bez podzapytania do `applications` i bez pola `newApplications`.
+    const applications = recruitmentStatsEnabled();
 
-    // 13 wierszy = strona + znacznik kolejnej. Liczniki liczone w bazie (count pod RLS) —
+    // Strona + znacznik kolejnej w kierunku odczytu. Liczniki liczone w bazie (count pod RLS) —
     // bez przesyłania wierszy aplikacji/dopasowań; błąd licznika = błąd całej listy.
     const rows = await withPortalTransaction(me, (tx) =>
-      queryRows(tx, 'employer.jobs-page',
-        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at,
+      queryRows(tx, prev ? 'employer.jobs-page-prev' : 'employer.jobs-page',
+        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at${applications ? `,
                 (SELECT count(*) FROM public.applications a
                   WHERE a.company_id = $1 AND a.job_id = j.id
-                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications,
-                (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched
+                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications` : ''}${matching ? `,
+                (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched` : ''}
            FROM public.jobs j
           WHERE j.company_id = $1 AND j.deleted_at IS NULL
-          ORDER BY j.created_at DESC, j.id DESC
-          LIMIT 13 OFFSET $2`, [companyId, start]));
-
-    const hasNext = rows.length > 12;
-    const jobs = rows.slice(0, 12);
-    if (jobs.length === 0) return { status: 'ok', jobs: [], hasNext: false };
+            AND ($2::timestamptz IS NULL OR (j.created_at, j.id) ${prev ? '>' : '<'} ($2::timestamptz, $3::uuid))
+          ORDER BY ${prev ? 'j.created_at ASC, j.id ASC' : 'j.created_at DESC, j.id DESC'}
+          LIMIT $4`,
+        [companyId, request.cursor?.ts ?? null, request.cursor?.id ?? null, EMPLOYER_JOBS_PAGE_SIZE + 1]));
 
     const now = new Date();
-    return { status: 'ok', hasNext, jobs: jobs.map((r) => {
-      const id = asString(r['id']);
-      const expiresAt = asString(r['expires_at']) || null;
-      return {
-        id,
-        title: asString(r['title']),
-        city: asString(r['city']),
-        status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
-        pastExpiry: isPastExpiry(expiresAt, now),
-        slug: asString(r['slug']),
-        newApplications: recruiter ? asNumber(r['new_applications']) : null,
-        matched: recruiter ? asNumber(r['matched']) : null,
-        createdAt: asString(r['created_at']) || null,
-      };
-    }) };
+    const page = toListPage(
+      rows,
+      request,
+      EMPLOYER_JOBS_PAGE_SIZE,
+      (r) => encodeTimeCursor({ ts: asString(r['created_at']), id: asString(r['id']) }),
+      (r): EmployerJob => {
+        const expiresAt = asString(r['expires_at']) || null;
+        return {
+          id: asString(r['id']),
+          title: asString(r['title']),
+          city: asString(r['city']),
+          status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
+          pastExpiry: isPastExpiry(expiresAt, now),
+          slug: asString(r['slug']),
+          ...(applications ? { newApplications: recruiter ? asNumber(r['new_applications']) : null } : {}),
+          ...(matching ? { matched: recruiter ? asNumber(r['matched']) : null } : {}),
+          createdAt: asString(r['created_at']) || null,
+        };
+      },
+    );
+    return { status: 'ok', jobs: page.items, prevCursor: page.prevCursor, nextCursor: page.nextCursor };
   } catch (error) {
     captureError(error, { area: 'employer.getCompanyJobs' });
     return { status: 'error' };
@@ -837,38 +1077,103 @@ export async function getRecentApplications(): Promise<RecentApplicationsLoad> {
 
 /** Pełna lista aplikacji w małych stronach; osobny wynik błędu chroni przed fałszywym pustym stanem. */
 export type EmployerApplicationsLoad =
-  | { status: 'ok'; applications: EmployerApplication[]; hasMore: boolean; isDemo: boolean }
+  | {
+      status: 'ok';
+      applications: EmployerApplication[];
+      prevCursor: string | null;
+      nextCursor: string | null;
+      isDemo: boolean;
+      /** Filtr oferty (`?oferta=`) z tytułem — tylko oferta aktywnej firmy widoczna pod RLS. */
+      job: { id: string; title: string } | null;
+      /** Filtr statusu (`?status=`) — tylko wartości z `APPLICATION_FILTER_STATUSES`. */
+      statusFilter: ApplicationFilterStatus | null;
+      /** Aktywna firma, dla której wyrenderowano listę (akcja zbiorcza sprawdza ją na serwerze). */
+      companyId: string | null;
+      /** Oferty aktywnej firmy do filtra listy (najnowsze, bez usuniętych). */
+      jobOptions: { id: string; title: string }[];
+    }
+  | { status: 'not_found' }
   | { status: 'error' };
 
 export const EMPLOYER_APPLICATIONS_PAGE_SIZE = 12;
 
-export async function getEmployerApplicationsPage(page: number): Promise<EmployerApplicationsLoad> {
-  if (!Number.isSafeInteger(page) || page < 1 || page > 1000) return { status: 'error' };
+/**
+ * Zgłoszenia aktywnej firmy stronicowane kursorem (submitted_at, id) w obu kierunkach (P1-05),
+ * opcjonalnie tylko dla jednej oferty. Oferta spoza firmy (albo niewidoczna pod RLS) =
+ * `not_found`, nie pusta lista.
+ */
+export async function getEmployerApplicationsPage(
+  request: ListPageRequest<TimeCursor> = FIRST_PAGE,
+  jobId: string | null = null,
+  statusFilter: ApplicationFilterStatus | null = null,
+): Promise<EmployerApplicationsLoad> {
+  if (jobId !== null && !UUID_RE.test(jobId)) return { status: 'not_found' };
 
   if (!isPortalDataConfigured()) {
-    return { status: 'ok', applications: page === 1 ? DEMO_APPLICATIONS : [], hasMore: false, isDemo: true };
+    if (jobId !== null) return { status: 'not_found' };
+    return {
+      status: 'ok',
+      applications: request.cursor
+        ? []
+        : DEMO_APPLICATIONS.filter((a) => statusFilter === null || a.status === statusFilter),
+      prevCursor: null,
+      nextCursor: null,
+      isDemo: true,
+      job: null,
+      statusFilter,
+      companyId: null,
+      jobOptions: [],
+    };
   }
 
   try {
     const ctx = await loadContext();
-    if (!ctx) return { status: 'ok', applications: [], hasMore: false, isDemo: false };
+    if (!ctx) {
+      return jobId === null
+        ? {
+            status: 'ok', applications: [], prevCursor: null, nextCursor: null, isDemo: false,
+            job: null, statusFilter, companyId: null, jobOptions: [],
+          }
+        : { status: 'not_found' };
+    }
     const { me, companyId } = ctx;
-    const start = (page - 1) * EMPLOYER_APPLICATIONS_PAGE_SIZE;
-    // Strona + jeden wiersz znacznika starszych wyników; stabilna kolejność (submitted_at, id).
-    const data = await withPortalTransaction(me, (tx) =>
-      queryRows(tx, 'employer.applications-page',
-        `SELECT ${APPLICATION_LIST_COLUMNS}
+    const prev = request.direction === 'prev';
+
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      const job = jobId === null
+        ? null
+        : await queryOne(tx, 'employer.applications-job',
+            `SELECT id, title FROM public.jobs
+              WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
+      if (jobId !== null && !job) return null;
+      // Strona + jeden wiersz znacznika kolejnej strony w kierunku odczytu.
+      const rows = await queryRows(tx, prev ? 'employer.applications-page-prev' : 'employer.applications-page',
+        `SELECT ${APPLICATION_LIST_COLUMNS}, a.submitted_at
            FROM public.applications a
           WHERE a.company_id = $1 AND a.deleted_at IS NULL
-          ORDER BY a.submitted_at DESC, a.id DESC
-          LIMIT $2 OFFSET $3`, [companyId, EMPLOYER_APPLICATIONS_PAGE_SIZE + 1, start]));
+            AND ($2::uuid IS NULL OR a.job_id = $2::uuid)
+            AND ($3::timestamptz IS NULL OR (a.submitted_at, a.id) ${prev ? '>' : '<'} ($3::timestamptz, $4::uuid))
+            AND ($6::text IS NULL OR a.status::text = $6::text)
+          ORDER BY ${prev ? 'a.submitted_at ASC, a.id ASC' : 'a.submitted_at DESC, a.id DESC'}
+          LIMIT $5`,
+        [companyId, jobId, request.cursor?.ts ?? null, request.cursor?.id ?? null, EMPLOYER_APPLICATIONS_PAGE_SIZE + 1,
+          statusFilter]);
+      // Oferty do filtra: najnowsze 200 ofert aktywnej firmy (także zamknięte — mają zgłoszenia).
+      const jobOptions = await queryRows(tx, 'employer.applications-job-options',
+        `SELECT id, title FROM public.jobs
+          WHERE company_id = $1 AND deleted_at IS NULL AND status <> 'draft'
+          ORDER BY created_at DESC, id DESC
+          LIMIT 200`, [companyId]);
+      return { job, rows, jobOptions };
+    });
+    if (!loaded) return { status: 'not_found' };
 
-    const rows = asRows(data);
-    return {
-      status: 'ok',
-      isDemo: false,
-      hasMore: rows.length > EMPLOYER_APPLICATIONS_PAGE_SIZE,
-      applications: rows.slice(0, EMPLOYER_APPLICATIONS_PAGE_SIZE).map((row) => {
+    const page = toListPage(
+      asRows(loaded.rows),
+      request,
+      EMPLOYER_APPLICATIONS_PAGE_SIZE,
+      (row) => encodeTimeCursor({ ts: asString(row['submitted_at']), id: asString(row['id']) }),
+      (row): EmployerApplication => {
         const job = asEmbeddedRecord(row['jobs']);
         return {
           id: asString(row['id']),
@@ -876,7 +1181,18 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
           jobTitle: asString(job['title']),
           status: asString(row['status'], 'submitted'),
         };
-      }),
+      },
+    );
+    return {
+      status: 'ok',
+      isDemo: false,
+      applications: page.items,
+      prevCursor: page.prevCursor,
+      nextCursor: page.nextCursor,
+      job: loaded.job ? { id: asString(loaded.job['id']), title: asString(loaded.job['title']) } : null,
+      statusFilter,
+      companyId,
+      jobOptions: asRows(loaded.jobOptions).map((row) => ({ id: asString(row['id']), title: asString(row['title']) })),
     };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerApplicationsPage' });
@@ -884,8 +1200,112 @@ export async function getEmployerApplicationsPage(page: number): Promise<Employe
   }
 }
 
+interface MatchWinner {
+  candidateId: string;
+  jobId: string;
+  score: number;
+}
+
+/** Zwycięzcy RPC dopasowań (jeden wiersz na kandydata, porządek z bazy) → typ domenowy. */
+function matchWinners(rows: unknown): MatchWinner[] {
+  const seen = new Set<string>();
+  const winners: MatchWinner[] = [];
+  for (const r of asRows(rows)) {
+    const candidateId = asString(r['candidate_id']);
+    if (!candidateId || seen.has(candidateId)) continue;
+    seen.add(candidateId);
+    winners.push({ candidateId, jobId: asString(r['job_id']), score: asNumber(r['score']) });
+  }
+  return winners;
+}
+
+/**
+ * Zapisuje w `map` najnowszą (nie ostatnio odczytaną) datę propozycji dla danego klucza (#718).
+ * Kolejność wierszy zwróconych przez SQL bez wiążącego kontraktu (plan zapytania, indeks,
+ * vacuum) nie może decydować, którą datę zobaczy panel — dwie aktywne propozycje dla tej samej
+ * pary kandydat–oferta (historyczna + ponowiona) muszą zawsze dać najnowszą z nich, niezależnie
+ * od tego, w jakiej kolejności baza zwróciła wiersze.
+ */
+function setLatestOfferDate(map: Map<string, string>, key: string, value: string): void {
+  if (!key || !value) return;
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, value);
+    return;
+  }
+  const currentTime = new Date(current).getTime();
+  const nextTime = new Date(value).getTime();
+  if (Number.isFinite(nextTime) && (!Number.isFinite(currentTime) || nextTime > currentTime)) {
+    map.set(key, value);
+  }
+}
+
+/**
+ * Dane kart kandydatów dla zwycięzców dopasowań — w tej samej transakcji pod sesją/RLS.
+ * candidate_profiles: widoczność kandydata dla firmy; profiles (imię) tylko dla powiązanych
+ * relacją (brak imienia → UI podstawia etykietę); jobs/offers: tytuł oferty docelowej i aktywna
+ * propozycja (stan „wysłano” z DB, #327).
+ */
+async function matchedCandidateCards(tx: TransactionQuery, winners: MatchWinner[]): Promise<EmployerMatchedCandidate[]> {
+  if (winners.length === 0) return [];
+  const candidateIds = winners.map((w) => w.candidateId);
+  const targetJobIds = [...new Set(winners.map((w) => w.jobId))].filter((id) => id.length > 0);
+
+  const cpData = await queryRows(tx, 'employer.top-candidates-profiles',
+    `SELECT profile_id, headline, city, occupations
+       FROM public.candidate_profiles WHERE profile_id = ANY($1::uuid[])`, [candidateIds]);
+  const profData = await queryRows(tx, 'employer.top-candidates-names',
+    'SELECT id, first_name, last_name FROM public.profiles WHERE id = ANY($1::uuid[])', [candidateIds]);
+  const jobData = await queryRows(tx, 'employer.top-candidates-jobs',
+    'SELECT id, title, slug FROM public.jobs WHERE id = ANY($1::uuid[])', [targetJobIds]);
+  const offerData = await queryRows(tx, 'employer.top-candidates-offers',
+    `SELECT candidate_id, job_id, sent_at, created_at
+       FROM public.offers
+      WHERE candidate_id = ANY($1::uuid[]) AND job_id = ANY($2::uuid[])
+        AND status IN ('sent', 'viewed') AND deleted_at IS NULL
+      ORDER BY COALESCE(sent_at, created_at) DESC`, [candidateIds, targetJobIds]);
+
+  const jobMap = new Map<string, { title: string; slug: string }>();
+  for (const r of asRows(jobData)) {
+    jobMap.set(asString(r['id']), { title: asString(r['title']), slug: asString(r['slug']) });
+  }
+  const offerMap = new Map<string, string>();
+  for (const r of asRows(offerData)) {
+    setLatestOfferDate(
+      offerMap,
+      `${asString(r['candidate_id'])}:${asString(r['job_id'])}`,
+      asString(r['sent_at']) || asString(r['created_at']),
+    );
+  }
+  const cpMap = new Map<string, Record<string, unknown>>();
+  for (const r of asRows(cpData)) cpMap.set(asString(r['profile_id']), r);
+  const nameMap = new Map<string, string>();
+  for (const r of asRows(profData)) {
+    nameMap.set(asString(r['id']), fullName(r['first_name'], r['last_name']));
+  }
+
+  return winners.map(({ candidateId, jobId, score }) => {
+    const cp = cpMap.get(candidateId) ?? {};
+    const occupations = Array.isArray(cp['occupations']) ? (cp['occupations'] as unknown[]) : [];
+    const job = jobMap.get(jobId);
+    return {
+      candidateId,
+      jobId,
+      jobTitle: job?.title ?? '',
+      jobSlug: job?.slug ?? '',
+      offerSentAt: offerMap.get(`${candidateId}:${jobId}`) ?? null,
+      name: nameMap.get(candidateId) ?? '',
+      role: asString(cp['headline']) || asString(occupations[0]),
+      city: asString(cp['city']),
+      match: score,
+    };
+  });
+}
+
 /** Top dopasowani kandydaci (matches × candidate_profiles). Tylko dla firmy zweryfikowanej. */
 export async function getTopMatchedCandidates(options?: { throwOnError?: boolean }): Promise<EmployerMatchedCandidate[]> {
+  // #1133: tryb ogłoszeniowy — bez rankingu kandydatów i bez zapytań (także w demo).
+  if (!matchingEnabled()) return [];
   if (!isPortalDataConfigured()) return DEMO_CANDIDATES;
 
   try {
@@ -896,7 +1316,7 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
     // Dostęp do bazy dopasowanych kandydatów wymaga zweryfikowanej firmy.
     if (companyStatus !== 'verified') return [];
 
-    const loaded = await withPortalTransaction(me, async (tx) => {
+    return await withPortalTransaction(me, async (tx) => {
       // Najlepsze dopasowanie NA KANDYDATA liczone w bazie PRZED limitem (#141, 0079): kandydat
       // dopasowany do wielu ofert firmy nie wypiera innych. RPC działa pod RLS wywołującego
       // (recruiter+ firmy, widoczność kandydata) i zwraca już posortowanych zwycięzców.
@@ -904,85 +1324,70 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
         p_company_id: companyId,
         p_limit: 5,
       });
-
-      const best = new Map<string, { jobId: string; score: number }>();
-      for (const r of asRows(matchData)) {
-        const candidateId = asString(r['candidate_id']);
-        if (!candidateId || best.has(candidateId)) continue;
-        best.set(candidateId, { jobId: asString(r['job_id']), score: asNumber(r['score']) });
-      }
-      const candidateIds = [...best.keys()].slice(0, 5);
-      if (candidateIds.length === 0) return null;
-
-      const targetJobIds = [...new Set(candidateIds.map((id) => best.get(id)?.jobId ?? ''))].filter(
-        (id) => id.length > 0,
-      );
-
-      // candidate_profiles: is_searchable=true jest publicznie czytelne; profiles(imię) tylko
-      // dla powiązanych relacją kandydatów (best-effort — brak imienia → UI podstawia etykietę).
-      // jobs/offers: tytuł oferty docelowej i aktywna propozycja (stan „wysłano" z DB, #327).
-      return {
-        best,
-        candidateIds,
-        cpData: await queryRows(tx, 'employer.top-candidates-profiles',
-          `SELECT profile_id, headline, city, occupations
-             FROM public.candidate_profiles WHERE profile_id = ANY($1::uuid[])`, [candidateIds]),
-        profData: await queryRows(tx, 'employer.top-candidates-names',
-          'SELECT id, first_name, last_name FROM public.profiles WHERE id = ANY($1::uuid[])', [candidateIds]),
-        jobData: await queryRows(tx, 'employer.top-candidates-jobs',
-          'SELECT id, title, slug FROM public.jobs WHERE id = ANY($1::uuid[])', [targetJobIds]),
-        offerData: await queryRows(tx, 'employer.top-candidates-offers',
-          `SELECT candidate_id, job_id, sent_at, created_at
-             FROM public.offers
-            WHERE candidate_id = ANY($1::uuid[]) AND job_id = ANY($2::uuid[])
-              AND status IN ('sent', 'viewed') AND deleted_at IS NULL`, [candidateIds, targetJobIds]),
-      };
-    });
-    if (!loaded) return [];
-    const { best, candidateIds, cpData, profData, jobData, offerData } = loaded;
-
-    const jobMap = new Map<string, { title: string; slug: string }>();
-    for (const r of asRows(jobData)) {
-      jobMap.set(asString(r['id']), { title: asString(r['title']), slug: asString(r['slug']) });
-    }
-    const offerMap = new Map<string, string>();
-    for (const r of asRows(offerData)) {
-      offerMap.set(
-        `${asString(r['candidate_id'])}:${asString(r['job_id'])}`,
-        asString(r['sent_at']) || asString(r['created_at']),
-      );
-    }
-
-    const cpMap = new Map<string, Record<string, unknown>>();
-    for (const r of asRows(cpData)) cpMap.set(asString(r['profile_id']), r);
-    const nameMap = new Map<string, string>();
-    for (const r of asRows(profData)) {
-      nameMap.set(asString(r['id']), fullName(r['first_name'], r['last_name']));
-    }
-
-    return candidateIds.map((candidateId) => {
-      const entry = best.get(candidateId);
-      const cp = cpMap.get(candidateId) ?? {};
-      const occupations = Array.isArray(cp['occupations']) ? (cp['occupations'] as unknown[]) : [];
-      const firstOccupation = asString(occupations[0]);
-      const jobId = entry?.jobId ?? '';
-      const job = jobMap.get(jobId);
-      return {
-        candidateId,
-        jobId,
-        jobTitle: job?.title ?? '',
-        jobSlug: job?.slug ?? '',
-        offerSentAt: offerMap.get(`${candidateId}:${jobId}`) ?? null,
-        name: nameMap.get(candidateId) ?? '',
-        role: asString(cp['headline']) || firstOccupation,
-        city: asString(cp['city']),
-        match: entry?.score ?? 0,
-      };
+      return matchedCandidateCards(tx, matchWinners(matchData).slice(0, 5));
     });
   } catch (error) {
     captureError(error, { area: 'employer.getTopMatchedCandidates' });
     if (options?.throwOnError) throw error;
     return [];
+  }
+}
+
+export const EMPLOYER_CANDIDATES_PAGE_SIZE = 10;
+
+export type MatchedCandidatesLoad =
+  | ({ status: 'ok' } & ListPage<EmployerMatchedCandidate>)
+  | { status: 'disabled' }
+  | { status: 'denied' }
+  | { status: 'unverified' }
+  | { status: 'error' };
+
+/**
+ * Wszyscy dopasowani kandydaci firmy (P1-05) — strony po {@link EMPLOYER_CANDIDATES_PAGE_SIZE}
+ * kursorem (wynik, kandydat) w obu kierunkach (`get_company_matches_page`, 0152). Te same
+ * reguły co top 5: jeden wiersz na kandydata, RLS wywołującego, tylko firma zweryfikowana
+ * (`unverified`) i recruiter+ (`denied`).
+ */
+export async function getMatchedCandidatesPage(
+  request: ListPageRequest<ScoreCursor> = FIRST_PAGE,
+): Promise<MatchedCandidatesLoad> {
+  // #1133: tryb ogłoszeniowy — bez listy kandydatów i bez zapytań (strona i tak daje 404).
+  if (!matchingEnabled()) return { status: 'disabled' };
+  const empty = { status: 'ok' as const, items: [], prevCursor: null, nextCursor: null };
+  if (!isPortalDataConfigured()) {
+    return request.cursor ? empty : { ...empty, items: DEMO_CANDIDATES };
+  }
+
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return empty;
+    const { me, companyId, companyStatus } = ctx;
+    // Jak na pulpicie (P1-14): zwykły `member` i firma przed weryfikacją to jawne stany,
+    // nie pusta lista udająca brak kandydatów.
+    if (!canRecruit(ctx.role)) return { status: 'denied' };
+    if (companyStatus !== 'verified') return { status: 'unverified' };
+
+    return await withPortalTransaction(me, async (tx) => {
+      const winners = matchWinners(await rpcRows(tx, 'get_company_matches_page', {
+        p_company_id: companyId,
+        p_limit: EMPLOYER_CANDIDATES_PAGE_SIZE + 1,
+        p_cursor_score: request.cursor?.score ?? null,
+        p_cursor_candidate: request.cursor?.id ?? null,
+        p_direction: request.direction,
+      }));
+      // Znacznik kolejnej strony nie potrzebuje danych karty — wzbogacamy tylko widoczne wiersze.
+      const page = toListPage(
+        winners,
+        request,
+        EMPLOYER_CANDIDATES_PAGE_SIZE,
+        (w) => encodeScoreCursor({ score: w.score, id: w.candidateId }),
+        (w) => w,
+      );
+      return { status: 'ok' as const, ...page, items: await matchedCandidateCards(tx, page.items) };
+    });
+  } catch (error) {
+    captureError(error, { area: 'employer.getMatchedCandidatesPage' });
+    return { status: 'error' };
   }
 }
 
@@ -993,11 +1398,14 @@ export async function getTopMatchedCandidates(options?: { throwOnError?: boolean
  */
 export type TopMatchedCandidatesLoad =
   | { status: 'ok'; candidates: EmployerMatchedCandidate[] }
+  | { status: 'disabled' }
   | { status: 'denied' }
   | { status: 'unverified' }
   | { status: 'error' };
 
 export async function getTopMatchedCandidatesLoad(): Promise<TopMatchedCandidatesLoad> {
+  // #1133: tryb ogłoszeniowy — sekcja „Top dopasowani” nie istnieje, zapytań brak.
+  if (!matchingEnabled()) return { status: 'disabled' };
   if (!isPortalDataConfigured()) return { status: 'ok', candidates: DEMO_CANDIDATES };
   try {
     const ctx = await loadContext();
@@ -1072,8 +1480,10 @@ async function readFunnelViews(
 export interface JobFunnelMetrics {
   searchAppearances: number;
   detailViews: number;
+  /** Tryb ogłoszeniowy (#1147): kliknięcia „Aplikuj u pracodawcy”; tryb rekrutacyjny: otwarcia formularza. */
   applyStarted: number;
-  applicationsSubmitted: number;
+  /** Brak pola = tryb ogłoszeniowy (#1147): portal nie przyjmuje zgłoszeń, kolumny nie ma. */
+  applicationsSubmitted?: number;
 }
 
 export interface JobFunnelItem extends JobFunnelMetrics {
@@ -1095,16 +1505,24 @@ const DEMO_JOB_FUNNEL: JobFunnelItem[] = [
   { jobId: '12343', title: 'Elektryk przemysłowy', slug: '', status: 'active', searchAppearances: 764, detailViews: 158, applyStarted: 19, applicationsSubmitted: 11 },
 ];
 
-function sumFunnel(jobs: readonly JobFunnelMetrics[]): JobFunnelMetrics {
-  return jobs.reduce<JobFunnelMetrics>(
+function sumFunnel(jobs: readonly JobFunnelMetrics[], withApplications: boolean): JobFunnelMetrics {
+  const totals = jobs.reduce<Required<JobFunnelMetrics>>(
     (acc, job) => ({
       searchAppearances: acc.searchAppearances + job.searchAppearances,
       detailViews: acc.detailViews + job.detailViews,
       applyStarted: acc.applyStarted + job.applyStarted,
-      applicationsSubmitted: acc.applicationsSubmitted + job.applicationsSubmitted,
+      applicationsSubmitted: acc.applicationsSubmitted + (job.applicationsSubmitted ?? 0),
     }),
     { searchAppearances: 0, detailViews: 0, applyStarted: 0, applicationsSubmitted: 0 },
   );
+  return withApplications ? totals : withoutApplicationsSubmitted(totals);
+}
+
+/** Tryb ogłoszeniowy (#1147): metryki bez wysłanych aplikacji — pole znika, a nie „0”. */
+function withoutApplicationsSubmitted<T extends JobFunnelMetrics>(metrics: T): T {
+  const { applicationsSubmitted: _omit, ...rest } = metrics;
+  void _omit;
+  return rest as T;
 }
 
 /**
@@ -1117,8 +1535,10 @@ export async function getJobFunnel(
   now: Date = new Date(),
 ): Promise<JobFunnelLoad> {
   const range = funnelDateRange(days, now);
+  const withApplications = recruitmentStatsEnabled();
   if (!isPortalDataConfigured()) {
-    return { status: 'ok', range, totals: sumFunnel(DEMO_JOB_FUNNEL), jobs: DEMO_JOB_FUNNEL };
+    const jobs = withApplications ? DEMO_JOB_FUNNEL : DEMO_JOB_FUNNEL.map(withoutApplicationsSubmitted);
+    return { status: 'ok', range, totals: sumFunnel(jobs, withApplications), jobs };
   }
   try {
     const ctx = await loadContext();
@@ -1134,9 +1554,10 @@ export async function getJobFunnel(
       searchAppearances: funnelCount(row.search_appearances),
       detailViews: funnelCount(row.detail_views),
       applyStarted: funnelCount(row.apply_started),
-      applicationsSubmitted: funnelCount(row.applications_submitted),
+      // #1147: tryb ogłoszeniowy — kolumnę RPC pomijamy, wynik jej nie zawiera.
+      ...(withApplications ? { applicationsSubmitted: funnelCount(row.applications_submitted) } : {}),
     }));
-    return { status: 'ok', range, totals: sumFunnel(jobs), jobs };
+    return { status: 'ok', range, totals: sumFunnel(jobs, withApplications), jobs };
   } catch (error) {
     captureError(error, { area: 'employer.getJobFunnel' });
     return { status: 'error', range };
@@ -1155,6 +1576,8 @@ export async function getJobFunnel(
  * `null`, gdy użytkownik nie ma uprawnień rekrutera (nie udajemy zera).
  */
 export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStatsLoad> {
+  // #1147: tryb ogłoszeniowy — bez lejka rekrutacyjnego i bez zapytań (także w demo).
+  if (!recruitmentStatsEnabled()) return { status: 'disabled' };
   if (!isPortalDataConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
 
   try {
@@ -1246,8 +1669,6 @@ export type EmployerApplicationDetailLoad =
   | { status: 'not_found' }
   | { status: 'error' };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Kursor historii statusów (`created_at` + `id`, stronicowanie rosnące — #604). */
 export interface ApplicationHistoryCursor {
   createdAt: string;
@@ -1332,7 +1753,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         isGuest: false,
         guestEmail: '',
         historyNextCursor: null,
-        screeningAnswers: extra.screeningAnswers ?? [],
+        screeningAnswers: isRecruitmentEnabled('screening') ? (extra.screeningAnswers ?? []) : [],
       },
     };
   }
@@ -1375,14 +1796,17 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
             `SELECT id, headline, city, experience_years, has_driving_license
                FROM public.candidate_profiles WHERE profile_id = $1 AND deleted_at IS NULL`, [candidateId])
         : null;
-      const matchData = withAccount
+      // #1131: tryb ogłoszeniowy — wynik dopasowania nie jest czytany ani pokazywany.
+      const matchData = withAccount && matchingEnabled()
         ? await queryOne(tx, 'employer.application-detail-match',
             'SELECT score FROM public.matches WHERE candidate_id = $1 AND job_id = $2', [candidateId, jobId])
         : null;
       // application_screening_answers_select (0093): kandydat albo recruiter+ firmy oferty.
-      const answerData = await queryRows(tx, 'employer.application-detail-answers',
-        `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
-           FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id]);
+      const answerData = isRecruitmentEnabled('screening')
+        ? await queryRows(tx, 'employer.application-detail-answers',
+            `SELECT position, type, required, prompt, options, answer_boolean, answer_date, answer_text
+               FROM public.application_screening_answers WHERE application_id = $1 ORDER BY position`, [id])
+        : [];
 
       let relations: { skills: Record<string, unknown>[]; languages: Record<string, unknown>[]; certificates: Record<string, unknown>[] } | null = null;
       if (cpData) {
@@ -1391,8 +1815,10 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
           skills: await queryRows(tx, 'employer.application-detail-skills',
             'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
           languages: await queryRows(tx, 'employer.application-detail-languages',
-            `SELECT language_label, level FROM public.candidate_languages
-              WHERE candidate_profile_id = $1 ORDER BY language_label`, [cpId]),
+            `SELECT cl.language_label, cl.level, lg.code AS language_code
+               FROM public.candidate_languages cl
+               LEFT JOIN public.languages lg ON lg.id = cl.language_id
+              WHERE cl.candidate_profile_id = $1 ORDER BY cl.language_label`, [cpId]),
           certificates: await queryRows(tx, 'employer.application-detail-certificates',
             `SELECT certificate_label FROM public.candidate_certificates
               WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
@@ -1416,7 +1842,7 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
         hasDrivingLicense: cp['has_driving_license'] === true,
         skills: relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
         languages: relations.languages
-          .map((r) => ({ label: asString(r['language_label']), level: asString(r['level']) }))
+          .map((r) => ({ label: asString(r['language_code']) || asString(r['language_label']), level: asString(r['level']) }))
           .filter((l) => l.label),
         certificates: relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
       };
@@ -1455,16 +1881,206 @@ export async function getEmployerApplicationDetail(id: string): Promise<Employer
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * Szczegół kandydata (P1-06)
+ * ------------------------------------------------------------------------- */
+
+export interface EmployerCandidateDetail {
+  candidateId: string;
+  /** Imię i nazwisko tylko przy relacji z firmą (company_can_view_candidate); inaczej pusty. */
+  name: string;
+  profile: {
+    headline: string;
+    city: string;
+    occupations: string[];
+    experienceYears: number | null;
+    availability: string;
+    hasDrivingLicense: boolean;
+    skills: string[];
+    languages: { label: string; level: string }[];
+    certificates: string[];
+  } | null;
+  /** Dopasowania do ofert AKTYWNEJ firmy, od najlepszego (najwyżej 10). */
+  matches: {
+    jobId: string;
+    jobTitle: string;
+    jobSlug: string;
+    score: number;
+    offerSentAt: string | null;
+    /** Propozycję można wysłać tylko do aktywnej, niewygasłej oferty (`send_offer`). */
+    canOffer: boolean;
+  }[];
+  /** Zgłoszenia kandydata do ofert aktywnej firmy, od najnowszego (najwyżej 20). */
+  applications: { id: string; jobTitle: string; status: string; submittedAt: string | null }[];
+}
+
+export type EmployerCandidateDetailLoad =
+  | { status: 'ok'; candidate: EmployerCandidateDetail; isDemo: boolean }
+  | { status: 'disabled' }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+/**
+ * Szczegół kandydata dla AKTYWNEJ firmy — pod sesją/RLS. Kandydat musi mieć z firmą relację
+ * widoczną dla wywołującego: dopasowanie do jej oferty albo zgłoszenie. Brak relacji, brak
+ * uprawnień (member, cudza firma) i nieistniejący kandydat dają ten sam `not_found` — bez
+ * ujawniania istnienia cudzych danych. Profil zawodowy i imię czyta RLS (widoczność profilu,
+ * `company_can_view_candidate`, blokady #97); CV i kontakt z konta nie są tu pokazywane.
+ */
+export async function getEmployerCandidateDetail(candidateId: string): Promise<EmployerCandidateDetailLoad> {
+  // #1133: tryb ogłoszeniowy — bez szczegółu kandydata i bez zapytań (strona i tak daje 404).
+  if (!matchingEnabled()) return { status: 'disabled' };
+  if (!isPortalDataConfigured()) {
+    const demo = DEMO_CANDIDATES.find((c) => c.candidateId === candidateId);
+    if (!demo) return { status: 'not_found' };
+    return {
+      status: 'ok',
+      isDemo: true,
+      candidate: {
+        candidateId: demo.candidateId,
+        name: demo.name,
+        profile: {
+          headline: demo.role, city: demo.city, occupations: demo.role ? [demo.role] : [],
+          experienceYears: null, availability: '', hasDrivingLicense: false, skills: [], languages: [], certificates: [],
+        },
+        matches: [{ jobId: demo.jobId, jobTitle: demo.jobTitle, jobSlug: demo.jobSlug, score: demo.match, offerSentAt: demo.offerSentAt, canOffer: true }],
+        applications: [],
+      },
+    };
+  }
+
+  if (!UUID_RE.test(candidateId)) return { status: 'not_found' };
+
+  try {
+    const ctx = await loadContext();
+    if (!ctx) return { status: 'not_found' };
+    const { me, companyId } = ctx;
+
+    const loaded = await withPortalTransaction(me, async (tx) => {
+      // matches (recruiter+, widoczność kandydata) i applications (recruiter+) pod RLS, zawężone
+      // do ofert aktywnej firmy.
+      const matchRows = await queryRows(tx, 'employer.candidate-detail-matches',
+        `SELECT m.job_id, m.score, j.title, j.slug,
+                (j.status = 'active' AND (j.expires_at IS NULL OR j.expires_at > now())) AS can_offer
+           FROM public.matches m
+           JOIN public.jobs j ON j.id = m.job_id
+          WHERE m.candidate_id = $1 AND j.company_id = $2 AND j.deleted_at IS NULL
+          ORDER BY m.score DESC, m.job_id
+          LIMIT 10`, [candidateId, companyId]);
+      const applicationRows = await queryRows(tx, 'employer.candidate-detail-applications',
+        `SELECT a.id, a.status, a.submitted_at,
+                (SELECT to_json(j) FROM (SELECT jb.title FROM public.jobs jb WHERE jb.id = a.job_id) j) AS jobs
+           FROM public.applications a
+          WHERE a.candidate_id = $1 AND a.company_id = $2 AND a.deleted_at IS NULL
+          ORDER BY a.submitted_at DESC, a.id DESC
+          LIMIT 20`, [candidateId, companyId]);
+      if (matchRows.length === 0 && applicationRows.length === 0) return null;
+
+      const jobIds = matchRows.map((r) => asString(asRecord(r)['job_id'])).filter(Boolean);
+      const offerRows = jobIds.length === 0 ? [] : await queryRows(tx, 'employer.candidate-detail-offers',
+        `SELECT job_id, sent_at, created_at FROM public.offers
+          WHERE candidate_id = $1 AND job_id = ANY($2::uuid[])
+            AND status IN ('sent', 'viewed') AND deleted_at IS NULL
+          ORDER BY COALESCE(sent_at, created_at) DESC`, [candidateId, jobIds]);
+      const nameRow = await queryOne(tx, 'employer.candidate-detail-name',
+        'SELECT first_name, last_name FROM public.profiles WHERE id = $1', [candidateId]);
+      const cpRow = await queryOne(tx, 'employer.candidate-detail-profile',
+        `SELECT id, headline, city, occupations, experience_years, availability, has_driving_license
+           FROM public.candidate_profiles WHERE profile_id = $1 AND deleted_at IS NULL`, [candidateId]);
+      let relations: { skills: Record<string, unknown>[]; languages: Record<string, unknown>[]; certificates: Record<string, unknown>[] } | null = null;
+      if (cpRow) {
+        const cpId = asString(cpRow['id']);
+        relations = {
+          skills: await queryRows(tx, 'employer.candidate-detail-skills',
+            'SELECT skill_label FROM public.candidate_skills WHERE candidate_profile_id = $1 ORDER BY skill_label', [cpId]),
+          languages: await queryRows(tx, 'employer.candidate-detail-languages',
+            `SELECT cl.language_label, cl.level, lg.code AS language_code
+               FROM public.candidate_languages cl
+               LEFT JOIN public.languages lg ON lg.id = cl.language_id
+              WHERE cl.candidate_profile_id = $1 ORDER BY cl.language_label`, [cpId]),
+          certificates: await queryRows(tx, 'employer.candidate-detail-certificates',
+            `SELECT certificate_label FROM public.candidate_certificates
+              WHERE candidate_profile_id = $1 ORDER BY certificate_label`, [cpId]),
+        };
+      }
+      return { matchRows, applicationRows, offerRows, nameRow, cpRow, relations };
+    });
+    if (!loaded) return { status: 'not_found' };
+
+    const offerMap = new Map<string, string>();
+    for (const r of asRows(loaded.offerRows)) {
+      setLatestOfferDate(offerMap, asString(r['job_id']), asString(r['sent_at']) || asString(r['created_at']));
+    }
+    let profile: EmployerCandidateDetail['profile'] = null;
+    if (loaded.cpRow && loaded.relations) {
+      const cp = asRecord(loaded.cpRow);
+      const years = cp['experience_years'];
+      profile = {
+        headline: asString(cp['headline']),
+        city: asString(cp['city']),
+        occupations: Array.isArray(cp['occupations']) ? cp['occupations'].map((o) => asString(o)).filter(Boolean) : [],
+        experienceYears: typeof years === 'number' ? years : null,
+        availability: asString(cp['availability']),
+        hasDrivingLicense: cp['has_driving_license'] === true,
+        skills: loaded.relations.skills.map((r) => asString(r['skill_label'])).filter(Boolean),
+        languages: loaded.relations.languages
+          .map((r) => ({ label: asString(r['language_code']) || asString(r['language_label']), level: asString(r['level']) }))
+          .filter((l) => l.label),
+        certificates: loaded.relations.certificates.map((r) => asString(r['certificate_label'])).filter(Boolean),
+      };
+    }
+
+    return {
+      status: 'ok',
+      isDemo: false,
+      candidate: {
+        candidateId,
+        name: loaded.nameRow ? fullName(loaded.nameRow['first_name'], loaded.nameRow['last_name']) : '',
+        profile,
+        matches: asRows(loaded.matchRows).map((r) => ({
+          jobId: asString(r['job_id']),
+          jobTitle: asString(r['title']),
+          jobSlug: asString(r['slug']),
+          score: asNumber(r['score']),
+          offerSentAt: offerMap.get(asString(r['job_id'])) ?? null,
+          canOffer: r['can_offer'] === true,
+        })),
+        applications: asRows(loaded.applicationRows).map((r) => ({
+          id: asString(r['id']),
+          jobTitle: asString(asEmbeddedRecord(r['jobs'])['title']),
+          status: asString(r['status'], 'submitted'),
+          submittedAt: asString(r['submitted_at']) || null,
+        })),
+      },
+    };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerCandidateDetail' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Jawny wynik odczytu kolejnej strony historii (#770): `ok` obejmuje też legalnie pustą stronę
+ * (zła aplikacja, brak dostępu, koniec historii) — nie ujawniamy istnienia cudzych danych.
+ * `error` to WYŁĄCZNIE awaria techniczna (np. błąd zapytania) — nie wolno jej cicho zamieniać
+ * na pustą stronę, bo UI wtedy usuwa kursor i „Pokaż więcej” tak, jakby historia się skończyła.
+ */
+export type ApplicationHistoryPageLoad =
+  | { status: 'ok'; page: ApplicationHistoryPage }
+  | { status: 'error' };
+
 /**
  * Kolejna strona historii statusów zgłoszenia (#604, „Pokaż więcej") — odczyt pod sesją i RLS,
  * ponownie zawężony do AKTYWNEJ firmy (nie ufamy samemu `applicationId` z klienta, jak w
  * `getEmployerApplicationDetail`). Obca/usunięta aplikacja → pusta strona bez ujawniania istnienia.
+ * Awaria zapytania (#770) → `{ status: 'error' }`, nigdy pusta strona — inaczej pracodawca widzi
+ * niepełną historię jako kompletną, bez komunikatu i możliwości ponowienia.
  */
 export async function getEmployerApplicationHistoryPage(
   applicationId: string,
   cursor: ApplicationHistoryCursor | null = null,
-): Promise<ApplicationHistoryPage> {
-  const empty: ApplicationHistoryPage = { items: [], nextCursor: null };
+): Promise<ApplicationHistoryPageLoad> {
+  const empty: ApplicationHistoryPageLoad = { status: 'ok', page: { items: [], nextCursor: null } };
   if (!UUID_RE.test(applicationId)) return empty;
   if (!isPortalDataConfigured()) return empty;
 
@@ -1486,10 +2102,10 @@ export async function getEmployerApplicationHistoryPage(
           ORDER BY created_at ASC, id ASC
           LIMIT $4`,
         [applicationId, cursor?.createdAt ?? null, cursor?.id ?? null, APPLICATION_HISTORY_PAGE_SIZE + 1]);
-      return pageHistoryRows(rows);
+      return { status: 'ok' as const, page: pageHistoryRows(rows) };
     });
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerApplicationHistoryPage' });
-    return empty;
+    return { status: 'error' };
   }
 }

@@ -5,12 +5,13 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 
 /**
- * Dwa wejścia pod listą najnowszych ofert: „Utwórz profil kandydata” i „Dodaj ofertę pracy”.
+ * Dwa wejścia pod listą najnowszych ofert: konto do zapisywania ofert i wyszukiwań oraz
+ * „Dodaj ofertę pracy” (#1149).
  *
  * Dawniej kafelki pod wyszukiwarką w hero. Prototyp „Ludzie i praca” nie ma ich w hero
  * (wyszukiwarka stoi sama), ale ma kartę `p-profile-note` („Profil zamiast CV”) w sekcji pod
- * ofertami — stąd ten sam wygląd: jasna karta z czerwonym akcentem i linkiem. Cel linków
- * i teksty bez zmian (namespace `home`, klucze cta*). Komponent serwerowy.
+ * ofertami — stąd ten sam wygląd: jasna karta z czerwonym akcentem i linkiem. Teksty:
+ * namespace `home`, klucze cta*. Komponent serwerowy.
  */
 
 const ENTRIES = [

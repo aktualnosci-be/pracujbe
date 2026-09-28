@@ -8,6 +8,11 @@ import pl from '@/messages/pl.json';
 import type { PortalIdentity } from '@/lib/auth/session';
 import { getNotificationsPage, resolveHref, titleKeyForType } from '@/lib/data/notifications';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+
+// Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
+recruitmentModeInTests();
 
 vi.mock('next-intl/server', () => ({ getTranslations: vi.fn() }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());

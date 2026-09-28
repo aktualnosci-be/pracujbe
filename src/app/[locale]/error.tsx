@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useErrorRetry } from '@/components/errors/use-error-retry';
 import { buttonVariants } from '@/components/ui/button';
+import { installClientErrorReporter } from '@/lib/client-error/reporter';
 import { captureError } from '@/lib/error-report';
 
 /**
@@ -13,6 +14,14 @@ import { captureError } from '@/lib/error-report';
  * w obrębie [locale] i pokazuje PRZYJAZNY komunikat z i18n — NIGDY stack trace/technikaliów
  * (Invariant #8). Szczegóły trafiają do kanału błędów (captureError). Renderowana wewnątrz
  * [locale]/layout, więc ma kontekst i18n i chrome.
+ *
+ * #851: `{children}` w layoucie montuje się PRZED `<ClientErrorReporter />` (kolejność
+ * rodzeństwa w Reakcie 19 wykonuje efekty potomków przed rodzicem), więc pierwszy błąd
+ * klienta może trafić tu, zanim `ClientErrorReporter` zdąży zainstalować reporter w swoim
+ * `useEffect`. `captureError` bez reportera cicho nic nie robi i nie ponawia wywołania.
+ * Instalujemy reporter tutaj jawnie — tak samo jak `global-error.tsx` — przed zgłoszeniem;
+ * `installClientErrorReporter` jest idempotentny, więc późniejsza instalacja z
+ * `ClientErrorReporter` (albo wcześniejsza, gdy oba montują się w innej kolejności) jest no-op.
  */
 export default function LocaleError({
   error,
@@ -26,6 +35,7 @@ export default function LocaleError({
   const { retry } = useErrorRetry(reset);
 
   useEffect(() => {
+    installClientErrorReporter();
     captureError(error, { area: 'app.error-boundary', digest: error.digest });
   }, [error]);
 

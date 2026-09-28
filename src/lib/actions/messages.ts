@@ -11,6 +11,7 @@ import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 import { MESSAGE_BODY_MAX_LENGTH } from '@/lib/validation/message';
 import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
@@ -24,7 +25,13 @@ import { MESSAGE_ATTACHMENTS_MAX } from '@/lib/validation/message-attachment';
  * strona firmowa rozmowy (aktywny członek recruiter+) i uczestnictwo ustala baza.
  *
  * Tryb demo (brak konfiguracji bazy/sesji) zwraca sukces-atrapę, aby UI działało bez backendu.
+ *
+ * #1134 — decyzja produktowa: portal ogłoszeniowy. W trybie ogłoszeniowym każda akcja zwraca
+ * `RECRUITMENT_DISABLED` jako PIERWSZY krok (przed walidacją, limiterem, sesją i bazą; także
+ * w demo). Baza (0171) i tak odrzuca nowe rozmowy i wiadomości — to pierwsza linia obrony.
  */
+const DISABLED = { ok: false, error: 'RECRUITMENT_DISABLED' } as const;
+const messagingOff = () => !isRecruitmentEnabled('messaging');
 
 export type MsgResult = { ok: true; id: string } | { ok: false; error: ErrorCode };
 /**
@@ -39,6 +46,8 @@ export type OkResult = { ok: true } | { ok: false; error: ErrorCode };
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // #1140 (0171): baza w trybie ogłoszeniowym odrzuca nowe dane procesu rekrutacyjnego.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED')) return 'VALIDATION_FAILED';
   if (
@@ -66,6 +75,7 @@ export async function openConversation(input: {
   applicationId?: string;
   offerId?: string;
 }): Promise<MsgResult> {
+  if (messagingOff()) return DISABLED;
   const applicationId = input.applicationId || undefined;
   const offerId = input.offerId || undefined;
 
@@ -115,6 +125,7 @@ export async function sendMessage(
   clientMessageId: string,
   attachmentIds: string[] = [],
 ): Promise<SendMessageResult> {
+  if (messagingOff()) return DISABLED;
   // #495: NISS/BIS, PESEL ani numer dokumentu nie są potrzebne w rozmowie z firmą — odmowa
   // przy polu, zanim cokolwiek trafi do bazy (także w trybie demo i przed limitem).
   if (typeof body === 'string' && containsPersonalIdentifier(body)) {
@@ -128,14 +139,34 @@ export async function sendMessage(
 
   if (!isPortalDataConfigured()) return { ok: true, id: 'demo' };
 
-  // Rate limit per IP (60 wiadomości / godz) — ochrona przed spamowaniem konwersacji.
-  if (!(await checkRateLimit('message', { max: 60, windowSeconds: 3600 }))) {
+  // #852: sesja PRZED limitem — anonimowe, poprawnie sformatowane wywołanie nie może zużyć
+  // wspólnego budżetu IP/NAT i zablokować prawdziwych uczestników rozmów za tym samym adresem.
+  // Bez sesji RPC i tak odmawia (UNAUTHENTICATED → PERMISSION_DENIED); sprawdzamy to tu, bez
+  // dotykania jakiegokolwiek licznika.
+  const me = await getPortalIdentity();
+  if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+
+  // Limit biznesowy PER KONTO (60 wiadomości / godz), niezależny od IP (#852): dwa konta za
+  // tym samym adresem mają niezależne budżety, a jedno konto nie omija swojego limitu
+  // zmieniając sieć.
+  if (
+    !(await checkRateLimit('message', {
+      max: 60,
+      windowSeconds: 3600,
+      identifier: me.id,
+      perIp: false,
+    }))
+  ) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
+  // Dodatkowa, znacznie szersza ochrona sieciowa przed automatyzacją wielu kont z jednego
+  // adresu — próg nie blokuje populacji współdzielącej IP po zwykłym użyciu limitu jednej
+  // osoby (#852).
+  if (!(await checkRateLimit('message-ip', { max: 600, windowSeconds: 3600 }))) {
     return { ok: false, error: 'RATE_LIMITED' };
   }
 
   try {
-    const me = await getPortalIdentity();
-    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
     // Ten sam `client_message_id` przy ponowieniu = ta sama wiadomość (idempotencja w RPC, 0075).
     const data = await withPortalTransaction(me, (tx) =>
       rpc(tx, 'send_message', {
@@ -154,6 +185,7 @@ export async function sendMessage(
 
 /** Oznacza konwersację jako przeczytaną (ustawia `last_read_at`, wygasza powiadomienia). */
 export async function markConversationRead(conversationId: string): Promise<OkResult> {
+  if (messagingOff()) return DISABLED;
   if (!isPortalDataConfigured()) return { ok: true };
 
   try {
@@ -191,6 +223,7 @@ export async function loadOlderMessages(
   conversationId: string,
   cursor: unknown,
 ): Promise<OlderMessagesActionResult> {
+  if (messagingOff()) return { status: 'not-found' };
   const parsed = olderMessagesInput.safeParse({ locale, conversationId, cursor });
   if (!parsed.success) return { status: 'error' };
 

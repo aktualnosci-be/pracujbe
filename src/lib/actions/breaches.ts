@@ -4,6 +4,8 @@ import {
   BREACH_LIMITS,
   breachFieldFromDbMessage,
   breachFormErrors,
+  breachFormFromRow,
+  breachFormsMatch,
   breachNoteError,
   breachNotReadyField,
   normalizeBreachForm,
@@ -12,8 +14,13 @@ import {
   type BreachFormErrors,
 } from '@/lib/admin/breach';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
-import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { jsonArg, rpc as callRpc, type RpcArgs } from '@/lib/db/sql';
+import {
+  getPortalIdentity,
+  isPortalDataConfigured,
+  withPortalTransaction,
+  withServiceRole,
+} from '@/lib/db/portal';
+import { jsonArg, queryOne, rpc as callRpc, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { isLocale } from '@/i18n/routing';
 import { captureError } from '@/lib/error-report';
@@ -34,7 +41,7 @@ import { captureError } from '@/lib/error-report';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Błąd specyficzny dla rejestru (komunikat z namespace `admin`). */
-export type BreachProblem = 'closed' | 'notReady' | 'notifyNotDecided';
+export type BreachProblem = 'closed' | 'notReady' | 'notifyNotDecided' | 'clientKeyReused';
 
 export type BreachActionResult<T extends object = Record<never, never>> =
   | ({ ok: true; demo?: boolean } & Partial<T>)
@@ -48,6 +55,13 @@ export type BreachActionResult<T extends object = Record<never, never>> =
       problem?: BreachProblem;
       /** Brakujący krok przed zamknięciem (pole formularza). */
       missing?: string;
+      /**
+       * `problem: 'clientKeyReused'` (#835): klucz idempotencji trafił na już istniejący wpis
+       * z INNĄ treścią niż właśnie wysłana — `id` i `existingVersion` tego wpisu, żeby admin mógł
+       * świadomie zapisać poprawkę jako edycję (CAS po wersji) zamiast po cichu ją utracić.
+       */
+      id?: string;
+      existingVersion?: number;
     };
 
 function mapError(message: string | undefined): BreachActionResult {
@@ -100,7 +114,38 @@ function validForm(input: unknown) {
   return { form, fields, valid: Object.keys(fields).length === 0 };
 }
 
-/** Nowy wpis rejestru. Zwraca identyfikator (także przy ponowieniu z tym samym kluczem). */
+/**
+ * Odczyt istniejącego wpisu (service role — tabela bez grantów dla `authenticated`, #490)
+ * do porównania z właśnie wysłaną treścią po trafieniu na zajęty klucz idempotencji (#835).
+ * Awaria odczytu nie blokuje zapisu — wraca `null`, jakby porównania nie dało się wykonać.
+ */
+async function fetchBreachRecordForCompare(
+  id: string,
+): Promise<{ form: ReturnType<typeof breachFormFromRow>; version: number } | null> {
+  try {
+    const row = await withServiceRole((tx) =>
+      queryOne(tx, 'admin.breach-retry-compare', 'SELECT * FROM public.breach_incidents WHERE id = $1', [id]),
+    );
+    if (!row) return null;
+    const r = row as Record<string, unknown>;
+    const rawVersion = r['version'];
+    const version = typeof rawVersion === 'number' ? rawVersion : Number(rawVersion) || 1;
+    return { form: breachFormFromRow(r), version };
+  } catch (e) {
+    captureError(e, { area: 'admin.createBreachIncident.compare' });
+    return null;
+  }
+}
+
+/**
+ * Nowy wpis rejestru. Zwraca identyfikator (także przy ponowieniu z tym samym kluczem —
+ * podwójne kliknięcie / retry po utraconej odpowiedzi z NIEZMIENIONĄ treścią).
+ *
+ * Gdy klucz trafia na wpis z INNĄ treścią (formularz poprawiono między próbami, #835),
+ * NIE nadpisujemy go po cichu i NIE zwracamy zwykłego sukcesu: `problem: 'clientKeyReused'`
+ * niesie `id`/`existingVersion` istniejącego wpisu, żeby formularz mógł zapisać poprawkę
+ * jako jawną edycję (CAS po wersji) zamiast ją utracić.
+ */
 export async function createBreachIncident(
   clientKey: string,
   input: unknown,
@@ -119,7 +164,18 @@ export async function createBreachIncident(
     if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
     const { data, error } = outcome;
     if (error) return withFormField(mapError(error.message));
-    return typeof data === 'string' ? { ok: true, id: data } : { ok: false, error: 'INTERNAL' };
+    if (typeof data !== 'string') return { ok: false, error: 'INTERNAL' };
+    const existing = await fetchBreachRecordForCompare(data);
+    if (existing && !breachFormsMatch(existing.form, form)) {
+      return {
+        ok: false,
+        error: 'STALE_STATE',
+        problem: 'clientKeyReused',
+        id: data,
+        existingVersion: existing.version,
+      };
+    }
+    return { ok: true, id: data };
   } catch (e) {
     captureError(e, { area: 'admin.createBreachIncident' });
     return { ok: false, error: 'INTERNAL' };

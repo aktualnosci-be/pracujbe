@@ -11,6 +11,7 @@ type Messages = {
     title: string;
     close: string;
     immediate: string;
+    noLanguageRequired: string;
     showResults: string;
   };
   jobs: {
@@ -18,6 +19,8 @@ type Messages = {
     empty: string;
   };
   locations: Record<string, string>;
+  categories: Record<string, string>;
+  contractTypes: Record<string, string>;
 };
 
 function messages(locale: Locale): Messages {
@@ -94,15 +97,71 @@ test('formularz no-JS zachowuje pojedynczą lokalizację spoza facetów przy zer
   await expect(page.getByText(t.jobs.empty)).toBeVisible();
 
   const form = page.locator('[data-filter-passport="no-js"]');
-  const select = form.locator('select[name="location"]');
-  await expect(select).toHaveValue(location);
-  await expect(select.locator(`option[value="${location}"]`)).toHaveCount(1);
+  const checkbox = form.getByRole('checkbox', { name: location, exact: true });
+  await expect(checkbox).toHaveCount(1);
+  await expect(checkbox).toBeChecked();
 
   await form.locator('button[type="submit"]').click();
   await page.waitForLoadState('domcontentloaded');
   expect(new URL(page.url()).searchParams.get('location')).toBe(location);
   await expect(page.getByText(t.jobs.empty)).toBeVisible();
-  await expect(page.locator('select[name="location"]')).toHaveValue(location);
+  await expect(
+    page
+      .locator('[data-filter-passport="no-js"]')
+      .getByRole('checkbox', { name: location, exact: true }),
+  ).toBeChecked();
+
+  await context.close();
+});
+
+test('formularz no-JS pozwala dopisać i usunąć pojedynczą wartość z istniejącego zestawu (#795)', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 320, height: 800 },
+  });
+  const page = await context.newPage();
+  const t = messages('en');
+  const tCat = t.categories;
+
+  // Zestaw startowy: jedna kategoria zaznaczona z URL.
+  await page.goto('/en/oferty-pracy?category=construction');
+  const form = page.locator('[data-filter-passport="no-js"]');
+  const construction = form.getByRole('checkbox', {
+    name: tCat.construction,
+    exact: true,
+  });
+  const transport = form.getByRole('checkbox', {
+    name: tCat.transport,
+    exact: true,
+  });
+  await expect(construction).toBeChecked();
+  await expect(transport).not.toBeChecked();
+
+  // Dopisanie drugiej wartości do zestawu — oba checkboxy zaznaczone, oba trafiają do URL
+  // (GET z przeglądarki koduje dwa zaznaczone checkboxy tej samej nazwy jako powtórzony klucz).
+  await transport.check();
+  await form.locator('button[type="submit"]').click();
+  await page.waitForLoadState('domcontentloaded');
+  expect(
+    [...new URL(page.url()).searchParams.getAll('category')].sort(),
+  ).toEqual(['construction', 'transport']);
+  await expect(construction).toBeChecked();
+  await expect(transport).toBeChecked();
+
+  // Usunięcie jednej wartości z zestawu — druga zostaje zaznaczona i w URL, reszta filtrów
+  // (słowo kluczowe) przechodzi bez zmian, jak w edycji zestawu z głównego panelu.
+  await construction.uncheck();
+  await form.locator('button[type="submit"]').click();
+  await page.waitForLoadState('domcontentloaded');
+  const finalParams = new URL(page.url()).searchParams;
+  expect(finalParams.getAll('category')).toEqual(['transport']);
+  await expect(construction).not.toBeChecked();
+  await expect(transport).toBeChecked();
+  await expect(
+    page.getByRole('heading', { level: 1, name: t.jobs.pageTitle }),
+  ).toBeVisible();
 
   await context.close();
 });
@@ -231,12 +290,38 @@ for (const locale of locales) {
     await expect(
       noJsForm.getByRole('checkbox', { name: t.filters.immediate }),
     ).toBeChecked();
-    await noJsForm.getByRole('checkbox', { name: /.+/ }).last().check();
+    // #795: każda wartość wielokrotnego filtra ma WŁASNY, niezależny checkbox — zestaw
+    // z adresu jest w pełni edytowalny (dopisanie/usunięcie pojedynczej wartości), a nie
+    // tylko zachowywany w całości jako jedna opcja.
+    for (const key of ['construction', 'transport'] as const) {
+      await expect(
+        noJsForm.getByRole('checkbox', { name: t.categories[key], exact: true }),
+      ).toBeChecked();
+    }
+    await expect(
+      noJsForm.getByRole('checkbox', { name: t.categories.warehouse, exact: true }),
+    ).not.toBeChecked();
+    for (const key of ['permanent', 'temporary'] as const) {
+      await expect(
+        noJsForm.getByRole('checkbox', { name: t.contractTypes[key], exact: true }),
+      ).toBeChecked();
+    }
+    await noJsForm
+      .getByRole('checkbox', { name: t.filters.noLanguageRequired, exact: true })
+      .check();
     await noJsForm.locator('button[type="submit"]').click();
     await expect(noJs).toHaveURL(/(?:\?|&)noLang=1(?:&|$)/);
     await noJs.waitForLoadState('domcontentloaded');
     await expect(noJs.locator('html')).toBeAttached();
     const submittedParams = new URL(noJs.url()).searchParams;
+    // #795: kategoria/lokalizacja/rodzaj umowy/zakwaterowanie mają teraz WŁASNY checkbox na
+    // wartość, więc natywny GET wysyła je jako powtórzony klucz (`category=a&category=b`),
+    // nie jako jedną wartość CSV — dokładnie to samo koduje przeglądarka dla realnych
+    // checkboxów, a `flattenSearchParams` łączy je z powrotem po stronie serwera. Kolejność
+    // checkboxów w DOM (alfabetyczna dla lokalizacji) może różnić się od kolejności w adresie
+    // startowym, więc porównanie jest niewrażliwe na kolejność (zestaw, nie CSV).
+    const submittedSet = (key: string): string[] =>
+      [...submittedParams.getAll(key)].sort();
     // #189: formularz pokazuje i odsyła miasta pod nazwą w języku strony (to samo miasto).
     const expectedSubmitted = new URLSearchParams(expectedNoJsParams);
     expectedSubmitted.set(
@@ -244,9 +329,9 @@ for (const locale of locales) {
       `${t.locations['brussels']},${t.locations['antwerp']}`,
     );
     for (const [key, value] of expectedSubmitted) {
-      expect(submittedParams.get(key), key).toBe(value);
+      expect(submittedSet(key), key).toEqual(value.split(',').sort());
     }
-    expect(submittedParams.get('noLang')).toBe('1');
+    expect(submittedSet('noLang')).toEqual(['1']);
     await expectNoHorizontalOverflow(noJs);
     await noJsContext.close();
   });

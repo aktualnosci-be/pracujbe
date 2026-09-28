@@ -1,33 +1,26 @@
 import type { Metadata } from 'next';
-import { ArrowRight, MapPin } from 'lucide-react';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { Link } from '@/i18n/navigation';
 import { PanelStats } from '@/components/dashboard/PanelStats';
 import {
   BTN_PRIMARY,
-  EMPTY,
   EYEBROW,
   H1,
-  ICON_BOX,
   INTRO,
   PANEL,
   PANEL_H2,
-  ROW,
-  ROW_META,
-  ROW_TITLE,
-  SECTION_HEAD,
-  TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { cn } from '@/lib/utils';
-import { MatchBar } from '@/components/ui/match-bar';
+import { CandidateRecommendedPreview } from '@/components/candidate/CandidateRecommendedPreview';
+import { CandidateAccountDashboard } from '@/components/candidate/CandidateAccountDashboard';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
 import { ProfileChecklist } from '@/components/candidate/ProfileChecklist';
 import { ProfileSummaryError } from '@/components/candidate/ProfileSummaryError';
 import { CvUpload } from '@/components/candidate/CvUpload';
-import { SaveJobButton } from '@/components/candidate/SaveJobButton';
 import { CandidateApplicationsPreview } from '@/components/candidate/CandidateApplicationsPreview';
 import { CandidateMessagesPreview } from '@/components/candidate/CandidateMessagesPreview';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
@@ -66,12 +59,6 @@ export async function generateMetadata({
   };
 }
 
-/** Inicjały firmy (placeholder logo). */
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((part) => part.charAt(0).toUpperCase()).join('') || '•';
-}
-
 export default async function CandidateDashboardPage({
   params,
 }: {
@@ -80,27 +67,38 @@ export default async function CandidateDashboardPage({
   const { locale } = await params;
   setRequestLocale(locale);
 
+  // #1142 — decyzja produktowa: portal ogłoszeniowy. Konto bez profilu zawodowego: pulpit
+  // z zapisanymi ofertami i wyszukiwaniami; loadery profilu, CV, zgłoszeń, propozycji
+  // i wiadomości nie są wołane.
+  if (!isRecruitmentEnabled()) return <CandidateAccountDashboard locale={locale} />;
+
   const td = await getTranslations({ locale, namespace: 'dashboard' });
-  const tj = await getTranslations({ locale, namespace: 'jobs' });
   const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
   const tc = await getTranslations({ locale, namespace: 'common' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });
   const tm = await getTranslations({ locale, namespace: 'messages' });
 
+  // #1141/#1144 — decyzja produktowa: portal ogłoszeniowy. Bez trybu RECRUITMENT pulpit nie
+  // czyta zgłoszeń ani propozycji (loadery niewołane) i nie pokazuje ich sekcji.
+  const recruitment = isRecruitmentEnabled();
+  // #1134/#1138: tryb ogłoszeniowy — bez rozmów i bez wgrywania CV na pulpicie (loadery niewywoływane).
+  const messagingOn = isRecruitmentEnabled('messaging');
+  const cvUploadOn = isRecruitmentEnabled('cvAccess');
   const [overview, profile, recommended, applications, messages, files, newProposal] = await Promise.all([
     getCandidateOverview(),
     getCandidateProfileSummary(),
-    getRecommendedJobs(locale),
-    getMyApplicationsPreview(locale),
-    getLatestMessages(),
-    loadCandidateFiles(),
-    getLatestActiveOffer(locale),
+    // #1139: tryb ogłoszeniowy — bez rekomendacji (loader niewywoływany).
+    isRecruitmentEnabled('matching') ? getRecommendedJobs(locale) : Promise.resolve(null),
+    recruitment ? getMyApplicationsPreview(locale) : null,
+    messagingOn ? getLatestMessages() : Promise.resolve(null),
+    cvUploadOn ? loadCandidateFiles() : Promise.resolve(null),
+    recruitment ? getLatestActiveOffer(locale) : null,
   ]);
 
   const overviewFailed =
     overview.newJobsCount === null ||
-    overview.activeApplicationsCount === null ||
-    overview.unreadMessagesCount === null;
+    (recruitment && overview.activeApplicationsCount === null) ||
+    (messagingOn && overview.unreadMessagesCount === null);
 
   const checklist = profileChecklistItems(profile.checklist, td('add'), to);
 
@@ -136,22 +134,28 @@ export default async function CandidateDashboardPage({
             value: overview.newJobsCount ?? '—',
             sub: overview.newJobsCount === null ? td('candidateStatLoadError') : td('newJobsSub'),
           },
-          {
-            label: td('activeApplications'),
-            value: overview.activeApplicationsCount ?? '—',
-            sub:
-              overview.activeApplicationsCount === null
-                ? td('candidateStatLoadError')
-                : td('activeApplicationsSub'),
-          },
-          {
-            label: td('unreadMessages'),
-            value: overview.unreadMessagesCount ?? '—',
-            sub:
-              overview.unreadMessagesCount === null
-                ? td('candidateStatLoadError')
-                : td('unreadMessagesSub'),
-          },
+          ...(recruitment
+            ? [
+                {
+                  label: td('activeApplications'),
+                  value: overview.activeApplicationsCount ?? '—',
+                  sub:
+                    overview.activeApplicationsCount === null
+                      ? td('candidateStatLoadError')
+                      : td('activeApplicationsSub'),
+                },
+              ]
+            : []),
+          ...(messagingOn
+            ? [{
+                label: td('unreadMessages'),
+                value: overview.unreadMessagesCount ?? '—',
+                sub:
+                  overview.unreadMessagesCount === null
+                    ? td('candidateStatLoadError')
+                    : td('unreadMessagesSub'),
+              }]
+            : []),
           profile.loadFailed
             ? { label: td('profileCompleteness'), value: '—', sub: tp('loadError') }
             : { label: td('profileCompleteness'), value: `${profile.completionPct}%` },
@@ -161,77 +165,24 @@ export default async function CandidateDashboardPage({
       {/* `.people .dash-grid` — 1.4fr / 1fr, odstęp 19 px. */}
       <div className={DASH_GRID}>
         <div className={DASH_GRID_MAIN}>
-          {/* Polecane oferty pracy — `.panel` z wierszami `.job` */}
-          <section className={PANEL}>
-            <div className={SECTION_HEAD}>
-              <h2 className={PANEL_H2}>{td('recommendedJobs')}</h2>
-              <Link href="/candidate/oferty-polecane" className={TEXT_LINK}>
-                {td('seeAll')}
-                <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </div>
-            {recommended.length === 0 ? (
-              <p className={EMPTY}>{tj('empty')}</p>
-            ) : (
-              <ul className="min-w-0">
-                {recommended.map((job) => (
-                  <li key={job.id} className={ROW}>
-                    <span className={ICON_BOX} aria-hidden="true">
-                      {initials(job.companyName)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          {job.slug ? (
-                            <h3 className={ROW_TITLE}>
-                              <Link
-                                href={`/oferty-pracy/${job.slug}`}
-                                className="break-words hover:text-primary hover:underline"
-                              >
-                                {job.title}
-                              </Link>
-                            </h3>
-                          ) : (
-                            <h3 className={ROW_TITLE}>{job.title}</h3>
-                          )}
-                          <p className={ROW_META}>
-                            {job.companyName}
-                            <span aria-hidden="true"> · </span>
-                            <span className="inline-flex items-center gap-1">
-                              <MapPin className="size-3 shrink-0" aria-hidden="true" />
-                              {job.city}
-                            </span>
-                          </p>
-                        </div>
-                        <SaveJobButton jobId={job.id} initialSaved={job.saved} className="-mt-1" />
-                      </div>
-                      {job.match !== null ? (
-                        <span className="mt-2.5 flex min-w-[7rem] max-w-[14rem] items-center gap-2">
-                          <span className="w-9 shrink-0 text-right text-xs font-semibold tabular-nums text-success-text">
-                            {job.match}%
-                          </span>
-                          <MatchBar value={job.match} className="flex-1" />
-                        </span>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          {/* Polecane oferty pracy — `.panel` z wierszami `.job`. #1139: w trybie ogłoszeniowym
+              sekcji nie ma (portal nie wybiera ofert na podstawie profilu; bez sekcji zastępczej). */}
+          <CandidateRecommendedPreview locale={locale} recommended={recommended} />
 
-          {/* Moje ostatnie aplikacje */}
-          <CandidateApplicationsPreview
-            result={applications}
-            locale={locale}
-            labels={{
-              title: td('myApplications'),
-              seeAll: td('seeAll'),
-              empty: td('noApplications'),
-              loadError: td('candidateApplicationsLoadError'),
-              retry: td('candidateListRetry'),
-            }}
-          />
+          {/* Moje ostatnie aplikacje (tylko tryb RECRUITMENT, #1144) */}
+          {applications ? (
+            <CandidateApplicationsPreview
+              result={applications}
+              locale={locale}
+              labels={{
+                title: td('myApplications'),
+                seeAll: td('seeAll'),
+                empty: td('noApplications'),
+                loadError: td('candidateApplicationsLoadError'),
+                retry: td('candidateListRetry'),
+              }}
+            />
+          ) : null}
         </div>
 
         {/* Kolumna boczna */}
@@ -251,14 +202,18 @@ export default async function CandidateDashboardPage({
             </Link>
           </section>}
 
-          {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-          <CvUpload
-            items={files.status === 'ready' ? files.items : []}
-            loadFailed={files.status === 'error'}
-          />
+          {/* Dokumenty / CV (prywatny bucket + signed URLs). #1138: w trybie ogłoszeniowym bez
+              sekcji — istniejące pliki (pobranie/usunięcie) są w profilu. */}
+          {files ? (
+            <CvUpload
+              items={files.status === 'ready' ? files.items : []}
+              loadFailed={files.status === 'error'}
+              allowUpload
+            />
+          ) : null}
 
-          {/* Najnowsze wiadomości */}
-          <CandidateMessagesPreview
+          {/* Najnowsze wiadomości. #1134: w trybie ogłoszeniowym bez sekcji. */}
+          {messages ? <CandidateMessagesPreview
             result={messages}
             locale={locale}
             labels={{
@@ -269,7 +224,7 @@ export default async function CandidateDashboardPage({
               seeAll: td('seeAllMessages'),
               unread: tm('unreadBadge'),
             }}
-          />
+          /> : null}
         </div>
       </div>
     </div>

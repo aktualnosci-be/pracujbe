@@ -30,6 +30,9 @@ import { cn } from '@/lib/utils';
 import { AdminStatusBadge } from '@/components/admin/AdminStatusBadge';
 import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
+import { AgencyCheckActions } from '@/components/admin/AgencyCheckActions';
+import { agencyCheckFocusKey } from '@/lib/admin/focus';
+import { CompanyLinksReviewActions } from '@/components/admin/CompanyLinksReviewActions';
 
 /**
  * Panel administratora — szczegół firmy (#310).
@@ -37,7 +40,9 @@ import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
  * Decyzja o weryfikacji nie zapada „na ślepo”: dane rejestrowe (VAT, KBO, kontakt, adres),
  * uzasadnienie ostatniego odrzucenia/zawieszenia, członkowie firmy (rola, aktywny dostęp)
  * i najnowsze oferty. Sekcja VIES (#92): ostatni wynik weryfikacji numeru VAT z datą i ręczne
- * ponowienie — informacja pomocnicza, status firmy zmienia wyłącznie admin. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
+ * ponowienie — informacja pomocnicza, status firmy zmienia wyłącznie admin. Strona WWW i logo
+ * (0156): propozycja firmy czeka tu na decyzję („Zatwierdź” publikuje adresy w ofertach
+ * i profilu firmy, „Odrzuć” wymaga uzasadnienia) — `CompanyLinksReviewActions`. Akcje statusu te same co na liście (`CompanyStatusActions` → dialog
  * z wymaganym uzasadnieniem dla odrzucenia/zawieszenia → RPC 0084: powiadomienie i e-mail
  * do właściciela w JEGO języku, wpis w dzienniku). Po decyzji fokus na nagłówku strony (#415).
  *
@@ -219,8 +224,124 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
         ) : null}
       </section>
 
+      {/* Strona WWW i logo — propozycja firmy do decyzji (0156) */}
+      <section aria-labelledby="company-links-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-links-heading" className={PANEL_H2}>
+            {t('sectionCompanyLinks')}
+          </h2>
+          {company.linksReview ? (
+            <span
+              className={cn(
+                TAG,
+                company.linksReview.status === 'pending' ? 'bg-warning/10 text-warning-text' : 'bg-error/10 text-error-text',
+              )}
+            >
+              {t(company.linksReview.status === 'pending' ? 'companyLinksStatusPending' : 'companyLinksStatusRejected')}
+            </span>
+          ) : null}
+        </div>
+        <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label={t('companyLinksPublishedWebsite')} value={company.website ?? dash} />
+          <Field label={t('companyLinksPublishedLogo')} value={company.logoUrl ?? dash} />
+          {company.linksReview ? (
+            <>
+              <Field
+                label={t('companyLinksProposedWebsite')}
+                value={company.linksReview.website ?? t('companyLinksRemoved')}
+              />
+              <Field
+                label={t('companyLinksProposedLogo')}
+                value={company.linksReview.logoUrl ?? t('companyLinksRemoved')}
+              />
+              <Field
+                label={t('companyLinksSubmittedAt')}
+                value={formatDate(company.linksReview.submittedAt)}
+              />
+              {company.linksReview.reason ? (
+                <Field label={t('statusReasonLabel')} value={company.linksReview.reason} />
+              ) : null}
+            </>
+          ) : null}
+        </dl>
+        {company.linksReview?.status === 'pending' && company.linksReview.submittedAt ? (
+          <div className="mt-6 border-t border-border pt-5">
+            <p className={cn(PANEL_P, 'mb-3')}>{t('companyLinksReviewHint')}</p>
+            <CompanyLinksReviewActions
+              companyId={company.id}
+              submittedAt={company.linksReview.submittedAt}
+              websiteLabel={company.linksReview.website ?? t('companyLinksRemoved')}
+              logoUrlLabel={company.linksReview.logoUrl ?? t('companyLinksRemoved')}
+            />
+          </div>
+        ) : !company.linksReview ? (
+          <p className={cn(PANEL_P, 'mt-4')}>{t('companyLinksNoProposal')}</p>
+        ) : null}
+      </section>
+
       {/* Weryfikacja VAT w VIES (#92) */}
       <CompanyViesCheck companyId={company.id} initial={company.vies} />
+
+      {/* 0167: agencja pracy tymczasowej — numer uznania sprawdzany ręcznie w rejestrze regionu */}
+      <section aria-labelledby="company-agency-heading" className={PANEL} data-testid="admin-company-agency">
+        <div className={SECTION_HEAD}>
+          <h2
+            id="company-agency-heading"
+            tabIndex={-1}
+            data-admin-focus={agencyCheckFocusKey(company.id)}
+            className={cn(PANEL_H2, 'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+          >
+            {t('sectionAgency')}
+          </h2>
+          {company.agency.isAgency ? (
+            <span
+              className={cn(
+                TAG,
+                company.agency.checkStatus === 'confirmed'
+                  ? 'bg-success/10 text-success-text'
+                  : company.agency.checkStatus === 'not_confirmed'
+                    ? 'bg-error/10 text-error-text'
+                    : 'bg-warning/10 text-warning-text',
+              )}
+            >
+              {t(
+                company.agency.checkStatus === 'confirmed'
+                  ? 'agencyStatusConfirmed'
+                  : company.agency.checkStatus === 'not_confirmed'
+                    ? 'agencyStatusNotConfirmed'
+                    : 'agencyStatusUnchecked',
+              )}
+            </span>
+          ) : null}
+        </div>
+        {company.agency.isAgency ? (
+          <>
+            <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label={t('agencyCheckNumber')} value={company.agency.recognitionNumber ?? dash} />
+              <Field
+                label={t('agencyCheckedAt')}
+                value={company.agency.checkedAt ? formatDate(company.agency.checkedAt) : dash}
+              />
+              {company.agency.checkNote ? (
+                <Field label={t('agencyCheckNoteLabel')} value={company.agency.checkNote} />
+              ) : null}
+            </dl>
+            {company.agency.recognitionNumber ? (
+              <div className="mt-6 border-t border-border pt-5">
+                <p className={cn(PANEL_P, 'mb-3')}>{t('agencyCheckHint')}</p>
+                <AgencyCheckActions
+                  companyId={company.id}
+                  recognitionNumber={company.agency.recognitionNumber}
+                />
+              </div>
+            ) : (
+              <p className={cn(PANEL_P, 'mt-4')}>{t('agencyNoNumber')}</p>
+            )}
+          </>
+        ) : (
+          <p className={PANEL_P}>{t('agencyNotDeclared')}</p>
+        )}
+      </section>
 
       <div className="grid min-w-0 grid-cols-[1.4fr_1fr] gap-[19px] max-[1050px]:grid-cols-1">
         {/* Członkowie (`.panel` z wierszami `.job`) */}
@@ -271,6 +392,14 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
               <p className={PANEL_P}>
                 {t('jobsShown', { shown: company.jobs.length, total: company.jobsTotal })}
               </p>
+            ) : null}
+            {company.jobsTotal > 0 ? (
+              <Link
+                href={{ pathname: '/admin/oferty', query: { firma: company.id } }}
+                className={cn(TEXT_LINK, 'text-sm')}
+              >
+                {t('companyJobsAllLink')}
+              </Link>
             ) : null}
           </div>
           {company.jobs.length === 0 ? (

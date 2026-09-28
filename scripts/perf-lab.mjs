@@ -15,15 +15,24 @@
 //   E2E_PORT=3517 node scripts/perf-lab.mjs                   # własny serwer na 3617
 //   node scripts/perf-lab.mjs --base http://localhost:3000    # istniejący serwer
 // Zajęty port bez --base = błąd (nie mierzymy cudzego serwera).
+// Tryb produktu (#1136, #1166): LCP/CLS/TBT i INP-proxy listy ofert mierzymy w trybie
+// ogłoszeniowym (CLASSIFIEDS_ONLY = tryb produkcyjny portalu), a INP otwarcia ApplyModal —
+// jedynego dialogu rekrutacyjnego — w trybie RECRUITMENT. Bez --base skrypt uruchamia kolejno
+// dwa serwery `next start` na tym samym porcie (najpierw ogłoszeniowy, potem rekrutacyjny).
+// Z --base: podany serwer musi być w trybie ogłoszeniowym, a ApplyModal mierzymy tylko
+// z --recruitment-base <url> (serwer RECRUITMENT); bez niego ten pomiar jest pominięty.
+// Tryb każdego serwera jest sprawdzany na szczególe oferty (przycisk „Aplikuj u pracodawcy”
+// = ogłoszeniowy) — serwer w złym trybie = błąd, nie cichy pomiar innej strony.
 // Chromium: PLAYWRIGHT_CHROMIUM_PATH (np. /opt/pw-browsers/chromium) albo `playwright install`.
 import { spawn } from "node:child_process";
 import {
   appendFileSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { e2eBaseUrl, e2ePort } from "./lib/e2e-server.mjs";
@@ -51,10 +60,16 @@ const pl = JSON.parse(
 );
 const injectClickDelayMs = Number(argValue("--inject-click-delay-ms") ?? 0);
 const PORT = e2ePort("perfLab");
-const base = (argValue("--base") ?? e2eBaseUrl("perfLab")).replace(
+const ownServer = !argValue("--base");
+const classifiedsBase = (argValue("--base") ?? e2eBaseUrl("perfLab")).replace(
   /\/$/,
   "",
 );
+const recruitmentBase = ownServer
+  ? classifiedsBase
+  : argValue("--recruitment-base")?.replace(/\/$/, "");
+// Serwer bieżącej fazy pomiaru (openPage, firstLink, fakeCandidateViewer).
+let base = classifiedsBase;
 
 const CONSENT_COOKIE = {
   name: "pracujbe_consent",
@@ -403,31 +418,75 @@ async function measureInteraction(browser, scenario) {
 
 let server;
 let serverExit;
-async function main() {
-  if (!argValue("--base")) {
-    if (await answers(base)) {
-      throw new Error(
-        `Port ${PORT} jest zajęty przez inny serwer — ustaw inny E2E_PORT albo podaj --base.`,
-      );
-    }
-    server = spawn(
-      process.execPath,
-      ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)],
-      {
-        stdio: ["ignore", "ignore", "inherit"],
-        env: { ...process.env, PORT: String(PORT) },
-      },
+
+/** Własny `next start` w danym trybie produktu (#1136) na porcie PORT. */
+async function startServer(mode) {
+  if (await answers(base)) {
+    throw new Error(
+      `Port ${PORT} jest zajęty przez inny serwer — ustaw inny E2E_PORT albo podaj --base.`,
     );
-    server.on("exit", (code) => {
-      serverExit = code;
-    });
   }
+  // Strony ISR wyrenderowane przez serwer w innym trybie (poprzednia faza, wcześniejszy krok
+  // Playwright na tym buildzie) leżą w pamięci podręcznej na dysku (`isr-cache-handler.mjs`) —
+  // nowy serwer podałby je zamiast wyrenderować stronę w swoim trybie.
+  rmSync(join(process.cwd(), ".next", "cache", "isr-handler"), {
+    recursive: true,
+    force: true,
+  });
+  serverExit = undefined;
+  server = spawn(
+    process.execPath,
+    ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)],
+    {
+      stdio: ["ignore", "ignore", "inherit"],
+      env: { ...process.env, PORT: String(PORT), PORTAL_LEGAL_MODE: mode },
+    },
+  );
+  server.on("exit", (code) => {
+    serverExit = code;
+  });
   await waitForServer(`${base}/pl`, 60_000);
+}
+
+async function stopServer() {
+  if (!server) return;
+  const current = server;
+  server = undefined;
+  if (serverExit === undefined) {
+    const exited = new Promise((resolve) => current.once("exit", resolve));
+    current.kill("SIGTERM");
+    await Promise.race([exited, sleep(10_000)]);
+  }
+  // Port wolny, zanim wystartuje serwer kolejnej fazy.
+  for (let i = 0; i < 40 && (await answers(base)); i += 1) await sleep(250);
+}
+
+/**
+ * Tryb serwera widać na szczególe oferty: w trybie ogłoszeniowym jest „Aplikuj u pracodawcy”
+ * (`employer-apply-primary`), w RECRUITMENT — pasek z „Aplikuj teraz” (ApplyModal).
+ */
+async function assertServerMode(detail, expected) {
+  const html = await (await fetch(`${base}${detail}`)).text();
+  const actual = html.includes('data-testid="employer-apply-primary"')
+    ? "CLASSIFIEDS_ONLY"
+    : "RECRUITMENT";
+  if (actual !== expected)
+    throw new Error(
+      `Serwer ${base} jest w trybie ${actual}, a pomiar wymaga ${expected} (PORTAL_LEGAL_MODE).`,
+    );
+}
+
+async function main() {
+  // Faza 1: tryb ogłoszeniowy (produkcja) — LCP/CLS/TBT stron publicznych i INP-proxy listy.
+  base = classifiedsBase;
+  if (ownServer) await startServer("CLASSIFIEDS_ONLY");
+  else await waitForServer(`${base}/pl`, 60_000);
 
   const detail = await firstLink(
     "/pl/oferty-pracy",
     /href="(\/pl\/oferty-pracy\/[a-z0-9-]+)"/,
   );
+  await assertServerMode(detail, "CLASSIFIEDS_ONLY");
   const guide = await firstLink(
     "/pl/poradniki",
     /href="(\/pl\/poradniki\/[a-z0-9-]+)"/,
@@ -457,20 +516,24 @@ async function main() {
   const interactions = [
     {
       name: "otwarcie filtrów",
+      mode: "CLASSIFIEDS_ONLY",
       path: "/pl/oferty-pracy",
       trigger: '[data-filter-passport="mobile-trigger"]',
       done: '[data-filter-passport="mobile-sheet"]',
     },
     {
       name: "zapis oferty",
+      mode: "CLASSIFIEDS_ONLY",
       path: "/pl/oferty-pracy",
       trigger: "button.pp-save",
       done: 'button.pp-save[aria-pressed="true"]',
       fakeCandidate: true,
     },
+    // Ścieżka szczegółu ustalana w fazie 2 (serwer RECRUITMENT).
     {
       name: "otwarcie ApplyModal",
-      path: detail,
+      mode: "RECRUITMENT",
+      path: null,
       trigger: '[data-testid="job-mobile-cta-bar"] button',
       triggerName: pl.jobs.applyNow,
       done: '[role="dialog"]',
@@ -478,22 +541,56 @@ async function main() {
   ];
   const samples = new Map(scenarios.map((s) => [s, []]));
   const interactionSamples = new Map(interactions.map((s) => [s, []]));
+  const skipped = [];
   const browser = await launchChromium();
   const started = Date.now();
   try {
     // Próby przeplatane (runda po rundzie), żeby chwilowe obciążenie runnera nie trafiło
     // wszystkich prób jednej strony.
+    const phase1 = interactions.filter((s) => s.mode === "CLASSIFIEDS_ONLY");
     for (let run = 0; run < runs; run += 1) {
       for (const scenario of scenarios) {
         samples
           .get(scenario)
           .push(await measure(browser, scenario.path, scenario.withConsent));
       }
-      for (const scenario of interactions) {
+      for (const scenario of phase1) {
         interactionSamples
           .get(scenario)
           .push(await measureInteraction(browser, scenario));
       }
+    }
+
+    // Faza 2: tryb RECRUITMENT — tylko INP otwarcia ApplyModal.
+    const phase2 = interactions.filter((s) => s.mode === "RECRUITMENT");
+    if (ownServer) {
+      await stopServer();
+      await startServer("RECRUITMENT");
+    } else if (recruitmentBase) {
+      base = recruitmentBase;
+      await waitForServer(`${base}/pl`, 60_000);
+    }
+    if (ownServer || recruitmentBase) {
+      const recruitmentDetail = await firstLink(
+        "/pl/oferty-pracy",
+        /href="(\/pl\/oferty-pracy\/[a-z0-9-]+)"/,
+      );
+      await assertServerMode(recruitmentDetail, "RECRUITMENT");
+      for (let i = 0; i < 2; i += 1)
+        await (await fetch(`${base}${recruitmentDetail}`)).text();
+      for (const scenario of phase2) scenario.path = recruitmentDetail;
+      for (let run = 0; run < runs; run += 1) {
+        for (const scenario of phase2) {
+          interactionSamples
+            .get(scenario)
+            .push(await measureInteraction(browser, scenario));
+        }
+      }
+    } else {
+      for (const scenario of phase2) skipped.push(scenario);
+      console.warn(
+        "Pominięto INP otwarcia ApplyModal: podaj --recruitment-base <url> (serwer PORTAL_LEGAL_MODE=RECRUITMENT).",
+      );
     }
   } finally {
     await browser.close();
@@ -523,11 +620,12 @@ async function main() {
     };
   });
 
-  const interactionResults = interactions.map((scenario) => {
+  const interactionResults = interactions.filter((s) => !skipped.includes(s)).map((scenario) => {
     const values = interactionSamples.get(scenario);
     const inp = median(values.map((v) => v.inp));
     return {
       interaction: scenario.name,
+      mode: scenario.mode,
       path: scenario.path,
       inp,
       samples: values,
@@ -548,9 +646,10 @@ async function main() {
     ]),
   );
   const interactionTable = markdownTable(
-    ["interakcja", "strona", "INP-proxy ms", "próby ms", "wynik"],
+    ["interakcja", "tryb", "strona", "INP-proxy ms", "próby ms", "wynik"],
     interactionResults.map((r) => [
       r.interaction,
+      r.mode,
       `\`${r.path}\``,
       String(Math.round(r.inp)),
       r.samples.map((v) => Math.round(v.inp)).join("/"),
@@ -566,7 +665,9 @@ async function main() {
       : "") +
     `. CPU ${config.cpuThrottling}×, ` +
     `${config.network.downloadKbps / 1000} Mb/s, RTT ${config.network.latencyMs} ms, ` +
-    `${config.viewport.width}×${config.viewport.height}. Pomiar ${Math.round((Date.now() - started) / 1000)} s.`;
+    `${config.viewport.width}×${config.viewport.height}. Strony: tryb CLASSIFIEDS_ONLY (produkcja)` +
+    (skipped.length ? `; pominięto: ${skipped.map((s) => s.name).join(", ")}` : "") +
+    `. Pomiar ${Math.round((Date.now() - started) / 1000)} s.`;
   console.log(`${table}\n\n${interactionTable}\n\n${note}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(
@@ -622,5 +723,5 @@ try {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 } finally {
-  server?.kill("SIGTERM");
+  await stopServer();
 }
