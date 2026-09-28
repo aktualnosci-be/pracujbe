@@ -101,8 +101,11 @@ export interface EmployerJob {
   pastExpiry: boolean;
   /** Publiczny adres oferty (link „Zobacz ofertę" dla aktywnej, #325). */
   slug: string;
-  /** `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). */
-  newApplications: number | null;
+  /**
+   * `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). Brak pola = tryb ogłoszeniowy
+   * (#1147/#1144): licznika zgłoszeń przy ofercie nie ma, lista nie czyta `applications`.
+   */
+  newApplications?: number | null;
   /**
    * `null` = brak uprawnień rekrutera do dopasowań (nie zero). Brak pola = tryb ogłoszeniowy
    * (#1133): kolumny dopasowań nie ma, lista nie czyta `matches`.
@@ -249,6 +252,13 @@ function withoutMatchedCount(overview: EmployerOverview): EmployerOverview {
 /** Oferta bez licznika dopasowań (tryb ogłoszeniowy). */
 function withoutMatched(job: EmployerJob): EmployerJob {
   const { matched: _omit, ...rest } = job;
+  void _omit;
+  return rest;
+}
+
+/** Oferta bez licznika zgłoszeń (tryb ogłoszeniowy, #1147). */
+function withoutNewApplications(job: EmployerJob): EmployerJob {
+  const { newApplications: _omit, ...rest } = job;
   void _omit;
   return rest;
 }
@@ -628,6 +638,10 @@ export interface JobDraftValues {
   jointCommittee: string;
   companyDescription: string;
   contactEmail: string;
+  /** #1129 (0172): kanał aplikowania u ogłoszeniodawcy (puste = brak). */
+  applyUrl: string;
+  applyEmail: string;
+  applyPhone: string;
   /** #101: pytania screeningowe — wczytywane, bo krok 7 zapisuje je replace-all. */
   screeningQuestions: ScreeningQuestionDraft[];
 }
@@ -767,6 +781,9 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       ...EMPTY_JOB_COSTS_INITIAL,
       companyDescription: 'Firma demonstracyjna z branży logistycznej.',
       contactEmail: '',
+      applyUrl: 'https://example.com/praca',
+      applyEmail: '',
+      applyPhone: '',
       screeningQuestions: [],
     },
   };
@@ -800,7 +817,8 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 accommodation_kind, accommodation_cost::text AS accommodation_cost,
                 accommodation_cost_period, accommodation_deducted, accommodation_registration,
                 accommodation_after_contract, transport_shuttle, transport_reimbursed,
-                meal_voucher_daily::text AS meal_voucher_daily, joint_committee
+                meal_voucher_daily::text AS meal_voucher_daily, joint_committee,
+                apply_url, apply_email, apply_phone
            FROM public.jobs
           WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`, [jobId, companyId]);
       if (!job) return null;
@@ -905,6 +923,9 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         ...jobCostsInitial(job),
         companyDescription: asString(tr['company_description']),
         contactEmail: asString(job['contact_email']),
+        applyUrl: asString(job['apply_url']),
+        applyEmail: asString(job['apply_email']),
+        applyPhone: asString(job['apply_phone']),
         screeningQuestions: parseScreeningQuestions(screening).map((q) => ({
           type: q.type,
           required: q.required,
@@ -945,7 +966,11 @@ export async function getCompanyJobsLoad(
     const demoJobs = DEMO_JOBS.slice(0, EMPLOYER_JOBS_PAGE_SIZE);
     return {
       status: 'ok',
-      jobs: request.cursor ? [] : matchingEnabled() ? demoJobs : demoJobs.map(withoutMatched),
+      jobs: request.cursor
+        ? []
+        : demoJobs
+            .map((job) => (matchingEnabled() ? job : withoutMatched(job)))
+            .map((job) => (recruitmentStatsEnabled() ? job : withoutNewApplications(job))),
       prevCursor: null,
       nextCursor: null,
     };
@@ -961,15 +986,17 @@ export async function getCompanyJobsLoad(
     const recruiter = canRecruit(ctx.role);
     // #1133: tryb ogłoszeniowy — bez podzapytania do `matches` i bez pola `matched`.
     const matching = matchingEnabled();
+    // #1147: tryb ogłoszeniowy — bez podzapytania do `applications` i bez pola `newApplications`.
+    const applications = recruitmentStatsEnabled();
 
     // Strona + znacznik kolejnej w kierunku odczytu. Liczniki liczone w bazie (count pod RLS) —
     // bez przesyłania wierszy aplikacji/dopasowań; błąd licznika = błąd całej listy.
     const rows = await withPortalTransaction(me, (tx) =>
       queryRows(tx, prev ? 'employer.jobs-page-prev' : 'employer.jobs-page',
-        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at,
+        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at${applications ? `,
                 (SELECT count(*) FROM public.applications a
                   WHERE a.company_id = $1 AND a.job_id = j.id
-                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications${matching ? `,
+                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications` : ''}${matching ? `,
                 (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched` : ''}
            FROM public.jobs j
           WHERE j.company_id = $1 AND j.deleted_at IS NULL
@@ -993,7 +1020,7 @@ export async function getCompanyJobsLoad(
           status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
           pastExpiry: isPastExpiry(expiresAt, now),
           slug: asString(r['slug']),
-          newApplications: recruiter ? asNumber(r['new_applications']) : null,
+          ...(applications ? { newApplications: recruiter ? asNumber(r['new_applications']) : null } : {}),
           ...(matching ? { matched: recruiter ? asNumber(r['matched']) : null } : {}),
           createdAt: asString(r['created_at']) || null,
         };

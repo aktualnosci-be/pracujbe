@@ -26,7 +26,8 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
 type Messages = {
-  dashboard: Record<'listingStatsTitle' | 'funnelTitle' | 'newApplications' | 'messagesToAnswer' | 'funnelDetails', string>;
+  dashboard: Record<'listingStatsTitle' | 'funnelTitle' | 'newApplications' | 'messagesToAnswer' | 'funnelDetails'
+    | 'employerOffersApplicationsLabel', string>;
   jobFunnel: Record<'applyClicks' | 'applicationsSubmitted' | 'applyStarted' | 'consentNoteListing', string>;
 };
 const messages = (locale: string): Messages =>
@@ -70,8 +71,8 @@ for (const locale of LOCALES) {
     await expect(section.getByRole('link', { name: t.dashboard.funnelDetails })).toHaveAttribute('href', `/${locale}/employer/statystyki`);
     const main = page.getByRole('main');
     await expect(main.getByText(t.jobFunnel.applyClicks, { exact: true })).toBeVisible();
-    // Liczniki zgłoszeń przy kartach ofert (`EmployerOffersPreview`) to osobny obszar (#1144).
-    for (const text of [t.dashboard.funnelTitle, t.dashboard.messagesToAnswer]) {
+    for (const text of [t.dashboard.funnelTitle, t.dashboard.newApplications, t.dashboard.messagesToAnswer,
+      t.dashboard.employerOffersApplicationsLabel]) {
       await expect(main.getByText(text, { exact: true })).toHaveCount(0);
     }
   });

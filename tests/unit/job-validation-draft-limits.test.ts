@@ -55,6 +55,7 @@ describe("kreator oferty: szkic kroku 9 bez zgody na publikację (#193)", () => 
   const step9 = {
     companyDescription: "Rodzinna firma logistyczna z Antwerpii.",
     contactEmail: "hr@example.be",
+    applyEmail: "praca@example.be",
   };
 
   it("szkic przechodzi bez zgody i ze zgodą odznaczoną", () => {

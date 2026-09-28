@@ -125,6 +125,25 @@ describe('#1147: loadery statystyk w trybie ogłoszeniowym', () => {
     expect(processCalls()).toEqual([]);
   });
 
+  it('lista ofert bez licznika zgłoszeń i bez podzapytania do applications', async () => {
+    fakeDb.rows('employer.jobs-page', [{
+      id: JOB, title: 'Magazynier', city: 'Gent', status: 'active', slug: 'magazynier',
+      expires_at: null, created_at: '2026-09-20T10:00:00Z',
+    }]);
+    const jobs = await employer.getCompanyJobsLoad();
+    expect(jobs.status === 'ok' && jobs.jobs[0]).not.toHaveProperty('newApplications');
+    expect(fakeDb.callsTo('employer.jobs-page')[0]!.text).not.toMatch(PROCESS_TABLES);
+    recruitment();
+    fakeDb.rows('employer.jobs-page', [{
+      id: JOB, title: 'Magazynier', city: 'Gent', status: 'active', slug: 'magazynier',
+      expires_at: null, created_at: '2026-09-20T10:00:00Z', new_applications: 2, matched: 1,
+    }]);
+    const recruitmentJobs = await employer.getCompanyJobsLoad();
+    // Kontrola ujemna: tryb RECRUITMENT liczy zgłoszenia przy ofercie.
+    expect(recruitmentJobs.status === 'ok' && recruitmentJobs.jobs[0]?.newApplications).toBe(2);
+    expect(fakeDb.callsTo('employer.jobs-page')[1]!.text).toMatch(/public\.applications/);
+  });
+
   it('lejek rekrutacyjny → disabled bez żadnego zapytania', async () => {
     await expect(employer.getFunnelStats()).resolves.toEqual({ status: 'disabled' });
     expect(fakeDb.calls).toEqual([]);

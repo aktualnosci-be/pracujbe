@@ -700,7 +700,8 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- Uzupełnienie wymaganych danych (jak kreator: tytuł/miasto/region + tłumaczenie + wymaganie).
-update public.jobs set title = 'Operator produkcji', city = 'Antwerpia', region = 'Flandria'
+update public.jobs set title = 'Operator produkcji', city = 'Antwerpia', region = 'Flandria',
+                       apply_email = 'praca@firma-a.be'
   where id = 'e1111111-1111-1111-1111-111111111111';
 -- Tłumaczenie z NIEPUSTYM opisem i obowiązkami (P1-11: twardsza walidacja publikacji, 0042).
 insert into public.job_translations(job_id, locale, title, description, responsibilities)
@@ -1272,6 +1273,7 @@ reset role; reset app.current_uid;
 reset role;
 insert into public.jobs (id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values ('a2222222-2222-2222-2222-222222222222', :'COMPA', 'draft-gg', 'Nowa oferta', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+update public.jobs set apply_url = 'https://firma-a.be/praca' where id = 'a2222222-2222-2222-2222-222222222222';
 insert into public.job_translations (job_id, locale, title, description, responsibilities)
   values ('a2222222-2222-2222-2222-222222222222', 'pl', 'Nowa oferta', 'Dłuższy opis stanowiska magazynowego.', array['Obsługa magazynu']);
 insert into public.job_requirements (job_id, kind, locale, content, position)
@@ -2258,7 +2260,7 @@ select set_config('pb.rr_ok', $j${
           "salary_max": 18, "currency": "EUR", "salary_period": "hour",
           "min_experience_years": 1, "requires_driving_license": false,
           "no_language_required": true, "accommodation": true, "transport": false,
-          "contact_email": "hr@firma-a.be"},
+          "contact_email": "hr@firma-a.be", "apply_url": "https://firma-a.be/praca"},
   "translation": {"description": "Praca na magazynie w Gandawie, zmiana nocna, stała ekipa.",
                   "responsibilities": ["Kompletacja zamówień", "Załadunek"],
                   "conditions": ["Umowa przez agencję"], "benefits": ["Dodatek nocny", "Parking"],
@@ -3625,6 +3627,8 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   (:'EXJ6',:'COMPA','ex72-6','Oferta EX6','warehouse','permanent','Antwerpia','Flandria','active','pl', null),
   (:'EXJ7',:'COMPA','ex72-7','Oferta EX7','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '2 hours'),
   (:'EXJ8',:'COMPA','ex72-8','Oferta EX8','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '3 hours');
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
+update public.jobs set apply_email = 'praca@example.be' where id in (:'EXJ3');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'EXJ3', 'pl', 'Oferta EX3', 'Opis oferty magazynowej EX3.', array['Kompletacja']),
   (:'EXJ4', 'pl', 'Oferta EX4', 'Opis oferty magazynowej EX4.', array['Kompletacja']);
@@ -7015,6 +7019,8 @@ reset role; reset app.current_uid;
 insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
   (:'SRJOB', :'COMPA', :'EMPA', 'draft-sr497', 'Magazynier SR', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
   (:'SRJOB2', :'COMPA', :'EMPA', 'draft-sr497-2', 'Kierowca SR', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
+update public.jobs set apply_email = 'praca@example.be' where id in (:'SRJOB', :'SRJOB2');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'SRJOB', 'pl', 'Magazynier SR', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień']),
   (:'SRJOB2', 'pl', 'Kierowca SR', 'Transport międzynarodowy.', array['Dostawy']);
@@ -16198,6 +16204,8 @@ insert into public.jobs(id, company_id, created_by, slug, title, category, contr
           'Flandria', 'draft', 'nl', 16, 18, 'hour', 'hr@jd.be', true, false),
          (:'JOBJD2', :'COMPJD', :'OWNJD', 'draft-jd216-2', 'Kierowca JD', 'transport', 'permanent', 'Gandawa',
           'Flandria', 'draft', 'pl', null, null, 'month', null, false, false);
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
+update public.jobs set apply_email = 'praca@example.be' where id in (:'JOBJD', :'JOBJD2');
 insert into public.job_translations(job_id, locale, title, description, responsibilities, benefits, highlights, meta_title) values
   (:'JOBJD', 'nl', 'Operator JD', 'Werk in het magazijn.', array['Orderpicking'], array['Nachtpremie'], array['Nachtpremie'], 'SEO JD'),
   (:'JOBJD', 'pl', 'Operator JD PL', 'Tłumaczenie AI.', array['Kompletacja'], '{}', '{}', null);
@@ -16456,6 +16464,8 @@ reset role; reset app.current_uid;
 -- CB2: szkic zapisuje koszty w save_job_draft (krok 8 — jeden patch).
 insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
   values (:'CBDRAFT', :'COMPA', 'draft-cb169', 'Magazynier CB169', 'warehouse', 'temporary', 'Gent', 'Flandria', 'draft', 'pl');
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
+update public.jobs set apply_email = 'praca@example.be' where id in (:'CBDRAFT');
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.save_job_draft(:'CBDRAFT'::uuid, $j${"job": {
   "accommodation": true, "transport": true, "accommodation_kind": "provided",
@@ -17065,6 +17075,8 @@ insert into public.company_members(company_id, profile_id, role, is_active) valu
 insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
   (:'FTJOB', :'FTCOMP', :'EMPA', 'draft-ft910', 'Magazynier FT', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl'),
   (:'FTJOB2', :'FTCOMP', :'EMPA', 'draft-ft910-2', 'Kierowca FT', 'transport', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+-- 0172: kanał aplikowania (publikacja go wymaga — sekcja AC172).
+update public.jobs set apply_email = 'praca@example.be' where id in (:'FTJOB', :'FTJOB2');
 insert into public.job_translations(job_id, locale, title, description, responsibilities) values
   (:'FTJOB', 'pl', 'Magazynier FT', 'Praca w magazynie w Gandawie.', array['Kompletacja zamówień']),
   (:'FTJOB2', 'pl', 'Kierowca FT', 'Transport krajowy. Wynagrodzenie przelewem co tydzień.', array['Dostawy']);
@@ -17175,7 +17187,7 @@ reset role; reset app.current_uid;
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.update_published_job(:'FTJOB'::uuid, $j${
   "job": {"title": "Magazynier FT", "category": "warehouse", "contract_type": "permanent",
-          "city": "Gandawa", "region": "Flandria"},
+          "city": "Gandawa", "region": "Flandria", "apply_email": "praca@firma-a.be"},
   "translation": {"description": "Praca w magazynie. Napisz na Telegram, zapłać zaliczkę za mieszkanie.",
                   "responsibilities": ["Kompletacja zamówień"]},
   "requirements_mandatory": ["Dyspozycyjność"]
@@ -17899,6 +17911,156 @@ select pg_temp.assert((select count(*) = 0 from public.get_conversation_template
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- AC172. Kanał aplikowania u ogłoszeniodawcy (0172, #1129): CHECK formatu (URL https,
+--        e-mail bez parametrów mailto, telefon +cyfry), publikacja i rewizja wymagają co
+--        najmniej jednego kanału (JOB_APPLY_CHANNEL_REQUIRED), save_job_draft zapisuje
+--        klucze, get_public_job zwraca kanał wyłącznie dla oferty publicznej.
+-- ============================================================================
+\set ACJOB  'e9500000-0000-0000-0000-0000000000a1'
+\set ACJOB2 'e9500000-0000-0000-0000-0000000000a2'
+\set ACCOMP 'e9500000-0000-0000-0000-0000000000f1'
+reset role; reset app.current_uid;
+update public.companies set status = 'verified' where id = :'COMPA';
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'ACJOB', :'COMPA', :'EMPA', 'draft-ac172', 'Magazynier AC', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'ACJOB', 'pl', 'Magazynier AC', 'Praca w magazynie w Gandawie, zmiana dzienna.', array['Kompletacja zamówień']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'ACJOB', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- AC1: CHECK odrzuca niepoprawne wartości na każdej ścieżce (tu bezpośredni DML superusera).
+select pg_temp.expect_error(format('update public.jobs set apply_url = %L where id = %L', 'http://firma.be/praca', :'ACJOB'),
+  'jobs_apply_url_format', 'AC1a http:// odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_url = %L where id = %L', 'javascript:alert(1)', :'ACJOB'),
+  'jobs_apply_url_format', 'AC1b javascript: odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_url = %L where id = %L', '/praca/aplikuj', :'ACJOB'),
+  'jobs_apply_url_format', 'AC1c adres względny odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_url = %L where id = %L', 'https://firma.be/' || repeat('a', 2040), :'ACJOB'),
+  'jobs_apply_url_format', 'AC1d adres ponad 2048 znaków odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_url = %L where id = %L', ' https://firma.be/praca', :'ACJOB'),
+  'jobs_apply_url_format', 'AC1e adres z białym znakiem na brzegu odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_url = %L where id = %L', 'https://firma.be:0/praca', :'ACJOB'),
+  'jobs_apply_url_format', 'AC1f port 0 odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_email = %L where id = %L', 'praca(at)firma.be', :'ACJOB'),
+  'jobs_apply_email_format', 'AC1g niepoprawny e-mail odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_email = %L where id = %L', 'praca@firma.be?subject=x', :'ACJOB'),
+  'jobs_apply_email_format', 'AC1h e-mail z parametrem mailto odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_email = %L where id = %L', 'mailto:praca@firma.be', :'ACJOB'),
+  'jobs_apply_email_format', 'AC1i prefiks mailto: odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_email = %L where id = %L', repeat('a', 65) || '@firma.be', :'ACJOB'),
+  'jobs_apply_email_format', 'AC1j część lokalna ponad 64 znaki odrzucona');
+select pg_temp.expect_error(format('update public.jobs set apply_phone = %L where id = %L', '0470 12 34 56', :'ACJOB'),
+  'jobs_apply_phone_format', 'AC1k telefon bez formatu międzynarodowego odrzucony');
+select pg_temp.expect_error(format('update public.jobs set apply_phone = %L where id = %L', '+3247012345678901', :'ACJOB'),
+  'jobs_apply_phone_format', 'AC1l telefon ponad 15 cyfr odrzucony');
+select pg_temp.assert(
+  public.job_apply_url_ok('https://firma.be/praca?ref=pracuj#form')
+  and public.job_apply_url_ok('https://jobs.firma.be:8443/a')
+  and public.job_apply_email_ok('praca.hr+be@firma-a.be')
+  and public.job_apply_phone_ok('+32470123456')
+  and not public.job_apply_url_ok('https://localhost/praca')
+  and not public.job_apply_email_ok('praca@firma'),
+  'AC1m reguły przyjmują poprawne wartości i odrzucają graniczne');
+
+-- AC1n (kontrola ujemna): bez CHECK ten sam http:// przechodzi (cofnięte).
+begin;
+alter table public.jobs drop constraint jobs_apply_url_format;
+update public.jobs set apply_url = 'http://firma.be/praca' where id = :'ACJOB';
+select pg_temp.assert((select apply_url from public.jobs where id = :'ACJOB') = 'http://firma.be/praca',
+  'AC1n kontrola ujemna: bez CHECK adres http:// zostaje zapisany');
+rollback;
+
+-- AC2: szkic bez kanału nie publikuje się; stan bez zmian.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', :'ACJOB', 'ac172'),
+  'JOB_APPLY_CHANNEL_REQUIRED', 'AC2 publish_job bez kanału → JOB_APPLY_CHANNEL_REQUIRED');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.jobs where id = :'ACJOB') = 'draft',
+  'AC2b oferta bez kanału pozostaje szkicem');
+
+-- AC2c (kontrola ujemna): definicja publish_job bez sprawdzenia kanału (jak 0085) publikuje (cofnięte).
+begin;
+do $$
+declare d text;
+begin
+  d := pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure);
+  d := regexp_replace(d, 'if not v_has_channel then.*?end if;', '', 's');
+  if d like '%JOB_APPLY_CHANNEL_REQUIRED%' then raise exception 'AC2c: nie udało się usunąć sprawdzenia'; end if;
+  execute d;
+end $$;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.publish_job(:'ACJOB'::uuid, 'ac172-bez-kanalu') is not null as ok \gset ac2c_
+reset role;
+select pg_temp.assert((select status::text from public.jobs where id = :'ACJOB') = 'active',
+  'AC2c kontrola ujemna: bez sprawdzenia kanału szkic bez kanału staje się aktywny');
+rollback;
+reset role; reset app.current_uid;
+
+-- AC3: save_job_draft zapisuje kanał (krok 9), niepoprawny format odrzuca CHECK.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'ACJOB'::uuid,
+  '{"job": {"apply_url": " https://firma-a.be/praca ", "apply_email": "", "apply_phone": "+32470123456"}}'::jsonb);
+select pg_temp.expect_error(format('select public.save_job_draft(%L::uuid, %L::jsonb)', :'ACJOB',
+    '{"job": {"apply_email": "praca@firma.be?cc=x"}}'),
+  'jobs_apply_email_format', 'AC3b save_job_draft: niepoprawny e-mail odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select apply_url = 'https://firma-a.be/praca' and apply_email is null and apply_phone = '+32470123456'
+     from public.jobs where id = :'ACJOB'),
+  'AC3 save_job_draft zapisuje przycięty URL i telefon, pusty e-mail = brak');
+
+-- AC4: z kanałem publikacja przechodzi; get_public_job zwraca kanał.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.publish_job(:'ACJOB'::uuid, 'magazynier-ac172') as ac_slug \gset
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text from public.jobs where id = :'ACJOB') = 'active',
+  'AC4 publish_job z kanałem → active');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select apply_url = 'https://firma-a.be/praca' and apply_email is null and apply_phone = '+32470123456'
+     from public.get_public_job(:'ac_slug', 'pl')),
+  'AC4b get_public_job zwraca kanał oferty publicznej');
+reset role;
+
+-- AC5: rewizja opublikowanej oferty zmienia kanał, ale nie może go usunąć.
+select set_config('pb.ac_base', jsonb_set(current_setting('pb.rr_ok')::jsonb, '{job}',
+  (current_setting('pb.rr_ok')::jsonb -> 'job') - 'apply_url' || $j${"title": "Magazynier AC",
+   "apply_email": "praca@firma-a.be", "accommodation": false}$j$::jsonb)::text, false);
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'ACJOB'::uuid, current_setting('pb.ac_base')::jsonb) is not null as ok \gset ac5_
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb)', :'ACJOB',
+    ((current_setting('pb.ac_base')::jsonb) #- '{job,apply_email}')::text),
+  'JOB_APPLY_CHANNEL_REQUIRED', 'AC5b rewizja bez kanału odrzucona');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select apply_email = 'praca@firma-a.be' and apply_url is null and apply_phone is null and status = 'active'
+     from public.jobs where id = :'ACJOB'),
+  'AC5 rewizja zapisuje nowy kanał; odrzucona rewizja nie zmienia oferty');
+-- AC5c: bezpośredni zapis kanału opublikowanej oferty przez klienta zablokowany (0077).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('update public.jobs set apply_email = null where id = %L', :'ACJOB'),
+  'JOB_NOT_DRAFT', 'AC5c klient nie czyści kanału opublikowanej oferty bezpośrednim UPDATE');
+reset role; reset app.current_uid;
+select pg_temp.assert((select apply_email from public.jobs where id = :'ACJOB') = 'praca@firma-a.be',
+  'AC5d kanał opublikowanej oferty bez zmian po próbie bezpośredniego UPDATE');
+
+-- AC6: get_public_job nie zwraca kanału szkicu ani oferty firmy niezweryfikowanej.
+insert into public.companies(id, name, status) values (:'ACCOMP', 'Firma AC niezweryfikowana', 'pending');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale,
+                        apply_email, published_at) values
+  (:'ACJOB2', :'ACCOMP', 'ac172-pending', 'Oferta AC2', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'active', 'pl',
+   'praca@ac2.be', now());
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, apply_email)
+  values ('e9500000-0000-0000-0000-0000000000a3', :'COMPA', 'draft-ac172-3', 'Szkic AC3', 'warehouse', 'permanent',
+          'Gandawa', 'Flandria', 'draft', 'pl', 'praca@firma-a.be');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_public_job('ac172-pending', 'pl')) = 0
+  and (select count(*) from public.get_public_job('draft-ac172-3', 'pl')) = 0,
+  'AC6 get_public_job bez kanału dla firmy niezweryfikowanej i szkicu');
+reset role;
+
+-- ============================================================================
 -- CL1128 / PLM — tryb portalu ogłoszeniowego w bazie (#1140, #1143; migracja 0171)
 -- Tryb ogłoszeniowy (CLASSIFIEDS_ONLY): nowe dane procesu rekrutacyjnego odrzucane przez
 -- bazę (RPC i bezpośredni INSERT, także service_role), firma nie widzi danych procesu,
@@ -18314,5 +18476,29 @@ reset role; reset app.current_uid;
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql SS1148: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
 reset role;
+-- AC172-7: w trybie ogłoszeniowym (0171) publikacja nadal wymaga kanału, a z kanałem przechodzi
+-- (kanał wymagany we wszystkich trybach — decyzja właściciela 28.09.2026). Cofnięte.
+begin;
+set local role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql AC172-7', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'AC172-7a tryb ogłoszeniowy na czas sekcji');
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  ('e9500000-0000-0000-0000-0000000000a7', :'COMPA', :'EMPA', 'draft-ac172-7', 'Magazynier AC7', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  ('e9500000-0000-0000-0000-0000000000a7', 'pl', 'Magazynier AC7', 'Praca w magazynie w Gandawie, zmiana dzienna.', array['Kompletacja zamówień']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  ('e9500000-0000-0000-0000-0000000000a7', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.publish_job('e9500000-0000-0000-0000-0000000000a7'::uuid, 'ac172-7')$$,
+  'JOB_APPLY_CHANNEL_REQUIRED', 'AC172-7b tryb ogłoszeniowy: publikacja bez kanału odrzucona');
+select public.save_job_draft('e9500000-0000-0000-0000-0000000000a7'::uuid, '{"job": {"apply_email": "praca@firma-a.be"}}'::jsonb);
+select public.publish_job('e9500000-0000-0000-0000-0000000000a7'::uuid, 'ac172-7') is not null as ok \gset ac7_
+reset role;
+select pg_temp.assert((select status::text from public.jobs where id = 'e9500000-0000-0000-0000-0000000000a7') = 'active',
+  'AC172-7c tryb ogłoszeniowy: publikacja z kanałem → active');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'AC172-7d po cofnięciu tryb testów bez zmian');
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

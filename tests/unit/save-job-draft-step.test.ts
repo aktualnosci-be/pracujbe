@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateJobDraft } from '@/lib/actions/jobs';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+
+/** Najnowsza migracja definiująca `save_job_draft` (numer tymczasowy nie psuje testu). */
+function latestSaveJobDraftMigration(): string {
+  const dir = join(process.cwd(), 'supabase/migrations');
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .filter((f) => readFileSync(join(dir, f), 'utf8').includes('function public.save_job_draft('))
+    .at(-1)!;
+}
+
 
 /**
  * #192 — każdy krok kreatora zapisuje się JEDNYM transakcyjnym RPC `save_job_draft` (0083).
@@ -43,10 +54,10 @@ const STEPS: Record<number, unknown> = {
   9: { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be' },
 };
 
-/** Lista dozwolonych pól z ciała `save_job_draft` w najnowszej migracji (0169, wcześniej 0083). */
+/** Lista dozwolonych pól z ciała `save_job_draft` w najnowszej migracji. */
 function allowedKeys(): { job: Set<string>; translation: Set<string> } {
   const sql = readFileSync(
-    join(process.cwd(), 'supabase/migrations/0169_job_costs_benefits.sql'),
+    join(process.cwd(), 'supabase/migrations', latestSaveJobDraftMigration()),
     'utf8',
   );
   const lists = [...sql.matchAll(/k not in \(([^)]*)\)/g)].map(

@@ -5,6 +5,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { execute, queryOne, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Server Actions panelu KANDYDATA — zapisywane pod sesją użytkownika (transakcja sesji
@@ -97,6 +98,8 @@ export async function toggleSavedJob(
 
 /** Wycofuje aplikację kandydata (status → 'withdrawn'). */
 export async function withdrawApplication(applicationId: string): Promise<WithdrawResult> {
+  // #1144: portal ogłoszeniowy — przed walidacją i bazą (także w trybie demo).
+  if (!isRecruitmentEnabled('applications')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
   if (typeof applicationId !== 'string' || !UUID_RE.test(applicationId)) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }

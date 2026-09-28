@@ -76,6 +76,7 @@ import {
   step8PublishSchema,
   step8Schema,
   step9DraftSchema,
+  step9PublishedSchema,
   step9Schema,
   JOB_ITEM_LIMITS,
 } from '@/lib/validation/job';
@@ -208,6 +209,10 @@ interface FormValues {
   // krok 9 — firma i publikacja
   companyDescription: string;
   contactEmail: string;
+  // #1129 (0172): kanał aplikowania u ogłoszeniodawcy
+  applyUrl: string;
+  applyEmail: string;
+  applyPhone: string;
   agreePublish: boolean;
 }
 
@@ -258,6 +263,9 @@ const DEFAULT_VALUES: FormValues = {
   jointCommittee: '',
   companyDescription: '',
   contactEmail: '',
+  applyUrl: '',
+  applyEmail: '',
+  applyPhone: '',
   agreePublish: false,
 };
 
@@ -280,7 +288,7 @@ const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
     'mealVoucherDaily',
     'jointCommittee',
   ],
-  9: ['companyDescription', 'contactEmail', 'agreePublish'],
+  9: ['companyDescription', 'applyUrl', 'applyEmail', 'applyPhone', 'contactEmail', 'agreePublish'],
 };
 
 const SCHEMAS = {
@@ -409,6 +417,9 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
       return {
         companyDescription: v.companyDescription,
         contactEmail: toOptionalText(v.contactEmail),
+        applyUrl: toOptionalText(v.applyUrl),
+        applyEmail: toOptionalText(v.applyEmail),
+        applyPhone: toOptionalText(v.applyPhone),
         agreePublish: v.agreePublish,
       };
   }
@@ -539,6 +550,9 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
   transport: { step: 8, label: 'transportLabel' },
   companyDescription: { step: 9, label: 'companyDescriptionLabel' },
   contactEmail: { step: 9, label: 'contactEmailLabel' },
+  applyUrl: { step: 9, label: 'applyUrlLabel' },
+  applyEmail: { step: 9, label: 'applyEmailLabel' },
+  applyPhone: { step: 9, label: 'applyPhoneLabel' },
 };
 
 /** Zawężenie surowych wartości z DB do unii formularza (nieznane wartości → domyślne/puste). */
@@ -896,7 +910,10 @@ export function JobWizard({
     // kosztu i informacji o potrąceniu (decyzja właściciela 28.09.2026); szkic może być niepełny.
     const schema =
       current === 9 && intent === 'draft'
-        ? step9DraftSchema
+        ? // Edycja opublikowanej oferty: kanał aplikowania nadal wymagany (#1129).
+          isEdit
+          ? step9PublishedSchema
+          : step9DraftSchema
         : current === 8 && (intent === 'publish' || isEdit)
           ? step8PublishSchema
           : SCHEMAS[current];
@@ -1042,6 +1059,7 @@ export function JobWizard({
       const res = await updatePublishedJob(initialJobId, stepsData, editVersion);
       if (!res.ok) {
         setSaveError(res.error);
+        if (res.error === 'JOB_APPLY_CHANNEL_REQUIRED') markApplyChannelMissing();
         setSaveState('error');
         return;
       }
@@ -1104,6 +1122,8 @@ export function JobWizard({
       const res = await publishJob(id);
       if (!res.ok) {
         setPublishError(res.error);
+        // Baza odrzuciła brak kanału (#1129) — komunikat także przy polu kroku 9.
+        if (res.error === 'JOB_APPLY_CHANNEL_REQUIRED') markApplyChannelMissing();
         setScreeningReviews(res.screening ?? []);
         setContentReview(res.contentReview ?? null);
         return;
@@ -1113,6 +1133,17 @@ export function JobWizard({
       setPublishError('INTERNAL');
     } finally {
       setPublishing(false);
+    }
+  }
+
+  /** Błąd „brak kanału aplikowania” przy pierwszym polu kanału kroku 9 (fokus jak #160). */
+  function markApplyChannelMissing(): void {
+    const fields = new Set(['applyUrl']);
+    setError('applyUrl', { type: 'validate', message: 'job.error.applyChannelRequired' });
+    if (step === 9) scrollToFirstError(9, fields);
+    else {
+      pendingErrorsRef.current = fields;
+      setStep(9);
     }
   }
 
@@ -1989,6 +2020,54 @@ export function JobWizard({
                 />
                 <FieldError name="companyDescription" />
               </div>
+              {/* #1129 (0172): kanał aplikowania u ogłoszeniodawcy — co najmniej jeden przy publikacji. */}
+              <fieldset className={`${FORM_WIDE} ${FORM_GRID} min-w-0`} data-testid="job-apply-channel-fieldset">
+                <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('applyChannelLegend')}</legend>
+                <p id={`${domId('applyUrl')}-hint`} className={`${P_EXTENDED} ${FORM_WIDE}`}>{t('applyChannelHint')}</p>
+                <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                  <Label htmlFor={domId('applyUrl')} className={FORM_LABEL_TEXT}>{t('applyUrlLabel')}</Label>
+                  <Input
+                    className={FORM_INPUT}
+                    id={domId('applyUrl')}
+                    type="url"
+                    inputMode="url"
+                    autoComplete="url"
+                    placeholder={t('applyUrlPlaceholder')}
+                    aria-invalid={errors.applyUrl ? true : undefined}
+                    aria-describedby={[`${domId('applyUrl')}-hint`, errorDescription('applyUrl')].filter(Boolean).join(' ')}
+                    {...register('applyUrl')}
+                  />
+                  <FieldError name="applyUrl" />
+                </div>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('applyEmail')} className={FORM_LABEL_TEXT}>{t('applyEmailLabel')}</Label>
+                  <Input
+                    className={FORM_INPUT}
+                    id={domId('applyEmail')}
+                    type="email"
+                    autoComplete="email"
+                    placeholder={t('applyEmailPlaceholder')}
+                    aria-invalid={errors.applyEmail ? true : undefined}
+                    aria-describedby={errorDescription('applyEmail')}
+                    {...register('applyEmail')}
+                  />
+                  <FieldError name="applyEmail" />
+                </div>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor={domId('applyPhone')} className={FORM_LABEL_TEXT}>{t('applyPhoneLabel')}</Label>
+                  <Input
+                    className={FORM_INPUT}
+                    id={domId('applyPhone')}
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder={t('applyPhonePlaceholder')}
+                    aria-invalid={errors.applyPhone ? true : undefined}
+                    aria-describedby={errorDescription('applyPhone')}
+                    {...register('applyPhone')}
+                  />
+                  <FieldError name="applyPhone" />
+                </div>
+              </fieldset>
               <div className={FORM_FIELD}>
                 <Label htmlFor={domId('contactEmail')} className={FORM_LABEL_TEXT}>{t('contactEmailLabel')}</Label>
                 <Input
@@ -1997,9 +2076,10 @@ export function JobWizard({
                   type="email"
                   placeholder={t('contactEmailPlaceholder')}
                   aria-invalid={errors.contactEmail ? true : undefined}
-                  aria-describedby={errorDescription('contactEmail')}
+                  aria-describedby={[`${domId('contactEmail')}-hint`, errorDescription('contactEmail')].filter(Boolean).join(' ')}
                   {...register('contactEmail')}
                 />
+                <p id={`${domId('contactEmail')}-hint`} className={P_EXTENDED}>{t('contactEmailHint')}</p>
                 <FieldError name="contactEmail" />
               </div>
 

@@ -135,8 +135,9 @@ test('pracodawca: firma zweryfikowana przez admina, oferta opublikowana pod sesj
   jobId = await employer.request(async (tx) => {
     const [draft] = rows<{ id: string }>(await tx.query(
       `INSERT INTO public.jobs (company_id, created_by, slug, default_locale, title, status, category,
-         contract_type, city, region)
-       VALUES ($1, auth.uid(), $2, 'nl', $3, 'draft', 'logistics', 'permanent', 'Antwerpen', 'Vlaanderen')
+         contract_type, city, region, apply_email)
+       VALUES ($1, auth.uid(), $2, 'nl', $3, 'draft', 'logistics', 'permanent', 'Antwerpen', 'Vlaanderen',
+               'jobs@example.com')
        RETURNING id`, [companyId, `draft-${uuid()}`, JOB_TITLE]));
     await tx.query(
       `INSERT INTO public.job_translations (job_id, locale, title, description, responsibilities)
