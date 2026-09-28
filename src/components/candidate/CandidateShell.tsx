@@ -18,6 +18,12 @@ import { usePathname } from '@/i18n/navigation';
 import { SessionKeepAlive } from '@/components/auth/SessionKeepAlive';
 import { DashboardShell, type DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
+import {
+  CANDIDATE_NAV_HREF as HREF,
+  candidateNavKeys,
+  isOnboardingPath,
+  type CandidateNavKey,
+} from '@/lib/candidate-nav';
 
 /**
  * CandidateShell — chrome panelu kandydata (makieta 04): jasny sidebar `.side-item` + topbar
@@ -32,18 +38,6 @@ import type { NotificationItem } from '@/components/dashboard/NotificationsDropd
  * Dane użytkownika/powiadomień są DEMO (backend niepodpięty) — TODO(data).
  */
 
-/** Ścieżki nawigacji panelu (bez prefiksu locale — dokłada go next-intl Link). */
-const HREF = {
-  summary: '/candidate',
-  recommended: '/candidate/oferty-polecane',
-  saved: '/candidate/zapisane',
-  searches: '/candidate/wyszukiwania',
-  applications: '/candidate/aplikacje',
-  proposals: '/candidate/propozycje',
-  messages: '/candidate/wiadomosci',
-  profile: '/candidate/profil',
-  settings: '/candidate/ustawienia',
-} as const;
 
 export interface CandidateShellProps {
   children: React.ReactNode;
@@ -90,8 +84,9 @@ export function CandidateShell({
   const td = useTranslations('dashboard');
   const pathname = usePathname();
 
-  // Onboarding ma własny (lekki) layout — nie owijaj panelem.
-  if (pathname === '/candidate/onboarding' || pathname.startsWith('/candidate/onboarding/')) {
+  // Onboarding ma własny (lekki) layout — nie owijaj panelem. #1142: w trybie ogłoszeniowym
+  // kreatora nie ma (404), więc strona błędu renderuje się w zwykłym panelu.
+  if (recruitmentEnabled && isOnboardingPath(pathname)) {
     return (
       <>
         {keepSessionAlive ? <SessionKeepAlive /> : null}
@@ -100,24 +95,23 @@ export function CandidateShell({
     );
   }
 
-  const nav: DashboardNavItem[] = [
-    { href: HREF.summary, label: td('navSummary'), icon: <LayoutDashboard /> },
-    // #1133/#1139: tryb ogłoszeniowy (domyślny) — bez pozycji rekrutacyjnej.
-    ...(recruitmentEnabled ? [{ href: HREF.recommended, label: td('navRecommended'), icon: <FileText /> }] : []),
-    { href: HREF.saved, label: td('navSaved'), icon: <Heart /> },
-    { href: HREF.searches, label: td('navSearches'), icon: <BellRing /> },
-    // #1144/#1141: zgłoszenia i propozycje tylko w trybie RECRUITMENT (portal ogłoszeniowy).
-    ...(recruitmentEnabled
-      ? [
-          { href: HREF.applications, label: td('navApplications'), icon: <Bookmark /> },
-          { href: HREF.proposals, label: td('navProposals'), icon: <MailCheck /> },
-        ]
-      : []),
-    // #1134: bez rozmów w trybie ogłoszeniowym (także bez plakietki — DashboardShell liczy ją z tej pozycji).
-    ...(recruitmentEnabled ? [{ href: HREF.messages, label: td('navMessages'), icon: <MessageSquare /> }] : []),
-    { href: HREF.profile, label: td('navProfile'), icon: <User /> },
-    { href: HREF.settings, label: td('navSettings'), icon: <Settings /> },
-  ];
+  // #1142: jedno źródło listy pozycji zależnej od trybu (`candidateNavKeys`). Tryb ogłoszeniowy
+  // (domyślny, fail-closed): pulpit, zapisane oferty, zapisane wyszukiwania, ustawienia.
+  const items: Record<CandidateNavKey, Omit<DashboardNavItem, 'href'>> = {
+    summary: { label: td('navSummary'), icon: <LayoutDashboard /> },
+    recommended: { label: td('navRecommended'), icon: <FileText /> },
+    saved: { label: td('navSaved'), icon: <Heart /> },
+    searches: { label: td('navSearches'), icon: <BellRing /> },
+    applications: { label: td('navApplications'), icon: <Bookmark /> },
+    proposals: { label: td('navProposals'), icon: <MailCheck /> },
+    messages: { label: td('navMessages'), icon: <MessageSquare /> },
+    profile: { label: td('navProfile'), icon: <User /> },
+    settings: { label: td('navSettings'), icon: <Settings /> },
+  };
+  const nav: DashboardNavItem[] = candidateNavKeys(recruitmentEnabled).map((key) => ({
+    href: HREF[key],
+    ...items[key],
+  }));
 
   // Aktywna pozycja = najdłuższy pasujący href (obsługa podstron).
   const active = nav.reduce<string>((best, item) => {
@@ -133,7 +127,12 @@ export function CandidateShell({
     <DashboardShell
       nav={nav}
       active={active}
-      user={{ name: displayName, subtitle: td('viewProfile'), initials: initialsOf(displayName) }}
+      user={{
+        name: displayName,
+        // #1142: bez profilu zawodowego w trybie ogłoszeniowym — bez podpisu „Zobacz profil”.
+        subtitle: recruitmentEnabled ? td('viewProfile') : undefined,
+        initials: initialsOf(displayName),
+      }}
       notifications={notifUnread}
       notificationError={notificationError}
       notifItems={notifItems}

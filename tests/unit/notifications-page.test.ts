@@ -8,7 +8,7 @@ import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import { withRecruitmentMode } from '../helpers/portal-mode';
 
-// Przepływ rekrutacyjny (#1128, #1134/#1138) w trybie RECRUITMENT; zapytania nie ukrywają powiadomień o przeglądzie pytań (ukrycie: classifieds-screening-hidden).
+// Pełne przepływy (kategorie rekrutacyjne, linki do rozmów) w trybie RECRUITMENT (#1128); zapytania nie ukrywają powiadomień o przeglądzie pytań (ukrycie: classifieds-screening-hidden); tryb ogłoszeniowy: classifieds-notifications.test.ts.
 withRecruitmentMode();
 
 vi.mock('next-intl/server', () => ({
