@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateJobDraft } from '@/lib/actions/jobs';
 import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
+// Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
+import { useClassifiedsMode as classifiedsModeInTests, useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 /**
  * #192 — każdy krok kreatora zapisuje się JEDNYM transakcyjnym RPC `save_job_draft` (0083).
@@ -74,6 +76,8 @@ function rpcCalls() {
 }
 
 describe('updateJobDraft — jeden zapis transakcyjny na krok (#192)', () => {
+  // Przepływ z pytaniami screeningowymi (#101) testowany w trybie RECRUITMENT (#1128).
+  recruitmentModeInTests();
   it.each(Object.keys(STEPS).map(Number))('krok %i idzie jednym RPC save_job_draft', async (step) => {
     const result = await updateJobDraft(JOB, step, STEPS[step]);
 
@@ -177,5 +181,40 @@ describe('updateJobDraft — jeden zapis transakcyjny na krok (#192)', () => {
   it('nieprawidłowe dane kroku nie trafiają do bazy', async () => {
     expect(await updateJobDraft(JOB, 1, { title: '' })).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
     expect(fakeDb.calls).toHaveLength(0);
+  });
+});
+
+/** #1137 — decyzja produktowa: portal ogłoszeniowy (bez pytań screeningowych). */
+describe('updateJobDraft — krok 7 w trybie ogłoszeniowym (#1137)', () => {
+  classifiedsModeInTests();
+  const withQuestion = {
+    ...(STEPS[7] as object),
+    screeningQuestions: [{ type: 'yes_no', required: true, prompt: { pl: 'Prawo jazdy C?' }, options: [] }],
+  };
+
+  it('krok 7 z pytaniem → RECRUITMENT_DISABLED przed bazą', async () => {
+    expect(await updateJobDraft(JOB, 7, withQuestion)).toEqual({ ok: false, error: 'RECRUITMENT_DISABLED' });
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('krok 7 bez pytań zapisuje się bez klucza screening_questions (pytania w bazie nietknięte)', async () => {
+    expect(await updateJobDraft(JOB, 7, STEPS[7])).toEqual({ ok: true });
+    const content = JSON.parse(String(rpcCalls()[0]!.args.p_content)) as Record<string, unknown>;
+    expect(content).not.toHaveProperty('screening_questions');
+    expect(content.certificates).toEqual(['VCA']);
+  });
+
+  it('błąd bazy RECRUITMENT_DISABLED → ten sam kod użytkowy', async () => {
+    saveError = pgError('42501', 'RECRUITMENT_DISABLED');
+    expect(await updateJobDraft(JOB, 5, STEPS[5])).toEqual({ ok: false, error: 'RECRUITMENT_DISABLED' });
+  });
+
+  describe('kontrola ujemna: tryb RECRUITMENT zapisuje pytanie', () => {
+    recruitmentModeInTests();
+    it('krok 7 z pytaniem → save_job_draft z listą pytań', async () => {
+      expect(await updateJobDraft(JOB, 7, withQuestion)).toEqual({ ok: true });
+      const content = JSON.parse(String(rpcCalls()[0]!.args.p_content)) as { screening_questions: unknown[] };
+      expect(content.screening_questions).toHaveLength(1);
+    });
   });
 });

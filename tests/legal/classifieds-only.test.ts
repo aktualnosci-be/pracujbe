@@ -116,6 +116,7 @@ const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'employer/kandydaci', status: 'pending', issue: 1129 },
   { segment: 'employer/aplikacje', status: 'pending', issue: 1129 },
   { segment: 'candidate/profil/import-cv', status: 'pending', issue: 1129 },
+  { segment: 'admin/pytania', status: 'enforced', issue: 1137 },
 ];
 
 const LOCALE_APP = join(ROOT, 'src/app/[locale]');
@@ -227,5 +228,104 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
     const src = read('src/app/api/maintenance/route.ts');
     expect(guardedMatches(src.replace('if (recruitment) {', 'if (true) {'))).toBe(false);
     expect(guardedMatches(`${src}\nawait runMatchRecompute();`)).toBe(false);
+  });
+});
+
+/**
+ * #1135 (brak wyszukiwalnej bazy profili) i #1137 (bez pytań screeningowych), migracja 0980 na 0171.
+ * Sekcje CLVIS/CLSCR w `supabase/tests/rls.sql` wywołują każde RPC poniżej w trybie ogłoszeniowym.
+ */
+const VIS_SCREENING_RPCS = [
+  'set_candidate_searchable', 'company_can_see_match_candidate', 'candidate_profile_is_searchable',
+  'set_job_screening_questions', 'save_job_draft', 'get_public_job_screening_questions',
+  'admin_decide_screening_review', 'publish_job', 'duplicate_job_as_draft',
+] as const;
+
+function clVisScreeningSection(rls: string): string {
+  const start = rls.indexOf("\\echo '--- CLVIS");
+  const end = rls.indexOf("\\echo '=================== ALL RLS TESTS PASSED", start);
+  return start >= 0 && end > start ? rls.slice(start, end) : '';
+}
+const missingVisScreeningRpcs = (section: string) =>
+  VIS_SCREENING_RPCS.filter((fn) => !new RegExp(`public\\.${fn}\\(`).test(section));
+
+describe('profile firm i pytania screeningowe w trybie ogłoszeniowym (#1135, #1137)', () => {
+  const migration = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .find((sql) => sql.includes('function public.enforce_recruitment_searchable()')) ?? '';
+  const rls = read('supabase/tests/rls.sql');
+
+  it('migracja: strażnik is_searchable, pomijanie pytań, blokada decyzji przeglądu', () => {
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode_searchable\s+before insert or update of is_searchable on public\.candidate_profiles/);
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode\s+before insert on public\.job_screening_questions/);
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode_update\s+before update on public\.screening_question_reviews/);
+    // Każda przedefiniowana funkcja ma warunek trybu.
+    for (const fn of ['set_candidate_searchable', 'company_can_see_match_candidate', 'set_job_screening_questions',
+      'get_public_job_screening_questions', 'enforce_screening_review']) {
+      const body = migration.split(`create or replace function public.${fn}(`)[1]?.split('$$;')[0] ?? '';
+      expect(body, fn).toMatch(/public\.recruitment_(enabled|write_allowed)\(\)/);
+    }
+  });
+
+  it('pracodawca nie może otworzyć profilu dowolnego kandydata (rls.sql CLVIS-1)', () => {
+    const section = clVisScreeningSection(rls);
+    expect(section).toMatch(/'CLVIS-1 rekruter nie otwiera profilu dowolnego kandydata/);
+    expect(section).toMatch(/\(select count\(\*\) from public\.candidate_profiles\) = 0/);
+  });
+
+  it('sekcje CLVIS/CLSCR wywołują każde RPC widoczności profilu i pytań', () => {
+    const section = clVisScreeningSection(rls);
+    expect(section.length).toBeGreaterThan(0);
+    expect(missingVisScreeningRpcs(section)).toEqual([]);
+  });
+
+  it('kontrola ujemna: sekcja bez set_job_screening_questions jest wykrywana', () => {
+    const section = clVisScreeningSection(rls).replaceAll('public.set_job_screening_questions(', 'public.x(');
+    expect(missingVisScreeningRpcs(section)).toEqual(['set_job_screening_questions']);
+  });
+
+  /** Sekcja widoczności w /candidate/ustawienia: odczyt i render tylko w trybie rekrutacyjnym. */
+  const visibilityGated = (src: string) =>
+    /const visibilityEnabled = isRecruitmentEnabled\('candidateSearch'\)/.test(src)
+    && /visibilityEnabled \? loadProfileVisibility\(\) : Promise\.resolve\(null\)/.test(src)
+    && (src.match(/loadProfileVisibility\(\)/g) ?? []).length === 1
+    && /visibility === null \? null :/.test(src);
+
+  it('/candidate/ustawienia: bez sekcji widoczności profilu w trybie ogłoszeniowym', () => {
+    expect(visibilityGated(read('src/app/[locale]/candidate/ustawienia/page.tsx'))).toBe(true);
+  });
+
+  it('kontrola ujemna: odczyt widoczności poza strażnikiem jest wykrywany', () => {
+    const src = read('src/app/[locale]/candidate/ustawienia/page.tsx');
+    expect(visibilityGated(src.replace('visibilityEnabled ? loadProfileVisibility() : Promise.resolve(null)', 'loadProfileVisibility()'))).toBe(false);
+  });
+
+  /** Każde miejsce renderowania kreatora oferty podaje tryb pytań z serwera. */
+  function wizardCallersGated(files: { path: string; source: string }[]): string[] {
+    return files
+      .filter((f) => /<(New)?JobWizard\b/.test(f.source))
+      .filter((f) => {
+        const tags = f.source.match(/<(New)?JobWizard\b[^>]*>/gs) ?? [];
+        return !tags.every((tag) => tag.includes("screeningEnabled={isRecruitmentEnabled('screening')}"));
+      })
+      .map((f) => f.path);
+  }
+
+  it('strony kreatora oferty podają screeningEnabled z isRecruitmentEnabled(\'screening\')', () => {
+    const pages = walk(LOCALE_APP)
+      .filter((f) => /\/page\.tsx$/.test(f))
+      .map((f) => ({ path: relative(ROOT, f), source: readFileSync(f, 'utf8') }));
+    expect(pages.filter((p) => /<(New)?JobWizard\b/.test(p.source)).length).toBeGreaterThanOrEqual(2);
+    expect(wizardCallersGated(pages)).toEqual([]);
+  });
+
+  it('kontrola ujemna: kreator bez propu trybu jest wykrywany', () => {
+    const mutant = { path: 'src/app/x/page.tsx', source: '<JobWizard initialJobId={id} assistEnabled />' };
+    expect(wizardCallersGated([mutant])).toEqual(['src/app/x/page.tsx']);
+  });
+
+  it('nawigacja admina: „Pytania screeningowe” tylko z trybu serwera', () => {
+    expect(read('src/components/admin/AdminShell.tsx')).toMatch(/\.\.\.\(screeningEnabled \? \[\{ href: HREF\.screening/);
+    expect(read('src/app/[locale]/admin/layout.tsx')).toMatch(/screeningEnabled=\{isRecruitmentEnabled\('screening'\)\}/);
   });
 });

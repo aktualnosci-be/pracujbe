@@ -444,6 +444,7 @@ Tabele w migracjach: 112; z danymi osobowymi: 74; bez danych osobowych: 38.
 - **Migracja:** `supabase/migrations/0002_core_tables.sql`
 - **Czynności:** Profil zawodowy kandydata, Dopasowanie i zapisane wyszukiwania
 - **Osoby:** Kandydaci (konto)
+- **Uwaga:** Odbiorca „zweryfikowana firma” (wyszukiwanie profili, #494) tylko w trybie RECRUITMENT; w trybie ogłoszeniowym (decyzja produktowa, 0171/0980) firmy nie widzą profili, a włączenie widoczności jest odrzucane.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -1311,7 +1312,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.job_funnel_receipts` | Losowy nonce jednego załadowania strony — nie identyfikuje osoby. |
 | `public.job_languages` | Treść ogłoszenia (dane firmy). |
 | `public.job_requirements` | Treść ogłoszenia (dane firmy). |
-| `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. |
+| `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0980) nowe pytania nie są zapisywane, a zapisane nie są pokazywane. |
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
 | `public.job_translations` | Treść ogłoszenia (dane firmy). |
 | `public.joint_committees` | Słownik/konfiguracja (komisje parytetowe PC/CP (kod i nazwy PL/NL/FR/EN), 0169) — bez danych osobowych. |

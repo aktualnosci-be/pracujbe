@@ -8,6 +8,7 @@ import { attempt, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { readProfileVisibility } from '@/lib/data/profile-visibility';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Server Action widoczności profilu kandydata dla firm (#494).
@@ -17,6 +18,10 @@ import { readProfileVisibility } from '@/lib/data/profile-visibility';
  * profilu, `false` zawsze; znacznik czasu i historia zapisywane w bazie przy realnej zmianie.
  * Zwracany stan pochodzi z bazy (ponowny odczyt po zapisie w tej samej transakcji sesji),
  * nie z wartości wysłanej przez przeglądarkę. Błędy → kod użytkowy (Invariant #8).
+ *
+ * Decyzja produktowa: portal ogłoszeniowy (#1135) — w trybie ogłoszeniowym firmy nie przeglądają
+ * profili: akcja zwraca `RECRUITMENT_DISABLED` bez zapytania do bazy (sekcja nie jest renderowana;
+ * baza i tak odrzuca włączenie, 0980).
  */
 
 export type SetProfileVisibilityResult =
@@ -26,6 +31,7 @@ export type SetProfileVisibilityResult =
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   // 0126 (#492): profil bez ważnej deklaracji progu wieku nie staje się widoczny dla firm.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('AGE_ATTESTATION_REQUIRED')) return 'AGE_ATTESTATION_REQUIRED';
   // 0126 (#576): konto 16–17 — widoczność profilu dla firm tylko dla pełnoletnich.
   if (m.includes('AGE_ADULT_REQUIRED')) return 'AGE_ADULT_REQUIRED';
@@ -39,6 +45,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 export async function setProfileVisibilityAction(searchable: unknown): Promise<SetProfileVisibilityResult> {
   const parsed = z.boolean().safeParse(searchable);
   if (!parsed.success) return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isRecruitmentEnabled('candidateSearch')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
 
   if (!isPortalDataConfigured()) {
     return { ok: true, searchable: parsed.data, changedAt: new Date().toISOString(), demo: true };
