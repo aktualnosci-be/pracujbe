@@ -2198,8 +2198,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   nadpisuje wcześniejszego wyniku. Porównanie nazwy (`name-match.ts`) = sygnał do ręcznego
   sprawdzenia. Status firmy zmienia tylko admin. Dowód: `rls.sql` sekcja VI92, unit
   `vies-verification` (fixture'y, kontrola ujemna), E2E `admin-vies.spec`; live smoke opt-in
-  `VIES_LIVE_SMOKE=1`. **Otwarte:** publiczna odznaka „zweryfikowano w VIES” dla kandydatów
-  (decyzja produktowa), automatyczne sprawdzenie przy zakładaniu firmy.
+  `VIES_LIVE_SMOKE=1`. Automatyczne sprawdzenie przy zakładaniu firmy (decyzja właściciela
+  26.09.2026, migracja `0164`): po `create_first_company` /
+  `create_additional_company` / `create_company_with_owner` serwer planuje (`after`, po odpowiedzi)
+  `runCompanyViesAutoCheck` (`src/lib/vies/auto-check.ts`: bieżący VAT/KBO → ten sam adapter VIES →
+  zapis tylko `valid`/`invalid` przez `record_company_vies_check_auto` — EXECUTE tylko
+  service_role, bez nadpisywania istniejącego wyniku, tylko dla bieżącego numeru, `checked_by`
+  null, audyt `company.vies_checked` z `source: auto`). Awaria VIES/bazy nie blokuje założenia
+  i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
+  NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
+  (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
@@ -2719,7 +2727,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `messageAttachmentsGc` w odpowiedzi); awaria jednego nie blokuje drugiego. Dowód: unit
   `storage-gc`, `railway-bucket` (kontrola ujemna: `pattern` inny niż podany traktowany jako obcy).
   **Otwarte:** utworzenie bucketu (właściciel), GC
-  `email_deliveries`/`processed_webhooks`/`rate_limit` z #17, AV, PDF faktur (`storage.ts`, #27).
+  `email_deliveries` z #17 (retencja e-maili = decyzja #574; `processed_webhooks` i `rate_limits`
+  czyści `/api/maintenance` od migracji `0163`, `rls.sql` sekcja GC163), AV, PDF faktur (`storage.ts`, #27).
   Manifest PWA per język (#174): `/{locale}/manifest.webmanifest` z `lang`/`start_url`/opisem
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,

@@ -421,7 +421,7 @@ export function FilterSheet({
             </div>
           </div>
 
-          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="pp-filter-scroll min-w-0 flex-1 overflow-y-auto px-5 py-5">
             <FilterFields
               facets={liveFacets.facets}
               value={pending}

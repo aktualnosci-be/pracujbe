@@ -4337,6 +4337,75 @@ select pg_temp.expect_error('select * from public.company_vies_checks',
 reset role;
 
 -- ============================================================================
+-- VA164. Automatyczne sprawdzenie VIES po założeniu firmy (0164, decyzja 26.09.2026)
+-- Zapis tylko service_role, tylko wynik rozstrzygający, bez nadpisywania istniejącego
+-- wyniku (np. admina), tylko dla bieżącego numeru firmy; status firmy bez zmian.
+-- ============================================================================
+\set COMPVA '00000000-0000-0000-0000-000000000a97'
+insert into public.companies(id, name, status, vat_number)
+  values (:'COMPVA', 'Firma VA', 'unverified', 'BE 0417.497.106');
+
+-- VA164-1: service_role zapisuje wynik ważny; checked_by = null (system); audyt z source=auto.
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0417497106', 'valid', ' NV VA ', date '2026-09-26') as va_saved \gset
+reset role;
+select pg_temp.assert(:'va_saved' = 't', 'VA164-1 wynik zapisany (true)');
+select pg_temp.assert(
+  (select result = 'valid' and vies_name = 'NV VA' and checked_by is null and vat_number = '0417497106'
+     from public.company_vies_checks where company_id = :'COMPVA'),
+  'VA164-1b wynik z nazwą, bez admina (system)');
+select pg_temp.assert(
+  (select status from public.companies where id = :'COMPVA') = 'unverified',
+  'VA164-1c automatyczny wynik nie zmienia statusu firmy');
+select pg_temp.assert(
+  (select after_data = '{"result":"valid","source":"auto"}'::jsonb and actor_id is null
+     from public.audit_logs
+    where entity_id = :'COMPVA' and action = 'company.vies_checked'
+    order by created_at desc limit 1),
+  'VA164-1d audyt company.vies_checked z source=auto, bez numeru i nazwy');
+
+-- VA164-2: KONTROLA UJEMNA — nie nadpisuje istniejącego wyniku (np. ręcznego sprawdzenia admina).
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0417497106', 'invalid') as va_again \gset
+reset role;
+select pg_temp.assert(:'va_again' = 'f', 'VA164-2 drugi zapis zwraca false');
+select pg_temp.assert(
+  (select result from public.company_vies_checks where company_id = :'COMPVA') = 'valid',
+  'VA164-2b istniejący wynik zostaje');
+
+-- VA164-3: numer inny niż bieżący VAT firmy → brak zapisu (zmiana numeru w trakcie).
+delete from public.company_vies_checks where company_id = :'COMPVA';
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVA', '0403170701', 'valid') as va_stale \gset
+reset role;
+select pg_temp.assert(:'va_stale' = 'f'
+  and not exists (select 1 from public.company_vies_checks where company_id = :'COMPVA'),
+  'VA164-3 numer niezgodny z bieżącym VAT firmy nie jest zapisywany');
+
+-- VA164-4: stan nierozstrzygający i zły format odrzucone.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''unavailable'')', :'COMPVA'),
+  'RESULT_NOT_PERSISTABLE', 'VA164-4 awaria VIES nie jest zapisywana');
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0123456789'', ''valid'')', :'COMPVA'),
+  'VAT_FORMAT', 'VA164-4b zła suma kontrolna odrzucona');
+reset role;
+
+-- VA164-5: KONTROLA UJEMNA — pracodawca i anon bez EXECUTE.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''valid'')', :'COMPVA'),
+  'permission denied', 'VA164-5 pracodawca nie zapisze wyniku VIES');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.record_company_vies_check_auto(%L, ''0417497106'', ''valid'')', :'COMPVA'),
+  'permission denied', 'VA164-5b anon bez EXECUTE');
+reset role;
+
+
+-- ============================================================================
 -- ML44 (#44, 0098): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
 -- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
 -- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
@@ -15186,6 +15255,75 @@ select pg_temp.assert(
   (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
+-- GC163. Sprzątanie tabel technicznych z /api/maintenance (K2, migracja 0163).
+--        rate_limit_gc i processed_webhooks_gc: EXECUTE tylko service_role;
+--        limiter nie traci trwających okien (dolna granica doby), inbox webhooków nie
+--        traci wpisów `processing` ani świeżych (dolna granica 7 dni).
+-- ============================================================================
+reset role; reset app.current_uid;
+insert into public.rate_limits(key, window_start, count, updated_at) values
+  ('gc193:old',   now() - interval '3 days',  5, now() - interval '2 days'),
+  ('gc193:fresh', now() - interval '2 hours', 1, now() - interval '2 hours');
+insert into public.processed_webhooks(id, source, status, seen_at, updated_at) values
+  ('gc193:done-old',   'emaillabs', 'completed',  now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:failed-old', 'emaillabs', 'failed',     now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:proc-old',   'emaillabs', 'processing', now() - interval '40 days', now() - interval '40 days'),
+  ('gc193:done-3d',    'emaillabs', 'completed',  now() - interval '3 days',  now() - interval '3 days');
+
+-- GC163-1: klient bez EXECUTE.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied', 'GC163-1 anon nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30)', 'permission denied', 'GC163-1b anon nie wywoła processed_webhooks_gc');
+reset role;
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied', 'GC163-1c authenticated nie wywoła rate_limit_gc');
+select pg_temp.expect_error('select public.processed_webhooks_gc(30)', 'permission denied', 'GC163-1d authenticated nie wywoła processed_webhooks_gc');
+reset role;
+
+-- GC163-2: service_role — nawet z argumentem 1 s limiter usuwa tylko wiersz starszy niż doba.
+set role service_role;
+select public.rate_limit_gc(1);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.rate_limits where key = 'gc193:old')
+  and exists (select 1 from public.rate_limits where key = 'gc193:fresh'),
+  'GC163-2 rate_limit_gc usuwa okno sprzed doby, trwające (2 h) zostaje mimo argumentu 1 s');
+
+-- GC163-3: service_role — z argumentem 1 dzień inbox usuwa tylko rozstrzygnięte wpisy > 7 dni.
+set role service_role;
+select public.processed_webhooks_gc(1);
+reset role;
+select pg_temp.assert(
+  (select array_agg(id order by id) from public.processed_webhooks where id like 'gc193:%')
+  = array['gc193:done-3d', 'gc193:proc-old'],
+  'GC163-3 processed_webhooks_gc usuwa completed/failed > 7 dni, zostawia processing i świeże');
+
+-- KONTROLA UJEMNA: definicje sprzed 0163 — bez grantu service_role dostaje permission denied,
+-- a bez dolnej granicy argument 1 s kasuje trwające okno limitera.
+begin;
+revoke execute on function public.rate_limit_gc(integer) from service_role;
+set local role service_role;
+select pg_temp.expect_error('select public.rate_limit_gc(86400)', 'permission denied',
+  'GC163-N1 bez grantu 0163 maintenance dostaje permission denied');
+reset role;
+create or replace function public.rate_limit_gc(p_older_than_seconds integer default 86400)
+returns integer language plpgsql security definer set search_path = public as $gcneg$
+declare v_deleted integer;
+begin
+  delete from public.rate_limits
+    where updated_at < now() - make_interval(secs => p_older_than_seconds);
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end $gcneg$;
+select public.rate_limit_gc(1);
+select pg_temp.assert(
+  not exists (select 1 from public.rate_limits where key = 'gc193:fresh'),
+  'GC163-N2 definicja z 0015 (bez dolnej granicy) kasuje trwające okno — granica z 0163 jest potrzebna');
+rollback;
+reset role;
+delete from public.rate_limits where key like 'gc193:%';
+delete from public.processed_webhooks where id like 'gc193:%';
+
 -- ============================================================================
 -- SV162. Zapisane oferty ze stanem oferty (0162): `get_saved_jobs_display` zwraca KAŻDY
 --        własny zapis z `job_availability` (available/closed/expired/paused/unavailable),
@@ -16752,5 +16890,375 @@ end $ft$;
 select public.get_public_jobs_count(p_keyword => 'Magazynier FT', p_direct_only => true) as ftneg \gset
 rollback;
 select pg_temp.assert(:ftneg >= 1, 'FT910-9d kontrola ujemna: bez warunku agencja trafia do filtra „bezpośrednio”');
+
+-- ============================================================================
+-- CMI165. Kolumny tożsamości członkostwa firmy niezmienne poza RPC (0165) oraz dostęp
+-- do rozmów firmy tylko dla bieżącego recruiter+ albo kandydata relacji.
+-- ============================================================================
+\echo '--- CMI165 company_members: tożsamość wiersza + dostęp do rozmów (0165) ---'
+\set CI9O  'e9000000-0000-0000-0000-0000000000a1'
+\set CI9A  'e9000000-0000-0000-0000-0000000000a2'
+\set CI9R  'e9000000-0000-0000-0000-0000000000a3'
+\set CI9X  'e9000000-0000-0000-0000-0000000000a4'
+\set CI9C  'e9000000-0000-0000-0000-0000000000c1'
+\set CI9T  'e9000000-0000-0000-0000-0000000000f1'
+\set CI9T2 'e9000000-0000-0000-0000-0000000000f2'
+\set CI9J  'e9000000-0000-0000-0000-0000000000b1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CI9O','ci9o@test.be','Olaf O','{"role":"employer","first_name":"Olaf","last_name":"Owner","locale":"pl"}'),
+  (:'CI9A','ci9a@test.be','Ada A','{"role":"employer","first_name":"Ada","last_name":"Admin","locale":"nl"}'),
+  (:'CI9R','ci9r@test.be','Rik R','{"role":"employer","first_name":"Rik","last_name":"Recruiter","locale":"fr"}'),
+  (:'CI9X','ci9x@test.be','Xavier X','{"role":"employer","first_name":"Xavier","last_name":"X","locale":"en"}'),
+  (:'CI9C','ci9c@test.be','Cleo C','{"role":"candidate","first_name":"Cleo","last_name":"Cand","locale":"pl"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id in (:'CI9O', :'CI9A', :'CI9R', :'CI9X', :'CI9C');
+insert into public.companies(id,name,status) values
+  (:'CI9T','Firma CMI T','verified'), (:'CI9T2','Firma CMI T2','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'CI9T',:'CI9O','owner',true), (:'CI9T',:'CI9A','admin',true), (:'CI9T',:'CI9R','recruiter',true),
+  (:'CI9T2',:'CI9A','owner',true);
+select id as cm_owner_row from public.company_members
+  where company_id = :'CI9T'::uuid and profile_id = :'CI9O'::uuid \gset
+select id as cm_rec_row from public.company_members
+  where company_id = :'CI9T'::uuid and profile_id = :'CI9R'::uuid \gset
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'CI9J',:'CI9T','job-cmi165','Magazynier CMI165','warehouse','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'CI9C', false);
+
+-- CMI165-1..4: admin firmy nie przepisze tożsamości wiersza (konto, firma, zaproszenie, daty).
+set role authenticated; set app.current_uid = :'CI9A'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.company_members set profile_id = %L where id = %L', :'CI9X', :'cm_owner_row'),
+  'PERMISSION_DENIED', 'CMI165-1 zmiana konta wiersza ownera odrzucona');
+select pg_temp.expect_error(
+  format('update public.company_members set company_id = %L where id = %L', :'CI9T2', :'cm_owner_row'),
+  'PERMISSION_DENIED', 'CMI165-2 przeniesienie wiersza ownera do innej firmy odrzucone');
+select pg_temp.expect_error(
+  format('update public.company_members set profile_id = %L where id = %L', :'CI9X', :'cm_rec_row'),
+  'PERMISSION_DENIED', 'CMI165-3 podmiana konta rekrutera (dołączenie bez zaproszenia) odrzucona');
+select pg_temp.expect_error(
+  format('update public.company_members set joined_at = now() - interval ''1 year'', invited_by = %L where id = %L',
+         :'CI9A', :'cm_rec_row'),
+  'PERMISSION_DENIED', 'CMI165-4 zmiana danych zaproszenia/dat odrzucona');
+select pg_temp.expect_error(
+  format('update public.company_members set created_at = now() - interval ''1 year'' where id = %L', :'cm_rec_row'),
+  'PERMISSION_DENIED', 'CMI165-4b zmiana created_at odrzucona');
+-- CMI165-5: rola/aktywność dalej jak w 0086 (bezpośredni UPDATE w hierarchii i RPC).
+update public.company_members set is_active = false where id = :'cm_rec_row'::uuid;
+select public.set_company_member_active(:'cm_rec_row'::uuid, true);
+select public.set_company_member_role(:'cm_rec_row'::uuid, 'member');
+select public.set_company_member_role(:'cm_rec_row'::uuid, 'recruiter');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select profile_id = :'CI9O'::uuid and company_id = :'CI9T'::uuid and role = 'owner' and is_active
+     from public.company_members where id = :'cm_owner_row'::uuid)
+  and (select profile_id = :'CI9R'::uuid and role = 'recruiter' and is_active
+     from public.company_members where id = :'cm_rec_row'::uuid)
+  and (select count(*) = 0 from public.company_members where profile_id = :'CI9X'::uuid),
+  'CMI165-5 wiersze bez zmian tożsamości; RPC roli/aktywności działają');
+
+-- CMI165-6: przyjęcie zaproszenia (RPC) dalej tworzy i reaktywuje członkostwo.
+set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
+select invitation_id as cminv
+  from public.invite_company_member(:'CI9T', 'ci9x@test.be', 'recruiter', 'en', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'cminv'::uuid, true);
+reset role;
+set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
+select id as cm_x_row from public.company_members
+  where company_id = :'CI9T'::uuid and profile_id = :'CI9X'::uuid \gset
+select public.set_company_member_active(:'cm_x_row'::uuid, false);
+select invitation_id as cminv2
+  from public.invite_company_member(:'CI9T', 'ci9x@test.be', 'member', 'en', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
+select public.respond_to_company_invitation(:'cminv2'::uuid, true);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select is_active and role = 'member' and invited_by = :'CI9O'::uuid and joined_at is not null
+     from public.company_members where id = :'cm_x_row'::uuid),
+  'CMI165-6 respond_to_company_invitation tworzy i reaktywuje członkostwo (kolumny zaproszenia)');
+
+-- CMI165-7 (kontrola ujemna): trigger z 0086 (bez strażnika tożsamości) przepuszcza podmianę
+-- konta wiersza ownera przez admina — dokładnie to, co blokuje CMI165-1.
+begin;
+do $cmi$
+declare v_def text := pg_get_functiondef('public.enforce_owner_invariants()'::regprocedure);
+begin
+  if position('or new.profile_id is distinct from old.profile_id' in v_def) = 0 then
+    raise exception 'ASSERT FAILED: CMI165-7 brak strażnika tożsamości w enforce_owner_invariants';
+  end if;
+  execute replace(v_def, 'or new.profile_id is distinct from old.profile_id', '');
+end $cmi$;
+set local role authenticated; set local app.current_uid = :'CI9A'; select pg_temp.assert_client_role();
+update public.company_members set profile_id = :'CI9C' where id = :'cm_owner_row'::uuid;
+reset role;
+select pg_temp.assert(
+  (select profile_id = :'CI9C'::uuid from public.company_members where id = :'cm_owner_row'::uuid),
+  'CMI165-7 kontrola ujemna: bez strażnika admin podmienia konto ownera');
+rollback;
+reset role; reset app.current_uid;
+
+-- CMI165-8..10: rozmowa firmy — usunięty (DELETE) rekruter traci dostęp, kandydat nie.
+set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'CI9J'::uuid, 'cmi165-app', null, null, null) as cmapp \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'cmapp'::uuid, null) as cmconv \gset
+select public.send_message(:'cmconv'::uuid, 'Dzień dobry CMI165', gen_random_uuid()) as cmmsg1 \gset
+reset role;
+set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
+select public.send_message(:'cmconv'::uuid, 'Odpowiedź CMI165', gen_random_uuid()) as cmmsg2 \gset
+reset role;
+-- Owner usuwa członkostwo rekrutera (DELETE w hierarchii); wiersz conversation_members zostaje.
+set role authenticated; set app.current_uid = :'CI9O'; select pg_temp.assert_client_role();
+delete from public.company_members where id = :'cm_rec_row'::uuid;
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 from public.conversation_members
+     where conversation_id = :'cmconv'::uuid and profile_id = :'CI9R'::uuid),
+  'CMI165-8 wiersz uczestnika usuniętego rekrutera nadal istnieje (warunek scenariusza)');
+set role authenticated; set app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_conversation_member(:'cmconv'::uuid),
+  'CMI165-8b usunięty rekruter nie jest uczestnikiem rozmowy firmy');
+select pg_temp.assert((select count(*) = 0 from public.messages where conversation_id = :'cmconv'::uuid),
+  'CMI165-8c usunięty rekruter nie czyta wiadomości rozmowy');
+select pg_temp.assert(not exists (select 1 from public.get_conversation_summaries() s
+                                  where s.conversation_id = :'cmconv'::uuid),
+  'CMI165-8d usunięty rekruter nie widzi rozmowy na liście');
+select pg_temp.expect_error(
+  format('select public.send_message(%L::uuid, %L, gen_random_uuid())', :'cmconv', 'Po usunięciu'),
+  'PERMISSION_DENIED', 'CMI165-9 usunięty rekruter nie wysyła wiadomości');
+reset role;
+set role authenticated; set app.current_uid = :'CI9C'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
+  and (select count(*) = 2 from public.messages where conversation_id = :'cmconv'::uuid),
+  'CMI165-10 kandydat relacji zachowuje dostęp do rozmowy');
+reset role;
+set role authenticated; set app.current_uid = :'CI9X'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_conversation_member(:'cmconv'::uuid),
+  'CMI165-10b aktywny zwykły member (spoza uczestników) bez dostępu');
+reset role; reset app.current_uid;
+
+-- CMI165-11 (kontrola ujemna): definicja z 0039 (strona kandydata = brak wiersza członkostwa)
+-- zwraca usuniętemu rekruterowi dostęp.
+begin;
+create or replace function public.is_conversation_member(p_conversation_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.conversation_members m
+    join public.conversations c on c.id = m.conversation_id
+    where m.conversation_id = p_conversation_id and m.profile_id = auth.uid()
+      and (c.company_id is null or public.can_manage_jobs(c.company_id)
+           or not exists (select 1 from public.company_members cm
+                          where cm.company_id = c.company_id and cm.profile_id = auth.uid())));
+$$;
+set local role authenticated; set local app.current_uid = :'CI9R'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_conversation_member(:'cmconv'::uuid)
+  and (select count(*) = 2 from public.messages where conversation_id = :'cmconv'::uuid),
+  'CMI165-11 kontrola ujemna: reguła z 0039 wpuszcza usuniętego rekrutera');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+\echo '--- DC166 usunięcie konta po przejęciu aplikacji gościa + job_is_public z firmą (0166) ---'
+-- ============================================================================
+-- DC166. (a) Kandydat, który przejął aplikację gościa (0095), usuwa konto sam
+-- (request_account_erasure, 0105): usunięcie zgłoszenia gościa zeruje FK
+-- applications.guest_request_id, a enforce_application_integrity pod sesją nie może tego
+-- odrzucić. Nadal odrzuca wyzerowanie/zmianę linku przy istniejącym zgłoszeniu.
+-- (b) job_is_public wymaga firmy verified i nieusuniętej: apply_to_job,
+-- submit/confirm_guest_application odrzucają ofertę firmy zawieszonej, oczekującej,
+-- odrzuconej i usuniętej. Kontrole ujemne: trigger z 0095 i job_is_public z 0048.
+-- ============================================================================
+\set DCE  'e9010000-0000-0000-0000-0000000000a1'
+\set DCG  'e9010000-0000-0000-0000-0000000000c1'
+\set DCC  'e9010000-0000-0000-0000-0000000000c2'
+\set DCCO 'e9010000-0000-0000-0000-0000000000f1'
+\set DCCS 'e9010000-0000-0000-0000-0000000000f2'
+\set DCJ1 'e9010000-0000-0000-0000-0000000000b1'
+\set DCJS 'e9010000-0000-0000-0000-0000000000b2'
+\set DCJS2 'e9010000-0000-0000-0000-0000000000b3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'DCE','dce@test.be','Els E','{"role":"employer","first_name":"Els","last_name":"E","locale":"nl"}'),
+  (:'DCG','dc-guest@test.be','Gerda G','{"role":"candidate","first_name":"Gerda","last_name":"G","locale":"nl"}'),
+  (:'DCC','dcc@test.be','Cas C','{"role":"candidate","first_name":"Cas","last_name":"C","locale":"fr"}');
+select test_fixture.attest_candidates();
+update auth.users set email_verified = true where id in (:'DCE', :'DCG', :'DCC');
+insert into public.companies(id,name,status) values
+  (:'DCCO','Firma DC166','verified'), (:'DCCS','Firma DC166 S','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'DCCO',:'DCE','owner',true), (:'DCCS',:'DCE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'DCJ1',:'DCCO','job-dc901-1','Magazynier DC166','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'DCJS',:'DCCS','job-dc901-s','Kierowca DC166','transport','permanent','Gent','Flandria','active','pl'),
+  (:'DCJS2',:'DCCS','job-dc901-s2','Sprzątanie DC166','cleaning','permanent','Gent','Flandria','active','pl');
+insert into public.candidate_profiles(profile_id, is_searchable) values (:'DCC', false);
+
+-- DC166-1: gość aplikuje, potwierdza, przejmuje aplikację na konto DCG.
+set role service_role;
+select public.submit_guest_application(:'DCJ1', 'dc-guest@test.be', 'Gerda Gość', null, null, null, 'nl',
+  'idem-dc901-0001', 'nonce-dc901-0001-aaaaaa', encode(sha256('tok-dc901-1'::bytea), 'hex'),
+  p_age_attested_min => 18) as dcreq \gset
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-dc901-1'::bytea), 'hex'),
+     'nonce-claim-dc901-0001', encode(sha256('claim-dc901-1'::bytea), 'hex'))) = 'confirmed',
+  'DC166-1 zgłoszenie gościa potwierdzone');
+reset role;
+set role authenticated; set app.current_uid = :'DCG'; select pg_temp.assert_client_role();
+select public.claim_guest_application(encode(sha256('claim-dc901-1'::bytea), 'hex')) as dcapp \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select candidate_id = :'DCG'::uuid and guest_request_id = :'dcreq'::uuid from public.applications where id = :'dcapp')
+  and (select claimed_by = :'DCG'::uuid from public.guest_application_requests where id = :'dcreq'),
+  'DC166-1b aplikacja przejęta, link do zgłoszenia gościa zachowany');
+
+-- DC166-2: trigger nadal chroni link, gdy zgłoszenie istnieje (także pod sesją właściciela).
+select set_config('app.current_uid', :'DCG', false);
+select pg_temp.expect_error('update public.applications set guest_request_id = null where id = ''' || :'dcapp' || '''',
+  'niezmienne po wysłaniu', 'DC166-2 wyzerowanie linku przy istniejącym zgłoszeniu → odrzucone');
+select pg_temp.expect_error('update public.applications set guest_request_id = ''' || :'dcapp' || ''' where id = ''' || :'dcapp' || '''',
+  'niezmienne po wysłaniu', 'DC166-2b podmiana linku → odrzucona');
+reset app.current_uid;
+
+-- DC166-3 (kontrola ujemna): z triggerem z 0095 samoobsługowe usunięcie konta pada
+-- (akcja FK ON DELETE SET NULL traktowana jak zmiana niezmiennego pola).
+begin;
+do $dc$
+declare
+  v_def text := pg_get_functiondef('public.enforce_application_integrity()'::regprocedure);
+  v_old text;
+begin
+  v_old := regexp_replace(v_def,
+    'or \(new\.guest_request_id is distinct from old\.guest_request_id.*?where g\.id = old\.guest_request_id\)\)\)',
+    'or new.guest_request_id is distinct from old.guest_request_id');
+  if v_old = v_def then
+    raise exception 'ASSERT FAILED: DC166-3 brak wyjątku FK w enforce_application_integrity';
+  end if;
+  execute v_old;
+end $dc$;
+set local role authenticated; set local app.current_uid = :'DCG'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.request_account_erasure(''dc-guest@test.be'')',
+  'niezmienne po wysłaniu', 'DC166-3 kontrola ujemna: trigger z 0095 cofa usunięcie konta');
+rollback;
+reset role; reset app.current_uid;
+
+-- DC166-4: samoobsługowe usunięcie konta kandydata z przejętą aplikacją gościa działa.
+set role authenticated; set app.current_uid = :'DCG'; select pg_temp.assert_client_role();
+select (public.request_account_erasure('dc-guest@test.be')->>'erased')::boolean as dcerased \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'dcerased'::boolean
+  and not exists (select 1 from auth.users where id = :'DCG')
+  and not exists (select 1 from public.profiles where id = :'DCG')
+  and not exists (select 1 from public.applications where id = :'dcapp')
+  and not exists (select 1 from public.guest_application_requests where id = :'dcreq')
+  and exists (select 1 from public.erasure_tombstones where subject_id = :'DCG'),
+  'DC166-4 konto, przejęta aplikacja i zgłoszenie gościa usunięte, tombstone zapisany');
+
+-- DC166-5: firma verified — oferta publiczna, aplikacja działa (kontrola pozytywna).
+select pg_temp.assert(public.job_is_public(:'DCJS') and public.job_is_public(:'DCJS2'),
+  'DC166-5 oferta zweryfikowanej firmy jest publiczna');
+-- Zgłoszenie gościa wysłane przed zmianą statusu firmy (link potwierdzenia w skrzynce).
+set role service_role;
+select public.submit_guest_application(:'DCJS', 'dc-late@test.be', 'Lars Late', null, null, null, 'fr',
+  'idem-dc901-0002', 'nonce-dc901-0002-aaaaaa', encode(sha256('tok-dc901-2'::bytea), 'hex'),
+  p_age_attested_min => 18) as dcreq2 \gset
+reset role;
+
+-- DC166-6: każdy status firmy poza verified i usunięta firma → oferta niepubliczna,
+-- apply_to_job i gość odrzuceni, potwierdzenie gościa = job_closed.
+do $dc$
+declare v_st text; v_ok boolean;
+begin
+  foreach v_st in array array['suspended', 'pending', 'rejected', 'unverified', 'deleted'] loop
+    if v_st = 'deleted' then
+      update public.companies set status = 'verified', deleted_at = now() where id = 'e9010000-0000-0000-0000-0000000000f2';
+    else
+      update public.companies set status = v_st::public.company_status, deleted_at = null
+       where id = 'e9010000-0000-0000-0000-0000000000f2';
+    end if;
+    if public.job_is_public('e9010000-0000-0000-0000-0000000000b2') then
+      raise exception 'ASSERT FAILED: DC166-6 job_is_public=true dla firmy %', v_st;
+    end if;
+    perform set_config('app.current_uid', 'e9010000-0000-0000-0000-0000000000c2', true);
+    begin
+      perform public.apply_to_job('e9010000-0000-0000-0000-0000000000b2'::uuid, 'dc901-app-' || v_st, null, null, null);
+      raise exception 'ASSERT FAILED: DC166-6b apply_to_job przeszło dla firmy %', v_st;
+    exception when others then
+      if sqlerrm not like '%JOB_NOT_ACTIVE%' then
+        raise exception 'ASSERT FAILED: DC166-6b firma %: oczekiwano JOB_NOT_ACTIVE, jest %', v_st, sqlerrm;
+      end if;
+    end;
+    perform set_config('app.current_uid', '', true);
+    begin
+      perform public.submit_guest_application('e9010000-0000-0000-0000-0000000000b3', 'dc-new@test.be', 'Nel N',
+        null, null, null, 'nl', 'idem-dc901-g-' || v_st, 'nonce-dc901-g-aaaaaaaaa',
+        encode(sha256(('tok-dc901-g-' || v_st)::bytea), 'hex'), p_age_attested_min => 18);
+      raise exception 'ASSERT FAILED: DC166-6c zgłoszenie gościa przeszło dla firmy %', v_st;
+    exception when others then
+      if sqlerrm not like '%JOB_NOT_ACTIVE%' then
+        raise exception 'ASSERT FAILED: DC166-6c firma %: oczekiwano JOB_NOT_ACTIVE, jest %', v_st, sqlerrm;
+      end if;
+    end;
+    select (select outcome from public.confirm_guest_application(encode(sha256('tok-dc901-2'::bytea), 'hex'),
+              'nonce-claim-dc901-0002', encode(sha256('claim-dc901-2'::bytea), 'hex'))) = 'job_closed' into v_ok;
+    if not v_ok then
+      raise exception 'ASSERT FAILED: DC166-6d potwierdzenie gościa dla firmy % nie jest job_closed', v_st;
+    end if;
+    if exists (select 1 from public.get_public_job_screening_questions('e9010000-0000-0000-0000-0000000000b2')) then
+      raise exception 'ASSERT FAILED: DC166-6e pytania oferty firmy % widoczne publicznie', v_st;
+    end if;
+  end loop;
+end $dc$;
+select pg_temp.assert(
+  not exists (select 1 from public.applications where company_id = :'DCCS')
+  and (select status = 'pending' from public.guest_application_requests where id = :'dcreq2')
+  and not exists (select 1 from public.email_deliveries where template = 'newApplication' and profile_id = :'DCE'),
+  'DC166-6f brak aplikacji, powiadomień i e-maili do firmy niezweryfikowanej; zgłoszenie gościa czeka');
+
+-- DC166-7 (kontrola ujemna): job_is_public z 0048 (bez firmy) przepuszcza aplikację do
+-- zawieszonej firmy — dokładnie błąd z audytu.
+begin;
+update public.companies set status = 'suspended', deleted_at = null where id = :'DCCS';
+create or replace function public.job_is_public(p_job_id uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $f$
+  select exists (select 1 from public.jobs j where j.id = p_job_id and j.status = 'active'
+    and j.deleted_at is null and (j.expires_at is null or j.expires_at > now()));
+$f$;
+set local role authenticated; set local app.current_uid = :'DCC'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'DCJS'::uuid, 'dc901-neg-1', null, null, null) as dcneg \gset
+reset role;
+select pg_temp.assert((select c.status::text from public.applications a join public.companies c on c.id = a.company_id
+                        where a.id = :'dcneg') = 'suspended',
+  'DC166-7 kontrola ujemna: bez warunku na firmę aplikacja trafia do zawieszonej firmy');
+rollback;
+reset role; reset app.current_uid;
+
+-- DC166-8: po ponownej weryfikacji firma przyjmuje aplikacje i potwierdzenie gościa.
+update public.companies set status = 'verified', deleted_at = null where id = :'DCCS';
+set role authenticated; set app.current_uid = :'DCC'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'DCJS'::uuid, 'dc901-app-ok', null, null, null) as dcok \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(
+  (select outcome from public.confirm_guest_application(encode(sha256('tok-dc901-2'::bytea), 'hex'),
+     'nonce-claim-dc901-0002', encode(sha256('claim-dc901-2'::bytea), 'hex'))) = 'confirmed',
+  'DC166-8 potwierdzenie gościa po ponownej weryfikacji → confirmed');
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.applications where company_id = :'DCCS') = 2
+  and (select candidate_id = :'DCC'::uuid from public.applications where id = :'dcok'),
+  'DC166-8b zweryfikowana firma przyjmuje aplikacje z konta i gościa');
+-- Historia kandydata nie zależy od job_is_public: po zawieszeniu firmy DCC widzi zgłoszenie.
+update public.companies set status = 'suspended' where id = :'DCCS';
+set role authenticated; set app.current_uid = :'DCC'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.applications where id = :'dcok') = 1
+  and exists (select 1 from public.get_applied_jobs_display('pl', array[:'DCJS'::uuid]) d),
+  'DC166-8c kandydat nadal widzi własne zgłoszenie i dane oferty zawieszonej firmy');
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
