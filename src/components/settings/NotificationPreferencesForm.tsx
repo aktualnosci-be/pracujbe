@@ -13,7 +13,7 @@ import { updateNotificationPreferences } from '@/lib/actions/notification-prefer
 import type { NotificationPreferences } from '@/lib/data/notification-preferences';
 import {
   descriptionKey,
-  EMAIL_FIELDS,
+  emailFieldsFor,
   type NotificationPreferencesRole,
   type ToggleField,
 } from '@/lib/settings/email-preference-fields';
@@ -44,11 +44,17 @@ export interface NotificationPreferencesFormProps {
   defaultValues: NotificationPreferences;
   /** Rola panelu — wybiera pola i opisy (#357). Domyślnie kandydat. */
   role?: NotificationPreferencesRole;
+  /**
+   * Tryb produktu z serwera (#1128/#1145). Brak propsa = tryb ogłoszeniowy (fail-closed): bez
+   * kategorii rekrutacyjnych (zgłoszenia, propozycje, wiadomości).
+   */
+  recruitmentEnabled?: boolean;
 }
 
 export function NotificationPreferencesForm({
   defaultValues,
   role = 'candidate',
+  recruitmentEnabled = false,
 }: NotificationPreferencesFormProps): React.JSX.Element {
   const t = useTranslations('settings');
   const tRoot = useTranslations();
@@ -152,7 +158,7 @@ export function NotificationPreferencesForm({
         </legend>
         <p className="text-sm text-muted-foreground">{t('emailSectionDescription')}</p>
         <div className="divide-y divide-border rounded-lg border border-border">
-          {EMAIL_FIELDS[role].map((field) => (
+          {emailFieldsFor(role, recruitmentEnabled).map((field) => (
             <div key={field} className="p-4">
               {renderToggle(field)}
             </div>

@@ -8,7 +8,7 @@ import { captureError } from '@/lib/error-report';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 import { withRecruitmentMode } from '../helpers/portal-mode';
 
-// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym ta ścieżka jest wyłączona (#1134/#1138).
+// Pełne przepływy (kategorie rekrutacyjne, linki do rozmów) w trybie RECRUITMENT (#1128); tryb ogłoszeniowy: classifieds-notifications.test.ts.
 withRecruitmentMode();
 
 vi.mock('next-intl/server', () => ({

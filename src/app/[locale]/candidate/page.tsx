@@ -14,6 +14,7 @@ import {
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { cn } from '@/lib/utils';
 import { CandidateRecommendedPreview } from '@/components/candidate/CandidateRecommendedPreview';
+import { CandidateAccountDashboard } from '@/components/candidate/CandidateAccountDashboard';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { NewProposalBanner } from '@/components/candidate/NewProposalBanner';
 import { ProfileCompleteness } from '@/components/candidate/ProfileCompleteness';
@@ -65,6 +66,11 @@ export default async function CandidateDashboardPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  // #1142 — decyzja produktowa: portal ogłoszeniowy. Konto bez profilu zawodowego: pulpit
+  // z zapisanymi ofertami i wyszukiwaniami; loadery profilu, CV, zgłoszeń, propozycji
+  // i wiadomości nie są wołane.
+  if (!isRecruitmentEnabled()) return <CandidateAccountDashboard locale={locale} />;
 
   const td = await getTranslations({ locale, namespace: 'dashboard' });
   const tp = await getTranslations({ locale, namespace: 'candidatePassport' });
