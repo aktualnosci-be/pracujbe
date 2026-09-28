@@ -33,6 +33,8 @@
 --    zgodności). `email_delivery_suppression_reason` (0124) dostaje pierwszą przyczynę
 --    `suppressed_feature_disabled`; korzystają z niej `claim_email_batch` (0124) i
 --    `email_delivery_send_check` (0131), więc wygaszane są także wiersze już w kolejce.
+--    Definicja rozszerza wersję z 0174 (przyczyna `suppressed_recruitment_disabled` dla
+--    `newMessage` zostaje pierwsza), nie 0124.
 --
 -- Rollback: supabase/rollback/0175_classifieds_account_notifications.down.sql.
 -- =============================================================================
@@ -174,7 +176,8 @@ $$;
 revoke all on function public.email_recruitment_template(text) from public, anon, authenticated;
 grant execute on function public.email_recruitment_template(text) to service_role;
 
--- 0124 + pierwsza przyczyna `suppressed_feature_disabled` (reszta bez zmian).
+-- 0174 (newMessage → `suppressed_recruitment_disabled`, zachowane) + `suppressed_feature_disabled`
+-- dla pozostałych szablonów procesu (reszta bez zmian; definicja bazuje na 0174, nie na 0124).
 create or replace function public.email_delivery_suppression_reason(
   p_profile_id uuid,
   p_template text,
@@ -184,7 +187,10 @@ create or replace function public.email_delivery_suppression_reason(
   p_entity_id uuid
 ) returns text language sql stable security definer set search_path = public, pg_temp as $$
   select case
-    -- #1145: tryb ogłoszeniowy — e-maile procesu rekrutacyjnego nie wychodzą.
+    -- 0174 (#1134): rozmowy wyłączone w trybie ogłoszeniowym — przyczyna newMessage bez zmian.
+    when p_template = 'newMessage' and not public.recruitment_enabled()
+      then 'suppressed_recruitment_disabled'
+    -- #1145: tryb ogłoszeniowy — pozostałe e-maile procesu rekrutacyjnego nie wychodzą.
     when not public.recruitment_enabled() and public.email_recruitment_template(p_template)
       then 'suppressed_feature_disabled'
     when public.email_address_suppressed(p_to_email) then 'suppressed_address'

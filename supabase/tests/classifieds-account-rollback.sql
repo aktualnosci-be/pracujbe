@@ -29,8 +29,10 @@ select pg_temp.assert(
                where t.tgname = 'trg_aa_recruitment_mode' and c.relname = 'applications')
   and position('recruitment' in pg_get_functiondef('public.ensure_candidate_profile()'::regprocedure)) = 0
   and position('suppressed_feature_disabled' in pg_get_functiondef(
-        'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) = 0,
-  'CA1142-R rollback usuwa tylko obiekty 0175 i przywraca definicje z 0040/0124/0173');
+        'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) = 0
+  and position('suppressed_recruitment_disabled' in pg_get_functiondef(
+        'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) > 0,
+  'CA1142-R rollback usuwa tylko obiekty 0175 i przywraca definicje z 0040/0124/0173/0174');
 rollback;
 select pg_temp.assert(to_regprocedure('public.email_recruitment_template(text)') is not null,
   'CA1142-R po cofnięciu transakcji migracja 0175 zostaje');

@@ -178,6 +178,18 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
   `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
   `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+- **Bez wiadomości i CV (#1134/#1138, migracja `0174`, na 0171):** akcje
+  `messages.ts`/`message-attachments.ts` → `RECRUITMENT_DISABLED` jako pierwszy krok (bez bazy, limitera, bucketu),
+  loadery rozmów bez zapytań (lista pusta, licznik 0), segmenty `candidate|employer/wiadomosci` = 404 (layout,
+  przed `loading.tsx`), `/api/files/message/<id>` = 404, nawigacja bez „Wiadomości”, szczegół oferty bez „Wyślij
+  wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
+  `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
+  `allowUpload` = lista istniejących plików w profilu, pulpit bez sekcji). Import CV przez AI: `cvImportProvider()` =
+  null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
+  `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
+  trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
+  = nakładka ze strażnikiem (`_impl` bez EXECUTE dla klientów). Dowód: `rls.sql` sekcja CL174 (kontrole ujemne),
+  rollback `0174_…down.sql`, unit `classifieds-messaging-cv-off`, strażnik `legal`, E2E `classifieds-messaging-cv-off`.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -3120,6 +3132,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny).
+  Tytuł zawsze obecny (#1032): `htmlLimitedBots: /./` w `next.config.mjs` wyłącza strumieniowanie
+  metadanych Next 15 dla każdego klienta z user-agentem — `<title>` w `<head>`, a po
+  `router.refresh()`/nawigacji podmienia się atomowo (strumieniowane drzewo metadanych ma klucz
+  żądania i montuje się od nowa → dokument chwilowo bez tytułu, flaka axe `document-title`).
+  Strażnik `blocking-metadata-config.test` (z kontrolą ujemną), E2E `offer-trust` (tytuł w `<head>`,
+  zero mutacji bez tytułu podczas odświeżenia).
   Bramka wydajności w CI (#395): kroki „Performance budget (static)” w `build` (JS gzip
   kluczowych tras = layouty + strona, fonty woff2; `scripts/perf-budget-static.mjs`) i
   „Performance budget (lab CWV)” w `e2e-perf` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,

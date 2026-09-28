@@ -73,7 +73,7 @@ drop trigger if exists trg_aa_recruitment_mode on public.notifications;
 drop function if exists public.skip_recruitment_notification();
 drop function if exists public.notification_is_recruitment(text, text);
 
--- 3. Kolejka e-mail: przyczyny wygaszenia z 0124.
+-- 3. Kolejka e-mail: przyczyny wygaszenia z 0174 (newMessage) i 0124.
 create or replace function public.email_delivery_suppression_reason(
   p_profile_id uuid,
   p_template text,
@@ -83,6 +83,9 @@ create or replace function public.email_delivery_suppression_reason(
   p_entity_id uuid
 ) returns text language sql stable security definer set search_path = public, pg_temp as $$
   select case
+    -- 0174 (#1134): rozmowy wyłączone w trybie ogłoszeniowym — list o wiadomości nie wychodzi.
+    when p_template = 'newMessage' and not public.recruitment_enabled()
+      then 'suppressed_recruitment_disabled'
     when public.email_address_suppressed(p_to_email) then 'suppressed_address'
     when public.email_allowed(p_profile_id, p_template) is not true then 'suppressed_opt_out'
     -- 0122 (#503): odbiorca firmowy musi nadal być aktywnym recruiter+ w chwili claimu/wysyłki.

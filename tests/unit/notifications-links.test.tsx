@@ -76,6 +76,22 @@ describe('resolveHref — cel powiadomienia wyznaczany serwerowo (#148)', () => 
     expect(resolveHref(entityType, role, CONVERSATION)).toBe(href);
   });
 
+  describe('tryb rekrutacyjny: rozmowy (#1134 — kontrola ujemna trybu)', () => {
+    recruitmentModeInTests();
+    it.each([
+      ['candidate', `/candidate/wiadomosci?c=${CONVERSATION}`],
+      ['employer', `/employer/wiadomosci?c=${CONVERSATION}`],
+    ])('conversation dla %s → %s', (role, href) => {
+      expect(resolveHref('conversation', role, CONVERSATION)).toBe(href);
+    });
+    it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
+      'nie wkleja niezweryfikowanego id rozmowy do URL: %j',
+      (entityId) => {
+        expect(resolveHref('conversation', 'candidate', entityId)).toBe('/candidate/wiadomosci');
+      },
+    );
+  });
+
   it.each(['', 'not-a-uuid', `${CONVERSATION}&x=1`, '../../admin'])(
     'nie wkleja niezweryfikowanego id do URL: %j',
     (entityId) => {

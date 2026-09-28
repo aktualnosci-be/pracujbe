@@ -30,7 +30,7 @@ import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { profileChecklistItems } from '@/components/candidate/profile-checklist-items';
 import { getProfileLevelTitle } from '@/lib/profile-completeness';
 import { isCvImportEnabled } from '@/lib/cv-import/config';
-import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
+import { isRecruitmentEnabled, notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Panel kandydata — Profil. Wygląd: `#people/profile` z prototypu „04 Ludzie i praca”
@@ -82,6 +82,7 @@ export default async function CandidateProfilePage({
     getTranslations({ locale, namespace: 'common' }),
     getTranslations({ locale, namespace: 'languageNames' }),
   ]);
+  const cvUploadOn = isRecruitmentEnabled('cvAccess');
   const [profile, passport, files] = await Promise.all([
     getCandidateProfileSummary(),
     getCandidatePassport(),
@@ -172,11 +173,15 @@ export default async function CandidateProfilePage({
           <Link href="/candidate/onboarding" className={cn(BTN_SECONDARY, 'w-full')}>{t('completeProfile')}</Link>
         </section>}
 
-        {/* Dokumenty / CV (prywatny bucket + signed URLs) */}
-        <CvUpload
-          items={files.status === 'ready' ? files.items : []}
-          loadFailed={files.status === 'error'}
-        />
+        {/* Dokumenty / CV (prywatny bucket + signed URLs). #1138: w trybie ogłoszeniowym bez
+            wgrywania — tylko lista wcześniej wgranych plików (pobranie/usunięcie), gdy istnieją. */}
+        {cvUploadOn || files.status === 'error' || (files.status === 'ready' && files.items.length > 0) ? (
+          <CvUpload
+            items={files.status === 'ready' ? files.items : []}
+            loadFailed={files.status === 'error'}
+            allowUpload={cvUploadOn}
+          />
+        ) : null}
         </div>
       </div>
     </div>

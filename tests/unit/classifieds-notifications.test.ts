@@ -58,6 +58,16 @@ describe('kolejka e-mail: szablony rekrutacyjne (SQL ↔ TS)', () => {
     expect(fn.indexOf('suppressed_feature_disabled')).toBeLessThan(fn.indexOf('suppressed_address'));
   });
 
+  it('najnowsza definicja zachowuje przyczynę newMessage z 0174 (0175 jej nie nadpisuje starszą wersją)', () => {
+    const sql = latestTemplateMigration();
+    const fn = sql.slice(sql.indexOf('function public.email_delivery_suppression_reason('));
+    expect(fn).toMatch(/when p_template = 'newMessage' and not public\.recruitment_enabled\(\)\s*then 'suppressed_recruitment_disabled'/);
+    // Kontrola ujemna: definicja bez tej klauzuli (stan z 0124) jest wykrywana.
+    const mutated = fn.replace(/when p_template = 'newMessage'[\s\S]*?'suppressed_recruitment_disabled'/, '');
+    expect(mutated).not.toMatch(/suppressed_recruitment_disabled'\s*\n\s*when public\.email_address/);
+    expect(mutated).not.toContain("p_template = 'newMessage'");
+  });
+
   it('szablony ogłoszeniowe poza listą (alert, status firmy, konto, zespół, moderacja)', () => {
     for (const t of ['jobMatch', 'companyVerified', 'companyRejected', 'jobPublished', 'accountConfirmation',
       'passwordReset', 'teamInvitation', 'reportReceived', 'newsletter']) {
