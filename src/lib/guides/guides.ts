@@ -91,6 +91,7 @@ const GUIDES: readonly Guide[] = [
     slug: 'praca-w-belgii-bez-znajomosci-jezyka',
     category: 'jobSearch',
     publishedAt: '2026-07-15',
+    updatedAt: '2026-09-28',
     translations: {
       pl: {
         title: 'Jak znaleźć pracę w Belgii bez znajomości języka',
@@ -116,7 +117,7 @@ const GUIDES: readonly Guide[] = [
             'Nawet bez znajomości języka warto pokazać, że jesteś gotowy do pracy od zaraz i masz podstawowe uprawnienia. Największą wartością są konkretne umiejętności: prawo jazdy kategorii B lub C, certyfikat VCA (bezpieczeństwo na budowie), doświadczenie na wózku widłowym czy w konkretnym zawodzie.',
           ),
           p(
-            'W profilu na Pracuj.be zaznacz języki, które znasz choćby w stopniu podstawowym, oraz swoją dostępność. Wielu pracodawców używa filtra „bez wymogu językowego" — dzięki temu Twoja aplikacja trafia dokładnie tam, gdzie język nie jest wymagany.',
+            'Na liście ofert Pracuj.be użyj filtra „Bez wymogu językowego” — zobaczysz oferty, w których pracodawca nie wymaga lokalnego języka. Kontaktując się z pracodawcą, podaj języki, które znasz choćby w stopniu podstawowym, oraz swoją dostępność.',
           ),
           h('Ucz się języka od pierwszego dnia'),
           p(

@@ -60,15 +60,28 @@ import {
  */
 export interface EmployerOverview {
   activeOffersCount: number;
-  /** Zgłoszenia w statusie `submitted` (jeszcze nieprzejrzane). */
-  newApplicationsCount: number | null;
+  /**
+   * Zgłoszenia w statusie `submitted` (jeszcze nieprzejrzane). Brak pola = tryb ogłoszeniowy
+   * (#1147): kafelka nie ma, zapytania do `applications` nie ma.
+   */
+  newApplicationsCount?: number | null;
   /**
    * RÓŻNI kandydaci dopasowani do ofert firmy (nie wiersze `matches`) — jak lista „Top dopasowani”.
    * Brak pola = tryb ogłoszeniowy (#1133): kafelek nie istnieje, zapytania do `matches` nie ma.
    */
   matchedCandidatesCount?: number | null;
-  /** Rozmowy AKTYWNEJ firmy, w których ostatnia wiadomość jest od kandydata (czekają na odpowiedź). */
-  messagesToAnswerCount: number | null;
+  /**
+   * Rozmowy AKTYWNEJ firmy, w których ostatnia wiadomość jest od kandydata (czekają na odpowiedź).
+   * Brak pola = tryb ogłoszeniowy (#1147): bez zapytania do `conversations`/`messages`.
+   */
+  messagesToAnswerCount?: number | null;
+  /**
+   * Tryb ogłoszeniowy (#1147): statystyki ogłoszeń z lejka ofert (#99) za {@link FUNNEL_PERIOD_DAYS}
+   * dni — wyświetlenia szczegółów i kliknięcia „Aplikuj u pracodawcy” (`apply_started`). `null` =
+   * brak uprawnień do lejka (zwykły `member`), nie zero. Brak pól = tryb rekrutacyjny.
+   */
+  listingDetailViews?: number | null;
+  listingApplyClicks?: number | null;
   /** Rola recruiter+ w aktywnej firmie — gdy `false`, UI wyjaśnia, dlaczego liczników brak. */
   recruiterAccess: boolean;
   /** Firma zweryfikowana — gdy `false`, dopasowani kandydaci czekają na weryfikację. */
@@ -88,8 +101,11 @@ export interface EmployerJob {
   pastExpiry: boolean;
   /** Publiczny adres oferty (link „Zobacz ofertę" dla aktywnej, #325). */
   slug: string;
-  /** `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). */
-  newApplications: number | null;
+  /**
+   * `null` = brak uprawnień rekrutera do zgłoszeń (nie zero). Brak pola = tryb ogłoszeniowy
+   * (#1147/#1144): licznika zgłoszeń przy ofercie nie ma, lista nie czyta `applications`.
+   */
+  newApplications?: number | null;
   /**
    * `null` = brak uprawnień rekrutera do dopasowań (nie zero). Brak pola = tryb ogłoszeniowy
    * (#1133): kolumny dopasowań nie ma, lista nie czyta `matches`.
@@ -193,6 +209,15 @@ const DEMO_CANDIDATES: EmployerMatchedCandidate[] = [
 
 const DEMO_FUNNEL: FunnelStats = { views: 4126, applications: 287, interviews: 38, hired: 6 };
 
+/** Tryb ogłoszeniowy (#1147): kafelki demo = statystyki ogłoszeń (sumy {@link DEMO_JOB_FUNNEL}). */
+const DEMO_LISTING_OVERVIEW: EmployerOverview = {
+  activeOffersCount: 8,
+  listingDetailViews: 875,
+  listingApplyClicks: 120,
+  recruiterAccess: true,
+  companyVerified: true,
+};
+
 const EMPTY_OVERVIEW: EmployerOverview = {
   activeOffersCount: 0,
   newApplicationsCount: 0,
@@ -203,6 +228,14 @@ const EMPTY_OVERVIEW: EmployerOverview = {
 };
 
 const EMPTY_FUNNEL: FunnelStats = { views: null, applications: 0, interviews: 0, hired: 0 };
+
+/**
+ * #1147: tryb ogłoszeniowy — statystyki pracodawcy = statystyki ogłoszenia. Liczniki procesu
+ * (zgłoszenia, rozmowy, lejek rekrutacyjny, wysłane aplikacje) nie są liczone ani zwracane.
+ */
+function recruitmentStatsEnabled(): boolean {
+  return isRecruitmentEnabled('applications');
+}
 
 /** #1133: tryb ogłoszeniowy — dopasowania kandydatów nie istnieją w panelu pracodawcy. */
 function matchingEnabled(): boolean {
@@ -223,6 +256,13 @@ function withoutMatched(job: EmployerJob): EmployerJob {
   return rest;
 }
 
+/** Oferta bez licznika zgłoszeń (tryb ogłoszeniowy, #1147). */
+function withoutNewApplications(job: EmployerJob): EmployerJob {
+  const { newApplications: _omit, ...rest } = job;
+  void _omit;
+  return rest;
+}
+
 /** Okno czasowe lejka — musi odpowiadać etykiecie `dashboard.funnelPeriod` („ostatnie 30 dni"). */
 export const FUNNEL_PERIOD_DAYS = 30;
 
@@ -238,7 +278,9 @@ export type EmployerOverviewLoad =
 export type FunnelStatsLoad =
   | { status: 'ok'; funnel: FunnelStats }
   | { status: 'denied' }
-  | { status: 'error' };
+  | { status: 'error' }
+  /** #1147: tryb ogłoszeniowy — lejka rekrutacyjnego nie ma (loader bez zapytań). */
+  | { status: 'disabled' };
 
 /**
  * Statusy z `application_status_history` traktowane jako „osiągnięto etap rozmowy".
@@ -421,6 +463,11 @@ const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
       AND NOT EXISTS (SELECT 1 FROM public.company_members cm
                        WHERE cm.company_id = $1 AND cm.profile_id = last.sender_id)`;
 
+/** Aktywne oferty firmy. #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance. */
+const ACTIVE_JOBS_SQL = `SELECT 1 FROM public.jobs
+     WHERE company_id = $1 AND status = 'active' AND deleted_at IS NULL
+       AND (expires_at IS NULL OR expires_at > now())`;
+
 /**
  * Kafelki statystyk (aktywne oferty, nowe aplikacje, dopasowani, wiadomości do odpowiedzi).
  * Liczniki rekrutacyjne tylko dla recruiter+ — dla zwykłego `member` `null` („brak danych”),
@@ -428,6 +475,7 @@ const CONVERSATIONS_AWAITING_REPLY_SQL = `SELECT 1
  * niezweryfikowanej (dostęp do bazy kandydatów dopiero po weryfikacji).
  */
 export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
+  if (!recruitmentStatsEnabled()) return getListingOverview();
   const matching = matchingEnabled();
   if (!isPortalDataConfigured()) {
     return { status: 'ok', overview: matching ? DEMO_OVERVIEW : withoutMatchedCount(DEMO_OVERVIEW) };
@@ -441,11 +489,7 @@ export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
 
     // Liczniki w jednej transakcji: błąd któregokolwiek = stan błędu kafelków (#304).
     const overview = await withPortalTransaction(me, async (tx): Promise<EmployerOverview> => ({
-      activeOffersCount: await queryCount(tx, 'employer.overview-active-jobs',
-        `SELECT 1 FROM public.jobs
-          WHERE company_id = $1 AND status = 'active' AND deleted_at IS NULL
-            -- #72: przeterminowana oferta nie jest aktywna także przed przebiegiem maintenance.
-            AND (expires_at IS NULL OR expires_at > now())`, [companyId]),
+      activeOffersCount: await queryCount(tx, 'employer.overview-active-jobs', ACTIVE_JOBS_SQL, [companyId]),
       newApplicationsCount: recruiter
         ? await queryCount(tx, 'employer.overview-new-applications',
             `SELECT 1 FROM public.applications
@@ -466,6 +510,42 @@ export async function getEmployerOverview(): Promise<EmployerOverviewLoad> {
       companyVerified: companyStatus === 'verified',
     }));
 
+    return { status: 'ok', overview };
+  } catch (error) {
+    captureError(error, { area: 'employer.getEmployerOverview' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Kafelki w trybie ogłoszeniowym (#1147): aktywne oferty + wyświetlenia i kliknięcia „Aplikuj
+ * u pracodawcy” z lejka ofert (#99, ostatnie {@link FUNNEL_PERIOD_DAYS} dni). Bez zapytań do
+ * `applications`, `matches`, `conversations` i `messages`. Kolumnę `applications_submitted`
+ * zwracaną przez RPC lejka pomijamy (portal nie przyjmuje zgłoszeń).
+ */
+async function getListingOverview(now: Date = new Date()): Promise<EmployerOverviewLoad> {
+  if (!isPortalDataConfigured()) return { status: 'ok', overview: DEMO_LISTING_OVERVIEW };
+  try {
+    const ctx = await loadContext();
+    if (!ctx) {
+      return {
+        status: 'ok',
+        overview: { activeOffersCount: 0, listingDetailViews: 0, listingApplyClicks: 0, recruiterAccess: true, companyVerified: true },
+      };
+    }
+    const { me, companyId, companyStatus, role } = ctx;
+    const overview = await withPortalTransaction(me, async (tx): Promise<EmployerOverview> => {
+      const activeOffersCount = await queryCount(tx, 'employer.overview-active-jobs', ACTIVE_JOBS_SQL, [companyId]);
+      const rows = await readJobFunnelRows(tx, companyId, funnelDateRange(FUNNEL_PERIOD_DAYS, now));
+      const denied = rows === 'denied';
+      return {
+        activeOffersCount,
+        listingDetailViews: denied ? null : rows.reduce((sum, row) => sum + funnelCount(row.detail_views), 0),
+        listingApplyClicks: denied ? null : rows.reduce((sum, row) => sum + funnelCount(row.apply_started), 0),
+        recruiterAccess: canRecruit(role),
+        companyVerified: companyStatus === 'verified',
+      };
+    });
     return { status: 'ok', overview };
   } catch (error) {
     captureError(error, { area: 'employer.getEmployerOverview' });
@@ -886,7 +966,11 @@ export async function getCompanyJobsLoad(
     const demoJobs = DEMO_JOBS.slice(0, EMPLOYER_JOBS_PAGE_SIZE);
     return {
       status: 'ok',
-      jobs: request.cursor ? [] : matchingEnabled() ? demoJobs : demoJobs.map(withoutMatched),
+      jobs: request.cursor
+        ? []
+        : demoJobs
+            .map((job) => (matchingEnabled() ? job : withoutMatched(job)))
+            .map((job) => (recruitmentStatsEnabled() ? job : withoutNewApplications(job))),
       prevCursor: null,
       nextCursor: null,
     };
@@ -902,15 +986,17 @@ export async function getCompanyJobsLoad(
     const recruiter = canRecruit(ctx.role);
     // #1133: tryb ogłoszeniowy — bez podzapytania do `matches` i bez pola `matched`.
     const matching = matchingEnabled();
+    // #1147: tryb ogłoszeniowy — bez podzapytania do `applications` i bez pola `newApplications`.
+    const applications = recruitmentStatsEnabled();
 
     // Strona + znacznik kolejnej w kierunku odczytu. Liczniki liczone w bazie (count pod RLS) —
     // bez przesyłania wierszy aplikacji/dopasowań; błąd licznika = błąd całej listy.
     const rows = await withPortalTransaction(me, (tx) =>
       queryRows(tx, prev ? 'employer.jobs-page-prev' : 'employer.jobs-page',
-        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at,
+        `SELECT j.id, j.title, j.city, j.status, j.slug, j.expires_at, j.created_at${applications ? `,
                 (SELECT count(*) FROM public.applications a
                   WHERE a.company_id = $1 AND a.job_id = j.id
-                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications${matching ? `,
+                    AND a.status = 'submitted' AND a.deleted_at IS NULL)::integer AS new_applications` : ''}${matching ? `,
                 (SELECT count(*) FROM public.matches m WHERE m.job_id = j.id)::integer AS matched` : ''}
            FROM public.jobs j
           WHERE j.company_id = $1 AND j.deleted_at IS NULL
@@ -934,7 +1020,7 @@ export async function getCompanyJobsLoad(
           status: effectiveJobStatus(asString(r['status'], 'draft'), expiresAt, now),
           pastExpiry: isPastExpiry(expiresAt, now),
           slug: asString(r['slug']),
-          newApplications: recruiter ? asNumber(r['new_applications']) : null,
+          ...(applications ? { newApplications: recruiter ? asNumber(r['new_applications']) : null } : {}),
           ...(matching ? { matched: recruiter ? asNumber(r['matched']) : null } : {}),
           createdAt: asString(r['created_at']) || null,
         };
@@ -1391,8 +1477,10 @@ async function readFunnelViews(
 export interface JobFunnelMetrics {
   searchAppearances: number;
   detailViews: number;
+  /** Tryb ogłoszeniowy (#1147): kliknięcia „Aplikuj u pracodawcy”; tryb rekrutacyjny: otwarcia formularza. */
   applyStarted: number;
-  applicationsSubmitted: number;
+  /** Brak pola = tryb ogłoszeniowy (#1147): portal nie przyjmuje zgłoszeń, kolumny nie ma. */
+  applicationsSubmitted?: number;
 }
 
 export interface JobFunnelItem extends JobFunnelMetrics {
@@ -1414,16 +1502,24 @@ const DEMO_JOB_FUNNEL: JobFunnelItem[] = [
   { jobId: '12343', title: 'Elektryk przemysłowy', slug: '', status: 'active', searchAppearances: 764, detailViews: 158, applyStarted: 19, applicationsSubmitted: 11 },
 ];
 
-function sumFunnel(jobs: readonly JobFunnelMetrics[]): JobFunnelMetrics {
-  return jobs.reduce<JobFunnelMetrics>(
+function sumFunnel(jobs: readonly JobFunnelMetrics[], withApplications: boolean): JobFunnelMetrics {
+  const totals = jobs.reduce<Required<JobFunnelMetrics>>(
     (acc, job) => ({
       searchAppearances: acc.searchAppearances + job.searchAppearances,
       detailViews: acc.detailViews + job.detailViews,
       applyStarted: acc.applyStarted + job.applyStarted,
-      applicationsSubmitted: acc.applicationsSubmitted + job.applicationsSubmitted,
+      applicationsSubmitted: acc.applicationsSubmitted + (job.applicationsSubmitted ?? 0),
     }),
     { searchAppearances: 0, detailViews: 0, applyStarted: 0, applicationsSubmitted: 0 },
   );
+  return withApplications ? totals : withoutApplicationsSubmitted(totals);
+}
+
+/** Tryb ogłoszeniowy (#1147): metryki bez wysłanych aplikacji — pole znika, a nie „0”. */
+function withoutApplicationsSubmitted<T extends JobFunnelMetrics>(metrics: T): T {
+  const { applicationsSubmitted: _omit, ...rest } = metrics;
+  void _omit;
+  return rest as T;
 }
 
 /**
@@ -1436,8 +1532,10 @@ export async function getJobFunnel(
   now: Date = new Date(),
 ): Promise<JobFunnelLoad> {
   const range = funnelDateRange(days, now);
+  const withApplications = recruitmentStatsEnabled();
   if (!isPortalDataConfigured()) {
-    return { status: 'ok', range, totals: sumFunnel(DEMO_JOB_FUNNEL), jobs: DEMO_JOB_FUNNEL };
+    const jobs = withApplications ? DEMO_JOB_FUNNEL : DEMO_JOB_FUNNEL.map(withoutApplicationsSubmitted);
+    return { status: 'ok', range, totals: sumFunnel(jobs, withApplications), jobs };
   }
   try {
     const ctx = await loadContext();
@@ -1453,9 +1551,10 @@ export async function getJobFunnel(
       searchAppearances: funnelCount(row.search_appearances),
       detailViews: funnelCount(row.detail_views),
       applyStarted: funnelCount(row.apply_started),
-      applicationsSubmitted: funnelCount(row.applications_submitted),
+      // #1147: tryb ogłoszeniowy — kolumnę RPC pomijamy, wynik jej nie zawiera.
+      ...(withApplications ? { applicationsSubmitted: funnelCount(row.applications_submitted) } : {}),
     }));
-    return { status: 'ok', range, totals: sumFunnel(jobs), jobs };
+    return { status: 'ok', range, totals: sumFunnel(jobs, withApplications), jobs };
   } catch (error) {
     captureError(error, { area: 'employer.getJobFunnel' });
     return { status: 'error', range };
@@ -1474,6 +1573,8 @@ export async function getJobFunnel(
  * `null`, gdy użytkownik nie ma uprawnień rekrutera (nie udajemy zera).
  */
 export async function getFunnelStats(now: Date = new Date()): Promise<FunnelStatsLoad> {
+  // #1147: tryb ogłoszeniowy — bez lejka rekrutacyjnego i bez zapytań (także w demo).
+  if (!recruitmentStatsEnabled()) return { status: 'disabled' };
   if (!isPortalDataConfigured()) return { status: 'ok', funnel: DEMO_FUNNEL };
 
   try {

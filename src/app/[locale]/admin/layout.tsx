@@ -7,6 +7,7 @@ import { redirect } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { displayName, getCurrentIdentity, readOwnProfileSummary } from '@/lib/auth/current';
 import { isPortalAuthConfigured } from '@/lib/env';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Layout panelu administratora (grupa tras `/admin/*`).
@@ -53,7 +54,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <AdminShell userName={userName} keepSessionAlive={hasSession}>
+    <AdminShell userName={userName} keepSessionAlive={hasSession} screeningEnabled={isRecruitmentEnabled('screening')}>
       {children}
     </AdminShell>
   );

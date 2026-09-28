@@ -5,7 +5,7 @@ import { getEmployerApplicationHistoryPage } from '@/lib/data/employer';
 import { loadMoreApplicationHistory } from '@/lib/actions/employer-application-history';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 // Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
 recruitmentModeInTests();

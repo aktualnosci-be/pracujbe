@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
-import { useClassifiedsMode as withClassifiedsMode } from '../helpers/portal-mode';
+import { withClassifiedsMode } from '../helpers/portal-mode';
 
 /**
  * Tryb ogłoszeniowy (#1131, #1133, #1139; epik #1128) — decyzja produktowa: portal ogłoszeniowy.
@@ -151,6 +151,8 @@ describe('#1133: panel pracodawcy bez kandydatów i dopasowań', () => {
     fakeDb.count('employer.overview-awaiting-reply', 0);
     fakeDb.rpc('get_company_top_matches', []);
     fakeDb.rpc('get_company_matches_page', []);
+    // #1147: tryb ogłoszeniowy — kafelki przeglądu czytają lejek ofert (wyświetlenia, kliknięcia).
+    fakeDb.rpc('get_company_job_funnel', []);
     const jobRow = {
       id: '33333333-3333-4333-8333-333333333333', title: 'Magazynier', city: 'Gent', status: 'active', slug: 'magazynier',
       expires_at: null, created_at: '2026-09-20T10:00:00Z', new_applications: 1, matched: 4,

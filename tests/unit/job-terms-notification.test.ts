@@ -9,7 +9,7 @@ import type { PortalIdentity } from '@/lib/auth/session';
 import { getNotificationsPage, resolveHref, titleKeyForType } from '@/lib/data/notifications';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 // Istniejące przepływy rekrutacyjne testowane w trybie RECRUITMENT (#1128, tryb ogłoszeniowy = domyślny).
 recruitmentModeInTests();

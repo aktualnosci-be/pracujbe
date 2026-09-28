@@ -1,5 +1,8 @@
 # PROJEKT — do weryfikacji prawnika, nieopublikowany
 
+> **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy — przesyłanie i import CV
+> są wyłączone (#1138). Szkic bez zmian merytorycznych.
+
 > Dokument roboczy dla #487 i #498. Nie jest opinią prawną, polityką prywatności ani treścią
 > dla użytkowników. Opisuje, co robi kod, i zbiera pytania do prawnika. Nic z tego dokumentu
 > nie trafia do UI. Do czasu decyzji import CV przez AI pozostaje wyłączony

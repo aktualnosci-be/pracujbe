@@ -5,8 +5,8 @@ import { getTranslations } from 'next-intl/server';
 /**
  * Benefits — pasek zaufania (dawniej pod hero, wg makiety `01-home`).
  *
- * Trzy pozycje z zieloną ikoną potwierdzenia: szybka aplikacja bez CV, zweryfikowane oferty,
- * praca w całej Belgii. Każda ma tytuł i krótki podtytuł (namespace `home`, klucze trust*).
+ * Trzy pozycje z zieloną ikoną potwierdzenia: kontakt bezpośrednio z pracodawcą, zweryfikowane
+ * firmy, praca w całej Belgii (#1149). Każda ma tytuł i krótki podtytuł (namespace `home`, klucze trust*).
  * Prototyp „Ludzie i praca” nie ma paska między hero a ofertami, więc stoi pod wejściami
  * `HomeEntryPoints` — sama lista, sekcję zapewnia strona. Komponent serwerowy.
  */

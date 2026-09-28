@@ -83,16 +83,16 @@
     "savedSuccess": "Dane firmy zostały zapisane.",
     "statusLabel": "Status weryfikacji",
     "verifiedAt": "Data weryfikacji",
-    "verificationNote": "Publikacja ofert i wysyłka propozycji wymaga statusu „zweryfikowana”, który nadaje administrator.",
+    "verificationNote": "Publikacja ofert wymaga statusu „zweryfikowana”, który administrator nadaje po sprawdzeniu danych rejestrowych firmy.",
     "bannerPendingTitle": "Firma czeka na weryfikację",
-    "bannerPendingDesc": "Dane firmy czekają w kolejce na sprawdzenie przez administratora Pracuj.be. Publikacja ofert i wysyłka propozycji będą możliwe po zatwierdzeniu.",
+    "bannerPendingDesc": "Dane firmy czekają w kolejce na sprawdzenie przez administratora Pracuj.be. Publikacja ofert będzie możliwa po zatwierdzeniu.",
     "bannerEta": "Zwykle do 2 dni roboczych.",
     "bannerVerifiedTitle": "Firma zweryfikowana",
-    "bannerVerifiedDesc": "Możesz publikować oferty i wysyłać propozycje kandydatom.",
+    "bannerVerifiedDesc": "Administrator potwierdził dane rejestrowe firmy. Możesz publikować oferty.",
     "bannerRejectedTitle": "Weryfikacja odrzucona",
     "bannerRejectedDesc": "Administrator nie zatwierdził danych firmy. Sprawdź nazwę i numer VAT/KBO, popraw je i wyślij firmę ponownie do weryfikacji.",
     "bannerSuspendedTitle": "Konto firmy zawieszone",
-    "bannerSuspendedDesc": "Konto firmy zostało zawieszone przez administratora. Publikacja ofert i wysyłka propozycji są wstrzymane.",
+    "bannerSuspendedDesc": "Konto firmy zostało zawieszone przez administratora. Publikacja ofert jest wstrzymana.",
     "statusUnverified": "Niezweryfikowana",
     "statusPending": "Oczekuje na weryfikację",
     "statusVerified": "Zweryfikowana",
@@ -118,7 +118,7 @@
     "reverifySubmit": "Wyślij ponownie do weryfikacji",
     "reverifyHint": "Najpierw popraw i zapisz dane firmy, a potem wyślij ją ponownie do weryfikacji.",
     "reverifySuccess": "Firma wróciła do kolejki weryfikacji.",
-    "editVerifiedHint": "Zmiana nazwy lub numeru VAT/KBO zweryfikowanej firmy wymaga ponownej weryfikacji. Do czasu zatwierdzenia oferty firmy nie będą widoczne publicznie, a publikacja i wysyłka propozycji zostaną wstrzymane.",
+    "editVerifiedHint": "Zmiana nazwy lub numeru VAT/KBO zweryfikowanej firmy wymaga ponownej weryfikacji. Do czasu zatwierdzenia oferty firmy nie będą widoczne publicznie, a publikacja zostanie wstrzymana.",
     "savedReverification": "Dane firmy zostały zapisane. Firma wróciła do weryfikacji — administrator sprawdzi nowe dane.",
     "linksTitle": "Strona WWW i logo",
     "linksSubtitle": "Adresy pokazujemy w ofertach i profilu firmy. Nowy adres publikujemy po sprawdzeniu przez administratora portalu, usunięcie adresu działa od razu. Zmiana nie wymaga ponownej weryfikacji firmy.",
@@ -245,9 +245,9 @@
     "heroTitleLine2": "Twoje miejsce.",
     "heroTitleLine3": "Twój nowy start.",
     "heroEyebrow": "Praca w Belgii",
-    "heroSubtitle": "Znajdź pracę, w której wykorzystasz to, co potrafisz. Porównaj warunki i aplikuj swoim profilem — bez pisania CV.",
+    "heroSubtitle": "Przeglądaj oferty pracy w Belgii, porównuj warunki i kontaktuj się bezpośrednio z pracodawcą.",
     "heroBrowseJobs": "Przeglądaj oferty",
-    "heroCreateProfile": "Załóż profil kandydata",
+    "heroCreateProfile": "Załóż konto i zapisuj oferty",
     "heroPhotoCaption": "Praca to przede wszystkim ludzie.",
     "heroPhotoDisclaimer": "Zdjęcie ilustracyjne — nie przedstawia konkretnej oferty.",
     "heroSearchJobLabel": "Stanowisko, słowo kluczowe",
@@ -255,14 +255,14 @@
     "searchJobPlaceholder": "np. mechanik, magazynier, opiekunka",
     "searchLocationPlaceholder": "np. Antwerpia, Bruksela, Gandawa",
     "searchButton": "Szukaj pracy",
-    "ctaCreateProfile": "Utwórz profil kandydata",
-    "ctaCreateProfileSub": "Zapisz oferty i aplikuj szybciej",
+    "ctaCreateProfile": "Zapisuj oferty i wyszukiwania",
+    "ctaCreateProfileSub": "Załóż konto i włącz powiadomienia e-mail o nowych ofertach",
     "ctaPostJob": "Dodaj ofertę pracy",
-    "ctaPostJobSub": "Dotrzyj do kandydatów szukających pracy w Belgii",
-    "trustFastTitle": "Szybka aplikacja bez CV",
-    "trustFastSub": "Wystarczy kilka kliknięć",
-    "trustVerifiedTitle": "Zweryfikowane oferty",
-    "trustVerifiedSub": "Sprawdzamy pracodawców",
+    "ctaPostJobSub": "Opublikuj ogłoszenie dla osób szukających pracy w Belgii",
+    "trustFastTitle": "Kontakt bezpośrednio z pracodawcą",
+    "trustFastSub": "Sposób aplikowania podaje ogłoszenie",
+    "trustVerifiedTitle": "Zweryfikowane firmy",
+    "trustVerifiedSub": "Sprawdzamy dane rejestrowe firm",
     "trustEverywhereTitle": "Praca w całej Belgii",
     "trustEverywhereSub": "Oferty z każdego regionu",
     "latestJobsTitle": "Najnowsze oferty pracy",
@@ -277,47 +277,36 @@
     "fieldsSubtitle": "Zacznij od swojej branży.",
     "fieldsLogistics": "Logistyka i magazyn",
     "fieldsTechnical": "Technika i produkcja",
-    "profileNoteEyebrow": "Profil zamiast CV",
-    "profileNoteTitle": "Nie musisz umieć<br></br>pisać o sobie.",
-    "profileNoteBody": "Wystarczy kilka informacji: zawód, doświadczenie i umiejętności. Resztę pokażesz w pracy.",
-    "profileNoteCta": "Poznaj profil zawodowy",
+    "profileNoteEyebrow": "Zapisane wyszukiwania",
+    "profileNoteTitle": "Nie szukaj<br></br>od nowa co dzień.",
+    "profileNoteBody": "Ustaw filtry na liście ofert i zapisz wyszukiwanie. Powiadomienia e-mail o nowych ofertach włączysz na koncie — codziennie albo raz w tygodniu.",
+    "profileNoteCta": "Ustaw filtry",
     "offersCount": "{count, plural, one {# oferta} few {# oferty} many {# ofert} other {# ofert}}",
     "categoriesTitle": "Popularne kategorie",
     "locationsTitle": "Popularne lokalizacje",
     "howTitle": "Jak to działa?",
     "step1Title": "Znajdź ofertę",
-    "step1Desc": "Przeglądaj oferty pracy dopasowane do Ciebie.",
-    "step2Title": "Aplikuj szybko",
-    "step2Desc": "Aplikuj bez CV w kilka kliknięć.",
-    "step3Title": "Rozmawiaj",
-    "step3Desc": "Pracodawca skontaktuje się z Tobą bezpośrednio.",
+    "step1Desc": "Zawężaj wyniki filtrami: miasto, branża, rodzaj umowy i wynagrodzenie.",
+    "step2Title": "Sprawdź warunki",
+    "step2Desc": "Porównaj wynagrodzenie, umowę i wymagania podane w ogłoszeniu.",
+    "step3Title": "Aplikuj u pracodawcy",
+    "step3Desc": "Skontaktuj się z pracodawcą w sposób podany w ogłoszeniu.",
     "step4Title": "Zacznij pracę",
     "step4Desc": "Dołącz do zespołu w Belgii.",
     "companiesTitle": "Jesteś pracodawcą?",
-    "companiesDesc": "Dodaj ofertę pracy i znajdź odpowiednich kandydatów szybciej.",
+    "companiesDesc": "Opublikuj ofertę pracy i podaj, jak kandydaci mogą się z Tobą skontaktować.",
     "companiesCta": "Dodaj ofertę pracy",
-    "benefitsTitle": "Dlaczego Pracuj.be",
-    "benefitNoCvTitle": "Bez CV",
-    "benefitNoCvDesc": "Nie musisz mieć gotowego CV. Wystarczy prosty profil.",
-    "benefitMultilangTitle": "W Twoim języku",
-    "benefitMultilangDesc": "Serwis działa po polsku, niderlandzku, francusku i angielsku.",
-    "benefitEasyApplyTitle": "Łatwe aplikowanie",
-    "benefitEasyApplyDesc": "Wysyłasz zgłoszenie jednym kliknięciem, bez zbędnych formalności.",
-    "benefitMatchingTitle": "Trafne dopasowanie",
-    "benefitMatchingDesc": "Pokazujemy oferty, które naprawdę pasują do Ciebie.",
-    "benefitVerifiedTitle": "Sprawdzeni pracodawcy",
-    "benefitVerifiedDesc": "Weryfikujemy firmy, żebyś czuł się bezpiecznie.",
     "faqTitle": "Najczęstsze pytania",
-    "faqQ1": "Czy potrzebuję CV, żeby korzystać z Pracuj.be?",
-    "faqA1": "Nie. Zamiast CV wypełniasz krótki profil ze swoim doświadczeniem i umiejętnościami. Pracodawcy widzą go i kontaktują się z Tobą bezpośrednio.",
+    "faqQ1": "Jak aplikować na ofertę z Pracuj.be?",
+    "faqA1": "Na stronie oferty znajdziesz sposób kontaktu podany przez pracodawcę: adres strony, e-mail albo telefon. Zgłoszenie wysyłasz bezpośrednio do pracodawcy.",
     "faqQ2": "Czy Pracuj.be jest bezpłatne dla osób szukających pracy?",
-    "faqA2": "Tak. Założenie profilu, przeglądanie ofert i aplikowanie są dla kandydatów całkowicie bezpłatne.",
+    "faqA2": "Tak. Przeglądanie ofert, konto oraz zapisane oferty i wyszukiwania są dla osób szukających pracy bezpłatne.",
     "faqQ3": "W jakich językach działa platforma?",
     "faqA3": "Z Pracuj.be korzystasz po polsku, niderlandzku, francusku i angielsku. Treść oferty jest w języku, w którym przygotował ją pracodawca.",
     "faqQ4": "Czy muszę znać niderlandzki lub francuski?",
-    "faqA4": "Nie zawsze. Wielu pracodawców przyjmuje kandydatów bez znajomości lokalnego języka. Użyj filtra, aby zobaczyć oferty bez wymogu językowego.",
-    "faqQ5": "Jak pracodawcy się ze mną kontaktują?",
-    "faqA5": "Po wysłaniu aplikacji lub opublikowaniu profilu pracodawcy mogą napisać do Ciebie bezpośrednio na platformie, aby ustalić kolejne kroki."
+    "faqA4": "Nie zawsze. Część ofert nie wymaga lokalnego języka. Użyj filtra „Bez wymogu językowego”, aby je zobaczyć.",
+    "faqQ5": "Jak skontaktować się z pracodawcą?",
+    "faqA5": "Każda oferta podaje sposób kontaktu wybrany przez pracodawcę. Dalsze kroki ustalasz bezpośrednio z pracodawcą."
   },
   "categories": {
     "construction": "Budownictwo",
@@ -393,7 +382,7 @@
     "paginationLabel": "Paginacja",
     "paginationPrevious": "Poprzednia",
     "paginationNext": "Następna",
-    "subtitle": "Znajdź pracę dopasowaną do Ciebie. Przeglądaj aktualne oferty pracy w Belgii.",
+    "subtitle": "Przeglądaj aktualne oferty pracy w Belgii i zawężaj wyniki filtrami.",
     "searchJobs": "Szukaj pracy",
     "keywordPlaceholder": "np. mechanik, magazynier, opiekunka",
     "locationPlaceholder": "np. Antwerpia, Bruksela, Gandawa",
@@ -428,7 +417,8 @@
     "transport": "Transport",
     "startDate": "Data rozpoczęcia",
     "aboutCompany": "O firmie",
-    "verified": "Zweryfikowana firma",
+    "verified": "Tożsamość firmy zweryfikowana",
+    "verifiedHelp": "Co oznacza weryfikacja?",
     "share": "Udostępnij",
     "backToList": "Wróć do listy ofert",
     "matchTitle": "Twoje dopasowanie",
@@ -550,13 +540,28 @@
       "committeeCode": "PC {code}",
       "minimumWagesLink": "Oficjalne stawki minimalne w sektorze",
       "minimumWagesNote": "Stawka zależy m.in. od kategorii i stażu — sprawdź w oficjalnej bazie."
+    },
+    "employerApply": {
+      "boxTitle": "Aplikuj bezpośrednio u pracodawcy.",
+      "boxText": "Zgłoszenie wysyłasz ogłoszeniodawcy — tak, jak podał w ofercie.",
+      "button": "Aplikuj u pracodawcy",
+      "newTab": "(otwiera się w nowej karcie)",
+      "hint": {
+        "url": "Strona: {value}",
+        "email": "E-mail: {value}",
+        "phone": "Telefon: {value}"
+      },
+      "otherWays": "Inne sposoby kontaktu:",
+      "none": "Ta oferta nie podaje sposobu aplikowania.",
+      "mailSubject": "Oferta pracy: {title}",
+      "contact": "Kontakt bezpośrednio z ogłoszeniodawcą"
     }
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
-    "hubMetaDescription": "Znajdź pracę w Belgii według branży i miasta. Przeglądaj oferty w budownictwie, logistyce, produkcji, opiece i wielu innych — bez CV.",
+    "hubMetaDescription": "Oferty pracy w Belgii według branży i miasta — budownictwo, logistyka, produkcja, opieka i inne.",
     "hubTitle": "Przeglądaj pracę w Belgii",
-    "hubSubtitle": "Wybierz branżę lub miasto i zobacz dopasowane oferty pracy. Aplikuj szybko, bez skomplikowanego CV.",
+    "hubSubtitle": "Wybierz branżę lub miasto i przeglądaj aktualne oferty pracy.",
     "breadcrumbHub": "Praca",
     "byCategoryTitle": "Praca według branży",
     "byCategoryIntro": "Wybierz branżę, w której chcesz pracować, i przeglądaj aktualne oferty w całej Belgii.",
@@ -573,17 +578,17 @@
     "otherCategories": "Inne branże",
     "otherCities": "Inne miasta",
     "empty": "Obecnie brak ofert w tej sekcji. Zajrzyj wkrótce lub przejrzyj wszystkie oferty.",
-    "cat_construction": "Oferty pracy w budownictwie w Belgii — murarze, cieśle, pracownicy ogólnobudowlani i wykończeniowcy. Aplikuj bez CV.",
-    "cat_transport": "Praca w transporcie w Belgii — kierowcy kategorii C i C+E, dostawcy i operatorzy. Sprawdź aktualne oferty i aplikuj szybko.",
+    "cat_construction": "Oferty pracy w budownictwie w Belgii — murarze, cieśle, pracownicy ogólnobudowlani i wykończeniowcy. Sprawdź aktualne oferty.",
+    "cat_transport": "Praca w transporcie w Belgii — kierowcy kategorii C i C+E, dostawcy i operatorzy. Sprawdź aktualne oferty.",
     "cat_warehouse": "Praca w magazynie w Belgii — magazynierzy, operatorzy wózków widłowych i pracownicy kompletacji. Zacznij od zaraz.",
-    "cat_production": "Oferty pracy w produkcji w Belgii — operatorzy maszyn, pracownicy linii i kontrola jakości. Aplikuj bez zbędnych formalności.",
-    "cat_technical": "Praca techniczna i instalacyjna w Belgii — elektrycy, hydraulicy, mechanicy i monterzy. Znajdź ofertę dopasowaną do Twoich kwalifikacji.",
+    "cat_production": "Oferty pracy w produkcji w Belgii — operatorzy maszyn, pracownicy linii i kontrola jakości. Sprawdź aktualne oferty.",
+    "cat_technical": "Praca techniczna i instalacyjna w Belgii — elektrycy, hydraulicy, mechanicy i monterzy. Sprawdź wymagania w ofertach.",
     "cat_cleaning": "Praca przy sprzątaniu w Belgii — biura, hotele i obiekty przemysłowe. Elastyczne godziny i praca od zaraz.",
     "cat_hospitality": "Praca w gastronomii i hotelarstwie w Belgii — kucharze, kelnerzy, pomoc kuchenna i obsługa hotelowa.",
     "cat_care": "Praca w opiece w Belgii — opiekunowie osób starszych, pomoc domowa i personel medyczny. Sprawdź oferty w swoim regionie.",
     "cat_logistics": "Praca w logistyce w Belgii — kompletacja zamówień, spedycja i obsługa łańcucha dostaw.",
     "cat_seasonal": "Praca sezonowa w Belgii — zbiory, rolnictwo i sezon turystyczny. Idealna na krótszy okres.",
-    "city_brussels": "Oferty pracy w Brukseli i okolicach — stolica Belgii z tysiącami ofert w wielu branżach.",
+    "city_brussels": "Oferty pracy w Brukseli i okolicach — w stolicy Belgii, w wielu branżach.",
     "city_antwerp": "Praca w Antwerpii — największy port Belgii oraz centrum logistyki, produkcji i usług.",
     "city_ghent": "Oferty pracy w Gandawie — dynamiczne miasto Flandrii z pracą w produkcji, logistyce i usługach.",
     "city_leuven": "Praca w Leuven — miasto uniwersyteckie z ofertami w usługach, technice i logistyce.",
@@ -614,8 +619,8 @@
     "cookieSettings": "Ustawienia cookie"
   },
   "footer": {
-    "tagline": "Praca w Belgii bez CV — w Twoim języku.",
-    "forCandidates": "Dla kandydatów",
+    "tagline": "Oferty pracy w Belgii. Serwis w czterech językach.",
+    "forCandidates": "Dla szukających pracy",
     "forEmployers": "Dla pracodawców",
     "company": "Firma",
     "legal": "Informacje prawne",
@@ -663,7 +668,7 @@
     "marketingOptIn": "Chcę dostawać e-maile z nowościami Pracuj.be. Mogę to wyłączyć w ustawieniach.",
     "opensInNewTab": "(otwiera się w nowej karcie)",
     "passwordHint": "Minimum 8 znaków, w tym litera i cyfra.",
-    "registerAsEmployer": "Rekrutujesz? Załóż konto pracodawcy",
+    "registerAsEmployer": "Chcesz dodać ofertę pracy? Załóż konto pracodawcy",
     "registerAsCandidate": "Szukasz pracy? Załóż konto kandydata",
     "resetSuccess": "Jeśli konto o podanym adresie istnieje, wysłaliśmy na nie link do zresetowania hasła.",
     "backToLogin": "Wróć do logowania",
@@ -702,7 +707,7 @@
     "ageBandLegend": "Twój wiek",
     "ageBandMinor": "Mam {min}–{max} lat",
     "ageBandAdult": "Mam {age} lat lub więcej",
-    "ageBandMinorHint": "Przy tym przedziale Twój profil nie będzie widoczny dla firm w wyszukiwarce kandydatów. Nadal możesz sam aplikować na oferty.",
+    "ageBandMinorHint": "Z konta możesz przeglądać i zapisywać oferty oraz wyszukiwania.",
     "ageConfirmHint": "Nie pytamy o datę urodzenia ani o dokument tożsamości.",
     "confirmEmailTitle": "Aktywuj konto",
     "confirmEmailIntro": "Kliknij przycisk, aby potwierdzić adres e-mail i przejść do swojego konta.",
@@ -712,10 +717,10 @@
     "confirmEmailExpiredHint": "Link potwierdzający wygasł? Zaloguj się adresem e-mail i hasłem — wyślemy nowy link."
   },
   "metadata": {
-    "homeTitle": "Pracuj.be — Praca w Belgii bez CV",
-    "homeDescription": "Znajdź pracę w Belgii bez CV. Załóż prosty profil w swoim języku, a pracodawcy sami się do Ciebie odezwą.",
+    "homeTitle": "Pracuj.be — oferty pracy w Belgii",
+    "homeDescription": "Oferty pracy w Belgii. Szukaj według miasta, branży i rodzaju umowy, zapisuj wyszukiwania i kontaktuj się bezpośrednio z pracodawcą.",
     "jobsTitle": "Oferty pracy w Belgii | Pracuj.be",
-    "jobsDescription": "Przeglądaj aktualne oferty pracy w Belgii. Filtruj według miasta, branży i rodzaju umowy. Aplikuj bez CV."
+    "jobsDescription": "Przeglądaj aktualne oferty pracy w Belgii. Filtruj według miasta, branży i rodzaju umowy i aplikuj bezpośrednio u pracodawcy."
   },
   "errors": {
     "authInvalidCredentials": "Nieprawidłowy e-mail lub hasło.",
@@ -1200,7 +1205,9 @@
     "bulkConfirmTitle": "{count, plural, one {Zmienić status # zgłoszenia?} few {Zmienić status # zgłoszeń?} many {Zmienić status # zgłoszeń?} other {Zmienić status # zgłoszenia?}}",
     "bulkConfirmDescription": "Nowy status: {status}. Każde zgłoszenie zmieniamy osobno, a te, dla których taka zmiana jest niedozwolona, pomijamy. Kandydaci dostaną powiadomienie o zmianie.",
     "bulkConfirm": "Zmień status",
-    "bulkStatusUncertain": "Nie wiemy, czy zmiana się udała (np. przerwane połączenie). Odśwież stronę i sprawdź statusy."
+    "bulkStatusUncertain": "Nie wiemy, czy zmiana się udała (np. przerwane połączenie). Odśwież stronę i sprawdź statusy.",
+    "listingStatsTitle": "Statystyki ogłoszeń",
+    "listingStatsText": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” dla każdej oferty."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -3039,13 +3046,13 @@
   },
   "employers": {
     "metaTitle": "Dla pracodawców — oferty pracy w Belgii | Pracuj.be",
-    "metaDescription": "Jak opublikować ofertę pracy w Belgii na Pracuj.be: konto firmy, weryfikacja, kreator oferty i kontakt z kandydatami. Na obecnym etapie bez opłat.",
+    "metaDescription": "Jak opublikować ofertę pracy w Belgii na Pracuj.be: konto firmy, weryfikacja, kreator oferty i sposób kontaktu dla kandydatów. Na obecnym etapie bez opłat.",
     "pageTitle": "Dla pracodawców",
-    "title": "Rekrutuj w Belgii prościej",
-    "intro": "Pracuj.be łączy firmy z osobami szukającymi pracy w Belgii — także z tymi, które nie mają klasycznego CV. Zobacz, jak opublikować ofertę i jak wygląda kontakt z kandydatem.",
+    "title": "Opublikuj ofertę pracy w Belgii",
+    "intro": "Pracuj.be to portal ogłoszeń o pracę w Belgii. Publikujesz ofertę, a osoby szukające pracy kontaktują się z Tobą bezpośrednio — w sposób, który podasz w ogłoszeniu.",
     "ctaRegister": "Załóż konto pracodawcy",
     "ctaLogin": "Masz już konto? Zaloguj się",
-    "photoCaption": "Rekrutacja to rozmowa z ludźmi.",
+    "photoCaption": "Praca to przede wszystkim ludzie.",
     "photoDisclaimer": "Zdjęcie ilustracyjne — nie przedstawia konkretnego pracodawcy.",
     "stepsTitle": "Jak to działa",
     "step1Title": "Załóż konto",
@@ -3054,24 +3061,24 @@
     "step2Desc": "Nasz zespół sprawdza firmę. Oferty publikują wyłącznie zweryfikowane firmy.",
     "step3Title": "Przygotuj ofertę",
     "step3Desc": "Kreator prowadzi krok po kroku przez stanowisko, lokalizację, warunki i wymagania. Szkic możesz przygotować jeszcze przed weryfikacją.",
-    "step4Title": "Prowadź rekrutację",
-    "step4Desc": "Zgłoszenia trafiają do panelu firmy. Tam zmieniasz ich status, piszesz do kandydatów i wysyłasz propozycje pracy.",
+    "step4Title": "Odbieraj zgłoszenia u siebie",
+    "step4Desc": "W ofercie podajesz adres strony, e-mail albo telefon. Kandydaci kontaktują się z Tobą bezpośrednio.",
     "freeTitle": "Bez opłat na obecnym etapie",
     "freeDesc": "Na obecnym etapie rozwoju Pracuj.be nie pobiera opłat za konto firmy ani za publikację ofert. Nie sprzedajemy pakietów ani subskrypcji.",
-    "candidatesTitle": "Kogo znajdziesz",
-    "candidatesProfileTitle": "Profil zamiast CV",
-    "candidatesProfileDesc": "Kandydaci wypełniają prosty profil zawodowy: zawody, umiejętności, języki, certyfikaty, doświadczenie i dostępność. CV mogą dołączyć, ale nie muszą.",
-    "candidatesLanguagesTitle": "Cztery języki",
-    "candidatesLanguagesDesc": "Portal działa po polsku, niderlandzku, francusku i angielsku. Każdy e-mail trafia do odbiorcy w jego języku.",
-    "candidatesMatchTitle": "Czytelne dopasowanie",
-    "candidatesMatchDesc": "Przy zgłoszeniu widzisz, które wymagania oferty kandydat spełnia, a których mu brakuje.",
+    "adTitle": "Twoje ogłoszenie",
+    "adPassportTitle": "Czytelna karta oferty",
+    "adPassportDesc": "Stanowisko, miejsce pracy, umowa, wymagania i — jeśli je podasz — wynagrodzenie widać w jednym układzie, także na telefonie.",
+    "adLanguagesTitle": "Cztery języki",
+    "adLanguagesDesc": "Portal działa po polsku, niderlandzku, francusku i angielsku. Każdy e-mail trafia do odbiorcy w jego języku.",
+    "adVerifiedTitle": "Oznaczenie weryfikacji",
+    "adVerifiedDesc": "Przy ofertach zweryfikowanej firmy pokazujemy, że administrator portalu sprawdził jej dane rejestrowe. To nie jest ocena firmy ani oferty.",
     "contactTitle": "Kontakt z kandydatem",
-    "contactApplicationsTitle": "Zgłoszenia",
-    "contactApplicationsDesc": "Kandydat aplikuje swoim profilem — jedno zgłoszenie na ofertę. Status zgłoszenia zmieniasz w panelu, a kandydat dostaje powiadomienie.",
-    "contactMessagesTitle": "Wiadomości",
-    "contactMessagesDesc": "Z kandydatem rozmawiasz w wiadomościach w panelu firmy.",
-    "contactProposalsTitle": "Propozycje pracy",
-    "contactProposalsDesc": "Możesz wysłać kandydatowi propozycję pracy, którą on akceptuje albo odrzuca.",
+    "contactChannelTitle": "Twój sposób aplikowania",
+    "contactChannelDesc": "Podajesz co najmniej jeden: adres strony, e-mail albo telefon. Z oferty kandydat trafia bezpośrednio do Ciebie.",
+    "contactStatsTitle": "Statystyki ogłoszenia",
+    "contactStatsDesc": "W panelu firmy widzisz zbiorcze statystyki wyświetleń ofert.",
+    "contactTeamTitle": "Zespół firmy",
+    "contactTeamDesc": "Zaproś współpracowników do konta firmy po adresie e-mail i nadaj im role.",
     "finalTitle": "Chcesz dodać pierwszą ofertę?",
     "finalDesc": "Załóż konto pracodawcy. Ofertę opublikujesz po weryfikacji firmy."
   },
@@ -3298,7 +3305,10 @@
     "csvStatus": "Status",
     "csvTotal": "Razem",
     "exportCsv": "Pobierz CSV",
-    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})"
+    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})",
+    "applyClicks": "Kliknięcia „Aplikuj u pracodawcy”",
+    "applyClicksDefinition": "Ile razy na stronie oferty kliknięto „Aplikuj u pracodawcy” (strona, e-mail albo telefon ogłoszeniodawcy). Nie wiemy, czy ktoś potem się zgłosił.",
+    "consentNoteListing": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” liczymy tylko u osób, które zgodziły się na cookies analityczne."
   },
   "savedSearches": {
     "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",
@@ -3498,30 +3508,26 @@
   },
   "help": {
     "metaTitle": "Pomoc — pytania i odpowiedzi",
-    "metaDescription": "Jak działa Pracuj.be: profil bez CV, aplikowanie, dopasowanie ofert, konto pracodawcy, weryfikacja firmy i e-maile w Twoim języku.",
+    "metaDescription": "Jak działa Pracuj.be: przeglądanie ofert, kontakt z pracodawcą, zapisane wyszukiwania, konto pracodawcy, weryfikacja firmy i e-maile w Twoim języku.",
     "title": "Pomoc",
     "intro": "Odpowiedzi na najczęstsze pytania o to, jak działa Pracuj.be. Jeśli nie znajdziesz tu odpowiedzi, napisz do nas przez formularz kontaktu.",
     "groups": {
-      "candidates": "Dla kandydatów",
+      "candidates": "Dla szukających pracy",
       "employers": "Dla pracodawców",
       "account": "Konto, e-maile i bezpieczeństwo"
     },
     "faq": {
-      "noCv": {
-        "q": "Czy potrzebuję CV, żeby szukać pracy?",
-        "a": "Nie. Po <register>rejestracji</register> tworzysz prosty profil zawodowy w sześciu krótkich krokach — m.in. zawody, umiejętności, języki i dostępność. Plik CV (PDF, DOC lub DOCX do 5 MB) możesz dodać, ale nie jest wymagany."
+      "howToApply": {
+        "q": "Jak aplikować na ofertę?",
+        "a": "Na stronie oferty znajdziesz sposób kontaktu podany przez pracodawcę: adres strony, e-mail albo telefon. Zgłoszenie wysyłasz bezpośrednio do pracodawcy, nie przez Pracuj.be."
       },
-      "guestApply": {
-        "q": "Czy mogę aplikować bez zakładania konta?",
-        "a": "Tak. W formularzu aplikacji podajesz imię i nazwisko oraz adres e-mail, a zgłoszenie potwierdzasz linkiem z wiadomości e-mail. Później możesz założyć konto z tym samym adresem i przejąć zgłoszenie."
+      "dataSharing": {
+        "q": "Czy Pracuj.be przekazuje moje dane pracodawcy?",
+        "a": "Nie. Portal nie wysyła pracodawcom danych z Twojego konta. Pracodawca dostaje tylko to, co sam mu wyślesz, kontaktując się w sposób podany w ofercie."
       },
-      "match": {
-        "q": "Jak liczone jest dopasowanie do oferty?",
-        "a": "Procent dopasowania wynika ze stałych kryteriów: zawodu i kategorii, umiejętności, lokalizacji, doświadczenia, dostępności, języków, certyfikatów, prawa jazdy i warunków umowy. Wyniku nie ustala sztuczna inteligencja, a przy ofercie widzisz, co spełniasz i czego brakuje."
-      },
-      "visibility": {
-        "q": "Czy pracodawcy widzą mój profil?",
-        "a": "Zweryfikowane firmy mogą znaleźć Twój profil tylko wtedy, gdy włączysz opcję „Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w ustawieniach — domyślnie jest wyłączona. Firma, do której aplikujesz, widzi Twoje zgłoszenie. Wybrane firmy możesz zablokować w sekcji „Zablokowane firmy”."
+      "account": {
+        "q": "Po co zakładać konto?",
+        "a": "Konto nie jest potrzebne do przeglądania ofert. Po <register>rejestracji</register> zapiszesz oferty i wyszukiwania oraz włączysz powiadomienia e-mail o nowych ofertach."
       },
       "alerts": {
         "q": "Jak dostawać powiadomienia o nowych ofertach?",
@@ -3536,8 +3542,8 @@
         "a": "Na obecnym etapie korzystanie z Pracuj.be jest dla pracodawców bezpłatne. Portal nie sprzedaje pakietów ani płatnych publikacji ofert."
       },
       "verification": {
-        "q": "Dlaczego firma musi zostać zweryfikowana?",
-        "a": "Oferty publikują tylko firmy zweryfikowane przez administratora portalu. Status weryfikacji widzisz w panelu pracodawcy. Jeśli firma zostanie odrzucona, zobaczysz powód i możesz wybrać „Wyślij ponownie do weryfikacji”."
+        "q": "Co oznacza weryfikacja firmy?",
+        "a": "Weryfikacja oznacza, że administrator portalu sprawdził dane rejestrowe firmy, m.in. nazwę i numer VAT/KBO. Nie jest to ocena firmy ani jej ofert. Oferty publikują tylko zweryfikowane firmy, a status widzisz w panelu pracodawcy. Jeśli firma zostanie odrzucona, zobaczysz powód i możesz wybrać „Wyślij ponownie do weryfikacji”."
       },
       "drafts": {
         "q": "Czy mogę przygotować ofertę przed weryfikacją?",
@@ -3547,9 +3553,9 @@
         "q": "Jak dodać współpracowników?",
         "a": "Właściciel lub administrator firmy zaprasza osoby z zespołu po adresie e-mail w panelu pracodawcy i nadaje im rolę."
       },
-      "applications": {
-        "q": "Jak kontaktuję się z kandydatami?",
-        "a": "Zgłoszenia, wiadomości i propozycje pracy obsługujesz w panelu pracodawcy. Więcej przeczytasz na stronie <employer>Dla pracodawców</employer>."
+      "candidateContact": {
+        "q": "Jak kandydaci się ze mną kontaktują?",
+        "a": "W ofercie podajesz co najmniej jeden sposób kontaktu: adres strony, e-mail albo telefon. Kandydaci kontaktują się z Tobą bezpośrednio. Więcej przeczytasz na stronie <employer>Dla pracodawców</employer>."
       },
       "languages": {
         "q": "W jakich językach działa serwis?",
@@ -3557,7 +3563,7 @@
       },
       "emailLanguage": {
         "q": "W jakim języku dostaję e-maile?",
-        "a": "E-maile z konta wysyłamy w języku ustawionym na Twoim koncie — także wtedy, gdy wiadomość wysyła pracodawca używający innego języka."
+        "a": "E-maile z konta wysyłamy w języku ustawionym na Twoim koncie."
       },
       "noEmail": {
         "q": "Nie dostaję e-maili z serwisu. Co zrobić?",

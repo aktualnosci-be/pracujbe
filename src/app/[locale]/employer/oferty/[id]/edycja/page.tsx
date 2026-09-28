@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { JobWizard } from '@/components/employer/JobWizard';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import {
   BTN_RESET,
@@ -91,6 +92,7 @@ export default async function EditJobPage({
         published={{ status: draft.jobStatus, slug: draft.slug, updatedAt: draft.updatedAt }}
         contentLocale={draft.contentLocale}
         assistEnabled={isJobAssistEnabled()}
+        screeningEnabled={isRecruitmentEnabled('screening')}
       />
     );
   }
@@ -111,6 +113,7 @@ export default async function EditJobPage({
         initialValues={draft.values}
         contentLocale={draft.contentLocale}
         assistEnabled={isJobAssistEnabled()}
+        screeningEnabled={isRecruitmentEnabled('screening')}
       />
     </>
   );

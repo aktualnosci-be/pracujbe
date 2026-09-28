@@ -5,9 +5,6 @@ import { startPortalDb } from './support/portal-db';
 import type { PortalIdentity } from '../../src/lib/auth/session';
 import { useRecruitmentMode as withRecruitmentMode } from '../helpers/portal-mode';
 
-// Przepływ rekrutacyjny (#1128): w trybie ogłoszeniowym rozmowy są wyłączone (#1134).
-withRecruitmentMode();
-
 vi.mock('@/lib/db/portal', async () => (await import('./support/real-portal')).realPortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
@@ -83,6 +80,8 @@ beforeAll(async () => {
 afterAll(async () => { await realSession.db?.stop(); });
 
 describe('wiadomości na PostgreSQL (#25)', () => {
+  // #1134: rozmowy istnieją tylko w trybie RECRUITMENT.
+  withRecruitmentMode();
   it('get_or_create_conversation: strona aplikacji otwiera rozmowę, ponowienie = ta sama', async () => {
     actAs(anna);
     const first = await messagesActions.openConversation({ applicationId: application });
@@ -260,6 +259,8 @@ describe('blokada firmy (#97)', () => {
 });
 
 describe('widoczność profilu (#494)', () => {
+  // #1135: widoczność profilu dla firm istnieje tylko w trybie RECRUITMENT (baza: startPortalDb).
+  withRecruitmentMode();
   it('niekompletny profil nie włączy widoczności; kompletny — tak, stan z bazy, tylko własny', async () => {
     actAs(anna);
     expect(await visibilityData.loadProfileVisibility()).toEqual({

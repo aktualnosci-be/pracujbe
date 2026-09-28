@@ -30,7 +30,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { enforceTurnstile } from '@/lib/turnstile/verify';
 import { fakeDb, resetFakeDb } from '../helpers/fake-db';
 // Alias: nazwa `use*` myli regułę react-hooks/rules-of-hooks (to nie hook Reacta, tylko beforeEach/afterEach).
-import { useRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
+import { withRecruitmentMode as recruitmentModeInTests } from '../helpers/portal-mode';
 
 /**
  * #1141 (propozycje), #1144 (zgłoszenia i statusy), #1132 (aplikacja bez konta), część akcji

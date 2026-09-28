@@ -18,6 +18,11 @@ Vercela usuwaj dopiero razem z zastępującym je przepływem migracyjnym.
 Blokery startu (kod vs właściciel/infra/prawnik, stan 27.09.2026: produkcja na migracji 0148,
 brak usług cron — zastępczy Worker Cloudflare gotowy, niewdrożony — tryb demo za
 bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
+**Decyzja produktowa: portal ogłoszeniowy (#1128)** (28.09.2026). Pracuj.be publikuje oferty,
+a kandydat aplikuje bezpośrednio u ogłoszeniodawcy. Funkcje rekrutacyjne (aplikowanie przez
+portal, matching, profile/CV dla firm, propozycje, wiadomości, screening) są wyłączone
+fail-closed — nie włączaj ich „przy okazji” (Invariant #13, `docs/PRODUCT_DECISIONS.md`,
+lista kontrolna `docs/LAUNCH_CHECKLIST.md` §1c).
 
 1. **Stack:** Next.js 15 (App Router, React Server Components) · TypeScript `strict` · Tailwind + shadcn/ui · PostgreSQL Railway · Better Auth · Zod · React Hook Form · Resend + React Email · webhook błędów Discord · Vitest + Playwright · Railway.
 2. **CI działa na GitHub-hosted runnerach (`ubuntu-latest`, decyzja właściciela 2026-09-23; repo publiczne, minuty darmowe — 2026-09-27); wdrożenie prowadzi natywna integracja Railway** (patrz `.github/workflows/*`, `docs/DEPLOYMENT.md` i sekcja „CI/CD" niżej). Nie wypychaj pustych commitów ani push-ów „na odświeżenie”.
@@ -35,15 +40,20 @@ bramką hasła): `docs/LAUNCH_CHECKLIST.md` §1.
 
 ## 1. Produkt
 
-**Pracuj.be** — lekka, wielojęzyczna platforma rekrutacyjna, przede wszystkim dla osób
+**Pracuj.be** — lekki, wielojęzyczny portal ogłoszeń o pracę (decyzja produktowa: portal
+ogłoszeniowy, #1128), przede wszystkim dla osób
 szukających pracy w **Belgii** i belgijskich pracodawców. Grupa docelowa: Polacy w Belgii,
 obcokrajowcy, pracownicy fizyczni/techniczni/produkcja/magazyn/kierowcy/budowa/gastronomia/
 sprzątanie, praca sezonowa, osoby bez profesjonalnego CV.
 
-**Kluczowa obietnica:** „Znajdź pracę w Belgii szybko i bez zbędnych formalności".
+**Kluczowa obietnica:** oferty pracy w Belgii w czterech językach — przeglądanie, filtry,
+zapisane wyszukiwania z powiadomieniami i kontakt **bezpośrednio z ogłoszeniodawcą** (jego
+kanał aplikowania: strona, e-mail albo telefon, #1129).
 
-**Wyróżnik:** kandydat nie musi mieć klasycznego CV — tworzy **prosty profil zawodowy**,
-który jest dopasowywany do ofert (matching).
+**Model (od 28.09.2026, #1128):** portal nie przyjmuje aplikacji, nie udostępnia firmom profili
+ani CV, nie liczy dopasowań, nie wysyła propozycji i nie prowadzi rozmów kandydat–pracodawca.
+Dawny wyróżnik „profil zamiast CV + matching” jest wyłączony (kod zostaje, fail-closed).
+Odznaka weryfikacji = administrator sprawdził dane rejestrowe (tożsamość) firmy, nie ocena firmy.
 
 **Pozycjonowanie:** prostota, zaufanie, przejrzystość, szybkość, bezpieczeństwo. Prościej
 niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
@@ -100,7 +110,7 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   funkcje rekrutacyjne, każda inna wartość/brak = `CLASSIFIEDS_ONLY` (decyzja produktowa: portal ogłoszeniowy, fail-closed
   także w demo/dev/testach). API: `isRecruitmentEnabled()`, `assertRecruitmentEnabled()` (`AppError(RECRUITMENT_DISABLED)`,
   `errors.recruitmentDisabled`), `notFoundUnlessRecruitment()`; lista `RECRUITMENT_FEATURES`. Tryb w `/api/health` tylko za
-  sekretem. Vitest domyślnie ogłoszeniowy (`useRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
+  sekretem. Vitest domyślnie ogłoszeniowy (`withRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
   (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
   Wyłączone w trybie ogłoszeniowym (#1141/#1144/#1132, warstwa aplikacji, bez migracji): akcje `sendOffer`/`respondToOffer`/
@@ -138,7 +148,22 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   shelli z propsem `recruitmentEnabled` (domyślnie `false`). Dowód: `tests/unit/classifieds-matching-off.test.ts`
   (kontrole ujemne w trybie `RECRUITMENT`), strażnik `legal` (importy `MatchBar`/`SendOfferButton` tylko w chronionych
   segmentach, `public.matches` tylko za bramką), E2E `classifieds-matching-off` (z `E2E_PORTAL_LEGAL_MODE=`).
-  Wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138, migracja `0174`): akcje
+- **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0173`, na 0171):** w trybie
+  ogłoszeniowym `set_candidate_searchable(true)` → `RECRUITMENT_DISABLED` (wyłączenie działa), strażnik
+  `trg_aa_recruitment_mode_searchable` odrzuca `is_searchable = true` każdą ścieżką (wyjątek seedu jak w 0171),
+  `company_can_see_match_candidate` = false; bez jednorazowego zerowania flag (odczyt firm zamyka 0171). Pytania:
+  `set_job_screening_questions` z niepustą listą → `RECRUITMENT_DISABLED`, wstawienie do `job_screening_questions`
+  pomijane (duplikat oferty powstaje bez pytań), `get_public_job_screening_questions` pusty, `enforce_screening_review`
+  nie blokuje publikacji ofert z pytaniami sprzed trybu, decyzja przeglądu (`screening_question_reviews`) odrzucona;
+  pytania i przeglądy sprzed trybu zostają. Aplikacja: `/candidate/ustawienia` bez sekcji widoczności (akcja
+  `setProfileVisibilityAction` → `RECRUITMENT_DISABLED` bez bazy), kreator (prop `screeningEnabled` z serwera, domyślnie
+  wyłączony) bez edytora pytań w kroku 7 i bez klucza `screening_questions` w zapisie (`updateJobDraft` odrzuca pytania
+  przed bazą), `/admin/pytania` = 404 i bez pozycji w nawigacji, `decideScreeningReview` → `RECRUITMENT_DISABLED`.
+  Dowód: `rls.sql` sekcje CLVIS/CLSCR (kontrole ujemne: zdjęty strażnik, polityka z 0078, tryb RECRUITMENT blokuje
+  publikację), rollback `supabase/rollback/0173_…down.sql` (przed 0171 w `portal-legal-mode-rollback.sql`), unit
+  `profile-visibility`, `save-job-draft-step`, `screening-review`, `job-wizard-screening-mode`, strażnik
+  `classifieds-only` (w tym `GUARDED_ROUTES` `admin/pytania`), E2E `classifieds-profile-screening` (`E2E_PORTAL_LEGAL_MODE=`).
+- **Bez wiadomości i CV (#1134/#1138, migracja `0174`, na 0171):** akcje
   `messages.ts`/`message-attachments.ts` → `RECRUITMENT_DISABLED` jako pierwszy krok (bez bazy, limitera, bucketu),
   loadery rozmów bez zapytań (lista pusta, licznik 0), segmenty `candidate|employer/wiadomosci` = 404 (layout,
   przed `loading.tsx`), `/api/files/message/<id>` = 404, nawigacja bez „Wiadomości”, szczegół oferty bez „Wyślij
@@ -289,10 +314,19 @@ Te reguły wynikają wprost ze specyfikacji i z błędów poprzedniego produktu.
 11. **Formularze:** blokada przycisku podczas zapisu, brak podwójnego kliknięcia, zachowanie danych po błędzie,
     błędy przy polach, przewijanie do pierwszego błędu, jasny sukces.
 12. **Dane demonstracyjne oznaczone** (`is_demo = true`) — łatwe do odfiltrowania/usunięcia.
+13. **Tryb ogłoszeniowy (#1128).** Decyzja produktowa: portal ogłoszeniowy. Funkcje rekrutacyjne
+    wyłączone fail-closed (jedno źródło `src/lib/portal-mode.ts` #1136, blokady w bazie #1140,
+    strażnik CI `tests/legal/classifieds-only.test.ts` #1146). Teksty publiczne bez obietnic
+    dopasowania, aplikowania przez portal i widoczności profilu — strażnik
+    `tests/unit/classifieds-copy.test.ts` (#1149/#1151). Ponowne włączenie tylko nową decyzją
+    właściciela i dwoma kluczami (#1143).
 
 ---
 
 ## 8. Matching (dopasowanie) — deterministyczny
+
+> **Wyłączone w trybie ogłoszeniowym (#1128, #1131).** Kod zostaje; wynik nie jest liczony ani
+> pokazywany, `matches` nie są materializowane.
 
 `src/lib/matching/score.ts`. **Bez niekontrolowanego AI** przy decyzjach. Suma 100 pkt:
 
@@ -315,7 +349,12 @@ obowiązkowych oraz krótkie wyjaśnienie (np. „Dobre dopasowanie: spełniasz 
 
 ## 9. Przepływy krytyczne
 
-**Kandydat → oferta → pracodawca:**
+**Przepływ ogłoszeniowy (aktywny, #1128):** pracodawca zakłada konto firmy → weryfikacja firmy
+przez administratora → kreator oferty z kanałem aplikowania (https / e-mail / telefon, co
+najmniej jeden, #1129) → publikacja → kandydat wyszukuje i filtruje (zapisane wyszukiwania
+i alerty z własnych filtrów, #1148) → „Aplikuj u pracodawcy” prowadzi poza portal (#1130).
+
+**Kandydat → oferta → pracodawca** (wyłączone w trybie ogłoszeniowym, #1128):
 1. Kandydat: rejestracja → onboarding (6 krótkich kroków, każdy zapisywany) → profil (wskaźnik kompletności).
 2. Kandydat aplikuje (idempotentnie) → `applications(status=submitted)` → powiadomienie + e-mail do pracodawcy (w języku pracodawcy).
 3. Pracodawca zmienia status → `application_status_history` + powiadomienie/e-mail do kandydata (w języku kandydata).
@@ -385,6 +424,10 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
 
 Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 **Model kontynuujący: wybierz pierwszy niezaznaczony punkt, zrób, zaznacz, zaktualizuj ten plik.**
+
+> **Tryb ogłoszeniowy (#1128, 28.09.2026).** Pozycje oznaczone „wyłączone w trybie ogłoszeniowym”
+> opisują zachowany kod funkcji rekrutacyjnych, które nie działają produkcyjnie. Historia zostaje;
+> nie wznawiaj tych funkcji bez nowej decyzji właściciela.
 
 > 🔒 **Audyt bezpieczeństwa 2026-07-23** (`docs/audit/audyt-2026-07-23.md`) + remediacja
 > (`docs/REMEDIATION-2026-07-23.md`). Zamknięte P0-01..04 oraz P1-01..14 i P2-01 (migracje
@@ -652,6 +695,22 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 
 ### Etap 2 — strony publiczne
 - [x] Strona główna (hero + sekcje) SSR — redesign wg makiety 01
+  Teksty jako portal ogłoszeń (#1149, #1151, bez migracji): strona główna (hero, karta
+  „Zapisane wyszukiwania” w slocie `.p-profile-note` → lista ofert, kroki „Jak to działa?”:
+  znajdź → sprawdź warunki → aplikuj u pracodawcy → zacznij pracę), metadane i manifest PWA
+  (`metadata.home*`), landingi, stopka (także stopka e-maili), poradnik o języku, powitanie
+  e-mail, `/dla-pracodawcow` (sekcje „Twoje ogłoszenie” i „Kontakt z kandydatami”: kanał
+  aplikowania, statystyki ogłoszenia, zespół), `/pomoc` (jak aplikować, czy portal przekazuje
+  dane, po co konto; znaczenie weryfikacji z kotwicą `#weryfikacja` — `src/lib/help-anchors.ts`),
+  banery statusu firmy i rejestracja bez „propozycji”. Odznaka `job.verified` = „Tożsamość firmy
+  zweryfikowana”, na szczególe oferty link „Co oznacza weryfikacja?” → `/pomoc#weryfikacja`.
+  Nieużywane klucze `home.benefit*` usunięte. Strażnik `tests/unit/classifieds-copy.test.ts`:
+  zakazane frazy per język na przestrzeniach publicznych (`home`, `metadata`, `landing`,
+  `footer`, `employers`, `help`, `guides`, `companyProfile` + wybrane klucze `jobs`/`job`/
+  `auth`/`company`), treści poradników i stopce/powitaniu e-mail; kontrole ujemne („dopasowanie
+  87%” w `home.*`, przywrócone `employers.contactProposalsDesc` i in. = czerwony). Klucze paneli
+  i funkcji rekrutacyjnych (`job.match*`, `apply.*`, `dashboard.*`) — osobne PR-y #1128.
+  **Do akceptacji właściciela:** nowe brzmienia (lista w PR).
   Hero (#166) wg `people.js`: teza w trzech wierszach, czerwona akcja „Przeglądaj oferty” +
   link do `/rejestracja`, podpis „ilustracyjne” na zdjęciu; E2E `home-hero.spec` (4 języki,
   320/1440 px, axe, kontrola ujemna).
@@ -1069,7 +1128,7 @@ wynik jednego kandydata nigdy nie wycieka do innego ani do gościa. Dowód: unit
 `job-filter-facets-ssr-cache` (jedna agregacja dla równoległych i odrębnych wywołań SSR,
 kontrole ujemne: inny kandydat i inne filtry → osobna agregacja).
 
-Widoczność profilu dla firm (#494, migracja `0100`): przełącznik
+Widoczność profilu dla firm (**wyłączone w trybie ogłoszeniowym, #1135**; #494, migracja `0100`): przełącznik
 „Pozwól zweryfikowanym pracodawcom znaleźć mój profil” w `/candidate/ustawienia`
 (`ProfileVisibilitySettings`, akcja `setProfileVisibilityAction` → `set_candidate_searchable`
 pod sesją; stan UI = ponowny odczyt z bazy, bez optymistycznej zmiany). Domyślnie wyłączone
@@ -1165,6 +1224,15 @@ ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontro
 bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
 SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
 za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
+Tryb ogłoszeniowy (#1148, bez migracji): zapisane wyszukiwania i alerty działają bez zmian, bo
+wynikają wyłącznie z filtrów użytkownika. Strażnik `tests/legal/classifieds-saved-search.test.ts`:
+najnowsze definicje funkcji `*saved_search*` bez profilu kandydata i dopasowań (wyjątek: blokada
+firmy #97), klucze filtrów v1 = parametry `get_public_jobs` (SQL i lustro TS), kolejność = lista
+publiczna, akcje/strony/trasy bez bramki trybu, `/api/maintenance` woła worker alertów w trybie
+(kontrole ujemne). `rls.sql` sekcja SS1148 (konto bez `candidate_profiles` i z nieukończonym
+profilem: zapis, nazwa, alert, digest, wyłączenie z linku; kontrola ujemna: wymóg onboardingu).
+E2E `tests/e2e-real/saved-search-classifieds.spec.ts` (`E2E_PORTAL_LEGAL_MODE=`, mutacja
+`saved-search-requires-onboarding` = czerwony).
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
@@ -1188,7 +1256,7 @@ locale różni się od panelu i wyszukiwanie ma słowo kluczowe, dodatkowa notat
 ujemną; komponent: link pod locale zapisu różnym i tym samym co panel, notatka tylko przy
 słowie kluczowym i różnym locale, z kontrolami ujemnymi).
 
-Import CV przez AI (#487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
+Import CV przez AI (**wyłączone w trybie ogłoszeniowym, #1138**; #487, #498, migracja `0115` — numer tymczasowy, za flagą `AI_CV_IMPORT_ENABLED`, domyślnie
 wyłączony, osobno od importu ogłoszeń): `/candidate/profil/import-cv` (404 bez flagi, link w
 profilu tylko z flagą). PDF/DOCX → tekst lokalnie (`src/lib/cv-import/text.ts`: pdf.js 5 bez
 `eval`, DOCX tylko `word/document.xml` z limitem dekompresji) → minimalizacja
@@ -1317,6 +1385,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja FC575, E2E `job-funnel-no-storage` (4 języki: przed decyzją, po odmowie, po wycofaniu
   w tej i drugiej karcie, zmiana strony, restart = zero żądań). E2E `e2e-real` (licznik) wymaga
   teraz zgody w teście.
+  Tryb ogłoszeniowy (#1147, decyzja produktowa: portal ogłoszeniowy, bez migracji): statystyki
+  pracodawcy = statystyki ogłoszenia. `getEmployerOverview` zwraca aktywne oferty +
+  `listingDetailViews`/`listingApplyClicks` (lejek ofert, 30 dni; member = „brak danych”) bez
+  zapytań o `applications`/`matches`/`conversations`/`messages`; `getFunnelStats` → `disabled`
+  bez zapytań (pulpit: w miejscu lejka rekrutacyjnego odnośnik „Statystyki ogłoszeń”, strona
+  `/employer/statystyki` go nie woła); `getJobFunnel` i CSV bez `applicationsSubmitted` (kolumnę
+  RPC 0089 loader pomija), `apply_started` = „Kliknięcia »Aplikuj u pracodawcy«” (nowe etykiety
+  `jobFunnel.applyClicks*`, `consentNoteListing`). Tryb `RECRUITMENT` bez zmian. Dowód: unit
+  `classifieds-employer-stats` (kontrole ujemne obu trybów), E2E `classifieds-employer-stats`
+  (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px). Karty ofert (`getCompanyJobsLoad`, pulpit
+  i `/employer/oferty`) w trybie bez licznika zgłoszeń i bez podzapytania do `applications`.
   Eksport CSV lejka (bez migracji): „Pobierz CSV” w sekcji lejka `/employer/statystyki` →
   `GET /api/employer/job-funnel?dni=7|30|90&locale=` — te same dane co strona (`getJobFunnel`
   pod sesją/RLS, recruiter+ aktywnej firmy wg `get_company_job_funnel`), kolumny od/do, oferta,
@@ -1397,8 +1476,23 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `contact_email` zostaje kontaktem niepublicznym; import AI kanału nie wypełnia. Demo/seed:
   kanały w domenie `example.com`. Dowód: `rls.sql` sekcja AC172 (kontrole ujemne: bez CHECK,
   `publish_job` bez sprawdzenia), unit `job-apply-channel` (TS = wzorce z migracji), E2E
-  `job-wizard-step9-draft`. **Otwarte:** przycisk „Aplikuj u pracodawcy” na szczególe (#1130),
-  kanał w regułach zaufania treści (0167).
+  `job-wizard-step9-draft`. **Otwarte:** kanał w regułach zaufania treści (0167).
+  „Aplikuj u pracodawcy” na szczególe (#1130, bez migracji): w trybie ogłoszeniowym
+  (`isRecruitmentEnabled('applications')` = false) zamiast `ApplyModal` wyspa
+  `EmployerApplyChannel` — przycisk główny = pierwszy kanał (strona https w nowej karcie,
+  `rel="noopener noreferrer nofollow"` → `mailto:` z tematem → `tel:`), w ramce pozostałe kanały;
+  linki wyłącznie z `buildApplyLinks` (`src/lib/job-apply-links.ts`, trzecie sprawdzenie reguł);
+  ramka widoczna też na mobile, pasek mobilny = sam przycisk główny; bez „Wyślij wiadomość”,
+  podpis kontaktu `job.employerApply.contact`, JobPosting `directApply: false`. Oferta bez kanału
+  = brak przycisku i neutralny komunikat `job.employerApply.none`. Kliknięcie = `apply_started`
+  tylko po zgodzie analitycznej (demo nie liczone); komponent serwerowy, kliknięcia liczy istniejąca
+  wyspa `JobFunnelBeacon` (`applyClicks`), a `JobMatchCard` (tylko RECRUITMENT) idzie osobnym
+  chunkiem (`JobMatchCardLazy`, `ssr: false`) — budżet JS szczegółu oferty (#395) bez podnoszenia
+  limitu. Tryb `RECRUITMENT` bez zmian (`ApplyModal`).
+  Dowód: unit `employer-apply-channel` (kontrole ujemne: schematy, zgoda), strażnik
+  `tests/legal/classifieds-only.test.ts` (ApplyModal/„Wyślij wiadomość” tylko w gałęzi
+  `recruitment`, kontrola ujemna), E2E `job-detail-employer-apply` (4 języki, axe 320/1280 px;
+  uruchamiany z `E2E_PORTAL_LEGAL_MODE=`). Helper Vitest: `withRecruitmentMode`/`withClassifiedsMode`.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -1560,7 +1654,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
-- [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
+- [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — **wyłączone w trybie ogłoszeniowym (#1144)** — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
   Fokus po anulowaniu potwierdzenia (#800): „Anuluj” w kroku potwierdzenia (`rejected`/`hired`)
   przywraca fokus na status, który uruchomił potwierdzenie (referencje opcji listy), zamiast go
   gubić po odmontowaniu panelu; Escape nadal zamyka całe menu i wraca fokusem na trigger (bez
@@ -1655,7 +1749,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   unit `team-invitation-signup-preview`.
 
 ### Etap 5 — procesy
-- [x] Matching (logika + test jednostkowy + integracja z UI) — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
+- [x] Matching (logika + test jednostkowy + integracja z UI) — **wyłączone w trybie ogłoszeniowym (#1131)** — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
   Poziomy języków (#195, 0074): każdy wymagany język = 10/n pkt; poziom ≥ wymagany (lub oferta
   bez poziomu) → pełny udział, o jeden niżej → połowa, niżej lub nieznany → 0; luka w
   `languageGaps` (komunikat `match.languageLevel*`). Lokalizacja (#194): odległość haversine
@@ -1822,7 +1916,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
   ręcznej, `protectedTerms` (nazwa firmy).
-- [x] Aplikacje — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
+- [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
   Ponowna aplikacja (0071, #361): ten sam klucz idempotencji = retry → sukces; inny klucz przy
@@ -1960,7 +2054,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   tytuł, status; CTA lista ofert, bez tokenu i linku wypisania. Dowód: `rls.sql` sekcja GS98
   (kontrole ujemne), unit `guest-status-email`. **Otwarte:** okres retencji do potwierdzenia
   w polityce prywatności (#40).
-- [x] Propozycje pracy — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
+- [x] Propozycje pracy — **wyłączone w trybie ogłoszeniowym (#1141)** — RPC `send_offer`/`respond_to_offer` (idempotentne, outbox, niezależne od e-maila) + server actions + wpięcie do UI paneli (zweryfikowane na PG)
   Granica wygaśnięcia (0075, #88): `respond_to_offer` odrzuca `expires_at <= now()` — jak odczyt
   i UI. Wyścig accept/decline w dwóch sesjach: jedna wygrywa, druga `VALIDATION_FAILED`, historia
   i alerty pojedyncze (`rls.sql` PP7–PP8).
@@ -1981,7 +2075,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Etykieta karty zmienia się na „Wygasła” bez serwera (`onExpire` → `CandidateProposalsList`).
   Testy: unit `proposal-actions` (kontrola ujemna: stary komponent = 5 czerwonych),
   `candidate-proposals-list`.
-- [~] Wiadomości — konwersacje/wątek/wysyłka/przeczytania, zgłoszenia i załączniki gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16)
+- [~] Wiadomości — **wyłączone w trybie ogłoszeniowym (#1134)** — konwersacje/wątek/wysyłka/przeczytania, zgłoszenia i załączniki gotowe (RPC 0016 + UI `/…/wiadomosci`, zweryfikowane na PG16)
   Zgłoszenia (migracja `0116`): strona rozmowy zgłasza wiadomość drugiej
   strony („Zgłoś” pod dymkiem) albo całą rozmowę (nagłówek wątku) — `ReportContentButton`
   (powód ze słownika `MESSAGE_REPORT_CATEGORIES`, opis ≤ 1000, znacznik treści prawnej „do

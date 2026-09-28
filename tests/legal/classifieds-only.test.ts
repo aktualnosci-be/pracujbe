@@ -122,6 +122,7 @@ const GUARDED_ROUTES: GuardedRoute[] = [
   { segment: 'candidate/profil/import-cv', status: 'enforced', issue: 1138 },
   { segment: 'candidate/wiadomosci', status: 'enforced', issue: 1134 },
   { segment: 'employer/wiadomosci', status: 'enforced', issue: 1134 },
+  { segment: 'admin/pytania', status: 'enforced', issue: 1137 },
 ];
 
 const LOCALE_APP = join(ROOT, 'src/app/[locale]');
@@ -163,7 +164,6 @@ describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
   it.todo('screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129)');
   it.todo('loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata/aplikacji, /api/files/cv/*) nie zwracają danych (#1129)');
   it.todo('słownik zakazanych etykiet UI na trasach aktywnych w trybie ogłoszeniowym, 4 języki (#1128, teksty)');
-  it.todo('jedyne CTA aplikacyjne na szczególe oferty = zewnętrzny kanał ogłoszeniodawcy (#1129/#1130)');
   it.todo('pozytywnie: lista ofert, szczegół, kreator/publikacja, zapisane oferty/wyszukiwania, konto nie zwracają RECRUITMENT_DISABLED (#1128)');
 });
 
@@ -234,6 +234,75 @@ describe('baza: tryb ogłoszeniowy i dwuklucz (#1140, #1143)', () => {
     const src = read('src/app/api/maintenance/route.ts');
     expect(guardedMatches(src.replace('if (!recruitment) {', 'if (false) {'))).toBe(false);
     expect(guardedMatches(`${src}\nawait runMatchRecompute();`)).toBe(false);
+  });
+});
+
+/**
+ * #1130: na szczególe oferty jedynym CTA aplikacyjnym w trybie ogłoszeniowym jest kanał
+ * ogłoszeniodawcy (`EmployerApplyChannel`: https / mailto / tel). `ApplyModal` i „Wyślij
+ * wiadomość” zostają wyłącznie w gałęzi `recruitment` (tryb `RECRUITMENT`).
+ */
+const JOB_DETAIL_PAGE = 'src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx';
+
+/** Usuwa gałęzie JSX renderowane tylko w trybie rekrutacji (`recruitment ? ( … )`, `!recruitment ? null : ( … )`). */
+function stripRecruitmentBranches(src: string): string {
+  const OPENERS = [/\brecruitment \? \(/g, /!recruitment \? null : \(/g];
+  let out = src;
+  for (const re of OPENERS) {
+    for (;;) {
+      re.lastIndex = 0;
+      const m = re.exec(out);
+      if (!m) break;
+      let i = m.index + m[0].length;
+      let depth = 1;
+      while (i < out.length && depth > 0) {
+        if (out[i] === '(') depth += 1;
+        else if (out[i] === ')') depth -= 1;
+        i += 1;
+      }
+      out = out.slice(0, m.index) + out.slice(i);
+    }
+  }
+  return out;
+}
+
+const classifiedsView = (src: string) => stripRecruitmentBranches(src);
+const unguardedRecruitmentCtas = (src: string) =>
+  (classifiedsView(src).match(/<ApplyModal\b|t\('sendMessage'\)/g) ?? []).length;
+
+describe('szczegół oferty: CTA aplikacyjne = kanał ogłoszeniodawcy (#1130)', () => {
+  const page = read(JOB_DETAIL_PAGE);
+
+  it('tryb czytany z portal-mode, ApplyModal i „Wyślij wiadomość” tylko w gałęzi recruitment', () => {
+    expect(page).toMatch(/const recruitment = isRecruitmentEnabled\('applications'\)/);
+    expect(page).toMatch(/<ApplyModal\b/);
+    expect(unguardedRecruitmentCtas(page)).toBe(0);
+  });
+
+  it('widok ogłoszeniowy renderuje EmployerApplyChannel w ramce i w pasku mobilnym', () => {
+    const view = classifiedsView(page);
+    expect(view.match(/<EmployerApplyChannel\b/g) ?? []).toHaveLength(2);
+    expect(view).toMatch(/variant="box"/);
+    expect(view).toMatch(/variant="bar"/);
+    expect(view).toMatch(/channel=\{job\.applyChannel\}/);
+    // Kliknięcia kanału liczy wyspa lejka (bramka zgody), tylko w trybie ogłoszeniowym.
+    expect(page).toMatch(/<JobFunnelBeacon event="detail_view" jobIds=\{\[job\.id\]\} applyClicks=\{!recruitment\} \/>/);
+  });
+
+  it('kontrola ujemna: ApplyModal albo „Wyślij wiadomość” poza gałęzią recruitment są wykrywane', () => {
+    expect(unguardedRecruitmentCtas(`${page}\n<ApplyModal jobId="x" />`)).toBe(1);
+    expect(unguardedRecruitmentCtas(page.replace('job.isDemo || !recruitment ? null : (', 'job.isDemo ? null : ('))).toBe(1);
+    expect(unguardedRecruitmentCtas(page.replaceAll('recruitment ? (', 'true ? ('))).toBeGreaterThan(0);
+  });
+
+  it('komponent kanału: jedyne cele linków to https / mailto / tel (bez innych schematów)', () => {
+    const src = read('src/components/public/EmployerApplyChannel.tsx');
+    // Linki powstają wyłącznie z buildApplyLinks (href z kanału), bez stałych adresów i Link portalu.
+    expect(src).toMatch(/buildApplyLinks\(channel/);
+    expect(src).not.toMatch(/href=["'{]/);
+    expect(src).not.toMatch(/from '@\/i18n\/navigation'|from '@\/components\/public\/ApplyModal'|applyToJob\(/);
+    const links = read('src/lib/job-apply-links.ts');
+    expect(links).toMatch(/export const APPLY_LINK_REL = 'noopener noreferrer nofollow'/);
   });
 });
 
@@ -363,7 +432,7 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
       expect(read(shell), shell).toMatch(/\.\.\.\(recruitmentEnabled \? \[\{ href: HREF\.messages,/);
     }
     const page = read('src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx');
-    expect(page).toMatch(/messagingOn \? <p[^>]*>\{t\('contactViaPlatform'\)\}<\/p> : null/);
+    expect(page).toMatch(/\{messagingOn \? t\('contactViaPlatform'\) : t\('employerApply\.contact'\)\}/);
     expect(page).toMatch(/\{job\.isDemo \|\| !messagingOn \? null : \(/);
   });
 
@@ -394,5 +463,104 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
     for (const id of ['CL174-1c', 'CL174-2', 'CL174-2b', 'CL174-3b', 'CL174-4', 'CL174-N1', 'CL174-N2']) {
       expect(rls, id).toContain(`'${id} `);
     }
+  });
+});
+
+/**
+ * #1135 (brak wyszukiwalnej bazy profili) i #1137 (bez pytań screeningowych), migracja 0173 na 0171.
+ * Sekcje CLVIS/CLSCR w `supabase/tests/rls.sql` wywołują każde RPC poniżej w trybie ogłoszeniowym.
+ */
+const VIS_SCREENING_RPCS = [
+  'set_candidate_searchable', 'company_can_see_match_candidate', 'candidate_profile_is_searchable',
+  'set_job_screening_questions', 'save_job_draft', 'get_public_job_screening_questions',
+  'admin_decide_screening_review', 'publish_job', 'duplicate_job_as_draft',
+] as const;
+
+function clVisScreeningSection(rls: string): string {
+  const start = rls.indexOf("\\echo '--- CLVIS");
+  const end = rls.indexOf("\\echo '=================== ALL RLS TESTS PASSED", start);
+  return start >= 0 && end > start ? rls.slice(start, end) : '';
+}
+const missingVisScreeningRpcs = (section: string) =>
+  VIS_SCREENING_RPCS.filter((fn) => !new RegExp(`public\\.${fn}\\(`).test(section));
+
+describe('profile firm i pytania screeningowe w trybie ogłoszeniowym (#1135, #1137)', () => {
+  const migration = readdirSync(join(ROOT, 'supabase/migrations'))
+    .map((f) => read(`supabase/migrations/${f}`))
+    .find((sql) => sql.includes('function public.enforce_recruitment_searchable()')) ?? '';
+  const rls = read('supabase/tests/rls.sql');
+
+  it('migracja: strażnik is_searchable, pomijanie pytań, blokada decyzji przeglądu', () => {
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode_searchable\s+before insert or update of is_searchable on public\.candidate_profiles/);
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode\s+before insert on public\.job_screening_questions/);
+    expect(migration).toMatch(/create trigger trg_aa_recruitment_mode_update\s+before update on public\.screening_question_reviews/);
+    // Każda przedefiniowana funkcja ma warunek trybu.
+    for (const fn of ['set_candidate_searchable', 'company_can_see_match_candidate', 'set_job_screening_questions',
+      'get_public_job_screening_questions', 'enforce_screening_review']) {
+      const body = migration.split(`create or replace function public.${fn}(`)[1]?.split('$$;')[0] ?? '';
+      expect(body, fn).toMatch(/public\.recruitment_(enabled|write_allowed)\(\)/);
+    }
+  });
+
+  it('pracodawca nie może otworzyć profilu dowolnego kandydata (rls.sql CLVIS-1)', () => {
+    const section = clVisScreeningSection(rls);
+    expect(section).toMatch(/'CLVIS-1 rekruter nie otwiera profilu dowolnego kandydata/);
+    expect(section).toMatch(/\(select count\(\*\) from public\.candidate_profiles\) = 0/);
+  });
+
+  it('sekcje CLVIS/CLSCR wywołują każde RPC widoczności profilu i pytań', () => {
+    const section = clVisScreeningSection(rls);
+    expect(section.length).toBeGreaterThan(0);
+    expect(missingVisScreeningRpcs(section)).toEqual([]);
+  });
+
+  it('kontrola ujemna: sekcja bez set_job_screening_questions jest wykrywana', () => {
+    const section = clVisScreeningSection(rls).replaceAll('public.set_job_screening_questions(', 'public.x(');
+    expect(missingVisScreeningRpcs(section)).toEqual(['set_job_screening_questions']);
+  });
+
+  /** Sekcja widoczności w /candidate/ustawienia: odczyt i render tylko w trybie rekrutacyjnym. */
+  const visibilityGated = (src: string) =>
+    /const visibilityEnabled = isRecruitmentEnabled\('candidateSearch'\)/.test(src)
+    && /visibilityEnabled \? loadProfileVisibility\(\) : Promise\.resolve\(null\)/.test(src)
+    && (src.match(/loadProfileVisibility\(\)/g) ?? []).length === 1
+    && /visibility === null \? null :/.test(src);
+
+  it('/candidate/ustawienia: bez sekcji widoczności profilu w trybie ogłoszeniowym', () => {
+    expect(visibilityGated(read('src/app/[locale]/candidate/ustawienia/page.tsx'))).toBe(true);
+  });
+
+  it('kontrola ujemna: odczyt widoczności poza strażnikiem jest wykrywany', () => {
+    const src = read('src/app/[locale]/candidate/ustawienia/page.tsx');
+    expect(visibilityGated(src.replace('visibilityEnabled ? loadProfileVisibility() : Promise.resolve(null)', 'loadProfileVisibility()'))).toBe(false);
+  });
+
+  /** Każde miejsce renderowania kreatora oferty podaje tryb pytań z serwera. */
+  function wizardCallersGated(files: { path: string; source: string }[]): string[] {
+    return files
+      .filter((f) => /<(New)?JobWizard\b/.test(f.source))
+      .filter((f) => {
+        const tags = f.source.match(/<(New)?JobWizard\b[^>]*>/gs) ?? [];
+        return !tags.every((tag) => tag.includes("screeningEnabled={isRecruitmentEnabled('screening')}"));
+      })
+      .map((f) => f.path);
+  }
+
+  it('strony kreatora oferty podają screeningEnabled z isRecruitmentEnabled(\'screening\')', () => {
+    const pages = walk(LOCALE_APP)
+      .filter((f) => /\/page\.tsx$/.test(f))
+      .map((f) => ({ path: relative(ROOT, f), source: readFileSync(f, 'utf8') }));
+    expect(pages.filter((p) => /<(New)?JobWizard\b/.test(p.source)).length).toBeGreaterThanOrEqual(2);
+    expect(wizardCallersGated(pages)).toEqual([]);
+  });
+
+  it('kontrola ujemna: kreator bez propu trybu jest wykrywany', () => {
+    const mutant = { path: 'src/app/x/page.tsx', source: '<JobWizard initialJobId={id} assistEnabled />' };
+    expect(wizardCallersGated([mutant])).toEqual(['src/app/x/page.tsx']);
+  });
+
+  it('nawigacja admina: „Pytania screeningowe” tylko z trybu serwera', () => {
+    expect(read('src/components/admin/AdminShell.tsx')).toMatch(/\.\.\.\(screeningEnabled \? \[\{ href: HREF\.screening/);
+    expect(read('src/app/[locale]/admin/layout.tsx')).toMatch(/screeningEnabled=\{isRecruitmentEnabled\('screening'\)\}/);
   });
 });

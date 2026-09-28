@@ -83,16 +83,16 @@
     "savedSuccess": "The company details have been saved.",
     "statusLabel": "Verification status",
     "verifiedAt": "Verification date",
-    "verificationNote": "Posting jobs and sending offers requires the “verified” status, granted by an administrator.",
+    "verificationNote": "Publishing jobs requires the “verified” status, which an administrator grants after checking the company’s registration details.",
     "bannerPendingTitle": "Your company is awaiting verification",
-    "bannerPendingDesc": "Your company details are in the queue to be checked by a Pracuj.be administrator. You can publish jobs and send offers once they are approved.",
+    "bannerPendingDesc": "Your company details are in the queue to be checked by a Pracuj.be administrator. You can publish jobs once they are approved.",
     "bannerEta": "Usually within 2 business days.",
     "bannerVerifiedTitle": "Company verified",
-    "bannerVerifiedDesc": "You can post jobs and send offers to candidates.",
+    "bannerVerifiedDesc": "An administrator has confirmed the company’s registration details. You can publish jobs.",
     "bannerRejectedTitle": "Verification rejected",
     "bannerRejectedDesc": "An administrator did not approve your company details. Check the name and VAT/KBO number, correct them and send your company for verification again.",
     "bannerSuspendedTitle": "Company account suspended",
-    "bannerSuspendedDesc": "Your company account has been suspended by an administrator. Publishing jobs and sending offers are on hold.",
+    "bannerSuspendedDesc": "Your company account has been suspended by an administrator. Publishing jobs is on hold.",
     "statusUnverified": "Unverified",
     "statusPending": "Awaiting verification",
     "statusVerified": "Verified",
@@ -118,7 +118,7 @@
     "reverifySubmit": "Send for verification again",
     "reverifyHint": "First correct and save your company details, then send your company for verification again.",
     "reverifySuccess": "Your company is back in the verification queue.",
-    "editVerifiedHint": "Changing the name or VAT/KBO number of a verified company requires verification again. Until it is approved, your company’s jobs will not be publicly visible and publishing and sending offers will be on hold.",
+    "editVerifiedHint": "Changing the name or VAT/KBO number of a verified company requires verification again. Until it is approved, your company’s jobs will not be publicly visible and publishing will be on hold.",
     "savedReverification": "Company details saved. Your company is back in verification — an administrator will check the new details.",
     "linksTitle": "Website and logo",
     "linksSubtitle": "We show these addresses in your job offers and on the company profile. A new address is published after the portal administrator checks it; removing an address takes effect immediately. The change does not require the company to be verified again.",
@@ -245,9 +245,9 @@
     "heroTitleLine2": "Your place.",
     "heroTitleLine3": "Your new start.",
     "heroEyebrow": "Work in Belgium",
-    "heroSubtitle": "Find work that makes use of what you do well. Compare conditions and apply with your profile — no CV to write.",
+    "heroSubtitle": "Browse jobs in Belgium, compare the conditions and contact the employer directly.",
     "heroBrowseJobs": "Browse jobs",
-    "heroCreateProfile": "Create a candidate profile",
+    "heroCreateProfile": "Create an account to save jobs",
     "heroPhotoCaption": "Work is about people.",
     "heroPhotoDisclaimer": "Illustrative photo — not connected to a specific job.",
     "heroSearchJobLabel": "Job title, keyword",
@@ -255,14 +255,14 @@
     "searchJobPlaceholder": "e.g. mechanic, warehouse worker, carer",
     "searchLocationPlaceholder": "e.g. Antwerp, Brussels, Ghent",
     "searchButton": "Search jobs",
-    "ctaCreateProfile": "Create a candidate profile",
-    "ctaCreateProfileSub": "Save jobs and apply faster",
+    "ctaCreateProfile": "Save jobs and searches",
+    "ctaCreateProfileSub": "Create an account and turn on email alerts for new jobs",
     "ctaPostJob": "Post a job",
-    "ctaPostJobSub": "Reach candidates looking for work in Belgium",
-    "trustFastTitle": "Fast application without a CV",
-    "trustFastSub": "Just a few clicks",
-    "trustVerifiedTitle": "Verified jobs",
-    "trustVerifiedSub": "We check employers",
+    "ctaPostJobSub": "Publish a job ad for people looking for work in Belgium",
+    "trustFastTitle": "Direct contact with the employer",
+    "trustFastSub": "The ad tells you how to apply",
+    "trustVerifiedTitle": "Verified companies",
+    "trustVerifiedSub": "We check company registration details",
     "trustEverywhereTitle": "Work across Belgium",
     "trustEverywhereSub": "Jobs from every region",
     "latestJobsTitle": "Latest jobs",
@@ -277,47 +277,36 @@
     "fieldsSubtitle": "Start with your sector.",
     "fieldsLogistics": "Logistics and warehouse",
     "fieldsTechnical": "Technical and production",
-    "profileNoteEyebrow": "A profile instead of a CV",
-    "profileNoteTitle": "You don’t need to be good<br></br>at writing about yourself.",
-    "profileNoteBody": "A few details are enough: occupation, experience and skills. You’ll show the rest at work.",
-    "profileNoteCta": "Discover the work profile",
+    "profileNoteEyebrow": "Saved searches",
+    "profileNoteTitle": "No need to search<br></br>again every day.",
+    "profileNoteBody": "Set filters on the job list and save the search. Turn on email alerts for new jobs in your account — daily or weekly.",
+    "profileNoteCta": "Set filters",
     "offersCount": "{count, plural, one {# job} other {# jobs}}",
     "categoriesTitle": "Popular categories",
     "locationsTitle": "Popular locations",
     "howTitle": "How it works",
     "step1Title": "Find a job",
-    "step1Desc": "Browse jobs matched to you.",
-    "step2Title": "Apply fast",
-    "step2Desc": "Apply without a CV in a few clicks.",
-    "step3Title": "Get in touch",
-    "step3Desc": "The employer contacts you directly.",
+    "step1Desc": "Narrow the results with filters: city, sector, contract type and pay.",
+    "step2Title": "Check the conditions",
+    "step2Desc": "Compare the pay, contract and requirements in the ad.",
+    "step3Title": "Apply with the employer",
+    "step3Desc": "Contact the employer the way the ad describes.",
     "step4Title": "Start working",
     "step4Desc": "Join a team in Belgium.",
     "companiesTitle": "Are you an employer?",
-    "companiesDesc": "Post a job and find the right candidates faster.",
+    "companiesDesc": "Publish a job and say how candidates can contact you.",
     "companiesCta": "Post a job",
-    "benefitsTitle": "Why Pracuj.be",
-    "benefitNoCvTitle": "No CV needed",
-    "benefitNoCvDesc": "You don't need a ready-made CV. A simple profile is enough.",
-    "benefitMultilangTitle": "In your language",
-    "benefitMultilangDesc": "The platform works in Polish, Dutch, French and English.",
-    "benefitEasyApplyTitle": "Easy application",
-    "benefitEasyApplyDesc": "You apply with one click, without unnecessary paperwork.",
-    "benefitMatchingTitle": "Smart matching",
-    "benefitMatchingDesc": "We show jobs that truly fit you.",
-    "benefitVerifiedTitle": "Verified employers",
-    "benefitVerifiedDesc": "We check companies so you feel safe.",
     "faqTitle": "Frequently asked questions",
-    "faqQ1": "Do I need a CV to use Pracuj.be?",
-    "faqA1": "No. Instead of a CV, you fill in a short profile with your experience and skills. Employers can see it and contact you directly.",
+    "faqQ1": "How do I apply for a job on Pracuj.be?",
+    "faqA1": "The job page shows how to contact the employer: a website, email address or phone number. You send your application directly to the employer.",
     "faqQ2": "Is Pracuj.be free for job seekers?",
-    "faqA2": "Yes. Creating a profile, searching for jobs and applying are completely free for candidates.",
+    "faqA2": "Yes. Browsing jobs, an account and saved jobs and searches are free for job seekers.",
     "faqQ3": "What languages does the platform support?",
     "faqA3": "You can use Pracuj.be in Polish, Dutch, French and English. The text of a job offer is in the language the employer wrote it in.",
     "faqQ4": "Do I have to speak Dutch or French?",
-    "faqA4": "Not always. Many employers accept candidates without local language skills. Use the filter to see jobs with no language requirement.",
-    "faqQ5": "How do employers get in touch with me?",
-    "faqA5": "After you apply or publish your profile, employers can message you directly on the platform to arrange the next steps."
+    "faqA4": "Not always. Some jobs do not require the local language. Use the “No language required” filter to see them.",
+    "faqQ5": "How do I contact an employer?",
+    "faqA5": "Each job shows the contact method chosen by the employer. You agree on the next steps directly with the employer."
   },
   "categories": {
     "construction": "Construction",
@@ -393,7 +382,7 @@
     "paginationLabel": "Pagination",
     "paginationPrevious": "Previous",
     "paginationNext": "Next",
-    "subtitle": "Find a job that fits you. Browse current job offers in Belgium.",
+    "subtitle": "Browse current jobs in Belgium and narrow the results with filters.",
     "searchJobs": "Search jobs",
     "keywordPlaceholder": "e.g. mechanic, warehouse worker, carer",
     "locationPlaceholder": "e.g. Antwerp, Brussels, Ghent",
@@ -428,7 +417,8 @@
     "transport": "Transport",
     "startDate": "Start date",
     "aboutCompany": "About the company",
-    "verified": "Verified company",
+    "verified": "Company identity verified",
+    "verifiedHelp": "What does verification mean?",
     "share": "Share",
     "backToList": "Back to list",
     "matchTitle": "Your match",
@@ -550,13 +540,28 @@
       "committeeCode": "PC {code}",
       "minimumWagesLink": "Official sector minimum wages",
       "minimumWagesNote": "The wage depends on category and seniority, among other things — check the official database."
+    },
+    "employerApply": {
+      "boxTitle": "Apply directly with the employer.",
+      "boxText": "You send your application to the advertiser — as stated in the job ad.",
+      "button": "Apply with the employer",
+      "newTab": "(opens in a new tab)",
+      "hint": {
+        "url": "Website: {value}",
+        "email": "Email: {value}",
+        "phone": "Phone: {value}"
+      },
+      "otherWays": "Other ways to get in touch:",
+      "none": "This job ad does not say how to apply.",
+      "mailSubject": "Job ad: {title}",
+      "contact": "Direct contact with the advertiser"
     }
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
-    "hubMetaDescription": "Find work in Belgium by industry and city. Browse jobs in construction, logistics, production, care and more — no CV needed.",
+    "hubMetaDescription": "Jobs in Belgium by sector and city — construction, logistics, production, care and more.",
     "hubTitle": "Browse jobs in Belgium",
-    "hubSubtitle": "Pick an industry or a city and see matching jobs. Apply fast, without a complicated CV.",
+    "hubSubtitle": "Pick a sector or city and browse current jobs.",
     "breadcrumbHub": "Jobs",
     "byCategoryTitle": "Jobs by industry",
     "byCategoryIntro": "Choose the industry you want to work in and browse current openings across Belgium.",
@@ -573,17 +578,17 @@
     "otherCategories": "Other industries",
     "otherCities": "Other cities",
     "empty": "There are no jobs here right now. Check back soon or browse all jobs.",
-    "cat_construction": "Construction jobs in Belgium — bricklayers, carpenters, general builders and finishers. Apply without a CV.",
-    "cat_transport": "Transport jobs in Belgium — category C and C+E drivers, delivery drivers and operators. Check current openings and apply fast.",
+    "cat_construction": "Construction jobs in Belgium — bricklayers, carpenters, general builders and finishers. See current openings.",
+    "cat_transport": "Transport jobs in Belgium — category C and C+E drivers, delivery drivers and operators. See current openings.",
     "cat_warehouse": "Warehouse jobs in Belgium — warehouse workers, forklift operators and order pickers. Start right away.",
-    "cat_production": "Production jobs in Belgium — machine operators, line workers and quality control. Apply without red tape.",
-    "cat_technical": "Technical and installation jobs in Belgium — electricians, plumbers, mechanics and fitters. Find a role that fits your skills.",
+    "cat_production": "Production jobs in Belgium — machine operators, line workers and quality control. See current openings.",
+    "cat_technical": "Technical and installation jobs in Belgium — electricians, plumbers, mechanics and fitters. Check the requirements in each job.",
     "cat_cleaning": "Cleaning jobs in Belgium — offices, hotels and industrial sites. Flexible hours and immediate starts.",
     "cat_hospitality": "Hospitality jobs in Belgium — cooks, waiters, kitchen help and hotel staff.",
     "cat_care": "Care jobs in Belgium — elderly carers, home help and medical staff. Check openings in your region.",
     "cat_logistics": "Logistics jobs in Belgium — order picking, freight forwarding and supply chain support.",
     "cat_seasonal": "Seasonal jobs in Belgium — harvests, farm work and the tourist season. Ideal for a shorter period.",
-    "city_brussels": "Jobs in Brussels and around — Belgium's capital with thousands of openings across many industries.",
+    "city_brussels": "Jobs in Brussels and around — in Belgium’s capital, across many industries.",
     "city_antwerp": "Jobs in Antwerp — Belgium's largest port and a hub for logistics, production and services.",
     "city_ghent": "Jobs in Ghent — a lively Flemish city with work in production, logistics and services.",
     "city_leuven": "Jobs in Leuven — a university city with openings in services, technical trades and logistics.",
@@ -614,8 +619,8 @@
     "cookieSettings": "Cookie settings"
   },
   "footer": {
-    "tagline": "Work in Belgium without a CV — in your language.",
-    "forCandidates": "For candidates",
+    "tagline": "Jobs in Belgium. A site in four languages.",
+    "forCandidates": "For job seekers",
     "forEmployers": "For employers",
     "company": "Company",
     "legal": "Legal",
@@ -663,7 +668,7 @@
     "marketingOptIn": "I want to receive emails about Pracuj.be news. I can turn this off in settings.",
     "opensInNewTab": "(opens in a new tab)",
     "passwordHint": "At least 8 characters, including a letter and a number.",
-    "registerAsEmployer": "Hiring? Create an employer account",
+    "registerAsEmployer": "Posting a job? Create an employer account",
     "registerAsCandidate": "Looking for work? Create a candidate account",
     "resetSuccess": "If an account exists for this email address, we've sent a link to reset the password.",
     "backToLogin": "Back to login",
@@ -702,7 +707,7 @@
     "ageBandLegend": "Your age",
     "ageBandMinor": "I am {min}–{max} years old",
     "ageBandAdult": "I am {age} or older",
-    "ageBandMinorHint": "In this age range your profile will not be visible to companies in the candidate search. You can still apply for jobs yourself.",
+    "ageBandMinorHint": "With your account you can browse and save jobs and searches.",
     "ageConfirmHint": "We do not ask for your date of birth or an identity document.",
     "confirmEmailTitle": "Activate your account",
     "confirmEmailIntro": "Click the button to confirm your email address and go to your account.",
@@ -712,10 +717,10 @@
     "confirmEmailExpiredHint": "Has the confirmation link expired? Log in with your email address and password — we will send you a new link."
   },
   "metadata": {
-    "homeTitle": "Pracuj.be — Work in Belgium without a CV",
-    "homeDescription": "Find work in Belgium without a CV. Create a simple profile in your language and employers reach out to you.",
+    "homeTitle": "Pracuj.be — jobs in Belgium",
+    "homeDescription": "Jobs in Belgium. Search by city, sector and contract type, save your searches and contact the employer directly.",
     "jobsTitle": "Jobs in Belgium | Pracuj.be",
-    "jobsDescription": "Browse current job openings in Belgium. Filter by city, sector and contract type. Apply without a CV."
+    "jobsDescription": "Browse current jobs in Belgium. Filter by city, sector and contract type and apply directly with the employer."
   },
   "errors": {
     "authInvalidCredentials": "Incorrect email or password.",
@@ -1200,7 +1205,9 @@
     "bulkConfirmTitle": "{count, plural, one {Change the status of # application?} other {Change the status of # applications?}}",
     "bulkConfirmDescription": "New status: {status}. Each application is changed separately, and those that can’t take this change are skipped. Candidates will be notified of the change.",
     "bulkConfirm": "Change status",
-    "bulkStatusUncertain": "We don’t know whether the change went through (for example, the connection dropped). Refresh the page and check the statuses."
+    "bulkStatusUncertain": "We don’t know whether the change went through (for example, the connection dropped). Refresh the page and check the statuses.",
+    "listingStatsTitle": "Listing statistics",
+    "listingStatsText": "Search appearances, views and clicks on “Apply with the employer” for each job."
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -3039,13 +3046,13 @@
   },
   "employers": {
     "metaTitle": "For employers — job offers in Belgium | Pracuj.be",
-    "metaDescription": "How to post a job offer in Belgium on Pracuj.be: company account, verification, job wizard and contact with candidates. Free of charge at this stage.",
+    "metaDescription": "How to post a job in Belgium on Pracuj.be: company account, verification, job wizard and how candidates contact you. Free of charge at this stage.",
     "pageTitle": "For employers",
-    "title": "Hire in Belgium more simply",
-    "intro": "Pracuj.be connects companies with people looking for work in Belgium — including those without a traditional CV. Here is how to post a job offer and how contact with candidates works.",
+    "title": "Post a job in Belgium",
+    "intro": "Pracuj.be is a job ad portal for Belgium. You publish a job and job seekers contact you directly, the way you describe in the ad.",
     "ctaRegister": "Create an employer account",
     "ctaLogin": "Already have an account? Log in",
-    "photoCaption": "Hiring is about people.",
+    "photoCaption": "Work is about people.",
     "photoDisclaimer": "Illustrative photo — does not show a specific employer.",
     "stepsTitle": "How it works",
     "step1Title": "Create an account",
@@ -3054,24 +3061,24 @@
     "step2Desc": "Our team checks the company. Only verified companies can publish job offers.",
     "step3Title": "Prepare the job offer",
     "step3Desc": "The wizard guides you step by step through the position, location, conditions and requirements. You can prepare a draft before verification.",
-    "step4Title": "Run the recruitment",
-    "step4Desc": "Applications arrive in the company panel. There you change their status, write to candidates and send job proposals.",
+    "step4Title": "Receive applications yourself",
+    "step4Desc": "In the job you give a website, email address or phone number. Candidates contact you directly.",
     "freeTitle": "Free of charge at this stage",
     "freeDesc": "At this stage of development, Pracuj.be does not charge for a company account or for publishing job offers. We do not sell packages or subscriptions.",
-    "candidatesTitle": "Who you will find",
-    "candidatesProfileTitle": "A profile instead of a CV",
-    "candidatesProfileDesc": "Candidates fill in a simple work profile: occupations, skills, languages, certificates, experience and availability. They may attach a CV, but do not have to.",
-    "candidatesLanguagesTitle": "Four languages",
-    "candidatesLanguagesDesc": "The portal works in Polish, Dutch, French and English. Every email reaches the recipient in their own language.",
-    "candidatesMatchTitle": "A clear match",
-    "candidatesMatchDesc": "For each application you see which requirements of the job offer the candidate meets and which are missing.",
+    "adTitle": "Your job ad",
+    "adPassportTitle": "A clear job card",
+    "adPassportDesc": "Role, place of work, contract, requirements and — if you give it — pay sit together in one layout, on phones too.",
+    "adLanguagesTitle": "Four languages",
+    "adLanguagesDesc": "The portal works in Polish, Dutch, French and English. Every email reaches the recipient in their own language.",
+    "adVerifiedTitle": "Verification badge",
+    "adVerifiedDesc": "On jobs from a verified company we show that a portal administrator has checked its registration details. It is not a rating of the company or the job.",
     "contactTitle": "Contact with candidates",
-    "contactApplicationsTitle": "Applications",
-    "contactApplicationsDesc": "The candidate applies with their profile — one application per job offer. You change the status in the panel and the candidate is notified.",
-    "contactMessagesTitle": "Messages",
-    "contactMessagesDesc": "You talk to the candidate through messages in the company panel.",
-    "contactProposalsTitle": "Job proposals",
-    "contactProposalsDesc": "You can send the candidate a job proposal, which they accept or decline.",
+    "contactChannelTitle": "Your application channel",
+    "contactChannelDesc": "You give at least one: a website, email address or phone number. From the job, the candidate goes straight to you.",
+    "contactStatsTitle": "Job ad statistics",
+    "contactStatsDesc": "In the company panel you see aggregate view statistics for your jobs.",
+    "contactTeamTitle": "Company team",
+    "contactTeamDesc": "Invite colleagues to the company account by email and give them a role.",
     "finalTitle": "Ready to post your first job offer?",
     "finalDesc": "Create an employer account. You will publish the offer once the company is verified."
   },
@@ -3298,7 +3305,10 @@
     "csvStatus": "Status",
     "csvTotal": "Total",
     "exportCsv": "Download CSV",
-    "exportCsvLabel": "Download the job funnel as a CSV file ({from} – {to})"
+    "exportCsvLabel": "Download the job funnel as a CSV file ({from} – {to})",
+    "applyClicks": "Clicks on “Apply with the employer”",
+    "applyClicksDefinition": "How many times “Apply with the employer” was clicked on the job page (the advertiser’s website, email or phone). We do not know whether the person applied afterwards.",
+    "consentNoteListing": "Search appearances, views and clicks on “Apply with the employer” are counted only for people who accepted analytics cookies."
   },
   "savedSearches": {
     "hint": "Save these filters and we will let you know on the site and by email about new jobs (at most once a day).",
@@ -3498,30 +3508,26 @@
   },
   "help": {
     "metaTitle": "Help — questions and answers",
-    "metaDescription": "How Pracuj.be works: a profile without a CV, applying, job matching, employer accounts, company verification and emails in your language.",
+    "metaDescription": "How Pracuj.be works: browsing jobs, contacting employers, saved searches, employer accounts, company verification and emails in your language.",
     "title": "Help",
     "intro": "Answers to the most common questions about how Pracuj.be works. If you can’t find an answer here, write to us through the contact form.",
     "groups": {
-      "candidates": "For candidates",
+      "candidates": "For job seekers",
       "employers": "For employers",
       "account": "Account, emails and safety"
     },
     "faq": {
-      "noCv": {
-        "q": "Do I need a CV to look for work?",
-        "a": "No. After you <register>sign up</register>, you create a simple professional profile in six short steps — including occupations, skills, languages and availability. You can add a CV file (PDF, DOC or DOCX up to 5 MB), but it is not required."
+      "howToApply": {
+        "q": "How do I apply for a job?",
+        "a": "The job page shows how to contact the employer: a website, email address or phone number. You send your application directly to the employer, not through Pracuj.be."
       },
-      "guestApply": {
-        "q": "Can I apply without creating an account?",
-        "a": "Yes. In the application form you enter your full name and email address, then confirm the application with the link in the email. Later you can create an account with the same address and take over the application."
+      "dataSharing": {
+        "q": "Does Pracuj.be pass my data on to employers?",
+        "a": "No. The portal does not send employers any data from your account. An employer only receives what you send yourself when you contact them the way the job describes."
       },
-      "match": {
-        "q": "How is the match with a job calculated?",
-        "a": "The match percentage is based on fixed criteria: occupation and category, skills, location, experience, availability, languages, certificates, driving licence and contract terms. The result is not decided by artificial intelligence, and the job page shows what you meet and what is missing."
-      },
-      "visibility": {
-        "q": "Can employers see my profile?",
-        "a": "Verified companies can only find your profile if you turn on “Let verified employers find my profile” in your settings — it is off by default. A company you apply to sees your application. You can block specific companies in the “Blocked companies” section."
+      "account": {
+        "q": "Why create an account?",
+        "a": "You do not need an account to browse jobs. After you <register>sign up</register> you can save jobs and searches and turn on email alerts for new jobs."
       },
       "alerts": {
         "q": "How do I get alerts about new jobs?",
@@ -3536,8 +3542,8 @@
         "a": "At this stage Pracuj.be is free for employers. The portal does not sell packages or paid job postings."
       },
       "verification": {
-        "q": "Why does my company need to be verified?",
-        "a": "Only companies verified by a portal administrator can publish jobs. You see the verification status in the employer panel. If the company is rejected, you see the reason and can choose “Send for verification again”."
+        "q": "What does company verification mean?",
+        "a": "Verification means a portal administrator has checked the company’s registration details, such as its name and VAT/KBO number. It is not a rating of the company or its jobs. Only verified companies can publish jobs; you see the status in the employer panel. If your company is rejected, you see the reason and can choose “Send for verification again”."
       },
       "drafts": {
         "q": "Can I prepare a job before verification?",
@@ -3547,9 +3553,9 @@
         "q": "How do I add colleagues?",
         "a": "The company owner or admin invites team members by email address in the employer panel and gives them a role."
       },
-      "applications": {
-        "q": "How do I contact candidates?",
-        "a": "You handle applications, messages and job offers in the employer panel. Read more on the <employer>For employers</employer> page."
+      "candidateContact": {
+        "q": "How do candidates contact me?",
+        "a": "In the job you give at least one contact method: a website, email address or phone number. Candidates contact you directly. Read more on the <employer>For employers</employer> page."
       },
       "languages": {
         "q": "Which languages is the site available in?",
@@ -3557,7 +3563,7 @@
       },
       "emailLanguage": {
         "q": "In which language will I receive emails?",
-        "a": "Emails about your account are sent in the language set on your account — even when the message comes from an employer who uses a different language."
+        "a": "Emails about your account are sent in the language set on your account."
       },
       "noEmail": {
         "q": "I am not receiving emails from the site. What should I do?",
