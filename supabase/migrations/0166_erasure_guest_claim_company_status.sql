@@ -1,6 +1,5 @@
 -- =============================================================================
--- 0901_erasure_guest_claim_company_status.sql — numer TYMCZASOWY (ostateczny nada
--- integrator). Dwie poprawki spójności z audytu:
+-- 0166_erasure_guest_claim_company_status.sql — dwie poprawki spójności z audytu:
 --
 -- 1. Usunięcie konta kandydata, który przejął aplikację gościa (#486 × #98).
 --    `erase_candidate_subject` (0105) usuwa `guest_application_requests` kandydata.
