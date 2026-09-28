@@ -23,6 +23,7 @@ import {
   TAG,
   TEXT_LINK,
 } from '@/components/dashboard/panel-styles';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 
 /**
  * Szczegół WŁASNEGO zgłoszenia w panelu kandydata (P1-05/P1-06, strona kandydata): dane wysłane
@@ -54,6 +55,8 @@ export default async function CandidateApplicationDetailPage({
 }) {
   const { locale, id } = await params;
   setRequestLocale(locale);
+  // Decyzja produktowa: portal ogłoszeniowy — trasa tylko w trybie RECRUITMENT.
+  notFoundUnlessRecruitment('applications');
 
   const t = await getTranslations({ locale, namespace: 'dashboard' });
   const to = await getTranslations({ locale, namespace: 'onboarding' });

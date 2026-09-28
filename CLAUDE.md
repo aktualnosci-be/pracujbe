@@ -121,6 +121,14 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   strażnik `send_offer`, zdjęta polityka, zdjęty trigger trybu), rollback `supabase/rollback/0171_…down.sql`, unit
   `portal-mode-dual-key`, `maintenance-portal-mode`, `ops-health-route`, `test:backup`. Dane istniejące (#1150): tylko
   blokada nowych danych, bez zamrażania (brak danych produkcyjnych).
+  Wyłączone w trybie ogłoszeniowym (#1141/#1144/#1132, warstwa aplikacji, bez migracji): akcje `sendOffer`/`respondToOffer`/
+  `loadMoreProposals`, `applyToJob`/`transitionApplication`/`withdrawApplication`, odczyty historii zgłoszeń kandydata
+  i pracodawcy, aplikacja gościa (`submit`/`confirm`/`claimGuestApplication`, `stageGuestLink`) → `RECRUITMENT_DISABLED`
+  przed limiterem/Turnstile/bazą (`tests/legal/classifieds-process-off.test.ts`, kontrola ujemna w trybie RECRUITMENT);
+  trasy `/employer/aplikacje[/id]`, `/candidate/aplikacje[/id]`, `/candidate/propozycje`, `/aplikacja/potwierdz|przejmij`
+  → 404; nawigacja (`recruitmentEnabled` z layoutu do `EmployerShell`/`CandidateShell`), sekcja zgłoszeń pulpitu
+  pracodawcy, baner propozycji i podgląd zgłoszeń pulpitu kandydata ukryte (loadery niewołane); powiadomienia
+  o zgłoszeniach/propozycjach prowadzą do pulpitu. Blokady RPC i wygaszanie e-maili: #1140/#1145.
   Matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139, bez migracji): `/api/maintenance` nie woła
   `runMatchRecompute` (`matches: "disabled"`, sam `runMatchRecompute` też sprawdza tryb), `getMyJobMatch(Action)` →
   `disabled` bez transakcji, brak `job-match-slot` i `MatchBar` na `JobCard`; `/employer/kandydaci[/id]` i
@@ -308,7 +316,7 @@ wyznacz locale odbiorcy (fallback) → wstaw `email_deliveries(status=queued)` �
 worker/route handler renderuje React Email w locale odbiorcy → Resend → zapisz
 `status/provider_id/attempts/last_error`. Błąd = retry, nie usuwa rekordu źródłowego.
 
-**Propozycja (idempotentnie):** patrz Invariant #3. Kolejność w server action:
+**Propozycja (idempotentnie; tylko tryb `RECRUITMENT`, #1141):** patrz Invariant #3. Kolejność w server action:
 autoryzacja → status firmy `verified` → status oferty `active` → walidacja kandydata →
 `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING RETURNING *` w transakcji →
 historia → notyfikacja → enqueue e-mail.

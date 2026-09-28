@@ -9,6 +9,7 @@ import { DuplicateJobButton } from "@/components/employer/DuplicateJobButton";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
 import { canRecruit } from "@/lib/team/permissions";
+import { isRecruitmentEnabled } from "@/lib/portal-mode";
 import { StatValue } from "@/components/dashboard/StatValue";
 import {
   decodeTimeCursor,
@@ -83,6 +84,7 @@ export default async function EmployerOffersPage({
   // P1-05: kursor (created_at, id) w adresie — `?po=` starsze, `?przed=` nowsze.
   const request = listPageRequest(await searchParams, decodeTimeCursor);
   setRequestLocale(locale);
+  const recruitment = isRecruitmentEnabled();
   const td = await getTranslations("dashboard");
   const tb = await getTranslations("campaignBanner");
   const [result, shell] = await Promise.all([
@@ -199,7 +201,8 @@ export default async function EmployerOffersPage({
                         <StatValue value={offer.newApplications} noDataLabel={td("funnelNoData")} />
                       </dd>
                       {/* P1-05: zgłoszenia tej oferty (recruiter+ — member nie czyta zgłoszeń). */}
-                      {shell.status === "ok" && canRecruitHere && offer.status !== "draft" ? (
+                      {/* #1144: link do panelu zgłoszeń tylko w trybie RECRUITMENT. */}
+                      {recruitment && shell.status === "ok" && canRecruitHere && offer.status !== "draft" ? (
                         <dd className="mt-1">
                           <Link
                             href={`/employer/aplikacje?oferta=${encodeURIComponent(offer.id)}`}
