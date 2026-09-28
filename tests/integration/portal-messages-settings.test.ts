@@ -231,6 +231,8 @@ describe('zapisane wyszukiwania (#100)', () => {
 });
 
 describe('blokada firmy (#97)', () => {
+  // #1134: rozmowy (a z nimi blokada wiadomości firmy) istnieją tylko w trybie RECRUITMENT.
+  withRecruitmentMode();
   it('kandydatka blokuje firmę: lista, szczegół oferty, blokada wiadomości firmy; inny kandydat bez zmian', async () => {
     actAs(anna);
     expect(await blocksActions.setCompanyBlockAction(companyX, true)).toEqual({ ok: true, blocked: true });
