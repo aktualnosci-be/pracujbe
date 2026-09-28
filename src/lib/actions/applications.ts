@@ -56,6 +56,8 @@ export type TransitionResult = { ok: true } | { ok: false; error: ErrorCode };
 /** Mapuje komunikat błędu z Postgresa/RLS na kod użytkowy (Invariant #8). */
 function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
+  // #1140 (0940): baza w trybie ogłoszeniowym odrzuca nowe dane procesu rekrutacyjnego.
+  if (m.includes('RECRUITMENT_DISABLED')) return 'RECRUITMENT_DISABLED';
   if (m.includes('COMPANY_NOT_VERIFIED')) return 'COMPANY_NOT_VERIFIED';
   // apply_to_job (0093): brak odpowiedzi na pytanie wymagane.
   if (m.includes('SCREENING_ANSWER_REQUIRED')) return 'SCREENING_ANSWER_REQUIRED';

@@ -34,6 +34,8 @@ export const opsMetricsSchema = z.object({
   storageDeletion: z
     .object({ pending: count, oldestPendingAgeSeconds: count, deadLetters: count })
     .optional(),
+  /** #1143 (0940): tryb portalu w bazie (1 = RECRUITMENT); brak = baza sprzed 0940. */
+  portalLegalMode: z.object({ recruitmentEnabled: z.union([z.literal(0), z.literal(1)]) }).optional(),
   // #44 (0118). Brak sekcji = baza sprzed migracji: czujki poczty milczą zamiast 503.
   mail: z.object({
     sentLast24h: count,
@@ -107,7 +109,8 @@ export type OpsSignal =
   | 'mail_complaint_rate'
   | 'mail_complaint_rising'
   | 'mail_suppressions_new'
-  | 'mail_suppressions_active';
+  | 'mail_suppressions_active'
+  | 'portal_legal_mode_mismatch';
 
 export interface OpsEvaluation {
   status: 'ok' | 'alert';

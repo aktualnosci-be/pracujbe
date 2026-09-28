@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 111; z danymi osobowymi: 73; bez danych osobowych: 38.
+Tabele w migracjach: 112; z danymi osobowymi: 74; bez danych osobowych: 38.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -24,7 +24,7 @@ Tabele w migracjach: 111; z danymi osobowymi: 73; bez danych osobowych: 38.
 | Zgody cookies i akceptacja dokumentów (`consents`) | Receipt zgody cookies (record_consent) i akceptacji regulaminu przy rejestracji — z IP i User-Agent. | `public.consents`, `public.document_acceptances`, `public.email_consent_events` | Railway | Receipt akceptacji przy rejestracji: IP (tylko zaufany nagłówek proxy) i User-Agent wyzerowane po 7 dniach (acceptance_ip_user_agent, 0132; harmonogram za RETENTION_MODE, domyślnie wyłączony), receipt zostaje; w metadanych konta tylko w transakcji rejestracji. Receipt cookies (consents) — do ustalenia. |
 | Zgłoszenia treści (DSA) i moderacja (`dsa-moderation`) | Publiczny formularz zgłoszenia, sprawy z numerem i kodem dostępu, decyzje moderacyjne z uzasadnieniem, e-maile do stron; zgłoszenia wiadomości i rozmów przez ich strony (dowód z treścią tylko zgłoszonej wiadomości, wgląd tylko administratora). | `public.moderation_appeals`, `public.moderation_decisions`, `public.moderation_restorations`, `public.report_events`, `public.reports` | Railway, Resend, EmailLabs, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
 | Formularz kontaktu (`support-contact`) | Publiczny formularz /kontakt (także bez konta): temat, treść, imię (opcjonalnie), e-mail, język formularza; potwierdzenie do nadawcy i powiadomienie adminów (w kolejce tylko numer i temat); obsługa w /admin/kontakt. | `public.contact_messages` | Railway, Resend, Cloudflare Turnstile | Kod nie usuwa danych — do ustalenia |
-| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | /api/maintenance (0163): rate_limit_gc — okna limitera starsze niż doba; processed_webhooks_gc — rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. audit_logs bez usuwania w kodzie. |
+| Bezpieczeństwo, audyt i limity (`security-audit`) | Dziennik audytu (triggery), limiter zapytań, zdarzenia systemowe, inbox webhooków, raportowanie błędów. | `auth.sessions`, `public.age_policy`, `public.audit_logs`, `public.breach_incident_events`, `public.breach_incidents`, `public.breach_notice_recipients`, `public.breach_notices`, `public.portal_legal_mode`, `public.rate_limits`, `public.system_events` | Railway, Discord (webhook kanału błędów), Cloudflare Turnstile | /api/maintenance (0163): rate_limit_gc — okna limitera starsze niż doba; processed_webhooks_gc — rozstrzygnięte wpisy inboxu webhooków starsze niż 30 dni. audit_logs bez usuwania w kodzie. |
 | Import ogłoszenia przez AI (`ai-job-import`) | Pracodawca przesyła zrzut ekranu lub link; tekst jest minimalizowany przed wysyłką (zrzut — nie), wynik trafia do szkicu oferty (bez publikacji). Za flagą, domyślnie wyłączone. | — | Railway, OpenAI (Responses API, model GPT-6 Luna) | Portal nie zapisuje przesłanego obrazu ani pobranej strony — tylko wynik w szkicu oferty. |
 | Tłumaczenia AI (rdzeń) (`ai-translation`) | Kolejka tłumaczeń pól tekstowych ofert i profili (rewizje źródła, zadania per język, przekłady, korekty ręczne; 0145). Wpięcie ofert/profili dopiero w #33/#34; za flagą, domyślnie wyłączone. | `public.translation_documents`, `public.translation_jobs`, `public.translation_source_revisions`, `public.translation_sources` | Railway, OpenAI (Responses API, model GPT-6 Luna) | deactivate_translation_source(purge) usuwa rewizje, zadania i przekłady encji (wywołanie przy usunięciu konta/oferty — do wpięcia w #33/#34). Wynik odrzuconej rewizji nie jest przechowywany (poza propozycją przy korekcie ręcznej). |
 | Statystyki ofert (lejek) (`job-statistics`) | Zliczanie wyświetleń/wystąpień w wynikach per oferta i dzień, bez IP, cookies i identyfikatora osoby. Zdarzenie wysyłane wyłącznie po zgodzie w kategorii analitycznej banera cookies (#575). | — | Railway | job_funnel_receipts (nonce deduplikacji) najwyżej 48 h, job_funnel_daily — bieżący i 12 poprzednich miesięcy kalendarzowych (purge_job_funnel_data w /api/maintenance). |
@@ -997,6 +997,17 @@ Tabele w migracjach: 111; z danymi osobowymi: 73; bez danych osobowych: 38.
 | `status` | Proces rekrutacyjny (statusy, dopasowanie, odpowiedzi screeningowe) | `supabase/migrations/0005_processes.sql` |
 | `message` | Korespondencja i treści swobodne | `supabase/migrations/0005_processes.sql` |
 | `locale` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0005_processes.sql` |
+
+### `public.portal_legal_mode`
+
+- **Migracja:** `supabase/migrations/0940_portal_legal_mode.sql`
+- **Czynności:** Bezpieczeństwo, audyt i limity
+- **Osoby:** Administratorzy portalu
+- **Uwaga:** Tryb portalu jako dane (0940, #1140/#1143): CLASSIFIEDS_ONLY albo RECRUITMENT; zmiana tylko RPC service_role z uzasadnieniem i audytem.
+
+| Kolumna | Kategoria | Wprowadzona w |
+|---|---|---|
+| `changed_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0940_portal_legal_mode.sql` |
 
 ### `public.profiles`
 

@@ -144,6 +144,7 @@ RESTORE_AGE_IDENTITY_FILE   # klucz prywatny age
 RESTORE_TARGET_URL          # pusta baza pracujbe_restore_* na OSOBNYM klastrze
 RESTORE_TOMBSTONES_FILE     # (opcjonalnie, #486) rejestr usunięć nowszy niż kopia
 RESTORE_S3_OBJECT           # (#569) zamiast RESTORE_ARCHIVE: `latest` albo nazwa w R2 + BACKUP_S3_READ_*
+RESTORE_KEEP_PORTAL_MODE    # (#1143) `1` = zachowaj tryb portalu z kopii (domyślnie wymuszany CLASSIFIEDS_ONLY)
 ```
 
 Kolejne kroki: zgodność SHA-256 artefaktu z manifestem, odszyfrowanie, pełny
@@ -151,6 +152,14 @@ odczyt, utworzenie brakujących ról wg bootstrapu, `pg_restore --no-owner
 --single-transaction --exit-on-error` (z uprawnieniami) i porównanie SHA-256 zapytań
 kontrolnych oraz odcisku uprawnień z manifestem. Kody wyjścia jak wyżej. Podmieniony artefakt, zły klucz, zmieniony
 manifest, niepusty cel i nazwa spoza `pracujbe_restore_*` kończą się błędem.
+
+### Tryb portalu po odtworzeniu (#1143)
+
+Po kontrolach zgodności z manifestem skrypt wymusza tryb ogłoszeniowy
+(`admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', …)` z wpisem audytu), jeśli kopia była
+w trybie `RECRUITMENT` — przywrócona kopia nie włącza po cichu funkcji rekrutacyjnych.
+Zachowanie trybu z kopii tylko jawnie: `RESTORE_KEEP_PORTAL_MODE=1` (decyzja właściciela).
+Wynik w wierszu `RESTORE: tryb portalu: …`. Procedura trybu: [OPERATIONS.md](OPERATIONS.md) §6.
 
 ### Usunięcia po dacie kopii (#486)
 
@@ -180,7 +189,8 @@ artefakcie, odtwarza najnowszą kopię i wykonuje kontrole ujemne. Scenariusz #4
 kandydat usunięty po kopii wraca przy odtworzeniu bez rejestru (kontrola ujemna), z
 rejestrem jest usuwany ponownie, a zły rejestr kończy się odmową bez odtworzenia. OPS14-01:
 odtworzona baza ma uprawnienia źródła, a kopia bez ACL (jak dawne `--no-acl`) i manifest
-formatu 1 są odrzucane (kontrole ujemne). Z `BACKUP_TEST_FRESH_PGHOST`/`BACKUP_TEST_FRESH_PGPORT`
+formatu 1 są odrzucane (kontrole ujemne). #1143: kopia z `RECRUITMENT` po odtworzeniu ma
+`CLASSIFIEDS_ONLY` (z wpisem audytu), a tylko `RESTORE_KEEP_PORTAL_MODE=1` zachowuje tryb kopii. Z `BACKUP_TEST_FRESH_PGHOST`/`BACKUP_TEST_FRESH_PGPORT`
 (drugi, pusty klaster bez ról runtime) test odtwarza też kopię tam: role powstają wg
 bootstrapu, a rola `anon` z `LOGIN` na celu kończy się odmową. Wymaga `age`
 i `age-keygen`, nie łączy się z internetem. Workflow CI nie uruchamia go

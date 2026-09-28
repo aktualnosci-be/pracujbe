@@ -100,15 +100,20 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     expect(fakeDb.callsTo('expire_due_jobs')).toEqual([expect.objectContaining({ args: {}, as: 'service' })]);
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
     // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
-    expect(fakeDb.calls.map((c) => c.name)).toEqual(TASKS.filter((t) => t !== 'run_retention_purge'));
+    // #1143: tryb ogłoszeniowy (domyślny) — bez materializacji dopasowań.
+    expect(fakeDb.calls.map((c) => c.name)).toEqual(
+      TASKS.filter((t) => t !== 'run_retention_purge' && t !== 'match_recompute_claim'),
+    );
     expect(await res.json()).toEqual({
       ok: true,
       releasedDiscounts: 0,
       releasedCheckouts: 0,
       releasedAiBudgetReservations: 0,
       expiredJobs: 3,
-      // P1-03: pusta kolejka dopasowań — same liczniki.
-      matches: { subjects: 0, failed: 0, upserted: 0, deleted: 0, skipped: 0 },
+      // P1-03/#1143: materializacja dopasowań tylko w trybie RECRUITMENT (env ORAZ baza) —
+      // w trybie ogłoszeniowym pominięta (maintenance-portal-mode.test.ts).
+      matches: null,
+      recruitmentTasks: { skipped: 'classifieds_only' },
       savedSearchDigests: 0,
       purgedGuestRequests: 0,
       campaignEmailsQueued: 0,

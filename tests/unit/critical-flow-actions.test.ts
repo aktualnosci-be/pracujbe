@@ -31,6 +31,8 @@ const USER = '66666666-6666-4666-8666-666666666666';
 const PG_ERRORS: Array<[string, string]> = [
   ['COMPANY_NOT_VERIFIED: company 7 is pending', 'COMPANY_NOT_VERIFIED'],
   ['JOB_NOT_ACTIVE', 'JOB_NOT_ACTIVE'],
+  // #1140 (0940): baza w trybie ogłoszeniowym odrzuca nowe dane procesu (kod 42501).
+  ['RECRUITMENT_DISABLED', 'RECRUITMENT_DISABLED'],
   ['NOT_FOUND: job', 'NOT_FOUND'],
   ['PERMISSION_DENIED', 'PERMISSION_DENIED'],
   ['UNAUTHENTICATED', 'PERMISSION_DENIED'],

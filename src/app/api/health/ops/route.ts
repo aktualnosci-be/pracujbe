@@ -3,6 +3,8 @@ import { backupAlerts, readBackupFreshness } from '@/lib/ops/backup-freshness';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
 import { readOpsMetrics } from '@/lib/ops/metrics-source';
 import { evaluateOps } from '@/lib/ops/sensors';
+import { portalLegalModeAlerts, portalLegalModeSummary } from '@/lib/ops/portal-mode';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
 /**
  * Czujki operacyjne (#47) — wyłącznie dla monitoringu wewnętrznego.
@@ -16,6 +18,9 @@ import { evaluateOps } from '@/lib/ops/sensors';
  * HTTP 503 `alert` — co najmniej jeden próg przekroczony (kody w `alerts`);
  * HTTP 503 `unavailable` — metryk nie da się odczytać (baza/konfiguracja; szczegół w kanale błędów);
  * HTTP 503 `unconfigured` — brak źródła metryk (`DATABASE_OPS_URL` ani service-role).
+ *
+ * #1143: `portal_legal_mode_mismatch` — env `PORTAL_LEGAL_MODE` i tryb w bazie (0940) różnią się
+ * (503 `alert`); `portalLegalMode` = nazwy trybów env/bazy/efektywnego.
  *
  * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
  * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
@@ -40,10 +45,18 @@ export async function GET(request: Request): Promise<Response> {
 
   const appPool = domainPoolStats();
   const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget);
-  const alerts = [...evaluation.alerts, ...backupAlerts(backup)];
+  // #1143: env i baza muszą mówić to samo; rozbieżność = alarm (tryb efektywny i tak ogłoszeniowy).
+  const envRecruitment = isRecruitmentEnabled();
+  const dbRecruitment = result.metrics.portalLegalMode?.recruitmentEnabled;
+  const alerts = [
+    ...evaluation.alerts,
+    ...portalLegalModeAlerts(dbRecruitment, envRecruitment),
+    ...backupAlerts(backup),
+  ];
   const status = alerts.length ? 'alert' : 'ok';
+  const portalLegalMode = portalLegalModeSummary(dbRecruitment, envRecruitment);
   return Response.json(
-    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null, backup },
+    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null, backup, portalLegalMode },
     { status: status === 'ok' ? 200 : 503, headers },
   );
 }

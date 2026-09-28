@@ -186,6 +186,8 @@ export async function submitGuestApplication(
   } catch (e) {
     if (isDatabaseError(e)) {
       const message = databaseErrorMessage(e);
+      // #1140 (0940): tryb ogłoszeniowy w bazie — brak nowych zgłoszeń gości.
+      if (message.includes('RECRUITMENT_DISABLED')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
       if (message.includes('JOB_NOT_ACTIVE')) return { ok: false, error: 'JOB_NOT_ACTIVE' };
       if (message.includes('AGE_ATTESTATION_REQUIRED')) {
         return { ok: false, error: 'AGE_ATTESTATION_REQUIRED', field: 'age' };
@@ -233,6 +235,10 @@ export async function confirmGuestApplication(locale: string): Promise<GuestConf
     }
     return { ok: true, outcome: outcome as GuestConfirmOutcome, ...(slug ? { jobSlug: slug } : {}) };
   } catch (e) {
+    // #1140 (0940): tryb ogłoszeniowy w bazie — potwierdzenie nie tworzy aplikacji.
+    if (isDatabaseError(e) && databaseErrorMessage(e).includes('RECRUITMENT_DISABLED')) {
+      return { ok: false, error: 'RECRUITMENT_DISABLED' };
+    }
     captureError(e, { area: 'guestApply.confirm' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -258,6 +264,7 @@ export async function claimGuestApplication(locale: string): Promise<GuestClaimR
     if (isDatabaseError(error)) {
       const message = databaseErrorMessage(error);
       if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
+      if (message.includes('RECRUITMENT_DISABLED')) return { ok: false, error: 'RECRUITMENT_DISABLED' };
       if (message.includes('EMAIL_NOT_VERIFIED')) return { ok: false, error: 'EMAIL_NOT_VERIFIED' };
       if (message.includes('CLAIM_EXPIRED')) return { ok: false, error: 'CLAIM_EXPIRED' };
       if (message.includes('APPLICATION_ALREADY_EXISTS')) return { ok: false, error: 'APPLICATION_ALREADY_EXISTS' };

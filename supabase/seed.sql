@@ -42,6 +42,12 @@ begin
   end if;
 end $$;
 
+-- #1140 (0940): baza startuje w trybie ogłoszeniowym i odrzuca nowe dane procesu
+-- rekrutacyjnego (aplikacje, propozycje, dopasowania, wiadomości). Dane DEMO seedu wstawiamy
+-- jawnym wyjątkiem na czas tej transakcji — baza uwzględnia go tylko dla superusera
+-- (migrator/seed), nigdy dla loginów aplikacji. Tryb portalu się nie zmienia.
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+
 -- ==========================================================================
 -- auth.users - konta uwierzytelniania (haslo demo: DemoPass123!)
 -- ==========================================================================
