@@ -12,6 +12,7 @@ vi.mock('@/lib/db/runtime', () => ({ getDomainPool: db.getDomainPool }));
 
 import { env, isAppReady, isProductionDeployment, readinessChecks } from '@/lib/env';
 import { GET } from '@/app/api/health/route';
+import { resetHealthPingCacheForTests } from '@/lib/ops/health-ping-cache';
 
 const SECRET = 'x'.repeat(40);
 
@@ -34,6 +35,9 @@ function stubPostgresProduction(site = 'https://pracuj.be') {
 beforeEach(() => {
   db.query.mockReset().mockResolvedValue({ rows: [{ ok: 1 }] });
   db.getDomainPool.mockReset().mockResolvedValue({ query: db.query });
+  // Single-flight `pingCache` żyje w module na cały plik testowy (#600/#645) — bez czyszczenia
+  // test symulujący wiecznie zawieszone zapytanie zatruwałby stan na kolejne, odrębne testy.
+  resetHealthPingCacheForTests();
 });
 afterEach(() => {
   vi.unstubAllEnvs();

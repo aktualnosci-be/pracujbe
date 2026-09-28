@@ -164,6 +164,39 @@ describe("employer candidates read", () => {
     expect(offers?.text).toContain("status IN ('sent', 'viewed')");
     expect(offers?.text).toContain("deleted_at IS NULL");
   });
+
+  it("picks the latest of two active offers for the same pair, regardless of row order (#718)", async () => {
+    // SQL bez wiążącej kolejności (plan zapytania/indeks/vacuum) nie może decydować, którą
+    // datę propozycji zobaczy panel — starsza propozycja (`sent`/`viewed` zachowana po
+    // ponowieniu) nie może nadpisać nowszej tylko dlatego, że baza zwróciła ją jako ostatnią.
+    db({
+      winners: [{ candidate_id: "candidate-1", job_id: "job-1", score: 92 }],
+      rows: {
+        jobs: [{ id: "job-1", title: "Operator wózka", slug: "operator-wozka" }],
+        offers: [
+          { candidate_id: "candidate-1", job_id: "job-1", sent_at: "2026-09-25T08:00:00Z" },
+          { candidate_id: "candidate-1", job_id: "job-1", sent_at: "2026-09-10T10:00:00Z" },
+        ],
+      },
+    });
+    const result = await getTopMatchedCandidates({ throwOnError: true });
+    expect(result.map((c) => c.offerSentAt)).toEqual(["2026-09-25T08:00:00Z"]);
+  });
+
+  it("negative control: reversing the two offer rows still picks the same latest date (#718)", async () => {
+    db({
+      winners: [{ candidate_id: "candidate-1", job_id: "job-1", score: 92 }],
+      rows: {
+        jobs: [{ id: "job-1", title: "Operator wózka", slug: "operator-wozka" }],
+        offers: [
+          { candidate_id: "candidate-1", job_id: "job-1", sent_at: "2026-09-10T10:00:00Z" },
+          { candidate_id: "candidate-1", job_id: "job-1", sent_at: "2026-09-25T08:00:00Z" },
+        ],
+      },
+    });
+    const result = await getTopMatchedCandidates({ throwOnError: true });
+    expect(result.map((c) => c.offerSentAt)).toEqual(["2026-09-25T08:00:00Z"]);
+  });
 });
 
 describe("top matched candidates load states (P1-14)", () => {

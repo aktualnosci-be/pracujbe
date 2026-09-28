@@ -39,13 +39,25 @@ import { createAdditionalCompany, createCompany, updateCompany } from '@/lib/act
 
 export interface CompanyFormProps {
   mode: 'create' | 'edit' | 'add';
+  /**
+   * ID firmy, dla której wyrenderowano formularz (WYMAGANE w trybie `edit`, #801) — akcja
+   * zapisu używa TEGO identyfikatora, nie aktywnej firmy z cookie w chwili wysłania, więc
+   * zmiana aktywnej firmy w innej karcie po otwarciu formularza nie może przekierować zapisu
+   * do innego rekordu.
+   */
+  companyId?: string;
   /** Wartości początkowe (tryb edycji). */
   defaultValues?: { name?: string; vatNumber?: string };
   /** Tryb edycji zweryfikowanej firmy: ostrzeżenie, że zmiana nazwy/VAT wraca do weryfikacji. */
   verified?: boolean;
 }
 
-export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFormProps): React.JSX.Element {
+export function CompanyForm({
+  mode,
+  companyId,
+  defaultValues,
+  verified = false,
+}: CompanyFormProps): React.JSX.Element {
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -96,7 +108,9 @@ export function CompanyForm({ mode, defaultValues, verified = false }: CompanyFo
           ? await createCompany(input)
           : mode === 'add'
             ? await createAdditionalCompany(input)
-            : await updateCompany(input);
+            : companyId
+              ? await updateCompany(companyId, input)
+              : { ok: false as const, error: 'NOT_FOUND' as const };
 
       if (!result.ok) {
         setServerError(result.error);

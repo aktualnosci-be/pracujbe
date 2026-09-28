@@ -109,4 +109,33 @@ describe('confirmEmail', () => {
     expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ ok: false, error: 'INTERNAL' });
     expect(internalAdapter.deleteUserSessions).toHaveBeenCalledWith(USER_ID);
   });
+
+  describe('token z usuniętego cyklu konta (#872)', () => {
+    it('konto pod tym adresem powstało PO wystawieniu tokenu → AUTH_LINK_INVALID, SDK nie wywołane', async () => {
+      const issuedAt = Math.floor(Date.parse('2026-01-01T00:00:00Z') / 1000);
+      mocks.verifyJWT.mockResolvedValue({ email: 'j@ex.org', iat: issuedAt });
+      internalAdapter.findUserByEmail.mockResolvedValue({
+        // Nowe konto (usunięto stare pod tym adresem i zarejestrowano ponownie) powstało PO tokenie.
+        user: { id: USER_ID, email: 'j@ex.org', createdAt: new Date('2026-06-01T00:00:00Z') },
+      });
+      expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ ok: false, error: 'AUTH_LINK_INVALID' });
+      expect(api.verifyEmail).not.toHaveBeenCalled();
+    });
+
+    it('konto powstało PRZED tokenem (przebieg zwykły) → potwierdzenie przechodzi', async () => {
+      const issuedAt = Math.floor(Date.parse('2026-06-01T00:00:00Z') / 1000);
+      mocks.verifyJWT.mockResolvedValue({ email: 'j@ex.org', iat: issuedAt });
+      internalAdapter.findUserByEmail.mockResolvedValue({
+        user: { id: USER_ID, email: 'j@ex.org', createdAt: new Date('2026-01-01T00:00:00Z') },
+      });
+      expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/candidate' });
+      expect(api.verifyEmail).toHaveBeenCalled();
+    });
+
+    it('brak `createdAt`/`iat` w danych (np. atrapa) nie blokuje — zachowanie sprzed poprawki', async () => {
+      mocks.verifyJWT.mockResolvedValue({ email: 'j@ex.org' });
+      internalAdapter.findUserByEmail.mockResolvedValue({ user: { id: USER_ID, email: 'j@ex.org' } });
+      expect(await outcome(() => confirmEmail(TOKEN))).toEqual({ redirect: '/fr/candidate' });
+    });
+  });
 });

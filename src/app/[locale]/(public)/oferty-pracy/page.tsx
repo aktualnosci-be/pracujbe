@@ -29,6 +29,7 @@ import { JobFunnelBeacon } from '@/components/public/JobFunnelBeacon';
 import { Pagination } from '@/components/public/Pagination';
 import {
   buildDemoFacets,
+  flattenSearchParams,
   parseLocationsParam,
   serializeLocations,
   sidebarFiltersToParams,
@@ -75,18 +76,6 @@ type PageProps = {
   searchParams: Promise<SearchParams>;
 };
 
-function firstValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function flatten(sp: SearchParams): Record<string, string | undefined> {
-  const flat: Record<string, string | undefined> = {};
-  for (const key of Object.keys(sp)) {
-    flat[key] = firstValue(sp[key]);
-  }
-  return flat;
-}
-
 /** Numer strony z URL (jak w widoku: nieprawidłowy lub < 1 → 1). */
 function parsePage(value: string | undefined): number {
   const raw = Number(value);
@@ -99,7 +88,7 @@ function parsePage(value: string | undefined): number {
  * kanonizujemy do listy bazowej (bez eksplozji kombinacji); `page=1` = lista bazowa.
  */
 function canonicalQuery(sp: SearchParams): string {
-  const flat = flatten(sp);
+  const flat = flattenSearchParams(sp);
   const hasFilters = Object.entries(flat).some(
     ([key, value]) => key !== 'page' && value !== undefined && value.trim() !== '',
   );
@@ -158,7 +147,7 @@ export default async function JobsListPage({
   setRequestLocale(locale);
 
   const sp = await searchParams;
-  const flat = flatten(sp);
+  const flat = flattenSearchParams(sp);
 
   const listQuery = parseJobListQuery(flat, locale);
   const { keyword, city, sort, sidebar: sf, cityFilters, filterParams } = listQuery;

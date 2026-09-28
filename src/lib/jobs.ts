@@ -127,6 +127,11 @@ export interface JobDetail extends JobListItem {
   availableLocales?: Locale[];
   /** Pytania screeningowe do formularza aplikowania (#101); brak = oferta bez pytań. */
   screeningQuestions?: ScreeningQuestion[];
+  /**
+   * Treść przetłumaczona na język strony z kolejki tłumaczeń (#33, 0159); brak = treść
+   * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
+   */
+  machineTranslation?: JobMachineTranslation;
 }
 
 export interface GetJobsParams {

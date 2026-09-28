@@ -449,7 +449,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
 > --package-lock-only`) na self-hosted runnerze blokuje CI przy PRAWDZIWYCH podatnościach
 > high/critical (obecnie 0). Audyt z lockfile = deterministyczne drzewo (omija błąd „Invalid
 > package tree" przy artefakcie node_modules); skrypt parsuje JSON i blokuje tylko na realnych
-> podatnościach — niestabilny/wygaszany endpoint audytu npm (400/5xx) nie wywala CI. **QA-01 (a11y w CI) —
+> podatnościach — niestabilny/wygaszany endpoint audytu npm (400/5xx) nie wywala CI.
+> **Utwardzenie klasyfikatora (#643, bez migracji):** `scripts/lib/sca-audit-outcome.mjs` odczytuje
+> `metadata.vulnerabilities.high/critical` tylko jako nieujemną, skończoną liczbę całkowitą (brak
+> pola = 0); tekst, liczba ujemna, ułamek, `NaN`/`Infinity`, tablica, obiekt czy `boolean` w tym
+> polu dają `unrecognized` (blokuje CI) zamiast dawnego `Number(value) || 0`, które cicho zamieniało
+> taką wartość w zero i mogło dać `clean` bez dowodu. Dowód: `tests/unit/sca-audit-outcome.test.ts`
+> (kontrole ujemne). **QA-01 (a11y w CI) —
 > ZROBIONE:** bramka axe-core (`@axe-core/playwright`) w `tests/e2e/a11y.spec.ts` (uruchamiana w
 > jobie `e2e`) blokuje przy naruszeniach WCAG 2.x A/AA critical/serious na home/liście ofert/
 > logowaniu/rejestracji; domknięte realne naruszenia kontrastu tokenami: `--muted-foreground`
@@ -623,6 +629,23 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
   jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
   ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
+  Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
+  fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
+  lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało
+  się tylko zachować w całości (jedna opcja z całym CSV) albo zastąpić jedną nową wartością,
+  nigdy dopisać/usunąć pojedynczej wartości z zestawu. Powodem był `flatten()` na stronie listy
+  (`src/app/[locale]/(public)/oferty-pracy/page.tsx`), który brał tylko PIERWSZĄ wartość
+  powtórzonego klucza query — a to dokładnie to, co przeglądarka wysyła dla kilku zaznaczonych
+  checkboxów tej samej nazwy (`category=a&category=b`). Naprawa: te cztery pola są teraz
+  fieldsetami checkboxów (jedna wartość = jeden checkbox, `defaultChecked` z URL), a nowe
+  `flattenSearchParams` (`src/components/public/job-filters.ts`) łączy powtórzony klucz w jedną
+  wartość — CSV dla kategorii/rodzaju umowy/zakwaterowania, `serializeLocations` (escaping #845)
+  dla lokalizacji — więc `parseSidebarFilters` dostaje dokładnie to, czego oczekuje niezależnie
+  od tego, czy filtr przyszedł z linku JS (jedna wartość CSV) czy z formularza bez JS (powtórzony
+  klucz). Dowód: `tests/unit/job-filters-search-params.test.ts` (w tym kontrola ujemna: branie
+  tylko pierwszej wartości gubi resztę zaznaczonych checkboxów), E2E
+  `job-filter-passport.spec.ts` (dopisanie i usunięcie pojedynczej wartości z istniejącego
+  zestawu bez JS; istniejący test wielowartościowego round-tripu zaktualizowany pod checkboxy).
   Zapis kwot (#22): jedno źródło `src/lib/salary.ts` (`normalizeSalary` + `formatSalaryRange`)
   dla karty, szczegółu, podobnych ofert, JobPosting JSON-LD i e-maili (worker formatuje z kwot
   w payloadzie w locale odbiorcy, etykiety `jobs.passport.*` przez `src/lib/salary-labels.ts`).
@@ -647,6 +670,11 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
   `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy
   (dopasowanie po `parent_location_id`), matching nadal liczy odległość z tekstu (`cityKey`).
+  Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
+  „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
+  wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
+  aliasie, bo przeglądarka odfiltrowuje z natywnego `datalist` opcję, której wartość nie zawiera
+  wpisanego tekstu. Test: `job-location` (kontrole pozytywna/ujemna).
 - [x] Szczegóły oferty + JobPosting JSON-LD + ApplyModal — wg makiety 03
   Tryb demo (#297, Invariant #12): oferty z `src/lib/data/demo.ts` mają `isDemo` (`src/lib/jobs.ts`,
   `isShowingDemoJobs()`); strona główna, lista, landing kategorii/miasta i szczegół pokazują baner
@@ -714,6 +742,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
   `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
   opublikowane przed 0156 zostają bez przeglądu.
+  Zakres portu (#745): `isPublicHttpsUrl` (`src/lib/company-links.ts`, lustro Zod
+  `companyLinksSchema`) dopuszcza port wyłącznie z prawdziwego zakresu TCP `1–65535` —
+  `:0` i wartości powyżej `65535` (np. `:99999`) są odrzucane na jedynej ścieżce, którą
+  pracodawca faktycznie zapisuje adres, zanim trafi do RPC `submit_company_links`. **Otwarte:**
+  baza (`public.public_https_url`, 0114/0141/0156) nadal luźno dopuszcza dowolne 1–5 cyfr portu
+  w CHECK — zaostrzenie wymaga osobnej migracji i decyzji o ewentualnych istniejących wierszach
+  poza zakresem.
 - [x] Poradniki (blog) + Article JSON-LD — `/poradniki` + `/poradniki/[slug]` (6 poradników w `src/lib/guides/guides.ts`)
 - [x] Strona dla pracodawców `/dla-pracodawcow` (#339) — indeksowalna (sitemap, canonical, hreflang,
   BreadcrumbList), treść `employers.*` w PL/NL/FR/EN wyłącznie z faktów produktu (konto + firma,
@@ -773,7 +808,16 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (unit `faq-redirect`, brak w sitemap — `sitemap-robots`, E2E `faq-redirect`).
 
 ### Etap 3 — kandydat
-- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Wylogowanie po awarii inicjalizacji runtime auth (#902, bez migracji): `sessionCookieNames()` liczy nazwy cookies sesji WYŁĄCZNIE ze statycznej konfiguracji `createAuthServer` (`getCookies` z `better-auth/cookies`, `advanced.useSecureCookies: true`), bez odczytu `auth.$context` — `signOut` czyści cookie tej przeglądarki także wtedy, gdy `getAuthRuntime()` odrzuci PRZED przypisaniem `auth` (przejściowa awaria puli/bazy), nie tylko gdy sam `auth.api.signOut()` zawiedzie. Dowód: unit `auth-password-reset` (kontrola ujemna: bez gałęzi `else { await clearSessionCookies(); }` test czerwony). Domyślna nazwa
+- [x] Rejestracja / logowanie / reset / potwierdzenie e-mail — Better Auth + PostgreSQL Railway (#24, bez Supabase Auth). Akcje `src/lib/actions/auth.ts` przez `auth.api` (limiter PostgreSQL, Turnstile, Zod; rola z aktywnego profilu, awaria → sesja cofnięta). Zgoda na regulamin sprawdzana w akcji; receipty i preferowany język zapisuje trigger 0059 w transakcji konta. `/api/auth/[...all]` wystawia tylko `GET /get-session` (`src/lib/auth/http-allowlist.ts`). Linki z e-maili: `/{locale}/potwierdz-email#token=` (przycisk → `confirmEmail`, bootstrap firmy) i `/{locale}/ustaw-nowe-haslo#token=` — token we fragmencie (#505), język odbiorcy z kolejki 0061, worker w `/api/email/process` (`DATABASE_AUTH_MAIL_URL`). Guardy paneli na `getCurrentIdentity()` (`src/lib/auth/current.ts` — kontrakt tożsamości dla #25/#26): `/candidate` (sesja + employer→/employer, admin→/admin), `/employer` (sesja + aktywne `company_members`; pracodawca bez firmy → formularz firmy, inni → /rejestracja-pracodawca), `/admin` (sesja + rola=admin, else `notFound`), wszystkie `force-dynamic` + noindex. Odświeżanie
+  sesji przy zwykłym przeglądaniu (#864, bez migracji): guardy paneli czytają sesję po stronie
+  Server Components, które nie mogą zapisać odnowionego `Set-Cookie` — samo przeglądanie panelu
+  (bez Server Action) nie przedłużało 7-dniowej sesji Better Auth. `SessionKeepAlive`
+  (`src/components/auth/SessionKeepAlive.tsx`) woła z przeglądarki jedyny dozwolony endpoint SDK,
+  `GET /api/auth/get-session` (ten sam origin → przeglądarka sama stosuje ewentualny `Set-Cookie`
+  z odpowiedzi, SDK sam decyduje wg progu `updateAge`); layouty przekazują `keepSessionAlive` do
+  `CandidateShell`/`EmployerShell`/`AdminShell` TYLKO gdy sesja jest prawdziwa (nie tryb demo).
+  Dowód: unit `session-keep-alive`, `panel-shells-keep-alive` (kontrola ujemna: bez prawdziwej
+  sesji `SessionKeepAlive` się nie montuje). Gotowość produkcji (#429) = PostgreSQL + Better Auth + limiter, `/api/health` z `SELECT 1` (`docs/railway/STATUS.md`). Dowód: `tests/integration/auth-actions.test.ts` (PG16), unit `auth-*`, E2E `auth-link-token`. IP/user-agent w receipcie akceptacji (migracja `0132`): akcja rejestracji przekazuje zaufany adres (`trustedClientIp`, nigdy `X-Forwarded-For`) i user-agent (≤ 512) w metadanych; trigger zapisuje je w `document_acceptances` i usuwa z `auth.users` w tej samej transakcji; po 7 dniach zeruje je `acceptance_ip_user_agent` (`retention_purge_receipts_batch` w `run_retention_purge`, za `RETENTION_MODE`); receipt niezmienny poza wyzerowaniem IP/UA. Dowód: `rls.sql` sekcja RIP (kontrole ujemne), `signup-receipts` (PG16), `auth-register-terms`. Budżet wysyłki puli `auth` w workerze (migracja `0137`): `processAuthEmailBatch` po renderze pobiera budżet okna dostawcy przez `auth.take_send_budget` (nakładka na `take_email_send_budget`, tylko szablony `accountConfirmation`/`passwordReset`, EXECUTE tylko `pracujbe_auth_mail`); odmowa = to i pozostałe pobrane zlecenia wracają do kolejki bez zużycia próby (`auth.defer_email`: `attempts` cofnięte, `next_attempt_at` = następne okno, tylko ważna dzierżawa), licznik `deferred`; awaria poboru = fail-open (list konta wychodzi, błąd w kanale). Dowód: unit `auth-email-worker` (kontrola ujemna na starym workerze), integracja `auth-email-outbox` (PG16, kontrola ujemna bez migracji). Wylogowanie po awarii inicjalizacji runtime auth (#902, bez migracji): `sessionCookieNames()` liczy nazwy cookies sesji WYŁĄCZNIE ze statycznej konfiguracji `createAuthServer` (`getCookies` z `better-auth/cookies`, `advanced.useSecureCookies: true`), bez odczytu `auth.$context` — `signOut` czyści cookie tej przeglądarki także wtedy, gdy `getAuthRuntime()` odrzuci PRZED przypisaniem `auth` (przejściowa awaria puli/bazy), nie tylko gdy sam `auth.api.signOut()` zawiedzie. Dowód: unit `auth-password-reset` (kontrola ujemna: bez gałęzi `else { await clearSessionCookies(); }` test czerwony). Domyślna nazwa
   firmy w formularzu po nieudanym bootstrapie (#365, `src/lib/auth/signup-company-name.ts`): metadane
   rejestracji (`raw_user_meta_data.company_name`) czytane pod WŁASNYM `identity.id` (Better Auth
   `internalAdapter.findUserById`, nigdy z URL/formularza) wypełniają `CompanyOnboarding` w
@@ -820,6 +864,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   dane wysłane z bieżącymi wartościami formularza po każdej udanej odpowiedzi; różnica = nowsza
   edycja w trakcie zapisu → automatyczny ponowny zapis (limit 5 prób) przed zmianą kroku/wyjściem,
   zamiast fałszywego „Zapisano”. Ten sam wzorzec co naprawa #829 dla `JobWizard` pracodawcy.
+  Prawo jazdy w kroku 4 (#762, bez migracji): kreator pokazywał pigułki kategorii (B/C/C+E), ale
+  model danych i matching (`src/lib/matching/score.ts`) zawsze liczyły tylko boolean
+  `hasDrivingLicense` — wybrana kategoria nie była nigdzie utrwalana ani porównywana z wymaganiami
+  oferty, co sugerowało kandydatowi nieistniejącą precyzję. Pigułki zastąpione jednoznacznym
+  przełącznikiem Tak/Nie (ten sam wzorzec co „Własny samochód” obok), spójnym z boolean
+  `requiresDrivingLicense` w kreatorze oferty pracodawcy (`JobWizard.tsx`). Test:
+  `onboarding-driving-license-toggle.test.tsx` (kontrola ujemna: pigułki kategorii nie istnieją
+  w DOM).
   Dowód: `onboarding-wizard-save-revision.test.tsx` (4 testy: zapis nowszej wartości przy „Zapisz
   i wyjdź”/„Dalej”, kontrola ujemna bez zmian = jeden zapis, błąd ponownego zapisu bez wyjścia).
 - [x] Panel kandydata — realne dane pod sesją (RLS) + akcje (zapis oferty, wycofanie aplikacji, odpowiedź na propozycję), noindex; fallback demo bez env
@@ -1088,6 +1140,14 @@ unit `cv-import-*` (payload modelu bez referentów + kontrola ujemna bez minimal
 schematu bez limitu); E2E `cv-import.spec` (atrapa, edycja z błędem pola). Opis: `docs/AI_CV_IMPORT.md`. **Otwarte:** decyzje prawne w szkicu
 `docs/legal-drafts/cv-ai-osoby-trzecie.md` (#485/#486/#488/#61) przed włączeniem, AV i izolacja
 parsera.
+Duplikat języka po normalizacji (#805, bez migracji): dwie zatwierdzone propozycje, których nazwa
+języka jest po `trim()+lowerCase` identyczna (choćby inny zapis wielkości liter), ale poziom
+różny, zapisałyby się w RPC 0115 nieokreślenie (`DISTINCT ON` bez tie-breakera na poziom) —
+`cvApprovedProposalsSchema` (`superRefine`) odrzuca taki zestaw przed wysyłką (`VALIDATION_FAILED`),
+a `findDuplicateLanguageIds` wskazuje konflikt przy obu polach w `CvImportPanel` (komunikat
+`cvImport.errorLanguageDuplicate`) zanim akcja w ogóle zostanie wywołana. Dowód: unit
+`cv-import-approved` (schemat + funkcja, kontrola ujemna różnych nazw), `cv-import-panel`
+(blokada zapisu, fokus na pierwszym konflikcie, poprawka nazwy odblokowuje zapis).
 
 Historia propozycji kandydata (`/candidate/propozycje`) jest stronicowana tak samo: po 10
 rekordów kursorem `created_at` + `id` (`getMyOffersPage` + `loadMoreProposals`), bez limitu 20 (#245).
@@ -1120,6 +1180,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
   transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
   sekcja CO28 (dblink, kontrola ujemna bez `FOR UPDATE` tworzy duplikat), `company-bootstrap-callback.test`.
+  Stary formularz nie nadpisuje innej firmy (#801, bez migracji): `updateCompany`/
+  `updateCompanyLinks` przyjmują `companyId` z formularza (wyrenderowanego dla KONKRETNEJ
+  firmy), zamiast czytać aktywną firmę z cookie w chwili zapisu — wybór aktywnej firmy jest
+  wspólny dla wszystkich kart, więc zmiana firmy w drugiej karcie po otwarciu formularza nie
+  przekierowuje już zapisu do innego rekordu (`getCompanyMembershipFor` weryfikuje rolę
+  owner/admin właśnie dla `companyId` z formularza). `CompanyForm`/`CompanyLinksForm` na
+  `/employer/firma` dostają `companyId={company.id}` z RSC. Testy: `company-update`,
+  `company-links-update` (przypadek dwóch kart), `company-links-form`.
 - [x] Panel pracodawcy — realne dane pod sesją (RLS) + akcje (zmiana statusu aplikacji, wysyłka propozycji), noindex; fallback demo bez env
   Lejek (#302): kohorta aplikacji z 30 dni (`submitted_at`) liczona zapytaniami `count` (head,
   `!inner` na historii = jedna aplikacja raz); „Wyświetlenia” = suma `detail_views` z lejka ofert
@@ -1207,6 +1275,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przy polu, bez wyjścia. Tryb edycji opublikowanej oferty po takim zapisie nie pokazuje
   „Zapisano” (ponowne „Zapisz zmiany” z nową wersją). Test: `job-wizard-save-revision`
   (kontrola ujemna: bez poprawki 5 z 7 czerwonych).
+  Flaga „bez wymogu języka” kontra wymagane języki (#910, bez migracji): pole `noLanguageRequired`
+  i lista `languages` w kroku 7 wykluczają się nawzajem — zapisane niezależnie dawały sprzeczny
+  wynik dla kandydata (filtr „bez języka” czyta tylko flagę, dopasowanie tylko listę). `JobWizard`
+  czyści listę języków po zaznaczeniu flagi i odznacza flagę po dodaniu języka; `step7Schema` i pełny
+  `jobSchema` (`src/lib/validation/job.ts`, `refineNoLanguageConflict`) odrzucają oba pola naraz
+  błędem przy polu `languages` (`job.error.noLanguageConflict`, PL/NL/FR/EN) — obejmuje zarówno
+  zapis kroku (`updateJobDraft`/`save_job_draft`), jak i edycję opublikowanej oferty
+  (`updatePublishedJob`, każdy krok tym samym schematem). Istniejące rekordy z fixture testowej
+  (`warehouse-rich`) nie są migrowane — poprawka zamyka tylko zapis nowych/edytowanych ofert.
+  Testy: `job-validation-draft-limits.test.ts` (kontrola ujemna: flaga + niepusta lista odrzucone
+  w obu schematach), `update-published-job.test.ts` (fixture bez sprzecznego stanu).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -1487,6 +1566,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Top dopasowani (#141, 0079): `get_company_top_matches` — najlepsze dopasowanie na kandydata
   (DISTINCT ON) przed limitem 5, pod RLS (recruiter+, widoczność kandydata, firma verified).
   Dowód: `rls.sql` sekcja MC.
+  Data propozycji deterministyczna (#718, bez migracji): odczyt aktywnej propozycji
+  (`sent`/`viewed`) dla pulpitu, pełnej listy dopasowanych kandydatów i szczegółu kandydata
+  (`matchedCandidateCards`, `getEmployerCandidateDetail` w `src/lib/data/employer.ts`) dodaje
+  `ORDER BY COALESCE(sent_at, created_at) DESC` w SQL i wybiera w JS zawsze późniejszą datę
+  (`setLatestOfferDate`), zamiast nadpisywać wynik ostatnim odczytanym wierszem — dwie aktywne
+  propozycje dla tej samej pary kandydat–oferta (historyczna + ponowiona) nie mogą już pokazać
+  starszej daty w zależności od planu zapytania/indeksu/vacuum. Testy: `employer-candidates-load`
+  (kontrola ujemna: odwrócona kolejność wierszy), `employer-candidate-detail-offers`.
   Odporność odczytu (#191/#197): `getSimilarJobs` i `getMyJobMatch` zwracają jawny wynik
   (`ok`/`error`, dopasowanie także `none`). Awaria podobnych ofert nie blokuje szczegółu
   i aplikowania; błąd któregokolwiek z pięciu odczytów dopasowania daje „nie udało się
@@ -2140,6 +2227,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Cel formularza odwołania = snapshot udanego odczytu (#884, bez migracji):
+  `ReportCaseLookup` przechowuje numer sprawy i kod dostępu, którymi POWIODŁO SIĘ sprawdzenie
+  (`reportTarget`, ustawiany razem z `report`), zamiast czytać `getValues()` z pól formularza
+  przy renderze `AppealForm` — edycja pól po odpowiedzi (albo podczas oczekiwania na nią, bez
+  wysłania drugiego odczytu) nie zmienia już celu odwołania na inną sprawę. Oba pola
+  dodatkowo `disabled` podczas `isSubmitting` (obrona w głąb). Dowód: unit
+  `report-case-lookup-appeal-target` (kontrola: bez edycji celuje w A; regresja: edycja na B
+  podczas oczekiwania na A nadal celuje w A — czerwony na kodzie sprzed naprawy; pola
+  zablokowane podczas oczekiwania).
 - [~] Rejestr naruszeń RODO (#490, migracja `0106`): `/admin/naruszenia`
   (tylko admin). Wpis = incydent bezpieczeństwa albo naruszenie danych osobowych: czas
   stwierdzenia (termin 72 h liczony od niego — `breachDeadline` w `src/lib/admin/breach.ts`),
@@ -2157,6 +2253,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Szkic procedury (nieopublikowany): `docs/legal-drafts/procedura-naruszen.md`. **Do zrobienia
   (właściciel/prawnik):** role i kontakty dyżuru, organ i portal, treść zawiadomień, tabletop,
   zatwierdzenie procedury; okres przechowywania wpisów.
+  Ponowienie zapisu po utraconej odpowiedzi (#835, bez migracji): `admin_create_breach_incident`
+  przy trafieniu na już zajęty `client_key` zawsze zwraca wcześniej zapisany wiersz — retry
+  z NIEZMIENIONĄ treścią jest w porządku (Invariant #11), ale retry z treścią POPRAWIONĄ między
+  próbami wcześniej po cichu porzucał tę poprawkę. `createBreachIncident` (`src/lib/actions/breaches.ts`)
+  po odpowiedzi RPC odczytuje zapisany wiersz service-rolem i porównuje go z właśnie wysłanym
+  formularzem (`breachFormsMatch`/`breachFormFromRow`, `src/lib/admin/breach.ts` — porównanie po
+  normalizacji jak w bazie: przycięte teksty, posortowane kategorie, instant zamiast tekstu daty);
+  różnica → `problem: 'clientKeyReused'` z `id`/`existingVersion` istniejącego wpisu zamiast cichego
+  sukcesu. `BreachIncidentForm` pokazuje komunikat i link do istniejącego wpisu oraz przycisk
+  „Zapisz poprawki jako edycję” (`updateBreachIncident` z CAS po wersji) — poprawka trafia do
+  bazy jako jawna edycja, nie znika. Odczyt porównawczy jest best-effort (błąd → brak konfliktu,
+  nie blokuje zwykłego zapisu). Dowód: unit `breach-register` (`#835` — retry bez zmian = sukces,
+  retry ze zmianą = konflikt z wersją, kontrola ujemna: awaria odczytu porównawczego nie blokuje
+  zapisu; `breachFormsMatch` — zgodność po normalizacji i wykrycie różnicy pól).
   Wspólny `csvCell` (#876, bez migracji): neutralizacja formuł arkusza rozszerzona o wiodący LF
   (`\n`) i pełnoszerokie warianty operatorów (`＝ ＋ － ＠`) — poprzedni regex `/^[=+\-@\t\r]/`
   pomijał oba przypadki z listy OWASP CSV Injection, więc kontrolowana wartość zaczynająca się
@@ -2324,6 +2434,34 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `site-access.test.ts` (body bez `Content-Length` nad limitem, deklarowany `Content-Length` nad
   limitem ze strumieniem, który nigdy się nie kończy — czyli obietnica, że handler NIE czyta go
   w całości, bramka wyłączona nadal odrzuca, kontrola ujemna: body w granicach limitu bez zmian).
+  Healthcheck: single-flight nie gubi trwającego zapytania po lokalnym timeoncie (#645, bez
+  migracji): `GET /api/health` (#600/#624) dzielił RÓWNOLEGŁE `pool.query('SELECT 1')` przez
+  `ttl-single-flight.ts`, ale obietnica trzymana jako `inFlight` była wynikiem `Promise.race`
+  z lokalnym timeoutem 2 s — gdy baza odpowiadała wolniej, wyścig kończył się (i `finally`
+  zdejmował wpis `inFlight`) ZANIM realne zapytanie faktycznie się skończyło, więc kolejne,
+  pozornie odrębne żądanie w tym samym oknie otwierało NASTĘPNE zapytanie na tej samej,
+  być może przeciążonej puli — dokładnie to, co #600 miało ograniczać. Naprawa w
+  `src/app/api/health/route.ts`: `pingCache.run` trzyma teraz BEZ TIMEOUTU realną obietnicę
+  zapytania (`pingDatabaseQuery`), a `Promise.race` z timeoutem jest na zewnątrz, tylko dla
+  odpowiedzi TEGO żądania — przegrana wyścigu nie kończy ani nie odłącza dzielonej obietnicy,
+  która nadal blokuje nowe zapytanie, dopóki `pool.query` faktycznie się nie rozstrzygnie.
+  Dowód: `tests/unit/health-route.test.ts` (żądanie po lokalnym timeoncie nie mnoży zapytań,
+  dopóki poprzednie trwa; kontrola ujemna — bez naprawy test łapie regresję: drugie zapytanie
+  mimo wciąż trwającego pierwszego).
+  Wspólny limit aplikacji/wiadomości po IP (#852, bez migracji): `applyToJob`/`sendMessage`
+  liczyły limit (`checkRateLimit('apply'|'message', …)`) TYLKO po adresie IP i PRZED sprawdzeniem
+  sesji — anonimowe wywołanie (bez konta, np. bezpośrednio do Server Action) zdążało zużyć
+  wspólny bucket przed odrzuceniem, blokując realnych, zalogowanych użytkowników za tym samym
+  NAT/CGNAT/biurem. Naprawa: sesja PRZED limitem (brak konta = `UNAUTHENTICATED`/
+  `PERMISSION_DENIED` bez dotknięcia jakiegokolwiek licznika), limit biznesowy (20 aplikacji /
+  60 wiadomości na godz.) liczony PER KONTO (`identifier: me.id, perIp: false`) — dwa konta za
+  tym samym adresem mają niezależne budżety, jedno konto nie omija limitu zmieniając sieć.
+  Dodatkowa, znacznie szersza ochrona przed automatyzacją wielu kont z jednego adresu zostaje
+  jako osobny, wyższy próg (`apply-ip` 200/godz., `message-ip` 600/godz.) — nie blokuje
+  populacji współdzielącej IP po zwykłym użyciu limitu jednej osoby. Dowód: unit
+  `rate-limit-account-scope` (limit budowany z identyfikatora konta, anonimowe wywołanie zero
+  wywołań limitera, dwa konta = dwa niezależne klucze, kontrola ujemna: przekroczenie limitu
+  konta nadal blokuje).
 - [~] AI Act / art. 22 / DPIA i ePrivacy lejka (#489, #499) — część techniczna: inwentarz
   funkcji AI jako dane (`src/lib/ai/inventory.ts`; strażnik `ai-inventory.test` skanuje
   `src/`+`scripts/`, wywołanie modelu bez wpisu = czerwony test, kontrola ujemna; pliki
@@ -2359,6 +2497,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu nie zapisze), `backup-r2-image.test`, `ops-health-route.test`, scenariusz R2 w
   `npm run test:backup`. **Do zrobienia (właściciel):** bucket bez domeny publicznej i `r2.dev`,
   dwa tokeny, usługa `backup` w Railway, zmienne (`BACKUP_RESTORE.md`).
+  Rozpoznanie bezpośredniego uruchomienia CLI (#925): `backup-s3.mjs` porównuje
+  `import.meta.url` z `pathToFileURL(process.argv[1]).href` (nie z ręcznie zbudowanym
+  `file://${process.argv[1]}`) — ścieżka repozytorium/wdrożenia ze spacją (albo innym znakiem
+  kodowanym w URL) już nie powodowała cichego pominięcia `main()` i fałszywego kodu 0
+  (`backup.sh` raportowałby wtedy sukces R2 bez żadnej wysyłki). Dowód:
+  `backup-r2-space-path.test` (prawdziwy podproces z repozytorium skopiowanym do katalogu ze
+  spacją; kontrola ujemna: ta sama ścieżka bez spacji ma ten sam kontrakt).
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
@@ -2403,6 +2548,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`/sitemap/1.xml`, `2.xml`, …) tam wskazanej (`parseRobotsSitemapShardPaths`), więc awaria
   generowania katalogu ofert (zapytanie, paginacja, tłumaczenia) nie umyka już wynikowi
   „wszystkie sprawdzenia zgodne” mimo zielonego `id=0`. Katalog bez partii ofert = bez zmian.
+  Pierwsze wystąpienie dyrektywy CSP (#900): `securityHeaderProblems` sprawdzała obecność
+  wymaganego tekstu GDZIEKOLWIEK w nagłówku (`directives.includes(...)`) — duplikat tej samej
+  nazwy dyrektywy z SŁABSZĄ pierwszą wartością (np. `frame-ancestors *` przed poprawnym
+  `frame-ancestors 'none'`) dawał fałszywie zielony wynik, mimo że zgodnie z CSP Level 3
+  przeglądarka stosuje wyłącznie pierwsze wystąpienie nazwy. Teraz porównanie bierze TYLKO
+  pierwszą wartość każdej nazwy dyrektywy z nagłówka. Dowód: test `railway-prod-smoke`
+  (kanarek z odtworzenia issue + kontrola ujemna: ten sam zestaw bez duplikatów zostaje zielony).
   **Otwarte:** wykonanie cutoveru i zapis wyników w `STATUS.md` (właściciel).
 - [x] Telemetria bez danych kandydata (#502, część kodowa). Kanał błędów (#571, zamiast
   Sentry — `@sentry/nextjs`, `sentry.*.config.ts` i `sentry-egress` usunięte): webhook Discorda
@@ -2444,6 +2596,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Wiadomość „błąd w przeglądarce”, osobne okno deduplikacji. Dowód: `client-error` (kontrole
   ujemne: payload z PII, obcy Origin, spoofowany `X-Forwarded-For`/brak nagłówka proxy,
   strażnik grafu importów klienta), `client-error-capture`.
+  Kolejność montowania (#851): w `[locale]/layout` `{children}` montuje się PRZED
+  `<ClientErrorReporter />` (React 19 wykonuje efekty potomków przed rodzicem tego samego
+  commitu), więc pierwszy błąd klienta złapany przez `[locale]/error.tsx` mógł trafić do
+  `captureError`, zanim reporter zdążył się zainstalować w swoim `useEffect` — `captureError`
+  bez reportera cicho nic nie robi i nie ponawia zgłoszenia po instalacji. `LocaleError`
+  wywołuje teraz `installClientErrorReporter()` (idempotentny, jak w `global-error.tsx`) tuż
+  przed `captureError`, więc pierwszy błąd na pierwszej stronie po starcie karty też dociera.
+  Dowód: `locale-error-reporter-order` (pozytyw + kontrola ujemna: błąd z `digest` nadal
+  pomijany).
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
@@ -2496,6 +2657,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
+  Rejestracja Service Workera po hydratacji (#797): `ServiceWorkerRegister` czekał wyłącznie na
+  przyszłe zdarzenie `window.load` — gdy efekt montował się już po `document.readyState ===
+  'complete'` (późna hydratacja/wolniejsze urządzenie), `load` już minęło i listener nigdy się
+  nie odpalał, więc SW nie rejestrował się na tej wizycie. Rejestracja następuje teraz od razu
+  przy `readyState === 'complete'`, inaczej czeka na `load` (`{ once: true }`) jak dotąd. Test:
+  `tests/unit/service-worker-register.test.tsx` (z kontrolą ujemną).
 
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
@@ -2683,6 +2850,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
+  Unieważnianie cache po zmianie cyklu życia oferty (#775, bez migracji): `publishJob`,
+  `setJobStatus` (pause/resume/close/reopen) i `expire_due_jobs` w `/api/maintenance` (gdy
+  wygasiła choć jedną ofertę) wołają wspólny `revalidatePublicJobPaths()`
+  (`src/lib/jobs/public-cache.ts`) — rewaliduje wzorce z dynamicznym segmentem + typ `'page'`
+  (`/[locale]`, `/[locale]/oferty-pracy/[slug]`, `/[locale]/praca/kategoria/[category]`,
+  `/[locale]/praca/miasto/[city]`), więc bez znajomości dokładnego sluga/kategorii/miasta
+  zmienionej oferty. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
+  tylko widoków panelu (setJobStatus) — poprzednio wyrenderowana strona (i `JobPosting`) mogła
+  zostać widoczna jeszcze przez okno rewalidacji (60 s) po pauzie/zamknięciu/wygaśnięciu, a
+  nowo opublikowana/wznowiona oferta nie pojawiała się od razu. Rewalidacja następuje wyłącznie
+  po udanej transakcji (błąd RPC → bez wywołania). Testy: `job-lifecycle-public-cache`,
+  `job-expiry` (kontrola ujemna: 0 wygaszonych ofert i błąd RPC nie rewalidują niczego).
   Oferty (home, `/praca`, landingi, szczegół) `revalidate = 60`, treść `3600` (layout). Przy
   `DATABASE_APP_URL` build nie czyta bazy: landingi przez `prerenderParamsAtBuild` (strony na pierwsze
   żądanie), odczyty ofert w `next build` zwracają pusty wynik (`isBuildPhase`), a layout `[locale]`
