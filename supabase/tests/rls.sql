@@ -18367,4 +18367,29 @@ select pg_temp.assert(not public.recruitment_enabled(),
 rollback;
 reset role;
 
+-- AC172-7: w trybie ogłoszeniowym (0171) publikacja nadal wymaga kanału, a z kanałem przechodzi
+-- (kanał wymagany we wszystkich trybach — decyzja właściciela 28.09.2026). Cofnięte.
+begin;
+set local role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql AC172-7', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'AC172-7a tryb ogłoszeniowy na czas sekcji');
+insert into public.jobs(id, company_id, created_by, slug, title, category, contract_type, city, region, status, default_locale) values
+  ('e9500000-0000-0000-0000-0000000000a7', :'COMPA', :'EMPA', 'draft-ac172-7', 'Magazynier AC7', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  ('e9500000-0000-0000-0000-0000000000a7', 'pl', 'Magazynier AC7', 'Praca w magazynie w Gandawie, zmiana dzienna.', array['Kompletacja zamówień']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  ('e9500000-0000-0000-0000-0000000000a7', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.publish_job('e9500000-0000-0000-0000-0000000000a7'::uuid, 'ac172-7')$$,
+  'JOB_APPLY_CHANNEL_REQUIRED', 'AC172-7b tryb ogłoszeniowy: publikacja bez kanału odrzucona');
+select public.save_job_draft('e9500000-0000-0000-0000-0000000000a7'::uuid, '{"job": {"apply_email": "praca@firma-a.be"}}'::jsonb);
+select public.publish_job('e9500000-0000-0000-0000-0000000000a7'::uuid, 'ac172-7') is not null as ok \gset ac7_
+reset role;
+select pg_temp.assert((select status::text from public.jobs where id = 'e9500000-0000-0000-0000-0000000000a7') = 'active',
+  'AC172-7c tryb ogłoszeniowy: publikacja z kanałem → active');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'AC172-7d po cofnięciu tryb testów bez zmian');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
