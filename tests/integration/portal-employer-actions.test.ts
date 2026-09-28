@@ -48,7 +48,7 @@ const STEPS: unknown[] = [
     noLanguageRequired: false,
   },
   { conditions: ['Umowa'], benefits: ['Dodatek nocny'], accommodation: true, transport: false },
-  { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be' },
+  { companyDescription: 'Firma A — logistyka w Gandawie.', contactEmail: 'hr@firma-a.be', applyUrl: 'https://firma-a.be/praca' },
 ];
 
 const as = (id: string): PortalIdentity => ({ id, role: 'employer' });

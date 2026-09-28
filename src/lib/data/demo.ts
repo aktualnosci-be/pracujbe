@@ -17,6 +17,7 @@ import type { JobCosts } from '@/lib/job-costs';
 import type {
   CategoryKey,
   ContractType,
+  JobApplyChannel,
   JobDetail,
   JobListItem,
   LocationKey,
@@ -762,6 +763,18 @@ function composeDescription(raw: DemoJobRaw, locale: Locale, companyName: string
   return extra ? `${lead} ${extra}` : lead;
 }
 
+/**
+ * Kanał aplikowania ofert demonstracyjnych (#1129): zarezerwowana domena `example.com`
+ * i nieprzydzielony numer — żadnych prawdziwych adresów. Warianty rotują po numerze oferty
+ * (strona / e-mail / e-mail + telefon), żeby widoki pokazywały każdy rodzaj.
+ */
+function demoApplyChannel(id: string): JobApplyChannel {
+  const n = Number.parseInt(id, 10) || 0;
+  if (n % 3 === 0) return { url: `https://example.com/jobs/${id}` };
+  if (n % 3 === 1) return { email: `jobs+${id}@example.com` };
+  return { email: `jobs+${id}@example.com`, phone: '+32000000000' };
+}
+
 function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
   const company = COMPANY_MAP[raw.companyId];
   const regionKey = REGION_OF[raw.locationKey];
@@ -807,6 +820,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
     ...(raw.costs ? { costs: raw.costs } : {}),
+    applyChannel: demoApplyChannel(raw.id),
     startDate: raw.startDate,
     companyDescription: company.description[content],
     contentLocale: content,

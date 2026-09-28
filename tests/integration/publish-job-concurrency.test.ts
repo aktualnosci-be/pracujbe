@@ -33,9 +33,10 @@ function docker(...args: string[]): string {
 async function insertCompleteDraft(id: string): Promise<void> {
   await admin!.query(
     `INSERT INTO public.jobs
-      (id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+      (id, company_id, slug, title, category, contract_type, city, region, status, default_locale,
+       apply_email)
     VALUES ($1, $2, $3, 'Operator produkcji', 'warehouse', 'permanent',
-      'Antwerpia', 'Flandria', 'draft', 'pl')`,
+      'Antwerpia', 'Flandria', 'draft', 'pl', 'praca@example.be')`,
     [id, companyId, `draft-${id}`],
   );
   await admin!.query(
