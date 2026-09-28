@@ -4,11 +4,13 @@
 #
 # 1. pg_dump -Fc bazy źródłowej ze snapshotu transakcji tylko do odczytu,
 # 2. pełny odczyt archiwum (pg_restore --list),
-# 3. odtworzenie do PUSTEJ, izolowanej bazy docelowej (bez właścicieli i ACL —
-#    role są globalne dla klastra i nie są częścią kopii danych),
+# 3. odtworzenie do PUSTEJ, izolowanej bazy docelowej z uprawnieniami (ACL), bez
+#    właścicieli; role są globalne dla klastra i nie są częścią kopii — brakujące
+#    tworzone wg kontraktu database/bootstrap (scripts/db/lib/restore-roles.sh),
 # 4. zapytania kontrolne: identyczna historia migracji (nazwy + SHA-256),
 #    identyczna liczba wierszy w każdej tabeli public/auth/app_migrations,
-#    identyczny zestaw tabel z włączonym RLS i liczba polityk. Liczności źródła
+#    identyczny zestaw tabel z włączonym RLS i liczba polityk, identyczne uprawnienia
+#    (OPS14-01: GRANT/REVOKE, atrybuty i członkostwa ról runtime). Liczności źródła
 #    czytamy z tego samego snapshotu co pg_dump, więc test działa na żywej bazie.
 #
 # Wejście wyłącznie ze zmiennych środowiskowych (nie z argumentów — nie trafiają
@@ -86,7 +88,7 @@ snapshot="$(src_tx "begin isolation level repeatable read read only; select pg_e
 [[ "$snapshot" =~ ^[0-9A-F-]+$ ]] || fail 'Nie udało się wyeksportować snapshotu źródła.'
 
 echo 'RESTORE: zrzut źródła (pg_dump -Fc, snapshot transakcji kontrolnej)'
-pg_dump --format=custom --no-owner --no-acl --snapshot="$snapshot" \
+pg_dump --format=custom --no-owner --snapshot="$snapshot" \
   --file="$dump" --dbname="$RESTORE_SOURCE_URL" 2>"$workdir/dump.err" \
   || fail 'pg_dump nie powiódł się.'
 
@@ -94,20 +96,14 @@ echo 'RESTORE: pełny odczyt archiwum'
 pg_restore --list "$dump" >"$workdir/toc.txt" 2>/dev/null || fail 'Archiwum jest nieczytelne.'
 [ -s "$workdir/toc.txt" ] || fail 'Archiwum jest puste.'
 
-# Polityki RLS odwołują się do ról globalnych klastra. Na izolowanym celu tworzymy
-# brakujące role jako NOLOGIN bez atrybutów — wyłącznie po to, by DDL polityk się wykonał.
-roles="$(src_tx "select coalesce(string_agg(distinct r.rolname, ' '), '') from pg_policy p
-  cross join unnest(p.polroles) as pr(oid) join pg_roles r on r.oid = pr.oid;")" \
-  || fail 'Odczyt ról polityk ze źródła.'
-for role in $roles; do
-  [[ "$role" =~ ^[a-z_][a-z0-9_]*$ ]] || fail 'Nieoczekiwana nazwa roli w polityce.'
-  if [ -z "$(dst -c "select 1 from pg_roles where rolname = '$role'")" ]; then
-    dst -c "create role \"$role\" nologin" >/dev/null || fail 'Nie można utworzyć roli na celu.' 2
-  fi
-done
+# shellcheck source=scripts/db/lib/backup-controls.sh
+source "$(dirname "$0")/lib/backup-controls.sh"
+# shellcheck source=scripts/db/lib/restore-roles.sh
+source "$(dirname "$0")/lib/restore-roles.sh"
+restore_prepare_roles "$(restore_dump_roles "$dump")"
 
 echo 'RESTORE: odtwarzanie do izolowanej bazy'
-pg_restore --no-owner --no-acl --exit-on-error --single-transaction \
+pg_restore --no-owner --exit-on-error --single-transaction \
   --dbname="$RESTORE_TARGET_URL" "$dump" 2>"$workdir/restore.err" \
   || fail 'pg_restore nie powiódł się.'
 
@@ -137,6 +133,7 @@ compare 'historia migracji (nazwy i SHA-256)' "$history_sql"
 compare 'tabele z RLS' "$rls_sql"
 compare 'liczba polityk RLS' "$policies_sql"
 compare 'lista tabel' "$tables_sql"
+compare 'uprawnienia (GRANT/REVOKE, role runtime)' "$BACKUP_ACL_SQL"
 
 # Deskryptory coprocesu nie są dostępne w potoku — najpierw wynik do zmiennej.
 table_list="$(src_tx "$tables_sql")" || fail 'Odczyt listy tabel ze źródła.'
@@ -156,4 +153,4 @@ if [ -n "${RESTORE_KEEP_DUMP:-}" ]; then
   echo 'RESTORE: archiwum zachowane (ścieżka z RESTORE_KEEP_DUMP)'
 fi
 
-echo "RESTORE: PASS — ${tables} tabel, ${rows} wierszy, ${migrations} migracji; liczności, RLS i polityki zgodne."
+echo "RESTORE: PASS — ${tables} tabel, ${rows} wierszy, ${migrations} migracji; liczności, RLS, polityki i uprawnienia zgodne."

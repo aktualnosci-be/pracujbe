@@ -19,6 +19,15 @@ import { generateSitemaps } from './sitemap';
  * identyfikatory, które serwuje sitemap.
  */
 
+/**
+ * Per żądanie, nie w `next build` (PERF-03): bez tego Next prerenderował robots.txt w buildzie,
+ * gdzie odczyty ofert są celowo puste (`isBuildPhase`, #534) — `generateSitemaps()` dawało
+ * wtedy samo `/sitemap/0.xml` i taki plik zostawał w cache do następnego wdrożenia, choć
+ * partie ofert `/sitemap/1.xml…` istnieją w runtime. `force-dynamic` w `sitemap.ts` nie
+ * obejmuje importującej go trasy robots. Strażnik: `tests/unit/readiness-postgres-only.test.ts`.
+ */
+export const dynamic = 'force-dynamic';
+
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const base = env.siteUrl;
 

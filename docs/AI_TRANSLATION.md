@@ -148,8 +148,33 @@ Dowód: `rls.sql` sekcja TM159 (bieżąca rewizja, tylko pola wyświetlane, pier
 człowieka, oferta wstrzymana/firma zawieszona, przekład po edycji, granty, strona z tekstem
 spoza `default_locale` — TM159-7) z kontrolami ujemnymi TM159-N i TM159-7N; unit `job-machine-translation` (flaga wyłączona = brak odczytu, awaria = oryginał).
 
-Otwarte (#33 → kolejne kroki): przekład w liście ofert i JobPosting/hreflang wersji
-przetłumaczonych (decyzja SEO), UI korekty ręcznej dla
+### Karty listy ofert (migracja 0160)
+
+`get_public_jobs_machine_titles(ids[], locale)` (SECURITY DEFINER, anon/authenticated) zwraca
+przekład pól karty — `title` i `highlights.N` — dla najwyżej 100 ofert jednej strony listy.
+Warunki jak w 0159 (oferta publiczna, bieżąca rewizja bez `is_stale`, język bez własnego
+tłumaczenia i wymagań) plus warunek karty: `get_public_jobs` pokazuje przy braku tłumaczenia
+w języku strony tłumaczenie `default_locale` (albo `jobs.title`), więc wiersz jest zwracany
+tylko wtedy, gdy karta pokazuje właśnie tę treść, z której powstała rewizja.
+
+`withListMachineTranslations` (`src/lib/jobs.ts`) robi JEDNO zapytanie na stronę (lista id,
+nigdy zapytanie na kartę), za flagą `AI_TRANSLATION_ENABLED`, w tym samym renderze serwera co
+lista — strony ISR (strona główna, landingi) dostają gotowy HTML, cache bez zmian.
+`applyJobListMachineTranslation` nakłada tytuł i wyróżniki tylko przy niepustym tytule i tej
+samej liczbie wyróżników; inaczej karta w oryginale. Awaria odczytu = oryginał + kod obszaru
+`jobs.readListMachineTranslations`. Przekład włącza wywołujący (`getJobs(…, { translateCards:
+true })`): „Najnowsze oferty”, `/oferty-pracy`, landingi kategorii i miasta, profil firmy.
+Sitemap, liczniki, facety i „Podobne oferty” (lista bez znacznika) zostają w oryginale.
+Znacznik na karcie (wiersz firmy): `jobs.machineTranslatedBadge` albo `jobs.translatedBadge`
+(korekta ręczna). SEO bez zmian — adresy kart i dane strukturalne nie zależą od przekładu.
+
+Dowód: `rls.sql` sekcja TM160 (tylko pola karty, limit 100 id, tekst człowieka, oferta
+wstrzymana/wygasła, firma zawieszona, przekład po edycji, granty) z kontrolą ujemną TM160-N;
+unit `job-list-machine-translation` (flaga wyłączona = brak odczytu, lista bez kart = brak
+odczytu, jedno wywołanie na stronę, fallback, awaria).
+
+Otwarte (#33 → kolejne kroki): JobPosting/hreflang wersji
+przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach”, UI korekty ręcznej dla
 rekrutera, ochrona nazwy firmy (`protectedTerms`) w zleceniu, budżet AI (#36/#552 — po
 scaleniu: `costBudgeted: true` w inwentarzu i rezerwacja budżetu przed wywołaniem w
 `run.ts`), oferty ponad limit pól (podział na kilka zleceń).

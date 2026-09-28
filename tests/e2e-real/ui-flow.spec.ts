@@ -186,7 +186,10 @@ test('onboarding kandydata w kreatorze: 6 kroków, walidacja pola, „Terminer�
   // Krok 4: lokalizacja.
   await page.getByLabel(t('city'), { exact: true }).fill('Antwerpen');
   await page.getByLabel(t('radiusLabel'), { exact: true }).fill('30');
-  await page.getByRole('button', { name: t('catB'), exact: true }).click();
+  await page
+    .getByRole('group', { name: t('drivingLicense'), exact: true })
+    .getByRole('button', { name: t('yes'), exact: true })
+    .click();
   await next(t('step5Title')).click();
 
   // Krok 5: języki + certyfikat z datą ważności.

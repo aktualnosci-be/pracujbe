@@ -104,7 +104,6 @@ const CHIP_REMOVE =
 type Availability = (typeof AVAILABILITY_VALUES)[number];
 type LanguageLevel = (typeof LANGUAGE_LEVELS)[number];
 type Currency = 'EUR' | 'PLN';
-type License = 'none' | 'b' | 'c' | 'ce';
 
 interface LanguageEntry {
   language: string;
@@ -337,12 +336,6 @@ export function OnboardingWizard({
   const [stepAnnouncement, setStepAnnouncement] = React.useState('');
   const [demoSaved, setDemoSaved] = React.useState(false);
   const [badgeVisible, setBadgeVisible] = React.useState(false);
-
-  // Lokalny stan pigułek prawa jazdy (kategoria) — schemat/DB przechowują tylko boolean
-  // `hasDrivingLicense`; granularność kategorii to element wizualny makiety (TODO(data)).
-  const [license, setLicense] = React.useState<License>(
-    initialValues?.hasDrivingLicense ? 'b' : 'none',
-  );
 
   // Roboczy wiersz dodawania języka (relacja — nieutrwalana w tej iteracji, TODO(data)).
   const [langDraft, setLangDraft] = React.useState('');
@@ -852,40 +845,39 @@ export function OnboardingWizard({
                   </div>
                 </div>
 
-                <div
-                  id={domId('hasDrivingLicense')}
-                  role="group"
-                  aria-labelledby={`${domId('hasDrivingLicense')}-label`}
-                >
-                  <Label id={`${domId('hasDrivingLicense')}-label`}>{t('drivingLicense')}</Label>
-                  <div className="mt-[9px] flex flex-wrap gap-2">
-                    {(
-                      [
-                        { value: 'none', label: t('noLicense') },
-                        { value: 'b', label: t('catB') },
-                        { value: 'c', label: t('catC') },
-                        { value: 'ce', label: t('catCE') },
-                      ] as { value: License; label: string }[]
-                    ).map((option) => {
-                      const active = license === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => {
-                            setLicense(option.value);
-                            setValue('hasDrivingLicense', option.value !== 'none', {
-                              shouldDirty: true,
-                            });
-                          }}
-                          className={cn(chipClass(active), 'gap-1.5')}
-                        >
-                          {option.label}
-                          {active ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                        </button>
-                      );
-                    })}
+                <div id={domId('hasDrivingLicense')}>
+                  <Label className={FORM_LABEL_TEXT}>{t('drivingLicense')}</Label>
+                  <div
+                    className="mt-[9px] inline-flex rounded-[11px] border border-input p-1"
+                    role="group"
+                    aria-label={t('drivingLicense')}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={!values.hasDrivingLicense}
+                      onClick={() => setValue('hasDrivingLicense', false, { shouldDirty: true })}
+                      className={cn(
+                        'min-h-10 rounded-[8px] px-5 py-1.5 text-[13px] font-semibold transition-colors',
+                        !values.hasDrivingLicense
+                          ? 'bg-primary/10 text-primary-dark'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {t('no')}
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={values.hasDrivingLicense}
+                      onClick={() => setValue('hasDrivingLicense', true, { shouldDirty: true })}
+                      className={cn(
+                        'min-h-10 rounded-[8px] px-5 py-1.5 text-[13px] font-semibold transition-colors',
+                        values.hasDrivingLicense
+                          ? 'bg-primary/10 text-primary-dark'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {t('yes')}
+                    </button>
                   </div>
                 </div>
 
