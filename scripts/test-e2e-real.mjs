@@ -95,6 +95,16 @@ const MUTATIONS = {
       IF position($q$v_cstatus <> 'verified'$q$ IN d) = 0 THEN RAISE EXCEPTION 'mutacja: brak warunku weryfikacji'; END IF;
       EXECUTE replace(d, $q$v_cstatus <> 'verified'$q$, 'false');
     END $mut$`,
+  // #1148: zapis wyszukiwania wymaga ukończonego onboardingu (regresja trybu ogłoszeniowego).
+  'saved-search-requires-onboarding': `DO $mut$ DECLARE d text; BEGIN
+      d := pg_get_functiondef('public.save_saved_search(text, text, jsonb, text, text)'::regprocedure);
+      IF position('v_filters := public.saved_search_canonical_filters(' IN d) = 0 THEN
+        RAISE EXCEPTION 'mutacja: brak kanonizacji filtrów'; END IF;
+      EXECUTE replace(d, 'v_filters := public.saved_search_canonical_filters(',
+        $q$IF NOT EXISTS (SELECT 1 FROM public.candidate_profiles cp WHERE cp.profile_id = v_uid AND cp.profile_completed)
+           THEN RAISE EXCEPTION 'ONBOARDING_REQUIRED' USING errcode = '42501'; END IF;
+         v_filters := public.saved_search_canonical_filters($q$);
+    END $mut$`,
   'retry-new-key': null,
 };
 if (mutation && !Object.hasOwn(MUTATIONS, mutation)) {

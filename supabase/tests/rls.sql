@@ -18367,6 +18367,115 @@ select pg_temp.assert(not public.recruitment_enabled(),
 rollback;
 reset role;
 
+-- ============================================================================
+-- SS1148. Zapisane wyszukiwania i alerty w trybie ogłoszeniowym (#1148, epik #1128) —
+-- decyzja produktowa: portal ogłoszeniowy. Funkcja zostaje, bo wynika wyłącznie z filtrów
+-- użytkownika: działa przy `recruitment_enabled() = false` i NIE wymaga profilu kandydata ani
+-- ukończonego onboardingu (konto bez wiersza `candidate_profiles` i konto z
+-- `profile_completed = false`). Bez migracji — utrwalenie stanu 0092/0124/0138/0158.
+-- ============================================================================
+\echo '--- SS1148 zapisane wyszukiwania w trybie ogłoszeniowym ---'
+\set SXA 'f1148000-0000-4000-8000-0000000000a1'
+\set SXB 'f1148000-0000-4000-8000-0000000000a2'
+\set SXE 'f1148000-0000-4000-8000-0000000000b1'
+\set SXC 'f1148000-0000-4000-8000-0000000000c1'
+\set SXJ 'f1148000-0000-4000-8000-0000000000d1'
+reset role; reset app.current_uid;
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql SS1148', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'SS1148-0 tryb ogłoszeniowy na czas sekcji');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SXA','sxa@test.be','Xawery A','{"role":"candidate","first_name":"Xawery","last_name":"A","locale":"nl"}'),
+  (:'SXB','sxb@test.be','Xenia B','{"role":"candidate","first_name":"Xenia","last_name":"B","locale":"en"}'),
+  (:'SXE','sxe@test.be','Xander E','{"role":"employer","first_name":"Xander","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
+-- SXA: profil kandydata nieukończony; SXB: bez wiersza candidate_profiles (onboarding nie ruszony).
+insert into public.candidate_profiles(profile_id, is_searchable, profile_completed) values (:'SXA', false, false);
+select pg_temp.assert(
+  not exists (select 1 from public.candidate_profiles where profile_id in (:'SXA', :'SXB') and profile_completed)
+  and not exists (select 1 from public.candidate_profiles where profile_id = :'SXB'),
+  'SS1148-pre konta bez ukończonego onboardingu (jedno bez profilu kandydata)');
+insert into public.companies(id,name,status) values (:'SXC','Firma SS1148','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'SXC',:'SXE','owner',true);
+
+-- SS1148-1: zapis, zmiana nazwy i ustawienia alertu — bez profilu i bez onboardingu.
+set role authenticated; set app.current_uid = :'SXA'; select pg_temp.assert_client_role();
+select saved_search_id as sx1, created as sx1c from public.save_saved_search(
+  'Magazyn Gent', 'nl', '{"keyword":"Magazijnier SS1148","categories":["warehouse"]}',
+  '?keyword=Magazijnier+SS1148&category=warehouse') \gset
+select pg_temp.assert(:'sx1c'::boolean, 'SS1148-1 profil nieukończony: wyszukiwanie zapisane');
+select public.rename_saved_search(:'sx1'::uuid, 'Magazyn Gent nocą');
+select public.set_saved_search_alerts(:'sx1'::uuid, true, 'daily');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'SXB'; select pg_temp.assert_client_role();
+select saved_search_id as sx2, created as sx2c from public.save_saved_search(
+  'Transport', 'en', '{"keyword":"Driver SS1148","categories":["transport"]}',
+  '?keyword=Driver+SS1148&category=transport') \gset
+select pg_temp.assert(:'sx2c'::boolean, 'SS1148-1b konto bez candidate_profiles: wyszukiwanie zapisane');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select name = 'Magazyn Gent nocą' and alerts_enabled from public.saved_searches where id = :'sx1')
+  and not exists (select 1 from public.candidate_profiles where profile_id = :'SXB'),
+  'SS1148-1c zmiana nazwy i alert zapisane; zapis nie tworzy profilu kandydata');
+-- Pracodawca nadal nie zapisuje wyszukiwań (tryb nie poszerza uprawnień).
+set role authenticated; set app.current_uid = :'SXE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"categories":["warehouse"]}')$$,
+  'PERMISSION_DENIED', 'SS1148-1d pracodawca nie zapisuje wyszukiwań także w trybie ogłoszeniowym');
+reset role; reset app.current_uid;
+
+-- SS1148-2: worker w trybie ogłoszeniowym — nowa pasująca oferta → alert, in-app i e-mail
+-- jobMatch w języku odbiorcy; oferta spoza filtrów pominięta.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SXJ',:'SXC','ss1148-j1','Magazijnier SS1148 nacht','warehouse','permanent','Gent','Flandria','active','nl', now());
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days' where id in (:'sx1', :'sx2');
+set role service_role;
+select pg_temp.assert(public.process_saved_search_alerts(100) = 1,
+  'SS1148-2 jeden digest w trybie ogłoszeniowym (drugie wyszukiwanie bez nowych ofert)');
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id) from public.saved_search_alerts where saved_search_id = :'sx1') = array[:'SXJ'::uuid]
+  and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'sx2'),
+  'SS1148-2b alert tylko z filtrów użytkownika');
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where profile_id = :'SXA' and template = 'jobMatch' and locale = 'nl') = 1
+  and (select count(*) from public.notifications where profile_id = :'SXA' and type = 'job_match'
+         and entity_type = 'saved_search' and entity_id = :'sx1') = 1,
+  'SS1148-2c e-mail jobMatch (nl) i powiadomienie in-app dla konta bez ukończonego profilu');
+
+-- SS1148-3: wyłączenie alertu (ścieżka linku w e-mailu, service_role) działa w trybie.
+set role service_role;
+select public.saved_search_alert_unsubscribe(:'SXA'::uuid, :'sx1'::uuid);
+reset role;
+select pg_temp.assert(not (select alerts_enabled from public.saved_searches where id = :'sx1'),
+  'SS1148-3 wyłączenie alertu z linku działa w trybie ogłoszeniowym');
+
+-- SS1148-4 (kontrola ujemna): gdyby zapis wymagał ukończonego onboardingu, konto SXB zostałoby
+-- odrzucone — ten przypadek łapie taką regresję.
+begin;
+alter function public.save_saved_search(text, text, jsonb, text, text) rename to save_saved_search_ss1148;
+create function public.save_saved_search(p_name text, p_locale text, p_filters jsonb,
+  p_query text default '', p_frequency text default 'daily')
+returns table (saved_search_id uuid, created boolean)
+language plpgsql security definer set search_path = public, pg_temp as $f$
+begin
+  if not exists (select 1 from public.candidate_profiles cp
+                  where cp.profile_id = auth.uid() and cp.profile_completed) then
+    raise exception 'ONBOARDING_REQUIRED' using errcode = '42501';
+  end if;
+  return query select * from public.save_saved_search_ss1148(p_name, p_locale, p_filters, p_query, p_frequency);
+end $f$;
+grant execute on function public.save_saved_search(text, text, jsonb, text, text) to authenticated;
+set local role authenticated; set local app.current_uid = :'SXB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select * from public.save_saved_search('Y', 'en', '{"categories":["warehouse"]}')$$,
+  'ONBOARDING_REQUIRED', 'SS1148-4 kontrola ujemna: wymóg onboardingu odrzuciłby konto bez profilu');
+rollback;
+reset role; reset app.current_uid;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql SS1148: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
 -- AC172-7: w trybie ogłoszeniowym (0171) publikacja nadal wymaga kanału, a z kanałem przechodzi
 -- (kanał wymagany we wszystkich trybach — decyzja właściciela 28.09.2026). Cofnięte.
 begin;

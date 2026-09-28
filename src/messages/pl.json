@@ -1205,7 +1205,9 @@
     "bulkConfirmTitle": "{count, plural, one {Zmienić status # zgłoszenia?} few {Zmienić status # zgłoszeń?} many {Zmienić status # zgłoszeń?} other {Zmienić status # zgłoszenia?}}",
     "bulkConfirmDescription": "Nowy status: {status}. Każde zgłoszenie zmieniamy osobno, a te, dla których taka zmiana jest niedozwolona, pomijamy. Kandydaci dostaną powiadomienie o zmianie.",
     "bulkConfirm": "Zmień status",
-    "bulkStatusUncertain": "Nie wiemy, czy zmiana się udała (np. przerwane połączenie). Odśwież stronę i sprawdź statusy."
+    "bulkStatusUncertain": "Nie wiemy, czy zmiana się udała (np. przerwane połączenie). Odśwież stronę i sprawdź statusy.",
+    "listingStatsTitle": "Statystyki ogłoszeń",
+    "listingStatsText": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” dla każdej oferty."
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -3301,7 +3303,10 @@
     "csvStatus": "Status",
     "csvTotal": "Razem",
     "exportCsv": "Pobierz CSV",
-    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})"
+    "exportCsvLabel": "Pobierz lejek ofert jako plik CSV (zakres {from} – {to})",
+    "applyClicks": "Kliknięcia „Aplikuj u pracodawcy”",
+    "applyClicksDefinition": "Ile razy na stronie oferty kliknięto „Aplikuj u pracodawcy” (strona, e-mail albo telefon ogłoszeniodawcy). Nie wiemy, czy ktoś potem się zgłosił.",
+    "consentNoteListing": "Pojawienia w wynikach, wyświetlenia i kliknięcia „Aplikuj u pracodawcy” liczymy tylko u osób, które zgodziły się na cookies analityczne."
   },
   "savedSearches": {
     "hint": "Zapisz te filtry, a powiadomimy Cię w serwisie i e-mailem o nowych ofertach (najwyżej raz dziennie).",

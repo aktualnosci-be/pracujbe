@@ -192,7 +192,10 @@ export default async function EmployerOffersPage({
                       {offer.city}
                     </p>
                   ) : null}
-                  <dl className={`mt-6 grid gap-4 border-y border-border py-5${offer.matched !== undefined ? " grid-cols-2" : ""}`}>
+                  {/* #1147: tryb ogłoszeniowy — bez liczników zgłoszeń i dopasowań (loader ich nie zwraca). */}
+                  {offer.newApplications !== undefined || offer.matched !== undefined ? (
+                  <dl className={`mt-6 grid gap-4 border-y border-border py-5${offer.newApplications !== undefined && offer.matched !== undefined ? " grid-cols-2" : ""}`}>
+                    {offer.newApplications !== undefined ? (
                     <div className="min-w-0">
                       <dt className={INFO_LABEL}>
                         {td("employerOffersApplicationsLabel")}
@@ -214,6 +217,7 @@ export default async function EmployerOffersPage({
                         </dd>
                       ) : null}
                     </div>
+                    ) : null}
                     {/* #1133: tryb ogłoszeniowy — bez pola dopasowań (loader go nie zwraca). */}
                     {offer.matched !== undefined ? (
                       <div className="min-w-0 border-l border-border pl-4">
@@ -226,6 +230,7 @@ export default async function EmployerOffersPage({
                       </div>
                     ) : null}
                   </dl>
+                  ) : null}
                   <div className="mt-auto flex flex-wrap items-center gap-[9px] pt-[14px]">
                     {/* 0148: kopia oferty w dowolnym statusie jako nowy szkic (recruiter+). */}
                     {canRecruitHere ? (
