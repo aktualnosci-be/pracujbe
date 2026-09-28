@@ -49,6 +49,7 @@ identyfikatorów ani konfiguracji.
 | `mail_complaint_rising` | alarm | odsetek skarg 24 h > 0,1% i > 2× odsetka z 7 dób bazowych | nowa kampania/szablon |
 | `mail_suppressions_new` | alarm | > 20 nowych blokad adresów w 24 h | nagły skok odbić lub skarg |
 | `mail_suppressions_active` | ostrzeżenie | > 1000 aktywnych blokad | przegląd listy w `/admin/poczta` |
+| `portal_legal_mode_mismatch` | alarm | env `PORTAL_LEGAL_MODE` i tryb w bazie (`ops_metrics().portalLegalMode`, 0171) różnią się | zmieniono jeden klucz bez drugiego, odtworzona kopia; tryb efektywny i tak ogłoszeniowy — procedura w §6 |
 
 Liczby pochodzą z `public.ops_metrics()` (migracja `0096`, `SECURITY DEFINER`,
 EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma
@@ -268,6 +269,40 @@ izolowanego celu i sprawdzić jej zawartość.
        docker exec -e PGHOST=127.0.0.1 -e PGPORT=5432 -e PGUSER=postgres -e PGPASSWORD=postgres \
          "$POSTGRES_CONTAINER" bash /tmp/pracujbe-tests/scripts/db/test-backup.sh
    ```
+
+## 6. Tryb portalu (#1143, migracja `0171`)
+
+Decyzja produktowa: portal ogłoszeniowy. Funkcje rekrutacyjne (aplikacje, propozycje,
+dopasowania, wyszukiwanie profili, wiadomości, pytania screeningowe, aplikacje gości) działają
+**tylko** przy dwóch kluczach naraz:
+
+1. zmienna `PORTAL_LEGAL_MODE=RECRUITMENT` w usłudze Railway (#1136, `src/lib/portal-mode.ts`);
+2. tryb bazy `RECRUITMENT` (`public.portal_legal_mode`, odczyt `recruitment_enabled()`).
+
+Każda rozbieżność = tryb ogłoszeniowy, a `/api/health/ops` zgłasza alarm
+`portal_legal_mode_mismatch`. W trybie ogłoszeniowym baza sama odrzuca nowe dane procesu
+(`RECRUITMENT_DISABLED`, także dla `service_role`), firmy nie widzą danych procesu, a
+`/api/maintenance` pomija materializację dopasowań (`recruitmentTasks: { skipped:
+'classifieds_only' }`); retencja i czyszczenie działają dalej.
+
+Zmiana trybu w bazie — wyłącznie przez RPC `admin_set_portal_legal_mode` (bez panelu admina),
+z uzasadnieniem (≤ 1000 znaków), kontrolą oczekiwanego stanu (`STALE_STATE`) i wpisem
+`audit_logs` `portal_legal_mode.changed`. Bezpośredni zapis tabeli blokuje trigger.
+
+```bash
+# odczyt (login migratora, nigdy DATABASE_URL aplikacji)
+MIGRATION_DATABASE_URL=… node scripts/db/set-portal-legal-mode.mjs --status
+# zmiana: --confirm powtarza docelowy tryb
+MIGRATION_DATABASE_URL=… node scripts/db/set-portal-legal-mode.mjs \
+  --mode RECRUITMENT --expected CLASSIFIEDS_ONLY --reason "<decyzja właściciela, data>" --confirm RECRUITMENT
+```
+
+Ponowne włączenie rekrutacji: **każda funkcja wymaga osobnej decyzji właściciela** przed
+zmianą któregokolwiek klucza. Kolejność: (1) zapis decyzji w `docs/railway/STATUS.md`,
+(2) baza (skrypt wyżej), (3) zmienna w Railway i redeploy, (4) `/api/health/ops` bez
+`portal_legal_mode_mismatch`. Wyłączenie — w odwrotnej kolejności (najpierw env, potem baza),
+alarm między krokami jest oczekiwany. Po odtworzeniu kopii baza wraca w trybie ogłoszeniowym
+(`restore-backup.sh`, [BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
 
 ## Pozostałe punkty #47 (niezrobione w tej zmianie)
 

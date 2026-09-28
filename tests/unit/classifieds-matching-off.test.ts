@@ -84,6 +84,8 @@ afterEach(() => {
 describe('#1131: maintenance nie przelicza dopasowań', () => {
   beforeEach(() => {
     for (const fn of MAINTENANCE_RPCS) fakeDb.rpc(fn, fn === 'match_recompute_claim' ? [] : 0);
+    // #1143: w trybie RECRUITMENT (env) maintenance pyta też bazę — dwuklucz.
+    fakeDb.rpc('recruitment_enabled', true);
   });
 
   it('tryb ogłoszeniowy: zero zapytań match_recompute_*, odpowiedź matches: disabled', async () => {
