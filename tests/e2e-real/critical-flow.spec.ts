@@ -259,7 +259,9 @@ test('onboarding kandydata (#66): kroki 1–6, błąd kroku 5 nie narusza zapisa
       `SELECT p.first_name, p.phone, cp.experience_years, cp.city, cp.profile_completed,
          (SELECT array_agg(cs.skill_label ORDER BY cs.skill_label) FROM public.candidate_skills cs
             WHERE cs.candidate_profile_id = cp.id) AS skills,
-         (SELECT array_agg(cl.language_label || ':' || cl.level ORDER BY cl.language_label) FROM public.candidate_languages cl
+         (SELECT array_agg(coalesce(lg.code, cl.language_label) || ':' || cl.level
+                           ORDER BY coalesce(lg.code, cl.language_label))
+            FROM public.candidate_languages cl LEFT JOIN public.languages lg ON lg.id = cl.language_id
             WHERE cl.candidate_profile_id = cp.id) AS languages,
          (SELECT array_agg(cc.certificate_label || '@' || coalesce(cc.expires_at::text, '-') ORDER BY cc.certificate_label)
             FROM public.candidate_certificates cc WHERE cc.candidate_profile_id = cp.id) AS certificates
