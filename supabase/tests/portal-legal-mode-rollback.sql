@@ -14,7 +14,7 @@ select count(*) as clr_apps from public.applications \gset
 
 begin;
 -- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów).
-\ir ../rollback/0960_classifieds_messaging_cv_off.down.sql
+\ir ../rollback/0174_classifieds_messaging_cv_off.down.sql
 \ir ../rollback/0171_portal_legal_mode.down.sql
 select pg_temp.assert(to_regprocedure('public.recruitment_enabled()') is null
   and to_regprocedure('public.admin_set_portal_legal_mode(text, text, text)') is null

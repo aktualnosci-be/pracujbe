@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0960 (numer TYMCZASOWY — ostateczny nada integrator) — tryb ogłoszeniowy: wiadomości
+-- 0174 — tryb ogłoszeniowy: wiadomości
 -- i CV (#1134, #1138; epik #1128). Uzupełnia 0171 (`portal_legal_mode`,
 -- `recruitment_enabled()`, `recruitment_write_allowed()`), bez powtarzania jej strażników.
 --
@@ -25,7 +25,7 @@
 --    dotychczasowa treść przeniesiona bez zmian do `apply_candidate_cv_proposals_impl`
 --    (bez EXECUTE dla klientów). Sygnatura i granty publicznej funkcji bez zmian.
 --
--- Rollback: supabase/rollback/0960_classifieds_messaging_cv_off.down.sql.
+-- Rollback: supabase/rollback/0174_classifieds_messaging_cv_off.down.sql.
 -- =============================================================================
 
 -- --- 1. Kolejka e-mail: newMessage wygaszany w trybie ogłoszeniowym -----------------------------
@@ -38,7 +38,7 @@ create or replace function public.email_delivery_suppression_reason(
   p_entity_id uuid
 ) returns text language sql stable security definer set search_path = public, pg_temp as $$
   select case
-    -- 0960 (#1134): rozmowy wyłączone w trybie ogłoszeniowym — list o wiadomości nie wychodzi.
+    -- 0174 (#1134): rozmowy wyłączone w trybie ogłoszeniowym — list o wiadomości nie wychodzi.
     when p_template = 'newMessage' and not public.recruitment_enabled()
       then 'suppressed_recruitment_disabled'
     when public.email_address_suppressed(p_to_email) then 'suppressed_address'
@@ -99,7 +99,7 @@ create function public.apply_candidate_cv_proposals(
 )
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  -- 0960 (#1138): tryb ogłoszeniowy — bez zapisu propozycji z CV (także bez tworzenia profilu).
+  -- 0174 (#1138): tryb ogłoszeniowy — bez zapisu propozycji z CV (także bez tworzenia profilu).
   perform public.assert_recruitment_enabled();
   return public.apply_candidate_cv_proposals_impl(
     p_occupations, p_skills, p_languages, p_certificates, p_experience_years);

@@ -325,7 +325,7 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
 
 /**
  * Wiadomości i CV (#1134, #1138). Zachowanie (zero zapytań, bez bucketu, bez modelu) sprawdza
- * `tests/unit/classifieds-messaging-cv-off.test.ts`; baza — `rls.sql` sekcje CL1128/CL960.
+ * `tests/unit/classifieds-messaging-cv-off.test.ts`; baza — `rls.sql` sekcje CL1128/CL174.
  */
 describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', () => {
   /** Każda eksportowana akcja pliku zaczyna się od bramki trybu (pierwsza instrukcja ciała). */
@@ -383,7 +383,7 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
       ['prepareCvImportAction', 'proposeFromCvAction', 'applyCvProposals'])).toEqual([]);
   });
 
-  it('baza (0960): strażnik plików CV i nakładka apply_candidate_cv_proposals, list newMessage wygaszany', () => {
+  it('baza (0174): strażnik plików CV i nakładka apply_candidate_cv_proposals, list newMessage wygaszany', () => {
     const migration = readdirSync(join(ROOT, 'supabase/migrations'))
       .map((f) => read(`supabase/migrations/${f}`))
       .find((sql) => sql.includes('function public.enforce_recruitment_cv_file()')) ?? '';
@@ -391,7 +391,7 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
     expect(migration).toMatch(/perform public\.assert_recruitment_enabled\(\);\s*return public\.apply_candidate_cv_proposals_impl\(/);
     expect(migration).toMatch(/when p_template = 'newMessage' and not public\.recruitment_enabled\(\)\s*then 'suppressed_recruitment_disabled'/);
     const rls = read('supabase/tests/rls.sql');
-    for (const id of ['CL960-1c', 'CL960-2', 'CL960-2b', 'CL960-3b', 'CL960-4', 'CL960-N1', 'CL960-N2']) {
+    for (const id of ['CL174-1c', 'CL174-2', 'CL174-2b', 'CL174-3b', 'CL174-4', 'CL174-N1', 'CL174-N2']) {
       expect(rls, id).toContain(`'${id} `);
     }
   });

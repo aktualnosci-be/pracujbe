@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0960 — tryb ogłoszeniowy: wiadomości i CV (#1134, #1138).
+-- Rollback 0174 — tryb ogłoszeniowy: wiadomości i CV (#1134, #1138).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT.
 -- Przywraca `email_delivery_suppression_reason` z 0124 (treść 1:1), usuwa strażnika plików CV
