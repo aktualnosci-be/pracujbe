@@ -8,7 +8,7 @@ import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
-import { useClassifiedsMode as withClassifiedsMode } from '../helpers/portal-mode';
+import { withClassifiedsMode } from '../helpers/portal-mode';
 import { PORTAL_LEGAL_MODE_ENV } from '@/lib/portal-mode';
 
 /**
