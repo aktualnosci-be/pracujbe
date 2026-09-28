@@ -3118,6 +3118,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   axe-core w CI (`tests/e2e/a11y.spec.ts`, uruchamiana w jobie `e2e`) blokuje przy naruszeniach
   WCAG 2.x A/AA o wadze critical/serious na kluczowych stronach publicznych (home, lista ofert,
   logowanie, rejestracja); domknięte realne naruszenia kontrastu (tokeny).
+  Tytuł zawsze obecny (#1032): `htmlLimitedBots: /./` w `next.config.mjs` wyłącza strumieniowanie
+  metadanych Next 15 dla każdego klienta z user-agentem — `<title>` w `<head>`, a po
+  `router.refresh()`/nawigacji podmienia się atomowo (strumieniowane drzewo metadanych ma klucz
+  żądania i montuje się od nowa → dokument chwilowo bez tytułu, flaka axe `document-title`).
+  Strażnik `blocking-metadata-config.test` (z kontrolą ujemną), E2E `offer-trust` (tytuł w `<head>`,
+  zero mutacji bez tytułu podczas odświeżenia).
   Bramka wydajności w CI (#395): kroki „Performance budget (static)” w `build` (JS gzip
   kluczowych tras = layouty + strona, fonty woff2; `scripts/perf-budget-static.mjs`) i
   „Performance budget (lab CWV)” w `e2e-perf` (LCP/CLS/TBT, mediana 3 prób, CPU 4×, 1,6 Mb/s,
