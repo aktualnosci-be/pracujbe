@@ -2002,7 +2002,7 @@
     "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
     "deleteSuccess": "The document has been deleted.",
     "errorTooLarge": "The file is too large (max 5 MB).",
-    "errorAccountLimit": "You reached the file limit for your account (max. 5 files and 20 MB in total). Delete an older document.",
+    "errorAccountLimit": "You reached the file limit for your account (max. 10 files and 50 MB in total). Delete an older document.",
     "errorType": "Allowed formats: PDF, DOC, DOCX.",
     "errorEmpty": "The selected file is empty."
   },

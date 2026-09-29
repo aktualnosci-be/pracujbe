@@ -2002,7 +2002,7 @@
     "deleteConfirmDescription": "Le fichier « {name} » sera définitivement supprimé. Cette action est irréversible.",
     "deleteSuccess": "Le document a été supprimé.",
     "errorTooLarge": "Le fichier est trop volumineux (max. 5 Mo).",
-    "errorAccountLimit": "Limite de fichiers du compte atteinte (max. 5 fichiers et 20 Mo au total). Supprimez un ancien document.",
+    "errorAccountLimit": "Limite de fichiers du compte atteinte (max. 10 fichiers et 50 Mo au total). Supprimez un ancien document.",
     "errorType": "Formats acceptés : PDF, DOC, DOCX.",
     "errorEmpty": "Le fichier choisi est vide."
   },

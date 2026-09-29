@@ -2002,7 +2002,7 @@
     "deleteConfirmDescription": "Plik „{name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.",
     "deleteSuccess": "Dokument został usunięty.",
     "errorTooLarge": "Plik jest za duży (maks. 5 MB).",
-    "errorAccountLimit": "Osiągnięto limit plików na koncie (maks. 5 plików i 20 MB łącznie). Usuń starszy dokument.",
+    "errorAccountLimit": "Osiągnięto limit plików na koncie (maks. 10 plików i 50 MB łącznie). Usuń starszy dokument.",
     "errorType": "Dozwolone formaty: PDF, DOC, DOCX.",
     "errorEmpty": "Wybrany plik jest pusty."
   },

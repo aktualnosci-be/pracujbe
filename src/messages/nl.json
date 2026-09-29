@@ -2002,7 +2002,7 @@
     "deleteConfirmDescription": "Het bestand „{name}” wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.",
     "deleteSuccess": "Het document is verwijderd.",
     "errorTooLarge": "Het bestand is te groot (max. 5 MB).",
-    "errorAccountLimit": "Je hebt de bestandslimiet van je account bereikt (max. 5 bestanden en 20 MB in totaal). Verwijder een ouder document.",
+    "errorAccountLimit": "Je hebt de bestandslimiet van je account bereikt (max. 10 bestanden en 50 MB in totaal). Verwijder een ouder document.",
     "errorType": "Toegestane formaten: PDF, DOC, DOCX.",
     "errorEmpty": "Het gekozen bestand is leeg."
   },

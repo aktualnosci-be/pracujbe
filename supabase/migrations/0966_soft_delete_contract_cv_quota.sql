@@ -10,9 +10,11 @@
 --    DEFINER RPC i service_role): nowa wiadomość w usuniętej rozmowie i zmiana treści usuniętej
 --    wiadomości → `NOT_FOUND`. Zmiany samych kluczy obcych (anonimizacja przy usunięciu konta,
 --    retencja) i przywrócenie (zmiana `deleted_at`) nie są blokowane. Zmiany statusu usuniętej
---    aplikacji/propozycji celowo NIE są blokowane w bazie: `transition_application` na usuniętej
---    aplikacji jest udokumentowanym zachowaniem (GS98-6, bez e-maila); odczyt zamyka polityka.
--- 2. Limit plików CV na konto (CF-06): najwyżej 5 nieusuniętych plików `candidate_cv` i 20 MB
+--    aplikacji i propozycji (`applications`, `offers`) odrzuca ten sam strażnik (BEFORE UPDATE, każda
+--    ścieżka: `transition_application`, `respond_to_offer`, wycofanie, bezpośredni DML, SECURITY
+--    DEFINER i service_role) → `NOT_FOUND` (decyzja właściciela 29.09.2026). Zmiana samego `deleted_at`
+--    i kluczy obcych (usuwanie konta `erase_*`, retencja) nie jest blokowana.
+-- 2. Limit plików CV na konto (CF-06): najwyżej 10 nieusuniętych plików `candidate_cv` i 50 MB
 --    łącznie (`CV_ACCOUNT_LIMIT`, SQLSTATE 54000), serializowane blokadą doradczą właściciela.
 --    Lustro TS: `CV_MAX_FILES_PER_ACCOUNT`/`CV_MAX_TOTAL_BYTES_PER_ACCOUNT` (validation/cv-file.ts).
 --
@@ -54,6 +56,10 @@ begin
           and new.body is distinct from old.body then
       raise exception 'NOT_FOUND' using errcode = 'P0002';
     end if;
+  elsif tg_table_name in ('applications', 'offers') then
+    if tg_op = 'UPDATE' and old.deleted_at is not null and new.status is distinct from old.status then
+      raise exception 'NOT_FOUND' using errcode = 'P0002';
+    end if;
   end if;
   return new;
 end $$;
@@ -61,6 +67,13 @@ revoke all on function public.enforce_soft_delete_contract() from public, anon, 
 
 drop trigger if exists trg_soft_delete_contract on public.messages;
 create trigger trg_soft_delete_contract before insert or update on public.messages
+  for each row execute function public.enforce_soft_delete_contract();
+
+drop trigger if exists trg_soft_delete_contract on public.applications;
+create trigger trg_soft_delete_contract before update on public.applications
+  for each row execute function public.enforce_soft_delete_contract();
+drop trigger if exists trg_soft_delete_contract on public.offers;
+create trigger trg_soft_delete_contract before update on public.offers
   for each row execute function public.enforce_soft_delete_contract();
 
 -- --- 2. Limit plików CV na konto ---------------------------------------------------------------
@@ -77,7 +90,7 @@ begin
   select count(*), coalesce(sum(size_bytes), 0) into v_count, v_bytes
     from public.files
    where owner_id = new.owner_id and entity_type = 'candidate_cv' and deleted_at is null;
-  if v_count >= 5 or v_bytes + coalesce(new.size_bytes, 0) > 20 * 1024 * 1024 then
+  if v_count >= 10 or v_bytes + coalesce(new.size_bytes, 0) > 50 * 1024 * 1024 then
     raise exception 'CV_ACCOUNT_LIMIT' using errcode = '54000';
   end if;
   return new;
