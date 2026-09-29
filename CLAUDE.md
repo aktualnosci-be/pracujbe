@@ -2753,6 +2753,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
   ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
   na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
+- [~] Narzędzia i konfiguracja (audyt CFG29, #1121, bez migracji). `@react-email/*` w `dependencies`
+  (#1175). Typecheck specyfikacji Playwrighta: `tsconfig.e2e.json` (rozszerza `tsconfig.json`,
+  bez `noUncheckedIndexedAccess` — 151 błędów z tej flagi w `tests/e2e` to osobny follow-up,
+  reszta naprawiona) wołany przez `npm run typecheck` (job „Typecheck” bez zmian), strażnik
+  `scripts/check-ci-workflows.mjs` pilnuje skryptu i zakresu (kontrola ujemna w
+  `ci-workflows-guard.test`). `EMAIL_REPLY_TO` jest czytany (`replyToFromEnv`, `sender.ts`):
+  nagłówek Reply-To we wszystkich listach obu workerów (kolejka domenowa i kont; Resend
+  `replyTo`, EmailLabs nagłówek), zła wartość albo wstrzyknięcie CRLF = bez nagłówka, bez
+  wartości domyślnej (`email-reply-to.test`, kontrole ujemne). Limit Server Actions 6 MB
+  zostaje globalny (Next nie ma go per akcja), ale middleware odrzuca 413 żądanie Server Action
+  spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
+  `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). **Otwarte:**
+  `noUncheckedIndexedAccess` w `tsconfig.e2e.json`, ESLint 9 (wymaga instalacji; `next lint`
+  zastąpione `eslint` CLI bez zmiany wersji, lint obejmuje też pliki konfiguracyjne), usunięcie nieużywanych zależności (lista w PR #1121).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,
@@ -3326,7 +3340,8 @@ npm run db:migrate:production  # migracje na wskazanej bazie (MIGRATION_DATABASE
 - Dostęp do DB: `src/lib/db/portal.ts` + `src/lib/db/sql.ts` (#25); nazwy zapytań/funkcji tylko stałe, wartości w `$n`. Operacje wrażliwe = Server Actions/route handlers.
 - Błędy: rzucaj `AppError` z kodem (`src/lib/errors`); mapuj na komunikat tłumaczony.
 - Nazwy plików: `kebab-case`; komponenty React: `PascalCase`.
-- Lint obejmuje `src/`, `tests/` i `scripts/` (`next lint --dir …`); `.eslintrc.json` ma `"root": true`,
+- Lint (`eslint` CLI zamiast przestarzałego `next lint`, ta sama konfiguracja i wersja ESLint 8) obejmuje `src/`, `tests/`,
+  `scripts/` oraz pliki `*.config.{mjs,ts}` z korzenia; `.eslintrc.json` ma `"root": true`,
   więc worktree w `.claude/worktrees/` nie dziedziczy konfiguracji z checkoutu nadrzędnego (konflikt
   pluginu `@next/next`). Reguł nie wyłączamy globalnie — lokalny `eslint-disable` tylko z komentarzem
   uzasadnienia (np. `require` w preloadzie CommonJS `tests/e2e-real/support/server-only-hook.cjs`).
