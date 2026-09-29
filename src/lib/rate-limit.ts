@@ -56,6 +56,10 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   'password-reset',
   'password-update',
   'verify-email',
+  // Limity na konto/adres (bez IP): nie mogą się otwierać przy awarii limitera.
+  'signin-account',
+  'password-reset-account',
+  'register-account',
   // Import ogłoszenia przez AI (#465): każde wywołanie kosztuje — awaria limitera nie może
   // otwierać nieograniczonych wywołań płatnego API.
   'job-import',

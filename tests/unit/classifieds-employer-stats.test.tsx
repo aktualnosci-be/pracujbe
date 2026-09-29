@@ -49,6 +49,7 @@ const { jobFunnelCsv } = await import('@/lib/job-funnel/csv');
 const { JobFunnelStats } = await import('@/components/employer/JobFunnelStats');
 const { EmployerOverviewStats } = await import('@/components/employer/EmployerOverviewStats');
 const { EmployerFunnelSection } = await import('@/components/employer/EmployerFunnelSection');
+const { EmployerListingStats } = await import('@/components/employer/EmployerListingStats');
 
 withClassifiedsMode();
 
@@ -156,6 +157,40 @@ describe('#1147: loadery statystyk w trybie ogłoszeniowym', () => {
     if (load.status !== 'ok') return;
     expect(load.totals).toEqual({ searchAppearances: 120, detailViews: 40, applyStarted: 7 });
     expect(load.jobs[0]).not.toHaveProperty('applicationsSubmitted');
+  });
+
+  it('skrót statystyk ogłoszeń: 3 najczęściej oglądane oferty (wyświetlenia ↓, kliknięcia ↓), bez ruchu pomijane, bez zapytań o proces', async () => {
+    const row = (n: number, views: number, clicks: number, status = 'active') => ({
+      job_id: `4444444${n}-4444-4444-8444-444444444444`, title: `Oferta ${n}`, slug: `oferta-${n}`, status,
+      search_appearances: 100, detail_views: views, apply_started: clicks, applications_submitted: 9,
+    });
+    fakeDb.rpc('get_company_job_funnel', [
+      row(1, 10, 1), row(2, 50, 2), row(3, 50, 8), row(4, 0, 0), row(5, 30, 3, 'closed'),
+    ]);
+    const load = await employer.getTopListingJobs();
+    expect(load.status).toBe('ok');
+    if (load.status !== 'ok') return;
+    expect(load.jobs.map((job) => job.title)).toEqual(['Oferta 3', 'Oferta 2', 'Oferta 5']);
+    expect(load.jobs[0]).toMatchObject({ detailViews: 50, applyClicks: 8, slug: 'oferta-3' });
+    // Oferta zamknięta nie ma publicznej strony — bez sluga (UI nie linkuje).
+    expect(load.jobs[2]).toMatchObject({ slug: '' });
+    expect(load.jobs[0]).not.toHaveProperty('applicationsSubmitted');
+    expect(processCalls()).toEqual([]);
+  });
+
+  it('skrót statystyk ogłoszeń: member = denied, błąd RPC = error, nigdy zera', async () => {
+    activeAs('member');
+    fakeDb.rpc('get_company_job_funnel', () => { throw pgError('42501', 'PERMISSION_DENIED'); });
+    await expect(employer.getTopListingJobs()).resolves.toEqual({ status: 'denied' });
+    activeAs('owner');
+    fakeDb.rpc('get_company_job_funnel', () => { throw new Error('boom'); });
+    await expect(employer.getTopListingJobs()).resolves.toEqual({ status: 'error' });
+  });
+
+  it('kontrola ujemna: tryb RECRUITMENT — skrót statystyk ogłoszeń wyłączony, zero zapytań', async () => {
+    recruitment();
+    await expect(employer.getTopListingJobs()).resolves.toEqual({ status: 'disabled' });
+    expect(fakeDb.callsTo('get_company_job_funnel')).toHaveLength(0);
   });
 
   it('demo (bez bazy) także bez liczników procesu', async () => {
@@ -287,12 +322,52 @@ describe('#1147: widoki statystyk', () => {
     expect(container.textContent).not.toContain(pl.jobFunnel.applyClicks);
   });
 
-  it('pulpit: w miejscu lejka rekrutacyjnego tylko odnośnik do statystyk ogłoszeń', async () => {
+  it('pulpit: lejek rekrutacyjny w trybie ogłoszeniowym nic nie renderuje (skrót statystyk to EmployerListingStats)', async () => {
     const element = await EmployerFunnelSection({ locale: 'pl', funnel: { status: 'disabled' } });
-    const { container } = render(<NextIntlClientProvider locale="pl" messages={pl}>{element}</NextIntlClientProvider>);
-    expect(screen.getByRole('heading', { level: 2, name: pl.dashboard.listingStatsTitle })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: pl.dashboard.funnelDetails })).toHaveAttribute('href', '/employer/statystyki');
-    expect(container.textContent).not.toContain(pl.dashboard.funnelTitle);
-    expect(container.textContent).not.toMatch(/\d/);
+    expect(element).toBeNull();
+  });
+
+  it.each(Object.entries(MESSAGES) as [Locale, (typeof MESSAGES)[Locale]][])(
+    '%s: skrót statystyk ogłoszeń — oferty z wyświetleniami i kliknięciami oraz jeden odnośnik do statystyk',
+    async (locale, messages) => {
+      const element = await EmployerListingStats({
+        locale,
+        top: {
+          status: 'ok',
+          jobs: [
+            { jobId: 'a', title: 'Magazynier', slug: 'magazynier', detailViews: 1240, applyClicks: 31 },
+            { jobId: 'b', title: 'Kierowca', slug: '', detailViews: 12, applyClicks: 0 },
+          ],
+        },
+      });
+      const { container } = render(<NextIntlClientProvider locale={locale} messages={messages}>{element}</NextIntlClientProvider>);
+      expect(screen.getByRole('heading', { level: 2, name: messages.dashboard.listingStatsTitle })).toBeInTheDocument();
+      const links = screen.getAllByRole('link', { name: messages.dashboard.funnelDetails });
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAttribute('href', '/employer/statystyki');
+      expect(screen.getByRole('link', { name: 'Magazynier' })).toHaveAttribute('href', '/oferty-pracy/magazynier');
+      // Oferta bez publicznej strony: sam tytuł, bez linku.
+      expect(screen.getByRole('heading', { level: 3, name: 'Kierowca' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Kierowca' })).toBeNull();
+      expect(screen.getAllByText(`${messages.jobFunnel.detailViews}:`, { exact: false }).length).toBe(2);
+      expect(container.textContent).toContain(new Intl.NumberFormat(locale).format(1240));
+      expect(container.textContent).not.toContain(messages.dashboard.funnelTitle);
+    },
+  );
+
+  it('skrót statystyk ogłoszeń: brak ruchu, brak uprawnień i błąd to trzy różne stany', async () => {
+    const empty = await EmployerListingStats({ locale: 'pl', top: { status: 'ok', jobs: [] } });
+    const { container: c1 } = render(<NextIntlClientProvider locale="pl" messages={pl}>{empty}</NextIntlClientProvider>);
+    expect(c1.textContent).toContain(pl.dashboard.listingTopJobsEmpty);
+    cleanup();
+    const denied = await EmployerListingStats({ locale: 'pl', top: { status: 'denied' } });
+    const { container: c2 } = render(<NextIntlClientProvider locale="pl" messages={pl}>{denied}</NextIntlClientProvider>);
+    expect(c2.textContent).toContain(pl.dashboard.listingTopJobsDenied);
+    expect(c2.textContent).not.toContain(pl.dashboard.listingTopJobsEmpty);
+    cleanup();
+  });
+
+  it('kontrola ujemna: tryb rekrutacyjny (disabled) — skrót statystyk ogłoszeń nic nie renderuje', async () => {
+    await expect(EmployerListingStats({ locale: 'pl', top: { status: 'disabled' } })).resolves.toBeNull();
   });
 });
