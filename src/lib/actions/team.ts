@@ -12,6 +12,7 @@ import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 import { issueTeamInviteToken } from '@/lib/team/invite-token';
+import { isLocale } from '@/i18n/routing';
 import {
   memberRoleSchema,
   teamInviteSchema,
@@ -29,6 +30,7 @@ import {
  *                              zaproszenia i jednorazowy token linku rejestracji dla adresu
  *                              bez konta (0121) — wynik nie zależy od istnienia konta,
  *   - `revokeTeamInvitation` — cofnięcie oczekującego zaproszenia,
+ *   - `renewTeamInvitation`  — odnowienie oczekującego zaproszenia (adres/rola/język z bazy, 0187),
  *   - `setTeamMemberRole`    — zmiana roli członka,
  *   - `setTeamMemberActive`  — dezaktywacja / przywrócenie członka,
  *   - `respondToTeamInvitation` — przyjęcie / odrzucenie zaproszenia przez adresata;
@@ -129,6 +131,65 @@ export async function revokeTeamInvitation(invitationId: string): Promise<TeamAc
   if (await limited('team-manage', MANAGE_RATE_MAX)) return fail('RATE_LIMITED');
 
   return sessionRpc('revoke_company_invitation', { p_invitation_id: invitationId }, 'team.revokeInvitation');
+}
+
+/**
+ * Odnowienie oczekującego zaproszenia (0187): kolejne 14 dni ważności i nowy link rejestracji
+ * dla adresu bez konta — bez przepisywania adresu, roli i języka przez zapraszającego.
+ *
+ * Adres, rolę i język bierzemy z BAZY (`get_company_invitations` aktywnej firmy, owner/admin),
+ * nie z klienta — klient podaje tylko identyfikator. Zaproszenie spoza aktywnej firmy,
+ * wygasłe albo rozstrzygnięte = `NOT_FOUND`. Zapis to ten sam `invite_company_member` co przy
+ * zapraszaniu (hierarchia ról, limit e-maili na adres, audyt `company.member_invitation_updated`),
+ * w tej samej transakcji co odczyt. Język: zapisany przy zaproszeniu (Invariant #1 — jedyny znany
+ * język adresu bez konta); zaproszenie sprzed 0121 bez języka → ostatni stopień fallbacku `en`.
+ * Konto z profilem nadal dostaje komunikaty w języku swojego konta (bez nowego e-maila — samo
+ * zaproszenie czeka w jego panelu). Wynik nie zależy od tego, czy adres ma konto.
+ */
+export async function renewTeamInvitation(
+  invitationId: string,
+  expectedCompanyId: string,
+): Promise<TeamActionResult> {
+  if (!uuidSchema.safeParse(invitationId).success) return fail('VALIDATION_FAILED');
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (await limited('team-invite', INVITE_RATE_MAX)) return fail('RATE_LIMITED');
+  const signupToken = issueTeamInviteToken();
+  if (!signupToken) {
+    captureError(new Error('team invite token secret missing'), { area: 'team.renew.token' });
+    return fail('INTERNAL');
+  }
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return fail('PERMISSION_DENIED');
+    const renewed = await withPortalTransaction(me, async (tx): Promise<TeamError | null> => {
+      // Firma widoku (EMP-02, jak przy zapraszaniu): zmiana aktywnej firmy w innej karcie
+      // nie przenosi odnowienia do nowej firmy — `ACTIVE_COMPANY_CHANGED`.
+      const expected = await getExpectedActiveCompany(tx, me.id, expectedCompanyId);
+      if (!expected.ok) return expected.error;
+      const companyId = expected.context.activeId;
+      const pending = await rpcRows(tx, 'get_company_invitations', { p_company_id: companyId });
+      const row = pending.find((r) => r['invitation_id'] === invitationId);
+      const email = typeof row?.['email'] === 'string' ? row['email'] : '';
+      const role = typeof row?.['role'] === 'string' ? row['role'] : '';
+      if (!row || !email || !role) return 'NOT_FOUND';
+      const locale = isLocale(row['locale']) ? row['locale'] : 'en';
+      await rpcRows(tx, 'invite_company_member', {
+        p_company_id: companyId,
+        p_email: email,
+        p_role: role,
+        p_locale: locale,
+        p_signup_token_hash: signupToken.hash,
+        p_signup_nonce: signupToken.nonce,
+      });
+      return null;
+    });
+    if (renewed) return fail(renewed);
+    refreshPanel();
+    return { ok: true };
+  } catch (e) {
+    return failure(e, 'team.renewInvitation');
+  }
 }
 
 export async function setTeamMemberRole(memberId: string, role: string): Promise<TeamActionResult> {
