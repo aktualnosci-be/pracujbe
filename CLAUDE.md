@@ -1849,6 +1849,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
   TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
   unit `team-invitation-signup-preview`.
+  Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
+  `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
+  `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
+  bo `get_company_invitations` od 0086 filtruje po dacie) zajmowały limit na zawsze i blokowały
+  zapraszanie nowych osób bez żadnej akcji „Cofnij” w UI dla tych rekordów. Ujednolicone: limit
+  liczy `pending` z `expires_at > now()`, dokładnie jak panel; sama tabela i sygnatura RPC bez
+  zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
+  nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
+  TM403-13c przez `INVITATION_LIMIT_REACHED`).
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — **wyłączone w trybie ogłoszeniowym (#1131)** — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
