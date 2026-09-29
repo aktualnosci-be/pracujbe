@@ -158,6 +158,8 @@ interface FormValues {
   title: string;
   category: '' | CategoryKey;
   occupation: string;
+  /** #1048: język treści ogłoszenia (`jobs.default_locale`), domyślnie język panelu. */
+  contentLocale: Locale;
   // krok 2 — umowa i grafik
   contractType: '' | ContractType;
   workingHours: string;
@@ -222,6 +224,7 @@ const DEFAULT_VALUES: FormValues = {
   title: '',
   category: '',
   occupation: '',
+  contentLocale: routing.defaultLocale,
   contractType: '',
   workingHours: '',
   shifts: '',
@@ -271,7 +274,7 @@ const DEFAULT_VALUES: FormValues = {
 
 /** Pola należące do kroku (kolejność = kolejność przewijania do pierwszego błędu). */
 const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
-  1: ['title', 'category', 'occupation'],
+  1: ['title', 'contentLocale', 'category', 'occupation'],
   2: ['contractType', 'workingHours', 'shifts', 'startDate'],
   3: ['city', 'region', 'address'],
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
@@ -353,7 +356,7 @@ function toOptionalText(value: string): string | undefined {
 function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): unknown {
   switch (step) {
     case 1:
-      return { title: v.title, category: v.category, occupation: v.occupation };
+      return { title: v.title, category: v.category, occupation: v.occupation, contentLocale };
     case 2:
       return {
         contractType: v.contractType,
@@ -485,6 +488,12 @@ export interface JobWizardProps {
    */
   initialJobId?: string;
   initialValues?: JobWizardInitialValues;
+  /**
+   * #1070: wersja wznowionego szkicu (`jobs.updated_at` z loadera) — token przy zapisie kroku.
+   * Szkic zmieniony w innej karcie/przez innego rekrutera = konflikt zamiast cichego nadpisania.
+   * Brak (nowa oferta, import) = pierwszy zapis bez kontroli, kolejne z wersją z odpowiedzi.
+   */
+  draftVersion?: string;
   /**
    * #325: oferta już opublikowana (aktywna/wstrzymana) — kreator w trybie edycji. `updatedAt`
    * = wczytana wersja (ochrona przed cichym nadpisaniem równoległej poprawki).
@@ -632,6 +641,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
 export function JobWizard({
   initialJobId,
   initialValues,
+  draftVersion,
   published,
   contentLocale: contentLocaleProp,
   importSlot,
@@ -650,7 +660,9 @@ export function JobWizard({
   const tLang = useTranslations('languageNames');
   const locale = useLocale();
   const router = useRouter();
-  const contentLocale: Locale = isLocale(contentLocaleProp)
+  // #1048: język wskazany przez stronę (szkic) albo język panelu — startowa wartość pola
+  // „Język ogłoszenia”; dalej obowiązuje wartość z formularza (`contentLocale` niżej).
+  const initialContentLocale: Locale = isLocale(contentLocaleProp)
     ? contentLocaleProp
     : isLocale(locale)
       ? locale
@@ -670,6 +682,7 @@ export function JobWizard({
     // Wznowienie szkicu: zapisane wartości nadpisują domyślne (pola nieuzupełnione zostają puste).
     defaultValues: {
       ...DEFAULT_VALUES,
+      contentLocale: initialContentLocale,
       ...narrowInitialValues(initialValues),
       ...(screeningEnabled ? {} : { screeningQuestions: [] }),
     },
@@ -677,6 +690,9 @@ export function JobWizard({
   });
 
   const values = watch();
+  const contentLocale: Locale = isLocale(values.contentLocale)
+    ? values.contentLocale
+    : initialContentLocale;
 
   // #37: asystent redagowania — propozycja zmienia pole wyłącznie po kliknięciu (onApply).
   const assistLabels: Record<AssistField, string> = {
@@ -781,6 +797,10 @@ export function JobWizard({
   }, [cityValue, locale, step]);
 
   const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
+  // #1070: aktualna wersja szkicu (ref — pętla zapisu #829 musi widzieć ją od razu) i migawki
+  // ostatnio zapisanych kroków (krok bez zmian nie wysyła żądania).
+  const draftVersionRef = React.useRef<string | null>(draftVersion ?? null);
+  const lastSavedStepRef = React.useRef<Partial<Record<WizardStep, string>>>({});
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
   // #363: kod błędu z serwera → własny komunikat (zamiast zawsze „Nie udało się zapisać”).
   const [saveError, setSaveError] = React.useState<ErrorCode | null>(null);
@@ -820,6 +840,7 @@ export function JobWizard({
   // Roboczy wiersz dodawania języka: kod ze słownika (0168), nie wolny tekst (I18N-02).
   const [langDraft, setLangDraft] = React.useState('');
   const [levelDraft, setLevelDraft] = React.useState<LanguageLevel>('basic');
+  const draftKeyRef = React.useRef<string | null>(null);
   const [langError, setLangError] = React.useState(false);
 
   const LEVEL_LABEL: Record<LanguageLevel, string> = {
@@ -973,12 +994,24 @@ export function JobWizard({
     }
     const data = checked.data;
 
+    // #1070: krok bez zmian od ostatniego udanego zapisu w tej karcie nie wysyła żądania
+    // (publikacja zawsze zapisuje — kontrola wersji przed opublikowaniem treści).
+    if (intent === 'draft' && jobId && lastSavedStepRef.current[current] === JSON.stringify(data)) {
+      setSaveError(null);
+      setSaveState('saved');
+      setBadgeVisible(true);
+      return true;
+    }
+
     setSaveError(null);
     setSaveState('saving');
     try {
       let id = jobId;
       if (!id) {
-        const created = await createJobDraft(locale, companyId);
+        // #1099 (EMP-05): jeden klucz na operację tworzenia — ponowienie po utraconej
+        // odpowiedzi zwraca ten sam szkic zamiast kolejnego, pustego.
+        draftKeyRef.current ??= crypto.randomUUID();
+        const created = await createJobDraft(contentLocale, companyId, draftKeyRef.current);
         if (!created.ok) {
           setSaveError(created.error);
           setSaveState('error');
@@ -994,13 +1027,15 @@ export function JobWizard({
       // edycja jest walidowana i zapisywana ponownie, zanim kreator zmieni krok albo wyjdzie.
       let saved = data;
       for (let round = 0; ; round += 1) {
-        const res = await updateJobDraft(id, current, saved);
+        const res = await updateJobDraft(id, current, saved, draftVersionRef.current);
         if (!res.ok) {
           setSaveError(res.error);
           setSaveState('error');
           return false;
         }
         if (res.demo) setDemo(true);
+        if (res.version) draftVersionRef.current = res.version;
+        lastSavedStepRef.current[current] = JSON.stringify(saved);
         if (!stepDataChanged(saved, buildStepData(current, getValues(), contentLocale))) break;
         if (round + 1 >= MAX_SAVE_ROUNDS) {
           // Wartości zmieniają się szybciej niż zapis — zostajemy w kreatorze bez „Zapisano”.
@@ -1277,7 +1312,7 @@ export function JobWizard({
           role="alert"
           className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error-text" aria-hidden="true" />
           {t('editFixStep', { step: editInvalidStep, title: steps[editInvalidStep - 1]?.title ?? '' })}
         </p>
       ) : null}
@@ -1286,7 +1321,7 @@ export function JobWizard({
           role="alert"
           className="mt-5 flex min-w-0 items-start gap-2.5 rounded-[16px] border border-error/40 bg-error/5 px-[23px] py-5 text-sm font-semibold text-foreground max-[600px]:p-[18px]"
         >
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error-text" aria-hidden="true" />
           {t('publishFixStep', { step: publishInvalidStep, title: steps[publishInvalidStep - 1]?.title ?? '' })}
         </p>
       ) : null}
@@ -1322,6 +1357,7 @@ export function JobWizard({
         ) : null}
 
         <form
+          method="post"
           className="min-w-0"
           noValidate
           onSubmit={(e) => {
@@ -1343,6 +1379,34 @@ export function JobWizard({
                 />
                 <FieldError name="title" />
               </div>
+                <div className={FORM_FIELD}>
+                  <Label htmlFor="job-content-locale-trigger" className={FORM_LABEL_TEXT}>{t('contentLocaleLabel')}</Label>
+                  <Select
+                    value={contentLocale}
+                    disabled={isEdit}
+                    onValueChange={(val) => {
+                      if (isLocale(val)) setValue('contentLocale', val, { shouldDirty: true });
+                    }}
+                  >
+                    <SelectTrigger
+                      className={FORM_SELECT}
+                      id="job-content-locale-trigger"
+                      aria-describedby={'job-content-locale-hint'}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {routing.locales.map((code) => (
+                        <SelectItem key={code} value={code}>
+                          {tRoot(`job.contentLanguageNames.${code}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p id={'job-content-locale-hint'} className="text-sm text-muted-foreground">
+                    {isEdit ? t('contentLocaleLocked') : t('contentLocaleHint')}
+                  </p>
+                </div>
                 <div id={domId('category')} className={FORM_FIELD}>
                   <Label htmlFor="job-category-trigger" className={FORM_LABEL_TEXT}>{t('categoryLabel')}</Label>
                   <Select
@@ -1749,7 +1813,10 @@ export function JobWizard({
                   </div>
                   <div className="w-full sm:w-48">
                     <Select value={levelDraft} onValueChange={(val) => setLevelDraft(val as LanguageLevel)}>
-                      <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
+                      <SelectTrigger
+                        className={FORM_SELECT}
+                        aria-label={t('languageLevelAria', { level: LEVEL_LABEL[levelDraft] })}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -2236,7 +2303,11 @@ export function JobWizard({
               saving: t('saving'),
               saved: isEdit ? (demo ? t('editSavedDemo') : t('editSaved')) : demo ? t('savedDemo') : t('saved'),
               // Kod z serwera ma własny komunikat; brak kodu (np. zerwane połączenie) → ogólny.
-              error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
+              error: saveError
+                ? saveError === 'JOB_EDIT_CONFLICT' && !isEdit
+                  ? t('draftConflict')
+                  : tRoot(toUserMessageKey(saveError))
+                : t('saveError'),
             }}
           />
           {isEdit && contentReview && saveState !== 'error' ? (
@@ -2245,12 +2316,19 @@ export function JobWizard({
               {renderContentReview()}
             </div>
           ) : null}
+          {saveState === 'error' && saveError === 'JOB_EDIT_CONFLICT' && !isEdit && jobId ? (
+            // #1070: konflikt szkicu — pełne przeładowanie (nie nawigacja klienta), bo kreator
+            // zachowałby stan formularza i starą wersję.
+            <a href={`/${locale}/employer/oferty/${jobId}/edycja`} className={TEXT_LINK}>
+              {t('reloadDraft')}
+            </a>
+          ) : null}
           {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
               da, więc prowadzimy do listy ofert (#363). */}
           {saveState === 'error' &&
           (saveError === 'JOB_NOT_DRAFT' ||
             saveError === 'JOB_NOT_EDITABLE' ||
-            saveError === 'JOB_EDIT_CONFLICT') ? (
+            (saveError === 'JOB_EDIT_CONFLICT' && (isEdit || !jobId))) ? (
             <Link
               href="/employer/oferty"
               className={TEXT_LINK}
@@ -2396,7 +2474,7 @@ function SaveIndicator({
   }
   if (state === 'error') {
     return (
-      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error">
+      <p role="alert" className="inline-flex items-center gap-2 text-sm text-error-text">
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
         {labels.error}
       </p>

@@ -10,6 +10,7 @@ const jobs = vi.hoisted(() => ({
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
   getJobsAvailableLocales: vi.fn(),
+  getJobsCount: vi.fn(),
 }));
 
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' }, isProductionDeployment: () => true }));

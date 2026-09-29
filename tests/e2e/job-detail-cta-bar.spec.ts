@@ -7,11 +7,20 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
  * - CTA „Aplikuj” mieści się w całości w 320 px we wszystkich językach (FR było obcięte),
  * - pasek ma jeden wiersz (nie rośnie od długiego opisu stanu zapisu),
  * - element z fokusem nigdy nie chowa się pod paskiem, a koniec stopki nie jest przykryty.
+ *
+ * Tryb produkcyjny (#1242, `E2E_PORTAL_LEGAL_MODE=CLASSIFIEDS_ONLY`): w pasku zamiast „Aplikuj”
+ * (ApplyModal) jest link „Aplikuj u pracodawcy” z drugim wierszem kanału (`EmployerApplyChannel`,
+ * #1130), więc pasek ma z założenia dwa wiersze treści przycisku (FR/EN: etykieta zawija się
+ * w 320 px). Sprawdzamy to samo co dla RECRUITMENT (cały w 320 px, bez obcięcia, cele ≥ 48 px),
+ * a wysokość paska — z limitem trzech wierszy przycisku zamiast jednego.
  */
 
 const locales = ["pl", "nl", "fr", "en"] as const;
 type Locale = (typeof locales)[number];
 const DEMO_JOB_SLUG = "bricklayer-brussels-1002";
+const classifieds = (process.env.E2E_PORTAL_LEGAL_MODE ?? "RECRUITMENT").trim().toUpperCase() !== "RECRUITMENT";
+/** Jeden wiersz (RECRUITMENT, #202) albo przycisk z etykietą i kanałem (tryb ogłoszeniowy). */
+const MAX_BAR_HEIGHT = classifieds ? 112 : 80;
 
 function messages(locale: Locale): { jobs: { applyNow: string } } {
   return JSON.parse(
@@ -46,7 +55,7 @@ async function barTop(page: Page): Promise<number> {
 }
 
 for (const locale of locales) {
-  test(`pasek CTA mieści się w 320 px w jednym wierszu: ${locale}`, async ({ page }) => {
+  test(`pasek CTA mieści się w 320 px${classifieds ? "" : " w jednym wierszu"}: ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto(`/${locale}/oferty-pracy/${DEMO_JOB_SLUG}`);
 
@@ -54,9 +63,12 @@ for (const locale of locales) {
     await expect(bar).toBeVisible();
     const barBox = await bar.boundingBox();
     expect(barBox, "pasek").not.toBeNull();
-    expect(barBox!.height).toBeLessThanOrEqual(80);
+    expect(barBox!.height).toBeLessThanOrEqual(MAX_BAR_HEIGHT);
 
-    const apply = bar.getByRole("button", { name: messages(locale).jobs.applyNow });
+    const apply = classifieds
+      ? bar.getByTestId("employer-apply-primary")
+      : bar.getByRole("button", { name: messages(locale).jobs.applyNow });
+    await expect(apply).toBeVisible();
     const applyBox = await apply.boundingBox();
     expect(applyBox).not.toBeNull();
     expect(applyBox!.x).toBeGreaterThanOrEqual(0);

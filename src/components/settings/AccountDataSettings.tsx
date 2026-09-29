@@ -181,7 +181,7 @@ export function AccountDataSettings({
               className={
                 exportOk
                   ? 'mt-3 flex items-start gap-2 text-sm text-success-text'
-                  : 'mt-3 flex items-start gap-2 text-sm text-error'
+                  : 'mt-3 flex items-start gap-2 text-sm text-error-text'
               }
             >
               {exportOk ? (
@@ -220,7 +220,7 @@ export function AccountDataSettings({
               {variant === 'employer' ? t('deleteDescriptionEmployer') : t('deleteDescription')}
             </p>
             {confirming ? (
-              <form className="mt-3" noValidate onSubmit={(event) => void deleteAccount(event)}>
+              <form method="post" className="mt-3" noValidate onSubmit={(event) => void deleteAccount(event)}>
                 <Label htmlFor="account-delete-email">{t('confirmLabel')}</Label>
                 <Input
                   ref={inputRef}
@@ -235,7 +235,7 @@ export function AccountDataSettings({
                   onChange={(event) => setEmail(event.target.value)}
                 />
                 {deleteError ? (
-                  <p id="account-delete-error" role="alert" className="mt-2 text-sm text-error">
+                  <p id="account-delete-error" role="alert" className="mt-2 text-sm text-error-text">
                     {t(DELETE_ERRORS[deleteError])}
                   </p>
                 ) : null}

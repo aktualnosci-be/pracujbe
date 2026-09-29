@@ -71,7 +71,7 @@ export function JobCompanyBlockControl({ jobId }: { jobId: string }): React.JSX.
       </p>
       <div aria-live="polite">
         {error ? (
-          <p role="alert" className="mt-2 flex items-start gap-2 text-sm text-error">
+          <p role="alert" className="mt-2 flex items-start gap-2 text-sm text-error-text">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             {t('saveError')}
           </p>

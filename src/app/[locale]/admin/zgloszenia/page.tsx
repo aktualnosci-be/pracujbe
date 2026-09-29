@@ -476,7 +476,7 @@ export default async function AdminReportsPage({
                                 {t('caseDue', { date: formatDate(report.dsa.dueAt) })}
                                 {['open', 'reviewing'].includes(report.status) &&
                                 new Date(report.dsa.dueAt).getTime() < now ? (
-                                  <span className="ml-1 font-medium text-error">{t('caseOverdue')}</span>
+                                  <span className="ml-1 font-medium text-error-text">{t('caseOverdue')}</span>
                                 ) : null}
                               </>
                             ) : null}

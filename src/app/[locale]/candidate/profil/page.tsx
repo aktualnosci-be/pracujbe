@@ -134,7 +134,7 @@ export default async function CandidateProfilePage({
           <h2 id="passport-heading" className={H2_EXTENDED}>{tp('sectionTitle')}</h2>
           <p className={cn(P_EXTENDED, 'mt-1')}>{tp('sectionHint')}</p>
           {passport.loadFailed ? (
-            <p role="alert" className="mt-5 text-[15px] text-error">{tp('loadError')}</p>
+            <p role="alert" className="mt-5 text-[15px] text-error-text">{tp('loadError')}</p>
           ) : <div className={cn(INFO_PAIRS, 'mt-2 border-t border-border')}>
             <div className="min-w-0">
               <h3 className={INFO_LABEL}>{to('occupationsLabel')}</h3>

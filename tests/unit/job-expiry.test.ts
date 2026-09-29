@@ -105,9 +105,16 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
     // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
     // #1143: tryb bazy sprawdzany tuż przed materializacją dopasowań.
+    // 0180: na końcu przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
     const expected = TASKS.filter((t) => t !== 'run_retention_purge');
     expected.splice(expected.indexOf('match_recompute_claim'), 0, 'recruitment_enabled');
-    expect(fakeDb.calls.map((c) => c.name)).toEqual(expected);
+    expect(fakeDb.calls.map((c) => c.name)).toEqual([...expected, 'record_ops_job_run']);
+    expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
+      expect.objectContaining({
+        args: expect.objectContaining({ p_job: 'maintenance', p_ok: true, p_failed_task: null }),
+        as: 'service',
+      }),
+    ]);
     expect(await res.json()).toEqual({
       ok: true,
       releasedAiBudgetReservations: 0,
@@ -133,12 +140,9 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // #775: oferty wygaszone w tym przebiegu muszą zniknąć z publicznych stron ISR od razu,
     // nie dopiero po 60 s okna rewalidacji.
     expect(revalidatePath.mock.calls).toEqual(
-      expect.arrayContaining([
-        ['/[locale]', 'page'],
-        ['/[locale]/oferty-pracy/[slug]', 'page'],
-        ['/[locale]/praca/kategoria/[category]', 'page'],
-        ['/[locale]/praca/miasto/[city]', 'page'],
-      ]),
+      expect.arrayContaining(
+        (await import('@/lib/jobs/public-cache')).PUBLIC_JOB_ROUTES.map((path) => [path, 'page']),
+      ),
     );
   });
 
@@ -159,6 +163,10 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // Bez wygaszenia nie wysyłamy alertów; pozostałe zadania idą dalej (osobne transakcje).
     expect(fakeDb.callsTo('process_saved_search_alerts')).toHaveLength(0);
     expect(fakeDb.callsTo('process_email_campaigns')).toHaveLength(1);
+    // 0180: nieudany przebieg też jest zapisany — z samą nazwą zadania (bez treści błędu).
+    expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
+      expect.objectContaining({ args: expect.objectContaining({ p_ok: false, p_failed_task: 'jobExpiry' }) }),
+    ]);
     const body = await res.json();
     expect(body).toEqual({ error: 'gc failed' });
     expect(JSON.stringify(body)).not.toContain('maintenance-secret');
