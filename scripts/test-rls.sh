@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
-# scripts/test-rls.sh — integracyjne testy RLS/triggerów na czystym PostgreSQL 16.
+# ======================================================================# scripts/test-rls.sh — integracyjne testy RLS/triggerów na czystym PostgreSQL 16.
 #
 # Tworzy świeżą bazę i nakłada PRODUKCYJNY zestaw: bootstrap ról (database/bootstrap)
 # oraz migracje domeny i auth (supabase/migrations + database/auth) w kolejności numerów —
@@ -13,8 +12,7 @@
 # Lokalnie (peer auth):   sudo -u postgres bash scripts/test-rls.sh
 # Lub z hasłem/hostem:    PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres bash scripts/test-rls.sh
 # W CI: usługa postgres:16 (patrz job „rls" w .github/workflows/ci.yml).
-# =============================================================================
-set -euo pipefail
+# ======================================================================set -euo pipefail
 
 DB="${RLS_TEST_DB:-pracujbe_rls_ci}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -57,6 +55,9 @@ echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
+echo ">> rollback 0192 (czujki poczty i requeue, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-ops-config-rollback.sql"
+
 echo ">> rollback 0183 (części gmin w filtrach, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/city-sections-filters-rollback.sql"
 
@@ -68,6 +69,10 @@ echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 
 echo ">> rollback 0981 (reopen = nowa publikacja, zaproszenia usuwanego pracodawcy; w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-decisions-0981-rollback.sql"
+
+echo ">> rollback 0191 (kolejka automatycznego VIES, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/vies-auto-queue-rollback.sql"
+
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
@@ -85,7 +90,10 @@ echo ">> rollback 0175 (konto i komunikacja w trybie ogłoszeniowym, w transakcj
 echo ">> rollback 0174 (tryb ogłoszeniowy: wiadomości i CV, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-messaging-cv-rollback.sql"
 
-echo ">> rollback 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
+echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/translation-protected-terms-rollback.sql"
+
+echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
 echo ">> sprzątanie"

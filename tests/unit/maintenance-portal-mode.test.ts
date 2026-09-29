@@ -40,6 +40,7 @@ beforeEach(() => {
   resetFakeDb(null);
   for (const fn of RPCS) fakeDb.rpc(fn, 0);
   fakeDb.rpc('claim_storage_deletions', []);
+  fakeDb.rpc('claim_company_vies_auto_checks', []);
   vi.stubEnv('MAINTENANCE_SECRET', 'maintenance-secret');
 });
 afterEach(() => vi.unstubAllEnvs());
