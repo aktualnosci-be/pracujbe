@@ -37,6 +37,7 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
   RAILWAY_ENVIRONMENT_NAME: 'ustawia Railway (etykieta środowiska w webhooku błędów, #571)',
   NEXT_PUBLIC_APP_VERSION: 'wylicza next.config.mjs w czasie builda (build-version)',
   NEXT_PUBLIC_BUILD_TIME: 'wylicza next.config.mjs w czasie builda',
+  PRACUJBE_EXPECTED_MIGRATION: 'wylicza next.config.mjs w czasie builda z plików migracji (#1065, czujka schema_behind_code)',
   // --- GitHub Actions ---
   GITHUB_SHA: 'ustawia GitHub Actions (wersja builda w CI)',
   GITHUB_STEP_SUMMARY: 'ustawia GitHub Actions (podsumowanie kroku budżetu wydajności)',

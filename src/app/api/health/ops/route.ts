@@ -17,6 +17,11 @@ import { readOpsStatus } from '@/lib/ops/status';
  * #1143: `portal_legal_mode_mismatch` — env `PORTAL_LEGAL_MODE` i tryb w bazie (0171) różnią się
  * (503 `alert`); `portalLegalMode` = nazwy trybów env/bazy/efektywnego.
  *
+ * #1065: `schema_behind_code` — najwyższa zastosowana migracja (`ops_schema_state()`, 0184) jest starsza
+ * niż ta, którą zna wdrożony kod (`PRACUJBE_EXPECTED_MIGRATION` z builda): przepływy z nowymi
+ * funkcjami bazy dostaną `INTERNAL` do czasu migracji (503 `alert`); `schema_state_unreadable` —
+ * stanu nie da się odczytać. `schema` = nazwy migracji (oczekiwana/zastosowana), bez konfiguracji.
+ *
  * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
  * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
  *
@@ -40,9 +45,9 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ status: result.kind, checkedAt, backup: result.backup }, { status: 503, headers });
   }
 
-  const { status, alerts, warnings, metrics, appPool, aiBudget, maintenanceRun, backup, portalLegalMode } = result;
+  const { status, alerts, warnings, metrics, appPool, aiBudget, maintenanceRun, backup, portalLegalMode, schema } = result;
   return Response.json(
-    { status, alerts, warnings, checkedAt, metrics, appPool, aiBudget, maintenanceRun: maintenanceRun ?? null, backup, portalLegalMode },
+    { status, alerts, warnings, checkedAt, metrics, appPool, aiBudget, maintenanceRun: maintenanceRun ?? null, backup, portalLegalMode, schema },
     { status: status === 'ok' ? 200 : 503, headers },
   );
 }
