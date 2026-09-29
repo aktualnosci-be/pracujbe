@@ -163,7 +163,7 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   await addChip(t('requirementsOptionalLabel'), 'Ervaring met WMS');
   await addChip(t('skillsLabel'), 'Reachtruck');
   await chooseOption(page, page.getByRole('combobox', { name: t('languagesLabel'), exact: true }), msg(LOCALE, 'languageNames.nl'));
-  await chooseOption(page, page.getByRole('combobox', { name: t('levelBasic'), exact: true }), t('levelFluent'));
+  await chooseOption(page, page.getByRole('combobox', { name: t('languageLevelAria', { level: t('levelBasic') }), exact: true }), t('levelFluent'));
   await page.getByRole('button', { name: t('addLanguage'), exact: true }).click();
   await addChip(t('certificatesLabel'), 'VCA Basis');
   await page.getByRole('checkbox', { name: t('requiresDrivingLicense'), exact: true }).check();

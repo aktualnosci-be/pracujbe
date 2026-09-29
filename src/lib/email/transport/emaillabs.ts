@@ -73,7 +73,12 @@ export function emailLabsPayload(
     from,
     to: [{ email: message.to, messageId }],
     content: { html: message.html, text: message.text },
-    headers: { ...(message.headers ?? {}), 'X-TRACKING-OFF': '1' },
+    // Reply-To jako nagłówek (jak `List-Unsubscribe`); tracking wyłączony zawsze.
+    headers: {
+      ...(message.headers ?? {}),
+      ...(message.replyTo ? { 'Reply-To': message.replyTo } : {}),
+      'X-TRACKING-OFF': '1',
+    },
   };
 }
 
