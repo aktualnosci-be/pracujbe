@@ -20,6 +20,8 @@ vi.mock('@/lib/actions/files', () => ({
   prepareCvDownload: vi.fn(),
 }));
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+const { downloadPrivateFile } = vi.hoisted(() => ({ downloadPrivateFile: vi.fn() }));
+vi.mock('@/lib/files/client-download', () => ({ downloadPrivateFile }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 afterEach(() => {
@@ -108,20 +110,23 @@ describe('Lista CV', () => {
     },
   );
 
-  it('pobranie wystawia link dopiero przy kliknięciu i przechodzi pod niego (#26)', async () => {
-    const assign = vi.fn();
-    const original = window.location;
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, assign } });
-    try {
-      vi.mocked(prepareCvDownload).mockResolvedValue({ ok: true, url: '/api/files/cv/fixture-cv?t=signed' });
-      renderCv('pl');
-      expect(prepareCvDownload).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole('button', { name: `${pl.files.download}: ${fileName}` }));
-      await waitFor(() => expect(assign).toHaveBeenCalledExactlyOnceWith('/api/files/cv/fixture-cv?t=signed'));
-      expect(prepareCvDownload).toHaveBeenCalledExactlyOnceWith('fixture-cv');
-    } finally {
-      Object.defineProperty(window, 'location', { configurable: true, value: original });
-    }
+  it('pobranie wystawia link dopiero przy kliknięciu i pobiera bez opuszczania strony (#26, FS30-04)', async () => {
+    downloadPrivateFile.mockResolvedValue(true);
+    vi.mocked(prepareCvDownload).mockResolvedValue({ ok: true, url: '/api/files/cv/fixture-cv?t=signed' });
+    renderCv('pl');
+    expect(prepareCvDownload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: `${pl.files.download}: ${fileName}` }));
+    await waitFor(() => expect(downloadPrivateFile).toHaveBeenCalledExactlyOnceWith('/api/files/cv/fixture-cv?t=signed', fileName));
+    expect(prepareCvDownload).toHaveBeenCalledExactlyOnceWith('fixture-cv');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('błąd trasy pobierania (404/503) daje komunikat przy pliku, bez przejścia na inną stronę', async () => {
+    downloadPrivateFile.mockResolvedValue(false);
+    vi.mocked(prepareCvDownload).mockResolvedValue({ ok: true, url: '/api/files/cv/fixture-cv?t=signed' });
+    renderCv('pl');
+    fireEvent.click(screen.getByRole('button', { name: `${pl.files.download}: ${fileName}` }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(pl.files.downloadError));
   });
 
   it.each(['pl', 'nl', 'fr', 'en'] as const)('błąd wystawienia linku daje komunikat: %s', async (locale) => {

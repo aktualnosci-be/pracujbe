@@ -61,11 +61,19 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
   const sentRef = React.useRef<HTMLParagraphElement | null>(null);
+  // #1243: „Anuluj” odmontowuje formularz razem z aktywnym przyciskiem — fokus wraca na
+  // przycisk „Odwołaj się”, zamiast spadać na <body>.
+  const openButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const restoreOpenFocusRef = React.useRef(false);
 
   const idBase = React.useId();
   const ids = { grounds: `${idBase}-grounds`, hint: `${idBase}-hint`, error: `${idBase}-error` };
 
   React.useEffect(() => {
+    if (!open && restoreOpenFocusRef.current) {
+      restoreOpenFocusRef.current = false;
+      openButtonRef.current?.focus();
+    }
     if (open && !pending) textareaRef.current?.focus();
     // Fokus tylko przy otwarciu formularza.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,6 +104,7 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
   if (!open) {
     return (
       <Button
+        ref={openButtonRef}
         type="button"
         variant="outline"
         onClick={() => {
@@ -155,7 +164,7 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
     serverError === 'NETWORK' ? t('appealNetworkError') : serverError ? tRoot(toUserMessageKey(serverError)) : null;
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-3" aria-busy={pending || undefined}>
+    <form method="post" onSubmit={submit} noValidate className="space-y-3" aria-busy={pending || undefined}>
       {serverMessage ? (
         <div
           ref={alertRef}
@@ -208,7 +217,15 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
             <span>{t('appealSubmit')}</span>
           )}
         </Button>
-        <Button type="button" variant="ghost" disabled={pending} onClick={() => setOpen(false)}>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => {
+            restoreOpenFocusRef.current = true;
+            setOpen(false);
+          }}
+        >
           {t('appealCancel')}
         </Button>
       </div>

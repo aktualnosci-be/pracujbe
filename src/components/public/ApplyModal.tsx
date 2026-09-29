@@ -480,7 +480,7 @@ export function ApplyModal({
             </div>
 
             {formReady ? (
-              <form className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate>
+              <form method="post" className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate>
                 <div className={FORM_FIELD}>
                   <Label htmlFor="apply-phone" className={FORM_LABEL_TEXT}>
                     {t('phone')} <span className="text-error-text" aria-hidden="true">*</span>

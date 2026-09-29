@@ -7,7 +7,7 @@ import { AppError, type ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
-import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
+import { checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
 
 /**
  * Upload / pobranie / usunięcie CV kandydata — prywatny bucket Railway (#26, Invariant #10).
@@ -25,7 +25,7 @@ import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
 /** `reason` rozróżnia błędy walidacji pliku (rozmiar / format), by UI podało konkretny komunikat. */
 export type UploadResult =
   | { ok: true; id: string }
-  | { ok: false; error: ErrorCode; reason?: CvFileProblem };
+  | { ok: false; error: ErrorCode; reason?: CvUploadProblem };
 export type SimpleResult = { ok: true } | { ok: false; error: ErrorCode };
 export type DownloadLinkResult = { ok: true; url: string } | { ok: false; error: ErrorCode };
 

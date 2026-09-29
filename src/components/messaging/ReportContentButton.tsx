@@ -206,7 +206,7 @@ export function ReportContentButton({
           <p className="mb-4 text-sm text-muted-foreground">{t('reportConversationHint')}</p>
         )}
 
-        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+        <form method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
           <fieldset
             aria-describedby={categoryError ? categoryErrorId : undefined}
             className="space-y-1"

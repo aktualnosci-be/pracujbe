@@ -124,3 +124,9 @@ błędem.
 - **Zaproszenia przy usunięciu konta pracodawcy (#1233).** Oczekujące zaproszenia na adres
   usuwanej osoby są cofane, a we wszystkich jej zaproszeniach (także rozstrzygniętych) adres
   jest usuwany; zostaje ślad zdarzenia (firma, rola, status, daty) bez danych osoby.
+
+## Limit CV i usunięte rekordy procesu (29.09.2026)
+
+Konto kandydata może mieć najwyżej 10 plików CV i 50 MB łącznie. Aplikacja lub propozycja
+oznaczona jako usunięta jest nieaktywna: baza odrzuca zmianę jej statusu (neutralny błąd „nie
+znaleziono”), a strony jej nie widzą; usuwanie konta i retencja działają jak dotąd.

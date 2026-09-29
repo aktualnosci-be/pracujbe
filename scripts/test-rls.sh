@@ -68,6 +68,8 @@ echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 
 echo ">> rollback 0981 (reopen = nowa publikacja, zaproszenia usuwanego pracodawcy; w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-decisions-0981-rollback.sql"
+echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-verified-locale-rollback.sql"
 echo ">> rollback 0185 (utwardzenie warstwy danych: oferty, firmy, pliki, sesje i tokeny; w transakcji cofanej)"

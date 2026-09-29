@@ -69,7 +69,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | K5 | ~~P2~~ | **Zrobione:** stopka każdego e-maila (`src/emails/_components.tsx`) linkuje `/{locale}/pomoc` i `/{locale}/polityka-prywatnosci` w języku odbiorcy | treść polityki = W5 |
 | K6 | P2 | Wersja polityki z cookie w receipcie zgody | zrobione w #631 (migracja `0142`): receipt niesie wersję z cookie, jeśli jest opublikowana w `consent_versions`; nazewnictwo — pkt w §3 |
 | K7 | ~~P2~~ | **Zrobione (#633, migracja `0143`):** domyślna nazwa firmy po nieudanym bootstrapie; nazwa firmy w wiadomościach kandydata | |
-| K8 | P2 | `npm run test:e2e:real` w CI — job `e2e-real` (usługa `postgres:16`), na start informacyjny (`continue-on-error`) | po serii zielonych przebiegów na `main`: check wymagany (repo publiczne — minuty darmowe, decyzja 27.09.2026) |
+| K8 | P2 | `npm run test:e2e:real` w CI — job `e2e-real` (usługa `postgres:16`), od #1239 blokujący (12/12 zielonych na `main`), wynik w wymaganym checku „E2E (Playwright)”, drugi krok w trybie `CLASSIFIEDS_ONLY` | zrobione (#1239) |
 | K9 | P3 | CSP nonce/strict-dynamic — warianty A–D w [`CSP_NONCE_ANALYSIS.md`](./CSP_NONCE_ANALYSIS.md) | decyzja właściciela |
 | K10 | ~~P0~~ | **Zrobione:** e-maile konta (potwierdzenie adresu, reset hasła, nowy link przy logowaniu niepotwierdzonego konta) wychodzą zaraz po akcji — jedna paczka workera `auth.email_outbox` po odpowiedzi (`after()`, `src/lib/auth/email-kick.ts`), ten sam claim z dzierżawą, budżet i klucz idempotencji co cron. Wyłącznik: `AUTH_EMAIL_IMMEDIATE_SEND=off` | ponowienia i `email_deliveries` nadal wymagają W1; test `auth-email-kick` (kontrole ujemne) |
 

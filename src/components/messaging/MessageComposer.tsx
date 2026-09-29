@@ -93,6 +93,8 @@ export function MessageComposer({
   const attachHintId = `${fieldId}-attach-hint`;
   const [drafts, setDrafts] = React.useState<DraftAttachment[]>([]);
   const [attachNotice, setAttachNotice] = React.useState<string | null>(null);
+  /** Klucze usuniętych szkiców: wynik spóźnionego uploadu takiego pliku jest odrzucany (FS30-05). */
+  const removedKeysRef = React.useRef<Set<string>>(new Set());
 
   const tooLongMessage = t('composerTooLong', { max: MESSAGE_BODY_MAX_LENGTH });
   const sensitiveIdMessage = t('composerSensitiveId');
@@ -116,7 +118,10 @@ export function MessageComposer({
     formData.set('file', file);
     try {
       const result = await uploadMessageAttachment(formData);
-      if (result.ok) {
+      if (removedKeysRef.current.has(key)) {
+        // Użytkownik usunął plik w trakcie wgrywania — sprzątamy powstały załącznik.
+        if (result.ok) void discardMessageAttachment(result.id).catch(() => undefined);
+      } else if (result.ok) {
         updateDraft(key, { status: 'ready', attachmentId: result.id, error: undefined });
       } else {
         const message =
@@ -131,6 +136,7 @@ export function MessageComposer({
       }
     } catch {
       // Wynik niejednoznaczny: ponowienie użyje tego samego klucza (bez duplikatu pliku).
+      if (removedKeysRef.current.has(key)) return;
       updateDraft(key, { status: 'error', error: t('attachmentUploadError') });
     }
   }
@@ -160,7 +166,20 @@ export function MessageComposer({
     void upload(draft.key, draft.file);
   }
 
+  function removeAllDrafts(): void {
+    for (const draft of drafts) {
+      removedKeysRef.current.add(draft.key);
+      if (draft.attachmentId) void discardMessageAttachment(draft.attachmentId).catch(() => undefined);
+    }
+    operationRef.current = null;
+    setDrafts([]);
+    setAttachNotice(null);
+    setError(null);
+    textareaRef.current?.focus();
+  }
+
   function removeDraft(draft: DraftAttachment): void {
+    removedKeysRef.current.add(draft.key);
     setDrafts((current) => current.filter((item) => item.key !== draft.key));
     setAttachNotice(null);
     // Najlepsza próba: niewysłany plik i tak sprząta zadanie konserwacji (0119).
@@ -332,7 +351,7 @@ export function MessageComposer({
               <button
                 type="button"
                 onClick={() => removeDraft(draft)}
-                disabled={draft.status === 'uploading' || pending}
+                disabled={pending}
                 aria-label={t('attachmentRemove', { name: draft.file.name })}
                 className="inline-flex size-11 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               >
@@ -341,6 +360,15 @@ export function MessageComposer({
             </li>
           ))}
         </ul>
+      ) : null}
+      {drafts.length > 0 && !pending && (error || drafts.some((draft) => draft.status !== 'ready')) ? (
+        <button
+          type="button"
+          onClick={removeAllDrafts}
+          className="mt-2 min-h-11 rounded-[8px] px-2 text-xs font-semibold text-foreground underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t('attachmentsRemoveAll')}
+        </button>
       ) : null}
       {attachNotice ? (
         <p role="alert" className="mt-2 text-[13px] text-error-text">

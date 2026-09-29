@@ -5,9 +5,10 @@ import { useTranslations } from 'next-intl';
 import { FileText, Trash2, UploadCloud } from 'lucide-react';
 
 import { useRouter } from '@/i18n/navigation';
+import { downloadPrivateFile } from '@/lib/files/client-download';
 import { uploadCandidateCv, deleteCandidateFile, prepareCvDownload } from '@/lib/actions/files';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
+import { checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
 
 /**
  * Upload CV kandydata (PDF/DOC/DOCX, <=5 MB) — prywatny bucket Railway (#26, Invariant #10).
@@ -105,7 +106,9 @@ export function CvUpload({
     startTransition(async () => {
       try {
         const res = await prepareCvDownload(item.id);
-        if (res.ok) window.location.assign(res.url);
+        if (res.ok) {
+          if (!(await downloadPrivateFile(res.url, item.fileName))) setError(t('downloadError'));
+        }
         else if (res.error === 'DEMO_UNAVAILABLE') setError(tErrors('demoUnavailable'));
         else setError(t('downloadError'));
       } catch {
@@ -114,9 +117,10 @@ export function CvUpload({
     });
   }
 
-  function problemMessage(problem: CvFileProblem): string {
+  function problemMessage(problem: CvUploadProblem): string {
     if (problem === 'tooLarge') return t('errorTooLarge');
     if (problem === 'type') return t('errorType');
+    if (problem === 'accountLimit') return t('errorAccountLimit');
     return t('errorEmpty');
   }
 
