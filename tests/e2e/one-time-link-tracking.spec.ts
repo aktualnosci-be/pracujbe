@@ -88,3 +88,28 @@ test('nawigacja kliencka z trasy publicznej na prywatną nie zostaje w karcie z 
   expect(await page.locator('script#cf-web-analytics').count()).toBe(0);
   expect(trackerRequests, 'zewnętrzne żądania po przejściu na /pl/logowanie').toEqual([]);
 });
+
+test('strona publiczna otwarta z trasy prywatnej w nowej karcie nie dostaje jej ścieżki ani query jako referrera (#1218)', async ({ page, context, baseURL }) => {
+  const origin = new URL(baseURL!).origin;
+
+  async function referrerOfNewTab(): Promise<string> {
+    const [popup] = await Promise.all([
+      context.waitForEvent('page'),
+      page.evaluate(() => { window.open('/pl/pomoc', '_blank'); }),
+    ]);
+    await popup.waitForLoadState('domcontentloaded');
+    const referrer = await popup.evaluate(() => document.referrer);
+    await popup.close();
+    return referrer;
+  }
+
+  const privatePath = '/pl/logowanie?next=%2Fpl%2Fadmin%2Fuzytkownicy%3Fq%3Djan%2540example.com';
+  const response = await page.goto(privatePath);
+  expect(response?.headers()['referrer-policy'], 'trasa prywatna z polityką bez ścieżki').toBe('strict-origin');
+  expect(await referrerOfNewTab(), 'referrer = sam origin').toBe(`${origin}/`);
+
+  // Kontrola ujemna: ze strony publicznej (polityka globalna) referrer niesie ścieżkę i query,
+  // więc test rozpoznałby brak nadpisania na trasie prywatnej.
+  await page.goto('/pl/oferty-pracy?keyword=magazyn');
+  expect(await referrerOfNewTab()).toContain('/pl/oferty-pracy?keyword=magazyn');
+});
