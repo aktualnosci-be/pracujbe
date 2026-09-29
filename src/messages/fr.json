@@ -560,7 +560,8 @@
       "none": "Cette offre n'indique pas comment postuler.",
       "mailSubject": "Offre d'emploi : {title}",
       "contact": "Contact direct avec l'annonceur"
-    }
+    },
+    "startImmediate": "Début immédiat"
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1250,7 +1251,14 @@
     "compareRowShifts": "Équipes",
     "compareRowAccommodation": "Logement",
     "compareRowTransport": "Transport",
-    "compareRowRequirements": "Principales exigences"
+    "compareRowRequirements": "Principales exigences",
+    "deleteJobDraft": "Supprimer le brouillon",
+    "deleteJobDraftLabel": "Supprimer le brouillon : {title}",
+    "deleteJobDraftTitle": "Supprimer le brouillon de l'offre ?",
+    "deleteJobDraftDescription": "Le brouillon « {title} » sera supprimé avec le contenu saisi. Cette action est irréversible.",
+    "deleteJobDraftConfirm": "Supprimer le brouillon",
+    "deleteJobDraftCancel": "Annuler",
+    "deleteJobDraftUntitled": "sans titre"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1344,6 +1352,7 @@
     "levelIntermediate": "Intermédiaire",
     "levelFluent": "Courant",
     "levelNative": "Langue maternelle",
+    "languageLevelLabel": "Niveau de langue",
     "addLanguage": "Ajouter une langue",
     "certificatesLabel": "Certificats et attestations",
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
@@ -1827,7 +1836,11 @@
     "jointCommitteeLabel": "Commission paritaire (CP)",
     "jointCommitteeCode": "CP {code}",
     "jointCommitteeHint": "La page de l'offre affichera le numéro de la commission et un lien vers la base officielle des salaires minimums. Le portail n'évalue pas le salaire.",
-    "languageSelectPlaceholder": "Choisissez une langue"
+    "languageSelectPlaceholder": "Choisissez une langue",
+    "contentLocaleLabel": "Langue de l'annonce",
+    "contentLocaleHint": "C'est dans cette langue que vous rédigez le texte de l'annonce. Elle peut différer de la langue du panneau ; l'indication de langue et les traductions pour les candidats en dépendent.",
+    "contentLocaleLocked": "La langue d'une offre publiée ne peut pas être modifiée.",
+    "languageLevelAria": "Niveau de langue : {level}"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -3404,7 +3417,8 @@
     "pauseHint": "Met en pause les alertes de toutes vos recherches enregistrées et entreprises suivies (un an maximum). Les réglages de chaque recherche ne changent pas et les autres notifications du compte fonctionnent comme avant.",
     "followedCompany": "Entreprise suivie",
     "openCompany": "Voir la page de l’entreprise",
-    "companyUnavailable": "La page de l’entreprise n’est pas disponible."
+    "companyUnavailable": "La page de l’entreprise n’est pas disponible.",
+    "renameErrorRequired": "Saisissez un nom pour la recherche (de 1 à 80 caractères)."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -3441,6 +3455,7 @@
     "successTitle": "Signalement reçu",
     "successBody": "Votre dossier porte le numéro ci-dessous. Nous enverrons une confirmation à l’adresse e-mail indiquée.",
     "successDuplicate": "Ce signalement avait déjà été reçu — voici le même dossier.",
+    "successDuplicateEdited": "Ce signalement a déjà été enregistré — voici le même dossier. Les modifications apportées ensuite au texte n’y ont pas été ajoutées.",
     "caseNumberLabel": "Numéro de dossier",
     "accessCodeLabel": "Code d’accès",
     "accessCodeHint": "Conservez le numéro de dossier et le code d’accès — ils sont nécessaires pour consulter le statut. Le code figure aussi dans l’e-mail de confirmation.",

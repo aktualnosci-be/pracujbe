@@ -76,16 +76,64 @@ describe('zmiana nazwy zapisanego wyszukiwania', () => {
     await waitFor(() => expect(renameButton()).toHaveFocus());
   });
 
-  it('błąd zapisu → komunikat w alert, pole zostaje z wpisaną nazwą (Invariant #11)', async () => {
+  it('błąd zapisu → komunikat przy polu (aria-describedby) i fokus na polu, wpisana nazwa zostaje (Invariant #11, #1095)', async () => {
     vi.mocked(renameSavedSearchAction).mockResolvedValue({ ok: false, error: 'NOT_FOUND' });
     renderList();
     fireEvent.click(renameButton());
     const input = screen.getByRole('textbox', { name: t.renameLabel });
     fireEvent.change(input, { target: { value: 'Nowa' } });
     fireEvent.submit(input.closest('form')!);
-    await waitFor(() => expect(screen.getByRole('alert')).not.toBeEmptyDOMElement());
+    await waitFor(() => expect(input).toHaveAccessibleDescription(new RegExp(pl.errors.notFound)));
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription(new RegExp(t.renameHint));
+    await waitFor(() => expect(input).toHaveFocus());
     expect(screen.getByRole('textbox', { name: t.renameLabel })).toHaveValue('Nowa');
     expect(refresh).not.toHaveBeenCalled();
+    // Globalny region statusu nie dubluje błędu pola.
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('nazwa z samych spacji → błąd przy polu bez wołania akcji, fokus na polu (#1103)', async () => {
+    renderList();
+    fireEvent.click(renameButton());
+    const input = screen.getByRole('textbox', { name: t.renameLabel });
+    fireEvent.change(input, { target: { value: '    ' } });
+    fireEvent.submit(input.closest('form')!);
+    expect(renameSavedSearchAction).not.toHaveBeenCalled();
+    expect(input).toHaveAccessibleDescription(expect.stringContaining(t.renameErrorRequired));
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(input).toHaveFocus());
+    // Poprawka nazwy zdejmuje błąd.
+    fireEvent.change(input, { target: { value: 'Ok' } });
+    expect(input).not.toHaveAttribute('aria-invalid');
+    expect(input).toHaveAccessibleDescription(t.renameHint);
+  });
+
+  it('VALIDATION_FAILED z serwera trafia do pola, nie do globalnego statusu (#1103)', async () => {
+    vi.mocked(renameSavedSearchAction).mockResolvedValue({ ok: false, error: 'VALIDATION_FAILED' });
+    renderList();
+    fireEvent.click(renameButton());
+    const input = screen.getByRole('textbox', { name: t.renameLabel });
+    fireEvent.change(input, { target: { value: 'Nowa' } });
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() =>
+      expect(input).toHaveAccessibleDescription(new RegExp(pl.errors.validationFailed)),
+    );
+  });
+
+  it('pole nie jest wyłączane na czas zapisu (fokus zostaje w polu, #1095)', async () => {
+    let resolve!: (v: { ok: true }) => void;
+    vi.mocked(renameSavedSearchAction).mockReturnValue(new Promise((r) => (resolve = r)));
+    renderList();
+    fireEvent.click(renameButton());
+    const input = screen.getByRole('textbox', { name: t.renameLabel });
+    fireEvent.change(input, { target: { value: 'Nowa' } });
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() => expect(input).toHaveAttribute('readonly'));
+    expect(input).not.toBeDisabled();
+    expect(input).toHaveFocus();
+    resolve({ ok: true });
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: t.renameLabel })).toBeNull());
   });
 
   it('KONTROLA UJEMNA: Escape i „Anuluj” nie zapisują, fokus wraca na „Zmień nazwę”', async () => {

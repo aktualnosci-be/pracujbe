@@ -161,7 +161,7 @@ function AttachmentItem({ attachment }: { attachment: ThreadAttachment }): React
       )}
       {hasAttachmentPreview(attachment) ? <AttachmentPreview attachment={attachment} /> : null}
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-error">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-error-text">
           {error}
         </p>
       ) : null}

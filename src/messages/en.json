@@ -560,7 +560,8 @@
       "none": "This job ad does not say how to apply.",
       "mailSubject": "Job ad: {title}",
       "contact": "Direct contact with the advertiser"
-    }
+    },
+    "startImmediate": "Immediate start"
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1250,7 +1251,14 @@
     "compareRowShifts": "Shifts",
     "compareRowAccommodation": "Accommodation",
     "compareRowTransport": "Transport",
-    "compareRowRequirements": "Key requirements"
+    "compareRowRequirements": "Key requirements",
+    "deleteJobDraft": "Delete draft",
+    "deleteJobDraftLabel": "Delete draft: {title}",
+    "deleteJobDraftTitle": "Delete the offer draft?",
+    "deleteJobDraftDescription": "The draft \"{title}\" will be deleted together with the content you entered. This cannot be undone.",
+    "deleteJobDraftConfirm": "Delete draft",
+    "deleteJobDraftCancel": "Cancel",
+    "deleteJobDraftUntitled": "untitled"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1344,6 +1352,7 @@
     "levelIntermediate": "Intermediate",
     "levelFluent": "Fluent",
     "levelNative": "Native",
+    "languageLevelLabel": "Language level",
     "addLanguage": "Add language",
     "certificatesLabel": "Certificates and qualifications",
     "certificatesPlaceholder": "e.g. VCA, qualification certificate",
@@ -1827,7 +1836,11 @@
     "jointCommitteeLabel": "Joint committee (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "The job page will show the committee number and a link to the official minimum wage database. The portal does not assess the wage.",
-    "languageSelectPlaceholder": "Choose a language"
+    "languageSelectPlaceholder": "Choose a language",
+    "contentLocaleLabel": "Listing language",
+    "contentLocaleHint": "You write the listing text in this language. It can differ from the panel language; the language label and translations for candidates depend on it.",
+    "contentLocaleLocked": "The language of a published offer cannot be changed.",
+    "languageLevelAria": "Language level: {level}"
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -3404,7 +3417,8 @@
     "pauseHint": "Pauses alerts from all your saved searches and followed companies (up to one year). The settings of each search stay as they are, and other account notifications keep working.",
     "followedCompany": "Followed company",
     "openCompany": "View company page",
-    "companyUnavailable": "The company page is not available."
+    "companyUnavailable": "The company page is not available.",
+    "renameErrorRequired": "Enter a name for the search (1 to 80 characters)."
   },
   "contentReport": {
     "metaTitle": "Report content",
@@ -3441,6 +3455,7 @@
     "successTitle": "Report received",
     "successBody": "Your case has the number shown below. We will send a confirmation to the email address you gave.",
     "successDuplicate": "This report had already been received — the same case is shown below.",
+    "successDuplicateEdited": "This report was already received — the same case is shown below. Later changes to the text were not added to it.",
     "caseNumberLabel": "Case number",
     "accessCodeLabel": "Access code",
     "accessCodeHint": "Keep the case number and access code — you need them to check the status. The code is also in the confirmation email.",

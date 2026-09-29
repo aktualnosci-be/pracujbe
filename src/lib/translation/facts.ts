@@ -84,6 +84,17 @@ function isoDate(y: number, m: number, d: number): string | null {
   return `${y}-${pad2(m)}-${pad2(d)}`;
 }
 
+/**
+ * Data numeryczna wg konwencji języka tekstu (#739): pl/nl/fr = dzień/miesiąc/rok; en z ukośnikiem
+ * = miesiąc/dzień/rok (gdy taka kolejność jest niemożliwa, np. 25/12/2025, dzień/miesiąc);
+ * en z kropką lub myślnikiem zostaje dzień/miesiąc/rok (zapis europejski). Zapis niejednoznaczny
+ * rozstrzyga konwencja — inna interpretacja przekładu = odrzucenie (fail-closed).
+ */
+function numericDate(y: number, a: number, b: number, sep: string, locale: Locale): string | null {
+  if (locale === 'en' && sep === '/') return isoDate(y, a, b) ?? isoDate(y, b, a);
+  return isoDate(y, b, a);
+}
+
 /** Kanoniczna postać liczby wg konwencji separatorów języka tekstu. */
 export function canonicalNumber(token: string, locale: Locale): string {
   let t = token.replace(/[\s  ]/g, '');
@@ -257,7 +268,9 @@ export function extractFacts(input: string, locale: Locale, protectedTerms: read
   );
   const dates = [
     ...take(text, /(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/g, (m) => isoDate(+m(1), +m(2), +m(3))),
-    ...take(text, /(?<![\d.,])(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/g, (m) => isoDate(+m(3), +m(2), +m(1))),
+    ...take(text, /(?<![\d.,])(\d{1,2})([./-])(\d{1,2})[./-](\d{4})(?!\d)/g, (m) =>
+      numericDate(+m(4), +m(1), +m(3), m(2), locale),
+    ),
   ];
   const times = take(text, /(?<![\d.,:])([01]?\d|2[0-3])\s?[:hu]\s?([0-5]\d)(?![\d])/giu, (m) => `${pad2(+m(1))}:${m(2)}`);
   const phones = take(text, /(?<!\d[\s\u00a0.,]?)(?:\+|00|0)\d[\d\s ().\/-]{6,}\d/g, (m) => {
@@ -272,8 +285,13 @@ export function extractFacts(input: string, locale: Locale, protectedTerms: read
   }
   const numbers = take(
     text,
-    /(?<![\d.,])(\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)*)(?![\d])/g,
-    (m) => canonicalNumber(m(0), locale),
+    // Znak (#738): `-`/`−` tuż przed cyfrą i nie po literze/cyfrze/separatorze (zakres „5-10”
+    // i „B-2” nie są liczbami ujemnymi) jest częścią faktu; `+` jest pomijany (5 = +5).
+    /(?:(?<![\p{L}\p{N}_.,+−-])([-−+])(?=\d))?(?<![\d.,])(\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)*)(?![\d])/gu,
+    (m) => {
+      const value = canonicalNumber(m(2), locale);
+      return m(1) === '-' || m(1) === '−' ? (/^0(\.0*)?$/.test(value) ? value : `-${value}`) : value;
+    },
   );
   // Waluty, jednostki i pojęcia liczymy na tekście z zamaskowanymi adresami i telefonami,
   // ale z liczbami na miejscu (jednostka musi stać tuż po liczbie).

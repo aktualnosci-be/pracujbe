@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { waitForHydrated } from './fixtures/hydration';
 
 /**
  * #220 — licznik ofert (`/api/job-filter-facets`) jest tylko podpowiedzią. Jego awaria lub
@@ -56,7 +57,9 @@ for (const failure of ['error', 'slow'] as const) {
     await page.goto('/en/oferty-pracy');
 
     const rail = page.locator('[data-filter-passport="desktop"]');
-    await rail.getByRole('checkbox', { name: 'Construction' }).click();
+    const checkbox = rail.getByRole('checkbox', { name: 'Construction' });
+    await waitForHydrated(checkbox);
+    await checkbox.click();
     // Przycisk zatwierdzenia (niezależnie od etykiety) — bez fałszywej liczby, ale aktywny.
     const apply = rail.locator('button[aria-busy]');
     await expect(apply).toBeVisible();
@@ -80,7 +83,9 @@ for (const failure of ['error', 'slow'] as const) {
     await breakFacets(page, failure);
     await page.goto('/en/oferty-pracy');
 
-    await page.locator('[data-filter-passport="mobile-trigger"]').click();
+    const trigger = page.locator('[data-filter-passport="mobile-trigger"]');
+    await waitForHydrated(trigger);
+    await trigger.click();
     const sheet = page.getByRole('dialog');
     await sheet.getByRole('checkbox', { name: 'Construction' }).click();
     const apply = sheet.locator('button[aria-busy]');

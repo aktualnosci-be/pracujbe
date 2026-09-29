@@ -12,7 +12,7 @@ const viewports = [
 type Locale = (typeof locales)[number];
 
 type Messages = {
-  common: { appName: string; cancel: string; skipToContent: string };
+  common: { appName: string; skipToContent: string };
   dashboard: {
     addJob: string;
     navSummary: string;
@@ -21,7 +21,7 @@ type Messages = {
     latestMessages: string;
     seeAll: string;
   };
-  nav: { menu: string };
+  nav: { menu: string; close: string };
 };
 
 type OverflowReport = {
@@ -209,7 +209,7 @@ for (const locale of locales) {
           }),
         ).toHaveAttribute("aria-current", "page");
         await expect(
-          drawer.getByRole("button", { name: t.common.cancel, exact: true }),
+          drawer.getByRole("button", { name: t.nav.close, exact: true }),
         ).toBeFocused();
         await expectNoHorizontalOverflow(
           page,

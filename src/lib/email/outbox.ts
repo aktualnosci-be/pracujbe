@@ -18,6 +18,7 @@ import { alertOffOneClickUrl, alertOffPageUrl, createAlertOffToken } from '@/lib
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import {
   emailFromEnv,
+  replyToFromEnv,
   marketingSenderFromEnv,
   senderIdentityFromEnv,
   type EmailSenderIdentity,
@@ -469,6 +470,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       const listHeaders = unsubscribe
         ? (alertOffHeadersFor(row, locale, site, unsubscribeSecret) ?? unsubscribe.headers)
         : null;
+      const replyTo = replyToFromEnv(process.env);
       const { from, subject, html, text } = await renderDelivery(
         row,
         locale,
@@ -524,6 +526,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           html,
           text,
           ...(listHeaders ? { headers: listHeaders } : {}),
+          ...(replyTo ? { replyTo } : {}),
         },
         row.id,
       );
