@@ -40,9 +40,9 @@ for (const locale of ["pl", "nl", "fr", "en"] as const) {
           .getByRole("dialog")
           .getByRole("link", { name: messages.dashboard.navMessages })
           .click({ noWaitAfter: true });
-        await expect(page.getByRole("status")).toContainText(
-          messages.messages.loading,
-        );
+        // Region toastów (#1179) to też `role="status"` — patrzymy tylko na niepuste regiony.
+        const statuses = page.getByRole("status").filter({ hasText: /\S/ });
+        await expect(statuses).toContainText(messages.messages.loading);
         await expect.poll(() => delayed, 'Przejście powinno czekać na odpowiedź RSC.').toBe(true);
         expect(
           await page.evaluate(
@@ -55,7 +55,7 @@ for (const locale of ["pl", "nl", "fr", "en"] as const) {
         await expect(
           page.getByRole("list", { name: messages.messages.title }),
         ).toBeVisible();
-        await expect(page.getByRole("status")).toHaveCount(0);
+        await expect(statuses).toHaveCount(0);
 
         // Zmiana samego ?c= nie aktywuje route-level loading.tsx.
         delayed = false;
@@ -76,7 +76,7 @@ for (const locale of ["pl", "nl", "fr", "en"] as const) {
             name: messages.messages.composerLabel.split("{name}")[0],
           }),
         ).toBeVisible();
-        await expect(page.getByRole("status")).toHaveCount(0);
+        await expect(statuses).toHaveCount(0);
       });
     }
   }
