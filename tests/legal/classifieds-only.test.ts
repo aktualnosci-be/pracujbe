@@ -411,7 +411,7 @@ describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
   const accountFiles = readdirSync(join(ROOT, 'supabase/migrations'))
     .map((f) => read(`supabase/migrations/${f}`))
     .filter((sql) => sql.includes('create or replace function public.ensure_candidate_profile()'));
-  // Najnowsza definicja (0978 dodała deleted_at, #1111); triggery tabel profilu zostały w 0175.
+  // Najnowsza definicja (0193 dodała deleted_at, #1111); triggery tabel profilu zostały w 0175.
   const account = accountFiles.at(-1) ?? '';
   const accountTriggers = accountFiles.find((sql) => sql.includes("'candidate_certificates'")) ?? '';
   /** Najnowsza definicja `ensure_candidate_profile` zaczyna się od strażnika trybu. */

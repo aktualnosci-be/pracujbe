@@ -1,5 +1,5 @@
 /**
- * Kontrakt soft-delete dla funkcji SECURITY DEFINER (#1111, DC-06; migracje 0189 i 0978).
+ * Kontrakt soft-delete dla funkcji SECURITY DEFINER (#1111, DC-06; migracje 0189 i 0193).
  *
  * Funkcja SECURITY DEFINER omija RLS, więc warunek `deleted_at IS NULL` z polityk odczytu jej nie
  * obejmuje. Strażnik czyta NAJNOWSZĄ definicję każdej funkcji z migracji (kolejność jak
@@ -170,7 +170,7 @@ export function tableChecked(rawBody: string, table: string): boolean {
  *   NEW      — dotyczy wiersza NEW/tworzonego w tej samej transakcji (nie może być usunięty);
  *   SESSION  — dotyczy profilu z sesji (auth.uid()); sesja usuniętego profilu jest odrzucana
  *              (src/lib/auth/session.ts: `deleted_at IS NULL`), a is_admin (0185) i
- *              current_profile_role (0978) odrzucają go także w bazie;
+ *              current_profile_role (0193) odrzucają go także w bazie;
  *   FORMAT   — tylko formatowanie/metadane znanego już identyfikatora (nazwa, język), bez decyzji
  *              o dostępie;
  *   ADMIN    — odczyt dla administratora albo operatora (dziennik, eksport, moderacja, metryki).
@@ -182,7 +182,7 @@ const ERASE = 'ERASE: usunięcie konta, retencja albo sprzątanie obejmuje takż
 const GUARD = 'GUARD: strażnik/blokada — pominięcie usuniętego wiersza osłabiłoby ochronę';
 const WRITE = 'WRITE: zapis na usuniętym wierszu odrzuca trg_soft_delete_contract (0189), stan sprawdza też can_access_*/polityka odczytu';
 const NEW = 'NEW: wiersz tworzony albo NEW triggera w tej samej transakcji';
-const SESSION = 'SESSION: profil z sesji; sesja usuniętego profilu jest odrzucana (session.ts), rolę odrzuca current_profile_role (0978)';
+const SESSION = 'SESSION: profil z sesji; sesja usuniętego profilu jest odrzucana (session.ts), rolę odrzuca current_profile_role (0193)';
 const FORMAT = 'FORMAT: formatowanie danych identyfikatora już zweryfikowanego przez wywołującego';
 const ADMIN = 'ADMIN: odczyt administratora/operatora, który musi widzieć także wiersze usunięte';
 const EXPORT = 'EXPORT: eksport własnych danych musi być kompletny (także wiersze usunięte logicznie)';
@@ -204,8 +204,8 @@ export const EXCEPTIONS: Record<string, string> = {
   'public.email_unsubscribe:profiles': `${SESSION} — wypisanie z tokenu jest zawsze dozwolone (tylko zmniejsza wysyłkę)`,
   'public.email_unsubscribe_all:profiles': `${SESSION} — wypisanie z tokenu jest zawsze dozwolone (tylko zmniejsza wysyłkę)`,
   'public.enforce_application_integrity:jobs': `${NEW} — company_id z oferty dla NEW; publiczność oferty (deleted_at) sprawdza apply_to_job przez job_is_public`,
-  'public.enforce_offer_integrity:companies': `${GUARD} — integralność NEW propozycji; usuniętą ofertę/firmę odrzuca send_offer (0978)`,
-  'public.enforce_offer_integrity:jobs': `${GUARD} — integralność NEW propozycji; usuniętą ofertę/firmę odrzuca send_offer (0978)`,
+  'public.enforce_offer_integrity:companies': `${GUARD} — integralność NEW propozycji; usuniętą ofertę/firmę odrzuca send_offer (0193)`,
+  'public.enforce_offer_integrity:jobs': `${GUARD} — integralność NEW propozycji; usuniętą ofertę/firmę odrzuca send_offer (0193)`,
   'public.erase_candidate_subject:applications': `${ERASE} — usunięcie konta kandydata`,
   'public.erase_candidate_subject:conversations': `${ERASE} — usunięcie konta kandydata`,
   'public.erase_candidate_subject:files': `${ERASE} — usunięcie konta kandydata`,
@@ -227,7 +227,7 @@ export const EXCEPTIONS: Record<string, string> = {
   'public.get_conversation_template_context:profiles': `${FORMAT} — zmienne szablonu; rozmowa sprawdzana deleted_at i is_conversation_member`,
   'public.get_job_company_block:profiles': `${SESSION} — rola własnego konta; oferta przez job_is_public`,
   'public.get_my_company_blocks:companies': `${GUARD} — kandydat widzi i może zdjąć każdą swoją blokadę`,
-  'public.get_or_create_conversation:jobs': `${FORMAT} — firma i oferta relacji; dostęp i usunięcie aplikacji/propozycji rozstrzyga can_access_* (0978)`,
+  'public.get_or_create_conversation:jobs': `${FORMAT} — firma i oferta relacji; dostęp i usunięcie aplikacji/propozycji rozstrzyga can_access_* (0193)`,
   'public.guard_conversation_guest_application:applications': `${GUARD} — rozmowa do aplikacji gościa`,
   'public.guard_message_candidate_block:conversations': `${GUARD} — blokada firmy przez kandydata (#97)`,
   'public.guard_offer_candidate_block:jobs': `${GUARD} — blokada firmy przez kandydata (#97)`,
@@ -263,7 +263,7 @@ export const EXCEPTIONS: Record<string, string> = {
   'public.retention_purge_batch:candidate_profiles': `${ERASE} — retencja`,
   'public.retention_purge_batch:conversations': `${ERASE} — retencja`,
   'public.retention_purge_batch:messages': `${ERASE} — retencja`,
-  'public.send_message:companies': `${FORMAT} — nazwa firmy nadawcy; rozmowę sprawdza is_conversation_member (0978)`,
+  'public.send_message:companies': `${FORMAT} — nazwa firmy nadawcy; rozmowę sprawdza is_conversation_member (0193)`,
   'public.send_message:messages': `${WRITE} — nowa wiadomość do usuniętej rozmowy → NOT_FOUND; ponowienie zwraca istniejący identyfikator`,
   'public.set_company_block:profiles': `${SESSION} — rola własnego konta`,
   'public.set_job_status:companies': `${MAINT} — oferta sprawdzana deleted_at; oferta usuniętej firmy nie jest publiczna (job_is_public)`,
@@ -317,7 +317,7 @@ describe('soft-delete: funkcje SECURITY DEFINER (#1111)', () => {
     for (const reason of Object.values(EXCEPTIONS)) expect(reason.length).toBeGreaterThan(20);
   });
 
-  it('funkcje poprawione w 0978 spełniają kontrakt bez wyjątków', () => {
+  it('funkcje poprawione w 0193 spełniają kontrakt bez wyjątków', () => {
     const fixed = ['current_profile_role', 'can_access_application', 'can_access_offer',
       'is_job_company_member', 'is_job_manager', 'is_conversation_member', 'conversation_created_by_me',
       'owns_candidate_profile', 'email_recipient_authorized', 'ensure_candidate_profile'];
@@ -332,11 +332,11 @@ describe('soft-delete: funkcje SECURITY DEFINER (#1111)', () => {
     }
   });
 
-  it('kontrola ujemna: definicje sprzed 0978 i syntetyczna funkcja są wykrywane', () => {
+  it('kontrola ujemna: definicje sprzed 0193 i syntetyczna funkcja są wykrywane', () => {
     const withoutFix = files.filter((f) => !f.name.endsWith('_soft_delete_definer_review.sql'));
     const old = latestFunctions(withoutFix);
     expect(tableChecked(old.get('public.current_profile_role')!.body, 'profiles')).toBe(false);
-    // is_admin sprawdza deleted_at od 0185 — także bez 0978.
+    // is_admin sprawdza deleted_at od 0185 — także bez 0193.
     expect(tableChecked(old.get('public.is_admin')!.body, 'profiles')).toBe(true);
     expect(tableChecked(old.get('public.is_job_manager')!.body, 'jobs')).toBe(false);
     expect(tableChecked(old.get('public.can_access_application')!.body, 'applications')).toBe(false);

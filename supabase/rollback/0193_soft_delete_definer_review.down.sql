@@ -1,101 +1,96 @@
--- =============================================================================
--- 0978 — numer tymczasowy (nadaje integrator). Audyt 2026-09-28: DC-06 (#1111), część 2.
--- Zależy od 0189 (#1202: polityki odczytu i strażnik `trg_soft_delete_contract`).
---
--- Przegląd wszystkich funkcji SECURITY DEFINER czytających albo zmieniających tabele z kolumną
--- `deleted_at` (profiles, candidate_profiles, companies, employer_profiles, jobs, applications,
--- offers, conversations, messages, files). Funkcje SECURITY DEFINER omijają RLS, więc warunek
--- `deleted_at IS NULL` z polityk 0189 ich nie obejmuje. Poprawione tu (pomijają albo odrzucają
--- usunięty wiersz):
---   * current_profile_role — usunięty profil nie ma roli (zwraca '' zamiast NULL, więc wzorzec
---     `current_profile_role() <> 'candidate'` odrzuca także brak profilu — dotąd NULL przepuszczał
---     warunek); is_admin sprawdza `deleted_at` od 0185 (bez zmian tutaj);
---   * can_access_application, can_access_offer, is_job_company_member, is_job_manager,
---     is_conversation_member, conversation_created_by_me, owns_candidate_profile — pomocnicze
---     funkcje RLS i RPC: usunięty wiersz nie daje dostępu (get_or_create_conversation, załączniki,
---     wysyłka wiadomości i relacje profilu dziedziczą kontrolę);
---   * email_recipient_authorized — list o usuniętej aplikacji/propozycji/wiadomości (albo ofercie
---     lub rozmowie) jest wygaszany przy claimie i tuż przed wysyłką (fail-closed);
---   * ensure_candidate_profile — usunięty profil kandydata → NOT_FOUND (każde RPC profilu);
---   * apply_to_job — ponowienie trafiające na usuniętą aplikację → NOT_FOUND zamiast sukcesu;
---   * send_offer — usunięta oferta/firma → NOT_FOUND; usunięta aplikacja albo usunięty profil
---     nie tworzą relacji firma–kandydat.
--- Pozostałe funkcje: lista wyjątków z uzasadnieniem w tests/unit/soft-delete-contract.test.ts
--- (strażnik czyta najnowsze definicje z migracji). Ciała skopiowane z najnowszych definicji
--- (0040, 0039, 0009, 0033, 0171, 0123, 0175, 0093, 0150) — zmienione tylko warunki.
---
--- Rollback: supabase/rollback/0978_soft_delete_definer_review.down.sql.
--- =============================================================================
+-- Rollback 0193 (numer tymczasowy): przywraca definicje funkcji sprzed przeglądu soft-delete (#1111).
+-- Ciała skopiowane z 0040, 0039, 0009, 0033, 0171, 0123, 0175, 0093, 0150. Granty bez zmian
+-- (create or replace zachowuje uprawnienia). Test: supabase/tests/rls.sql sekcja SDR1111-R.
+-- search_path z `, pg_temp` jak po 0067 (strażnik role-guard.sql).
 
+-- z 0040_state_and_role_hardening.sql
 create or replace function public.current_profile_role()
 returns text language sql stable security definer set search_path = public, pg_temp as $$
-  select coalesce((select role::text from public.profiles
-                    where id = auth.uid() and deleted_at is null), '');
+  select role::text from public.profiles where id = auth.uid();
 $$;
 
+-- z 0039_recruiter_read_access.sql
 create or replace function public.can_access_application(p_application_id uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1 from public.applications a
-    where a.id = p_application_id and a.deleted_at is null
+    where a.id = p_application_id
       and (a.candidate_id = auth.uid() or public.is_job_manager(a.job_id))
   );
 $$;
 
+-- z 0039_recruiter_read_access.sql
 create or replace function public.can_access_offer(p_offer_id uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1 from public.offers o
-    where o.id = p_offer_id and o.deleted_at is null
+    where o.id = p_offer_id
       and (o.candidate_id = auth.uid() or public.is_job_manager(o.job_id))
   );
 $$;
 
+-- z 0009_rls.sql
 create or replace function public.is_job_company_member(p_job_id uuid)
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
   select exists (
     select 1
     from public.jobs j
     join public.company_members cm on cm.company_id = j.company_id
     where j.id = p_job_id
-      and j.deleted_at is null
       and cm.profile_id = auth.uid()
       and cm.is_active = true
   );
 $$;
 
+-- z 0033_company_rbac.sql
 create or replace function public.is_job_manager(p_job_id uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1 from public.jobs j
     join public.company_members cm on cm.company_id = j.company_id
-    where j.id = p_job_id and j.deleted_at is null and cm.profile_id = auth.uid()
+    where j.id = p_job_id and cm.profile_id = auth.uid()
       and cm.is_active = true and cm.role in ('owner', 'admin', 'recruiter')
   );
 $$;
 
+-- z 0009_rls.sql
 create or replace function public.conversation_created_by_me(p_conversation_id uuid)
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
   select exists (
     select 1
     from public.conversations c
     where c.id = p_conversation_id
-      and c.deleted_at is null
       and c.created_by = auth.uid()
   );
 $$;
 
+-- z 0009_rls.sql
 create or replace function public.owns_candidate_profile(p_candidate_profile_id uuid)
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
   select exists (
     select 1
     from public.candidate_profiles cp
     where cp.id = p_candidate_profile_id
-      and cp.deleted_at is null
       and cp.profile_id = auth.uid()
   );
 $$;
 
+-- z 0171_portal_legal_mode.sql
 create or replace function public.is_conversation_member(p_conversation_id uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
@@ -103,7 +98,6 @@ returns boolean language sql stable security definer set search_path = public, p
     from public.conversation_members m
     join public.conversations c on c.id = m.conversation_id
     where m.conversation_id = p_conversation_id
-      and c.deleted_at is null
       and m.profile_id = auth.uid()
       and (
         c.company_id is null
@@ -117,6 +111,7 @@ returns boolean language sql stable security definer set search_path = public, p
   );
 $$;
 
+-- z 0123_email_send_time_recipient_check.sql
 create or replace function public.email_recipient_authorized(
   p_template text,
   p_entity_type text,
@@ -129,19 +124,19 @@ begin
     if p_entity_type is distinct from 'application' then return false; end if;
     select j.company_id into v_company
       from public.applications a join public.jobs j on j.id = a.job_id
-     where a.id = p_entity_id and a.deleted_at is null and j.deleted_at is null;
+     where a.id = p_entity_id;
     return v_company is not null and public.company_recipient_ok(v_company, p_profile_id);
   elsif p_template in ('offerAccepted', 'offerDeclined') then
     if p_entity_type is distinct from 'offer' then return false; end if;
     select j.company_id into v_company
       from public.offers o join public.jobs j on j.id = o.job_id
-     where o.id = p_entity_id and o.deleted_at is null and j.deleted_at is null;
+     where o.id = p_entity_id;
     return v_company is not null and public.company_recipient_ok(v_company, p_profile_id);
   elsif p_template = 'newMessage' then
     if p_entity_type is distinct from 'message' then return false; end if;
     select c.company_id into v_company
       from public.messages m join public.conversations c on c.id = m.conversation_id
-     where m.id = p_entity_id and m.deleted_at is null and c.deleted_at is null;
+     where m.id = p_entity_id;
     if not found then return false; end if;
     -- Strona firmowa rozmowy (jak w send_message: każdy członek firmy, także nieaktywny).
     if v_company is not null and exists (
@@ -154,9 +149,10 @@ begin
   return true;
 end $$;
 
+-- z 0175_classifieds_account_notifications.sql
 create or replace function public.ensure_candidate_profile()
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
-declare v_cp uuid; v_deleted timestamptz;
+declare v_cp uuid;
 begin
   -- #1142: tryb ogłoszeniowy — konto nie buduje profilu zawodowego.
   if not public.recruitment_write_allowed() then
@@ -169,12 +165,11 @@ begin
   end if;
   insert into public.candidate_profiles(profile_id) values (auth.uid())
     on conflict (profile_id) do nothing;
-  select id, deleted_at into v_cp, v_deleted from public.candidate_profiles where profile_id = auth.uid();
-  -- #1111: usunięty profil kandydata nie jest zwracany (każde RPC profilu przez tę funkcję).
-  if v_deleted is not null then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
+  select id into v_cp from public.candidate_profiles where profile_id = auth.uid();
   return v_cp;
 end $$;
 
+-- z 0093_screening_questions.sql
 create or replace function public.apply_to_job(
   p_job_id uuid,
   p_idempotency_key text,
@@ -184,7 +179,7 @@ create or replace function public.apply_to_job(
   p_answers jsonb default null
 ) returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_uid uuid := auth.uid(); v_company uuid; v_app_id uuid; v_locale text; v_job_title text;
-        v_existing_key text; v_existing_deleted timestamptz;
+        v_existing_key text;
 begin
   if v_uid is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
   -- P1-04: aplikować może wyłącznie konto kandydata (nie pracodawca/admin).
@@ -205,13 +200,8 @@ begin
   returning id into v_app_id;
 
   if v_app_id is null then
-    select id, idempotency_key, deleted_at into v_app_id, v_existing_key, v_existing_deleted
+    select id, idempotency_key into v_app_id, v_existing_key
       from public.applications where candidate_id = v_uid and job_id = p_job_id;
-    -- #1111: usunięta (deleted_at) aplikacja nie jest zwracana jako sukces ponowienia — para
-    -- (kandydat, oferta) pozostaje zajęta (Invariant #4), więc jawny błąd.
-    if v_existing_deleted is not null then
-      raise exception 'NOT_FOUND' using errcode = 'P0002';
-    end if;
     -- Ten sam klucz = ponowienie tej samej próby (retry/podwójne kliknięcie) → sukces, bez
     -- duplikatu. Inny klucz = nowa, świadoma próba na ofertę, na którą kandydat już
     -- aplikował (także wycofaną/odrzuconą) → jawny błąd zamiast fałszywego sukcesu (#361).
@@ -240,6 +230,7 @@ begin
   return v_app_id;
 end $$;
 
+-- z 0150_send_offer_key_target.sql
 create or replace function public.send_offer(
   p_job_id uuid,
   p_candidate_id uuid,
@@ -256,8 +247,7 @@ begin
 
   select j.company_id, j.title, c.name, j.expires_at, j.salary_min, j.salary_max, j.currency, j.salary_period
     into v_company, v_job_title, v_company_name, v_job_expires, v_salary_min, v_salary_max, v_currency, v_salary_period
-    from public.jobs j join public.companies c on c.id = j.company_id
-   where j.id = p_job_id and j.deleted_at is null and c.deleted_at is null;
+    from public.jobs j join public.companies c on c.id = j.company_id where j.id = p_job_id;
   if v_company is null then raise exception 'NOT_FOUND' using errcode = 'P0002'; end if;
 
   -- P2-03: domyślny termin ważności propozycji, gdy nie podano jawnie. least() ignoruje NULL,
@@ -267,11 +257,9 @@ begin
   -- Relacja: kandydat aplikował do oferty tej firmy LUB profil jest wyszukiwalny i kompletny.
   select exists (
     select 1 from public.applications a where a.candidate_id = p_candidate_id and a.company_id = v_company
-      and a.deleted_at is null
     union all
     select 1 from public.candidate_profiles cp
       where cp.profile_id = p_candidate_id and cp.is_searchable = true and cp.profile_completed = true
-        and cp.deleted_at is null
   ) into v_related;
   if not v_related then
     raise exception 'PERMISSION_DENIED: brak relacji firma–kandydat dla propozycji' using errcode = '42501';

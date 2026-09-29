@@ -22576,12 +22576,12 @@ rollback;
 
 
 -- ============================================================================
--- SDR1111. Przegląd funkcji SECURITY DEFINER na tabelach z deleted_at (#1111, 0978).
---   Funkcje omijają RLS, więc polityki 0189 ich nie obejmują. Po 0978 usunięty wiersz nie daje
+-- SDR1111. Przegląd funkcji SECURITY DEFINER na tabelach z deleted_at (#1111, 0193).
+--   Funkcje omijają RLS, więc polityki 0189 ich nie obejmują. Po 0193 usunięty wiersz nie daje
 --   roli (current_profile_role; is_admin od 0185), dostępu (can_access_*, is_job_*, is_conversation_member,
 --   conversation_created_by_me, owns_candidate_profile), listu (email_recipient_authorized),
 --   profilu (ensure_candidate_profile), sukcesu ponowienia (apply_to_job) ani relacji/celu
---   propozycji (send_offer). Kontrola ujemna: rollback 0978 przywraca dostęp do usuniętych wierszy.
+--   propozycji (send_offer). Kontrola ujemna: rollback 0193 przywraca dostęp do usuniętych wierszy.
 -- ============================================================================
 \echo '--- SDR1111 funkcje SECURITY DEFINER a deleted_at ---'
 reset role; reset app.current_uid;
@@ -22653,8 +22653,8 @@ reset role; set local role authenticated; set local app.current_uid = :'WMER'; s
 select pg_temp.expect_error($$select public.send_offer('$$ || :'WMJA' || $$'::uuid, '$$ || :'WMCA' || $$'::uuid, 'sdr1111-offer-2')$$,
   'NOT_FOUND', 'SDR1111-2j propozycja do usuniętej oferty odrzucona');
 reset role;
--- Kontrola ujemna: definicje sprzed 0978 dają dostęp do usuniętych wierszy.
-\ir ../rollback/0978_soft_delete_definer_review.down.sql
+-- Kontrola ujemna: definicje sprzed 0193 dają dostęp do usuniętych wierszy.
+\ir ../rollback/0193_soft_delete_definer_review.down.sql
 set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.current_profile_role() = 'admin', 'SDR1111-N1 kontrola ujemna: stara current_profile_role daje rolę usuniętemu profilowi');
 reset role; set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
