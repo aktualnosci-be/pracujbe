@@ -17,6 +17,18 @@ const roles = {
   auth_mail: 'pracujbe_auth_mail',
   service: 'service_role',
 } as const;
+/** Serwerowy limit zapytania (`statement_timeout` w opcjach startowych każdego połączenia). */
+export const STATEMENT_TIMEOUT_MS = 30_000;
+/**
+ * Kliencki limit czasu zapytania (#1229) — nieco dłuższy od `statement_timeout`, więc zwykle
+ * pierwszy zadziała serwer (czytelny błąd `57014`). Chroni przed półotwartym połączeniem
+ * (zerwana sieć bez RST, failover proxy bazy): serwer nie odpowie wcale, `statement_timeout`
+ * nic nie da, a `pg` bez `query_timeout` czeka bez końca — to zatruwało single-flight
+ * healthchecku (`/api/health`) i trwale zajmowało slot puli.
+ */
+export const CLIENT_QUERY_TIMEOUT_MS = 35_000;
+/** TCP keepalive (#1229): martwe połączenie wykrywa system, zanim trafi do niego kolejne zapytanie. */
+export const KEEP_ALIVE_INITIAL_DELAY_MS = 10_000;
 const authSchemaPurposes: ReadonlySet<DatabasePurpose> = new Set(['auth', 'auth_mail']);
 
 /** Konfiguracja jawna; nie odczytuje DATABASE_URL migratora ani nie łączy przy imporcie. */
@@ -43,7 +55,10 @@ export function runtimePoolConfig(connectionString: string, purpose: DatabasePur
     max: purpose === 'ops' ? 1 : purpose === 'auth_mail' || purpose === 'rate_limit' ? 2 : purpose === 'service' ? 3 : 5,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
-    options: `-c role=${roles[purpose]} -c search_path=${authSchemaPurposes.has(purpose) ? 'auth' : 'public'} -c statement_timeout=30000 -c idle_in_transaction_session_timeout=30000`,
+    query_timeout: CLIENT_QUERY_TIMEOUT_MS,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: KEEP_ALIVE_INITIAL_DELAY_MS,
+    options: `-c role=${roles[purpose]} -c search_path=${authSchemaPurposes.has(purpose) ? 'auth' : 'public'} -c statement_timeout=${STATEMENT_TIMEOUT_MS} -c idle_in_transaction_session_timeout=30000`,
   };
 }
 

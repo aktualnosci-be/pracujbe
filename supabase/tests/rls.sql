@@ -4502,6 +4502,194 @@ reset role;
 
 
 -- ============================================================================
+-- VQ976. Trwała kolejka automatycznego sprawdzenia VIES (0191, #706/#879)
+-- Trigger kolejkuje każdy nowy prawidłowy numer (także dopisany po założeniu firmy), claim
+-- z dzierżawą i limitem prób, backoff po awarii VIES, wynik rozstrzygający zdejmuje zadanie.
+-- Kontrole ujemne: bez triggera dopisany numer nie trafia do kolejki; klient bez dostępu;
+-- ponowny zapis tego samego numeru nie zeruje prób; awaria nie jest wynikiem.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set COMPVQ '00000000-0000-0000-0000-000000000a98'
+\set COMPVQ2 '00000000-0000-0000-0000-000000000a99'
+
+-- VQ976-1: firma z numerem → zadanie z numerem znormalizowanym, bez prób.
+insert into public.companies(id, name, status, vat_number)
+  values (:'COMPVQ', 'Firma VQ', 'unverified', 'be 0417-497-106');
+select pg_temp.assert(
+  (select vat_number = '0417497106' and attempts = 0 and lease_until is null and next_attempt_at <= now()
+     from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-1 założenie firmy z numerem kolejkuje sprawdzenie');
+
+-- VQ976-2 (#879): firma bez numeru → brak zadania; numer dopisany później (także KBO) → zadanie.
+insert into public.companies(id, name, status) values (:'COMPVQ2', 'Firma VQ2', 'unverified');
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2 firma bez numeru bez zadania');
+update public.companies set name = 'Firma VQ2 nowa' where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2b sama zmiana nazwy nie kolejkuje');
+update public.companies set vat_number = 'DE123456789' where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2c numer spoza BE nie kolejkuje');
+update public.companies set vat_number = null, registration_number = '0403.170.701' where id = :'COMPVQ2';
+select pg_temp.assert(
+  (select vat_number from public.company_vies_auto_queue where company_id = :'COMPVQ2') = '0403170701',
+  'VQ976-2d numer KBO dopisany po założeniu firmy kolejkuje sprawdzenie');
+
+-- VQ976-2n: KONTROLA UJEMNA — bez triggera dopisany numer nie trafia do kolejki (to trigger
+-- zamyka #879, nie przypadek).
+begin;
+drop trigger trg_companies_vies_auto_enqueue on public.companies;
+update public.companies set registration_number = null where id = :'COMPVQ2';
+delete from public.company_vies_auto_queue where company_id = :'COMPVQ2';
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2n bez triggera numer dopisany w edycji nie jest sprawdzany (stan sprzed 0191)');
+rollback;
+
+-- VQ976-3: claim tylko service_role; dzierżawa blokuje drugie pobranie; próba liczona.
+set role service_role;
+select count(*) as vq_claimed from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+select count(*) as vq_again from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+reset role;
+select pg_temp.assert(:'vq_claimed' = '1' and :'vq_again' = '0', 'VQ976-3 dzierżawa: jedno pobranie naraz');
+select pg_temp.assert(
+  (select attempts = 1 and lease_until > now() from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-3b próba policzona przy pobraniu');
+
+-- VQ976-4 (#706): awaria VIES → zadanie zostaje z terminem ponowienia (backoff), bez wyniku.
+set role service_role;
+select public.finish_company_vies_auto_check(:'COMPVQ', '0417497106', 'rate_limited') as vq_fin \gset
+select count(*) as vq_early from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+reset role;
+select pg_temp.assert(:'vq_fin' = 't' and :'vq_early' = '0', 'VQ976-4 przed terminem ponowienia brak pobrania');
+select pg_temp.assert(
+  (select lease_until is null and last_outcome = 'rate_limited'
+          and next_attempt_at between now() + interval '4 minutes' and now() + interval '6 minutes'
+     from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-4b backoff 5 min po pierwszej próbie, dzierżawa zwolniona');
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_checks where company_id = :'COMPVQ'),
+  'VQ976-4c awaria nie jest zapisana jako wynik');
+
+-- VQ976-5: ponowny zapis tego samego numeru (inny zapis) nie zeruje prób ani terminu.
+update public.companies set vat_number = 'BE0417.497.106' where id = :'COMPVQ';
+select pg_temp.assert(
+  (select attempts = 1 and last_outcome = 'rate_limited' and next_attempt_at > now()
+     from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-5 ten sam numer nie omija backoffu');
+
+-- VQ976-6: po terminie kolejna próba; backoff rośnie; wynik rozstrzygający zdejmuje zadanie.
+update public.company_vies_auto_queue set next_attempt_at = now() - interval '1 second' where company_id = :'COMPVQ';
+set role service_role;
+select attempts as vq_att from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+select public.finish_company_vies_auto_check(:'COMPVQ', '0417497106', 'unavailable') as vq_fin2 \gset
+reset role;
+select pg_temp.assert(:'vq_att' = '2'
+  and (select next_attempt_at > now() + interval '9 minutes' from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-6 druga próba, backoff 10 min');
+update public.company_vies_auto_queue set next_attempt_at = now() - interval '1 second' where company_id = :'COMPVQ';
+set role service_role;
+select count(*) as vq_c3 from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+select public.record_company_vies_check_auto(:'COMPVQ', '0417497106', 'valid', 'NV VQ') as vq_saved \gset
+reset role;
+select pg_temp.assert(:'vq_c3' = '1' and :'vq_saved' = 't'
+  and not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-6b wynik zapisany po ponowieniu zdejmuje zadanie');
+
+-- VQ976-7: numer już sprawdzony → ponowny zapis nie kolejkuje; nowy numer kolejkuje i wynik
+-- dla starego numeru zostaje zastąpiony (dla tego samego numeru — nie, VA164-2).
+update public.companies set vat_number = '0417497106' where id = :'COMPVQ';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-7 numer z wynikiem nie wraca do kolejki');
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ';
+select pg_temp.assert(
+  (select vat_number = '0403170701' and attempts = 0 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-7b zmieniony numer kolejkuje sprawdzenie');
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVQ', '0403170701', 'invalid') as vq_new \gset
+select public.record_company_vies_check_auto(:'COMPVQ', '0403170701', 'valid') as vq_same \gset
+reset role;
+select pg_temp.assert(:'vq_new' = 't' and :'vq_same' = 'f'
+  and (select vat_number = '0403170701' and result = 'invalid' and checked_by is null
+         from public.company_vies_checks where company_id = :'COMPVQ')
+  and not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-7c wynik dla nowego numeru zastępuje wynik starego numeru; ten sam numer bez nadpisania');
+
+-- VQ976-8: numer zmieniony w trakcie próby — zakończenie starego zadania nie rusza nowego.
+set role service_role;
+select count(*) as vq_c4 from public.claim_company_vies_auto_checks(10, :'COMPVQ2') \gset
+reset role;
+update public.companies set registration_number = null, vat_number = 'BE0417497106' where id = :'COMPVQ2';
+set role service_role;
+select public.finish_company_vies_auto_check(:'COMPVQ2', '0403170701', 'done') as vq_stale_done \gset
+reset role;
+select pg_temp.assert(:'vq_c4' = '1' and :'vq_stale_done' = 'f'
+  and (select vat_number = '0417497106' and attempts = 0 and lease_until is null
+         from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-8 zadanie dla nowego numeru zostaje (próby od zera)');
+
+-- VQ976-9: limit prób — wyczerpane zadanie nie jest pobierane.
+update public.company_vies_auto_queue
+   set attempts = public.company_vies_auto_max_attempts(), next_attempt_at = now() - interval '1 second'
+ where company_id = :'COMPVQ2';
+set role service_role;
+select count(*) as vq_exh from public.claim_company_vies_auto_checks(10, :'COMPVQ2') \gset
+reset role;
+select pg_temp.assert(:'vq_exh' = '0', 'VQ976-9 po wyczerpaniu prób brak kolejnych zapytań do VIES');
+
+-- VQ976-10: ręczny wynik admina dla bieżącego numeru też zdejmuje zadanie.
+insert into public.company_vies_checks(company_id, vat_number, result) values (:'COMPVQ2', '0417497106', 'valid');
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-10 wynik dla bieżącego numeru zdejmuje zadanie');
+
+-- VQ976-11: usunięcie numeru / firmy usuwa zadanie.
+delete from public.company_vies_checks where company_id = :'COMPVQ2';
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
+select pg_temp.assert(exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-11 ponownie w kolejce');
+update public.companies set vat_number = null where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-11b wyczyszczony numer usuwa zadanie');
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
+update public.companies set deleted_at = now() where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-11c usunięta firma bez zadania');
+
+-- VQ976-12: walidacja wyniku zakończenia.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.finish_company_vies_auto_check(%L, ''0417497106'', ''invalid'')', :'COMPVQ'),
+  'VALIDATION_FAILED', 'VQ976-12 nieznany wynik odrzucony');
+reset role;
+
+-- VQ976-13: KONTROLA UJEMNA — pracodawca i anon: brak odczytu kolejki i EXECUTE.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.company_vies_auto_queue',
+  'permission denied', 'VQ976-13 pracodawca nie czyta kolejki');
+select pg_temp.expect_error(
+  format('select * from public.claim_company_vies_auto_checks(10, %L)', :'COMPVQ'),
+  'permission denied', 'VQ976-13b pracodawca nie pobiera zadań');
+select pg_temp.expect_error(
+  format('select public.finish_company_vies_auto_check(%L, ''0417497106'', ''done'')', :'COMPVQ'),
+  'permission denied', 'VQ976-13c pracodawca nie zamyka zadań');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.company_vies_auto_queue',
+  'permission denied', 'VQ976-13d anon nie czyta kolejki');
+reset role;
+select pg_temp.assert(
+  (select relrowsecurity and relforcerowsecurity from pg_class where oid = 'public.company_vies_auto_queue'::regclass),
+  'VQ976-14 RLS włączone i wymuszone');
+
+-- ============================================================================
 -- ML44 (#44, 0098): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
 -- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
 -- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
@@ -12707,6 +12895,117 @@ rollback;
 update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
 select pg_temp.assert((select count(*) from public.translation_jobs where entity_id = :'TRJ2' and status = 'queued') = 3,
   'TR33-Nb z triggerem ta sama edycja kolejkuje trzy zadania');
+
+-- =============================================================================
+-- TP740 (#740, 0190): nazwy chronione w kolejce tłumaczeń. Nazwa firmy z bazy trafia do
+-- rewizji oferty (nigdy od klienta), claim wydaje ją workerowi, zmiana nazwy firmy = nowa
+-- rewizja; normalizacja i limity; rewizja niezmienna. Kontrole ujemne: odcisk z 0145 (bez
+-- nazw) nie odróżnia zmiany nazwy, trigger firmy z 0146 (bez `name`) nie reaguje na zmianę.
+-- =============================================================================
+\set TPCO 'f0740000-0000-0000-0000-0000000000c1'
+\set TPJ1 'f0740000-0000-0000-0000-0000000000a1'
+\set TPE1 'f0740000-0000-0000-0000-0000000000e1'
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values (:'TPCO', 'Logistiek Noord', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TPJ1', :'TPCO', 'draft-tp740', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TPJ1', 'nl', 'Magazijnmedewerker', 'Logistiek Noord zoekt een magazijnmedewerker.');
+update public.jobs set status = 'active', published_at = now() where id = :'TPJ1';
+
+-- TP740-1: publikacja → rewizja z nazwą firmy z bazy; claim wydaje ją workerowi.
+select r.id as tp_rev1, r.content_hash as tp_hash1, r.fields::text as tp_f1
+  from public.translation_source_revisions r where r.entity_id = :'TPJ1' and r.revision_no = 1 \gset
+select pg_temp.assert((select protected_terms = array['Logistiek Noord'] from public.translation_source_revisions
+                        where id = :'tp_rev1'), 'TP740-1 rewizja oferty niesie nazwę firmy');
+begin;
+select pg_temp.assert((select bool_and(protected_terms = array['Logistiek Noord']) and count(*) = 3
+                         from public.claim_translation_jobs(100, 300) where entity_id = :'TPJ1'),
+  'TP740-1b claim wydaje nazwy chronione rewizji dla każdego języka docelowego');
+rollback;
+
+-- TP740-2: zmiana nazwy firmy (bez zmiany treści oferty) = nowa rewizja z nową nazwą; zadania
+-- starej rewizji superseded.
+update public.companies set name = 'Logistiek Noord BV' where id = :'TPCO';
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 2
+  and (select protected_terms = array['Logistiek Noord BV'] from public.translation_source_revisions
+        where entity_id = :'TPJ1' and revision_no = 2)
+  and (select fields::text from public.translation_source_revisions where entity_id = :'TPJ1' and revision_no = 2) = :'tp_f1'
+  and not exists (select 1 from public.translation_jobs where revision_id = :'tp_rev1' and status in ('queued', 'retry', 'leased'))
+  and (select count(*) from public.translation_jobs j join public.translation_source_revisions r on r.id = j.revision_id
+        where r.entity_id = :'TPJ1' and r.revision_no = 2 and j.status = 'queued') = 3,
+  'TP740-2 zmiana nazwy firmy = nowa rewizja (te same pola), stare zadania superseded');
+
+-- TP740-2N (kontrola ujemna): odcisk liczony jak w 0145 (bez nazw) jest identyczny dla obu
+-- rewizji — bez nazw w odcisku zmiana nazwy byłaby „unchanged”.
+select pg_temp.assert(
+  encode(sha256(convert_to('nl' || E'\n' || (:'tp_f1')::jsonb::text, 'UTF8')), 'hex')
+    = encode(sha256(convert_to('nl' || E'\n' || (select fields::text from public.translation_source_revisions
+                                                   where entity_id = :'TPJ1' and revision_no = 2)::jsonb::text, 'UTF8')), 'hex')
+  and (select content_hash from public.translation_source_revisions where entity_id = :'TPJ1' and revision_no = 2) <> :'tp_hash1',
+  'TP740-2N kontrola ujemna: odcisk bez nazw nie odróżnia zmiany nazwy firmy');
+
+-- TP740-2Nb (kontrola ujemna): trigger firmy z 0146 (bez `name`) nie reaguje na zmianę nazwy.
+begin;
+drop trigger trg_job_translation_sync_companies on public.companies;
+create constraint trigger trg_job_translation_sync_companies
+  after update of status, deleted_at on public.companies deferrable initially deferred
+  for each row execute function public.trg_job_translation_sync();
+update public.companies set name = 'Northern Logistics' where id = :'TPCO';
+set constraints all immediate;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 2,
+  'TP740-2Nb kontrola ujemna: bez `name` w triggerze zmiana nazwy nie tworzy rewizji');
+rollback;
+begin;
+update public.companies set name = 'Northern Logistics' where id = :'TPCO';
+set constraints all immediate;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 3,
+  'TP740-2Nc z triggerem 0190 ta sama zmiana tworzy rewizję');
+rollback;
+
+-- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
+-- przy tej samej treści = nowa rewizja; bez nazw (5/6 argumentów) jak w 0145.
+set role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1', 0, array[' Beta ', 'Alfa', 'Alfa', '', null]))->>'status') = 'created', 'TP740-3 rewizja z nazwami');
+select pg_temp.assert((select protected_terms = array['Alfa', 'Beta'] from public.translation_source_revisions
+                        where entity_id = :'TPE1' and revision_no = 1), 'TP740-3b nazwy znormalizowane i posortowane');
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1', 0, array['Beta', 'Alfa']))->>'status') = 'unchanged', 'TP740-3c ta sama lista w innej kolejności = unchanged');
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1', 0, array['Gamma']))->>'status') = 'created', 'TP740-3d inna nazwa = nowa rewizja');
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1'))->>'status') = 'created', 'TP740-3e bez nazw (5 argumentów) = nowa rewizja');
+select pg_temp.assert((select protected_terms = '{}'::text[] from public.translation_source_revisions where entity_id = :'TPE1' and revision_no = 3)
+  and (select content_hash from public.translation_source_revisions where entity_id = :'TPE1' and revision_no = 3)
+      = encode(sha256(convert_to('pl' || E'\n' || '{"title": "Magazynier"}'::jsonb::text, 'UTF8')), 'hex'),
+  'TP740-3f bez nazw: pusta lista, odcisk jak w 0145');
+
+-- TP740-4: limity — najwyżej 10 nazw, każda ≤ 200 znaków, bez znaków sterujących.
+select pg_temp.expect_error(format($$select public.record_translation_source('job', %L, 'pl', '{"title":"X"}'::jsonb, 'tr-v1', 0,
+    array['a1','a2','a3','a4','a5','a6','a7','a8','a9','a10','a11'])$$, :'TPE1'), 'VALIDATION_FAILED: protected_terms',
+  'TP740-4 ponad 10 nazw odrzucone');
+select pg_temp.expect_error(format($$select public.record_translation_source('job', %L, 'pl', '{"title":"X"}'::jsonb, 'tr-v1', 0,
+    array[repeat('x', 201)])$$, :'TPE1'), 'VALIDATION_FAILED: protected_term', 'TP740-4b nazwa ponad 200 znaków odrzucona');
+select pg_temp.expect_error(format($$select public.record_translation_source('job', %L, 'pl', '{"title":"X"}'::jsonb, 'tr-v1', 0,
+    array[E'Firma\u0007'])$$, :'TPE1'), 'VALIDATION_FAILED: protected_term', 'TP740-4c znak sterujący odrzucony');
+reset role;
+
+-- TP740-5: rewizja (także nazwy) niezmienna.
+select pg_temp.expect_error(format($$update public.translation_source_revisions set protected_terms = array['Inna'] where id = %L$$,
+    :'tp_rev1'), 'TRANSLATION_REVISION_IMMUTABLE', 'TP740-5 nazw chronionych rewizji nie da się zmienić');
+
+-- TP740-6: tylko serwer; stara sygnatura usunięta.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])', 'execute')
+  and not has_function_privilege('anon', 'public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])', 'execute')
+  and not has_function_privilege('authenticated', 'public.translation_protected_terms(text[])', 'execute')
+  and not has_function_privilege('authenticated', 'public.claim_translation_jobs(integer, integer)', 'execute')
+  and to_regprocedure('public.record_translation_source(text, uuid, text, jsonb, text, integer)') is null
+  and public.translation_pipeline_version() = 'translation-v2+prompt-v1+glossary-v1',
+  'TP740-6 RPC tylko dla serwera, stara sygnatura usunięta, pipeline v2');
+
+select count(public.deactivate_translation_source('job', :'TPE1'::uuid, true));
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
@@ -22238,6 +22537,83 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- =============================================================================
+-- OM1227 — poczta (0192, #1227/#1214): ops_metrics.email liczy porażki bez wygaszonych,
+-- osobno wygaszone i listy odłożone po błędzie konfiguracji; requeue_failed_email_deliveries
+-- (tylko service_role) wraca do kolejki wyłącznie niewygaszone, nieprzyjęte, z okna N dni.
+-- =============================================================================
+\echo '--- OM1227 ops_metrics email + requeue ---'
+set role pracujbe_ops;
+select pg_temp.assert((public.ops_metrics() -> 'email') ?& array['failedLast24h', 'suppressedLast24h', 'configBlocked'],
+  'OM1227-1 pracujbe_ops widzi failedLast24h, suppressedLast24h, configBlocked');
+reset role;
+select public.ops_metrics() -> 'email' as om_base \gset
+begin;
+insert into public.email_deliveries(id, to_email, template, status, attempts, suppressed_at, error_message, provider_message_id, updated_at) values
+  ('f9800000-0000-0000-0000-000000000001', 'om1227-a@test.invalid', 'jobMatch', 'failed', 1, now(), 'suppressed_opt_out', null, now()),
+  ('f9800000-0000-0000-0000-000000000002', 'om1227-b@test.invalid', 'jobMatch', 'failed', 1, now(), 'suppressed_address', null, now()),
+  ('f9800000-0000-0000-0000-000000000003', 'om1227-c@test.invalid', 'supportContact', 'failed', 1, null, 'EMAIL_PROVIDER_REJECTED', null, now()),
+  ('f9800000-0000-0000-0000-000000000004', 'om1227-d@test.invalid', 'supportContact', 'queued', 0, null, 'EMAIL_PROVIDER_CONFIG', null, now()),
+  -- nieudane, ale przyjęte przez dostawcę (np. odbicie po wysyłce) i starsze niż okno — nie wracają
+  ('f9800000-0000-0000-0000-000000000005', 'om1227-e@test.invalid', 'supportContact', 'failed', 1, null, 'EMAIL_PROVIDER_REJECTED', 'om1227-provider', now()),
+  ('f9800000-0000-0000-0000-000000000006', 'om1227-f@test.invalid', 'supportContact', 'failed', 1, null, 'EMAIL_PROVIDER_REJECTED', null, now() - interval '10 days');
+set local role pracujbe_ops;
+select public.ops_metrics() -> 'email' as om_now \gset
+reset role;
+select pg_temp.assert(
+  ((:'om_now')::jsonb ->> 'failedLast24h')::int = ((:'om_base')::jsonb ->> 'failedLast24h')::int + 2
+  and ((:'om_now')::jsonb ->> 'suppressedLast24h')::int = ((:'om_base')::jsonb ->> 'suppressedLast24h')::int + 2
+  and ((:'om_now')::jsonb ->> 'configBlocked')::int = ((:'om_base')::jsonb ->> 'configBlocked')::int + 1,
+  'OM1227-2 failedLast24h bez wygaszonych, wygaszone osobno, odłożone po błędzie konfiguracji');
+-- OM1227-2N: kontrola ujemna — dawna reguła (0177: bez suppressed_at is null) liczy też wygaszone.
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where status = 'failed' and updated_at > now() - interval '24 hours')
+    = ((:'om_now')::jsonb ->> 'failedLast24h')::int + ((:'om_now')::jsonb ->> 'suppressedLast24h')::int
+  and ((:'om_now')::jsonb ->> 'suppressedLast24h')::int >= 2,
+  'OM1227-2N kontrola ujemna: licznik z 0177 zawyża porażki o wygaszone wiersze');
+
+set local role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(7, false)', 'permission denied',
+  'OM1227-3 authenticated nie wywoła requeue');
+reset role;
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(7, false)', 'permission denied',
+  'OM1227-3b anon nie wywoła requeue');
+reset role;
+set local role service_role;
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(0, true)', 'VALIDATION_FAILED',
+  'OM1227-4 okno poza 1–30 dni = VALIDATION_FAILED');
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(31, true)', 'VALIDATION_FAILED',
+  'OM1227-4b okno ponad 30 dni = VALIDATION_FAILED');
+select public.requeue_failed_email_deliveries(7, true, array['supportContact']) as om_dry \gset
+reset role;
+select pg_temp.assert(((:'om_dry')::jsonb ->> 'matched')::int >= 1
+  and ((:'om_dry')::jsonb ->> 'requeued')::int = 0 and ((:'om_dry')::jsonb ->> 'dryRun')::boolean
+  and (select status = 'failed' from public.email_deliveries where id = 'f9800000-0000-0000-0000-000000000003'),
+  'OM1227-5 dry-run tylko liczy, nic nie zmienia');
+select count(*) as om_audit_before from public.audit_logs where action = 'email_delivery.requeued' \gset
+set local role service_role;
+select public.requeue_failed_email_deliveries(7, false, array['supportContact', 'jobMatch']) as om_run \gset
+reset role;
+select pg_temp.assert(
+  (select status = 'queued' and attempts = 0 and error_message is null and next_attempt_at <= now()
+     from public.email_deliveries where id = 'f9800000-0000-0000-0000-000000000003')
+  and (select count(*) from public.email_deliveries where status = 'failed' and id in (
+       'f9800000-0000-0000-0000-000000000001', 'f9800000-0000-0000-0000-000000000002',
+       'f9800000-0000-0000-0000-000000000005', 'f9800000-0000-0000-0000-000000000006')) = 4
+  and ((:'om_run')::jsonb ->> 'requeued')::int = ((:'om_dry')::jsonb ->> 'matched')::int
+  and (select count(*) from public.audit_logs where action = 'email_delivery.requeued') = :'om_audit_before'::int + 1,
+  'OM1227-6 requeue: niewygaszony z okna wraca (attempts 0); wygaszone, przyjęte i stare zostają; audyt');
+-- OM1227-6N: kontrola ujemna — naiwny warunek (sam status i okno) objąłby wygaszone i przyjęte.
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where status = 'failed' and updated_at > now() - interval '7 days'
+     and id::text like 'f9800000-%') = 3,
+  'OM1227-6N kontrola ujemna: bez filtrów suppressed_at/provider_message_id wróciłyby 3 kolejne wiersze');
+select pg_temp.assert(pg_get_functiondef('public.requeue_failed_email_deliveries(integer,boolean,text[],text[])'::regprocedure)
+  like '%campaign_id is null%',
+  'OM1227-7 listy kampanii nie wracają (mają własne rewizje)');
+rollback;
+reset role;
 -- ============================================================================
 -- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0189) i limit CV na konto (#1101, CF-06).
 --   Polityki odczytu applications/offers/conversations/messages ukrywają wiersze z `deleted_at`;

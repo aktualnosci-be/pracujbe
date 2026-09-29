@@ -1,3 +1,4 @@
+import { parseMailbox } from '../mailbox';
 import { MailSendError, type MailMessage, type MailTransport } from './types';
 
 /**
@@ -23,8 +24,6 @@ import { MailSendError, type MailMessage, type MailTransport } from './types';
 
 export const EMAILLABS_API_BASE = 'https://api.emaillabs.io';
 const SUBJECT_MAX = 128;
-const NAME_MIN = 2;
-const NAME_MAX = 64;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface EmailLabsConfig {
@@ -37,16 +36,7 @@ export interface EmailLabsConfig {
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
-/** `Nazwa <adres@domena>` albo sam adres → części EmailLabs; `null` = zły zapis. */
-export function parseMailbox(value: string): { email: string; name?: string } | null {
-  const trimmed = value.trim();
-  const match = /^(.*)<([^<>\s]+@[^<>\s]+)>$/.exec(trimmed);
-  const email = (match?.[2] ?? trimmed).trim();
-  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email)) return null;
-  const rawName = (match?.[1] ?? '').trim().replace(/^"(.*)"$/, '$1').trim();
-  const name = rawName.length >= NAME_MIN ? rawName.slice(0, NAME_MAX) : undefined;
-  return name ? { email, name } : { email };
-}
+export { parseMailbox };
 
 /** Identyfikator wiadomości EmailLabs dla wiersza kolejki (stabilny między ponowieniami). */
 export function emailLabsMessageId(idempotencyKey: string, fromEmail: string): string {
@@ -66,7 +56,8 @@ export function emailLabsPayload(
   smtpAccount: string,
 ): Record<string, unknown> {
   const from = parseMailbox(message.from);
-  if (!from) throw new MailSendError('delivery_failed');
+  // #1214: zły `EMAIL_FROM` dotyczy każdego listu — konfiguracja, nie odrzucenie odbiorcy.
+  if (!from) throw new MailSendError('configuration_error');
   return {
     subject: truncateSubject(message.subject),
     smtpAccount,
@@ -102,10 +93,34 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-/** 429, 5xx i błędy uwierzytelnienia (konfiguracja, nie odbiorca) = ponowić; reszta = odrzucenie. */
-function sendErrorFor(status: number): MailSendError {
-  const retryable = status === 401 || status === 403 || status === 408 || status === 429 || status >= 500;
-  return new MailSendError(retryable ? 'provider_unavailable' : 'delivery_failed');
+/**
+ * Komunikat odrzucenia EmailLabs dotyczący KONTA/NADAWCY (nie odbiorcy): konto SMTP, domena,
+ * nadawca `from`. Sam komunikat nie wychodzi poza adapter (może zawierać adres) — tylko kod.
+ */
+const CONFIG_REJECTION_RE = /smtp|account|domain|sender|\bfrom\b|dkim|spf/i;
+
+function rejectionText(body: unknown): string {
+  if (!isRecord(body)) return '';
+  const parts: string[] = [];
+  for (const key of ['message', 'error', 'errors']) {
+    const value = body[key];
+    if (typeof value === 'string') parts.push(value);
+    else if (value !== undefined) parts.push(JSON.stringify(value));
+  }
+  return parts.join(' ').slice(0, 2000);
+}
+
+/**
+ * 429, 408 i 5xx = chwilowa niedostępność (ponowić); 401/403 i odrzucenie wskazujące konto SMTP,
+ * domenę albo nadawcę = błąd konfiguracji wspólny dla wszystkich listów (#1214 — odłożyć bez
+ * zużycia próby, alarm); reszta = odrzucenie tego listu.
+ */
+export function sendErrorFor(status: number, body: unknown = null): MailSendError {
+  if (status === 408 || status === 429 || status >= 500) return new MailSendError('provider_unavailable');
+  if (status === 401 || status === 403) return new MailSendError('configuration_error');
+  // 207 = odrzucenie elementu (odbiorcy) — nigdy konfiguracja; tylko 4xx całego żądania.
+  if (status >= 400 && CONFIG_REJECTION_RE.test(rejectionText(body))) return new MailSendError('configuration_error');
+  return new MailSendError('delivery_failed');
 }
 
 /** Limit pojedynczego żądania albo wcześniejszy termin workera — co nastąpi pierwsze. */
@@ -149,6 +164,8 @@ export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike
     const response = await call(`${base}/v2.1/email?${query.toString()}`, { method: 'GET' }, deadline);
     // 404 = zapytanie poprawne, brak wyników (kontrakt API EmailLabs).
     if (response.status === 404) return false;
+    // #1214: klucz bez uprawnień / zły klucz — konfiguracja (każdy list dostanie to samo).
+    if (response.status === 401 || response.status === 403) throw new MailSendError('configuration_error');
     if (response.status !== 200) throw new MailSendError('provider_unavailable');
     const body = await readJson(response);
     if (!isRecord(body) || !Array.isArray(body['data'])) throw new MailSendError('provider_unavailable');
@@ -159,7 +176,7 @@ export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike
     provider: 'emaillabs',
     async send(message, options) {
       const from = parseMailbox(message.from);
-      if (!from) throw new MailSendError('delivery_failed');
+      if (!from) throw new MailSendError('configuration_error');
       const messageId = emailLabsMessageId(options.idempotencyKey, from.email);
       if (await alreadyAccepted(messageId, options.signal)) return { id: messageId };
 
@@ -169,7 +186,7 @@ export function emailLabsTransport(config: EmailLabsConfig, fetchImpl: FetchLike
         body: JSON.stringify(emailLabsPayload(message, messageId, config.smtpAccount)),
       }, options.signal);
       // 207 = część elementów odrzucona walidacją — przy jednym odbiorcy to odrzucenie listu.
-      if (response.status !== 200) throw sendErrorFor(response.status);
+      if (response.status !== 200) throw sendErrorFor(response.status, await readJson(response));
       const body = await readJson(response);
       // Bez identyfikatora wiadomości w odpowiedzi nie potwierdzamy wysyłki; ponowienie
       // sprawdzi najpierw, czy list o tym identyfikatorze już istnieje.
