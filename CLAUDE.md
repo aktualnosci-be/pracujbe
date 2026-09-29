@@ -856,8 +856,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Dowód: `rls.sql` sekcja LC153 (kontrole ujemne: bez `location_id` / bez triggera), unit
   `job-location` (parzystość klucza, 10 miast landingów → jedna miejscowość, facet),
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
-  `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy
-  (dopasowanie po `parent_location_id`), matching nadal liczy odległość z tekstu (`cityKey`).
+  `portal-employer`. Części gmin w filtrach (#1076, migracja `0183` — numer tymczasowy):
+  `location_filter_ids` obejmuje aktywne części wskazanej gminy (`parent_location_id`, jeden
+  poziom), więc lista, licznik, landing miasta, facety i `saved_search_jobs_after` widzą oferty
+  z dzielnic bez zmiany bloków FROM … WHERE; filtr po samej części zwraca tylko ją,
+  `search_city_candidates` rozwija wpis o gminie, facet miasta grupuje część pod gminą
+  nadrzędną. Dowód: `rls.sql` sekcja SRCH1076 (kontrole ujemne: funkcje z 0153), rollback
+  `supabase/rollback/0183_…down.sql` (`city-sections-filters-rollback.sql`), unit
+  `city-sections-filters`. **Otwarte:** matching nadal liczy odległość z tekstu (`cityKey`).
   Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
   „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
   wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
@@ -2785,6 +2791,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, literówka trybu nie włącza usuwania; strażnik: kategorie z migracji = klucze
   tłumaczeń w 4 językach), E2E `admin-retention` (4 języki), trasa w `admin-a11y`.
   **Otwarte:** edycja okresu z panelu (RPC 0105 bez uzasadnienia i CAS — osobna migracja).
+  Wydłużenie okresu po wysłanym ostrzeżeniu (#862, migracja `0182`):
+  `admin_set_retention_policy` synchronizuje teraz `due_at` już zapisanych `retention_warnings`
+  danej kategorii do co najmniej `activity_at + nowy_okres` (`greatest()`, nigdy nie obniża) —
+  wcześniej zmieniała wyłącznie `retention_policies.period`, więc wydłużenie okresu PO wysłaniu
+  ostrzeżenia (e-mail z konkretną datą) nie odraczało terminu i `run_retention_purge` wciąż kasował
+  CV/konto wg starego, krótszego `due_at`. Skrócenie okresu też nie cofa już ustalonego, dłuższego
+  terminu (nie przyspiesza usunięcia ponad to, co już obiecano). Dowód: `rls.sql` sekcja RW862
+  (kontrola ujemna: goła zmiana `retention_policies.period` bez przejścia przez RPC nadal gubi CV).
 - [x] Płatności — **USUNIĘTE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Portal bez
   cennika, pakietów, CTA zakupu i sprzedaży; `/employer/platnosci` → przekierowanie na `/employer`,
   brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap, `/api/stripe/webhook` nie istnieje

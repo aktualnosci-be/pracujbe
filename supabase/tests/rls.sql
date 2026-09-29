@@ -11905,7 +11905,10 @@ select pg_temp.assert(
 -- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
 select pg_temp.assert(
   (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
-  and (select not payload ? 'message' and payload::text not like '%0470%'
+  -- Pełny numer, nie sam „0470”: ten ciąg zdarza się w losowych UUID i ułamkach sekund
+  -- znaczników czasu w payloadzie (flaky w CI).
+  and (select not payload ? 'message' and payload::text not like '%0470 12 34 56%'
+                                        and payload::text not like '%0470123456%'
          from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
   'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
 -- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
@@ -14436,6 +14439,132 @@ alter table public.jobs disable trigger trg_jobs_resolve_location;
 update public.jobs set city = 'Antwerpia' where id = :'LCJ4';
 select pg_temp.assert((select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.id = :'LCJ4') = 'aalst',
   'LC153-N2 kontrola ujemna: bez triggera location_id nie nadąża za jobs.city');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- SRCH1076. Części gmin (dzielnice) w filtrze, liczniku, facetach, wyszukiwaniu miasta i alertach
+--           zapisanych wyszukiwań (#1076, audyt SRCH-01, migracja 0183/tymczasowa): filtr po gminie
+--           obejmuje aktywne części gminy (`parent_location_id`), filtr po części zwraca tylko ją,
+--           facet „miasto” grupuje część pod gminą nadrzędną. Kontrole ujemne: funkcje z 0153.
+-- ============================================================================
+\set SRCO  'f9500000-0000-0000-0000-000000030000'
+\set SRJ1  'f9500000-0000-0000-0000-000000030001'
+\set SRJ2  'f9500000-0000-0000-0000-000000030002'
+\set SRJ3  'f9500000-0000-0000-0000-000000030003'
+\set SRJ4  'f9500000-0000-0000-0000-000000030004'
+\set SRJ5  'f9500000-0000-0000-0000-000000030005'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, status) values (:'SRCO', 'SRCH1076 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SRJ1',:'SRCO','sr1076-a','Dzielnica SRCH1076','warehouse','permanent','Leuven','Flandria','active','pl', now()),
+  (:'SRJ2',:'SRCO','sr1076-b','Dzielnica SRCH1076','warehouse','permanent','Heverlee','Flandria','active','pl', now()),
+  (:'SRJ3',:'SRCO','sr1076-c','Dzielnica SRCH1076','warehouse','permanent','Kessel-Lo','Flandria','active','pl', now()),
+  (:'SRJ4',:'SRCO','sr1076-d','Dzielnica SRCH1076','warehouse','permanent','Haren','Bruksela','active','pl', now()),
+  (:'SRJ5',:'SRCO','sr1076-e','Dzielnica SRCH1076','warehouse','permanent','Aalst','Flandria','active','pl', now());
+-- Punkt wyjścia: trigger 0153 przypisał oferty do części (Heverlee, Kessel-Lo, Haren) i gmin.
+select pg_temp.assert(
+  (select array_agg(l.kind || ':' || coalesce(p.slug, '-') order by j.slug)
+     from public.jobs j join public.locations l on l.id = j.location_id
+     left join public.locations p on p.id = l.parent_location_id where j.company_id = :'SRCO')
+  = array['municipality:-', 'section:leuven', 'section:leuven', 'section:brussels', 'municipality:-'],
+  'SRCH1076-0 oferty w częściach gmin mają location_id części z gminą nadrzędną');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SRCH1076-1: filtr po gminie obejmuje jej części (lista + licznik), w każdym języku/pisowni.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Leuven']))
+    = array['sr1076-a', 'sr1076-b', 'sr1076-c']
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 3
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Louvain']) = 3
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Brussel']) = 1
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven', 'Aalst']) = 4,
+  'SRCH1076-1 lista i licznik: filtr po gminie obejmuje oferty jej części');
+-- SRCH1076-2: filtr po samej części zwraca tylko tę część (bez rodzeństwa i gminy).
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Heverlee']))
+    = array['sr1076-b']
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Kessel-Lo']) = 1,
+  'SRCH1076-2 filtr po części gminy zwraca tylko część');
+-- SRCH1076-3: facet miasta = jedna pozycja na gminę nadrzędną; filtr w facetach spójny z listą.
+select pg_temp.assert(
+  (select array_agg(key || ':' || total order by key)
+     from public.get_public_job_filter_facets('pl', 'srch1076') where dimension = 'location')
+    = array['Aalst:1', 'Brussels:1', 'Leuven:3']
+  and (select total from public.get_public_job_filter_facets('pl', 'srch1076', p_locations => array['Leuven'])
+        where dimension = 'total') = 3
+  and (select total from public.get_public_job_filter_facets('pl', 'srch1076', p_locations => array['Leuven'])
+        where dimension = 'category' and key = 'warehouse') = 3,
+  'SRCH1076-3 facety: części gminy w pozycji gminy, licznik = lista');
+-- SRCH1076-4: wyszukiwanie tekstowe miasta (p_city) rozpoznaje gminę i dokłada jej części.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', 'Leuven') = 3
+  and public.get_public_jobs_count('pl', 'srch1076', 'Louvain') = 3
+  and public.get_public_jobs_count('pl', 'srch1076', 'Heverlee') = 1
+  and public.get_public_jobs_count('pl', 'srch1076', 'heve') = 1,
+  'SRCH1076-4 search_city_candidates: gmina obejmuje części, fragment tekstu jak dotąd');
+reset role;
+-- SRCH1076-5: alerty zapisanych wyszukiwań (saved_search_jobs_after) widzą te same oferty.
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs('{"locations":["Leuven"]}'::jsonb, 'pl', now() - interval '2 days')) = 3
+  and (select count(*) from public.saved_search_matching_jobs('{"locations":["Heverlee"]}'::jsonb, 'pl', now() - interval '2 days')) = 1
+  and (select count(*) from public.saved_search_matching_jobs('{"city":"Leuven"}'::jsonb, 'pl', now() - interval '2 days')) = 3,
+  'SRCH1076-5 zapisane wyszukiwania: filtr po gminie obejmuje części');
+reset role;
+-- SRCH1076-6: nieaktywna część nie wchodzi do gminy; nieaktywna gmina — facet wraca do nazw części.
+savepoint sr1076_6;
+update public.locations set is_active = false where slug = 'heverlee-leuven';
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 2,
+  'SRCH1076-6 nieaktywna część nie jest dołączana do gminy');
+rollback to savepoint sr1076_6;
+update public.locations set is_active = false where slug = 'leuven';
+select pg_temp.assert(
+  (select array_agg(key order by key) from public.get_public_job_filter_facets('pl', 'srch1076')
+    where dimension = 'location' and key not in ('Aalst', 'Brussels'))
+  = array['Heverlee', 'Kessel-Lo', 'Leuven'],
+  'SRCH1076-6b facet bez aktywnej gminy nadrzędnej: pozycje części osobno');
+rollback to savepoint sr1076_6;
+
+-- KONTROLA UJEMNA (SRCH1076-N1): filtr z 0153 (sama gmina) gubi oferty części gmin.
+savepoint sr1076_n1;
+create or replace function public.location_filter_ids(p_values text[])
+returns uuid[] language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select coalesce(array_agg(distinct a.location_id), '{}'::uuid[])
+  from unnest(p_values[1:100]) v
+  join public.location_aliases a on a.alias_key = public.city_key(left(v, 200))
+  join public.locations l on l.id = a.location_id and l.is_active;
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 1
+  and (select array_agg(slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Leuven'])) = array['sr1076-a'],
+  'SRCH1076-N1 kontrola ujemna: location_filter_ids z 0153 pomija dzielnice gminy');
+reset role;
+rollback to savepoint sr1076_n1;
+-- KONTROLA UJEMNA (SRCH1076-N2): search_city_candidates z 0153 nie dokłada części gminy.
+savepoint sr1076_n2;
+create or replace function public.search_city_candidates(p_city text)
+returns setof uuid language sql stable strict
+set search_path = public, pg_temp as $$
+  select j.id from public.jobs j
+  where j.status = 'active' and j.deleted_at is null
+    and public.search_fold(j.city) like public.search_like_pattern(p_city) escape '\'
+  union
+  select j.id from public.jobs j
+  where j.status = 'active' and j.deleted_at is null
+    and j.location_id = (select public.resolve_location_id(p_city));
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', 'Leuven') = 1,
+  'SRCH1076-N2 kontrola ujemna: search_city_candidates z 0153 nie łączy gminy z jej częściami');
+reset role;
+rollback to savepoint sr1076_n2;
 rollback;
 reset role; reset app.current_uid;
 
@@ -19704,6 +19833,91 @@ delete from auth.accounts where user_id = :'M2CAND' and provider_id = 'credentia
 delete from auth.verifications where identifier = 'm2-inne-zadanie';
 delete from auth.users where id = :'M2PW';
 -- ============================================================================
+-- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0182):
+--        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
+--        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
+--        już ustalonego, dłuższego terminu ostrzeżenia (e-mail z konkretną datą był wysłany).
+-- ============================================================================
+\echo '--- RW862 wydłużenie retencji odracza usunięcie (0182) ---'
+reset role; reset app.current_uid;
+\set RW1 '86200000-0000-4000-8000-0000000000c1'
+\set RW2 '86200000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RW1','rw862c1@test.be','Rw Jeden','{"role":"candidate","first_name":"Rw","last_name":"Jeden","locale":"pl"}'),
+  (:'RW2','rw862c2@test.be','Rw Dwa','{"role":"candidate","first_name":"Rw","last_name":"Dwa","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW1', 'candidate-files', :'RW1' || '/cv-rw1.pdf', 'candidate_cv');
+-- RW2 (plik + aktywność + ostrzeżenie) powstaje dopiero tuż przed RW862-5: wcześniejsze
+-- wywołania admin_set_retention_policy (RW862-1/3, które SŁUSZNIE synchronizują WSZYSTKIE
+-- ostrzeżenia tej kategorii, więc RW2 też by odsunęły, gdyby już istniał) nie mogą go dotknąć
+-- — kontrola ujemna ma sprawdzać goły zapis retention_policies.period, nie efekt uboczny
+-- poprawnie działającej naprawy.
+
+-- Ostrzeżenie RW1 wysłane pod poprzednią, krótszą polityką: aktywność dawno temu, termin już
+-- minięty (25 dni temu) — dokładnie stan tuż po wysłaniu e-maila z konkretną datą usunięcia.
+select (now() - interval '400 days')::text as rw_activity \gset
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW1';
+set session_replication_role = origin;
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW1', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+
+-- RW862-1: admin WYDŁUŻA okres (365→500 dni) przez admin_set_retention_policy — termin już
+-- wysłanego ostrzeżenia RW1 ma się odsunąć do activity_at + 500 dni (w przyszłość).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 500);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days'
+  and (select due_at > now() + interval '90 days' from public.retention_warnings
+        where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv'),
+  'RW862-1 wydłużenie okresu przez admin_set_retention_policy przesuwa due_at już wysłanego ostrzeżenia w przyszłość');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp1 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-2 po wydłużeniu przez RPC CV nie jest usuwane mimo minięcia dawnego, krótszego terminu');
+
+-- RW862-3: skrócenie do 300 dni NIE cofa już ustalonego (dłuższego) terminu RW1.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 300);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days',
+  'RW862-3 skrócenie okresu nie obniża już ustalonego, dłuższego terminu ostrzeżenia');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp2 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-4 po skróceniu RW1 nadal nie jest usuwany przed odroczonym terminem');
+
+-- RW862-5 (kontrola ujemna): świeże ostrzeżenie RW2 pod tym samym, dawno minionym terminem,
+-- a potem sama zmiana retention_policies.period z pominięciem RPC (czyli dokładnie to, co
+-- robił kod SPRZED naprawy #862 — bez synchronizacji due_at) NIE odracza tego ostrzeżenia:
+-- CV znika mimo że okres formalnie „wydłużono" do 500 dni.
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW2';
+set session_replication_role = origin;
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW2', 'candidate-files', :'RW2' || '/cv-rw2.pdf', 'candidate_cv');
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW2', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+update public.retention_policies set period = interval '500 days' where key = 'inactive_candidate_cv';
+set role service_role;
+select public.run_retention_purge(200)::text as rwp3 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RW2' || '/cv-rw2.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RW2' || '/cv-rw2.pdf'),
+  'RW862-5 kontrola ujemna: bez synchronizacji przez RPC (goła zmiana period) CV nadal ginie mimo wydłużenia');
+
 -- WM1040. Macierz zapisu cudzych wierszy (#1040) + strażnik pokrycia grantów.
 --   * Strażnik: zbiór (tabela, operacja) z grantem zapisu dla `authenticated` musi być pokryty
 --     przypadkami poniżej — nowa tabela/grant bez przypadku = czerwony test. Dodatkowo: brak
