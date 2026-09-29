@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isAiFeatureEnabled } from '@/lib/ai/feature-gate';
 import { AiBudgetError, withAiBudget, type ReportUsage } from '@/lib/ai/budget';
 import { DEFAULT_AI_MODEL, isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { AiProviderError, createStructuredResponse, type ResponsesClient } from '@/lib/ai/openai';
@@ -37,12 +38,10 @@ import { redactSensitiveData } from '@/lib/privacy/sensitive-data';
 
 export type JobFraudCheckProvider = 'openai' | 'fixture';
 
-function flagOn(value: string | undefined): boolean {
-  return value === '1' || value?.toLowerCase() === 'true';
-}
 
 export function jobFraudCheckProvider(): JobFraudCheckProvider | null {
-  if (!flagOn(process.env.AI_JOB_FRAUD_CHECK_ENABLED)) return null;
+  // #1152: flaga funkcji × tryb produktu (wspólna bramka `src/lib/ai/feature-gate.ts`).
+  if (!isAiFeatureEnabled('job_fraud_check')) return null;
   if (process.env.AI_JOB_FRAUD_CHECK_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }

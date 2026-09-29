@@ -1,4 +1,5 @@
 import type { Locale } from '@/i18n/routing';
+import type { TranslationEntityType } from '@/lib/translation/feature';
 import type { TranslationFields } from '@/lib/translation/validate';
 
 /**
@@ -13,6 +14,8 @@ export interface TranslationRequest {
   fields: TranslationFields;
   /** Nazwy własne do zachowania dosłownie (np. nazwa firmy). */
   protectedTerms?: readonly string[];
+  /** Encja kolejki (#1152) — wybiera funkcję AI w budżecie i logu użycia (brak = oferta). */
+  entityType?: TranslationEntityType;
 }
 
 export interface TranslationResponse {

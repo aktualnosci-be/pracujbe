@@ -557,7 +557,6 @@ async function getListingOverview(now: Date = new Date()): Promise<EmployerOverv
 export interface CompanyEntitlements {
   plan: string;
   maxActiveJobs: number;
-  candidateAccess: boolean;
   activeJobsUsed: number;
 }
 
@@ -579,7 +578,6 @@ export async function getCompanyEntitlements(): Promise<CompanyEntitlements | nu
     return {
       plan: asString(row['plan'], 'free'),
       maxActiveJobs: asNumber(row['max_active_jobs']),
-      candidateAccess: row['candidate_access'] === true,
       activeJobsUsed: asNumber(row['active_jobs_used']),
     };
   } catch (error) {
@@ -1562,6 +1560,53 @@ export async function getJobFunnel(
     captureError(error, { area: 'employer.getJobFunnel' });
     return { status: 'error', range };
   }
+}
+
+/** Liczba ofert w skrócie statystyk ogłoszeń na pulpicie pracodawcy (tryb ogłoszeniowy). */
+export const TOP_LISTING_JOBS_LIMIT = 3;
+
+/** Oferta w skrócie statystyk ogłoszeń: wyświetlenia i kliknięcia „Aplikuj u pracodawcy”. */
+export interface TopListingJob {
+  jobId: string;
+  title: string;
+  /** Pusty, gdy oferta nie ma publicznej strony (nie jest aktywna). */
+  slug: string;
+  detailViews: number;
+  applyClicks: number;
+}
+
+/**
+ * Jawny stan skrótu statystyk ogłoszeń: brak uprawnień do lejka (zwykły `member`) ≠ błąd ≠ brak
+ * ofert z ruchem. `disabled` = tryb rekrutacyjny (skrót nie istnieje, loader bez zapytań).
+ */
+export type TopListingJobsLoad =
+  | { status: 'ok'; jobs: TopListingJob[] }
+  | { status: 'denied' }
+  | { status: 'error' }
+  | { status: 'disabled' };
+
+/**
+ * Tryb ogłoszeniowy (decyzja produktowa: portal ogłoszeniowy): do {@link TOP_LISTING_JOBS_LIMIT}
+ * najczęściej oglądanych ofert firmy z lejka ofert (#99) za ostatnie {@link FUNNEL_PERIOD_DAYS}
+ * dni — bez zapytań do tabel procesu. Kolejność: wyświetlenia ↓, kliknięcia ↓, tytuł; oferty
+ * bez żadnego ruchu pomijamy.
+ */
+export async function getTopListingJobs(now: Date = new Date()): Promise<TopListingJobsLoad> {
+  if (recruitmentStatsEnabled()) return { status: 'disabled' };
+  const funnel = await getJobFunnel(FUNNEL_PERIOD_DAYS, now);
+  if (funnel.status !== 'ok') return { status: funnel.status };
+  const jobs = funnel.jobs
+    .filter((job) => job.detailViews > 0 || job.applyStarted > 0)
+    .sort((a, b) => b.detailViews - a.detailViews || b.applyStarted - a.applyStarted || a.title.localeCompare(b.title))
+    .slice(0, TOP_LISTING_JOBS_LIMIT)
+    .map((job) => ({
+      jobId: job.jobId,
+      title: job.title,
+      slug: job.status === 'active' ? job.slug : '',
+      detailViews: job.detailViews,
+      applyClicks: job.applyStarted,
+    }));
+  return { status: 'ok', jobs };
 }
 
 /**

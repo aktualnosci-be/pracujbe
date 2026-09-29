@@ -1,4 +1,4 @@
--- 0956_public_jobs_updated_at.sql — numer tymczasowy (ostateczny nada integrator).
+-- 0184_public_jobs_updated_at.sql.
 --
 -- #796: sitemap ofert ustawiał `lastmod` wyłącznie z `published_at`. Po istotnej edycji
 -- opublikowanej oferty (`update_published_job`, 0077/0144) baza aktualizuje `jobs.updated_at`,

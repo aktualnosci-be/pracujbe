@@ -82,12 +82,12 @@ describe('sitemap', () => {
     const entry = entries.find((e) => e.url.endsWith('/oferta-edited'));
     expect(entry?.lastModified).toEqual(new Date('2026-09-20T12:00:00.000Z'));
     // Kontrola ujemna: gdyby sitemap nadal liczył wyłącznie z `publishedAt` (zachowanie
-    // sprzed 0956), ten test by nie przeszedł — data publikacji jest wcześniejsza.
+    // sprzed 0184), ten test by nie przeszedł — data publikacji jest wcześniejsza.
     expect(entry?.lastModified).not.toEqual(new Date('2026-09-01T00:00:00.000Z'));
   });
 
   // Bez `updatedAt` (dane demonstracyjne, profil firmy, starszy wiersz RPC) sitemap liczy
-  // `lastModified` z `publishedAt`, dokładnie jak przed 0956 — brak regresji fallbacku.
+  // `lastModified` z `publishedAt`, dokładnie jak przed 0184 — brak regresji fallbacku.
   it('brak updated_at (dane demo / starszy RPC): lastModified z published_at jak dotychczas', async () => {
     jobs.getJobsAvailableLocales.mockResolvedValue(null);
     jobs.getJobs.mockResolvedValue({ jobs: [job('demo')], total: 1, page: 1, pageSize: 100 });
