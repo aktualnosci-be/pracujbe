@@ -22204,7 +22204,7 @@ select pg_temp.assert((select description_locale is null from public.companies w
   'CDL975-4d język wyczyszczony w bazie');
 
 
-=======
+-- ============================================================================
 -- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0189) i limit CV na konto (#1101, CF-06).
 --   Polityki odczytu applications/offers/conversations/messages ukrywają wiersze z `deleted_at`;
 --   strażnik `trg_soft_delete_contract` blokuje zapis wiadomości do usuniętych rozmów/wiadomości
