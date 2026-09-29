@@ -238,7 +238,8 @@
     "no": "Nie",
     "home": "Strona główna",
     "breadcrumb": "Ścieżka nawigacji",
-    "skipToContent": "Przejdź do treści"
+    "skipToContent": "Przejdź do treści",
+    "formJsRequired": "Ten formularz wymaga włączonego JavaScriptu. Włącz go w przeglądarce, żeby wysłać dane."
   },
   "nav": {
     "jobs": "Oferty pracy",
@@ -1753,6 +1754,8 @@
     "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "goToOffers": "Przejdź do listy ofert",
+    "draftConflict": "Ten szkic zmienił się w międzyczasie — w innej karcie albo przez innego członka zespołu. Zmiany z tego kroku nie zostały zapisane, żeby nie nadpisać cudzych. Wczytaj aktualną wersję szkicu.",
+    "reloadDraft": "Wczytaj aktualną wersję szkicu",
     "editTitle": "Edytuj ofertę",
     "editSubtitleActive": "Oferta jest opublikowana. Zmiany zapiszesz przyciskiem „Zapisz zmiany” i od razu zobaczą je kandydaci. Status oferty i zgłoszenia zostają bez zmian.",
     "editSubtitlePaused": "Oferta jest wstrzymana. Zmiany zapiszesz przyciskiem „Zapisz zmiany”; kandydaci zobaczą je po wznowieniu oferty. Zgłoszenia zostają bez zmian.",
@@ -1981,6 +1984,7 @@
     "attachmentSensitiveId": "Nazwa pliku zawiera numer identyfikacyjny (np. NISS, PESEL, numer dowodu lub paszportu). Zmień nazwę pliku i dodaj go ponownie.",
     "attachmentLimit": "Do jednej wiadomości możesz dołączyć najwyżej {max} pliki.",
     "attachmentRemove": "Usuń plik {name}",
+    "attachmentsRemoveAll": "Usuń wszystkie załączniki",
     "attachmentDownload": "Pobierz {name} ({size})",
     "attachmentDownloadError": "Nie udało się pobrać pliku. Spróbuj ponownie.",
     "attachmentUnavailable": "Plik czeka na sprawdzenie — pobieranie niedostępne.",
@@ -2033,6 +2037,7 @@
     "deleteConfirmDescription": "Plik „{name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.",
     "deleteSuccess": "Dokument został usunięty.",
     "errorTooLarge": "Plik jest za duży (maks. 5 MB).",
+    "errorAccountLimit": "Osiągnięto limit plików na koncie (maks. 10 plików i 50 MB łącznie). Usuń starszy dokument.",
     "errorType": "Dozwolone formaty: PDF, DOC, DOCX.",
     "errorEmpty": "Wybrany plik jest pusty."
   },
@@ -2407,6 +2412,7 @@
     "dsaRetentionPolicy": "Okno odwołania: {appealDays} dni od poinformowania · retencja: {retentionDays} dni. Wartości tymczasowe — do zatwierdzenia przez właściciela serwisu.",
     "dsaRetentionEligible": "Do anonimizacji",
     "dsaRetentionWaiting": "Czeka na koniec drogi odwołania",
+    "dsaRetentionFallback": "Termin biegnie z reguły zastępczej (nie doręczono / brak adresata)",
     "dsaRetentionWithin": "W okresie retencji",
     "dsaRetentionNext": "najbliższa: {date}",
     "dsaRetentionRedacted": "Zanonimizowane",
@@ -2904,6 +2910,7 @@
     "opsRow_dbConnections": "Wykorzystanie połączeń",
     "opsRow_appPoolWaiting": "Żądania czekające na połączenie",
     "opsRow_portalModeMismatch": "Niezgodność trybu portalu (env i baza)",
+    "opsRow_schemaBehind": "Schemat bazy starszy niż kod (migracje)",
     "opsRow_backupAge": "Wiek ostatniej kopii",
     "filterCompanyLinks": "Strona i logo do zatwierdzenia",
     "sectionCompanyLinks": "Strona WWW i logo",
@@ -2948,6 +2955,7 @@
     "entityJob": "Oferta pracy",
     "auditActionJobUpdatePublished": "Edycja opublikowanej oferty",
     "auditActionJobDuplicated": "Kopia oferty",
+    "auditActionJobDeleted": "Oferta usunięta",
     "companyJobsAllLink": "Wszystkie oferty firmy",
     "auditActionRetentionPolicyChanged": "Zmiana okresu retencji",
     "auditActionRetentionPoliciesSeeded": "Wpisanie okresów retencji",
@@ -3034,7 +3042,9 @@
     "auditActionCompanyAgencyChanged": "Zmiana deklaracji agencji",
     "auditActionCompanyAgencyChecked": "Sprawdzenie numeru uznania agencji",
     "aiCostsFeatureFraudCheck": "Kontrola treści ofert",
-    "auditActionCompanyDescriptionLocale": "Zmiana języka opisu firmy"
+    "auditActionCompanyDescriptionLocale": "Zmiana języka opisu firmy",
+    "auditActionEmailLocaleChanged": "Zmiana języka e-maili przez użytkownika",
+    "entityProfile": "Profil"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -3064,7 +3074,14 @@
     "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
     "employerEmailApplicationsDescription": "Nowe zgłoszenia kandydatów na Twoje oferty.",
     "employerEmailOffersDescription": "Gdy kandydat przyjmie lub odrzuci Twoją propozycję pracy.",
-    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach."
+    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach.",
+    "emailLocaleTitle": "Język e-maili i powiadomień",
+    "emailLocaleDescription": "W tym języku wysyłamy do Ciebie e-maile i powiadomienia. Nie zależy od języka, w którym oglądasz stronę. Zmiana dotyczy kolejnych wiadomości.",
+    "emailLocaleLabel": "Język e-maili i powiadomień",
+    "emailLocaleSave": "Zapisz język",
+    "emailLocaleSaving": "Zapisywanie...",
+    "emailLocaleSaved": "Język e-maili i powiadomień został zapisany.",
+    "emailLocaleLoadError": "Nie udało się wczytać języka e-maili i powiadomień. Spróbuj ponownie za chwilę."
   },
   "guides": {
     "pageTitle": "Poradniki",
@@ -3334,6 +3351,16 @@
     "revoke": "Cofnij",
     "revokeLabel": "Cofnij zaproszenie dla {email}",
     "revoked": "Zaproszenie cofnięte.",
+    "invitationLanguage": "Język zaproszenia: {language}",
+    "invitationLanguageUnknown": "Język zaproszenia: nie wybrano",
+    "invitationSentBy": "Zaprosił(a): {name}, {date}",
+    "invitationSentOn": "Wysłane {date}",
+    "renew": "Odnów",
+    "renewLabel": "Odnów zaproszenie dla {email}",
+    "renewed": "Zaproszenie odnowione — ważne przez kolejne 14 dni. Osoba bez konta dostanie nowy link w języku zaproszenia (poprzedni przestaje działać).",
+    "revokeTitle": "Cofnąć zaproszenie dla {email}?",
+    "revokeDesc": "Link w e-mailu przestanie działać, a zaproszenie zniknie z panelu tej osoby. Możesz później zaprosić ją ponownie.",
+    "revokeConfirm": "Cofnij zaproszenie",
     "myInvitationsTitle": "Zaproszenia dla Ciebie",
     "myInvitationFrom": "{inviter} zaprasza Cię do firmy {company}. Rola: {role}.",
     "myInvitationNoInviter": "Zaproszenie do firmy {company}. Rola: {role}.",
@@ -3914,6 +3941,14 @@
       "erasure_tombstone": {
         "label": "Rejestr usunięć",
         "description": "Rejestr usunięć do ponownego zastosowania po odtworzeniu kopii; musi przeżyć najstarszą kopię."
+      },
+      "expired_auth_session": {
+        "label": "Wygasła sesja logowania",
+        "description": "Wiersz wygasłej sesji (z adresem IP i user-agentem) jest usuwany 7 dni po wygaśnięciu."
+      },
+      "expired_auth_verification": {
+        "label": "Wygasły token weryfikacji",
+        "description": "Wiersz wygasłego tokenu weryfikacji (potwierdzenie e-maila, reset hasła) jest usuwany 7 dni po wygaśnięciu."
       },
       "guest_ip_user_agent": {
         "label": "IP i user-agent gościa",

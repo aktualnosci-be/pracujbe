@@ -169,13 +169,17 @@ export function createRailwayBucket(options: RailwayBucketOptions) {
     const cancel = () => abort();
     signal?.addEventListener("abort", cancel, { once: true });
     if (signal?.aborted) cancel();
-    const timer = setTimeout(
-      () => abort("TIMEOUT"),
-      options.timeoutMs ?? 30_000,
-    );
+    const limitMs = options.timeoutMs ?? 30_000;
+    let timer = setTimeout(() => abort("TIMEOUT"), limitMs);
     return {
       signal: controller.signal,
       abort,
+      /** Limit czasu jako bezczynność: każdy odebrany fragment body odnawia okno (FS30-03). */
+      rearm: () => {
+        if (controller.signal.aborted) return;
+        clearTimeout(timer);
+        timer = setTimeout(() => abort("TIMEOUT"), limitMs);
+      },
       code: (error: unknown): StorageErrorCode => reason ?? classify(error),
       cleanup: () => {
         clearTimeout(timer);
@@ -443,6 +447,7 @@ export function createRailwayBucket(options: RailwayBucketOptions) {
                 return;
               }
               received += chunk.value.byteLength;
+              life.rearm();
               controller.enqueue(chunk.value);
             } catch {
               await close(life.code(null));

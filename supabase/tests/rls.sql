@@ -7406,6 +7406,9 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CMN4','cmn4@test.be','Cm N4','{"role":"candidate","first_name":"Cm","last_name":"N4","locale":"en"}'),
   (:'CMN5','cmn5@test.be','Cm N5','{"role":"candidate","first_name":"Cm","last_name":"N5","locale":"pl"}');
 select test_fixture.attest_candidates();
+-- 0186 (#1038): marketing tylko na potwierdzony adres — adresy scenariuszy CM45 są potwierdzone
+-- (brak potwierdzenia sprawdza sekcja EMQ1038 na końcu pliku).
+update auth.users set email_verified = true where id in (:'CMA', :'CMB', :'CMN1', :'CMN2', :'CMN3', :'CMN4', :'CMN5');
 
 -- CM45-1: dowód zgody.
 select pg_temp.assert(not exists (select 1 from public.email_consent_events where profile_id = :'CMA'),
@@ -7639,6 +7642,8 @@ select pg_temp.un45_sql($q$
     ('e0450000-0000-0000-0000-0000000000f1','cmp1@test.be','Cm P1','{"role":"candidate","first_name":"Cm","last_name":"P1","locale":"pl"}'),
     ('e0450000-0000-0000-0000-0000000000f2','cmp2@test.be','Cm P2','{"role":"candidate","first_name":"Cm","last_name":"P2","locale":"en"}');
 select test_fixture.attest_candidates();
+  update auth.users set email_verified = true
+   where id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2');
   update public.notification_preferences set email_marketing = true
    where profile_id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2');
   insert into public.email_recipient_budget_config (scope, window_seconds, max_per_recipient)
@@ -8988,8 +8993,9 @@ reset role;
 update public.email_deliveries set status = 'bounced', sent_at = now() - interval '7 months'
   where entity_id = :'ar4' and template = 'reportDecisionNoAction';
 set role service_role;
-select pg_temp.assert(public.moderation_appeal_deadline(:'ad4') is null,
-  'APL43-3b odbity e-mail nie jest poinformowaniem');
+select pg_temp.assert(public.moderation_informed_at(:'ad4') between now() - interval '1 minute' and now() + interval '1 minute'
+  and not exists (select 1 from public.moderation_informed where decision_id = :'ad4' and basis = 'email_sent' and voided_at is null),
+  'APL43-3b odbity e-mail nie jest poinformowaniem wysyłką (0188/#1063: termin od chwili porażki, nie od wysyłki)');
 reset role;
 update public.email_deliveries set status = 'delivered' where entity_id = :'ar4' and template = 'reportDecisionNoAction';
 set role service_role;
@@ -9000,12 +9006,21 @@ select pg_temp.expect_error('select * from public.submit_report_appeal(''' || :'
 select (public.get_report_case(:'acase4', 'ABCDEFGHIJKLMNOPQRSTUVWX'))->>'appealState' as astate4 \gset
 reset role;
 select pg_temp.assert(:'astate4' = 'APPEAL_WINDOW_CLOSED', 'APL43-3e zgłaszający widzi, że termin upłynął');
--- Autor: odczyt powiadomienia w panelu = poinformowanie (wcześniejsze niż e-mail).
+-- Autor: sam odczyt/oznaczenie powiadomienia NIE jest poinformowaniem (0188/#1045); poinformowaniem
+-- jest odczyt decyzji w panelu (get_company_moderation_decisions), zapisany niezmiennie.
 update public.notifications set read_at = now() - interval '1 day'
   where data->>'decisionId' = :'ad3' and profile_id = :'EMPA';
 set role service_role;
-select pg_temp.assert(public.moderation_informed_at(:'ad3') between now() - interval '25 hours' and now() - interval '23 hours',
-  'APL43-3f autor poinformowany odczytem powiadomienia w panelu');
+select pg_temp.assert(public.moderation_informed_at(:'ad3') is null,
+  'APL43-3f odczyt powiadomienia nie rozpoczyna biegu terminu (mutowalna tabela UI)');
+reset role;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as apl3f_rows from public.get_company_moderation_decisions(:'APCO') \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(:'apl3f_rows'::int >= 1
+  and public.moderation_informed_at(:'ad3') between now() - interval '1 minute' and now() + interval '1 minute',
+  'APL43-3g autor poinformowany odczytem decyzji w panelu (chwila odczytu, nie chwila odczytu powiadomienia)');
 reset role;
 
 -- APL43-4: ponowny przegląd przez INNEGO człowieka, gdy to możliwe.
@@ -9392,9 +9407,10 @@ reset role;
 update public.email_deliveries set status = 'bounced', sent_at = now() - interval '2 years'
   where entity_id = :'rs2' and template = 'reportRestored';
 set role service_role;
-select pg_temp.assert(public.moderation_restoration_appeal_deadline(:'rs2') is null
+select pg_temp.assert(public.moderation_restoration_informed_at(:'rs2') between now() - interval '1 minute' and now() + interval '1 minute'
+  and not exists (select 1 from public.moderation_informed where restoration_id = :'rs2' and basis = 'email_sent' and voided_at is null)
   and public.moderation_restoration_appealable(:'rs2') = 'OK',
-  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem');
+  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem wysyłką (0188/#1063: termin od chwili porażki)');
 reset role;
 update public.email_deliveries set status = 'delivered' where entity_id = :'rs2' and template = 'reportRestored';
 update public.email_deliveries set status = 'sent', sent_at = now() where entity_id = :'rs1' and template = 'reportRestored';
@@ -10863,15 +10879,23 @@ select pg_temp.assert(exists (select 1 from public.email_deliveries where templa
   'GS98-5b kontrola ujemna: bez warunku potwierdzenia e-mail trafia do kolejki');
 rollback;
 
--- GS98-6: aplikacja usunięta miękko → brak e-maila.
+-- GS98-6: aplikacja usunięta miękko → zmiana statusu odrzucona (0189), brak e-maila.
 begin;
 update public.applications set deleted_at = now() where id = :'gsapp';
 set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
-select public.transition_application(:'gsapp', 'offer_sent');
+select pg_temp.expect_error(format($$select public.transition_application(%L, 'offer_sent')$$, :'gsapp'),
+  'NOT_FOUND', 'GS98-6 zmiana statusu usuniętej aplikacji gościa odrzucona');
 reset role;
 select pg_temp.assert(not exists (select 1 from public.email_deliveries where template = 'guestStatusChanged'
                         and entity_id = :'gsapp' and payload ->> 'status' = 'offer_sent'),
-  'GS98-6 usunięta aplikacja nie wysyła e-maila');
+  'GS98-6b usunięta aplikacja nie wysyła e-maila');
+-- Kontrola ujemna: bez strażnika zmiana przechodzi i powstaje e-mail.
+alter table public.applications disable trigger trg_soft_delete_contract;
+set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
+select public.transition_application(:'gsapp', 'offer_sent');
+reset role;
+select pg_temp.assert((select status::text from public.applications where id = :'gsapp') = 'offer_sent',
+  'GS98-6n kontrola ujemna: bez strażnika status usuniętej aplikacji się zmienia');
 rollback;
 
 -- GS98-7: retencja zamkniętych aplikacji (#486) usuwa e-maile gościa razem z aplikacją.
@@ -11421,6 +11445,8 @@ reset role;
 -- KONTROLA UJEMNA: bez strażnika właściciel podmieniłby ścieżkę (pobranie cudzego obiektu).
 begin;
 alter table public.files disable trigger trg_files_guard_message_attachment;
+-- 0185: metadane plików chroni też ogólny strażnik `guard_files_client_write` (niezależna warstwa).
+alter table public.files disable trigger trg_files_guard_client_write;
 select set_config('app.current_uid', :'MAC', true);
 set local role authenticated; select pg_temp.assert_client_role();
 update public.files set path = :'mapathx' where path = :'mapath1';
@@ -11903,7 +11929,10 @@ select pg_temp.assert(
 -- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
 select pg_temp.assert(
   (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
-  and (select not payload ? 'message' and payload::text not like '%0470%'
+  -- Pełny numer, nie sam „0470”: ten ciąg zdarza się w losowych UUID i ułamkach sekund
+  -- znaczników czasu w payloadzie (flaky w CI).
+  and (select not payload ? 'message' and payload::text not like '%0470 12 34 56%'
+                                        and payload::text not like '%0470123456%'
          from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
   'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
 -- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
@@ -14438,6 +14467,132 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- SRCH1076. Części gmin (dzielnice) w filtrze, liczniku, facetach, wyszukiwaniu miasta i alertach
+--           zapisanych wyszukiwań (#1076, audyt SRCH-01, migracja 0183/tymczasowa): filtr po gminie
+--           obejmuje aktywne części gminy (`parent_location_id`), filtr po części zwraca tylko ją,
+--           facet „miasto” grupuje część pod gminą nadrzędną. Kontrole ujemne: funkcje z 0153.
+-- ============================================================================
+\set SRCO  'f9500000-0000-0000-0000-000000030000'
+\set SRJ1  'f9500000-0000-0000-0000-000000030001'
+\set SRJ2  'f9500000-0000-0000-0000-000000030002'
+\set SRJ3  'f9500000-0000-0000-0000-000000030003'
+\set SRJ4  'f9500000-0000-0000-0000-000000030004'
+\set SRJ5  'f9500000-0000-0000-0000-000000030005'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, status) values (:'SRCO', 'SRCH1076 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SRJ1',:'SRCO','sr1076-a','Dzielnica SRCH1076','warehouse','permanent','Leuven','Flandria','active','pl', now()),
+  (:'SRJ2',:'SRCO','sr1076-b','Dzielnica SRCH1076','warehouse','permanent','Heverlee','Flandria','active','pl', now()),
+  (:'SRJ3',:'SRCO','sr1076-c','Dzielnica SRCH1076','warehouse','permanent','Kessel-Lo','Flandria','active','pl', now()),
+  (:'SRJ4',:'SRCO','sr1076-d','Dzielnica SRCH1076','warehouse','permanent','Haren','Bruksela','active','pl', now()),
+  (:'SRJ5',:'SRCO','sr1076-e','Dzielnica SRCH1076','warehouse','permanent','Aalst','Flandria','active','pl', now());
+-- Punkt wyjścia: trigger 0153 przypisał oferty do części (Heverlee, Kessel-Lo, Haren) i gmin.
+select pg_temp.assert(
+  (select array_agg(l.kind || ':' || coalesce(p.slug, '-') order by j.slug)
+     from public.jobs j join public.locations l on l.id = j.location_id
+     left join public.locations p on p.id = l.parent_location_id where j.company_id = :'SRCO')
+  = array['municipality:-', 'section:leuven', 'section:leuven', 'section:brussels', 'municipality:-'],
+  'SRCH1076-0 oferty w częściach gmin mają location_id części z gminą nadrzędną');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SRCH1076-1: filtr po gminie obejmuje jej części (lista + licznik), w każdym języku/pisowni.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Leuven']))
+    = array['sr1076-a', 'sr1076-b', 'sr1076-c']
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 3
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Louvain']) = 3
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Brussel']) = 1
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven', 'Aalst']) = 4,
+  'SRCH1076-1 lista i licznik: filtr po gminie obejmuje oferty jej części');
+-- SRCH1076-2: filtr po samej części zwraca tylko tę część (bez rodzeństwa i gminy).
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Heverlee']))
+    = array['sr1076-b']
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Kessel-Lo']) = 1,
+  'SRCH1076-2 filtr po części gminy zwraca tylko część');
+-- SRCH1076-3: facet miasta = jedna pozycja na gminę nadrzędną; filtr w facetach spójny z listą.
+select pg_temp.assert(
+  (select array_agg(key || ':' || total order by key)
+     from public.get_public_job_filter_facets('pl', 'srch1076') where dimension = 'location')
+    = array['Aalst:1', 'Brussels:1', 'Leuven:3']
+  and (select total from public.get_public_job_filter_facets('pl', 'srch1076', p_locations => array['Leuven'])
+        where dimension = 'total') = 3
+  and (select total from public.get_public_job_filter_facets('pl', 'srch1076', p_locations => array['Leuven'])
+        where dimension = 'category' and key = 'warehouse') = 3,
+  'SRCH1076-3 facety: części gminy w pozycji gminy, licznik = lista');
+-- SRCH1076-4: wyszukiwanie tekstowe miasta (p_city) rozpoznaje gminę i dokłada jej części.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', 'Leuven') = 3
+  and public.get_public_jobs_count('pl', 'srch1076', 'Louvain') = 3
+  and public.get_public_jobs_count('pl', 'srch1076', 'Heverlee') = 1
+  and public.get_public_jobs_count('pl', 'srch1076', 'heve') = 1,
+  'SRCH1076-4 search_city_candidates: gmina obejmuje części, fragment tekstu jak dotąd');
+reset role;
+-- SRCH1076-5: alerty zapisanych wyszukiwań (saved_search_jobs_after) widzą te same oferty.
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs('{"locations":["Leuven"]}'::jsonb, 'pl', now() - interval '2 days')) = 3
+  and (select count(*) from public.saved_search_matching_jobs('{"locations":["Heverlee"]}'::jsonb, 'pl', now() - interval '2 days')) = 1
+  and (select count(*) from public.saved_search_matching_jobs('{"city":"Leuven"}'::jsonb, 'pl', now() - interval '2 days')) = 3,
+  'SRCH1076-5 zapisane wyszukiwania: filtr po gminie obejmuje części');
+reset role;
+-- SRCH1076-6: nieaktywna część nie wchodzi do gminy; nieaktywna gmina — facet wraca do nazw części.
+savepoint sr1076_6;
+update public.locations set is_active = false where slug = 'heverlee-leuven';
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 2,
+  'SRCH1076-6 nieaktywna część nie jest dołączana do gminy');
+rollback to savepoint sr1076_6;
+update public.locations set is_active = false where slug = 'leuven';
+select pg_temp.assert(
+  (select array_agg(key order by key) from public.get_public_job_filter_facets('pl', 'srch1076')
+    where dimension = 'location' and key not in ('Aalst', 'Brussels'))
+  = array['Heverlee', 'Kessel-Lo', 'Leuven'],
+  'SRCH1076-6b facet bez aktywnej gminy nadrzędnej: pozycje części osobno');
+rollback to savepoint sr1076_6;
+
+-- KONTROLA UJEMNA (SRCH1076-N1): filtr z 0153 (sama gmina) gubi oferty części gmin.
+savepoint sr1076_n1;
+create or replace function public.location_filter_ids(p_values text[])
+returns uuid[] language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select coalesce(array_agg(distinct a.location_id), '{}'::uuid[])
+  from unnest(p_values[1:100]) v
+  join public.location_aliases a on a.alias_key = public.city_key(left(v, 200))
+  join public.locations l on l.id = a.location_id and l.is_active;
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 1
+  and (select array_agg(slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Leuven'])) = array['sr1076-a'],
+  'SRCH1076-N1 kontrola ujemna: location_filter_ids z 0153 pomija dzielnice gminy');
+reset role;
+rollback to savepoint sr1076_n1;
+-- KONTROLA UJEMNA (SRCH1076-N2): search_city_candidates z 0153 nie dokłada części gminy.
+savepoint sr1076_n2;
+create or replace function public.search_city_candidates(p_city text)
+returns setof uuid language sql stable strict
+set search_path = public, pg_temp as $$
+  select j.id from public.jobs j
+  where j.status = 'active' and j.deleted_at is null
+    and public.search_fold(j.city) like public.search_like_pattern(p_city) escape '\'
+  union
+  select j.id from public.jobs j
+  where j.status = 'active' and j.deleted_at is null
+    and j.location_id = (select public.resolve_location_id(p_city));
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', 'Leuven') = 1,
+  'SRCH1076-N2 kontrola ujemna: search_city_candidates z 0153 nie łączy gminy z jej częściami');
+reset role;
+rollback to savepoint sr1076_n2;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- EP05. Stronicowanie kursorem list panelu pracodawcy (audyt P1-05, migracja 0152).
 --       get_company_matches_page: najlepsze dopasowanie na kandydata w porządku
 --       (score DESC, candidate_id ASC), kursor w obu kierunkach, remis wyniku na granicy strony,
@@ -16410,6 +16565,109 @@ delete from public.job_duplications where client_key = :'KEYJD'::uuid;
 set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
 select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdneg \gset
 select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu klucza powstaje duplikat');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- TI179. Oczekujące zaproszenia: język, autor, odnowienie (0187).
+-- get_company_invitations zwraca `locale` (0121) i `inviter_name`; bramka owner/admin bez
+-- zmian. Odnowienie = invite_company_member z językiem z bazy: ten sam wiersz, nowa ważność,
+-- autor = odnawiający. Kontrola ujemna: definicja z 0086 nie ma kolumny `locale`.
+-- ============================================================================
+\set TIO 'e8700000-0000-0000-0000-0000000187a1'
+\set TIA 'e8700000-0000-0000-0000-0000000187a2'
+\set TIR 'e8700000-0000-0000-0000-0000000187a3'
+\set TIX 'e8700000-0000-0000-0000-0000000187b1'
+\set TIC 'e8700000-0000-0000-0000-0000000187f1'
+\set TICX 'e8700000-0000-0000-0000-0000000187f2'
+
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TIO','tio235@test.be','Olga O','{"role":"employer","first_name":"Olga","last_name":"Owner235","locale":"pl"}'),
+  (:'TIA','tia235@test.be','Adam A','{"role":"employer","first_name":"Adam","last_name":"Admin235","locale":"nl"}'),
+  (:'TIR','tir235@test.be','Rita R','{"role":"employer","first_name":"Rita","last_name":"Rec235","locale":"fr"}'),
+  (:'TIX','tix235@test.be','Xavier X','{"role":"employer","first_name":"Xavier","last_name":"Obcy235","locale":"en"}');
+update auth.users set email_verified = true where id in (:'TIO', :'TIA', :'TIR', :'TIX');
+insert into public.companies(id,name,status) values
+  (:'TIC','Firma TI179','verified'), (:'TICX','Firma TI179 obca','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'TIC',:'TIO','owner',true), (:'TIC',:'TIA','admin',true), (:'TIC',:'TIR','recruiter',true),
+  (:'TICX',:'TIX','owner',true);
+
+create or replace function pg_temp.ti_hash() returns text language sql volatile as $$
+  select encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex') $$;
+create or replace function pg_temp.ti_nonce() returns text language sql volatile as $$
+  select replace(gen_random_uuid()::text, '-', '') $$;
+
+-- TI179-1: owner zaprasza adres bez konta w języku nl — lista pokazuje język i autora.
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select invitation_id as tiinv
+  from public.invite_company_member(:'TIC', 'nowy235@firma.be', 'member', 'nl', pg_temp.ti_hash(), pg_temp.ti_nonce()) \gset
+select pg_temp.assert(
+  (select locale = 'nl' and inviter_name = 'Olga Owner235'
+     from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+  'TI179-1 język zaproszenia i autor na liście');
+reset role; reset app.current_uid;
+
+-- TI179-2: odnowienie przez admina (język z bazy) — ten sam wiersz, dłuższa ważność, nowy autor,
+-- data utworzenia bez zmian, drugi e-mail rejestracji w języku zaproszenia.
+update public.company_invitations set expires_at = now() + interval '1 day' where id = :'tiinv';
+select created_at as ticreated from public.company_invitations where id = :'tiinv' \gset
+set role authenticated; set app.current_uid = :'TIA'; select pg_temp.assert_client_role();
+select invitation_id as tiinv2, created as ticreated2
+  from public.invite_company_member(:'TIC', 'nowy235@firma.be', 'member',
+    (select locale from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+    pg_temp.ti_hash(), pg_temp.ti_nonce()) \gset
+select pg_temp.assert(:'tiinv2' = :'tiinv' and not :'ticreated2'::boolean,
+  'TI179-2 odnowienie = to samo zaproszenie');
+select pg_temp.assert(
+  (select expires_at > now() + interval '13 days' and inviter_name = 'Adam Admin235'
+          and created_at = :'ticreated'::timestamptz and locale = 'nl'
+     from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+  'TI179-2b ważność 14 dni, autor = odnawiający, data utworzenia i język bez zmian');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries
+     where to_email = 'nowy235@firma.be' and template = 'teamInvitationSignup' and locale = 'nl') = 2,
+  'TI179-2c nowy link rejestracji w języku zaproszenia');
+
+-- TI179-3: bramka bez zmian — rekruter tej firmy i owner obcej firmy nie czytają listy.
+set role authenticated; set app.current_uid = :'TIR'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.get_company_invitations(%L)', :'TIC'),
+  'PERMISSION_DENIED', 'TI179-3 rekruter nie widzi zaproszeń');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'TIX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.get_company_invitations(%L)', :'TIC'),
+  'PERMISSION_DENIED', 'TI179-3b owner obcej firmy nie widzi zaproszeń');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select * from public.get_company_invitations(%L)', :'TIC'),
+  'permission denied', 'TI179-3c anon bez EXECUTE');
+reset role;
+
+-- TI179-4: zaproszenie bez języka (sprzed 0121) → locale null, bez błędu.
+update public.company_invitations set locale = null where id = :'tiinv';
+set role authenticated; set app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select locale is null from public.get_company_invitations(:'TIC') where invitation_id = :'tiinv'),
+  'TI179-4 zaproszenie bez języka = null');
+reset role; reset app.current_uid;
+
+-- TI179-5 (kontrola ujemna): definicja z 0086 nie zwraca języka — panel nie mógłby odnowić
+-- zaproszenia w jego języku ani go pokazać.
+begin;
+drop function public.get_company_invitations(uuid);
+create function public.get_company_invitations(p_company_id uuid)
+returns table (invitation_id uuid, email text, role text, expires_at timestamptz, created_at timestamptz)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select i.id, i.email::text, i.role::text, i.expires_at, i.created_at
+  from public.company_invitations i
+  where i.company_id = p_company_id and i.status = 'pending' and i.expires_at > now();
+$$;
+grant execute on function public.get_company_invitations(uuid) to authenticated;
+set local role authenticated; set local app.current_uid = :'TIO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select locale from public.get_company_invitations(%L)', :'TIC'),
+  'column "locale" does not exist', 'TI179-5 kontrola ujemna: stara definicja bez języka');
 rollback;
 reset role; reset app.current_uid;
 
@@ -19260,7 +19518,1250 @@ set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
 
+\echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0185, #1033/#1034/#1089/#1091/#1090) ---'
+-- Sekcja niezależna od trybu portalu (rekordy procesu wstawia superuser ze znacznikiem seedu).
+\set M2OWN 'd2961000-0000-0000-0000-000000000001'
+\set M2REC 'd2961000-0000-0000-0000-000000000002'
+\set M2MEM 'd2961000-0000-0000-0000-000000000003'
+\set M2CAND 'd2961000-0000-0000-0000-000000000004'
+\set M2ADM 'd2961000-0000-0000-0000-000000000005'
+\set M2ADX 'd2961000-0000-0000-0000-000000000006'
+\set M2ADD 'd2961000-0000-0000-0000-000000000007'
+\set M2COMP 'd2961000-0000-0000-0000-0000000000f1'
+\set M2J1 'd2961000-0000-0000-0000-0000000000a1'
+\set M2J2 'd2961000-0000-0000-0000-0000000000a2'
+\set M2J3 'd2961000-0000-0000-0000-0000000000a3'
+\set M2J4 'd2961000-0000-0000-0000-0000000000a4'
+\set M2J5 'd2961000-0000-0000-0000-0000000000a5'
+\set M2J6 'd2961000-0000-0000-0000-0000000000a6'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'M2OWN','m2own@test.be','Otto M2','{"role":"employer","first_name":"Otto","last_name":"M2","locale":"pl"}'),
+  (:'M2REC','m2rec@test.be','Rex M2','{"role":"employer","first_name":"Rex","last_name":"M2","locale":"pl"}'),
+  (:'M2MEM','m2mem@test.be','Mila M2','{"role":"employer","first_name":"Mila","last_name":"M2","locale":"pl"}'),
+  (:'M2CAND','m2cand@test.be','Kasia M2','{"role":"candidate","first_name":"Kasia","last_name":"M2","locale":"pl"}'),
+  (:'M2ADM','m2adm@test.be','Ada M2','{"role":"employer","first_name":"Ada","last_name":"M2","locale":"pl"}'),
+  (:'M2ADX','m2adx@test.be','Adx M2','{"role":"employer","first_name":"Adx","last_name":"M2","locale":"pl"}'),
+  (:'M2ADD','m2add@test.be','Add M2','{"role":"employer","first_name":"Add","last_name":"M2","locale":"pl"}');
+select test_fixture.attest_candidates();
+update public.profiles set role = 'admin' where id in (:'M2ADM', :'M2ADX', :'M2ADD');
+update public.profiles set is_active = false where id = :'M2ADX';
+update public.profiles set deleted_at = now() where id = :'M2ADD';
+insert into public.companies(id,name,slug,status,vat_number,registration_number,verified_at) values
+  (:'M2COMP','Firma M2','firma-m2-slug','verified','BE0622222222','0622.222.222',now());
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'M2COMP',:'M2OWN','owner',true), (:'M2COMP',:'M2REC','recruiter',true), (:'M2COMP',:'M2MEM','member',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'M2J1',:'M2COMP','m2-j1','Szkic 1','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J2',:'M2COMP','m2-j2','Szkic ze zgłoszeniem','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J3',:'M2COMP','m2-j3','Szkic zapisany','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J4',:'M2COMP','m2-j4','Oferta aktywna','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'M2J5',:'M2COMP','m2-j5','Szkic 5','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J6',:'M2COMP','m2-j6','Szkic 6','warehouse','permanent','Antwerpia','Flandria','draft','pl');
+select set_config('pracujbe.allow_recruitment_write', 'on', false);
+insert into public.applications(job_id, candidate_id, company_id, status) values (:'M2J2', :'M2CAND', :'M2COMP', 'submitted');
+select set_config('pracujbe.allow_recruitment_write', '', false);
+insert into public.saved_jobs(candidate_id, job_id) values (:'M2CAND', :'M2J3');
+
+-- M2-1 (#1033): recruiter usuwa szkic bez powiązań; audyt `job.deleted` z aktorem, bez treści.
+set role authenticated; set app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = :'M2J1' returning id)
+select pg_temp.assert((select count(*) = 1 from del), 'M2-1 recruiter usuwa szkic bez powiązań');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'job.deleted' and entity_id = :'M2J1' and actor_id = :'M2REC'
+            and before_data = jsonb_build_object('status', 'draft', 'company_id', :'M2COMP'::uuid, 'slug', 'm2-j1')),
+  'M2-1b audyt usunięcia oferty (aktor, status, firma, slug — bez treści)');
+
+-- M2-2: zwykły member, oferta aktywna, szkic ze zgłoszeniem i szkic z zapisem kandydata — zero wierszy.
+set role authenticated; set app.current_uid = :'M2MEM'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = :'M2J5' returning id)
+select pg_temp.assert((select count(*) = 0 from del), 'M2-2 member nie usuwa nawet szkicu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id in (:'M2J4', :'M2J2', :'M2J3') returning id)
+select pg_temp.assert((select count(*) = 0 from del),
+  'M2-2b recruiter nie usuwa oferty aktywnej, szkicu ze zgłoszeniem ani szkicu zapisanego przez kandydata');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) = 4 from public.jobs where id in (:'M2J2', :'M2J3', :'M2J4', :'M2J5'))
+  and (select count(*) = 1 from public.applications where job_id = :'M2J2')
+  and (select count(*) = 1 from public.saved_jobs where job_id = :'M2J3'),
+  'M2-2c oferty i ich rekordy procesu zostały');
+select pg_temp.assert(public.job_has_process_records(:'M2J2') and public.job_has_process_records(:'M2J3')
+  and not public.job_has_process_records(:'M2J4'), 'M2-2d job_has_process_records: zgłoszenie i zapis tak, oferta bez rekordów nie');
+
+-- M2-3 (kontrola ujemna): polityka z 0033 pozwalała recruiterowi usunąć aktywną ofertę i szkic
+-- ze zgłoszeniem — kaskada kasuje zgłoszenie bez śladu (poza audytem usunięcia oferty).
+begin;
+drop policy jobs_delete_member on public.jobs;
+create policy jobs_delete_member on public.jobs for delete to authenticated using (public.can_manage_jobs(company_id));
+set local role authenticated; set local app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id in (:'M2J4', :'M2J2') returning id)
+select pg_temp.assert((select count(*) = 2 from del), 'M2-3 kontrola ujemna: polityka 0033 usuwa ofertę aktywną i szkic ze zgłoszeniem');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.applications where job_id = :'M2J2'),
+  'M2-3b kontrola ujemna: kaskada skasowała zgłoszenie kandydata');
+rollback;
+select pg_temp.assert(exists (select 1 from public.applications where job_id = :'M2J2') and exists (select 1 from public.jobs where id = :'M2J4'),
+  'M2-3c po cofnięciu transakcji oferta i zgłoszenie są');
+
+-- M2-4: usunięcie ofert przez właściciela tabel/service_role dalej możliwe, z audytem bez aktora.
+delete from public.jobs where id = :'M2J6';
+select pg_temp.assert(exists (select 1 from public.audit_logs where action = 'job.deleted' and entity_id = :'M2J6' and actor_id is null),
+  'M2-4 usunięcie poza sesją klienta też zostawia wpis audytu (bez aktora)');
+
+-- M2-5 (#1034): numer rejestrowy zweryfikowanej firmy działa jak VAT — zmiana cofa weryfikację.
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set registration_number = '0633.333.333' where id = :'M2COMP';
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'pending' and verified_at is null and verified_by is null
+                         from public.companies where id = :'M2COMP'),
+  'M2-5 zmiana numeru rejestrowego zweryfikowanej firmy → pending (jak VAT)');
+update public.companies set status = 'verified', verified_at = now() where id = :'M2COMP';
+-- Zapis tej samej wartości (bez zmiany) nie cofa weryfikacji.
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set registration_number = '0633.333.333' where id = :'M2COMP';
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'verified' from public.companies where id = :'M2COMP'),
+  'M2-5b ta sama wartość numeru nie cofa weryfikacji');
+-- M2-5c (kontrola ujemna): funkcja z 0084 (tylko nazwa/VAT) zostawia firmę zweryfikowaną po zmianie numeru.
+begin;
+create or replace function public.protect_company_verification()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if auth.uid() is not null and not public.is_admin() then
+    if old.status = 'verified' and (new.name is distinct from old.name or new.vat_number is distinct from old.vat_number) then
+      new.status := 'pending'; new.verified_at := null; new.verified_by := null;
+    end if;
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set registration_number = '0644.444.444' where id = :'M2COMP';
+reset role;
+select pg_temp.assert((select status::text = 'verified' from public.companies where id = :'M2COMP'),
+  'M2-5c kontrola ujemna: strażnik 0084 przepuszcza zmianę numeru bez ponownej weryfikacji');
+rollback;
+
+-- M2-6: pola techniczne firmy niezmienne dla roli klienta (owner firmy też nie zmieni).
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.companies set slug = 'inny-slug' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6 slug niezmienny');
+select pg_temp.expect_error($q$update public.companies set is_demo = true where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6b is_demo niezmienne');
+select pg_temp.expect_error($q$update public.companies set deleted_at = now() where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6c deleted_at niezmienne');
+select pg_temp.expect_error($q$update public.companies set created_at = now() - interval '1 year' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6e created_at niezmienne');
+-- Dozwolone dane (opis) nadal się zapisują.
+update public.companies set description = 'Opis firmy M2' where id = :'M2COMP';
+reset role; reset app.current_uid;
+select pg_temp.assert((select description = 'Opis firmy M2' and slug = 'firma-m2-slug' and not is_demo and deleted_at is null
+                         from public.companies where id = :'M2COMP'), 'M2-6f opis zapisany, pola techniczne bez zmian');
+-- Właściciel tabel / service_role (RPC definer, migracje) zmieniają je bez przeszkód.
+update public.companies set created_at = timestamptz '2026-01-01 00:00:00+00' where id = :'M2COMP';
+select pg_temp.assert((select created_at = timestamptz '2026-01-01 00:00:00+00' from public.companies where id = :'M2COMP'),
+  'M2-6g zaufana ścieżka (poza rolą klienta) zmienia pole techniczne');
+-- M2-6h (kontrola ujemna): bez strażnika owner firmy zmienia slug publicznego profilu.
+begin;
+drop trigger trg_guard_company_immutable_fields on public.companies;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set slug = 'przejety-slug' where id = :'M2COMP';
+reset role;
+select pg_temp.assert((select slug = 'przejety-slug' from public.companies where id = :'M2COMP'),
+  'M2-6h kontrola ujemna: bez strażnika slug profilu publicznego się zmienia');
+rollback;
+
+-- M2-7 (#1034): blokada moderacyjna — sama flaga sesji nie wystarcza roli klienta.
+insert into public.companies(id,name,status) values ('d2961000-0000-0000-0000-0000000000f2','Firma M2 zablokowana','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  ('d2961000-0000-0000-0000-0000000000f2', :'M2OWN', 'owner', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('d2961000-0000-0000-0000-0000000000a7', 'd2961000-0000-0000-0000-0000000000f2', 'm2-j7', 'Oferta do decyzji', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl');
+set role service_role;
+select report_id as m2r1 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', 'd2961000-0000-0000-0000-0000000000a7', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, 'Gość M2', 'm2r1@test.be', 'fr', true) \gset
+reset role;
+set role authenticated; set app.current_uid = :'M2ADM'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'m2r1', 'open', 'job_removed',
+  'Oferta wymaga od kandydatów opłaty za rekrutację z góry.', 'terms', '§ 4') as m2d1 \gset
+reset role; reset app.current_uid;
+select id as m2dec from public.moderation_decisions where report_id = :'m2r1' \gset
+select pg_temp.assert((select moderation_decision_id = :'m2dec'::uuid and status::text = 'closed'
+                         from public.jobs where id = 'd2961000-0000-0000-0000-0000000000a7'),
+  'M2-7a decyzja przez RPC (definer) ustawia blokadę i zamyka ofertę (ścieżka zaufana działa)');
+
+-- Recruiter firmy: flaga sesji + zdjęcie blokady z oferty → odrzucone (dawniej przechodziło).
+begin;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select set_config('pracujbe.moderation', 'on', true);
+select pg_temp.expect_error($q$update public.jobs set moderation_decision_id = null where id = 'd2961000-0000-0000-0000-0000000000a7'$q$,
+  'blokadę moderacyjną', 'M2-7b flaga sesji nie zdejmuje blokady z oferty roli klienta');
+rollback;
+begin;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select set_config('pracujbe.moderation', 'on', true);
+select pg_temp.expect_error(format($q$update public.companies set moderation_decision_id = %L where id = 'd2961000-0000-0000-0000-0000000000f2'$q$, :'m2dec'),
+  'blokadę moderacyjną', 'M2-7c flaga sesji nie ustawia blokady na firmie roli klienta');
+rollback;
+-- M2-7d (kontrola ujemna): bramka z 0099 (samo GUC) przepuszcza rolę klienta — właściciel firmy
+-- przypisuje jej cudzą decyzję i zdejmuje ją z powrotem, poza ścieżką administracyjną.
+begin;
+create or replace function public.guard_company_moderation_lock()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('pracujbe.moderation', true), '') <> 'on' then
+    if new.moderation_decision_id is distinct from old.moderation_decision_id then
+      raise exception 'PERMISSION_DENIED: blokadę moderacyjną zmienia tylko decyzja' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select set_config('pracujbe.moderation', 'on', true);
+update public.companies set moderation_decision_id = :'m2dec' where id = 'd2961000-0000-0000-0000-0000000000f2';
+reset role;
+select pg_temp.assert((select moderation_decision_id = :'m2dec'::uuid from public.companies where id = 'd2961000-0000-0000-0000-0000000000f2'),
+  'M2-7d kontrola ujemna: bramka 0099 pozwala pracodawcy ustawić blokadę moderacyjną flagą sesji');
+rollback;
+-- Bez flagi zwykła próba nadal odrzucona (bez zmiany).
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.jobs set moderation_decision_id = null where id = 'd2961000-0000-0000-0000-0000000000a7'$q$,
+  'blokadę moderacyjną', 'M2-7e bez flagi sesji też odrzucone');
+reset role; reset app.current_uid;
+
+-- M2-8 (#1033): szkic objęty decyzją moderacyjną (blokada ustawiona zaufaną ścieżką) nie jest usuwalny.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('d2961000-0000-0000-0000-0000000000a8', 'd2961000-0000-0000-0000-0000000000f2', 'm2-j8', 'Szkic zablokowany', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'draft', 'pl');
+begin;
+select set_config('pracujbe.moderation', 'on', true);
+update public.jobs set moderation_decision_id = :'m2dec' where id = 'd2961000-0000-0000-0000-0000000000a8';
+select set_config('pracujbe.moderation', '', true);
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = 'd2961000-0000-0000-0000-0000000000a8' returning id)
+select pg_temp.assert((select count(*) = 0 from del), 'M2-8 szkic z decyzją moderacyjną nie jest usuwalny przez klienta');
+reset role;
+-- Kontrola ujemna: ten sam szkic bez decyzji jest usuwalny.
+select set_config('pracujbe.moderation', 'on', true);
+update public.jobs set moderation_decision_id = null where id = 'd2961000-0000-0000-0000-0000000000a8';
+select set_config('pracujbe.moderation', '', true);
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = 'd2961000-0000-0000-0000-0000000000a8' returning id)
+select pg_temp.assert((select count(*) = 1 from del), 'M2-8b kontrola ujemna: bez decyzji ten sam szkic jest usuwalny');
+reset role;
+rollback;
+
+-- M2-9 (#1089): tabela files — role klienta: folder właściciela, prywatność, status skanu.
+set role authenticated; set app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+insert into public.files(owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility, scan_status)
+  values (:'M2CAND', 'm2-bucket', 'd2961000-0000-0000-0000-000000000004/doc.pdf', 'doc.pdf', 'application/pdf', 10, 'm2_doc', 'private', 'skipped');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.files where bucket = 'm2-bucket' and owner_id = :'M2CAND'),
+  'M2-9 własny plik w folderze właściciela, prywatny, status skanu skipped — zapisany');
+set role authenticated; set app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$insert into public.files(owner_id, bucket, path, entity_type, scan_status)
+  values ('d2961000-0000-0000-0000-000000000004', 'm2-bucket', 'd2961000-0000-0000-0000-000000000099/x.pdf', 'm2_doc', 'pending')$q$,
+  'nowy plik tylko prywatny', 'M2-9b ścieżka w folderze cudzego konta odrzucona');
+select pg_temp.expect_error($q$insert into public.files(owner_id, bucket, path, entity_type, scan_status)
+  values ('d2961000-0000-0000-0000-000000000004', 'm2-bucket', 'd2961000-0000-0000-0000-000000000004/y.pdf', 'm2_doc', 'clean')$q$,
+  'nowy plik tylko prywatny', 'M2-9c klient nie ustawia statusu skanu clean');
+select pg_temp.expect_error($q$insert into public.files(owner_id, bucket, path, entity_type, scan_status, visibility)
+  values ('d2961000-0000-0000-0000-000000000004', 'm2-bucket', 'd2961000-0000-0000-0000-000000000004/z.pdf', 'm2_doc', 'pending', 'public')$q$,
+  'nowy plik tylko prywatny', 'M2-9d klient nie tworzy pliku publicznego');
+select pg_temp.expect_error($q$update public.files set scan_status = 'clean' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9e klient nie zmienia statusu skanu');
+select pg_temp.expect_error($q$update public.files set path = 'd2961000-0000-0000-0000-000000000004/inny.pdf' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9f klient nie zmienia ścieżki');
+select pg_temp.expect_error($q$update public.files set entity_type = 'candidate_cv' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9g klient nie zmienia typu encji');
+select pg_temp.expect_error($q$update public.files set visibility = 'public' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9h klient nie upublicznia pliku');
+update public.files set file_name = 'nowa-nazwa.pdf' where bucket = 'm2-bucket';
+reset role; reset app.current_uid;
+select pg_temp.assert((select file_name = 'nowa-nazwa.pdf' and scan_status = 'skipped' from public.files where bucket = 'm2-bucket'),
+  'M2-9i nazwa pliku edytowalna, status skanu bez zmian');
+-- Zaufana ścieżka (skaner/serwer) ustawia status skanu.
+update public.files set scan_status = 'clean' where bucket = 'm2-bucket';
+select pg_temp.assert((select scan_status = 'clean' from public.files where bucket = 'm2-bucket'), 'M2-9j serwer ustawia status skanu');
+-- M2-9k (kontrola ujemna): bez strażnika klient sam oznacza plik jako czysty.
+begin;
+drop trigger trg_files_guard_client_write on public.files;
+update public.files set scan_status = 'infected' where bucket = 'm2-bucket';
+set local role authenticated; set local app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+update public.files set scan_status = 'clean', visibility = 'public' where bucket = 'm2-bucket';
+reset role;
+select pg_temp.assert((select scan_status = 'clean' and visibility::text = 'public' from public.files where bucket = 'm2-bucket'),
+  'M2-9k kontrola ujemna: bez strażnika klient zmienia status skanu i widoczność');
+rollback;
+
+-- M2-10 (#1089): is_admin() — tylko aktywny, nieusunięty profil admina.
+set role authenticated; set app.current_uid = :'M2ADM'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_admin(), 'M2-10 aktywny admin przechodzi is_admin()');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'M2ADX'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_admin(), 'M2-10b dezaktywowany admin nie przechodzi is_admin()');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'M2ADD'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_admin(), 'M2-10c usunięty admin nie przechodzi is_admin()');
+select pg_temp.expect_error('select public.admin_set_company_status(''d2961000-0000-0000-0000-0000000000f2'', ''suspended'', ''verified'', ''powód'')',
+  'PERMISSION_DENIED', 'M2-10d RPC administracyjne odrzucają dezaktywowanego admina');
+reset role; reset app.current_uid;
+-- M2-10e (kontrola ujemna): definicja z 0019 (tylko rola) przepuszcza dezaktywowany profil.
+begin;
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
+$$;
+set local role authenticated; set local app.current_uid = :'M2ADX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_admin(), 'M2-10e kontrola ujemna: is_admin() z 0019 przepuszcza dezaktywowanego admina');
+reset role;
+rollback;
+
+-- M2-11 (#1089): licznik właścicieli bez EXECUTE dla ról klienta; strażnik ostatniego właściciela działa.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.count_other_active_owners(uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.count_other_active_owners(uuid, uuid)', 'execute'),
+  'M2-11 count_other_active_owners bez EXECUTE dla anon/authenticated');
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.company_members set is_active = false
+  where company_id = 'd2961000-0000-0000-0000-0000000000f1' and profile_id = 'd2961000-0000-0000-0000-000000000001'$q$,
+  'co najmniej jednego aktywnego właściciela', 'M2-11b ostatni aktywny właściciel nie dezaktywuje się (licznik inline pod RLS)');
+select pg_temp.expect_error($q$delete from public.company_members
+  where company_id = 'd2961000-0000-0000-0000-0000000000f1' and profile_id = 'd2961000-0000-0000-0000-000000000001'$q$,
+  'ostatniego aktywnego właściciela', 'M2-11c ostatni aktywny właściciel nie opuści firmy');
+reset role; reset app.current_uid;
+-- Drugi właściciel → pierwszy może zostać zdezaktywowany (ścieżka pozytywna tego samego strażnika).
+insert into public.company_members(company_id, profile_id, role, is_active) values ('d2961000-0000-0000-0000-0000000000f1', :'M2ADM', 'owner', true);
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.company_members set is_active = false
+  where company_id = 'd2961000-0000-0000-0000-0000000000f1' and profile_id = 'd2961000-0000-0000-0000-000000000001';
+reset role; reset app.current_uid;
+select pg_temp.assert((select not is_active from public.company_members where company_id = :'M2COMP' and profile_id = :'M2OWN'),
+  'M2-11d przy drugim właścicielu pierwszy może zostać zdezaktywowany');
+update public.company_members set is_active = true where company_id = :'M2COMP' and profile_id = :'M2OWN';
+delete from public.company_members where company_id = :'M2COMP' and profile_id = :'M2ADM';
+
+-- M2-12 (#1091): retencja wygasłych sesji i tokenów weryfikacji (7 dni po wygaśnięciu).
+insert into auth.sessions(id, user_id, token, expires_at, ip_address, user_agent) values
+  ('d2961000-0000-0000-0000-0000000000b1', :'M2CAND', 'm2-tok-old', now() - interval '10 days', '10.0.0.1', 'agent-old'),
+  ('d2961000-0000-0000-0000-0000000000b2', :'M2CAND', 'm2-tok-recent', now() - interval '2 days', '10.0.0.2', 'agent-recent'),
+  ('d2961000-0000-0000-0000-0000000000b3', :'M2CAND', 'm2-tok-live', now() + interval '2 days', '10.0.0.3', 'agent-live');
+insert into auth.verifications(id, identifier, value, expires_at) values
+  ('d2961000-0000-0000-0000-0000000000c1', 'm2-verif-old', 'v', now() - interval '10 days'),
+  ('d2961000-0000-0000-0000-0000000000c2', 'm2-verif-recent', 'v', now() - interval '1 day'),
+  ('d2961000-0000-0000-0000-0000000000c3', 'm2-verif-live', 'v', now() + interval '1 hour');
+-- Kategorie są danymi (retention_policies) — domyślnie 7 dni, zadanie czytają run_retention_purge i krok auth.
+select pg_temp.assert(
+  (select count(*) = 2 from public.retention_policies
+    where key in ('expired_auth_session', 'expired_auth_verification') and period = interval '7 days' and enforcement = 'job'),
+  'M2-12 kategorie retencji sesji i tokenów (7 dni, zadanie job)');
+-- Dry-run zlicza bez usuwania.
+set role service_role;
+select (public.run_retention_purge(200, true)->>'expiredAuthSessions')::int as m2_dry_s,
+       (public.run_retention_purge(200, true)->>'expiredAuthVerifications')::int as m2_dry_v \gset
+reset role;
+select pg_temp.assert(:m2_dry_s = 1 and :m2_dry_v = 1
+  and (select count(*) = 3 from auth.sessions where user_id = :'M2CAND')
+  and (select count(*) = 3 from auth.verifications where identifier like 'm2-verif-%'),
+  'M2-12b dry-run: liczniki 1/1, dane nietknięte');
+-- Kontrola ujemna: kategoria wyłączona (okres null) — nic nie jest usuwane.
+begin;
+update public.retention_policies set period = null where key in ('expired_auth_session', 'expired_auth_verification');
+select public.retention_purge_auth_batch(200) as m2_off \gset
+select pg_temp.assert((:'m2_off'::jsonb->>'expiredAuthSessions')::int = 0 and (:'m2_off'::jsonb->>'expiredAuthVerifications')::int = 0
+  and (select count(*) = 3 from auth.sessions where user_id = :'M2CAND'),
+  'M2-12c kontrola ujemna: wyłączona kategoria niczego nie usuwa');
+rollback;
+select public.retention_purge_auth_batch(200) as m2_run \gset
+select pg_temp.assert((:'m2_run'::jsonb->>'expiredAuthSessions')::int = 1 and (:'m2_run'::jsonb->>'expiredAuthVerifications')::int = 1
+  and not exists (select 1 from auth.sessions where id = 'd2961000-0000-0000-0000-0000000000b1')
+  and exists (select 1 from auth.sessions where id = 'd2961000-0000-0000-0000-0000000000b2')
+  and exists (select 1 from auth.sessions where id = 'd2961000-0000-0000-0000-0000000000b3')
+  and not exists (select 1 from auth.verifications where id = 'd2961000-0000-0000-0000-0000000000c1')
+  and exists (select 1 from auth.verifications where id = 'd2961000-0000-0000-0000-0000000000c2')
+  and exists (select 1 from auth.verifications where id = 'd2961000-0000-0000-0000-0000000000c3'),
+  'M2-12d usunięta tylko sesja i token wygasłe > 7 dni; świeżo wygasłe i aktywne zostają');
+-- Partia ograniczona limitem: fullBatches = 1 przy wyczerpaniu limitu.
+insert into auth.sessions(user_id, token, expires_at) select :'M2CAND', 'm2-bulk-' || g, now() - interval '30 days' from generate_series(1, 3) g;
+select public.retention_purge_auth_batch(1) as m2_lim \gset
+select pg_temp.assert((:'m2_lim'::jsonb->>'expiredAuthSessions')::int = 1 and (:'m2_lim'::jsonb->>'fullBatches')::int = 1,
+  'M2-12e limit partii = 1 → jedna sesja i fullBatches = 1 (worker woła kolejną)');
+delete from auth.sessions where token like 'm2-bulk-%' or token like 'm2-tok-%';
+delete from auth.verifications where identifier like 'm2-verif-%';
+-- Klient nie woła zadania retencji.
+set role authenticated; set app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.retention_purge_auth_batch(10)', 'permission denied', 'M2-12f rola klienta nie uruchamia kroku retencji');
+reset role; reset app.current_uid;
+
+-- M2-13 (#1091): usunięcie konta usuwa tokeny resetu hasła zapisane pod identyfikatorem konta.
+\set M2GONE 'd2961000-0000-0000-0000-000000000008'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'M2GONE','m2gone@test.be','Gone M2','{"role":"candidate","first_name":"Gone","last_name":"M2","locale":"pl"}');
+insert into auth.verifications(identifier, value, expires_at) values
+  ('reset-password:m2-gone-1', :'M2GONE', now() + interval '1 hour'),
+  ('reset-password:m2-gone-2', :'M2GONE', now() - interval '1 day'),
+  ('m2gone@test.be', 'mail-token', now() + interval '1 hour'),
+  ('reset-password:m2-other', :'M2CAND', now() + interval '1 hour');
+-- Kontrola ujemna: bez triggera tokeny zostają po usunięciu konta (stan sprzed 0185).
+begin;
+drop trigger trg_auth_users_delete_cleanup on auth.users;
+delete from auth.users where id = :'M2GONE';
+select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2-gone-%'),
+  'M2-13 kontrola ujemna: bez triggera tokeny resetu usuniętego konta zostają');
+rollback;
+delete from auth.users where id = :'M2GONE';
+select pg_temp.assert(not exists (select 1 from auth.verifications where identifier in ('reset-password:m2-gone-1', 'reset-password:m2-gone-2', 'm2gone@test.be'))
+  and exists (select 1 from auth.verifications where identifier = 'reset-password:m2-other'),
+  'M2-13b usunięcie konta kasuje jego tokeny resetu i weryfikacje po adresie; cudze zostają');
+delete from auth.verifications where identifier = 'reset-password:m2-other';
+
+-- M2-14 (#1090): ustawienie hasła unieważnia pozostałe linki resetu tego konta.
+\set M2PW 'd2961000-0000-0000-0000-000000000009'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'M2PW','m2pw@test.be','Pw M2','{"role":"candidate","first_name":"Pw","last_name":"M2","locale":"pl"}');
+insert into auth.accounts(id, user_id, account_id, provider_id, password)
+  values ('d2961000-0000-0000-0000-0000000000d1', :'M2PW', :'M2PW', 'credential', 'hash-stare');
+insert into auth.verifications(identifier, value, expires_at) values
+  ('reset-password:m2pw-1', :'M2PW', now() + interval '1 hour'),
+  ('reset-password:m2pw-2', :'M2PW', now() + interval '1 hour'),
+  ('reset-password:m2pw-cand', :'M2CAND', now() + interval '1 hour'),
+  ('m2-inne-zadanie', :'M2PW', now() + interval '1 hour');
+insert into auth.email_outbox(user_id, kind, recipient_email, first_name, recipient_role, locale, token, expires_at, idempotency_key, status)
+  values (:'M2PW', 'password_reset', 'm2pw@test.be', 'Pw', 'candidate', 'pl', 'm2pw-1', now() + interval '1 hour', repeat('a', 64), 'queued'),
+         (:'M2PW', 'password_reset', 'm2pw@test.be', 'Pw', 'candidate', 'pl', 'm2pw-sent', now() + interval '1 hour', repeat('b', 64), 'queued');
+update auth.email_outbox set status = 'sent', token = null, sent_at = now() where idempotency_key = repeat('b', 64);
+-- Zapis tego samego hasła i zmiana konta innego niż credential nie unieważniają linków.
+update auth.accounts set password = 'hash-stare' where id = 'd2961000-0000-0000-0000-0000000000d1';
+select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2pw-%' and value = :'M2PW'),
+  'M2-14 ten sam hash hasła nie unieważnia linków');
+-- Kontrola ujemna: bez triggera nowe hasło zostawia stare linki ważne (stan sprzed 0185).
+begin;
+drop trigger trg_auth_accounts_invalidate_reset_links on auth.accounts;
+update auth.accounts set password = 'hash-nowe' where id = 'd2961000-0000-0000-0000-0000000000d1';
+select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2pw-%' and value = :'M2PW'),
+  'M2-14b kontrola ujemna: bez triggera stare linki resetu zostają po zmianie hasła');
+rollback;
+update auth.accounts set password = 'hash-nowe' where id = 'd2961000-0000-0000-0000-0000000000d1';
+select pg_temp.assert(not exists (select 1 from auth.verifications where value = :'M2PW' and identifier like 'reset-password:%')
+  and exists (select 1 from auth.verifications where identifier = 'reset-password:m2pw-cand')
+  and exists (select 1 from auth.verifications where identifier = 'm2-inne-zadanie'),
+  'M2-14c nowe hasło kasuje wszystkie linki resetu konta; cudze i inne rodzaje weryfikacji zostają');
+select pg_temp.assert(
+  (select status = 'expired' and token is null from auth.email_outbox where idempotency_key = repeat('a', 64))
+  and (select status = 'sent' from auth.email_outbox where idempotency_key = repeat('b', 64)),
+  'M2-14d niewysłany list resetu wycofany z kolejki, wysłany bez zmian');
+-- Ustawienie hasła przy tworzeniu konta credential (INSERT) też działa: nowe konto, świeże linki.
+insert into auth.verifications(identifier, value, expires_at) values ('reset-password:m2pw-3', :'M2CAND', now() + interval '1 hour');
+delete from auth.accounts where id = 'd2961000-0000-0000-0000-0000000000d1';
+insert into auth.accounts(user_id, account_id, provider_id, password) values (:'M2CAND', :'M2CAND', 'credential', 'hash-cand');
+select pg_temp.assert(not exists (select 1 from auth.verifications where identifier in ('reset-password:m2pw-cand', 'reset-password:m2pw-3')),
+  'M2-14e utworzenie konta credential z hasłem unieważnia linki resetu tego konta');
+delete from auth.accounts where user_id = :'M2CAND' and provider_id = 'credential';
+delete from auth.verifications where identifier = 'm2-inne-zadanie';
+delete from auth.users where id = :'M2PW';
 -- ============================================================================
+-- EMQ1038 / EL1049 (0186 — numer tymczasowy): marketing tylko na potwierdzony adres
+-- i zmiana języka e-maili przez użytkownika.
+-- ============================================================================
+\set EQ1 'e1038000-0000-0000-0000-0000000000a1'
+\set EQ2 'e1038000-0000-0000-0000-0000000000a2'
+\set EQ3 'e1038000-0000-0000-0000-0000000000a3'
+\set EQ4 'e1038000-0000-0000-0000-0000000000a4'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'EQ1','eq1@test.be','Eq 1','{"role":"candidate","first_name":"Eq","last_name":"1","locale":"pl"}'),
+  (:'EQ2','eq2@test.be','Eq 2','{"role":"candidate","first_name":"Eq","last_name":"2","locale":"nl"}'),
+  (:'EQ3','eq3@test.be','Eq 3','{"role":"candidate","first_name":"Eq","last_name":"3","locale":"fr"}'),
+  (:'EQ4','eq4@test.be','Eq 4','{"role":"candidate","first_name":"Eq","last_name":"4","locale":"en"}');
+select test_fixture.attest_candidates();
+-- EQ1 potwierdzony + zgoda; EQ2 zgoda, ale adres niepotwierdzony; EQ3 potwierdzony bez zgody.
+update auth.users set email_verified = true where id in (:'EQ1', :'EQ3');
+insert into public.notification_preferences (profile_id, email_marketing)
+values (:'EQ1', true), (:'EQ2', true), (:'EQ3', false)
+on conflict (profile_id) do update set email_marketing = excluded.email_marketing;
+
+-- EMQ1038-1: zgoda odbiorcy.
+select pg_temp.assert(
+  public.email_address_verified(:'EQ1') and not public.email_address_verified(:'EQ2'),
+  'EMQ1038-1 potwierdzenie adresu czytane z konta');
+select pg_temp.assert(
+  public.email_allowed(:'EQ1', 'newsletter') is true
+  and public.email_allowed(:'EQ2', 'newsletter') is false
+  and public.email_allowed(:'EQ3', 'newsletter') is false,
+  'EMQ1038-1b marketing = zgoda ORAZ potwierdzony adres');
+select pg_temp.assert(
+  public.email_allowed(:'EQ2', 'statusChanged') is true and public.email_allowed(:'EQ2', 'jobPublished') is true,
+  'EMQ1038-1c poczta transakcyjna nie zależy od potwierdzenia adresu');
+
+-- EMQ1038-2: kolejkowanie z wynikiem.
+select pg_temp.assert(
+  (select outcome = 'unverified_address' and delivery_id is null
+     from public.enqueue_email_outcome(:'EQ2', 'newsletter', null, null, 'emq1038-news-2', '{}'::jsonb))
+  and not exists (select 1 from public.email_deliveries where idempotency_key = 'emq1038-news-2'),
+  'EMQ1038-2 niepotwierdzony adres: wynik unverified_address, brak wiersza w kolejce');
+select pg_temp.assert(
+  (select outcome = 'opted_out' from public.enqueue_email_outcome(:'EQ3', 'newsletter', null, null, 'emq1038-news-3', '{}'::jsonb)),
+  'EMQ1038-2b potwierdzony bez zgody: nadal opted_out');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ2', 'statusChanged', 'application', null, 'emq1038-status-2', '{}'::jsonb)),
+  'EMQ1038-2d transakcyjny e-mail do niepotwierdzonego adresu bez zmian');
+
+-- EMQ1038-3: kampania. Treść w 4 językach jak w CM45 (zmienna CMJOBS).
+-- Zgody z wcześniejszych sekcji wyłączone, żeby paczka dotyczyła tylko odbiorców tej sekcji.
+update public.notification_preferences set email_marketing = false
+ where profile_id not in (:'EQ1', :'EQ2', :'EQ3', :'EQ4') and email_marketing;
+update public.notification_preferences set email_marketing = true where profile_id = :'EQ4';
+set role service_role;
+select public.create_email_campaign_revision('emq1038-news', :'CMJOBS'::jsonb) as eq_rev \gset
+select public.activate_email_campaign(:'eq_rev');
+select public.enqueue_campaign_batch(:'eq_rev', 5000);
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ1'
+            and status = 'queued')
+  and not exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ2')
+  and not exists (select 1 from public.email_deliveries where campaign_id = :'eq_rev'::uuid and profile_id = :'EQ2'),
+  'EMQ1038-3 potwierdzony adres zakolejkowany; niepotwierdzony nie jest rezerwowany ani kolejkowany');
+-- EMQ1038-3n: KONTROLA UJEMNA — wybór odbiorców z 0101 (sama zgoda) obejmuje niepotwierdzony adres.
+select pg_temp.assert(
+  exists (select 1 from public.notification_preferences np
+           where np.email_marketing and np.profile_id = :'EQ2'
+             and not exists (select 1 from public.email_campaign_recipients r
+                              where r.campaign_id = :'eq_rev' and r.profile_id = np.profile_id))
+  and not public.email_address_verified(:'EQ2'),
+  'EMQ1038-3n kontrola ujemna: wybór po samej zgodzie (0101) wskazałby niepotwierdzony adres');
+select pg_temp.assert((select status from public.email_campaigns where id = :'eq_rev') = 'active',
+  'EMQ1038-3b kampania nadal aktywna po pierwszej paczce');
+-- Potwierdzenie adresu w trakcie aktywnej kampanii: odbiorca trafia do następnej paczki.
+update auth.users set email_verified = true where id = :'EQ2';
+set role service_role;
+select public.enqueue_campaign_batch(:'eq_rev', 5000);
+reset role;
+select pg_temp.assert(
+  (select d.locale = 'nl' and d.status::text = 'queued'
+     from public.email_deliveries d where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2'),
+  'EMQ1038-3c po potwierdzeniu adresu odbiorca dostaje list w swoim języku (Invariant #1)');
+
+-- EMQ1038-4: wiersz już w kolejce, adres przestaje być potwierdzony → worker go nie wydaje.
+update auth.users set email_verified = false where id = :'EQ2';
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'EQ2', 'newsletter', 'eq2@test.be', null, null, null)
+    = 'suppressed_unverified_address',
+  'EMQ1038-4 przyczyna wygaszenia dla niepotwierdzonego adresu');
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c
+               where c.campaign_id = :'eq_rev'::uuid and c.profile_id = :'EQ2'),
+  'EMQ1038-4b claim nie wydaje marketingu na niepotwierdzony adres');
+select pg_temp.assert(
+  (select d.status::text || '/' || d.error_message from public.email_deliveries d
+    where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2') = 'failed/suppressed_unverified_address'
+  and (select r.status || '/' || r.reason from public.email_campaign_recipients r
+        where r.campaign_id = :'eq_rev' and r.profile_id = :'EQ2') = 'skipped_consent/unverified_address',
+  'EMQ1038-4c wiersz wygaszony, odbiorca kampanii = skipped_consent/unverified_address');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'EQ2', 'jobPublished', 'eq2@test.be', null, null, null) is null,
+  'EMQ1038-4d e-mail transakcyjny nie jest wygaszany z powodu niepotwierdzenia');
+-- EMQ1038-4n: KONTROLA UJEMNA — bez tej klauzuli (0175) o wysyłce decydowałaby sama zgoda.
+create function pg_temp.emq1038_old_allowed(p_profile_id uuid) returns boolean language sql as $$
+  select coalesce((select np.email_marketing from public.notification_preferences np
+                    where np.profile_id = p_profile_id), false);
+$$;
+select pg_temp.assert(pg_temp.emq1038_old_allowed(:'EQ2') is true
+  and public.email_allowed(:'EQ2', 'newsletter') is false,
+  'EMQ1038-4n kontrola ujemna: sama zgoda (0087) przepuściłaby niepotwierdzony adres, 0186 nie');
+
+-- EMQ1038-5: uprawnienia.
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.email_address_verified(%L)', :'EQ1'), 'permission denied',
+  'EMQ1038-5 zalogowany nie odpytuje potwierdzenia adresu');
+reset role; reset app.current_uid;
+
+-- EL1049: język e-maili.
+select public.resolve_recipient_locale(:'EQ3') as eq3_locale \gset
+select pg_temp.assert(public.resolve_recipient_locale(:'EQ1') = 'pl', 'EL1049-0 język startowy = język rejestracji');
+select public.enqueue_email_outcome(:'EQ1', 'jobPublished', null, null, 'el1049-pre', '{}'::jsonb);
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_my_email_locale('nl') = 'nl', 'EL1049-1 zmiana języka zwraca nowy język');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select preferred_locale = 'nl' and signup_locale = 'pl' from public.profiles where id = :'EQ1')
+  and public.resolve_recipient_locale(:'EQ1') = 'nl',
+  'EL1049-1b preferred_locale zapisany, język rejestracji bez zmian, odbiorca rozwiązany na nl');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'EQ1'::uuid
+            and before_data ->> 'preferred_locale' is null
+            and after_data ->> 'preferred_locale' = 'nl')
+     from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid),
+  'EL1049-2 audyt zmiany: aktor, język przed i po');
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select public.set_my_email_locale('nl');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid) = 1,
+  'EL1049-2b ponowne ustawienie tego samego języka nie dopisuje audytu');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ1', 'statusChanged', 'application', null, 'el1049-1', '{}'::jsonb)),
+  'EL1049-3 e-mail po zmianie języka zakolejkowany');
+select pg_temp.assert(
+  (select locale = 'nl' from public.email_deliveries where idempotency_key = 'el1049-1'),
+  'EL1049-3a kolejne e-maile w nowym języku (Invariant #1)');
+select pg_temp.assert(
+  (select locale = 'pl' from public.email_deliveries where idempotency_key = 'el1049-pre'),
+  'EL1049-3b e-mail zakolejkowany wcześniej zachowuje język z chwili kolejkowania');
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('de')$$, 'VALIDATION_FAILED',
+  'EL1049-4 język spoza listy odrzucony');
+select pg_temp.expect_error($$select public.set_my_email_locale(null)$$, 'VALIDATION_FAILED',
+  'EL1049-4b brak języka odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert((select preferred_locale = 'nl' from public.profiles where id = :'EQ1'),
+  'EL1049-4c odrzucone wywołania nie zmieniły języka');
+select pg_temp.assert(
+  (select preferred_locale is null from public.profiles where id = :'EQ3')
+  and public.resolve_recipient_locale(:'EQ3') = :'eq3_locale',
+  'EL1049-5 cudzy profil bez zmian');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'permission denied',
+  'EL1049-6 anon nie ustawia języka');
+reset role;
+set role authenticated; set app.current_uid = ''; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'UNAUTHENTICATED',
+  'EL1049-6b bez tożsamości sesji odrzucone');
+reset role; reset app.current_uid;
+update public.profiles set deleted_at = now() where id = :'EQ4';
+set role authenticated; set app.current_uid = :'EQ4'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('pl')$$, 'PERMISSION_DENIED',
+  'EL1049-7 konto usunięte nie ustawia języka');
+reset role; reset app.current_uid;
+update public.profiles set deleted_at = null where id = :'EQ4';
+-- DC1070. Token wersji szkicu oferty (0184, #1070): save_job_draft z p_expected_updated_at —
+--         zapis ze starą wersją (druga karta / drugi rekruter) = JOB_EDIT_CONFLICT bez zmian;
+--         każdy udany zapis (także krok tylko z relacjami) podbija wersję i zwraca ją.
+-- ============================================================================
+\set JOBDC 'e9640000-0000-0000-0000-0000000000b1'
+select pg_temp.remote_connect('dc_setup');
+select dbl.dblink_exec('dc_setup', format($fx$
+  insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+    values (%L, 'e7500000-0000-0000-0000-0000000000f1', 'draft-dc1070', '', 'logistics', 'permanent', '', '', 'draft', 'pl')
+$fx$, :'JOBDC'));
+select dbl.dblink_disconnect('dc_setup');
+select updated_at::text as dc_v0 from public.jobs where id = :'JOBDC' \gset
+
+-- DC1070-1: zapis bez tokenu (świeży szkic tej samej karty) przechodzi i zwraca nową wersję.
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)::text', :'JOBDC',
+    '{"job": {"title": "Karta A v1"}}')))::jsonb ->> 'updated_at' as dc_v1 \gset
+select pg_temp.assert(:'dc_v1'::timestamptz > :'dc_v0'::timestamptz
+  and (select updated_at = :'dc_v1'::timestamptz from public.jobs where id = :'JOBDC'),
+  'DC1070-1 zapis bez tokenu zwraca wersję = jobs.updated_at, większą od poprzedniej');
+
+-- DC1070-2: kolejny zapis z tokenem z poprzedniej odpowiedzi przechodzi (łańcuch wersji).
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Karta A v2"}}', :'dc_v1')))::jsonb ->> 'updated_at' as dc_v2 \gset
+select pg_temp.assert(:'dc_v2'::timestamptz > :'dc_v1'::timestamptz,
+  'DC1070-2 zapis z aktualnym tokenem przechodzi, wersja rośnie');
+
+-- DC1070-3: krok zmieniający WYŁĄCZNIE relacje (bez kolumn jobs) też podbija wersję.
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"skills_optional": ["Excel"]}', :'dc_v2')))::jsonb ->> 'updated_at' as dc_v3 \gset
+select pg_temp.assert(:'dc_v3'::timestamptz > :'dc_v2'::timestamptz
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel'],
+  'DC1070-3 krok tylko z relacjami zapisany i podbija wersję');
+
+-- DC1070-4 (kontrola ujemna): stara wersja (druga karta) = konflikt i ŻADNEJ zmiany
+-- (kolumny, tłumaczenie i relacje z tego samego kroku zostają jak były).
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC', $j${
+    "job": {"title": "Karta B (stara wersja)"}, "translation": {"description": "Nadpisany opis z drugiej karty."},
+    "skills_optional": ["Nadpisana umiejętność"]
+  }$j$, :'dc_v1'),
+  'JOB_EDIT_CONFLICT', 'DC1070-4 zapis ze starą wersją szkicu = JOB_EDIT_CONFLICT');
+-- Wersja z chwili sprzed ostatniego zapisu (v2) też jest już nieaktualna.
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
+    '{"job": {"title": "Karta B"}}', :'dc_v2'),
+  'JOB_EDIT_CONFLICT', 'DC1070-4b poprzednia wersja (v2) po zapisie v3 = konflikt');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Karta A v2' and updated_at = :'dc_v3'::timestamptz from public.jobs where id = :'JOBDC')
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel']
+  and not exists (select 1 from public.job_translations where job_id = :'JOBDC' and description is not null),
+  'DC1070-4c odrzucony zapis nic nie zmienił (kolumny, tłumaczenie, relacje, wersja)');
+
+-- DC1070-5: dwa RÓWNOLEGŁE zapisy z tym samym tokenem — wygrywa pierwszy, drugi po odblokowaniu
+-- widzi nową wersję i kończy się konfliktem (nie nadpisuje).
+select pg_temp.remote_begin('dc_s1', :'OWNP'::uuid) as dc_pid1 \gset
+select pg_temp.remote_begin('dc_s2', :'OWNP'::uuid) as dc_pid2 \gset
+select t.v as dc_s1_res from dbl.dblink('dc_s1',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Sesja 1"}}', :'dc_v3')) as t(v text) \gset
+select dbl.dblink_send_query('dc_s2',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Sesja 2"}}', :'dc_v3')) as dc_sent \gset
+select pg_temp.wait_blocked(:dc_pid2, 'DC1070-5 druga sesja czeka na blokadę szkicu');
+select dbl.dblink_exec('dc_s1', 'commit');
+select pg_temp.remote_result('dc_s2') as dc_s2_res \gset
+select dbl.dblink_exec('dc_s2', 'rollback');
+select dbl.dblink_disconnect('dc_s1');
+select dbl.dblink_disconnect('dc_s2');
+select pg_temp.assert(:'dc_s2_res' like 'ERROR:%JOB_EDIT_CONFLICT%'
+  and (:'dc_s1_res')::jsonb ->> 'updated_at' is not null
+  and (select title = 'Sesja 1' from public.jobs where id = :'JOBDC'),
+  'DC1070-5 równoległy zapis z tym samym tokenem: pierwszy wygrywa, drugi = konflikt, tytuł z sesji 1');
+
+-- DC1070-6: granice — oferta po publikacji nadal JOB_NOT_DRAFT (przed kontrolą wersji), nie-członek
+-- i anon bez dostępu; stara sygnatura dwuargumentowa nie istnieje osobno (jedna funkcja z domyślnym
+-- tokenem), więc wywołania bez tokenu działają, a EXECUTE ma wyłącznie authenticated.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', 'e7500000-0000-0000-0000-0000000000b1',
+    '{"job": {"title": "Opublikowana"}}', now()::text),
+  'JOB_NOT_DRAFT', 'DC1070-6 opublikowana oferta = JOB_NOT_DRAFT także z tokenem');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
+    '{"job": {"title": "Cudzy"}}', now()::text),
+  'PERMISSION_DENIED', 'DC1070-6b nie-członek firmy nie zapisze cudzego szkicu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  to_regprocedure('public.save_job_draft(uuid, jsonb)') is null
+  and has_function_privilege('authenticated', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute')
+  and not has_function_privilege('anon', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute'),
+  'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
+
+-- ============================================================================
+-- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
+--         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
+-- ============================================================================
+-- SS1065-1: baza bez historii (pliki nałożone ręcznie) = applied 0, latest null (bez błędu).
+select pg_temp.assert(public.ops_schema_state() = '{"applied": 0, "latest": null}'::jsonb,
+  'SS1065-1 brak app_migrations.history: applied 0, latest null');
+begin;
+create schema app_migrations;
+create table app_migrations.history (name text primary key, checksum text not null, applied_at timestamptz not null default now());
+insert into app_migrations.history(name, checksum) values
+  ('0000_bootstrap_roles_and_identity.sql', 'a'), ('0170_recruiter_tools.sql', 'b'), ('0999_ostatnia.sql', 'c');
+select pg_temp.assert(public.ops_schema_state() = '{"applied": 3, "latest": "0999_ostatnia.sql"}'::jsonb,
+  'SS1065-2 historia: liczba zastosowanych i najwyższa nazwa');
+-- Kontrola ujemna: nowa migracja zmienia wynik (czujka widzi rozjazd, gdy kod zna nowszą nazwę).
+insert into app_migrations.history(name, checksum) values ('1000_kolejna.sql', 'd');
+select pg_temp.assert(public.ops_schema_state()->>'latest' = '1000_kolejna.sql'
+  and (public.ops_schema_state()->>'applied')::int = 4,
+  'SS1065-2b kolejna migracja podbija stan (najwyższa nazwa wg porządku C)');
+-- Role: monitoring i service_role czytają, klient nie.
+set role pracujbe_ops;
+select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3 rola pracujbe_ops czyta stan schematu');
+reset role;
+set role service_role;
+select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3b service_role czyta stan schematu');
+reset role;
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4 authenticated nie czyta stanu schematu');
+reset role; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4b anon nie czyta stanu schematu');
+reset role;
+rollback;
+-- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0182):
+--        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
+--        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
+--        już ustalonego, dłuższego terminu ostrzeżenia (e-mail z konkretną datą był wysłany).
+-- ============================================================================
+\echo '--- RW862 wydłużenie retencji odracza usunięcie (0182) ---'
+reset role; reset app.current_uid;
+\set RW1 '86200000-0000-4000-8000-0000000000c1'
+\set RW2 '86200000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RW1','rw862c1@test.be','Rw Jeden','{"role":"candidate","first_name":"Rw","last_name":"Jeden","locale":"pl"}'),
+  (:'RW2','rw862c2@test.be','Rw Dwa','{"role":"candidate","first_name":"Rw","last_name":"Dwa","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW1', 'candidate-files', :'RW1' || '/cv-rw1.pdf', 'candidate_cv');
+-- RW2 (plik + aktywność + ostrzeżenie) powstaje dopiero tuż przed RW862-5: wcześniejsze
+-- wywołania admin_set_retention_policy (RW862-1/3, które SŁUSZNIE synchronizują WSZYSTKIE
+-- ostrzeżenia tej kategorii, więc RW2 też by odsunęły, gdyby już istniał) nie mogą go dotknąć
+-- — kontrola ujemna ma sprawdzać goły zapis retention_policies.period, nie efekt uboczny
+-- poprawnie działającej naprawy.
+
+-- Ostrzeżenie RW1 wysłane pod poprzednią, krótszą polityką: aktywność dawno temu, termin już
+-- minięty (25 dni temu) — dokładnie stan tuż po wysłaniu e-maila z konkretną datą usunięcia.
+select (now() - interval '400 days')::text as rw_activity \gset
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW1';
+set session_replication_role = origin;
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW1', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+
+-- RW862-1: admin WYDŁUŻA okres (365→500 dni) przez admin_set_retention_policy — termin już
+-- wysłanego ostrzeżenia RW1 ma się odsunąć do activity_at + 500 dni (w przyszłość).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 500);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days'
+  and (select due_at > now() + interval '90 days' from public.retention_warnings
+        where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv'),
+  'RW862-1 wydłużenie okresu przez admin_set_retention_policy przesuwa due_at już wysłanego ostrzeżenia w przyszłość');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp1 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-2 po wydłużeniu przez RPC CV nie jest usuwane mimo minięcia dawnego, krótszego terminu');
+
+-- RW862-3: skrócenie do 300 dni NIE cofa już ustalonego (dłuższego) terminu RW1.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 300);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days',
+  'RW862-3 skrócenie okresu nie obniża już ustalonego, dłuższego terminu ostrzeżenia');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp2 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-4 po skróceniu RW1 nadal nie jest usuwany przed odroczonym terminem');
+
+-- RW862-5 (kontrola ujemna): świeże ostrzeżenie RW2 pod tym samym, dawno minionym terminem,
+-- a potem sama zmiana retention_policies.period z pominięciem RPC (czyli dokładnie to, co
+-- robił kod SPRZED naprawy #862 — bez synchronizacji due_at) NIE odracza tego ostrzeżenia:
+-- CV znika mimo że okres formalnie „wydłużono" do 500 dni.
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW2';
+set session_replication_role = origin;
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW2', 'candidate-files', :'RW2' || '/cv-rw2.pdf', 'candidate_cv');
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW2', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+update public.retention_policies set period = interval '500 days' where key = 'inactive_candidate_cv';
+set role service_role;
+select public.run_retention_purge(200)::text as rwp3 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RW2' || '/cv-rw2.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RW2' || '/cv-rw2.pdf'),
+  'RW862-5 kontrola ujemna: bez synchronizacji przez RPC (goła zmiana period) CV nadal ginie mimo wydłużenia');
+
+-- ============================================================================
+-- DSA960 (0188, paczka M-1): kod dostępu poza kolejką e-mail (#1037), trwały dowód
+-- poinformowania niezależny od powiadomień (#1045) z regułami zastępczymi (#1063), limity
+-- zgłoszeń pod blokadą (#1098, część DSA), zawieszenie firmy niezweryfikowanej (#1107).
+-- Kontrole ujemne: zdjęty strażnik/trigger/indeks daje wykrywalny, błędny wynik; dla blokady
+-- per adres samo `wait_blocked` jest kontrolą (bez blokady druga sesja nie czeka).
+-- ============================================================================
+\echo '--- DSA960 dowód poinformowania, limity, kod dostępu, zawieszenie ---'
+\set D9CO1 'e9960000-0000-0000-0000-0000000000c1'
+\set D9CO2 'e9960000-0000-0000-0000-0000000000c2'
+\set D9CO3 'e9960000-0000-0000-0000-0000000000c3'
+\set D9CO4 'e9960000-0000-0000-0000-0000000000c4'
+\set D9CODE 'ABCDEFGHIJKLMNOPQRSTUVWX'
+\set D9DESC 'Oferta wymaga opłaty za rekrutację z góry.'
+reset role; reset app.current_uid;
+select (public.dsa_retention_report()->>'informedByFallback')::int as d9fb0 \gset
+insert into public.companies(id,name,status) values
+  (:'D9CO1','Firma D960 A','verified'), (:'D9CO2','Firma D960 B','verified'), (:'D9CO3','Firma D960 C','verified'),
+  (:'D9CO4','Firma D960 D','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'D9CO1',:'EMPA','owner',true),
+  (:'D9CO2',:'EMPA','owner',true), (:'D9CO2',:'EMPB','owner',true),
+  (:'D9CO3',:'EMPA','owner',false),   -- firma bez aktywnego właściciela
+  (:'D9CO4',:'EMPA','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
+select ('e9960000-0000-0000-0000-0000000001' || lpad(n::text, 2, '0'))::uuid,
+       (case when n in (5, 6) then :'D9CO2' when n in (7, 8) then :'D9CO3' when n = 2 then :'D9CO4' else :'D9CO1' end)::uuid,
+       'dsa960-job-' || n, 'Magazynier D960 ' || n, 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl'
+  from generate_series(1, 20) n;
+
+-- Zgłoszenia (każda decyzja zamyka swoją ofertę, więc osobna oferta na decyzję).
+set role service_role;
+select report_id as d9r1 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000101', 'fraud', :'D9DESC', null, 'Gość D9', 'd9-1@test.be', 'pl', true) \gset
+select report_id as d9r2 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000101', 'fraud', :'D9DESC', null, null, 'd9-2@test.be', 'pl', true) \gset
+select report_id as d9r3 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000102', 'fraud', :'D9DESC', null, null, 'd9-3@test.be', 'fr', true) \gset
+select report_id as d9r4 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000103', 'fraud', :'D9DESC', null, null, 'd9-4@test.be', 'nl', true) \gset
+select report_id as d9r5 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000104', 'fraud', :'D9DESC', null, null, 'd9-5@test.be', 'pl', true) \gset
+select report_id as d9r6 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000105', 'fraud', :'D9DESC', null, null, 'd9-6@test.be', 'pl', true) \gset
+select report_id as d9r7 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000106', 'fraud', :'D9DESC', null, null, 'd9-7@test.be', 'pl', true) \gset
+select report_id as d9r8 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000107', 'fraud', :'D9DESC', null, null, 'd9-8@test.be', 'pl', true) \gset
+select report_id as d9r10 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000109', 'fraud', :'D9DESC', null, null, 'd9-10@test.be', 'nl', true) \gset
+select report_id as d9r11 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000110', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null, 'd9-11@test.be', 'pl', true) \gset
+reset role;
+
+-- DSA960-1 (#1037): kod dostępu nie zostaje w kolejce po wysyłce ani po błędzie.
+select pg_temp.assert(
+  (select payload->>'accessCode' = :'D9CODE' and payload->>'caseNumber' is not null
+     from public.email_deliveries where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1 oczekujące zlecenie trzyma kod (potrzebny do wysyłki)');
+update public.email_deliveries set attempts = 1, next_attempt_at = now() + interval '5 minutes'
+  where entity_id = :'d9r1' and template = 'reportReceived';
+select pg_temp.assert(
+  (select status = 'queued' and payload ? 'accessCode'
+     from public.email_deliveries where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1b ponowienie (nadal w kolejce) zachowuje kod');
+update public.email_deliveries set status = 'sent', sent_at = now()
+  where entity_id = :'d9r1' and template = 'reportReceived';
+select pg_temp.assert(
+  (select not (payload ? 'accessCode') and payload->>'caseNumber' is not null
+     from public.email_deliveries where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1c po wysyłce kod zniknął z payloadu (numer sprawy zostaje)');
+update public.email_deliveries set status = 'failed', error_message = 'EMAIL_PROVIDER_REJECTED'
+  where entity_id = :'d9r2' and template = 'reportReceived';
+select pg_temp.assert(
+  (select not (payload ? 'accessCode') from public.email_deliveries
+    where entity_id = :'d9r2' and template = 'reportReceived'),
+  'DSA960-1d po ostatecznym błędzie kod zniknął z payloadu');
+insert into public.email_deliveries
+  (to_email, template, locale, subject, status, entity_type, entity_id, idempotency_key, payload, queued_at, next_attempt_at, attempts)
+values
+  ('d9-x@test.be', 'reportReceived', 'pl', 'reportReceived', 'sent', 'report', gen_random_uuid(), 'dsa960-scrub-insert',
+   jsonb_build_object('caseNumber', 'DSA-X', 'accessCode', :'D9CODE'), now(), now(), 0),
+  ('d9-x@test.be', 'supportContact', 'pl', 'supportContact', 'sent', 'contact_message', gen_random_uuid(), 'dsa960-scrub-other',
+   jsonb_build_object('accessCode', 'inny-szablon'), now(), now(), 0);
+select pg_temp.assert(
+  (select not (payload ? 'accessCode') from public.email_deliveries where idempotency_key = 'dsa960-scrub-insert')
+  and (select payload ? 'accessCode' from public.email_deliveries where idempotency_key = 'dsa960-scrub-other'),
+  'DSA960-1e wstawienie od razu jako wysłane też czyszczone; inne szablony bez zmian');
+-- Kontrola ujemna: bez strażnika kod zostaje w danych operacyjnych po wysyłce.
+begin;
+drop trigger trg_email_deliveries_scrub_access_code on public.email_deliveries;
+update public.email_deliveries set payload = jsonb_build_object('caseNumber', 'X', 'accessCode', :'D9CODE')
+  where entity_id = :'d9r1' and template = 'reportReceived';
+select pg_temp.assert((select payload ? 'accessCode' from public.email_deliveries
+   where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1f kontrola ujemna: bez strażnika kod przeżywa wysłane zlecenie');
+rollback;
+
+-- Decyzje moderacyjne (ADMIN).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'d9r3', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d3 \gset
+select public.admin_decide_report(:'d9r4', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d4 \gset
+select public.admin_decide_report(:'d9r5', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d5 \gset
+select public.admin_decide_report(:'d9r6', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d6 \gset
+select public.admin_decide_report(:'d9r7', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d7 \gset
+select public.admin_decide_report(:'d9r8', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d8 \gset
+select public.admin_decide_report(:'d9r10', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d10 \gset
+select public.admin_decide_report(:'d9r11', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as d9d11 \gset
+reset role; reset app.current_uid;
+
+-- DSA960-2 (#1045): poinformowanie autora = odczyt decyzji w panelu, nie odczyt powiadomienia.
+set role service_role;
+select pg_temp.assert(public.moderation_informed_at(:'d9d3') is null and public.moderation_appealable(:'d9d3') = 'OK',
+  'DSA960-2 e-mail w kolejce, nic nie odczytane: termin jeszcze nie biegnie');
+reset role;
+update public.notifications set read_at = now() - interval '3 days'
+  where data->>'decisionId' = :'d9d3' and profile_id = :'EMPA';
+select pg_temp.assert(
+  (select min(n.read_at) from public.notifications n
+     where n.data->>'decisionId' = :'d9d3' and n.profile_id = :'EMPA') is not null,
+  'DSA960-2b kontrola: powiadomienie autora jest oznaczone jako przeczytane (dawna reguła by to policzyła)');
+set role service_role;
+select pg_temp.assert(public.moderation_informed_at(:'d9d3') is null,
+  'DSA960-2c odczyt/„oznacz jako przeczytane” powiadomienia nie rozpoczyna biegu terminu');
+reset role;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select count(*) as d9v_other from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select count(*) as d9v_cand from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'d9v_other'::int = 0 and :'d9v_cand'::int = 0
+  and not exists (select 1 from public.moderation_informed where decision_id = :'d9d3'),
+  'DSA960-2d osoba spoza firmy nie widzi decyzji i nie rozpoczyna biegu terminu');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as d9v_owner from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'d9v_owner'::int = 1
+  and (select count(*) = 1 and bool_and(basis = 'panel_view' and voided_at is null
+          and informed_at between now() - interval '1 minute' and now() + interval '1 minute')
+         from public.moderation_informed where decision_id = :'d9d3'),
+  'DSA960-2e pierwszy odczyt decyzji przez właściciela zapisuje panel_view (chwila odczytu)');
+select informed_at as d9inf1 from public.moderation_informed where decision_id = :'d9d3' \gset
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as d9v_again from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select informed_at = :'d9inf1'::timestamptz and count(*) over () = 1
+     from public.moderation_informed where decision_id = :'d9d3'),
+  'DSA960-2f ponowny odczyt nie przesuwa chwili poinformowania');
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'d9d3') = :'d9inf1'::timestamptz + public.dsa_appeal_window(),
+  'DSA960-2g termin odwołania = chwila poinformowania + okno (6 mies. bez zmian)');
+reset role;
+-- Niezmienność i brak dostępu klienta.
+select pg_temp.expect_error(
+  'update public.moderation_informed set informed_at = now() - interval ''1 year'' where decision_id = ''' || :'d9d3' || '''',
+  'niezmienny', 'DSA960-2h chwili poinformowania nie da się cofnąć w czasie');
+select pg_temp.expect_error('delete from public.moderation_informed where decision_id = ''' || :'d9d3' || '''',
+  'niezmienny', 'DSA960-2i wpisu nie da się usunąć');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.moderation_informed', 'permission denied',
+  'DSA960-2j klient nie czyta dowodu poinformowania');
+select pg_temp.expect_error(
+  'insert into public.moderation_informed(decision_id, basis, informed_at) values (''' || :'d9d4' || ''', ''panel_view'', now())',
+  'permission denied', 'DSA960-2k klient nie zapisuje dowodu poinformowania');
+reset role; reset app.current_uid;
+
+-- DSA960-3 (#1063): reguły zastępcze, gdy strony nie da się poinformować.
+-- 3a: jedyny e-mail o decyzji nie został doręczony (adres zablokowany) → termin od porażki.
+update public.email_deliveries set status = 'failed', error_message = 'suppressed_address'
+  where entity_id = :'d9d4' and template = 'moderationJobRemoved';
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(basis = 'delivery_failed' and voided_at is null
+          and informed_at between now() - interval '1 minute' and now() + interval '1 minute')
+     from public.moderation_informed where decision_id = :'d9d4'),
+  'DSA960-3a nieudane doręczenie jedynego e-maila: reguła delivery_failed od chwili porażki');
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'d9d4') = public.moderation_informed_at(:'d9d4') + public.dsa_appeal_window()
+  and public.moderation_appealable(:'d9d4') = 'OK',
+  'DSA960-3a2 termin odwołania biegnie (okno 6 mies. od porażki), droga odwołania otwarta');
+reset role;
+select pg_temp.assert(
+  (select min(e.sent_at) from public.email_deliveries e
+    where e.entity_type = 'moderation_decision' and e.entity_id = :'d9d4'
+      and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null) is null,
+  'DSA960-3a3 kontrola ujemna: dawna reguła (tylko wysłany list) nie miałaby początku terminu');
+-- 3a4 (kontrola ujemna): bez triggera poczty nieudana wysyłka nie zostawia śladu.
+begin;
+drop trigger trg_email_deliveries_track_moderation_informed on public.email_deliveries;
+update public.email_deliveries set status = 'failed', error_message = 'suppressed_address'
+  where entity_id = :'d9d5' and template = 'moderationJobRemoved';
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9d5'),
+  'DSA960-3a4 kontrola ujemna: bez triggera porażka wysyłki nie zapisuje początku terminu');
+rollback;
+-- d9d5 nadal czeka na wysyłkę (rollback), więc nikt nie jest poinformowany.
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9d5')
+  and (select status::text from public.email_deliveries where entity_id = :'d9d5' and template = 'moderationJobRemoved') = 'queued',
+  'DSA960-3a5 decyzja z listem w kolejce: termin nie biegnie');
+
+-- 3b: dwóch właścicieli — fallback dopiero po porażce OBU zleceń.
+select pg_temp.assert((select count(*) from public.email_deliveries
+   where entity_id = :'d9d6' and template = 'moderationJobRemoved') = 2,
+  'DSA960-3b0 dwóch właścicieli = dwa zlecenia');
+update public.email_deliveries set status = 'failed', error_message = 'suppressed_address'
+  where id = (select id from public.email_deliveries where entity_id = :'d9d6' and template = 'moderationJobRemoved'
+               order by id limit 1);
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9d6'),
+  'DSA960-3b pierwszy list nieudany, drugi czeka: jeszcze nie ma początku terminu');
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9d6' and template = 'moderationJobRemoved' and status = 'queued';
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(basis = 'delivery_failed') from public.moderation_informed where decision_id = :'d9d6'),
+  'DSA960-3b2 oba listy nieudane: reguła delivery_failed');
+
+-- 3c: list wysłany, potem trwałe odbicie → wpis unieważniony, termin od odbicia.
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '10 days'
+  where id = (select id from public.email_deliveries where entity_id = :'d9d7' and template = 'moderationJobRemoved'
+               order by id limit 1);
+update public.email_deliveries set status = 'failed', error_message = 'EMAIL_PROVIDER_REJECTED'
+  where entity_id = :'d9d7' and template = 'moderationJobRemoved' and status = 'queued';
+select pg_temp.assert(
+  (select basis = 'email_sent' and informed_at < now() - interval '9 days' and voided_at is null
+     from public.moderation_informed where decision_id = :'d9d7'),
+  'DSA960-3c list wysłany 10 dni temu = poinformowanie od wysyłki (drugi list nieudany nie zmienia)');
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9d7' and template = 'moderationJobRemoved' and status = 'sent';
+select pg_temp.assert(
+  (select count(*) filter (where basis = 'email_sent' and voided_at is not null) = 1
+      and count(*) filter (where basis = 'delivery_failed' and voided_at is null) = 1
+     from public.moderation_informed where decision_id = :'d9d7')
+  and public.moderation_informed_at(:'d9d7') > now() - interval '1 minute',
+  'DSA960-3c2 odbicie unieważnia wpis email_sent; termin od chwili odbicia (delivery_failed)');
+
+-- 3d: brak adresata (firma bez aktywnego właściciela) → termin od chwili decyzji.
+select pg_temp.assert(
+  not exists (select 1 from public.email_deliveries where entity_id = :'d9d8' and template = 'moderationJobRemoved')
+  and (select basis = 'no_recipient' and informed_at = (select decided_at from public.moderation_decisions where id = :'d9d8')
+         from public.moderation_informed where decision_id = :'d9d8'),
+  'DSA960-3d brak adresata: reguła no_recipient od chwili decyzji');
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'d9d8') =
+    (select decided_at from public.moderation_decisions where id = :'d9d8') + public.dsa_appeal_window(),
+  'DSA960-3d2 termin odwołania = chwila decyzji + okno');
+reset role;
+-- 3d3 (kontrola ujemna): bez triggera zatwierdzenia decyzja bez adresata nie ma początku terminu.
+begin;
+drop trigger trg_moderation_decisions_informed_no_recipient on public.moderation_decisions;
+set role service_role;
+select report_id as d9rn from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000108', 'fraud', :'D9DESC', null, null, 'd9-neg@test.be', 'pl', true) \gset
+reset role;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'d9rn', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9dn \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9dn'),
+  'DSA960-3d3 kontrola ujemna: bez triggera decyzja bez adresata nie ma początku terminu');
+rollback;
+
+-- 3e: brak działań — list do zgłaszającego (mapowanie przez sprawę), wysłany i odbity.
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '2 days'
+  where entity_id = :'d9r11' and template = 'reportDecisionNoAction';
+select pg_temp.assert(
+  (select basis = 'email_sent' and informed_at < now() - interval '47 hours'
+     from public.moderation_informed where decision_id = :'d9d11'),
+  'DSA960-3e list o braku działań wysłany = poinformowanie zgłaszającego');
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9r11' and template = 'reportDecisionNoAction';
+select pg_temp.assert(
+  (select count(*) filter (where basis = 'email_sent' and voided_at is not null) = 1
+      and count(*) filter (where basis = 'delivery_failed' and voided_at is null) = 1
+     from public.moderation_informed where decision_id = :'d9d11'),
+  'DSA960-3e2 odbity list o braku działań nie jest poinformowaniem; fallback od odbicia');
+
+-- 3f: cofnięcie — zgłaszający nie doręczony.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'d9d10', 'Po ponownym przeglądzie oferta nie wymaga żadnych opłat.') as d9rs10 \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'d9rs10') = 'OK'
+  and public.moderation_restoration_informed_at(:'d9rs10') is null,
+  'DSA960-3f cofnięcie z listem w kolejce: odwołanie przysługuje, termin nie biegnie');
+reset role;
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9rs10' and template = 'reportRestored';
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_informed_at(:'d9rs10') between now() - interval '1 minute' and now() + interval '1 minute'
+  and public.moderation_restoration_appeal_deadline(:'d9rs10') = public.moderation_restoration_informed_at(:'d9rs10') + public.dsa_appeal_window(),
+  'DSA960-3f2 cofnięcie z nieudanym listem: termin odwołania od chwili porażki');
+reset role;
+
+-- 3g: retencja i raport uwzględniają regułę zastępczą.
+select pg_temp.assert(
+  exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r4' and retention_start is not null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r8' and retention_start is not null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r3' and retention_start is not null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r5' and retention_start is null),
+  'DSA960-3g retencja: sprawy z poinformowaniem (także zastępczym) mają początek; z listem w kolejce — czekają');
+select pg_temp.assert(
+  (public.dsa_retention_report()->>'informedByFallback')::int = :'d9fb0'::int + 6,
+  'DSA960-3g2 raport retencji zlicza sprawy z biegiem terminu z reguły zastępczej (d4, d6, d7, d8, d11, cofnięcie)');
+
+-- DSA960-4 (#1098): limity zgłoszeń pod blokadą per adres.
+-- 4a: dwa zgłoszenia z RÓŻNYMI kluczami tego samego adresu na tę samą treść — jedno.
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000111'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race1@test.be'', ''pl'', true)'
+  as d9_a1_sql \gset
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000111'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race1@test.be'', ''pl'', true)'
+  as d9_a2_sql \gset
+select pg_temp.dsa_remote_begin('d9_a') as d9_pid_a \gset
+select pg_temp.dsa_remote_begin('d9_b') as d9_pid_b \gset
+select t.v as d9_ra from dbl.dblink('d9_a', :'d9_a1_sql') as t(v text) \gset
+select dbl.dblink_send_query('d9_b', :'d9_a2_sql');
+select pg_temp.wait_blocked(:d9_pid_b, 'DSA960-4a');
+select dbl.dblink_exec('d9_a', 'commit');
+select pg_temp.remote_result('d9_b') as d9_rb \gset
+select dbl.dblink_exec('d9_b', 'commit');
+select dbl.dblink_disconnect('d9_a'); select dbl.dblink_disconnect('d9_b');
+select pg_temp.assert(:'d9_rb' like 'ERROR:%RATE_LIMITED%'
+  and (select count(*) from public.reports where reporter_email = 'd9-race1@test.be' and kind = 'dsa_notice') = 1,
+  'DSA960-4a równoległe zgłoszenia tego samego adresu na tę samą treść: jedna otwarta sprawa (druga RATE_LIMITED)');
+
+-- 4b: limit 5 spraw / adres / 24 h — cztery istniejące, dwa równoległe zgłoszenia na RÓŻNE treści.
+set role service_role;
+select count(*) as d9_pre from (select public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  ('e9960000-0000-0000-0000-0000000001' || lpad(n::text, 2, '0'))::uuid, 'fraud', :'D9DESC', null, null,
+  'd9-race2@test.be', 'pl', true) from generate_series(12, 15) n) s \gset
+reset role;
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000116'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race2@test.be'', ''pl'', true)'
+  as d9_b1_sql \gset
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000117'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race2@test.be'', ''pl'', true)'
+  as d9_b2_sql \gset
+select pg_temp.dsa_remote_begin('d9_c') as d9_pid_c \gset
+select pg_temp.dsa_remote_begin('d9_d') as d9_pid_d \gset
+select t.v as d9_rc from dbl.dblink('d9_c', :'d9_b1_sql') as t(v text) \gset
+select dbl.dblink_send_query('d9_d', :'d9_b2_sql');
+select pg_temp.wait_blocked(:d9_pid_d, 'DSA960-4b');
+select dbl.dblink_exec('d9_c', 'commit');
+select pg_temp.remote_result('d9_d') as d9_rd \gset
+select dbl.dblink_exec('d9_d', 'commit');
+select dbl.dblink_disconnect('d9_c'); select dbl.dblink_disconnect('d9_d');
+select pg_temp.assert(:'d9_pre'::int = 4 and :'d9_rd' like 'ERROR:%RATE_LIMITED%'
+  and (select count(*) from public.reports where reporter_email = 'd9-race2@test.be' and kind = 'dsa_notice') = 5,
+  'DSA960-4b równoległe zgłoszenia na różne treści: najwyżej 5 spraw / adres / 24 h');
+
+-- DSA960-5 (#1098): częściowy indeks otwartych spraw — niezależnie od funkcji.
+select pg_temp.expect_error(
+  'insert into public.reports(reporter_id, target_type, target_id, reason, details, status, kind, case_number, access_code_hash, idempotency_key, category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at) '
+  || 'select reporter_id, target_type, target_id, reason, details, status, kind, ''DSA-D960-0000-0000-0001'', access_code_hash, gen_random_uuid(), category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at from public.reports where id = ''' || :'d9r1' || '''',
+  'reports_dsa_open_uq', 'DSA960-5 druga otwarta sprawa tego adresu na tę samą treść odrzucona przez indeks');
+begin;
+drop index public.reports_dsa_open_uq;
+insert into public.reports(reporter_id, target_type, target_id, reason, details, status, kind, case_number, access_code_hash, idempotency_key, category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at)
+  select reporter_id, target_type, target_id, reason, details, status, kind, 'DSA-D960-0000-0000-0002', access_code_hash, gen_random_uuid(), category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at
+    from public.reports where id = :'d9r1';
+select pg_temp.assert((select count(*) from public.reports where reporter_email = 'd9-1@test.be' and kind = 'dsa_notice') = 2,
+  'DSA960-5b kontrola ujemna: bez indeksu powstają dwie otwarte sprawy');
+rollback;
+-- Rozstrzygnięta sprawa nie blokuje nowego zgłoszenia tego samego adresu na tę samą treść.
+set role service_role;
+select created as d9_again from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000110', 'other', 'Opis oferty nadal wydaje się niepełny i mylący.', null, null,
+  'd9-11@test.be', 'pl', true) \gset
+reset role;
+select pg_temp.assert(:'d9_again'::boolean, 'DSA960-5c po rozstrzygnięciu (brak działań) można zgłosić ponownie');
+
+-- DSA960-6 (#1107): zawieszenie firmy niezweryfikowanej.
+\set D9P1 'e9960000-0000-0000-0000-0000000000f1'
+\set D9U1 'e9960000-0000-0000-0000-0000000000f2'
+\set D9R1 'e9960000-0000-0000-0000-0000000000f3'
+insert into public.companies(id,name,status) values
+  (:'D9P1','Firma D960 pending','pending'), (:'D9U1','Firma D960 unverified','unverified'),
+  (:'D9R1','Firma D960 rejected','rejected');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'D9P1',:'EMPA','owner',true);
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9P1' || '''::uuid, ''suspended'', ''pending'')',
+  'REASON_REQUIRED', 'DSA960-6 zawieszenie firmy pending wymaga uzasadnienia');
+select public.admin_set_company_status(:'D9P1'::uuid, 'suspended', 'pending', 'Pilna blokada: podejrzenie podszycia.');
+select public.admin_set_company_status(:'D9U1'::uuid, 'suspended', 'unverified', 'Pilna blokada firmy niezweryfikowanej.');
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9R1' || '''::uuid, ''suspended'', ''rejected'', ''Powód zawieszenia.'')',
+  'INVALID_TRANSITION', 'DSA960-6b odrzuconej firmy nie zawieszamy');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'suspended' and status_reason = 'Pilna blokada: podejrzenie podszycia.' and verified_at is null
+     from public.companies where id = :'D9P1')
+  and (select status::text = 'suspended' from public.companies where id = :'D9U1')
+  and (select count(*) from public.audit_logs where entity_id = :'D9P1' and action = 'company.status_changed'
+        and before_data->>'status' = 'pending' and after_data->>'status' = 'suspended') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'D9P1' and template = 'companySuspended'
+        and profile_id = :'EMPA') = 1
+  and (select count(*) from public.notifications where entity_id = :'D9P1' and profile_id = :'EMPA'
+        and type = 'system' and data->>'kind' = 'company_status' and data->>'status' = 'suspended') = 1,
+  'DSA960-6c zawieszenie pending/unverified: status, powód, audyt, e-mail i powiadomienie właściciela');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9P1' || '''::uuid, ''pending'', ''suspended'')',
+  'INVALID_TRANSITION', 'DSA960-6d z zawieszenia nie wracamy do pending');
+select public.admin_set_company_status(:'D9U1'::uuid, 'rejected', 'suspended', 'Firma nie przeszła weryfikacji.');
+select public.admin_set_company_status(:'D9P1'::uuid, 'verified', 'suspended');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'rejected' and status_reason = 'Firma nie przeszła weryfikacji.' from public.companies where id = :'D9U1')
+  and (select status::text = 'verified' and verified_at is not null from public.companies where id = :'D9P1'),
+  'DSA960-6e z zawieszenia: odrzucenie (z powodem) i weryfikacja');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9CO1' || '''::uuid, ''suspended'')',
+  'PERMISSION_DENIED', 'DSA960-6f właściciel firmy nie zawiesza firmy (tylko admin)');
+reset role; reset app.current_uid;
+
 -- WM1040. Macierz zapisu cudzych wierszy (#1040) + strażnik pokrycia grantów.
 --   * Strażnik: zbiór (tabela, operacja) z grantem zapisu dla `authenticated` musi być pokryty
 --     przypadkami poniżej — nowa tabela/grant bez przypadku = czerwony test. Dodatkowo: brak
@@ -19621,6 +21122,8 @@ begin
   -- company_members: dodatkowa warstwa (hierarchia ról, tożsamość członkostwa) też odrzuca — dla dowodu
   -- działania samej polityki wyłączamy ją w tej kontroli.
   alter table public.company_members disable trigger user;
+  -- files: strażnik zapisu klienta (0185, #1089) odrzuca cudzy owner_id niezależnie od polityki.
+  alter table public.files disable trigger trg_files_guard_client_write;
 end $$;
 select pg_temp.wm_run('control') as wm_ctl \gset
 rollback;
@@ -20350,9 +21853,13 @@ rollback;
 -- Kontrola ujemna: bez triggera append-only treść przywrócenia da się przepisać i usunąć.
 begin;
 alter table public.moderation_restorations disable trigger trg_moderation_restorations_append_only;
+-- 0188: dowód poinformowania (moderation_informed) wskazuje na przywrócenie kluczem obcym — przed
+-- usunięciem przywrócenia trzeba usunąć wpisy zależne (strażnik tabeli pochodnej też wyłączony).
+alter table public.moderation_informed disable trigger trg_moderation_informed_guard;
 update public.moderation_restorations set reason = 'Przepisany powód przywrócenia decyzji' where id = :'im_rest';
 select pg_temp.assert((select reason = 'Przepisany powód przywrócenia decyzji' from public.moderation_restorations where id = :'im_rest'),
   'IM1114-N2 kontrola ujemna: bez triggera powód przywrócenia da się przepisać');
+delete from public.moderation_informed where restoration_id = :'im_rest';
 delete from public.moderation_restorations where id = :'im_rest';
 select pg_temp.assert(not exists (select 1 from public.moderation_restorations where id = :'im_rest'),
   'IM1114-N2b kontrola ujemna: bez triggera przywrócenie da się usunąć');
@@ -20576,7 +22083,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 --         `companies.description_locale` ustawia tylko owner/admin firmy przez RPC (audyt);
 --         zmiana treści opisu bez wskazania języka zeruje język (trigger); pusty opis = brak
 --         języka (CHECK); `get_public_company` zwraca język tylko firmy zweryfikowanej.
--- ============================================================================
+-- =====================================================================
 \set CDLO 'e9750000-0000-0000-0000-000000000001'
 \set CDLM 'e9750000-0000-0000-0000-000000000002'
 \set CDLX 'e9750000-0000-0000-0000-000000000003'
@@ -20696,5 +22203,135 @@ reset role; reset app.current_uid;
 select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
   'CDL975-4d język wyczyszczony w bazie');
 
+
+=======
+-- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0189) i limit CV na konto (#1101, CF-06).
+--   Polityki odczytu applications/offers/conversations/messages ukrywają wiersze z `deleted_at`;
+--   strażnik `trg_soft_delete_contract` blokuje zapis wiadomości do usuniętych rozmów/wiadomości
+--   (także dla ról z ominięciem RLS). Limit CV: 10 plików / 50 MB, usunięte pliki nie liczą się.
+--   Kontrole ujemne: zdjęte polityki (stara definicja) i zdjęte triggery.
+-- ============================================================================
+\echo '--- SD1111 soft-delete kontrakt + limit CV ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from pg_policies where schemaname = 'public'
+     and ((tablename = 'applications' and policyname = 'applications_select')
+       or (tablename = 'offers' and policyname = 'offers_select')
+       or (tablename = 'conversations' and policyname = 'conversations_select_member')
+       or (tablename = 'messages' and policyname = 'messages_select_member'))
+     and qual like '%deleted_at IS NULL%') = 4,
+  'SD1111-0 wszystkie cztery polityki odczytu sprawdzają deleted_at');
+
+begin;
+insert into public.messages(conversation_id, sender_id, body) values (:'at_conv', :'WMCA', 'sd1111 wiadomość');
+select pg_temp.assert((select count(*) from public.messages where conversation_id = :'at_conv' and body = 'sd1111 wiadomość') = 1, 'SD1111-1a fixture');
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.messages where body = 'sd1111 wiadomość') = 1
+  and (select count(*) from public.conversations where id = :'at_conv') = 1
+  and (select count(*) from public.applications where id = :'rd_app') = 1, 'SD1111-1b przed usunięciem kandydat widzi wiersze');
+reset role;
+update public.messages set deleted_at = now() where body = 'sd1111 wiadomość';
+update public.applications set deleted_at = now() where id = :'rd_app';
+update public.conversations set deleted_at = now() where id = :'at_conv';
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.messages where body = 'sd1111 wiadomość') = 0
+  and (select count(*) from public.conversations where id = :'at_conv') = 0
+  and (select count(*) from public.applications where id = :'rd_app') = 0,
+  'SD1111-2 po soft-delete kandydat nie widzi wiadomości, rozmowy ani aplikacji');
+reset role; set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'rd_app') = 0
+  and (select count(*) from public.conversations where id = :'at_conv') = 0,
+  'SD1111-2b firma też nie widzi usuniętej aplikacji ani rozmowy');
+reset role;
+-- Strażnik zapisu.
+select pg_temp.expect_error(format($$insert into public.messages(conversation_id, sender_id, body) values (%L, %L, 'do usuniętej')$$, :'at_conv', :'WMCA'),
+  'NOT_FOUND', 'SD1111-3a wiadomość do usuniętej rozmowy odrzucona');
+select pg_temp.expect_error(format($$update public.messages set body = 'zmiana' where body = 'sd1111 wiadomość'$$),
+  'NOT_FOUND', 'SD1111-3b treść usuniętej wiadomości nie do zmiany');
+-- Zmiana samego klucza obcego (anonimizacja) i przywrócenie nie są blokowane.
+update public.messages set sender_id = null where body = 'sd1111 wiadomość';
+update public.conversations set deleted_at = null where id = :'at_conv';
+select pg_temp.assert((select count(*) from public.conversations where id = :'at_conv' and deleted_at is null) = 1,
+  'SD1111-3d przywrócenie rozmowy działa');
+-- Kontrola ujemna: bez strażnika wiadomość trafia do usuniętej rozmowy.
+alter table public.messages disable trigger trg_soft_delete_contract;
+update public.conversations set deleted_at = now() where id = :'at_conv';
+insert into public.messages(conversation_id, sender_id, body) values (:'at_conv', :'WMCA', 'bez strażnika');
+select pg_temp.assert((select count(*) from public.messages where body = 'bez strażnika') = 1,
+  'SD1111-N1 kontrola ujemna: bez strażnika wiadomość trafia do usuniętej rozmowy');
+rollback;
+reset role; reset app.current_uid;
+
+-- Zmiana statusu usuniętej aplikacji/propozycji: każda ścieżka (także bez RLS) → NOT_FOUND.
+begin;
+update public.applications set deleted_at = now() where id = :'rd_app';
+select pg_temp.expect_error(format($$update public.applications set status = 'rejected' where id = %L$$, :'rd_app'),
+  'NOT_FOUND', 'SD1111-6a status usuniętej aplikacji nie do zmiany (bezpośredni DML)');
+update public.applications set deleted_at = null where id = :'rd_app';
+select pg_temp.assert((select deleted_at is null from public.applications where id = :'rd_app'),
+  'SD1111-6b zmiana samego deleted_at (przywrócenie) nie jest blokowana');
+update public.offers set deleted_at = now() where id = (select id from public.offers limit 1);
+select pg_temp.expect_error($$update public.offers set status = 'cancelled' where deleted_at is not null$$,
+  'NOT_FOUND', 'SD1111-6c status usuniętej propozycji nie do zmiany');
+update public.offers set candidate_id = candidate_id where deleted_at is not null;
+alter table public.applications disable trigger trg_soft_delete_contract;
+update public.applications set deleted_at = now() where id = :'rd_app';
+update public.applications set status = 'rejected' where id = :'rd_app';
+select pg_temp.assert((select status::text from public.applications where id = :'rd_app') = 'rejected',
+  'SD1111-N4 kontrola ujemna: bez strażnika status usuniętej aplikacji się zmienia');
+rollback;
+reset role; reset app.current_uid;
+
+-- Kontrola ujemna polityki: definicja sprzed 0189 pokazuje usuniętą aplikację.
+begin;
+update public.applications set deleted_at = now() where id = :'rd_app';
+drop policy applications_select on public.applications;
+create policy applications_select on public.applications for select to authenticated
+  using (candidate_id = auth.uid() or public.is_job_manager(job_id));
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'rd_app') = 1,
+  'SD1111-N2 kontrola ujemna: stara polityka pokazuje usuniętą aplikację');
+rollback;
+reset role; reset app.current_uid;
+
+-- Limit CV na konto.
+begin;
+delete from public.files where owner_id = :'WMCA' and entity_type = 'candidate_cv';
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes)
+  select :'WMCA', 'candidate-files', :'WMCA' || '/sd-' || g || '.pdf', 'candidate_cv', 1000 from generate_series(1, 9) g;
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (%L, 'candidate-files', %L, 'candidate_cv', 1000), (%L, 'candidate-files', %L, 'candidate_cv', 1000)$$,
+  :'WMCA', :'WMCA' || '/sd-10.pdf', :'WMCA', :'WMCA' || '/sd-11.pdf'), 'CV_ACCOUNT_LIMIT', 'SD1111-4a jedenasty plik CV odrzucony');
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/sd-10.pdf', 'candidate_cv', 1000);
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (%L, 'candidate-files', %L, 'candidate_cv', 1000)$$,
+  :'WMCA', :'WMCA' || '/sd-11.pdf'), 'CV_ACCOUNT_LIMIT', 'SD1111-4b limit liczby: dziesiąty plik przechodzi, jedenasty nie');
+update public.files set deleted_at = now() where path = :'WMCA' || '/sd-1.pdf';
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/sd-11.pdf', 'candidate_cv', 1000);
+select pg_temp.assert(true, 'SD1111-4c usunięty plik nie liczy się do limitu');
+-- Limit rozmiaru łącznego.
+delete from public.files where owner_id = :'WMCA' and entity_type = 'candidate_cv';
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes)
+  select :'WMCA', 'candidate-files', :'WMCA' || '/big-' || g || '.pdf', 'candidate_cv', 5 * 1024 * 1024 from generate_series(1, 10) g;
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (%L, 'candidate-files', %L, 'candidate_cv', 1)$$,
+  :'WMCA', :'WMCA' || '/big-11.pdf'), 'CV_ACCOUNT_LIMIT', 'SD1111-5 przekroczenie 50 MB łącznie odrzucone');
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/msg.pdf', 'message_attachment', 5 * 1024 * 1024);
+select pg_temp.assert(true, 'SD1111-5b inne typy plików poza limitem CV');
+-- Kontrola ujemna: bez triggera szósty plik przechodzi.
+alter table public.files disable trigger trg_cv_account_quota;
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/big-11.pdf', 'candidate_cv', 5 * 1024 * 1024);
+select pg_temp.assert((select sum(size_bytes) from public.files where owner_id = :'WMCA' and entity_type = 'candidate_cv') = 55 * 1024 * 1024,
+  'SD1111-N3 kontrola ujemna: bez triggera limit rozmiaru nie działa');
+rollback;
+
+-- Rollback 0189 przywraca polityki bez deleted_at i zdejmuje strażniki (w transakcji cofanej).
+begin;
+\ir ../rollback/0189_soft_delete_contract_cv_quota.down.sql
+select pg_temp.assert(
+  (select count(*) from pg_policies where schemaname = 'public' and policyname in
+     ('applications_select', 'offers_select', 'conversations_select_member', 'messages_select_member')
+     and qual like '%deleted_at%') = 0
+  and to_regprocedure('public.enforce_soft_delete_contract()') is null
+  and to_regprocedure('public.enforce_cv_account_quota()') is null,
+  'SD1111-R rollback 0189 przywraca stan sprzed migracji');
+rollback;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

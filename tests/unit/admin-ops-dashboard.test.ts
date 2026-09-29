@@ -147,6 +147,15 @@ describe('mapowanie czujek na wiersze', () => {
     expect(byId(buildOpsRows(data), 'portalModeMismatch')).toMatchObject({ state: 'ok', value: { kind: 'count', value: 0 } });
   });
 
+  it('#1065: wiersz schemaBehind tylko przy mierzonej czujce; behind = alarm, ok = ok', () => {
+    const data = input();
+    expect(buildOpsRows(data).some((r) => r.id === 'schemaBehind')).toBe(false);
+    expect(buildOpsRows({ ...data, schema: { status: 'skipped' } }).some((r) => r.id === 'schemaBehind')).toBe(false);
+    expect(byId(buildOpsRows({ ...data, schema: { status: 'ok' } }), 'schemaBehind')).toMatchObject({ state: 'ok', value: { kind: 'count', value: 0 } });
+    const behind = { ...data, schema: { status: 'behind' as const }, alerts: [...data.alerts, 'schema_behind_code' as const] };
+    expect(byId(buildOpsRows(behind), 'schemaBehind')).toMatchObject({ state: 'alert', value: { kind: 'count', value: 1 } });
+  });
+
   it('stan każdego wiersza wynika z list alerts/warnings (panel nie liczy progów sam)', () => {
     const data = input({
       metrics: { ...healthy, email: { ...healthy.email, oldestReadyAgeSeconds: 5000, failedLast24h: 1 } },
