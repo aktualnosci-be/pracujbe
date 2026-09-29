@@ -2,6 +2,7 @@ import { z } from 'zod/v3';
 
 import { routing } from '@/i18n/routing';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
+import { isSimpleDisplayName } from '@/lib/validation/display-name';
 
 /**
  * Walidacja formularza kontaktu (#61) — ten sam schemat w formularzu (React Hook Form)
@@ -66,7 +67,9 @@ export const contactSchema = z.object({
     .string()
     .trim()
     .max(CONTACT_LIMITS.nameMax, 'contact.error.nameTooLong')
-    .refine((v) => !containsPersonalIdentifier(v), 'contact.error.sensitiveId'),
+    .refine((v) => !containsPersonalIdentifier(v), 'contact.error.sensitiveId')
+    // Imię trafia do powitania w e-mailu z potwierdzeniem: tylko prosta postać (litery, spacja, myślnik).
+    .refine((v) => isSimpleDisplayName(v), 'contact.error.nameInvalid'),
   senderEmail: z
     .string()
     .trim()

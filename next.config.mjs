@@ -118,7 +118,8 @@ const nextConfig = {
     // `isProductionDeployment()` w src/lib/env.ts (build-time nie importuje TS, stąd powielenie).
     // „Publiczna produkcja" = tryb produkcyjny (APP_MODE) ORAZ realny publiczny URL.
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    const isProdMode = process.env.APP_MODE === 'production';
+    // #1115: ta sama normalizacja co `parseAppMode()` w src/lib/env.ts (trim + małe litery).
+    const isProdMode = (process.env.APP_MODE ?? '').trim().toLowerCase() === 'production';
     const isProd = isProdMode && !/localhost|127\.0\.0\.1|0\.0\.0\.0|staging|preview/i.test(siteUrl);
     const isDev = process.env.NODE_ENV !== 'production';
 
