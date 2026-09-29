@@ -112,7 +112,8 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   `errors.recruitmentDisabled`), `notFoundUnlessRecruitment()`; lista `RECRUITMENT_FEATURES`. Tryb w `/api/health` tylko za
   sekretem. Vitest domyślnie ogłoszeniowy (`withRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
-  (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
+  (projekt Vitest `legal`, job `unit`; dawne `it.todo` kolejnych PR-ów #1128 zamienione na odnośniki do testów,
+  strona pozytywna — ścieżki aktywne bez `RECRUITMENT_DISABLED` — w `tests/legal/classifieds-active-paths.test.ts`, #1249).
   Wyłączone w trybie ogłoszeniowym (#1141/#1144/#1132, warstwa aplikacji, bez migracji): akcje `sendOffer`/`respondToOffer`/
   `loadMoreProposals`, `applyToJob`/`transitionApplication`/`withdrawApplication`, odczyty historii zgłoszeń kandydata
   i pracodawcy, aplikacja gościa (`submit`/`confirm`/`claimGuestApplication`, `stageGuestLink`) → `RECRUITMENT_DISABLED`
@@ -458,15 +459,25 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     jawna lista części 2 `FULL_PART_2` w konfiguracji — `--shard` dzieli po liczbie testów
     i oba speci lejka trafiały do jednego shardu), każda część zapisuje blob jak shardy demo;
   - `e2e-real` („E2E real flow (PostgreSQL 16)”) — `npm run test:e2e:real` na usłudze
-    `postgres:16` (#351, #66); na start **informacyjny** (`continue-on-error`), nie blokuje
-    scalania ani wdrożenia — po serii zielonych przebiegów na `main` zdejmij `continue-on-error`;
+    `postgres:16` (#351, #66); od #1239 **blokujący** (bez `continue-on-error`, po 12/12 zielonych
+    przebiegach `main`; zależność jobu zbiorczego `e2e`) i w dwóch krokach: RECRUITMENT (przepływy
+    rekrutacyjne) oraz `E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY` (`saved-search-classifieds`, #1148);
   - `e2e` („E2E (Playwright)”, wymagany check o stałej nazwie) — job zbiorczy z `always()`,
-    pada, gdy którykolwiek shard/pomiar/część fixture nie jest `success`; łączy bloby
+    pada, gdy którykolwiek shard/pomiar/część fixture/przepływ real nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
     `failOnFlakyTests` obowiązuje w każdym shardzie.
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
 - `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint` (test z kontrolami
-  ujemnymi: `tests/unit/ci-workflows-guard.test.ts`).
+  ujemnymi: `tests/unit/ci-workflows-guard.test.ts`). Pilnuje też (#1241/#1246/#1247/#1250):
+  `forbidOnly: !!process.env.CI` w KAŻDEJ konfiguracji Playwrighta uruchamiającej testy (demo,
+  fixture, real-flow) i regułę ESLint `no-restricted-syntax` w `tests/**` (`.only`, statyczne
+  `.skip`/`.fixme`, `xit`/`fit`; warunkowe `test.skip(warunek, 'powód')` dozwolone); zgodność
+  `FIXTURE_ONLY_SPECS` z `ERROR_SPECS ∪ FULL_SPECS`; w jobie „Migration runner” osobny krok
+  ciągłości numeracji (`scripts/db/check-migration-numbering.mjs` — numer tymczasowy w PR = ten
+  krok czerwony z założenia, na `main` luka = błąd), integrację bez `runtime-logins.test.ts`
+  (wynik reszty nie ginie pod luką) i test operatora loginów tylko przy ciągłej numeracji;
+  każdą akcję przypiętą do 40-znakowego SHA z komentarzem wersji (`# v7.0.1`; aktualizacja =
+  nowy SHA + komentarz, np. `git ls-remote --tags https://github.com/actions/<akcja>.git`).
 
 **Reguły CI:**
 - Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`. Liczba
@@ -3209,7 +3220,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
   (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
   completeness-guard-off|relations-dml-open`. Zestaw real-flow biegnie w CI w jobie `e2e-real`
-  (usługa `postgres:16`, na start check informacyjny — CLAUDE.md §10); mutacje nadal ręcznie.
+  (usługa `postgres:16`, check blokujący od #1239 — CLAUDE.md §10); mutacje nadal ręcznie.
   Kroki UI w przeglądarce (`tests/e2e-real/ui-flow.spec.ts`, helpery `support/ui.ts`): serwer
   `next dev` z Better Auth na ograniczonym loginie auth (`DATABASE_AUTH_URL`, origin jak w stosie
   testu). Rejestracja pracodawcy (nl) i kandydata (fr) formularzami → link potwierdzenia z
@@ -3229,8 +3240,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z poziomem, certyfikaty); publikacja przy firmie niezweryfikowanej = komunikat i nadal `draft`
   (bez e-maila `jobPublished`), po weryfikacji przez admina ta sama sesja publikuje (`active`,
   slug publiczny, e-mail w języku publikującego, strona oferty dla gościa). Mutacje:
-  `wizard-draft-noop|publish-unverified`. W CI: job `e2e-real` (informacyjny). **Otwarte:**
-  po serii zielonych przebiegów — check wymagany (zdjęcie `continue-on-error`).
+  `wizard-draft-noop|publish-unverified`. W CI: job `e2e-real` — blokujący od #1239 (12/12
+  zielonych na `main`), drugi krok w trybie `CLASSIFIEDS_ONLY` (`saved-search-classifieds`).
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);

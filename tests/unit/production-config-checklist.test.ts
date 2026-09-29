@@ -64,6 +64,9 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
   ESCO_TEST_DATABASE_URL: 'npm run test:esco na jednorazowej bazie',
   BACKUP_S3_ALLOW_INSECURE_LOCAL: 'tylko atrapa S3 w testach (http na localhost), nigdy produkcja',
   VIES_LIVE_SMOKE: 'opt-in smoke VIES na żywym API (test ręczny)',
+  CI_GUARD_FIXTURE_CONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia konfiguracji fixture w kontroli ujemnej',
+  CI_GUARD_REAL_CONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia konfiguracji real-flow w kontroli ujemnej',
+  CI_GUARD_ESLINT_CONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia .eslintrc.json w kontroli ujemnej',
   TEST_NETWORK_ALLOW: 'testy — zezwolenie na sieć w teście',
   // --- Deterministyczny build fontu (scripts/subset-font.py) ---
   PYTHONHASHSEED: 'powtarzalny podzbiór fontu (subset-font.py)',
