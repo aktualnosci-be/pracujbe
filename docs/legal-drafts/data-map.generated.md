@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 107; z danymi osobowymi: 74; bez danych osobowych: 33.
+Tabele w migracjach: 108; z danymi osobowymi: 74; bez danych osobowych: 34.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -1295,6 +1295,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.job_funnel_daily` | Liczniki per oferta i dzień — bez IP, cookies i identyfikatora osoby. |
 | `public.job_funnel_receipts` | Losowy nonce jednego załadowania strony — nie identyfikuje osoby. |
 | `public.job_languages` | Treść ogłoszenia (dane firmy). |
+| `public.job_operation_context` | Kontekst zaufanej edycji opublikowanej oferty (0967): identyfikator transakcji, oferty i rodzaj operacji — wiersz istnieje tylko w trakcie update_published_job. Bez danych osobowych. |
 | `public.job_requirements` | Treść ogłoszenia (dane firmy). |
 | `public.job_screening_questions` | Treść pytań ustalonych przez firmę; odpowiedzi — application_screening_answers. W trybie ogłoszeniowym (decyzja produktowa, 0173) nowe pytania nie są zapisywane, a zapisane nie są pokazywane. |
 | `public.job_skills` | Treść ogłoszenia (dane firmy). |
