@@ -17,7 +17,7 @@ import { readOpsStatus } from '@/lib/ops/status';
  * #1143: `portal_legal_mode_mismatch` — env `PORTAL_LEGAL_MODE` i tryb w bazie (0171) różnią się
  * (503 `alert`); `portalLegalMode` = nazwy trybów env/bazy/efektywnego.
  *
- * #1065: `schema_behind_code` — najwyższa zastosowana migracja (`ops_schema_state()`, 0964) jest starsza
+ * #1065: `schema_behind_code` — najwyższa zastosowana migracja (`ops_schema_state()`, 0184) jest starsza
  * niż ta, którą zna wdrożony kod (`PRACUJBE_EXPECTED_MIGRATION` z builda): przepływy z nowymi
  * funkcjami bazy dostaną `INTERNAL` do czasu migracji (503 `alert`); `schema_state_unreadable` —
  * stanu nie da się odczytać. `schema` = nazwy migracji (oczekiwana/zastosowana), bez konfiguracji.

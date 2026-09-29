@@ -18,11 +18,11 @@ import {
 
 /**
  * #1065 — czujka zgodności schematu bazy z wdrożonym kodem: build zapisuje najwyższą migrację,
- * `ops_schema_state()` (0964) zwraca zastosowaną, `/api/health/ops` porównuje i alarmuje
+ * `ops_schema_state()` (0184) zwraca zastosowaną, `/api/health/ops` porównuje i alarmuje
  * `schema_behind_code`. Dowód po stronie SQL: `rls.sql` sekcja SS1065.
  */
 
-const EXPECTED = '0964_job_draft_cas_schema_state.sql';
+const EXPECTED = '0184_job_draft_cas_schema_state.sql';
 const ok = (latest: string | null, applied = 10): SchemaStateResult => ({ kind: 'ok', state: { applied, latest } });
 
 describe('expectedSchemaMigration (build)', () => {
@@ -75,7 +75,7 @@ describe('schemaAlerts', () => {
     expect(schemaAlerts(EXPECTED, ok(null, 0))).toEqual(['schema_behind_code']);
   });
 
-  it('brak funkcji ops_schema_state (baza sprzed 0964) = baza za kodem', () => {
+  it('brak funkcji ops_schema_state (baza sprzed 0184) = baza za kodem', () => {
     expect(schemaAlerts(EXPECTED, { kind: 'missing' })).toEqual(['schema_behind_code']);
   });
 
@@ -115,7 +115,7 @@ describe('schemaSummary / parseSchemaState / env', () => {
 
   it('expectedMigrationFromEnv: pusta albo nieprawidłowa wartość = wyłączona', () => {
     expect(expectedMigrationFromEnv({ PRACUJBE_EXPECTED_MIGRATION: EXPECTED })).toBe(EXPECTED);
-    for (const value of ['', '  ', 'nie-migracja', '0964_Zle.sql', undefined]) {
+    for (const value of ['', '  ', 'nie-migracja', '0184_Zle.sql', undefined]) {
       expect(expectedMigrationFromEnv({ PRACUJBE_EXPECTED_MIGRATION: value })).toBeNull();
     }
   });

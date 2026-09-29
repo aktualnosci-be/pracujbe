@@ -1,7 +1,7 @@
 -- =============================================================================
--- DC1070-R — rollback migracji 0964 (#1070, #1065). Uruchamiany przez scripts/test-rls.sh
+-- DC1070-R — rollback migracji 0184 (#1070, #1065). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany,
--- więc baza po teście ma nadal schemat 0964.
+-- więc baza po teście ma nadal schemat 0184.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -17,7 +17,7 @@ select pg_temp.assert(to_regprocedure('public.save_job_draft(uuid, jsonb, timest
   'DC1070-R0 przed rollbackiem: jedna trójargumentowa save_job_draft i ops_schema_state');
 
 begin;
-\ir ../rollback/0964_job_draft_cas_schema_state.down.sql
+\ir ../rollback/0184_job_draft_cas_schema_state.down.sql
 select pg_temp.assert(to_regprocedure('public.ops_schema_state()') is null
   and to_regprocedure('public.save_job_draft(uuid, jsonb, timestamptz)') is null
   and to_regprocedure('public.save_job_draft(uuid, jsonb)') is not null

@@ -1512,7 +1512,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przy polu, bez wyjścia. Tryb edycji opublikowanej oferty po takim zapisie nie pokazuje
   „Zapisano” (ponowne „Zapisz zmiany” z nową wersją). Test: `job-wizard-save-revision`
   (kontrola ujemna: bez poprawki 5 z 7 czerwonych).
-  Token wersji szkicu (#1070, migracja `0964` — numer tymczasowy): `save_job_draft(job, content,
+  Token wersji szkicu (#1070, migracja `0184` — numer tymczasowy): `save_job_draft(job, content,
   p_expected_updated_at default null)` zwraca `{updated_at}` (nowa wersja szkicu) i przy starej
   wersji rzuca `JOB_EDIT_CONFLICT` bez żadnej zmiany (kolumny, tłumaczenie, relacje, pytania)
   — jak `update_published_job` (0077); kontrola po `FOR UPDATE` i po sprawdzeniu `JOB_NOT_DRAFT`,
@@ -1527,7 +1527,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przeładowanie `/employer/oferty/<id>/edycja`) w 4 językach; zapisu nie ponawiamy. Krok bez zmian
   od ostatniego udanego zapisu w tej karcie nie wysyła żądania (publikacja zawsze zapisuje).
   Dowód: `rls.sql` sekcja DC1070 (kontrole ujemne: stara wersja, równoległe sesje przez dblink,
-  krok tylko z relacjami), rollback `supabase/rollback/0964_…down.sql` + `job-draft-cas-rollback.sql`,
+  krok tylko z relacjami), rollback `supabase/rollback/0184_…down.sql` + `job-draft-cas-rollback.sql`,
   integracja `portal-employer-actions`, unit `job-wizard-draft-version`. **Otwarte:** wersja
   szkicu po imporcie (pierwszy zapis bez kontroli), szkic wczytany i niezmieniony wysyła zapis
   przy pierwszym „Dalej” (brak migawki z bazy).
@@ -2986,7 +2986,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`backup.sh` raportowałby wtedy sukces R2 bez żadnej wysyłki). Dowód:
   `backup-r2-space-path.test` (prawdziwy podproces z repozytorium skopiowanym do katalogu ze
   spacją; kontrola ujemna: ta sama ścieżka bez spacji ma ten sam kontrakt).
-  Zgodność schematu z kodem (#1065, migracja `0964` — numer tymczasowy): build zapisuje najwyższą
+  Zgodność schematu z kodem (#1065, migracja `0184` — numer tymczasowy): build zapisuje najwyższą
   migrację (`PRACUJBE_EXPECTED_MIGRATION` z `next.config.mjs`, `scripts/db/expected-migration.mjs`),
   `public.ops_schema_state()` (EXECUTE tylko `pracujbe_ops`/`service_role`) zwraca liczbę i najwyższą
   nazwę z `app_migrations.history`, a `/api/health/ops` (`src/lib/ops/schema-state.ts`) alarmuje

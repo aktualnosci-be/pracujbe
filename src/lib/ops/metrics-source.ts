@@ -93,9 +93,9 @@ async function readBudget(read: () => Promise<unknown>): Promise<unknown> {
 }
 
 /**
- * Odczyt `public.ops_schema_state()` (0964, #1065) tym samym kanałem co `ops_metrics()`: login
+ * Odczyt `public.ops_schema_state()` (0184, #1065) tym samym kanałem co `ops_metrics()`: login
  * `DATABASE_OPS_URL`, zapasowo pula zadań serwerowych. Brak funkcji (SQLSTATE 42883) = baza
- * sprzed migracji 0964, czyli za kodem — osobny wynik, nie błąd.
+ * sprzed migracji 0184, czyli za kodem — osobny wynik, nie błąd.
  */
 export async function readSchemaState(): Promise<SchemaStateResult> {
   try {

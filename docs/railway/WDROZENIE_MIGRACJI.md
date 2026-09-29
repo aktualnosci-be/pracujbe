@@ -72,7 +72,7 @@ migracji. Żeby okno było widoczne:
 
 - Build zapisuje nazwę najwyższej migracji, jaką zna (`PRACUJBE_EXPECTED_MIGRATION`, wyliczana
   z plików w `next.config.mjs` przez `scripts/db/expected-migration.mjs`).
-- Funkcja `public.ops_schema_state()` (migracja 0964; EXECUTE tylko `pracujbe_ops` i `service_role`)
+- Funkcja `public.ops_schema_state()` (migracja 0184; EXECUTE tylko `pracujbe_ops` i `service_role`)
   zwraca liczbę zastosowanych migracji i najwyższą nazwę z `app_migrations.history`.
 - `GET /api/health/ops` porównuje oba i zgłasza alarm `schema_behind_code` (HTTP 503), gdy baza jest
   za kodem — także gdy funkcji jeszcze nie ma. Po nałożeniu migracji alarm sam znika. Baza nowsza

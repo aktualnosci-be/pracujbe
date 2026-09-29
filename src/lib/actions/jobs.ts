@@ -105,7 +105,7 @@ export type SaveDraftResult =
       demo?: boolean;
       /**
        * #1070: nowa wersja szkicu (`jobs.updated_at`, pełna precyzja) — kreator odsyła ją przy
-       * kolejnym zapisie. Brak = tryb demo albo baza sprzed 0964 (zapis bez kontroli wersji).
+       * kolejnym zapisie. Brak = tryb demo albo baza sprzed 0184 (zapis bez kontroli wersji).
        */
       version?: string;
     }
@@ -463,7 +463,7 @@ export async function deleteJobDraft(jobId: string): Promise<SaveDraftResult> {
  * Zapisuje pojedynczy krok szkicu. Waliduje danymi z `@/lib/validation/job` i utrwala
  * właściwe kolumny/relacje. RLS pilnuje, że użytkownik edytuje ofertę własnej firmy.
  *
- * `expectedVersion` (#1070, 0964) — wersja szkicu wczytana do kreatora albo zwrócona przez
+ * `expectedVersion` (#1070, 0184) — wersja szkicu wczytana do kreatora albo zwrócona przez
  * poprzedni zapis. Szkic zmieniony w międzyczasie (druga karta, inny rekruter firmy) →
  * `JOB_EDIT_CONFLICT` bez żadnej zmiany. Brak wersji (świeży szkic tej karty, import) = zapis
  * bez kontroli; odpowiedź niesie wtedy pierwszą wersję do kolejnych zapisów.

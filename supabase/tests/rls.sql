@@ -19261,7 +19261,7 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót
 reset role;
 
 -- ============================================================================
--- DC1070. Token wersji szkicu oferty (0964, #1070): save_job_draft z p_expected_updated_at —
+-- DC1070. Token wersji szkicu oferty (0184, #1070): save_job_draft z p_expected_updated_at —
 --         zapis ze starą wersją (druga karta / drugi rekruter) = JOB_EDIT_CONFLICT bez zmian;
 --         każdy udany zapis (także krok tylko z relacjami) podbija wersję i zwraca ją.
 -- ============================================================================
@@ -19361,7 +19361,7 @@ select pg_temp.assert(
   'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
 
 -- ============================================================================
--- SS1065. Czujka zgodności schematu z kodem (0964, #1065): ops_schema_state() zwraca liczbę
+-- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
 --         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
 -- ============================================================================
 -- SS1065-1: baza bez historii (pliki nałożone ręcznie) = applied 0, latest null (bez błędu).

@@ -7,7 +7,7 @@ import { z } from 'zod/v3';
  * (`docs/railway/WDROZENIE_MIGRACJI.md`). W oknie między wdrożeniem kodu a migracją przepływy
  * używające nowych funkcji bazy kończą się ogólnym `INTERNAL`, którego monitoring nie odróżniał od
  * innych awarii. Build zapisuje nazwę najwyższej migracji, jaką zna (`PRACUJBE_EXPECTED_MIGRATION`,
- * `scripts/db/expected-migration.mjs` → `next.config.mjs`), a `public.ops_schema_state()` (0964)
+ * `scripts/db/expected-migration.mjs` → `next.config.mjs`), a `public.ops_schema_state()` (0184)
  * zwraca najwyższą zastosowaną. Baza ZA kodem = alarm `schema_behind_code`; baza przed kodem
  * (rollback wdrożenia, migracje są addytywne) nie jest alarmem.
  *
@@ -29,7 +29,7 @@ export function parseSchemaState(raw: unknown): SchemaState | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Wynik odczytu: stan, brak funkcji (baza sprzed 0964), brak źródła albo błąd odczytu. */
+/** Wynik odczytu: stan, brak funkcji (baza sprzed 0184), brak źródła albo błąd odczytu. */
 export type SchemaStateResult =
   | { kind: 'ok'; state: SchemaState }
   | { kind: 'missing' }
@@ -56,7 +56,7 @@ export function schemaAlerts(expected: string | null, result: SchemaStateResult)
   switch (result.kind) {
     case 'ok':
       return isMigrationBehind(result.state.latest, expected) ? ['schema_behind_code'] : [];
-    // Funkcja pojawia się razem z migracją 0964 — jej brak to baza sprzed niej, czyli za kodem.
+    // Funkcja pojawia się razem z migracją 0184 — jej brak to baza sprzed niej, czyli za kodem.
     case 'missing':
       return ['schema_behind_code'];
     // Bez źródła metryk `/api/health/ops` i tak odpowiada `unconfigured` (503) wcześniej.

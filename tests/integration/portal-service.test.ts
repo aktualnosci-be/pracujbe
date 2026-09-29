@@ -443,7 +443,7 @@ describe('ops_schema_state przez pulę service (#1065)', () => {
     expect(schemaAlerts('9999_przyszla_migracja.sql', result)).toEqual(['schema_behind_code']);
   });
 
-  it('brak funkcji w bazie (sprzed 0964) → wynik „missing”, a nie błąd', async () => {
+  it('brak funkcji w bazie (sprzed 0184) → wynik „missing”, a nie błąd', async () => {
     // Funkcję chowamy tylko na czas testu (zmiana nazwy i powrót w bloku finally).
     await realSession.db!.admin.query('ALTER FUNCTION public.ops_schema_state() RENAME TO ops_schema_state_hidden');
     try {

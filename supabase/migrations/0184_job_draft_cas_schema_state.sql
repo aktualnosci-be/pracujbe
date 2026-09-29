@@ -1,21 +1,34 @@
 -- =============================================================================
--- Rollback 0964 (numer tymczasowy) — token wersji szkicu (#1070) i czujka schematu (#1065).
--- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
--- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
--- (supabase/tests/job-draft-cas-rollback.sql wykonuje go w transakcji i cofa).
+-- 0184 (NUMER TYMCZASOWY — ostateczny nada integrator) — paczka M-5.
 --
--- Przywraca `save_job_draft(uuid, jsonb)` z 0172 (treść 1:1, wynik void) i usuwa
--- `ops_schema_state()`. Kod aplikacji po rollbacku nie może wysyłać `p_expected_updated_at`
--- (najpierw revert wdrożenia aplikacji). Dane bez zmian.
+-- 1. Token wersji szkicu oferty (#1070, audyt IR2-01): `save_job_draft` dostaje trzeci
+--    argument `p_expected_updated_at` (jak `update_published_job`, 0077) i zwraca
+--    `{updated_at}` — nową wersję szkicu. Zapis kroku ze starą wersją (drugi karta, drugi
+--    rekruter firmy) kończy się `JOB_EDIT_CONFLICT` bez żadnej zmiany (kolumny, tłumaczenie
+--    i relacje — także pytania screeningowe — zostają jak były). Brak tokenu = bez kontroli
+--    (świeży szkic tworzony przez tę samą kartę, import ogłoszenia). Każdy udany zapis podbija
+--    `jobs.updated_at`, również krok zmieniający wyłącznie relacje.
+--    Ciało funkcji = 0172 (najnowsza definicja) + kontrola wersji + zwrot wersji; lista pól,
+--    tryb ogłoszeniowy (0173: pytania → RECRUITMENT_DISABLED w `set_job_screening_questions`)
+--    i pozostałe strażniki bez zmian. Zmiana typu wyniku wymaga `drop function` starej sygnatury
+--    (dwuargumentowe wywołania nadal działają dzięki wartości domyślnej).
+-- 2. Czujka zgodności schematu z kodem (#1065, audyt OPS14-02): `ops_schema_state()` zwraca
+--    liczbę zastosowanych migracji i nazwę najwyższej (`app_migrations.history`); `/api/health/ops`
+--    porównuje ją z nazwą zapisaną w buildzie (`PRACUJBE_EXPECTED_MIGRATION`) i zgłasza alarm
+--    `schema_behind_code`. EXECUTE tylko `pracujbe_ops` i `service_role` (jak `ops_metrics()`).
+--
+-- Rollback: supabase/rollback/0184_job_draft_cas_schema_state.down.sql (dowód:
+-- supabase/tests/job-draft-cas-rollback.sql).
 -- =============================================================================
 
-drop function if exists public.ops_schema_state();
-drop function if exists public.save_job_draft(uuid, jsonb, timestamptz);
+drop function if exists public.save_job_draft(uuid, jsonb);
 
-create or replace function public.save_job_draft(p_job_id uuid, p_content jsonb)
-returns void language plpgsql security definer set search_path = public, pg_temp as $$
+create function public.save_job_draft(
+  p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
+) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_company uuid; v_status text; v_locale text; v_title text;
+  v_updated timestamptz; v_new timestamptz;
   j jsonb := coalesce(p_content->'job', '{}'::jsonb);
   tr jsonb := coalesce(p_content->'translation', '{}'::jsonb);
   v_bad text;
@@ -50,8 +63,8 @@ begin
     raise exception 'VALIDATION_FAILED: nieznane pole %', v_bad using errcode = '42501';
   end if;
 
-  select j0.company_id, j0.status::text, j0.default_locale
-    into v_company, v_status, v_locale
+  select j0.company_id, j0.status::text, j0.default_locale, j0.updated_at
+    into v_company, v_status, v_locale, v_updated
     from public.jobs j0
     where j0.id = p_job_id and j0.deleted_at is null
     for update;
@@ -62,6 +75,12 @@ begin
   end if;
   if v_status <> 'draft' then
     raise exception 'JOB_NOT_DRAFT: kreator zapisuje wyłącznie szkic' using errcode = '42501';
+  end if;
+  -- #1070: token wersji szkicu. Wiersz jest już zablokowany (FOR UPDATE), więc równoległy zapis
+  -- czeka i po odblokowaniu widzi nową wersję → konflikt zamiast cichego nadpisania. Brak tokenu
+  -- (świeży szkic tej karty, import) = bez kontroli, jak `update_published_job`.
+  if p_expected_updated_at is not null and p_expected_updated_at <> v_updated then
+    raise exception 'JOB_EDIT_CONFLICT: szkic zmienił się w międzyczasie' using errcode = '40001';
   end if;
 
   if j <> '{}'::jsonb then
@@ -163,6 +182,34 @@ begin
   if p_content ? 'screening_questions' then
     perform public.set_job_screening_questions(p_job_id, p_content->'screening_questions');
   end if;
+
+  -- #1070: nowa wersja szkicu. Każdy zapis kroku ją podbija — także krok, który zmienia tylko
+  -- relacje albo tłumaczenie (nie dotyka wiersza `jobs`); `strict_job_version` (0077) gwarantuje
+  -- ścisły wzrost nawet w jednej transakcji.
+  select updated_at into v_new from public.jobs where id = p_job_id;
+  if v_new is not distinct from v_updated then
+    update public.jobs set updated_at = now() where id = p_job_id
+      returning updated_at into v_new;
+  end if;
+  return jsonb_build_object('updated_at', v_new);
 end $$;
-revoke all on function public.save_job_draft(uuid, jsonb) from public;
-grant execute on function public.save_job_draft(uuid, jsonb) to authenticated;
+revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
+grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
+
+-- --- ops_schema_state() (#1065) ---------------------------------------------------------------
+-- Zwraca stan historii migracji dla monitoringu. Właściciel funkcji (migrator) czyta schemat
+-- `app_migrations`, do którego rola monitoringu nie ma dostępu. Baza bez historii (np. testy
+-- z plikami nakładanymi ręcznie) = `applied: 0`, `latest: null`.
+create or replace function public.ops_schema_state()
+returns jsonb language plpgsql stable security definer set search_path = pg_catalog, pg_temp as $$
+declare v_applied integer := 0; v_latest text;
+begin
+  if to_regclass('app_migrations.history') is not null then
+    select count(*)::integer, max(name collate "C")
+      into v_applied, v_latest
+      from app_migrations.history;
+  end if;
+  return jsonb_build_object('applied', v_applied, 'latest', v_latest);
+end $$;
+revoke all on function public.ops_schema_state() from public, anon, authenticated;
+grant execute on function public.ops_schema_state() to pracujbe_ops, service_role;
