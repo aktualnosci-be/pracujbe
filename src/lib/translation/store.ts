@@ -23,6 +23,11 @@ export interface ClaimedTranslationJob {
   target_locale: string;
   pipeline_version: string;
   fields: TranslationFields;
+  /**
+   * Nazwy chronione rewizji (#740, 0977) — źródło wyłącznie serwerowe (nazwa firmy z bazy),
+   * muszą wystąpić w przekładzie bez zmian. Starsza baza bez kolumny = brak (pusta lista).
+   */
+  protected_terms?: readonly string[] | null;
 }
 
 export type CompleteOutcome = 'applied' | 'proposal' | 'superseded' | 'stale_lease' | 'not_found';

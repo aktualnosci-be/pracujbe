@@ -11,7 +11,8 @@ import { validateTranslation } from '@/lib/translation/validate';
  * Worker kolejki tłumaczeń (#31/#32). Jedna paczka:
  *   1. `claim` — krótka transakcja w bazie (SKIP LOCKED + dzierżawa),
  *   2. wywołanie dostawcy POZA transakcją (równolegle w obrębie paczki),
- *   3. walidacja kształtu i faktów — niepoprawny wynik nigdy nie jest zapisywany,
+ *   3. walidacja kształtu i faktów (także nazw chronionych rewizji, #740) — niepoprawny wynik
+ *      nigdy nie jest zapisywany,
  *   4. `complete` (CAS po lease + kontrola bieżącej rewizji w bazie) albo `fail` z kodem.
  *
  * Odmowa globalnego budżetu AI (#36) = model nie został wywołany: zadanie jest odraczane
@@ -82,12 +83,18 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
     return fail('recruitment_disabled', false);
   }
 
+  // #740: nazwy chronione rewizji (nazwa firmy z bazy) trafiają do promptu i do walidatora.
+  const protectedTerms = Array.isArray(job.protected_terms)
+    ? job.protected_terms.filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+    : [];
+
   let response;
   try {
     response = await provider.translate({
       sourceLocale: job.source_locale,
       targetLocale: job.target_locale,
       fields: job.fields,
+      protectedTerms,
       entityType: job.entity_type,
     });
   } catch (e) {
@@ -103,6 +110,7 @@ async function processJob(job: ClaimedTranslationJob, deps: TranslationWorkerDep
     sourceLocale: job.source_locale,
     targetLocale: job.target_locale,
     output: response.output,
+    protectedTerms,
   });
   // Niepoprawny wynik dla tej samej treści i wersji pipeline jest trwały — bez ponawiania.
   if (!result.ok) return fail(result.code, false);
