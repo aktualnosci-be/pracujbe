@@ -32,6 +32,7 @@ const MAINTENANCE_RPCS = [
   'processed_webhooks_gc',
   'ai_budget_release_stale_reservations',
   'claim_storage_deletions',
+  'claim_company_vies_auto_checks',
 ];
 
 const request = () =>
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.mocked(isProductionMode).mockReturnValue(true);
   for (const fn of MAINTENANCE_RPCS) fakeDb.rpc(fn, 0);
   fakeDb.rpc('claim_storage_deletions', []);
+  fakeDb.rpc('claim_company_vies_auto_checks', []);
 });
 
 describe('maintenance: terminy lejka ofert (#575)', () => {

@@ -313,6 +313,7 @@ describe('/api/maintenance — kolejkowanie kampanii tylko z nadawcą', () => {
     resetFakeDb(null);
     for (const fn of TASKS) fakeDb.rpc(fn, 0);
     fakeDb.rpc('claim_storage_deletions', []);
+    fakeDb.rpc('claim_company_vies_auto_checks', []);
     vi.stubEnv('MAINTENANCE_SECRET', 'maintenance-secret');
     vi.stubEnv('CRON_SECRET', '');
   });
