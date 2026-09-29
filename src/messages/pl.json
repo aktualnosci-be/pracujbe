@@ -2878,6 +2878,7 @@
     "opsRow_emailQueueAge": "Najstarszy e-mail w kolejce",
     "opsRow_emailLeases": "Porzucone dzierżawy (e-mail)",
     "opsRow_emailFailed": "Nieudane e-maile (24 h)",
+    "opsRow_emailConfigBlocked": "E-maile wstrzymane: błąd konfiguracji nadawcy",
     "opsRow_authQueueAge": "Najstarszy e-mail konta w kolejce",
     "opsRow_authLeases": "Porzucone dzierżawy (e-maile kont)",
     "opsRow_authFailed": "Nieudane e-maile kont (24 h)",

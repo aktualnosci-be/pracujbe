@@ -2878,6 +2878,7 @@
     "opsRow_emailQueueAge": "E-mail le plus ancien en file",
     "opsRow_emailLeases": "Baux abandonnés (e-mail)",
     "opsRow_emailFailed": "E-mails en échec (24 h)",
+    "opsRow_emailConfigBlocked": "E-mails en attente : erreur de configuration de l’expéditeur",
     "opsRow_authQueueAge": "E-mail de compte le plus ancien en file",
     "opsRow_authLeases": "Baux abandonnés (e-mails de compte)",
     "opsRow_authFailed": "E-mails de compte en échec (24 h)",

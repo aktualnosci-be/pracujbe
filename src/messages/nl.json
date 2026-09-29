@@ -2878,6 +2878,7 @@
     "opsRow_emailQueueAge": "Oudste e-mail in de wachtrij",
     "opsRow_emailLeases": "Verlaten leases (e-mail)",
     "opsRow_emailFailed": "Mislukte e-mails (24 uur)",
+    "opsRow_emailConfigBlocked": "E-mails in de wacht: configuratiefout afzender",
     "opsRow_authQueueAge": "Oudste account-e-mail in de wachtrij",
     "opsRow_authLeases": "Verlaten leases (account-e-mails)",
     "opsRow_authFailed": "Mislukte account-e-mails (24 uur)",

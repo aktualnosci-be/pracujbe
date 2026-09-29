@@ -2351,6 +2351,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
   statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Błąd konfiguracji nadawcy/dostawcy (#1214, migracja `0192` — numer tymczasowy): kod transportu
+  `configuration_error` (zły/nieparsowalny `EMAIL_FROM`, Resend `invalid_from_address`/`*_api_key`/
+  `validation_error` o domenie/nadawcy, EmailLabs 401/403 i odrzucenie wskazujące konto SMTP/domenę)
+  odkłada ten i pozostałe wiersze paczki o 10 min bez zużycia próby (`EMAIL_PROVIDER_CONFIG`
+  w `error_message`, 503 cronu; kolejka kont — `auth.defer_email`); odrzucenie adresata zostaje
+  trwałym `failed`. `EMAIL_FROM` bez otaczających cudzysłowów (`emailFromEnv`), nieużywalny =
+  worker nie pobiera kolejki, `/api/health` `emailProviderReady: false`, alarm
+  `email_sender_invalid`; `ops_metrics().email.configBlocked` → alarm `email_provider_config`.
+  Ponowne zakolejkowanie `failed` z N dni: RPC `requeue_failed_email_deliveries` (service_role,
+  bez wygaszonych/kampanii/przyjętych, audyt) + `scripts/db/requeue-failed-emails.mjs`. Licznik
+  `failedLast24h` bez wygaszonych, osobno `suppressedLast24h` (#1227). Dowód: `rls.sql` sekcja
+  OM1227, rollback `0192_…down.sql`, unit `email-config-errors`, `email-outbox-lease`,
+  `auth-email-worker`, `emaillabs-transport`. Pule `pg` z `query_timeout` 35 s i TCP keepalive
+  (#1229, `db-pool-query-timeout`); retencja R2 liczy tylko kompletne kopie, niekompletne > 24 h
+  sprzątane osobno (#1228, `backup-r2`).
   Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
   (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
   semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;
