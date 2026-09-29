@@ -56,6 +56,7 @@ Start = zdjęcie bramki hasła i `APP_MODE=production`. Każdy punkt „P0” bl
 | W13 | P2 | Cloudflare Web Analytics: `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN` (opcjonalne; bez niego beacon się nie ładuje) | brak statystyk ruchu i danych polowych CWV; podgląd CWV w `/admin/wydajnosc` wymaga dodatkowo `CF_ANALYTICS_ACCOUNT_ID`, `CF_WEB_ANALYTICS_SITE_TAG`, `CF_ANALYTICS_API_TOKEN` |
 | W14 | P2 | AI (OpenAI, #677): `OPENAI_API_KEY` jako sekret usługi web (tylko serwer, nigdy `NEXT_PUBLIC_*`) + DPA z OpenAI + ocena AI Act; `ANTHROPIC_API_KEY` nie jest już używany — nie ustawiaj go, a jeśli jest, usuń; do tego czasu **nie** ustawiaj `AI_JOB_IMPORT_ENABLED`, `AI_JOB_ASSIST_ENABLED`, `AI_CV_IMPORT_ENABLED` | — (funkcje wyłączone, nie blokuje startu) |
 | W15 | P2 | Google Search Console: domena, zgłoszenie plików `/sitemap/0.xml`, `/sitemap/1.xml` … (wypisane w produkcyjnym `robots.txt`; pojedynczego `/sitemap.xml` nie ma — #599) | wolniejsze indeksowanie |
+| W16 | **P0** | **Decyzja: tryb rekordu Cloudflare (DNS-only albo proxied) i pasujący `TRUSTED_PROXY_HEADER`** (`x-real-ip` przy DNS-only, `cf-connecting-ip` przy proxied) — tabela, uwagi i weryfikacja w [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md#cloudflare-tryb-rekordu-dns-a-zaufany-adres-ip-klienta-1073); zapisz wybór obok W3 | zła para: masowe blokady limitera przy rejestracji/resecie hasła w dniu startu albo bramka hasła 503 (#1073) |
 
 ### 1b. Kod (do zrobienia przez sesje)
 
@@ -130,6 +131,7 @@ testowe operatora). Punkt odsyła do sub-issue epiku #1128, który wprowadza zmi
 
 - [ ] Domena `pracuj.be` w Railway zweryfikowana (CNAME w Cloudflare, [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md)).
 - [ ] Jedna wersja kanoniczna (`www` → apex), SSL, HTTP→HTTPS, HSTS.
+- [ ] Tryb rekordu Cloudflare zgodny z `TRUSTED_PROXY_HEADER` (W16), weryfikacja adresu IP w receiptcie wg [`DOMAIN_SETUP.md`](./DOMAIN_SETUP.md).
 - [ ] `NEXT_PUBLIC_SITE_URL=https://pracuj.be` (build), `BETTER_AUTH_URL` = ten sam origin.
 
 ## 3. Zmienne środowiskowe (usługa `pracujbe`)
@@ -147,7 +149,7 @@ Pełna lista: [`railway/KONFIGURACJA_PRODUKCJI.md`](./railway/KONFIGURACJA_PRODU
 - [ ] `EMAILLABS_WEBHOOK_SECRET` (health `emaillabsWebhook: false`) — W4.
 - [ ] `GUEST_APPLY_SECRET` i `EMAIL_UNSUBSCRIBE_SECRET` (≥ 32 znaki) — health `checks.guestApplySecret`/`checks.unsubscribeSecret` = `true` (#674).
 - [ ] `HEALTH_CHECK_SECRET`, `DATABASE_OPS_URL` — W10.
-- [ ] **`APP_MODE=production`** dopiero po decyzji właściciela (W8). W trybie produkcyjnym brak
+- [ ] **`APP_MODE=production`** dopiero po decyzji właściciela (W8). Wartość jest normalizowana (białe znaki, wielkość liter — #1115), ale literówka (np. `prod`) zostaje trybem demo: po zmianie sprawdź `mode` w `/api/health` (z tokenem). Zmieniaj `APP_MODE` i zdejmuj `SITE_ACCESS_PASSWORD` w jednym oknie, a zaraz potem sprawdź `robots.txt` (`Allow: /` + lista sitemap) oraz stronę główną i `/praca` (ISR może krótko pokazywać pustą listę do pierwszej rewalidacji — odśwież je po wdrożeniu). W trybie produkcyjnym brak
       konfiguracji = 503 (fail-closed, SEC-19); publiczne `/api/health` pokazuje wtedy tylko `status`.
 - [ ] Nieustawione: `BILLING_ENABLED`, `STRIPE_*`, `AI_*_ENABLED`, `ANTHROPIC_API_KEY` (AI na OpenAI od #677), zmienne Supabase, `CRON_SECRET`.
 - [ ] `OPENAI_API_KEY` dopiero razem z włączeniem funkcji AI (W14); sam klucz niczego nie włącza.
