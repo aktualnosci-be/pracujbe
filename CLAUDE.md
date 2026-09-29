@@ -2958,7 +2958,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,
   cron kopii/odtworzenia), odmiana i aliasy miast w SQL.
-  Panel `/admin/operacje` (migracja `0178`): strona tylko do odczytu (noindex,
+  Panel `/admin/operacje` (migracja `0180`): strona tylko do odczytu (noindex,
   `requireAdmin` → 404 dla innej roli, bez dzwonka, link „Stan operacyjny” w nawigacji) z tymi
   samymi liczbami i stanami co `/api/health/ops` — wspólny odczyt `readOpsStatus`
   (`src/lib/ops/status.ts`: pula `ops`, zapasowo service-role), wiersze z `src/lib/ops/dashboard.ts`

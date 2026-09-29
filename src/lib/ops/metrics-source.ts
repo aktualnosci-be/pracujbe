@@ -14,7 +14,7 @@ export type OpsMetricsResult =
       kind: 'ok';
       metrics: OpsMetrics;
       aiBudget: AiBudgetStatus | null;
-      /** 0178: `null` = odczyt się nie udał; `undefined` = baza sprzed 0178 (brak funkcji). */
+      /** 0180: `null` = odczyt się nie udał; `undefined` = baza sprzed 0180 (brak funkcji). */
       maintenanceRun?: MaintenanceRun | null;
     }
   | { kind: 'unconfigured' }

@@ -37,7 +37,7 @@ export type OpsStatus =
       metrics: OpsMetrics;
       appPool: AppPoolStats | null;
       aiBudget: AiBudgetStatus | null;
-      /** `undefined` = baza sprzed 0178 (czujka nie mierzy), `null` = odczyt się nie udał. */
+      /** `undefined` = baza sprzed 0180 (czujka nie mierzy), `null` = odczyt się nie udał. */
       maintenanceRun: MaintenanceRun | null | undefined;
       backup: BackupFreshness;
       /** #1143: nazwy trybów env/bazy/efektywnego (dwuklucz), bez konfiguracji. */

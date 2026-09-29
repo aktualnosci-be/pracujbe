@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0178_ops_maintenance_runs.sql — ostatni przebieg /api/maintenance dla czujek (#47).
+-- 0180_ops_maintenance_runs.sql — ostatni przebieg /api/maintenance dla czujek (#47).
 --
 -- Kontekst: ops_metrics() (0096) widzi skutki pominiętego maintenance tylko pośrednio
 -- (oferty po terminie, porzucone rezerwacje). Przy pustej bazie albo braku crona nic nie

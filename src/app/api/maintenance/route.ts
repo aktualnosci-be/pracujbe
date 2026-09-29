@@ -106,9 +106,9 @@ function retentionCounters(value: unknown): Record<string, number> {
 }
 
 /**
- * 0178: ostatni przebieg dla czujek (`ops_last_maintenance_run`, panel `/admin/operacje`).
+ * 0180: ostatni przebieg dla czujek (`ops_last_maintenance_run`, panel `/admin/operacje`).
  * Tylko czas, wynik i stała nazwa zadania z błędem. Awaria zapisu nie zmienia wyniku przebiegu
- * (baza sprzed 0178 = brak funkcji) — tylko kanał błędów.
+ * (baza sprzed 0180 = brak funkcji) — tylko kanał błędów.
  */
 async function recordRun(durationMs: number, failedTask: string | null): Promise<void> {
   try {
