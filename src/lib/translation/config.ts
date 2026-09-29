@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isAiFeatureEnabled } from '@/lib/ai/feature-gate';
 import { isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
 import { isProductionMode } from '@/lib/env';
 
@@ -23,7 +24,8 @@ function flagOn(value: string | undefined): boolean {
 
 /** Dostawca tłumaczeń albo `null`, gdy funkcja jest wyłączona/nieskonfigurowana. */
 export function translationProvider(): TranslationProviderKind | null {
-  if (!flagOn(process.env.AI_TRANSLATION_ENABLED)) return null;
+  // #1152: flaga funkcji × tryb produktu (wspólna bramka `src/lib/ai/feature-gate.ts`).
+  if (!isAiFeatureEnabled('content_translation')) return null;
   if (process.env.AI_TRANSLATION_PROVIDER === 'fixture') {
     return isProductionMode() ? null : 'fixture';
   }
