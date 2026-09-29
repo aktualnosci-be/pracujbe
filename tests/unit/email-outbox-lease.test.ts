@@ -125,6 +125,53 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
     expect(typeof nextAttemptAt).toBe('string');
   });
 
+  describe('trwałe odrzucenie a awaria przejściowa dostawcy', () => {
+    function claimAttempts(id: string, attempts: number) {
+      fakeDb.rpc('claim_email_batch', [row(id, `lt-${id}`, { attempts })]);
+      fakeDb.rpc('email_delivery_send_check', null);
+      fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
+    }
+
+    it('odrzucenie listu (delivery_failed): od razu "failed", bez kolejnych prób', async () => {
+      send.mockResolvedValueOnce({ data: null, error: { name: 'validation_error', message: 'x' } });
+      claimAttempts('rej-1', 0);
+      expect(await processEmailQueue()).toMatchObject({ sent: 0, failed: 1 });
+      const [, status, attempts, errorMessage] = fakeDb.callsTo('email.outbox.mark-failed')[0]!.values;
+      expect({ status, attempts, errorMessage }).toEqual({
+        status: 'failed',
+        attempts: 1,
+        errorMessage: 'EMAIL_PROVIDER_REJECTED',
+      });
+    });
+
+    it('KONTROLA UJEMNA: awaria przejściowa wraca do kolejki ("queued") do wyczerpania prób', async () => {
+      send.mockResolvedValueOnce({ data: null, error: { name: 'internal_server_error', message: 'x' } });
+      claimAttempts('tmp-1', 0);
+      await processEmailQueue();
+      expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('queued');
+    });
+
+    it('KONTROLA UJEMNA: błąd klucza/limitu konta u dostawcy nie kończy wiersza', async () => {
+      for (const name of ['invalid_api_key', 'daily_quota_exceeded']) {
+        resetFakeDb(null)
+          .rows('email.outbox.recipient-names', [])
+          .exec('email.outbox.mark-sent')
+          .exec('email.outbox.mark-failed');
+        send.mockResolvedValueOnce({ data: null, error: { name, message: 'x' } });
+        claimAttempts(`cfg-${name}`, 0);
+        await processEmailQueue();
+        expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('queued');
+      }
+    });
+
+    it('po wyczerpaniu prób awaria przejściowa też kończy jako "failed"', async () => {
+      send.mockResolvedValueOnce({ data: null, error: { name: 'internal_server_error', message: 'x' } });
+      claimAttempts('last-1', 4);
+      await processEmailQueue();
+      expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('failed');
+    });
+  });
+
   it('defer niesie lock_token jako CAS (odmowa budżetu)', async () => {
     fakeDb.rpc('claim_email_batch', [row('defer-1', 'lt-defer')]);
     fakeDb.rpc('email_delivery_send_check', null);
