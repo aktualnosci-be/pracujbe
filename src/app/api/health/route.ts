@@ -15,8 +15,9 @@ import { portalLegalMode } from '@/lib/portal-mode';
  *
  * P3-01: publicznie zwracamy WYŁĄCZNIE ogólny `status` — mapa brakujących usług ułatwiłaby
  * rekonesans. Szczegółowy `checks`/`mode` jest widoczny tylko dla monitoringu wewnętrznego:
- * w trybie nieprodukcyjnym albo po podaniu tokena `HEALTH_CHECK_SECRET` (nagłówek
- * `x-health-token`). Nigdy nie ujawnia sekretów ani treści błędu bazy.
+ * po podaniu tokena `HEALTH_CHECK_SECRET` (nagłówek `x-health-token`) albo w trybie
+ * nieprodukcyjnym przy żądaniu na loopback (lokalny dev) — publiczny host demo/staging bez tokena
+ * dostaje tylko `status` (#1105). Nigdy nie ujawnia sekretów ani treści błędu bazy.
  * `emailProvider` = wybrany dostawca poczty, `checks.emailProviderReady` = ma komplet kluczy.
  * `checks.turnstile` (#46) = czy ochrona formularzy jest włączona — sam boolean, bez kluczy.
  * `portalLegalMode` (#1136) = tryb produktu (`CLASSIFIEDS_ONLY` | `RECRUITMENT`) — tylko w szczegółach,
@@ -71,6 +72,22 @@ async function pingDatabase(): Promise<boolean | null> {
   }
 }
 
+/** Żądanie skierowane na loopback (`localhost`, `*.localhost`, 127.0.0.0/8, `::1`) — dev lokalny. */
+function isLoopbackRequest(request: Request): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(request.url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '[::1]' ||
+    /^127(\.\d{1,3}){3}$/.test(hostname)
+  );
+}
+
 export async function GET(request: Request): Promise<Response> {
   const configured = isAppReady();
   // Łączność sprawdzamy tylko przy komplecie konfiguracji — nieskonfigurowana produkcja i tak 503.
@@ -80,8 +97,12 @@ export async function GET(request: Request): Promise<Response> {
   const httpStatus = ready ? 200 : 503;
   const headers = { 'cache-control': 'no-store' } as const;
 
-  // Szczegóły tylko dla monitoringu wewnętrznego: poza produkcją (dev/staging) lub z tokenem.
-  const detailed = !isProductionMode() || healthTokenMatches(request.headers.get(HEALTH_TOKEN_HEADER));
+  // Szczegóły tylko dla monitoringu wewnętrznego: z tokenem albo lokalnie (dev na loopbacku).
+  // #1105: sam tryb aplikacji nie wystarcza — publiczna instancja demo/staging nie może
+  // wystawiać mapy włączonych zabezpieczeń każdemu, kto zna adres.
+  const detailed =
+    healthTokenMatches(request.headers.get(HEALTH_TOKEN_HEADER)) ||
+    (!isProductionMode() && isLoopbackRequest(request));
   if (detailed) {
     return Response.json(
       {

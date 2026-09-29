@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { getConsent, type ConsentRecord } from '@/lib/consent';
 import { subscribeConsent } from '@/lib/consent-store';
 import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
+import { cfBeaconConfig, needsHardNavigation, sameOriginTarget } from '@/lib/analytics/beacon';
 
 /**
  * Ładowanie skryptu analityki — WYŁĄCZNIE po świadomej zgodzie (#570: Cloudflare Web Analytics
@@ -25,6 +26,11 @@ import { allowsTrackingOnPath } from '@/lib/analytics/route-policy';
  * Kategorii `marketing` nie ma (decyzja właściciela 2026-09-25): portal nie używa trackerów
  * marketingowych, a wersja polityki cookies poszła w górę (`CONSENT_POLICY_VERSION`).
  *
+ * Nawigacje SPA (#1046, Invariant #7): beacon dostaje `spa: false` (liczy tylko pełne załadowania),
+ * a gdy skrypt jest już w karcie, przejście na trasę prywatną (link albo `router.push`) jest
+ * pełnym przeładowaniem — nowy dokument nie ma skryptu, więc adresy paneli i jednorazowych
+ * linków nie trafiają do dostawcy.
+ *
  * Token pochodzi z env `NEXT_PUBLIC_CF_WEB_ANALYTICS_TOKEN`; brak tokenu = nic się nie ładuje.
  */
 
@@ -43,14 +49,40 @@ export function Analytics() {
   }, []);
 
   const analyticsGranted = routeAllowed && record?.categories.analytics === true;
+  const shouldLoad = analyticsGranted && Boolean(CF_ANALYTICS_TOKEN);
 
-  if (!analyticsGranted || !CF_ANALYTICS_TOKEN) return null;
+  // Skrypt wstawiony do DOM zostaje do końca dokumentu (`next/script` go nie usuwa).
+  const beaconLoaded = useRef(false);
+  if (shouldLoad) beaconLoaded.current = true;
+
+  useEffect(() => {
+    // Kliknięcie linku na trasę prywatną: pełne przejście ZANIM zmieni się adres w karcie.
+    const onClick = (event: MouseEvent) => {
+      if (!beaconLoaded.current || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = (event.target as Element | null)?.closest?.('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      const target = sameOriginTarget(anchor, window.location.origin);
+      if (!target || !needsHardNavigation(true, target.pathname)) return;
+      event.preventDefault();
+      window.location.assign(target.href);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, []);
+
+  useEffect(() => {
+    // Przejście programowe (`router.push`, przekierowanie po akcji) na trasę prywatną.
+    if (needsHardNavigation(beaconLoaded.current, pathname)) window.location.reload();
+  }, [pathname]);
+
+  if (!shouldLoad || !CF_ANALYTICS_TOKEN) return null;
 
   return (
     <Script
       id="cf-web-analytics"
       src="https://static.cloudflareinsights.com/beacon.min.js"
-      data-cf-beacon={JSON.stringify({ token: CF_ANALYTICS_TOKEN })}
+      data-cf-beacon={cfBeaconConfig(CF_ANALYTICS_TOKEN)}
       strategy="afterInteractive"
     />
   );

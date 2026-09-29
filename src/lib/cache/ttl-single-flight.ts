@@ -21,6 +21,8 @@ interface Entry<V> {
 export interface TtlSingleFlightCache<V> {
   /** Zwraca świeży wynik z cache albo woła `factory` (dzieląc się z równoległymi wywołaniami). */
   run(key: string, factory: () => Promise<V>): Promise<V>;
+  /** Usuwa rozstrzygnięty wpis (np. wynik zdegradowany, którego nie wolno trzymać w cache). */
+  delete(key: string): void;
   /** Tylko do testów/diagnostyki: liczba wpisów aktualnie w cache. */
   size(): number;
   /** Tylko do testów: czyści cache i trwające obliczenia. */
@@ -86,6 +88,9 @@ export function createTtlSingleFlightCache<V>(opts: {
         });
       inFlight.set(key, promise);
       return promise;
+    },
+    delete(key) {
+      store.delete(key);
     },
     size() {
       return store.size;
