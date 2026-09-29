@@ -5,7 +5,7 @@ import { buildDraftStepContent } from '@/lib/job-draft-content';
 import { step2Schema } from '@/lib/validation/job';
 
 /**
- * #811 (0974): wymiar pracy w kreatorze oferty — zapis kroku 2 (`save_job_draft`, klucz
+ * #811 (0194): wymiar pracy w kreatorze oferty — zapis kroku 2 (`save_job_draft`, klucz
  * `work_time`), brak wyboru = brak deklaracji (null czyści wartość), wartość spoza listy
  * odrzuca walidacja (i CHECK `jobs_work_time_check` w bazie — rls.sql FL974-7).
  */

@@ -14566,7 +14566,7 @@ create or replace function public.get_public_jobs(
   p_offset         integer     default 0,
   p_salary_unit    text        default 'month',
   p_direct_only    boolean     default null,
-  -- 0974: sygnatura jak w migracji (mutacja nadpisuje funkcję, nie tworzy przeciążenia)
+  -- 0194: sygnatura jak w migracji (mutacja nadpisuje funkcję, nie tworzy przeciążenia)
   p_language       text        default null,
   p_language_level text        default null,
   p_work_time      text        default null,
@@ -22581,7 +22581,7 @@ rollback;
 -- Rollback 0189: supabase/tests/soft-delete-cv-quota-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
 
 -- ============================================================================
--- FL974. Filtry listy ofert (migracja 0974 — numer tymczasowy): waluta wynagrodzenia (#787),
+-- FL974. Filtry listy ofert (migracja 0194 — numer tymczasowy): waluta wynagrodzenia (#787),
 --   wymagany język i poziom (#786), wymiar czasu pracy (#811), promień od miejscowości (#824).
 --   Lista, licznik, facety i kopia dla alertów (saved_search_jobs_after przez
 --   saved_search_keyset_page) zwracają ten sam zbiór; zapisane wyszukiwanie przechowuje nowe

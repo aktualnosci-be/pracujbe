@@ -187,7 +187,7 @@ export default async function JobsListPage({
             locale,
             keyword,
             ...cityFilters.cityQuery,
-            // 0974: filtry bazy facetów (jak w SQL) — demo filtruje je w `getJobs`.
+            // 0194: filtry bazy facetów (jak w SQL) — demo filtruje je w `getJobs`.
             ...refinementQueryParams(sf),
             page: 1,
             pageSize: 100,

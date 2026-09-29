@@ -64,7 +64,7 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
     // 0167: filtr „bezpośrednio od pracodawcy”. Zapisane wyszukiwania go nie przechowują
     // (etap 2) — `savedSearchFiltersFromQuery` i adres wyszukiwania go pomijają.
     ...(sidebar.directOnly ? { directOnly: true } : {}),
-    // 0974: język + poziom (#786), wymiar pracy (#811), promień (#824) — zapisywane też
+    // 0194: język + poziom (#786), wymiar pracy (#811), promień (#824) — zapisywane też
     // w wyszukiwaniu (klucze `language`, `languageLevel`, `workTime`, `near`, `radiusKm`).
     ...refinementQueryParams(sidebar),
     ...(since ? { since } : {}),
@@ -91,13 +91,13 @@ export interface SavedSearchFilters {
   accommodation?: boolean;
   immediate?: true;
   noLanguage?: true;
-  /** #786 (0974): kod wymaganego języka. */
+  /** #786 (0194): kod wymaganego języka. */
   language?: LanguageCode;
   /** #786: poziom kandydata (tylko z językiem). */
   languageLevel?: LanguageFilterLevel;
-  /** #811 (0974): wymiar pracy. */
+  /** #811 (0194): wymiar pracy. */
   workTime?: WorkTimeFilter;
-  /** #824 (0974): miejscowość środka promienia (baza zapisuje małymi literami). */
+  /** #824 (0194): miejscowość środka promienia (baza zapisuje małymi literami). */
   near?: string;
   /** #824: promień w km (zawsze z `near`). */
   radiusKm?: RadiusKm;

@@ -19,7 +19,7 @@ export interface FilterSummaryTranslators {
   categories: FilterTranslator;
   /** Przestrzeń `contractTypes`. */
   contractTypes: FilterTranslator;
-  /** Przestrzeń `languageNames` (nazwa języka w języku widza, 0974). */
+  /** Przestrzeń `languageNames` (nazwa języka w języku widza, 0194). */
   languageNames: FilterTranslator;
 }
 

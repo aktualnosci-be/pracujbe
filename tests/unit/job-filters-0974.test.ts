@@ -35,7 +35,7 @@ import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
 /**
- * Filtry listy ofert z migracji 0974 (numer tymczasowy): waluta (#787), język i poziom (#786),
+ * Filtry listy ofert z migracji 0194 (numer tymczasowy): waluta (#787), język i poziom (#786),
  * wymiar pracy (#811), promień (#824). Reguły TS są lustrem SQL (dane demo, liczniki na żywo,
  * adres URL, zapisane wyszukiwania) — test porównuje listy wartości z migracją i sprawdza, że
  * każdy filtr naprawdę zawęża wynik (kontrole ujemne).
@@ -76,7 +76,7 @@ describe('#787 waluta: widełki i sortowanie tylko w EUR', () => {
       { slug: 'eur-3000', salaryMin: 3000, salaryPeriod: 'month' as const, currency: 'EUR', publishedAt: at(3) },
     ];
     expect(sortJobs(jobs, 'salary').map((j) => j.slug)).toEqual(['eur-3000', 'eur-2000', 'pln-5000']);
-    // Kontrola ujemna: bez waluty (jak przed 0974) 5000 PLN byłoby „najwyżej płatne”.
+    // Kontrola ujemna: bez waluty (jak przed 0194) 5000 PLN byłoby „najwyżej płatne”.
     const noCurrency = jobs.map(({ currency: _c, ...rest }) => rest);
     expect(sortJobs(noCurrency, 'salary')[0]!.slug).toBe('pln-5000');
     expect(compareSalaryDesc(jobs[0]!, jobs[1]!)).toBeGreaterThan(0);
@@ -90,7 +90,7 @@ describe('#787 waluta: widełki i sortowanie tylko w EUR', () => {
   });
 });
 
-describe('0974: lustro list wartości z migracją', () => {
+describe('0194: lustro list wartości z migracją', () => {
   it('wymiar pracy: CHECK kolumny i filtr', () => {
     expect(MIGRATION).toContain(`work_time in ('${WORK_TIME_VALUES.join("', '")}')`);
     expect(MIGRATION).toContain(`p_work_time in ('${WORK_TIME_FILTERS.join("', '")}')`);
@@ -136,7 +136,7 @@ describe('0974: lustro list wartości z migracją', () => {
   });
 });
 
-describe('0974: adres URL filtrów', () => {
+describe('0194: adres URL filtrów', () => {
   it('parsowanie i serializacja są odwracalne', () => {
     const f = parseSidebarFilters({
       lang: 'nl', langLevel: 'fluent', workTime: 'part_time', near: '  Gent ', radius: '50',
@@ -168,7 +168,7 @@ describe('0974: adres URL filtrów', () => {
   });
 });
 
-describe('0974: zapisane wyszukiwanie i chipy', () => {
+describe('0194: zapisane wyszukiwanie i chipy', () => {
   const query = parseJobListQuery(
     { lang: 'fr', langLevel: 'basic', workTime: 'full_time', near: 'Luik', radius: '10' },
     'nl',
@@ -213,7 +213,7 @@ describe('0974: zapisane wyszukiwanie i chipy', () => {
   });
 });
 
-describe('0974: lustro demo (`getJobs` bez bazy)', () => {
+describe('0194: lustro demo (`getJobs` bez bazy)', () => {
   const base = { locale: 'pl' as const, page: 1, pageSize: 100 };
 
   it('wymagany język: tylko oferty z tym językiem (kontrola ujemna: bez filtra więcej)', async () => {

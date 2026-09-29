@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0974_job_filters_language_worktime_radius.sql — filtry listy ofert: waluta wynagrodzenia,
+-- 0194_job_filters_language_worktime_radius.sql — filtry listy ofert: waluta wynagrodzenia,
 -- wymagany język i poziom, wymiar czasu pracy, promień od miejscowości.
 -- NUMER TYMCZASOWY — ostateczny nada integrator.
 --
@@ -43,7 +43,7 @@
 -- i `search_city_candidates` nie są tu zmieniane. Bez 0183 facety zachowują się jak po 0183
 -- w wymiarze „miasto” (join `parent_location_id` istnieje od 0151).
 --
--- Rollback: supabase/rollback/0974_job_filters_language_worktime_radius.down.sql.
+-- Rollback: supabase/rollback/0194_job_filters_language_worktime_radius.down.sql.
 -- =============================================================================
 
 -- --- 1. Wymiar czasu pracy (#811) ---------------------------------------------------------------
@@ -51,7 +51,7 @@ alter table public.jobs
   add column if not exists work_time text,
   add constraint jobs_work_time_check check (work_time is null or work_time in ('full_time', 'part_time', 'both'));
 comment on column public.jobs.work_time is
-  '0974 (#811): wymiar czasu pracy deklarowany przez pracodawcę: full_time, part_time, both; null = brak danych.';
+  '0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę: full_time, part_time, both; null = brak danych.';
 create index if not exists idx_jobs_work_time_active on public.jobs (work_time)
   where status = 'active' and deleted_at is null and work_time is not null;
 
@@ -163,7 +163,7 @@ create or replace function public.get_public_jobs(
   p_offset         integer     default 0,
   p_salary_unit    text        default 'month',
   p_direct_only    boolean     default null,
-  -- 0974: język, poziom, wymiar pracy, promień
+  -- 0194: język, poziom, wymiar pracy, promień
   p_language       text        default null,
   p_language_level text        default null,
   p_work_time      text        default null,
@@ -219,7 +219,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
       select public.search_title_candidates(left(p_keyword, 100))))
     and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
       like public.search_like_pattern(left(p_keyword, 100)) escape '\')
-    -- 0974 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
+    -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
     and public.job_salary_in_range(
       j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit)
     and (p_accommodation is null or j.accommodation = p_accommodation)
@@ -228,15 +228,15 @@ language sql stable security definer set search_path = public, pg_temp as $$
     and (p_since is null or j.published_at >= p_since)
     -- 0167: „bezpośrednio od pracodawcy” = firma nie jest agencją pracy tymczasowej.
     and (coalesce(p_direct_only, false) = false or not c.is_agency)
-    -- 0974 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
+    -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
     -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
     and (coalesce(btrim(p_language), '') = ''
          or public.job_requires_language(j.id, btrim(p_language), p_language_level))
-    -- 0974 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
+    -- 0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-    -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
+    -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
@@ -278,7 +278,7 @@ create or replace function public.get_public_jobs_count(
   p_since          timestamptz default null,
   p_salary_unit    text      default 'month',
   p_direct_only    boolean   default null,
-  -- 0974: język, poziom, wymiar pracy, promień
+  -- 0194: język, poziom, wymiar pracy, promień
   p_language       text        default null,
   p_language_level text        default null,
   p_work_time      text        default null,
@@ -312,7 +312,7 @@ create or replace function public.get_public_jobs_count(
       select public.search_title_candidates(left(p_keyword, 100))))
     and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
       like public.search_like_pattern(left(p_keyword, 100)) escape '\')
-    -- 0974 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
+    -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
     and public.job_salary_in_range(
       j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit)
     and (p_accommodation is null or j.accommodation = p_accommodation)
@@ -320,15 +320,15 @@ create or replace function public.get_public_jobs_count(
     and (coalesce(p_no_language, false) = false or j.no_language_required = true)
     and (p_since is null or j.published_at >= p_since)
     and (coalesce(p_direct_only, false) = false or not c.is_agency)
-    -- 0974 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
+    -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
     -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
     and (coalesce(btrim(p_language), '') = ''
          or public.job_requires_language(j.id, btrim(p_language), p_language_level))
-    -- 0974 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
+    -- 0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-    -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
+    -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
@@ -356,7 +356,7 @@ create or replace function public.get_public_job_filter_facets(
   p_immediate boolean default null, p_no_language boolean default null,
   p_since timestamptz default null, p_salary_unit text default 'month',
   p_direct_only boolean default null,
-  -- 0974: język, poziom, wymiar pracy, promień (zawężają bazę wszystkich wymiarów)
+  -- 0194: język, poziom, wymiar pracy, promień (zawężają bazę wszystkich wymiarów)
   p_language text default null, p_language_level text default null,
   p_work_time text default null, p_near text default null,
   p_radius_km integer default null
@@ -399,18 +399,18 @@ language sql stable security definer set search_path = public, pg_temp as $$
         like public.search_like_pattern(i.keyword) escape '\')
       and (nullif(left(p_city,100),'') is null or j.id in (
         select public.search_city_candidates(left(p_city,100))))
-      -- 0974 (#787): widełki w EUR — inna waluta nieporównywalna.
+      -- 0194 (#787): widełki w EUR — inna waluta nieporównywalna.
       and public.job_salary_in_range(
         j.salary_min,j.salary_max,j.salary_period,j.currency,p_salary_min,p_salary_max,p_salary_unit)
-      -- 0974 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
+      -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
       -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
       and (coalesce(btrim(p_language), '') = ''
            or public.job_requires_language(j.id, btrim(p_language), p_language_level))
-      -- 0974 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
+      -- 0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
       -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
       and (coalesce(p_work_time, '') = ''
            or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-      -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
+      -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
       -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
       -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
       and (coalesce(btrim(p_near), '') = ''
@@ -546,7 +546,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
       select public.search_title_candidates(left(p_keyword, 100))))
     and (p_keyword is null or public.search_fold(coalesce(t.title, j.title))
       like public.search_like_pattern(left(p_keyword, 100)) escape '\')
-    -- 0974 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
+    -- 0194 (#787): widełki w EUR — oferta w innej walucie jest nieporównywalna (jak inny okres).
     and public.job_salary_in_range(
       j.salary_min, j.salary_max, j.salary_period, j.currency, p_salary_min, p_salary_max, p_salary_unit)
     and (p_accommodation is null or j.accommodation = p_accommodation)
@@ -554,15 +554,15 @@ language sql stable security definer set search_path = public, pg_temp as $$
     and (coalesce(p_no_language, false) = false or j.no_language_required = true)
     and (p_since is null or j.published_at >= p_since)
     and (coalesce(p_direct_only, false) = false or not c.is_agency)
-    -- 0974 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
+    -- 0194 (#786): wymagany język ze słownika (kod ISO) — oferta wymaga tego języka na poziomie
     -- najwyżej wybranym (brak poziomu w ofercie = każdy poziom). Nieznany kod = brak wyników.
     and (coalesce(btrim(p_language), '') = ''
          or public.job_requires_language(j.id, btrim(p_language), p_language_level))
-    -- 0974 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
+    -- 0194 (#811): wymiar czasu pracy deklarowany przez pracodawcę; `both` pasuje do obu.
     -- Oferta bez deklaracji nie pasuje (nie zgadujemy z opisu godzin).
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
-    -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
+    -- 0194 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
     -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
     -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
@@ -685,7 +685,7 @@ begin
     end if;
   end loop;
 
-  -- 0974 (#786): język (kod słownika) i opcjonalny poziom (tylko razem z językiem).
+  -- 0194 (#786): język (kod słownika) i opcjonalny poziom (tylko razem z językiem).
   if p_filters ? 'language' and jsonb_typeof(p_filters -> 'language') <> 'null' then
     if jsonb_typeof(p_filters -> 'language') <> 'string'
        or not exists (select 1 from public.languages l
@@ -703,7 +703,7 @@ begin
     v_out := v_out || jsonb_build_object('languageLevel', p_filters ->> 'languageLevel');
   end if;
 
-  -- 0974 (#811): wymiar czasu pracy.
+  -- 0194 (#811): wymiar czasu pracy.
   if p_filters ? 'workTime' and jsonb_typeof(p_filters -> 'workTime') <> 'null' then
     if jsonb_typeof(p_filters -> 'workTime') <> 'string'
        or p_filters ->> 'workTime' not in ('full_time', 'part_time') then
@@ -712,7 +712,7 @@ begin
     v_out := v_out || jsonb_build_object('workTime', p_filters ->> 'workTime');
   end if;
 
-  -- 0974 (#824): promień od miejscowości — miejscowość (≤ 100 znaków) i promień z listy.
+  -- 0194 (#824): promień od miejscowości — miejscowość (≤ 100 znaków) i promień z listy.
   if p_filters ? 'near' and jsonb_typeof(p_filters -> 'near') <> 'null' then
     if jsonb_typeof(p_filters -> 'near') <> 'string'
        or char_length(btrim(p_filters ->> 'near')) > 100 then
@@ -780,7 +780,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     p_after_published_at => p_after_published_at,
     p_after_id           => p_after_id,
     p_limit              => least(greatest(coalesce(p_page_size, 1000), 1), 1000),
-    -- 0974: język, poziom, wymiar pracy, promień (klucze kanoniczne → parametry listy)
+    -- 0194: język, poziom, wymiar pracy, promień (klucze kanoniczne → parametry listy)
     p_language           => p_filters ->> 'language',
     p_language_level     => p_filters ->> 'languageLevel',
     p_work_time          => p_filters ->> 'workTime',
@@ -823,7 +823,7 @@ begin
                     'meal_voucher_daily', 'joint_committee',
                     -- 0172: kanał aplikowania u ogłoszeniodawcy
                     'apply_url', 'apply_email', 'apply_phone',
-                    -- 0974, #811: wymiar czasu pracy
+                    -- 0194, #811: wymiar czasu pracy
                     'work_time')
     limit 1;
   if v_bad is null then
@@ -1054,7 +1054,7 @@ begin
     apply_url                = nullif(btrim(coalesce(j->>'apply_url', '')), ''),
     apply_email              = nullif(btrim(coalesce(j->>'apply_email', '')), ''),
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
-    -- 0974 (#811): wymiar czasu pracy (brak klucza = brak deklaracji).
+    -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji).
     work_time                = nullif(j->>'work_time', ''),
     updated_at               = now()
   where id = p_job_id;
@@ -1199,7 +1199,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
     case when c.status = 'verified' then c.slug end as company_slug,
     -- 0172: kanał aplikowania (bramki oferty publicznej bez zmian — warunki WHERE niżej).
     j.apply_url, j.apply_email, j.apply_phone,
-    -- 0974 (#811): wymiar czasu pracy (null = pracodawca nie podał).
+    -- 0194 (#811): wymiar czasu pracy (null = pracodawca nie podał).
     j.work_time
   from public.jobs j
   join public.companies c on c.id = j.company_id

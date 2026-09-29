@@ -76,7 +76,7 @@ describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
     }
     const [listSql, listValues] = calls.find(([sql]) => sql.includes('p_sort'))!;
     expect(listSql).toContain('p_sort => $20::text');
-    // 0167: $14 = p_direct_only, 0974: $15–$19 = język, poziom, wymiar, promień (NULL bez
+    // 0167: $14 = p_direct_only, 0194: $15–$19 = język, poziom, wymiar, promień (NULL bez
     // filtra), potem sortowanie i stronicowanie.
     expect(listValues.slice(13)).toEqual([null, null, null, null, null, null, 'salary', 12, 0]);
   });
@@ -96,7 +96,7 @@ describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
   });
 });
 
-describe('0974: język, wymiar pracy i promień w publicznych RPC', () => {
+describe('0194: język, wymiar pracy i promień w publicznych RPC', () => {
   const run = async (
     params: Parameters<typeof getPublicJobs>[1],
   ): Promise<Array<[string, unknown[]]>> => {

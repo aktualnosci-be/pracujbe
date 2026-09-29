@@ -165,7 +165,7 @@ interface FormValues {
   contractType: '' | ContractType;
   workingHours: string;
   shifts: string;
-  /** #811 (0974): wymiar pracy ('' = nie podano). */
+  /** #811 (0194): wymiar pracy ('' = nie podano). */
   workTime: '' | WorkTime;
   startImmediately: boolean;
   startDate: string;
@@ -1493,7 +1493,7 @@ export function JobWizard({
                   />
                   <FieldError name="workingHours" />
                 </div>
-                {/* #811 (0974): wymiar pracy — filtr „pełny etat / część etatu” na liście ofert. */}
+                {/* #811 (0194): wymiar pracy — filtr „pełny etat / część etatu” na liście ofert. */}
                 <div id={domId('workTime')} className={FORM_FIELD}>
                   <Label htmlFor="job-work-time-trigger" className={FORM_LABEL_TEXT}>{t('workTimeLabel')}</Label>
                   <Select

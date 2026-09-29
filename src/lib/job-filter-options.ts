@@ -1,11 +1,11 @@
 import { LANGUAGE_CODES, type LanguageCode } from '@/lib/languages';
 
 /**
- * Wartości nowych filtrów listy ofert (migracja 0974 — numer tymczasowy) — moduł czysty, bez
+ * Wartości nowych filtrów listy ofert (migracja 0194 — numer tymczasowy) — moduł czysty, bez
  * Zoda (importują go klienckie panele filtrów, #390). Te same listy sprawdza baza:
  * `get_public_jobs` (`p_language`, `p_language_level`, `p_work_time`, `p_near`, `p_radius_km`)
  * i kanonizacja zapisanych wyszukiwań (`saved_search_canonical_filters`); zgodność pilnuje
- * test `job-filters-0974`.
+ * test `job-filters-0194`.
  */
 
 /** Wymiar czasu pracy oferty (#811, `jobs.work_time`); brak = pracodawca nie podał. */
@@ -40,7 +40,7 @@ export function isLanguageFilterLevel(value: unknown): value is LanguageFilterLe
   return typeof value === 'string' && (LANGUAGE_FILTER_LEVELS as readonly string[]).includes(value);
 }
 
-/** Wymaganie spełnione przez poziom kandydata — lustro `job_requires_language` (0974). */
+/** Wymaganie spełnione przez poziom kandydata — lustro `job_requires_language` (0194). */
 export function languageLevelSatisfies(
   required: LanguageFilterLevel | null | undefined,
   candidate: LanguageFilterLevel | undefined,
@@ -69,7 +69,7 @@ export function parseRadiusKm(value: string | undefined): RadiusKm {
 /** Limit długości nazwy miejscowości promienia (jak `left(p_near, 100)` w SQL). */
 export const NEAR_MAX_LENGTH = 100;
 
-/** Promień Ziemi jak w `geo_distance_km` (0974). */
+/** Promień Ziemi jak w `geo_distance_km` (0194). */
 const EARTH_RADIUS_KM = 6371;
 
 /** Odległość po łuku koła wielkiego (haversine) — lustro `geo_distance_km` dla danych demo. */
@@ -87,7 +87,7 @@ export function distanceKm(
 type GeoPoint = { lat: number; lng: number };
 
 /**
- * #824 — czy oferta mieści się w filtrze promienia (lustro SQL 0974). Oferta zdalna pasuje do
+ * #824 — czy oferta mieści się w filtrze promienia (lustro SQL 0194). Oferta zdalna pasuje do
  * KAŻDEGO promienia — także przy nierozpoznanej miejscowości środka (decyzja właściciela
  * 29.09.2026: dojazd nie dotyczy pracy zdalnej). Inaczej odległość tylko ze znanych
  * współrzędnych obu miejsc; nieznane = nie pasuje (nie zgadujemy).

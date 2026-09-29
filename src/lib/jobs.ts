@@ -127,7 +127,7 @@ export interface JobListItem {
   isAgency?: true;
   /**
    * Praca zdalna (`jobs.remote`, pole kreatora „Praca zdalna”) — tylko zestaw demonstracyjny
-   * niesie to pole na liście (lustro filtra promienia 0974: zdalna pasuje do każdego promienia).
+   * niesie to pole na liście (lustro filtra promienia 0194: zdalna pasuje do każdego promienia).
    */
   remote?: boolean;
 }
@@ -201,7 +201,7 @@ export interface JobDetail extends JobListItem {
   /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
   remoteApplicantCountries?: string[];
   /**
-   * #811 (0974): wymiar czasu pracy zadeklarowany przez pracodawcę (`jobs.work_time`); brak =
+   * #811 (0194): wymiar czasu pracy zadeklarowany przez pracodawcę (`jobs.work_time`); brak =
    * nie podano (nie zgadujemy z opisu godzin).
    */
   workTime?: WorkTime;
@@ -229,13 +229,13 @@ export interface GetJobsParams {
   noLanguageRequired?: boolean;
   /** 0167: tylko oferty spoza agencji pracy tymczasowej. */
   directOnly?: boolean;
-  /** #786 (0974): wymagany język oferty (kod słownika). */
+  /** #786 (0194): wymagany język oferty (kod słownika). */
   language?: LanguageCode;
   /** #786: poziom kandydata — oferty wymagające języka najwyżej na tym poziomie (albo bez poziomu). */
   languageLevel?: LanguageFilterLevel;
-  /** #811 (0974): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
+  /** #811 (0194): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
   workTime?: WorkTimeFilter;
-  /** #824 (0974): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
+  /** #824 (0194): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
   near?: string;
   /** #824: promień w km (z `near`). */
   radiusKm?: RadiusKm;
@@ -373,10 +373,10 @@ function getJobsFromDemo(
   if (params.immediate) jobs = jobs.filter((job) => job.immediate);
   if (params.noLanguageRequired)
     jobs = jobs.filter((job) => job.noLanguageRequired);
-  // 0974 — lustro warunków SQL dla danych demo: język (demo nie ma poziomów → każdy poziom
+  // 0194 — lustro warunków SQL dla danych demo: język (demo nie ma poziomów → każdy poziom
   // pasuje), wymiar pracy (`both` pasuje do obu, brak deklaracji — do żadnego), promień po
   // współrzędnych miast (nieznane miasto oferty albo środka = brak wyników); oferta zdalna
-  // (`remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026, jak SQL 0974).
+  // (`remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026, jak SQL 0194).
   if (params.language) {
     const code = params.language;
     jobs = jobs.filter((job) => job.languages.some((label) => resolveLanguageCode(label) === code));

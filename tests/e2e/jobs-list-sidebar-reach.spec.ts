@@ -63,7 +63,7 @@ for (const viewport of [
     await expect(apply).toBeInViewport({ ratio: 1 });
 
     // Ostatnia sekcja filtrów da się osiągnąć przewijaniem wewnątrz panelu, bez ruszania strony.
-    // Po nazwie: panel ma też listy języka, poziomu i promienia (0974).
+    // Po nazwie: panel ma też listy języka, poziomu i promienia (0194).
     const dateSelect = rail.getByRole('combobox', { name: messages('pl').filters.datePosted, exact: true });
     await dateSelect.scrollIntoViewIfNeeded();
     await expect(dateSelect).toBeInViewport({ ratio: 1 });

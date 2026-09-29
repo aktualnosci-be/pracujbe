@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0974 — filtry listy ofert (waluta, język i poziom, wymiar pracy, promień).
+-- Rollback 0194 — filtry listy ofert (waluta, język i poziom, wymiar pracy, promień).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
 -- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/job-filters-rollback.sql wykonuje go w transakcji i cofa).

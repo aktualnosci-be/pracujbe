@@ -85,13 +85,13 @@ export interface SidebarFilters {
   noLanguageRequired: boolean;
   /** 0167: tylko oferty spoza agencji pracy tymczasowej (URL `direct=1`). */
   directOnly: boolean;
-  /** #786 (0974): wymagany język oferty (kod słownika, URL `lang`); `null` = bez filtra. */
+  /** #786 (0194): wymagany język oferty (kod słownika, URL `lang`); `null` = bez filtra. */
   language: LanguageCode | null;
   /** #786: poziom kandydata (URL `langLevel`, tylko z językiem) — oferty wymagające najwyżej tego. */
   languageLevel: LanguageFilterLevel | null;
-  /** #811 (0974): wymiar pracy (URL `workTime`); oferta z oboma wariantami pasuje do obu. */
+  /** #811 (0194): wymiar pracy (URL `workTime`); oferta z oboma wariantami pasuje do obu. */
   workTime: WorkTimeFilter | null;
-  /** #824 (0974): miejscowość środka promienia (URL `near`); pusty = bez filtra. */
+  /** #824 (0194): miejscowość środka promienia (URL `near`); pusty = bez filtra. */
   near: string;
   /** #824: promień w km (URL `radius`), znaczący tylko z miejscowością. */
   radiusKm: RadiusKm;
@@ -311,7 +311,7 @@ export function parseSidebarFilters(
   f.noLanguageRequired = sp['noLang'] === '1';
   f.directOnly = sp['direct'] === '1';
 
-  // 0974: język + poziom (poziom bez języka nic nie znaczy), wymiar pracy, promień.
+  // 0194: język + poziom (poziom bez języka nic nie znaczy), wymiar pracy, promień.
   const lang = sp['lang'];
   f.language = isLanguageFilterCode(lang) ? lang : null;
   const level = sp['langLevel'];
@@ -520,7 +520,7 @@ export function sidebarFiltersToParams(
 }
 
 /**
- * Filtry 0974 jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
+ * Filtry 0194 jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
  * `p_near`, `p_radius_km`). Jak słowo kluczowe zawężają BAZĘ wszystkich wymiarów facetów
  * (SQL: warunek w `base`), więc dane demo filtruje nimi `getJobs`, nie `matchesSidebar`.
  */

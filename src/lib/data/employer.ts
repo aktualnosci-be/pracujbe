@@ -598,7 +598,7 @@ export interface JobDraftValues {
   contractType: string;
   workingHours: string;
   shifts: string;
-  /** #811 (0974): `jobs.work_time`; pusty = brak deklaracji. */
+  /** #811 (0194): `jobs.work_time`; pusty = brak deklaracji. */
   workTime: string;
   startImmediately: boolean;
   startDate: string;

@@ -286,7 +286,7 @@ function NoScriptFilterForm({
         </label>
       </fieldset>
 
-      {/* 0974: odległość (#824), wymiar pracy (#811), język i poziom (#786) — bez JS te same
+      {/* 0194: odległość (#824), wymiar pracy (#811), język i poziom (#786) — bez JS te same
           parametry adresu co panel z JS (`near`/`radius`, `workTime`, `lang`/`langLevel`). */}
       <fieldset className="space-y-3 border-t border-border pt-5">
         <legend className="text-sm font-semibold text-foreground">{t('distance')}</legend>

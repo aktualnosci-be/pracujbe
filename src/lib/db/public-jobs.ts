@@ -78,7 +78,7 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.since ?? null,
     params.salaryUnit ?? 'month',
     params.directOnly ? true : null,
-    // 0974: język + poziom, wymiar pracy, promień (miejscowość bez promienia nic nie znaczy).
+    // 0194: język + poziom, wymiar pracy, promień (miejscowość bez promienia nic nie znaczy).
     params.language ?? null,
     params.language ? (params.languageLevel ?? null) : null,
     params.workTime ?? null,
@@ -422,7 +422,7 @@ export async function getPublicJobsAgency(
 }
 
 /**
- * Czy miejscowość środka promienia (#824, 0974) jest w słowniku i ma współrzędne — ta sama
+ * Czy miejscowość środka promienia (#824, 0194) jest w słowniku i ma współrzędne — ta sama
  * funkcja co filtr listy (`locations_within_radius`): środek ze współrzędnymi leży w 1 km od
  * siebie, więc niepusty wynik = miejscowość rozpoznana.
  */

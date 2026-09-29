@@ -12,7 +12,7 @@
  * Stawek godzinowych i miesięcznych nie przeliczamy na siebie: godziny pracy to wolny
  * tekst, a 160 h/mies. nie pasuje do niepełnego wymiaru ani zmiennych godzin.
  * Brak okresu = `month` (domyślna wartość kolumny `jobs.salary_period`).
- * Waluta (#787, 0974): widełki i sortowanie są w EUR. Kwoty w innej walucie (np. PLN) NIE są
+ * Waluta (#787, 0194): widełki i sortowanie są w EUR. Kwoty w innej walucie (np. PLN) NIE są
  * przeliczane — portal nie ma datowanego źródła kursów — więc taka oferta jest nieporównywalna,
  * tak samo jak stawka w innym okresie. Brak waluty = EUR (domyślna wartość `jobs.currency`).
  * Oferta bez porównywalnej kwoty nie odpada z filtra kwoty i trafia na koniec sortowania.

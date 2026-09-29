@@ -4,7 +4,7 @@ import { AxeBuilder } from './fixtures/axe';
 import { LOCALES, messages, rejectOptionalCookies } from './fixtures/messages';
 
 /**
- * Filtry listy ofert z migracji 0974 (numer tymczasowy): wymagany język i poziom (#786),
+ * Filtry listy ofert z migracji 0194 (numer tymczasowy): wymagany język i poziom (#786),
  * wymiar pracy (#811), promień od miejscowości (#824) — w panelu z JavaScriptem i w formularzu
  * bez JavaScriptu (te same parametry adresu), chipy z usuwaniem całego filtra i komunikat dla
  * nierozpoznanej miejscowości. Dane demo (bez bazy). Bramka axe 320/1280 px.

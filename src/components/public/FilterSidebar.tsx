@@ -261,7 +261,7 @@ export function FilterFields({
   const tContract = useTranslations('contractTypes');
   const tLanguageNames = useTranslations('languageNames');
 
-  // 0974: języki w kolejności nazw w języku widza (kody ze słownika bazy).
+  // 0194: języki w kolejności nazw w języku widza (kody ze słownika bazy).
   const languageOptions = React.useMemo(
     () =>
       LANGUAGE_FILTER_CODES.map((code) => ({ code, label: tLanguageNames(code) })).sort((a, b) =>
@@ -412,7 +412,7 @@ export function FilterFields({
         ) : null}
       </section>
 
-      {/* Odległość od miejscowości (#824, 0974) */}
+      {/* Odległość od miejscowości (#824, 0194) */}
       <section>
         <SectionTitle>{t('distance')}</SectionTitle>
         <div className="space-y-2">
@@ -555,7 +555,7 @@ export function FilterFields({
         </div>
       </section>
 
-      {/* Wymiar pracy (#811, 0974) */}
+      {/* Wymiar pracy (#811, 0194) */}
       <section>
         <fieldset aria-describedby={`${idPrefix}-worktime-note`}>
           <legend className="mb-[14px] break-words text-[15px] font-bold text-foreground">
@@ -627,7 +627,7 @@ export function FilterFields({
         />
       </section>
 
-      {/* Wymagany język i poziom (#786, 0974) */}
+      {/* Wymagany język i poziom (#786, 0194) */}
       <section>
         <SectionTitle>{t('requiredLanguage')}</SectionTitle>
         <div className="space-y-2">

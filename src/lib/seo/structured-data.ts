@@ -58,7 +58,7 @@ export function publicHttpsUrl(value: string | undefined): string | undefined {
  * `buildJobPostingJsonLd` w ogóle nie emituje `employmentType` dla niepotwierdzonego wymiaru,
  * zamiast fałszywie deklarować `FULL_TIME`. Pozostałe rodzaje (`temporary`/`interim`/
  * `freelance`/`internship`/`seasonal`) same w sobie są kategorią zatrudnienia niezależną od
- * wymiaru, więc zostają. Jawny wymiar etatu (#811, 0974: `jobs.work_time`) dokłada
+ * wymiaru, więc zostają. Jawny wymiar etatu (#811, 0194: `jobs.work_time`) dokłada
  * `FULL_TIME`/`PART_TIME` tylko wtedy, gdy pracodawca go zadeklarował (`WORK_TIME_EMPLOYMENT`).
  */
 const EMPLOYMENT_TYPE: Partial<Record<ContractType, string>> = {
@@ -69,7 +69,7 @@ const EMPLOYMENT_TYPE: Partial<Record<ContractType, string>> = {
   seasonal: 'TEMPORARY',
 };
 
-/** #811 (0974): zadeklarowany wymiar pracy → `employmentType` (oba warianty = obie wartości). */
+/** #811 (0194): zadeklarowany wymiar pracy → `employmentType` (oba warianty = obie wartości). */
 const WORK_TIME_EMPLOYMENT: Record<NonNullable<JobDetail['workTime']>, readonly string[]> = {
   full_time: ['FULL_TIME'],
   part_time: ['PART_TIME'],

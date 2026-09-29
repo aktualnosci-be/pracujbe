@@ -39,7 +39,7 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
           contract_type: v.contractType,
           working_hours: v.workingHours,
           shifts: nullIfEmpty(v.shifts),
-          // #811 (0974): brak wyboru = brak deklaracji (null czyści zapisany wymiar).
+          // #811 (0194): brak wyboru = brak deklaracji (null czyści zapisany wymiar).
           work_time: v.workTime ?? null,
           start_immediately: v.startImmediately,
           start_date: v.startDate ?? null,

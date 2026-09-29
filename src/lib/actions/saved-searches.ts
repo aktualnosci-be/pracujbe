@@ -53,7 +53,7 @@ const filtersSchema = z
     accommodation: z.boolean().optional(),
     immediate: z.literal(true).optional(),
     noLanguage: z.literal(true).optional(),
-    // 0974: te same listy co baza (`saved_search_canonical_filters`) i panel filtrów.
+    // 0194: te same listy co baza (`saved_search_canonical_filters`) i panel filtrów.
     language: z.enum(LANGUAGE_FILTER_CODES as unknown as [LanguageCode, ...LanguageCode[]]).optional(),
     languageLevel: z.enum(LANGUAGE_FILTER_LEVELS).optional(),
     workTime: z.enum(WORK_TIME_FILTERS).optional(),

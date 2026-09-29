@@ -342,7 +342,7 @@ const WH = {
 type WhKey = keyof typeof WH;
 
 /**
- * Wymiar pracy ofert demonstracyjnych (#811, 0974) — jawne dane zestawu (odpowiednik
+ * Wymiar pracy ofert demonstracyjnych (#811, 0194) — jawne dane zestawu (odpowiednik
  * `jobs.work_time`, deklaracji pracodawcy), nie zgadywanie z tekstu. `undefined` = brak deklaracji.
  */
 const WH_WORK_TIME: Record<WhKey, WorkTime | undefined> = {
