@@ -1464,6 +1464,10 @@ async function readAuditRows(
     } else if (entityType === 'email_campaign' && id) {
       const uuid = parseUuid(id);
       entityHref = uuid ? { pathname: `/admin/kampanie/${uuid}` } : null;
+    } else if (entityType === 'profile' && id) {
+      // #1049: zmiana języka e-maili — szczegół konta (tylko odczyt).
+      const uuid = parseUuid(id);
+      entityHref = uuid ? { pathname: `/admin/uzytkownicy/${uuid}` } : null;
     }
     return {
       id: asString(row['id']),

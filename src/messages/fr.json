@@ -1737,6 +1737,8 @@
     "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
     "stepAnnounce": "Étape {current} sur {total} : {title}",
     "goToOffers": "Voir la liste des offres",
+    "draftConflict": "Ce brouillon a été modifié entre-temps — dans un autre onglet ou par un autre membre de l'équipe. Les modifications de cette étape n'ont pas été enregistrées, pour ne pas écraser le travail d'un autre. Rechargez la version actuelle du brouillon.",
+    "reloadDraft": "Recharger la version actuelle du brouillon",
     "editTitle": "Modifier l'offre",
     "editSubtitleActive": "L'offre est publiée. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront aussitôt. Le statut et les candidatures ne changent pas.",
     "editSubtitlePaused": "L'offre est suspendue. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront à la reprise de l'offre. Les candidatures ne changent pas.",
@@ -2891,6 +2893,7 @@
     "opsRow_dbConnections": "Utilisation des connexions",
     "opsRow_appPoolWaiting": "Requêtes en attente de connexion",
     "opsRow_portalModeMismatch": "Mode du portail incohérent (env et base)",
+    "opsRow_schemaBehind": "Schéma de la base en retard sur le code (migrations)",
     "opsRow_backupAge": "Âge de la dernière sauvegarde",
     "filterCompanyLinks": "Site et logo à approuver",
     "sectionCompanyLinks": "Site web et logo",
@@ -2935,6 +2938,7 @@
     "entityJob": "Offre d’emploi",
     "auditActionJobUpdatePublished": "Modification d’une offre publiée",
     "auditActionJobDuplicated": "Copie d’une offre",
+    "auditActionJobDeleted": "Offre supprimée",
     "companyJobsAllLink": "Toutes les offres de l’entreprise",
     "auditActionRetentionPolicyChanged": "Modification d’une durée de conservation",
     "auditActionRetentionPoliciesSeeded": "Enregistrement des durées de conservation",
@@ -3020,7 +3024,9 @@
     "auditActionJobPausedForReview": "Offre suspendue pour vérification",
     "auditActionCompanyAgencyChanged": "Modification de la déclaration d’agence",
     "auditActionCompanyAgencyChecked": "Vérification du numéro d’agrément",
-    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres"
+    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres",
+    "auditActionEmailLocaleChanged": "Langue des e-mails modifiée par l’utilisateur",
+    "entityProfile": "Profil"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -3050,7 +3056,14 @@
     "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
     "employerEmailApplicationsDescription": "Nouvelles candidatures à vos offres d’emploi.",
     "employerEmailOffersDescription": "Lorsqu’un candidat accepte ou refuse votre proposition d’emploi.",
-    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations."
+    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations.",
+    "emailLocaleTitle": "Langue des e-mails et des notifications",
+    "emailLocaleDescription": "C’est dans cette langue que nous vous envoyons e-mails et notifications, quelle que soit la langue dans laquelle vous consultez le site. Le changement s’applique aux messages suivants.",
+    "emailLocaleLabel": "Langue des e-mails et des notifications",
+    "emailLocaleSave": "Enregistrer la langue",
+    "emailLocaleSaving": "Enregistrement...",
+    "emailLocaleSaved": "La langue des e-mails et des notifications a été enregistrée.",
+    "emailLocaleLoadError": "Impossible de charger la langue des e-mails et des notifications. Réessayez dans un instant."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -3900,6 +3913,14 @@
       "erasure_tombstone": {
         "label": "Registre des effacements",
         "description": "Registre des effacements à réappliquer après restauration ; doit survivre à la plus ancienne sauvegarde."
+      },
+      "expired_auth_session": {
+        "label": "Session de connexion expirée",
+        "description": "La ligne d’une session expirée (avec adresse IP et user-agent) est supprimée 7 jours après l’expiration."
+      },
+      "expired_auth_verification": {
+        "label": "Jeton de vérification expiré",
+        "description": "La ligne d’un jeton de vérification expiré (confirmation d’e-mail, réinitialisation du mot de passe) est supprimée 7 jours après l’expiration."
       },
       "guest_ip_user_agent": {
         "label": "IP et user-agent de l’invité",
