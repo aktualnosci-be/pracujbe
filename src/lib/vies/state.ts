@@ -73,3 +73,41 @@ export function buildViesState(input: {
   }
   return { kind: 'invalid', vatNumber, checkedAt: stored.checkedAt };
 }
+
+/** Lustro `company_vies_auto_max_attempts()` (0191) — najwyżej tyle prób automatycznych. */
+export const VIES_AUTO_MAX_ATTEMPTS = 10;
+
+/**
+ * Zadanie automatycznego sprawdzenia w kolejce (0191, #706/#879) — pokazywane adminowi, żeby
+ * było widać, że wynik czeka na ponowienie (VIES był niedostępny) albo próby się wyczerpały.
+ */
+export interface ViesAutoRetry {
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lastOutcome: 'unavailable' | 'rate_limited' | 'error' | null;
+  /** Wyczerpane próby — kolejka nie ponowi sprawdzenia, zostaje ręczne. */
+  exhausted: boolean;
+}
+
+/** Wiersz `company_vies_auto_queue` → stan dla panelu; zadanie dla innego numeru = brak. */
+export function parseViesAutoRetry(
+  row: Record<string, unknown> | null | undefined,
+  currentNumber: string | null,
+): ViesAutoRetry | null {
+  if (!row || !currentNumber || row['vat_number'] !== currentNumber) return null;
+  const attempts = Number(row['attempts']);
+  const next = row['next_attempt_at'];
+  const nextAttemptAt = next instanceof Date ? next.toISOString() : typeof next === 'string' ? next : null;
+  if (!Number.isInteger(attempts) || attempts < 0 || !nextAttemptAt) return null;
+  const outcome = row['last_outcome'];
+  const lastOutcome =
+    outcome === 'unavailable' || outcome === 'rate_limited' || outcome === 'error' ? outcome : null;
+  return {
+    attempts,
+    maxAttempts: VIES_AUTO_MAX_ATTEMPTS,
+    nextAttemptAt,
+    lastOutcome,
+    exhausted: attempts >= VIES_AUTO_MAX_ATTEMPTS,
+  };
+}

@@ -644,6 +644,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['employer'],
     columns: { vat_number: 'company', vies_name: 'company', checked_by: 'reference' },
   },
+  'public.company_vies_auto_queue': {
+    activities: ['companies'],
+    subjects: ['employer'],
+    columns: { vat_number: 'company' },
+    notPersonal: {
+      attempts: 'Liczba prób automatycznego sprawdzenia VIES.',
+      next_attempt_at: 'Termin kolejnej próby (backoff).',
+      lease_until: 'Dzierżawa zadania workera.',
+      last_outcome: 'Ostatni wynik nierozstrzygający (niedostępność / limit / błąd).',
+    },
+    note: 'Kolejka zadań (0191, #706/#879): tylko numer przedsiębiorstwa; wiersz znika po wyniku, usunięciu numeru albo firmy.',
+  },
   'public.jobs': {
     activities: ['companies'],
     subjects: ['employer'],
@@ -829,6 +841,12 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       decided_by: 'reference',
     },
     note: 'Uzasadnienia odwołania i rozpatrzenia są anonimizowane przez dsa_retention_run po końcu drogi odwołania i okresie retencji (#43).',
+  },
+  'public.moderation_informed': {
+    activities: ['dsa-moderation'],
+    subjects: [],
+    columns: {},
+    note: 'Niezmienny dowód poinformowania strony decyzji/cofnięcia (początek biegu terminu odwołania, 0188/#1045/#1063): identyfikatory decyzji, podstawa (e-mail wysłany / odczyt w panelu / reguła zastępcza) i czas — bez danych osobowych i bez treści.',
   },
   'public.ai_budget_limits': DICTIONARY('globalne limity kosztów AI, #36'),
   'public.ai_usage_ledger': {

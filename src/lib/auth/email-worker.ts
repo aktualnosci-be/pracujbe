@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { renderEmail } from '@/emails/templates';
-import { emailFromEnv, replyToFromEnv } from '@/lib/email/sender';
+import { emailFromEnv, emailFromProblem, replyToFromEnv } from '@/lib/email/sender';
 import { env, isAuthMailConfigured, isPortalAuthConfigured, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
 import {
@@ -54,6 +54,9 @@ export type AuthMailErrorCode = MailErrorCode;
  * Błąd wysyłki z ustalonym kodem — bez komunikatu dostawcy (może zawierać adres lub link).
  * Ten sam typ dla każdego transportu (`src/lib/email/transport`).
  */
+/** #1214: po błędzie konfiguracji kolejka kont czeka tyle przed kolejną próbą. */
+export const AUTH_CONFIG_RETRY_MS = 10 * 60_000;
+
 export const AuthMailSendError = MailSendError;
 export type AuthMailSendError = MailSendError;
 
@@ -98,6 +101,7 @@ export async function processAuthEmailBatch(
   let stale = 0;
   let ackErrors = 0;
   let deferred = 0;
+  let configBlocked = false;
   for (const [index, delivery] of queue.entries()) {
     let message: { subject: string; html: string; text: string };
     let prepared: ReturnType<typeof prepareAuthEmail>;
@@ -133,8 +137,19 @@ export async function processAuthEmailBatch(
         { idempotencyKey: prepared.idempotencyKey },
       )).id;
     } catch (error) {
+      if (error instanceof MailSendError && error.code === 'configuration_error') {
+        // #1214: błąd konfiguracji nadawcy/dostawcy dotyczy każdego listu — to i pozostałe
+        // zlecenia wracają do kolejki bez zużycia próby (jak odmowa budżetu); alarm przez 503.
+        captureError(error, { area: 'auth.email.config', kind: delivery.kind });
+        const retryAt = new Date(Date.now() + AUTH_CONFIG_RETRY_MS);
+        for (const pending of queue.slice(index)) {
+          if (await deferAuthEmail(pool, pending, retryAt).catch(() => false)) deferred += 1;
+        }
+        configBlocked = true;
+        break;
+      }
       // Nieznany wyjątek (np. przerwane połączenie) traktujemy jak chwilową niedostępność.
-      const code = error instanceof MailSendError ? error.code : 'provider_unavailable';
+      const code = error instanceof MailSendError && error.code !== 'configuration_error' ? error.code : 'provider_unavailable';
       captureError(new MailSendError(code), { area: 'auth.email.send', kind: delivery.kind });
       // Dzierżawa wygaśnie sama, gdy zapis porażki też się nie uda — zlecenie wróci do kolejki.
       await failAuthEmail(pool, delivery, code).catch(() => false);
@@ -152,7 +167,17 @@ export async function processAuthEmailBatch(
       ackErrors += 1;
     }
   }
-  return { processed: queue.length, sent, failed, expired, stale, ackErrors, deferred, ok: ackErrors === 0 };
+  return {
+    processed: queue.length,
+    sent,
+    failed,
+    expired,
+    stale,
+    ackErrors,
+    deferred,
+    ...(configBlocked ? { skipped: 'email provider configuration error' } : {}),
+    ok: ackErrors === 0 && !configBlocked,
+  };
 }
 
 /**
@@ -165,6 +190,10 @@ export async function processAuthEmailQueue(limit = 20): Promise<AuthEmailProces
   if (!isPortalAuthConfigured()) return { ...empty, skipped: 'auth not configured', ok: true };
   const transport = mailTransportFromEnv();
   const baseURL = env.authBaseUrl;
+  // #1214: nieużywalny `EMAIL_FROM` — nie pobieramy kolejki (listy czekają, próby niezużyte).
+  if (transport && emailFromProblem()) {
+    return { ...empty, skipped: 'email sender invalid', ok: !isProductionMode() };
+  }
   if (!isAuthMailConfigured() || !transport || !baseURL) {
     const reason = !transport && emailProviderFromEnv().provider === null
       ? 'email provider not configured'

@@ -41,15 +41,27 @@ export interface MailSendOptions {
   signal?: AbortSignal;
 }
 
-export type MailErrorCode = 'delivery_failed' | 'provider_unavailable';
+export type MailErrorCode = 'delivery_failed' | 'provider_unavailable' | 'configuration_error';
+
+/** Kod błędu konfiguracji zapisywany w `email_deliveries.error_message` (czujka `ops_metrics`, 0192). */
+export const MAIL_CONFIG_ERROR_MESSAGE = 'EMAIL_PROVIDER_CONFIG';
+
+const MESSAGES: Record<MailErrorCode, string> = {
+  provider_unavailable: 'EMAIL_PROVIDER_UNAVAILABLE',
+  delivery_failed: 'EMAIL_PROVIDER_REJECTED',
+  configuration_error: MAIL_CONFIG_ERROR_MESSAGE,
+};
 
 /**
  * Błąd wysyłki z ustalonym kodem. `provider_unavailable` = limit, awaria dostawcy lub sieci,
- * brak identyfikatora w odpowiedzi (warto ponowić); `delivery_failed` = odrzucenie listu.
+ * brak identyfikatora w odpowiedzi (warto ponowić); `delivery_failed` = odrzucenie TEGO listu
+ * (np. adres odbiorcy); `configuration_error` (#1214) = błąd WSPÓLNY dla wszystkich listów
+ * (zły/nieparsowalny nadawca, niezweryfikowana domena, 401/403 klucza, złe konto SMTP) —
+ * worker odkłada kolejkę bez zużycia próby i podnosi alarm; po poprawce listy wychodzą.
  */
 export class MailSendError extends Error {
   constructor(readonly code: MailErrorCode) {
-    super(code === 'provider_unavailable' ? 'EMAIL_PROVIDER_UNAVAILABLE' : 'EMAIL_PROVIDER_REJECTED');
+    super(MESSAGES[code]);
     this.name = 'MailSendError';
   }
 }

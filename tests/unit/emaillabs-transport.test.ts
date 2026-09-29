@@ -107,6 +107,25 @@ describe('kontrakt żądania EmailLabs', () => {
 });
 
 describe('ACK i błędy', () => {
+  it.each([
+    ['złe konto SMTP', 400, { message: 'Invalid smtpAccount' }],
+    ['niezweryfikowana domena nadawcy', 422, { errors: [{ message: 'Sender domain is not verified' }] }],
+  ] as const)('#1214: odrzucenie wskazujące konfigurację (%s) → configuration_error', async (_label, status, body) => {
+    const http = fakeFetch({ send: () => jsonResponse(status, body) });
+    const error = await emailLabsTransport(CONFIG, http.fn).send(MESSAGE, { idempotencyKey: KEY }).catch((e) => e);
+    expect((error as MailSendError).code).toBe('configuration_error');
+    expect((error as Error).message).toBe('EMAIL_PROVIDER_CONFIG');
+  });
+
+  it('#1214: nieparsowalny nadawca (cudzysłowy bez nawiasów) → configuration_error przed żądaniem', async () => {
+    const http = fakeFetch({});
+    const error = await emailLabsTransport(CONFIG, http.fn)
+      .send({ ...MESSAGE, from: 'Pracuj.be no-reply@pracuj.be' }, { idempotencyKey: KEY })
+      .catch((e) => e);
+    expect((error as MailSendError).code).toBe('configuration_error');
+    expect(http.posts()).toHaveLength(0);
+  });
+
   it('odpowiedź 200 bez naszego messageId → brak ACK (provider_unavailable)', async () => {
     const http = fakeFetch({ send: () => jsonResponse(200, accepted('inny@pracuj.be')) });
     const error = await emailLabsTransport(CONFIG, http.fn).send(MESSAGE, { idempotencyKey: KEY }).catch((e) => e);
@@ -117,7 +136,9 @@ describe('ACK i błędy', () => {
   it.each([
     [429, 'provider_unavailable'],
     [500, 'provider_unavailable'],
-    [401, 'provider_unavailable'],
+    // #1214: 401/403 = klucz/konto — konfiguracja wspólna dla wszystkich listów.
+    [401, 'configuration_error'],
+    [403, 'configuration_error'],
     [400, 'delivery_failed'],
     [207, 'delivery_failed'],
   ] as const)('HTTP %i → %s, bez komunikatu dostawcy', async (status, code) => {
@@ -218,11 +239,14 @@ describe('idempotencja (EmailLabs nie ma Idempotency-Key)', () => {
     expect(http.posts()).toHaveLength(2);
   });
 
-  it('błąd sprawdzenia (np. brak uprawnienia klucza) → provider_unavailable i brak wysyłki', async () => {
+  it('błąd sprawdzenia: brak uprawnienia klucza (403) → configuration_error, inny → provider_unavailable; bez wysyłki', async () => {
     const http = fakeFetch({ lookup: () => jsonResponse(403, { errors: [] }) });
     const error = await emailLabsTransport(CONFIG, http.fn).send(MESSAGE, { idempotencyKey: KEY }).catch((e) => e);
-    expect((error as MailSendError).code).toBe('provider_unavailable');
+    expect((error as MailSendError).code).toBe('configuration_error');
     expect(http.posts()).toHaveLength(0);
+    const http502 = fakeFetch({ lookup: () => jsonResponse(502, { errors: [] }) });
+    const error502 = await emailLabsTransport(CONFIG, http502.fn).send(MESSAGE, { idempotencyKey: KEY }).catch((e) => e);
+    expect((error502 as MailSendError).code).toBe('provider_unavailable');
   });
 });
 

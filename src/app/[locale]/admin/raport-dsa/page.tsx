@@ -255,9 +255,10 @@ export default async function AdminDsaReportPage({
                 retentionDays: retention.overview.retentionDays,
               })}
             </p>
-            <div className={`${STATS} grid-cols-2 md:grid-cols-4`}>
+            <div className={`${STATS} grid-cols-2 md:grid-cols-5`}>
               {stat(t('dsaRetentionEligible'), retention.overview.eligibleCases)}
               {stat(t('dsaRetentionWaiting'), retention.overview.waitingForAppealPath)}
+              {stat(t('dsaRetentionFallback'), retention.overview.informedByFallback)}
               {stat(
                 t('dsaRetentionWithin'),
                 retention.overview.withinRetention,
