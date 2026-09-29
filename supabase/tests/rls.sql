@@ -22165,7 +22165,7 @@ update public.companies set description = 'Nous construisons des ponts.' where i
 reset role;
 select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
   'CDL975-3 nowa treść opisu = język nieznany (nie zostaje język starego tekstu)');
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert((select description_locale is null from public.get_public_company('firma-d-cdl975')),
   'CDL975-3b profil publiczny nie przypisuje starego języka nowemu opisowi');
 reset role;
