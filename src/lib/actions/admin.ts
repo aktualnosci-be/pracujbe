@@ -71,6 +71,12 @@ function mapPgError(message: string | undefined): ErrorCode {
   const m = message ?? '';
   if (m.includes('STALE_STATE')) return 'STALE_STATE';
   if (m.includes('MODERATION_LOCKED')) return 'MODERATION_LOCKED';
+  // Cofnięcie ograniczenia oferty aktywuje ją ponownie, a strażnik przeglądu pytań (0103/0154)
+  // odrzuca aktywację, gdy treść pytania zmieniła się od decyzji — czytelny komunikat zamiast
+  // błędu technicznego; całe RPC jest cofnięte, ograniczenie zostaje w mocy (#1102).
+  if (m.includes('SCREENING_REVIEW_REQUIRED') || m.includes('SCREENING_QUESTION_REJECTED')) {
+    return 'MODERATION_RESTORE_BLOCKED';
+  }
   if (m.includes('INVALID_TRANSITION')) return 'INVALID_TRANSITION';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
   if (m.includes('VALIDATION_FAILED') || m.includes('invalid input value')) return 'VALIDATION_FAILED';
