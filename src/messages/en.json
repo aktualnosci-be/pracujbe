@@ -2394,6 +2394,7 @@
     "dsaRetentionPolicy": "Appeal window: {appealDays} days after notice · retention: {retentionDays} days. Provisional values — to be approved by the website owner.",
     "dsaRetentionEligible": "Due for anonymisation",
     "dsaRetentionWaiting": "Waiting for the appeal path to end",
+    "dsaRetentionFallback": "Deadline running on the fallback rule (not delivered / no recipient)",
     "dsaRetentionWithin": "Within retention",
     "dsaRetentionNext": "next: {date}",
     "dsaRetentionRedacted": "Anonymised",

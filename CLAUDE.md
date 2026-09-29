@@ -2681,6 +2681,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Trwały dowód poinformowania i limity DSA (paczka M-1, migracja `0188` — numer tymczasowy;
+  #1037/#1045/#1063/#1098/#1107; terminy 6 mies./14 dni/12 mies. bez zmian, strażnik
+  `dsa-approved-terms`): początek biegu terminu odwołania zapisuje niezmienna tabela
+  `moderation_informed` (bez grantów; triggery na `email_deliveries` + RPC odczytu decyzji), a nie
+  mutowalna tabela powiadomień ani bieżący stan poczty — `email_sent` (odbicie/błąd unieważnia wpis),
+  `panel_view` (odczyt decyzji w `get_company_moderation_decisions`; „oznacz jako przeczytane” nie
+  liczy się), reguły zastępcze `delivery_failed` (od ostatecznej porażki wysyłki) i `no_recipient`
+  (od chwili decyzji/cofnięcia; odroczony trigger przy zatwierdzeniu). Retencja i stan drogi
+  odwołania korzystają z tego bez zmian; `dsa_retention_report` ma `informedByFallback`
+  (kafelek w `/admin/raport-dsa`). Kod dostępu do sprawy (`reportReceived`) znika z payloadu
+  zlecenia, gdy przestaje być oczekujące (strażnik BEFORE INSERT/UPDATE + jednorazowe czyszczenie).
+  `submit_content_report`: limit 5/adres/24 h i „jedna otwarta sprawa na treść” pod blokadą
+  doradczą per adres + częściowy indeks `reports_dsa_open_uq`. `admin_set_company_status`: zawieszenie
+  także z `unverified`/`pending`, z `suspended` również `rejected` (przyciski = macierz bazy,
+  test `dsa-informed-limits`). Dowód: `rls.sql` sekcja DSA960 (kontrole ujemne: zdjęty strażnik,
+  trigger poczty, trigger zatwierdzenia, indeks; wyścigi dblink), rollback
+  `supabase/rollback/0188_…down.sql` + `dsa-informed-rollback.sql`. **Otwarte (poza M-1):** blokada
+  wiersza przy „Kopiuj jako szkic”, odpowiedź na propozycję (wyłączona), zgłoszenie wiadomości
+  „otwórz ponownie” (#1107 pkt 2).
   Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0179`,
   `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
   dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
