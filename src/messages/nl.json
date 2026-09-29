@@ -553,7 +553,8 @@
       "none": "Deze vacature vermeldt geen manier om te solliciteren.",
       "mailSubject": "Vacature: {title}",
       "contact": "Rechtstreeks contact met de adverteerder"
-    }
+    },
+    "startImmediate": "Onmiddellijke start"
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1221,7 +1222,14 @@
     "savedSearchJobsShow": "Vacatures tonen: {name}",
     "savedSearchJobsFrom": "Zoekopdracht: {name}",
     "employerGreetingSubListing": "Welkom {name}! Bekijk hoe je vacatures presteren.",
-    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren."
+    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren.",
+    "deleteJobDraft": "Concept verwijderen",
+    "deleteJobDraftLabel": "Concept verwijderen: {title}",
+    "deleteJobDraftTitle": "Concept van de vacature verwijderen?",
+    "deleteJobDraftDescription": "Het concept \"{title}\" wordt verwijderd, samen met de ingevoerde tekst. Dit kan niet ongedaan worden gemaakt.",
+    "deleteJobDraftConfirm": "Concept verwijderen",
+    "deleteJobDraftCancel": "Annuleren",
+    "deleteJobDraftUntitled": "zonder titel"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1797,7 +1805,11 @@
     "jointCommitteeLabel": "Paritair comité (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "Op de vacaturepagina tonen we het nummer van het comité en een link naar de officiële databank met minimumlonen. Het portaal beoordeelt het loon niet.",
-    "languageSelectPlaceholder": "Kies een taal"
+    "languageSelectPlaceholder": "Kies een taal",
+    "contentLocaleLabel": "Taal van de vacature",
+    "contentLocaleHint": "In deze taal schrijf je de tekst van de vacature. Dit mag afwijken van de taal van het paneel; de taalaanduiding en vertalingen voor kandidaten hangen ervan af.",
+    "contentLocaleLocked": "De taal van een gepubliceerde vacature kan niet worden gewijzigd.",
+    "languageLevelAria": "Taalniveau: {level}"
   },
   "jobImport": {
     "title": "Importeren uit een vacature",

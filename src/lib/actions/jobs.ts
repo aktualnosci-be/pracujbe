@@ -23,6 +23,7 @@ import {
 } from '@/lib/job-trust/review';
 import type { PortalIdentity } from '@/lib/auth/session';
 import { execute, jsonArg, queryOne, queryRows, rpc } from '@/lib/db/sql';
+import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
@@ -227,6 +228,40 @@ function validateJobStep(step: number, data: unknown): unknown | null {
   return result.success ? result.data : null;
 }
 
+
+/**
+ * #1048 (I18N-01, bez migracji): zmienia język treści SZKICU (`jobs.default_locale`) i przenosi
+ * jego dotychczasowe wiersze językowe (`job_translations`, `job_requirements`) do nowego języka —
+ * bez przeniesienia treść zostałaby oznaczona starym językiem, a `save_job_draft` (zapisuje
+ * w `default_locale`) zostawiłby drugi, osierocony komplet. Wywoływać w transakcji pod sesją
+ * (RLS recruiter+; strażniki opublikowanej oferty przepuszczają szkic). Ten sam język = nic.
+ */
+async function setDraftContentLocale(
+  tx: TransactionQuery,
+  jobId: string,
+  locale: string,
+): Promise<void> {
+  const target = normalizeLocale(locale);
+  const current = await queryOne<Record<string, unknown>>(tx, 'jobs.draft-locale',
+    `SELECT default_locale FROM public.jobs
+      WHERE id = $1 AND status = 'draft' AND deleted_at IS NULL
+      FOR UPDATE`, [jobId]);
+  const from = asString(current?.['default_locale']);
+  if (!from || from === target) return;
+  await execute(tx, 'jobs.draft-locale-translations-clear',
+    'DELETE FROM public.job_translations WHERE job_id = $1 AND locale = $2', [jobId, target]);
+  await execute(tx, 'jobs.draft-locale-requirements-clear',
+    'DELETE FROM public.job_requirements WHERE job_id = $1 AND locale = $2', [jobId, target]);
+  await execute(tx, 'jobs.draft-locale-translations-move',
+    'UPDATE public.job_translations SET locale = $3 WHERE job_id = $1 AND locale = $2',
+    [jobId, from, target]);
+  await execute(tx, 'jobs.draft-locale-requirements-move',
+    'UPDATE public.job_requirements SET locale = $3 WHERE job_id = $1 AND locale = $2',
+    [jobId, from, target]);
+  await execute(tx, 'jobs.draft-locale-set',
+    "UPDATE public.jobs SET default_locale = $2 WHERE id = $1 AND status = 'draft'", [jobId, target]);
+}
+
 /* ---------------------------------------------------------------------------
  * createJobDraft
  * ------------------------------------------------------------------------- */
@@ -237,12 +272,18 @@ function validateJobStep(step: number, data: unknown): unknown | null {
  * @param expectedCompanyId firma, dla której wyrenderowano kreator (EMP-02). Gdy aktywna firma
  *   zmieniła się w międzyczasie (inna karta, przełącznik), szkic NIE powstaje w nowej firmie —
  *   `ACTIVE_COMPANY_CHANGED`.
+ * @param clientKey UUID jednej operacji tworzenia szkicu w przeglądarce (#1099, EMP-05, bez
+ *   migracji): staje się częścią tymczasowego sluga `draft-<klucz>` (unikalny), więc ponowienie
+ *   po utraconej odpowiedzi albo podwójne kliknięcie zwraca TEN SAM szkic zamiast kolejnego,
+ *   pustego. Brak/niepoprawny klucz = jak dawniej (losowy slug).
  */
 export async function createJobDraft(
   locale: string | undefined,
   expectedCompanyId: string | null | undefined,
+  clientKey?: string,
 ): Promise<CreateDraftResult> {
   const loc = normalizeLocale(locale);
+  const slug = `draft-${typeof clientKey === 'string' && UUID_RE.test(clientKey) ? clientKey.toLowerCase() : randomUUID()}`;
 
   if (!isPortalDataConfigured()) {
     return { ok: true, id: DEMO_DRAFT_ID, demo: true };
@@ -272,9 +313,18 @@ export async function createJobDraft(
         `INSERT INTO public.jobs
            (company_id, created_by, slug, default_locale, title, status, category, contract_type, city, region)
          VALUES ($1, $2, $3, $4, '', 'draft', $5, $6, '', '')
+         ON CONFLICT (slug) DO NOTHING
          RETURNING id`,
-        [companyId, me.id, `draft-${randomUUID()}`, loc, PLACEHOLDER_CATEGORY, PLACEHOLDER_CONTRACT]);
-      return asString(asRecord(rows[0])['id']);
+        [companyId, me.id, slug, loc, PLACEHOLDER_CATEGORY, PLACEHOLDER_CONTRACT]);
+      const created = asString(asRecord(rows[0])['id']);
+      if (created) return created;
+      // Ten sam klucz operacji: szkic już powstał (ponowienie) — tylko własny, tej firmy.
+      const existing = await queryOne<Record<string, unknown>>(tx, 'jobs.create-draft-existing',
+        `SELECT id FROM public.jobs
+          WHERE slug = $1 AND company_id = $2 AND created_by = $3
+            AND status = 'draft' AND deleted_at IS NULL`,
+        [slug, companyId, me.id]);
+      return asString(existing?.['id']);
     });
     if (typeof id !== 'string') return { ok: false, error: id.error };
     if (!id) return { ok: false, error: 'INTERNAL' };
@@ -346,6 +396,53 @@ export async function duplicateJobAsDraft(
 }
 
 /* ---------------------------------------------------------------------------
+ * deleteJobDraft
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Usuwa SZKIC oferty z panelu (#1099, EMP-04, bez migracji): miękkie usunięcie
+ * (`deleted_at`) pod sesją — RLS: recruiter+ firmy oferty. Tylko status `draft`
+ * (opublikowanej oferty nie usuwa się, tylko zamyka). Ponowienie na już usuniętym szkicu
+ * = `NOT_FOUND`.
+ */
+export async function deleteJobDraft(jobId: string): Promise<SaveDraftResult> {
+  if (typeof jobId !== 'string') return { ok: false, error: 'VALIDATION_FAILED' };
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (!UUID_RE.test(jobId)) return { ok: false, error: 'VALIDATION_FAILED' };
+
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+
+    const allowed = await checkRateLimit('job-draft', {
+      identifier: me.id,
+      max: DRAFT_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!allowed) return { ok: false, error: 'RATE_LIMITED' };
+
+    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
+      const job = await queryOne<Record<string, unknown>>(tx, 'jobs.delete-draft-state',
+        'SELECT status FROM public.jobs WHERE id = $1 AND deleted_at IS NULL FOR UPDATE', [jobId]);
+      if (!job) return 'NOT_FOUND';
+      if (asString(job['status']) !== 'draft') return 'JOB_NOT_DRAFT';
+      const { rowCount } = await execute(tx, 'jobs.delete-draft',
+        `UPDATE public.jobs SET deleted_at = now()
+          WHERE id = $1 AND status = 'draft' AND deleted_at IS NULL`, [jobId]);
+      // RLS bez prawa zapisu (member) = 0 zmienionych wierszy mimo widocznego szkicu.
+      return rowCount === 1 ? null : 'PERMISSION_DENIED';
+    });
+    if (outcome) return { ok: false, error: outcome };
+
+    revalidatePath('/employer/oferty');
+    revalidatePath('/employer');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: failureCode(error) };
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * updateJobDraft
  * ------------------------------------------------------------------------- */
 
@@ -397,6 +494,12 @@ export async function updateJobDraft(
       const content = buildDraftStepContent(step, parsed);
       if (!content) return 'VALIDATION_FAILED';
       if (screeningOff) delete content['screening_questions'];
+      // #1048 (I18N-01): krok 1 niesie jawny język ogłoszenia — zmiana PRZED zapisem treści,
+      // żeby tłumaczenie i wymagania trafiły do właściwego języka.
+      if (step === 1) {
+        const chosen = (parsed as JobStep1).contentLocale;
+        if (chosen) await setDraftContentLocale(tx, jobId, chosen);
+      }
       await rpc(tx, 'save_job_draft', { p_job_id: jobId, p_content: jsonArg(content) });
       return null;
     });
@@ -537,9 +640,10 @@ export async function updatePublishedJob(
     const version = contentReview ? await readJobVersion(me, jobId) : null;
 
     revalidatePath('/[locale]/employer/oferty', 'page');
-    revalidatePath('/[locale]/oferty-pracy/[slug]', 'page');
-    // Wstrzymanie do przeglądu zdejmuje ofertę z publicznych list (ISR).
-    if (contentReview) revalidatePublicJobPaths();
+    // #1099 (EMP-06): poprawiona treść jest widoczna także na stronie głównej i landingach
+    // kategorii/miasta (karty ofert), nie tylko na szczególe — rewalidacja zawsze, nie tylko
+    // przy wstrzymaniu do przeglądu.
+    revalidatePublicJobPaths();
     const saved = asRecord(data);
     return {
       ok: true,

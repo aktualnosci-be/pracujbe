@@ -553,7 +553,8 @@
       "none": "This job ad does not say how to apply.",
       "mailSubject": "Job ad: {title}",
       "contact": "Direct contact with the advertiser"
-    }
+    },
+    "startImmediate": "Immediate start"
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1221,7 +1222,14 @@
     "savedSearchJobsShow": "Show jobs: {name}",
     "savedSearchJobsFrom": "Search: {name}",
     "employerGreetingSubListing": "Welcome {name}! See how your listings are doing.",
-    "employerGreetingSubListingGeneric": "See how your listings are doing."
+    "employerGreetingSubListingGeneric": "See how your listings are doing.",
+    "deleteJobDraft": "Delete draft",
+    "deleteJobDraftLabel": "Delete draft: {title}",
+    "deleteJobDraftTitle": "Delete the offer draft?",
+    "deleteJobDraftDescription": "The draft \"{title}\" will be deleted together with the content you entered. This cannot be undone.",
+    "deleteJobDraftConfirm": "Delete draft",
+    "deleteJobDraftCancel": "Cancel",
+    "deleteJobDraftUntitled": "untitled"
   },
   "candidatePassport": {
     "eyebrow": "WORK PASSPORT",
@@ -1797,7 +1805,11 @@
     "jointCommitteeLabel": "Joint committee (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "The job page will show the committee number and a link to the official minimum wage database. The portal does not assess the wage.",
-    "languageSelectPlaceholder": "Choose a language"
+    "languageSelectPlaceholder": "Choose a language",
+    "contentLocaleLabel": "Listing language",
+    "contentLocaleHint": "You write the listing text in this language. It can differ from the panel language; the language label and translations for candidates depend on it.",
+    "contentLocaleLocked": "The language of a published offer cannot be changed.",
+    "languageLevelAria": "Language level: {level}"
   },
   "jobImport": {
     "title": "Import from a job ad",

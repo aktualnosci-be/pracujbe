@@ -37,6 +37,7 @@ import {
 } from '@/lib/job-costs';
 import { minimumWagesUrl } from '@/lib/joint-committees';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
+import { jobStartDateInstant, jobStartInfo } from '@/lib/job-start';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
 import { getCandidateMinAge } from '@/lib/data/age-policy';
 import {
@@ -265,6 +266,11 @@ export default async function JobDetailPage({ params }: PageProps) {
   });
 
   const publishedLabel = format.dateTime(new Date(job.publishedAt), { dateStyle: 'long' });
+  // #1112: „Praca od zaraz” i data rozpoczęcia z kreatora (dzień kalendarzowy — strefa UTC).
+  const start = jobStartInfo(job);
+  const startDateLabel = start.date
+    ? format.dateTime(jobStartDateInstant(start.date), { dateStyle: 'long', timeZone: 'UTC' })
+    : null;
 
   // 0169: „Koszty i dodatki” — sekcja strony i `jobBenefits` w JSON-LD z jednego źródła.
   const pageLocale: Locale = (routing.locales as readonly string[]).includes(locale)
@@ -504,6 +510,20 @@ export default async function JobDetailPage({ params }: PageProps) {
               <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="break-words">{t('publishedOn')} {publishedLabel}</span>
             </p>
+
+            {start.immediate || startDateLabel ? (
+              <p data-testid="job-start" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
+                <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="break-words">
+                  {[
+                    start.immediate ? t('startImmediate') : null,
+                    startDateLabel ? `${t('startDate')}: ${startDateLabel}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </p>
+            ) : null}
 
             {translation ? (
               <p data-testid="job-machine-translation" className="mt-3 inline-flex max-w-full items-start gap-2 text-sm text-muted-foreground">
