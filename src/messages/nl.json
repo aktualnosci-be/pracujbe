@@ -201,7 +201,10 @@
     "noDescription": "Dit bedrijf heeft nog geen beschrijving toegevoegd.",
     "jobsHeading": "Actieve vacatures van dit bedrijf",
     "empty": "Dit bedrijf heeft momenteel geen actieve vacatures.",
-    "backToJobs": "Bekijk alle vacatures"
+    "backToJobs": "Bekijk alle vacatures",
+    "metaTitlePage": "Vacatures bij {name} — pagina {page}",
+    "jobsCount": "{count, plural, one {# actieve vacature} other {# actieve vacatures}}",
+    "pageStatus": "Pagina {page} van {lastPage}"
   },
   "common": {
     "appName": "Pracuj.be",

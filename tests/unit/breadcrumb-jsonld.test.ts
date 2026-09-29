@@ -81,7 +81,8 @@ function pageFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return pageFiles(path);
-    return name === 'page.tsx' ? [path] : [];
+    // Profil firmy (#638): strony `/pracodawcy/<slug>` i `/strona/<n>` renderuje wspólny widok.
+    return name === 'page.tsx' || path.endsWith('/_profile/company-profile.tsx') ? [path] : [];
   });
 }
 
@@ -108,7 +109,7 @@ describe('strony publiczne: BreadcrumbList z helpera', () => {
   });
 
   it('szczegół oferty i profil firmy mają BreadcrumbList obok JobPosting/Organization', () => {
-    for (const relative of ['oferty-pracy/[slug]/page.tsx', 'pracodawcy/[slug]/page.tsx']) {
+    for (const relative of ['oferty-pracy/[slug]/page.tsx', 'pracodawcy/_profile/company-profile.tsx']) {
       const source = readFileSync(join(PUBLIC_ROOT, relative), 'utf8');
       expect(source, relative).toContain('buildBreadcrumbListJsonLd(');
     }

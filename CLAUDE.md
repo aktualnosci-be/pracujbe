@@ -963,6 +963,19 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z aktywnych ofert. Serwer fixture E2E ma profile firm zweryfikowanych i jedną firmę bez ofert
   (`src/lib/company-fixture.ts`). Dowód: unit `company-profile-seo` (kontrole ujemne), E2E
   `company-profile` (linki, JSON-LD, noindex, 404 niezweryfikowanej, axe 320/1280 px w 4 językach).
+  Stronicowanie ofert profilu (#638, migracja `0181`): profil pokazywał tylko
+  pierwsze 50 ofert bez informacji o obcięciu. Kolejne strony pod ścieżką
+  `/pracodawcy/<slug>/strona/<n>` (segment, nie `?page=` — strona zostaje ISR, #298), po 50 ofert,
+  offset liczony w `getCompanyProfile(slug, locale, page)`; ostatnia strona z `active_jobs_count`
+  przycięta do offsetu 10 000 z RPC (`companyJobsLastPage`), strona za końcem, `strona/1`
+  i zapis niekanoniczny (`parseCompanyJobsPageSegment`) = 404. Każda strona ma własny canonical
+  i hreflang, tytuł z numerem strony (`companyProfile.metaTitlePage`); nad listą liczba wszystkich
+  ofert i „Strona N z M”, nawigacja = `Pagination` z `pathForPage`. `get_public_company_jobs`
+  sortuje `published_at desc, j.id desc` (tie-breaker jak 0136) — offset bez pominięć i dubli.
+  Widok wspólny `pracodawcy/_profile/company-profile.tsx`; fixture E2E stronicuje po 2. Dowód:
+  `rls.sql` sekcja CPP638 (remis `published_at`, kontrola ujemna: definicja z 0140), unit
+  `company-profile` (51 ofert = 2 strony, strona za końcem bez zapytania), `company-profile-seo`,
+  E2E `company-profile` (#638).
   Meta description z opisu firmy (#647, bez migracji): `generateMetadata()` obcina realny
   `company.description` do 160 znaków (ten sam `truncate` co szczegół oferty) zamiast ogólnego
   klucza `companyProfile.metaDescription` z samą nazwą dla każdej firmy; pusty/białe znaki opisu
