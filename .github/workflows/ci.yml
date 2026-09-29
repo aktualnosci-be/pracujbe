@@ -12,8 +12,9 @@ name: CI
 # - każdy job ma `timeout-minutes`, więc zawieszony krok nie blokuje przebiegu;
 # - joby E2E odtwarzają `.next` z jobu build (cache Actions) zamiast budować drugi raz (#127);
 # - E2E: 3 shardy + pomiar + fixture'y (full w 2 częściach) + tryb ogłoszeniowy (produkcyjny,
-#   `e2e-classifieds`) równolegle, wynik zbiera wymagany check „E2E (Playwright)”; przepływ
-#   na PostgreSQL 16 (`e2e-real`) na razie informacyjny.
+#   `e2e-classifieds`) + przepływ na PostgreSQL 16 (`e2e-real`, oba tryby) równolegle, wynik
+#   zbiera wymagany check „E2E (Playwright)”;
+# - akcje przypięte do SHA commita z komentarzem wersji (#1250; strażnik check-ci-workflows.mjs).
 
 on:
   push:
@@ -44,8 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -54,7 +55,7 @@ jobs:
       # a artefakty node_modules zjadały cały miesięczny limit storage organizacji.
       - name: Cache node_modules
         id: node-modules
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -69,13 +70,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -92,13 +93,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -114,8 +115,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -124,7 +125,7 @@ jobs:
       - name: Install dependencies from lockfile
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -157,8 +158,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - run: bash scripts/sca-audit.sh
@@ -170,13 +171,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -199,7 +200,7 @@ jobs:
       # Cache Actions, NIE artefakt: nie zjada płatnego storage organizacji.
       # Bez .next/cache (cache kompilatora nie jest potrzebny do `next start`).
       - name: Save build for E2E
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .next
@@ -230,7 +231,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare isolated database tests
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
@@ -303,11 +304,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-      - uses: actions/cache/restore@v6
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: node-modules
         with:
           path: node_modules
@@ -328,8 +329,20 @@ jobs:
           AUTH_SCHEMA_TEST_DATABASE_URL: postgresql://postgres:isolated-test-only@127.0.0.1:${{ job.services.auth.ports[5432] }}/pracujbe_auth_schema_test
           AUTH_SCHEMA_TEST_ISOLATED_CLUSTER: 'yes'
         run: node scripts/db/test-auth-schema.mjs
+      # #1246: operator loginów runtime wymaga ciągłej numeracji 0000..N, a PR z migracją na
+      # numerze tymczasowym ma lukę z definicji. Integracja bez tego testu biegnie osobno
+      # (jej wynik nie ginie pod czerwienią luki), ciągłość ma własny krok z czytelnym
+      # komunikatem, a test operatora biegnie tylko przy ciągłej numeracji (na main zawsze).
       - name: Verify runtime PostgreSQL isolation
-        run: node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts
+        if: ${{ !cancelled() }}
+        run: node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts --exclude tests/integration/runtime-logins.test.ts
+      - name: Check migration numbering continuity
+        id: numbering
+        if: ${{ !cancelled() }}
+        run: node scripts/db/check-migration-numbering.mjs
+      - name: Verify runtime logins operator
+        if: ${{ !cancelled() && steps.numbering.outcome == 'success' }}
+        run: node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts tests/integration/runtime-logins.test.ts
 
   e2e-shard:
     name: E2E shard ${{ matrix.shard }}/3
@@ -352,13 +365,13 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -366,7 +379,7 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -376,7 +389,7 @@ jobs:
       # Build z jobu `build` tego przebiegu (#127). restore-keys łapie też build
       # z wcześniejszej próby, gdy ponawiany jest sam shard.
       - name: Restore build from build job
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .next
@@ -402,7 +415,7 @@ jobs:
           E2E_DEMO_SHARD: ${{ matrix.shard }}
         run: npx playwright test --project=chromium
       # Raport cząstkowy zawsze (także przy zielonym shardzie) — job zbiorczy łączy komplet.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
           name: blob-report-shard-${{ matrix.shard }}
@@ -418,13 +431,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -432,14 +445,14 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Restore build from build job
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .next
@@ -467,13 +480,13 @@ jobs:
       # JSON wyników trafia do playwright-report/ (artefakt tylko przy porażce).
       - name: Performance budget (lab CWV)
         run: node scripts/perf-lab.mjs
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
           name: blob-report-timing
           path: blob-report/
           retention-days: 2
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: perf-lab-report
@@ -500,13 +513,13 @@ jobs:
           - { fixture: full, part: 2/2 }
           - { fixture: error, part: 1/1 }
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -514,7 +527,7 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -527,13 +540,13 @@ jobs:
           E2E_BLOB_NAME: fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}
         run: npx playwright test --config playwright.applications-fixture.config.ts
       # Raport cząstkowy zawsze (także przy zielonej części) — job zbiorczy łączy komplet.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
           name: blob-report-fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}
           path: blob-report/
           retention-days: 2
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: fixtures-${{ matrix.fixture }}-${{ strategy.job-index }}-test-results
@@ -554,13 +567,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -568,14 +581,14 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Restore build from build job
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             .next
@@ -599,7 +612,7 @@ jobs:
           E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY
           E2E_BLOB_NAME: classifieds
         run: npx playwright test --project=chromium
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
           name: blob-report-classifieds
@@ -613,13 +626,13 @@ jobs:
           TEST_APPLICATIONS_FIXTURE: full
           E2E_BLOB_NAME: classifieds-fixtures
         run: rm -rf blob-report && npx playwright test --config playwright.applications-fixture.config.ts
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ !cancelled() }}
         with:
           name: blob-report-classifieds-fixtures
           path: blob-report/
           retention-days: 2
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: classifieds-test-results
@@ -631,14 +644,15 @@ jobs:
     # Przepływ kandydat ↔ pracodawca na prawdziwym PostgreSQL 16 i sesjach Better Auth
     # (#351, #66): `npm run test:e2e:real` tworzy izolowaną bazę (nazwa z „e2e”), nakłada
     # migracje produkcyjne i jednorazowe ograniczone loginy, potem Playwright + `next dev`.
-    # Na start INFORMACYJNY (`continue-on-error`): scenariusz nigdy nie biegł w CI — czerwony
-    # wynik jest widoczny w checku, ale nie blokuje scalania ani Railway `Wait for CI`.
-    # Po serii zielonych przebiegów na main: usuń `continue-on-error` i dodaj do wymaganych.
+    # BLOKUJĄCY (#1239): po serii zielonych przebiegów na main (12/12, 29.09.2026) bez
+    # `continue-on-error`; wynik wchodzi do wymaganego checka „E2E (Playwright)”.
+    # Dwa kroki: przepływy rekrutacyjne (serwer RECRUITMENT, jak dotąd) i tryb produkcyjny
+    # portalu — `E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY` dla speców, które w przebiegu
+    # RECRUITMENT są pomijane (`saved-search-classifieds`, #1148). Każdy krok na świeżej bazie.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16
@@ -653,13 +667,13 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -667,7 +681,7 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Cache Playwright browsers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -681,8 +695,20 @@ jobs:
           E2E_PGPASSWORD: isolated-test-only
           E2E_PGDATABASE: pracujbe_e2e_real
         run: npm run test:e2e:real
+      # Tryb produkcyjny portalu (#1239): serwer i proces testów w CLASSIFIEDS_ONLY; krok biegnie
+      # także po czerwonym kroku RECRUITMENT (osobny wynik, osobna baza).
+      - name: Run E2E real flow (classifieds)
+        if: ${{ !cancelled() }}
+        env:
+          E2E_PGHOST: 127.0.0.1
+          E2E_PGPORT: ${{ job.services.postgres.ports[5432] }}
+          E2E_PGUSER: postgres
+          E2E_PGPASSWORD: isolated-test-only
+          E2E_PGDATABASE: pracujbe_e2e_real_classifieds
+          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY
+        run: npm run test:e2e:real -- saved-search-classifieds
       # Trace'y (`retain-on-failure`) tylko przy porażce, krótka retencja.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: e2e-real-test-results
@@ -696,17 +722,17 @@ jobs:
     # pomiar albo fixture zawsze daje czerwony „E2E (Playwright)”. Łączy raporty cząstkowe
     # w jeden raport html + raport flaków (#375).
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds]
+    needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
       - name: Restore node_modules
         id: node-modules
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'package-lock.json') }}
@@ -714,7 +740,7 @@ jobs:
         if: steps.node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefer-offline --no-audit --fund=false
       - name: Download blob reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         continue-on-error: true
         with:
           pattern: blob-report-*
@@ -737,7 +763,7 @@ jobs:
             if (bad.length > 0) { console.error(`Niezaliczone: ${bad.map(([name]) => name).join(", ")}`); process.exit(1); }
           '
       # Raport tylko przy porażce i z krótką retencją.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure() && steps.merge.outcome == 'success'
         with:
           name: playwright-report

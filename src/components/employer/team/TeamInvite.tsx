@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -81,6 +83,7 @@ export function TeamInvite(props: TeamInviteProps): React.JSX.Element {
 }
 
 function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('team');
   const tRoot = useTranslations();
   const router = useRouter();
@@ -180,7 +183,8 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
         </Alert>
       ) : null}
 
-      <form onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,11rem)_auto] sm:items-end">
+      <form method="post" onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,11rem)_auto] sm:items-end">
+        <NoScriptFormNotice />
         <div className="flex min-w-0 flex-col gap-[9px]">
           <Label htmlFor="team-invite-email" className={FORM_LABEL}>{t('emailLabel')}</Label>
           <Input
@@ -241,7 +245,7 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
             </p>
           ) : null}
         </div>
-        <Button type="submit" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} disabled={isSubmitting}>
+        <Button type="submit" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} disabled={isSubmitting || !hydrated}>
           {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
           {isSubmitting ? t('saving') : t('inviteSubmit')}
         </Button>
