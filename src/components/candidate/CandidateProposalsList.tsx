@@ -178,7 +178,7 @@ export function CandidateProposalsList({
           );
         })}
       </ul>
-      {failed ? <p role="alert" className="mb-3 text-[15px] text-error">{t('proposalsMoreError')}</p> : null}
+      {failed ? <p role="alert" className="mb-3 text-[15px] text-error-text">{t('proposalsMoreError')}</p> : null}
       {cursor ? (
         <button
           type="button"

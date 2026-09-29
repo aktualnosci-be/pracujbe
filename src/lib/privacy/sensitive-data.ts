@@ -151,7 +151,14 @@ function keywordPattern(keywords: string[]): RegExp {
 const NATIONAL_CONTEXT = keywordPattern(NATIONAL_KEYWORDS);
 const DOCUMENT_CONTEXT = keywordPattern(DOCUMENT_KEYWORDS);
 
-const EMAIL = /[\p{L}\p{N}._%+\-]+@[\p{L}\p{N}\-]+(?:\.[\p{L}\p{N}\-]+)*\.\p{L}{2,}/gu;
+/**
+ * Adres e-mail. Dopasowanie kotwiczy się na początku ciągu znaków lokalnej części (lookbehind)
+ * i ma górne granice długości (RFC 5321: 254 znaki adresu, etykieta domeny ≤ 63) — bez nich
+ * bardzo długi, jednolity ciąg (np. 100 000 × „a”) dawał złożoność kwadratową i blokował
+ * proces na sekundy (#1108).
+ */
+const EMAIL =
+  /(?<![\p{L}\p{N}._%+\-])[\p{L}\p{N}._%+\-]{1,254}@[\p{L}\p{N}\-]{1,63}(?:\.[\p{L}\p{N}\-]{1,63}){0,20}\.\p{L}{2,63}/gu;
 /** Międzynarodowy: +XX / 00XX, potem 7–12 cyfr z separatorami; opcjonalne „(0)”. */
 const PHONE_INTL = new RegExp(
   String.raw`(?<![\p{L}\p{N}])(?:\+|00)\d{1,3}(?:[ .\-/]?\(0\))?(?:[ .\-/]?\d){7,12}${POST}`,

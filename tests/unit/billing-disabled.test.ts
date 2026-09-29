@@ -51,6 +51,18 @@ describe('płatności usunięte (#51, migracja 0177)', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('package.json i lockfile nie zawierają zależności stripe', () => {
+    const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect({ ...pkg.dependencies, ...pkg.devDependencies }).not.toHaveProperty('stripe');
+    const lock = JSON.parse(readFileSync(resolve(ROOT, 'package-lock.json'), 'utf-8')) as {
+      packages: Record<string, unknown>;
+    };
+    expect(lock.packages).not.toHaveProperty('node_modules/stripe');
+  });
+
   it('kod źródłowy nie odwołuje się do usuniętych tabel i funkcji billingu', () => {
     const offenders = sourceFiles(resolve(ROOT, 'src'))
       .filter((file) => BILLING_SQL_REFERENCE.test(readFileSync(file, 'utf-8')))

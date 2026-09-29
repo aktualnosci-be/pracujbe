@@ -8,6 +8,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { captureFocus } from '@/lib/a11y/restore-focus';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { updateNotificationPreferences } from '@/lib/actions/notification-preferences';
 import type { NotificationPreferences } from '@/lib/data/notification-preferences';
@@ -81,6 +82,8 @@ export function NotificationPreferencesForm({
   }, [serverError, success]);
 
   const onSubmit = handleSubmit(async (values) => {
+    // Formularz jest wyłączony na czas zapisu — po nim fokus wraca tam, gdzie był (#1095).
+    const restoreFocus = captureFocus();
     setServerError(null);
     setSuccess(false);
     try {
@@ -93,6 +96,8 @@ export function NotificationPreferencesForm({
       setSuccess(true);
     } catch {
       setServerError('INTERNAL');
+    } finally {
+      restoreFocus();
     }
   });
 
@@ -117,7 +122,11 @@ export function NotificationPreferencesForm({
               id={id}
               aria-describedby={descriptionId}
               checked={f.value}
-              onCheckedChange={(checked) => f.onChange(checked === true)}
+              onCheckedChange={(checked) => {
+                f.onChange(checked === true);
+                // #1103: „Zapisano” dotyczy poprzedniego stanu — nowa, jeszcze niewysłana zmiana je unieważnia.
+                setSuccess(false);
+              }}
               onBlur={f.onBlur}
               ref={f.ref}
               className="mt-0.5 shrink-0"
@@ -134,7 +143,7 @@ export function NotificationPreferencesForm({
         <div
           ref={alertRef}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(toUserMessageKey(serverError))}</p>

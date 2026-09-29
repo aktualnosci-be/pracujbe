@@ -1568,6 +1568,26 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `tests/legal/classifieds-only.test.ts` (ApplyModal/„Wyślij wiadomość” tylko w gałęzi
   `recruitment`, kontrola ujemna), E2E `job-detail-employer-apply` (4 języki, axe 320/1280 px;
   uruchamiany z `E2E_PORTAL_LEGAL_MODE=`). Helper Vitest: `withRecruitmentMode`/`withClassifiedsMode`.
+  Język ogłoszenia, szkice i data rozpoczęcia (#1048, #1099, #1112, bez migracji): krok 1
+  ma pole „Język ogłoszenia” (domyślnie język panelu lub zapisany w szkicu; w edycji opublikowanej
+  oferty zablokowane). Zmiana w szkicu: krok 1 niesie `contentLocale` → `setDraftContentLocale`
+  (`src/lib/actions/jobs.ts`) w jednej transakcji ustawia `jobs.default_locale` i przenosi
+  `job_translations`/`job_requirements` do nowego języka (bez tego `save_job_draft` zostawiłby
+  osierocony komplet); `createJobDraft` tworzy szkic od razu w wybranym języku. Tworzenie szkicu
+  jest idempotentne po kluczu operacji z przeglądarki (`draft-<uuid>` jako slug, `ON CONFLICT`):
+  ponowienie po utraconej odpowiedzi zwraca ten sam szkic. „Usuń szkic” na `/employer/oferty`
+  (`deleteJobDraft`, miękkie usunięcie, tylko `draft`, recruiter+, `ConfirmDialog`). Poprawka
+  opublikowanej oferty rewaliduje też stronę główną i landingi (`revalidatePublicJobPaths`).
+  Szczegół oferty pokazuje „Praca od zaraz” i datę rozpoczęcia (`src/lib/job-start.ts`, komponent
+  serwerowy, bez JS). Combobox poziomu języka w kroku 7 ma nazwę (`jobWizard.languageLevelAria`).
+  Dowód: unit `job-wizard-content-locale`, `job-detail-start`, `job-start`, `delete-job-draft-button`,
+  integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
+  inny klucz = nowy szkic). **Otwarte (wymaga migracji):** kontrola kompletności w `publish_job`/
+  `update_published_job` odrzuca tytuły zaczynające się od „draft” lub zawierające „placeholder”
+  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), język
+  proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
+  przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
+  i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -1835,6 +1855,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `rls.sql` sekcja TI179 (kontrola ujemna: definicja z 0086 bez `locale`), unit
   `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
   (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
+  Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
+  `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
+  `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
+  bo `get_company_invitations` od 0086 filtruje po dacie) zajmowały limit na zawsze i blokowały
+  zapraszanie nowych osób bez żadnej akcji „Cofnij” w UI dla tych rekordów. Ujednolicone: limit
+  liczy `pending` z `expires_at > now()`, dokładnie jak panel; sama tabela i sygnatura RPC bez
+  zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
+  nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
+  TM403-13c przez `INVITATION_LIMIT_REACHED`).
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — **wyłączone w trybie ogłoszeniowym (#1131)** — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -2575,7 +2604,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (service_role, `dsa_retention_runs`) anonimizują sprawy dopiero po końcu drogi odwołania
   i okresie retencji — wiersze i liczby zostają. Raport: `dsa_transparency_report` + eksport
   `dsa_statements_export` (bez danych osobowych i faktów) w `/admin/raport-dsa` i
-  `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
+  `GET /api/admin/dsa-report` (CSV/JSON). Oba formaty to KOMPLET zakresu strumieniowany stronami po kursorze
+  (#641, #670, `src/lib/admin/dsa-export-stream.ts`, `dsa-csv-stream.ts`, `dsa-json-stream.ts`): bez limitu
+  stron i bez `nextCursor` w JSON; błąd bazy albo kursor niepostępujący przerywa odpowiedź (niepełny plik nie
+  udaje kompletnego). Dowód: unit `dsa-export-stream` (kontrole ujemne). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
   APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Zatwierdzone przez właściciela 26.09.2026 (#40):** okno
@@ -2592,6 +2624,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0179`,
+  `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
+  dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
+  `admin-dsa.other-admins`, `src/lib/data/admin-dsa.ts`) wymaga teraz `is_active = true`, nie
+  tylko `role = 'admin' AND deleted_at IS NULL`. Konto wyłączone operacyjnie (bez zmiany roli)
+  nie liczy się już jako dostępny drugi recenzent — autor pierwotnej decyzji może rozpatrzyć
+  odwołanie, gdy jedyny inny admin nie może się zalogować. Testy: integracyjny PG16
+  `portal-appeals.test.ts` (wyłączenie `is_active`, brak konfliktu, decyzja przechodzi,
+  przywrócenie), unit `moderation-appeals.test.ts` (SQL migracji i zapytania zawierają
+  `is_active = true`; kontrola ujemna: stara treść 0109 bez tego warunku).
   Cel formularza odwołania = snapshot udanego odczytu (#884, bez migracji):
   `ReportCaseLookup` przechowuje numer sprawy i kod dostępu, którymi POWIODŁO SIĘ sprawdzenie
   (`reportTarget`, ustawiany razem z `report`), zamiast czytać `getValues()` z pól formularza
@@ -2791,6 +2833,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
   ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
   na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
+- [~] Narzędzia i konfiguracja (audyt CFG29, #1121, bez migracji). `@react-email/*` w `dependencies`
+  (#1175). Typecheck specyfikacji Playwrighta: `tsconfig.e2e.json` (rozszerza `tsconfig.json`,
+  bez `noUncheckedIndexedAccess` — 151 błędów z tej flagi w `tests/e2e` to osobny follow-up,
+  reszta naprawiona) wołany przez `npm run typecheck` (job „Typecheck” bez zmian), strażnik
+  `scripts/check-ci-workflows.mjs` pilnuje skryptu i zakresu (kontrola ujemna w
+  `ci-workflows-guard.test`). `EMAIL_REPLY_TO` jest czytany (`replyToFromEnv`, `sender.ts`):
+  nagłówek Reply-To we wszystkich listach obu workerów (kolejka domenowa i kont; Resend
+  `replyTo`, EmailLabs nagłówek), zła wartość albo wstrzyknięcie CRLF = bez nagłówka, bez
+  wartości domyślnej (`email-reply-to.test`, kontrole ujemne). Limit Server Actions 6 MB
+  zostaje globalny (Next nie ma go per akcja), ale middleware odrzuca 413 żądanie Server Action
+  spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
+  `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). **Otwarte:**
+  `noUncheckedIndexedAccess` w `tsconfig.e2e.json`, ESLint 9 (wymaga instalacji; `next lint`
+  zastąpione `eslint` CLI bez zmiany wersji, lint obejmuje też pliki konfiguracyjne), usunięcie nieużywanych zależności (lista w PR #1121).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,
@@ -2920,7 +2976,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   undici/`fetch`/`pg`) i `globalThis.fetch` do hosta spoza localhost/127.0.0.0/8/::1 i
   `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
   dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
-  po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
+  po rozwiązaniu adresu (tylko loopback); literalny adres IP spoza allow-listy jest blokowany od
+  razu także z własnym `lookup` (Node go dla IP nie woła, #772). Metody sieciowe `node:dns`
+  (`resolve*`/`reverse`, `dns.promises`, instancje `Resolver`) dla nazw spoza allow-listy →
+  `NetworkBlockedError` (#812; `dns.lookup` i `node:dgram` bez zmian). Etykieta pliku testu zawsze
+  z `/` (`testFileLabel`, #885, wariant Windows sprawdzany przez `path.win32`).
+  `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
   Chromium z Playwrighta to osobny proces (poza blokadą). Błąd wskazuje test (`plik > opis > nazwa`
   ze stanu `expect`, pole `NetworkBlockedError.test`) i host. Integracja PG
   (`vitest.integration.config.ts` → `tests/integration/setup.ts`) ma tę samą blokadę: PG z Dockera
@@ -2932,7 +2993,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
   jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.
   Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
-  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
+  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 64 KB, dłuższa paczka niż 10 raportów = pierwsze 10, 20/min
   z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
   strict-origin-when-cross-origin` globalnie — test `csp-report`. Limiter per adres (#648): klucz
   wyłącznie z `@/lib/http/trusted-ip` (jeden jawnie skonfigurowany nagłówek proxy, #588/#602) —
@@ -3364,7 +3425,8 @@ npm run db:migrate:production  # migracje na wskazanej bazie (MIGRATION_DATABASE
 - Dostęp do DB: `src/lib/db/portal.ts` + `src/lib/db/sql.ts` (#25); nazwy zapytań/funkcji tylko stałe, wartości w `$n`. Operacje wrażliwe = Server Actions/route handlers.
 - Błędy: rzucaj `AppError` z kodem (`src/lib/errors`); mapuj na komunikat tłumaczony.
 - Nazwy plików: `kebab-case`; komponenty React: `PascalCase`.
-- Lint obejmuje `src/`, `tests/` i `scripts/` (`next lint --dir …`); `.eslintrc.json` ma `"root": true`,
+- Lint (`eslint` CLI zamiast przestarzałego `next lint`, ta sama konfiguracja i wersja ESLint 8) obejmuje `src/`, `tests/`,
+  `scripts/` oraz pliki `*.config.{mjs,ts}` z korzenia; `.eslintrc.json` ma `"root": true`,
   więc worktree w `.claude/worktrees/` nie dziedziczy konfiguracji z checkoutu nadrzędnego (konflikt
   pluginu `@next/next`). Reguł nie wyłączamy globalnie — lokalny `eslint-disable` tylko z komentarzem
   uzasadnienia (np. `require` w preloadzie CommonJS `tests/e2e-real/support/server-only-hook.cjs`).

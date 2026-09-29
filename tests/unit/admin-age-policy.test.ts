@@ -38,7 +38,7 @@ describe('reguły uzasadnienia (lustro RPC 0126)', () => {
 describe('setCandidateMinAge', () => {
   it('zły próg (nie 16/18) → VALIDATION_FAILED bez wywołania bazy', async () => {
     resetFakeDb({ id: ADMIN_ID, role: 'admin' });
-    await expect(setCandidateMinAge(17, true, 'Powód')).resolves.toEqual({
+    await expect(setCandidateMinAge(17, true, 'Powód', null)).resolves.toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
     });
@@ -47,7 +47,7 @@ describe('setCandidateMinAge', () => {
 
   it('brak uzasadnienia → VALIDATION_FAILED, pole reason, bez wywołania bazy', async () => {
     resetFakeDb({ id: ADMIN_ID, role: 'admin' });
-    await expect(setCandidateMinAge(18, true, '   ')).resolves.toEqual({
+    await expect(setCandidateMinAge(18, true, '   ', null)).resolves.toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
       field: 'reason',
@@ -58,7 +58,7 @@ describe('setCandidateMinAge', () => {
 
   it('za długie uzasadnienie → VALIDATION_FAILED, pole reason, bez wywołania bazy', async () => {
     resetFakeDb({ id: ADMIN_ID, role: 'admin' });
-    await expect(setCandidateMinAge(18, true, 'x'.repeat(AGE_POLICY_REASON_MAX + 1))).resolves.toEqual({
+    await expect(setCandidateMinAge(18, true, 'x'.repeat(AGE_POLICY_REASON_MAX + 1), null)).resolves.toEqual({
       ok: false,
       error: 'VALIDATION_FAILED',
       field: 'reason',
@@ -69,7 +69,7 @@ describe('setCandidateMinAge', () => {
 
   it('bez sesji → PERMISSION_DENIED bez wywołania bazy', async () => {
     resetFakeDb(null);
-    await expect(setCandidateMinAge(18, true, 'Decyzja właściciela')).resolves.toEqual({
+    await expect(setCandidateMinAge(18, true, 'Decyzja właściciela', null)).resolves.toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
@@ -81,7 +81,7 @@ describe('setCandidateMinAge', () => {
     fakeDb.rpc('admin_set_candidate_min_age', () => {
       throw pgError('P0001', 'PERMISSION_DENIED');
     });
-    await expect(setCandidateMinAge(18, true, 'Decyzja właściciela')).resolves.toEqual({
+    await expect(setCandidateMinAge(18, true, 'Decyzja właściciela', null)).resolves.toEqual({
       ok: false,
       error: 'PERMISSION_DENIED',
     });
@@ -89,8 +89,8 @@ describe('setCandidateMinAge', () => {
 
   it('poprawne wywołanie: RPC pod sesją admina z argumentami, wynik = liczba ukrytych profili', async () => {
     resetFakeDb({ id: ADMIN_ID, role: 'admin' });
-    fakeDb.rpc('admin_set_candidate_min_age', () => 3);
-    await expect(setCandidateMinAge(18, true, '  Decyzja właściciela 25.09.2026  ')).resolves.toEqual({
+    fakeDb.rows('admin.age-policy-version', [{ updated_at: null }]).rpc('admin_set_candidate_min_age', () => 3);
+    await expect(setCandidateMinAge(18, true, '  Decyzja właściciela 25.09.2026  ', null)).resolves.toEqual({
       ok: true,
       hiddenProfiles: 3,
     });
@@ -101,10 +101,54 @@ describe('setCandidateMinAge', () => {
     });
   });
 
+  describe('kontrola wersji (CAS, #1102)', () => {
+    const SEEN = '2026-09-25T10:00:00.000000+00:00';
+    const NEWER = '2026-09-29T08:30:00.000000+00:00';
+
+    it('znacznik zgodny z bazą → RPC wykonane', async () => {
+      resetFakeDb({ id: ADMIN_ID, role: 'admin' });
+      fakeDb.rows('admin.age-policy-version', [{ updated_at: SEEN }]).rpc('admin_set_candidate_min_age', () => 0);
+      await expect(setCandidateMinAge(18, true, 'Decyzja', SEEN)).resolves.toEqual({ ok: true, hiddenProfiles: 0 });
+      expect(fakeDb.callsTo('admin_set_candidate_min_age')).toHaveLength(1);
+    });
+
+    it('drugi administrator zmienił próg w międzyczasie → STALE_STATE, bez wywołania RPC', async () => {
+      resetFakeDb({ id: ADMIN_ID, role: 'admin' });
+      fakeDb.rows('admin.age-policy-version', [{ updated_at: NEWER }]).rpc('admin_set_candidate_min_age', () => 0);
+      await expect(setCandidateMinAge(18, true, 'Decyzja', SEEN)).resolves.toEqual({
+        ok: false,
+        error: 'STALE_STATE',
+      });
+      expect(fakeDb.callsTo('admin_set_candidate_min_age')).toHaveLength(0);
+    });
+
+    it('formularz otwarty przed pierwszą zmianą (null), a próg już zmieniony → STALE_STATE', async () => {
+      resetFakeDb({ id: ADMIN_ID, role: 'admin' });
+      fakeDb.rows('admin.age-policy-version', [{ updated_at: NEWER }]).rpc('admin_set_candidate_min_age', () => 0);
+      await expect(setCandidateMinAge(16, true, 'Decyzja', null)).resolves.toEqual({
+        ok: false,
+        error: 'STALE_STATE',
+      });
+      expect(fakeDb.callsTo('admin_set_candidate_min_age')).toHaveLength(0);
+    });
+
+    it('kontrola ujemna: nie-admin nie czyta wersji — decyzję podejmuje RPC (PERMISSION_DENIED)', async () => {
+      resetFakeDb({ id: ADMIN_ID, role: 'employer' });
+      fakeDb.rows('admin.age-policy-version', [{ updated_at: NEWER }]).rpc('admin_set_candidate_min_age', () => {
+        throw pgError('P0001', 'PERMISSION_DENIED');
+      });
+      await expect(setCandidateMinAge(18, true, 'Decyzja', SEEN)).resolves.toEqual({
+        ok: false,
+        error: 'PERMISSION_DENIED',
+      });
+      expect(fakeDb.callsTo('admin.age-policy-version')).toHaveLength(0);
+    });
+  });
+
   it('tryb demo nic nie zapisuje', async () => {
     resetFakeDb({ id: ADMIN_ID, role: 'admin' });
     fakeSession.configured = false;
-    await expect(setCandidateMinAge(18, true, 'Decyzja właściciela')).resolves.toEqual({
+    await expect(setCandidateMinAge(18, true, 'Decyzja właściciela', null)).resolves.toEqual({
       ok: true,
       demo: true,
     });
