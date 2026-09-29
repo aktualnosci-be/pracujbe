@@ -30,6 +30,7 @@ import { Link } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { submitContactMessage } from '@/lib/actions/contact';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
+import { payloadKey, type PayloadKeyState } from '@/lib/idempotency/payload-key';
 import { cn } from '@/lib/utils';
 import {
   CONTACT_LIMITS,
@@ -72,7 +73,7 @@ export function ContactForm(): React.JSX.Element {
   const [submitted, setSubmitted] = React.useState<Submitted | null>(null);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
   const successRef = React.useRef<HTMLHeadingElement | null>(null);
-  const idempotencyKeyRef = React.useRef<string | null>(null);
+  const idempotencyKeyRef = React.useRef<PayloadKeyState | null>(null);
   // #817: bez JS ten stan nigdy nie zmienia się na true, więc przycisk wysyłki zostaje
   // trwale zablokowany i formularz nie ma jak wykonać niejawnej (natywnej) submisji.
   const [mounted, setMounted] = React.useState(false);
@@ -113,12 +114,13 @@ export function ContactForm(): React.JSX.Element {
       setBotCheckMissing(true);
       return;
     }
-    idempotencyKeyRef.current ??= crypto.randomUUID();
+    // Ten sam klucz przy ponowieniu bez zmian; poprawiona treść = nowy klucz (#1103).
+    const idempotencyKey = payloadKey(idempotencyKeyRef, values);
 
     let result: Awaited<ReturnType<typeof submitContactMessage>>;
     try {
       result = await submitContactMessage(
-        { ...values, locale, idempotencyKey: idempotencyKeyRef.current },
+        { ...values, locale, idempotencyKey },
         botCheckToken,
       );
     } catch {
@@ -199,7 +201,7 @@ export function ContactForm(): React.JSX.Element {
         {t('formTitle')}
       </h2>
       <noscript>
-        <p className="flex items-start gap-3 rounded-[11px] border border-error/30 bg-error/10 p-3 text-sm text-error">
+        <p className="flex items-start gap-3 rounded-[11px] border border-error/30 bg-error/10 p-3 text-sm text-error-text">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           {t('jsRequired')}
         </p>
@@ -209,7 +211,7 @@ export function ContactForm(): React.JSX.Element {
           ref={alertRef}
           tabIndex={-1}
           role="alert"
-          className="flex items-start gap-3 rounded-[11px] border border-error/30 bg-error/10 p-3 text-sm text-error outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex items-start gap-3 rounded-[11px] border border-error/30 bg-error/10 p-3 text-sm text-error-text outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{serverMessage}</p>

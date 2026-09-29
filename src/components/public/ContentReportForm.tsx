@@ -20,6 +20,7 @@ import { Link } from '@/i18n/navigation';
 import type { Locale } from '@/i18n/routing';
 import { submitContentReport } from '@/lib/actions/content-reports';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
+import { payloadKey, type PayloadKeyState } from '@/lib/idempotency/payload-key';
 import { cn } from '@/lib/utils';
 import {
   contentReportFormSchema,
@@ -51,7 +52,13 @@ interface ContentReportFormProps {
   initialTarget: ReportTarget;
 }
 
-type Submitted = { caseNumber: string; accessCode: string; created: boolean };
+type Submitted = {
+  caseNumber: string;
+  accessCode: string;
+  created: boolean;
+  /** Poprawiona treść nie trafiła do sprawy, która już istniała (#1103). */
+  editedNotSaved?: boolean;
+};
 
 const CATEGORY_KEY: Record<(typeof REPORT_CATEGORIES)[number], string> = {
   fraud: 'categoryFraud',
@@ -80,7 +87,8 @@ export function ContentReportForm({
   const [submitted, setSubmitted] = React.useState<Submitted | null>(null);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
   const successRef = React.useRef<HTMLHeadingElement | null>(null);
-  const operationRef = React.useRef<{ idempotencyKey: string; accessCode: string } | null>(null);
+  const accessCodeRef = React.useRef<string | null>(null);
+  const keyRef = React.useRef<PayloadKeyState | null>(null);
 
   const botCheckEnabled = isTurnstileWidgetEnabled();
   const botCheckRef = React.useRef<TurnstileHandle | null>(null);
@@ -120,11 +128,16 @@ export function ContentReportForm({
       setBotCheckMissing(true);
       return;
     }
-    operationRef.current ??= {
-      idempotencyKey: crypto.randomUUID(),
-      accessCode: generateAccessCode(),
+    // Kod dostępu zostaje ten sam przez cały formularz (pierwsza próba mogła założyć sprawę z tym
+    // kodem); klucz idempotencji zmienia się razem z poprawioną treścią (#1103).
+    accessCodeRef.current ??= generateAccessCode();
+    const previousFingerprint = keyRef.current?.fingerprint ?? null;
+    const operation = {
+      idempotencyKey: payloadKey(keyRef, values),
+      accessCode: accessCodeRef.current,
     };
-    const operation = operationRef.current;
+    // Treść poprawiona po wcześniejszej próbie (np. utracona odpowiedź).
+    const edited = previousFingerprint !== null && previousFingerprint !== keyRef.current?.fingerprint;
 
     let result: Awaited<ReturnType<typeof submitContentReport>>;
     try {
@@ -154,6 +167,7 @@ export function ContentReportForm({
       caseNumber: result.caseNumber,
       accessCode: operation.accessCode,
       created: result.created,
+      editedNotSaved: !result.created && edited,
     });
   });
 
@@ -175,7 +189,11 @@ export function ContentReportForm({
           {t('successTitle')}
         </h2>
         <p className="text-sm text-foreground">
-          {submitted.created ? t('successBody') : t('successDuplicate')}
+          {submitted.created
+            ? t('successBody')
+            : submitted.editedNotSaved
+              ? t('successDuplicateEdited')
+              : t('successDuplicate')}
         </p>
         <dl className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-md border border-border bg-card p-3">
@@ -239,7 +257,7 @@ export function ContentReportForm({
           ref={alertRef}
           tabIndex={-1}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{serverMessage}</p>
@@ -295,7 +313,7 @@ export function ContentReportForm({
           </label>
         ))}
         {categoryError ? (
-          <p id="category-error" className="text-sm text-error">
+          <p id="category-error" className="text-sm text-error-text">
             {categoryError}
           </p>
         ) : null}
@@ -315,7 +333,7 @@ export function ContentReportForm({
           {t('detailsHint', { min: REPORT_LIMITS.detailsMin })}
         </p>
         {detailsError ? (
-          <p id="report-details-error" className="text-sm text-error">
+          <p id="report-details-error" className="text-sm text-error-text">
             {detailsError}
           </p>
         ) : null}
@@ -335,7 +353,7 @@ export function ContentReportForm({
           {t('contentUrlHint')}
         </p>
         {urlError ? (
-          <p id="report-url-error" className="text-sm text-error">
+          <p id="report-url-error" className="text-sm text-error-text">
             {urlError}
           </p>
         ) : null}
@@ -354,7 +372,7 @@ export function ContentReportForm({
             {...register('reporterName')}
           />
           {nameError ? (
-            <p id="report-name-error" className="text-sm text-error">
+            <p id="report-name-error" className="text-sm text-error-text">
               {nameError}
             </p>
           ) : null}
@@ -370,7 +388,7 @@ export function ContentReportForm({
             {...register('reporterEmail')}
           />
           {emailError ? (
-            <p id="report-email-error" className="text-sm text-error">
+            <p id="report-email-error" className="text-sm text-error-text">
               {emailError}
             </p>
           ) : null}
@@ -400,7 +418,7 @@ export function ContentReportForm({
           </Label>
         </div>
         {goodFaithError ? (
-          <p id="report-good-faith-error" className="text-sm text-error">
+          <p id="report-good-faith-error" className="text-sm text-error-text">
             {goodFaithError}
           </p>
         ) : null}

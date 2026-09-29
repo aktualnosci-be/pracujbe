@@ -335,7 +335,7 @@ export function MessageComposer({
                 </span>
               ) : null}
               {draft.status === 'error' ? (
-                <span role="alert" className="text-xs text-error">
+                <span role="alert" className="text-xs text-error-text">
                   {draft.error}
                 </span>
               ) : null}
@@ -371,12 +371,12 @@ export function MessageComposer({
         </button>
       ) : null}
       {attachNotice ? (
-        <p role="alert" className="mt-2 text-[13px] text-error">
+        <p role="alert" className="mt-2 text-[13px] text-error-text">
           {attachNotice}
         </p>
       ) : null}
       {error ? (
-        <p id={errorId} role="alert" className="mt-2 text-[13px] text-error">
+        <p id={errorId} role="alert" className="mt-2 text-[13px] text-error-text">
           {error}
         </p>
       ) : null}

@@ -25,6 +25,7 @@ for (const locale of locales) {
           detailsTitle: string;
           editTitle: string;
           submitSave: string;
+          name: string;
         };
       };
 

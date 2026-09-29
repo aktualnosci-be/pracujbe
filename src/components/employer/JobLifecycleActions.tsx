@@ -8,7 +8,7 @@ import { useRouter } from '@/i18n/navigation';
 import { setJobStatus, type JobLifecycleAction } from '@/lib/actions/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
-import { Toast } from '@/components/ui/toast';
+import { ToastRegion } from '@/components/ui/toast';
 import { BTN_SMALL } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
  * błędy → toast z komunikatem i18n.
  */
 
-const TOAST_MS = 4000;
 
 export interface JobLifecycleActionsProps {
   jobId: string;
@@ -64,12 +63,6 @@ export function JobLifecycleActions({
     null,
   );
 
-  React.useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), TOAST_MS);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
-
   const actions = allowedActions(status, pastExpiry);
   if (actions.length === 0) return null;
 
@@ -88,6 +81,7 @@ export function JobLifecycleActions({
 
   const run = (action: JobLifecycleAction) => {
     if (pending) return;
+    setToast(null); // kolejna akcja zamyka poprzedni komunikat (#1054)
     startTransition(async () => {
       try {
         const res = await setJobStatus(jobId, action);
@@ -122,11 +116,7 @@ export function JobLifecycleActions({
         ))}
       </div>
 
-      {toast ? (
-        <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
-          <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} />
-        </div>
-      ) : null}
+      <ToastRegion toast={toast} onClose={() => setToast(null)} />
     </>
   );
 }
