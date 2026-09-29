@@ -3345,6 +3345,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
   jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
   `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.
+  Przegląd funkcji SECURITY DEFINER (migracja `0193`, numer tymczasowy): funkcje omijają RLS, więc usunięty
+  wiersz nie daje roli (`current_profile_role` — brak/usunięty profil = `''`, więc wzorzec
+  `<> 'candidate'` odrzuca; `is_admin` od 0185), dostępu (`can_access_*`, `is_job_manager`/`is_job_company_member`,
+  `is_conversation_member`, `conversation_created_by_me`, `owns_candidate_profile`), listu
+  (`email_recipient_authorized`), profilu (`ensure_candidate_profile` → `NOT_FOUND`), sukcesu ponowienia
+  (`apply_to_job`) ani relacji/celu propozycji (`send_offer`). Strażnik `tests/unit/soft-delete-contract.test.ts`
+  czyta najnowsze definicje z migracji: każda para (funkcja SECURITY DEFINER, tabela z `deleted_at`) ma warunek,
+  funkcję pomocniczą sprawdzającą `deleted_at` albo wyjątek z uzasadnieniem (kategorie ERASE/GUARD/WRITE/NEW/
+  SESSION/FORMAT/ADMIN/EXPORT/MATCH/MAINT; nieaktualny wyjątek = czerwony; kontrola ujemna na definicjach sprzed
+  0193). Dowód: `rls.sql` SDR1111 (kontrole ujemne po rollbacku `0193_…down.sql`).
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
