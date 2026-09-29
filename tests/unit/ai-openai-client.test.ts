@@ -8,7 +8,9 @@ import { ASSIST_SYSTEM_PROMPT, AssistorError, OpenAiJobAssistor } from '@/lib/ai
 import { ASSIST_JSON_SCHEMA } from '@/lib/ai-assist/schema';
 import { JOB_EXTRACTION_JSON_SCHEMA } from '@/lib/ai-import/schema';
 import { DEFAULT_AI_MODEL, isOpenAiConfigured, resolveAiModel } from '@/lib/ai/model-config';
-import { AiProviderError, createStructuredResponse } from '@/lib/ai/openai';
+import OpenAI from 'openai';
+
+import { AiProviderError, createStructuredResponse, OPENAI_CLIENT_OPTIONS } from '@/lib/ai/openai';
 import { CV_EXTRACTION_JSON_SCHEMA } from '@/lib/cv-import/proposals';
 
 import { callParams, fakeOpenAiClient } from '../helpers/fake-openai';
@@ -167,5 +169,38 @@ describe('schematy structured output spełniają tryb strict OpenAI', () => {
     expect(
       strictProblems({ type: 'object', additionalProperties: false, required: [], properties: { a: { type: 'string' } } }),
     ).toEqual(['$.a: nie jest wymagane']);
+  });
+});
+
+describe('klient SDK nie ponawia płatnych wywołań w ramach jednej rezerwacji (#1106)', () => {
+  async function callsFor(maxRetries: number): Promise<number> {
+    let calls = 0;
+    const sdk = new OpenAI({
+      apiKey: 'test-key',
+      baseURL: 'http://127.0.0.1:9/v1',
+      timeout: OPENAI_CLIENT_OPTIONS.timeout,
+      maxRetries,
+      fetch: (async () => {
+        calls += 1;
+        return new Response('{"error":{"message":"boom"}}', {
+          status: 500,
+          headers: { 'content-type': 'application/json', 'retry-after-ms': '1' },
+        });
+      }) as unknown as typeof fetch,
+    });
+    await expect(createStructuredResponse(REQUEST, { client: sdk })).rejects.toBeInstanceOf(AiProviderError);
+    return calls;
+  }
+
+  it('domyślne opcje klienta: maxRetries = 0, timeout 60 s', () => {
+    expect(OPENAI_CLIENT_OPTIONS).toEqual({ timeout: 60_000, maxRetries: 0 });
+  });
+
+  it('błąd 5xx = dokładnie jedno wywołanie HTTP', async () => {
+    expect(await callsFor(OPENAI_CLIENT_OPTIONS.maxRetries)).toBe(1);
+  });
+
+  it('kontrola ujemna: z maxRetries 1 (stan sprzed naprawy) SDK wykonuje drugie wywołanie', async () => {
+    expect(await callsFor(1)).toBe(2);
   });
 });

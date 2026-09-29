@@ -158,3 +158,91 @@ describe('normalizeEmailCase', () => {
     expect(normalizeEmailCase('NoAt')).toBe('noat');
   });
 });
+
+describe('znak liczby (#738)', () => {
+  it('zmiana -5°C na 5°C jest odrzucona, zgodny znak przechodzi', () => {
+    expect(diff('Temperatura -5°C', 'pl', 'Temperature 5°C', 'en')).toBe('numbers');
+    expect(diff('Temperatura 5°C', 'pl', 'Temperature -5°C', 'en')).toBe('numbers');
+    expect(diff('Temperatura -5°C', 'pl', 'Temperature -5°C', 'en')).toBeNull();
+    expect(diff('Korekta -1,5 EUR', 'pl', 'Adjustment −1.5 EUR', 'en')).toBeNull();
+  });
+  it('+5 = 5, a zakresy i oznaczenia z myślnikiem nie są ujemne', () => {
+    expect(diff('Premia +5 EUR', 'pl', 'Bonus 5 EUR', 'en')).toBeNull();
+    expect(extractFacts('od 5-10 EUR', 'pl').numbers).toEqual(['10', '5']);
+    expect(extractFacts('B-2 i 5 - 10', 'pl').numbers).toEqual(['10', '2', '5']);
+    expect(extractFacts('-0', 'pl').numbers).toEqual(['0']);
+  });
+});
+
+describe('daty numeryczne wg języka (#739)', () => {
+  it('poprawna lokalizacja pl → en (miesiąc/dzień) przechodzi', () => {
+    expect(extractFacts('Termin: 03.04.2025', 'pl').dates).toEqual(['2025-04-03']);
+    expect(extractFacts('Date: 04/03/2025', 'en').dates).toEqual(['2025-04-03']);
+    expect(diff('Termin: 03.04.2025', 'pl', 'Date: 04/03/2025', 'en')).toBeNull();
+    expect(extractFacts('Date: 25/12/2025', 'en').dates).toEqual(['2025-12-25']);
+  });
+  it('kontrola ujemna: zamieniony dzień z miesiącem nadal odrzucony', () => {
+    expect(diff('Termin: 03.04.2025', 'pl', 'Date: 03/04/2025', 'en')).toBe('dates');
+    expect(extractFacts('Date: 04.03.2025', 'en').dates).toEqual(['2025-03-04']);
+    expect(extractFacts('04/03/2025', 'nl').dates).toEqual(['2025-03-04']);
+  });
+});
+
+describe('okres stawki: niderlandzkie „u” (#1067)', () => {
+  it('forma grzecznościowa „u” nie jest stawką godzinową', () => {
+    const nl = 'Wij bieden u een vaste job aan. Bruto loon 2 500 EUR per maand.';
+    expect(extractFacts(nl, 'nl').pay_terms).toEqual(['gross', 'per_month']);
+    expect(
+      diff(nl, 'nl', 'Oferujemy Panu stałą pracę. Wynagrodzenie brutto 2 500 EUR miesięcznie.', 'pl'),
+    ).toBeNull();
+    expect(
+      diff(nl, 'nl', 'Nous vous proposons un emploi fixe. Salaire brut 2 500 EUR par mois.', 'fr'),
+    ).toBeNull();
+  });
+
+  it('skrót „u” z kontekstem liczby, waluty albo ukośnika nadal oznacza godzinę', () => {
+    for (const text of ['Loon 15 u', 'Loon 15u', 'Loon €/u', 'Loon 15,50 EUR/u', 'Loon 15 u']) {
+      expect(extractFacts(text, 'nl').pay_terms, text).toContain('per_hour');
+    }
+    expect(diff('Stawka 15,50 EUR/godz.', 'pl', 'Loon 15,50 EUR/u', 'nl')).toBeNull();
+    expect(diff('Stawka 15,50 EUR/godz.', 'pl', 'Loon 15,50 EUR/maand', 'nl')).toBe('pay_terms');
+  });
+
+  it('kontrola ujemna: zgubiona godzinowa stawka w formie „15 u” nadal odrzucona', () => {
+    expect(diff('Loon 15 u brutto', 'nl', 'Salaire 15 EUR brut par mois', 'fr')).not.toBeNull();
+  });
+
+  it('samotne „h”/„hr” bez liczby też nie jest okresem stawki', () => {
+    expect(extractFacts('Plan h in het bedrijf', 'nl').pay_terms).toEqual([]);
+    expect(extractFacts('Rate 15 hr', 'en').pay_terms).toEqual(['per_hour']);
+    expect(extractFacts('Vitamin h', 'en').pay_terms).toEqual([]);
+  });
+});
+
+describe('negacja zdanie po zdaniu (#1106)', () => {
+  const src = 'Praca w weekendy. Nie wymagamy doświadczenia. Oferujemy szkolenie.';
+
+  it('ta sama liczba zdań, negacja na tym samym miejscu = ok', () => {
+    expect(diff(src, 'pl', 'Work at weekends. No experience required. We offer training.', 'en')).toBeNull();
+  });
+
+  it('negacja przeniesiona do innego zdania (ta sama obecność w polu) jest odrzucona', () => {
+    // Obecność „gdzieś w polu” zgadza się, ale sens zdań zmieniony.
+    expect(diff(src, 'pl', 'Work at weekends is not possible. Experience required. We offer training.', 'en')).toBe(
+      'negation',
+    );
+  });
+
+  it('kontrola ujemna: gdy zdania się nie zgadzają, wystarcza obecność w polu (bez fałszywych odrzuceń)', () => {
+    expect(
+      diff(src, 'pl', 'Work at weekends. No experience required, and we offer training.', 'en'),
+    ).toBeNull();
+  });
+
+  it('wiersze listy liczą się jak zdania', () => {
+    expect(diff('Prawo jazdy\nBez doświadczenia\nWłasny samochód', 'pl', 'Driving licence\nNo experience\nOwn car', 'en')).toBeNull();
+    expect(diff('Prawo jazdy\nBez doświadczenia\nWłasny samochód', 'pl', 'Driving licence\nExperience\nNo own car', 'en')).toBe(
+      'negation',
+    );
+  });
+});

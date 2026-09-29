@@ -82,7 +82,6 @@ export function DashboardShell({
   notificationsHref,
   children,
 }: DashboardShellProps): React.JSX.Element {
-  const tc = useTranslations('common');
   const td = useTranslations('dashboard');
   const tnav = useTranslations('nav');
   const tn = useTranslations('notifications');
@@ -323,7 +322,7 @@ export function DashboardShell({
                 aria-label={
                   notificationError ? tn('loadError') : tn('bellLabel', { count: notifications ?? 0 })
                 }
-                aria-haspopup="true"
+                // #1095: panel powiadomień to region, nie menu — bez `aria-haspopup`.
                 aria-expanded={notifOpen}
                 className="relative inline-flex size-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-soft"
               >
@@ -429,7 +428,7 @@ export function DashboardShell({
                 ref={drawerCloseRef}
                 type="button"
                 onClick={() => setDrawerOpen(false)}
-                aria-label={tc('cancel')}
+                aria-label={tnav('close')}
                 className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-soft hover:text-foreground"
               >
                 <X className="size-5" aria-hidden="true" />

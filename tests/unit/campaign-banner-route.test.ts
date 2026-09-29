@@ -111,6 +111,22 @@ describe('GET /api/employer/jobs/[id]/banner', () => {
     expect(state.rateLimit).toHaveBeenCalledWith('campaign-banner', expect.objectContaining({ identifier: 'u-1', perIp: false }));
   });
 
+  it('#1110: podglądy i pobrania mają osobne wiadra — podglądy nie zużywają limitu pobrań 60/h', async () => {
+    await call('format=300x250&locale=nl');
+    expect(state.rateLimit).toHaveBeenLastCalledWith(
+      'campaign-banner-preview',
+      expect.objectContaining({ identifier: 'u-1', perIp: false, max: 600, windowSeconds: 3600 }),
+    );
+    await call('format=300x250&locale=nl&download=1');
+    expect(state.rateLimit).toHaveBeenLastCalledWith(
+      'campaign-banner',
+      expect.objectContaining({ identifier: 'u-1', perIp: false, max: 60, windowSeconds: 3600 }),
+    );
+    // Kontrola ujemna: `download=0` i inne wartości to nadal podgląd.
+    await call('format=300x250&locale=nl&download=0');
+    expect(state.rateLimit).toHaveBeenLastCalledWith('campaign-banner-preview', expect.anything());
+  });
+
   it('podgląd bez download=1 jest inline', async () => {
     const response = await call();
     expect(response.headers.get('content-disposition')).toMatch(/^inline;/);

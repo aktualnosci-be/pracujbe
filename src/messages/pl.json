@@ -556,7 +556,8 @@
       "none": "Ta oferta nie podaje sposobu aplikowania.",
       "mailSubject": "Oferta pracy: {title}",
       "contact": "Kontakt bezpośrednio z ogłoszeniodawcą"
-    }
+    },
+    "startImmediate": "Praca od zaraz"
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -767,6 +768,7 @@
     "jobImportFailed": "Nie udało się odczytać ogłoszenia. Spróbuj ponownie albo wypełnij formularz ręcznie.",
     "savedSearchLimitReached": "Masz już 20 zapisanych wyszukiwań. Usuń jedno z nich, aby dodać nowe.",
     "moderationLocked": "Ta treść jest ograniczona decyzją moderacyjną, więc nie można zmienić jej statusu.",
+    "moderationRestoreBlocked": "Nie można cofnąć ograniczenia: treść pytań tej oferty zmieniła się od decyzji i wymaga ponownego przeglądu. Ograniczenie zostaje w mocy — rozpatrz przegląd pytań i spróbuj ponownie.",
     "guestApplyUnavailable": "Aplikacja bez konta jest chwilowo niedostępna. Spróbuj później albo zaloguj się.",
     "siteAccessUnavailable": "Wejście do serwisu jest chwilowo niedostępne. Spróbuj ponownie później.",
     "emailNotVerified": "Najpierw potwierdź adres e-mail swojego konta — kliknij link, który wysłaliśmy przy rejestracji.",
@@ -1224,7 +1226,14 @@
     "savedSearchJobsShow": "Pokaż oferty: {name}",
     "savedSearchJobsFrom": "Wyszukiwanie: {name}",
     "employerGreetingSubListing": "Witaj {name}! Sprawdź, jak radzą sobie Twoje ogłoszenia.",
-    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia."
+    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia.",
+    "deleteJobDraft": "Usuń szkic",
+    "deleteJobDraftLabel": "Usuń szkic: {title}",
+    "deleteJobDraftTitle": "Usunąć szkic oferty?",
+    "deleteJobDraftDescription": "Szkic „{title}” zostanie usunięty razem z wpisaną treścią. Tej operacji nie można cofnąć.",
+    "deleteJobDraftConfirm": "Usuń szkic",
+    "deleteJobDraftCancel": "Anuluj",
+    "deleteJobDraftUntitled": "bez tytułu"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1318,6 +1327,7 @@
     "levelIntermediate": "Średni",
     "levelFluent": "Biegły",
     "levelNative": "Ojczysty",
+    "languageLevelLabel": "Poziom znajomości języka",
     "addLanguage": "Dodaj język",
     "certificatesLabel": "Certyfikaty i uprawnienia",
     "certificatesPlaceholder": "np. VCA, świadectwo kwalifikacji",
@@ -1599,6 +1609,7 @@
       "languagesTooMany": "Dodano zbyt wiele języków.",
       "certificatesTooMany": "Dodano zbyt wiele certyfikatów.",
       "certificateExpiryInvalid": "Podaj poprawną datę ważności certyfikatu.",
+      "textInvalid": "Ten tekst zawiera niedozwolony znak. Usuń go.",
       "contractTypesTooMany": "Wybrano zbyt wiele rodzajów umów.",
       "salaryInvalid": "Podaj poprawną kwotę wynagrodzenia.",
       "bioTooLong": "Opis jest za długi.",
@@ -1800,7 +1811,11 @@
     "jointCommitteeLabel": "Komisja parytetowa (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "Na stronie oferty pokażemy numer komisji i link do oficjalnej bazy stawek minimalnych. Portal nie ocenia wysokości stawki.",
-    "languageSelectPlaceholder": "Wybierz język"
+    "languageSelectPlaceholder": "Wybierz język",
+    "contentLocaleLabel": "Język ogłoszenia",
+    "contentLocaleHint": "W tym języku piszesz treść ogłoszenia. Może być inny niż język panelu; od niego zależy oznaczenie języka i tłumaczenia dla kandydatów.",
+    "contentLocaleLocked": "Języka opublikowanej oferty nie można zmienić.",
+    "languageLevelAria": "Poziom języka: {level}"
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",
@@ -2764,6 +2779,7 @@
     "agePolicyConfirmTitle": "Zmienić próg wieku kandydatów?",
     "agePolicyConfirmDescription": "Próg zmieni się z „{from}” na „{to}”.",
     "agePolicySuccess": "Próg wieku kandydatów został zapisany.",
+    "agePolicyStale": "Próg wieku został w międzyczasie zmieniony przez innego administratora. Strona została odświeżona — sprawdź aktualną wartość i w razie potrzeby zapisz ponownie.",
     "agePolicySuccessHidden": "Próg wieku kandydatów został zapisany. Ukryto {count} profili z wyszukiwania.",
     "reportsSortLabel": "Kolejność",
     "reportsSortNewest": "Najnowsze",
@@ -3364,7 +3380,8 @@
     "renameSave": "Zapisz nazwę",
     "renameCancel": "Anuluj",
     "renamed": "Zmieniliśmy nazwę wyszukiwania.",
-    "renameHint": "Od 1 do 80 znaków."
+    "renameHint": "Od 1 do 80 znaków.",
+    "renameErrorRequired": "Wpisz nazwę wyszukiwania (od 1 do 80 znaków)."
   },
   "contentReport": {
     "metaTitle": "Zgłoś treść",
@@ -3401,6 +3418,7 @@
     "successTitle": "Zgłoszenie przyjęte",
     "successBody": "Twoja sprawa ma numer podany poniżej. Potwierdzenie wyślemy na podany adres e-mail.",
     "successDuplicate": "To zgłoszenie zostało już przyjęte wcześniej — poniżej ta sama sprawa.",
+    "successDuplicateEdited": "To zgłoszenie zostało już przyjęte wcześniej — poniżej ta sama sprawa. Późniejsze zmiany treści nie zostały do niej dopisane.",
     "caseNumberLabel": "Numer sprawy",
     "accessCodeLabel": "Kod dostępu",
     "accessCodeHint": "Zapisz numer sprawy i kod dostępu — są potrzebne do sprawdzenia statusu. Kod jest też w e-mailu z potwierdzeniem.",

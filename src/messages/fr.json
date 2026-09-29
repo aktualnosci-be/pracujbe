@@ -556,7 +556,8 @@
       "none": "Cette offre n'indique pas comment postuler.",
       "mailSubject": "Offre d'emploi : {title}",
       "contact": "Contact direct avec l'annonceur"
-    }
+    },
+    "startImmediate": "Début immédiat"
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -767,6 +768,7 @@
     "jobImportFailed": "Nous n’avons pas pu lire l’annonce. Réessayez ou remplissez le formulaire vous-même.",
     "savedSearchLimitReached": "Vous avez déjà 20 recherches enregistrées. Supprimez-en une pour en ajouter une nouvelle.",
     "moderationLocked": "Ce contenu est restreint par une décision de modération : son statut ne peut pas être modifié.",
+    "moderationRestoreBlocked": "La restriction ne peut pas être levée : les questions de cette offre ont changé depuis la décision et doivent être réexaminées. La restriction reste en vigueur — traitez le réexamen puis réessayez.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "siteAccessUnavailable": "L’accès au site est temporairement indisponible. Réessayez plus tard.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
@@ -1224,7 +1226,14 @@
     "savedSearchJobsShow": "Voir les offres : {name}",
     "savedSearchJobsFrom": "Recherche : {name}",
     "employerGreetingSubListing": "Bonjour {name} ! Découvrez les résultats de vos annonces.",
-    "employerGreetingSubListingGeneric": "Découvrez les résultats de vos annonces."
+    "employerGreetingSubListingGeneric": "Découvrez les résultats de vos annonces.",
+    "deleteJobDraft": "Supprimer le brouillon",
+    "deleteJobDraftLabel": "Supprimer le brouillon : {title}",
+    "deleteJobDraftTitle": "Supprimer le brouillon de l'offre ?",
+    "deleteJobDraftDescription": "Le brouillon « {title} » sera supprimé avec le contenu saisi. Cette action est irréversible.",
+    "deleteJobDraftConfirm": "Supprimer le brouillon",
+    "deleteJobDraftCancel": "Annuler",
+    "deleteJobDraftUntitled": "sans titre"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1318,6 +1327,7 @@
     "levelIntermediate": "Intermédiaire",
     "levelFluent": "Courant",
     "levelNative": "Langue maternelle",
+    "languageLevelLabel": "Niveau de langue",
     "addLanguage": "Ajouter une langue",
     "certificatesLabel": "Certificats et attestations",
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
@@ -1599,6 +1609,7 @@
       "languagesTooMany": "Trop de langues ajoutées.",
       "certificatesTooMany": "Trop de certificats ajoutés.",
       "certificateExpiryInvalid": "Indiquez une date d’expiration valide pour le certificat.",
+      "textInvalid": "Ce texte contient un caractère non autorisé. Supprimez-le.",
       "contractTypesTooMany": "Trop de types de contrat sélectionnés.",
       "salaryInvalid": "Indiquez un montant de salaire valide.",
       "bioTooLong": "La description est trop longue.",
@@ -1800,7 +1811,11 @@
     "jointCommitteeLabel": "Commission paritaire (CP)",
     "jointCommitteeCode": "CP {code}",
     "jointCommitteeHint": "La page de l'offre affichera le numéro de la commission et un lien vers la base officielle des salaires minimums. Le portail n'évalue pas le salaire.",
-    "languageSelectPlaceholder": "Choisissez une langue"
+    "languageSelectPlaceholder": "Choisissez une langue",
+    "contentLocaleLabel": "Langue de l'annonce",
+    "contentLocaleHint": "C'est dans cette langue que vous rédigez le texte de l'annonce. Elle peut différer de la langue du panneau ; l'indication de langue et les traductions pour les candidats en dépendent.",
+    "contentLocaleLocked": "La langue d'une offre publiée ne peut pas être modifiée.",
+    "languageLevelAria": "Niveau de langue : {level}"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -2764,6 +2779,7 @@
     "agePolicyConfirmTitle": "Modifier le seuil d'âge des candidats ?",
     "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
     "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
+    "agePolicyStale": "Le seuil d’âge a été modifié entre-temps par un autre administrateur. La page a été actualisée — vérifiez la valeur actuelle et, si besoin, enregistrez à nouveau.",
     "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche.",
     "reportsSortLabel": "Ordre",
     "reportsSortNewest": "Plus récents",
@@ -3364,7 +3380,8 @@
     "renameSave": "Enregistrer le nom",
     "renameCancel": "Annuler",
     "renamed": "Nous avons renommé la recherche.",
-    "renameHint": "De 1 à 80 caractères."
+    "renameHint": "De 1 à 80 caractères.",
+    "renameErrorRequired": "Saisissez un nom pour la recherche (de 1 à 80 caractères)."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -3401,6 +3418,7 @@
     "successTitle": "Signalement reçu",
     "successBody": "Votre dossier porte le numéro ci-dessous. Nous enverrons une confirmation à l’adresse e-mail indiquée.",
     "successDuplicate": "Ce signalement avait déjà été reçu — voici le même dossier.",
+    "successDuplicateEdited": "Ce signalement a déjà été enregistré — voici le même dossier. Les modifications apportées ensuite au texte n’y ont pas été ajoutées.",
     "caseNumberLabel": "Numéro de dossier",
     "accessCodeLabel": "Code d’accès",
     "accessCodeHint": "Conservez le numéro de dossier et le code d’accès — ils sont nécessaires pour consulter le statut. Le code figure aussi dans l’e-mail de confirmation.",

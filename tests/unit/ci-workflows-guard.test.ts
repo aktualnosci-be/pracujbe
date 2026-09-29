@@ -17,8 +17,12 @@ const FILES = ['ci.yml', 'delete-old-runs.yml'];
 const PLAYWRIGHT_CONFIG = join(process.cwd(), 'playwright.config.ts');
 const dirs: string[] = [];
 
-function runGuard(dir?: string, config?: string) {
-  const args = [...(dir || config ? [dir ?? WORKFLOWS] : []), ...(config ? [config] : [])];
+function runGuard(dir?: string, config?: string, packageJson?: string) {
+  const args = [
+    ...(dir || config || packageJson ? [dir ?? WORKFLOWS] : []),
+    ...(config || packageJson ? [config ?? PLAYWRIGHT_CONFIG] : []),
+    ...(packageJson ? [packageJson] : []),
+  ];
   const result = spawnSync(process.execPath, ['scripts/check-ci-workflows.mjs', ...args], {
     cwd: process.cwd(),
     encoding: 'utf8',
@@ -149,5 +153,18 @@ describe('strażnik workflowów CI', () => {
     const { code, output } = runGuard(undefined, mutatedConfig(edit));
     expect(code).not.toBe(0);
     expect(output).toContain(message);
+  });
+
+  it('kontrola ujemna: typecheck bez tests/e2e (tsconfig.e2e.json)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ci-guard-pkg-'));
+    dirs.push(dir);
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    expect(pkg.scripts.typecheck).toContain('-p tsconfig.e2e.json');
+    pkg.scripts.typecheck = 'tsc --noEmit';
+    const file = join(dir, 'package.json');
+    writeFileSync(file, JSON.stringify(pkg));
+    const { code, output } = runGuard(undefined, undefined, file);
+    expect(code).not.toBe(0);
+    expect(output).toContain('typecheck musi sprawdzać tests/e2e');
   });
 });

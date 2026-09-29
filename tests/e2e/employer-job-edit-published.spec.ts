@@ -42,7 +42,7 @@ test('opublikowaną ofertę można poprawić bez zmiany statusu (#325)', async (
   await page.getByRole('button', { name: w.next }).click();
   await expect(page.getByRole('heading', { level: 2, name: w.step2Title })).toBeFocused();
   await page.getByRole('button', { name: w.saveChanges }).click();
-  await expect(page.getByRole('status')).toHaveText(w.editSavedDemo!);
+  await expect(page.getByRole('status').filter({ hasText: /\S/ })).toHaveText(w.editSavedDemo!);
 });
 
 test('kontrola ujemna: pusty tytuł blokuje zapis i przenosi do kroku 1 (#325)', async ({ page }) => {
@@ -57,5 +57,5 @@ test('kontrola ujemna: pusty tytuł blokuje zapis i przenosi do kroku 1 (#325)',
 
   await page.getByRole('button', { name: w.saveChanges }).click();
   await expect(page.getByRole('alert').filter({ hasText: w.step1Title! })).toBeVisible();
-  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: /\S/ })).toHaveCount(0);
 });

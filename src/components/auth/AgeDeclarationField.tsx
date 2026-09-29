@@ -109,7 +109,7 @@ export const AgeDeclarationField = React.forwardRef<HTMLInputElement, AgeDeclara
           </p>
         ) : null}
         {error ? (
-          <p id={errorId} className="text-sm text-error">
+          <p id={errorId} className="text-sm text-error-text">
             {error}
           </p>
         ) : null}

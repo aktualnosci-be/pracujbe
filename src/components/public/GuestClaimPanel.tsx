@@ -102,7 +102,7 @@ export function GuestClaimPanel({
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('claimIntro')}</p>
       {error ? (
-        <div ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-error/10 p-3 text-sm text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <div ref={errorRef} role="alert" tabIndex={-1} className="rounded-lg bg-error/10 p-3 text-sm text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           {message(error)}
         </div>
       ) : null}

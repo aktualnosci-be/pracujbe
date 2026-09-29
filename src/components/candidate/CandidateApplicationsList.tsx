@@ -199,7 +199,7 @@ export function CandidateApplicationsList({
           );
         })}
       </ul>
-      {failed ? <p role="alert" className="mb-3 text-[15px] text-error">{t('applicationsMoreError')}</p> : null}
+      {failed ? <p role="alert" className="mb-3 text-[15px] text-error-text">{t('applicationsMoreError')}</p> : null}
       {cursor ? (
         <button
           type="button"
