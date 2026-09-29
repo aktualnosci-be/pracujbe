@@ -1582,6 +1582,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `withAiBudget` + log użycia bez treści, minimalizacja `redactSensitiveData`, treść jako dane
   w `<offer_text>`, strict schema; trafienie tylko kieruje do kolejki (`record_job_content_ai_signal`,
   service_role, odcisk jak CAS), awaria/brak budżetu = same reguły; inwentarz `job_fraud_check`.
+  Przy publikacji model woła się dopiero, gdy `publish_job` może się udać (`canAttemptPublish` pod RLS:
+  recruiter+, szkic, firma `verified`, termin, kanał — #1235; member/oferta aktywna = bez kosztu AI).
   Podpowiedź w kreatorze (kroki 5, 6, 8), kolejka admina `/admin/tresc-ofert` (źródło reguła/AI,
   uzasadnienie i pewność AI, treść z chwili zgłoszenia, `admin_decide_job_content_review` z CAS
   treści, audytem i powiadomieniem). **Agencje pracy tymczasowej** (decyzja właściciela 28.09):
@@ -3268,10 +3270,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `safeErrorArea`) i SQLSTATE, deduplikacja po (kod, obszar, SQLSTATE), maintenance zgłasza każde
   nieudane zadanie osobno (#1066); `reportUnmappedDbError` (`src/lib/db/errors.ts`) zgłasza
   `INTERNAL` z nieznanego błędu bazy w akcjach (kandydat, onboarding, ustawienia powiadomień,
-  zespół, firma, zapisane wyszukiwania; bez akcji rekrutacyjnych i `jobs.ts`, #1068); cookie aktywnej
+  zespół, firma, zapisane wyszukiwania; bez akcji rekrutacyjnych i `jobs.ts`, #1068); trasy prywatne (`isPrivateRoutePath`, lista
+  `route-policy.ts`) dostają w middleware `Referrer-Policy: strict-origin` (sam origin jako referrer
+  strony otwartej z panelu; jednorazowe linki `no-referrer`, #1218, unit `middleware-referrer-policy`,
+  E2E `one-time-link-tracking`); cookie aktywnej
   firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
   firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
-  poza produkcją pokazuje szczegóły tylko z tokenem albo na loopbacku, zbiorczy budżet błędów
+  pokazuje szczegóły tylko z tokenem albo w `next dev` (`NODE_ENV=development` poza trybem produkcyjnym —
+  nie po `request.url`, który za proxy Railway wskazuje localhost, #1219), zbiorczy budżet błędów
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
   worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
   i SQLSTATE bez komunikatu bazy (#1105).
