@@ -9,6 +9,7 @@ import { CompanyModerationDecisions } from '@/components/employer/CompanyModerat
 import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
 import { CompanyAgencyForm } from '@/components/employer/CompanyAgencyForm';
+import { CompanyDescriptionLocaleForm } from '@/components/employer/CompanyDescriptionLocaleForm';
 import { env } from '@/lib/env';
 import { APP_TIME_ZONE } from '@/lib/datetime';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
@@ -294,6 +295,21 @@ export default async function EmployerCompanyPage({
                   />
                 </div>
               </section>
+
+              {/* #708 (0975): język opisu — publiczny profil oznacza nim opis i informuje o innym języku. */}
+              {company.descriptionLanguage.hasDescription ? (
+                <section className={PAPER}>
+                  <h2 className={H2_EXTENDED}>{t('descriptionLocaleTitle')}</h2>
+                  <p className={INTRO}>{t('descriptionLocaleSubtitle')}</p>
+                  <div className="mt-4">
+                    <CompanyDescriptionLocaleForm
+                      key={company.id}
+                      companyId={company.id}
+                      locale={company.descriptionLanguage.locale}
+                    />
+                  </div>
+                </section>
+              ) : null}
 
               {/* 0167: agencja pracy tymczasowej — deklaracja + numer uznania (sprawdza admin). */}
               <section className={PAPER}>

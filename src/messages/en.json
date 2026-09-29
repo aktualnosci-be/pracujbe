@@ -193,7 +193,18 @@
     "agencyUnchanged": "No changes.",
     "agencyDemoNotice": "Demo mode — nothing was saved.",
     "agencySaving": "Saving…",
-    "agencySubmit": "Save"
+    "agencySubmit": "Save",
+    "descriptionLocaleTitle": "Company description language",
+    "descriptionLocaleSubtitle": "The company profile exists in every language of the portal, but there is one description. Say which language it is written in — visitors will see this when they view the profile in another language.",
+    "descriptionLocaleLabel": "Language the description is written in",
+    "descriptionLocaleNone": "Not specified",
+    "descriptionLocaleHint": "After changing the description, you need to specify its language again.",
+    "descriptionLocaleDescriptionEmpty": "The company has no description yet — the language can be set once a description is added.",
+    "descriptionLocaleSubmit": "Save description language",
+    "descriptionLocaleSaving": "Saving…",
+    "descriptionLocaleSaved": "Description language saved.",
+    "descriptionLocaleUnchanged": "No change — this language was already saved.",
+    "descriptionLocaleDemoNotice": "Demo mode — the change was not saved."
   },
   "companyProfile": {
     "metaTitle": "Jobs at {name}",
@@ -204,7 +215,12 @@
     "backToJobs": "See all job listings",
     "metaTitlePage": "Jobs at {name} — page {page}",
     "jobsCount": "{count, plural, one {# active job} other {# active jobs}}",
-    "pageStatus": "Page {page} of {lastPage}"
+    "pageStatus": "Page {page} of {lastPage}",
+    "logoAlt": "{name} logo",
+    "websiteLabel": "Website",
+    "opensInNewTab": "(opens in a new tab)",
+    "descriptionLanguageOther": "The company wrote this description in {language}.",
+    "descriptionLanguageUnknown": "Description as provided by the company — it may not be in your language."
   },
   "common": {
     "appName": "Pracuj.be",
@@ -3017,7 +3033,8 @@
     "auditActionJobPausedForReview": "Job paused for content review",
     "auditActionCompanyAgencyChanged": "Agency declaration changed",
     "auditActionCompanyAgencyChecked": "Agency recognition number checked",
-    "aiCostsFeatureFraudCheck": "Job content check"
+    "aiCostsFeatureFraudCheck": "Job content check",
+    "auditActionCompanyDescriptionLocale": "Company description language changed"
   },
   "settings": {
     "title": "Notification preferences",

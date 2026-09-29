@@ -20571,4 +20571,130 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- ============================================================================
+-- CDL975. Język opisu firmy na publicznym profilu (#708, migracja 0975 — numer tymczasowy):
+--         `companies.description_locale` ustawia tylko owner/admin firmy przez RPC (audyt);
+--         zmiana treści opisu bez wskazania języka zeruje język (trigger); pusty opis = brak
+--         języka (CHECK); `get_public_company` zwraca język tylko firmy zweryfikowanej.
+-- ============================================================================
+\set CDLO 'e9750000-0000-0000-0000-000000000001'
+\set CDLM 'e9750000-0000-0000-0000-000000000002'
+\set CDLX 'e9750000-0000-0000-0000-000000000003'
+\set CDLC 'e9750000-0000-0000-0000-0000000000c1'
+\set CDLE 'e9750000-0000-0000-0000-0000000000c2'
+\set CDLU 'e9750000-0000-0000-0000-0000000000c3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CDLO','cdlo@test.be','Olga D','{"role":"employer","first_name":"Olga","last_name":"D","locale":"nl"}'),
+  (:'CDLM','cdlm@test.be','Mira D','{"role":"employer","first_name":"Mira","last_name":"D","locale":"pl"}'),
+  (:'CDLX','cdlx@test.be','Xavier D','{"role":"employer","first_name":"Xavier","last_name":"D","locale":"fr"}');
+insert into public.companies(id,name,slug,status,vat_number,verified_at,description) values
+  (:'CDLC','Firma D','firma-d-cdl975','verified','BE0644444444',now(),'Wij bouwen bruggen.'),
+  (:'CDLE','Firma D bez opisu','firma-d2-cdl975','verified','BE0655555555',now(),null),
+  (:'CDLU','Firma D niezweryfikowana','firma-d3-cdl975','pending','BE0666666666',null,'Opis');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'CDLC',:'CDLO','owner',true),
+  (:'CDLC',:'CDLM','member',true),
+  (:'CDLE',:'CDLO','owner',true),
+  (:'CDLU',:'CDLX','owner',true);
+
+-- CDL975-0: nowa kolumna = język nieznany; profil publiczny zwraca null.
+set role anon;
+select pg_temp.assert(
+  (select description_locale is null and description = 'Wij bouwen bruggen.'
+     from public.get_public_company('firma-d-cdl975')),
+  'CDL975-0 istniejący opis bez zadeklarowanego języka = null w profilu');
+reset role;
+
+-- CDL975-1: owner wskazuje język → zapis, audyt, profil publiczny zwraca kod.
+set role authenticated; set app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_company_description_locale(:'CDLC', ' nl ') = 'nl',
+  'CDL975-1 owner ustawia język opisu');
+select pg_temp.assert(public.set_company_description_locale(:'CDLC', 'nl') = 'nl',
+  'CDL975-1b ponowienie tej samej wartości');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+    where entity_id = :'CDLC' and action = 'company.description_locale_changed' and actor_id = :'CDLO'
+      and after_data = jsonb_build_object('description_locale', 'nl')) = 1,
+  'CDL975-1c jeden wpis audytu (ponowienie bez zmiany nie dubluje)');
+set role anon;
+select pg_temp.assert(
+  (select description_locale = 'nl' from public.get_public_company('firma-d-cdl975')),
+  'CDL975-1d profil publiczny zwraca język opisu');
+select pg_temp.assert(
+  not exists (select 1 from public.get_public_company('firma-d3-cdl975')),
+  'CDL975-1e firma niezweryfikowana nadal bez profilu');
+reset role;
+
+-- CDL975-2 (kontrole ujemne): member i owner innej firmy nie zmienią języka; zły kod odrzucony.
+set role authenticated; set app.current_uid = :'CDLM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''fr'')', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-2 member nie ustawia języka opisu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CDLX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''fr'')', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-2b owner obcej firmy nie ustawia języka opisu');
+-- Bezpośredni UPDATE obcej firmy nic nie zmienia (RLS).
+update public.companies set description_locale = 'fr' where id = :'CDLC';
+reset role; reset app.current_uid;
+select pg_temp.assert((select description_locale = 'nl' from public.companies where id = :'CDLC'),
+  'CDL975-2c bezpośredni UPDATE obcej firmy nie zmienia języka (RLS)');
+set role authenticated; set app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''de'')', :'CDLC'),
+  'LOCALE_INVALID', 'CDL975-2d język spoza języków serwisu odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''fr'')', :'CDLE'),
+  'DESCRIPTION_EMPTY', 'CDL975-2e firma bez opisu nie deklaruje języka opisu');
+reset role; reset app.current_uid;
+
+-- CDL975-3: zmiana treści opisu bez wskazania języka zeruje język (każda ścieżka zapisu).
+begin;
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+update public.companies set description = 'Nous construisons des ponts.' where id = :'CDLC';
+reset role;
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-3 nowa treść opisu = język nieznany (nie zostaje język starego tekstu)');
+set local role anon;
+select pg_temp.assert((select description_locale is null from public.get_public_company('firma-d-cdl975')),
+  'CDL975-3b profil publiczny nie przypisuje starego języka nowemu opisowi');
+reset role;
+rollback;
+begin;
+update public.companies set description = 'Nous construisons des ponts.', description_locale = 'fr' where id = :'CDLC';
+select pg_temp.assert((select description_locale = 'fr' from public.companies where id = :'CDLC'),
+  'CDL975-3c nowa treść z jednoczesnym wskazaniem języka zachowuje wskazany język');
+rollback;
+-- CDL975-3N (kontrola ujemna): bez triggera stary język zostaje przypięty do nowej treści.
+begin;
+alter table public.companies disable trigger trg_reset_company_description_locale;
+update public.companies set description = 'Nous construisons des ponts.' where id = :'CDLC';
+select pg_temp.assert((select description_locale = 'nl' from public.companies where id = :'CDLC'),
+  'CDL975-3N kontrola ujemna: bez triggera nieaktualny język zostaje przy nowym opisie');
+rollback;
+
+-- CDL975-4: wyczyszczenie opisu czyści język; bez triggera CHECK nie dopuszcza języka bez opisu.
+begin;
+update public.companies set description = '   ' where id = :'CDLC';
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-4 pusty opis = brak języka');
+rollback;
+begin;
+alter table public.companies disable trigger trg_reset_company_description_locale;
+select pg_temp.expect_error(
+  format('update public.companies set description_locale = ''fr'' where id = %L', :'CDLE'),
+  'companies_description_locale_requires_text', 'CDL975-4b CHECK: język bez opisu odrzucony (bez triggera)');
+rollback;
+-- Wyczyszczenie języka przez owner (null) działa.
+set role authenticated; set app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_company_description_locale(:'CDLC', null) is null,
+  'CDL975-4c owner czyści język opisu');
+reset role; reset app.current_uid;
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-4d język wyczyszczony w bazie');
+
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

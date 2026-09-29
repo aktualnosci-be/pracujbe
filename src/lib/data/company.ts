@@ -18,6 +18,7 @@ import { isAgencyCheckStatus, type AgencyCheckStatus } from '@/lib/job-trust/age
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
+import { isLocale, type Locale } from '@/i18n/routing';
 
 /** Dane aktywnej firmy zalogowanego pracodawcy (kontrakt dla UI). */
 export interface MyCompany {
@@ -43,7 +44,22 @@ export interface MyCompany {
   linksReview: CompanyLinksReview | null;
   /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia przez admina. */
   agency: CompanyAgency;
+  /** #708 (0975): czy firma ma opis i w jakim języku go napisała (null = nie wskazano). */
+  descriptionLanguage: CompanyDescriptionLanguage;
   canEdit: boolean;
+}
+
+export interface CompanyDescriptionLanguage {
+  hasDescription: boolean;
+  locale: Locale | null;
+}
+
+function parseDescriptionLanguage(row: Record<string, unknown>): CompanyDescriptionLanguage {
+  const locale = row['description_locale'];
+  return {
+    hasDescription: row['has_description'] === true,
+    locale: typeof locale === 'string' && isLocale(locale) ? locale : null,
+  };
 }
 
 export interface CompanyAgency {
@@ -78,6 +94,7 @@ const DEMO_COMPANY: MyCompany = {
   logoUrl: null,
   linksReview: null,
   agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
+  descriptionLanguage: { hasDescription: false, locale: null },
   canEdit: true,
 };
 
@@ -133,7 +150,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
                 c.website, c.logo_url, c.website_pending, c.logo_url_pending,
                 c.links_review_status, c.links_pending_at, c.links_review_reason,
-                c.is_agency, c.agency_recognition_number, c.agency_check_status
+                c.is_agency, c.agency_recognition_number, c.agency_check_status,
+                c.description_locale, (btrim(coalesce(c.description, '')) <> '') AS has_description
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -165,6 +183,7 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
         logoUrl: asNullableString(company['logo_url']),
         linksReview: parseCompanyLinksReview(company),
         agency: parseCompanyAgency(company),
+        descriptionLanguage: parseDescriptionLanguage(company),
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
       },
     };
@@ -204,7 +223,8 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
                 c.website, c.logo_url, c.website_pending, c.logo_url_pending,
                 c.links_review_status, c.links_pending_at, c.links_review_reason, m.role,
-                c.is_agency, c.agency_recognition_number, c.agency_check_status
+                c.is_agency, c.agency_recognition_number, c.agency_check_status,
+                c.description_locale, (btrim(coalesce(c.description, '')) <> '') AS has_description
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -234,6 +254,7 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
         logoUrl: asNullableString(company['logo_url']),
         linksReview: parseCompanyLinksReview(company),
         agency: parseCompanyAgency(company),
+        descriptionLanguage: parseDescriptionLanguage(company),
         canEdit: role === 'owner' || role === 'admin',
       },
     };

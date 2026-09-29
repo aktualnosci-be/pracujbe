@@ -981,6 +981,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   klucza `companyProfile.metaDescription` z samą nazwą dla każdej firmy; pusty/białe znaki opisu
   = fallback na ten klucz. Dotyczy też `og:description`/`twitter.description`. Dowód: unit
   `company-profile-seo` (kontrola ujemna: ogólny klucz nie trafia do metadanych przy niepustym opisie).
+  Logo, strona WWW i język opisu (#686/#708, migracja `0975` — numer tymczasowy): profil pokazuje
+  zatwierdzoną (0156) stronę WWW jako nazwany link zewnętrzny (host + ścieżka, nowa karta zapowiedziana
+  czytnikowi, `rel="noopener noreferrer nofollow"`) i logo — ale obraz tylko z hosta witryny
+  (`profileLogoSrc`: CSP `img-src`/`remotePatterns`, bez żądania do serwera firmy przed zgodą,
+  Invariant #7), inaczej inicjały. `companies.description_locale` (FK `supported_locales`) wskazuje
+  owner/admin w `/employer/firma` (`CompanyDescriptionLocaleForm` → `set_company_description_locale`,
+  audyt `company.description_locale_changed`); trigger zeruje język przy każdej zmianie treści opisu
+  bez jednoczesnego wskazania języka (stary język nie zostaje przy nowym tekście), CHECK — brak języka
+  bez opisu. `get_public_company` zwraca `description_locale`; opis ma `lang`, a gdy jest w innym
+  języku niż strona albo język nieznany — dopisek `companyProfile.descriptionLanguage*`; metadane
+  wersji w innym języku niż opis biorą ogólny `metaDescription` (nieznany = opis, #647). hreflang bez
+  zmian (interfejs i karty ofert są w języku strony). Dowód: `rls.sql` sekcja CDL975 (kontrole ujemne:
+  bez triggera, CHECK, member/obca firma), rollback `0975_…down.sql`, unit `company-profile-view`,
+  `company-description-locale-*`, E2E `company-profile`. **Otwarte:** tłumaczenia opisu z zatwierdzaniem
+  (plan #31), język propozycji opisu po #868/#1197.
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść

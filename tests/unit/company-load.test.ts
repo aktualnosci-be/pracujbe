@@ -37,6 +37,17 @@ describe('company read state', () => {
     });
   });
 
+  it('#708: język opisu firmy — tylko obsługiwany kod; inna wartość z bazy = brak języka', async () => {
+    const row = { id: 'company-1', name: 'Acme', slug: 'acme', status: 'verified', has_description: true };
+    db([{ ...row, description_locale: 'fr' }]);
+    const ok = await getMyCompany();
+    expect(ok.status === 'ok' && ok.company?.descriptionLanguage).toEqual({ hasDescription: true, locale: 'fr' });
+    // Kontrola ujemna: kod spoza języków serwisu nie trafia do formularza.
+    db([{ ...row, description_locale: 'de' }]);
+    const other = await getMyCompany();
+    expect(other.status === 'ok' && other.company?.descriptionLanguage).toEqual({ hasDescription: true, locale: null });
+  });
+
   it('allows creation only when active membership is absent', async () => {
     db([]);
     vi.mocked(getActiveCompany).mockResolvedValue({
@@ -74,6 +85,7 @@ describe('company read state', () => {
         logoUrl: null,
         linksReview: null,
         agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
+        descriptionLanguage: { hasDescription: false, locale: null },
         canEdit: true,
       },
     });
@@ -189,6 +201,7 @@ describe('getCompanyById (#843) — firma z linku decyzji, niezależnie od aktyw
         logoUrl: null,
         linksReview: null,
         agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
+        descriptionLanguage: { hasDescription: false, locale: null },
         canEdit: true,
       },
     });

@@ -193,7 +193,18 @@
     "agencyUnchanged": "Bez zmian.",
     "agencyDemoNotice": "Tryb demonstracyjny — nic nie zostało zapisane.",
     "agencySaving": "Zapisywanie…",
-    "agencySubmit": "Zapisz"
+    "agencySubmit": "Zapisz",
+    "descriptionLocaleTitle": "Język opisu firmy",
+    "descriptionLocaleSubtitle": "Profil firmy ma wersję w każdym języku portalu, a opis jest jeden. Wskaż, w jakim języku go napisano — odwiedzający zobaczy tę informację, gdy przegląda profil w innym języku.",
+    "descriptionLocaleLabel": "Język, w którym napisano opis",
+    "descriptionLocaleNone": "Nie wskazano",
+    "descriptionLocaleHint": "Po zmianie treści opisu trzeba ponownie wskazać jego język.",
+    "descriptionLocaleDescriptionEmpty": "Firma nie ma jeszcze opisu — język można wskazać po dodaniu opisu.",
+    "descriptionLocaleSubmit": "Zapisz język opisu",
+    "descriptionLocaleSaving": "Zapisywanie…",
+    "descriptionLocaleSaved": "Zapisano język opisu.",
+    "descriptionLocaleUnchanged": "Bez zmian — ten język był już zapisany.",
+    "descriptionLocaleDemoNotice": "Tryb demonstracyjny — zmiana nie została zapisana."
   },
   "companyProfile": {
     "metaTitle": "Oferty pracy w firmie {name}",
@@ -204,7 +215,12 @@
     "backToJobs": "Zobacz wszystkie oferty pracy",
     "metaTitlePage": "Oferty pracy w firmie {name} — strona {page}",
     "jobsCount": "{count, plural, one {# aktywna oferta} few {# aktywne oferty} many {# aktywnych ofert} other {# aktywnej oferty}}",
-    "pageStatus": "Strona {page} z {lastPage}"
+    "pageStatus": "Strona {page} z {lastPage}",
+    "logoAlt": "Logo firmy {name}",
+    "websiteLabel": "Strona internetowa",
+    "opensInNewTab": "(otwiera się w nowej karcie)",
+    "descriptionLanguageOther": "Firma napisała opis w języku: {language}.",
+    "descriptionLanguageUnknown": "Opis w brzmieniu podanym przez firmę — może nie być w Twoim języku."
   },
   "common": {
     "appName": "Pracuj.be",
@@ -3017,7 +3033,8 @@
     "auditActionJobPausedForReview": "Wstrzymanie oferty do przeglądu treści",
     "auditActionCompanyAgencyChanged": "Zmiana deklaracji agencji",
     "auditActionCompanyAgencyChecked": "Sprawdzenie numeru uznania agencji",
-    "aiCostsFeatureFraudCheck": "Kontrola treści ofert"
+    "aiCostsFeatureFraudCheck": "Kontrola treści ofert",
+    "auditActionCompanyDescriptionLocale": "Zmiana języka opisu firmy"
   },
   "settings": {
     "title": "Preferencje powiadomień",

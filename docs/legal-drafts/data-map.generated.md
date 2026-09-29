@@ -480,6 +480,7 @@ Tabele w migracjach: 107; z danymi osobowymi: 74; bez danych osobowych: 33.
 - **Migracja:** `supabase/migrations/0002_core_tables.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm
+- **Uwaga:** Każda kolumna tabeli ma wpis w columns albo notPersonal (strażnik tests/unit/privacy-data-map.test.ts, #729). Propozycje strony WWW/logo (`*_pending`) i uzasadnienie odrzucenia (`links_review_reason`) są czyszczone po wycofaniu propozycji albo zastępowane kolejną decyzją (0156); do czasu decyzji widzi je tylko owner/admin firmy i admin portalu. Retencja firm: DO USTALENIA (#486).
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
@@ -497,6 +498,31 @@ Tabele w migracjach: 107; z danymi osobowymi: 74; bez danych osobowych: 33.
 | `agency_recognition_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0167_offer_trust.sql` |
 | `agency_checked_by` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0167_offer_trust.sql` |
 | `agency_check_note` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0167_offer_trust.sql` |
+| `slug` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `description` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `logo_url` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `region` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0002_core_tables.sql` |
+| `website_pending` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0156_company_links_review.sql` |
+| `logo_url_pending` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0156_company_links_review.sql` |
+| `links_review_status` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `links_pending_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `links_review_reason` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `links_reviewed_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0156_company_links_review.sql` |
+| `verified_at` | Zgłoszenia treści i decyzje moderacyjne | `supabase/migrations/0002_core_tables.sql` |
+| `id` | nie dotyczy: Identyfikator techniczny firmy. | — |
+| `status` | nie dotyczy: Status weryfikacji firmy (słownik). | — |
+| `country` | nie dotyczy: Kod kraju siedziby. | — |
+| `size_label` | nie dotyczy: Przedział wielkości firmy (słownik). | — |
+| `industry` | nie dotyczy: Branża (słownik). | — |
+| `is_demo` | nie dotyczy: Znacznik danych demonstracyjnych. | — |
+| `created_at` | nie dotyczy: Czas utworzenia wiersza. | — |
+| `updated_at` | nie dotyczy: Czas ostatniej zmiany wiersza. | — |
+| `deleted_at` | nie dotyczy: Znacznik miękkiego usunięcia. | — |
+| `moderation_decision_id` | nie dotyczy: Powiązanie z decyzją moderacyjną (public.moderation_decisions), nie z osobą. | — |
+| `is_agency` | nie dotyczy: Deklaracja agencji pracy tymczasowej (0167). | — |
+| `agency_check_status` | nie dotyczy: Wynik ręcznego sprawdzenia numeru uznania (słownik, 0167). | — |
+| `agency_checked_at` | nie dotyczy: Czas ręcznego sprawdzenia numeru uznania (0167). | — |
+| `description_locale` | nie dotyczy: Język opisu firmy zadeklarowany przez firmę (#708, 0975) — kod języka serwisu. | — |
 
 ### `public.company_invitations`
 

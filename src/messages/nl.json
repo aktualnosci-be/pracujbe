@@ -193,7 +193,18 @@
     "agencyUnchanged": "Geen wijzigingen.",
     "agencyDemoNotice": "Demomodus — er is niets opgeslagen.",
     "agencySaving": "Opslaan…",
-    "agencySubmit": "Opslaan"
+    "agencySubmit": "Opslaan",
+    "descriptionLocaleTitle": "Taal van de bedrijfsbeschrijving",
+    "descriptionLocaleSubtitle": "Het bedrijfsprofiel bestaat in elke taal van het portaal, maar er is één beschrijving. Geef aan in welke taal ze geschreven is — bezoekers zien dit wanneer ze het profiel in een andere taal bekijken.",
+    "descriptionLocaleLabel": "Taal waarin de beschrijving geschreven is",
+    "descriptionLocaleNone": "Niet opgegeven",
+    "descriptionLocaleHint": "Na een wijziging van de beschrijving moet je de taal opnieuw opgeven.",
+    "descriptionLocaleDescriptionEmpty": "Het bedrijf heeft nog geen beschrijving — de taal kan worden opgegeven zodra er een beschrijving is.",
+    "descriptionLocaleSubmit": "Taal van beschrijving opslaan",
+    "descriptionLocaleSaving": "Opslaan…",
+    "descriptionLocaleSaved": "Taal van de beschrijving opgeslagen.",
+    "descriptionLocaleUnchanged": "Geen wijziging — deze taal was al opgeslagen.",
+    "descriptionLocaleDemoNotice": "Demomodus — de wijziging is niet opgeslagen."
   },
   "companyProfile": {
     "metaTitle": "Vacatures bij {name}",
@@ -204,7 +215,12 @@
     "backToJobs": "Bekijk alle vacatures",
     "metaTitlePage": "Vacatures bij {name} — pagina {page}",
     "jobsCount": "{count, plural, one {# actieve vacature} other {# actieve vacatures}}",
-    "pageStatus": "Pagina {page} van {lastPage}"
+    "pageStatus": "Pagina {page} van {lastPage}",
+    "logoAlt": "Logo van {name}",
+    "websiteLabel": "Website",
+    "opensInNewTab": "(opent in een nieuw tabblad)",
+    "descriptionLanguageOther": "Het bedrijf schreef de beschrijving in het {language}.",
+    "descriptionLanguageUnknown": "Beschrijving zoals opgegeven door het bedrijf — mogelijk niet in jouw taal."
   },
   "common": {
     "appName": "Pracuj.be",
@@ -3017,7 +3033,8 @@
     "auditActionJobPausedForReview": "Vacature gepauzeerd voor controle",
     "auditActionCompanyAgencyChanged": "Wijziging aangifte uitzendbureau",
     "auditActionCompanyAgencyChecked": "Controle erkenningsnummer uitzendbureau",
-    "aiCostsFeatureFraudCheck": "Controle vacatureteksten"
+    "aiCostsFeatureFraudCheck": "Controle vacatureteksten",
+    "auditActionCompanyDescriptionLocale": "Taal bedrijfsbeschrijving gewijzigd"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",

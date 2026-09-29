@@ -593,7 +593,42 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       agency_recognition_number: 'company',
       agency_checked_by: 'reference',
       agency_check_note: 'moderation',
+      // Publiczny profil firmy (#591): opis i logo mogą identyfikować osobę (jednoosobowa działalność).
+      slug: 'company',
+      description: 'company',
+      logo_url: 'company',
+      region: 'company',
+      // 0156 (#729): propozycja nowej strony WWW/logo czeka na decyzję admina — niepubliczna do
+      // zatwierdzenia; stan i historia decyzji to dane moderacji, uzasadnienie odrzucenia pisze admin.
+      website_pending: 'company',
+      logo_url_pending: 'company',
+      links_review_status: 'moderation',
+      links_pending_at: 'moderation',
+      links_review_reason: 'moderation',
+      links_reviewed_at: 'moderation',
+      verified_at: 'moderation',
     },
+    notPersonal: {
+      id: 'Identyfikator techniczny firmy.',
+      status: 'Status weryfikacji firmy (słownik).',
+      country: 'Kod kraju siedziby.',
+      size_label: 'Przedział wielkości firmy (słownik).',
+      industry: 'Branża (słownik).',
+      is_demo: 'Znacznik danych demonstracyjnych.',
+      created_at: 'Czas utworzenia wiersza.',
+      updated_at: 'Czas ostatniej zmiany wiersza.',
+      deleted_at: 'Znacznik miękkiego usunięcia.',
+      moderation_decision_id: 'Powiązanie z decyzją moderacyjną (public.moderation_decisions), nie z osobą.',
+      is_agency: 'Deklaracja agencji pracy tymczasowej (0167).',
+      agency_check_status: 'Wynik ręcznego sprawdzenia numeru uznania (słownik, 0167).',
+      agency_checked_at: 'Czas ręcznego sprawdzenia numeru uznania (0167).',
+      description_locale: 'Język opisu firmy zadeklarowany przez firmę (#708, 0975) — kod języka serwisu.',
+    },
+    note:
+      'Każda kolumna tabeli ma wpis w columns albo notPersonal (strażnik tests/unit/privacy-data-map.test.ts, #729). ' +
+      'Propozycje strony WWW/logo (`*_pending`) i uzasadnienie odrzucenia (`links_review_reason`) są czyszczone po ' +
+      'wycofaniu propozycji albo zastępowane kolejną decyzją (0156); do czasu decyzji widzi je tylko owner/admin firmy ' +
+      'i admin portalu. Retencja firm: DO USTALENIA (#486).',
   },
   'public.company_members': {
     activities: ['companies'],
