@@ -280,7 +280,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
       </section>
 
       {/* Weryfikacja VAT w VIES (#92) */}
-      <CompanyViesCheck companyId={company.id} initial={company.vies} />
+      <CompanyViesCheck companyId={company.id} initial={company.vies} autoRetry={company.viesAutoRetry} />
 
       {/* 0167: agencja pracy tymczasowej — numer uznania sprawdzany ręcznie w rejestrze regionu */}
       <section aria-labelledby="company-agency-heading" className={PANEL} data-testid="admin-company-agency">

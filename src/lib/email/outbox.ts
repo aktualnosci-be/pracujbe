@@ -18,6 +18,7 @@ import { alertOffOneClickUrl, alertOffPageUrl, createAlertOffToken } from '@/lib
 import { newsletterJobsFromPayload } from '@/lib/email/newsletter-delivery';
 import {
   emailFromEnv,
+  emailFromProblem,
   replyToFromEnv,
   marketingSenderFromEnv,
   senderIdentityFromEnv,
@@ -29,6 +30,7 @@ import { captureError } from '@/lib/error-report';
 import { isProductionMode } from '@/lib/env';
 import {
   emailProviderFromEnv,
+  MAIL_CONFIG_ERROR_MESSAGE,
   mailTransportFromEnv,
   MailSendError,
   type MailMessage,
@@ -89,6 +91,8 @@ import {
  */
 
 const MAX_ATTEMPTS = 5;
+/** #1214: po błędzie konfiguracji kolejka czeka tyle, zanim worker spróbuje ponownie. */
+export const CONFIG_RETRY_MS = 10 * 60_000;
 
 /**
  * #628: dzierżawa wiersza (sekundy) — przekazywana jawnie do `claim_email_batch`; odnawia ją
@@ -318,6 +322,12 @@ export interface ProcessResult {
    */
   leaseLost?: number;
   /**
+   * #1214: wiersze odłożone z powodu błędu KONFIGURACJI nadawcy/dostawcy (wspólnego dla wszystkich
+   * listów) — bez zużycia próby, z kodem `EMAIL_PROVIDER_CONFIG` w `error_message` (czujka
+   * `email_provider_config`). Paczka z takim błędem zwraca `ok: false` (503 — alarm cronu).
+   */
+  configBlocked?: number;
+  /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
    * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
    * cronu, gdy nic nie wychodzi. `true` = przetworzono (także pustą kolejkę) albo oczekiwane
@@ -342,6 +352,13 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     };
   }
 
+  // #1214: nieużywalny `EMAIL_FROM` dotyczy KAŻDEGO listu — nie pobieramy kolejki (nic nie
+  // przechodzi w `failed`, listy czekają na poprawkę zmiennej). Alarm: `email_sender_invalid`
+  // w `/api/health/ops`, `emailProviderReady: false` w `/api/health`, 503 cronu w produkcji.
+  if (emailFromProblem(process.env)) {
+    return { processed: 0, sent: 0, failed: 0, skipped: 'email sender invalid', ok: !isProductionMode() };
+  }
+
   // Atomowy claim (RPC 0021: FOR UPDATE SKIP LOCKED + dzierżawa locked_at) — dwa równoległe
   // workery NIE pobiorą tego samego wiersza, więc brak podwójnej wysyłki (P2#6). Własna
   // transakcja: dzierżawa jest zatwierdzona, zanim zaczniemy wysyłać.
@@ -364,8 +381,36 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let deferred = 0;
   let suppressed = 0;
   let leaseLost = 0;
+  let configBlocked = 0;
   // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
   const exhausted = new Map<string, string>();
+  // #1214: po pierwszym błędzie konfiguracji reszta paczki czeka (bez prób wysyłki).
+  let configRetryAt: string | null = null;
+
+  /**
+   * #1214: odłożenie z powodu błędu konfiguracji — jak odmowa budżetu (`attempts` bez zmian),
+   * ale z kodem `EMAIL_PROVIDER_CONFIG` w `error_message`, który liczy `ops_metrics()`
+   * (`email.configBlocked`, alarm). Udana wysyłka po poprawce ustawia `status = 'sent'`.
+   */
+  async function deferForConfig(rowId: string, lockToken: string, nextAttemptAt: string): Promise<void> {
+    try {
+      const { rowCount } = await withServiceRole((tx) =>
+        execute(
+          tx,
+          'email.outbox.defer-config',
+          `UPDATE public.email_deliveries
+              SET locked_at = NULL, lock_token = NULL, next_attempt_at = $2, error_message = $4
+            WHERE id = $1 AND lock_token = $3`,
+          [rowId, nextAttemptAt, lockToken, MAIL_CONFIG_ERROR_MESSAGE],
+        ),
+      );
+      if (rowCount === 0) return;
+    } catch (deferErr) {
+      captureError(deferErr, { area: 'email.outbox.deferConfig', deliveryId: rowId });
+    }
+    deferred += 1;
+    configBlocked += 1;
+  }
 
   /** Zwalnia dzierżawę i odkłada wiersz; `attempts` bez zmian — outbox pozostaje ponawialny. */
   async function defer(rowId: string, lockToken: string, nextAttemptAt: string): Promise<void> {
@@ -440,6 +485,10 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   }
 
   for (const row of queue) {
+    if (configRetryAt) {
+      await deferForConfig(row.id, row.lock_token, configRetryAt);
+      continue;
+    }
     const pool = emailSendPool(row.template);
     const waitUntil = exhausted.get(pool);
     if (waitUntil) {
@@ -566,6 +615,14 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       }
       sent += 1;
     } catch (err) {
+      if (err instanceof MailSendError && err.code === 'configuration_error') {
+        // #1214: zły nadawca/domena/klucz/konto SMTP — ponowienie tego listu nic nie da, ale
+        // to też NIE jest odrzucenie listu: po poprawce konfiguracji wyjdzie. Bez zużycia próby.
+        configRetryAt = new Date(Date.now() + CONFIG_RETRY_MS).toISOString();
+        captureError(err, { area: 'email.outbox.config', deliveryId: row.id });
+        await deferForConfig(row.id, row.lock_token, configRetryAt);
+        continue;
+      }
       const attempts = row.attempts + 1;
       // Trwałe odrzucenie listu przez dostawcę (`delivery_failed`) ponowienie nie naprawi — kończymy
       // od razu, bez zajmowania okna wysyłki kolejnymi próbami. Awaria przejściowa
@@ -610,5 +667,14 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     }
   }
 
-  return { processed: queue.length, sent, failed, deferred, suppressed, leaseLost, ok: true };
+  return {
+    processed: queue.length,
+    sent,
+    failed,
+    deferred,
+    suppressed,
+    leaseLost,
+    ...(configBlocked > 0 ? { configBlocked } : {}),
+    ok: configBlocked === 0,
+  };
 }
