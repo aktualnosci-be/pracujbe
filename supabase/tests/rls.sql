@@ -14438,6 +14438,132 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
+-- SRCH1076. Części gmin (dzielnice) w filtrze, liczniku, facetach, wyszukiwaniu miasta i alertach
+--           zapisanych wyszukiwań (#1076, audyt SRCH-01, migracja 0963/tymczasowa): filtr po gminie
+--           obejmuje aktywne części gminy (`parent_location_id`), filtr po części zwraca tylko ją,
+--           facet „miasto” grupuje część pod gminą nadrzędną. Kontrole ujemne: funkcje z 0153.
+-- ============================================================================
+\set SRCO  'f9500000-0000-0000-0000-000000030000'
+\set SRJ1  'f9500000-0000-0000-0000-000000030001'
+\set SRJ2  'f9500000-0000-0000-0000-000000030002'
+\set SRJ3  'f9500000-0000-0000-0000-000000030003'
+\set SRJ4  'f9500000-0000-0000-0000-000000030004'
+\set SRJ5  'f9500000-0000-0000-0000-000000030005'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, status) values (:'SRCO', 'SRCH1076 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'SRJ1',:'SRCO','sr1076-a','Dzielnica SRCH1076','warehouse','permanent','Leuven','Flandria','active','pl', now()),
+  (:'SRJ2',:'SRCO','sr1076-b','Dzielnica SRCH1076','warehouse','permanent','Heverlee','Flandria','active','pl', now()),
+  (:'SRJ3',:'SRCO','sr1076-c','Dzielnica SRCH1076','warehouse','permanent','Kessel-Lo','Flandria','active','pl', now()),
+  (:'SRJ4',:'SRCO','sr1076-d','Dzielnica SRCH1076','warehouse','permanent','Haren','Bruksela','active','pl', now()),
+  (:'SRJ5',:'SRCO','sr1076-e','Dzielnica SRCH1076','warehouse','permanent','Aalst','Flandria','active','pl', now());
+-- Punkt wyjścia: trigger 0153 przypisał oferty do części (Heverlee, Kessel-Lo, Haren) i gmin.
+select pg_temp.assert(
+  (select array_agg(l.kind || ':' || coalesce(p.slug, '-') order by j.slug)
+     from public.jobs j join public.locations l on l.id = j.location_id
+     left join public.locations p on p.id = l.parent_location_id where j.company_id = :'SRCO')
+  = array['municipality:-', 'section:leuven', 'section:leuven', 'section:brussels', 'municipality:-'],
+  'SRCH1076-0 oferty w częściach gmin mają location_id części z gminą nadrzędną');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- SRCH1076-1: filtr po gminie obejmuje jej części (lista + licznik), w każdym języku/pisowni.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Leuven']))
+    = array['sr1076-a', 'sr1076-b', 'sr1076-c']
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 3
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Louvain']) = 3
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Brussel']) = 1
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven', 'Aalst']) = 4,
+  'SRCH1076-1 lista i licznik: filtr po gminie obejmuje oferty jej części');
+-- SRCH1076-2: filtr po samej części zwraca tylko tę część (bez rodzeństwa i gminy).
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Heverlee']))
+    = array['sr1076-b']
+  and public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Kessel-Lo']) = 1,
+  'SRCH1076-2 filtr po części gminy zwraca tylko część');
+-- SRCH1076-3: facet miasta = jedna pozycja na gminę nadrzędną; filtr w facetach spójny z listą.
+select pg_temp.assert(
+  (select array_agg(key || ':' || total order by key)
+     from public.get_public_job_filter_facets('pl', 'srch1076') where dimension = 'location')
+    = array['Aalst:1', 'Brussels:1', 'Leuven:3']
+  and (select total from public.get_public_job_filter_facets('pl', 'srch1076', p_locations => array['Leuven'])
+        where dimension = 'total') = 3
+  and (select total from public.get_public_job_filter_facets('pl', 'srch1076', p_locations => array['Leuven'])
+        where dimension = 'category' and key = 'warehouse') = 3,
+  'SRCH1076-3 facety: części gminy w pozycji gminy, licznik = lista');
+-- SRCH1076-4: wyszukiwanie tekstowe miasta (p_city) rozpoznaje gminę i dokłada jej części.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', 'Leuven') = 3
+  and public.get_public_jobs_count('pl', 'srch1076', 'Louvain') = 3
+  and public.get_public_jobs_count('pl', 'srch1076', 'Heverlee') = 1
+  and public.get_public_jobs_count('pl', 'srch1076', 'heve') = 1,
+  'SRCH1076-4 search_city_candidates: gmina obejmuje części, fragment tekstu jak dotąd');
+reset role;
+-- SRCH1076-5: alerty zapisanych wyszukiwań (saved_search_jobs_after) widzą te same oferty.
+set role service_role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_matching_jobs('{"locations":["Leuven"]}'::jsonb, 'pl', now() - interval '2 days')) = 3
+  and (select count(*) from public.saved_search_matching_jobs('{"locations":["Heverlee"]}'::jsonb, 'pl', now() - interval '2 days')) = 1
+  and (select count(*) from public.saved_search_matching_jobs('{"city":"Leuven"}'::jsonb, 'pl', now() - interval '2 days')) = 3,
+  'SRCH1076-5 zapisane wyszukiwania: filtr po gminie obejmuje części');
+reset role;
+-- SRCH1076-6: nieaktywna część nie wchodzi do gminy; nieaktywna gmina — facet wraca do nazw części.
+savepoint sr1076_6;
+update public.locations set is_active = false where slug = 'heverlee-leuven';
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 2,
+  'SRCH1076-6 nieaktywna część nie jest dołączana do gminy');
+rollback to savepoint sr1076_6;
+update public.locations set is_active = false where slug = 'leuven';
+select pg_temp.assert(
+  (select array_agg(key order by key) from public.get_public_job_filter_facets('pl', 'srch1076')
+    where dimension = 'location' and key not in ('Aalst', 'Brussels'))
+  = array['Heverlee', 'Kessel-Lo', 'Leuven'],
+  'SRCH1076-6b facet bez aktywnej gminy nadrzędnej: pozycje części osobno');
+rollback to savepoint sr1076_6;
+
+-- KONTROLA UJEMNA (SRCH1076-N1): filtr z 0153 (sama gmina) gubi oferty części gmin.
+savepoint sr1076_n1;
+create or replace function public.location_filter_ids(p_values text[])
+returns uuid[] language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select coalesce(array_agg(distinct a.location_id), '{}'::uuid[])
+  from unnest(p_values[1:100]) v
+  join public.location_aliases a on a.alias_key = public.city_key(left(v, 200))
+  join public.locations l on l.id = a.location_id and l.is_active;
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', p_locations => array['Leuven']) = 1
+  and (select array_agg(slug) from public.get_public_jobs('pl', 'srch1076', p_locations => array['Leuven'])) = array['sr1076-a'],
+  'SRCH1076-N1 kontrola ujemna: location_filter_ids z 0153 pomija dzielnice gminy');
+reset role;
+rollback to savepoint sr1076_n1;
+-- KONTROLA UJEMNA (SRCH1076-N2): search_city_candidates z 0153 nie dokłada części gminy.
+savepoint sr1076_n2;
+create or replace function public.search_city_candidates(p_city text)
+returns setof uuid language sql stable strict
+set search_path = public, pg_temp as $$
+  select j.id from public.jobs j
+  where j.status = 'active' and j.deleted_at is null
+    and public.search_fold(j.city) like public.search_like_pattern(p_city) escape '\'
+  union
+  select j.id from public.jobs j
+  where j.status = 'active' and j.deleted_at is null
+    and j.location_id = (select public.resolve_location_id(p_city));
+$$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'srch1076', 'Leuven') = 1,
+  'SRCH1076-N2 kontrola ujemna: search_city_candidates z 0153 nie łączy gminy z jej częściami');
+reset role;
+rollback to savepoint sr1076_n2;
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- EP05. Stronicowanie kursorem list panelu pracodawcy (audyt P1-05, migracja 0152).
 --       get_company_matches_page: najlepsze dopasowanie na kandydata w porządku
 --       (score DESC, candidate_id ASC), kursor w obu kierunkach, remis wyniku na granicy strony,
