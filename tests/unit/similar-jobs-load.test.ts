@@ -10,7 +10,7 @@ import { captureError } from '@/lib/error-report';
 
 const adapters = vi.hoisted(() => ({ list: vi.fn(), pool: {} }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
-vi.mock('@/lib/db/public-jobs', () => ({ getPublicJobs: adapters.list }));
+vi.mock('@/lib/db/public-jobs', () => ({ getPublicJobs: adapters.list, getPublicJobsPage: adapters.list }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 afterEach(() => {

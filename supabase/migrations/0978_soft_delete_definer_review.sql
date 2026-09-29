@@ -1,15 +1,15 @@
 -- =============================================================================
 -- 0978 — numer tymczasowy (nadaje integrator). Audyt 2026-09-28: DC-06 (#1111), część 2.
--- Zależy od 0966 (#1202: polityki odczytu i strażnik `trg_soft_delete_contract`).
+-- Zależy od 0189 (#1202: polityki odczytu i strażnik `trg_soft_delete_contract`).
 --
 -- Przegląd wszystkich funkcji SECURITY DEFINER czytających albo zmieniających tabele z kolumną
 -- `deleted_at` (profiles, candidate_profiles, companies, employer_profiles, jobs, applications,
 -- offers, conversations, messages, files). Funkcje SECURITY DEFINER omijają RLS, więc warunek
--- `deleted_at IS NULL` z polityk 0966 ich nie obejmuje. Poprawione tu (pomijają albo odrzucają
+-- `deleted_at IS NULL` z polityk 0189 ich nie obejmuje. Poprawione tu (pomijają albo odrzucają
 -- usunięty wiersz):
---   * is_admin, current_profile_role — usunięty profil nie ma roli (current_profile_role zwraca
---     '' zamiast NULL, więc wzorzec `current_profile_role() <> 'candidate'` odrzuca także brak
---     profilu — dotąd NULL przepuszczał warunek);
+--   * current_profile_role — usunięty profil nie ma roli (zwraca '' zamiast NULL, więc wzorzec
+--     `current_profile_role() <> 'candidate'` odrzuca także brak profilu — dotąd NULL przepuszczał
+--     warunek); is_admin sprawdza `deleted_at` od 0185 (bez zmian tutaj);
 --   * can_access_application, can_access_offer, is_job_company_member, is_job_manager,
 --     is_conversation_member, conversation_created_by_me, owns_candidate_profile — pomocnicze
 --     funkcje RLS i RPC: usunięty wiersz nie daje dostępu (get_or_create_conversation, załączniki,
@@ -22,16 +22,10 @@
 --     nie tworzą relacji firma–kandydat.
 -- Pozostałe funkcje: lista wyjątków z uzasadnieniem w tests/unit/soft-delete-contract.test.ts
 -- (strażnik czyta najnowsze definicje z migracji). Ciała skopiowane z najnowszych definicji
--- (0019, 0040, 0039, 0009, 0033, 0171, 0123, 0175, 0093, 0150) — zmienione tylko warunki.
+-- (0040, 0039, 0009, 0033, 0171, 0123, 0175, 0093, 0150) — zmienione tylko warunki.
 --
 -- Rollback: supabase/rollback/0978_soft_delete_definer_review.down.sql.
 -- =============================================================================
-
-create or replace function public.is_admin()
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
-  select exists (select 1 from public.profiles
-                  where id = auth.uid() and role = 'admin' and deleted_at is null);
-$$;
 
 create or replace function public.current_profile_role()
 returns text language sql stable security definer set search_path = public, pg_temp as $$

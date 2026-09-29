@@ -12,6 +12,7 @@ const jobs = vi.hoisted(() => ({
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
   getJobsAvailableLocales: vi.fn(),
+  getJobsCount: vi.fn(),
 }));
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' }, isProductionDeployment: () => true }));
 vi.mock('@/lib/jobs', () => jobs);
@@ -28,6 +29,7 @@ beforeEach(() => {
   jobs.getCategoryCounts.mockResolvedValue({});
   jobs.getCityCounts.mockResolvedValue({});
   jobs.getJobs.mockResolvedValue({ jobs: [job], total: 1, page: 1, pageSize: 100 });
+  jobs.getJobsCount.mockResolvedValue(1);
   jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['pl', 'nl', 'fr', 'en'] });
 });
 
@@ -63,8 +65,7 @@ describe('cache sitemap (#1042)', () => {
     await Promise.all(Array.from({ length: 8 }, () => generateSitemaps()));
     await Promise.all(Array.from({ length: 8 }, () => generateSitemaps()));
     // Jedno zapytanie licznikowe na listę partii, niezależnie od liczby żądań (także robots.txt).
-    const probeCalls = jobs.getJobs.mock.calls.filter(([params]) => params?.pageSize === 1);
-    expect(probeCalls).toHaveLength(1);
+    expect(jobs.getJobsCount).toHaveBeenCalledTimes(1);
   });
 
   it('błąd odczytu nie jest cache’owany — kolejne żądanie próbuje ponownie', async () => {

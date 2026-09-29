@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0966 — kontrakt soft-delete i limit CV na konto (#1111, #1101).
+-- Rollback 0189 — kontrakt soft-delete i limit CV na konto (#1111, #1101).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT.
 -- Przywraca polityki odczytu z 0039 (applications, offers) i 0009 (conversations, messages).

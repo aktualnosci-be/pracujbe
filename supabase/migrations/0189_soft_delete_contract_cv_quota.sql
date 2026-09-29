@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0966 — numer tymczasowy (nadaje integrator). Audyt 2026-09-28: DC-06 (#1111) i CF-06 (#1101).
+-- 0189 — numer tymczasowy (nadaje integrator). Audyt 2026-09-28: DC-06 (#1111) i CF-06 (#1101).
 --
 -- 1. Kontrakt soft-delete (`deleted_at`) dla tabel procesu: applications, offers, conversations,
 --    messages. Polityki ODCZYTU (0039 / 0009) nie sprawdzały `deleted_at`, więc logicznie usunięty
@@ -18,7 +18,7 @@
 --    łącznie (`CV_ACCOUNT_LIMIT`, SQLSTATE 54000), serializowane blokadą doradczą właściciela.
 --    Lustro TS: `CV_MAX_FILES_PER_ACCOUNT`/`CV_MAX_TOTAL_BYTES_PER_ACCOUNT` (validation/cv-file.ts).
 --
--- Rollback: supabase/rollback/0966_soft_delete_contract_cv_quota.down.sql.
+-- Rollback: supabase/rollback/0189_soft_delete_contract_cv_quota.down.sql.
 -- =============================================================================
 
 -- --- 1. Polityki odczytu -----------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 import { env, isProductionDeployment } from '@/lib/env';
+import { panelDisallowRules } from '@/lib/seo/robots-rules';
 import { generateSitemaps } from './sitemap';
 
 /**
@@ -43,7 +44,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/api/', '/*/candidate', '/*/employer', '/*/admin'],
+      disallow: ['/api/', ...panelDisallowRules()],
     },
     sitemap: sitemaps.map(({ id }) => `${base}/sitemap/${id}.xml`),
     host: base,

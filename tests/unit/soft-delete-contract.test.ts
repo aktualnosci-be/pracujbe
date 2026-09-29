@@ -1,5 +1,5 @@
 /**
- * Kontrakt soft-delete dla funkcji SECURITY DEFINER (#1111, DC-06; migracje 0966 i 0978).
+ * Kontrakt soft-delete dla funkcji SECURITY DEFINER (#1111, DC-06; migracje 0189 i 0978).
  *
  * Funkcja SECURITY DEFINER omija RLS, więc warunek `deleted_at IS NULL` z polityk odczytu jej nie
  * obejmuje. Strażnik czyta NAJNOWSZĄ definicję każdej funkcji z migracji (kolejność jak
@@ -166,11 +166,11 @@ export function tableChecked(rawBody: string, table: string): boolean {
  * Kategorie uzasadnień:
  *   ERASE    — usunięcie konta/retencja/GC: musi objąć także wiersze usunięte logicznie;
  *   GUARD    — trigger/blokada: pominięcie usuniętego wiersza osłabiłoby ochronę (fail-safe);
- *   WRITE    — zapis na usuniętym wierszu odrzuca trg_soft_delete_contract (0966) każdą ścieżką;
+ *   WRITE    — zapis na usuniętym wierszu odrzuca trg_soft_delete_contract (0189) każdą ścieżką;
  *   NEW      — dotyczy wiersza NEW/tworzonego w tej samej transakcji (nie może być usunięty);
  *   SESSION  — dotyczy profilu z sesji (auth.uid()); sesja usuniętego profilu jest odrzucana
- *              (src/lib/auth/session.ts: `deleted_at IS NULL`), a is_admin/current_profile_role
- *              odrzucają go także w bazie (0978);
+ *              (src/lib/auth/session.ts: `deleted_at IS NULL`), a is_admin (0185) i
+ *              current_profile_role (0978) odrzucają go także w bazie;
  *   FORMAT   — tylko formatowanie/metadane znanego już identyfikatora (nazwa, język), bez decyzji
  *              o dostępie;
  *   ADMIN    — odczyt dla administratora albo operatora (dziennik, eksport, moderacja, metryki).
@@ -180,7 +180,7 @@ export function tableChecked(rawBody: string, table: string): boolean {
  */
 const ERASE = 'ERASE: usunięcie konta, retencja albo sprzątanie obejmuje także wiersze usunięte logicznie';
 const GUARD = 'GUARD: strażnik/blokada — pominięcie usuniętego wiersza osłabiłoby ochronę';
-const WRITE = 'WRITE: zapis na usuniętym wierszu odrzuca trg_soft_delete_contract (0966), stan sprawdza też can_access_*/polityka odczytu';
+const WRITE = 'WRITE: zapis na usuniętym wierszu odrzuca trg_soft_delete_contract (0189), stan sprawdza też can_access_*/polityka odczytu';
 const NEW = 'NEW: wiersz tworzony albo NEW triggera w tej samej transakcji';
 const SESSION = 'SESSION: profil z sesji; sesja usuniętego profilu jest odrzucana (session.ts), rolę odrzuca current_profile_role (0978)';
 const FORMAT = 'FORMAT: formatowanie danych identyfikatora już zweryfikowanego przez wywołującego';
@@ -316,7 +316,7 @@ describe('soft-delete: funkcje SECURITY DEFINER (#1111)', () => {
   });
 
   it('funkcje poprawione w 0978 spełniają kontrakt bez wyjątków', () => {
-    const fixed = ['is_admin', 'current_profile_role', 'can_access_application', 'can_access_offer',
+    const fixed = ['current_profile_role', 'can_access_application', 'can_access_offer',
       'is_job_company_member', 'is_job_manager', 'is_conversation_member', 'conversation_created_by_me',
       'owns_candidate_profile', 'email_recipient_authorized', 'ensure_candidate_profile'];
     for (const fn of fixed) {
@@ -333,7 +333,9 @@ describe('soft-delete: funkcje SECURITY DEFINER (#1111)', () => {
   it('kontrola ujemna: definicje sprzed 0978 i syntetyczna funkcja są wykrywane', () => {
     const withoutFix = files.filter((f) => !f.name.endsWith('_soft_delete_definer_review.sql'));
     const old = latestFunctions(withoutFix);
-    expect(tableChecked(old.get('public.is_admin')!.body, 'profiles')).toBe(false);
+    expect(tableChecked(old.get('public.current_profile_role')!.body, 'profiles')).toBe(false);
+    // is_admin sprawdza deleted_at od 0185 — także bez 0978.
+    expect(tableChecked(old.get('public.is_admin')!.body, 'profiles')).toBe(true);
     expect(tableChecked(old.get('public.is_job_manager')!.body, 'jobs')).toBe(false);
     expect(tableChecked(old.get('public.can_access_application')!.body, 'applications')).toBe(false);
     expect(tableChecked(old.get('public.email_recipient_authorized')!.body, 'messages')).toBe(false);

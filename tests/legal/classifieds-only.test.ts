@@ -160,14 +160,22 @@ describe('trasy rekrutacyjne za notFoundUnlessRecruitment()', () => {
   });
 });
 
-describe('invarianty włączane przez kolejne PR-y epiku #1128', () => {
-  // applyToJob, aplikacja gościa, sendOffer, respondToOffer, zmiana statusu, wycofanie i odczyty
-  // historii zgłoszeń/propozycji: `tests/legal/classifieds-process-off.test.ts` (#1130/#1132/#1141/#1144).
-  it.todo('screening, rozmowy/wiadomości → RECRUITMENT_DISABLED przed bazą (fake-db: zero zapytań) (#1129)');
-  it.todo('loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata/aplikacji, /api/files/cv/*) nie zwracają danych (#1129)');
-  it.todo('słownik zakazanych etykiet UI na trasach aktywnych w trybie ogłoszeniowym, 4 języki (#1128, teksty)');
-  it.todo('pozytywnie: lista ofert, szczegół, kreator/publikacja, zapisane oferty/wyszukiwania, konto nie zwracają RECRUITMENT_DISABLED (#1128)');
-});
+/**
+ * Invarianty kolejnych PR-ów epiku #1128 — wszystkie zrealizowane, asercje żyją przy funkcjach
+ * (#1249; dawne `it.todo` z tego pliku):
+ * - applyToJob, aplikacja gościa, sendOffer, respondToOffer, zmiana statusu, wycofanie i odczyty
+ *   historii zgłoszeń/propozycji → `tests/legal/classifieds-process-off.test.ts` (#1130/#1132/#1141/#1144);
+ * - rozmowy/wiadomości i załączniki → `tests/unit/classifieds-messaging-cv-off.test.ts` (#1134/#1138);
+ *   pytania screeningowe → `tests/unit/classifieds-screening-hidden.test.ts`, `save-job-draft-step.test.ts`,
+ *   `job-wizard-screening-mode.test.tsx`, `screening-review.test.ts` (#1135/#1137);
+ * - loadery pracodawcy (kandydaci, top dopasowani, szczegół kandydata) →
+ *   `tests/unit/classifieds-matching-off.test.ts` (#1131/#1133/#1139), szczegół zgłoszenia =
+ *   `GUARDED_ROUTES` wyżej (#1144) i bramki odczytu niżej; dostęp firmy do profili i CV zamyka baza
+ *   (`company_can_view_candidate`, `supabase/tests/rls.sql` sekcja CL1128);
+ * - zakazane obietnice w tekstach publicznych, 4 języki → `tests/unit/classifieds-copy.test.ts` (#1149/#1151);
+ * - strona pozytywna (ścieżki aktywne nie zwracają RECRUITMENT_DISABLED) →
+ *   `tests/legal/classifieds-active-paths.test.ts` (#1249).
+ */
 
 /**
  * Baza (#1140/#1143, migracja 0171): tryb portalu w bazie, strażniki zapisu i dwuklucz.

@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
@@ -48,6 +50,7 @@ export function CompanyAgencyForm({
   recognitionNumber,
   checkStatus,
 }: CompanyAgencyFormProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const router = useRouter();
@@ -63,6 +66,18 @@ export function CompanyAgencyForm({
   const [success, setSuccess] = React.useState<'saved' | 'unchanged' | 'demo' | null>(null);
   const [pending, startTransition] = React.useTransition();
   const numberRef = React.useRef<HTMLInputElement | null>(null);
+  const alertRef = React.useRef<HTMLDivElement | null>(null);
+  const focusAlertRef = React.useRef(false);
+
+  // #1238: przycisk jest `disabled` na czas zapisu, więc przeglądarka zdejmuje z niego fokus
+  // (spada na <body>). Po wyniku zapisu fokus trafia na komunikat sukcesu albo błędu.
+  React.useEffect(() => {
+    if ((serverError || success) && focusAlertRef.current && alertRef.current) {
+      focusAlertRef.current = false;
+      alertRef.current.focus({ preventScroll: true });
+      alertRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    }
+  }, [serverError, success]);
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -78,11 +93,13 @@ export function CompanyAgencyForm({
       }
     }
     setFieldError(null);
+    focusAlertRef.current = true;
     startTransition(async () => {
       try {
         const res = await updateCompanyAgency(companyId, agency, number);
         if (!res.ok) {
           if (res.field === 'number') {
+            focusAlertRef.current = false;
             setFieldError(res.reason ?? 'required');
             window.setTimeout(() => numberRef.current?.focus(), 0);
           } else {
@@ -99,11 +116,14 @@ export function CompanyAgencyForm({
   };
 
   return (
-    <form onSubmit={submit} noValidate className="min-w-0 space-y-5" data-testid="company-agency-form">
+    <form method="post" onSubmit={submit} noValidate className="min-w-0 space-y-5" data-testid="company-agency-form">
+      <NoScriptFormNotice />
       {serverError ? (
         <div
+          ref={alertRef}
+          tabIndex={-1}
           role="alert"
-          className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-error/30 bg-error/10 text-error-text max-[600px]:flex-row')}
+          className={cn(NOTICE, 'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 my-0 items-start justify-start gap-3 border-error/30 bg-error/10 text-error-text max-[600px]:flex-row')}
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(toUserMessageKey(serverError))}</p>
@@ -111,8 +131,10 @@ export function CompanyAgencyForm({
       ) : null}
       {success ? (
         <div
+          ref={alertRef}
+          tabIndex={-1}
           role="status"
-          className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-success/30 bg-success/10 text-foreground max-[600px]:flex-row')}
+          className={cn(NOTICE, 'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 my-0 items-start justify-start gap-3 border-success/30 bg-success/10 text-foreground max-[600px]:flex-row')}
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
           <p>
@@ -178,7 +200,7 @@ export function CompanyAgencyForm({
         </div>
       ) : null}
 
-      <Button type="submit" disabled={pending} aria-busy={pending || undefined} className={BTN_PRIMARY}>
+      <Button type="submit" disabled={pending || !hydrated} aria-busy={pending || undefined} className={BTN_PRIMARY}>
         {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
         {pending ? t('agencySaving') : t('agencySubmit')}
       </Button>

@@ -1,13 +1,7 @@
 -- Rollback 0978 (numer tymczasowy): przywraca definicje funkcji sprzed przeglądu soft-delete (#1111).
--- Ciała skopiowane z 0019, 0040, 0039, 0009, 0033, 0171, 0123, 0175, 0093, 0150. Granty bez zmian
+-- Ciała skopiowane z 0040, 0039, 0009, 0033, 0171, 0123, 0175, 0093, 0150. Granty bez zmian
 -- (create or replace zachowuje uprawnienia). Test: supabase/tests/rls.sql sekcja SDR1111-R.
 -- search_path z `, pg_temp` jak po 0067 (strażnik role-guard.sql).
-
--- z 0019_admin.sql
-create or replace function public.is_admin()
-returns boolean language sql stable security definer set search_path = public, pg_temp as $$
-  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
-$$;
 
 -- z 0040_state_and_role_hardening.sql
 create or replace function public.current_profile_role()
