@@ -20681,24 +20681,26 @@ select pg_temp.assert(not exists (select 1 from public.saved_searches where id =
 -- PS969-5 (#810): digest zakolejkowany PRZED pauzą nie wychodzi — claim i kontrola tuż przed
 -- wysyłką wygaszają go (oba szablony alertu). Bez pauzy (przeszłość) wychodzi.
 select id as psb_search from public.saved_searches where profile_id = :'PSB' and company_id is null limit 1 \gset
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q3',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select public.enqueue_email(:'PSB', 'jobPublished', 'job', :'PSJ1', 'ps969-q4', '{"jobTitle":"Magazijnier PS969 pauza"}'::jsonb);
+select id as psq3 from public.email_deliveries where idempotency_key = 'ps969-q3' \gset
+select id as psq4 from public.email_deliveries where idempotency_key = 'ps969-q4' \gset
+-- Przed pauzą: q3 i q4 zostają claimowane (dzierżawa workera trwa do kontroli przed wysyłką).
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c where c.id in (:'psq3', :'psq4')) = 2,
+  'PS969-5a bez pauzy claim wydaje digest obserwacji i inny mail (tryb ogłoszeniowy)');
+select lock_token as psq3_lt from public.email_deliveries where id = :'psq3' \gset
+select lock_token as psq4_lt from public.email_deliveries where id = :'psq4' \gset
+-- Limit dobowy jobMatch z wcześniejszej sekcji (SS45) nie dotyczy tego testu.
+update public.email_recipient_budget_config set max_per_recipient = 1000 where scope = 'template:jobMatch';
 select public.enqueue_email(:'PSB', 'jobMatch', 'saved_search', :'psb_search', 'ps969-q1',
   '{"searchName":"Magazyn B PS969","count":1}'::jsonb);
 select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q2',
   '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
-select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q3',
-  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
-select public.enqueue_email(:'PSB', 'jobOffer', 'offer', :'PSJ1', 'ps969-q4', '{}'::jsonb);
 select id as psq1 from public.email_deliveries where idempotency_key = 'ps969-q1' \gset
 select id as psq2 from public.email_deliveries where idempotency_key = 'ps969-q2' \gset
-select id as psq3 from public.email_deliveries where idempotency_key = 'ps969-q3' \gset
-select id as psq4 from public.email_deliveries where idempotency_key = 'ps969-q4' \gset
--- Przed pauzą: q3 i q4 zostają claimowane (q1/q2 czekają w kolejce na pauzę).
-select pg_temp.assert(
-  (select count(*) from public.claim_email_batch(100000) c where c.id in (:'psq3', :'psq4')) = 2,
-  'PS969-5a bez pauzy claim wydaje digest obserwacji i inny mail');
-select lock_token as psq3_lt from public.email_deliveries where id = :'psq3' \gset
-select lock_token as psq4_lt from public.email_deliveries where id = :'psq4' \gset
--- Konto B ustawia pauzę PO zakolejkowaniu.
+-- q1/q2 czekają w kolejce (niewydane) — konto B ustawia pauzę PO zakolejkowaniu.
 set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
 select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 2);
 reset role; reset app.current_uid;
@@ -20711,7 +20713,7 @@ set role service_role;
 select pg_temp.assert(public.email_delivery_send_check(:'psq3'::uuid, :'psq3_lt'::uuid) = 'suppressed_alert_paused',
   'PS969-5c pauza po claimie → kontrola tuż przed wysyłką zatrzymuje digest obserwacji');
 select pg_temp.assert(public.email_delivery_send_check(:'psq4'::uuid, :'psq4_lt'::uuid) is null,
-  'PS969-5d pauza nie dotyka innych powiadomień konta (propozycja wychodzi)');
+  'PS969-5d pauza nie dotyka innych powiadomień konta (inny typ maila wychodzi)');
 reset role;
 select pg_temp.assert(
   not exists (select 1 from public.claim_email_batch(100000) c where c.id in (:'psq1', :'psq2')),

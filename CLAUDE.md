@@ -1327,14 +1327,17 @@ ustawienia pojedynczych wyszukiwań bez zmian. Panel `/candidate/wyszukiwania`: 
 wyszukiwanie z `saved_searches.company_id` (filtry v1 `{}`, hash `md5('company:'||id)`, limit 20 wspólny):
 RPC `follow_company`/`unfollow_company`/`get_my_followed_companies` (tylko kandydat, firma `verified` z profilem,
 zablokowana przez kandydata = `NOT_FOUND`); worker bierze dla nich nowe aktywne niewygasłe oferty firmy po
-`company_id` (blokady #97, deduplikacja pary wyszukiwanie–oferta, digest `jobMatch` w języku odbiorcy, zgody,
-wypisanie z linku jak przy wyszukiwaniu). Przycisk „Obserwuj firmę” (`FollowCompanyButton`, wyspa na ISR-owym
+`company_id` (blokady #97, deduplikacja pary wyszukiwanie–oferta, zgody, wypisanie z linku jak przy wyszukiwaniu);
+digest to osobny szablon `followedCompanyJobs` („Nowe oferty firmy …”, PL/NL/FR/EN, payload `companyName`/`count`/`jobs`,
+kategoria `job_matches` i pula marketingowa jak `jobMatch`, link i `List-Unsubscribe` tokenem alertu wyłączają tylko tę
+obserwację). Przycisk „Obserwuj firmę” (`FollowCompanyButton`, wyspa na ISR-owym
 profilu `/pracodawcy/<slug>`: gość = link logowania z powrotem, pracodawca/demo nic); firma nie ma odczytu
 obserwujących. Dowód: `rls.sql` sekcje PS969/FC969 (kontrole ujemne na definicji workera: bez klauzuli pauzy,
-bez dolnej granicy, bez filtra firmy), rollback `0969_…down.sql`, unit `saved-search-pause-follow`,
-`saved-search-pause-follow-ui`. **Otwarte:** digest już zakolejkowany przed pauzą może wyjść (kolejka nie
-sprawdza pauzy — `email_delivery_suppression_reason` bez zmian), osobny szablon e-mail dla obserwowanej firmy
-(dziś teksty „zapisanego wyszukiwania” z nazwą firmy), wypisanie z alertów firmy w jednym kliknięciu z pauzą.
+bez dolnej granicy, bez filtra firmy, bez klauzuli pauzy w kolejce), rollback `0969_…down.sql`
+(`saved-search-pause-follow-rollback.sql` w `test-rls.sh`), unit `saved-search-pause-follow`,
+`saved-search-pause-follow-ui`, `saved-search-followups`. Digest zakolejkowany przed pauzą jest wygaszany
+(`suppressed_alert_paused`) przy claimie i tuż przed wysyłką — `email_delivery_suppression_reason` w 0969 bazuje na
+definicji z 0175 (oba szablony alertu). **Otwarte:** wypisanie z alertów firmy w jednym kliknięciu z pauzą.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`

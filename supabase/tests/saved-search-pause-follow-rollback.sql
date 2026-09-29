@@ -37,7 +37,7 @@ select pg_temp.assert(
   and to_regprocedure('public.get_my_followed_companies()') is null
   and not exists (select 1 from information_schema.columns
                    where table_schema = 'public' and table_name = 'saved_searches' and column_name = 'company_id')
-  and position('company_id' in pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure)) = 0
+  and position('v_search.company_id' in pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure)) = 0
   and position('paused_until' in pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure)) = 0
   and (select count(*) from public.saved_searches) = :ps_r_searches,
   'PS969-R1 rollback usuwa pauzę i obserwacje, worker z 0138, zwykłe wyszukiwania zostają');
