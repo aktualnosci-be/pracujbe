@@ -11,7 +11,10 @@ vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 const resendSend = vi.fn();
 vi.mock('resend', () => ({
-  Resend: vi.fn().mockImplementation(() => ({ emails: { send: resendSend } })),
+  // Vitest 4 (#749): atrapa wołana przez `new` musi mieć implementację `function` (nie strzałkę).
+  Resend: vi.fn(function () {
+    return { emails: { send: resendSend } };
+  }),
 }));
 
 import {
