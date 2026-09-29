@@ -108,9 +108,12 @@ albo klucz co `AWS_*`.
 `backup.sh` sprawdza konfigurację R2 **przed** zrzutem (zła/niepełna = kod 2, nic nie
 powstaje). Po zapisie lokalnym wysyła artefakt, potem manifest (kopia z manifestem jest
 kompletna), sprawdza rozmiar obiektów i stosuje retencję w buckecie: zostaje
-`BACKUP_RETENTION` najnowszych kopii, a przy `BACKUP_S3_MAX_AGE_DAYS` także usuwane są
-kopie starsze niż N dni; najnowsza kompletna kopia zostaje zawsze, usuwane są wyłącznie
-obiekty o wzorcu nazwy kopii. Błąd wysyłki lub retencji = kod 1 i heartbeat `/fail`.
+`BACKUP_RETENTION` najnowszych KOMPLETNYCH kopii (artefakt + manifest; #1228 — kopie bez
+manifestu nie zajmują miejsca w limicie), a przy `BACKUP_S3_MAX_AGE_DAYS` także usuwane są
+kopie starsze niż N dni; najnowsza kompletna kopia zostaje zawsze. Kopie niekompletne
+(artefakt bez manifestu po nieudanej wysyłce albo sam manifest) są sprzątane osobno, gdy są
+starsze niż 24 h (młodsza może być w trakcie wysyłki). Usuwane są wyłącznie obiekty o wzorcu
+nazwy kopii. Błąd wysyłki lub retencji = kod 1 i heartbeat `/fail`.
 
 Klucze (dwa osobne tokeny API R2, zakres: tylko ten bucket):
 

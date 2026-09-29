@@ -2104,7 +2104,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zawieszona, tekst człowieka), unit `job-list-machine-translation` (flaga wyłączona = brak
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
-  ręcznej, `protectedTerms` (nazwa firmy).
+  ręcznej.
+  Nazwy chronione (#740, migracja `0190` — numer tymczasowy): nazwa firmy (`companies.name`,
+  wyłącznie z bazy) = `translation_source_revisions.protected_terms` rewizji oferty
+  (`sync_job_translation_source` → `record_translation_source(…, p_protected_terms)`,
+  normalizacja `translation_protected_terms`: ≤ 10 nazw po ≤ 200 znaków), część odcisku — zmiana
+  nazwy firmy (trigger `companies` z `name`) = nowa rewizja; `claim_translation_jobs` zwraca
+  listę, worker podaje ją dostawcy i `validateTranslation` (nazwa ze źródła musi zostać bez zmian,
+  inaczej `facts_terms`). Pipeline `translation-v2`. Dowód: `rls.sql` sekcja TP740 (kontrole
+  ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
+  (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
+  unit `translation-worker`, `translation-job-sync`.
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -2356,6 +2366,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
   statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Błąd konfiguracji nadawcy/dostawcy (#1214, migracja `0192` — numer tymczasowy): kod transportu
+  `configuration_error` (zły/nieparsowalny `EMAIL_FROM`, Resend `invalid_from_address`/`*_api_key`/
+  `validation_error` o domenie/nadawcy, EmailLabs 401/403 i odrzucenie wskazujące konto SMTP/domenę)
+  odkłada ten i pozostałe wiersze paczki o 10 min bez zużycia próby (`EMAIL_PROVIDER_CONFIG`
+  w `error_message`, 503 cronu; kolejka kont — `auth.defer_email`); odrzucenie adresata zostaje
+  trwałym `failed`. `EMAIL_FROM` bez otaczających cudzysłowów (`emailFromEnv`), nieużywalny =
+  worker nie pobiera kolejki, `/api/health` `emailProviderReady: false`, alarm
+  `email_sender_invalid`; `ops_metrics().email.configBlocked` → alarm `email_provider_config`.
+  Ponowne zakolejkowanie `failed` z N dni: RPC `requeue_failed_email_deliveries` (service_role,
+  bez wygaszonych/kampanii/przyjętych, audyt) + `scripts/db/requeue-failed-emails.mjs`. Licznik
+  `failedLast24h` bez wygaszonych, osobno `suppressedLast24h` (#1227). Dowód: `rls.sql` sekcja
+  OM1227, rollback `0192_…down.sql`, unit `email-config-errors`, `email-outbox-lease`,
+  `auth-email-worker`, `emaillabs-transport`. Pule `pg` z `query_timeout` 35 s i TCP keepalive
+  (#1229, `db-pool-query-timeout`); retencja R2 liczy tylko kompletne kopie, niekompletne > 24 h
+  sprzątane osobno (#1228, `backup-r2`).
   Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
   (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
   semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;
@@ -2622,6 +2647,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
   NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
   (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
+  Trwała kolejka (#706/#879, migracja `0191` — numer tymczasowy): trigger na `companies`
+  kolejkuje firmę w `company_vies_auto_queue` przy KAŻDYM zapisie nowego prawidłowego numeru
+  VAT/KBO bez wyniku dla tego numeru (założenie, dopisanie numeru w `/employer/firma`, zmiana);
+  sama zmiana nazwy nie kolejkuje, usunięty numer/firma zdejmuje zadanie, wynik dla bieżącego
+  numeru (auto albo admin) też. Worker `processCompanyViesAutoQueue` w `/api/maintenance`
+  (≤ 10 na przebieg) + jednorazowa próba po zapisie (`after`): `claim_company_vies_auto_checks`
+  (SKIP LOCKED, dzierżawa, ≤ 10 prób), niedostępność/limit/błąd → `finish_company_vies_auto_check`
+  z backoffem 5 min × 2^n (≤ 6 h). Wynik dla numeru, którego firma już nie ma, jest zastępowany.
+  Admin widzi stan kolejki w sekcji VIES (`admin.viesAuto*`). Dowód: `rls.sql` sekcja VQ976
+  (kontrola ujemna: bez triggera dopisany numer nie trafia do kolejki), rollback
+  `vies-auto-queue-rollback.sql`, unit `company-vies-auto-check`, `vies-auto-retry-admin`.
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`

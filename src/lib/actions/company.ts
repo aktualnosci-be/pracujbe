@@ -379,6 +379,10 @@ export async function updateCompany(
       return { ok: false, error: 'PERMISSION_DENIED' };
     }
 
+    // #879: numer dopisany/zmieniony po założeniu firmy — baza (0191) zakolejkowała sprawdzenie
+    // VIES; próbujemy od razu po odpowiedzi (bez zadania w kolejce = bez zapytania do VIES).
+    if (setVat) scheduleCompanyViesAutoCheck(companyId);
+
     const newStatus = asString(asRecord(rows[0])['status']);
     if (statusBefore === 'verified' && newStatus === 'pending') {
       return { ok: true, reverificationRequired: true };

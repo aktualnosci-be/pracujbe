@@ -672,6 +672,18 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['employer'],
     columns: { vat_number: 'company', vies_name: 'company', checked_by: 'reference' },
   },
+  'public.company_vies_auto_queue': {
+    activities: ['companies'],
+    subjects: ['employer'],
+    columns: { vat_number: 'company' },
+    notPersonal: {
+      attempts: 'Liczba prób automatycznego sprawdzenia VIES.',
+      next_attempt_at: 'Termin kolejnej próby (backoff).',
+      lease_until: 'Dzierżawa zadania workera.',
+      last_outcome: 'Ostatni wynik nierozstrzygający (niedostępność / limit / błąd).',
+    },
+    note: 'Kolejka zadań (0191, #706/#879): tylko numer przedsiębiorstwa; wiersz znika po wyniku, usunięciu numeru albo firmy.',
+  },
   'public.jobs': {
     activities: ['companies'],
     subjects: ['employer'],
