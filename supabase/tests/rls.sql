@@ -11421,6 +11421,8 @@ reset role;
 -- KONTROLA UJEMNA: bez strażnika właściciel podmieniłby ścieżkę (pobranie cudzego obiektu).
 begin;
 alter table public.files disable trigger trg_files_guard_message_attachment;
+-- 0961: metadane plików chroni też ogólny strażnik `guard_files_client_write` (niezależna warstwa).
+alter table public.files disable trigger trg_files_guard_client_write;
 select set_config('app.current_uid', :'MAC', true);
 set local role authenticated; select pg_temp.assert_client_role();
 update public.files set path = :'mapathx' where path = :'mapath1';
