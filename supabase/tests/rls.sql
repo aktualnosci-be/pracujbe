@@ -11903,7 +11903,10 @@ select pg_temp.assert(
 -- PL109-4: treść wiadomości rekrutera zostaje w offers, NIE trafia do payloadu (#503).
 select pg_temp.assert(
   (select o.message from public.offers o where o.id = :'ploff1') = 'Bel me op 0470 12 34 56'
-  and (select not payload ? 'message' and payload::text not like '%0470%'
+  -- Pełny numer, nie sam „0470”: ten ciąg zdarza się w losowych UUID i ułamkach sekund
+  -- znaczników czasu w payloadzie (flaky w CI).
+  and (select not payload ? 'message' and payload::text not like '%0470 12 34 56%'
+                                        and payload::text not like '%0470123456%'
          from public.email_deliveries where entity_id = :'ploff1' and template = 'jobOffer'),
   'PL109-4 payload jobOffer bez treści wiadomości rekrutera');
 -- PL109-5: język e-maila = język ODBIORCY (nl), nie nadawcy (pl) — Invariant #1.
