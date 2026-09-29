@@ -307,23 +307,16 @@ function getJobsFromDemo(
   if (params.city) {
     const q = searchFold(params.city.trim());
     if (q) {
-      jobs = jobs.filter(
-        (job) =>
-          searchFold(job.city).includes(q) ||
-          job.slug.toLowerCase().includes(q),
-      );
+      // Jak `search_city_candidates` (0153): tylko miasto oferty, bez sluga (#1119).
+      jobs = jobs.filter((job) => searchFold(job.city).includes(q));
     }
   }
   if (params.keyword) {
     const q = searchFold(params.keyword.trim());
     if (q) {
-      jobs = jobs.filter(
-        (job) =>
-          searchFold(job.title).includes(q) ||
-          searchFold(job.companyName).includes(q) ||
-          searchFold(job.description).includes(q) ||
-          job.highlights.some((h) => searchFold(h).includes(q)),
-      );
+      // Jak SQL (0110/0153): słowo kluczowe szuka wyłącznie w tytule oferty — nie w nazwie
+      // firmy, opisie ani wyróżnikach (#1119, lustro demo nie może szukać szerzej niż baza).
+      jobs = jobs.filter((job) => searchFold(job.title).includes(q));
     }
   }
   // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0091): oferta bez

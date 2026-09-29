@@ -802,6 +802,21 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
   jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
   ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
+  Spójność wyszukiwania miast i filtrów (#1077/#1119, bez migracji): `resolveLocationKey`
+  (`src/lib/locations/city-aliases.ts`) porównuje CAŁĄ nazwę po `nameKey` (lustro SQL `city_key` z
+  0153: bez wielkości liter, diakrytyków i różnic spacji/myślnika), więc „Bruxelles”/„bruxelles”/
+  „BRUXELLES” dają te same aliasy i ten sam zbiór ofert (fragment nazwy nadal = tekst). Landing
+  miasta liczy indeksowalność (`generateMetadata`) tym samym filtrem co treść (`locations:
+  cityAliases`), nie tekstem po nazwie w języku strony. Samo zawężenie górnej granicy wynagrodzenia
+  („do 2000”) nie wysyła dolnej granicy z końca suwaka (`salaryQueryParams`, licznik
+  `matchesSidebar`). Lustro demo (`getJobsFromDemo`) szuka jak SQL: słowo kluczowe tylko w tytule,
+  miasto tylko w nazwie miasta. Dowód: unit `city-aliases` (#1077, kontrole ujemne starej reguły),
+  `salary-compare`, `landing-empty-noindex`, `jobs-demo-search-mirror`. **Otwarte (wymaga migracji,
+  #1076/M-4):** oferta zapisana z dopiskiem („Bruxelles 1000”) wypada z filtra rozpoznanego miasta
+  (dopasowanie po aliasie/`location_id`, nie po tekście) — potrzebny OR z tekstem albo normalizacja
+  kodu pocztowego w `resolve_location_id`; facet lokalizacji spoza 10 miast pokazuje nazwę
+  kanoniczną `locations.name` (aliasy w bazie bez kolumny języka), więc nazwa w języku widoku
+  wymaga kolumny `locale` w `location_aliases`.
   Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
   fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
   lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało

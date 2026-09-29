@@ -195,3 +195,54 @@ describe('parametry filtra jednostki', () => {
       .toEqual(['hour', 'month', 'month-low', 'none', 'year', 'year-low']);
   });
 });
+
+/**
+ * #1119 — zawężenie tylko górnej granicy („do 2000”) nie dokłada niewidocznej dolnej granicy
+ * (dolny koniec suwaka = „bez dolnej granicy”); to samo w liczniku demo i w liście.
+ */
+describe('samo górne zawężenie widełek', () => {
+  it('parametry zapytania: tylko salaryMax, bez salaryMin z dolnego końca suwaka', () => {
+    const f = parseSidebarFilters({ salaryMax: '2000' });
+    expect(f).toMatchObject({ salaryMin: 1500, salaryMax: 2000 });
+    expect(salaryQueryParams(f)).toEqual({ salaryUnit: 'month', salaryMax: 2000 });
+    const hour = parseSidebarFilters({ salaryUnit: 'hour', salaryMax: '20' });
+    expect(salaryQueryParams(hour)).toEqual({ salaryUnit: 'hour', salaryMax: 20 });
+  });
+
+  it('obie granice ruszone → obie wysyłane; tylko dolna → jak dotąd', () => {
+    expect(salaryQueryParams(parseSidebarFilters({ salaryMin: '2000', salaryMax: '3000' }))).toEqual({
+      salaryUnit: 'month',
+      salaryMin: 2000,
+      salaryMax: 3000,
+    });
+    expect(salaryQueryParams(parseSidebarFilters({ salaryMin: '2500' }))).toEqual({
+      salaryUnit: 'month',
+      salaryMin: 2500,
+    });
+  });
+
+  it('licznik demo: oferta poniżej dolnego końca suwaka mieści się w „do 2000”', () => {
+    const low: FacetItem = {
+      category: 'warehouse', city: 'Mechelen', contractType: 'permanent',
+      salaryMin: 850, salaryPeriod: 'month', publishedAt: at(1),
+      accommodation: false, immediate: false, noLanguageRequired: false,
+    };
+    const f = parseSidebarFilters({ salaryMax: '2000' });
+    expect(matchesSidebar(low, f)).toBe(true);
+    // Kontrola ujemna: wyraźna dolna granica nadal ją wyklucza.
+    expect(matchesSidebar(low, parseSidebarFilters({ salaryMin: '1500', salaryMax: '2000' }))).toBe(true);
+    expect(matchesSidebar(low, parseSidebarFilters({ salaryMin: '1600', salaryMax: '2000' }))).toBe(false);
+  });
+
+  it('lista ofert (demo): „do 2000” zawiera ofertę z widełkami poniżej 1500', async () => {
+    const { getJobs } = await import('@/lib/jobs');
+    const query = { locale: 'pl' as const, page: 1, pageSize: 100 };
+    const belowSliderFloor = (job: { salaryMin?: number; salaryPeriod?: string }) =>
+      job.salaryPeriod === 'month' && (job.salaryMin ?? Infinity) < 1500;
+    const capped = await getJobs({ ...query, ...salaryQueryParams(parseSidebarFilters({ salaryMax: '2000' })) });
+    expect(capped.jobs.some(belowSliderFloor)).toBe(true);
+    // Dawne zachowanie (dolna granica 1500 dołożona po cichu) gubi tę ofertę.
+    const old = await getJobs({ ...query, salaryMin: 1500, salaryMax: 2000 });
+    expect(old.jobs.some(belowSliderFloor)).toBe(false);
+  });
+});
