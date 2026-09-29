@@ -553,7 +553,8 @@
       "none": "Ta oferta nie podaje sposobu aplikowania.",
       "mailSubject": "Oferta pracy: {title}",
       "contact": "Kontakt bezpośrednio z ogłoszeniodawcą"
-    }
+    },
+    "startImmediate": "Praca od zaraz"
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1222,7 +1223,14 @@
     "savedSearchJobsShow": "Pokaż oferty: {name}",
     "savedSearchJobsFrom": "Wyszukiwanie: {name}",
     "employerGreetingSubListing": "Witaj {name}! Sprawdź, jak radzą sobie Twoje ogłoszenia.",
-    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia."
+    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia.",
+    "deleteJobDraft": "Usuń szkic",
+    "deleteJobDraftLabel": "Usuń szkic: {title}",
+    "deleteJobDraftTitle": "Usunąć szkic oferty?",
+    "deleteJobDraftDescription": "Szkic „{title}” zostanie usunięty razem z wpisaną treścią. Tej operacji nie można cofnąć.",
+    "deleteJobDraftConfirm": "Usuń szkic",
+    "deleteJobDraftCancel": "Anuluj",
+    "deleteJobDraftUntitled": "bez tytułu"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1800,7 +1808,11 @@
     "jointCommitteeLabel": "Komisja parytetowa (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "Na stronie oferty pokażemy numer komisji i link do oficjalnej bazy stawek minimalnych. Portal nie ocenia wysokości stawki.",
-    "languageSelectPlaceholder": "Wybierz język"
+    "languageSelectPlaceholder": "Wybierz język",
+    "contentLocaleLabel": "Język ogłoszenia",
+    "contentLocaleHint": "W tym języku piszesz treść ogłoszenia. Może być inny niż język panelu; od niego zależy oznaczenie języka i tłumaczenia dla kandydatów.",
+    "contentLocaleLocked": "Języka opublikowanej oferty nie można zmienić.",
+    "languageLevelAria": "Poziom języka: {level}"
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",
