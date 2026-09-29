@@ -9,17 +9,40 @@
  * 1. `net.Socket.prototype.connect` — jedyny wspólny punkt TCP w Node: `http`/`https`,
  *    `tls.connect`, `undici` (także wbudowany `fetch`), `pg`, SDK dostawców. Gniazda Unix/IPC
  *    (`path`) przepuszczamy. Gdy połączenie ma własny `lookup` (atrapa DNS, np. `jobs.test` →
- *    127.0.0.1 w teście safe-fetch), rozstrzyga adres po rozwiązaniu: tylko loopback.
+ *    127.0.0.1 w teście safe-fetch), rozstrzyga adres po rozwiązaniu: tylko loopback. Literalny adres IP spoza allow-listy jest
+ *    blokowany od razu, także z własnym `lookup` — Node nie woła go dla adresów IP (#772).
  * 2. `globalThis.fetch` — ten sam błąd już przed otwarciem gniazda (bez opakowania „fetch
  *    failed”), żeby komunikat był od razu widoczny w teście.
+ *
+ * 3. `node:dns` — metody sieciowe (`resolve*`, `reverse`, także `dns.promises` i instancje
+ *    `Resolver`) zawsze wysyłają zapytanie do serwera DNS, bez gniazda `net.Socket` (#812).
+ *    Nazwa spoza allow-listy → `NetworkBlockedError`. `dns.lookup()` (systemowy resolver,
+ *    używany m.in. przez `net.connect` do hostów z allow-listy) zostaje bez zmian.
+ *    Nie obejmujemy `node:dgram` (surowy UDP) — nikt w repo go nie używa.
  *
  * Allow-lista: localhost / 127.0.0.0/8 / ::1 (atrapy HTTP, serwery testowe, PostgreSQL, Chromium
  * przez CDP) + hosty z `TEST_NETWORK_ALLOW` (przecinki). Chromium uruchamiany przez Playwright to
  * osobny proces — blokada go nie obejmuje (strony renderuje z `setContent`/lokalnych plików).
  */
+import dns from 'node:dns';
 import net from 'node:net';
-import { relative } from 'node:path';
+import path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
 import { expect } from 'vitest';
+
+/**
+ * Ścieżka pliku testu względem `cwd`, ZAWSZE z `/` (#885): `path.relative` na Windows zwraca
+ * separatory `\`, a etykieta (i asercje na niej) ma być taka sama na każdym systemie.
+ * `pathApi` pozwala sprawdzić wariant Windows (`path.win32`) bez runnera Windows.
+ */
+export function testFileLabel(
+  testPath: string,
+  cwd: string = process.cwd(),
+  pathApi: Pick<typeof path, 'relative' | 'sep'> = path,
+): string {
+  const rel = pathApi.relative(cwd, testPath);
+  return pathApi.sep === '/' ? rel : rel.split(pathApi.sep).join('/');
+}
 
 /**
  * Bieżący test (plik + pełna nazwa) ze stanu `expect` Vitest — żeby błąd wskazywał winowajcę
@@ -29,7 +52,7 @@ import { expect } from 'vitest';
 export function currentTestLabel(): string | null {
   try {
     const state = expect.getState();
-    const file = state.testPath ? relative(process.cwd(), state.testPath) : null;
+    const file = state.testPath ? testFileLabel(state.testPath) : null;
     const name = state.currentTestName ?? null;
     if (file && name) return `${file} › ${name}`;
     return file ?? name;
@@ -154,14 +177,77 @@ function guardLookup(host: string, lookup: LookupFn): LookupFn {
   };
 }
 
+/** Metody `node:dns` wysyłające zapytanie do serwera DNS (pierwszy argument = nazwa albo IP). */
+export const DNS_NETWORK_METHODS = [
+  'resolve',
+  'resolve4',
+  'resolve6',
+  'resolveAny',
+  'resolveCaa',
+  'resolveCname',
+  'resolveMx',
+  'resolveNaptr',
+  'resolveNs',
+  'resolvePtr',
+  'resolveSoa',
+  'resolveSrv',
+  'resolveTxt',
+  'reverse',
+] as const;
+
+type DnsPatch = { target: Record<string, unknown>; key: string; original: unknown };
+let dnsPatches: DnsPatch[] = [];
+
+function dnsTargets(): Record<string, unknown>[] {
+  return [
+    dns as unknown as Record<string, unknown>,
+    dns.promises as unknown as Record<string, unknown>,
+    dns.Resolver.prototype as unknown as Record<string, unknown>,
+    dns.promises.Resolver.prototype as unknown as Record<string, unknown>,
+  ];
+}
+
+function installDnsGuard(): void {
+  for (const target of dnsTargets()) {
+    const isPromiseApi = target === (dns.promises as unknown) || target === (dns.promises.Resolver.prototype as unknown);
+    for (const key of DNS_NETWORK_METHODS) {
+      const original = target[key];
+      if (typeof original !== 'function') continue;
+      dnsPatches.push({ target, key, original });
+      target[key] = function guardedDns(this: unknown, ...args: unknown[]) {
+        const name = args[0];
+        if (typeof name !== 'string' || !isAllowedHost(name)) {
+          const error = new NetworkBlockedError(String(name), `dns.${key}`);
+          if (isPromiseApi) return Promise.reject(error);
+          throw error;
+        }
+        return (original as (...a: unknown[]) => unknown).apply(this, args);
+      };
+    }
+  }
+  syncBuiltinESMExports();
+}
+
+function uninstallDnsGuard(): void {
+  for (const { target, key, original } of dnsPatches) target[key] = original;
+  dnsPatches = [];
+  syncBuiltinESMExports();
+}
+
 export function installNetworkGuard(): void {
   if (originalConnect) return;
+  installDnsGuard();
   const proto = net.Socket.prototype as unknown as { connect: ConnectFn };
   const connect = proto.connect;
   originalConnect = connect;
   proto.connect = function guardedConnect(this: net.Socket, ...args: unknown[]) {
     const host = connectTarget(args);
     if (host !== null && !isAllowedHost(host)) {
+      // Literalny adres IP: Node pomija wtedy DNS i nigdy nie woła własnego `lookup` (#772),
+      // więc wyjątek poniżej nie może go obejmować — adres spoza allow-listy blokujemy od razu.
+      if (net.isIP(normalizeHost(host)) !== 0) {
+        throw new NetworkBlockedError(host, 'net.Socket#connect');
+      }
       const opts = connectOptions(args);
       // Własny `lookup` (np. przypięty DNS w safe-fetch) — rozstrzyga adres, z którym faktycznie
       // łączy się gniazdo: dopuszczamy tylko loopback.
@@ -190,6 +276,7 @@ export function installNetworkGuard(): void {
 /** Zdejmuje blokadę — tylko dla kontroli ujemnej w teście strażnika. */
 export function uninstallNetworkGuard(): void {
   if (originalConnect) {
+    uninstallDnsGuard();
     (net.Socket.prototype as unknown as { connect: ConnectFn }).connect = originalConnect;
     originalConnect = null;
   }

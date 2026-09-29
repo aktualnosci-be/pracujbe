@@ -22,6 +22,11 @@ export interface MailMessage {
   subject: string;
   html: string;
   text: string;
+  /**
+   * Adres odpowiedzi (`EMAIL_REPLY_TO`, np. `kontakt@pracuj.be`) — nagłówek `Reply-To`, gdy
+   * ustawiony; `From` zostaje adresem bez skrzynki (`no-reply@`).
+   */
+  replyTo?: string;
   /** Dodatkowe nagłówki (np. `List-Unsubscribe`, `List-Unsubscribe-Post`). */
   headers?: Record<string, string>;
 }

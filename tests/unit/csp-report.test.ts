@@ -106,10 +106,17 @@ describe('parseCspReports', () => {
     ['pusty obiekt', {}],
     ['zła dyrektywa', { 'csp-report': { 'effective-directive': 'script-src; drop table', 'blocked-uri': 'inline' } }],
     ['sama tablica bez csp-violation', [{ type: 'deprecation', body: {} }]],
-    ['za dużo raportów', Array.from({ length: MAX_REPORTS_PER_REQUEST + 1 }, () => reportingApiReport[0])],
     ['tekst', 'hello'],
   ])('odrzuca: %s', (_label, payload) => {
     expect(parseCspReports(payload)).toBeNull();
+  });
+
+  it('#1110: paczka większa niż limit nie jest odrzucana w całości — przetwarzane pierwsze wpisy', () => {
+    const many = Array.from({ length: MAX_REPORTS_PER_REQUEST + 5 }, () => reportingApiReport[0]);
+    const parsed = parseCspReports(many);
+    expect(parsed).toHaveLength(MAX_REPORTS_PER_REQUEST);
+    // Kontrola ujemna: pusta tablica nadal nie jest raportem.
+    expect(parseCspReports([])).toBeNull();
   });
 
   it('nieznany schemat zasobu nie trafia do logu dosłownie', () => {
@@ -163,13 +170,27 @@ describe('POST /api/csp-report', () => {
     ['zły typ treści', () => request(JSON.stringify(legacyReport), { 'content-type': 'text/plain' }), 415],
     ['niepoprawny JSON', () => request('{'), 400],
     ['to nie raport CSP', () => request('{"a":1}'), 400],
-    ['za duże body', () => request(JSON.stringify({ x: 'a'.repeat(17 * 1024) })), 413],
+    ['za duże body', () => request(JSON.stringify({ x: 'a'.repeat(65 * 1024) })), 413],
   ])('%s → %i bez logu', async (_label, make, status) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { POST } = await route();
     const res = await POST(make());
     expect(res.status).toBe(status);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('#1110: paczka 15 raportów i body ponad 16 KB (do 64 KB) są przyjmowane; ponad 64 KB → 413', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { POST } = await route();
+    const batch = Array.from({ length: 15 }, () => reportingApiReport[0]);
+    const res = await POST(request(JSON.stringify(batch), { 'content-type': 'application/reports+json' }));
+    expect(res.status).toBe(204);
+    expect(warn).toHaveBeenCalledTimes(MAX_REPORTS_PER_REQUEST);
+
+    const padded = [{ ...reportingApiReport[0], pad: 'a'.repeat(20 * 1024) }];
+    expect((await POST(request(JSON.stringify(padded), { 'content-type': 'application/reports+json', 'x-real-ip': '198.51.100.9' }))).status).toBe(204);
+    const huge = [{ ...reportingApiReport[0], pad: 'a'.repeat(70 * 1024) }];
+    expect((await POST(request(JSON.stringify(huge), { 'content-type': 'application/reports+json', 'x-real-ip': '198.51.100.10' }))).status).toBe(413);
   });
 
   it('limituje żądania z jednego adresu (20/min), inny adres przechodzi', async () => {

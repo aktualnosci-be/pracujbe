@@ -51,7 +51,7 @@ export function CandidateIdentity({
         {labels.eyebrow}
       </p>
       {loadFailed ? (
-        <p role="alert" className="mt-4 text-[15px] text-error">
+        <p role="alert" className="mt-4 text-[15px] text-error-text">
           {labels.loadError}
         </p>
       ) : (

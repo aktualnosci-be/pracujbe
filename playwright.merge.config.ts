@@ -4,7 +4,7 @@
  * Shardy (`--shard=i/N`) i pomiar czasu zapisują blob (playwright.config.ts, E2E_BLOB_NAME);
  * tutaj powstaje jeden raport html i jeden raport flaków (#375) dla całego zestawu.
  */
-export default {
+const config = {
   testDir: './tests/e2e',
   reporter: [
     ['line'],
@@ -12,3 +12,5 @@ export default {
     ['./tests/e2e/reporters/flaky-report.ts', { outputFile: 'playwright-report/flaky-tests.json' }],
   ],
 };
+
+export default config;

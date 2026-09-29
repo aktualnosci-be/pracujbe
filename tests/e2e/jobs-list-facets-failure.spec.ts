@@ -57,11 +57,11 @@ for (const failure of ['error', 'slow'] as const) {
     await page.goto('/en/oferty-pracy');
 
     const rail = page.locator('[data-filter-passport="desktop"]');
-    const construction = rail.getByRole('checkbox', { name: 'Construction' });
+    const checkbox = rail.getByRole('checkbox', { name: 'Construction' });
     // Klik przed hydratacją ginie (#1032) — pod obciążeniem runnera okno jest dłuższe.
-    await waitForHydrated(construction);
-    await construction.click();
-    await expect(construction).toBeChecked();
+    await waitForHydrated(checkbox);
+    await checkbox.click();
+    await expect(checkbox).toBeChecked();
     // Przycisk zatwierdzenia (niezależnie od etykiety) — bez fałszywej liczby, ale aktywny.
     const apply = rail.locator('button[aria-busy]');
     await expect(apply).toBeVisible();

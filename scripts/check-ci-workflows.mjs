@@ -289,6 +289,22 @@ assert.match(playwrightConfig, /CLASSIFIEDS_SERVER \? \[\] : CLASSIFIEDS_ONLY_SP
 const mergeConfig = await readFile(new URL('playwright.merge.config.ts', root), 'utf8');
 assert.match(mergeConfig, /flaky-report\.ts/, 'playwright.merge.config.ts: raport flaków w połączonym raporcie');
 
+// Typecheck obejmuje też specyfikacje Playwrighta (`tests/e2e`): korzeniowy tsconfig je wyłącza
+// (osobne typy przeglądarki), więc `npm run typecheck` musi jawnie sprawdzać `tsconfig.e2e.json`,
+// a ten musi obejmować `tests/e2e` (job „Typecheck” woła tylko `npm run typecheck`).
+const packageJson = JSON.parse(await readFile(process.argv[4] ?? new URL('package.json', root), 'utf8'));
+assert.match(
+  packageJson.scripts?.typecheck ?? '',
+  /tsc --noEmit -p tsconfig\.e2e\.json/,
+  'package.json: skrypt typecheck musi sprawdzać tests/e2e (tsc --noEmit -p tsconfig.e2e.json)',
+);
+assert.match(ci.match(/^  typecheck:[\s\S]*?(?=^  [a-z][a-z0-9_-]*:\s*$)/m)?.[0] ?? '', /run: npm run typecheck\s*$/m, 'ci.yml: job Typecheck uruchamia npm run typecheck');
+const e2eTsconfig = JSON.parse(await readFile(new URL('tsconfig.e2e.json', root), 'utf8'));
+assert.ok(
+  (e2eTsconfig.include ?? []).some((pattern) => pattern.startsWith('tests/e2e/')),
+  'tsconfig.e2e.json: include musi obejmować tests/e2e',
+);
+
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
