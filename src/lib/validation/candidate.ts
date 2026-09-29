@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
+import { isPlausibleCalendarDate, NO_NUL_REGEX } from '@/lib/validation/text';
 
 /**
  * Walidacja profilu kandydata oraz sześciu kroków onboardingu.
@@ -13,6 +14,9 @@ import type { CategoryKey, ContractType } from '@/lib/jobs';
  *
  * Komunikaty błędów to klucze i18n.
  */
+
+/** Tekst bez znaku NUL — baza go odrzuca, a użytkownik dostałby błąd techniczny (#1108). */
+const TEXT_INVALID = 'candidate.error.textInvalid';
 
 export const CATEGORY_KEYS = [
   'construction',
@@ -54,7 +58,8 @@ export const candidateLanguageSchema = z.object({
     .string({ required_error: 'candidate.error.languageRequired' })
     .trim()
     .min(2, 'candidate.error.languageInvalid')
-    .max(40, 'candidate.error.languageInvalid'),
+    .max(40, 'candidate.error.languageInvalid')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   level: z.enum(LANGUAGE_LEVELS),
 });
 
@@ -74,13 +79,13 @@ export const CANDIDATE_ITEM_LIMITS = {
 const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'candidate.error.certificateExpiryInvalid')
-  .refine((v) => {
-    const d = new Date(`${v}T00:00:00Z`);
-    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
-  }, 'candidate.error.certificateExpiryInvalid');
+  // Istniejąca data z rokiem 1900–2100 (#1108: rok 0000 przechodził kontrolę kalendarza,
+  // a baza go odrzuca).
+  .refine(isPlausibleCalendarDate, 'candidate.error.certificateExpiryInvalid');
+
 
 const itemLine = (max: number) =>
-  z.string().trim().min(1).max(max, 'candidate.error.itemTooLong');
+  z.string().trim().min(1).max(max, 'candidate.error.itemTooLong').regex(NO_NUL_REGEX, TEXT_INVALID);
 
 /** Krok 1 — kim jesteś: dane podstawowe. */
 export const step1Schema = z.object({
@@ -90,13 +95,15 @@ export const step1Schema = z.object({
     // Pusty string (formularz wysyła '') → „wymagane", „za krótkie" dopiero dla 1 znaku (#367).
     .min(1, 'candidate.error.firstNameRequired')
     .min(2, 'candidate.error.firstNameTooShort')
-    .max(80, 'candidate.error.firstNameTooLong'),
+    .max(80, 'candidate.error.firstNameTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   lastName: z
     .string({ required_error: 'candidate.error.lastNameRequired' })
     .trim()
     .min(1, 'candidate.error.lastNameRequired')
     .min(2, 'candidate.error.lastNameTooShort')
-    .max(80, 'candidate.error.lastNameTooLong'),
+    .max(80, 'candidate.error.lastNameTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
   phone: z
     .string()
     .trim()
@@ -136,8 +143,14 @@ export const step4Schema = z.object({
     .string({ required_error: 'candidate.error.cityRequired' })
     .trim()
     .min(2, 'candidate.error.cityRequired')
-    .max(80, 'candidate.error.cityTooLong'),
-  region: z.string().trim().max(80, 'candidate.error.regionTooLong').optional(),
+    .max(80, 'candidate.error.cityTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID),
+  region: z
+    .string()
+    .trim()
+    .max(80, 'candidate.error.regionTooLong')
+    .regex(NO_NUL_REGEX, TEXT_INVALID)
+    .optional(),
   radiusKm: z
     .number({ invalid_type_error: 'candidate.error.radiusInvalid' })
     .int('candidate.error.radiusInvalid')
@@ -178,7 +191,7 @@ export const step6Schema = z.object({
     .min(0, 'candidate.error.salaryInvalid')
     .max(1000000, 'candidate.error.salaryInvalid')
     .optional(),
-  bio: z.string().trim().max(2000, 'candidate.error.bioTooLong').optional(),
+  bio: z.string().trim().max(2000, 'candidate.error.bioTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   agreeTerms: z.literal(true, {
     errorMap: () => ({ message: 'candidate.error.termsRequired' }),
   }),
