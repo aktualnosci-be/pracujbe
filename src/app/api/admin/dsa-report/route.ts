@@ -7,6 +7,7 @@ import {
   csvRows,
   decodeDsaExportCursor,
   DSA_EXPORT_PAGE_SIZE,
+  fetchStatementsExportPage,
   getStatementsExport,
   getTransparencyReport,
 } from '@/lib/data/admin-dsa';
@@ -81,7 +82,10 @@ export async function GET(request: Request): Promise<Response> {
     header: csvHeader(),
     first,
     toCsv: csvRows,
-    fetchPage: (cursor) => getStatementsExport(range.from, range.to, cursor),
+    // Strony 2+ idą już po zakończeniu żądania (wewnątrz strumienia) — rola admina została
+    // potwierdzona przy pierwszej stronie; `getStatementsExport` sprawdzałby sesję ponownie
+    // poza kontekstem żądania i urywał plik po pierwszej stronie (#1110).
+    fetchPage: (cursor) => fetchStatementsExportPage(range.from, range.to, cursor),
     maxPages: DSA_EXPORT_MAX_PAGES,
   });
 

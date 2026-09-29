@@ -222,6 +222,15 @@ describe('akcje odwołań', () => {
       p_new_decision: 'job_removed', p_ground_type: 'law', p_ground_reference: 'Art. 7',
     });
 
+    // #1102: uwzględnienie odwołania autora cofa ograniczenie; strażnik pytań oferty może je
+    // odrzucić — czytelny kod zamiast INTERNAL. Potem kolejka wraca do dalszych odpowiedzi testu.
+    fakeDb.rpc('admin_decide_appeal', queue(APPEAL,
+      pgError('P0001', 'SCREENING_REVIEW_REQUIRED: treść pytania'),
+      pgError('P0001', 'REVIEWER_CONFLICT: inny administrator'),
+      pgError('P0001', 'STALE_STATE: status odwołania zmienił się'),
+      pgError('P0001', 'VALIDATION_FAILED: GROUND_REFERENCE_REQUIRED')));
+    expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'reversed', reasoning: REASONING }))
+      .toEqual({ ok: false, error: 'MODERATION_RESTORE_BLOCKED' });
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
       .toEqual({ ok: false, error: 'REVIEWER_CONFLICT' });
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
@@ -478,6 +487,38 @@ describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606
     expect(fakeDb.callsTo('dsa_statements_export')[0]?.args).toMatchObject({
       p_cursor_decided_at: '2026-01-20T10:00:00.000Z', p_cursor_reference: 'DEC-ABCD-1234',
     });
+  });
+
+  it('trasa CSV: strony 2+ dociągane po zakończeniu żądania nie wymagają sesji — plik nie urywa się po 2000 wierszach (#1110)', async () => {
+    const { GET } = await import('@/app/api/admin/dsa-report/route');
+    const total = DSA_EXPORT_PAGE_SIZE + 5;
+    const all = Array.from({ length: total }, (_, i) => ({ ...exportRow(i), decision_reference: `DEC-${String(i).padStart(5, '0')}` }));
+    fakeDb.rpc('dsa_statements_export', ({ args }: { args: Record<string, unknown> }) => {
+      const first = !args['p_cursor_decided_at'];
+      if (first) {
+        // Po pierwszej stronie „żądanie się kończy”: sesja (cookies) nie jest już dostępna.
+        queueMicrotask(() => {
+          fakeSession.identity = null;
+        });
+        return all.slice(0, DSA_EXPORT_PAGE_SIZE);
+      }
+      return all.slice(DSA_EXPORT_PAGE_SIZE);
+    });
+    const response = await GET(new Request('https://pracuj.be/api/admin/dsa-report?format=csv&od=2026-01-01&do=2026-12-31'));
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    const lines = text.trim().split('\r\n');
+    expect(lines).toHaveLength(total + 1); // nagłówek + komplet decyzji
+    expect(lines.at(-1)).toContain(`DEC-${String(total - 1).padStart(5, '0')}`);
+    expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(2);
+  });
+
+  it('kontrola ujemna: pierwsza strona nadal wymaga admina — bez sesji trasa rzuca 404, bez zapytania', async () => {
+    const { GET } = await import('@/app/api/admin/dsa-report/route');
+    fakeSession.identity = null;
+    fakeDb.rpc('dsa_statements_export', []);
+    await expect(GET(new Request('https://pracuj.be/api/admin/dsa-report?format=csv&od=2026-01-01&do=2026-12-31'))).rejects.toThrow();
+    expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(0);
   });
 
   it('CSV: bezpiecznik stron przy niepustym kursorze kończy strumień BŁĘDEM, nie cichym obcięciem', async () => {

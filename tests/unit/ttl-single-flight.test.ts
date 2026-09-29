@@ -122,4 +122,15 @@ describe('createTtlSingleFlightCache', () => {
     await Promise.all([factoryNoCache(), factoryNoCache(), factoryNoCache()]);
     expect(calls).toBe(3);
   });
+
+  it('delete usuwa rozstrzygnięty wpis (kolejne wywołanie liczy na nowo)', async () => {
+    const cache = createTtlSingleFlightCache<number>({ ttlMs: 10_000, maxEntries: 10 });
+    const factory = vi.fn(async () => 1);
+    await cache.run('k', factory);
+    await cache.run('k', factory);
+    expect(factory).toHaveBeenCalledTimes(1);
+    cache.delete('k');
+    await cache.run('k', factory);
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
 });
