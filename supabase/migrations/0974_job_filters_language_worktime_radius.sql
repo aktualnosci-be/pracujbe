@@ -813,7 +813,7 @@ begin
                     'meal_voucher_daily', 'joint_committee',
                     -- 0172: kanał aplikowania u ogłoszeniodawcy
                     'apply_url', 'apply_email', 'apply_phone',
-                    -- 0974 (#811): wymiar czasu pracy
+                    -- 0974, #811: wymiar czasu pracy
                     'work_time')
     limit 1;
   if v_bad is null then
