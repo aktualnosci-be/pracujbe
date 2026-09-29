@@ -22,10 +22,10 @@ for (const locale of LOCALES) {
     await expect(form).toBeVisible();
 
     await form.getByLabel(t.near, { exact: true }).fill('Gent');
-    await form.getByLabel(t.radius, { exact: true }).selectOption('50');
-    await form.getByLabel(t.workTime, { exact: true }).selectOption('full_time');
-    await form.getByLabel(t.requiredLanguage, { exact: true }).selectOption('nl');
-    await form.getByLabel(t.languageLevel, { exact: true }).selectOption('fluent');
+    await form.getByRole('combobox', { name: t.radius, exact: true }).selectOption('50');
+    await form.getByRole('combobox', { name: t.workTime, exact: true }).selectOption('full_time');
+    await form.getByRole('combobox', { name: t.requiredLanguage, exact: true }).selectOption('nl');
+    await form.getByRole('combobox', { name: t.languageLevel, exact: true }).selectOption('fluent');
     await form.locator('button[type="submit"]').click();
     await page.waitForLoadState('domcontentloaded');
 
@@ -39,10 +39,10 @@ for (const locale of LOCALES) {
     // Formularz po przeładowaniu odtwarza wybór z adresu.
     const again = page.locator('[data-filter-passport="no-js"]');
     await expect(again.getByLabel(t.near, { exact: true })).toHaveValue('Gent');
-    await expect(again.getByLabel(t.radius, { exact: true })).toHaveValue('50');
-    await expect(again.getByLabel(t.workTime, { exact: true })).toHaveValue('full_time');
-    await expect(again.getByLabel(t.requiredLanguage, { exact: true })).toHaveValue('nl');
-    await expect(again.getByLabel(t.languageLevel, { exact: true })).toHaveValue('fluent');
+    await expect(again.getByRole('combobox', { name: t.radius, exact: true })).toHaveValue('50');
+    await expect(again.getByRole('combobox', { name: t.workTime, exact: true })).toHaveValue('full_time');
+    await expect(again.getByRole('combobox', { name: t.requiredLanguage, exact: true })).toHaveValue('nl');
+    await expect(again.getByRole('combobox', { name: t.languageLevel, exact: true })).toHaveValue('fluent');
 
     // Chip miejscowości usuwa miejscowość i promień naraz (link działa bez JS).
     const nearChip = page.getByRole('link', { name: new RegExp(`${t.removeFilter}: .*Gent`) });
@@ -100,7 +100,7 @@ test('panel z JavaScriptem: wybór wymiaru pracy i języka trafia do adresu', as
   await rail.getByRole('radio', { name: t['workTimePart'], exact: true }).check({ force: true });
   await rail.getByRole('combobox', { name: t['requiredLanguage'], exact: true }).click();
   await page.getByRole('option', { name: messages('en').languageNames!['nl']!, exact: true }).click();
-  await rail.getByRole('button', { name: /^Show / }).click();
+  await rail.locator('[data-filter-apply="desktop"]').click();
   await expect(page).toHaveURL(/(?:\?|&)workTime=part_time(?:&|$)/);
   await expect(page).toHaveURL(/(?:\?|&)lang=nl(?:&|$)/);
 });
