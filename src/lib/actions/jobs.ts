@@ -99,7 +99,17 @@ import {
 export type CreateDraftResult =
   | { ok: true; id: string; demo?: boolean }
   | { ok: false; error: ErrorCode };
-export type SaveDraftResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+export type SaveDraftResult =
+  | {
+      ok: true;
+      demo?: boolean;
+      /**
+       * #1070: nowa wersja szkicu (`jobs.updated_at`, pełna precyzja) — kreator odsyła ją przy
+       * kolejnym zapisie. Brak = tryb demo albo baza sprzed 0184 (zapis bez kontroli wersji).
+       */
+      version?: string;
+    }
+  | { ok: false; error: ErrorCode };
 export type PublishResult =
   | { ok: true; demo?: boolean }
   | {
@@ -235,14 +245,18 @@ async function setDraftContentLocale(
   tx: TransactionQuery,
   jobId: string,
   locale: string,
-): Promise<void> {
+  expectedVersion?: string,
+): Promise<{ conflict: true } | { conflict?: false; version?: string }> {
   const target = normalizeLocale(locale);
   const current = await queryOne<Record<string, unknown>>(tx, 'jobs.draft-locale',
-    `SELECT default_locale FROM public.jobs
+    `SELECT default_locale, ($2::timestamptz IS NULL OR updated_at = $2::timestamptz) AS fresh
+       FROM public.jobs
       WHERE id = $1 AND status = 'draft' AND deleted_at IS NULL
-      FOR UPDATE`, [jobId]);
+      FOR UPDATE`, [jobId, expectedVersion ?? null]);
+  // #1070: szkic zmienił się od wczytania kreatora — konflikt zamiast zmiany języka.
+  if (current && current['fresh'] === false) return { conflict: true };
   const from = asString(current?.['default_locale']);
-  if (!from || from === target) return;
+  if (!from || from === target) return {};
   await execute(tx, 'jobs.draft-locale-translations-clear',
     'DELETE FROM public.job_translations WHERE job_id = $1 AND locale = $2', [jobId, target]);
   await execute(tx, 'jobs.draft-locale-requirements-clear',
@@ -255,6 +269,10 @@ async function setDraftContentLocale(
     [jobId, from, target]);
   await execute(tx, 'jobs.draft-locale-set',
     "UPDATE public.jobs SET default_locale = $2 WHERE id = $1 AND status = 'draft'", [jobId, target]);
+  const after = await queryOne<Record<string, unknown>>(tx, 'jobs.draft-locale-version',
+    `SELECT to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS version
+       FROM public.jobs WHERE id = $1`, [jobId]);
+  return { version: asString(after?.['version']) || undefined };
 }
 
 /* ---------------------------------------------------------------------------
@@ -444,13 +462,26 @@ export async function deleteJobDraft(jobId: string): Promise<SaveDraftResult> {
 /**
  * Zapisuje pojedynczy krok szkicu. Waliduje danymi z `@/lib/validation/job` i utrwala
  * właściwe kolumny/relacje. RLS pilnuje, że użytkownik edytuje ofertę własnej firmy.
+ *
+ * `expectedVersion` (#1070, 0184) — wersja szkicu wczytana do kreatora albo zwrócona przez
+ * poprzedni zapis. Szkic zmieniony w międzyczasie (druga karta, inny rekruter firmy) →
+ * `JOB_EDIT_CONFLICT` bez żadnej zmiany. Brak wersji (świeży szkic tej karty, import) = zapis
+ * bez kontroli; odpowiedź niesie wtedy pierwszą wersję do kolejnych zapisów.
  */
 export async function updateJobDraft(
   jobId: string,
   step: number,
   data: unknown,
+  expectedVersion?: string | null,
 ): Promise<SaveDraftResult> {
   if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && jobId !== DEMO_DRAFT_ID)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (
+    expectedVersion !== undefined &&
+    expectedVersion !== null &&
+    (typeof expectedVersion !== 'string' || Number.isNaN(Date.parse(expectedVersion)))
+  ) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
   if (!Number.isInteger(step) || step < 1 || step > 9) {
@@ -473,7 +504,7 @@ export async function updateJobDraft(
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
+    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | { version?: string }> => {
       // Odczyt oferty (RLS jobs_select_member) — potwierdza własność i stan szkicu.
       const job = await queryOne<Record<string, unknown>>(tx, 'jobs.draft-state',
         'SELECT id, status FROM public.jobs WHERE id = $1 AND deleted_at IS NULL', [jobId]);
@@ -490,16 +521,28 @@ export async function updateJobDraft(
       if (!content) return 'VALIDATION_FAILED';
       if (screeningOff) delete content['screening_questions'];
       // #1048 (I18N-01): krok 1 niesie jawny język ogłoszenia — zmiana PRZED zapisem treści,
-      // żeby tłumaczenie i wymagania trafiły do właściwego języka.
+      // żeby tłumaczenie i wymagania trafiły do właściwego języka. Zmiana języka modyfikuje
+      // `jobs` (nowa wersja szkicu), więc token wersji (#1070) sprawdzamy tu PRZED zmianą
+      // i do RPC przekazujemy wersję odczytaną po niej.
+      let versionForSave = expectedVersion || undefined;
       if (step === 1) {
         const chosen = (parsed as JobStep1).contentLocale;
-        if (chosen) await setDraftContentLocale(tx, jobId, chosen);
+        if (chosen) {
+          const refreshed = await setDraftContentLocale(tx, jobId, chosen, versionForSave);
+          if (refreshed.conflict) return 'JOB_EDIT_CONFLICT' as const;
+          if (refreshed.version) versionForSave = refreshed.version;
+        }
       }
-      await rpc(tx, 'save_job_draft', { p_job_id: jobId, p_content: jsonArg(content) });
-      return null;
+      // #1070: wersja w RPC tylko przy znanym tokenie (undefined = pominięty argument).
+      const saved = await rpc(tx, 'save_job_draft', {
+        p_job_id: jobId,
+        p_content: jsonArg(content),
+        p_expected_updated_at: versionForSave,
+      });
+      return { version: asString(asRecord(saved)['updated_at']) || undefined };
     });
-    if (outcome) return { ok: false, error: outcome };
-    return { ok: true };
+    if (typeof outcome === 'string') return { ok: false, error: outcome };
+    return { ok: true, ...(outcome.version ? { version: outcome.version } : {}) };
   } catch (error) {
     return { ok: false, error: failureCode(error) };
   }

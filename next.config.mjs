@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
+import { expectedSchemaMigration } from './scripts/db/expected-migration.mjs';
 import { buildConsentBootScript } from './src/lib/security/csp-inline-scripts.mjs';
 
 // #585: próba i ustalenie, empirycznie zweryfikowane przeciwko realnie zbudowanej stronie
@@ -79,6 +80,8 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: BUILD.version,
     NEXT_PUBLIC_BUILD_TIME: BUILD.buildTime,
+    // #1065: najwyższa migracja znana tej wersji kodu — porównuje ją `/api/health/ops` z bazą.
+    PRACUJBE_EXPECTED_MIGRATION: expectedSchemaMigration() ?? '',
   },
   reactStrictMode: true,
   // #298: własny cache ISR — LRU w pamięci, limit dysku, 404 losowych slugów tylko krótko

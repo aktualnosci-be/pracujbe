@@ -276,7 +276,7 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126, 0186). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'job',
@@ -289,6 +289,7 @@ export const AUDIT_ENTITY_TYPES = [
   'email_campaign',
   'age_policy',
   'retention_policy',
+  'profile',
 ] as const;
 export type AuditEntityType = (typeof AUDIT_ENTITY_TYPES)[number];
 
@@ -303,6 +304,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.links_reviewed': 'auditActionCompanyLinksReviewed',
   'job.update_published': 'auditActionJobUpdatePublished',
   'job.duplicated': 'auditActionJobDuplicated',
+  'job.deleted': 'auditActionJobDeleted',
   'report.resolved': 'auditActionReportStatus',
   'moderation.decided': 'auditActionModerationDecided',
   'moderation.restored': 'auditActionModerationRestored',
@@ -337,6 +339,8 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
   'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',
+  // 0186 (#1049): zmiana języka e-maili przez użytkownika.
+  'profile.email_locale_changed': 'auditActionEmailLocaleChanged',
 };
 
 export function parseAuditEntity(raw: string | undefined | null): AuditEntityType | null {
