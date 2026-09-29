@@ -67,6 +67,11 @@ const classifieds = PORTAL_LEGAL_MODE.trim().toUpperCase() !== 'RECRUITMENT';
 const CLASSIFIEDS_FIXTURE_SPECS = [
   // „Aplikuj u pracodawcy” w lejku tylko po zgodzie, bez cookies i storage (#1161).
   '**/job-funnel-no-storage.spec.ts',
+  // Strony publiczne niezależne od procesu rekrutacyjnego — tryb produkcyjny (#1242).
+  '**/company-profile.spec.ts',
+  '**/contact-form.spec.ts',
+  '**/content-report-form.spec.ts',
+  '**/job-posting-fixture.spec.ts',
 ];
 for (const spec of CLASSIFIEDS_FIXTURE_SPECS) {
   if (!FULL_SPECS.includes(spec)) throw new Error(`CLASSIFIEDS_FIXTURE_SPECS: ${spec} nie należy do trybu full`);
@@ -93,6 +98,8 @@ const BLOB_NAME = (process.env.E2E_BLOB_NAME ?? '').replace(/[^a-z0-9-]/gi, '');
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: specsFor(),
+  // `test.only` pozostawione w specu nie może cicho wyłączyć reszty zestawu w CI (#1241).
+  forbidOnly: !!process.env.CI,
   workers: 1,
   // next dev kompiluje trasę przy pierwszym żądaniu; na zimnym starcie trwa to ponad 30 s.
   timeout: 120_000,

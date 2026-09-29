@@ -16,6 +16,8 @@ const { sendMessage, refresh, uploadMessageAttachment, discardMessageAttachment,
     discardMessageAttachment: vi.fn(),
     prepareMessageAttachmentDownload: vi.fn(),
   }));
+const { downloadPrivateFile } = vi.hoisted(() => ({ downloadPrivateFile: vi.fn() }));
+vi.mock('@/lib/files/client-download', () => ({ downloadPrivateFile }));
 vi.mock('@/lib/actions/messages', () => ({ sendMessage }));
 vi.mock('@/lib/actions/message-attachments', () => ({
   uploadMessageAttachment,
@@ -149,6 +151,44 @@ describe('MessageComposer — załączniki', () => {
     const list = screen.getByRole('list', { name: pl.messages.attachmentsLabel });
     expect(within(list).getAllByRole('listitem')).toHaveLength(2);
   });
+  it('plik w trakcie wgrywania można usunąć; spóźniony wynik uploadu jest sprzątany (FS30-05)', async () => {
+    let finish!: (value: unknown) => void;
+    uploadMessageAttachment.mockReturnValue(new Promise((r) => { finish = r; }));
+    discardMessageAttachment.mockResolvedValue({ ok: true });
+    renderComposer();
+    await choose(png('wolny.png'));
+    const remove = screen.getByRole('button', { name: fill(pl.messages.attachmentRemove, { name: 'wolny.png' }) });
+    expect(remove).toBeEnabled();
+    fireEvent.click(remove);
+    expect(screen.queryByRole('list', { name: pl.messages.attachmentsLabel })).toBeNull();
+    await act(async () => { finish({ ok: true, id: 'att-late' }); });
+    expect(discardMessageAttachment).toHaveBeenCalledWith('att-late');
+    expect(screen.queryByRole('list', { name: pl.messages.attachmentsLabel })).toBeNull();
+  });
+
+  it('niejednoznaczny wynik wysyłki z plikami: „Usuń wszystkie załączniki” czyści szkice i odblokowuje pole', async () => {
+    uploadMessageAttachment.mockResolvedValue({ ok: true, id: 'att-9' });
+    discardMessageAttachment.mockResolvedValue({ ok: true });
+    sendMessage.mockRejectedValue(new Error('network'));
+    renderComposer();
+    await choose(png('a.png'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Treść' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: pl.messages.send })); });
+    expect(screen.getByRole('alert')).toHaveTextContent(pl.messages.sendErrorUncertain);
+    const removeAll = screen.getByRole('button', { name: pl.messages.attachmentsRemoveAll });
+    fireEvent.click(removeAll);
+    expect(discardMessageAttachment).toHaveBeenCalledWith('att-9');
+    expect(screen.queryByRole('list', { name: pl.messages.attachmentsLabel })).toBeNull();
+    expect(screen.queryByRole('button', { name: pl.messages.attachmentsRemoveAll })).toBeNull();
+    expect(screen.queryByText(pl.messages.sendErrorUncertain)).toBeNull();
+  });
+
+  it('kontrola ujemna: bez błędu i z gotowymi plikami nie ma przycisku „Usuń wszystkie załączniki”', async () => {
+    uploadMessageAttachment.mockResolvedValue({ ok: true, id: 'att-1' });
+    renderComposer();
+    await choose(png());
+    expect(screen.queryByRole('button', { name: pl.messages.attachmentsRemoveAll })).toBeNull();
+  });
 });
 
 describe('MessageAttachmentList', () => {
@@ -162,16 +202,23 @@ describe('MessageAttachmentList', () => {
     );
   }
 
-  it('klik pobiera krótki link i przechodzi do trasy aplikacji', async () => {
-    const assign = vi.fn();
-    vi.stubGlobal('location', { ...window.location, assign });
+  it('klik pobiera krótki link i pobiera plik bez opuszczania strony', async () => {
+    downloadPrivateFile.mockResolvedValue(true);
     prepareMessageAttachmentDownload.mockResolvedValue({ ok: true, url: '/api/files/message/att-1?t=signed' });
     renderList();
     const button = screen.getByRole('button', { name: /umowa\.pdf/ });
     await act(async () => { fireEvent.click(button); });
     expect(prepareMessageAttachmentDownload).toHaveBeenCalledWith('att-1');
-    expect(assign).toHaveBeenCalledWith('/api/files/message/att-1?t=signed');
-    vi.unstubAllGlobals();
+    expect(downloadPrivateFile).toHaveBeenCalledWith('/api/files/message/att-1?t=signed', 'umowa.pdf');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('błąd trasy pobierania → komunikat przy pliku (kontekst wątku zostaje)', async () => {
+    downloadPrivateFile.mockResolvedValue(false);
+    prepareMessageAttachmentDownload.mockResolvedValue({ ok: true, url: '/api/files/message/att-1?t=signed' });
+    renderList();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /umowa\.pdf/ })); });
+    expect(screen.getByRole('alert')).toHaveTextContent(pl.messages.attachmentDownloadError);
   });
 
   it('błąd linku → komunikat przy pliku', async () => {

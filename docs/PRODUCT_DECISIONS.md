@@ -102,3 +102,9 @@ publikację lub wyróżnienie ogłoszenia) wymaga osobnego projektu i decyzji w�
 Ponowne włączenie funkcji rekrutacyjnych wymaga nowej, jawnej decyzji właściciela i obu kluczy
 trybu (zmienna środowiskowa i stan w bazie, #1143). Zmiana „przy okazji” innej pracy jest
 błędem.
+
+## Limit CV i usunięte rekordy procesu (29.09.2026)
+
+Konto kandydata może mieć najwyżej 10 plików CV i 50 MB łącznie. Aplikacja lub propozycja
+oznaczona jako usunięta jest nieaktywna: baza odrzuca zmianę jej statusu (neutralny błąd „nie
+znaleziono”), a strony jej nie widzą; usuwanie konta i retencja działają jak dotąd.

@@ -1,5 +1,6 @@
 import { aiBudgetLevel, aiBudgetPercent, type AiBudgetStatus } from '@/lib/admin/ai-costs';
 import { BACKUP_MAX_AGE_SECONDS, backupAlerts, type BackupFreshness, type BackupSignal } from '@/lib/ops/backup-freshness';
+import type { SchemaSignal } from '@/lib/ops/schema-state';
 import {
   evaluateOps,
   OPS_THRESHOLDS,
@@ -62,6 +63,7 @@ export type OpsRowId =
   | 'dbConnections'
   | 'appPoolWaiting'
   | 'portalModeMismatch'
+  | 'schemaBehind'
   | 'backupAge';
 
 /**
@@ -96,18 +98,20 @@ export interface OpsRow {
   threshold: OpsThreshold;
   state: OpsRowState;
   /** Sygnały czujek, które decydują o stanie wiersza (te same kody co w `/api/health/ops`). */
-  signals: readonly (OpsSignal | BackupSignal)[];
+  signals: readonly (OpsSignal | BackupSignal | SchemaSignal)[];
   note?: OpsNote;
 }
 
 export interface OpsDashboardInput {
-  alerts: readonly (OpsSignal | BackupSignal)[];
+  alerts: readonly (OpsSignal | BackupSignal | SchemaSignal)[];
   warnings: readonly OpsSignal[];
   metrics: OpsMetrics;
   appPool: AppPoolStats | null;
   aiBudget: AiBudgetStatus | null;
   maintenanceRun: MaintenanceRun | null | undefined;
   backup: BackupFreshness;
+  /** #1065: stan schematu (opcjonalny; brak = czujka niemierzona). */
+  schema?: { status: 'ok' | 'behind' | 'unreadable' | 'skipped' };
 }
 
 const NONE: OpsValue = { kind: 'none' };
@@ -135,7 +139,7 @@ export function buildOpsRows(input: OpsDashboardInput): OpsRow[] {
     section: OpsSection,
     value: OpsValue,
     threshold: OpsThreshold,
-    signals: readonly (OpsSignal | BackupSignal)[],
+    signals: readonly (OpsSignal | BackupSignal | SchemaSignal)[],
     available = true,
     note?: OpsNote,
   ): OpsRow => ({
@@ -251,6 +255,15 @@ export function buildOpsRows(input: OpsDashboardInput): OpsRow[] {
     row('portalModeMismatch', 'database', count(alerts.has('portal_legal_mode_mismatch') ? 1 : 0), POSITIVE,
       ['portal_legal_mode_mismatch']),
   );
+
+  // #1065: wiersz tylko, gdy czujka schematu jest mierzona (build zna oczekiwaną migrację).
+  // Wartość = 0/1 (najwyższa zastosowana migracja starsza niż oczekiwana przez kod).
+  if (input.schema && input.schema.status !== 'skipped') {
+    rows.push(
+      row('schemaBehind', 'database', count(input.schema.status === 'behind' ? 1 : 0), POSITIVE,
+        ['schema_behind_code', 'schema_state_unreadable']),
+    );
+  }
 
   // --- Kopia bazy (#569) -------------------------------------------------------------------------
   const backupSignals: BackupSignal[] = ['backup_stale', 'backup_missing', 'backup_unavailable', 'backup_misconfigured', 'backup_unconfigured'];

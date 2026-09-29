@@ -63,6 +63,26 @@ nie wiadomo, czy migracje zostały nałożone; usługa `pracujbe` nie ma zmienny
 8. **Po wszystkim.** Rozważ wyłączenie publicznego TCP proxy bazy (dostęp operatora
    przez `railway run`/sieć prywatną) — decyzja właściciela.
 
+## Kolejność względem wdrożenia kodu i czujka zgodności (#1065)
+
+Railway wdraża `main` automatycznie, a migracje nakłada operator osobnym krokiem. Migracje są
+addytywne względem kodu, więc bezpieczna kolejność to **najpierw migracje, potem kod**. Gdy kod
+wyjdzie pierwszy, przepływy używające nowych funkcji bazy dostają ogólny `INTERNAL` do czasu
+migracji. Żeby okno było widoczne:
+
+- Build zapisuje nazwę najwyższej migracji, jaką zna (`PRACUJBE_EXPECTED_MIGRATION`, wyliczana
+  z plików w `next.config.mjs` przez `scripts/db/expected-migration.mjs`).
+- Funkcja `public.ops_schema_state()` (migracja 0184; EXECUTE tylko `pracujbe_ops` i `service_role`)
+  zwraca liczbę zastosowanych migracji i najwyższą nazwę z `app_migrations.history`.
+- `GET /api/health/ops` porównuje oba i zgłasza alarm `schema_behind_code` (HTTP 503), gdy baza jest
+  za kodem — także gdy funkcji jeszcze nie ma. Po nałożeniu migracji alarm sam znika. Baza nowsza
+  od kodu (rollback wdrożenia) nie jest alarmem. Sekcja `schema` w odpowiedzi podaje nazwy migracji.
+
+Publiczny `/api/health` (healthcheck Railway) **celowo** nie sprawdza schematu: nieudany
+healthcheck wstrzymywałby wdrożenie kodu i wymuszał kolejność, której nie egzekwuje żaden krok
+automatyczny. Wstrzymanie ruchu przy rozjeździe (healthcheck z porównaniem) wymaga osobnej decyzji
+właściciela razem z automatycznym uruchamianiem migracji przy wdrożeniu (sekcja niżej).
+
 ## Rollback
 
 - **Kod:** revert na `main`; schemat zostaje (migracje są addytywne względem kodu).
