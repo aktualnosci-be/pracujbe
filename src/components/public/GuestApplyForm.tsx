@@ -356,7 +356,7 @@ export function GuestApplyForm({
     ) : null;
 
   return (
-    <form className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate aria-labelledby="guest-apply-title" data-testid="guest-apply-form">
+    <form method="post" className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate aria-labelledby="guest-apply-title" data-testid="guest-apply-form">
       <div>
         <h3 id="guest-apply-title" className="text-lg font-bold tracking-[-0.025em] text-foreground">{t('formTitle')}</h3>
         <p className="mt-1 text-[13px] leading-[1.6] text-muted-foreground">{t('formHint')}</p>
@@ -364,7 +364,7 @@ export function GuestApplyForm({
 
       <div className={FORM_FIELD}>
         <Label htmlFor="guest-apply-name" className={FORM_LABEL_TEXT}>
-          {t('fullName')} <span className="text-error" aria-hidden="true">*</span>
+          {t('fullName')} <span className="text-error-text" aria-hidden="true">*</span>
         </Label>
         <Input
           ref={refs.fullName}
@@ -383,7 +383,7 @@ export function GuestApplyForm({
 
       <div className={FORM_FIELD}>
         <Label htmlFor="guest-apply-email" className={FORM_LABEL_TEXT}>
-          {t('email')} <span className="text-error" aria-hidden="true">*</span>
+          {t('email')} <span className="text-error-text" aria-hidden="true">*</span>
         </Label>
         <Input
           ref={refs.email}
@@ -583,7 +583,7 @@ export function GuestApplyForm({
           ref={formErrorRef}
           role="alert"
           tabIndex={-1}
-          className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {formError === 'network'
             ? ta('errorNetwork')

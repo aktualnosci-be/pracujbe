@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { createReleaseAwareBuildMetadata } from './scripts/build-version.mjs';
+import { expectedSchemaMigration } from './scripts/db/expected-migration.mjs';
 import { buildConsentBootScript } from './src/lib/security/csp-inline-scripts.mjs';
 
 // #585: próba i ustalenie, empirycznie zweryfikowane przeciwko realnie zbudowanej stronie
@@ -79,6 +80,8 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: BUILD.version,
     NEXT_PUBLIC_BUILD_TIME: BUILD.buildTime,
+    // #1065: najwyższa migracja znana tej wersji kodu — porównuje ją `/api/health/ops` z bazą.
+    PRACUJBE_EXPECTED_MIGRATION: expectedSchemaMigration() ?? '',
   },
   reactStrictMode: true,
   // #298: własny cache ISR — LRU w pamięci, limit dysku, 404 losowych slugów tylko krótko
@@ -107,7 +110,9 @@ const nextConfig = {
   experimental: {
     // Ograniczenie JS na stronach publicznych: optymalizacja importów ikon.
     optimizePackageImports: ['lucide-react'],
-    // Plik CV ma limit 5 MB; multipart potrzebuje dodatkowego miejsca.
+    // Plik CV ma limit 5 MB; multipart potrzebuje dodatkowego miejsca. Limit jest globalny
+    // (Next nie ma go per akcja), więc anonimowe formularze poza panelami zawęża middleware
+    // (`src/lib/http/public-action-body-limit.ts`, 256 KB → 413, CFG29-07).
     serverActions: { bodySizeLimit: '6mb' },
   },
   // Uwaga: przekierowanie "/" → "/{locale}" obsługuje middleware next-intl

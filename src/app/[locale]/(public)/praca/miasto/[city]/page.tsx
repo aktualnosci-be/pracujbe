@@ -10,7 +10,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
-import { getJobs, isShowingDemoJobs, type LocationKey } from '@/lib/jobs';
+import { getJobs, getJobsCount, isShowingDemoJobs, type LocationKey } from '@/lib/jobs';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import { cityAliases } from '@/lib/locations/city-aliases';
@@ -97,7 +97,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Pusty landing (0 ofert) działa dla użytkownika, ale nie jest indeksowany (thin content, #299).
   // Ten sam filtr co treść strony (wszystkie nazwy miasta, #189), więc indeksowalność i wynik
   // są spójne z listą także w trybie demo (#1119: dawniej tekst po nazwie w języku strony).
-  const { total } = await getJobs({ locale, locations: cityAliases(city), page: 1, pageSize: 1 });
+  const total = await getJobsCount({ locale, locations: cityAliases(city) });
   const indexable = total > 0;
 
   return {

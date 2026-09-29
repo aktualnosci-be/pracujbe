@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import {
   Controller,
@@ -239,7 +241,7 @@ function ConsentCheckbox({
         </Label>
       </div>
       {error ? (
-        <p id={errorId} className="text-sm text-error">
+        <p id={errorId} className="text-sm text-error-text">
           {error}
         </p>
       ) : null}
@@ -280,6 +282,9 @@ export function AuthForm({
   const [serverError, setServerError] = React.useState<ErrorCode | null>(initialError);
   const [success, setSuccess] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
+  // #1236: przed hydracją (albo bez JS) natywna wysyłka wysłałaby hasło w adresie URL —
+  // przycisk odblokowuje się dopiero po hydracji, `method="post"` obronnie.
+  const hydrated = useHydrated();
   // Fokus na komunikat tylko po wysyłce (nie przy wejściu z `?error=`): przycisk jest `disabled`
   // w trakcie zapisu, więc przeglądarka zdejmuje z niego fokus — bez tego ląduje on na <body>.
   const focusAlertRef = React.useRef(false);
@@ -429,13 +434,14 @@ export function AuthForm({
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form onSubmit={onSubmit} noValidate method="post" className="space-y-4">
+      <NoScriptFormNotice />
       {serverError ? (
         <div
           ref={alertRef}
           tabIndex={-1}
           role="alert"
-          className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+          className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(errorMessageKey(serverError))}</p>
@@ -469,7 +475,7 @@ export function AuthForm({
               </p>
             ) : null}
             {fieldError?.message ? (
-              <p id={errorId} className="text-sm text-error">
+              <p id={errorId} className="text-sm text-error-text">
                 {tRoot(String(fieldError.message))}
               </p>
             ) : null}
@@ -551,7 +557,7 @@ export function AuthForm({
         />
       ) : null}
 
-      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting}>
+      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting || !hydrated}>
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

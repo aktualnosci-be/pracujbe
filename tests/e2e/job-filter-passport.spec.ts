@@ -355,6 +355,6 @@ test('kontrola ujemna wykrywa zbyt mały cel filtra', async ({ page }) => {
     )
     .toBe(true);
 
-  await mutation.evaluate((style) => style.remove());
+  await mutation.evaluate((node) => (node as Element).remove());
   await expectTargetsAtLeast48(rail);
 });

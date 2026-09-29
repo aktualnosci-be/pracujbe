@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { StatusPill } from "@/components/ui/status-pill";
 import { JobLifecycleActions } from "@/components/employer/JobLifecycleActions";
+import { DeleteJobDraftButton } from "@/components/employer/DeleteJobDraftButton";
 import { DuplicateJobButton } from "@/components/employer/DuplicateJobButton";
 import { RecruiterOnlyNote } from "@/components/employer/RecruiterOnlyNote";
 import { getCompanyJobsLoad, getEmployerShellData } from "@/lib/data/employer";
@@ -235,6 +236,10 @@ export default async function EmployerOffersPage({
                     {/* 0148: kopia oferty w dowolnym statusie jako nowy szkic (recruiter+). */}
                     {canRecruitHere ? (
                       <DuplicateJobButton jobId={offer.id} title={offer.title} />
+                    ) : null}
+                    {/* #1099 (EMP-04): szkic można usunąć (opublikowanej oferty się nie usuwa). */}
+                    {canRecruitHere && offer.status === "draft" ? (
+                      <DeleteJobDraftButton jobId={offer.id} title={offer.title} />
                     ) : null}
                     {offer.status === "draft" ? (
                       !canRecruitHere ? null : (

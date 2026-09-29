@@ -8,7 +8,7 @@ import { useRouter } from '@/i18n/navigation';
 import { duplicateJobAsDraft } from '@/lib/actions/jobs';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { Button } from '@/components/ui/button';
-import { Toast } from '@/components/ui/toast';
+import { ToastRegion } from '@/components/ui/toast';
 import { BTN_SMALL } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils';
  * sam szkic. Klucz jest wymieniany dopiero po sukcesie. Przycisk zablokowany w trakcie zapisu.
  */
 
-const TOAST_MS = 5000;
 
 export interface DuplicateJobButtonProps {
   jobId: string;
@@ -40,14 +39,9 @@ export function DuplicateJobButton({ jobId, title }: DuplicateJobButtonProps): R
   const [pending, startTransition] = React.useTransition();
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!error) return;
-    const timer = window.setTimeout(() => setError(null), TOAST_MS);
-    return () => window.clearTimeout(timer);
-  }, [error]);
-
   const run = () => {
     if (pending) return;
+    setError(null); // kolejna akcja zamyka poprzedni błąd (#1054)
     keyRef.current ??= newKey();
     const key = keyRef.current;
     startTransition(async () => {
@@ -88,11 +82,10 @@ export function DuplicateJobButton({ jobId, title }: DuplicateJobButtonProps): R
         {t('duplicateJob')}
       </Button>
 
-      {error ? (
-        <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
-          <Toast message={error} tone="error" onClose={() => setError(null)} />
-        </div>
-      ) : null}
+      <ToastRegion
+        toast={error ? { tone: 'error', message: error } : null}
+        onClose={() => setError(null)}
+      />
     </>
   );
 }

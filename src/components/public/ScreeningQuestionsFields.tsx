@@ -66,14 +66,14 @@ export function ScreeningQuestionsFields({
         const invalid = errors[question.id] !== undefined;
         const prompt = localizedText(question.prompt, locale, contentLocale);
         const marker = question.required ? (
-          <span className="text-error" aria-hidden="true">
+          <span className="text-error-text" aria-hidden="true">
             {' '}*
           </span>
         ) : (
           <span className="font-normal text-muted-foreground"> {t('screeningOptional')}</span>
         );
         const error = invalid ? (
-          <p id={errorId} className="text-sm text-error">
+          <p id={errorId} className="text-sm text-error-text">
             {errors[question.id] === 'sensitiveId' ? t('sensitiveIdNotAllowed') : t('screeningRequired')}
           </p>
         ) : null;

@@ -111,6 +111,7 @@ export default async function EditJobPage({
       <JobWizard
         initialJobId={draft.jobId}
         initialValues={draft.values}
+        draftVersion={draft.updatedAt || undefined}
         contentLocale={draft.contentLocale}
         assistEnabled={isJobAssistEnabled()}
         screeningEnabled={isRecruitmentEnabled('screening')}

@@ -4,7 +4,7 @@ import { isCronAuthorized } from '@/lib/cron/auth';
 import { isServiceDatabaseConfigured } from '@/lib/db/portal';
 import { isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
-import { isTranslationEnabled } from '@/lib/translation/config';
+import { isTranslationEnabled, isTranslationMisconfigured } from '@/lib/translation/config';
 import { createTranslationProvider, runTranslationQueue } from '@/lib/translation/run';
 import { serviceTranslationStore } from '@/lib/translation/store';
 
@@ -29,6 +29,12 @@ async function run(request: Request): Promise<Response> {
   if (!isCronAuthorized(request, 'maintenance')) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
+  // #692: flaga włączona bez dostawcy to błąd konfiguracji (alarmowalny 503, kolejka nietknięta),
+  // a nie „wyłączona funkcja” (200/skipped).
+  if (isTranslationMisconfigured()) {
+    captureError(new Error('translation_provider_missing'), { area: 'translation.config' });
+    return NextResponse.json({ error: 'translation_misconfigured' }, { status: 503 });
+  }
   if (!isTranslationEnabled()) {
     return NextResponse.json({ ok: true, skipped: 'disabled' });
   }
@@ -37,7 +43,7 @@ async function run(request: Request): Promise<Response> {
     return NextResponse.json({ ok: true, skipped: 'unconfigured' });
   }
   const provider = createTranslationProvider();
-  if (!provider) return NextResponse.json({ ok: true, skipped: 'disabled' });
+  if (!provider) return NextResponse.json({ error: 'translation_misconfigured' }, { status: 503 });
   try {
     const result = await runTranslationQueue({ store: serviceTranslationStore(), provider });
     return NextResponse.json({ ok: true, ...result });
