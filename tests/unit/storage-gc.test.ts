@@ -166,6 +166,7 @@ describe('/api/maintenance + GC (#17)', () => {
     delete process.env.STORAGE_GC_MODE;
     for (const fn of MAINTENANCE_RPCS) fakeDb.rpc(fn, 0);
     fakeDb.rpc('claim_storage_deletions', []);
+    fakeDb.rpc('claim_company_vies_auto_checks', []);
     bucket.config = { endpoint: 'https://storage.example.com', bucket: 'b', region: 'auto', accessKeyId: 'a', secretAccessKey: 's' };
   });
 
