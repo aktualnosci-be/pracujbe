@@ -14,7 +14,7 @@
 --    przez service_role/migrację) zostawia wpis audytu `job.deleted` (bez treści oferty).
 -- 2. #1034 — `protect_company_verification` (0084) traktuje numer rejestrowy (KBO) jak VAT:
 --    zmiana zweryfikowanej firmy wraca do `pending`. Nowy strażnik `guard_company_immutable_fields`:
---    `slug`, `is_demo`, `deleted_at`, `provider_customer_id`, `created_at` są niezmienne dla ról
+--    `slug`, `is_demo`, `deleted_at`, `created_at` są niezmienne dla ról
 --    klienta (anon/authenticated); definer RPC, service_role i migracje bez zmian. Bramki blokady
 --    moderacyjnej (oferta i firma, 0099) nie ufają już samej fladze sesji `pracujbe.moderation`:
 --    flaga działa tylko poza rolą klienta (RPC decyzji są SECURITY DEFINER, więc ich wykonawcą
@@ -126,7 +126,6 @@ begin
      or new.slug is distinct from old.slug
      or new.is_demo is distinct from old.is_demo
      or new.deleted_at is distinct from old.deleted_at
-     or new.provider_customer_id is distinct from old.provider_customer_id
      or new.created_at is distinct from old.created_at then
     raise exception 'PERMISSION_DENIED: pola techniczne firmy są niezmienne' using errcode = '42501';
   end if;

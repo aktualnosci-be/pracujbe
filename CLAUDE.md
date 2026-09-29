@@ -2793,7 +2793,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   dopasowania, zgłoszenia gościa, zapisane oferty); opublikowana oferta = zamknięcie/wygaśnięcie;
   każde usunięcie (także service_role/migracja) zapisuje audyt `job.deleted` (aktor, status, firma,
   slug — bez treści; etykieta w dzienniku admina); (2) firmy: numer rejestrowy zweryfikowanej firmy
-  cofa weryfikację jak VAT, `slug`/`is_demo`/`deleted_at`/`provider_customer_id`/`created_at` niezmienne
+  cofa weryfikację jak VAT, `slug`/`is_demo`/`deleted_at`/`created_at` niezmienne
   dla roli klienta (`guard_company_immutable_fields`), a bramki blokady moderacyjnej (oferta i firma)
   nie ufają samej fladze sesji `pracujbe.moderation` — działa tylko poza rolą klienta (RPC decyzji są
   definerami); (3) `files`: rola klienta tworzy plik tylko prywatny, w folderze własnego `owner_id`,

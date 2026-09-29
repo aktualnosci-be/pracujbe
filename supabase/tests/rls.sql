@@ -19202,8 +19202,6 @@ select pg_temp.expect_error($q$update public.companies set is_demo = true where 
   'pola techniczne firmy', 'M2-6b is_demo niezmienne');
 select pg_temp.expect_error($q$update public.companies set deleted_at = now() where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
   'pola techniczne firmy', 'M2-6c deleted_at niezmienne');
-select pg_temp.expect_error($q$update public.companies set provider_customer_id = 'cus_x' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
-  'pola techniczne firmy', 'M2-6d provider_customer_id niezmienne');
 select pg_temp.expect_error($q$update public.companies set created_at = now() - interval '1 year' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
   'pola techniczne firmy', 'M2-6e created_at niezmienne');
 -- Dozwolone dane (opis) nadal się zapisują.
@@ -19212,8 +19210,8 @@ reset role; reset app.current_uid;
 select pg_temp.assert((select description = 'Opis firmy M2' and slug = 'firma-m2-slug' and not is_demo and deleted_at is null
                          from public.companies where id = :'M2COMP'), 'M2-6f opis zapisany, pola techniczne bez zmian');
 -- Właściciel tabel / service_role (RPC definer, migracje) zmieniają je bez przeszkód.
-update public.companies set provider_customer_id = 'cus_m2' where id = :'M2COMP';
-select pg_temp.assert((select provider_customer_id = 'cus_m2' from public.companies where id = :'M2COMP'),
+update public.companies set created_at = timestamptz '2026-01-01 00:00:00+00' where id = :'M2COMP';
+select pg_temp.assert((select created_at = timestamptz '2026-01-01 00:00:00+00' from public.companies where id = :'M2COMP'),
   'M2-6g zaufana ścieżka (poza rolą klienta) zmienia pole techniczne');
 -- M2-6h (kontrola ujemna): bez strażnika owner firmy zmienia slug publicznego profilu.
 begin;
@@ -19873,6 +19871,8 @@ begin
   -- company_members: dodatkowa warstwa (hierarchia ról, tożsamość członkostwa) też odrzuca — dla dowodu
   -- działania samej polityki wyłączamy ją w tej kontroli.
   alter table public.company_members disable trigger user;
+  -- files: strażnik zapisu klienta (0961, #1089) odrzuca cudzy owner_id niezależnie od polityki.
+  alter table public.files disable trigger trg_files_guard_client_write;
 end $$;
 select pg_temp.wm_run('control') as wm_ctl \gset
 rollback;
