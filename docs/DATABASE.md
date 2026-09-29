@@ -279,9 +279,18 @@ koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
   danych drugiej: autor dostaje swoje decyzje i odwołania (`get_company_moderation_decisions`
   z polami odwołania), zgłaszający — wynik i własne odwołanie (`get_report_case`); zdarzenia
   odwołań nie są widoczne w RLS historii sprawy dla zgłaszającego.
-- **Termin od poinformowania.** `moderation_informed_at(decision)` = pierwszy faktycznie wysłany
-  e-mail o decyzji (`sent`/`delivered`/`opened`/`clicked`; odbicie się nie liczy) albo odczyt
-  powiadomienia w panelu (autor). Koniec terminu = poinformowanie + `dsa_appeal_window()`.
+- **Termin od poinformowania.** `moderation_informed_at(decision)` = najwcześniejszy nieunieważniony
+  wpis niezmiennej tabeli `moderation_informed` (0960, numer tymczasowy; #1045/#1063), zapisywanej
+  wyłącznie triggerami i RPC odczytu decyzji — nie tabelą powiadomień UI ani bieżącym stanem
+  poczty. Podstawy: `email_sent` (pierwszy faktycznie wysłany e-mail; trwałe odbicie/błąd
+  UNIEWAŻNIA wpis z tego listu), `panel_view` (pierwszy odczyt decyzji przez aktywnego
+  właściciela/administratora firmy w `get_company_moderation_decisions`; „oznacz jako przeczytane”
+  powiadomień nie liczy się), reguły zastępcze `delivery_failed` (wszystkie zlecenia e-mail o decyzji
+  zakończone bez doręczenia, nikt inny nie poinformowany — od chwili ostatecznej porażki) i
+  `no_recipient` (w chwili decyzji nie było żadnego adresata — od chwili decyzji; sprawdzane
+  odroczonym triggerem przy zatwierdzeniu transakcji). `dsa_retention_report()` zlicza sprawy
+  z terminem z reguły zastępczej (`informedByFallback`). Koniec terminu = poinformowanie +
+  `dsa_appeal_window()`.
   Dopóki strona nie została poinformowana, termin nie biegnie. Stan drogi odwołania:
   `moderation_appealable` (`OK`, `APPEAL_EXISTS`, `APPEAL_WINDOW_CLOSED`, `INVALID_TRANSITION`).
 - **Rozpatrzenie.** `admin_decide_appeal(appeal, expected_status, outcome, reasoning,
@@ -334,8 +343,9 @@ rozszerza tę samą maszynę odwołań:
   odwołania (trigger). Unikaty: jedno odwołanie od decyzji i jedno od każdego cofnięcia.
 - Ręczne cofnięcie (`admin_restore_moderation`) kolejkuje e-mail `reportRestored` do
   zgłaszającego w jego języku (profil → `resolve_recipient_locale`, gość — język formularza),
-  bez powodu cofnięcia i danych autora. Termin odwołania biegnie od faktycznego wysłania tego
-  e-maila (`moderation_restoration_informed_at`/`_appeal_deadline`).
+  bez powodu cofnięcia i danych autora. Termin odwołania biegnie od poinformowania zgłaszającego (wysłany
+  e-mail; przy nieudanym doręczeniu od chwili porażki — `moderation_restoration_informed_at`/`_appeal_deadline`,
+  wpisy `moderation_informed`, 0960).
 - `moderation_restoration_appealable(id)`: od cofnięcia po uwzględnionym odwołaniu autora
   (albo przy jego odwołaniu w toku) i od cofnięcia decyzji, która już nie rozstrzyga sprawy —
   `INVALID_TRANSITION` (e-mail też nie wychodzi).

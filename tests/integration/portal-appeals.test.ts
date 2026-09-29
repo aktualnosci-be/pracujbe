@@ -15,6 +15,7 @@ vi.mock('next/navigation', () => ({
 
 const actions = await import('../../src/lib/actions/appeals');
 const dsa = await import('../../src/lib/data/admin-dsa');
+const companyData = await import('../../src/lib/data/company');
 
 // #25/#43: odwołania DSA na PostgreSQL 16 — autor pod sesją (RLS/członkostwo w RPC),
 // zgłaszający przez service_role z kodem dostępu, kolejka i raport tylko po roli admina.
@@ -224,5 +225,37 @@ describe('odwołania na PostgreSQL (#25) — panel admina', () => {
     if (retention.status !== 'ok') throw new Error('expected ok');
     expect(retention.overview.appealWindowDays).toBeGreaterThan(0);
     expect(retention.overview.runs).toEqual([]);
+  });
+});
+
+// 0960 (#1045): poinformowanie autora = odczyt decyzji w panelu (niezmienny zapis), nie odczyt
+// powiadomienia; osoba spoza firmy nie rozpoczyna biegu terminu.
+describe('dowód poinformowania autora przy odczycie decyzji (0960)', () => {
+  it('odczyt przez właściciela zapisuje panel_view; obca firma nic nie zapisuje', async () => {
+    const companyId = (await db().admin.query(
+      `SELECT j.company_id AS id FROM public.jobs j WHERE j.id = $1`, [restrictedJob])).rows[0].id as string;
+    const decisionId = (await db().admin.query(
+      `SELECT id FROM public.moderation_decisions WHERE job_id = $1 ORDER BY decided_at LIMIT 1`, [restrictedJob])).rows[0].id as string;
+    const informed = async () => (await db().admin.query(
+      `SELECT basis, informed_at FROM public.moderation_informed WHERE decision_id = $1 AND voided_at IS NULL`, [decisionId])).rows;
+    // Dawne wpisy tej decyzji (np. z e-maila) nie mają znaczenia — usuwamy tylko kontrolę początkową.
+    await db().admin.query(`UPDATE public.moderation_informed SET voided_at = now() WHERE decision_id = $1 AND voided_at IS NULL`, [decisionId]);
+    expect(await informed()).toEqual([]);
+
+    actAs(stranger);
+    const foreign = await companyData.getCompanyModerationDecisions(companyId);
+    expect(foreign).toEqual({ status: 'ok', decisions: [] });
+    expect(await informed()).toEqual([]);
+
+    actAs(owner);
+    const own = await companyData.getCompanyModerationDecisions(companyId);
+    expect(own.status).toBe('ok');
+    if (own.status === 'ok') expect(own.decisions.some((d) => d.id === decisionId)).toBe(true);
+    const rows = await informed();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ basis: 'panel_view' });
+    const first = rows[0].informed_at as Date;
+    await companyData.getCompanyModerationDecisions(companyId);
+    expect((await informed())[0].informed_at).toEqual(first);
   });
 });

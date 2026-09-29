@@ -2373,6 +2373,7 @@
     "dsaRetentionPolicy": "Délai de recours : {appealDays} jours après notification · conservation : {retentionDays} jours. Valeurs provisoires — à approuver par le propriétaire du site.",
     "dsaRetentionEligible": "À anonymiser",
     "dsaRetentionWaiting": "En attente de la fin du délai de recours",
+    "dsaRetentionFallback": "Délai courant selon la règle de repli (non remis / sans destinataire)",
     "dsaRetentionWithin": "En période de conservation",
     "dsaRetentionNext": "prochaine : {date}",
     "dsaRetentionRedacted": "Anonymisés",

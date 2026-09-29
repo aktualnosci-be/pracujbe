@@ -2373,6 +2373,7 @@
     "dsaRetentionPolicy": "Okno odwołania: {appealDays} dni od poinformowania · retencja: {retentionDays} dni. Wartości tymczasowe — do zatwierdzenia przez właściciela serwisu.",
     "dsaRetentionEligible": "Do anonimizacji",
     "dsaRetentionWaiting": "Czeka na koniec drogi odwołania",
+    "dsaRetentionFallback": "Termin biegnie z reguły zastępczej (nie doręczono / brak adresata)",
     "dsaRetentionWithin": "W okresie retencji",
     "dsaRetentionNext": "najbliższa: {date}",
     "dsaRetentionRedacted": "Zanonimizowane",

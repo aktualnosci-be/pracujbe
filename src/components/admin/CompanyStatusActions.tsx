@@ -46,19 +46,28 @@ interface StatusAction {
   tone: AdminActionTone;
 }
 
-/** Dostępne akcje zależnie od bieżącego statusu firmy (zgodne z macierzą w DB, 0081). */
+/**
+ * Dostępne akcje zależnie od bieżącego statusu firmy (zgodne z macierzą w DB, 0081/0960).
+ * Pilna blokada (zawieszenie) jest dostępna także dla firmy jeszcze niezweryfikowanej, a
+ * zawieszoną firmę można odrzucić zamiast „reaktywować” do zweryfikowanej (#1107).
+ */
 export const COMPANY_ACTIONS_BY_STATUS: Record<string, StatusAction[]> = {
   unverified: [
     { target: 'verified', labelKey: 'actionVerify', tone: 'success' },
     { target: 'rejected', labelKey: 'actionRejectCompany', tone: 'error' },
+    { target: 'suspended', labelKey: 'actionSuspend', tone: 'warning' },
   ],
   pending: [
     { target: 'verified', labelKey: 'actionVerify', tone: 'success' },
     { target: 'rejected', labelKey: 'actionRejectCompany', tone: 'error' },
+    { target: 'suspended', labelKey: 'actionSuspend', tone: 'warning' },
   ],
   verified: [{ target: 'suspended', labelKey: 'actionSuspend', tone: 'warning' }],
   rejected: [{ target: 'verified', labelKey: 'actionVerify', tone: 'success' }],
-  suspended: [{ target: 'verified', labelKey: 'actionReactivate', tone: 'success' }],
+  suspended: [
+    { target: 'verified', labelKey: 'actionReactivate', tone: 'success' },
+    { target: 'rejected', labelKey: 'actionRejectCompany', tone: 'error' },
+  ],
 };
 
 export interface CompanyStatusActionsProps {

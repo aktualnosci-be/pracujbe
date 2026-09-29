@@ -2373,6 +2373,7 @@
     "dsaRetentionPolicy": "Bezwaartermijn: {appealDays} dagen na kennisgeving · bewaring: {retentionDays} dagen. Voorlopige waarden — goed te keuren door de eigenaar van de website.",
     "dsaRetentionEligible": "Te anonimiseren",
     "dsaRetentionWaiting": "Wacht op einde bezwaartermijn",
+    "dsaRetentionFallback": "Termijn loopt via de terugvalregel (niet bezorgd / geen ontvanger)",
     "dsaRetentionWithin": "Binnen de bewaartermijn",
     "dsaRetentionNext": "eerstvolgende: {date}",
     "dsaRetentionRedacted": "Geanonimiseerd",

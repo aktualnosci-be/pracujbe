@@ -8988,8 +8988,9 @@ reset role;
 update public.email_deliveries set status = 'bounced', sent_at = now() - interval '7 months'
   where entity_id = :'ar4' and template = 'reportDecisionNoAction';
 set role service_role;
-select pg_temp.assert(public.moderation_appeal_deadline(:'ad4') is null,
-  'APL43-3b odbity e-mail nie jest poinformowaniem');
+select pg_temp.assert(public.moderation_informed_at(:'ad4') between now() - interval '1 minute' and now() + interval '1 minute'
+  and not exists (select 1 from public.moderation_informed where decision_id = :'ad4' and basis = 'email_sent' and voided_at is null),
+  'APL43-3b odbity e-mail nie jest poinformowaniem wysyłką (0960/#1063: termin od chwili porażki, nie od wysyłki)');
 reset role;
 update public.email_deliveries set status = 'delivered' where entity_id = :'ar4' and template = 'reportDecisionNoAction';
 set role service_role;
@@ -9000,12 +9001,21 @@ select pg_temp.expect_error('select * from public.submit_report_appeal(''' || :'
 select (public.get_report_case(:'acase4', 'ABCDEFGHIJKLMNOPQRSTUVWX'))->>'appealState' as astate4 \gset
 reset role;
 select pg_temp.assert(:'astate4' = 'APPEAL_WINDOW_CLOSED', 'APL43-3e zgłaszający widzi, że termin upłynął');
--- Autor: odczyt powiadomienia w panelu = poinformowanie (wcześniejsze niż e-mail).
+-- Autor: sam odczyt/oznaczenie powiadomienia NIE jest poinformowaniem (0960/#1045); poinformowaniem
+-- jest odczyt decyzji w panelu (get_company_moderation_decisions), zapisany niezmiennie.
 update public.notifications set read_at = now() - interval '1 day'
   where data->>'decisionId' = :'ad3' and profile_id = :'EMPA';
 set role service_role;
-select pg_temp.assert(public.moderation_informed_at(:'ad3') between now() - interval '25 hours' and now() - interval '23 hours',
-  'APL43-3f autor poinformowany odczytem powiadomienia w panelu');
+select pg_temp.assert(public.moderation_informed_at(:'ad3') is null,
+  'APL43-3f odczyt powiadomienia nie rozpoczyna biegu terminu (mutowalna tabela UI)');
+reset role;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as apl3f_rows from public.get_company_moderation_decisions(:'APCO') \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(:'apl3f_rows'::int >= 1
+  and public.moderation_informed_at(:'ad3') between now() - interval '1 minute' and now() + interval '1 minute',
+  'APL43-3g autor poinformowany odczytem decyzji w panelu (chwila odczytu, nie chwila odczytu powiadomienia)');
 reset role;
 
 -- APL43-4: ponowny przegląd przez INNEGO człowieka, gdy to możliwe.
@@ -9392,9 +9402,10 @@ reset role;
 update public.email_deliveries set status = 'bounced', sent_at = now() - interval '2 years'
   where entity_id = :'rs2' and template = 'reportRestored';
 set role service_role;
-select pg_temp.assert(public.moderation_restoration_appeal_deadline(:'rs2') is null
+select pg_temp.assert(public.moderation_restoration_informed_at(:'rs2') between now() - interval '1 minute' and now() + interval '1 minute'
+  and not exists (select 1 from public.moderation_informed where restoration_id = :'rs2' and basis = 'email_sent' and voided_at is null)
   and public.moderation_restoration_appealable(:'rs2') = 'OK',
-  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem');
+  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem wysyłką (0960/#1063: termin od chwili porażki)');
 reset role;
 update public.email_deliveries set status = 'delivered' where entity_id = :'rs2' and template = 'reportRestored';
 update public.email_deliveries set status = 'sent', sent_at = now() where entity_id = :'rs1' and template = 'reportRestored';
@@ -19112,5 +19123,416 @@ select count(public.deactivate_translation_source(entity_type, entity_id, false)
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
+
+-- ============================================================================
+-- DSA960 (0960, paczka M-1): kod dostępu poza kolejką e-mail (#1037), trwały dowód
+-- poinformowania niezależny od powiadomień (#1045) z regułami zastępczymi (#1063), limity
+-- zgłoszeń pod blokadą (#1098, część DSA), zawieszenie firmy niezweryfikowanej (#1107).
+-- Kontrole ujemne: zdjęty strażnik/trigger/indeks daje wykrywalny, błędny wynik; dla blokady
+-- per adres samo `wait_blocked` jest kontrolą (bez blokady druga sesja nie czeka).
+-- ============================================================================
+\echo '--- DSA960 dowód poinformowania, limity, kod dostępu, zawieszenie ---'
+\set D9CO1 'e9960000-0000-0000-0000-0000000000c1'
+\set D9CO2 'e9960000-0000-0000-0000-0000000000c2'
+\set D9CO3 'e9960000-0000-0000-0000-0000000000c3'
+\set D9CO4 'e9960000-0000-0000-0000-0000000000c4'
+\set D9CODE 'ABCDEFGHIJKLMNOPQRSTUVWX'
+\set D9DESC 'Oferta wymaga opłaty za rekrutację z góry.'
+reset role; reset app.current_uid;
+select (public.dsa_retention_report()->>'informedByFallback')::int as d9fb0 \gset
+insert into public.companies(id,name,status) values
+  (:'D9CO1','Firma D960 A','verified'), (:'D9CO2','Firma D960 B','verified'), (:'D9CO3','Firma D960 C','verified'),
+  (:'D9CO4','Firma D960 D','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'D9CO1',:'EMPA','owner',true),
+  (:'D9CO2',:'EMPA','owner',true), (:'D9CO2',:'EMPB','owner',true),
+  (:'D9CO3',:'EMPA','owner',false),   -- firma bez aktywnego właściciela
+  (:'D9CO4',:'EMPA','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale)
+select ('e9960000-0000-0000-0000-0000000001' || lpad(n::text, 2, '0'))::uuid,
+       (case when n in (5, 6) then :'D9CO2' when n in (7, 8) then :'D9CO3' when n = 2 then :'D9CO4' else :'D9CO1' end)::uuid,
+       'dsa960-job-' || n, 'Magazynier D960 ' || n, 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl'
+  from generate_series(1, 20) n;
+
+-- Zgłoszenia (każda decyzja zamyka swoją ofertę, więc osobna oferta na decyzję).
+set role service_role;
+select report_id as d9r1 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000101', 'fraud', :'D9DESC', null, 'Gość D9', 'd9-1@test.be', 'pl', true) \gset
+select report_id as d9r2 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000101', 'fraud', :'D9DESC', null, null, 'd9-2@test.be', 'pl', true) \gset
+select report_id as d9r3 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000102', 'fraud', :'D9DESC', null, null, 'd9-3@test.be', 'fr', true) \gset
+select report_id as d9r4 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000103', 'fraud', :'D9DESC', null, null, 'd9-4@test.be', 'nl', true) \gset
+select report_id as d9r5 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000104', 'fraud', :'D9DESC', null, null, 'd9-5@test.be', 'pl', true) \gset
+select report_id as d9r6 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000105', 'fraud', :'D9DESC', null, null, 'd9-6@test.be', 'pl', true) \gset
+select report_id as d9r7 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000106', 'fraud', :'D9DESC', null, null, 'd9-7@test.be', 'pl', true) \gset
+select report_id as d9r8 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000107', 'fraud', :'D9DESC', null, null, 'd9-8@test.be', 'pl', true) \gset
+select report_id as d9r10 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000109', 'fraud', :'D9DESC', null, null, 'd9-10@test.be', 'nl', true) \gset
+select report_id as d9r11 from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000110', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null, 'd9-11@test.be', 'pl', true) \gset
+reset role;
+
+-- DSA960-1 (#1037): kod dostępu nie zostaje w kolejce po wysyłce ani po błędzie.
+select pg_temp.assert(
+  (select payload->>'accessCode' = :'D9CODE' and payload->>'caseNumber' is not null
+     from public.email_deliveries where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1 oczekujące zlecenie trzyma kod (potrzebny do wysyłki)');
+update public.email_deliveries set attempts = 1, next_attempt_at = now() + interval '5 minutes'
+  where entity_id = :'d9r1' and template = 'reportReceived';
+select pg_temp.assert(
+  (select status = 'queued' and payload ? 'accessCode'
+     from public.email_deliveries where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1b ponowienie (nadal w kolejce) zachowuje kod');
+update public.email_deliveries set status = 'sent', sent_at = now()
+  where entity_id = :'d9r1' and template = 'reportReceived';
+select pg_temp.assert(
+  (select not (payload ? 'accessCode') and payload->>'caseNumber' is not null
+     from public.email_deliveries where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1c po wysyłce kod zniknął z payloadu (numer sprawy zostaje)');
+update public.email_deliveries set status = 'failed', error_message = 'EMAIL_PROVIDER_REJECTED'
+  where entity_id = :'d9r2' and template = 'reportReceived';
+select pg_temp.assert(
+  (select not (payload ? 'accessCode') from public.email_deliveries
+    where entity_id = :'d9r2' and template = 'reportReceived'),
+  'DSA960-1d po ostatecznym błędzie kod zniknął z payloadu');
+insert into public.email_deliveries
+  (to_email, template, locale, subject, status, entity_type, entity_id, idempotency_key, payload, queued_at, next_attempt_at, attempts)
+values
+  ('d9-x@test.be', 'reportReceived', 'pl', 'reportReceived', 'sent', 'report', gen_random_uuid(), 'dsa960-scrub-insert',
+   jsonb_build_object('caseNumber', 'DSA-X', 'accessCode', :'D9CODE'), now(), now(), 0),
+  ('d9-x@test.be', 'supportContact', 'pl', 'supportContact', 'sent', 'contact_message', gen_random_uuid(), 'dsa960-scrub-other',
+   jsonb_build_object('accessCode', 'inny-szablon'), now(), now(), 0);
+select pg_temp.assert(
+  (select not (payload ? 'accessCode') from public.email_deliveries where idempotency_key = 'dsa960-scrub-insert')
+  and (select payload ? 'accessCode' from public.email_deliveries where idempotency_key = 'dsa960-scrub-other'),
+  'DSA960-1e wstawienie od razu jako wysłane też czyszczone; inne szablony bez zmian');
+-- Kontrola ujemna: bez strażnika kod zostaje w danych operacyjnych po wysyłce.
+begin;
+drop trigger trg_email_deliveries_scrub_access_code on public.email_deliveries;
+update public.email_deliveries set payload = jsonb_build_object('caseNumber', 'X', 'accessCode', :'D9CODE')
+  where entity_id = :'d9r1' and template = 'reportReceived';
+select pg_temp.assert((select payload ? 'accessCode' from public.email_deliveries
+   where entity_id = :'d9r1' and template = 'reportReceived'),
+  'DSA960-1f kontrola ujemna: bez strażnika kod przeżywa wysłane zlecenie');
+rollback;
+
+-- Decyzje moderacyjne (ADMIN).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'d9r3', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d3 \gset
+select public.admin_decide_report(:'d9r4', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d4 \gset
+select public.admin_decide_report(:'d9r5', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d5 \gset
+select public.admin_decide_report(:'d9r6', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d6 \gset
+select public.admin_decide_report(:'d9r7', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d7 \gset
+select public.admin_decide_report(:'d9r8', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d8 \gset
+select public.admin_decide_report(:'d9r10', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9d10 \gset
+select public.admin_decide_report(:'d9r11', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as d9d11 \gset
+reset role; reset app.current_uid;
+
+-- DSA960-2 (#1045): poinformowanie autora = odczyt decyzji w panelu, nie odczyt powiadomienia.
+set role service_role;
+select pg_temp.assert(public.moderation_informed_at(:'d9d3') is null and public.moderation_appealable(:'d9d3') = 'OK',
+  'DSA960-2 e-mail w kolejce, nic nie odczytane: termin jeszcze nie biegnie');
+reset role;
+update public.notifications set read_at = now() - interval '3 days'
+  where data->>'decisionId' = :'d9d3' and profile_id = :'EMPA';
+select pg_temp.assert(
+  (select min(n.read_at) from public.notifications n
+     where n.data->>'decisionId' = :'d9d3' and n.profile_id = :'EMPA') is not null,
+  'DSA960-2b kontrola: powiadomienie autora jest oznaczone jako przeczytane (dawna reguła by to policzyła)');
+set role service_role;
+select pg_temp.assert(public.moderation_informed_at(:'d9d3') is null,
+  'DSA960-2c odczyt/„oznacz jako przeczytane” powiadomienia nie rozpoczyna biegu terminu');
+reset role;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select count(*) as d9v_other from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select count(*) as d9v_cand from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'d9v_other'::int = 0 and :'d9v_cand'::int = 0
+  and not exists (select 1 from public.moderation_informed where decision_id = :'d9d3'),
+  'DSA960-2d osoba spoza firmy nie widzi decyzji i nie rozpoczyna biegu terminu');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as d9v_owner from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'d9v_owner'::int = 1
+  and (select count(*) = 1 and bool_and(basis = 'panel_view' and voided_at is null
+          and informed_at between now() - interval '1 minute' and now() + interval '1 minute')
+         from public.moderation_informed where decision_id = :'d9d3'),
+  'DSA960-2e pierwszy odczyt decyzji przez właściciela zapisuje panel_view (chwila odczytu)');
+select informed_at as d9inf1 from public.moderation_informed where decision_id = :'d9d3' \gset
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as d9v_again from public.get_company_moderation_decisions(:'D9CO4') \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select informed_at = :'d9inf1'::timestamptz and count(*) over () = 1
+     from public.moderation_informed where decision_id = :'d9d3'),
+  'DSA960-2f ponowny odczyt nie przesuwa chwili poinformowania');
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'d9d3') = :'d9inf1'::timestamptz + public.dsa_appeal_window(),
+  'DSA960-2g termin odwołania = chwila poinformowania + okno (6 mies. bez zmian)');
+reset role;
+-- Niezmienność i brak dostępu klienta.
+select pg_temp.expect_error(
+  'update public.moderation_informed set informed_at = now() - interval ''1 year'' where decision_id = ''' || :'d9d3' || '''',
+  'niezmienny', 'DSA960-2h chwili poinformowania nie da się cofnąć w czasie');
+select pg_temp.expect_error('delete from public.moderation_informed where decision_id = ''' || :'d9d3' || '''',
+  'niezmienny', 'DSA960-2i wpisu nie da się usunąć');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.moderation_informed', 'permission denied',
+  'DSA960-2j klient nie czyta dowodu poinformowania');
+select pg_temp.expect_error(
+  'insert into public.moderation_informed(decision_id, basis, informed_at) values (''' || :'d9d4' || ''', ''panel_view'', now())',
+  'permission denied', 'DSA960-2k klient nie zapisuje dowodu poinformowania');
+reset role; reset app.current_uid;
+
+-- DSA960-3 (#1063): reguły zastępcze, gdy strony nie da się poinformować.
+-- 3a: jedyny e-mail o decyzji nie został doręczony (adres zablokowany) → termin od porażki.
+update public.email_deliveries set status = 'failed', error_message = 'suppressed_address'
+  where entity_id = :'d9d4' and template = 'moderationJobRemoved';
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(basis = 'delivery_failed' and voided_at is null
+          and informed_at between now() - interval '1 minute' and now() + interval '1 minute')
+     from public.moderation_informed where decision_id = :'d9d4'),
+  'DSA960-3a nieudane doręczenie jedynego e-maila: reguła delivery_failed od chwili porażki');
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'d9d4') = public.moderation_informed_at(:'d9d4') + public.dsa_appeal_window()
+  and public.moderation_appealable(:'d9d4') = 'OK',
+  'DSA960-3a2 termin odwołania biegnie (okno 6 mies. od porażki), droga odwołania otwarta');
+reset role;
+select pg_temp.assert(
+  (select min(e.sent_at) from public.email_deliveries e
+    where e.entity_type = 'moderation_decision' and e.entity_id = :'d9d4'
+      and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null) is null,
+  'DSA960-3a3 kontrola ujemna: dawna reguła (tylko wysłany list) nie miałaby początku terminu');
+-- 3a4 (kontrola ujemna): bez triggera poczty nieudana wysyłka nie zostawia śladu.
+begin;
+drop trigger trg_email_deliveries_track_moderation_informed on public.email_deliveries;
+update public.email_deliveries set status = 'failed', error_message = 'suppressed_address'
+  where entity_id = :'d9d5' and template = 'moderationJobRemoved';
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9d5'),
+  'DSA960-3a4 kontrola ujemna: bez triggera porażka wysyłki nie zapisuje początku terminu');
+rollback;
+-- d9d5 nadal czeka na wysyłkę (rollback), więc nikt nie jest poinformowany.
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9d5')
+  and (select status::text from public.email_deliveries where entity_id = :'d9d5' and template = 'moderationJobRemoved') = 'queued',
+  'DSA960-3a5 decyzja z listem w kolejce: termin nie biegnie');
+
+-- 3b: dwóch właścicieli — fallback dopiero po porażce OBU zleceń.
+select pg_temp.assert((select count(*) from public.email_deliveries
+   where entity_id = :'d9d6' and template = 'moderationJobRemoved') = 2,
+  'DSA960-3b0 dwóch właścicieli = dwa zlecenia');
+update public.email_deliveries set status = 'failed', error_message = 'suppressed_address'
+  where id = (select id from public.email_deliveries where entity_id = :'d9d6' and template = 'moderationJobRemoved'
+               order by id limit 1);
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9d6'),
+  'DSA960-3b pierwszy list nieudany, drugi czeka: jeszcze nie ma początku terminu');
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9d6' and template = 'moderationJobRemoved' and status = 'queued';
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(basis = 'delivery_failed') from public.moderation_informed where decision_id = :'d9d6'),
+  'DSA960-3b2 oba listy nieudane: reguła delivery_failed');
+
+-- 3c: list wysłany, potem trwałe odbicie → wpis unieważniony, termin od odbicia.
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '10 days'
+  where id = (select id from public.email_deliveries where entity_id = :'d9d7' and template = 'moderationJobRemoved'
+               order by id limit 1);
+update public.email_deliveries set status = 'failed', error_message = 'EMAIL_PROVIDER_REJECTED'
+  where entity_id = :'d9d7' and template = 'moderationJobRemoved' and status = 'queued';
+select pg_temp.assert(
+  (select basis = 'email_sent' and informed_at < now() - interval '9 days' and voided_at is null
+     from public.moderation_informed where decision_id = :'d9d7'),
+  'DSA960-3c list wysłany 10 dni temu = poinformowanie od wysyłki (drugi list nieudany nie zmienia)');
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9d7' and template = 'moderationJobRemoved' and status = 'sent';
+select pg_temp.assert(
+  (select count(*) filter (where basis = 'email_sent' and voided_at is not null) = 1
+      and count(*) filter (where basis = 'delivery_failed' and voided_at is null) = 1
+     from public.moderation_informed where decision_id = :'d9d7')
+  and public.moderation_informed_at(:'d9d7') > now() - interval '1 minute',
+  'DSA960-3c2 odbicie unieważnia wpis email_sent; termin od chwili odbicia (delivery_failed)');
+
+-- 3d: brak adresata (firma bez aktywnego właściciela) → termin od chwili decyzji.
+select pg_temp.assert(
+  not exists (select 1 from public.email_deliveries where entity_id = :'d9d8' and template = 'moderationJobRemoved')
+  and (select basis = 'no_recipient' and informed_at = (select decided_at from public.moderation_decisions where id = :'d9d8')
+         from public.moderation_informed where decision_id = :'d9d8'),
+  'DSA960-3d brak adresata: reguła no_recipient od chwili decyzji');
+set role service_role;
+select pg_temp.assert(public.moderation_appeal_deadline(:'d9d8') =
+    (select decided_at from public.moderation_decisions where id = :'d9d8') + public.dsa_appeal_window(),
+  'DSA960-3d2 termin odwołania = chwila decyzji + okno');
+reset role;
+-- 3d3 (kontrola ujemna): bez triggera zatwierdzenia decyzja bez adresata nie ma początku terminu.
+begin;
+drop trigger trg_moderation_decisions_informed_no_recipient on public.moderation_decisions;
+set role service_role;
+select report_id as d9rn from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000108', 'fraud', :'D9DESC', null, null, 'd9-neg@test.be', 'pl', true) \gset
+reset role;
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'d9rn', 'open', 'job_removed', :'APFACTS', 'terms', 'Regulamin § 4') as d9dn \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.moderation_informed where decision_id = :'d9dn'),
+  'DSA960-3d3 kontrola ujemna: bez triggera decyzja bez adresata nie ma początku terminu');
+rollback;
+
+-- 3e: brak działań — list do zgłaszającego (mapowanie przez sprawę), wysłany i odbity.
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '2 days'
+  where entity_id = :'d9r11' and template = 'reportDecisionNoAction';
+select pg_temp.assert(
+  (select basis = 'email_sent' and informed_at < now() - interval '47 hours'
+     from public.moderation_informed where decision_id = :'d9d11'),
+  'DSA960-3e list o braku działań wysłany = poinformowanie zgłaszającego');
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9r11' and template = 'reportDecisionNoAction';
+select pg_temp.assert(
+  (select count(*) filter (where basis = 'email_sent' and voided_at is not null) = 1
+      and count(*) filter (where basis = 'delivery_failed' and voided_at is null) = 1
+     from public.moderation_informed where decision_id = :'d9d11'),
+  'DSA960-3e2 odbity list o braku działań nie jest poinformowaniem; fallback od odbicia');
+
+-- 3f: cofnięcie — zgłaszający nie doręczony.
+set role authenticated; set app.current_uid = :'ADMIN2'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'d9d10', 'Po ponownym przeglądzie oferta nie wymaga żadnych opłat.') as d9rs10 \gset
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_appealable(:'d9rs10') = 'OK'
+  and public.moderation_restoration_informed_at(:'d9rs10') is null,
+  'DSA960-3f cofnięcie z listem w kolejce: odwołanie przysługuje, termin nie biegnie');
+reset role;
+update public.email_deliveries set status = 'bounced', bounced_at = now()
+  where entity_id = :'d9rs10' and template = 'reportRestored';
+set role service_role;
+select pg_temp.assert(public.moderation_restoration_informed_at(:'d9rs10') between now() - interval '1 minute' and now() + interval '1 minute'
+  and public.moderation_restoration_appeal_deadline(:'d9rs10') = public.moderation_restoration_informed_at(:'d9rs10') + public.dsa_appeal_window(),
+  'DSA960-3f2 cofnięcie z nieudanym listem: termin odwołania od chwili porażki');
+reset role;
+
+-- 3g: retencja i raport uwzględniają regułę zastępczą.
+select pg_temp.assert(
+  exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r4' and retention_start is not null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r8' and retention_start is not null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r3' and retention_start is not null)
+  and exists (select 1 from public.dsa_retention_cases() where report_id = :'d9r5' and retention_start is null),
+  'DSA960-3g retencja: sprawy z poinformowaniem (także zastępczym) mają początek; z listem w kolejce — czekają');
+select pg_temp.assert(
+  (public.dsa_retention_report()->>'informedByFallback')::int = :'d9fb0'::int + 6,
+  'DSA960-3g2 raport retencji zlicza sprawy z biegiem terminu z reguły zastępczej (d4, d6, d7, d8, d11, cofnięcie)');
+
+-- DSA960-4 (#1098): limity zgłoszeń pod blokadą per adres.
+-- 4a: dwa zgłoszenia z RÓŻNYMI kluczami tego samego adresu na tę samą treść — jedno.
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000111'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race1@test.be'', ''pl'', true)'
+  as d9_a1_sql \gset
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000111'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race1@test.be'', ''pl'', true)'
+  as d9_a2_sql \gset
+select pg_temp.dsa_remote_begin('d9_a') as d9_pid_a \gset
+select pg_temp.dsa_remote_begin('d9_b') as d9_pid_b \gset
+select t.v as d9_ra from dbl.dblink('d9_a', :'d9_a1_sql') as t(v text) \gset
+select dbl.dblink_send_query('d9_b', :'d9_a2_sql');
+select pg_temp.wait_blocked(:d9_pid_b, 'DSA960-4a');
+select dbl.dblink_exec('d9_a', 'commit');
+select pg_temp.remote_result('d9_b') as d9_rb \gset
+select dbl.dblink_exec('d9_b', 'commit');
+select dbl.dblink_disconnect('d9_a'); select dbl.dblink_disconnect('d9_b');
+select pg_temp.assert(:'d9_rb' like 'ERROR:%RATE_LIMITED%'
+  and (select count(*) from public.reports where reporter_email = 'd9-race1@test.be' and kind = 'dsa_notice') = 1,
+  'DSA960-4a równoległe zgłoszenia tego samego adresu na tę samą treść: jedna otwarta sprawa (druga RATE_LIMITED)');
+
+-- 4b: limit 5 spraw / adres / 24 h — cztery istniejące, dwa równoległe zgłoszenia na RÓŻNE treści.
+set role service_role;
+select count(*) as d9_pre from (select public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  ('e9960000-0000-0000-0000-0000000001' || lpad(n::text, 2, '0'))::uuid, 'fraud', :'D9DESC', null, null,
+  'd9-race2@test.be', 'pl', true) from generate_series(12, 15) n) s \gset
+reset role;
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000116'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race2@test.be'', ''pl'', true)'
+  as d9_b1_sql \gset
+select 'select report_id::text from public.submit_content_report(null, ''' || gen_random_uuid() || ''', ''' || :'D9CODE'
+  || ''', ''job'', ''e9960000-0000-0000-0000-000000000117'', ''fraud'', ''Oferta wymaga opłaty za rekrutację z góry.'', null, null, ''d9-race2@test.be'', ''pl'', true)'
+  as d9_b2_sql \gset
+select pg_temp.dsa_remote_begin('d9_c') as d9_pid_c \gset
+select pg_temp.dsa_remote_begin('d9_d') as d9_pid_d \gset
+select t.v as d9_rc from dbl.dblink('d9_c', :'d9_b1_sql') as t(v text) \gset
+select dbl.dblink_send_query('d9_d', :'d9_b2_sql');
+select pg_temp.wait_blocked(:d9_pid_d, 'DSA960-4b');
+select dbl.dblink_exec('d9_c', 'commit');
+select pg_temp.remote_result('d9_d') as d9_rd \gset
+select dbl.dblink_exec('d9_d', 'commit');
+select dbl.dblink_disconnect('d9_c'); select dbl.dblink_disconnect('d9_d');
+select pg_temp.assert(:'d9_pre'::int = 4 and :'d9_rd' like 'ERROR:%RATE_LIMITED%'
+  and (select count(*) from public.reports where reporter_email = 'd9-race2@test.be' and kind = 'dsa_notice') = 5,
+  'DSA960-4b równoległe zgłoszenia na różne treści: najwyżej 5 spraw / adres / 24 h');
+
+-- DSA960-5 (#1098): częściowy indeks otwartych spraw — niezależnie od funkcji.
+select pg_temp.expect_error(
+  'insert into public.reports(reporter_id, target_type, target_id, reason, details, status, kind, case_number, access_code_hash, idempotency_key, category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at) '
+  || 'select reporter_id, target_type, target_id, reason, details, status, kind, ''DSA-D960-0000-0000-0001'', access_code_hash, gen_random_uuid(), category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at from public.reports where id = ''' || :'d9r1' || '''',
+  'reports_dsa_open_uq', 'DSA960-5 druga otwarta sprawa tego adresu na tę samą treść odrzucona przez indeks');
+begin;
+drop index public.reports_dsa_open_uq;
+insert into public.reports(reporter_id, target_type, target_id, reason, details, status, kind, case_number, access_code_hash, idempotency_key, category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at)
+  select reporter_id, target_type, target_id, reason, details, status, kind, 'DSA-D960-0000-0000-0002', access_code_hash, gen_random_uuid(), category, content_url, reporter_name, reporter_email, reporter_locale, good_faith_at, target_snapshot, due_at
+    from public.reports where id = :'d9r1';
+select pg_temp.assert((select count(*) from public.reports where reporter_email = 'd9-1@test.be' and kind = 'dsa_notice') = 2,
+  'DSA960-5b kontrola ujemna: bez indeksu powstają dwie otwarte sprawy');
+rollback;
+-- Rozstrzygnięta sprawa nie blokuje nowego zgłoszenia tego samego adresu na tę samą treść.
+set role service_role;
+select created as d9_again from public.submit_content_report(null, gen_random_uuid(), :'D9CODE', 'job',
+  'e9960000-0000-0000-0000-000000000110', 'other', 'Opis oferty nadal wydaje się niepełny i mylący.', null, null,
+  'd9-11@test.be', 'pl', true) \gset
+reset role;
+select pg_temp.assert(:'d9_again'::boolean, 'DSA960-5c po rozstrzygnięciu (brak działań) można zgłosić ponownie');
+
+-- DSA960-6 (#1107): zawieszenie firmy niezweryfikowanej.
+\set D9P1 'e9960000-0000-0000-0000-0000000000f1'
+\set D9U1 'e9960000-0000-0000-0000-0000000000f2'
+\set D9R1 'e9960000-0000-0000-0000-0000000000f3'
+insert into public.companies(id,name,status) values
+  (:'D9P1','Firma D960 pending','pending'), (:'D9U1','Firma D960 unverified','unverified'),
+  (:'D9R1','Firma D960 rejected','rejected');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'D9P1',:'EMPA','owner',true);
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9P1' || '''::uuid, ''suspended'', ''pending'')',
+  'REASON_REQUIRED', 'DSA960-6 zawieszenie firmy pending wymaga uzasadnienia');
+select public.admin_set_company_status(:'D9P1'::uuid, 'suspended', 'pending', 'Pilna blokada: podejrzenie podszycia.');
+select public.admin_set_company_status(:'D9U1'::uuid, 'suspended', 'unverified', 'Pilna blokada firmy niezweryfikowanej.');
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9R1' || '''::uuid, ''suspended'', ''rejected'', ''Powód zawieszenia.'')',
+  'INVALID_TRANSITION', 'DSA960-6b odrzuconej firmy nie zawieszamy');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'suspended' and status_reason = 'Pilna blokada: podejrzenie podszycia.' and verified_at is null
+     from public.companies where id = :'D9P1')
+  and (select status::text = 'suspended' from public.companies where id = :'D9U1')
+  and (select count(*) from public.audit_logs where entity_id = :'D9P1' and action = 'company.status_changed'
+        and before_data->>'status' = 'pending' and after_data->>'status' = 'suspended') = 1
+  and (select count(*) from public.email_deliveries where entity_id = :'D9P1' and template = 'companySuspended'
+        and profile_id = :'EMPA') = 1
+  and (select count(*) from public.notifications where entity_id = :'D9P1' and profile_id = :'EMPA'
+        and type = 'system' and data->>'kind' = 'company_status' and data->>'status' = 'suspended') = 1,
+  'DSA960-6c zawieszenie pending/unverified: status, powód, audyt, e-mail i powiadomienie właściciela');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9P1' || '''::uuid, ''pending'', ''suspended'')',
+  'INVALID_TRANSITION', 'DSA960-6d z zawieszenia nie wracamy do pending');
+select public.admin_set_company_status(:'D9U1'::uuid, 'rejected', 'suspended', 'Firma nie przeszła weryfikacji.');
+select public.admin_set_company_status(:'D9P1'::uuid, 'verified', 'suspended');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status::text = 'rejected' and status_reason = 'Firma nie przeszła weryfikacji.' from public.companies where id = :'D9U1')
+  and (select status::text = 'verified' and verified_at is not null from public.companies where id = :'D9P1'),
+  'DSA960-6e z zawieszenia: odrzucenie (z powodem) i weryfikacja');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9CO1' || '''::uuid, ''suspended'')',
+  'PERMISSION_DENIED', 'DSA960-6f właściciel firmy nie zawiesza firmy (tylko admin)');
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
