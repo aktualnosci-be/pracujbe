@@ -3106,6 +3106,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   pomijany).
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
+- [x] Formularze przed hydracją i fokus po zapisie (audyt 29.09, #1236/#1237/#1238/#1243, bez migracji):
+  każdy formularz obsługiwany przez `onSubmit` ma `method="post"` (bez JS albo przed hydracją natywna
+  wysyłka nie trafia do query URL), a formularze widoczne w HTML z serwera (logowanie, rejestracje,
+  reset i nowe hasło, sprawdzenie sprawy DSA, zgłoszenie treści, formularze firmy, zespołu,
+  ustawień, szablonów, importu, kampanii, rejestru naruszeń) blokują przycisk do hydracji
+  (`useHydrated`, `src/components/forms/use-hydrated.ts`) z komunikatem `<noscript>`
+  (`NoScriptFormNotice`, `common.formJsRequired`). Po zapisie danych firmy, linków, agencji,
+  preferencji powiadomień i „Zapisz wyszukiwanie” fokus trafia na komunikat wyniku (`tabIndex=-1`),
+  „Anuluj” w `AppealForm` wraca fokusem na „Odwołaj się”; akcje nieprzeczytanego powiadomienia
+  bez `shrink-0` (reflow 320 px). Dowód: E2E `forms-no-js-post` (JS wyłączony, opóźnione chunki,
+  kontrola ujemna: HTML bez `method`/`disabled` wysyła hasło w query), `notifications-list`
+  (`scrollWidth` 320 px, 4 języki), unit `a11y-focus-after-save` i `a11y-focus-after-pending`.
 - [x] Prywatność i obserwowalność (paczka audytu 2026-09-28, bez migracji): beacon Cloudflare
   z `spa: false` i pełnym przeładowaniem przy przejściu z trasy publicznej na prywatną (link
   albo `router.push`; `src/lib/analytics/beacon.ts`, #1046, E2E `one-time-link-tracking`);

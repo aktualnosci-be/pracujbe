@@ -222,7 +222,8 @@
     "no": "No",
     "home": "Home",
     "breadcrumb": "Breadcrumb",
-    "skipToContent": "Skip to content"
+    "skipToContent": "Skip to content",
+    "formJsRequired": "This form requires JavaScript. Turn it on in your browser to submit the data."
   },
   "nav": {
     "jobs": "Jobs",

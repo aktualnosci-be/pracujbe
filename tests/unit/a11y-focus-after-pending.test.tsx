@@ -77,6 +77,15 @@ function loseFocusDuringSave<T>(result: T): Promise<T> {
       el.focus = originalFocus;
       originalFocus();
     };
+    // Fokus ustawiony celowo na innym elemencie (np. komunikat wyniku, #1238) też kończy stan „body”.
+    document.addEventListener(
+      'focusin',
+      () => {
+        delete (document as unknown as Record<string, unknown>).activeElement;
+        el.focus = originalFocus;
+      },
+      { once: true },
+    );
   }
   return Promise.resolve(result);
 }
@@ -148,14 +157,25 @@ describe('preferencje powiadomień (#1095, #1103)', () => {
   const renderForm = () =>
     render(wrap(<NotificationPreferencesForm defaultValues={DEFAULT_NOTIFICATION_PREFERENCES} />));
 
-  it('przycisk „Zapisz” odzyskuje fokus po zapisie', async () => {
+  it('po zapisie fokus trafia na komunikat sukcesu, nie na <body> (#1095, #1238)', async () => {
     vi.mocked(updateNotificationPreferences).mockImplementation(() => loseFocusDuringSave({ ok: true }));
     renderForm();
     const save = screen.getByRole('button', { name: pl.settings.save });
     save.focus();
     fireEvent.click(save);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(pl.settings.savedSuccess));
-    await waitFor(() => expect(save).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('status')).toHaveFocus());
+  });
+
+  it('po błędzie zapisu fokus trafia na komunikat błędu (#1238)', async () => {
+    vi.mocked(updateNotificationPreferences).mockImplementation(() =>
+      loseFocusDuringSave({ ok: false, error: 'INTERNAL' } as never),
+    );
+    renderForm();
+    const save = screen.getByRole('button', { name: pl.settings.save });
+    save.focus();
+    fireEvent.click(save);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
   });
 
   it('„Zapisano” znika przy następnej, jeszcze niewysłanej zmianie przełącznika', async () => {

@@ -244,7 +244,7 @@ export function SendOfferButton({
             </div>
           </dl>
 
-          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+          <form method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">{td('offerDialogDefaultInfo')}</p>
               <p className="whitespace-pre-line break-words border-l-4 border-primary bg-soft px-4 py-3 text-sm leading-relaxed text-foreground">
