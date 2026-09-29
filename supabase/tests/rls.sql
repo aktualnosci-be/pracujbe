@@ -19196,6 +19196,7 @@ language sql as $$
 $$;
 
 select coalesce(slug, '') as sm_cslug from public.companies where id = :'SMC' \gset
+select published_at as sm_tie from public.jobs where slug = 'sm1042-1' \gset
 set role anon; select pg_temp.assert_client_role();
 select pg_temp.sm_expected() as sm_exp \gset
 select cardinality(:'sm_exp'::uuid[]) as sm_total \gset
@@ -19251,16 +19252,22 @@ select pg_temp.assert(
 -- (odpowiada po = (published_at, najmniejsze id)); kursor „włącznie” („<=”, po = (published_at,
 -- największe id)): strona 2 powtarza oferty strony 1.
 select pg_temp.assert(
-  (with p1 as (select * from public.get_public_jobs_sitemap_page(null, null, null, null, 20) order by published_at desc, id desc),
-        last1 as (select published_at from p1 order by published_at asc, id asc limit 1),
+  (with ties as (select * from public.get_public_jobs_sitemap_page(null, null, null, null, 1000)
+                 where published_at = :'sm_tie'::timestamptz),
+        p1 as (select * from ties order by id desc limit 20),   -- strona kończy się W ŚRODKU remisu
+        correct as (select count(*) c from public.get_public_jobs_sitemap_page(
+                      :'sm_tie'::timestamptz, (select min(id) from p1), null, null, 1000) where published_at = :'sm_tie'::timestamptz),
         skip as (select count(*) c from public.get_public_jobs_sitemap_page(
-                   (select published_at from last1), '00000000-0000-0000-0000-000000000000', null, null, 1000)),
+                   :'sm_tie'::timestamptz, '00000000-0000-0000-0000-000000000000', null, null, 1000)
+                 where published_at = :'sm_tie'::timestamptz),
         dup as (select count(*) c from public.get_public_jobs_sitemap_page(
-                  (select published_at from last1), 'ffffffff-ffff-ffff-ffff-ffffffffffff', null, null, 1000) d
+                  :'sm_tie'::timestamptz, 'ffffffff-ffff-ffff-ffff-ffffffffffff', null, null, 1000) d
                 where d.id in (select id from p1))
-   select (select count(*) from p1) = 20
-      and 20 + (select c from skip) < :sm_total          -- dziura: brakuje ofert remisu
-      and (select c from dup) > 0),                       -- duble: oferty strony 1 wracają
+   select (select count(*) from ties) = 130
+      and (select count(*) from p1) = 20
+      and (select c from correct) = 110          -- poprawny kursor: reszta remisu, bez dubli
+      and (select c from skip) = 0               -- dziura: kursor tylko po published_at gubi 110 ofert
+      and (select c from dup) = 20),             -- duble: kursor włącznie zwraca oferty strony 1
   'SM1042-5 kontrola ujemna: kursor bez id gubi oferty, kursor włącznie dubluje na granicy remisu');
 reset role;
 
