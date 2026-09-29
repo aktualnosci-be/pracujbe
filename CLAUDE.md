@@ -877,6 +877,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
+  robots (#1217, PERF-03): blokada paneli zakotwiczona na segmencie języka
+  (`/<język>/<panel>$` i `/<język>/<panel>/`, `src/lib/seo/robots-rules.ts`) — dawne reguły z
+  gwiazdką blokowały oferty i profile firm o slugach `administratief-…`/`employer-…` (test
+  z dopasowaniem jak Google i kontrolą ujemną w `sitemap-robots`). Sitemap: profile firm raz
+  w całym indeksie, w partii `0` (#1231, PERF-05; jedna iteracja po osiągalnej liście);
+  liczba partii i metadane landingów przez `getJobsCount`, a strony listy w sitemap, na stronie
+  głównej, w „Podobnych ofertach” i na pulpicie kandydata bez licznika
+  (`getJobs(…, { withTotal: false })` → `getPublicJobsPage`, #1230, PERF-04).
   Dane strukturalne (#313) w `src/lib/seo/structured-data.ts`: JobPosting bez wymyślonego
   `validThrough` (tylko realne `expires_at`), pełny opis HTML (opis, obowiązki, wymagania, warunki,
   godziny, zmiany; escapowany); Article z `image`, `dateModified` (`guides.ts` `updatedAt`) i logo
@@ -3451,9 +3459,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `setJobStatus` (pause/resume/close/reopen) i `expire_due_jobs` w `/api/maintenance` (gdy
   wygasiła choć jedną ofertę) wołają wspólny `revalidatePublicJobPaths()`
   (`src/lib/jobs/public-cache.ts`) — rewaliduje wzorce z dynamicznym segmentem + typ `'page'`
-  (`/[locale]`, `/[locale]/oferty-pracy/[slug]`, `/[locale]/praca/kategoria/[category]`,
-  `/[locale]/praca/miasto/[city]`), więc bez znajomości dokładnego sluga/kategorii/miasta
-  zmienionej oferty. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
+  jako ŚCIEŻKI PLIKÓW tras z grupą (`PUBLIC_JOB_ROUTES`: `/[locale]/(public)`, szczegół oferty,
+  `/praca`, landingi kategorii/miasta, profil firmy i jego strony), więc bez znajomości
+  dokładnego sluga/kategorii/miasta zmienionej oferty. #1216 (PERF-02): niejawne tagi wpisu ISR
+  Next liczy ze ścieżki pliku łącznie z `(public)` — wzorce bez grupy nie unieważniały niczego.
+  Strażnik `public-job-cache-tags` (bez atrapy `next/cache`): prawdziwe `revalidatePath`
+  w `workAsyncStorage`, tagi wpisu z prawdziwego `getImplicitTags`, lista = każda strona `(public)`
+  z `revalidate = 60`, wpis w `cacheHandler` znika po rewalidacji; kontrola ujemna wzorców bez
+  grupy. Poza zakresem: ścieżki `/employer…` bez `[locale]` w akcjach paneli. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
   tylko widoków panelu (setJobStatus) — poprzednio wyrenderowana strona (i `JobPosting`) mogła
   zostać widoczna jeszcze przez okno rewalidacji (60 s) po pauzie/zamknięciu/wygaśnięciu, a
   nowo opublikowana/wznowiona oferta nie pojawiała się od razu. Rewalidacja następuje wyłącznie
