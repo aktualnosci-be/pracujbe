@@ -2564,7 +2564,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
-  Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0954` — numer tymczasowy,
+  Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0182`,
   `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
   dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
   `admin-dsa.other-admins`, `src/lib/data/admin-dsa.ts`) wymaga teraz `is_active = true`, nie

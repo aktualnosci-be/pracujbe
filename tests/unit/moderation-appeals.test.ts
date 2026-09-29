@@ -596,9 +596,9 @@ describe('inny administrator do rozpatrzenia odwołania musi być AKTYWNY (#909)
     expect(match?.[0]).toMatch(/is_active\s*=\s*true/);
   });
 
-  it('migracja 0954 nadpisuje admin_decide_appeal z warunkiem is_active = true dla „innego administratora”', () => {
+  it('migracja 0182 nadpisuje admin_decide_appeal z warunkiem is_active = true dla „innego administratora”', () => {
     const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/0954_dsa_appeal_reviewer_active.sql'),
+      resolve(process.cwd(), 'supabase/migrations/0182_dsa_appeal_reviewer_active.sql'),
       'utf8',
     );
     expect(sql).toMatch(/create or replace function public\.admin_decide_appeal/);
@@ -607,11 +607,11 @@ describe('inny administrator do rozpatrzenia odwołania musi być AKTYWNY (#909)
     );
   });
 
-  // Kontrola ujemna: dawna wersja funkcji (0109, nadpisywana przez 0954) NIE sprawdzała
+  // Kontrola ujemna: dawna wersja funkcji (0109, nadpisywana przez 0182) NIE sprawdzała
   // is_active — wyłączone konto liczyło się jako dostępny drugi recenzent i blokowało
   // autora pierwotnej decyzji przez REVIEWER_CONFLICT, mimo że nikt inny nie mógł się
   // zalogować. Ten test dokumentuje błąd sprzed poprawki; ma pozostać czerwony, gdyby
-  // ktoś przywrócił starą treść zamiast 0954.
+  // ktoś przywrócił starą treść zamiast 0182.
   it('kontrola ujemna: 0109 (bez poprawki) pomijało is_active — błąd faktycznie istniał', () => {
     const sql = readFileSync(resolve(process.cwd(), 'supabase/migrations/0109_dsa_restoration_appeals.sql'), 'utf8');
     expect(sql).toMatch(/p\.role = 'admin' and p\.deleted_at is null and p\.id <> v_uid/);
