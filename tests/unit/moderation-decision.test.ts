@@ -182,6 +182,31 @@ describe('#42 decideReport / restoreModeration', () => {
     ]);
   });
 
+  it('cofnięcie zablokowane przeglądem pytań oferty → czytelny kod, nie INTERNAL (#1102)', async () => {
+    const rpc = mockSession();
+    void rpc;
+    for (const message of [
+      'SCREENING_REVIEW_REQUIRED: treść pytania wymaga akceptacji',
+      'SCREENING_QUESTION_REJECTED: 1',
+    ]) {
+      fakeDb.rpc('admin_restore_moderation', () => {
+        throw pgError('P0001', message);
+      });
+      expect(await restoreModeration(DECISION_ID, ' Autor usunął wymóg opłaty z oferty. ')).toEqual({
+        ok: false,
+        error: 'MODERATION_RESTORE_BLOCKED',
+      });
+    }
+    // Kontrola ujemna: nieznany błąd bazy nadal jest INTERNAL.
+    fakeDb.rpc('admin_restore_moderation', () => {
+      throw pgError('P0001', 'coś innego');
+    });
+    expect(await restoreModeration(DECISION_ID, ' Autor usunął wymóg opłaty z oferty. ')).toEqual({
+      ok: false,
+      error: 'INTERNAL',
+    });
+  });
+
   it('bez sesji → PERMISSION_DENIED bez wywołania RPC', async () => {
     const rpc = mockSession();
     fakeSession.identity = null;

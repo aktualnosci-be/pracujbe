@@ -43,7 +43,7 @@ const STRING_RULES: ReadonlyArray<readonly [RegExp, string | ((m: string) => str
     `$1$2$3${FILTERED}$3`,
   ],
   // Adres e-mail.
-  [/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, FILTERED],
+  [/(?<![A-Z0-9._%+-])[A-Z0-9._%+-]{1,254}@[A-Z0-9.-]{1,253}\.[A-Z]{2,63}/gi, FILTERED],
   // IBAN.
   [/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g, FILTERED],
   // NISS/BIS (rijksregisternummer): 11 cyfr, także w zapisie YY.MM.DD-XXX.XX.
