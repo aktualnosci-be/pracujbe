@@ -306,9 +306,13 @@ async function run(request: Request): Promise<Response> {
     failures.push({ task: 'storageDeletions', error });
   }
 
-  const [first] = failures;
-  if (first) {
-    captureError(first.error, { area: 'maintenance.gc', task: first.task });
+  if (failures.length > 0) {
+    // #1066: każde nieudane zadanie osobno; `task` dopina się do obszaru w `captureError`
+    // (`maintenance.gc.retention`), więc operator odróżnia GC bucketu od retencji czy
+    // wygaszania ofert, a deduplikacja (kod, obszar) nie zlewa ich w jeden wpis.
+    for (const failure of failures) {
+      captureError(failure.error, { area: 'maintenance.gc', task: failure.task });
+    }
     return NextResponse.json({ error: 'gc failed' }, { status: 503 });
   }
   return NextResponse.json({
