@@ -163,4 +163,46 @@ describe('processTranslationBatch', () => {
     expect(p.translate).not.toHaveBeenCalled();
     expect(s.fail).toHaveBeenCalledWith(expect.anything(), 'unsupported_locale', false, null);
   });
+
+  describe('nazwy chronione rewizji (#740)', () => {
+    const SRC = { title: 'Magazijnmedewerker', description: 'Logistiek Noord zoekt een magazijnmedewerker.' };
+    const KEPT = { title: 'Warehouse worker', description: 'Logistiek Noord is looking for a warehouse worker.' };
+    const RENAMED = { title: 'Warehouse worker', description: 'Northern Logistics is looking for a warehouse worker.' };
+    const claimed = (terms?: string[]) =>
+      job({ source_locale: 'nl', fields: SRC, ...(terms ? { protected_terms: terms } : {}) });
+
+    it('nazwa z rewizji trafia do dostawcy (prompt)', async () => {
+      const p = provider(KEPT);
+      await processTranslationBatch({ store: store([claimed(['Logistiek Noord'])]), provider: p });
+      expect(p.translate).toHaveBeenCalledWith(expect.objectContaining({ protectedTerms: ['Logistiek Noord'] }));
+    });
+
+    it('nazwa zachowana → applied', async () => {
+      const s = store([claimed(['Logistiek Noord'])]);
+      const r = await processTranslationBatch({ store: s, provider: provider(KEPT) });
+      expect(r.applied).toBe(1);
+      expect(s.complete).toHaveBeenCalled();
+    });
+
+    it('nazwa zmieniona przez model → failed facts_terms, wynik nie zapisany', async () => {
+      const s = store([claimed(['Logistiek Noord'])]);
+      const r = await processTranslationBatch({ store: s, provider: provider(RENAMED) });
+      expect(r.failed).toBe(1);
+      expect(s.complete).not.toHaveBeenCalled();
+      expect(s.fail).toHaveBeenCalledWith(expect.anything(), 'facts_terms', false, null);
+    });
+
+    it('kontrola ujemna: bez nazw w zadaniu ten sam wynik przechodzi (mechanizm = lista z rewizji)', async () => {
+      const s = store([claimed()]);
+      const r = await processTranslationBatch({ store: s, provider: provider(RENAMED) });
+      expect(r.applied).toBe(1);
+    });
+
+    it('wartości spoza tekstu i puste są pomijane', async () => {
+      const p = provider(KEPT);
+      const bad = claimed(['Logistiek Noord', '  ', 42 as unknown as string]);
+      await processTranslationBatch({ store: store([bad]), provider: p });
+      expect(p.translate).toHaveBeenCalledWith(expect.objectContaining({ protectedTerms: ['Logistiek Noord'] }));
+    });
+  });
 });

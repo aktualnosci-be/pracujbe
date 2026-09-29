@@ -12626,6 +12626,117 @@ rollback;
 update public.job_translations set responsibilities = array['Jedno zadanie'] where job_id = :'TRJ2' and locale = 'pl';
 select pg_temp.assert((select count(*) from public.translation_jobs where entity_id = :'TRJ2' and status = 'queued') = 3,
   'TR33-Nb z triggerem ta sama edycja kolejkuje trzy zadania');
+
+-- =============================================================================
+-- TP740 (#740, 0190): nazwy chronione w kolejce tłumaczeń. Nazwa firmy z bazy trafia do
+-- rewizji oferty (nigdy od klienta), claim wydaje ją workerowi, zmiana nazwy firmy = nowa
+-- rewizja; normalizacja i limity; rewizja niezmienna. Kontrole ujemne: odcisk z 0145 (bez
+-- nazw) nie odróżnia zmiany nazwy, trigger firmy z 0146 (bez `name`) nie reaguje na zmianę.
+-- =============================================================================
+\set TPCO 'f0740000-0000-0000-0000-0000000000c1'
+\set TPJ1 'f0740000-0000-0000-0000-0000000000a1'
+\set TPE1 'f0740000-0000-0000-0000-0000000000e1'
+reset role; reset app.current_uid;
+insert into public.companies(id, name, status) values (:'TPCO', 'Logistiek Noord', 'verified');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+  values (:'TPJ1', :'TPCO', 'draft-tp740', 'Magazijnmedewerker', 'warehouse', 'permanent', 'Gent', 'Vlaanderen', 'draft', 'nl');
+insert into public.job_translations(job_id, locale, title, description)
+  values (:'TPJ1', 'nl', 'Magazijnmedewerker', 'Logistiek Noord zoekt een magazijnmedewerker.');
+update public.jobs set status = 'active', published_at = now() where id = :'TPJ1';
+
+-- TP740-1: publikacja → rewizja z nazwą firmy z bazy; claim wydaje ją workerowi.
+select r.id as tp_rev1, r.content_hash as tp_hash1, r.fields::text as tp_f1
+  from public.translation_source_revisions r where r.entity_id = :'TPJ1' and r.revision_no = 1 \gset
+select pg_temp.assert((select protected_terms = array['Logistiek Noord'] from public.translation_source_revisions
+                        where id = :'tp_rev1'), 'TP740-1 rewizja oferty niesie nazwę firmy');
+begin;
+select pg_temp.assert((select bool_and(protected_terms = array['Logistiek Noord']) and count(*) = 3
+                         from public.claim_translation_jobs(100, 300) where entity_id = :'TPJ1'),
+  'TP740-1b claim wydaje nazwy chronione rewizji dla każdego języka docelowego');
+rollback;
+
+-- TP740-2: zmiana nazwy firmy (bez zmiany treści oferty) = nowa rewizja z nową nazwą; zadania
+-- starej rewizji superseded.
+update public.companies set name = 'Logistiek Noord BV' where id = :'TPCO';
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 2
+  and (select protected_terms = array['Logistiek Noord BV'] from public.translation_source_revisions
+        where entity_id = :'TPJ1' and revision_no = 2)
+  and (select fields::text from public.translation_source_revisions where entity_id = :'TPJ1' and revision_no = 2) = :'tp_f1'
+  and not exists (select 1 from public.translation_jobs where revision_id = :'tp_rev1' and status in ('queued', 'retry', 'leased'))
+  and (select count(*) from public.translation_jobs j join public.translation_source_revisions r on r.id = j.revision_id
+        where r.entity_id = :'TPJ1' and r.revision_no = 2 and j.status = 'queued') = 3,
+  'TP740-2 zmiana nazwy firmy = nowa rewizja (te same pola), stare zadania superseded');
+
+-- TP740-2N (kontrola ujemna): odcisk liczony jak w 0145 (bez nazw) jest identyczny dla obu
+-- rewizji — bez nazw w odcisku zmiana nazwy byłaby „unchanged”.
+select pg_temp.assert(
+  encode(sha256(convert_to('nl' || E'\n' || (:'tp_f1')::jsonb::text, 'UTF8')), 'hex')
+    = encode(sha256(convert_to('nl' || E'\n' || (select fields::text from public.translation_source_revisions
+                                                   where entity_id = :'TPJ1' and revision_no = 2)::jsonb::text, 'UTF8')), 'hex')
+  and (select content_hash from public.translation_source_revisions where entity_id = :'TPJ1' and revision_no = 2) <> :'tp_hash1',
+  'TP740-2N kontrola ujemna: odcisk bez nazw nie odróżnia zmiany nazwy firmy');
+
+-- TP740-2Nb (kontrola ujemna): trigger firmy z 0146 (bez `name`) nie reaguje na zmianę nazwy.
+begin;
+drop trigger trg_job_translation_sync_companies on public.companies;
+create constraint trigger trg_job_translation_sync_companies
+  after update of status, deleted_at on public.companies deferrable initially deferred
+  for each row execute function public.trg_job_translation_sync();
+update public.companies set name = 'Northern Logistics' where id = :'TPCO';
+set constraints all immediate;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 2,
+  'TP740-2Nb kontrola ujemna: bez `name` w triggerze zmiana nazwy nie tworzy rewizji');
+rollback;
+begin;
+update public.companies set name = 'Northern Logistics' where id = :'TPCO';
+set constraints all immediate;
+select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 3,
+  'TP740-2Nc z triggerem 0190 ta sama zmiana tworzy rewizję');
+rollback;
+
+-- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
+-- przy tej samej treści = nowa rewizja; bez nazw (5/6 argumentów) jak w 0145.
+set role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1', 0, array[' Beta ', 'Alfa', 'Alfa', '', null]))->>'status') = 'created', 'TP740-3 rewizja z nazwami');
+select pg_temp.assert((select protected_terms = array['Alfa', 'Beta'] from public.translation_source_revisions
+                        where entity_id = :'TPE1' and revision_no = 1), 'TP740-3b nazwy znormalizowane i posortowane');
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1', 0, array['Beta', 'Alfa']))->>'status') = 'unchanged', 'TP740-3c ta sama lista w innej kolejności = unchanged');
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1', 0, array['Gamma']))->>'status') = 'created', 'TP740-3d inna nazwa = nowa rewizja');
+select pg_temp.assert(((public.record_translation_source('job', :'TPE1'::uuid, 'pl', '{"title":"Magazynier"}'::jsonb,
+    'tr-v1'))->>'status') = 'created', 'TP740-3e bez nazw (5 argumentów) = nowa rewizja');
+select pg_temp.assert((select protected_terms = '{}'::text[] from public.translation_source_revisions where entity_id = :'TPE1' and revision_no = 3)
+  and (select content_hash from public.translation_source_revisions where entity_id = :'TPE1' and revision_no = 3)
+      = encode(sha256(convert_to('pl' || E'\n' || '{"title": "Magazynier"}'::jsonb::text, 'UTF8')), 'hex'),
+  'TP740-3f bez nazw: pusta lista, odcisk jak w 0145');
+
+-- TP740-4: limity — najwyżej 10 nazw, każda ≤ 200 znaków, bez znaków sterujących.
+select pg_temp.expect_error(format($$select public.record_translation_source('job', %L, 'pl', '{"title":"X"}'::jsonb, 'tr-v1', 0,
+    array['a1','a2','a3','a4','a5','a6','a7','a8','a9','a10','a11'])$$, :'TPE1'), 'VALIDATION_FAILED: protected_terms',
+  'TP740-4 ponad 10 nazw odrzucone');
+select pg_temp.expect_error(format($$select public.record_translation_source('job', %L, 'pl', '{"title":"X"}'::jsonb, 'tr-v1', 0,
+    array[repeat('x', 201)])$$, :'TPE1'), 'VALIDATION_FAILED: protected_term', 'TP740-4b nazwa ponad 200 znaków odrzucona');
+select pg_temp.expect_error(format($$select public.record_translation_source('job', %L, 'pl', '{"title":"X"}'::jsonb, 'tr-v1', 0,
+    array[E'Firma\u0007'])$$, :'TPE1'), 'VALIDATION_FAILED: protected_term', 'TP740-4c znak sterujący odrzucony');
+reset role;
+
+-- TP740-5: rewizja (także nazwy) niezmienna.
+select pg_temp.expect_error(format($$update public.translation_source_revisions set protected_terms = array['Inna'] where id = %L$$,
+    :'tp_rev1'), 'TRANSLATION_REVISION_IMMUTABLE', 'TP740-5 nazw chronionych rewizji nie da się zmienić');
+
+-- TP740-6: tylko serwer; stara sygnatura usunięta.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])', 'execute')
+  and not has_function_privilege('anon', 'public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])', 'execute')
+  and not has_function_privilege('authenticated', 'public.translation_protected_terms(text[])', 'execute')
+  and not has_function_privilege('authenticated', 'public.claim_translation_jobs(integer, integer)', 'execute')
+  and to_regprocedure('public.record_translation_source(text, uuid, text, jsonb, text, integer)') is null
+  and public.translation_pipeline_version() = 'translation-v2+prompt-v1+glossary-v1',
+  'TP740-6 RPC tylko dla serwera, stara sygnatura usunięta, pipeline v2');
+
+select count(public.deactivate_translation_source('job', :'TPE1'::uuid, true));
 -- ============================================================================
 -- FC575. Terminy lejka ofert (0128, #575): receipts ≤ 48 h, agregaty z bieżącego i 12
 --        poprzednich miesięcy kalendarzowych (Europe/Brussels), zadanie tylko service_role.
