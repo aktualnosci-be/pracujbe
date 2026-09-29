@@ -9,6 +9,7 @@ import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
 import { AgeStatusProvider } from '@/components/settings/age-status-context';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
+import { EmailLocaleSection } from '@/components/settings/EmailLocaleSection';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
@@ -81,6 +82,8 @@ export default async function CandidateSettingsPage({
           <NotificationPreferencesLoadError />
         )}
       </section>
+
+      <EmailLocaleSection locale={locale} />
 
       <AgeStatusProvider initialAdult={initialAdult}>
         {age.status === 'ready' ? (

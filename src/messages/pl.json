@@ -2927,7 +2927,9 @@
     "auditActionJobPausedForReview": "Wstrzymanie oferty do przeglądu treści",
     "auditActionCompanyAgencyChanged": "Zmiana deklaracji agencji",
     "auditActionCompanyAgencyChecked": "Sprawdzenie numeru uznania agencji",
-    "aiCostsFeatureFraudCheck": "Kontrola treści ofert"
+    "aiCostsFeatureFraudCheck": "Kontrola treści ofert",
+    "auditActionEmailLocaleChanged": "Zmiana języka e-maili przez użytkownika",
+    "entityProfile": "Profil"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -2957,7 +2959,14 @@
     "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
     "employerEmailApplicationsDescription": "Nowe zgłoszenia kandydatów na Twoje oferty.",
     "employerEmailOffersDescription": "Gdy kandydat przyjmie lub odrzuci Twoją propozycję pracy.",
-    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach."
+    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach.",
+    "emailLocaleTitle": "Język e-maili i powiadomień",
+    "emailLocaleDescription": "W tym języku wysyłamy do Ciebie e-maile i powiadomienia. Nie zależy od języka, w którym oglądasz stronę. Zmiana dotyczy kolejnych wiadomości.",
+    "emailLocaleLabel": "Język e-maili i powiadomień",
+    "emailLocaleSave": "Zapisz język",
+    "emailLocaleSaving": "Zapisywanie...",
+    "emailLocaleSaved": "Język e-maili i powiadomień został zapisany.",
+    "emailLocaleLoadError": "Nie udało się wczytać języka e-maili i powiadomień. Spróbuj ponownie za chwilę."
   },
   "guides": {
     "pageTitle": "Poradniki",

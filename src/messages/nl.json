@@ -2927,7 +2927,9 @@
     "auditActionJobPausedForReview": "Vacature gepauzeerd voor controle",
     "auditActionCompanyAgencyChanged": "Wijziging aangifte uitzendbureau",
     "auditActionCompanyAgencyChecked": "Controle erkenningsnummer uitzendbureau",
-    "aiCostsFeatureFraudCheck": "Controle vacatureteksten"
+    "aiCostsFeatureFraudCheck": "Controle vacatureteksten",
+    "auditActionEmailLocaleChanged": "Taal van e-mails door gebruiker gewijzigd",
+    "entityProfile": "Profiel"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -2957,7 +2959,14 @@
     "loadErrorHint": "We tonen het formulier niet, zodat opslaan je eerdere keuzes niet overschrijft. Probeer het zo meteen opnieuw.",
     "employerEmailApplicationsDescription": "Nieuwe sollicitaties van kandidaten op je vacatures.",
     "employerEmailOffersDescription": "Wanneer een kandidaat je werkaanbod aanvaardt of weigert.",
-    "employerEmailMessagesDescription": "Nieuwe berichten van kandidaten in je gesprekken."
+    "employerEmailMessagesDescription": "Nieuwe berichten van kandidaten in je gesprekken.",
+    "emailLocaleTitle": "Taal van e-mails en meldingen",
+    "emailLocaleDescription": "In deze taal sturen we je e-mails en meldingen. Dit staat los van de taal waarin je de website bekijkt. De wijziging geldt voor volgende berichten.",
+    "emailLocaleLabel": "Taal van e-mails en meldingen",
+    "emailLocaleSave": "Taal opslaan",
+    "emailLocaleSaving": "Opslaan...",
+    "emailLocaleSaved": "De taal van e-mails en meldingen is opgeslagen.",
+    "emailLocaleLoadError": "De taal van e-mails en meldingen kon niet worden geladen. Probeer het zo meteen opnieuw."
   },
   "guides": {
     "pageTitle": "Gidsen",

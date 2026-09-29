@@ -63,6 +63,9 @@ echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-rollback.sql"
 
+echo ">> rollback 0962 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-verified-locale-rollback.sql"
+
 echo ">> rollback 0175 (konto i komunikacja w trybie ogłoszeniowym, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-account-rollback.sql"
 

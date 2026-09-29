@@ -7406,6 +7406,9 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CMN4','cmn4@test.be','Cm N4','{"role":"candidate","first_name":"Cm","last_name":"N4","locale":"en"}'),
   (:'CMN5','cmn5@test.be','Cm N5','{"role":"candidate","first_name":"Cm","last_name":"N5","locale":"pl"}');
 select test_fixture.attest_candidates();
+-- 0962 (#1038): marketing tylko na potwierdzony adres — adresy scenariuszy CM45 są potwierdzone
+-- (brak potwierdzenia sprawdza sekcja EMQ1038 na końcu pliku).
+update auth.users set email_verified = true where id in (:'CMA', :'CMB', :'CMN1', :'CMN2', :'CMN3', :'CMN4', :'CMN5');
 
 -- CM45-1: dowód zgody.
 select pg_temp.assert(not exists (select 1 from public.email_consent_events where profile_id = :'CMA'),
@@ -7639,6 +7642,8 @@ select pg_temp.un45_sql($q$
     ('e0450000-0000-0000-0000-0000000000f1','cmp1@test.be','Cm P1','{"role":"candidate","first_name":"Cm","last_name":"P1","locale":"pl"}'),
     ('e0450000-0000-0000-0000-0000000000f2','cmp2@test.be','Cm P2','{"role":"candidate","first_name":"Cm","last_name":"P2","locale":"en"}');
 select test_fixture.attest_candidates();
+  update auth.users set email_verified = true
+   where id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2');
   update public.notification_preferences set email_marketing = true
    where profile_id in ('e0450000-0000-0000-0000-0000000000f1','e0450000-0000-0000-0000-0000000000f2');
   insert into public.email_recipient_budget_config (scope, window_seconds, max_per_recipient)
@@ -19112,5 +19117,181 @@ select count(public.deactivate_translation_source(entity_type, entity_id, false)
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
+
+-- ============================================================================
+-- EMQ1038 / EL1049 (0962 — numer tymczasowy): marketing tylko na potwierdzony adres
+-- i zmiana języka e-maili przez użytkownika.
+-- ============================================================================
+\set EQ1 'e1038000-0000-0000-0000-0000000000a1'
+\set EQ2 'e1038000-0000-0000-0000-0000000000a2'
+\set EQ3 'e1038000-0000-0000-0000-0000000000a3'
+\set EQ4 'e1038000-0000-0000-0000-0000000000a4'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'EQ1','eq1@test.be','Eq 1','{"role":"candidate","first_name":"Eq","last_name":"1","locale":"pl"}'),
+  (:'EQ2','eq2@test.be','Eq 2','{"role":"candidate","first_name":"Eq","last_name":"2","locale":"nl"}'),
+  (:'EQ3','eq3@test.be','Eq 3','{"role":"candidate","first_name":"Eq","last_name":"3","locale":"fr"}'),
+  (:'EQ4','eq4@test.be','Eq 4','{"role":"candidate","first_name":"Eq","last_name":"4","locale":"en"}');
+select test_fixture.attest_candidates();
+-- EQ1 potwierdzony + zgoda; EQ2 zgoda, ale adres niepotwierdzony; EQ3 potwierdzony bez zgody.
+update auth.users set email_verified = true where id in (:'EQ1', :'EQ3');
+insert into public.notification_preferences (profile_id, email_marketing)
+values (:'EQ1', true), (:'EQ2', true), (:'EQ3', false)
+on conflict (profile_id) do update set email_marketing = excluded.email_marketing;
+
+-- EMQ1038-1: zgoda odbiorcy.
+select pg_temp.assert(
+  public.email_address_verified(:'EQ1') and not public.email_address_verified(:'EQ2'),
+  'EMQ1038-1 potwierdzenie adresu czytane z konta');
+select pg_temp.assert(
+  public.email_allowed(:'EQ1', 'newsletter') is true
+  and public.email_allowed(:'EQ2', 'newsletter') is false
+  and public.email_allowed(:'EQ3', 'newsletter') is false,
+  'EMQ1038-1b marketing = zgoda ORAZ potwierdzony adres');
+select pg_temp.assert(
+  public.email_allowed(:'EQ2', 'statusChanged') is true and public.email_allowed(:'EQ2', 'jobPublished') is true,
+  'EMQ1038-1c poczta transakcyjna nie zależy od potwierdzenia adresu');
+
+-- EMQ1038-2: kolejkowanie z wynikiem.
+select pg_temp.assert(
+  (select outcome = 'unverified_address' and delivery_id is null
+     from public.enqueue_email_outcome(:'EQ2', 'newsletter', null, null, 'emq1038-news-2', '{}'::jsonb))
+  and not exists (select 1 from public.email_deliveries where idempotency_key = 'emq1038-news-2'),
+  'EMQ1038-2 niepotwierdzony adres: wynik unverified_address, brak wiersza w kolejce');
+select pg_temp.assert(
+  (select outcome = 'opted_out' from public.enqueue_email_outcome(:'EQ3', 'newsletter', null, null, 'emq1038-news-3', '{}'::jsonb)),
+  'EMQ1038-2b potwierdzony bez zgody: nadal opted_out');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ2', 'statusChanged', 'application', null, 'emq1038-status-2', '{}'::jsonb)),
+  'EMQ1038-2d transakcyjny e-mail do niepotwierdzonego adresu bez zmian');
+
+-- EMQ1038-3: kampania. Treść w 4 językach jak w CM45 (zmienna CMJOBS).
+-- Zgody z wcześniejszych sekcji wyłączone, żeby paczka dotyczyła tylko odbiorców tej sekcji.
+update public.notification_preferences set email_marketing = false
+ where profile_id not in (:'EQ1', :'EQ2', :'EQ3', :'EQ4') and email_marketing;
+update public.notification_preferences set email_marketing = true where profile_id = :'EQ4';
+set role service_role;
+select public.create_email_campaign_revision('emq1038-news', :'CMJOBS'::jsonb) as eq_rev \gset
+select public.activate_email_campaign(:'eq_rev');
+select public.enqueue_campaign_batch(:'eq_rev', 5000);
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ1'
+            and status = 'queued')
+  and not exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ2')
+  and not exists (select 1 from public.email_deliveries where campaign_id = :'eq_rev'::uuid and profile_id = :'EQ2'),
+  'EMQ1038-3 potwierdzony adres zakolejkowany; niepotwierdzony nie jest rezerwowany ani kolejkowany');
+-- EMQ1038-3n: KONTROLA UJEMNA — wybór odbiorców z 0101 (sama zgoda) obejmuje niepotwierdzony adres.
+select pg_temp.assert(
+  exists (select 1 from public.notification_preferences np
+           where np.email_marketing and np.profile_id = :'EQ2'
+             and not exists (select 1 from public.email_campaign_recipients r
+                              where r.campaign_id = :'eq_rev' and r.profile_id = np.profile_id))
+  and not public.email_address_verified(:'EQ2'),
+  'EMQ1038-3n kontrola ujemna: wybór po samej zgodzie (0101) wskazałby niepotwierdzony adres');
+select pg_temp.assert((select status from public.email_campaigns where id = :'eq_rev') = 'active',
+  'EMQ1038-3b kampania nadal aktywna po pierwszej paczce');
+-- Potwierdzenie adresu w trakcie aktywnej kampanii: odbiorca trafia do następnej paczki.
+update auth.users set email_verified = true where id = :'EQ2';
+set role service_role;
+select public.enqueue_campaign_batch(:'eq_rev', 5000);
+reset role;
+select pg_temp.assert(
+  (select d.locale = 'nl' and d.status::text = 'queued'
+     from public.email_deliveries d where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2'),
+  'EMQ1038-3c po potwierdzeniu adresu odbiorca dostaje list w swoim języku (Invariant #1)');
+
+-- EMQ1038-4: wiersz już w kolejce, adres przestaje być potwierdzony → worker go nie wydaje.
+update auth.users set email_verified = false where id = :'EQ2';
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'EQ2', 'newsletter', 'eq2@test.be', null, null, null)
+    = 'suppressed_unverified_address',
+  'EMQ1038-4 przyczyna wygaszenia dla niepotwierdzonego adresu');
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c
+               where c.campaign_id = :'eq_rev'::uuid and c.profile_id = :'EQ2'),
+  'EMQ1038-4b claim nie wydaje marketingu na niepotwierdzony adres');
+select pg_temp.assert(
+  (select d.status::text || '/' || d.error_message from public.email_deliveries d
+    where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2') = 'failed/suppressed_unverified_address'
+  and (select r.status || '/' || r.reason from public.email_campaign_recipients r
+        where r.campaign_id = :'eq_rev' and r.profile_id = :'EQ2') = 'skipped_consent/unverified_address',
+  'EMQ1038-4c wiersz wygaszony, odbiorca kampanii = skipped_consent/unverified_address');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'EQ2', 'jobPublished', 'eq2@test.be', null, null, null) is null,
+  'EMQ1038-4d e-mail transakcyjny nie jest wygaszany z powodu niepotwierdzenia');
+-- EMQ1038-4n: KONTROLA UJEMNA — bez tej klauzuli (0175) o wysyłce decydowałaby sama zgoda.
+create function pg_temp.emq1038_old_allowed(p_profile_id uuid) returns boolean language sql as $$
+  select coalesce((select np.email_marketing from public.notification_preferences np
+                    where np.profile_id = p_profile_id), false);
+$$;
+select pg_temp.assert(pg_temp.emq1038_old_allowed(:'EQ2') is true
+  and public.email_allowed(:'EQ2', 'newsletter') is false,
+  'EMQ1038-4n kontrola ujemna: sama zgoda (0087) przepuściłaby niepotwierdzony adres, 0962 nie');
+
+-- EMQ1038-5: uprawnienia.
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.email_address_verified(%L)', :'EQ1'), 'permission denied',
+  'EMQ1038-5 zalogowany nie odpytuje potwierdzenia adresu');
+reset role; reset app.current_uid;
+
+-- EL1049: język e-maili.
+select public.resolve_recipient_locale(:'EQ3') as eq3_locale \gset
+select pg_temp.assert(public.resolve_recipient_locale(:'EQ1') = 'pl', 'EL1049-0 język startowy = język rejestracji');
+select public.enqueue_email_outcome(:'EQ1', 'jobPublished', null, null, 'el1049-pre', '{}'::jsonb);
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_my_email_locale('nl') = 'nl', 'EL1049-1 zmiana języka zwraca nowy język');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select preferred_locale = 'nl' and signup_locale = 'pl' from public.profiles where id = :'EQ1')
+  and public.resolve_recipient_locale(:'EQ1') = 'nl',
+  'EL1049-1b preferred_locale zapisany, język rejestracji bez zmian, odbiorca rozwiązany na nl');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'EQ1'::uuid
+            and before_data ->> 'preferred_locale' is null
+            and after_data ->> 'preferred_locale' = 'nl')
+     from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid),
+  'EL1049-2 audyt zmiany: aktor, język przed i po');
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select public.set_my_email_locale('nl');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid) = 1,
+  'EL1049-2b ponowne ustawienie tego samego języka nie dopisuje audytu');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ1', 'statusChanged', 'application', null, 'el1049-1', '{}'::jsonb)),
+  'EL1049-3 e-mail po zmianie języka zakolejkowany');
+select pg_temp.assert(
+  (select locale = 'nl' from public.email_deliveries where idempotency_key = 'el1049-1'),
+  'EL1049-3a kolejne e-maile w nowym języku (Invariant #1)');
+select pg_temp.assert(
+  (select locale = 'pl' from public.email_deliveries where idempotency_key = 'el1049-pre'),
+  'EL1049-3b e-mail zakolejkowany wcześniej zachowuje język z chwili kolejkowania');
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('de')$$, 'VALIDATION_FAILED',
+  'EL1049-4 język spoza listy odrzucony');
+select pg_temp.expect_error($$select public.set_my_email_locale(null)$$, 'VALIDATION_FAILED',
+  'EL1049-4b brak języka odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert((select preferred_locale = 'nl' from public.profiles where id = :'EQ1'),
+  'EL1049-4c odrzucone wywołania nie zmieniły języka');
+select pg_temp.assert(
+  (select preferred_locale is null from public.profiles where id = :'EQ3')
+  and public.resolve_recipient_locale(:'EQ3') = :'eq3_locale',
+  'EL1049-5 cudzy profil bez zmian');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'permission denied',
+  'EL1049-6 anon nie ustawia języka');
+reset role;
+set role authenticated; set app.current_uid = ''; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'UNAUTHENTICATED',
+  'EL1049-6b bez tożsamości sesji odrzucone');
+reset role; reset app.current_uid;
+update public.profiles set deleted_at = now() where id = :'EQ4';
+set role authenticated; set app.current_uid = :'EQ4'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('pl')$$, 'PERMISSION_DENIED',
+  'EL1049-7 konto usunięte nie ustawia języka');
+reset role; reset app.current_uid;
+update public.profiles set deleted_at = null where id = :'EQ4';
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
