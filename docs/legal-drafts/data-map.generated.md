@@ -715,20 +715,20 @@ Tabele w migracjach: 110; z danymi osobowymi: 76; bez danych osobowych: 34.
 
 ### `public.email_pending_events`
 
-- **Migracja:** `supabase/migrations/0972_email_webhook_pending_events.sql`
+- **Migracja:** `supabase/migrations/0195_email_webhook_pending_events.sql`
 - **Czynności:** E-maile i powiadomienia
 - **Osoby:** Kandydaci (konto), Aplikujący bez konta, Pracodawcy i członkowie firm, Zgłaszający treści (z kontem lub bez), Osoby zaproszone do zespołu firmy
-- **Uwaga:** Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0972); przypisywane triggerem, czyszczone po 30 dniach.
+- **Uwaga:** Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0195); przypisywane triggerem, czyszczone po 30 dniach.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `provider` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
-| `provider_message_id` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
-| `event` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
-| `occurred_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
-| `recipient` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
-| `bounce_type` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
-| `received_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0972_email_webhook_pending_events.sql` |
+| `provider` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
+| `provider_message_id` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
+| `event` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
+| `occurred_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
+| `recipient` | Dane kontaktowe (e-mail, telefon) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
+| `bounce_type` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
+| `received_at` | Dane techniczne (IP, User-Agent, identyfikatory urządzeń, dzienniki) | `supabase/migrations/0195_email_webhook_pending_events.sql` |
 
 ### `public.email_recipient_windows`
 

@@ -701,7 +701,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       bounce_type: 'technical',
       received_at: 'technical',
     },
-    note: 'Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0972); przypisywane triggerem, czyszczone po 30 dniach.',
+    note: 'Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0195); przypisywane triggerem, czyszczone po 30 dniach.',
   },
   'public.email_consent_events': {
     activities: ['email-notifications', 'consents'],

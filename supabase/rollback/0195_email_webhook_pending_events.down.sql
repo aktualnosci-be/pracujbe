@@ -1,4 +1,4 @@
--- Rollback 0972 (numer tymczasowy): przywraca record_email_event (0098) i processed_webhooks_gc (0163).
+-- Rollback 0195 (numer tymczasowy): przywraca record_email_event (0098) i processed_webhooks_gc (0163).
 -- Zaległe zdarzenia bez wysyłki są tracone (jak przed migracją).
 drop trigger if exists trg_email_deliveries_apply_pending on public.email_deliveries;
 drop function if exists public.apply_pending_email_events();

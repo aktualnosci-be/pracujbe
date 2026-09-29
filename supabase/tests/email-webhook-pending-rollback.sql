@@ -1,5 +1,5 @@
 -- =============================================================================
--- EW788-R — rollback migracji 0972 (#788/#790). Uruchamiany przez scripts/test-rls.sh po
+-- EW788-R — rollback migracji 0195 (#788/#790). Uruchamiany przez scripts/test-rls.sh po
 -- rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -11,7 +11,7 @@ begin
 end $$;
 
 begin;
-\ir ../rollback/0972_email_webhook_pending_events.down.sql
+\ir ../rollback/0195_email_webhook_pending_events.down.sql
 select pg_temp.assert(to_regclass('public.email_pending_events') is null
   and to_regprocedure('public.release_webhook(text)') is null
   and to_regprocedure('public.apply_pending_email_events()') is null
@@ -22,4 +22,4 @@ select pg_temp.assert(to_regclass('public.email_pending_events') is null
 rollback;
 select pg_temp.assert(to_regclass('public.email_pending_events') is not null,
   'EW788-R2 rollback testu cofnięty');
-\echo 'EW788-R rollback 0972: PASS'
+\echo 'EW788-R rollback 0195: PASS'

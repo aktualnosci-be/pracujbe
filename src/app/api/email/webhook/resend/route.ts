@@ -21,7 +21,7 @@ import { verifyStandardWebhook } from '@/lib/webhooks';
  *      (`duplicate`) → 200 bez zmian; równoległa dostawa (`locked`) → 503 + `Retry-After` (#790),
  *   6. RPC `record_email_event` (0098): status tylko „w górę”, trwałe odbicie i skarga →
  *      blokada adresu. Błąd → zwolnienie dzierżawy + 500 (dostawca ponowi; zapis jest idempotentny).
- *      Zdarzenie bez wysyłki (`unknown_message`) baza zachowuje do przypisania (#788, 0972),
+ *      Zdarzenie bez wysyłki (`unknown_message`) baza zachowuje do przypisania (#788, 0195),
  *   7. inbox `completed` → 200.
  * #25: claim, zapis zdarzenia i complete to trzy osobne, krótkie transakcje service_role —
  * dzierżawa jest widoczna dla równoległych dostaw od chwili claimu.

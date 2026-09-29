@@ -22575,14 +22575,14 @@ rollback;
 -- Rollback 0189: supabase/tests/soft-delete-cv-quota-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
 
 -- ============================================================================
--- EW788 (#788/#790, 0972): webhook doręczenia przed zapisem `provider_message_id` nie ginie
+-- EW788 (#788/#790, 0195): webhook doręczenia przed zapisem `provider_message_id` nie ginie
 -- (email_pending_events + trigger przypisania), a dzierżawa inboxu jest zwalniana po błędzie
 -- (release_webhook). Kontrole ujemne: zdjęty trigger → zdarzenie nieprzypisane; bez release
 -- retry dostaje `locked`.
 -- ============================================================================
-\set EWA 'e0972000-0000-0000-0000-0000000000a1'
-\set EWB 'e0972000-0000-0000-0000-0000000000a2'
-\set EWE 'e0972000-0000-0000-0000-0000000000e1'
+\set EWA 'e0195000-0000-0000-0000-0000000000a1'
+\set EWB 'e0195000-0000-0000-0000-0000000000a2'
+\set EWE 'e0195000-0000-0000-0000-0000000000e1'
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'EWA','ewa@test.be','Ew A','{"role":"candidate","first_name":"Ew","last_name":"A","locale":"pl"}'),

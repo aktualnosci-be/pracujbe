@@ -336,8 +336,8 @@ describe('kontrakt z migracją 0098', () => {
   });
 });
 
-describe('kontrakt z migracją 0972 (#788)', () => {
-  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0972_email_webhook_pending_events.sql'), 'utf8');
+describe('kontrakt z migracją 0195 (#788)', () => {
+  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0195_email_webhook_pending_events.sql'), 'utf8');
 
   it('kolejka zdarzeń bez wysyłki przyjmuje te same rodzaje zdarzeń co model', async () => {
     const { EMAIL_EVENT_KINDS } = await import('@/lib/email/provider-events');

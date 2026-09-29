@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0972_email_webhook_pending_events.sql  (numer TYMCZASOWY — ostateczny nada integrator)
+-- 0195_email_webhook_pending_events.sql  (numer TYMCZASOWY — ostateczny nada integrator)
 -- #788: webhook doręczenia odebrany PRZED zapisem `provider_message_id` przez workera dostawał
 --       `unknown_message`, inbox oznaczał go `completed` i zdarzenie ginęło bezpowrotnie.
 --       Teraz `record_email_event` zapisuje takie zdarzenie w `email_pending_events`, a trigger
