@@ -20578,9 +20578,13 @@ rollback;
 -- Kontrola ujemna: bez triggera append-only treść przywrócenia da się przepisać i usunąć.
 begin;
 alter table public.moderation_restorations disable trigger trg_moderation_restorations_append_only;
+-- 0960: dowód poinformowania (moderation_informed) wskazuje na przywrócenie kluczem obcym — przed
+-- usunięciem przywrócenia trzeba usunąć wpisy zależne (strażnik tabeli pochodnej też wyłączony).
+alter table public.moderation_informed disable trigger trg_moderation_informed_guard;
 update public.moderation_restorations set reason = 'Przepisany powód przywrócenia decyzji' where id = :'im_rest';
 select pg_temp.assert((select reason = 'Przepisany powód przywrócenia decyzji' from public.moderation_restorations where id = :'im_rest'),
   'IM1114-N2 kontrola ujemna: bez triggera powód przywrócenia da się przepisać');
+delete from public.moderation_informed where restoration_id = :'im_rest';
 delete from public.moderation_restorations where id = :'im_rest';
 select pg_temp.assert(not exists (select 1 from public.moderation_restorations where id = :'im_rest'),
   'IM1114-N2b kontrola ujemna: bez triggera przywrócenie da się usunąć');
