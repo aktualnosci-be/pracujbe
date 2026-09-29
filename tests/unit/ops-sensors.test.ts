@@ -9,7 +9,7 @@ function healthy(): OpsMetrics {
     email: { ready: 3, oldestReadyAgeSeconds: 60, abandonedLeases: 0, failedLast24h: 0 },
     authEmail: { ready: 0, oldestReadyAgeSeconds: 0, abandonedLeases: 0, failedLast24h: 0 },
     webhooks: { stuckProcessing: 0, failedLast24h: 0 },
-    maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 0, staleCheckoutIntents: 0 },
+    maintenance: { overdueActiveJobs: 0 },
     connections: { used: 10, max: 100, reserved: 3 },
     mail: {
       sentLast24h: 1000, hardBouncesLast24h: 5, complaintsLast24h: 0,
@@ -43,18 +43,25 @@ describe('Czujki operacyjne (#47)', () => {
     m.email.abandonedLeases = 1;
     m.authEmail!.abandonedLeases = 2;
     m.webhooks.stuckProcessing = 1;
-    m.maintenance.staleCheckoutIntents = 1;
+    m.maintenance.overdueActiveJobs = 1;
     expect(evaluateOps(m).alerts).toEqual([
       'email_lease_abandoned', 'auth_email_lease_abandoned', 'webhook_stuck', 'maintenance_lag',
     ]);
   });
 
-  it.each([
-    ['overdueActiveJobs'], ['staleDiscountReservations'], ['staleCheckoutIntents'],
-  ] as const)('maintenance_lag z %s', (key) => {
+  it('maintenance_lag z przeterminowanej aktywnej oferty', () => {
     const m = healthy();
-    m.maintenance[key] = 1;
+    m.maintenance.overdueActiveJobs = 1;
     expect(evaluateOps(m).alerts).toEqual(['maintenance_lag']);
+  });
+
+  it('metryki z bazy sprzed 0177 (dodatkowe liczniki billingu) nadal się parsują, klucze są ignorowane', () => {
+    const parsed = parseOpsMetrics({
+      ...healthy(),
+      maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 4, staleCheckoutIntents: 2 },
+    });
+    expect(parsed?.maintenance).toEqual({ overdueActiveJobs: 0 });
+    expect(parsed && evaluateOps(parsed).alerts).toEqual([]);
   });
 
   it('nieudane wysyłki i webhooki = ostrzeżenia bez alarmu', () => {

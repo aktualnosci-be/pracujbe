@@ -13,7 +13,9 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0176 → 0175 → 0174 → 0173 → 0171).
+-- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
+-- 0177 (usunięcie schematu billingu) stoi na 0171 (ops_metrics) — cofana jako pierwsza.
+\ir ../rollback/0177_drop_dead_billing_schema.down.sql
 -- 0176 (#1152, #1153) stoi na 0175 — cofana jako pierwsza.
 \ir ../rollback/0176_classifieds_ai_billing.down.sql
 select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on c.oid = t.tgrelid
