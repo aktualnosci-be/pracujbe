@@ -6,14 +6,18 @@ import { describe, expect, it, vi } from 'vitest';
  */
 
 const jobs = vi.hoisted(() => ({
-  getJobs: vi.fn(),
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
-  getJobsAvailableLocales: vi.fn(),
+}));
+// #1042: katalog ofert z kursorowych RPC (języki tłumaczeń są częścią wiersza).
+const catalog = vi.hoisted(() => ({
+  getSitemapJobShardStarts: vi.fn(),
+  getSitemapJobsShard: vi.fn(),
 }));
 
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' }, isProductionDeployment: () => true }));
 vi.mock('@/lib/jobs', () => jobs);
+vi.mock('@/lib/sitemap-jobs', () => catalog);
 vi.mock('@/lib/guides/guides', () => ({ getAllGuideSlugs: () => [] }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale }: { locale: string }) => (key: string) =>
@@ -22,8 +26,14 @@ vi.mock('next-intl/server', () => ({
 
 const { default: sitemap } = await import('@/app/sitemap');
 
-function job(id: string) {
-  return { id, slug: `oferta-${id}`, publishedAt: '2026-09-01T00:00:00.000Z' };
+function job(id: string, locales: string[] = []) {
+  return {
+    id,
+    slug: `oferta-${id}`,
+    publishedAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    locales,
+  };
 }
 
 describe('sitemap', () => {
@@ -33,8 +43,7 @@ describe('sitemap', () => {
     jobs.getCityCounts.mockImplementation(async (_locale: string, keys: string[]) =>
       Object.fromEntries(keys.map((key) => [key, key === 'kortrijk' ? 1 : 0])),
     );
-    jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
-    jobs.getJobsAvailableLocales.mockResolvedValue({ a: ['nl'], b: ['pl', 'nl', 'fr', 'en'] });
+    catalog.getSitemapJobsShard.mockResolvedValue([job('a', ['nl']), job('b', ['pl', 'nl', 'fr', 'en'])]);
 
     // id 0 = core (strony statyczne/landingi/poradniki); id 1 = pierwsza (i tu jedyna) partia
     // ofert (#599: sitemap index zamiast jednego pliku).
@@ -61,10 +70,35 @@ describe('sitemap', () => {
     });
   });
 
-  it('nieznane języki tłumaczeń (błąd odczytu) = wszystkie wersje, jak dotąd', async () => {
-    jobs.getJobsAvailableLocales.mockResolvedValue(null);
-    jobs.getJobs.mockResolvedValue({ jobs: [job('a')], total: 1, page: 1, pageSize: 100 });
+  it('oferta bez żadnego tłumaczenia (pusta lista języków) = wszystkie wersje, jak dotąd', async () => {
+    catalog.getSitemapJobsShard.mockResolvedValue([job('a', [])]);
     const urls = (await sitemap({ id: 1 })).map((entry) => entry.url).filter((url) => url.includes('/oferta-a'));
     expect(urls).toHaveLength(4);
+  });
+
+  // #796: po istotnej edycji opublikowanej oferty `jobs.updated_at` jest nowsze niż
+  // `published_at` — sitemap ma to zobaczyć, inaczej Google dostaje przestarzały sygnał.
+  it('lastModified odzwierciedla ostatnią istotną edycję (updated_at), nie datę publikacji', async () => {
+    catalog.getSitemapJobsShard.mockResolvedValue([
+      { ...job('edited'), updatedAt: '2026-09-20T12:00:00.123456+00:00' },
+    ]);
+    const entry = (await sitemap({ id: 1 })).find((e) => e.url.endsWith('/oferta-edited'));
+    expect(entry?.lastModified).toEqual(new Date('2026-09-20T12:00:00.123Z'));
+    // Kontrola ujemna: liczenie wyłącznie z `publishedAt` (zachowanie sprzed #796) dałoby 1 września.
+    expect(entry?.lastModified).not.toEqual(new Date('2026-09-01T00:00:00.000Z'));
+  });
+
+  it('lastModified: nieparsowalne updated_at → data publikacji, a przy błędzie obu → bieżący czas', async () => {
+    catalog.getSitemapJobsShard.mockResolvedValue([
+      { ...job('bad-updated'), updatedAt: 'nie-data' },
+      { ...job('bad-both'), updatedAt: 'nie-data', publishedAt: 'nie-data' },
+    ]);
+    const before = Date.now();
+    const entries = await sitemap({ id: 1 });
+    expect(entries.find((e) => e.url.endsWith('/oferta-bad-updated'))?.lastModified).toEqual(
+      new Date('2026-09-01T00:00:00.000Z'),
+    );
+    const now = (entries.find((e) => e.url.endsWith('/oferta-bad-both'))?.lastModified as Date).getTime();
+    expect(now).toBeGreaterThanOrEqual(before);
   });
 });

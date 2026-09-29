@@ -890,6 +890,23 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   (strażnik źródeł: ręczny `'@type': 'BreadcrumbList'` albo ścieżka bez danych = czerwony,
   kontrola ujemna), E2E `job-posting-fixture` (pozycje, landing branży = 200, kontrola ujemna
   #301) i `company-profile` (nazwy = widoczna ścieżka).
+  Sitemap ofert kursorem (#1042, migracja `0965` — numer tymczasowy): `sitemap.ts` nie używa już
+  `getJobs` (osobny licznik + OFFSET po 100 ofert, sufit offsetu 10 000). Dwa lekkie RPC niezależne
+  od `get_public_jobs` (anon, SECURITY DEFINER): `get_public_jobs_sitemap_shard_starts(rozmiar)`
+  (jeden wiersz na partię = kursor ostatniej oferty poprzedniej; liczba plików = liczba wierszy,
+  bez licznika ofert) i `get_public_jobs_sitemap_page(after, until, limit ≤ 1000)` (strona
+  kursorem `published_at desc, id desc` z językami tłumaczeń #301, slugiem firmy #591 i
+  `updated_at` do `lastmod` #796 w jednym zapytaniu; kursor „do” włącznie = partie rozłączne
+  i bez dziur także przy zmianie katalogu między żądaniami). `id` rozstrzyga remis `published_at`;
+  znaczniki czasu jako tekst z mikrosekundami (`to_jsonb`), nigdy `Date`. Warunek „oferta
+  publiczna” = kopia `get_public_jobs` + `published_at is not null`; częściowy indeks
+  `idx_jobs_sitemap_cursor`. Kod: `src/lib/db/sitemap-jobs.ts` (SQL), `src/lib/sitemap-jobs.ts`
+  (partie, błąd = `AppError`, faza builda = pusto). Sufit partii `MAX_JOB_SITEMAP_SHARDS = 100`
+  niezależny od bazy. Dowód: `rls.sql` sekcja SM1042 (wynik = publiczna lista, remis 130 ofert
+  przez granice stron i partii, kontrole ujemne: kursor bez `id` gubi i dubluje, oferty
+  ukryte, niepełny kursor), rollback `supabase/rollback/0965_…down.sql`, integracja
+  `sitemap-jobs` (PG16, 2600 ofert z jednym `published_at`), unit `sitemap-jobs`,
+  `sitemap-jobs-db`, `sitemap-robots`, `sitemap-seo`. Cache 3600 s: osobno (#1177).
   Edycja strony i logo firmy (#112, migracja `0141`): `/employer/firma` ma osobny formularz
   (`CompanyLinksForm` + akcja `updateCompanyLinks`) — owner/admin firmy (jak nazwa/VAT, 0040)
   ustawia i czyści oba adresy; CHECK na `companies.website`/`logo_url` (`companies_website_https`/
