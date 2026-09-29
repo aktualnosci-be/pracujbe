@@ -34,6 +34,41 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('ToastRegion (#1054): współdzielony region w body', () => {
+  it('wiele instancji (np. przyciski zapisu na liście kart) = jedna para regionów poza treścią', () => {
+    render(
+      <main>
+        <ul>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <li key={n}>
+              <ToastRegion toast={null} onClose={() => undefined} />
+            </li>
+          ))}
+        </ul>
+      </main>,
+    );
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    const main = screen.getByRole('main');
+    expect(main).not.toContainElement(screen.getByRole('status'));
+    expect(main).not.toContainElement(screen.getByRole('alert'));
+  });
+
+  it('po odmontowaniu ostatniej instancji regionów nie ma (strony bez toastów nie mają pustych live regions)', () => {
+    const { unmount } = render(<ToastRegion toast={null} onClose={() => undefined} />);
+    expect(screen.queryByRole('status')).not.toBeNull();
+    unmount();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('kontrola ujemna: strona bez ToastRegion nie ma żadnego status/alert', () => {
+    render(<p>treść</p>);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
 describe('ToastRegion (#1054)', () => {
   it('regiony na żywo istnieją w DOM zanim pojawi się treść', () => {
     render(<Harness />);

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, XCircle, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -16,10 +17,11 @@ import { cn } from '@/lib/utils';
  *
  * #1054: komunikat wstawiony razem z własnym `role="status"` bywa niezauważony przez czytnik
  * ekranu (region musi istnieć w DOM przed treścią). Dlatego zalecany sposób to `ToastRegion`:
- * stały region na żywo (osobny `role="status"`/polite dla sukcesu i `role="alert"`/assertive
- * dla błędu), renderowany zawsze, do którego toast tylko wpisuje treść. Toast w regionie nie
- * ma własnej roli. Błąd nie znika sam (tylko po zamknięciu albo kolejnej akcji, która
- * czyści stan rodzica); sukces znika po `SUCCESS_TOAST_MS`, z pauzą przy najechaniu/fokusie.
+ * karta trafia do współdzielonego, wcześniej utworzonego regionu na żywo (osobny
+ * `role="status"`/polite dla sukcesu i `role="alert"`/assertive dla błędu, w `<body>`, poza
+ * treścią strony). Toast w regionie nie ma własnej roli. Błąd nie znika sam (tylko po zamknięciu
+ * albo kolejnej akcji, która czyści stan rodzica); sukces znika po `SUCCESS_TOAST_MS`, z pauzą
+ * przy najechaniu/fokusie.
  */
 
 /** Czas widoczności komunikatu sukcesu w `ToastRegion` (WCAG 2.2.1: wystarczająco długo). */
@@ -101,33 +103,81 @@ export interface ToastRegionState {
 export interface ToastRegionProps {
   toast: ToastRegionState | null;
   onClose: () => void;
-  /** Pozycjonowanie regionu (domyślnie prawy dolny róg). */
+  /** Pozycjonowanie karty (domyślnie prawy dolny róg). */
   className?: string;
   /** Czas widoczności sukcesu; błędy nie znikają same. */
   successMs?: number;
 }
 
 /**
- * Stały region na żywo dla toastów (#1054). Oba podregiony (polite dla sukcesu, assertive dla
- * błędu) są zawsze w DOM, więc czytnik ekranu ogłasza wpisaną treść. Puste podregiony nie
- * zajmują miejsca ani nie przechwytują kliknięć.
+ * Współdzielony korzeń regionów na żywo (#1054): jeden na stronę, dołączany do `<body>` (poza
+ * `<main>` i listami) przy montażu pierwszego `ToastRegion` i usuwany z odmontowaniem ostatniego.
+ * Dzięki temu region istnieje w DOM ZANIM pojawi się treść (czytniki ekranu ją ogłaszają), a
+ * strony bez toastów — i lista kart z wieloma przyciskami zapisu — nie mają pustych
+ * `role="status"`/`role="alert"` w treści.
+ */
+interface LiveTargets {
+  polite: HTMLElement;
+  assertive: HTMLElement;
+}
+
+let liveRoot: HTMLElement | null = null;
+let liveTargets: LiveTargets | null = null;
+let liveRefs = 0;
+
+function acquireLiveTargets(): LiveTargets {
+  if (!liveRoot || !liveTargets || !liveRoot.isConnected) {
+    const root = document.createElement('div');
+    root.setAttribute('data-toast-live-regions', '');
+    const polite = document.createElement('div');
+    polite.setAttribute('role', 'status');
+    polite.setAttribute('aria-live', 'polite');
+    polite.setAttribute('aria-atomic', 'true');
+    const assertive = document.createElement('div');
+    assertive.setAttribute('role', 'alert');
+    assertive.setAttribute('aria-live', 'assertive');
+    assertive.setAttribute('aria-atomic', 'true');
+    root.append(polite, assertive);
+    document.body.appendChild(root);
+    liveRoot = root;
+    liveTargets = { polite, assertive };
+  }
+  liveRefs += 1;
+  return liveTargets!;
+}
+
+function releaseLiveTargets(): void {
+  liveRefs = Math.max(0, liveRefs - 1);
+  if (liveRefs === 0 && liveRoot) {
+    liveRoot.remove();
+    liveRoot = null;
+    liveTargets = null;
+  }
+}
+
+/**
+ * Toast wpisywany do stałego regionu na żywo (#1054): sukces do `role="status"` (polite), błąd
+ * do `role="alert"` (assertive). Obie części są zawsze w DOM, gdy strona ma `ToastRegion`.
+ * Puste regiony nie zajmują miejsca; karta ma pozycję `fixed` i nie przechwytuje kliknięć poza sobą.
  */
 export function ToastRegion({
   toast,
   onClose,
   className,
   successMs = SUCCESS_TOAST_MS,
-}: ToastRegionProps): React.JSX.Element {
-  const card = toast ? (
-    <Toast
-      key={toast.id ?? toast.message}
-      message={toast.message}
-      tone={toast.tone}
-      onClose={onClose}
-      autoDismissMs={successMs}
-    />
-  ) : null;
-  return (
+}: ToastRegionProps): React.JSX.Element | null {
+  const [targets, setTargets] = React.useState<LiveTargets | null>(null);
+  React.useEffect(() => {
+    setTargets(acquireLiveTargets());
+    return () => {
+      releaseLiveTargets();
+      setTargets(null);
+    };
+  }, []);
+
+  if (!targets || !toast) return null;
+  const host = toast.tone === 'error' ? targets.assertive : targets.polite;
+  return createPortal(
     <ToastInRegionContext.Provider value>
       <div
         className={cn(
@@ -135,13 +185,15 @@ export function ToastRegion({
           className,
         )}
       >
-        <div role="status" aria-live="polite" aria-atomic="true">
-          {toast?.tone === 'success' ? card : null}
-        </div>
-        <div role="alert" aria-live="assertive" aria-atomic="true">
-          {toast?.tone === 'error' ? card : null}
-        </div>
+        <Toast
+          key={toast.id ?? toast.message}
+          message={toast.message}
+          tone={toast.tone}
+          onClose={onClose}
+          autoDismissMs={successMs}
+        />
       </div>
-    </ToastInRegionContext.Provider>
+    </ToastInRegionContext.Provider>,
+    host,
   );
 }
