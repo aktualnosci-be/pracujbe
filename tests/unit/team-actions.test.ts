@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   inviteTeamMember,
@@ -10,7 +10,8 @@ import {
   setTeamMemberActive,
   setTeamMemberRole,
 } from '@/lib/actions/team';
-import { createAdditionalCompany } from '@/lib/actions/company';
+import { createAdditionalCompany, setActiveCompany } from '@/lib/actions/company';
+import { activeCompanyCookieOptions } from '@/lib/company-context';
 import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
@@ -30,6 +31,7 @@ vi.mock('@/lib/company-context', async () => {
   const getActiveCompany = vi.fn();
   return {
     ACTIVE_COMPANY_COOKIE: 'pb_active_company',
+    activeCompanyCookieOptions: actual.activeCompanyCookieOptions,
     getActiveCompany,
     getExpectedActiveCompany: async (tx: never, userId: string, expected: unknown) =>
       actual.matchExpectedCompany(await getActiveCompany(tx, userId), expected),
@@ -286,5 +288,48 @@ describe('hierarchia ról w UI = hierarchia w bazie (0086)', () => {
     expect(teamErrorKey('PERMISSION_DENIED', toUserMessageKey)).toBe('errors.permissionDenied');
     expect(mapTeamError('permission denied for table company_invitations')).toBe('PERMISSION_DENIED');
     expect(mapTeamError('boom')).toBe('INTERNAL');
+  });
+});
+
+describe('cookie aktywnej firmy: atrybut Secure (#1109)', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('helper: Secure w produkcji, bez Secure poza nią (localhost/testy); reszta atrybutów bez zmian', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    expect(activeCompanyCookieOptions()).toEqual({
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(activeCompanyCookieOptions().secure).toBe(false);
+  });
+
+  it('wszystkie trzy miejsca zapisu (przełącznik, nowa firma, przyjęcie zaproszenia) ustawiają Secure w produkcji', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+
+    client({ data: COMPANY, error: null });
+    await respondToTeamInvitation(INVITE, true);
+    expect(cookieSet).toHaveBeenLastCalledWith('pb_active_company', COMPANY, expect.objectContaining({ secure: true }));
+
+    cookieSet.mockClear();
+    client({ data: [{ company_id: COMPANY, created: true }], error: null });
+    await createAdditionalCompany({ name: 'Druga Firma', vatNumber: '' });
+    expect(cookieSet).toHaveBeenLastCalledWith('pb_active_company', COMPANY, expect.objectContaining({ secure: true }));
+
+    cookieSet.mockClear();
+    client({ data: null, error: null });
+    fakeDb.rows('company.active-membership', [{ id: 'm1' }]);
+    expect(await setActiveCompany(COMPANY)).toEqual({ ok: true });
+    expect(cookieSet).toHaveBeenLastCalledWith('pb_active_company', COMPANY, expect.objectContaining({ secure: true }));
+  });
+
+  it('kontrola ujemna: poza produkcją cookie nie jest Secure (przeglądarka zapisze je na http://localhost)', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    client({ data: COMPANY, error: null });
+    await respondToTeamInvitation(INVITE, true);
+    expect(cookieSet).toHaveBeenLastCalledWith('pb_active_company', COMPANY, expect.objectContaining({ secure: false }));
   });
 });

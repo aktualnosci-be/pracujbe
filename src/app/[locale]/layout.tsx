@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
@@ -75,7 +76,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     openGraph: {
       type: 'website',
       siteName: tCommon('appName'),
-      locale,
+      ...openGraphLocales(locale),
       title: tMeta('homeTitle'),
       description: tMeta('homeDescription'),
       images: [{ url: '/og.png', width: 1200, height: 630, alt: tCommon('appName') }],

@@ -53,6 +53,35 @@ describe('processStorageDeletions', () => {
     expect(fakeDb.callsTo('complete_storage_deletion').every((call) => call.as === 'service')).toBe(true);
   });
 
+  it('#1105: pełna partia → kolejne partie w tym samym przebiegu, aż kolejka się opróżni', async () => {
+    const batches = [
+      [{ id: 'q1', bucket: 'b', path: 'p1' }, { id: 'q2', bucket: 'b', path: 'p2' }],
+      [{ id: 'q3', bucket: 'b', path: 'p3' }, { id: 'q4', bucket: 'b', path: 'p4' }],
+      [{ id: 'q5', bucket: 'b', path: 'p5' }],
+    ];
+    claim([]);
+    fakeDb.rpc('claim_storage_deletions', () => batches.shift() ?? []);
+    const { deleter } = storage(() => Promise.resolve(null));
+    expect(await processStorageDeletions(deleter, 2)).toEqual({ claimed: 5, deleted: 5, failed: 0 });
+    expect(fakeDb.callsTo('claim_storage_deletions')).toHaveLength(3);
+  });
+
+  it('#1105: sufit partii na przebieg i przerwanie, gdy partia nic nie usunęła', async () => {
+    const full = () => [{ id: `q${Math.random()}`, bucket: 'b', path: 'p' }, { id: `r${Math.random()}`, bucket: 'b', path: 'q' }];
+    claim([]);
+    fakeDb.rpc('claim_storage_deletions', full);
+    const ok = storage(() => Promise.resolve(null));
+    expect(await processStorageDeletions(ok.deleter, 2, 4)).toEqual({ claimed: 8, deleted: 8, failed: 0 });
+    expect(fakeDb.callsTo('claim_storage_deletions')).toHaveLength(4);
+
+    // Kontrola ujemna: bucket niedostępny — jedna partia, bez wyczerpywania kolejki próbami.
+    resetFakeDb(null);
+    claim([]);
+    fakeDb.rpc('claim_storage_deletions', full);
+    expect(await processStorageDeletions(unconfiguredDeleter, 2, 4)).toEqual({ claimed: 2, deleted: 0, failed: 2 });
+    expect(fakeDb.callsTo('claim_storage_deletions')).toHaveLength(1);
+  });
+
   it('błąd pobrania partii przerywa zadanie (503 w maintenance)', async () => {
     fakeDb.rpc('claim_storage_deletions', () => { throw pgError('42501', 'permission denied'); });
     const { deleter, from } = storage(() => Promise.resolve(null));

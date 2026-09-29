@@ -14,6 +14,7 @@ import {
   type ModerationFieldError,
 } from '@/lib/admin/moderation';
 import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction, withServiceRole } from '@/lib/db/portal';
 import { queryOne, rpc, type RpcArgs } from '@/lib/db/sql';
 import {
@@ -155,6 +156,9 @@ export async function setCompanyStatus(
       return { ok: false, error: mapPgError(message) };
     }
 
+    // #1109: status firmy steruje widocznością jej ofert (weryfikacja/zawieszenie) — publiczny
+    // ISR nie może pokazywać ich jeszcze przez okno rewalidacji.
+    revalidatePublicJobPaths();
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.setCompanyStatus' });
@@ -321,6 +325,9 @@ export async function decideReport(
       if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
       return { ok: false, error: mapPgError(message) };
     }
+    // #1109: decyzja moderacyjna (usunięcie oferty, zawieszenie firmy, cofnięcie) od razu
+    // unieważnia publiczne strony ofert — jak zwykłe zamknięcie oferty przez firmę (#775).
+    revalidatePublicJobPaths();
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.decideReport' });
@@ -354,6 +361,9 @@ export async function restoreModeration(
       if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
       return { ok: false, error: mapPgError(message) };
     }
+    // #1109: decyzja moderacyjna (usunięcie oferty, zawieszenie firmy, cofnięcie) od razu
+    // unieważnia publiczne strony ofert — jak zwykłe zamknięcie oferty przez firmę (#775).
+    revalidatePublicJobPaths();
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.restoreModeration' });

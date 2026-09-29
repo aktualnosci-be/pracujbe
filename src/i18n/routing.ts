@@ -13,6 +13,11 @@ export const routing = defineRouting({
   locales: ['pl', 'nl', 'fr', 'en'],
   defaultLocale: 'pl',
   localePrefix: 'always',
+  // #1057: bez nagłówka HTTP `Link: …; rel="alternate"; hreflang=…`, który next-intl dokłada do
+  // każdej odpowiedzi middleware. Jego `x-default` wskazywał adres bez prefiksu języka i był
+  // sprzeczny z hreflang w metadata stron i w sitemapie (jedyne źródło: `alternates.languages`
+  // i `src/app/sitemap.ts`, z uwzględnieniem tłumaczeń konkretnej oferty).
+  alternateLinks: false,
 });
 
 export type Locale = (typeof routing.locales)[number];
