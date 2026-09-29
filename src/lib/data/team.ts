@@ -8,6 +8,7 @@ import { rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
 import { canManageTeam } from '@/lib/team/permissions';
+import { isLocale, type Locale } from '@/i18n/routing';
 
 /**
  * Dane strony zespołu firmy (#403) — odczyt przez RPC z 0086 pod SESJĄ użytkownika
@@ -33,6 +34,12 @@ export interface TeamInvitation {
   email: string;
   role: string;
   expiresAt: string;
+  /** Data utworzenia zaproszenia (odnowienie jej nie zmienia). */
+  createdAt: string;
+  /** Język zaproszenia (0121); `null` — zaproszenie sprzed 0121 albo wartość spoza serwisu. */
+  locale: Locale | null;
+  /** Imię i nazwisko osoby, która ostatnio wysłała/odnowiła zaproszenie; pusty tekst, gdy nieznane. */
+  inviterName: string;
 }
 
 export interface MyTeamInvitation {
@@ -114,6 +121,9 @@ const DEMO_DATA: Extract<TeamPageData, { status: 'ok' }> = {
       email: 'nowa.osoba@example.be',
       role: 'recruiter',
       expiresAt: '2030-01-01T00:00:00.000Z',
+      createdAt: '2025-04-01T09:00:00.000Z',
+      locale: 'nl',
+      inviterName: 'Anna Peeters',
     },
   ],
   myInvitations: [],
@@ -200,6 +210,9 @@ export async function getTeamPageData(): Promise<TeamPageData> {
       email: asString(r['email']),
       role: asString(r['role']),
       expiresAt: asString(r['expires_at']),
+      createdAt: asString(r['created_at']),
+      locale: isLocale(r['locale']) ? r['locale'] : null,
+      inviterName: asString(r['inviter_name']).trim(),
     }));
 
     return {
