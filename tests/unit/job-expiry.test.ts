@@ -60,8 +60,6 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       headers: auth ? { authorization: auth } : {},
     });
   const TASKS = [
-    'release_stale_discount_reservations',
-    'release_stale_checkout_intents',
     'ai_budget_release_stale_reservations',
     'expire_due_jobs',
     'match_recompute_claim',
@@ -119,8 +117,6 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     ]);
     expect(await res.json()).toEqual({
       ok: true,
-      releasedDiscounts: 0,
-      releasedCheckouts: 0,
       releasedAiBudgetReservations: 0,
       expiredJobs: 3,
       // P1-03: pusta kolejka dopasowań — same liczniki.

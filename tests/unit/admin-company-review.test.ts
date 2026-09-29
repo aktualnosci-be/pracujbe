@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Locale } from '@/i18n/routing';
 import { renderEmail } from '@/emails/templates';
-import { setCompanyStatus } from '@/lib/actions/admin';
+import { decideReport, restoreModeration, setCompanyStatus } from '@/lib/actions/admin';
+import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { COMPANY_REASON_MAX, companyReasonError } from '@/lib/admin/company-review';
 import { getCompanyDetail } from '@/lib/data/admin';
 import { titleKeyForType } from '@/lib/data/notifications';
@@ -25,6 +26,7 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
+vi.mock('@/lib/jobs/public-cache', () => ({ revalidatePublicJobPaths: vi.fn() }));
 
 const COMPANY_ID = '0b9a9c0e-5f4e-4c1a-9d52-6f1f3c1d2e01';
 
@@ -136,6 +138,46 @@ describe('#310 setCompanyStatus — uzasadnienie', () => {
     const rpc = mockSession(null);
     expect(await setCompanyStatus(COMPANY_ID, 'verified', 'pending')).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
     expect(rpc()).toHaveLength(0);
+  });
+});
+
+describe('#1109 rewalidacja publicznych stron ofert po decyzji admina', () => {
+  const REPORT_ID = '1c0a9c0e-5f4e-4c1a-9d52-6f1f3c1d2e02';
+
+  it('zmiana statusu firmy unieważnia publiczny cache; błąd bazy i brak sesji — nie', async () => {
+    mockSession('admin');
+    expect(await setCompanyStatus(COMPANY_ID, 'suspended', 'verified', 'Skargi')).toEqual({ ok: true });
+    expect(revalidatePublicJobPaths).toHaveBeenCalledTimes(1);
+
+    vi.mocked(revalidatePublicJobPaths).mockClear();
+    mockSession('admin', 'STALE_STATE: status firmy zmienił się');
+    await setCompanyStatus(COMPANY_ID, 'verified', 'pending');
+    mockSession(null);
+    await setCompanyStatus(COMPANY_ID, 'verified', 'pending');
+    expect(revalidatePublicJobPaths).not.toHaveBeenCalled();
+  });
+
+  it('decyzja moderacyjna i jej cofnięcie unieważniają publiczny cache; błąd bazy — nie', async () => {
+    resetFakeDb({ id: ADMIN_ID, role: 'admin' });
+    fakeDb.rpc('admin_decide_report', null).rpc('admin_restore_moderation', null);
+    const input = {
+      decision: 'job_removed',
+      facts: 'Oferta wymaga od kandydatów opłaty za rekrutację z góry.',
+      groundType: 'law',
+      groundReference: 'Art. 7',
+      automatedDetection: false,
+    } as const;
+    expect(await decideReport(REPORT_ID, 'reviewing', 'job', input)).toEqual({ ok: true });
+    expect(revalidatePublicJobPaths).toHaveBeenCalledTimes(1);
+    expect(await restoreModeration(REPORT_ID, 'Decyzja była błędna, oferta jest zgodna z zasadami.')).toEqual({ ok: true });
+    expect(revalidatePublicJobPaths).toHaveBeenCalledTimes(2);
+
+    vi.mocked(revalidatePublicJobPaths).mockClear();
+    fakeDb.rpc('admin_decide_report', () => {
+      throw pgError('P0001', 'STALE_STATE');
+    });
+    expect(await decideReport(REPORT_ID, 'reviewing', 'job', input)).toMatchObject({ ok: false });
+    expect(revalidatePublicJobPaths).not.toHaveBeenCalled();
   });
 });
 

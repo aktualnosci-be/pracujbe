@@ -12,6 +12,10 @@ const MAX_LABEL = 80;
 
 export interface ErrorWebhookMessage {
   code: string;
+  /** Obszar awarii (#1066), np. `maintenance.retention`; przechodzi przez {@link safeErrorArea}. */
+  area?: string;
+  /** SQLSTATE błędu bazy (#1068); przechodzi przez {@link safeSqlState}. */
+  sqlstate?: string;
   route?: string;
   release?: string;
   environment?: string;
@@ -25,6 +29,27 @@ export interface ErrorWebhookMessage {
 /** Kod spoza słownika `ErrorCodes` (np. tekst z wyjątku) nie przechodzi — zostaje `INTERNAL`. */
 export function safeErrorCode(code: string): string {
   return ALLOWED_CODES.has(code) ? code : 'INTERNAL';
+}
+
+const AREA_RE = /^[A-Za-z][A-Za-z0-9-]{0,31}(\.[A-Za-z0-9-]{1,40}){0,3}$/;
+
+/**
+ * Etykieta obszaru awarii (#1066) — stały identyfikator z kodu (`maintenance.retention`,
+ * `email.outbox.send`, `ops.metrics`), nigdy dane. Zwraca `undefined` dla wszystkiego, co nie
+ * wygląda na taką etykietę: znaki spoza `[A-Za-z0-9.-]`, za długie, segment-UUID albo ciąg
+ * ≥ 6 cyfr (identyfikator/numer), więc dynamiczna wartość nie przecieknie na zewnątrz.
+ */
+export function safeErrorArea(area: unknown): string | undefined {
+  if (typeof area !== 'string') return undefined;
+  const value = area.trim();
+  if (value.length === 0 || value.length > 96 || !AREA_RE.test(value)) return undefined;
+  if (value.split('.').some((segment) => UUID_RE.test(segment) || /\d{6,}/.test(segment))) return undefined;
+  return value;
+}
+
+/** SQLSTATE (5 znaków `[0-9A-Z]`) — kod klasy błędu, nie dane; inne wartości są odrzucane. */
+export function safeSqlState(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[0-9A-Z]{5}$/.test(value) ? value : undefined;
 }
 
 /**
@@ -65,6 +90,8 @@ export function buildErrorWebhookText(message: ErrorWebhookMessage): string {
   const lines = [
     message.source === 'client' ? 'pracuj.be: błąd w przeglądarce' : 'pracuj.be: błąd serwera',
     `Kod: ${safeErrorCode(message.code)}`,
+    ...(safeErrorArea(message.area) ? [`Obszar: ${safeErrorArea(message.area)}`] : []),
+    ...(safeSqlState(message.sqlstate) ? [`SQLSTATE: ${safeSqlState(message.sqlstate)}`] : []),
     `Trasa: ${safeRoute(message.route)}`,
     `Wydanie: ${safeLabel(message.release)}`,
     `Środowisko: ${safeLabel(message.environment)}`,

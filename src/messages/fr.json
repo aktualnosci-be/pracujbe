@@ -2838,7 +2838,7 @@
     "opsNoteLastRunNever": "La base ne connaît aucune exécution — la planification (cron) ne fonctionne pas encore.",
     "opsNoteLastRunFailed": "La dernière exécution a échoué sur la tâche : {task}",
     "opsNoteLastRunUnknown": "Impossible de lire la dernière exécution.",
-    "opsNoteLagDetail": "Offres échues : {jobs}, réservations de codes : {discounts}, paiements abandonnés : {checkouts}",
+    "opsNoteLagDetail": "Offres échues : {jobs}",
     "opsNoteStoragePending": "Objets en attente : {pending}",
     "opsNoteConnections": "Connexions : {used} sur {available} disponibles",
     "opsNoteSmallSample": "Échantillon trop petit pour un taux : {sent} e-mails en 24 h (minimum {min}).",

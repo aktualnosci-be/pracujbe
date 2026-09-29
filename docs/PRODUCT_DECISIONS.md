@@ -7,13 +7,15 @@ pojedynczych publikacji ofert. Interfejs nie pokazuje cennika ani zachęt do zak
 odrzuca próby rozpoczęcia checkoutu i zdarzenia sprzedażowego webhooka nawet wtedy, gdy w
 środowisku pozostały sekrety Stripe.
 
-Technicznie stan wyłączony wyznacza jedna jawna flaga `BILLING_ENABLED` (domyślnie wyłączona,
-`src/lib/billing/flag.ts`). Bez niej klient Stripe jest nieosiągalny, a webhook odpowiada 404.
-Samo jej ustawienie nie przywraca sprzedaży — ta wersja nie zawiera przepływu checkoutu.
-
-Tabele finansowe pozostają w bazie, aby wycofanie sprzedaży nie wymagało destrukcyjnej migracji.
-Ich obecność nie oznacza, że funkcja jest aktywna. Powrót do monetyzacji wymaga nowej, jawnej
-decyzji właściciela oraz osobnego wdrożenia i testów.
+Aktualizacja 28.09.2026: martwy schemat billingu został usunięty (migracja 0177 — tabele
+`subscriptions`, `payments`, `invoices`, `discount_codes`, `checkout_intents`,
+`discount_redemptions`, RPC rabatów i checkoutu, kolumna `companies.provider_customer_id`),
+a z kodu klient Stripe, trasa webhooka, akcje checkoutu i flaga `BILLING_ENABLED`. Portal nigdy
+nie przyjął płatności (brak danych produkcyjnych), więc usunięcie było bezstratne; rollback
+odtwarza pusty schemat (`supabase/rollback/0177_drop_dead_billing_schema.down.sql`). Zostaje
+katalog limitów `plan_entitlements` (limit aktywnych ofert, każda firma ma plan `free`).
+Powrót do monetyzacji wymaga nowej, jawnej decyzji właściciela oraz osobnego projektu
+(schemat, checkout, testy) — nie wystarczy przywrócenie flagi.
 
 Docelowym środowiskiem uruchomieniowym aplikacji i PostgreSQL jest Railway. Migracja techniczna
 jest prowadzona osobno; ten wpis opisuje kierunek produktu, a nie potwierdza zakończenia migracji.
@@ -93,8 +95,7 @@ AI i monetyzacja w tym trybie (#1152, #1153): funkcje AI działają wyłącznie 
 (import ogłoszenia, asystent treści, tłumaczenie ofert, kontrola treści) — funkcja z wejściem
 kandydata jest wyłączona niezależnie od własnej flagi (`allowedInClassifieds` w
 `src/lib/ai/inventory.ts`, bramka `src/lib/ai/feature-gate.ts`, kolejka tłumaczeń w bazie nie
-przyjmuje profili kandydatów). Billing jest nieaktywny także przy `BILLING_ENABLED=true`
-(`src/lib/billing/flag.ts`), a katalog planów nie daje dostępu do kandydatów (`candidate_access`
+przyjmuje profili kandydatów). Billing nie istnieje (kod i schemat usunięte w migracji 0177), a katalog planów nie daje dostępu do kandydatów (`candidate_access`
 wymuszone na `false` w bazie). Ewentualna monetyzacja portalu ogłoszeń (np. stała opłata za
 publikację lub wyróżnienie ogłoszenia) wymaga osobnego projektu i decyzji właściciela.
 

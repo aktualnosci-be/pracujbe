@@ -2838,7 +2838,7 @@
     "opsNoteLastRunNever": "De database kent nog geen enkele run — de planning (cron) werkt nog niet.",
     "opsNoteLastRunFailed": "Laatste run eindigde met een fout in taak: {task}",
     "opsNoteLastRunUnknown": "De laatste run kon niet worden gelezen.",
-    "opsNoteLagDetail": "Verlopen vacatures: {jobs}, codereserveringen: {discounts}, verlaten betalingen: {checkouts}",
+    "opsNoteLagDetail": "Verlopen vacatures: {jobs}",
     "opsNoteStoragePending": "Wachtende objecten: {pending}",
     "opsNoteConnections": "Verbindingen: {used} van {available} beschikbaar",
     "opsNoteSmallSample": "Te kleine steekproef voor een percentage: {sent} e-mails in 24 uur (minimum {min}).",

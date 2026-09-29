@@ -2838,7 +2838,7 @@
     "opsNoteLastRunNever": "Baza nie zna żadnego przebiegu — harmonogram (cron) jeszcze nie działa.",
     "opsNoteLastRunFailed": "Ostatni przebieg zakończył się błędem zadania: {task}",
     "opsNoteLastRunUnknown": "Nie udało się odczytać ostatniego przebiegu.",
-    "opsNoteLagDetail": "Oferty po terminie: {jobs}, rezerwacje kodów: {discounts}, porzucone płatności: {checkouts}",
+    "opsNoteLagDetail": "Oferty po terminie: {jobs}",
     "opsNoteStoragePending": "Oczekujące obiekty: {pending}",
     "opsNoteConnections": "Połączenia: {used} z {available} dostępnych",
     "opsNoteSmallSample": "Za mała próba do oceny odsetka: {sent} listów w 24 h (minimum {min}).",

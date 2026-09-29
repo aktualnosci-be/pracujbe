@@ -35,7 +35,7 @@ identyfikatorów ani konfiguracji.
 | `auth_email_queue_age` | alarm | najstarszy gotowy e-mail auth (weryfikacja/reset) > 5 min | worker kolejki auth nie działa |
 | `auth_email_lease_abandoned` | alarm | dzierżawa `leased` po `lease_expires_at` | worker auth padł |
 | `webhook_stuck` | alarm | webhook `processing` > 15 min | awaria w trakcie przetwarzania (0038) |
-| `maintenance_lag` | alarm | aktywna oferta > 2 h po `expires_at`, rezerwacja kodu > 26 h, checkout `pending` > 150 min | cron `/api/maintenance` nie działa |
+| `maintenance_lag` | alarm | aktywna oferta > 2 h po `expires_at` (liczniki rabatów i checkoutu usunięte razem ze schematem billingu, 0177) | cron `/api/maintenance` nie działa |
 | `maintenance_run_stale` | alarm | ostatni zapisany przebieg `/api/maintenance` starszy niż 2 h (0178) | cron maintenance przestał działać |
 | `maintenance_run_missing` | ostrzeżenie | baza nie zna żadnego przebiegu maintenance (0178) | cron jeszcze nie uruchomiony — celowo ostrzeżenie, nie alarm, żeby świeża baza nie dawała stale 503 |
 | `maintenance_run_failed` | ostrzeżenie | ostatni przebieg zakończył się błędem zadania (nazwa zadania w wierszu panelu) | awaria jednego zadania; szczegół: kod na webhooku błędów |

@@ -82,7 +82,7 @@ export type OpsNote =
   | { key: 'lastRunNever' }
   | { key: 'lastRunFailed'; task: string }
   | { key: 'lastRunUnknown' }
-  | { key: 'lagDetail'; jobs: number; discounts: number; checkouts: number }
+  | { key: 'lagDetail'; jobs: number }
   | { key: 'storagePending'; pending: number }
   | { key: 'connections'; used: number; available: number }
   | { key: 'backupStatus'; status: Exclude<BackupFreshness['status'], 'ok' | 'stale'> }
@@ -190,9 +190,9 @@ export function buildOpsRows(input: OpsDashboardInput): OpsRow[] {
   const lag = m.maintenance;
   rows.push(
     row('maintenanceLag', 'maintenance',
-      count(lag.overdueActiveJobs + lag.staleDiscountReservations + lag.staleCheckoutIntents), POSITIVE,
+      count(lag.overdueActiveJobs), POSITIVE,
       ['maintenance_lag'], true,
-      { key: 'lagDetail', jobs: lag.overdueActiveJobs, discounts: lag.staleDiscountReservations, checkouts: lag.staleCheckoutIntents }),
+      { key: 'lagDetail', jobs: lag.overdueActiveJobs }),
   );
 
   // --- Kolejka storage (#574) ------------------------------------------------------------------
@@ -276,7 +276,7 @@ export function demoOpsInput(): OpsDashboardInput {
     email: { ready: 3, oldestReadyAgeSeconds: 42, abandonedLeases: 0, failedLast24h: 0 },
     authEmail: { ready: 0, oldestReadyAgeSeconds: 0, abandonedLeases: 0, failedLast24h: 0 },
     webhooks: { stuckProcessing: 0, failedLast24h: 0 },
-    maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 0, staleCheckoutIntents: 0 },
+    maintenance: { overdueActiveJobs: 0 },
     connections: { used: 12, max: 100, reserved: 3 },
     storageDeletion: { pending: 0, oldestPendingAgeSeconds: 0, deadLetters: 0 },
     mail: {

@@ -39,7 +39,7 @@ const healthy: OpsMetrics = {
   email: { ready: 2, oldestReadyAgeSeconds: 30, abandonedLeases: 0, failedLast24h: 0 },
   authEmail: { ready: 0, oldestReadyAgeSeconds: 0, abandonedLeases: 0, failedLast24h: 0 },
   webhooks: { stuckProcessing: 0, failedLast24h: 0 },
-  maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 0, staleCheckoutIntents: 0 },
+  maintenance: { overdueActiveJobs: 0 },
   connections: { used: 5, max: 100, reserved: 3 },
   storageDeletion: { pending: 0, oldestPendingAgeSeconds: 0, deadLetters: 0 },
   mail: {

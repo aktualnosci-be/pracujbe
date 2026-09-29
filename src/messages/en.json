@@ -2838,7 +2838,7 @@
     "opsNoteLastRunNever": "The database has no recorded run — the schedule (cron) is not running yet.",
     "opsNoteLastRunFailed": "The last run failed on job: {task}",
     "opsNoteLastRunUnknown": "The last run could not be read.",
-    "opsNoteLagDetail": "Overdue jobs: {jobs}, code reservations: {discounts}, abandoned checkouts: {checkouts}",
+    "opsNoteLagDetail": "Overdue jobs: {jobs}",
     "opsNoteStoragePending": "Pending objects: {pending}",
     "opsNoteConnections": "Connections: {used} of {available} available",
     "opsNoteSmallSample": "Sample too small to judge the rate: {sent} emails in 24 h (minimum {min}).",

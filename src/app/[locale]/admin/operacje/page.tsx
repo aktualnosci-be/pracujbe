@@ -109,11 +109,7 @@ export default async function AdminOpsPage({ params }: { params: Promise<{ local
       case 'lastRunUnknown':
         return t('opsNoteLastRunUnknown');
       case 'lagDetail':
-        return t('opsNoteLagDetail', {
-          jobs: num.format(note.jobs),
-          discounts: num.format(note.discounts),
-          checkouts: num.format(note.checkouts),
-        });
+        return t('opsNoteLagDetail', { jobs: num.format(note.jobs) });
       case 'storagePending':
         return t('opsNoteStoragePending', { pending: num.format(note.pending) });
       case 'connections':
