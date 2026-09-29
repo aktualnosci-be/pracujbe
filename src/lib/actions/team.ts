@@ -30,7 +30,7 @@ import {
  *                              zaproszenia i jednorazowy token linku rejestracji dla adresu
  *                              bez konta (0121) — wynik nie zależy od istnienia konta,
  *   - `revokeTeamInvitation` — cofnięcie oczekującego zaproszenia,
- *   - `renewTeamInvitation`  — odnowienie oczekującego zaproszenia (adres/rola/język z bazy, 0951),
+ *   - `renewTeamInvitation`  — odnowienie oczekującego zaproszenia (adres/rola/język z bazy, 0179),
  *   - `setTeamMemberRole`    — zmiana roli członka,
  *   - `setTeamMemberActive`  — dezaktywacja / przywrócenie członka,
  *   - `respondToTeamInvitation` — przyjęcie / odrzucenie zaproszenia przez adresata;
@@ -132,7 +132,7 @@ export async function revokeTeamInvitation(invitationId: string): Promise<TeamAc
 }
 
 /**
- * Odnowienie oczekującego zaproszenia (0951): kolejne 14 dni ważności i nowy link rejestracji
+ * Odnowienie oczekującego zaproszenia (0179): kolejne 14 dni ważności i nowy link rejestracji
  * dla adresu bez konta — bez przepisywania adresu, roli i języka przez zapraszającego.
  *
  * Adres, rolę i język bierzemy z BAZY (`get_company_invitations` aktywnej firmy, owner/admin),
