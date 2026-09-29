@@ -110,7 +110,7 @@ async function withCandidate<T>(
     );
   } catch (error) {
     if (error instanceof AppError) throw error;
-    // Limit plików CV na konto (trigger 0966, SQLSTATE 54000) — jedyny błąd bazy z własnym powodem.
+    // Limit plików CV na konto (trigger 0189, SQLSTATE 54000) — jedyny błąd bazy z własnym powodem.
     if (
       typeof error === "object" &&
       error !== null &&

@@ -3264,10 +3264,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
   next-intl) — strażnik `tests/unit/pwa-manifest-route.test.ts`, E2E `pwa-locale-manifest.spec`.
-  Limit CV na konto (decyzja właściciela 29.09.2026, migracja `0966`): najwyżej 10 nieusuniętych plików
+  Limit CV na konto (decyzja właściciela 29.09.2026, migracja `0189`): najwyżej 10 nieusuniętych plików
   i 50 MB łącznie (trigger `enforce_cv_account_quota`, lustro `CV_MAX_FILES_PER_ACCOUNT`/
   `CV_MAX_TOTAL_BYTES_PER_ACCOUNT`, komunikat `files.errorAccountLimit`); dowód `rls.sql` SD1111, unit `cv-account-quota`.
-  Kontrakt soft-delete (0966): usunięta (`deleted_at`) aplikacja i propozycja są niewidoczne dla stron
+  Kontrakt soft-delete (0189): usunięta (`deleted_at`) aplikacja i propozycja są niewidoczne dla stron
   (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
   jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
   `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.

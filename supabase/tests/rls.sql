@@ -10868,7 +10868,7 @@ select pg_temp.assert(exists (select 1 from public.email_deliveries where templa
   'GS98-5b kontrola ujemna: bez warunku potwierdzenia e-mail trafia do kolejki');
 rollback;
 
--- GS98-6: aplikacja usunięta miękko → zmiana statusu odrzucona (0966), brak e-maila.
+-- GS98-6: aplikacja usunięta miękko → zmiana statusu odrzucona (0189), brak e-maila.
 begin;
 update public.applications set deleted_at = now() where id = :'gsapp';
 set local role authenticated; set local app.current_uid = :'GSO'; select pg_temp.assert_client_role();
@@ -21550,7 +21550,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- ============================================================================
--- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0966) i limit CV na konto (#1101, CF-06).
+-- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0189) i limit CV na konto (#1101, CF-06).
 --   Polityki odczytu applications/offers/conversations/messages ukrywają wiersze z `deleted_at`;
 --   strażnik `trg_soft_delete_contract` blokuje zapis wiadomości do usuniętych rozmów/wiadomości
 --   (także dla ról z ominięciem RLS). Limit CV: 10 plików / 50 MB, usunięte pliki nie liczą się.
@@ -21627,7 +21627,7 @@ select pg_temp.assert((select status::text from public.applications where id = :
 rollback;
 reset role; reset app.current_uid;
 
--- Kontrola ujemna polityki: definicja sprzed 0966 pokazuje usuniętą aplikację.
+-- Kontrola ujemna polityki: definicja sprzed 0189 pokazuje usuniętą aplikację.
 begin;
 update public.applications set deleted_at = now() where id = :'rd_app';
 drop policy applications_select on public.applications;
@@ -21667,16 +21667,16 @@ select pg_temp.assert((select sum(size_bytes) from public.files where owner_id =
   'SD1111-N3 kontrola ujemna: bez triggera limit rozmiaru nie działa');
 rollback;
 
--- Rollback 0966 przywraca polityki bez deleted_at i zdejmuje strażniki (w transakcji cofanej).
+-- Rollback 0189 przywraca polityki bez deleted_at i zdejmuje strażniki (w transakcji cofanej).
 begin;
-\ir ../rollback/0966_soft_delete_contract_cv_quota.down.sql
+\ir ../rollback/0189_soft_delete_contract_cv_quota.down.sql
 select pg_temp.assert(
   (select count(*) from pg_policies where schemaname = 'public' and policyname in
      ('applications_select', 'offers_select', 'conversations_select_member', 'messages_select_member')
      and qual like '%deleted_at%') = 0
   and to_regprocedure('public.enforce_soft_delete_contract()') is null
   and to_regprocedure('public.enforce_cv_account_quota()') is null,
-  'SD1111-R rollback 0966 przywraca stan sprzed migracji');
+  'SD1111-R rollback 0189 przywraca stan sprzed migracji');
 rollback;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

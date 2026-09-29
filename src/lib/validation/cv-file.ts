@@ -6,7 +6,7 @@
  */
 
 export const CV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-/** Limity konta (CF-06): lustro triggera `enforce_cv_account_quota` (migracja 0966). */
+/** Limity konta (CF-06): lustro triggera `enforce_cv_account_quota` (migracja 0189). */
 export const CV_MAX_FILES_PER_ACCOUNT = 10;
 export const CV_MAX_TOTAL_BYTES_PER_ACCOUNT = 50 * 1024 * 1024; // 50 MB
 
