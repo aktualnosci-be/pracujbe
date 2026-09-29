@@ -20,8 +20,6 @@ const { isProductionMode } = await import('@/lib/env');
 const { captureError } = await import('@/lib/error-report');
 
 const MAINTENANCE_RPCS = [
-  'release_stale_discount_reservations',
-  'release_stale_checkout_intents',
   'expire_due_jobs',
   'match_recompute_claim',
   'purge_guest_application_requests',

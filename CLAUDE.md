@@ -172,8 +172,8 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   AI rozlicza ją osobno, `translationFeatureFor`), worker odrzuca takie zadanie bez modelu (`recruitment_disabled`).
   Baza: strażnik `trg_aa_recruitment_mode` na `translation_sources`/`_revisions`/`_jobs` odrzuca encję
   `candidate_profile`, `claim_translation_jobs` jej nie wydaje (fail-closed), CHECK
-  `plan_entitlements_no_candidate_access` (`candidate_access` zawsze false). `isBillingEnabled()` = tryb `RECRUITMENT`
-  × `BILLING_ENABLED`. Usunięte martwe klucze `billing.standardFeat3`/`proFeat3`, `dashboard.featCvAccess`. Dowód:
+  `plan_entitlements_no_candidate_access` (`candidate_access` zawsze false). (Flaga billingu `isBillingEnabled()`/`BILLING_ENABLED`
+  usunięta razem z kodem billingu w `0177`.) Usunięte martwe klucze `billing.standardFeat3`/`proFeat3`, `dashboard.featCvAccess`. Dowód:
   `rls.sql` sekcja CLAIB (kontrole ujemne: rollback 0176, CHECK zdjęty), rollback `0176_…down.sql` (w
   `portal-legal-mode-rollback.sql` przed 0173), unit `ai-feature-gate`, `ai-inventory`, `billing-disabled`.
 - **Bez bazy profili i pytań screeningowych (#1135/#1137, migracja `0173`, na 0171):** w trybie
@@ -327,7 +327,7 @@ Tabele (grupy):
 - **Komunikacja:** `conversations`, `conversation_members`, `messages`,
   `notifications`, `notification_preferences`, `email_deliveries`.
 - **Pliki/zgody/zgłoszenia:** `files`, `consents`, `consent_versions`, `reports`.
-- **Płatności:** `subscriptions`, `payments`, `invoices`, `discount_codes`.
+- **Płatności:** schemat billingu (`subscriptions`, `payments`, `invoices`, `discount_codes`, `checkout_intents`, `discount_redemptions`) usunięty migracją `0177` (#51); zostaje katalog limitów `plan_entitlements`.
 - **Audyt:** `audit_logs`, `system_events`.
 
 Statusy (enumy):
@@ -2747,21 +2747,31 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, literówka trybu nie włącza usuwania; strażnik: kategorie z migracji = klucze
   tłumaczeń w 4 językach), E2E `admin-retention` (4 języki), trasa w `admin-a11y`.
   **Otwarte:** edycja okresu z panelu (RPC 0105 bez uzasadnienia i CAS — osobna migracja).
-- [x] Płatności — **WYŁĄCZONE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Stan aktywny:
-  portal bez cennika, pakietów, CTA zakupu i limitów planu; billing niedostępny. Jedna jawna flaga
-  `BILLING_ENABLED` (`src/lib/billing/flag.ts`), domyślnie wyłączona — włącza ją tylko dokładne
-  `true`. Bez flagi: `getStripe()` = null, `isStripeConfigured`/`isBillingProviderReady`/
-  `isBillingProviderConfigured`/`readinessChecks().stripe` = false mimo sekretów, webhook
-  `/api/stripe/webhook` = 404 bez czytania treści. Niezależnie od flagi: akcje `startCheckout`/
-  `applyDiscount`/`cancelSubscription` zawsze zwracają `BILLING_UNAVAILABLE` (komunikat
-  `errors.billingDisabled` — portal jest bezpłatny), webhook z flagą = 410, `/employer/platnosci`
-  → przekierowanie na `/employer`, brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap.
-  `ENTITLEMENT_LIMIT` → `errors.activeJobLimit` (bez wzmianki o planie). Dawne klucze sprzedaży
-  (`billing.*`, `pricing.*`, `dashboard.*Package`, `footer.pricing`) zostały w `src/messages` bez
-  użycia. Tabele finansowe (`subscriptions/payments/invoices/discount_codes/checkout_intents`) =
-  martwy schemat do cleanupu po migracji Railway, nie wdrożona funkcja. Powrót monetyzacji =
-  nowa decyzja właściciela + osobny projekt (sama flaga nie uruchamia sprzedaży). Dowód:
-  `billing-disabled.test` (z kontrolą ujemną: flaga + sekrety + bezpośrednie wywołanie checkoutu),
+- [x] Płatności — **USUNIĘTE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Portal bez
+  cennika, pakietów, CTA zakupu i sprzedaży; `/employer/platnosci` → przekierowanie na `/employer`,
+  brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap, `/api/stripe/webhook` nie istnieje
+  (404). Martwy schemat i kod billingu usunięte (decyzja właściciela 28.09.2026, migracja `0177` —
+  na 0176): tabele `subscriptions`/`payments`/`invoices`/`discount_codes`/
+  `checkout_intents`/`discount_redemptions`, RPC `reserve/finalize_discount`,
+  `release_stale_discount_reservations`, `begin/complete_checkout`, `release_checkout_intent`,
+  `release_stale_checkout_intents`, kolumna `companies.provider_customer_id`, typy
+  `subscription_status`/`payment_status`/`invoice_status`; z kodu `src/lib/stripe.ts`,
+  `src/lib/billing/flag.ts` (`BILLING_ENABLED`), `src/lib/data/billing.ts`, `src/lib/actions/billing.ts`,
+  trasa webhooka, czujka `readinessChecks().stripe`, zadania `/api/maintenance` po rabatach i checkoutach
+  (odpowiedź bez `releasedDiscounts`/`releasedCheckouts`), liczniki `staleDiscountReservations`/
+  `staleCheckoutIntents` w `ops_metrics()` i czujkach, `STRIPE_*`/`BILLING_ENABLED` z `.env.example`
+  (w `KONFIGURACJA_PRODUKCJI.md` §2D zostają jako „nie ustawiać”). **Zostaje (aktywne):**
+  `plan_entitlements` + `company_max_active_jobs` + `get_company_entitlements` + limit aktywnych ofert
+  (`ENTITLEMENT_LIMIT` → `errors.activeJobLimit`); `company_plan()` nie czyta już subskrypcji i zawsze
+  zwraca `free` (zachowanie bez zmian — subskrypcji nigdy nie było); `processed_webhooks` (inbox poczty);
+  kod błędu `BILLING_UNAVAILABLE` z komunikatem; dawne klucze `billing.*`/`pricing.*` w `src/messages`
+  bez użycia; zależność npm `stripe` (do osobnego kroku). Parser mapy danych
+  (`scripts/privacy/schema.mjs`) rozumie `drop table` i `drop column`. Powrót monetyzacji = nowa
+  decyzja właściciela + osobny projekt. Dowód: `rls.sql` sekcja Z (brak obiektów, `company_plan` =
+  free, limit 1, kontrola ujemna w teście rollbacku), `supabase/tests/billing-schema-rollback.sql`
+  (rollback `0177_…down.sql` odtwarza schemat i działanie; wpięty przed 0176/0171 w
+  `portal-legal-mode-rollback.sql`), unit `billing-disabled` (strażnik: brak plików i odwołań do
+  billingu w `src/`, kontrola ujemna wzorca), `ops-sensors`, `privacy-data-map`,
   `free-mvp-ui.test`, `sitemap-robots.test`, E2E `free-mvp-no-sales.spec` (4 języki).
 
 ### Etap 7 — hardening operacyjny (bezpieczeństwo/CI)
