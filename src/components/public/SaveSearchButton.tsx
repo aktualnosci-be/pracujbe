@@ -44,6 +44,14 @@ export function SaveSearchButton({
   const pageLocale = useLocale();
   const [pending, startTransition] = React.useTransition();
   const [outcome, setOutcome] = React.useState<Outcome>(null);
+  const messageRef = React.useRef<HTMLParagraphElement | null>(null);
+
+  // #1238: przycisk jest `disabled` na czas zapisu, więc przeglądarka zdejmuje z niego fokus
+  // (spada na <body>). Po wyniku fokus trafia na komunikat (z linkiem do zarządzania albo
+  // logowania), więc czytnik go odczytuje, a Tab prowadzi do tego linku.
+  React.useEffect(() => {
+    if (outcome) messageRef.current?.focus({ preventScroll: true });
+  }, [outcome]);
 
   const handleClick = () => {
     if (pending) return;
@@ -60,7 +68,7 @@ export function SaveSearchButton({
   let message: React.ReactNode = null;
   if (outcome?.ok) {
     message = (
-      <p role="status" className="text-sm text-foreground">
+      <p ref={messageRef} tabIndex={-1} role="status" className="text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
         {outcome.created ? t('saved') : t('alreadySaved')}{' '}
         <Link href="/candidate/wyszukiwania" className="font-semibold text-accent-dark underline">
           {t('manage')}
@@ -70,14 +78,14 @@ export function SaveSearchButton({
   } else if (outcome && !outcome.ok) {
     message =
       outcome.error === 'UNAUTHENTICATED' ? (
-        <p role="alert" className="text-sm text-foreground">
+        <p ref={messageRef} tabIndex={-1} role="alert" className="text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           {t('loginRequired')}{' '}
           <Link href={loginHref(`/${pageLocale}${loginNext}`)} className="font-semibold text-accent-dark underline">
             {t('login')}
           </Link>
         </p>
       ) : (
-        <p role="alert" className="text-sm text-error-text">
+        <p ref={messageRef} tabIndex={-1} role="alert" className="text-sm text-error-text outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           {outcome.error === 'NETWORK' ? t('errorNetwork') : tRoot(toUserMessageKey(outcome.error))}
         </p>
       );

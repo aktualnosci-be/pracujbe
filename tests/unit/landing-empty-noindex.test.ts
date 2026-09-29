@@ -6,9 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * filtra co treść strony (kategoria; miasto po wszystkich swoich nazwach — #189, #1119).
  */
 
-const { getJobs } = vi.hoisted(() => ({ getJobs: vi.fn() }));
+const { getJobs, getJobsCount } = vi.hoisted(() => ({ getJobs: vi.fn(), getJobsCount: vi.fn() }));
 
-vi.mock('@/lib/jobs', () => ({ getJobs, isShowingDemoJobs: () => false }));
+vi.mock('@/lib/jobs', () => ({ getJobs, getJobsCount, isShowingDemoJobs: () => false }));
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
   setRequestLocale: () => undefined,
@@ -22,24 +22,27 @@ const { cityAliases } = await import('@/lib/locations/city-aliases');
 const category = await import('@/app/[locale]/(public)/praca/kategoria/[category]/page');
 const city = await import('@/app/[locale]/(public)/praca/miasto/[city]/page');
 
-const result = (total: number) => ({ jobs: [], total, page: 1, pageSize: 1 });
-
-beforeEach(() => getJobs.mockReset());
+beforeEach(() => {
+  getJobs.mockReset();
+  getJobsCount.mockReset();
+});
 
 describe.each([
   ['kategoria', () => category.generateMetadata({ params: Promise.resolve({ locale: 'nl', category: 'cleaning' }) }), { category: 'cleaning' }],
   ['miasto', () => city.generateMetadata({ params: Promise.resolve({ locale: 'nl', city: 'kortrijk' }) }), { locations: cityAliases('kortrijk') }],
 ])('landing %s', (_name, metadata, filter) => {
   it('bez ofert: noindex, follow i brak canonical/hreflang', async () => {
-    getJobs.mockResolvedValue(result(0));
+    getJobsCount.mockResolvedValue(0);
     const meta = await metadata();
     expect(meta.robots).toEqual({ index: false, follow: true });
     expect(meta.alternates).toBeUndefined();
-    expect(getJobs).toHaveBeenCalledWith(expect.objectContaining({ locale: 'nl', ...filter }));
+    expect(getJobsCount).toHaveBeenCalledWith(expect.objectContaining({ locale: 'nl', ...filter }));
+    // #1230: metadane liczą sam licznik — bez odczytu listy ofert.
+    expect(getJobs).not.toHaveBeenCalled();
   });
 
   it('z ofertami: indeksowalny, z canonical i hreflang', async () => {
-    getJobs.mockResolvedValue(result(3));
+    getJobsCount.mockResolvedValue(3);
     const meta = await metadata();
     expect(meta.robots).toBeUndefined();
     expect(meta.alternates?.canonical).toMatch(/\/nl\/praca\/(kategoria\/cleaning|miasto\/kortrijk)$/);
@@ -49,18 +52,20 @@ describe.each([
 
 describe('landing miasta — licznik indeksowalności = filtr treści strony (#1119)', () => {
   it('metadane nie liczą miasta tekstem po nazwie w języku strony', async () => {
-    getJobs.mockResolvedValue(result(1));
+    getJobsCount.mockResolvedValue(1);
     await city.generateMetadata({ params: Promise.resolve({ locale: 'fr', city: 'brussels' }) });
-    const [args] = getJobs.mock.calls[0]!;
+    const [args] = getJobsCount.mock.calls[0]!;
     expect(args).not.toHaveProperty('city');
     expect(new Set(args.locations)).toEqual(new Set(cityAliases('brussels')));
   });
 
   it('treść strony pyta o ten sam zbiór miejsc co metadane', async () => {
+    getJobsCount.mockResolvedValue(0);
     getJobs.mockResolvedValue({ jobs: [], total: 0, page: 1, pageSize: 12 });
     await city.generateMetadata({ params: Promise.resolve({ locale: 'nl', city: 'ghent' }) });
     await city.default({ params: Promise.resolve({ locale: 'nl', city: 'ghent' }) });
-    const [meta, body] = getJobs.mock.calls.map(([a]) => a);
+    const [meta] = getJobsCount.mock.calls[0]!;
+    const [body] = getJobs.mock.calls[0]!;
     expect(meta.locations).toEqual(body.locations);
     expect(meta).not.toHaveProperty('city');
   });

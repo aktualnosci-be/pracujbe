@@ -1,11 +1,46 @@
 {
   "root": true,
-  "extends": ["next/core-web-vitals", "next/typescript"],
+  "extends": [
+    "next/core-web-vitals",
+    "next/typescript"
+  ],
   "rules": {
     "@typescript-eslint/no-unused-vars": [
       "warn",
-      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
     ]
   },
-  "ignorePatterns": ["node_modules/", ".next/", "playwright-report/", "test-results/"]
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "playwright-report/",
+    "test-results/"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "tests/**"
+      ],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "MemberExpression[property.name='only']",
+            "message": "Bez .only w testach: cicho wyłącza resztę zestawu (#1241)."
+          },
+          {
+            "selector": "CallExpression[callee.property.name=/^(skip|fixme)$/][arguments.0.type=/^(Literal|TemplateLiteral)$/]",
+            "message": "Bez statycznego .skip/.fixme testu (#1241): napraw test albo pomiń go warunkowo z uzasadnieniem, np. test.skip(warunek, 'powód')."
+          },
+          {
+            "selector": "CallExpression[callee.name=/^(xit|xtest|xdescribe|fit|fdescribe)$/]",
+            "message": "Bez xit/fit/xdescribe (#1241)."
+          }
+        ]
+      }
+    }
+  ]
 }
