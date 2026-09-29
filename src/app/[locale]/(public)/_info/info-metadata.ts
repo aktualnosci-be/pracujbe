@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import type { Metadata } from 'next';
 
 import { routing } from '@/i18n/routing';
@@ -40,7 +41,7 @@ export function buildInfoMetadata({
       url,
       siteName: 'Pracuj.be',
       type: 'website',
-      locale,
+      ...openGraphLocales(locale),
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
   };

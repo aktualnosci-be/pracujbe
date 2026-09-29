@@ -4,11 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v3';
 
 import { routing } from '@/i18n/routing';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { codePointLength, hasNoNul } from '@/lib/validation/text';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
@@ -20,8 +21,16 @@ import { captureError } from '@/lib/error-report';
  * zapisuje (`DEMO_UNAVAILABLE`) — bez udawanego sukcesu.
  */
 
-const text100 = z.string().trim().min(1).max(100);
-const list = z.array(z.string().trim().min(1).max(100)).max(50);
+// Limity liczone w punktach kodowych jak `char_length` w bazie (0092): `.max(100)` liczyłoby
+// jednostki UTF-16 i odrzucało poprawne teksty z emoji/znakami spoza BMP (#1108). NUL baza
+// odrzuca błędem technicznym, więc wycinamy go już tu.
+const text100 = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => codePointLength(v) <= 100)
+  .refine(hasNoNul);
+const list = z.array(text100).max(50);
 
 const filtersSchema = z
   .object({
@@ -41,7 +50,12 @@ const filtersSchema = z
   .refine((f) => Object.keys(f).length > 0);
 
 const saveSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((v) => codePointLength(v) <= 80)
+    .refine(hasNoNul),
   locale: z.enum(routing.locales),
   filters: filtersSchema,
   query: z.string().max(2000).regex(/^(\?.*)?$/),
@@ -50,7 +64,12 @@ const saveSchema = z.object({
 const idSchema = z.string().uuid();
 /** Te same reguły co w bazie (0124): 1–80 znaków po przycięciu, bez znaków sterujących. */
 // eslint-disable-next-line no-control-regex
-const nameSchema = z.string().trim().min(1).max(80).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/);
+const nameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^\u0000-\u001f\u007f-\u009f]*$/)
+  .refine((v) => codePointLength(v) <= 80);
 const frequencySchema = z.enum(['daily', 'weekly']);
 
 export type SaveSearchResult =
@@ -100,7 +119,7 @@ export async function saveSearchAction(input: unknown): Promise<SaveSearchResult
     if (isDatabaseError(error)) {
       const message = databaseErrorMessage(error);
       if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
-      return { ok: false, error: mapPgError(message) };
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.save', mapPgError(message)) };
     }
     captureError(error, { area: 'saved-searches.save' });
     return { ok: false, error: 'INTERNAL' };
@@ -134,7 +153,9 @@ export async function setSavedSearchAlertsAction(
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.setAlerts', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'saved-searches.setAlerts' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -156,7 +177,9 @@ export async function renameSavedSearchAction(id: unknown, name: unknown): Promi
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.rename', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'saved-searches.rename' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -177,7 +200,9 @@ export async function deleteSavedSearchAction(id: unknown): Promise<SavedSearchM
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.delete', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'saved-searches.delete' });
     return { ok: false, error: 'INTERNAL' };
   }

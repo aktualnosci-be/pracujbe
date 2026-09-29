@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 
 /**
  * Wspólny szkielet stron prawnych/informacyjnych z treścią placeholder (regulamin, prywatność,
@@ -77,7 +78,7 @@ export async function LegalPage({
 }) {
   const t = await getTranslations({ locale, namespace: 'legal' });
 
-  const lastUpdated = new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(
+  const lastUpdated = new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: APP_TIME_ZONE }).format(
     new Date(LAST_UPDATED_ISO),
   );
 

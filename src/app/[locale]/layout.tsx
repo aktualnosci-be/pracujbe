@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
@@ -6,6 +7,7 @@ import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server
 import { pickClientMessages } from '@/i18n/client-messages';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
 import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
@@ -74,7 +76,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     openGraph: {
       type: 'website',
       siteName: tCommon('appName'),
-      locale,
+      ...openGraphLocales(locale),
       title: tMeta('homeTitle'),
       description: tMeta('homeDescription'),
       images: [{ url: '/og.png', width: 1200, height: 630, alt: tCommon('appName') }],
@@ -109,7 +111,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
         <noscript dangerouslySetInnerHTML={{ __html: NOSCRIPT_HIDE_BANNER }} />
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        <NextIntlClientProvider locale={locale} messages={messages} timeZone={APP_TIME_ZONE}>
           <SkipLink locale={locale} />
           <CookieConsent />
           {children}

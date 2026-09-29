@@ -175,6 +175,15 @@ export interface JobDetail extends JobListItem {
    * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
    */
   machineTranslation?: JobMachineTranslation;
+  /**
+   * #792: POTWIERDZONY tryb pracy. `remote` = 100% zdalnie (tylko wtedy JSON-LD może dostać
+   * `jobLocationType: TELECOMMUTE`). Brak pola = tryb nieznany: dawny boolean `jobs.remote` NIE
+   * gwarantuje pełnej zdalności i nie jest tu mapowany. Źródło (trójstanowy wybór w kreatorze +
+   * odczyt w `get_public_job`) wymaga migracji — do czasu jej wdrożenia pole nie jest ustawiane.
+   */
+  workMode?: 'onsite' | 'hybrid' | 'remote';
+  /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
+  remoteApplicantCountries?: string[];
 }
 
 export interface GetJobsParams {
@@ -307,23 +316,16 @@ function getJobsFromDemo(
   if (params.city) {
     const q = searchFold(params.city.trim());
     if (q) {
-      jobs = jobs.filter(
-        (job) =>
-          searchFold(job.city).includes(q) ||
-          job.slug.toLowerCase().includes(q),
-      );
+      // Jak `search_city_candidates` (0153): tylko miasto oferty, bez sluga (#1119).
+      jobs = jobs.filter((job) => searchFold(job.city).includes(q));
     }
   }
   if (params.keyword) {
     const q = searchFold(params.keyword.trim());
     if (q) {
-      jobs = jobs.filter(
-        (job) =>
-          searchFold(job.title).includes(q) ||
-          searchFold(job.companyName).includes(q) ||
-          searchFold(job.description).includes(q) ||
-          job.highlights.some((h) => searchFold(h).includes(q)),
-      );
+      // Jak SQL (0110/0153): słowo kluczowe szuka wyłącznie w tytule oferty — nie w nazwie
+      // firmy, opisie ani wyróżnikach (#1119, lustro demo nie może szukać szerzej niż baza).
+      jobs = jobs.filter((job) => searchFold(job.title).includes(q));
     }
   }
   // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0091): oferta bez
