@@ -26,6 +26,9 @@ export interface PaginationProps {
    *  pageSize)`, nawigacja jawnie kończy się tutaj zamiast oferować strony, które zduplikowałyby
    *  poprzedni, klampowany wycinek. Domyślnie bez ograniczenia (inne listy niż oferty). */
   maxPage?: number;
+  /** Adres strony zamiast parametru `page` — strony pod ścieżką (profil firmy #638,
+   *  `/pracodawcy/<slug>/strona/<n>`), żeby każda strona zostawała ISR bez `searchParams`. */
+  pathForPage?: (page: number) => string;
 }
 
 /** Buduje listę pozycji do wyświetlenia (numery stron + wielokropki). */
@@ -57,6 +60,7 @@ export async function Pagination({
   pageSize,
   filters = {},
   maxPage,
+  pathForPage,
 }: PaginationProps): Promise<React.JSX.Element | null> {
   const totalPages = Math.min(
     Math.max(1, Math.ceil(total / pageSize)),
@@ -68,6 +72,7 @@ export async function Pagination({
   const current = Math.min(Math.max(1, page), totalPages);
 
   const hrefFor = (target: number): string => {
+    if (pathForPage) return pathForPage(target);
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) {
       if (value) params.set(key, value);

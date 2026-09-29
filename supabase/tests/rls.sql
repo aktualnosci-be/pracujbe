@@ -16413,6 +16413,93 @@ select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- CPP638. Stronicowanie ofert profilu firmy (#638, migracja 0181). Profil pokazywał tylko
+--         pierwsze 50 ofert; kolejne strony `/pracodawcy/<slug>/strona/<n>` używają offsetu,
+--         więc `get_public_company_jobs` musi mieć deterministyczny porządek. Pięć ofert
+--         z IDENTYCZNYM `published_at` (+ jedna nowsza): strony po 2 sklejone = jedno
+--         zapytanie o wszystkie, każda oferta dokładnie raz, suma = `active_jobs_count`.
+--         Introspekcja pilnuje tie-breakera `j.id desc`; kontrola ujemna = definicja z 0140.
+-- ============================================================================
+\set CPPCO 'cc638000-0000-0000-0000-000000000001'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, slug, status) values
+  (:'CPPCO', 'CPP638 Firma', 'cpp638-firma', 'verified');
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status, default_locale, published_at)
+select :'CPPCO', 'cpp638-oferta-' || n, 'Pracownik CPP638', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl',
+       case when n = 0 then '2026-06-02 12:00:00+00'::timestamptz else '2026-06-01 12:00:00+00'::timestamptz end
+from generate_series(0, 5) as n;
+
+set local role anon; select pg_temp.assert_client_role();
+
+-- CPP638-1: strony rozmiaru 2 (offset 0/2/4) sklejone = jedno zapytanie o 6 wierszy.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_company_jobs('cpp638-firma', 'pl', 6, 0))
+  = (select array_agg(slug) from (
+       select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 0)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 2)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 4)
+     ) pages),
+  'CPP638-1 strony po 2 dają ten sam porządek co jedno zapytanie o wszystkie oferty');
+
+-- CPP638-2: każda oferta dokładnie raz, a suma stron = licznik profilu (link do każdej).
+select pg_temp.assert(
+  (select count(distinct slug) = 6 and count(*) = 6 from (
+       select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 0)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 2)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 4)
+     ) pages)
+  and (select active_jobs_count = 6 from public.get_public_company('cpp638-firma')),
+  'CPP638-2 bez pominięć i duplikatów, suma stron = active_jobs_count');
+
+-- CPP638-3: najnowsza pierwsza, remis rozstrzyga id malejąco; strona za końcem jest pusta.
+select pg_temp.assert(
+  (select slug = 'cpp638-oferta-0' from public.get_public_company_jobs('cpp638-firma', 'pl', 1, 0))
+  and (select array_agg(id::text) = array_agg(id::text order by id desc)
+         from public.get_public_company_jobs('cpp638-firma', 'pl', 5, 1))
+  and (select count(*) = 0 from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 6)),
+  'CPP638-3 porządek published_at desc, id desc; strona za końcem pusta');
+reset role;
+
+-- CPP638-4: definicja kończy ORDER BY tie-breakerem `j.id desc` przed limit/offset.
+select pg_temp.assert(
+  regexp_replace(pg_get_functiondef('public.get_public_company_jobs(text,text,integer,integer)'::regprocedure),
+    '--[^\n]*', '', 'g') ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
+  'CPP638-4 ORDER BY get_public_company_jobs kończy się tie-breakerem j.id');
+
+-- KONTROLA UJEMNA: definicja z 0140 (tylko `published_at desc`) — introspekcja CPP638-4
+-- wykrywa brak tie-breakera (sam SQL nie obiecuje wtedy stabilnego podziału na strony).
+savepoint cpp_neg;
+create or replace function public.get_public_company_jobs(
+  p_slug text, p_locale text default 'pl', p_limit integer default 20, p_offset integer default 0
+)
+returns table (
+  id uuid, slug text, title text, company_name text, company_verified boolean,
+  city text, region text, contract_type text, salary_min integer, salary_max integer,
+  currency text, salary_period text, published_at timestamptz, highlights text[], category text,
+  accommodation boolean, immediate boolean, no_language_required boolean
+)
+language sql stable security definer set search_path = public, pg_temp as $cppneg$
+  select j.id, j.slug, j.title, c.name, true, j.city, j.region, j.contract_type::text,
+    j.salary_min, j.salary_max, coalesce(j.currency, 'EUR'), j.salary_period::text,
+    j.published_at, '{}'::text[], j.category::text, j.accommodation, j.immediate, j.no_language_required
+  from public.jobs j join public.companies c on c.id = j.company_id
+  where c.slug = p_slug and c.status = 'verified' and c.deleted_at is null
+    and j.status = 'active' and j.deleted_at is null
+    and (j.expires_at is null or j.expires_at > now())
+  order by j.published_at desc
+  limit least(greatest(coalesce(p_limit, 20), 1), 100)
+  offset least(greatest(coalesce(p_offset, 0), 0), 10000);
+$cppneg$;
+select pg_temp.assert(
+  not (regexp_replace(pg_get_functiondef('public.get_public_company_jobs(text,text,integer,integer)'::regprocedure),
+    '--[^\n]*', '', 'g') ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
+  'CPP638-5 kontrola ujemna: definicja z 0140 nie przechodzi bramki CPP638-4');
+rollback to savepoint cpp_neg;
+rollback;
+reset role; reset app.current_uid;
+
 \echo '--- SK853 send_offer: klucz idempotencji związany z celem (0150) ---'
 \set SKC  'e8530000-0000-0000-0000-00000000000c'
 \set SKC2 'e8530000-0000-0000-0000-00000000000d'
