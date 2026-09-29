@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readOpsMetrics = vi.fn();
 const domainPoolStats = vi.fn(() => null);
-vi.mock('@/lib/ops/metrics-source', () => ({ readOpsMetrics: () => readOpsMetrics() }));
+const readSchemaState = vi.fn();
+vi.mock('@/lib/ops/metrics-source', () => ({
+  readOpsMetrics: () => readOpsMetrics(),
+  readSchemaState: () => readSchemaState(),
+}));
 vi.mock('@/lib/db/runtime', () => ({ domainPoolStats: () => domainPoolStats() }));
 const readBackupFreshness = vi.fn();
 vi.mock('@/lib/ops/backup-freshness', async (importOriginal) => ({
@@ -30,6 +34,7 @@ function call(token?: string) {
 
 beforeEach(() => {
   readOpsMetrics.mockReset();
+  readSchemaState.mockReset();
   readBackupFreshness.mockReset();
   readBackupFreshness.mockResolvedValue(freshBackup);
   vi.stubEnv('HEALTH_CHECK_SECRET', SECRET);
@@ -89,6 +94,26 @@ describe('GET /api/health/ops (#47)', () => {
     expect(body.portalLegalMode.effective).toBe('CLASSIFIEDS_ONLY');
   });
 
+  it('#1065: baza za kodem → 503 schema_behind_code i pole schema (te same dane co panel)', async () => {
+    vi.stubEnv('PRACUJBE_EXPECTED_MIGRATION', '0185_x.sql');
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics });
+    readSchemaState.mockResolvedValue({ kind: 'missing' });
+    const res = await call(SECRET);
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.alerts).toContain('schema_behind_code');
+    expect(body.schema).toMatchObject({ expected: '0185_x.sql', status: 'behind' });
+  });
+
+  it('#1065: bez oczekiwanej migracji w buildzie stan schematu nie jest czytany (kontrola ujemna)', async () => {
+    vi.stubEnv('PRACUJBE_EXPECTED_MIGRATION', '');
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics });
+    const res = await call(SECRET);
+    expect(res.status).toBe(200);
+    expect(readSchemaState).not.toHaveBeenCalled();
+    expect((await res.json()).schema.status).toBe('skipped');
+  });
+
   it('przekroczony próg → 503 alert z kodem sygnału', async () => {
     readOpsMetrics.mockResolvedValue({
       kind: 'ok', metrics: { ...metrics, webhooks: { stuckProcessing: 2, failedLast24h: 0 } },
@@ -108,6 +133,20 @@ describe('GET /api/health/ops (#47)', () => {
     const res = await call(SECRET);
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ status: 'alert', alerts: ['ai_budget_exhausted'], aiBudget });
+  });
+
+  it('0180: stary ostatni przebieg maintenance → 503 alert; brak przebiegu = tylko ostrzeżenie (200)', async () => {
+    const run = { finishedAt: '2026-09-26T05:00:00Z', ageSeconds: 7201, ok: true, durationMs: 900, failedTask: null };
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics, aiBudget: null, maintenanceRun: run });
+    let res = await call(SECRET);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ status: 'alert', alerts: ['maintenance_run_stale'], maintenanceRun: run });
+
+    const never = { finishedAt: null, ageSeconds: null, ok: null, durationMs: null, failedTask: null };
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics, maintenanceRun: never });
+    res = await call(SECRET);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ status: 'ok', alerts: [], warnings: ['maintenance_run_missing'] });
   });
 
   it.each([

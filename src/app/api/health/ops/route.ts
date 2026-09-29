@@ -1,11 +1,5 @@
-import { domainPoolStats } from '@/lib/db/runtime';
-import { backupAlerts, readBackupFreshness } from '@/lib/ops/backup-freshness';
 import { HEALTH_TOKEN_HEADER, healthTokenMatches } from '@/lib/ops/health-token';
-import { readOpsMetrics, readSchemaState } from '@/lib/ops/metrics-source';
-import { expectedMigrationFromEnv, schemaAlerts, schemaSummary } from '@/lib/ops/schema-state';
-import { evaluateOps } from '@/lib/ops/sensors';
-import { portalLegalModeAlerts, portalLegalModeSummary } from '@/lib/ops/portal-mode';
-import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { readOpsStatus } from '@/lib/ops/status';
 
 /**
  * Czujki operacyjne (#47) — wyłącznie dla monitoringu wewnętrznego.
@@ -30,6 +24,9 @@ import { isRecruitmentEnabled } from '@/lib/portal-mode';
  *
  * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
  * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
+ *
+ * 0180: `maintenanceRun` = ostatni przebieg `/api/maintenance` (brak = ostrzeżenie, > 2 h = alarm).
+ * Ten sam odczyt (`readOpsStatus`) pokazuje panel `/admin/operacje`.
  */
 
 export const runtime = 'nodejs';
@@ -43,33 +40,14 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const checkedAt = new Date().toISOString();
-  // Stan schematu czytamy tylko, gdy build zna oczekiwaną migrację (dev/testy bez niej nie płacą zapytaniem).
-  const expectedMigration = expectedMigrationFromEnv();
-  const [result, backup, schemaState] = await Promise.all([
-    readOpsMetrics(),
-    readBackupFreshness(),
-    expectedMigration ? readSchemaState() : Promise.resolve({ kind: 'unconfigured' } as const),
-  ]);
+  const result = await readOpsStatus();
   if (result.kind !== 'ok') {
-    const status = result.kind === 'unconfigured' ? 'unconfigured' : 'unavailable';
-    return Response.json({ status, checkedAt, backup }, { status: 503, headers });
+    return Response.json({ status: result.kind, checkedAt, backup: result.backup }, { status: 503, headers });
   }
 
-  const appPool = domainPoolStats();
-  const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget);
-  // #1143: env i baza muszą mówić to samo; rozbieżność = alarm (tryb efektywny i tak ogłoszeniowy).
-  const envRecruitment = isRecruitmentEnabled();
-  const dbRecruitment = result.metrics.portalLegalMode?.recruitmentEnabled;
-  const alerts = [
-    ...evaluation.alerts,
-    ...portalLegalModeAlerts(dbRecruitment, envRecruitment),
-    ...backupAlerts(backup),
-    ...schemaAlerts(expectedMigration, schemaState),
-  ];
-  const status = alerts.length ? 'alert' : 'ok';
-  const portalLegalMode = portalLegalModeSummary(dbRecruitment, envRecruitment);
+  const { status, alerts, warnings, metrics, appPool, aiBudget, maintenanceRun, backup, portalLegalMode, schema } = result;
   return Response.json(
-    { ...evaluation, status, alerts, checkedAt, metrics: result.metrics, appPool, aiBudget: result.aiBudget ?? null, backup, portalLegalMode, schema: schemaSummary(expectedMigration, schemaState) },
+    { status, alerts, warnings, checkedAt, metrics, appPool, aiBudget, maintenanceRun: maintenanceRun ?? null, backup, portalLegalMode, schema },
     { status: status === 'ok' ? 200 : 503, headers },
   );
 }
