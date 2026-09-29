@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,12 +9,12 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
 
 import { useRouter } from '@/i18n/navigation';
-import { isLocale, localeNames, routing } from '@/i18n/routing';
+import { isLocale, localeNames, routing, type Locale } from '@/i18n/routing';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toUserMessageKey } from '@/lib/errors';
-import { inviteTeamMember, revokeTeamInvitation } from '@/lib/actions/team';
+import { inviteTeamMember, renewTeamInvitation, revokeTeamInvitation } from '@/lib/actions/team';
 import { teamErrorKey, type TeamError } from '@/lib/team/errors';
 import { assignableRoles, canManageRole } from '@/lib/team/permissions';
 import { teamInviteSchema, type TeamInviteInput } from '@/lib/validation/team';
@@ -29,6 +31,7 @@ import {
   ROW_TITLE,
 } from '@/components/dashboard/panel-styles';
 import { Alert } from '@/components/ui/alert';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
 /**
@@ -41,6 +44,11 @@ import { cn } from '@/lib/utils';
  * Język zaproszenia (0121): domyślnie język strony zapraszającego. Decyduje o języku e-maila
  * tylko dla adresu bez konta (brak profilu odbiorcy, Invariant #1); konto z profilem dostaje
  * e-mail w swoim języku.
+ *
+ * Oczekujące zaproszenia (0187): rola, ważność, język zaproszenia, kto i kiedy zaprosił.
+ * „Odnów” = kolejne 14 dni i nowy link dla adresu bez konta (adres, rola i język z bazy);
+ * „Cofnij” wymaga potwierdzenia w dialogu (link w e-mailu przestaje działać). Jedna operacja
+ * naraz; po sukcesie fokus na komunikacie `role="status"` (wiersz może zniknąć).
  */
 
 export interface TeamInvitationView {
@@ -48,6 +56,11 @@ export interface TeamInvitationView {
   email: string;
   role: string;
   expiresLabel: string;
+  /** Data utworzenia w języku strony (pusty tekst, gdy nieznana). */
+  createdLabel: string;
+  /** Kod języka zaproszenia (`null` — zaproszenie sprzed wyboru języka). */
+  locale: Locale | null;
+  inviterName: string;
 }
 
 const controlClass = FORM_CONTROL;
@@ -70,6 +83,7 @@ export function TeamInvite(props: TeamInviteProps): React.JSX.Element {
 }
 
 function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('team');
   const tRoot = useTranslations();
   const router = useRouter();
@@ -77,7 +91,9 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
   const defaultLocale = isLocale(pageLocale) ? pageLocale : routing.defaultLocale;
   const [serverError, setServerError] = React.useState<TeamError | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
-  const [revoking, setRevoking] = React.useState<string | null>(null);
+  const [pendingId, setPendingId] = React.useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = React.useState<TeamInvitationView | null>(null);
+  const statusRef = React.useRef<HTMLParagraphElement>(null);
 
   const roles = assignableRoles(actorRole).filter((r) => r !== 'owner');
   const resolver = React.useMemo(() => zodResolver(teamInviteSchema) as Resolver<TeamInviteInput>, []);
@@ -115,27 +131,50 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
     }
   });
 
-  async function revoke(id: string): Promise<void> {
-    setRevoking(id);
+  async function runInvitation(
+    id: string,
+    action: (invitationId: string) => Promise<Awaited<ReturnType<typeof revokeTeamInvitation>>>,
+    successText: string,
+  ): Promise<boolean> {
+    if (pendingId !== null) return false;
+    setPendingId(id);
     setServerError(null);
     setNotice(null);
     try {
-      const result = await revokeTeamInvitation(id);
-      if (!result.ok) setServerError(result.error);
-      else {
-        setNotice(result.demo ? t('demoNotice') : t('revoked'));
-        router.refresh();
+      const result = await action(id);
+      if (!result.ok) {
+        setServerError(result.error);
+        return false;
       }
+      setNotice(result.demo ? t('demoNotice') : successText);
+      router.refresh();
+      return true;
     } catch {
       setServerError('INTERNAL');
+      return false;
     } finally {
-      setRevoking(null);
+      setPendingId(null);
     }
+  }
+
+  function invitationMeta(inv: TeamInvitationView): string {
+    const language = inv.locale ? localeNames[inv.locale] : null;
+    const parts = [
+      language ? t('invitationLanguage', { language }) : t('invitationLanguageUnknown'),
+    ];
+    if (inv.createdLabel) {
+      parts.push(
+        inv.inviterName
+          ? t('invitationSentBy', { name: inv.inviterName, date: inv.createdLabel })
+          : t('invitationSentOn', { date: inv.createdLabel }),
+      );
+    }
+    return parts.join(' · ');
   }
 
   return (
     <div className="space-y-6">
-      <p role="status" aria-live="polite" className={notice ? cn(NOTICE, 'my-0 border-success/30 bg-success/10 text-foreground') : 'sr-only'}>
+      <p ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className={notice ? cn(NOTICE, 'my-0 border-success/30 bg-success/10 text-foreground') : 'sr-only'}>
         {notice ?? ''}
       </p>
       {serverError ? (
@@ -144,7 +183,8 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
         </Alert>
       ) : null}
 
-      <form onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,11rem)_auto] sm:items-end">
+      <form method="post" onSubmit={onSubmit} noValidate className="grid min-w-0 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,12rem)_minmax(0,11rem)_auto] sm:items-end">
+        <NoScriptFormNotice />
         <div className="flex min-w-0 flex-col gap-[9px]">
           <Label htmlFor="team-invite-email" className={FORM_LABEL}>{t('emailLabel')}</Label>
           <Input
@@ -205,7 +245,7 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
             </p>
           ) : null}
         </div>
-        <Button type="submit" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} disabled={isSubmitting}>
+        <Button type="submit" className={cn(BTN_PRIMARY, 'h-auto whitespace-normal')} disabled={isSubmitting || !hydrated}>
           {isSubmitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
           {isSubmitting ? t('saving') : t('inviteSubmit')}
         </Button>
@@ -231,25 +271,65 @@ function TeamInviteFields({ companyId, actorRole, invitations }: TeamInviteProps
                     {t(roleLabelKey(inv.role))}
                     {inv.expiresLabel ? ` · ${inv.expiresLabel}` : ''}
                   </p>
+                  <p className={ROW_META}>{invitationMeta(inv)}</p>
                 </div>
                 {canManageRole(actorRole, inv.role) ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft self-start sm:self-auto')}
-                    disabled={revoking !== null}
-                    aria-label={t('revokeLabel', { email: inv.email })}
-                    onClick={() => void revoke(inv.id)}
-                  >
-                    {revoking === inv.id ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-                    {t('revoke')}
-                  </Button>
+                  <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft')}
+                      disabled={pendingId !== null}
+                      aria-busy={pendingId === inv.id && confirmRevoke === null ? true : undefined}
+                      aria-label={t('renewLabel', { email: inv.email })}
+                      onClick={() =>
+                        void runInvitation(inv.id, (id) => renewTeamInvitation(id, companyId), t('renewed')).then((ok) => {
+                          if (ok) statusRef.current?.focus();
+                        })
+                      }
+                    >
+                      {pendingId === inv.id && confirmRevoke === null ? (
+                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                      ) : null}
+                      {t('renew')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(BTN_SMALL, 'h-auto whitespace-normal border-border text-foreground hover:bg-soft')}
+                      disabled={pendingId !== null}
+                      aria-label={t('revokeLabel', { email: inv.email })}
+                      onClick={() => setConfirmRevoke(inv)}
+                    >
+                      {t('revoke')}
+                    </Button>
+                  </div>
                 ) : null}
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      <ConfirmDialog
+        open={confirmRevoke !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRevoke(null);
+        }}
+        title={confirmRevoke ? t('revokeTitle', { email: confirmRevoke.email }) : ''}
+        description={t('revokeDesc')}
+        confirmLabel={t('revokeConfirm')}
+        cancelLabel={tRoot('common.cancel')}
+        pending={confirmRevoke !== null && pendingId === confirmRevoke.id}
+        getReturnFocus={() => statusRef.current}
+        onConfirm={() => {
+          const target = confirmRevoke;
+          if (!target) return;
+          void runInvitation(target.id, revokeTeamInvitation, t('revoked')).then(() =>
+            setConfirmRevoke(null),
+          );
+        }}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@ import {
   verifyPrivateDownloadToken,
 } from '@/lib/storage/private-download-token';
 import { createCandidateCvKey, type createRailwayBucket } from '@/lib/storage/railway-bucket';
-import { CV_ALLOWED_TYPES, checkCvFile, type CvFileProblem } from '@/lib/validation/cv-file';
+import { CV_ALLOWED_TYPES, checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
 import { attachmentDisposition, cvDisplayName, isValidCvContent, type CvExtension } from './cv-content';
 import { DETECTED_MIME, extensionOfKey } from './file-type';
 
@@ -53,7 +53,7 @@ export interface CvUploadInput {
 
 export type CvUploadResult =
   | { ok: true; id: string }
-  | { ok: false; error: ErrorCode; reason?: CvFileProblem };
+  | { ok: false; error: ErrorCode; reason?: CvUploadProblem };
 export type CvSimpleResult = { ok: true } | { ok: false; error: ErrorCode };
 export type CvDownloadLinkResult = { ok: true; url: string } | { ok: false; error: ErrorCode };
 
@@ -132,6 +132,9 @@ export async function storeCandidateCv(
     return { ok: true, id: record.id };
   } catch (error) {
     await discardObject(deps.store, key, 'files.upload.orphan');
+    if (isAppError(error) && error.code === 'VALIDATION_FAILED' && error.context?.reason === 'accountLimit') {
+      return { ok: false, error: 'VALIDATION_FAILED', reason: 'accountLimit' };
+    }
     return { ok: false, error: repositoryError(error) };
   }
 }

@@ -48,8 +48,9 @@ const jobs = new Map(
 );
 
 // Nazwy wyświetlane są checkami — zmiana nazwy wymaganego checka blokuje scalanie i wdrożenie.
-// Joby E2E: 3 shardy + pomiar + fixture'y + przepływ na PostgreSQL; wynik zbiera `e2e`.
-const E2E_PARTS = ['e2e-shard', 'e2e-perf', 'e2e-fixtures', 'e2e-classifieds'];
+// Joby E2E: 3 shardy + pomiar + fixture'y + tryb ogłoszeniowy + przepływ na PostgreSQL
+// (od #1239 blokujący); wynik zbiera `e2e`.
+const E2E_PARTS = ['e2e-shard', 'e2e-perf', 'e2e-fixtures', 'e2e-classifieds', 'e2e-real'];
 const expected = {
   install: ['Install & cache deps', []],
   lint: ['Lint', ['install']],
@@ -177,7 +178,8 @@ assert.match(fixtures, /TEST_APPLICATIONS_FIXTURE_PART: \$\{\{ matrix\.part \}\}
 assert.match(fixtures, /npx playwright test --config playwright\.applications-fixture\.config\.ts\s*$/m, 'e2e-fixtures: konfiguracja fixture');
 assert.match(fixtures, /E2E_BLOB_NAME: fixtures-\$\{\{ matrix\.fixture \}\}-\$\{\{ strategy\.job-index \}\}/, 'e2e-fixtures: raport cząstkowy (blob) z nazwą części');
 assert.match(fixtures, /if: \$\{\{ !cancelled\(\) \}\}\s*\r?\n\s*with:\s*\r?\n\s*name: blob-report-fixtures-/, 'e2e-fixtures: wyślij blob także przy czerwonej części');
-const fixtureConfig = await readFile(new URL('playwright.applications-fixture.config.ts', root), 'utf8');
+// Ścieżki konfiguracji można podmienić zmiennymi CI_GUARD_* (kontrole ujemne w teście strażnika).
+const fixtureConfig = await readFile(process.env.CI_GUARD_FIXTURE_CONFIG ?? new URL('playwright.applications-fixture.config.ts', root), 'utf8');
 const allowedParts = fixtureConfig.match(/\(mode === 'full' \? \[([^\]]*)\] : \[([^\]]*)\]\)\.includes\(part\)/);
 assert.ok(allowedParts, 'playwright.applications-fixture.config.ts: lista dozwolonych części');
 const quoted = (list) => list.split(',').map((item) => item.trim().replace(/^'|'$/g, ''));
@@ -211,14 +213,23 @@ for (const artifact of ['blob-report-classifieds', 'blob-report-classifieds-fixt
 }
 assert.match(fixtureConfig, /if \(classifieds\) return CLASSIFIEDS_FIXTURE_SPECS;/, 'fixture config: serwer ogłoszeniowy = CLASSIFIEDS_FIXTURE_SPECS');
 
-// Przepływ na PostgreSQL 16 (#351, #66): izolowana baza z „e2e” w nazwie, informacyjny
-// (`continue-on-error`), więc NIE jest zależnością wymaganego checka „E2E (Playwright)”.
+// Przepływ na PostgreSQL 16 (#351, #66): izolowana baza z „e2e” w nazwie. Od #1239 BLOKUJĄCY
+// (bez `continue-on-error`, zależność wymaganego checka „E2E (Playwright)”) i w dwóch trybach:
+// RECRUITMENT (przepływy rekrutacyjne) oraz CLASSIFIEDS_ONLY (tryb produkcyjny — speci,
+// które przebieg RECRUITMENT pomija, np. `saved-search-classifieds`).
 const real = jobs.get('e2e-real');
 assert.match(real, /^        image: postgres:16\s*$/m, 'e2e-real: usługa postgres:16');
 assert.match(real, /E2E_PGPORT: \$\{\{ job\.services\.postgres\.ports\[5432\] \}\}/, 'e2e-real: port usługi z mapowania');
-assert.match(real, /E2E_PGDATABASE: [a-z0-9_]*e2e[a-z0-9_]*\s*$/m, 'e2e-real: nazwa bazy musi zawierać „e2e”');
+const realDatabases = [...real.matchAll(/^\s*E2E_PGDATABASE: (\S+)\s*$/gm)].map((match) => match[1]);
+assert.ok(realDatabases.length >= 2, 'e2e-real: każdy krok z jawną bazą E2E_PGDATABASE');
+for (const name of realDatabases) assert.match(name, /^[a-z0-9_]*e2e[a-z0-9_]*$/, `e2e-real: nazwa bazy musi zawierać „e2e” (${name})`);
 assert.match(real, /run: npm run test:e2e:real\s*$/m, 'e2e-real: uruchom `npm run test:e2e:real`');
-assert.match(real, /^    continue-on-error: true\s*$/m, 'e2e-real: na start check informacyjny (continue-on-error)');
+assert.doesNotMatch(real, /^\s*continue-on-error:/m, 'e2e-real: check blokujący — bez continue-on-error (#1239)');
+const realClassifieds = real.match(/^      - name: Run E2E real flow \(classifieds\)\s*\r?\n((?:^        .*\r?\n)+)/m)?.[1];
+assert.ok(realClassifieds, 'e2e-real: krok „Run E2E real flow (classifieds)” (tryb produkcyjny, #1239)');
+assert.match(realClassifieds, /^          E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY\s*$/m, 'e2e-real: krok classifieds — E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY');
+assert.match(realClassifieds, /^        if: \$\{\{ !cancelled\(\) \}\}\s*$/m, 'e2e-real: krok classifieds także po czerwonym kroku RECRUITMENT');
+assert.match(realClassifieds, /run: npm run test:e2e:real -- saved-search-classifieds\s*$/m, 'e2e-real: krok classifieds uruchamia saved-search-classifieds');
 assert.match(real, /if: failure\(\)\s*\r?\n\s*with:\s*\r?\n\s*name: e2e-real-test-results/, 'e2e-real: artefakt przy porażce');
 
 // Job zbiorczy: stała nazwa wymaganego checka; `always()`, bo pominięty job liczy się jako
@@ -304,6 +315,74 @@ assert.ok(
   (e2eTsconfig.include ?? []).some((pattern) => pattern.startsWith('tests/e2e/')),
   'tsconfig.e2e.json: include musi obejmować tests/e2e',
 );
+
+// Migration runner (#1246): luka numeracji (numer tymczasowy w PR sesji potomnej) ma własny
+// krok z czytelnym komunikatem; reszta integracji biegnie w osobnym kroku bez testu operatora
+// loginów (jej wynik nie ginie pod czerwienią luki), a test operatora — tylko przy ciągłej
+// numeracji. Na main luka nadal czerwieni job (krok ciągłości), więc wykrywanie zostaje.
+const migrationsJob = jobs.get('migrations');
+const migrationStep = (name) =>
+  migrationsJob.match(new RegExp(`^      - name: ${escapeRegExp(name)}\\s*\\r?\\n((?:^        .*\\r?\\n?)+)`, 'm'))?.[1];
+const integrationStep = migrationStep('Verify runtime PostgreSQL isolation');
+const numberingStep = migrationStep('Check migration numbering continuity');
+const operatorStep = migrationStep('Verify runtime logins operator');
+assert.ok(integrationStep && numberingStep && operatorStep, 'migrations: kroki integracji, ciągłości numeracji i operatora loginów (#1246)');
+assert.match(integrationStep, /--exclude tests\/integration\/runtime-logins\.test\.ts\s*$/m, 'migrations: integracja bez testu operatora loginów (luka numeracji nie maskuje reszty)');
+assert.match(integrationStep, /^        if: \$\{\{ !cancelled\(\) \}\}\s*$/m, 'migrations: integracja biegnie także po czerwonym wcześniejszym kroku');
+assert.match(numberingStep, /^        id: numbering\s*$/m, 'migrations: krok ciągłości z id numbering');
+assert.match(numberingStep, /run: node scripts\/db\/check-migration-numbering\.mjs\s*$/m, 'migrations: krok ciągłości numeracji');
+assert.match(numberingStep, /^        if: \$\{\{ !cancelled\(\) \}\}\s*$/m, 'migrations: ciągłość sprawdzana zawsze (także na main)');
+assert.match(operatorStep, /if: \$\{\{ !cancelled\(\) && steps\.numbering\.outcome == 'success' \}\}/, 'migrations: test operatora tylko przy ciągłej numeracji');
+assert.match(operatorStep, /vitest\.integration\.config\.ts tests\/integration\/runtime-logins\.test\.ts\s*$/m, 'migrations: test operatora loginów uruchamiany osobno');
+assert.doesNotMatch(migrationsJob, /^\s*continue-on-error:/m, 'migrations: bez continue-on-error — luka na main ma czerwienić job');
+
+// Akcje przypięte do SHA commita z komentarzem wersji (#1250): ruchomy tag (`@v7`) może zostać
+// przesunięty na inny kod bez zmiany w repozytorium.
+for (const [name, source] of sources) {
+  for (const [line, action, ref, comment] of source.matchAll(/^\s*(?:- )?uses: ([^@\s]+)@(\S+)(?:\s+#\s*(\S+))?\s*$/gm)) {
+    assert.match(ref, /^[0-9a-f]{40}$/, `${name}: ${action} — przypnij do 40-znakowego SHA commita (${line.trim()})`);
+    assert.match(comment ?? '', /^v\d+(\.\d+){0,2}$/, `${name}: ${action}@${ref} — komentarz z wersją (# vX.Y.Z)`);
+  }
+}
+
+// Każda konfiguracja Playwrighta, która uruchamia testy, odrzuca `test.only` w CI (#1241):
+// pozostawione `.only` w specu fixture albo real-flow cicho wyłączałoby resztę zestawu.
+const PLAYWRIGHT_RUN_CONFIGS = [
+  ['playwright.config.ts', playwrightConfig],
+  ['playwright.applications-fixture.config.ts', fixtureConfig],
+  ['playwright.real-flow.config.ts', await readFile(process.env.CI_GUARD_REAL_CONFIG ?? new URL('playwright.real-flow.config.ts', root), 'utf8')],
+];
+const rootFiles = await readdir(root);
+const runConfigs = rootFiles.filter((file) => /^playwright\..*config\.ts$/.test(file) && file !== 'playwright.merge.config.ts').sort();
+assert.deepEqual(runConfigs, PLAYWRIGHT_RUN_CONFIGS.map(([file]) => file).sort(), 'check-ci-workflows.mjs: nowa konfiguracja Playwrighta — dopisz ją do PLAYWRIGHT_RUN_CONFIGS');
+for (const [file, source] of PLAYWRIGHT_RUN_CONFIGS) {
+  assert.match(source, /^\s*forbidOnly: !!process\.env\.CI,\s*$/m, `${file}: forbidOnly: !!process.env.CI (test.only nie może cicho wyłączyć reszty zestawu)`);
+}
+// Druga warstwa: ESLint odrzuca `.only` i statyczne `.skip`/`.fixme` testu w tests/ (#1241).
+const eslintConfig = JSON.parse(await readFile(process.env.CI_GUARD_ESLINT_CONFIG ?? new URL('.eslintrc.json', root), 'utf8'));
+const testOverride = (eslintConfig.overrides ?? []).find((override) => [].concat(override.files ?? []).includes('tests/**'));
+const restricted = JSON.stringify(testOverride?.rules?.['no-restricted-syntax'] ?? []);
+assert.ok(restricted.includes("property.name='only'"), '.eslintrc.json: reguła no-restricted-syntax na .only w tests/**');
+assert.ok(restricted.includes('skip|fixme'), '.eslintrc.json: reguła no-restricted-syntax na statyczne .skip/.fixme w tests/**');
+
+// Speci fixture (#1247): każdy spec wyłączony z zestawu demo (`FIXTURE_ONLY_SPECS`) musi biec
+// w konfiguracji fixture (`ERROR_SPECS` ∪ `FULL_SPECS`) i odwrotnie — inaczej spec nie biegnie
+// nigdzie albo biegnie na danych demo, gdzie zawsze pada.
+const fixtureListOf = (name) => {
+  const body = fixtureConfig.match(new RegExp(`^const ${name} = \\[([^\\]]*)\\];`, 'ms'))?.[1];
+  assert.ok(body !== undefined, `playwright.applications-fixture.config.ts: brak listy ${name}`);
+  return [...body.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+};
+const fixtureSpecs = [...fixtureListOf('ERROR_SPECS'), ...fixtureListOf('FULL_SPECS')];
+assert.equal(new Set(fixtureSpecs).size, fixtureSpecs.length, 'fixture config: spec w ERROR_SPECS i FULL_SPECS naraz');
+const fixtureOnly = listOf('FIXTURE_ONLY_SPECS');
+for (const spec of fixtureOnly) {
+  assert.ok(fixtureSpecs.includes(spec), `FIXTURE_ONLY_SPECS: ${spec} nie biegnie w konfiguracji fixture (ERROR_SPECS ∪ FULL_SPECS) — nie biegnie nigdzie`);
+}
+for (const spec of fixtureSpecs) {
+  assert.ok(fixtureOnly.includes(spec), `fixture config: ${spec} nie jest wyłączony z demo (FIXTURE_ONLY_SPECS) — na danych demo padnie`);
+  assert.ok(e2eFiles.has(spec.replace('**/', '')), `fixture config: ${spec} nie istnieje w tests/e2e`);
+}
 
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);

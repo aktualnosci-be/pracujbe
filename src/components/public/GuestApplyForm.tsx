@@ -356,7 +356,7 @@ export function GuestApplyForm({
     ) : null;
 
   return (
-    <form className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate aria-labelledby="guest-apply-title" data-testid="guest-apply-form">
+    <form method="post" className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate aria-labelledby="guest-apply-title" data-testid="guest-apply-form">
       <div>
         <h3 id="guest-apply-title" className="text-lg font-bold tracking-[-0.025em] text-foreground">{t('formTitle')}</h3>
         <p className="mt-1 text-[13px] leading-[1.6] text-muted-foreground">{t('formHint')}</p>
