@@ -26,8 +26,6 @@ export const opsMetricsSchema = z.object({
   webhooks: z.object({ stuckProcessing: count, failedLast24h: count }),
   maintenance: z.object({
     overdueActiveJobs: count,
-    staleDiscountReservations: count,
-    staleCheckoutIntents: count,
   }),
   connections: z.object({ used: count, max: count, reserved: count }),
   /** #574 (0127): kolejka fizycznego usuwania obiektów storage; brak = baza sprzed 0127. */
@@ -150,7 +148,7 @@ export function evaluateOps(
   if (metrics.webhooks.failedLast24h > 0) warnings.push('webhook_failed');
 
   const m = metrics.maintenance;
-  if (m.overdueActiveJobs > 0 || m.staleDiscountReservations > 0 || m.staleCheckoutIntents > 0) {
+  if (m.overdueActiveJobs > 0) {
     alerts.push('maintenance_lag');
   }
 
