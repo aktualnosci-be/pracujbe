@@ -4,7 +4,20 @@ import { ACCESS_CODE_RE, CASE_NUMBER_RE } from '@/lib/validation/content-report'
 import { salaryLabelsFor } from '@/lib/salary-labels';
 import { buildMessageExcerpt } from '@/lib/email/message-excerpt';
 import { minimizeEmailPayload } from '@/lib/email/payload-fields';
+import { safeDisplayNameForEmail } from '@/lib/validation/display-name';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
+
+/** Szablony, których `recipientName` pochodzi z publicznego formularza (bez konta odbiorcy). */
+const FORM_NAME_TEMPLATES: ReadonlySet<string> = new Set([
+  'supportContact',
+  'reportReceived',
+  'reportDecisionActioned',
+  'reportDecisionNoAction',
+  'reportRestored',
+  'guestApplicationConfirm',
+  'guestApplicationSent',
+  'guestStatusChanged',
+]);
 
 /**
  * Dane szablonu dla wiersza kolejki `email_deliveries` (czysta funkcja, bez I/O — testowalna).
@@ -215,6 +228,14 @@ export function buildDeliveryData(
     const excerpt = buildMessageExcerpt(payload['messageExcerpt']);
     if (excerpt) payload['messageExcerpt'] = excerpt;
     else delete payload['messageExcerpt'];
+  }
+  // Imię wpisane w publicznym formularzu (kontakt, zgłoszenie treści, aplikacja bez konta) trafia do
+  // powitania w e-mailu na podany adres: przepuszczamy tylko prostą postać (litery, spacja, myślnik),
+  // także dla zleceń zapisanych przed wprowadzeniem walidacji. Inaczej powitanie neutralne.
+  if (FORM_NAME_TEMPLATES.has(row.template) && Object.hasOwn(payload, 'recipientName')) {
+    const name = safeDisplayNameForEmail(payload['recipientName']);
+    if (name) payload['recipientName'] = name;
+    else delete payload['recipientName'];
   }
   const isGuest = GUEST_TOKEN_TEMPLATES.has(row.template);
   if (isGuest && !guestToken) throw new Error('guest_token_unavailable');

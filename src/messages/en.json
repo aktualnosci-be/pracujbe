@@ -3433,6 +3433,7 @@
       "detailsTooLong": "The description can be at most 5000 characters.",
       "urlInvalid": "Enter a full address starting with http:// or https://.",
       "nameTooLong": "The name can be at most 200 characters.",
+      "nameInvalid": "The name can only contain letters, spaces and hyphens.",
       "emailRequired": "Enter your email address.",
       "emailInvalid": "Enter a valid email address.",
       "goodFaithRequired": "Tick the confirmation to send the report.",
@@ -3631,6 +3632,7 @@
       "messageTooShort": "Your message is too short — please describe your request in a bit more detail.",
       "messageTooLong": "Your message is too long.",
       "nameTooLong": "The first name is too long.",
+      "nameInvalid": "The name can only contain letters, spaces and hyphens.",
       "emailRequired": "Enter your email address.",
       "emailInvalid": "Enter a valid email address.",
       "sensitiveId": "Remove the national register number, PESEL or document number — it is not needed to reply to your message."
