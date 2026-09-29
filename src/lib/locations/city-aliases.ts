@@ -14,10 +14,12 @@ import pl from '@/messages/pl.json';
  * języka nie zmienia zbioru ofert.
  *
  * Kontrolowana tabela aliasów = istniejące tłumaczenia `locations.*` (bez osobnej listy do
- * utrzymania). Nie zgadujemy po fragmencie ani wielkości liter: wartość z adresu, oferty i
- * facety łączymy wyłącznie po DOKŁADNYM aliasie — tą samą regułą co SQL
- * (`j.city = any(p_locations)`), więc licznik zawsze zgadza się z listą. Nierozpoznana nazwa
- * zostaje osobną wartością.
+ * utrzymania). Nie zgadujemy po fragmencie: wartość z adresu, oferty i facety łączymy
+ * wyłącznie po CAŁYM aliasie, ale porównanie jest niezależne od wielkości liter, znaków
+ * diakrytycznych i rodzaju spacji/myślnika (`nameKey`, lustro SQL `city_key` z 0153, którym
+ * baza dopasowuje `p_locations` do miejscowości) — „Bruxelles”, „bruxelles” i „BRUXELLES”
+ * dają ten sam klucz i ten sam zbiór ofert (#1077). Nierozpoznana nazwa zostaje osobną
+ * wartością.
  * Moduł serwerowy (importuje pliki tłumaczeń).
  */
 
@@ -32,9 +34,22 @@ const NAMES_BY_LOCALE: Record<string, LocationNames> = {
 
 export const LOCATION_KEYS = Object.keys(pl.locations) as LocationKey[];
 
+/**
+ * Klucz porównania nazw miasta = `public.city_key` (0153) i `cityKey` z `belgian-cities.ts`:
+ * NFD bez znaków łączących, małe litery, ciągi spacji/nbsp/myślników → jedna spacja.
+ */
+export function nameKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s\u00a0-]+/g, ' ')
+    .trim();
+}
+
 const KEY_BY_ALIAS = new Map<string, LocationKey>();
 for (const key of LOCATION_KEYS) {
-  for (const names of Object.values(NAMES_BY_LOCALE)) KEY_BY_ALIAS.set(names[key], key);
+  for (const names of Object.values(NAMES_BY_LOCALE)) KEY_BY_ALIAS.set(nameKey(names[key]), key);
 }
 
 /**
@@ -74,9 +89,12 @@ export function resolveCitySlugAlias(slug: string): LocationKey | null {
   return wanted ? (KEY_BY_SLUG.get(wanted) ?? null) : null;
 }
 
-/** Klucz miasta dla dokładnej nazwy w dowolnym obsługiwanym języku; `null` gdy nieznana. */
+/**
+ * Klucz miasta dla całej nazwy w dowolnym obsługiwanym języku (bez względu na wielkość liter,
+ * diakryty i myślniki, #1077); `null` gdy nieznana albo tylko fragment nazwy.
+ */
 export function resolveLocationKey(value: string): LocationKey | null {
-  return KEY_BY_ALIAS.get(value.trim()) ?? null;
+  return KEY_BY_ALIAS.get(nameKey(value)) ?? null;
 }
 
 /** Wszystkie nazwy miasta (PL/NL/FR/EN), bez duplikatów — wartości porównywane z `jobs.city`. */

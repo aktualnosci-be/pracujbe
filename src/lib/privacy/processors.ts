@@ -19,7 +19,6 @@ export type ProcessorId =
   | 'cloudflare-turnstile'
   | 'cloudflare-r2'
   | 'openai'
-  | 'stripe'
   | 'cloudflare-web-analytics'
   | 'vies';
 
@@ -213,17 +212,6 @@ export const PROCESSORS: readonly Processor[] = [
       'Tekst ogłoszenia: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.',
       'Kod nie ustawia regionu przetwarzania (data residency) ani projektu z ograniczoną retencją — do decyzji właściciela.',
     ],
-    ...UNKNOWN,
-  },
-  {
-    id: 'stripe',
-    name: 'Stripe',
-    purpose: 'Płatności — WYŁĄCZONE w bezpłatnym MVP (#51).',
-    dataCategories: ['Brak przepływu przy wyłączonej fladze (dane rozliczeniowe firmy, gdyby płatności wróciły)'],
-    dataSubjects: ['Pracodawcy'],
-    activation: 'Tylko BILLING_ENABLED=true; akcje checkoutu zawsze zwracają BILLING_UNAVAILABLE.',
-    codeRefs: ['src/lib/billing/flag.ts', 'src/lib/stripe.ts', 'docs/PRODUCT_DECISIONS.md'],
-    notes: ['Powrót płatności wymaga nowej decyzji i ponownej oceny dostawcy.'],
     ...UNKNOWN,
   },
   {

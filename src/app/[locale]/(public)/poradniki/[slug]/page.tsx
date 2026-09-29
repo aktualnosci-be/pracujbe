@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Clock } from 'lucide-react';
@@ -86,7 +87,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       siteName: 'Pracuj.be',
       type: 'article',
-      locale,
+      ...openGraphLocales(locale),
       publishedTime: guide.publishedAt,
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
