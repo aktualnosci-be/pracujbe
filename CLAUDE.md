@@ -2780,6 +2780,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   długość po `trim()` — fail-closed zamiast fałszywej gotowości. Dowód:
   `tests/unit/auth-secret-length.test.ts` (pozytywne 32 znaki, kontrole ujemne: 31 znaków, z
   otaczającymi spacjami, pusty sekret, `isAppReady()` z resztą rdzenia gotową).
+- [x] Middleware i SEO-meta (audyt 2026-09-28, bez migracji): matcher `src/middleware.ts` (#1035) nie pomija już
+  ścieżek z kropką w segmencie (`/pl/oferty-pracy/a.b` szło do tras dynamicznych z pominięciem bramki hasła
+  i 503 „niegotowe”) — wyłączone są tylko `api|auth|_next|_vercel|images|.well-known` (granica segmentu),
+  jawna lista plików z korzenia, `/sitemap/<n>.xml` i `/<locale>/manifest.webmanifest`; drugi matcher
+  przepuszcza każde żądanie z nagłówkiem `next-action`. Strażnik `middleware-matcher.test.ts` (każdy plik
+  z `public/` musi omijać middleware; kontrola ujemna dawnego wzorca; kompilacja przez Next). `alternateLinks:
+  false` w `src/i18n/routing.ts` (#1057): brak nagłówka HTTP `Link` z hreflang (jego `x-default` bez prefiksu
+  języka był sprzeczny z metadata i sitemapą; test uruchamia prawdziwe middleware next-intl w podprocesie).
+  `src/lib/seo/locales.ts` (#1084/#1097): jedno źródło `og:locale` (`język_KRAJ` + `alternateLocale`) dla
+  wszystkich stron z własnym `openGraph` oraz `pickXDefaultLocale` (kolejność `routing.locales`, nie
+  kolejność z bazy) dla sitemapy i hreflang oferty. Sitemap (#1042, krok 1): zostaje `force-dynamic`
+  (prerender w buildzie zamroziłby pustą listę partii), ale wynik pliku i lista partii są w pamięci procesu
+  3600 s z single-flight (`src/lib/cache/sitemap-cache.ts`; błąd i wynik zdegradowany nie są cache'owane).
+  **Otwarte (#1042):** RPC kursorowe bez licznika (migracja); druga linia obrony (helper bramki w publicznych
+  Server Actions, #1035).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
   Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
   zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna
@@ -2988,6 +3003,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   pomijany).
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
+- [x] Prywatność i obserwowalność (paczka audytu 2026-09-28, bez migracji): beacon Cloudflare
+  z `spa: false` i pełnym przeładowaniem przy przejściu z trasy publicznej na prywatną (link
+  albo `router.push`; `src/lib/analytics/beacon.ts`, #1046, E2E `one-time-link-tracking`);
+  kanał błędów niesie obszar (`Obszar:` z `area`/`task` kontekstu `captureError`, walidowany
+  `safeErrorArea`) i SQLSTATE, deduplikacja po (kod, obszar, SQLSTATE), maintenance zgłasza każde
+  nieudane zadanie osobno (#1066); `reportUnmappedDbError` (`src/lib/db/errors.ts`) zgłasza
+  `INTERNAL` z nieznanego błędu bazy w akcjach (kandydat, onboarding, ustawienia powiadomień,
+  zespół, firma, zapisane wyszukiwania; bez akcji rekrutacyjnych i `jobs.ts`, #1068); cookie aktywnej
+  firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
+  firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
+  poza produkcją pokazuje szczegóły tylko z tokenem albo na loopbacku, zbiorczy budżet błędów
+  z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
+  worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
+  i SQLSTATE bez komunikatu bazy (#1105).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`

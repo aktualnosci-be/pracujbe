@@ -1,4 +1,5 @@
 import { routing, type Locale } from '@/i18n/routing';
+import { pickXDefaultLocale } from '@/lib/seo/locales';
 
 /**
  * Język treści oferty (#301).
@@ -39,7 +40,11 @@ export function resolveJobContentLocales(
   return { contentLocale, availableLocales };
 }
 
-/** x-default dla hreflang: język domyślny serwisu, jeśli oferta go ma, inaczej pierwszy dostępny. */
+/**
+ * x-default dla hreflang: język domyślny serwisu, jeśli oferta go ma, inaczej pierwszy dostępny
+ * wg kolejności `routing.locales` (nie kolejności wierszy z bazy) — ta sama reguła co w sitemapie
+ * (`pickXDefaultLocale`, #1097).
+ */
 export function defaultAlternateLocale(available: readonly Locale[]): Locale | undefined {
-  return available.includes(routing.defaultLocale) ? routing.defaultLocale : available[0];
+  return pickXDefaultLocale(available);
 }
