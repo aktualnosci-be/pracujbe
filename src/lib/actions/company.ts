@@ -13,6 +13,7 @@ import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
+import { asciiSlugBase } from '@/lib/slug';
 
 /** UUID v4 (walidacja identyfikatorów przekazywanych z klienta). */
 const UUID_RE =
@@ -123,14 +124,7 @@ function failureCode(error: unknown, area: string): ErrorCode {
 
 /** Rdzeń sluga (bez diakrytyków) + losowy sufiks (slug `companies` jest UNIQUE). */
 function companySlug(name: string): string {
-  const base = name
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/g, '');
+  const base = asciiSlugBase(name, 40);
   const suffix = Math.random().toString(36).slice(2, 8);
   return base ? `${base}-${suffix}` : `firma-${suffix}`;
 }

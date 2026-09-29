@@ -68,6 +68,11 @@ function mapPgError(message: string | undefined): ErrorCode {
   if (m.includes('APPEAL_EXISTS')) return 'APPEAL_EXISTS';
   if (m.includes('APPEAL_WINDOW_CLOSED')) return 'APPEAL_WINDOW_CLOSED';
   if (m.includes('REVIEWER_CONFLICT')) return 'REVIEWER_CONFLICT';
+  // Uwzględnienie odwołania autora cofa ograniczenie (aktywacja oferty) — strażnik przeglądu
+  // pytań może ją odrzucić, gdy treść pytania zmieniła się od decyzji (#1102).
+  if (m.includes('SCREENING_REVIEW_REQUIRED') || m.includes('SCREENING_QUESTION_REJECTED')) {
+    return 'MODERATION_RESTORE_BLOCKED';
+  }
   if (m.includes('STALE_STATE')) return 'STALE_STATE';
   if (m.includes('INVALID_TRANSITION')) return 'INVALID_TRANSITION';
   if (m.includes('NOT_FOUND')) return 'NOT_FOUND';
