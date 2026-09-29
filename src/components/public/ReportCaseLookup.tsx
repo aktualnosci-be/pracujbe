@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -61,6 +63,7 @@ function readFragment(): ReportCaseLookupInput | null {
 }
 
 export function ReportCaseLookup(): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('contentReport');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -157,7 +160,8 @@ export function ReportCaseLookup(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={onSubmit} noValidate className="space-y-4" aria-busy={isSubmitting || undefined}>
+      <form method="post" onSubmit={onSubmit} noValidate className="space-y-4" aria-busy={isSubmitting || undefined}>
+        <NoScriptFormNotice />
         {serverMessage ? (
           <div
             ref={alertRef}
@@ -203,7 +207,7 @@ export function ReportCaseLookup(): React.JSX.Element {
             </p>
           ) : null}
         </div>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || !hydrated}>
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

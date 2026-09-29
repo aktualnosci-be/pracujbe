@@ -222,7 +222,8 @@
     "no": "Nee",
     "home": "Startpagina",
     "breadcrumb": "Broodkruimelpad",
-    "skipToContent": "Ga naar de inhoud"
+    "skipToContent": "Ga naar de inhoud",
+    "formJsRequired": "Dit formulier vereist JavaScript. Schakel het in je browser in om de gegevens te verzenden."
   },
   "nav": {
     "jobs": "Vacatures",

@@ -222,7 +222,8 @@
     "no": "Nie",
     "home": "Strona główna",
     "breadcrumb": "Ścieżka nawigacji",
-    "skipToContent": "Przejdź do treści"
+    "skipToContent": "Przejdź do treści",
+    "formJsRequired": "Ten formularz wymaga włączonego JavaScriptu. Włącz go w przeglądarce, żeby wysłać dane."
   },
   "nav": {
     "jobs": "Oferty pracy",

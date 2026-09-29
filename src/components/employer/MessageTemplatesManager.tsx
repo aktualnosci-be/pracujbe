@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -66,6 +68,7 @@ export interface MessageTemplatesManagerProps {
 }
 
 export function MessageTemplatesManager({ companyId, templates }: MessageTemplatesManagerProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('messageTemplates');
   const tc = useTranslations('common');
   const tRoot = useTranslations();
@@ -202,7 +205,8 @@ export function MessageTemplatesManager({ companyId, templates }: MessageTemplat
         )}
       </section>
 
-      <form onSubmit={submit} noValidate aria-labelledby={`${formId}-form`} className={cn(PANEL, 'space-y-5')}>
+      <form method="post" onSubmit={submit} noValidate aria-labelledby={`${formId}-form`} className={cn(PANEL, 'space-y-5')}>
+        <NoScriptFormNotice />
         <h2 id={`${formId}-form`} className={PANEL_H2}>{draft.id ? t('formEditTitle') : t('formNewTitle')}</h2>
         <p className={PANEL_P}>{t('formHint')}</p>
         <div className={FORM_FIELD}>
@@ -246,7 +250,7 @@ export function MessageTemplatesManager({ companyId, templates }: MessageTemplat
         ) : null}
         {formError ? <p role="alert" className={FORM_ERROR}>{formError}</p> : null}
         <div className="flex flex-wrap gap-3">
-          <button type="submit" className={cn(BTN_PRIMARY, 'disabled:opacity-60')} disabled={pending} aria-busy={pending}>
+          <button type="submit" className={cn(BTN_PRIMARY, 'disabled:opacity-60')} disabled={pending || !hydrated} aria-busy={pending}>
             {pending ? t('saving') : t('save')}
           </button>
           {draft.id ? (

@@ -222,7 +222,8 @@
     "no": "Non",
     "home": "Accueil",
     "breadcrumb": "Fil d'Ariane",
-    "skipToContent": "Aller au contenu"
+    "skipToContent": "Aller au contenu",
+    "formJsRequired": "Ce formulaire nécessite JavaScript. Activez-le dans votre navigateur pour envoyer les données."
   },
   "nav": {
     "jobs": "Offres d'emploi",

@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -77,6 +79,7 @@ export function ContentReportForm({
   jobUrl,
   initialTarget,
 }: ContentReportFormProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('contentReport');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -251,7 +254,8 @@ export function ContentReportForm({
   const goodFaithError = fieldError('goodFaith');
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-6" aria-busy={isSubmitting || undefined}>
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-6" aria-busy={isSubmitting || undefined}>
+      <NoScriptFormNotice />
       {serverMessage ? (
         <div
           ref={alertRef}
@@ -433,7 +437,7 @@ export function ContentReportForm({
         />
       ) : null}
 
-      <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isSubmitting}>
+      <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isSubmitting || !hydrated}>
         {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
