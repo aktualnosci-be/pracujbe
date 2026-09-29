@@ -12,6 +12,8 @@ import {
   parseAppealState,
 } from '@/lib/admin/appeals';
 import { ADMIN_PAGE_SIZE } from '@/lib/admin/list-params';
+import { dsaCsvStream } from '@/lib/admin/dsa-csv-stream';
+import { dsaJsonStream } from '@/lib/admin/dsa-json-stream';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
 import { parseReportCase } from '@/lib/content-reports/case';
 import {
@@ -219,6 +221,15 @@ describe('akcje odwołań', () => {
       p_new_decision: 'job_removed', p_ground_type: 'law', p_ground_reference: 'Art. 7',
     });
 
+    // #1102: uwzględnienie odwołania autora cofa ograniczenie; strażnik pytań oferty może je
+    // odrzucić — czytelny kod zamiast INTERNAL. Potem kolejka wraca do dalszych odpowiedzi testu.
+    fakeDb.rpc('admin_decide_appeal', queue(APPEAL,
+      pgError('P0001', 'SCREENING_REVIEW_REQUIRED: treść pytania'),
+      pgError('P0001', 'REVIEWER_CONFLICT: inny administrator'),
+      pgError('P0001', 'STALE_STATE: status odwołania zmienił się'),
+      pgError('P0001', 'VALIDATION_FAILED: GROUND_REFERENCE_REQUIRED')));
+    expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'reversed', reasoning: REASONING }))
+      .toEqual({ ok: false, error: 'MODERATION_RESTORE_BLOCKED' });
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
       .toEqual({ ok: false, error: 'REVIEWER_CONFLICT' });
     expect(await decideAppeal(APPEAL, 'pending', 'author', 'job', { outcome: 'upheld', reasoning: REASONING }))
@@ -452,6 +463,102 @@ describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606
     expect(decodeDsaExportCursor('!!! nie base64url ###')).toBeNull();
     // Token bez separatora `|` (np. spreparowany ręcznie) — odrzucony, nie zgłasza wyjątku.
     expect(decodeDsaExportCursor(Buffer.from('brak-separatora', 'utf8').toString('base64url'))).toBeNull();
+  });
+
+  it('trasa JSON/CSV: parametr cursor jest ignorowany — eksport zawsze zaczyna od pierwszej strony i jest kompletny (bez 400)', async () => {
+    const { GET } = await import('@/app/api/admin/dsa-report/route');
+    const total = DSA_EXPORT_PAGE_SIZE + 3;
+    const all = Array.from({ length: total }, (_, i) => ({ ...exportRow(i), decision_reference: `DEC-${String(i).padStart(5, '0')}` }));
+    fakeDb.rpc('dsa_statements_export', ({ args }: { args: Record<string, unknown> }) =>
+      args['p_cursor_decided_at'] ? all.slice(DSA_EXPORT_PAGE_SIZE) : all.slice(0, DSA_EXPORT_PAGE_SIZE),
+    ).rpc('dsa_transparency_report', {
+      period: { from: '2026-01-01T00:00:00Z', to: '2026-12-31T00:00:00Z' },
+      notices: { total: 0, byCategory: {} },
+      decisions: { total: 0, medianHoursToDecision: null, automatedDecision: 0 },
+      appeals: { total: 0, byStatus: {}, reversedDecisions: 0, medianHoursToDecision: null },
+    });
+    const base = 'https://pracuj.be/api/admin/dsa-report?od=2026-01-01&do=2026-12-31';
+    const stale = encodeURIComponent('!!! nie base64url ###');
+
+    const json = await GET(new Request(`${base}&format=json&cursor=zly`));
+    expect(json.status).toBe(200);
+    const parsed = JSON.parse(await json.text()) as { statements: Array<{ decision_reference: string }> };
+    expect(parsed.statements).toHaveLength(total);
+    expect(parsed.statements[0]?.decision_reference).toBe('DEC-00000');
+    // Pierwsze zapytanie bez kursora, mimo `cursor=zly` w adresie.
+    expect(fakeDb.callsTo('dsa_statements_export')[0]?.args).toMatchObject({ p_cursor_decided_at: null });
+
+    const csv = await GET(new Request(`${base}&format=csv&cursor=${stale}`));
+    expect(csv.status).toBe(200);
+    expect((await csv.text()).trim().split('\r\n')).toHaveLength(total + 1);
+
+    // Kontrola ujemna: gdyby trasa honorowała `cursor`, plik zaczynałby się od drugiej strony i gubił wiersze.
+    const honoured = all.slice(DSA_EXPORT_PAGE_SIZE);
+    expect(honoured).toHaveLength(3);
+    expect(honoured.length).toBeLessThan(total);
+  });
+
+  it('trasa CSV: strony 2+ dociągane po zakończeniu żądania nie wymagają sesji — plik nie urywa się po 2000 wierszach (#1110)', async () => {
+    const { GET } = await import('@/app/api/admin/dsa-report/route');
+    const total = DSA_EXPORT_PAGE_SIZE + 5;
+    const all = Array.from({ length: total }, (_, i) => ({ ...exportRow(i), decision_reference: `DEC-${String(i).padStart(5, '0')}` }));
+    fakeDb.rpc('dsa_statements_export', ({ args }: { args: Record<string, unknown> }) => {
+      const first = !args['p_cursor_decided_at'];
+      if (first) {
+        // Po pierwszej stronie „żądanie się kończy”: sesja (cookies) nie jest już dostępna.
+        queueMicrotask(() => {
+          fakeSession.identity = null;
+        });
+        return all.slice(0, DSA_EXPORT_PAGE_SIZE);
+      }
+      return all.slice(DSA_EXPORT_PAGE_SIZE);
+    });
+    const response = await GET(new Request('https://pracuj.be/api/admin/dsa-report?format=csv&od=2026-01-01&do=2026-12-31'));
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    const lines = text.trim().split('\r\n');
+    expect(lines).toHaveLength(total + 1); // nagłówek + komplet decyzji
+    expect(lines.at(-1)).toContain(`DEC-${String(total - 1).padStart(5, '0')}`);
+    expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(2);
+  });
+
+  it('kontrola ujemna: pierwsza strona nadal wymaga admina — bez sesji trasa rzuca 404, bez zapytania', async () => {
+    const { GET } = await import('@/app/api/admin/dsa-report/route');
+    fakeSession.identity = null;
+    fakeDb.rpc('dsa_statements_export', []);
+    await expect(GET(new Request('https://pracuj.be/api/admin/dsa-report?format=csv&od=2026-01-01&do=2026-12-31'))).rejects.toThrow();
+    expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(0);
+  });
+
+  it('CSV/JSON: liczba stron powyżej dawnego limitu → eksport KOMPLETNY, bez znacznika export_truncated (kontrola ujemna: dawny limit gubi wiersze)', async () => {
+    const read = async (stream: ReadableStream<Uint8Array>) => {
+      const reader = stream.getReader();
+      let text = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return text;
+        text += new TextDecoder().decode(value);
+      }
+    };
+    const pages = 300; // więcej niż dawne 250 stron
+    const page = (n: number) => ({ status: 'ok' as const, rows: [`r${n}`], nextCursor: n + 1 < pages ? String(n + 1) : null });
+    const fetchPage = (cursor: string) => Promise.resolve(page(Number(cursor)));
+    const first = { rows: ['r0'], nextCursor: '1' };
+
+    const csv = await read(dsaCsvStream({ header: 'h\n', first, toCsv: (rows) => rows.join('\n') + '\n', fetchPage }));
+    const lines = csv.trim().split('\n');
+    expect(lines).toHaveLength(pages + 1);
+    expect(lines.at(-1)).toBe(`r${pages - 1}`);
+    expect(csv).not.toContain('export_truncated');
+
+    const json = JSON.parse(await read(dsaJsonStream({ report: {}, first, fetchPage }))) as { statements: string[] };
+    expect(json.statements).toHaveLength(pages);
+    expect(JSON.stringify(json)).not.toContain('export_truncated');
+
+    // Kontrola ujemna: atrapa z dawnym limitem 250 stron gubi końcówkę.
+    const capped = (cursor: string) => Promise.resolve(Number(cursor) >= 250 ? { status: 'ok' as const, rows: [], nextCursor: null } : page(Number(cursor)));
+    const truncated = await read(dsaCsvStream({ header: 'h\n', first, toCsv: (rows) => rows.join('\n') + '\n', fetchPage: capped }));
+    expect(truncated.trim().split('\n').length).toBeLessThan(pages + 1);
   });
 });
 

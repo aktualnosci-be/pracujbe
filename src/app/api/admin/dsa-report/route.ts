@@ -3,7 +3,13 @@ import { NextResponse } from 'next/server';
 import { dsaCsvStream } from '@/lib/admin/dsa-csv-stream';
 import { dsaJsonStream } from '@/lib/admin/dsa-json-stream';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
-import { csvHeader, csvRows, getStatementsExport, getTransparencyReport } from '@/lib/data/admin-dsa';
+import {
+  csvHeader,
+  csvRows,
+  fetchStatementsExportPage,
+  getStatementsExport,
+  getTransparencyReport,
+} from '@/lib/data/admin-dsa';
 
 /**
  * Eksport danych do raportu przejrzystości DSA (#43) — tylko administrator (`requireAdmin`
@@ -41,7 +47,10 @@ export async function GET(request: Request): Promise<Response> {
   const first = await getStatementsExport(range.from, range.to);
   if (first.status === 'error') return NextResponse.json({ error: 'unavailable' }, { status: 503, headers: HEADERS });
 
-  const fetchPage = (cursor: string) => getStatementsExport(range.from, range.to, cursor);
+  // Strony 2+ idą już po zakończeniu żądania (wewnątrz strumienia) — rola admina została
+  // potwierdzona przy pierwszej stronie; `getStatementsExport` sprawdzałby sesję ponownie
+  // poza kontekstem żądania i urywał plik po pierwszej stronie (#1110).
+  const fetchPage = (cursor: string) => fetchStatementsExportPage(range.from, range.to, cursor);
 
   if (format === 'json') {
     const report = await getTransparencyReport(range.from, range.to);
