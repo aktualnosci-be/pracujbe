@@ -441,12 +441,33 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
     try {
       const expired = await candidateData.getSavedJobs('pl');
       expect(expired).toEqual({ status: 'ready', jobs: [expect.objectContaining({ id: jobIds[2], title: 'Oferta 2', availability: 'expired', slug: null })] });
+      // Ponowienie istniejącego zapisu (ta sama para) przechodzi, choć oferta nie jest już publiczna.
+      expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: true, saved: true });
       expect(await toggleSavedJob(jobIds[2]!, false)).toEqual({ ok: true, saved: false });
       expect(await candidateData.getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
-      expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: true, saved: true });
+      // #882 (0968): NOWY zapis oferty niepublicznej odrzuca baza — neutralnie jak brak oferty.
+      expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: false, error: 'NOT_FOUND' });
+      expect(await candidateData.getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
     } finally {
       await db().admin.query('UPDATE public.jobs SET expires_at = NULL WHERE id = $1', [jobIds[2]]);
     }
+    expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: true, saved: true });
+
+    // #882: znany UUID nigdy niepublikowanego szkicu i oferty usuniętej — zapis odrzucony,
+    // odczyt panelu nie zawiera ich tytułu, firmy ani miasta.
+    const { rows: hidden } = await db().admin.query(
+      `INSERT INTO public.jobs(company_id, slug, title, status, category, contract_type, city, region, deleted_at)
+       VALUES ($1, $2, 'Poufny szkic 882', 'draft', 'warehouse', 'permanent', 'Poufnowo', 'Flandria', null),
+              ($1, $3, 'Usunięta 882', 'active', 'warehouse', 'permanent', 'Poufnowo', 'Flandria', now())
+       RETURNING id`,
+      [companyId, `draft-882-${randomUUID().slice(0, 8)}`, `deleted-882-${randomUUID().slice(0, 8)}`],
+    );
+    for (const row of hidden) {
+      expect(await toggleSavedJob(row.id as string, true)).toEqual({ ok: false, error: 'NOT_FOUND' });
+    }
+    const afterHidden = await candidateData.getSavedJobs('pl');
+    expect(afterHidden.status === 'ready' && afterHidden.jobs.map((job) => job.id)).toEqual([jobIds[2]]);
+    expect(JSON.stringify(afterHidden)).not.toMatch(/Poufn|882/);
     expect(await getPublicSavedJobs([jobIds[2]!, jobIds[3]!])).toEqual({ status: 'candidate', savedIds: [jobIds[2]] });
 
     actAs({ id: bob, role: 'candidate' });

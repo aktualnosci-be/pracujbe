@@ -84,6 +84,9 @@ echo ">> rollback 0174 (tryb ogłoszeniowy: wiadomości i CV, w transakcji cofan
 echo ">> rollback 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
+echo ">> rollback 0968 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-jobs-alias-relink-rollback.sql"
+
 echo ">> sprzątanie"
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null
 
