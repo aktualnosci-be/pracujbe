@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 113; z danymi osobowymi: 74; bez danych osobowych: 39.
+Tabele w migracjach: 107; z danymi osobowymi: 74; bez danych osobowych: 33.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -31,7 +31,6 @@ Tabele w migracjach: 113; z danymi osobowymi: 74; bez danych osobowych: 39.
 | Analityka po zgodzie (`analytics-marketing`) | Beacon Cloudflare Web Analytics ładowany dopiero po zgodzie w kategorii analytics (#570: zamiast Google Analytics i Meta Pixel — usunięte); bezcookie'owy. | — | Cloudflare Web Analytics | Cookie zgody ważne 180 dni. |
 | Prawa osób i retencja (`data-rights`) | Eksport danych kandydata (JSON), samoobsługowe usunięcie konta kandydata, okresy retencji jako dane, kolejka usuwania obiektów storage, rejestr usunięć do ponownego zastosowania po odtworzeniu kopii. | `public.data_rights_requests`, `public.erasure_tombstones`, `public.retention_policies`, `public.retention_warnings`, `public.storage_deletion_queue` | Railway | run_retention_purge (/api/maintenance): okresy z retention_policies (wartości #574, 0127); harmonogram WYŁĄCZONY do jawnego RETENTION_MODE=dry-run\|apply. Ślad wniosków 1095 dni; rejestr usunięć bez usuwania (minimum 400 dni do zmiany po RET-09/RET-10). |
 | Kopie zapasowe bazy (`backups`) | scripts/db/backup.sh: zaszyfrowany (age) zrzut logiczny całej bazy; kopia i manifest wysyłane do prywatnego bucketu Cloudflare R2 (BACKUP_S3_*, #569). | `public.erasure_tombstones` | Railway, Cloudflare R2 (bucket kopii bazy) | BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze). |
-| Płatności (wyłączone) (`billing-disabled`) | Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu. | — | Stripe | Kod nie usuwa danych — do ustalenia |
 
 ## 2. Usługi zewnętrzne (subprocesorzy — kandydaci do weryfikacji)
 
@@ -141,20 +140,6 @@ Tabele w migracjach: 113; z danymi osobowymi: 74; bez danych osobowych: 39.
 - **Uwaga:** Import ogłoszeń i asystent nie wysyłają danych kandydatów, profili ani CV; import CV wysyła wyłącznie zminimalizowany tekst CV samego kandydata.
 - **Uwaga:** Tekst ogłoszenia: z JSON-LD zostają tylko dozwolone pola JobPosting; redakcja e-maili, telefonów, NISS/BIS, PESEL i numerów dokumentów przed wysyłką (minimize.ts). Numer identyfikacyjny w odpowiedzi modelu = odmowa importu.
 - **Uwaga:** Kod nie ustawia regionu przetwarzania (data residency) ani projektu z ograniczoną retencją — do decyzji właściciela.
-- **Rola (procesor/administrator):** DO UZUPEŁNIENIA
-- **Region przetwarzania:** DO UZUPEŁNIENIA
-- **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
-- **Umowa (DPA):** DO UZUPEŁNIENIA
-- **Retencja u dostawcy:** DO UZUPEŁNIENIA
-
-### Stripe (`stripe`)
-
-- **Cel w portalu:** Płatności — WYŁĄCZONE w bezpłatnym MVP (#51).
-- **Kategorie danych:** Brak przepływu przy wyłączonej fladze (dane rozliczeniowe firmy, gdyby płatności wróciły)
-- **Osoby:** Pracodawcy
-- **Aktywacja:** Tylko BILLING_ENABLED=true; akcje checkoutu zawsze zwracają BILLING_UNAVAILABLE.
-- **Kod:** `src/lib/billing/flag.ts`, `src/lib/stripe.ts`, `docs/PRODUCT_DECISIONS.md`
-- **Uwaga:** Powrót płatności wymaga nowej decyzji i ponownej oceny dostawcy.
 - **Rola (procesor/administrator):** DO UZUPEŁNIENIA
 - **Region przetwarzania:** DO UZUPEŁNIENIA
 - **Podstawa transferu poza EOG:** DO UZUPEŁNIENIA
@@ -1299,17 +1284,13 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.ai_usage_ledger` | Liczniki wywołań modeli AI (funkcja, model, wynik, tokeny, koszt, doba) — bez treści i identyfikatorów osób/firm (#36). |
 | `public.categories` | Słownik/konfiguracja (kategorie) — bez danych osobowych. |
 | `public.certificates` | Słownik/konfiguracja (certyfikaty) — bez danych osobowych. |
-| `public.checkout_intents` | Martwy schemat billingu. |
 | `public.consent_versions` | Słownik/konfiguracja (wersje dokumentów zgód) — bez danych osobowych. |
-| `public.discount_codes` | Słownik/konfiguracja (kody rabatowe) — bez danych osobowych. |
-| `public.discount_redemptions` | Martwy schemat billingu. |
 | `public.dsa_retention_runs` | Wyłącznie liczniki przebiegów retencji (bez danych osobowych). |
 | `public.email_campaigns` | Treść i status kampanii (per język) — bez danych odbiorców. |
 | `public.email_recipient_budget_config` | Słownik/konfiguracja (limity wysyłki na odbiorcę) — bez danych osobowych. |
 | `public.email_send_budget_config` | Słownik/konfiguracja (budżet wysyłki e-mail) — bez danych osobowych. |
 | `public.email_send_windows` | Słownik/konfiguracja (liczniki okien wysyłki) — bez danych osobowych. |
 | `public.esco_snapshots` | Słownik/konfiguracja (metadane importu ESCO) — bez danych osobowych. |
-| `public.invoices` | Martwy schemat billingu. |
 | `public.job_certificates` | Treść ogłoszenia (dane firmy). |
 | `public.job_funnel_daily` | Liczniki per oferta i dzień — bez IP, cookies i identyfikatora osoby. |
 | `public.job_funnel_receipts` | Losowy nonce jednego załadowania strony — nie identyfikuje osoby. |
@@ -1327,10 +1308,8 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |
 | `public.occupations` | Słownik/konfiguracja (zawody) — bez danych osobowych. |
-| `public.payments` | Martwy schemat billingu. |
 | `public.plan_entitlements` | Słownik/konfiguracja (limity planów) — bez danych osobowych. |
 | `public.processed_webhooks` | Identyfikatory zdarzeń webhooków do deduplikacji — bez danych osobowych. |
 | `public.skill_labels` | Słownik/konfiguracja (etykiety umiejętności ESCO) — bez danych osobowych. |
 | `public.skills` | Słownik/konfiguracja (umiejętności) — bez danych osobowych. |
-| `public.subscriptions` | Martwy schemat billingu; provider_customer_id identyfikuje firmę u dostawcy płatności. |
 | `public.supported_locales` | Słownik/konfiguracja (obsługiwane języki) — bez danych osobowych. |

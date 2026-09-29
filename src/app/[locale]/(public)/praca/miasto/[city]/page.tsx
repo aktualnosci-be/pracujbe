@@ -95,8 +95,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = t(`city_${city}`);
 
   // Pusty landing (0 ofert) działa dla użytkownika, ale nie jest indeksowany (thin content, #299).
-  // Ten sam filtr co treść strony, więc w trybie demo wynik jest spójny z listą.
-  const { total } = await getJobs({ locale, city: name, page: 1, pageSize: 1 });
+  // Ten sam filtr co treść strony (wszystkie nazwy miasta, #189), więc indeksowalność i wynik
+  // są spójne z listą także w trybie demo (#1119: dawniej tekst po nazwie w języku strony).
+  const { total } = await getJobs({ locale, locations: cityAliases(city), page: 1, pageSize: 1 });
   const indexable = total > 0;
 
   return {
