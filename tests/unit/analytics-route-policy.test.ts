@@ -15,11 +15,13 @@ describe('analytics route policy', () => {
     '/pl/candidate/aplikacje',
     '/pl/employer/kandydaci',
     '/pl/admin',
+    '/pl/zglos-tresc/sprawa',
+    '/nl/zglos-tresc/sprawa/',
   ])('blocks tracking on %s', (path) => {
     expect(allowsTrackingOnPath(path)).toBe(false);
   });
 
-  it.each(['/', '/pl', '/pl/oferty-pracy', '/nl/oferty-pracy/monteur'])
+  it.each(['/', '/pl', '/pl/oferty-pracy', '/nl/oferty-pracy/monteur', '/pl/zglos-tresc', '/fr/zglos-tresc/inna'])
     ('allows tracking on public discovery page %s', (path) => {
       expect(allowsTrackingOnPath(path)).toBe(true);
     });

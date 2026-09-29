@@ -2935,6 +2935,7 @@
     "entityJob": "Job offer",
     "auditActionJobUpdatePublished": "Published job edited",
     "auditActionJobDuplicated": "Job copied",
+    "auditActionJobDeleted": "Job deleted",
     "companyJobsAllLink": "All company jobs",
     "auditActionRetentionPolicyChanged": "Retention period changed",
     "auditActionRetentionPoliciesSeeded": "Retention periods recorded",
@@ -3900,6 +3901,14 @@
       "erasure_tombstone": {
         "label": "Erasure register",
         "description": "Erasure register reapplied after a restore; must outlive the oldest backup."
+      },
+      "expired_auth_session": {
+        "label": "Expired login session",
+        "description": "The row of an expired session (with IP address and user agent) is deleted 7 days after it expires."
+      },
+      "expired_auth_verification": {
+        "label": "Expired verification token",
+        "description": "The row of an expired verification token (email confirmation, password reset) is deleted 7 days after it expires."
       },
       "guest_ip_user_agent": {
         "label": "Guest IP and user agent",

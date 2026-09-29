@@ -2935,6 +2935,7 @@
     "entityJob": "Oferta pracy",
     "auditActionJobUpdatePublished": "Edycja opublikowanej oferty",
     "auditActionJobDuplicated": "Kopia oferty",
+    "auditActionJobDeleted": "Oferta usunięta",
     "companyJobsAllLink": "Wszystkie oferty firmy",
     "auditActionRetentionPolicyChanged": "Zmiana okresu retencji",
     "auditActionRetentionPoliciesSeeded": "Wpisanie okresów retencji",
@@ -3900,6 +3901,14 @@
       "erasure_tombstone": {
         "label": "Rejestr usunięć",
         "description": "Rejestr usunięć do ponownego zastosowania po odtworzeniu kopii; musi przeżyć najstarszą kopię."
+      },
+      "expired_auth_session": {
+        "label": "Wygasła sesja logowania",
+        "description": "Wiersz wygasłej sesji (z adresem IP i user-agentem) jest usuwany 7 dni po wygaśnięciu."
+      },
+      "expired_auth_verification": {
+        "label": "Wygasły token weryfikacji",
+        "description": "Wiersz wygasłego tokenu weryfikacji (potwierdzenie e-maila, reset hasła) jest usuwany 7 dni po wygaśnięciu."
       },
       "guest_ip_user_agent": {
         "label": "IP i user-agent gościa",
