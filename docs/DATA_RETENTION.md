@@ -42,6 +42,8 @@ dopiero po RET-09/RET-10, osobnym krokiem. Tabela jest niedostępna dla ról kli
 | `unconfirmed_guest_request` | 7 dni | job | niepotwierdzone zgłoszenie usuwane 7 dni od **pierwszego** wysłania (`created_at`) — ponowny link nie przedłuża |
 | `guest_ip_user_agent` | 7 dni | job | zeruje IP i user-agent zgody gościa |
 | `acceptance_ip_user_agent` | 7 dni | job | zeruje IP i user-agent receiptu akceptacji przy rejestracji (0132, krok `retention_purge_receipts_batch`); receipt zostaje |
+| `expired_auth_session` | 7 dni | job | usuwa wygasłe sesje logowania (IP, user-agent) 7 dni po `expires_at` (migracja 0961 — numer tymczasowy, krok `retention_purge_auth_batch`) |
+| `expired_auth_verification` | 7 dni | job | usuwa wygasłe tokeny weryfikacji (potwierdzenie e-maila, reset hasła) 7 dni po `expires_at` (jak wyżej) |
 | `data_rights_request_log` | 1095 dni | job | usuwa ślad obsługi wniosku |
 | `erasure_tombstone` | wyłączone (bez limitu) | job | usuwa wpis rejestru usunięć — **bez zmian** do RET-09/RET-10 |
 | `storage_physical_deletion` | 3 dni (72 h), alarm 1 dzień | monitoring | cel fizycznego usunięcia obiektu; czujka `storage_deletion_age` po 24 h |
@@ -51,6 +53,13 @@ dopiero po RET-09/RET-10, osobnym krokiem. Tabela jest niedostępna dla ról kli
 | `database_backup` | 14 dni kalendarzowych | infrastructure | kopie i eksporty (`scripts/db/backup.sh` liczy dziś kopie, nie dni — RET-09) |
 
 Zadania dla `job` działają dopiero przy `RETENTION_MODE=apply` (patrz ramka wyżej).
+
+Tokeny konta (0961, #1091/#1090): usunięcie konta (`auth.users`) każdą ścieżką (kandydat,
+pracodawca, retencja, przywrócenie tombstone) usuwa też tokeny resetu hasła zapisane pod
+identyfikatorem konta (`auth.verifications.value`, identyfikator `reset-password:*`) i wiersze
+weryfikacji po adresie e-mail (trigger `trg_auth_users_delete_cleanup`). Ustawienie lub zmiana
+hasła (`auth.accounts`, konto `credential`) unieważnia pozostałe linki resetu tego konta
+(`trg_auth_accounts_invalidate_reset_links`) i wycofuje niewysłane listy resetu z kolejki.
 
 ### 1a. Niezmienny `closed_at` aplikacji (RET-06)
 

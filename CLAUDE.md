@@ -2761,6 +2761,35 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   długość po `trim()` — fail-closed zamiast fałszywej gotowości. Dowód:
   `tests/unit/auth-secret-length.test.ts` (pozytywne 32 znaki, kontrole ujemne: 31 znaków, z
   otaczającymi spacjami, pusty sekret, `isAppReady()` z resztą rdzenia gotową).
+- [x] Utwardzenie warstwy danych (audyt 2026-09-28, #1033/#1034/#1089/#1091/#1090, migracja `0961` —
+  numer tymczasowy, rollback `supabase/rollback/0961_…down.sql`, bez zmian w trybie ogłoszeniowym):
+  (1) usuwanie ofert: polityka `jobs_delete_member` pozwala roli klienta usunąć WYŁĄCZNIE szkic bez
+  decyzji moderacyjnej i bez rekordów procesu (`job_has_process_records`: zgłoszenia, propozycje,
+  dopasowania, zgłoszenia gościa, zapisane oferty); opublikowana oferta = zamknięcie/wygaśnięcie;
+  każde usunięcie (także service_role/migracja) zapisuje audyt `job.deleted` (aktor, status, firma,
+  slug — bez treści; etykieta w dzienniku admina); (2) firmy: numer rejestrowy zweryfikowanej firmy
+  cofa weryfikację jak VAT, `slug`/`is_demo`/`deleted_at`/`provider_customer_id`/`created_at` niezmienne
+  dla roli klienta (`guard_company_immutable_fields`), a bramki blokady moderacyjnej (oferta i firma)
+  nie ufają samej fladze sesji `pracujbe.moderation` — działa tylko poza rolą klienta (RPC decyzji są
+  definerami); (3) `files`: rola klienta tworzy plik tylko prywatny, w folderze własnego `owner_id`,
+  ze statusem skanu `pending`/`skipped`, a po utworzeniu właściciel/bucket/ścieżka/typ i id encji/
+  widoczność/status skanu/suma kontrolna/MIME/rozmiar są niezmienne (`guard_files_client_write`);
+  `is_admin()` wymaga aktywnego i nieusuniętego profilu; `count_other_active_owners` bez EXECUTE dla
+  ról klienta (strażnik `enforce_owner_invariants` liczy właścicieli zapytaniem inline pod RLS);
+  (4) sesje i tokeny konta: kategorie retencji `expired_auth_session` i `expired_auth_verification`
+  (7 dni po wygaśnięciu, krok `retention_purge_auth_batch` w `run_retention_purge`, jak reszta za
+  `RETENTION_MODE`), usunięcie konta (`auth.users`) każdą ścieżką kasuje tokeny resetu hasła
+  (`auth.verifications.value` + `reset-password:*`) i weryfikacje po adresie e-mail
+  (`trg_auth_users_delete_cleanup`); (5) ustawienie/zmiana hasła (`auth.accounts`, `credential`)
+  unieważnia pozostałe linki resetu konta i wycofuje niewysłane listy resetu z `auth.email_outbox`
+  (`trg_auth_accounts_invalidate_reset_links`; wykorzystany link zużywa Better Auth). Strona statusu
+  sprawy DSA (`/zglos-tresc/sprawa`, kod dostępu we fragmencie) wyłączona z analityki
+  (`src/lib/analytics/route-policy.ts`). Dowód: `rls.sql` sekcja M2RD (kontrole ujemne: polityka 0033,
+  strażnik 0084, bramki 0099, `is_admin` z 0019, brak triggerów), rollback `rls-data-hardening-rollback.sql`
+  (w `scripts/test-rls.sh`), unit `analytics-route-policy`, `admin-retention`, `admin-jobs`, integracja
+  `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
+  kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
+  ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
   Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
   zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna

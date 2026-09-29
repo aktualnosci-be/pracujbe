@@ -64,7 +64,7 @@ export function readRetentionModes(env: Record<string, string | undefined> = pro
   };
 }
 
-/** Wartości z migracji 0127 (+ 0132 i rejestr usunięć z 0105) — tryb DEMO. */
+/** Wartości z migracji 0127 (+ 0132, sesje i tokeny konta z 0961 i rejestr usunięć z 0105) — tryb DEMO. */
 const DEMO_POLICIES: ReadonlyArray<[string, number | null, number | null, RetentionEnforcement]> = [
   ['acceptance_ip_user_agent', 7, null, 'job'],
   ['audit_log', 365, null, 'none'],
@@ -76,6 +76,8 @@ const DEMO_POLICIES: ReadonlyArray<[string, number | null, number | null, Retent
   ['deleted_file', 7, null, 'job'],
   ['deleted_profile', 7, null, 'job'],
   ['erasure_tombstone', null, null, 'job'],
+  ['expired_auth_session', 7, null, 'job'],
+  ['expired_auth_verification', 7, null, 'job'],
   ['guest_ip_user_agent', 7, null, 'job'],
   ['inactive_candidate_account', 730, 30, 'job'],
   ['inactive_candidate_cv', 365, 30, 'job'],
