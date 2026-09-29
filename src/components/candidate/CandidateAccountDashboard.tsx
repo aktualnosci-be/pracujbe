@@ -19,8 +19,10 @@ import {
 } from '@/components/dashboard/panel-styles';
 import { DASH_GRID, DASH_GRID_MAIN, DASH_GRID_SIDE } from '@/components/candidate/candidate-styles';
 import { CandidateSectionError } from '@/components/candidate/CandidateSectionError';
+import { CandidateSavedSearchJobs } from '@/components/candidate/CandidateSavedSearchJobs';
 import { cn } from '@/lib/utils';
 import { getCandidateAccountOverview, getSavedJobs } from '@/lib/data/candidate';
+import { loadSavedSearchJobs } from '@/lib/data/candidate-saved-search-jobs';
 import { loadMySavedSearches } from '@/lib/data/saved-searches';
 
 /** Ile pozycji pokazuje pulpit (pełne listy na własnych stronach). */
@@ -43,6 +45,8 @@ export async function CandidateAccountDashboard({ locale }: { locale: string }) 
     loadMySavedSearches(),
   ]);
 
+  // Oferty z zapisanych wyszukiwań: wyszukiwania już odczytane wyżej, drugi raz bazy nie pytamy.
+  const searchJobs = await loadSavedSearchJobs(searches);
   const savedJobs = saved.status === 'ready' ? saved.jobs : null;
   const savedSearches = searches.status === 'ready' ? searches.searches : null;
   const alertsOn = savedSearches?.filter((s) => s.alertsEnabled).length ?? 0;
@@ -82,6 +86,9 @@ export async function CandidateAccountDashboard({ locale }: { locale: string }) 
 
       <div className={DASH_GRID}>
         <div className={DASH_GRID_MAIN}>
+          {/* Najnowsze oferty z zapisanych wyszukiwań (filtry kandydata, bez dopasowania). */}
+          <CandidateSavedSearchJobs locale={locale} result={searchJobs} />
+
           <section className={PANEL} aria-labelledby="account-saved-jobs">
             <div className={SECTION_HEAD}>
               <h2 id="account-saved-jobs" className={PANEL_H2}>{td('navSaved')}</h2>

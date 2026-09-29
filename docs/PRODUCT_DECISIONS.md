@@ -89,6 +89,15 @@ opisują wyłącznie portal ogłoszeń (#1149, #1151); odznaka „zweryfikowana 
 administrator sprawdził dane rejestrowe (tożsamość) przedsiębiorstwa — nie jest oceną firmy
 ani oferty.
 
+AI i monetyzacja w tym trybie (#1152, #1153): funkcje AI działają wyłącznie na treści ogłoszenia
+(import ogłoszenia, asystent treści, tłumaczenie ofert, kontrola treści) — funkcja z wejściem
+kandydata jest wyłączona niezależnie od własnej flagi (`allowedInClassifieds` w
+`src/lib/ai/inventory.ts`, bramka `src/lib/ai/feature-gate.ts`, kolejka tłumaczeń w bazie nie
+przyjmuje profili kandydatów). Billing jest nieaktywny także przy `BILLING_ENABLED=true`
+(`src/lib/billing/flag.ts`), a katalog planów nie daje dostępu do kandydatów (`candidate_access`
+wymuszone na `false` w bazie). Ewentualna monetyzacja portalu ogłoszeń (np. stała opłata za
+publikację lub wyróżnienie ogłoszenia) wymaga osobnego projektu i decyzji właściciela.
+
 Ponowne włączenie funkcji rekrutacyjnych wymaga nowej, jawnej decyzji właściciela i obu kluczy
 trybu (zmienna środowiskowa i stan w bazie, #1143). Zmiana „przy okazji” innej pracy jest
 błędem.
