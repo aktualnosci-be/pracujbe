@@ -19,9 +19,19 @@ const PRIVATE_ROOTS = new Set([
   'onboarding',
 ]);
 
+/**
+ * Strona statusu sprawy zgłoszenia treści: kod dostępu przychodzi we fragmencie adresu
+ * (`#`), więc — jak reset hasła i linki gościa — nie może trafiać do analityki.
+ * Formularz zgłoszenia (`/zglos-tresc`) zostaje stroną publiczną.
+ */
+function isReportCasePath(segments: string[]): boolean {
+  return segments[1] === 'zglos-tresc' && segments[2] === 'sprawa';
+}
+
 export function allowsTrackingOnPath(pathname: string): boolean {
   const segments = pathname.split('/').filter(Boolean);
   const root = segments[1];
+  if (isReportCasePath(segments)) return false;
   return !root || !PRIVATE_ROOTS.has(root);
 }
 

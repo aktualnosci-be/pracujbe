@@ -8,12 +8,18 @@ import {
   type BackupFreshness,
   type BackupSignal,
 } from '@/lib/ops/backup-freshness';
-import { readOpsMetrics } from '@/lib/ops/metrics-source';
+import { readOpsMetrics, readSchemaState } from '@/lib/ops/metrics-source';
 import {
   portalLegalModeAlerts,
   portalLegalModeSummary,
   type PortalLegalModeSignal,
 } from '@/lib/ops/portal-mode';
+import {
+  expectedMigrationFromEnv,
+  schemaAlerts,
+  schemaSummary,
+  type SchemaSignal,
+} from '@/lib/ops/schema-state';
 import {
   evaluateOps,
   type AppPoolStats,
@@ -32,7 +38,7 @@ export type OpsStatus =
   | {
       kind: 'ok';
       status: 'ok' | 'alert';
-      alerts: Array<OpsSignal | BackupSignal | PortalLegalModeSignal>;
+      alerts: Array<OpsSignal | BackupSignal | PortalLegalModeSignal | SchemaSignal>;
       warnings: OpsSignal[];
       metrics: OpsMetrics;
       appPool: AppPoolStats | null;
@@ -42,12 +48,20 @@ export type OpsStatus =
       backup: BackupFreshness;
       /** #1143: nazwy trybów env/bazy/efektywnego (dwuklucz), bez konfiguracji. */
       portalLegalMode: ReturnType<typeof portalLegalModeSummary>;
+      /** #1065: oczekiwana/zastosowana migracja (nazwy), bez konfiguracji. */
+      schema: ReturnType<typeof schemaSummary>;
     }
   | { kind: 'unconfigured'; backup: BackupFreshness }
   | { kind: 'unavailable'; backup: BackupFreshness };
 
 export async function readOpsStatus(): Promise<OpsStatus> {
-  const [result, backup] = await Promise.all([readOpsMetrics(), readBackupFreshness()]);
+  // Stan schematu czytamy tylko, gdy build zna oczekiwaną migrację (dev/testy bez niej nie płacą zapytaniem).
+  const expectedMigration = expectedMigrationFromEnv();
+  const [result, backup, schemaState] = await Promise.all([
+    readOpsMetrics(),
+    readBackupFreshness(),
+    expectedMigration ? readSchemaState() : Promise.resolve({ kind: 'unconfigured' } as const),
+  ]);
   if (result.kind !== 'ok') {
     return result.kind === 'unconfigured' ? { kind: 'unconfigured', backup } : { kind: 'unavailable', backup };
   }
@@ -60,6 +74,7 @@ export async function readOpsStatus(): Promise<OpsStatus> {
     ...evaluation.alerts,
     ...portalLegalModeAlerts(dbRecruitment, envRecruitment),
     ...backupAlerts(backup),
+    ...schemaAlerts(expectedMigration, schemaState),
   ];
   return {
     kind: 'ok',
@@ -72,5 +87,6 @@ export async function readOpsStatus(): Promise<OpsStatus> {
     maintenanceRun: result.maintenanceRun,
     backup,
     portalLegalMode: portalLegalModeSummary(dbRecruitment, envRecruitment),
+    schema: schemaSummary(expectedMigration, schemaState),
   };
 }

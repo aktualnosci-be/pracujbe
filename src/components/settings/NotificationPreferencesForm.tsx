@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useLocale, useTranslations } from 'next-intl';
@@ -8,7 +10,6 @@ import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { captureFocus } from '@/lib/a11y/restore-focus';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { updateNotificationPreferences } from '@/lib/actions/notification-preferences';
 import type { NotificationPreferences } from '@/lib/data/notification-preferences';
@@ -57,6 +58,7 @@ export function NotificationPreferencesForm({
   role = 'candidate',
   recruitmentEnabled = false,
 }: NotificationPreferencesFormProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('settings');
   const tRoot = useTranslations();
   const locale = useLocale();
@@ -64,6 +66,7 @@ export function NotificationPreferencesForm({
   const [serverError, setServerError] = React.useState<ErrorCode | null>(null);
   const [success, setSuccess] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
+  const focusAlertRef = React.useRef(false);
 
   const {
     control,
@@ -77,13 +80,20 @@ export function NotificationPreferencesForm({
   // Przewiń do komunikatu, gdy się pojawi.
   React.useEffect(() => {
     if (serverError || success) {
-      alertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const alert = alertRef.current;
+      // #1238: fieldsety i przycisk są `disabled` na czas zapisu, więc przeglądarka zdejmuje z nich
+      // fokus (spada na <body>). Po wyniku zapisu fokus trafia na komunikat (zastępuje przywracanie
+      // fokusu z #1095, które trafiało na wciąż zablokowaną kontrolkę).
+      if (focusAlertRef.current && alert) {
+        focusAlertRef.current = false;
+        alert.focus({ preventScroll: true });
+      }
+      alert?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [serverError, success]);
 
   const onSubmit = handleSubmit(async (values) => {
-    // Formularz jest wyłączony na czas zapisu — po nim fokus wraca tam, gdzie był (#1095).
-    const restoreFocus = captureFocus();
+    focusAlertRef.current = true;
     setServerError(null);
     setSuccess(false);
     try {
@@ -96,8 +106,6 @@ export function NotificationPreferencesForm({
       setSuccess(true);
     } catch {
       setServerError('INTERNAL');
-    } finally {
-      restoreFocus();
     }
   });
 
@@ -138,12 +146,14 @@ export function NotificationPreferencesForm({
   };
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-6">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-6">
+      <NoScriptFormNotice />
       {serverError ? (
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text"
+          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(toUserMessageKey(serverError))}</p>
@@ -153,8 +163,9 @@ export function NotificationPreferencesForm({
       {success ? (
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="status"
-          className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-3 text-sm text-foreground"
+          className="flex items-start gap-3 rounded-md border border-success/30 bg-success/10 p-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
           <p>{t('savedSuccess')}</p>
@@ -189,7 +200,7 @@ export function NotificationPreferencesForm({
         </div>
       </fieldset>
 
-      <Button type="submit" size="lg" disabled={isSubmitting} className="w-full sm:w-auto">
+      <Button type="submit" size="lg" disabled={isSubmitting || !hydrated} className="w-full sm:w-auto">
         {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

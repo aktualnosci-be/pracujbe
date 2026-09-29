@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import Image from 'next/image';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -77,6 +79,7 @@ function CompanyLinksFormFields({
   review,
   ownHost,
 }: CompanyLinksFormProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('company');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -86,6 +89,7 @@ function CompanyLinksFormFields({
   const [success, setSuccess] = React.useState<CompanyLinksOutcome | null>(null);
   const [demo, setDemo] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
+  const focusAlertRef = React.useRef(false);
 
   const resolver = React.useMemo(
     () => zodResolver(companyLinksSchema) as Resolver<CompanyLinksInput>,
@@ -108,11 +112,20 @@ function CompanyLinksFormFields({
 
   React.useEffect(() => {
     if (serverError || success) {
-      alertRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const alert = alertRef.current;
+      // #1238: przycisk jest `disabled` na czas zapisu, więc przeglądarka zdejmuje z niego fokus
+      // (spada na <body>). Po wyniku zapisu fokus trafia na komunikat — czytnik go odczytuje,
+      // a następny Tab zaczyna się w formularzu, nie od początku strony.
+      if (focusAlertRef.current && alert) {
+        focusAlertRef.current = false;
+        alert.focus({ preventScroll: true });
+      }
+      alert?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [serverError, success]);
 
   const onSubmit = handleSubmit(async (values) => {
+    focusAlertRef.current = true;
     setServerError(null);
     setSuccess(null);
     setDemo(false);
@@ -132,12 +145,14 @@ function CompanyLinksFormFields({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="min-w-0 space-y-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="min-w-0 space-y-5">
+      <NoScriptFormNotice />
       {serverError ? (
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="alert"
-          className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-error/30 bg-error/10 text-error-text max-[600px]:flex-row')}
+          className={cn(NOTICE, 'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 my-0 items-start justify-start gap-3 border-error/30 bg-error/10 text-error-text max-[600px]:flex-row')}
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{tRoot(toUserMessageKey(serverError))}</p>
@@ -147,8 +162,9 @@ function CompanyLinksFormFields({
       {success ? (
         <div
           ref={alertRef}
+          tabIndex={-1}
           role="status"
-          className={cn(NOTICE, 'my-0 items-start justify-start gap-3 border-success/30 bg-success/10 text-foreground max-[600px]:flex-row')}
+          className={cn(NOTICE, 'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 my-0 items-start justify-start gap-3 border-success/30 bg-success/10 text-foreground max-[600px]:flex-row')}
         >
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" aria-hidden="true" />
           <p>
@@ -273,7 +289,7 @@ function CompanyLinksFormFields({
       <Button
         type="submit"
         size="lg"
-        disabled={isSubmitting}
+        disabled={isSubmitting || !hydrated}
         className={cn(BTN_PRIMARY, 'h-auto w-full whitespace-normal sm:w-auto')}
       >
         {isSubmitting ? (
