@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0182_dsa_appeal_reviewer_active.sql
+-- 0179_dsa_appeal_reviewer_active.sql
 --
 -- #909: nieaktywny administrator (profiles.is_active = false) blokował rozpatrzenie
 -- odwołania DSA. Loader kolejki (`listAppeals`, src/lib/data/admin-dsa.ts) i RPC
