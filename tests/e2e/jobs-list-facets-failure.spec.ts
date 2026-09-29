@@ -58,8 +58,10 @@ for (const failure of ['error', 'slow'] as const) {
 
     const rail = page.locator('[data-filter-passport="desktop"]');
     const checkbox = rail.getByRole('checkbox', { name: 'Construction' });
+    // Klik przed hydratacją ginie (#1032) — pod obciążeniem runnera okno jest dłuższe.
     await waitForHydrated(checkbox);
     await checkbox.click();
+    await expect(checkbox).toBeChecked();
     // Przycisk zatwierdzenia (niezależnie od etykiety) — bez fałszywej liczby, ale aktywny.
     const apply = rail.locator('button[aria-busy]');
     await expect(apply).toBeVisible();
@@ -84,10 +86,14 @@ for (const failure of ['error', 'slow'] as const) {
     await page.goto('/en/oferty-pracy');
 
     const trigger = page.locator('[data-filter-passport="mobile-trigger"]');
+    // Otwarcie arkusza przed hydratacją wyzwalacza nie ustawia stanu roboczego filtrów (#1032).
     await waitForHydrated(trigger);
     await trigger.click();
     const sheet = page.getByRole('dialog');
-    await sheet.getByRole('checkbox', { name: 'Construction' }).click();
+    const construction = sheet.getByRole('checkbox', { name: 'Construction' });
+    await construction.click();
+    // Bez tej asercji zgubiony klik wyglądał jak „licznik bez filtra” (Show N jobs) przez 10 s.
+    await expect(construction).toBeChecked();
     const apply = sheet.locator('button[aria-busy]');
     await expect(apply).not.toHaveText(/\d/);
     await expect(apply).toBeEnabled();
