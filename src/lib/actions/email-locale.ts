@@ -12,7 +12,7 @@ import { captureError } from '@/lib/error-report';
 /**
  * Server Action zmiany języka e-maili i powiadomień (#1049, Invariant #1).
  *
- * Zapis wyłącznie przez RPC `set_my_email_locale` (0962) pod sesją użytkownika: właściciela nie
+ * Zapis wyłącznie przez RPC `set_my_email_locale` (0186) pod sesją użytkownika: właściciela nie
  * przyjmujemy od klienta, język walidowany w bazie względem `supported_locales`, audyt tylko przy
  * realnej zmianie. Zmiana dotyczy kolejnych wiadomości — te już zakolejkowane zachowują język
  * z chwili kolejkowania. Ekran ustawień istnieje dla kandydata i pracodawcy; admin go nie ma.

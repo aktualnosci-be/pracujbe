@@ -227,13 +227,13 @@ auth.expire_emails() → auth.claim_emails() [queued → leased, FOR UPDATE SKIP
   preferencji (skanery linków) — przekierowuje na stronę z przyciskiem potwierdzenia.
 - `claim_email_batch` ponownie sprawdza zgodę: wiersz osoby wypisanej po zakolejkowaniu
   dostaje `status='failed'`, `suppressed_at`, `error_message='suppressed_opt_out'` i nie wychodzi.
-- #1038 (migracja `0962`, numer tymczasowy): marketing (`newsletter`, kampanie) wychodzi tylko na
+- #1038 (migracja `0186`, numer tymczasowy): marketing (`newsletter`, kampanie) wychodzi tylko na
   adres potwierdzony przez właściciela (`auth.users.email_verified`) — decyduje `email_allowed`
   (kolejkowanie, claim, ponowna kontrola przed wysyłką). Kampania nie rezerwuje niepotwierdzonych
   adresów (po potwierdzeniu, przy aktywnej rewizji, trafiają do następnej paczki); wiersz już w kolejce
   jest wygaszany (`error_message='suppressed_unverified_address'`, odbiorca `skipped_consent` /
   `unverified_address`). Zgoda z rejestracji zostaje zapisana; działa od chwili potwierdzenia adresu.
-- #1049 (`0962`): język e-maili ustawia użytkownik w `/candidate/ustawienia` i `/employer/ustawienia`
+- #1049 (`0186`): język e-maili ustawia użytkownik w `/candidate/ustawienia` i `/employer/ustawienia`
   (RPC `set_my_email_locale` → `profiles.preferred_locale`, audyt `profile.email_locale_changed`).
   Dotyczy kolejnych wiadomości; zakolejkowane zachowują `email_deliveries.locale`.
 - #503: e-mail z danymi kandydata do członka firmy (`newApplication`, `offerAccepted`,

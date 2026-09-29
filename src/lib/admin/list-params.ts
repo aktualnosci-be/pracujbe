@@ -276,7 +276,7 @@ export function reportReasonView(reason: string): ReportReasonView {
  * Dziennik zdarzeń (audit_logs, #417)
  * ------------------------------------------------------------------------- */
 
-/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126, 0962). */
+/** Typy obiektów zapisywane w `audit_logs.entity_type` (0017, 0019, 0072, 0098, 0106, 0111, 0126, 0186). */
 export const AUDIT_ENTITY_TYPES = [
   'company',
   'job',
@@ -338,7 +338,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'email_campaign.activated': 'auditActionCampaignActivated',
   'email_campaign.cancelled': 'auditActionCampaignCancelled',
   'email_campaign.revision_created': 'auditActionCampaignRevisionCreated',
-  // 0962 (#1049): zmiana języka e-maili przez użytkownika.
+  // 0186 (#1049): zmiana języka e-maili przez użytkownika.
   'profile.email_locale_changed': 'auditActionEmailLocaleChanged',
 };
 

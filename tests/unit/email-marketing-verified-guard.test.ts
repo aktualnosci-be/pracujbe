@@ -7,7 +7,7 @@ import { AUDIT_ACTION_KEY, AUDIT_ENTITY_TYPES } from '@/lib/admin/list-params';
 /**
  * #1038 — marketing tylko na potwierdzony adres. Zachowanie sprawdza supabase/tests/rls.sql
  * (EMQ1038); tu strażnik przed cofnięciem przez późniejszą migrację: NAJNOWSZA definicja każdej
- * funkcji decyzyjnej musi znać `email_address_verified`. Kontrola ujemna: definicje sprzed 0962.
+ * funkcji decyzyjnej musi znać `email_address_verified`. Kontrola ujemna: definicje sprzed 0186.
  */
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
@@ -46,7 +46,7 @@ describe('marketing wymaga potwierdzonego adresu (#1038)', () => {
   it('powód odbiorcy kampanii jest dozwolony w CHECK, a wygaszenie mapowane w triggerze synchronizacji', () => {
     const sync = latestDefinition('sync_email_campaign_recipient').body;
     expect(sync).toContain("'suppressed_unverified_address'");
-    const migration = readFileSync(join(MIGRATIONS, files.find((f) => f.startsWith('0962'))!), 'utf8');
+    const migration = readFileSync(join(MIGRATIONS, files.find((f) => f.startsWith('0186'))!), 'utf8');
     expect(migration).toMatch(/email_campaign_recipients_reason[\s\S]*'unverified_address'/);
   });
 });

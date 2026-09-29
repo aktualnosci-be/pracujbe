@@ -1,17 +1,45 @@
 -- =============================================================================
--- Rollback 0962 (#1038, #1049) — przywraca definicje sprzed migracji (0087, 0101, 0175).
--- Dane bez zmian (migracja ich nie dotyka; język zapisany przez użytkownika zostaje).
--- Kolejność: przed rollbackiem 0175 (przywraca definicję przyczyn wygaszenia z 0175).
--- Wiersze `email_campaign_recipients` z powodem `unverified_address` są wcześniej
--- przepisane na `opted_out`, żeby CHECK z 0101 dał się przywrócić.
+-- 0186 (numer tymczasowy — ostateczny nada integrator) — poczta: marketing tylko na
+-- potwierdzone adresy (#1038) i zmiana języka e-maili przez użytkownika (#1049).
+--
+-- 1. #1038 (double opt-in). Zgoda na e-maile marketingowe z rejestracji (0108) jest zapisana
+--    od razu, a wysyłka kampanii wybierała odbiorców po samej zgodzie. Ktoś, kto założył
+--    konto na cudzy adres, mógł więc sprowadzić na właściciela adresu wiadomości, na które
+--    ten nigdy się nie zgodził. Teraz kategoria `marketing` wymaga potwierdzonego adresu
+--    (`auth.users.email_verified`, Better Auth) w KAŻDYM punkcie decyzji:
+--    * `email_address_verified(profile)` — jedno źródło prawdy (service_role);
+--    * `email_allowed(profile, template)` — marketing = zgoda ORAZ potwierdzony adres
+--      (0087; wspólne dla kolejkowania, claimu i ponownej kontroli przed wysyłką);
+--    * `enqueue_email_outcome` — nowy wynik `unverified_address` (przed sprawdzeniem zgody,
+--      żeby ślad odróżniał brak potwierdzenia od braku zgody);
+--    * `enqueue_campaign_batch` — niepotwierdzone adresy nie są NIGDY rezerwowane (po
+--      potwierdzeniu adresu, dopóki rewizja jest aktywna, trafią do kolejnej paczki);
+--    * `email_delivery_suppression_reason` (0175) — `suppressed_unverified_address` dla
+--      wiersza, który już czeka w kolejce; odbiorca kampanii = `skipped_consent` /
+--      `unverified_address` (`sync_email_campaign_recipient`, CHECK powodów).
+--    Zgoda zostaje w bazie (dowód #513 bez zmian); nie jest aktywowana ani cofana —
+--    po potwierdzeniu adresu działa od tej chwili. Poczta transakcyjna i alerty
+--    zapisanych wyszukiwań nie zależą od tej zmiany (konto bez potwierdzenia nie loguje się).
+-- 2. #1049 (Invariant #1). Język e-maili to `profiles.preferred_locale`, ustawiany dotąd
+--    tylko przy rejestracji. `set_my_email_locale(locale)` (authenticated, własny profil):
+--    język z `supported_locales`, zapis tylko przy zmianie, audyt `profile.email_locale_changed`
+--    (bez danych osobowych: język przed i po). E-maile już zakolejkowane zachowują język
+--    z chwili kolejkowania (`email_deliveries.locale`); kolejne — nowy język.
+--
+-- Definicje bazują na najnowszych: email_allowed 0087, enqueue_email_outcome i kampanie 0101,
+-- email_delivery_suppression_reason 0175 (z zachowaniem 0171–0176). Rollback:
+-- supabase/rollback/0186_email_verified_marketing_locale.down.sql.
 -- =============================================================================
 
-update public.email_campaign_recipients set reason = 'opted_out' where reason = 'unverified_address';
-alter table public.email_campaign_recipients drop constraint if exists email_campaign_recipients_reason;
-alter table public.email_campaign_recipients add constraint email_campaign_recipients_reason check (
-  reason is null or reason in ('opted_out', 'suppressed_address', 'recipient_budget', 'no_email',
-                               'send_failed', 'bounced', 'complained', 'superseded', 'cancelled'));
+-- --- 1a. Potwierdzony adres --------------------------------------------------------------------
+create or replace function public.email_address_verified(p_profile_id uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce((select u.email_verified from auth.users u where u.id = p_profile_id), false);
+$$;
+revoke all on function public.email_address_verified(uuid) from public, anon, authenticated;
+grant execute on function public.email_address_verified(uuid) to service_role;
 
+-- --- 1b. Zgoda odbiorcy (0087): marketing także wymaga potwierdzonego adresu -----------------------
 create or replace function public.email_allowed(p_profile_id uuid, p_template text)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(
@@ -27,11 +55,13 @@ returns boolean language sql stable security definer set search_path = public, p
       where np.profile_id = p_profile_id),
     -- Brak wiersza (lub typ bez kategorii): domyślne wartości kolumn — marketing tylko po opt-in.
     c.cat is distinct from 'marketing')
+  and (c.cat is distinct from 'marketing' or public.email_address_verified(p_profile_id))
   from (select public.email_preference_category(p_template) as cat) c;
 $$;
 revoke all on function public.email_allowed(uuid, text) from public;
 grant execute on function public.email_allowed(uuid, text) to service_role;
 
+-- --- 1c. Kolejkowanie z wynikiem (0101) — wynik `unverified_address` ---------------------------
 create or replace function public.enqueue_email_outcome(
   p_profile_id uuid,
   p_type text,
@@ -48,6 +78,11 @@ begin
   select u.email into v_email from auth.users u where u.id = p_profile_id;
   if v_email is null then outcome := 'no_email'; return; end if;
 
+  -- #1038: marketing tylko na potwierdzony adres (przed zgodą — ślad odróżnia przyczyny).
+  if public.email_preference_category(p_type) = 'marketing'
+     and not public.email_address_verified(p_profile_id) then
+    outcome := 'unverified_address'; return;
+  end if;
   -- Opt-out: nie kolejkujemy. Worker sprawdza zgodę ponownie przy claimie.
   if not public.email_allowed(p_profile_id, p_type) then outcome := 'opted_out'; return; end if;
   -- #44: trwałe odbicie albo skarga na ten adres — nie kolejkujemy.
@@ -85,6 +120,13 @@ end $$;
 revoke all on function public.enqueue_email_outcome(uuid, text, text, uuid, text, jsonb, uuid) from public;
 grant execute on function public.enqueue_email_outcome(uuid, text, text, uuid, text, jsonb, uuid) to service_role;
 
+-- --- 1d. Powód odbiorcy kampanii + przyczyna wygaszenia -------------------------------------------
+alter table public.email_campaign_recipients drop constraint if exists email_campaign_recipients_reason;
+alter table public.email_campaign_recipients add constraint email_campaign_recipients_reason check (
+  reason is null or reason in ('opted_out', 'suppressed_address', 'recipient_budget', 'no_email',
+                               'send_failed', 'bounced', 'complained', 'superseded', 'cancelled',
+                               'unverified_address'));
+
 create or replace function public.sync_email_campaign_recipient()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_status text; v_reason text;
@@ -101,6 +143,7 @@ begin
   elsif new.status = 'failed' then
     case new.error_message
       when 'suppressed_opt_out' then v_status := 'skipped_consent'; v_reason := 'opted_out';
+      when 'suppressed_unverified_address' then v_status := 'skipped_consent'; v_reason := 'unverified_address';
       when 'suppressed_address' then v_status := 'failed'; v_reason := 'suppressed_address';
       when 'suppressed_recipient_budget' then v_status := 'failed'; v_reason := 'recipient_budget';
       when 'suppressed_campaign_inactive' then
@@ -122,6 +165,7 @@ begin
 end $$;
 revoke all on function public.sync_email_campaign_recipient() from public;
 
+-- Definicja z 0175 (0174: newMessage, #1145: szablony procesu) + niepotwierdzony adres (marketing).
 create or replace function public.email_delivery_suppression_reason(
   p_profile_id uuid,
   p_template text,
@@ -131,15 +175,15 @@ create or replace function public.email_delivery_suppression_reason(
   p_entity_id uuid
 ) returns text language sql stable security definer set search_path = public, pg_temp as $$
   select case
-    -- 0174 (#1134): rozmowy wyłączone w trybie ogłoszeniowym — przyczyna newMessage bez zmian.
     when p_template = 'newMessage' and not public.recruitment_enabled()
       then 'suppressed_recruitment_disabled'
-    -- #1145: tryb ogłoszeniowy — pozostałe e-maile procesu rekrutacyjnego nie wychodzą.
     when not public.recruitment_enabled() and public.email_recruitment_template(p_template)
       then 'suppressed_feature_disabled'
     when public.email_address_suppressed(p_to_email) then 'suppressed_address'
+    -- #1038: marketing nie wychodzi na adres, którego właściciel nie potwierdził.
+    when public.email_preference_category(p_template) = 'marketing'
+         and not public.email_address_verified(p_profile_id) then 'suppressed_unverified_address'
     when public.email_allowed(p_profile_id, p_template) is not true then 'suppressed_opt_out'
-    -- 0122 (#503): odbiorca firmowy musi nadal być aktywnym recruiter+ w chwili claimu/wysyłki.
     when public.email_recipient_authorized(p_template, p_entity_type, p_entity_id, p_profile_id)
            is not true then 'suppressed_recipient_unauthorized'
     when p_template = 'jobMatch' and p_entity_type = 'saved_search' and not exists (
@@ -159,6 +203,7 @@ revoke all on function public.email_delivery_suppression_reason(uuid, text, text
 grant execute on function public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)
   to service_role;
 
+-- --- 1e. Paczka kampanii (0101): tylko potwierdzone adresy ----------------------------------------
 create or replace function public.enqueue_campaign_batch(p_campaign_id uuid, p_limit integer default 500)
 returns table (reserved integer, queued integer, skipped integer)
 language plpgsql security definer set search_path = public, pg_temp as $$
@@ -183,6 +228,8 @@ begin
     select np.profile_id
       from public.notification_preferences np
      where np.email_marketing
+       -- #1038: bez potwierdzonego adresu nikt nie jest rezerwowany (potwierdzi → następna paczka).
+       and public.email_address_verified(np.profile_id)
        and not exists (select 1 from public.email_campaign_recipients r
                         where r.campaign_id = v_c.id and r.profile_id = np.profile_id)
        and not exists (select 1 from public.email_campaign_recipients r
@@ -215,7 +262,8 @@ begin
       v_queued := v_queued + 1;
     else
       update public.email_campaign_recipients
-         set status = case when v_res.outcome = 'opted_out' then 'skipped_consent' else 'failed' end,
+         set status = case when v_res.outcome in ('opted_out', 'unverified_address')
+                           then 'skipped_consent' else 'failed' end,
              reason = v_res.outcome, delivery_id = v_res.delivery_id, updated_at = now()
        where campaign_id = v_c.id and profile_id = v_pid and status = 'reserved';
       v_skipped := v_skipped + 1;
@@ -233,5 +281,34 @@ end $$;
 revoke all on function public.enqueue_campaign_batch(uuid, integer) from public;
 grant execute on function public.enqueue_campaign_batch(uuid, integer) to service_role;
 
-drop function if exists public.set_my_email_locale(text);
-drop function if exists public.email_address_verified(uuid);
+-- --- 2. Język e-maili i powiadomień (#1049) -----------------------------------------------------
+create or replace function public.set_my_email_locale(p_locale text)
+returns text language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_uid uuid := auth.uid();
+  v_old text;
+  v_row_found boolean;
+begin
+  if v_uid is null then raise exception 'UNAUTHENTICATED' using errcode = '42501'; end if;
+  if p_locale is null or not public.is_supported_locale(p_locale) then
+    raise exception 'VALIDATION_FAILED: locale' using errcode = '22023';
+  end if;
+
+  select p.preferred_locale, true into v_old, v_row_found
+    from public.profiles p
+   where p.id = v_uid and p.is_active and p.deleted_at is null
+   for update;
+  if v_row_found is not true then
+    raise exception 'PERMISSION_DENIED: profil niedostępny' using errcode = '42501';
+  end if;
+
+  if v_old is distinct from p_locale then
+    update public.profiles set preferred_locale = p_locale, updated_at = now() where id = v_uid;
+    perform public.write_audit('profile.email_locale_changed', 'profile', v_uid,
+      jsonb_build_object('preferred_locale', v_old),
+      jsonb_build_object('preferred_locale', p_locale));
+  end if;
+  return p_locale;
+end $$;
+revoke all on function public.set_my_email_locale(text) from public, anon;
+grant execute on function public.set_my_email_locale(text) to authenticated;

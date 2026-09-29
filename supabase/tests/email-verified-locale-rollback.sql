@@ -1,5 +1,5 @@
 -- =============================================================================
--- EMQ1038-R — rollback migracji 0962 (#1038, #1049). Uruchamiany przez scripts/test-rls.sh
+-- EMQ1038-R — rollback migracji 0186 (#1038, #1049). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie (dane EMQ1038 z rls.sql: EQ2 = zgoda marketingowa,
 -- adres niepotwierdzony). Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
@@ -15,10 +15,10 @@ end $$;
 -- Stan przed rollbackiem: niepotwierdzony adres nie dostaje marketingu.
 select pg_temp.assert(public.email_allowed(:'EQ2', 'newsletter') is false
   and to_regprocedure('public.set_my_email_locale(text)') is not null,
-  'EMQ1038-R0 stan wyjściowy: migracja 0962 zastosowana');
+  'EMQ1038-R0 stan wyjściowy: migracja 0186 zastosowana');
 
 begin;
-\ir ../rollback/0962_email_verified_marketing_locale.down.sql
+\ir ../rollback/0186_email_verified_marketing_locale.down.sql
 select pg_temp.assert(
   to_regprocedure('public.set_my_email_locale(text)') is null
   and to_regprocedure('public.email_address_verified(uuid)') is null
@@ -30,7 +30,7 @@ select pg_temp.assert(
   and position('unverified' in pg_get_functiondef('public.enqueue_campaign_batch(uuid, integer)'::regprocedure)) = 0
   and position('unverified' in pg_get_constraintdef((select oid from pg_constraint
         where conname = 'email_campaign_recipients_reason'))) = 0,
-  'EMQ1038-R rollback przywraca stan sprzed 0962 (0087/0101/0175)');
+  'EMQ1038-R rollback przywraca stan sprzed 0186 (0087/0101/0175)');
 -- Po rollbacku sama zgoda znów wystarcza (dowód, że test wyżej odróżnia stany).
 select pg_temp.assert(public.email_allowed(:'EQ2', 'newsletter') is true,
   'EMQ1038-R2 po rollbacku niepotwierdzony adres ze zgodą jest dozwolony (stan z 0087)');
@@ -38,4 +38,4 @@ rollback;
 select pg_temp.assert(to_regprocedure('public.set_my_email_locale(text)') is not null
   and public.email_allowed(:'EQ2', 'newsletter') is false,
   'EMQ1038-R3 rollback testu cofnięty');
-\echo 'EMQ1038-R rollback 0962: PASS'
+\echo 'EMQ1038-R rollback 0186: PASS'

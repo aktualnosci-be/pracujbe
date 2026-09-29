@@ -7406,7 +7406,7 @@ insert into auth.users(id,email,name,raw_user_meta_data) values
   (:'CMN4','cmn4@test.be','Cm N4','{"role":"candidate","first_name":"Cm","last_name":"N4","locale":"en"}'),
   (:'CMN5','cmn5@test.be','Cm N5','{"role":"candidate","first_name":"Cm","last_name":"N5","locale":"pl"}');
 select test_fixture.attest_candidates();
--- 0962 (#1038): marketing tylko na potwierdzony adres — adresy scenariuszy CM45 są potwierdzone
+-- 0186 (#1038): marketing tylko na potwierdzony adres — adresy scenariuszy CM45 są potwierdzone
 -- (brak potwierdzenia sprawdza sekcja EMQ1038 na końcu pliku).
 update auth.users set email_verified = true where id in (:'CMA', :'CMB', :'CMN1', :'CMN2', :'CMN3', :'CMN4', :'CMN5');
 
@@ -19266,7 +19266,7 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót
 reset role;
 
 -- ============================================================================
--- EMQ1038 / EL1049 (0962 — numer tymczasowy): marketing tylko na potwierdzony adres
+-- EMQ1038 / EL1049 (0186 — numer tymczasowy): marketing tylko na potwierdzony adres
 -- i zmiana języka e-maili przez użytkownika.
 -- ============================================================================
 \set EQ1 'e1038000-0000-0000-0000-0000000000a1'
@@ -19374,7 +19374,7 @@ create function pg_temp.emq1038_old_allowed(p_profile_id uuid) returns boolean l
 $$;
 select pg_temp.assert(pg_temp.emq1038_old_allowed(:'EQ2') is true
   and public.email_allowed(:'EQ2', 'newsletter') is false,
-  'EMQ1038-4n kontrola ujemna: sama zgoda (0087) przepuściłaby niepotwierdzony adres, 0962 nie');
+  'EMQ1038-4n kontrola ujemna: sama zgoda (0087) przepuściłaby niepotwierdzony adres, 0186 nie');
 
 -- EMQ1038-5: uprawnienia.
 set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
