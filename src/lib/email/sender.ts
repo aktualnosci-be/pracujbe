@@ -1,3 +1,5 @@
+import { parseMailbox } from './mailbox';
+
 /**
  * Tożsamość nadawcy e-maili (#45).
  *
@@ -37,9 +39,43 @@ export function senderIdentityFromEnv(
   return { identity, postalAddress };
 }
 
+/**
+ * #1214: wartość wpisana w Railway razem z cudzysłowami z `.env.example`
+ * (`"Pracuj.be <no-reply@pracuj.be>"`) — zdejmujemy JEDNĄ parę otaczających cudzysłowów
+ * (`"…"` albo `'…'`). Zapis `"Pracuj.be" <no-reply@pracuj.be>` (cudzysłów tylko wokół nazwy)
+ * zostaje bez zmian.
+ */
+function stripOuterQuotes(value: string): string {
+  const first = value[0];
+  if (value.length >= 2 && (first === '"' || first === "'") && value[value.length - 1] === first) {
+    return value.slice(1, -1).trim();
+  }
+  return value;
+}
+
+/** Jawny `EMAIL_FROM` po normalizacji (jedna linia, bez otaczających cudzysłowów); `null` = brak. */
+function explicitEmailFrom(source: Record<string, string | undefined>): string | null {
+  const value = clean(source.EMAIL_FROM);
+  if (!value) return null;
+  return stripOuterQuotes(value) || null;
+}
+
 /** Adres nadawcy (nagłówek From). Poza marketingiem obowiązuje dotychczasowy domyślny. */
 export function emailFromEnv(source: Record<string, string | undefined> = process.env): string {
-  return clean(source.EMAIL_FROM) ?? DEFAULT_EMAIL_FROM;
+  return explicitEmailFrom(source) ?? DEFAULT_EMAIL_FROM;
+}
+
+/**
+ * #1214: `EMAIL_FROM` ustawiony, ale nieużywalny (zły zapis skrzynki albo wartość ponad limit)
+ * = błąd konfiguracji WSPÓLNY dla wszystkich listów. Worker nie pobiera wtedy kolejki (listy
+ * czekają, nic nie przechodzi w `failed`), `/api/health` pokazuje `emailProviderReady: false`,
+ * a `/api/health/ops` alarm `email_sender_invalid`. `null` = nadawca poprawny (także domyślny).
+ */
+export function emailFromProblem(source: Record<string, string | undefined> = process.env): 'invalid' | null {
+  const raw = source.EMAIL_FROM;
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  const from = explicitEmailFrom(source);
+  return from && parseMailbox(from) ? null : 'invalid';
 }
 
 /**
@@ -65,7 +101,7 @@ export function replyToFromEnv(source: Record<string, string | undefined> = proc
 export function marketingSenderFromEnv(
   source: Record<string, string | undefined> = process.env,
 ): (EmailSenderIdentity & { from: string }) | null {
-  const from = clean(source.EMAIL_FROM);
+  const from = explicitEmailFrom(source);
   const identity = senderIdentityFromEnv(source);
   if (!from || !identity) return null;
   return { from, ...identity };

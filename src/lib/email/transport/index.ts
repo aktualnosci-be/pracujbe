@@ -3,7 +3,7 @@ import { resendTransport } from './resend';
 import { emailLabsConfigFromEnv, emailProviderFromEnv, resendApiKeyFromEnv } from './select';
 import type { MailTransport } from './types';
 
-export { MailSendError } from './types';
+export { MAIL_CONFIG_ERROR_MESSAGE, MailSendError } from './types';
 export { emailLabsConfigFromEnv, emailProviderFromEnv } from './select';
 export type { EmailProviderSelection } from './select';
 export type { EmailProvider, MailErrorCode, MailMessage, MailSendOptions, MailTransport } from './types';

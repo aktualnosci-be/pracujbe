@@ -72,6 +72,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     'rate_limit_gc',
     'processed_webhooks_gc',
     'claim_storage_deletions',
+    'claim_company_vies_auto_checks',
   ];
 
   beforeEach(() => {
@@ -79,6 +80,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     resetFakeDb(null);
     for (const fn of TASKS) fakeDb.rpc(fn, 0);
     fakeDb.rpc('claim_storage_deletions', []);
+    fakeDb.rpc('claim_company_vies_auto_checks', []);
     // #1143: tryb efektywny = env (plik: RECRUITMENT) ORAZ baza — baza też RECRUITMENT.
     fakeDb.rpc('recruitment_enabled', true);
     process.env.MAINTENANCE_SECRET = 'maintenance-secret';
@@ -132,6 +134,8 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedWebhookInbox: 0,
       // #17/#833: bez bucketu Railway oba GC bucketu (CV i załączników wiadomości) pominięte.
       storageGc: null,
+      // #706/#879 (0191): pusta kolejka automatycznego sprawdzenia VIES.
+      viesAutoChecks: { claimed: 0, saved: 0, notSaved: 0, skipped: 0, deferred: 0, errors: 0 },
       messageAttachmentsGc: null,
       // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.
       dsaRetention: { mode: 'off' },
