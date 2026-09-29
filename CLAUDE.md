@@ -112,7 +112,8 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   `errors.recruitmentDisabled`), `notFoundUnlessRecruitment()`; lista `RECRUITMENT_FEATURES`. Tryb w `/api/health` tylko za
   sekretem. Vitest domyślnie ogłoszeniowy (`withRecruitmentMode()` z `tests/helpers/portal-mode.ts` dla starych przepływów),
   serwery Playwright jawnie `RECRUITMENT` (nadpisanie `E2E_PORTAL_LEGAL_MODE=`). Strażnik CI: `tests/legal/classifieds-only.test.ts`
-  (projekt Vitest `legal`, job `unit`; invarianty kolejnych PR-ów #1128 jako `it.todo` z numerem issue).
+  (projekt Vitest `legal`, job `unit`; dawne `it.todo` kolejnych PR-ów #1128 zamienione na odnośniki do testów,
+  strona pozytywna — ścieżki aktywne bez `RECRUITMENT_DISABLED` — w `tests/legal/classifieds-active-paths.test.ts`, #1249).
   Wyłączone w trybie ogłoszeniowym (#1141/#1144/#1132, warstwa aplikacji, bez migracji): akcje `sendOffer`/`respondToOffer`/
   `loadMoreProposals`, `applyToJob`/`transitionApplication`/`withdrawApplication`, odczyty historii zgłoszeń kandydata
   i pracodawcy, aplikacja gościa (`submit`/`confirm`/`claimGuestApplication`, `stageGuestLink`) → `RECRUITMENT_DISABLED`
@@ -458,15 +459,25 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
     jawna lista części 2 `FULL_PART_2` w konfiguracji — `--shard` dzieli po liczbie testów
     i oba speci lejka trafiały do jednego shardu), każda część zapisuje blob jak shardy demo;
   - `e2e-real` („E2E real flow (PostgreSQL 16)”) — `npm run test:e2e:real` na usłudze
-    `postgres:16` (#351, #66); na start **informacyjny** (`continue-on-error`), nie blokuje
-    scalania ani wdrożenia — po serii zielonych przebiegów na `main` zdejmij `continue-on-error`;
+    `postgres:16` (#351, #66); od #1239 **blokujący** (bez `continue-on-error`, po 12/12 zielonych
+    przebiegach `main`; zależność jobu zbiorczego `e2e`) i w dwóch krokach: RECRUITMENT (przepływy
+    rekrutacyjne) oraz `E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY` (`saved-search-classifieds`, #1148);
   - `e2e` („E2E (Playwright)”, wymagany check o stałej nazwie) — job zbiorczy z `always()`,
-    pada, gdy którykolwiek shard/pomiar/część fixture nie jest `success`; łączy bloby
+    pada, gdy którykolwiek shard/pomiar/część fixture/przepływ real nie jest `success`; łączy bloby
     (`playwright merge-reports --config playwright.merge.config.ts`: html + raport flaków #375).
     `failOnFlakyTests` obowiązuje w każdym shardzie.
 - `docs/DEPLOYMENT.md` — jedna produkcja Railway z `main`, z włączonym `Wait for CI`.
 - `scripts/check-ci-workflows.mjs` — strażnik uruchamiany w jobie `lint` (test z kontrolami
-  ujemnymi: `tests/unit/ci-workflows-guard.test.ts`).
+  ujemnymi: `tests/unit/ci-workflows-guard.test.ts`). Pilnuje też (#1241/#1246/#1247/#1250):
+  `forbidOnly: !!process.env.CI` w KAŻDEJ konfiguracji Playwrighta uruchamiającej testy (demo,
+  fixture, real-flow) i regułę ESLint `no-restricted-syntax` w `tests/**` (`.only`, statyczne
+  `.skip`/`.fixme`, `xit`/`fit`; warunkowe `test.skip(warunek, 'powód')` dozwolone); zgodność
+  `FIXTURE_ONLY_SPECS` z `ERROR_SPECS ∪ FULL_SPECS`; w jobie „Migration runner” osobny krok
+  ciągłości numeracji (`scripts/db/check-migration-numbering.mjs` — numer tymczasowy w PR = ten
+  krok czerwony z założenia, na `main` luka = błąd), integrację bez `runtime-logins.test.ts`
+  (wynik reszty nie ginie pod luką) i test operatora loginów tylko przy ciągłej numeracji;
+  każdą akcję przypiętą do 40-znakowego SHA z komentarzem wersji (`# v7.0.1`; aktualizacja =
+  nowy SHA + komentarz, np. `git ls-remote --tags https://github.com/actions/<akcja>.git`).
 
 **Reguły CI:**
 - Nazwy jobów (checków) są stałe — wymagają ich scalanie i Railway `Wait for CI`. Liczba
@@ -896,6 +907,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
+  robots (#1217, PERF-03): blokada paneli zakotwiczona na segmencie języka
+  (`/<język>/<panel>$` i `/<język>/<panel>/`, `src/lib/seo/robots-rules.ts`) — dawne reguły z
+  gwiazdką blokowały oferty i profile firm o slugach `administratief-…`/`employer-…` (test
+  z dopasowaniem jak Google i kontrolą ujemną w `sitemap-robots`). Sitemap: profile firm raz
+  w całym indeksie, w partii `0` (#1231, PERF-05; jedna iteracja po osiągalnej liście);
+  liczba partii i metadane landingów przez `getJobsCount`, a strony listy w sitemap, na stronie
+  głównej, w „Podobnych ofertach” i na pulpicie kandydata bez licznika
+  (`getJobs(…, { withTotal: false })` → `getPublicJobsPage`, #1230, PERF-04).
   Dane strukturalne (#313) w `src/lib/seo/structured-data.ts`: JobPosting bez wymyślonego
   `validThrough` (tylko realne `expires_at`), pełny opis HTML (opis, obowiązki, wymagania, warunki,
   godziny, zmiany; escapowany); Article z `image`, `dateModified` (`guides.ts` `updatedAt`) i logo
@@ -1899,6 +1918,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
   TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
   unit `team-invitation-signup-preview`.
+  Oczekujące zaproszenia (migracja `0187`): `get_company_invitations`
+  zwraca też `locale` (null dla zaproszeń sprzed 0121) i `inviter_name` (bramka owner/admin
+  bez zmian; zmiana typu wyniku = DROP + CREATE). Wiersz listy w `/employer/zespol` pokazuje
+  język zaproszenia, kto i kiedy zaprosił. „Odnów” (`renewTeamInvitation(id, expectedCompanyId)`, firma widoku jak przy
+  zapraszaniu — inna aktywna firma = `ACTIVE_COMPANY_CHANGED`): klient podaje tylko
+  id, adres/rolę/język akcja czyta z listy AKTYWNEJ firmy w tej samej transakcji i woła
+  `invite_company_member` z nowym tokenem (14 dni, nowy link dla adresu bez konta, limit 3/dobę
+  jak dotąd; zaproszenie bez języka → `en`); spoza listy = `NOT_FOUND`. „Cofnij” dopiero po
+  potwierdzeniu w `ConfirmDialog` (własna etykieta `team.revokeConfirm` — po francusku „Annuler”
+  = także „Anuluj”, test pilnuje różnicy); po sukcesie fokus na komunikacie `role="status"`. Dowód:
+  `rls.sql` sekcja TI179 (kontrola ujemna: definicja z 0086 bez `locale`), unit
+  `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
+  (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
   Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
   `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
   `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
@@ -2668,6 +2700,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Trwały dowód poinformowania i limity DSA (paczka M-1, migracja `0188` — numer tymczasowy;
+  #1037/#1045/#1063/#1098/#1107; terminy 6 mies./14 dni/12 mies. bez zmian, strażnik
+  `dsa-approved-terms`): początek biegu terminu odwołania zapisuje niezmienna tabela
+  `moderation_informed` (bez grantów; triggery na `email_deliveries` + RPC odczytu decyzji), a nie
+  mutowalna tabela powiadomień ani bieżący stan poczty — `email_sent` (odbicie/błąd unieważnia wpis),
+  `panel_view` (odczyt decyzji w `get_company_moderation_decisions`; „oznacz jako przeczytane” nie
+  liczy się), reguły zastępcze `delivery_failed` (od ostatecznej porażki wysyłki) i `no_recipient`
+  (od chwili decyzji/cofnięcia; odroczony trigger przy zatwierdzeniu). Retencja i stan drogi
+  odwołania korzystają z tego bez zmian; `dsa_retention_report` ma `informedByFallback`
+  (kafelek w `/admin/raport-dsa`). Kod dostępu do sprawy (`reportReceived`) znika z payloadu
+  zlecenia, gdy przestaje być oczekujące (strażnik BEFORE INSERT/UPDATE + jednorazowe czyszczenie).
+  `submit_content_report`: limit 5/adres/24 h i „jedna otwarta sprawa na treść” pod blokadą
+  doradczą per adres + częściowy indeks `reports_dsa_open_uq`. `admin_set_company_status`: zawieszenie
+  także z `unverified`/`pending`, z `suspended` również `rejected` (przyciski = macierz bazy,
+  test `dsa-informed-limits`). Dowód: `rls.sql` sekcja DSA960 (kontrole ujemne: zdjęty strażnik,
+  trigger poczty, trigger zatwierdzenia, indeks; wyścigi dblink), rollback
+  `supabase/rollback/0188_…down.sql` + `dsa-informed-rollback.sql`. **Otwarte (poza M-1):** blokada
+  wiersza przy „Kopiuj jako szkic”, odpowiedź na propozycję (wyłączona), zgłoszenie wiadomości
+  „otwórz ponownie” (#1107 pkt 2).
   Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0179`,
   `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
   dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
@@ -3181,6 +3232,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   pomijany).
   **Otwarte (właściciel):** wpisanie `ERROR_WEBHOOK_URL` w Railway, dostęp do kanału Discorda,
   logi Railway (retencja/dostęp), rejestr (#485).
+- [x] Formularze przed hydracją i fokus po zapisie (audyt 29.09, #1236/#1237/#1238/#1243, bez migracji):
+  każdy formularz obsługiwany przez `onSubmit` ma `method="post"` (bez JS albo przed hydracją natywna
+  wysyłka nie trafia do query URL), a formularze widoczne w HTML z serwera (logowanie, rejestracje,
+  reset i nowe hasło, sprawdzenie sprawy DSA, zgłoszenie treści, formularze firmy, zespołu,
+  ustawień, szablonów, importu, kampanii, rejestru naruszeń) blokują przycisk do hydracji
+  (`useHydrated`, `src/components/forms/use-hydrated.ts`) z komunikatem `<noscript>`
+  (`NoScriptFormNotice`, `common.formJsRequired`). Po zapisie danych firmy, linków, agencji,
+  preferencji powiadomień i „Zapisz wyszukiwanie” fokus trafia na komunikat wyniku (`tabIndex=-1`),
+  „Anuluj” w `AppealForm` wraca fokusem na „Odwołaj się”; akcje nieprzeczytanego powiadomienia
+  bez `shrink-0` (reflow 320 px). Dowód: E2E `forms-no-js-post` (JS wyłączony, opóźnione chunki,
+  kontrola ujemna: HTML bez `method`/`disabled` wysyła hasło w query), `notifications-list`
+  (`scrollWidth` 320 px, 4 języki), unit `a11y-focus-after-save` i `a11y-focus-after-pending`.
 - [x] Prywatność i obserwowalność (paczka audytu 2026-09-28, bez migracji): beacon Cloudflare
   z `spa: false` i pełnym przeładowaniem przy przejściu z trasy publicznej na prywatną (link
   albo `router.push`; `src/lib/analytics/beacon.ts`, #1046, E2E `one-time-link-tracking`);
@@ -3252,6 +3315,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
   next-intl) — strażnik `tests/unit/pwa-manifest-route.test.ts`, E2E `pwa-locale-manifest.spec`.
+  Limit CV na konto (decyzja właściciela 29.09.2026, migracja `0189`): najwyżej 10 nieusuniętych plików
+  i 50 MB łącznie (trigger `enforce_cv_account_quota`, lustro `CV_MAX_FILES_PER_ACCOUNT`/
+  `CV_MAX_TOTAL_BYTES_PER_ACCOUNT`, komunikat `files.errorAccountLimit`); dowód `rls.sql` SD1111, unit `cv-account-quota`.
+  Kontrakt soft-delete (0189): usunięta (`deleted_at`) aplikacja i propozycja są niewidoczne dla stron
+  (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
+  jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
+  `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
@@ -3284,7 +3354,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (niekompletny → `ONBOARDING_INCOMPLETE`), wyszukiwalność tylko po ukończeniu i opt-in
   (widok pracodawcy pod RLS). Mutacje: `searchable-without-complete|skills-append|
   completeness-guard-off|relations-dml-open`. Zestaw real-flow biegnie w CI w jobie `e2e-real`
-  (usługa `postgres:16`, na start check informacyjny — CLAUDE.md §10); mutacje nadal ręcznie.
+  (usługa `postgres:16`, check blokujący od #1239 — CLAUDE.md §10); mutacje nadal ręcznie.
   Kroki UI w przeglądarce (`tests/e2e-real/ui-flow.spec.ts`, helpery `support/ui.ts`): serwer
   `next dev` z Better Auth na ograniczonym loginie auth (`DATABASE_AUTH_URL`, origin jak w stosie
   testu). Rejestracja pracodawcy (nl) i kandydata (fr) formularzami → link potwierdzenia z
@@ -3304,8 +3374,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z poziomem, certyfikaty); publikacja przy firmie niezweryfikowanej = komunikat i nadal `draft`
   (bez e-maila `jobPublished`), po weryfikacji przez admina ta sama sesja publikuje (`active`,
   slug publiczny, e-mail w języku publikującego, strona oferty dla gościa). Mutacje:
-  `wizard-draft-noop|publish-unverified`. W CI: job `e2e-real` (informacyjny). **Otwarte:**
-  po serii zielonych przebiegów — check wymagany (zdjęcie `continue-on-error`).
+  `wizard-draft-noop|publish-unverified`. W CI: job `e2e-real` — blokujący od #1239 (12/12
+  zielonych na `main`), drugi krok w trybie `CLASSIFIEDS_ONLY` (`saved-search-classifieds`).
   Straże krytycznych przepływów bez realnej bazy: unit Server Actions (`critical-flow-actions`),
   worker outboxa w `email_deliveries.locale` (`email-outbox-locale`), zgody cookies
   (`consent-store`, `consent-action`), gałąź produkcyjna sitemap/robots (`sitemap-robots`);
@@ -3458,9 +3528,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `setJobStatus` (pause/resume/close/reopen) i `expire_due_jobs` w `/api/maintenance` (gdy
   wygasiła choć jedną ofertę) wołają wspólny `revalidatePublicJobPaths()`
   (`src/lib/jobs/public-cache.ts`) — rewaliduje wzorce z dynamicznym segmentem + typ `'page'`
-  (`/[locale]`, `/[locale]/oferty-pracy/[slug]`, `/[locale]/praca/kategoria/[category]`,
-  `/[locale]/praca/miasto/[city]`), więc bez znajomości dokładnego sluga/kategorii/miasta
-  zmienionej oferty. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
+  jako ŚCIEŻKI PLIKÓW tras z grupą (`PUBLIC_JOB_ROUTES`: `/[locale]/(public)`, szczegół oferty,
+  `/praca`, landingi kategorii/miasta, profil firmy i jego strony), więc bez znajomości
+  dokładnego sluga/kategorii/miasta zmienionej oferty. #1216 (PERF-02): niejawne tagi wpisu ISR
+  Next liczy ze ścieżki pliku łącznie z `(public)` — wzorce bez grupy nie unieważniały niczego.
+  Strażnik `public-job-cache-tags` (bez atrapy `next/cache`): prawdziwe `revalidatePath`
+  w `workAsyncStorage`, tagi wpisu z prawdziwego `getImplicitTags`, lista = każda strona `(public)`
+  z `revalidate = 60`, wpis w `cacheHandler` znika po rewalidacji; kontrola ujemna wzorców bez
+  grupy. Poza zakresem: ścieżki `/employer…` bez `[locale]` w akcjach paneli. Wcześniej te akcje nie unieważniały publicznego ISR wcale (publish) albo
   tylko widoków panelu (setJobStatus) — poprzednio wyrenderowana strona (i `JobPosting`) mogła
   zostać widoczna jeszcze przez okno rewalidacji (60 s) po pauzie/zamknięciu/wygaśnięciu, a
   nowo opublikowana/wznowiona oferta nie pojawiała się od razu. Rewalidacja następuje wyłącznie

@@ -447,6 +447,8 @@ export interface DsaRetentionOverview {
   eligibleDecisions: number;
   eligibleAppeals: number;
   waitingForAppealPath: number;
+  /** Sprawy, których termin odwołania biegnie z reguły zastępczej (nikt nie został faktycznie poinformowany, 0188). */
+  informedByFallback: number;
   withinRetention: number;
   openCases: number;
   redactedCases: number;
@@ -469,6 +471,7 @@ export function parseRetentionReport(
     eligibleDecisions: num(r['eligibleDecisions']),
     eligibleAppeals: num(r['eligibleAppeals']),
     waitingForAppealPath: num(r['waitingForAppealPath']),
+    informedByFallback: num(r['informedByFallback']),
     withinRetention: num(r['withinRetention']),
     openCases: num(r['openCases']),
     redactedCases: num(r['redactedCases']),

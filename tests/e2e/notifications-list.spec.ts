@@ -21,6 +21,7 @@ interface Copy {
     markRead: string;
     markedRead: string;
     markedAllRead: string;
+    markReadItem: string;
     itemJobMatch: string;
     itemApplicationStatusChanged: string;
     itemMessageReceived: string;
@@ -94,3 +95,31 @@ test('oznaczanie pojedynczo i wszystkich (#148) — kandydat, pl', async ({ page
   await expect(main.getByRole('status')).toHaveText(c.markedAllRead);
   await expect(main.getByRole('button', { name: c.markAllRead })).toBeDisabled();
 });
+
+/**
+ * #1237 (WCAG 1.4.10): przy 320 px akcje nieprzeczytanej pozycji („Nieprzeczytane” + „Oznacz
+ * jako przeczytane”) nie mogą wypychać dokumentu poza ekran — w PL kontener z `shrink-0`
+ * dawał `scrollWidth` 340 > 320.
+ */
+for (const locale of LOCALES) {
+  for (const role of ['candidate', 'employer'] as const) {
+    test(`bez poziomego przewijania przy 320 px (#1237) — ${role}, ${locale}`, async ({ page }) => {
+      const c = copy(locale).notifications;
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.goto(`/${locale}/${role}/powiadomienia`);
+      await rejectOptionalCookies(page, locale);
+      const main = page.getByRole('main');
+      const markOne = main.getByRole('button', { name: c.markReadItem.replace('{title}', c.itemJobMatch), exact: true });
+      await expect(markOne).toBeVisible();
+
+      const { scrollWidth, innerWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth: window.innerWidth,
+      }));
+      expect(scrollWidth, 'dokument bez poziomego przewijania').toBeLessThanOrEqual(innerWidth);
+      const box = await markOne.boundingBox();
+      expect(box, 'przycisk ma wymiary').not.toBeNull();
+      expect(box!.x + box!.width, 'przycisk mieści się w ekranie').toBeLessThanOrEqual(innerWidth);
+    });
+  }
+}

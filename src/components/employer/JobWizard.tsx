@@ -1366,6 +1366,7 @@ export function JobWizard({
         ) : null}
 
         <form
+          method="post"
           className="min-w-0"
           noValidate
           onSubmit={(e) => {

@@ -21,7 +21,11 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ refresh, push: vi.fn() }),
   Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
-vi.mock('@/lib/actions/team', () => ({ inviteTeamMember: vi.fn(), revokeTeamInvitation: vi.fn() }));
+vi.mock('@/lib/actions/team', () => ({
+  inviteTeamMember: vi.fn(),
+  renewTeamInvitation: vi.fn(),
+  revokeTeamInvitation: vi.fn(),
+}));
 vi.mock('@/lib/actions/team-invite-signup', () => ({ previewTeamInvitationSignup: vi.fn() }));
 vi.mock('@/lib/actions/auth', () => ({
   registerCandidate: vi.fn(),

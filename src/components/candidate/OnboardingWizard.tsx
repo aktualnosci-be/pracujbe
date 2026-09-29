@@ -653,6 +653,7 @@ export function OnboardingWizard({
           <p className={cn(P_EXTENDED, 'mt-2')}>{steps[step - 1]?.desc}</p>
 
           <form
+            method="post"
             className="mt-[22px] min-w-0"
             noValidate
             onSubmit={(e) => {
