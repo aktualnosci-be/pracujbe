@@ -122,3 +122,42 @@ describe('GET /api/health — cache + single-flight ping bazy (#600)', () => {
     }
   });
 });
+
+describe('GET /api/health — szczegóły poza produkcją tylko z tokenem albo na loopbacku (#1105)', () => {
+  async function body(url: string, headers: Record<string, string> = {}) {
+    const GET = await loadGet();
+    queryMock.mockResolvedValue({ rows: [{ ok: 1 }] });
+    return (await (await GET(new Request(url, { headers }))).json()) as Record<string, unknown>;
+  }
+
+  it('publiczny host w trybie demo bez tokena: tylko status (kontrola ujemna dawnej reguły „tryb ≠ produkcja”)', async () => {
+    const result = await body('https://demo.pracuj.be/api/health');
+    expect(Object.keys(result)).toEqual(['status']);
+  });
+
+  it('publiczny host w trybie demo z tokenem: szczegóły', async () => {
+    vi.stubEnv('HEALTH_CHECK_SECRET', 'h'.repeat(40));
+    const result = await body('https://demo.pracuj.be/api/health', { 'x-health-token': 'h'.repeat(40) });
+    expect(result).toHaveProperty('checks');
+    expect(result).toHaveProperty('mode');
+  });
+
+  it('błędny token na publicznym hoście: tylko status', async () => {
+    vi.stubEnv('HEALTH_CHECK_SECRET', 'h'.repeat(40));
+    const result = await body('https://demo.pracuj.be/api/health', { 'x-health-token': 'x'.repeat(40) });
+    expect(Object.keys(result)).toEqual(['status']);
+  });
+
+  it.each(['http://localhost:3000/api/health', 'http://127.0.0.1:3000/api/health', 'http://[::1]:3000/api/health', 'http://app.localhost:3000/api/health'])(
+    'lokalny dev (%s) bez tokena: szczegóły',
+    async (url) => {
+      expect(await body(url)).toHaveProperty('checks');
+    },
+  );
+
+  it('produkcja na loopbacku bez tokena: tylko status', async () => {
+    vi.stubEnv('APP_MODE', 'production');
+    const result = await body('http://localhost:3000/api/health');
+    expect(Object.keys(result)).toEqual(['status']);
+  });
+});

@@ -63,6 +63,20 @@ describe('maintenance: guest application retention', () => {
     expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'guestRequests' });
   });
 
+  it('#1066: każde nieudane zadanie zgłoszone osobno (nie tylko pierwsze)', async () => {
+    fakeDb.rpc('purge_guest_application_requests', () => {
+      throw pgError('42501', 'permission denied');
+    });
+    fakeDb.rpc('rate_limit_gc', () => {
+      throw pgError('XX000', 'x');
+    });
+    const res = await POST(request());
+    expect(res.status).toBe(503);
+    expect(captureError).toHaveBeenCalledTimes(2);
+    expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'guestRequests' });
+    expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'rateLimits' });
+  });
+
   it('brak puli service: produkcja → 503, poza produkcją → pominięcie bez zapytań', async () => {
     resetFakeDb(null).rpc('expire_due_jobs', 0);
     const { fakeSession } = await import('../helpers/fake-db');
