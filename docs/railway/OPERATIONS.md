@@ -54,6 +54,8 @@ identyfikatorów ani konfiguracji.
 | `mail_suppressions_new` | alarm | > 20 nowych blokad adresów w 24 h | nagły skok odbić lub skarg |
 | `mail_suppressions_active` | ostrzeżenie | > 1000 aktywnych blokad | przegląd listy w `/admin/poczta` |
 | `portal_legal_mode_mismatch` | alarm | env `PORTAL_LEGAL_MODE` i tryb w bazie (`ops_metrics().portalLegalMode`, 0171) różnią się | zmieniono jeden klucz bez drugiego, odtworzona kopia; tryb efektywny i tak ogłoszeniowy — procedura w §6 |
+| `schema_behind_code` | alarm | najwyższa zastosowana migracja (`ops_schema_state()`, 0184) jest starsza niż migracja znana wdrożonemu kodowi (`PRACUJBE_EXPECTED_MIGRATION` z builda), albo baza nie ma jeszcze funkcji | kod wdrożony przed migracją (Railway wdraża `main` sam, migracje nakłada operator) — przepływy z nowymi funkcjami bazy dostają `INTERNAL`; nałożyć migracje (`docs/railway/WDROZENIE_MIGRACJI.md`). Baza NOWSZA od kodu (rollback wdrożenia) nie jest alarmem |
+| `schema_state_unreadable` | alarm | `ops_schema_state()` istnieje, ale odczyt się nie udał albo zwrócił niepoprawny kształt | brak uprawnień `pracujbe_ops`, awaria bazy — szczegół w kanale błędów (`area: ops.schema-state`) |
 
 Liczby pochodzą z `public.ops_metrics()` (migracja `0096`, `SECURITY DEFINER`,
 EXECUTE mają tylko `pracujbe_ops` i `service_role`). Rola `pracujbe_ops` nie ma

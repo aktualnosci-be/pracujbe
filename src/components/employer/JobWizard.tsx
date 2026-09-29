@@ -496,6 +496,12 @@ export interface JobWizardProps {
   initialJobId?: string;
   initialValues?: JobWizardInitialValues;
   /**
+   * #1070: wersja wznowionego szkicu (`jobs.updated_at` z loadera) — token przy zapisie kroku.
+   * Szkic zmieniony w innej karcie/przez innego rekrutera = konflikt zamiast cichego nadpisania.
+   * Brak (nowa oferta, import) = pierwszy zapis bez kontroli, kolejne z wersją z odpowiedzi.
+   */
+  draftVersion?: string;
+  /**
    * #325: oferta już opublikowana (aktywna/wstrzymana) — kreator w trybie edycji. `updatedAt`
    * = wczytana wersja (ochrona przed cichym nadpisaniem równoległej poprawki).
    */
@@ -644,6 +650,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
 export function JobWizard({
   initialJobId,
   initialValues,
+  draftVersion,
   published,
   contentLocale: contentLocaleProp,
   importSlot,
@@ -799,6 +806,10 @@ export function JobWizard({
   }, [cityValue, locale, step]);
 
   const [jobId, setJobId] = React.useState<string | null>(initialJobId ?? null);
+  // #1070: aktualna wersja szkicu (ref — pętla zapisu #829 musi widzieć ją od razu) i migawki
+  // ostatnio zapisanych kroków (krok bez zmian nie wysyła żądania).
+  const draftVersionRef = React.useRef<string | null>(draftVersion ?? null);
+  const lastSavedStepRef = React.useRef<Partial<Record<WizardStep, string>>>({});
   const [saveState, setSaveState] = React.useState<SaveState>('idle');
   // #363: kod błędu z serwera → własny komunikat (zamiast zawsze „Nie udało się zapisać”).
   const [saveError, setSaveError] = React.useState<ErrorCode | null>(null);
@@ -992,6 +1003,15 @@ export function JobWizard({
     }
     const data = checked.data;
 
+    // #1070: krok bez zmian od ostatniego udanego zapisu w tej karcie nie wysyła żądania
+    // (publikacja zawsze zapisuje — kontrola wersji przed opublikowaniem treści).
+    if (intent === 'draft' && jobId && lastSavedStepRef.current[current] === JSON.stringify(data)) {
+      setSaveError(null);
+      setSaveState('saved');
+      setBadgeVisible(true);
+      return true;
+    }
+
     setSaveError(null);
     setSaveState('saving');
     try {
@@ -1016,13 +1036,15 @@ export function JobWizard({
       // edycja jest walidowana i zapisywana ponownie, zanim kreator zmieni krok albo wyjdzie.
       let saved = data;
       for (let round = 0; ; round += 1) {
-        const res = await updateJobDraft(id, current, saved);
+        const res = await updateJobDraft(id, current, saved, draftVersionRef.current);
         if (!res.ok) {
           setSaveError(res.error);
           setSaveState('error');
           return false;
         }
         if (res.demo) setDemo(true);
+        if (res.version) draftVersionRef.current = res.version;
+        lastSavedStepRef.current[current] = JSON.stringify(saved);
         if (!stepDataChanged(saved, buildStepData(current, getValues(), contentLocale))) break;
         if (round + 1 >= MAX_SAVE_ROUNDS) {
           // Wartości zmieniają się szybciej niż zapis — zostajemy w kreatorze bez „Zapisano”.
@@ -2313,7 +2335,11 @@ export function JobWizard({
               saving: t('saving'),
               saved: isEdit ? (demo ? t('editSavedDemo') : t('editSaved')) : demo ? t('savedDemo') : t('saved'),
               // Kod z serwera ma własny komunikat; brak kodu (np. zerwane połączenie) → ogólny.
-              error: saveError ? tRoot(toUserMessageKey(saveError)) : t('saveError'),
+              error: saveError
+                ? saveError === 'JOB_EDIT_CONFLICT' && !isEdit
+                  ? t('draftConflict')
+                  : tRoot(toUserMessageKey(saveError))
+                : t('saveError'),
             }}
           />
           {isEdit && contentReview && saveState !== 'error' ? (
@@ -2322,12 +2348,19 @@ export function JobWizard({
               {renderContentReview()}
             </div>
           ) : null}
+          {saveState === 'error' && saveError === 'JOB_EDIT_CONFLICT' && !isEdit && jobId ? (
+            // #1070: konflikt szkicu — pełne przeładowanie (nie nawigacja klienta), bo kreator
+            // zachowałby stan formularza i starą wersję.
+            <a href={`/${locale}/employer/oferty/${jobId}/edycja`} className={TEXT_LINK}>
+              {t('reloadDraft')}
+            </a>
+          ) : null}
           {/* Oferta już nie jest szkicem (np. opublikowana w innej karcie) — ponawianie nic nie
               da, więc prowadzimy do listy ofert (#363). */}
           {saveState === 'error' &&
           (saveError === 'JOB_NOT_DRAFT' ||
             saveError === 'JOB_NOT_EDITABLE' ||
-            saveError === 'JOB_EDIT_CONFLICT') ? (
+            (saveError === 'JOB_EDIT_CONFLICT' && (isEdit || !jobId))) ? (
             <Link
               href="/employer/oferty"
               className={TEXT_LINK}
