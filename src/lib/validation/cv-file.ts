@@ -18,7 +18,9 @@ export const CV_ALLOWED_TYPES: ReadonlyMap<string, 'pdf' | 'doc' | 'docx'> = new
 ]);
 
 /** Powód odrzucenia pliku (mapowany na komunikat i18n `files.error*`). */
-export type CvFileProblem = 'empty' | 'tooLarge' | 'type' | 'accountLimit';
+export type CvFileProblem = 'empty' | 'tooLarge' | 'type';
+/** Powód odrzucenia uploadu: kontrola pliku albo limit konta (CF-06, tylko serwer). */
+export type CvUploadProblem = CvFileProblem | 'accountLimit';
 
 /**
  * Kontrola metadanych pliku (bez czytania treści), identyczna z pierwszymi krokami serwera.
