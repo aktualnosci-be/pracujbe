@@ -1,5 +1,5 @@
 -- =============================================================================
--- M2RD-R — rollback migracji 0961 (#1033, #1034, #1089, #1091, #1090). Uruchamiany przez
+-- M2RD-R — rollback migracji 0185 (#1033, #1034, #1089, #1091, #1090). Uruchamiany przez
 -- scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji
 -- i jest cofany.
 -- =============================================================================
@@ -13,10 +13,10 @@ end $$;
 
 select pg_temp.assert(to_regprocedure('public.job_has_process_records(uuid)') is not null
   and exists (select 1 from pg_trigger where tgname = 'trg_auth_accounts_invalidate_reset_links'),
-  'M2RD-R0 migracja 0961 jest zastosowana przed rollbackiem');
+  'M2RD-R0 migracja 0185 jest zastosowana przed rollbackiem');
 
 begin;
-\ir ../rollback/0961_rls_data_hardening.down.sql
+\ir ../rollback/0185_rls_data_hardening.down.sql
 select pg_temp.assert(
   to_regprocedure('public.job_has_process_records(uuid)') is null
   and to_regprocedure('public.audit_job_delete()') is null
@@ -38,9 +38,9 @@ select pg_temp.assert(
   and has_function_privilege('authenticated', 'public.count_other_active_owners(uuid, uuid)', 'execute')
   and position('job_has_process_records' in (select pg_get_expr(polqual, polrelid) from pg_policy
         where polrelid = 'public.jobs'::regclass and polname = 'jobs_delete_member')) = 0,
-  'M2RD-R rollback usuwa obiekty 0961 i przywraca definicje z 0019/0033/0084/0099/0132/0165');
+  'M2RD-R rollback usuwa obiekty 0185 i przywraca definicje z 0019/0033/0084/0099/0132/0165');
 rollback;
 select pg_temp.assert(to_regprocedure('public.job_has_process_records(uuid)') is not null
   and not has_function_privilege('authenticated', 'public.count_other_active_owners(uuid, uuid)', 'execute'),
-  'M2RD-R po cofnięciu transakcji migracja 0961 zostaje');
-\echo '=================== 0961 ROLLBACK OK ==================='
+  'M2RD-R po cofnięciu transakcji migracja 0185 zostaje');
+\echo '=================== 0185 ROLLBACK OK ==================='

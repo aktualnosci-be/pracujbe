@@ -2855,8 +2855,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   długość po `trim()` — fail-closed zamiast fałszywej gotowości. Dowód:
   `tests/unit/auth-secret-length.test.ts` (pozytywne 32 znaki, kontrole ujemne: 31 znaków, z
   otaczającymi spacjami, pusty sekret, `isAppReady()` z resztą rdzenia gotową).
-- [x] Utwardzenie warstwy danych (audyt 2026-09-28, #1033/#1034/#1089/#1091/#1090, migracja `0961` —
-  numer tymczasowy, rollback `supabase/rollback/0961_…down.sql`, bez zmian w trybie ogłoszeniowym):
+- [x] Utwardzenie warstwy danych (audyt 2026-09-28, #1033/#1034/#1089/#1091/#1090, migracja `0185` —
+  numer tymczasowy, rollback `supabase/rollback/0185_…down.sql`, bez zmian w trybie ogłoszeniowym):
   (1) usuwanie ofert: polityka `jobs_delete_member` pozwala roli klienta usunąć WYŁĄCZNIE szkic bez
   decyzji moderacyjnej i bez rekordów procesu (`job_has_process_records`: zgłoszenia, propozycje,
   dopasowania, zgłoszenia gościa, zapisane oferty); opublikowana oferta = zamknięcie/wygaśnięcie;

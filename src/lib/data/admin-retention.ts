@@ -64,7 +64,7 @@ export function readRetentionModes(env: Record<string, string | undefined> = pro
   };
 }
 
-/** Wartości z migracji 0127 (+ 0132, sesje i tokeny konta z 0961 i rejestr usunięć z 0105) — tryb DEMO. */
+/** Wartości z migracji 0127 (+ 0132, sesje i tokeny konta z 0185 i rejestr usunięć z 0105) — tryb DEMO. */
 const DEMO_POLICIES: ReadonlyArray<[string, number | null, number | null, RetentionEnforcement]> = [
   ['acceptance_ip_user_agent', 7, null, 'job'],
   ['audit_log', 365, null, 'none'],

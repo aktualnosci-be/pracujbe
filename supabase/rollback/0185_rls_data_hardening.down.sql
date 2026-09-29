@@ -1,6 +1,6 @@
 -- =============================================================================
--- Rollback 0961 (#1033, #1034, #1089, #1091, #1090) — przywraca definicje sprzed migracji
--- (0019, 0033, 0084, 0099, 0132, 0165) i usuwa obiekty 0961. Dane bez zmian; wpisy audytu
+-- Rollback 0185 (#1033, #1034, #1089, #1091, #1090) — przywraca definicje sprzed migracji
+-- (0019, 0033, 0084, 0099, 0132, 0165) i usuwa obiekty 0185. Dane bez zmian; wpisy audytu
 -- `job.deleted` i wiersze retencji `expired_auth_*` (jeśli nie usunięte) zostają/są kasowane
 -- jawnie poniżej. Uruchamiany w teście scripts/test-rls.sh (transakcja cofana).
 -- =============================================================================

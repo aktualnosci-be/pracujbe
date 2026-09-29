@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0961 (numer TYMCZASOWY — ostateczny nada integrator) — utwardzenie warstwy danych:
+-- 0185 (numer TYMCZASOWY — ostateczny nada integrator) — utwardzenie warstwy danych:
 --      usuwanie ofert, niezmienność pól firmy, kontrola zapisu plików, sesje i tokeny konta.
 --
 -- Issues (audyt 2026-09-28): #1033 (AUTHZ-03), #1034 (AUTHZ-04), #1089 (AUTHZ-05/06),
@@ -38,7 +38,7 @@
 -- Nie zmienia danych istniejących poza definicjami i wierszami retencji. Tryb ogłoszeniowy
 -- (0171–0176) bez zmian.
 --
--- Rollback: `supabase/rollback/0961_rls_data_hardening.down.sql` (przywraca definicje z 0033, 0084,
+-- Rollback: `supabase/rollback/0185_rls_data_hardening.down.sql` (przywraca definicje z 0033, 0084,
 -- 0099, 0165, 0019, 0132 i usuwa nowe obiekty).
 -- =============================================================================
 

@@ -11421,7 +11421,7 @@ reset role;
 -- KONTROLA UJEMNA: bez strażnika właściciel podmieniłby ścieżkę (pobranie cudzego obiektu).
 begin;
 alter table public.files disable trigger trg_files_guard_message_attachment;
--- 0961: metadane plików chroni też ogólny strażnik `guard_files_client_write` (niezależna warstwa).
+-- 0185: metadane plików chroni też ogólny strażnik `guard_files_client_write` (niezależna warstwa).
 alter table public.files disable trigger trg_files_guard_client_write;
 select set_config('app.current_uid', :'MAC', true);
 set local role authenticated; select pg_temp.assert_client_role();
@@ -19262,7 +19262,7 @@ set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
 
-\echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0961, #1033/#1034/#1089/#1091/#1090) ---'
+\echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0185, #1033/#1034/#1089/#1091/#1090) ---'
 -- Sekcja niezależna od trybu portalu (rekordy procesu wstawia superuser ze znacznikiem seedu).
 \set M2OWN 'd2961000-0000-0000-0000-000000000001'
 \set M2REC 'd2961000-0000-0000-0000-000000000002'
@@ -19646,7 +19646,7 @@ insert into auth.verifications(identifier, value, expires_at) values
   ('reset-password:m2-gone-2', :'M2GONE', now() - interval '1 day'),
   ('m2gone@test.be', 'mail-token', now() + interval '1 hour'),
   ('reset-password:m2-other', :'M2CAND', now() + interval '1 hour');
--- Kontrola ujemna: bez triggera tokeny zostają po usunięciu konta (stan sprzed 0961).
+-- Kontrola ujemna: bez triggera tokeny zostają po usunięciu konta (stan sprzed 0185).
 begin;
 drop trigger trg_auth_users_delete_cleanup on auth.users;
 delete from auth.users where id = :'M2GONE';
@@ -19678,7 +19678,7 @@ update auth.email_outbox set status = 'sent', token = null, sent_at = now() wher
 update auth.accounts set password = 'hash-stare' where id = 'd2961000-0000-0000-0000-0000000000d1';
 select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2pw-%' and value = :'M2PW'),
   'M2-14 ten sam hash hasła nie unieważnia linków');
--- Kontrola ujemna: bez triggera nowe hasło zostawia stare linki ważne (stan sprzed 0961).
+-- Kontrola ujemna: bez triggera nowe hasło zostawia stare linki ważne (stan sprzed 0185).
 begin;
 drop trigger trg_auth_accounts_invalidate_reset_links on auth.accounts;
 update auth.accounts set password = 'hash-nowe' where id = 'd2961000-0000-0000-0000-0000000000d1';
@@ -20064,7 +20064,7 @@ begin
   -- company_members: dodatkowa warstwa (hierarchia ról, tożsamość członkostwa) też odrzuca — dla dowodu
   -- działania samej polityki wyłączamy ją w tej kontroli.
   alter table public.company_members disable trigger user;
-  -- files: strażnik zapisu klienta (0961, #1089) odrzuca cudzy owner_id niezależnie od polityki.
+  -- files: strażnik zapisu klienta (0185, #1089) odrzuca cudzy owner_id niezależnie od polityki.
   alter table public.files disable trigger trg_files_guard_client_write;
 end $$;
 select pg_temp.wm_run('control') as wm_ctl \gset
