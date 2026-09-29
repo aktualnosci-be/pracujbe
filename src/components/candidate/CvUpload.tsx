@@ -225,7 +225,7 @@ export function CvUpload({
                 onClick={(event) => askDelete(item, event.currentTarget)}
                 disabled={pending}
                 aria-label={`${t('delete')}: ${item.fileName}`}
-                className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-error disabled:opacity-60"
+                className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-error-text disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -237,7 +237,7 @@ export function CvUpload({
       )}
 
       {error ? (
-        <p role="alert" aria-live="polite" className="mt-2 text-xs text-error">
+        <p role="alert" aria-live="polite" className="mt-2 text-xs text-error-text">
           {error}
         </p>
       ) : null}

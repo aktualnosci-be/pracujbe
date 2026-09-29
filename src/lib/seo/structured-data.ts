@@ -148,6 +148,30 @@ export function buildJobPostingDescription(job: JobDetail, labels: JobPostingLab
  * u ogłoszeniodawcy (strona/e-mail/telefon), nie na tej stronie — wywołujący podaje
  * `directApply: false`.
  */
+/**
+ * #792 (Google: „work from home jobs”): `jobLocationType: TELECOMMUTE` tylko dla POTWIERDZONEJ pracy
+ * w 100% zdalnej (`workMode === 'remote'`) i z co najmniej jednym poprawnym krajem kandydata
+ * (`applicantLocationRequirements` jest wtedy wymagane — bez niego oznaczenie byłoby błędnym
+ * markupem). Praca stacjonarna, hybrydowa, okazjonalnie zdalna albo tryb nieznany (dawny boolean
+ * `remote`) zostaje zwykłym `jobLocation`. Zwraca `undefined`, gdy warunki nie są spełnione.
+ */
+function telecommuteFields(job: JobDetail): Record<string, unknown> | undefined {
+  if (job.workMode !== 'remote') return undefined;
+  const countries = [
+    ...new Set(
+      (job.remoteApplicantCountries ?? [])
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => /^[A-Z]{2}$/.test(code)),
+    ),
+  ];
+  if (countries.length === 0) return undefined;
+  const requirements = countries.map((name) => ({ '@type': 'Country', name }));
+  return {
+    jobLocationType: 'TELECOMMUTE',
+    applicantLocationRequirements: requirements.length === 1 ? requirements[0] : requirements,
+  };
+}
+
 export function buildJobPostingJsonLd(
   job: JobDetail,
   url: string,
@@ -186,6 +210,8 @@ export function buildJobPostingJsonLd(
   const sameAs = publicHttpsUrl(job.companyWebsite);
   const logo = publicHttpsUrl(job.companyLogoUrl);
 
+  const telecommute = telecommuteFields(job);
+
   return {
     '@context': 'https://schema.org/',
     '@type': 'JobPosting',
@@ -209,15 +235,18 @@ export function buildJobPostingJsonLd(
       ...(sameAs ? { sameAs } : {}),
       ...(logo ? { logo } : {}),
     },
-    jobLocation: {
-      '@type': 'Place',
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: job.city,
-        addressRegion: job.region,
-        addressCountry: 'BE',
+    // #792: praca w 100% zdalna = TELECOMMUTE + kraje kandydata, bez fizycznego `jobLocation`.
+    ...(telecommute ?? {
+      jobLocation: {
+        '@type': 'Place',
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: job.city,
+          addressRegion: job.region,
+          addressCountry: 'BE',
+        },
       },
-    },
+    }),
     ...(baseSalary ? { baseSalary } : {}),
     ...(job.startDate ? { jobStartDate: job.startDate } : {}),
     ...(options.jobBenefits?.trim() ? { jobBenefits: options.jobBenefits.trim() } : {}),

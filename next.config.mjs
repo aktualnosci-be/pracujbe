@@ -110,7 +110,9 @@ const nextConfig = {
   experimental: {
     // Ograniczenie JS na stronach publicznych: optymalizacja importów ikon.
     optimizePackageImports: ['lucide-react'],
-    // Plik CV ma limit 5 MB; multipart potrzebuje dodatkowego miejsca.
+    // Plik CV ma limit 5 MB; multipart potrzebuje dodatkowego miejsca. Limit jest globalny
+    // (Next nie ma go per akcja), więc anonimowe formularze poza panelami zawęża middleware
+    // (`src/lib/http/public-action-body-limit.ts`, 256 KB → 413, CFG29-07).
     serverActions: { bodySizeLimit: '6mb' },
   },
   // Uwaga: przekierowanie "/" → "/{locale}" obsługuje middleware next-intl

@@ -17,6 +17,7 @@ import type { SavedSearch, SavedSearchFrequency } from '@/lib/data/saved-searche
 import { toUserMessageKey } from '@/lib/errors';
 import { localeNames, type Locale } from '@/i18n/routing';
 import { BTN_SECONDARY, FORM_CONTROL, H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
+import { captureFocus } from '@/lib/a11y/restore-focus';
 import { cn } from '@/lib/utils';
 
 /**
@@ -60,11 +61,15 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
   const statusRef = React.useRef<HTMLParagraphElement>(null);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [draftName, setDraftName] = React.useState('');
+  // #1103/#1095: błąd zmiany nazwy należy do pola (aria-describedby + fokus), nie do globalnego statusu.
+  const [renameError, setRenameError] = React.useState<string | null>(null);
+  const renameInputRef = React.useRef<HTMLInputElement>(null);
   const renameButtons = React.useRef(new Map<string, HTMLButtonElement>());
 
   const startRename = (search: SavedSearch) => {
     setEditingId(search.id);
     setDraftName(search.name);
+    setRenameError(null);
   };
   // Fokus wraca na przycisk „Zmień nazwę” tego wiersza (po ponownym renderze, gdy formularz
   // zamykający fokus już zniknął z DOM) — zarówno po anulowaniu, jak i po udanym zapisie (#821).
@@ -73,15 +78,20 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
   };
   const cancelRename = (id: string) => {
     setEditingId(null);
+    setRenameError(null);
     focusRenameButton(id);
   };
+  const focusRenameInput = () => requestAnimationFrame(() => renameInputRef.current?.focus());
 
   const run = async (
     id: string,
     action: () => Promise<SavedSearchMutationResult>,
     okText: string,
+    onError?: (text: string) => void,
   ): Promise<boolean> => {
     if (pendingId) return false;
+    // Kontrolki są wyłączone na czas zapisu — po nim fokus wraca tam, gdzie był (#1095).
+    const restoreFocus = captureFocus();
     setPendingId(id);
     setFeedback(null);
     try {
@@ -91,11 +101,16 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
         router.refresh();
         return true;
       }
-      setFeedback({ tone: 'error', text: tRoot(toUserMessageKey(res.error)) });
+      const text = tRoot(toUserMessageKey(res.error));
+      if (onError) onError(text);
+      else setFeedback({ tone: 'error', text });
     } catch {
-      setFeedback({ tone: 'error', text: t('errorNetwork') });
+      const text = t('errorNetwork');
+      if (onError) onError(text);
+      else setFeedback({ tone: 'error', text });
     } finally {
       setPendingId(null);
+      restoreFocus();
     }
     return false;
   };
@@ -126,12 +141,24 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
                   <h2 className={H2_EXTENDED}>{search.name}</h2>
                   {editingId === search.id ? (
                     <form
+                      noValidate
                       className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
                       onSubmit={(event) => {
                         event.preventDefault();
+                        if (pendingId) return;
                         const id = search.id;
                         const name = draftName;
-                        void run(id, () => renameSavedSearchAction(id, name), t('renamed')).then((ok) => {
+                        // Te same reguły co akcja/baza (1–80 znaków po przycięciu): błąd od razu przy polu.
+                        if (name.trim().length === 0) {
+                          setRenameError(t('renameErrorRequired'));
+                          focusRenameInput();
+                          return;
+                        }
+                        setRenameError(null);
+                        void run(id, () => renameSavedSearchAction(id, name), t('renamed'), (text) => {
+                          setRenameError(text);
+                          focusRenameInput();
+                        }).then((ok) => {
                           if (ok) {
                             setEditingId(null);
                             focusRenameButton(id);
@@ -154,16 +181,26 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
                           type="text"
                           value={draftName}
                           maxLength={80}
-                          required
+                          aria-required="true"
                           autoFocus
-                          aria-describedby={`${renameId}-hint`}
-                          disabled={pendingId !== null}
-                          onChange={(event) => setDraftName(event.target.value)}
+                          ref={renameInputRef}
+                          aria-invalid={renameError ? true : undefined}
+                          aria-describedby={renameError ? `${renameId}-error ${renameId}-hint` : `${renameId}-hint`}
+                          readOnly={pendingId !== null}
+                          onChange={(event) => {
+                            setDraftName(event.target.value);
+                            if (renameError) setRenameError(null);
+                          }}
                           className={cn(FORM_CONTROL, 'mt-1')}
                         />
                         <p id={`${renameId}-hint`} className="mt-1 text-xs text-muted-foreground">
                           {t('renameHint')}
                         </p>
+                        {renameError ? (
+                          <p id={`${renameId}-error`} className="mt-1 text-sm text-error-text">
+                            {renameError}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex gap-2 sm:pb-6">
                         <button

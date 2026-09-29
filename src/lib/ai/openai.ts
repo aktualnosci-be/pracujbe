@@ -16,7 +16,11 @@ import type { AiTokenUsage } from '@/lib/ai/pricing';
  *     odpowiedź ograniczona schematem, model bez narzędzi;
  *   - `store: false` — odpowiedź nie jest przechowywana po stronie OpenAI do późniejszego
  *     pobrania (retencja dostawcy = osobna decyzja, docs/AI_BUDGET.md);
- *   - timeout 60 s i jedna ponowna próba (użytkownik czeka w UI);
+ *   - timeout 60 s i BEZ automatycznych ponowień SDK (`maxRetries: 0`): rezerwacja budżetu AI
+ *     (`withAiBudget`) to górna granica kosztu JEDNEGO wywołania, a ponowienie SDK po
+ *     przerwanym połączeniu/timeoucie mogłoby wykonać drugie płatne wywołanie w ramach tej samej
+ *     rezerwacji (#1106). Ponawianie należy do wywołującego, który rezerwuje budżet od nowa
+ *     (kolejka tłumaczeń: backoff zadania; UI: przycisk „spróbuj ponownie”);
  *   - bez logowania treści: błędy mapujemy na {@link AiProviderError} z samym powodem —
  *     treść wejścia, odpowiedź i komunikat dostawcy nie trafiają do logów ani do UI.
  */
@@ -52,10 +56,13 @@ export interface ResponsesClient {
   };
 }
 
+/** Opcje klienta SDK (test pilnuje `maxRetries: 0` — patrz komentarz modułu). */
+export const OPENAI_CLIENT_OPTIONS = { timeout: 60_000, maxRetries: 0 } as const;
+
 let defaultClient: ResponsesClient | null = null;
 
 function client(): ResponsesClient {
-  defaultClient ??= new OpenAI({ timeout: 60_000, maxRetries: 1 });
+  defaultClient ??= new OpenAI({ ...OPENAI_CLIENT_OPTIONS });
   return defaultClient;
 }
 

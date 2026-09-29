@@ -226,7 +226,7 @@ export function NotificationsList({
       <p className={cn(ROW_META, 'mb-3')}>{t('unreadCount', { count: unreadCount })}</p>
 
       {markError ? (
-        <p role="alert" className="mb-3 text-[15px] text-error">{tRoot(toUserMessageKey(markError))}</p>
+        <p role="alert" className="mb-3 text-[15px] text-error-text">{tRoot(toUserMessageKey(markError))}</p>
       ) : null}
       <p role="status" className="sr-only">
         {markStatus === 'all' ? t('markedAllRead') : markStatus === 'one' ? t('markedRead') : ''}
@@ -287,7 +287,7 @@ export function NotificationsList({
         </ul>
       )}
 
-      {moreFailed ? <p role="alert" className="mb-3 text-[15px] text-error">{t('moreError')}</p> : null}
+      {moreFailed ? <p role="alert" className="mb-3 text-[15px] text-error-text">{t('moreError')}</p> : null}
       {cursor ? (
         <button
           type="button"

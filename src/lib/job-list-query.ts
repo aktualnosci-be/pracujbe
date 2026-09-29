@@ -1,5 +1,6 @@
 import type { GetJobsParams } from '@/lib/jobs';
 import { resolveCityFilters } from '@/lib/locations/city-aliases';
+import { truncateCodePoints } from '@/lib/validation/text';
 import {
   parseSidebarFilters,
   parseSort,
@@ -86,11 +87,19 @@ export interface SavedSearchFilters {
   noLanguage?: true;
 }
 
+/** Limit długości słowa kluczowego i miasta w bazie (`get_public_jobs` ucina, zapis odrzuca dłuższe). */
+export const SAVED_SEARCH_TEXT_MAX = 100;
+
 export function savedSearchFiltersFromQuery(query: JobListQuery): SavedSearchFilters {
   const p = query.filterParams;
   const out: SavedSearchFilters = {};
-  if (p.keyword) out.keyword = p.keyword;
-  if (p.city) out.city = p.city;
+  // Lista ucina słowo kluczowe i miasto do 100 znaków (`left(…, 100)` w `get_public_jobs`,
+  // 0026), a zapis odrzuca dłuższe (0092) — ta sama ucięta wartość = ten sam zbiór ofert,
+  // więc kandydat może zapisać wyszukiwanie, które lista normalnie obsługuje (#1108).
+  const keyword = p.keyword ? truncateCodePoints(p.keyword, SAVED_SEARCH_TEXT_MAX).trim() : '';
+  const city = p.city ? truncateCodePoints(p.city, SAVED_SEARCH_TEXT_MAX).trim() : '';
+  if (keyword) out.keyword = keyword;
+  if (city) out.city = city;
   if (p.categories?.length) out.categories = [...p.categories];
   if (p.locations?.length) out.locations = [...p.locations];
   if (p.contractTypes?.length) out.contractTypes = [...p.contractTypes];
