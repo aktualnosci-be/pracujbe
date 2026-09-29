@@ -178,6 +178,20 @@ describe('JobPosting JSON-LD (#313)', () => {
     expect(data.employmentType).not.toBe('FULL_TIME');
   });
 
+  // #811 (0974): wymiar pracy zadeklarowany przez pracodawcę (`jobs.work_time`) daje
+  // FULL_TIME/PART_TIME także przy umowie na stałe; bez deklaracji nadal nic (#842).
+  it('#811: zadeklarowany wymiar pracy → employmentType (także przy umowie na stałe)', () => {
+    expect(buildJobPostingJsonLd(job({ contractType: 'permanent', workTime: 'part_time' }), 'u', labels).employmentType)
+      .toBe('PART_TIME');
+    expect(buildJobPostingJsonLd(job({ contractType: 'permanent', workTime: 'both' }), 'u', labels).employmentType)
+      .toEqual(['FULL_TIME', 'PART_TIME']);
+    expect(buildJobPostingJsonLd(job({ contractType: 'temporary', workTime: 'full_time' }), 'u', labels).employmentType)
+      .toEqual(['FULL_TIME', 'TEMPORARY']);
+    // Kontrola ujemna: opis godzin bez deklaracji niczego nie ustawia.
+    expect(buildJobPostingJsonLd(job({ contractType: 'permanent', workingHours: 'Full-time' }), 'u', labels))
+      .not.toHaveProperty('employmentType');
+  });
+
   it('#842 kontrola ujemna: rodzaje umowy o znanej kategorii nadal emitują employmentType', () => {
     expect(buildJobPostingJsonLd(job({ contractType: 'temporary' }), 'u', labels).employmentType).toBe(
       'TEMPORARY',

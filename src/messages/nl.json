@@ -557,7 +557,13 @@
       "mailSubject": "Vacature: {title}",
       "contact": "Rechtstreeks contact met de adverteerder"
     },
-    "startImmediate": "Onmiddellijke start"
+    "startImmediate": "Onmiddellijke start",
+    "workTimeLabel": "Arbeidsduur",
+    "workTimeValues": {
+      "full_time": "Voltijds",
+      "part_time": "Deeltijds",
+      "both": "Voltijds of deeltijds"
+    }
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1407,7 +1413,32 @@
     "showLess": "Minder tonen",
     "noLocations": "Geen locaties",
     "close": "Sluiten",
-    "directOnly": "Rechtstreeks bij de werkgever"
+    "directOnly": "Rechtstreeks bij de werkgever",
+    "languageAny": "Elke taal",
+    "languageLevel": "Mijn taalniveau",
+    "languageLevelAny": "Elk niveau",
+    "languageLevelNote": "We tonen vacatures die deze taal hoogstens op het gekozen niveau vereisen (of zonder vermeld niveau).",
+    "languageLevels": {
+      "basic": "Basis",
+      "intermediate": "Gemiddeld",
+      "fluent": "Vloeiend",
+      "native": "Moedertaal"
+    },
+    "languageChip": "Taal: {language}",
+    "languageLevelChip": "Taal: {language}, niveau tot: {level}",
+    "workTime": "Arbeidsduur",
+    "workTimeAny": "Elke",
+    "workTimeFull": "Voltijds",
+    "workTimePart": "Deeltijds",
+    "workTimeNote": "Alleen vacatures waarbij de werkgever de arbeidsduur heeft vermeld.",
+    "distance": "Afstand",
+    "near": "Gemeente",
+    "nearPlaceholder": "bv. Gent",
+    "radiusKm": "{km} km",
+    "radiusNote": "We meten de afstand in vogelvlucht vanaf een gemeente uit onze lijst. Vacatures zonder herkende gemeente worden bij deze filter niet getoond.",
+    "radiusChip": "Binnen {km} km van {place}",
+    "nearUnknown": "We herkennen de gemeente „{place}” niet. Vul de naam van een Belgische gemeente of stad in, bijvoorbeeld Gent of Luik.",
+    "salaryCurrencyNote": "Bedragen in een andere munt dan de euro rekenen we niet om — die vacatures blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon."
   },
   "notifications": {
     "title": "Meldingen",
@@ -1815,7 +1846,13 @@
     "contentLocaleLabel": "Taal van de vacature",
     "contentLocaleHint": "In deze taal schrijf je de tekst van de vacature. Dit mag afwijken van de taal van het paneel; de taalaanduiding en vertalingen voor kandidaten hangen ervan af.",
     "contentLocaleLocked": "De taal van een gepubliceerde vacature kan niet worden gewijzigd.",
-    "languageLevelAria": "Taalniveau: {level}"
+    "languageLevelAria": "Taalniveau: {level}",
+    "workTimeLabel": "Arbeidsduur",
+    "workTimeHint": "Zo vinden kandidaten de vacature met de filter „voltijds / deeltijds”. De beschrijving van de uren blijft een aanvulling.",
+    "workTimeNone": "Niet vermeld",
+    "workTimeFull": "Voltijds",
+    "workTimePart": "Deeltijds",
+    "workTimeBoth": "Voltijds of deeltijds"
   },
   "jobImport": {
     "title": "Importeren uit een vacature",

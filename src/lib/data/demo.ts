@@ -24,6 +24,7 @@ import type {
   SalaryPeriod,
 } from '@/lib/jobs';
 import { routing, type Locale } from '@/i18n/routing';
+import type { WorkTime } from '@/lib/job-filter-options';
 
 /** Wartość lokalizowana na wszystkie języki aplikacji. */
 type L<T = string> = Record<Locale, T>;
@@ -339,6 +340,19 @@ const WH = {
 } satisfies Record<string, L>;
 
 type WhKey = keyof typeof WH;
+
+/**
+ * Wymiar pracy ofert demonstracyjnych (#811, 0974) — jawne dane zestawu (odpowiednik
+ * `jobs.work_time`, deklaracji pracodawcy), nie zgadywanie z tekstu. `undefined` = brak deklaracji.
+ */
+const WH_WORK_TIME: Record<WhKey, WorkTime | undefined> = {
+  fulltime: 'full_time',
+  fulltime40: 'full_time',
+  parttime: 'part_time',
+  dayShift: undefined,
+  flexible: undefined,
+  seasonal: 'full_time',
+};
 
 /** System zmianowy. */
 const SH = {
@@ -816,6 +830,7 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     requirementsOptional: raw.optionalKeys.map((k) => OPT[k][content]),
     conditions: raw.conditionKeys.map((k) => COND[k][content]),
     workingHours: WH[raw.workingHoursKey][content],
+    ...(WH_WORK_TIME[raw.workingHoursKey] ? { workTime: WH_WORK_TIME[raw.workingHoursKey] } : {}),
     shifts: raw.shiftsKey ? SH[raw.shiftsKey][content] : undefined,
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,

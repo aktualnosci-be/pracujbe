@@ -58,7 +58,8 @@ export function publicHttpsUrl(value: string | undefined): string | undefined {
  * `buildJobPostingJsonLd` w ogóle nie emituje `employmentType` dla niepotwierdzonego wymiaru,
  * zamiast fałszywie deklarować `FULL_TIME`. Pozostałe rodzaje (`temporary`/`interim`/
  * `freelance`/`internship`/`seasonal`) same w sobie są kategorią zatrudnienia niezależną od
- * wymiaru, więc zostają. Docelowe jawne pole wymiaru etatu — #811.
+ * wymiaru, więc zostają. Jawny wymiar etatu (#811, 0974: `jobs.work_time`) dokłada
+ * `FULL_TIME`/`PART_TIME` tylko wtedy, gdy pracodawca go zadeklarował (`WORK_TIME_EMPLOYMENT`).
  */
 const EMPLOYMENT_TYPE: Partial<Record<ContractType, string>> = {
   temporary: 'TEMPORARY',
@@ -67,6 +68,20 @@ const EMPLOYMENT_TYPE: Partial<Record<ContractType, string>> = {
   internship: 'INTERN',
   seasonal: 'TEMPORARY',
 };
+
+/** #811 (0974): zadeklarowany wymiar pracy → `employmentType` (oba warianty = obie wartości). */
+const WORK_TIME_EMPLOYMENT: Record<NonNullable<JobDetail['workTime']>, readonly string[]> = {
+  full_time: ['FULL_TIME'],
+  part_time: ['PART_TIME'],
+  both: ['FULL_TIME', 'PART_TIME'],
+};
+
+function employmentTypes(job: JobDetail): string[] {
+  const types = [...(job.workTime ? WORK_TIME_EMPLOYMENT[job.workTime] : [])];
+  const contract = EMPLOYMENT_TYPE[job.contractType];
+  if (contract && !types.includes(contract)) types.push(contract);
+  return types;
+}
 
 const SALARY_UNIT: Record<NonNullable<JobDetail['salaryPeriod']>, string> = {
   hour: 'HOUR',
@@ -225,10 +240,13 @@ export function buildJobPostingJsonLd(
     },
     datePosted: job.publishedAt,
     ...(validThrough ? { validThrough } : {}),
-    // #842 — bez potwierdzonego wymiaru pracy (`permanent`) pole jest pomijane, nie zgadywane.
-    ...(EMPLOYMENT_TYPE[job.contractType]
-      ? { employmentType: EMPLOYMENT_TYPE[job.contractType] }
-      : {}),
+    // #842 — bez potwierdzonego wymiaru pracy (`permanent`) pole jest pomijane, nie zgadywane;
+    // #811 — zadeklarowany wymiar (FULL_TIME/PART_TIME) + kategoria z rodzaju umowy.
+    ...(() => {
+      const types = employmentTypes(job);
+      if (types.length === 0) return {};
+      return { employmentType: types.length === 1 ? types[0] : types };
+    })(),
     hiringOrganization: {
       '@type': 'Organization',
       name: job.companyName,

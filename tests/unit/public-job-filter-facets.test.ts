@@ -75,9 +75,10 @@ describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
       expect(values[12]).toBe('hour');
     }
     const [listSql, listValues] = calls.find(([sql]) => sql.includes('p_sort'))!;
-    expect(listSql).toContain('p_sort => $15::text');
-    // 0167: $14 = p_direct_only (NULL bez filtra), potem sortowanie i stronicowanie.
-    expect(listValues.slice(13)).toEqual([null, 'salary', 12, 0]);
+    expect(listSql).toContain('p_sort => $20::text');
+    // 0167: $14 = p_direct_only, 0974: $15–$19 = język, poziom, wymiar, promień (NULL bez
+    // filtra), potem sortowanie i stronicowanie.
+    expect(listValues.slice(13)).toEqual([null, null, null, null, null, null, 'salary', 12, 0]);
   });
 
   it('0167: filtr „bezpośrednio od pracodawcy” trafia do listy i licznika jako p_direct_only', async () => {
@@ -92,5 +93,39 @@ describe('jednostka wynagrodzenia w publicznych RPC (#188, 0091)', () => {
   it('bez jednostki = month (zachowanie 0080)', async () => {
     const calls = await run({ locale: 'pl' });
     for (const [, values] of calls) expect(values[12]).toBe('month');
+  });
+});
+
+describe('0974: język, wymiar pracy i promień w publicznych RPC', () => {
+  const run = async (
+    params: Parameters<typeof getPublicJobs>[1],
+  ): Promise<Array<[string, unknown[]]>> => {
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes('get_public_jobs_count')) return { rows: [{ total: 0 }] };
+      return { rows: [] };
+    });
+    const client: TransactionClient = { query, release: vi.fn() };
+    const pool: TransactionPool = { connect: vi.fn(async () => client) };
+    await getPublicJobs(pool, params);
+    return query.mock.calls
+      .filter(([sql]) => String(sql).includes('get_public_jobs'))
+      .map(([sql, values]) => [String(sql), (values ?? []) as unknown[]]);
+  };
+
+  it('lista i licznik dostają ten sam komplet nowych parametrów', async () => {
+    const calls = await run({
+      locale: 'nl', language: 'nl', languageLevel: 'fluent', workTime: 'part_time', near: ' Gent ', radiusKm: 50,
+    });
+    expect(calls).toHaveLength(2);
+    for (const [sql, values] of calls) {
+      expect(sql).toContain('p_language => $15::text');
+      expect(sql).toContain('p_radius_km => $19::integer');
+      expect(values.slice(14, 19)).toEqual(['nl', 'fluent', 'part_time', 'Gent', 50]);
+    }
+  });
+
+  it('kontrola ujemna: poziom bez języka i promień bez miejscowości nie trafiają do zapytania', async () => {
+    const calls = await run({ locale: 'pl', languageLevel: 'fluent', near: '   ', radiusKm: 50 });
+    for (const [, values] of calls) expect(values.slice(14, 19)).toEqual([null, null, null, null, null]);
   });
 });

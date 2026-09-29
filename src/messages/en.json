@@ -557,7 +557,13 @@
       "mailSubject": "Job ad: {title}",
       "contact": "Direct contact with the advertiser"
     },
-    "startImmediate": "Immediate start"
+    "startImmediate": "Immediate start",
+    "workTimeLabel": "Working time",
+    "workTimeValues": {
+      "full_time": "Full-time",
+      "part_time": "Part-time",
+      "both": "Full-time or part-time"
+    }
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1407,7 +1413,32 @@
     "showLess": "Show less",
     "noLocations": "No locations",
     "close": "Close",
-    "directOnly": "Directly from the employer"
+    "directOnly": "Directly from the employer",
+    "languageAny": "Any language",
+    "languageLevel": "My language level",
+    "languageLevelAny": "Any level",
+    "languageLevelNote": "We show jobs that require this language at most at the selected level (or without a stated level).",
+    "languageLevels": {
+      "basic": "Basic",
+      "intermediate": "Intermediate",
+      "fluent": "Fluent",
+      "native": "Native"
+    },
+    "languageChip": "Language: {language}",
+    "languageLevelChip": "Language: {language}, level up to: {level}",
+    "workTime": "Working time",
+    "workTimeAny": "Any",
+    "workTimeFull": "Full-time",
+    "workTimePart": "Part-time",
+    "workTimeNote": "Only jobs where the employer stated the working time.",
+    "distance": "Distance",
+    "near": "Town",
+    "nearPlaceholder": "e.g. Ghent",
+    "radiusKm": "{km} km",
+    "radiusNote": "Distance is measured in a straight line from a town on our list. Jobs without a recognised town are not shown with this filter.",
+    "radiusChip": "Within {km} km of {place}",
+    "nearUnknown": "We did not recognise the town “{place}”. Enter the name of a Belgian municipality or city, for example Ghent or Liège.",
+    "salaryCurrencyNote": "Amounts in currencies other than the euro are not converted — those jobs stay visible with this filter and appear last when sorting by salary."
   },
   "notifications": {
     "title": "Notifications",
@@ -1815,7 +1846,13 @@
     "contentLocaleLabel": "Listing language",
     "contentLocaleHint": "You write the listing text in this language. It can differ from the panel language; the language label and translations for candidates depend on it.",
     "contentLocaleLocked": "The language of a published offer cannot be changed.",
-    "languageLevelAria": "Language level: {level}"
+    "languageLevelAria": "Language level: {level}",
+    "workTimeLabel": "Working time",
+    "workTimeHint": "Lets candidates find the job with the “full-time / part-time” filter. The description of hours remains as extra information.",
+    "workTimeNone": "Not stated",
+    "workTimeFull": "Full-time",
+    "workTimePart": "Part-time",
+    "workTimeBoth": "Full-time or part-time"
   },
   "jobImport": {
     "title": "Import from a job ad",

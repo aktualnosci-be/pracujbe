@@ -25,6 +25,18 @@ import {
   type SalaryUnit,
 } from '@/lib/salary-compare';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
+import type { LanguageCode } from '@/lib/languages';
+import {
+  isLanguageFilterCode,
+  isLanguageFilterLevel,
+  isWorkTimeFilter,
+  NEAR_MAX_LENGTH,
+  parseRadiusKm,
+  DEFAULT_RADIUS_KM,
+  type LanguageFilterLevel,
+  type RadiusKm,
+  type WorkTimeFilter,
+} from '@/lib/job-filter-options';
 
 /**
  * Widełki suwaka wynagrodzenia (brutto/mies., EUR). `SALARY_MAX_BOUND` oznacza „i więcej”.
@@ -73,6 +85,16 @@ export interface SidebarFilters {
   noLanguageRequired: boolean;
   /** 0167: tylko oferty spoza agencji pracy tymczasowej (URL `direct=1`). */
   directOnly: boolean;
+  /** #786 (0974): wymagany język oferty (kod słownika, URL `lang`); `null` = bez filtra. */
+  language: LanguageCode | null;
+  /** #786: poziom kandydata (URL `langLevel`, tylko z językiem) — oferty wymagające najwyżej tego. */
+  languageLevel: LanguageFilterLevel | null;
+  /** #811 (0974): wymiar pracy (URL `workTime`); oferta z oboma wariantami pasuje do obu. */
+  workTime: WorkTimeFilter | null;
+  /** #824 (0974): miejscowość środka promienia (URL `near`); pusty = bez filtra. */
+  near: string;
+  /** #824: promień w km (URL `radius`), znaczący tylko z miejscowością. */
+  radiusKm: RadiusKm;
   date: DateValue;
 }
 
@@ -84,6 +106,8 @@ export interface FacetItem {
   salaryMin?: number;
   salaryMax?: number;
   salaryPeriod?: SalaryPeriod;
+  /** #787: waluta kwot (brak = EUR) — inna waluta jest w filtrze kwoty nieporównywalna. */
+  currency?: string;
   accommodation: boolean;
   immediate: boolean;
   noLanguageRequired: boolean;
@@ -140,6 +164,11 @@ export function emptySidebarFilters(): SidebarFilters {
     immediate: false,
     noLanguageRequired: false,
     directOnly: false,
+    language: null,
+    languageLevel: null,
+    workTime: null,
+    near: '',
+    radiusKm: DEFAULT_RADIUS_KM,
     date: 'any',
   };
 }
@@ -281,6 +310,16 @@ export function parseSidebarFilters(
   f.immediate = sp['immediate'] === '1';
   f.noLanguageRequired = sp['noLang'] === '1';
   f.directOnly = sp['direct'] === '1';
+
+  // 0974: język + poziom (poziom bez języka nic nie znaczy), wymiar pracy, promień.
+  const lang = sp['lang'];
+  f.language = isLanguageFilterCode(lang) ? lang : null;
+  const level = sp['langLevel'];
+  f.languageLevel = f.language && isLanguageFilterLevel(level) ? level : null;
+  const workTime = sp['workTime'];
+  f.workTime = isWorkTimeFilter(workTime) ? workTime : null;
+  f.near = (sp['near'] ?? '').trim().slice(0, NEAR_MAX_LENGTH).trim();
+  f.radiusKm = f.near ? parseRadiusKm(sp['radius']) : DEFAULT_RADIUS_KM;
 
   const date = sp['date'];
   f.date = (DATE_VALUES as readonly string[]).includes(date ?? '')
@@ -438,6 +477,7 @@ export function toFacetItem(job: JobListItem): FacetItem {
     salaryMin: job.salaryMin,
     salaryMax: job.salaryMax,
     ...(job.salaryPeriod ? { salaryPeriod: job.salaryPeriod } : {}),
+    currency: job.currency,
     accommodation: job.accommodation,
     immediate: job.immediate,
     noLanguageRequired: job.noLanguageRequired,
@@ -466,8 +506,37 @@ export function sidebarFiltersToParams(
   if (f.immediate) params['immediate'] = '1';
   if (f.noLanguageRequired) params['noLang'] = '1';
   if (f.directOnly) params['direct'] = '1';
+  if (f.language) {
+    params['lang'] = f.language;
+    if (f.languageLevel) params['langLevel'] = f.languageLevel;
+  }
+  if (f.workTime) params['workTime'] = f.workTime;
+  if (f.near) {
+    params['near'] = f.near;
+    params['radius'] = String(f.radiusKm);
+  }
   if (f.date !== 'any') params['date'] = f.date;
   return params;
+}
+
+/**
+ * Filtry 0974 jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
+ * `p_near`, `p_radius_km`). Jak słowo kluczowe zawężają BAZĘ wszystkich wymiarów facetów
+ * (SQL: warunek w `base`), więc dane demo filtruje nimi `getJobs`, nie `matchesSidebar`.
+ */
+export function refinementQueryParams(f: SidebarFilters): {
+  language?: LanguageCode;
+  languageLevel?: LanguageFilterLevel;
+  workTime?: WorkTimeFilter;
+  near?: string;
+  radiusKm?: RadiusKm;
+} {
+  return {
+    ...(f.language ? { language: f.language } : {}),
+    ...(f.language && f.languageLevel ? { languageLevel: f.languageLevel } : {}),
+    ...(f.workTime ? { workTime: f.workTime } : {}),
+    ...(f.near ? { near: f.near, radiusKm: f.radiusKm } : {}),
+  };
 }
 
 /** Liczba aktywnych wymiarów filtra (na badge „Filtry (n)”). */
@@ -481,6 +550,9 @@ export function countActiveSidebar(f: SidebarFilters): number {
     (f.immediate ? 1 : 0) +
     (f.noLanguageRequired ? 1 : 0) +
     (f.directOnly ? 1 : 0) +
+    (f.language ? 1 : 0) +
+    (f.workTime ? 1 : 0) +
+    (f.near ? 1 : 0) +
     (f.date !== 'any' ? 1 : 0)
   );
 }

@@ -528,6 +528,8 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       contract_type: s2.contractType,
       working_hours: s2.workingHours,
       shifts: nullIfEmpty(s2.shifts),
+      // #811 (0974): wymiar pracy (brak = brak deklaracji).
+      work_time: s2.workTime ?? null,
       start_immediately: s2.startImmediately,
       start_date: s2.startDate ?? null,
       city: s3.city,

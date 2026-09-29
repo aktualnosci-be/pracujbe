@@ -12,6 +12,9 @@
  * Stawek godzinowych i miesięcznych nie przeliczamy na siebie: godziny pracy to wolny
  * tekst, a 160 h/mies. nie pasuje do niepełnego wymiaru ani zmiennych godzin.
  * Brak okresu = `month` (domyślna wartość kolumny `jobs.salary_period`).
+ * Waluta (#787, 0974): widełki i sortowanie są w EUR. Kwoty w innej walucie (np. PLN) NIE są
+ * przeliczane — portal nie ma datowanego źródła kursów — więc taka oferta jest nieporównywalna,
+ * tak samo jak stawka w innym okresie. Brak waluty = EUR (domyślna wartość `jobs.currency`).
  * Oferta bez porównywalnej kwoty nie odpada z filtra kwoty i trafia na koniec sortowania.
  */
 
@@ -29,6 +32,16 @@ export interface SalaryFields {
   salaryMin?: number;
   salaryMax?: number;
   salaryPeriod?: SalaryPeriod;
+  /** Kod ISO waluty (`jobs.currency`); brak = EUR. */
+  currency?: string;
+}
+
+/** Waluta filtra i sortowania wynagrodzeń (suwak w EUR). */
+export const SALARY_COMPARE_CURRENCY = 'EUR';
+
+/** Czy kwoty oferty są w walucie filtra (#787) — lustro `coalesce(currency, 'EUR') = 'EUR'`. */
+export function isComparableCurrency(currency: string | undefined): boolean {
+  return (currency ?? SALARY_COMPARE_CURRENCY) === SALARY_COMPARE_CURRENCY;
 }
 
 /** Miesięczny ekwiwalent kwoty albo `undefined`, gdy kwoty nie da się porównać. */
@@ -62,6 +75,7 @@ export function salarySortKey(
   job: SalaryFields,
   unit: SalaryUnit = 'month',
 ): number | undefined {
+  if (!isComparableCurrency(job.currency)) return undefined;
   return comparableSalary(job.salaryMax ?? job.salaryMin, job.salaryPeriod, unit);
 }
 
@@ -72,7 +86,7 @@ export function monthlySalarySortKey(job: SalaryFields): number | undefined {
 
 /**
  * Czy oferta mieści się w widełkach filtra w wybranej jednostce. `hi` = `Infinity`
- * oznacza „i więcej”. Oferta bez porównywalnej kwoty zawsze przechodzi.
+ * oznacza „i więcej”. Oferta bez porównywalnej kwoty (także w innej walucie) zawsze przechodzi.
  */
 export function salaryInRange(
   job: SalaryFields,
@@ -80,6 +94,7 @@ export function salaryInRange(
   hi: number,
   unit: SalaryUnit = 'month',
 ): boolean {
+  if (!isComparableCurrency(job.currency)) return true;
   const top = comparableSalary(job.salaryMax ?? job.salaryMin, job.salaryPeriod, unit);
   const bottom = comparableSalary(job.salaryMin ?? job.salaryMax, job.salaryPeriod, unit);
   if (top === undefined || bottom === undefined) return true;

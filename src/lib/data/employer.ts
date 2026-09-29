@@ -598,6 +598,8 @@ export interface JobDraftValues {
   contractType: string;
   workingHours: string;
   shifts: string;
+  /** #811 (0974): `jobs.work_time`; pusty = brak deklaracji. */
+  workTime: string;
   startImmediately: boolean;
   startDate: string;
   city: string;
@@ -751,6 +753,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       contractType: 'permanent',
       workingHours: '38 h / tydzień',
       shifts: '',
+      workTime: 'full_time',
       startImmediately: true,
       startDate: '',
       city: job.city,
@@ -808,7 +811,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     const loaded = await withPortalTransaction(me, async (tx) => {
       const job = await queryOne(tx, 'employer.job-draft',
         `SELECT id, company_id, status, title, category, occupation, contract_type, working_hours,
-                shifts, start_immediately, start_date, city, region, address, remote, salary_min,
+                shifts, work_time, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
                 expires_at, updated_at,
@@ -881,6 +884,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         contractType: asString(job['contract_type']),
         workingHours: asString(job['working_hours']),
         shifts: asString(job['shifts']),
+        workTime: asString(job['work_time']),
         startImmediately: job['start_immediately'] === true,
         startDate: asString(job['start_date']),
         city: asString(job['city']),

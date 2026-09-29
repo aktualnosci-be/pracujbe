@@ -10,6 +10,14 @@ import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { codePointLength, hasNoNul } from '@/lib/validation/text';
+import type { LanguageCode } from '@/lib/languages';
+import {
+  LANGUAGE_FILTER_CODES,
+  LANGUAGE_FILTER_LEVELS,
+  RADIUS_KM_OPTIONS,
+  WORK_TIME_FILTERS,
+  type RadiusKm,
+} from '@/lib/job-filter-options';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
@@ -45,9 +53,20 @@ const filtersSchema = z
     accommodation: z.boolean().optional(),
     immediate: z.literal(true).optional(),
     noLanguage: z.literal(true).optional(),
+    // 0974: te same listy co baza (`saved_search_canonical_filters`) i panel filtrów.
+    language: z.enum(LANGUAGE_FILTER_CODES as unknown as [LanguageCode, ...LanguageCode[]]).optional(),
+    languageLevel: z.enum(LANGUAGE_FILTER_LEVELS).optional(),
+    workTime: z.enum(WORK_TIME_FILTERS).optional(),
+    near: text100.optional(),
+    radiusKm: z.union(RADIUS_KM_OPTIONS.map((km) => z.literal(km)) as unknown as [
+      z.ZodLiteral<RadiusKm>, z.ZodLiteral<RadiusKm>, ...z.ZodLiteral<RadiusKm>[]
+    ]).optional(),
   })
   .strict()
-  .refine((f) => Object.keys(f).length > 0);
+  .refine((f) => Object.keys(f).length > 0)
+  // Poziom bez języka i promień bez miejscowości baza odrzuca/pomija — nie wysyłamy ich wcale.
+  .refine((f) => !f.languageLevel || f.language !== undefined)
+  .refine((f) => f.radiusKm === undefined || f.near !== undefined);
 
 const saveSchema = z.object({
   name: z
