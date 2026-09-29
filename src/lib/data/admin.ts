@@ -67,9 +67,12 @@ import {
 import {
   buildViesState,
   companyVatSource,
+  parseViesAutoRetry,
   type AdminViesState,
   type StoredViesCheck,
+  type ViesAutoRetry,
 } from '@/lib/vies/state';
+import { parseBelgianVat } from '@/lib/vies/belgian-vat';
 
 /* ---------------------------------------------------------------------------
  * Kontrakty dla UI
@@ -1644,6 +1647,8 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   jobsTotal: number;
   /** Weryfikacja numeru VAT w VIES (#92) — informacja dla admina, nie decyzja. */
   vies: AdminViesState;
+  /** 0976 (#706/#879): automatyczne sprawdzenie VIES czekające na ponowienie; `null` = brak. */
+  viesAutoRetry: ViesAutoRetry | null;
   /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia numeru uznania. */
   agency: AdminCompanyAgency;
 }
@@ -1704,6 +1709,7 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
         vatSource: companyVatSource(row.vatNumber, row.registrationNumber),
         stored: null,
       }),
+      viesAutoRetry: null,
       agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked', checkedAt: null, checkNote: null },
     },
   };
@@ -1743,6 +1749,30 @@ async function readStoredViesCheck(
     },
     failed: false,
   };
+}
+
+/**
+ * Zadanie automatycznego sprawdzenia VIES (0976) dla bieżącego numeru firmy. Błąd odczytu
+ * nie psuje szczegółu (SAVEPOINT) — sekcja VIES pokazuje wtedy sam zapisany wynik.
+ */
+async function readViesAutoRetry(
+  tx: TransactionQuery,
+  companyId: string,
+  vatSource: string | null,
+): Promise<ViesAutoRetry | null> {
+  const parsed = parseBelgianVat(vatSource);
+  if (!parsed.ok) return null;
+  const read = await attempt(tx, () =>
+    queryOne(tx, 'admin.company-vies-auto-queue',
+      `SELECT vat_number, attempts, next_attempt_at, last_outcome
+         FROM public.company_vies_auto_queue
+        WHERE company_id = $1`, [companyId]),
+  );
+  if (!read.ok) {
+    captureError(read.error, { area: 'admin.readViesAutoRetry' });
+    return null;
+  }
+  return parseViesAutoRetry(read.value ? asRecord(read.value) : null, parsed.number);
 }
 
 /**
@@ -1794,7 +1824,8 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
       const viesRead = vatSource
         ? await readStoredViesCheck(tx, uuid)
         : { stored: null, failed: false };
-      return { c, members: asRows(members), jobs: asRows(jobs), jobsTotal, vatSource, viesRead };
+      const viesAutoRetry = vatSource ? await readViesAutoRetry(tx, uuid, vatSource) : null;
+      return { c, members: asRows(members), jobs: asRows(jobs), jobsTotal, vatSource, viesRead, viesAutoRetry };
     });
     if (!loaded) return { status: 'not_found' };
 
@@ -1860,6 +1891,7 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
           stored: viesRead.stored,
           storedLoadFailed: viesRead.failed,
         }),
+        viesAutoRetry: loaded.viesAutoRetry,
       },
     };
   } catch (error) {

@@ -17,6 +17,7 @@ import { captureError } from '@/lib/error-report';
 import { runMatchRecompute, type MatchRecomputeRun } from '@/lib/matching/materialize';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { effectiveRecruitmentEnabled } from '@/lib/ops/portal-mode';
+import { processCompanyViesAutoQueue, type ViesAutoQueueRun } from '@/lib/vies/auto-check';
 import { MESSAGE_ATTACHMENTS_BUCKET, runStorageGc, storageGcDryRun, type StorageGcRun } from '@/lib/storage-gc';
 import {
   processStorageDeletions,
@@ -168,7 +169,8 @@ async function run(request: Request): Promise<Response> {
     | 'storageGc'
     | 'messageAttachmentsGc'
     | 'dsaRetention'
-    | 'storageDeletions';
+    | 'storageDeletions'
+    | 'viesAutoChecks';
   const failures: Array<{ task: Task; error: unknown }> = [];
 
   /** Jedno zadanie = jedna transakcja; `null` = błąd (zapamiętany), kolejne zadania idą dalej. */
@@ -315,6 +317,14 @@ async function run(request: Request): Promise<Response> {
   } catch (error) {
     failures.push({ task: 'storageDeletions', error });
   }
+  // #706/#879 (0976): kolejka automatycznego sprawdzenia VIES — ponowienia po chwilowej
+  // niedostępności usługi i numery dopisane po założeniu firmy. Status firmy bez zmian.
+  let viesAutoChecks: ViesAutoQueueRun | null = null;
+  try {
+    viesAutoChecks = await processCompanyViesAutoQueue();
+  } catch (error) {
+    failures.push({ task: 'viesAutoChecks', error });
+  }
 
   const [first] = failures;
   await recordRun(Date.now() - startedAt, first?.task ?? null);
@@ -345,6 +355,7 @@ async function run(request: Request): Promise<Response> {
     messageAttachmentsGc,
     dsaRetention,
     storageDeletions,
+    viesAutoChecks,
   });
 }
 

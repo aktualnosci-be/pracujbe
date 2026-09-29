@@ -4421,6 +4421,194 @@ reset role;
 
 
 -- ============================================================================
+-- VQ976. Trwała kolejka automatycznego sprawdzenia VIES (0976, #706/#879)
+-- Trigger kolejkuje każdy nowy prawidłowy numer (także dopisany po założeniu firmy), claim
+-- z dzierżawą i limitem prób, backoff po awarii VIES, wynik rozstrzygający zdejmuje zadanie.
+-- Kontrole ujemne: bez triggera dopisany numer nie trafia do kolejki; klient bez dostępu;
+-- ponowny zapis tego samego numeru nie zeruje prób; awaria nie jest wynikiem.
+-- ============================================================================
+reset role; reset app.current_uid;
+\set COMPVQ '00000000-0000-0000-0000-000000000a98'
+\set COMPVQ2 '00000000-0000-0000-0000-000000000a99'
+
+-- VQ976-1: firma z numerem → zadanie z numerem znormalizowanym, bez prób.
+insert into public.companies(id, name, status, vat_number)
+  values (:'COMPVQ', 'Firma VQ', 'unverified', 'be 0417-497-106');
+select pg_temp.assert(
+  (select vat_number = '0417497106' and attempts = 0 and lease_until is null and next_attempt_at <= now()
+     from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-1 założenie firmy z numerem kolejkuje sprawdzenie');
+
+-- VQ976-2 (#879): firma bez numeru → brak zadania; numer dopisany później (także KBO) → zadanie.
+insert into public.companies(id, name, status) values (:'COMPVQ2', 'Firma VQ2', 'unverified');
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2 firma bez numeru bez zadania');
+update public.companies set name = 'Firma VQ2 nowa' where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2b sama zmiana nazwy nie kolejkuje');
+update public.companies set vat_number = 'DE123456789' where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2c numer spoza BE nie kolejkuje');
+update public.companies set vat_number = null, registration_number = '0403.170.701' where id = :'COMPVQ2';
+select pg_temp.assert(
+  (select vat_number from public.company_vies_auto_queue where company_id = :'COMPVQ2') = '0403170701',
+  'VQ976-2d numer KBO dopisany po założeniu firmy kolejkuje sprawdzenie');
+
+-- VQ976-2n: KONTROLA UJEMNA — bez triggera dopisany numer nie trafia do kolejki (to trigger
+-- zamyka #879, nie przypadek).
+begin;
+drop trigger trg_companies_vies_auto_enqueue on public.companies;
+update public.companies set registration_number = null where id = :'COMPVQ2';
+delete from public.company_vies_auto_queue where company_id = :'COMPVQ2';
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-2n bez triggera numer dopisany w edycji nie jest sprawdzany (stan sprzed 0976)');
+rollback;
+
+-- VQ976-3: claim tylko service_role; dzierżawa blokuje drugie pobranie; próba liczona.
+set role service_role;
+select count(*) as vq_claimed from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+select count(*) as vq_again from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+reset role;
+select pg_temp.assert(:'vq_claimed' = '1' and :'vq_again' = '0', 'VQ976-3 dzierżawa: jedno pobranie naraz');
+select pg_temp.assert(
+  (select attempts = 1 and lease_until > now() from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-3b próba policzona przy pobraniu');
+
+-- VQ976-4 (#706): awaria VIES → zadanie zostaje z terminem ponowienia (backoff), bez wyniku.
+set role service_role;
+select public.finish_company_vies_auto_check(:'COMPVQ', '0417497106', 'rate_limited') as vq_fin \gset
+select count(*) as vq_early from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+reset role;
+select pg_temp.assert(:'vq_fin' = 't' and :'vq_early' = '0', 'VQ976-4 przed terminem ponowienia brak pobrania');
+select pg_temp.assert(
+  (select lease_until is null and last_outcome = 'rate_limited'
+          and next_attempt_at between now() + interval '4 minutes' and now() + interval '6 minutes'
+     from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-4b backoff 5 min po pierwszej próbie, dzierżawa zwolniona');
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_checks where company_id = :'COMPVQ'),
+  'VQ976-4c awaria nie jest zapisana jako wynik');
+
+-- VQ976-5: ponowny zapis tego samego numeru (inny zapis) nie zeruje prób ani terminu.
+update public.companies set vat_number = 'BE0417.497.106' where id = :'COMPVQ';
+select pg_temp.assert(
+  (select attempts = 1 and last_outcome = 'rate_limited' and next_attempt_at > now()
+     from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-5 ten sam numer nie omija backoffu');
+
+-- VQ976-6: po terminie kolejna próba; backoff rośnie; wynik rozstrzygający zdejmuje zadanie.
+update public.company_vies_auto_queue set next_attempt_at = now() - interval '1 second' where company_id = :'COMPVQ';
+set role service_role;
+select attempts as vq_att from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+select public.finish_company_vies_auto_check(:'COMPVQ', '0417497106', 'unavailable') as vq_fin2 \gset
+reset role;
+select pg_temp.assert(:'vq_att' = '2'
+  and (select next_attempt_at > now() + interval '9 minutes' from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-6 druga próba, backoff 10 min');
+update public.company_vies_auto_queue set next_attempt_at = now() - interval '1 second' where company_id = :'COMPVQ';
+set role service_role;
+select count(*) as vq_c3 from public.claim_company_vies_auto_checks(10, :'COMPVQ') \gset
+select public.record_company_vies_check_auto(:'COMPVQ', '0417497106', 'valid', 'NV VQ') as vq_saved \gset
+reset role;
+select pg_temp.assert(:'vq_c3' = '1' and :'vq_saved' = 't'
+  and not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-6b wynik zapisany po ponowieniu zdejmuje zadanie');
+
+-- VQ976-7: numer już sprawdzony → ponowny zapis nie kolejkuje; nowy numer kolejkuje i wynik
+-- dla starego numeru zostaje zastąpiony (dla tego samego numeru — nie, VA164-2).
+update public.companies set vat_number = '0417497106' where id = :'COMPVQ';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-7 numer z wynikiem nie wraca do kolejki');
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ';
+select pg_temp.assert(
+  (select vat_number = '0403170701' and attempts = 0 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-7b zmieniony numer kolejkuje sprawdzenie');
+set role service_role;
+select public.record_company_vies_check_auto(:'COMPVQ', '0403170701', 'invalid') as vq_new \gset
+select public.record_company_vies_check_auto(:'COMPVQ', '0403170701', 'valid') as vq_same \gset
+reset role;
+select pg_temp.assert(:'vq_new' = 't' and :'vq_same' = 'f'
+  and (select vat_number = '0403170701' and result = 'invalid' and checked_by is null
+         from public.company_vies_checks where company_id = :'COMPVQ')
+  and not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ'),
+  'VQ976-7c wynik dla nowego numeru zastępuje wynik starego numeru; ten sam numer bez nadpisania');
+
+-- VQ976-8: numer zmieniony w trakcie próby — zakończenie starego zadania nie rusza nowego.
+set role service_role;
+select count(*) as vq_c4 from public.claim_company_vies_auto_checks(10, :'COMPVQ2') \gset
+reset role;
+update public.companies set registration_number = null, vat_number = 'BE0417497106' where id = :'COMPVQ2';
+set role service_role;
+select public.finish_company_vies_auto_check(:'COMPVQ2', '0403170701', 'done') as vq_stale_done \gset
+reset role;
+select pg_temp.assert(:'vq_c4' = '1' and :'vq_stale_done' = 'f'
+  and (select vat_number = '0417497106' and attempts = 0 and lease_until is null
+         from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-8 zadanie dla nowego numeru zostaje (próby od zera)');
+
+-- VQ976-9: limit prób — wyczerpane zadanie nie jest pobierane.
+update public.company_vies_auto_queue
+   set attempts = public.company_vies_auto_max_attempts(), next_attempt_at = now() - interval '1 second'
+ where company_id = :'COMPVQ2';
+set role service_role;
+select count(*) as vq_exh from public.claim_company_vies_auto_checks(10, :'COMPVQ2') \gset
+reset role;
+select pg_temp.assert(:'vq_exh' = '0', 'VQ976-9 po wyczerpaniu prób brak kolejnych zapytań do VIES');
+
+-- VQ976-10: ręczny wynik admina dla bieżącego numeru też zdejmuje zadanie.
+insert into public.company_vies_checks(company_id, vat_number, result) values (:'COMPVQ2', '0417497106', 'valid');
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-10 wynik dla bieżącego numeru zdejmuje zadanie');
+
+-- VQ976-11: usunięcie numeru / firmy usuwa zadanie.
+delete from public.company_vies_checks where company_id = :'COMPVQ2';
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
+select pg_temp.assert(exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-11 ponownie w kolejce');
+update public.companies set vat_number = null where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-11b wyczyszczony numer usuwa zadanie');
+update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
+update public.companies set deleted_at = now() where id = :'COMPVQ2';
+select pg_temp.assert(
+  not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
+  'VQ976-11c usunięta firma bez zadania');
+
+-- VQ976-12: walidacja wyniku zakończenia.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.finish_company_vies_auto_check(%L, ''0417497106'', ''invalid'')', :'COMPVQ'),
+  'VALIDATION_FAILED', 'VQ976-12 nieznany wynik odrzucony');
+reset role;
+
+-- VQ976-13: KONTROLA UJEMNA — pracodawca i anon: brak odczytu kolejki i EXECUTE.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.company_vies_auto_queue',
+  'permission denied', 'VQ976-13 pracodawca nie czyta kolejki');
+select pg_temp.expect_error(
+  format('select * from public.claim_company_vies_auto_checks(10, %L)', :'COMPVQ'),
+  'permission denied', 'VQ976-13b pracodawca nie pobiera zadań');
+select pg_temp.expect_error(
+  format('select public.finish_company_vies_auto_check(%L, ''0417497106'', ''done'')', :'COMPVQ'),
+  'permission denied', 'VQ976-13c pracodawca nie zamyka zadań');
+reset role; reset app.current_uid;
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.company_vies_auto_queue',
+  'permission denied', 'VQ976-13d anon nie czyta kolejki');
+reset role;
+select pg_temp.assert(
+  (select relrowsecurity and relforcerowsecurity from pg_class where oid = 'public.company_vies_auto_queue'::regclass),
+  'VQ976-14 RLS włączone i wymuszone');
+
+-- ============================================================================
 -- ML44 (#44, 0098): zdarzenia doręczeń dostawcy, blokady adresów (suppression),
 -- ręczne zdjęcie blokady przez admina. Kontrole ujemne: bezpośredni DML klienta,
 -- zapis blokady tylko service_role, enqueue na zablokowany adres, replay webhooka.
