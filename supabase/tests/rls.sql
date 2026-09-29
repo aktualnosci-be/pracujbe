@@ -22106,7 +22106,7 @@ insert into public.company_members(company_id,profile_id,role,is_active) values
   (:'CDLU',:'CDLX','owner',true);
 
 -- CDL975-0: nowa kolumna = język nieznany; profil publiczny zwraca null.
-set role anon;
+set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select description_locale is null and description = 'Wij bouwen bruggen.'
      from public.get_public_company('firma-d-cdl975')),
@@ -22125,7 +22125,7 @@ select pg_temp.assert(
     where entity_id = :'CDLC' and action = 'company.description_locale_changed' and actor_id = :'CDLO'
       and after_data = jsonb_build_object('description_locale', 'nl')) = 1,
   'CDL975-1c jeden wpis audytu (ponowienie bez zmiany nie dubluje)');
-set role anon;
+set role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select description_locale = 'nl' from public.get_public_company('firma-d-cdl975')),
   'CDL975-1d profil publiczny zwraca język opisu');
