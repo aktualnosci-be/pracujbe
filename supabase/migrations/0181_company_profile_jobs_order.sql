@@ -1,4 +1,4 @@
--- 0180_company_profile_jobs_order.sql — #638: stronicowanie ofert na profilu firmy
+-- 0181_company_profile_jobs_order.sql — #638: stronicowanie ofert na profilu firmy
 -- (numer nadany przez integratora).
 --
 -- Profil `/pracodawcy/<slug>` pokazywał tylko pierwsze 50 aktywnych ofert (`p_offset = 0`),
