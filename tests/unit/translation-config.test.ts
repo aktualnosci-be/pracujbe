@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TRANSLATION_PIPELINE_VERSION } from '@/lib/translation/pipeline';
-import { isTranslationEnabled, translationModel, translationProvider } from '@/lib/translation/config';
+import { isTranslationEnabled, isTranslationMisconfigured, translationModel, translationProvider } from '@/lib/translation/config';
 
 /** #32 — domyślnie wyłączone; atrapa nigdy w produkcji; wersja pipeline zgodna z CHECK w 0145. */
 const KEYS = ['AI_TRANSLATION_ENABLED', 'AI_TRANSLATION_PROVIDER', 'AI_TRANSLATION_MODEL', 'AI_MODEL', 'OPENAI_API_KEY', 'APP_MODE'];
@@ -18,6 +18,16 @@ describe('konfiguracja tłumaczeń', () => {
     delete process.env.AI_TRANSLATION_ENABLED;
     process.env.OPENAI_API_KEY = 'test-key';
     expect(isTranslationEnabled()).toBe(false);
+  });
+
+  it('#692: błędna konfiguracja tylko przy fladze bez dostawcy', () => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.AI_TRANSLATION_ENABLED;
+    expect(isTranslationMisconfigured()).toBe(false);
+    process.env.AI_TRANSLATION_ENABLED = 'true';
+    expect(isTranslationMisconfigured()).toBe(true);
+    process.env.OPENAI_API_KEY = 'test-key';
+    expect(isTranslationMisconfigured()).toBe(false);
   });
 
   it('flaga + klucz OpenAI = openai; flaga bez klucza = wyłączone', () => {

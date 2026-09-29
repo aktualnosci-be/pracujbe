@@ -158,3 +158,32 @@ describe('normalizeEmailCase', () => {
     expect(normalizeEmailCase('NoAt')).toBe('noat');
   });
 });
+
+describe('znak liczby (#738)', () => {
+  it('zmiana -5°C na 5°C jest odrzucona, zgodny znak przechodzi', () => {
+    expect(diff('Temperatura -5°C', 'pl', 'Temperature 5°C', 'en')).toBe('numbers');
+    expect(diff('Temperatura 5°C', 'pl', 'Temperature -5°C', 'en')).toBe('numbers');
+    expect(diff('Temperatura -5°C', 'pl', 'Temperature -5°C', 'en')).toBeNull();
+    expect(diff('Korekta -1,5 EUR', 'pl', 'Adjustment −1.5 EUR', 'en')).toBeNull();
+  });
+  it('+5 = 5, a zakresy i oznaczenia z myślnikiem nie są ujemne', () => {
+    expect(diff('Premia +5 EUR', 'pl', 'Bonus 5 EUR', 'en')).toBeNull();
+    expect(extractFacts('od 5-10 EUR', 'pl').numbers).toEqual(['10', '5']);
+    expect(extractFacts('B-2 i 5 - 10', 'pl').numbers).toEqual(['10', '2', '5']);
+    expect(extractFacts('-0', 'pl').numbers).toEqual(['0']);
+  });
+});
+
+describe('daty numeryczne wg języka (#739)', () => {
+  it('poprawna lokalizacja pl → en (miesiąc/dzień) przechodzi', () => {
+    expect(extractFacts('Termin: 03.04.2025', 'pl').dates).toEqual(['2025-04-03']);
+    expect(extractFacts('Date: 04/03/2025', 'en').dates).toEqual(['2025-04-03']);
+    expect(diff('Termin: 03.04.2025', 'pl', 'Date: 04/03/2025', 'en')).toBeNull();
+    expect(extractFacts('Date: 25/12/2025', 'en').dates).toEqual(['2025-12-25']);
+  });
+  it('kontrola ujemna: zamieniony dzień z miesiącem nadal odrzucony', () => {
+    expect(diff('Termin: 03.04.2025', 'pl', 'Date: 03/04/2025', 'en')).toBe('dates');
+    expect(extractFacts('Date: 04.03.2025', 'en').dates).toEqual(['2025-03-04']);
+    expect(extractFacts('04/03/2025', 'nl').dates).toEqual(['2025-03-04']);
+  });
+});
