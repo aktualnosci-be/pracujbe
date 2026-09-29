@@ -11,17 +11,33 @@ const RETRYABLE_PROVIDER_ERRORS: ReadonlySet<string> = new Set([
   'application_error',
   'internal_server_error',
   'concurrent_idempotent_requests',
-  // Konfiguracja konta/klucza i limity dnia/miesiąca dotyczą wszystkich listów naraz i mijają po
-  // poprawce po stronie operatora — nie są odrzuceniem konkretnego listu (nie kończymy wiersza).
-  'missing_api_key',
-  'invalid_api_key',
-  'restricted_api_key',
+  // Limity dnia/miesiąca dotyczą wszystkich listów naraz i mijają same — ponowić.
   'daily_quota_exceeded',
   'monthly_quota_exceeded',
 ]);
 
-export function classifyProviderError(name: string | undefined): MailErrorCode {
-  return name && RETRYABLE_PROVIDER_ERRORS.has(name) ? 'provider_unavailable' : 'delivery_failed';
+/**
+ * #1214: błędy konfiguracji wspólne dla wszystkich listów (klucz, nadawca, domena) — worker
+ * odkłada kolejkę bez zużycia próby i podnosi alarm, zamiast kończyć każdy wiersz jako `failed`.
+ */
+const CONFIGURATION_ERRORS: ReadonlySet<string> = new Set([
+  'missing_api_key',
+  'invalid_api_key',
+  'restricted_api_key',
+  'invalid_from_address',
+]);
+
+/** `validation_error` o nadawcy/domenie (np. niezweryfikowana domena) = konfiguracja, nie odbiorca. */
+const CONFIG_VALIDATION_RE = /domain|`from`|\bfrom\b|sender/i;
+
+export function classifyProviderError(name: string | undefined, message?: string): MailErrorCode {
+  if (!name) return 'delivery_failed';
+  if (RETRYABLE_PROVIDER_ERRORS.has(name)) return 'provider_unavailable';
+  if (CONFIGURATION_ERRORS.has(name)) return 'configuration_error';
+  if (name === 'validation_error' && typeof message === 'string' && CONFIG_VALIDATION_RE.test(message)) {
+    return 'configuration_error';
+  }
+  return 'delivery_failed';
 }
 
 /**
@@ -44,7 +60,7 @@ export function resendTransport(apiKey: string): MailTransport {
         { idempotencyKey: options.idempotencyKey },
       );
       // Komunikat dostawcy może zawierać adres odbiorcy — nie przenosimy go dalej, tylko kod.
-      if (result.error) throw new MailSendError(classifyProviderError(result.error.name));
+      if (result.error) throw new MailSendError(classifyProviderError(result.error.name, result.error.message));
       // Bez identyfikatora dostawcy nie wolno potwierdzić wysyłki (ACK).
       if (!result.data?.id) throw new MailSendError('provider_unavailable');
       return { id: result.data.id };

@@ -43,6 +43,7 @@ export type OpsRowId =
   | 'emailQueueAge'
   | 'emailLeases'
   | 'emailFailed'
+  | 'emailConfigBlocked'
   | 'authQueueAge'
   | 'authLeases'
   | 'authFailed'
@@ -161,6 +162,9 @@ export function buildOpsRows(input: OpsDashboardInput): OpsRow[] {
       ['email_queue_age'], true, { key: 'queueReady', ready: m.email.ready }),
     row('emailLeases', 'queues', count(m.email.abandonedLeases), POSITIVE, ['email_lease_abandoned']),
     row('emailFailed', 'queues', count(m.email.failedLast24h), POSITIVE, ['email_failed']),
+    // #1214: listy odłożone po błędzie konfiguracji nadawcy/dostawcy + nieużywalny EMAIL_FROM.
+    row('emailConfigBlocked', 'queues', count(m.email.configBlocked ?? 0), POSITIVE,
+      ['email_provider_config', 'email_sender_invalid']),
   );
   const auth = m.authEmail;
   rows.push(

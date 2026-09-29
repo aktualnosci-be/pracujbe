@@ -10,7 +10,7 @@ import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { NOTICE, PANEL, PANEL_H2, PANEL_P, TAG } from '@/components/admin/admin-styles';
 import { formatBelgianVat } from '@/lib/vies/belgian-vat';
-import type { AdminViesState } from '@/lib/vies/state';
+import type { AdminViesState, ViesAutoRetry } from '@/lib/vies/state';
 import { ADMIN_ACTION_TONE_CLASS, ADMIN_BUTTON_BASE } from '@/components/admin/AdminConfirmDialog';
 
 /**
@@ -64,9 +64,11 @@ const FORMAT_KEY: Record<string, string> = {
 export interface CompanyViesCheckProps {
   companyId: string;
   initial: AdminViesState;
+  /** 0191 (#706/#879): automatyczne sprawdzenie czeka w kolejce / na ponowienie. */
+  autoRetry?: ViesAutoRetry | null;
 }
 
-export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps): React.JSX.Element {
+export function CompanyViesCheck({ companyId, initial, autoRetry = null }: CompanyViesCheckProps): React.JSX.Element {
   const t = useTranslations('admin');
   const tRoot = useTranslations();
   const locale = useLocale();
@@ -181,6 +183,20 @@ export function CompanyViesCheck({ companyId, initial }: CompanyViesCheckProps):
           <p className="text-foreground">{t(FORMAT_KEY[shown.reason] ?? 'viesFormatInvalid')}</p>
         )}
       </div>
+
+      {autoRetry && fresh === null && (shown.kind === 'not_checked' || shown.kind === 'stale') ? (
+        <p className="text-[13px] text-muted-foreground" data-testid="vies-auto-retry">
+          {autoRetry.exhausted
+            ? t('viesAutoExhausted', { max: autoRetry.maxAttempts })
+            : autoRetry.lastOutcome
+              ? t('viesAutoRetry', {
+                  date: formatDate(autoRetry.nextAttemptAt),
+                  attempts: autoRetry.attempts,
+                  max: autoRetry.maxAttempts,
+                })
+              : t('viesAutoQueued')}
+        </p>
+      ) : null}
 
       <div role="status" aria-live="polite" className="text-[13px]">
         {noticeText ? (

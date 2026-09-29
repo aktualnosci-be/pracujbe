@@ -50,9 +50,11 @@ beforeEach(() => {
   resetFakeDb(null)
     .rows('email.outbox.recipient-names', [])
     .exec('email.outbox.defer')
+    .exec('email.outbox.defer-config')
     .exec('email.outbox.mark-sent')
     .exec('email.outbox.mark-failed');
   process.env.RESEND_API_KEY = 're_test';
+  delete process.env.EMAIL_FROM;
   process.env.NEXT_PUBLIC_SITE_URL = SITE;
   send.mockResolvedValue({ data: { id: 'provider-1' }, error: null });
   vi.mocked(captureError).mockClear();
@@ -151,17 +153,63 @@ describe('#615 — token dzierżawy przekazywany od claimu do każdej dalszej ak
       expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('queued');
     });
 
-    it('KONTROLA UJEMNA: błąd klucza/limitu konta u dostawcy nie kończy wiersza', async () => {
-      for (const name of ['invalid_api_key', 'daily_quota_exceeded']) {
-        resetFakeDb(null)
-          .rows('email.outbox.recipient-names', [])
-          .exec('email.outbox.mark-sent')
-          .exec('email.outbox.mark-failed');
-        send.mockResolvedValueOnce({ data: null, error: { name, message: 'x' } });
-        claimAttempts(`cfg-${name}`, 0);
-        await processEmailQueue();
-        expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('queued');
-      }
+    it('KONTROLA UJEMNA: limit konta u dostawcy nie kończy wiersza (ponowienie z backoffem)', async () => {
+      send.mockResolvedValueOnce({ data: null, error: { name: 'daily_quota_exceeded', message: 'x' } });
+      claimAttempts('cfg-quota', 0);
+      await processEmailQueue();
+      expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('queued');
+    });
+
+    describe('#1214 — błąd konfiguracji nadawcy/dostawcy', () => {
+      it.each([
+        ['invalid_api_key', 'x'],
+        ['invalid_from_address', 'x'],
+        ['validation_error', 'The pracuj.be domain is not verified. Please, add and verify your domain.'],
+      ])('%s: odłożenie bez zużycia próby, kod EMAIL_PROVIDER_CONFIG, reszta paczki czeka, ok=false', async (name, message) => {
+        send.mockResolvedValueOnce({ data: null, error: { name, message } });
+        fakeDb.rpc('claim_email_batch', [row('c1', 'lt-c1', { attempts: 2 }), row('c2', 'lt-c2')]);
+        fakeDb.rpc('email_delivery_send_check', null);
+        fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
+        const result = await processEmailQueue();
+        expect(result).toMatchObject({ sent: 0, failed: 0, deferred: 2, configBlocked: 2, ok: false });
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(fakeDb.callsTo('email.outbox.mark-failed')).toHaveLength(0);
+        const deferred = fakeDb.callsTo('email.outbox.defer-config');
+        expect(deferred.map((c) => [c.values[0], c.values[2], c.values[3]])).toEqual([
+          ['c1', 'lt-c1', 'EMAIL_PROVIDER_CONFIG'],
+          ['c2', 'lt-c2', 'EMAIL_PROVIDER_CONFIG'],
+        ]);
+        // `attempts` nie jest zapisywane (brak kolumny w UPDATE) — próba niezużyta.
+        expect(deferred[0]!.text).not.toMatch(/attempts/);
+        expect(deferred[0]!.text).toMatch(/AND lock_token = \$3/);
+        expect(Date.parse(String(deferred[0]!.values[1]))).toBeGreaterThan(Date.now());
+      });
+
+      it('KONTROLA UJEMNA: odrzucenie adresata (validation_error o `to`) nadal kończy wiersz jako failed', async () => {
+        send.mockResolvedValueOnce({ data: null, error: { name: 'validation_error', message: 'Invalid `to` field.' } });
+        claimAttempts('rcpt-1', 0);
+        expect(await processEmailQueue()).toMatchObject({ failed: 1, ok: true });
+        expect(fakeDb.callsTo('email.outbox.mark-failed')[0]!.values[1]).toBe('failed');
+        expect(fakeDb.callsTo('email.outbox.defer-config')).toHaveLength(0);
+      });
+
+      it('nieużywalny EMAIL_FROM: worker nie pobiera kolejki (nic nie przechodzi w failed)', async () => {
+        process.env.EMAIL_FROM = 'Pracuj.be no-reply@pracuj.be';
+        fakeDb.rpc('claim_email_batch', [row('never', 'lt-never')]);
+        const result = await processEmailQueue();
+        expect(result).toMatchObject({ processed: 0, skipped: 'email sender invalid' });
+        expect(fakeDb.callsTo('claim_email_batch')).toHaveLength(0);
+        expect(send).not.toHaveBeenCalled();
+      });
+
+      it('EMAIL_FROM z otaczającymi cudzysłowami (.env.example) jest poprawiany i list wychodzi', async () => {
+        process.env.EMAIL_FROM = '"Pracuj.be <no-reply@pracuj.be>"';
+        fakeDb.rpc('claim_email_batch', [row('q1', 'lt-q1')]);
+        fakeDb.rpc('email_delivery_send_check', null);
+        fakeDb.rpc('take_email_send_budget', [{ granted: true, retry_at: null }]);
+        expect(await processEmailQueue()).toMatchObject({ sent: 1, ok: true });
+        expect(send.mock.calls[0]![0].from).toBe('Pracuj.be <no-reply@pracuj.be>');
+      });
     });
 
     it('po wyczerpaniu prób awaria przejściowa też kończy jako "failed"', async () => {
