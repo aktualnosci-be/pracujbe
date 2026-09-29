@@ -1266,6 +1266,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `companySuspended` | `companyName`, `reason` | — | `admin_set_company_status` |
 | `companyVerified` | `companyName`, `reason` | `reason` | `admin_set_company_status` |
 | `contactMessageAdmin` | `reference`, `topic` | — | `submit_contact_message` |
+| `followedCompanyJobs` | `companyName`, `count`, `jobs` | — | `process_saved_search_alerts` |
 | `guestApplicationConfirm` | `companyName`, `jobSlug`, `jobTitle`, `nonce`, `recipientName` | `jobSlug`, `nonce` | `submit_guest_application_core` |
 | `guestApplicationSent` | `companyName`, `jobTitle`, `nonce`, `recipientName` | `nonce` | `confirm_guest_application` |
 | `guestStatusChanged` | `companyName`, `jobTitle`, `recipientName`, `status` | — | `transition_application` |

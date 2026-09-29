@@ -20582,10 +20582,26 @@ select public.process_saved_search_alerts(1000);
 reset role;
 select pg_temp.assert(
   (select array_agg(job_id order by job_id) from public.saved_search_alerts where saved_search_id = :'fc1') = array[:'PSJ1'::uuid, :'PSJ2'::uuid]
-  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch' and locale = 'nl') = 1
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs' and locale = 'nl') = 1
   and (select count(*) from public.notifications where profile_id = :'PSA' and type = 'job_match'
          and entity_type = 'saved_search' and entity_id = :'fc1') = 1,
   'FC969-2 obserwacja: oferty tej firmy (aktywne), bez innej firmy i wstrzymanej; jeden digest');
+-- Osobny szablon „Nowe oferty firmy …”: nazwa firmy z bazy, bez nazwy wyszukiwania i zapytania.
+select pg_temp.assert(
+  (select payload ->> 'companyName' = 'Firma PS969 Jeden' and (payload ->> 'count')::int = 2
+          and not (payload ? 'searchName') and not (payload ? 'query')
+          and jsonb_array_length(payload -> 'jobs') = 2
+          and not exists (select 1 from jsonb_array_elements(payload -> 'jobs') x where x ? 'companyName')
+          and entity_type = 'saved_search' and entity_id = :'fc1'::uuid
+     from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs'),
+  'FC969-2b digest obserwacji = szablon followedCompanyJobs z nazwą firmy (nie jobMatch z nazwą wyszukiwania)');
+select pg_temp.assert(not exists (select 1 from public.email_deliveries
+    where profile_id = :'PSA' and template = 'jobMatch' and entity_id = :'fc1'::uuid),
+  'FC969-2c obserwacja nie kolejkuje szablonu jobMatch');
+select pg_temp.assert(
+  public.email_preference_category('followedCompanyJobs') = 'job_matches'
+  and public.email_send_pool('followedCompanyJobs') = 'marketing',
+  'FC969-2d kategoria (zgoda email_job_matches) i pula jak jobMatch');
 -- Kolejny przebieg bez nowych ofert: brak drugiego alertu (deduplikacja pary).
 update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'fc1';
 set role service_role;
@@ -20593,7 +20609,7 @@ select public.process_saved_search_alerts(1000);
 reset role;
 select pg_temp.assert(
   (select count(*) from public.saved_search_alerts where saved_search_id = :'fc1') = 2
-  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch' and locale = 'nl') = 1,
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs' and locale = 'nl') = 1,
   'FC969-3 ponowny przebieg nie dubluje alertów ani e-maila');
 -- Nowa oferta obserwowanej firmy po pierwszym alercie trafia do następnego digestu.
 insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
@@ -20604,7 +20620,7 @@ select public.process_saved_search_alerts(1000);
 reset role;
 select pg_temp.assert(
   (select count(*) from public.saved_search_alerts where saved_search_id = :'fc1') = 3
-  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch') = 2,
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'followedCompanyJobs') = 2,
   'FC969-4 nowa oferta obserwowanej firmy → kolejny digest');
 
 -- FC969-5: odobserwowanie — wiersz i historia alertów znikają, ponowne wywołanie bez błędu.
@@ -20615,6 +20631,75 @@ reset role; reset app.current_uid;
 select pg_temp.assert(not exists (select 1 from public.saved_searches where id = :'fc1')
   and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'fc1'),
   'FC969-5 odobserwowanie usuwa obserwację i historię alertów (idempotentnie)');
+
+-- PS969-5 (#810): digest zakolejkowany PRZED pauzą nie wychodzi — claim i kontrola tuż przed
+-- wysyłką wygaszają go (oba szablony alertu). Bez pauzy (przeszłość) wychodzi.
+select id as psb_search from public.saved_searches where profile_id = :'PSB' and company_id is null limit 1 \gset
+select public.enqueue_email(:'PSB', 'jobMatch', 'saved_search', :'psb_search', 'ps969-q1',
+  '{"searchName":"Magazyn B PS969","count":1}'::jsonb);
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q2',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q3',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select public.enqueue_email(:'PSB', 'jobOffer', 'offer', :'PSJ1', 'ps969-q4', '{}'::jsonb);
+select id as psq1 from public.email_deliveries where idempotency_key = 'ps969-q1' \gset
+select id as psq2 from public.email_deliveries where idempotency_key = 'ps969-q2' \gset
+select id as psq3 from public.email_deliveries where idempotency_key = 'ps969-q3' \gset
+select id as psq4 from public.email_deliveries where idempotency_key = 'ps969-q4' \gset
+-- Przed pauzą: q3 i q4 zostają claimowane (q1/q2 czekają w kolejce na pauzę).
+select pg_temp.assert(
+  (select count(*) from public.claim_email_batch(100000) c where c.id in (:'psq3', :'psq4')) = 2,
+  'PS969-5a bez pauzy claim wydaje digest obserwacji i inny mail');
+select lock_token as psq3_lt from public.email_deliveries where id = :'psq3' \gset
+select lock_token as psq4_lt from public.email_deliveries where id = :'psq4' \gset
+-- Konto B ustawia pauzę PO zakolejkowaniu.
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 2);
+reset role; reset app.current_uid;
+-- KONTROLA UJEMNA: stara definicja (0175, bez pauzy) przepuściłaby digest — zgoda i alert włączone.
+select pg_temp.assert(
+  public.email_allowed(:'PSB', 'followedCompanyJobs') is true
+  and exists (select 1 from public.saved_searches s where s.id = :'psb_search' and s.alerts_enabled),
+  'PS969-5b kontrola ujemna: zgoda i alert włączone — samo to nie zatrzyma digestu');
+set role service_role;
+select pg_temp.assert(public.email_delivery_send_check(:'psq3'::uuid, :'psq3_lt'::uuid) = 'suppressed_alert_paused',
+  'PS969-5c pauza po claimie → kontrola tuż przed wysyłką zatrzymuje digest obserwacji');
+select pg_temp.assert(public.email_delivery_send_check(:'psq4'::uuid, :'psq4_lt'::uuid) is null,
+  'PS969-5d pauza nie dotyka innych powiadomień konta (propozycja wychodzi)');
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c where c.id in (:'psq1', :'psq2')),
+  'PS969-5e claim nie wydaje digestów zakolejkowanych przed pauzą (jobMatch i followedCompanyJobs)');
+select pg_temp.assert(
+  (select bool_and(status::text = 'failed' and suppressed_at is not null and error_message = 'suppressed_alert_paused')
+     from public.email_deliveries where id in (:'psq1', :'psq2', :'psq3')),
+  'PS969-5f wiersze wygaszone z przyczyną suppressed_alert_paused, ślad zostaje');
+-- Koniec pauzy: nowy digest wychodzi.
+update public.saved_search_alert_pauses set paused_until = now() - interval '1 minute' where profile_id = :'PSB';
+select public.enqueue_email(:'PSB', 'followedCompanyJobs', 'saved_search', :'psb_search', 'ps969-q5',
+  '{"companyName":"Firma PS969 Jeden","count":1}'::jsonb);
+select pg_temp.assert(
+  exists (select 1 from public.claim_email_batch(100000) c where c.idempotency_key = 'ps969-q5'),
+  'PS969-5g po końcu pauzy digest wychodzi');
+-- PS969-N3: kontrola ujemna — definicja bez klauzuli pauzy przepuszcza digest zakolejkowany przed pauzą.
+update public.saved_search_alert_pauses set paused_until = now() + interval '2 days' where profile_id = :'PSB';
+select public.enqueue_email(:'PSB', 'jobMatch', 'saved_search', :'psb_search', 'ps969-q6',
+  '{"searchName":"Magazyn B PS969","count":1}'::jsonb);
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure);
+  d := replace(d, 'ap.paused_until > now()', 'false');
+  execute d;
+end $do$;
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'PSB', 'jobMatch', 'psb@test.be', null, 'saved_search', :'psb_search') is null,
+  'PS969-N3 kontrola ujemna: bez klauzuli pauzy digest zakolejkowany przed pauzą wychodzi');
+rollback;
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'PSB', 'jobMatch', 'psb@test.be', null, 'saved_search', :'psb_search') = 'suppressed_alert_paused',
+  'PS969-N3b po cofnięciu zmiany pauza znów wygasza digest');
 
 set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql PS969: powrót do trybu testów', 'CLASSIFIEDS_ONLY');

@@ -17,8 +17,13 @@
 --    `unfollow_company`, `get_my_followed_companies`. Worker dla obserwacji bierze nowe,
 --    publiczne oferty tej firmy (aktywne, niewygasłe, firma verified), pomija firmy
 --    zablokowane przez kandydata i korzysta z tej samej deduplikacji par (wyszukiwanie, oferta),
---    alertu, e-maila `jobMatch` i wypisania co zapisane wyszukiwanie. Firma nie widzi obserwujących
---    (brak jakiegokolwiek odczytu po stronie firm).
+--    alertu i wypisania co zapisane wyszukiwanie; e-mail to osobny szablon `followedCompanyJobs`
+--    („Nowe oferty firmy …”, kategoria `job_matches`, pula marketingowa jak `jobMatch`).
+--    Firma nie widzi obserwujących (brak jakiegokolwiek odczytu po stronie firm).
+-- 3. Kolejka e-mail: `email_preference_category`/`email_send_pool` znają `followedCompanyJobs`;
+--    `email_delivery_suppression_reason` (definicja z 0175) wygasza digesty obu szablonów
+--    alertu przy pauzie konta (`suppressed_alert_paused`) — także zakolejkowane PRZED pauzą (#810) —
+--    i przy wyłączonym alercie.
 --
 -- Rollback: supabase/rollback/0969_saved_search_pause_company_follow.down.sql
 -- =============================================================================
@@ -256,8 +261,10 @@ begin
                jsonb_build_object(
                  'title', coalesce(t.title, j.title),
                  'city', j.city,
-                 'slug', j.slug,
-                 'companyName', c.name) as item
+                 'slug', j.slug)
+               -- Obserwowana firma: nazwa jest w temacie i nagłówku e-maila, nie przy każdej ofercie.
+               || case when v_search.company_id is null
+                       then jsonb_build_object('companyName', c.name) else '{}'::jsonb end as item
         from public.jobs j
         join public.companies c on c.id = j.company_id
         left join lateral (
@@ -278,10 +285,20 @@ begin
                                  'name', v_search.name),
               'saved_search', v_search.id);
 
-      perform public.enqueue_email(
-        v_search.profile_id, 'jobMatch', 'saved_search', v_search.id, v_key,
-        jsonb_build_object('searchName', v_search.name, 'count', v_count,
-                           'jobs', v_jobs, 'query', v_search.query));
+      if v_search.company_id is null then
+        perform public.enqueue_email(
+          v_search.profile_id, 'jobMatch', 'saved_search', v_search.id, v_key,
+          jsonb_build_object('searchName', v_search.name, 'count', v_count,
+                             'jobs', v_jobs, 'query', v_search.query));
+      else
+        -- 0969 (#855): osobny szablon „Nowe oferty firmy …” (ta sama kategoria `job_matches`,
+        -- ten sam token wyłączenia alertu); nazwa firmy z bazy, nie z nazwy zapisanej przy obserwowaniu.
+        perform public.enqueue_email(
+          v_search.profile_id, 'followedCompanyJobs', 'saved_search', v_search.id, v_key,
+          jsonb_build_object(
+            'companyName', (select c.name from public.companies c where c.id = v_search.company_id),
+            'count', v_count, 'jobs', v_jobs));
+      end if;
 
       v_digests := v_digests + 1;
     end if;
@@ -298,3 +315,79 @@ begin
 end $$;
 revoke all on function public.process_saved_search_alerts(integer) from public, anon, authenticated;
 grant execute on function public.process_saved_search_alerts(integer) to service_role;
+
+-- --- 4. Kolejka e-mail: szablon obserwowanej firmy i pauza ------------------------------------
+-- Lustro TS: src/lib/email/categories.ts (definicje bazują na 0087).
+create or replace function public.email_preference_category(p_template text)
+returns text language sql immutable set search_path = public, pg_temp as $$
+  select case p_template
+    when 'newApplication'    then 'applications'
+    when 'statusChanged'     then 'applications'
+    when 'applicationViewed' then 'applications'
+    when 'jobOffer'          then 'offers'
+    when 'offerAccepted'     then 'offers'
+    when 'offerDeclined'     then 'offers'
+    when 'newMessage'        then 'messages'
+    when 'jobMatch'          then 'job_matches'
+    when 'followedCompanyJobs' then 'job_matches'
+    when 'newsletter'        then 'marketing'
+    else null
+  end;
+$$;
+revoke all on function public.email_preference_category(text) from public;
+grant execute on function public.email_preference_category(text) to service_role;
+
+create or replace function public.email_send_pool(p_template text)
+returns text language sql immutable set search_path = public, pg_temp as $$
+  select case
+    when p_template in ('accountConfirmation', 'passwordReset', 'magicLink', 'emailChange', 'invite')
+      then 'auth'
+    when p_template in ('newsletter', 'jobMatch', 'followedCompanyJobs') then 'marketing'
+    else 'transactional'
+  end;
+$$;
+revoke all on function public.email_send_pool(text) from public;
+grant execute on function public.email_send_pool(text) to service_role;
+
+-- Definicja bazuje na NAJNOWSZEJ z 0175 (przyczyny 0174/0175 zachowane). Zmiany: alert
+-- obserwowanej firmy jak alert wyszukiwania; pauza konta (#810) wygasza digest zakolejkowany
+-- przed jej ustawieniem — przy claimie i tuż przed wysyłką (`email_delivery_send_check`).
+create or replace function public.email_delivery_suppression_reason(
+  p_profile_id uuid,
+  p_template text,
+  p_to_email text,
+  p_campaign_id uuid,
+  p_entity_type text,
+  p_entity_id uuid
+) returns text language sql stable security definer set search_path = public, pg_temp as $$
+  select case
+    when p_template = 'newMessage' and not public.recruitment_enabled()
+      then 'suppressed_recruitment_disabled'
+    when not public.recruitment_enabled() and public.email_recruitment_template(p_template)
+      then 'suppressed_feature_disabled'
+    when public.email_address_suppressed(p_to_email) then 'suppressed_address'
+    when public.email_allowed(p_profile_id, p_template) is not true then 'suppressed_opt_out'
+    when public.email_recipient_authorized(p_template, p_entity_type, p_entity_id, p_profile_id)
+           is not true then 'suppressed_recipient_unauthorized'
+    when p_template in ('jobMatch', 'followedCompanyJobs') and p_entity_type = 'saved_search'
+         and not exists (
+           select 1 from public.saved_searches s
+            where s.id = p_entity_id
+              and s.profile_id is not distinct from p_profile_id
+              and s.alerts_enabled) then 'suppressed_alert_disabled'
+    -- 0969 (#810): pauza alertów konta trwa — digest zakolejkowany wcześniej nie wychodzi.
+    when p_template in ('jobMatch', 'followedCompanyJobs') and p_entity_type = 'saved_search'
+         and exists (
+           select 1 from public.saved_search_alert_pauses ap
+            where ap.profile_id = p_profile_id and ap.paused_until > now()) then 'suppressed_alert_paused'
+    when p_campaign_id is not null and not exists (
+           select 1 from public.email_campaigns c
+            where c.id = p_campaign_id and c.status in ('active', 'completed'))
+      then 'suppressed_campaign_inactive'
+    else null
+  end;
+$$;
+revoke all on function public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)
+  to service_role;
