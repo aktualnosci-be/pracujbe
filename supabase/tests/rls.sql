@@ -1038,46 +1038,46 @@ select pg_temp.assert(
   'Y2d IP zapisane w receipcie');
 
 -- ============================================================================
--- Z. Audyt produkcyjny 0045 (P1-15) — realizacja kodów rabatowych (rezerwacja + limit)
+-- Z. Migracja 0177 (#51) — martwy schemat billingu usunięty (dawne sekcje Z/DD: rabaty, checkout)
 -- ============================================================================
 reset role;
-insert into public.discount_codes(id, code, percent_off, max_redemptions, is_active)
-  values ('dc000000-0000-0000-0000-0000000000dc', 'ZTEST10', 10, 1, true);
-
--- Z1: klient nie ma dostępu do tabeli realizacji (RPC-only).
-set role authenticated; reset app.current_uid; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select count(*) from public.discount_redemptions',
-  'permission denied', 'Z1 authenticated nie widzi discount_redemptions');
-reset role;
-
--- Z2: rezerwacja (service_role) zwraca zniżkę; ponowna dla tej samej firmy jest idempotentna.
-set role service_role;
-select (public.reserve_discount('ZTEST10', :'COMPA') ->> 'percent_off') as z_pct \gset
-select public.reserve_discount('ZTEST10', :'COMPA'); -- idempotentny retry (bez błędu, bez dubletu)
-reset role;
-select pg_temp.assert(:'z_pct' = '10', 'Z2 reserve_discount zwraca zniżkę 10%');
+-- Z1: tabele, kolumna, funkcje i typy billingu nie istnieją.
 select pg_temp.assert(
-  (select count(*) from public.discount_redemptions
-     where company_id = :'COMPA' and discount_code_id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
-  'Z2b jedna rezerwacja mimo retry (idempotencja per firma)');
-
--- Z3: limit=1 wyczerpany → inna firma nie zarezerwuje.
-set role service_role;
-select pg_temp.expect_error(
-  'select public.reserve_discount(''ZTEST10'', '''|| :'COMPB' ||''')',
-  'VALIDATION_FAILED', 'Z3 limit wykorzystania kodu (druga firma odrzucona)');
-reset role;
-
--- Z4: finalizacja inkrementuje times_redeemed; po niej ta firma nie zarezerwuje ponownie.
-set role service_role;
-select public.finalize_discount('dc000000-0000-0000-0000-0000000000dc', :'COMPA', 'sess-1');
-select pg_temp.expect_error(
-  'select public.reserve_discount(''ZTEST10'', '''|| :'COMPA' ||''')',
-  'VALIDATION_FAILED', 'Z4 kod już zrealizowany przez firmę (finalized)');
-reset role;
+  to_regclass('public.subscriptions') is null and to_regclass('public.payments') is null
+  and to_regclass('public.invoices') is null and to_regclass('public.discount_codes') is null
+  and to_regclass('public.checkout_intents') is null and to_regclass('public.discount_redemptions') is null,
+  'Z1 tabele billingu usunięte (0177)');
 select pg_temp.assert(
-  (select times_redeemed from public.discount_codes where id = 'dc000000-0000-0000-0000-0000000000dc') = 1,
-  'Z4b times_redeemed=1 po finalizacji');
+  not exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'companies' and column_name = 'provider_customer_id'),
+  'Z1b companies.provider_customer_id usunięta');
+select pg_temp.assert(
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname in ('reserve_discount', 'finalize_discount', 'release_stale_discount_reservations',
+                                   'begin_checkout', 'complete_checkout', 'release_checkout_intent',
+                                   'release_stale_checkout_intents')),
+  'Z1c funkcje rabatów i checkoutu usunięte');
+select pg_temp.assert(
+  not exists (select 1 from pg_type t join pg_namespace n on n.oid = t.typnamespace
+               where n.nspname = 'public'
+                 and t.typname in ('subscription_status', 'payment_status', 'invoice_status')),
+  'Z1d typy enum billingu usunięte');
+-- Z2: ops_metrics nie liczy już checkoutu i rabatów, ale nadal działa (przeterminowane oferty).
+select pg_temp.assert(
+  not (public.ops_metrics() -> 'maintenance' ? 'staleDiscountReservations')
+  and not (public.ops_metrics() -> 'maintenance' ? 'staleCheckoutIntents')
+  and (public.ops_metrics() -> 'maintenance' ? 'overdueActiveJobs'),
+  'Z2 ops_metrics.maintenance bez liczników billingu, z overdueActiveJobs');
+-- Z3: aktywne uprawnienia planów zostają — katalog jest, plan efektywny to zawsze 'free'.
+select pg_temp.assert(
+  to_regclass('public.plan_entitlements') is not null
+  and public.company_plan(:'COMPA'::uuid) = 'free'
+  and public.company_max_active_jobs(:'COMPA'::uuid) = 1,
+  'Z3 plan_entitlements zostaje; company_plan = free, limit 1 (ENTITLEMENT_LIMIT aktywny)');
+-- Z4: processed_webhooks (inbox poczty) zostaje.
+select pg_temp.assert(to_regclass('public.processed_webhooks') is not null,
+  'Z4 processed_webhooks zostaje (inbox webhooków poczty)');
 
 -- ============================================================================
 -- AA. Audyt produkcyjny 0046 (P1-12) — filtry/sort/paginacja get_public_jobs w SQL
@@ -1144,54 +1144,8 @@ select pg_temp.assert(public.job_is_public(:'JOBA'::uuid) is false,
   'CC3 job_is_public=false dla wygasłej oferty (blokuje apply_to_job)');
 
 -- ============================================================================
--- DD. AUDIT_REPORT 0050 (P0-02) — serwerowa idempotencja checkoutu (checkout_intents)
+-- DD. (usunięta w 0177 — checkout_intents/begin_checkout; brak obiektów potwierdza sekcja Z)
 -- ============================================================================
--- DD1: DML na checkout_intents odebrany anon/authenticated (RPC-only).
-set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(
-  'insert into public.checkout_intents (company_id, plan) values ('''|| :'COMPA' ||''', ''standard'')',
-  'permission denied', 'DD1 authenticated nie pisze checkout_intents (RPC-only)');
-select pg_temp.expect_error(
-  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
-  'permission denied', 'DD1b begin_checkout tylko service_role');
-reset role; reset app.current_uid;
-
--- DD2: begin_checkout tworzy 'pending'; drugi otwarty dla tej samej firmy → CHECKOUT_IN_PROGRESS.
-set role service_role;
-select public.begin_checkout(:'COMPA'::uuid, 'standard') as cintent \gset
-select pg_temp.assert(:'cintent' is not null, 'DD2 begin_checkout zwraca intent_id');
--- (rola nadal service_role) expect_error wywoła begin_checkout jako service_role.
-select pg_temp.expect_error(
-  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
-  'CHECKOUT_IN_PROGRESS', 'DD3 drugi otwarty checkout tej samej firmy odrzucony');
-reset role;
-
--- DD4: complete_checkout domyka 'pending'→'completed' (idempotentnie); po tym nowy checkout możliwy.
-set role service_role;
-select public.complete_checkout(:'cintent'::uuid, 'sess-cc-1');
-select public.complete_checkout(:'cintent'::uuid, 'sess-cc-1'); -- idempotentny reprocessing
-reset role;
-select pg_temp.assert(
-  (select status from public.checkout_intents where id = :'cintent') = 'completed',
-  'DD4 complete_checkout oznacza completed');
-set role service_role;
-select public.begin_checkout(:'COMPA'::uuid, 'standard') as cintent2 \gset
-reset role;
-select pg_temp.assert(:'cintent2' is not null and :'cintent2' <> :'cintent',
-  'DD5 po ukończeniu można rozpocząć nowy checkout');
-
--- DD6: aktywna subskrypcja blokuje begin_checkout (ACTIVE_SUBSCRIPTION).
-set role service_role;
-select public.release_checkout_intent(:'cintent2'::uuid); -- zwolnij otwarty, by test dotyczył sub
-insert into public.subscriptions (company_id, plan, status, provider)
-  values (:'COMPA', 'standard', 'active', 'stripe');
--- (rola nadal service_role) begin_checkout jako service_role — powinno odrzucić przez aktywną sub.
-select pg_temp.expect_error(
-  'select public.begin_checkout('''|| :'COMPA' ||'''::uuid, ''standard'')',
-  'ACTIVE_SUBSCRIPTION', 'DD6 aktywna subskrypcja blokuje nowy checkout');
--- sprzątanie: usuń testową subskrypcję, by nie zaburzać ewentualnych kolejnych sekcji
-delete from public.subscriptions where company_id = :'COMPA' and provider = 'stripe' and status = 'active';
-reset role;
 
 -- ============================================================================
 -- EE. AUDIT_REPORT 0051 (P1-08) — umiejętność realnie przechodzi mandatory↔optional
@@ -19246,5 +19200,1314 @@ set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4b anon nie czyta stanu schematu');
 reset role;
 rollback;
+-- WM1040. Macierz zapisu cudzych wierszy (#1040) + strażnik pokrycia grantów.
+--   * Strażnik: zbiór (tabela, operacja) z grantem zapisu dla `authenticated` musi być pokryty
+--     przypadkami poniżej — nowa tabela/grant bez przypadku = czerwony test. Dodatkowo: brak
+--     grantów zapisu i TRUNCATE dla anon oraz włączone RLS na każdej tabeli `public` (Inv. #5).
+--   * Macierz: dla każdej pary (tabela, operacja) próba zapisu CUDZEGO wiersza (inna firma,
+--     inny kandydat, zwykły member zamiast recruitera/admina) daje 0 wierszy albo odmowę 42501,
+--     a odcisk zawartości tabel po serii ataków jest identyczny jak przed nią.
+--   * Kontrole ujemne: (a) z wyłączonym RLS każdy przypadek oznaczony jako „tylko RLS” ZAPISUJE
+--     (przypadek nie jest pusty ani zasłonięty inną blokadą); (b) osłabiona polityka (USING true)
+--     wskazuje dokładnie swój przypadek; (c) nowy grant / wyłączone RLS wykrywa strażnik.
+--   Bez migracji. Tryb RECRUITMENT (nagłówek pliku) — pliki CV i aplikacje to procesy rekrutacyjne.
+-- ============================================================================
+\echo '--- WM1040 macierz zapisu cudzych wierszy ---'
+reset role; reset app.current_uid;
+\set WMCA 'd6000000-0000-0000-0000-000000000001'
+\set WMCB 'd6000000-0000-0000-0000-000000000002'
+\set WMCC 'd6000000-0000-0000-0000-000000000003'
+\set WMCD 'd6000000-0000-0000-0000-000000000004'
+\set WMCE 'd6000000-0000-0000-0000-000000000005'
+\set WMEA 'd6000000-0000-0000-0000-000000000011'
+\set WMEB 'd6000000-0000-0000-0000-000000000012'
+\set WMER 'd6000000-0000-0000-0000-000000000013'
+\set WMEM 'd6000000-0000-0000-0000-000000000014'
+\set WMEC 'd6000000-0000-0000-0000-000000000015'
+\set WMCOA 'd6000000-0000-0000-0000-0000000000a1'
+\set WMCOB 'd6000000-0000-0000-0000-0000000000b1'
+\set WMJA 'd6000000-0000-0000-0000-0000000000a2'
+\set WMJD 'd6000000-0000-0000-0000-0000000000a3'
+\set WMJB 'd6000000-0000-0000-0000-0000000000b2'
+\set WMJD2 'd6000000-0000-0000-0000-0000000000a4'
+
+insert into auth.users(id, email, name, raw_user_meta_data) values
+  (:'WMCA', 'wm-ca@test.be', 'WM CA', '{"role":"candidate","first_name":"Wm","last_name":"CA","locale":"pl"}'),
+  (:'WMCB', 'wm-cb@test.be', 'WM CB', '{"role":"candidate","first_name":"Wm","last_name":"CB","locale":"nl"}'),
+  (:'WMCC', 'wm-cc@test.be', 'WM CC', '{"role":"candidate","first_name":"Wm","last_name":"CC","locale":"fr"}'),
+  (:'WMCD', 'wm-cd@test.be', 'WM CD', '{"role":"candidate","first_name":"Wm","last_name":"CD","locale":"en"}'),
+  (:'WMCE', 'wm-ce@test.be', 'WM CE', '{"role":"candidate","first_name":"Wm","last_name":"CE","locale":"en"}'),
+  (:'WMEA', 'wm-ea@test.be', 'WM EA', '{"role":"employer","first_name":"Wm","last_name":"EA","locale":"nl"}'),
+  (:'WMEB', 'wm-eb@test.be', 'WM EB', '{"role":"employer","first_name":"Wm","last_name":"EB","locale":"fr"}'),
+  (:'WMER', 'wm-er@test.be', 'WM ER', '{"role":"employer","first_name":"Wm","last_name":"ER","locale":"nl"}'),
+  (:'WMEM', 'wm-em@test.be', 'WM EM', '{"role":"employer","first_name":"Wm","last_name":"EM","locale":"nl"}'),
+  (:'WMEC', 'wm-ec@test.be', 'WM EC', '{"role":"employer","first_name":"Wm","last_name":"EC","locale":"en"}');
+select test_fixture.attest_candidates();
+-- Konta bez wiersza profilu: cel wstawiania „za kogoś” i eskalacji przy zakładaniu profilu.
+delete from public.profiles where id in (:'WMCD', :'WMCE');
+
+insert into public.companies(id, name, status) values
+  (:'WMCOA', 'WM Firma A', 'verified'), (:'WMCOB', 'WM Firma B', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'WMCOA', :'WMEA', 'owner', true), (:'WMCOA', :'WMER', 'recruiter', true),
+  (:'WMCOA', :'WMEM', 'member', true), (:'WMCOB', :'WMEB', 'owner', true);
+insert into public.candidate_profiles(profile_id, headline, is_searchable) values
+  (:'WMCA', 'wm-a', false), (:'WMCB', 'wm-b', false);
+insert into public.employer_profiles(profile_id, primary_company_id, job_title) values
+  (:'WMEA', :'WMCOA', 'wm-a'), (:'WMEB', :'WMCOB', 'wm-b');
+insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale) values
+  (:'WMJA', :'WMCOA', 'wm-job-a', 'WM aktywna A', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl'),
+  (:'WMJD', :'WMCOA', 'wm-job-d', 'WM szkic A', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'draft', 'pl'),
+  (:'WMJD2', :'WMCOA', 'wm-job-d2', 'WM szkic A2', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'draft', 'pl'),
+  (:'WMJB', :'WMCOB', 'wm-job-b', 'WM szkic B', 'warehouse', 'permanent', 'Gandawa', 'Flandria', 'draft', 'pl');
+insert into public.job_skills(job_id, skill_label) values (:'WMJD', 'wm-skill'), (:'WMJD2', 'wm-skill');
+insert into public.job_languages(job_id, language_label) values (:'WMJD', 'wm-lang'), (:'WMJD2', 'wm-lang');
+insert into public.job_certificates(job_id, certificate_label) values (:'WMJD', 'wm-cert'), (:'WMJD2', 'wm-cert');
+insert into public.job_requirements(job_id, kind, content) values (:'WMJD', 'mandatory', 'wm-req'), (:'WMJD2', 'mandatory', 'wm-req');
+insert into public.job_translations(job_id, locale, title) values (:'WMJD', 'pl', 'wm-tr'), (:'WMJD2', 'pl', 'wm-tr');
+insert into public.files(owner_id, bucket, path, entity_type) values (:'WMCA', 'candidate-files', 'wm/cv-a.pdf', 'candidate_cv');
+insert into public.notifications(profile_id, type, title) values (:'WMCA', 'system', 'wm-a');
+insert into public.notification_preferences(profile_id, email_marketing) values (:'WMCA', false)
+  on conflict (profile_id) do update set email_marketing = false;
+insert into public.saved_jobs(candidate_id, job_id) values (:'WMCA', :'WMJA');
+delete from public.notification_preferences where profile_id in (:'WMCC');
+
+-- --- Pomocnicze ----------------------------------------------------------------------------------
+create temp table wm_cases (
+  id serial primary key,
+  tbl text not null, op text not null, actor uuid not null,
+  sql text not null, note text not null,
+  expect text not null default 'deny' check (expect in ('deny', 'allow')),
+  rls_only boolean not null default true
+);
+
+-- Tryby: 'deny' = każdy atak kończy się 0 wierszy/42501; 'positive' = uprawniony zapis własnych
+-- wierszy się udaje; 'control' = przy wyłączonym RLS atak „tylko RLS” zapisuje wiersze.
+create function pg_temp.wm_run(p_mode text) returns text
+language plpgsql as $$
+declare c record; v_rows bigint; v_state text; v_fail text := '';
+begin
+  for c in select * from pg_temp.wm_cases
+           where (p_mode = 'deny' and expect = 'deny')
+              or (p_mode = 'positive' and expect = 'allow')
+              or (p_mode = 'control' and expect = 'deny' and rls_only)
+           order by id loop
+    perform set_config('app.current_uid', c.actor::text, true);
+    execute 'set local role authenticated';
+    perform pg_temp.assert_client_role();
+    begin
+      execute c.sql;
+      get diagnostics v_rows = row_count;
+      v_state := case when v_rows = 0 then 'zero' else 'wrote' end;
+    exception
+      when insufficient_privilege then v_state := 'denied ' || sqlerrm;
+      when others then v_state := 'other ' || sqlstate || ' ' || sqlerrm;
+    end;
+    reset role;
+    if (p_mode = 'deny' and v_state <> 'zero' and v_state not like 'denied%')
+       or (p_mode in ('positive', 'control') and v_state <> 'wrote') then
+      v_fail := v_fail || format('[%s: %s -> %s] ', c.id, c.note, v_state);
+    end if;
+  end loop;
+  perform set_config('app.current_uid', '', true);
+  return v_fail;
+end $$;
+
+create function pg_temp.wm_fingerprint() returns text
+language plpgsql as $$
+declare t text; r text; v_out text := '';
+begin
+  for t in select distinct tbl from pg_temp.wm_cases order by 1 loop
+    execute format('select md5(coalesce(string_agg(to_jsonb(x)::text, %L order by to_jsonb(x)::text), %L)) from public.%I x',
+                   '|', '', t) into r;
+    v_out := v_out || t || '=' || r || ';';
+  end loop;
+  return md5(v_out);
+end $$;
+
+-- Pary (tabela, operacja) z grantem zapisu dla roli (INSERT/UPDATE także na poziomie kolumn).
+create function pg_temp.wm_write_grants(p_role text) returns table(tbl text, op text)
+language sql as $$
+  select c.relname::text, v.op
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  cross join (values ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) v(op)
+  where n.nspname = 'public' and c.relkind in ('r', 'p')
+    and case when v.op in ('INSERT', 'UPDATE') then has_any_column_privilege(p_role, c.oid, v.op)
+             else has_table_privilege(p_role, c.oid, v.op) end
+$$;
+create function pg_temp.wm_uncovered() returns text
+language sql as $$
+  select coalesce(string_agg(g.tbl || ':' || g.op, ', ' order by g.tbl, g.op), '')
+  from pg_temp.wm_write_grants('authenticated') g
+  where not exists (select 1 from pg_temp.wm_cases w where w.tbl = g.tbl and w.op = g.op and w.expect = 'deny')
+$$;
+create function pg_temp.wm_anon_writes() returns text
+language sql as $$
+  select coalesce(string_agg(g.tbl || ':' || g.op, ', ' order by g.tbl, g.op), '')
+  from pg_temp.wm_write_grants('anon') g
+$$;
+create function pg_temp.wm_tables_without_rls() returns text
+language sql as $$
+  select coalesce(string_agg(c.relname, ', ' order by c.relname), '')
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity
+$$;
+
+-- --- Przypadki: ataki (deny) ---------------------------------------------------------------------
+-- Aktorzy: WMCB = inny kandydat, WMEB = właściciel obcej firmy, WMEM = zwykły member firmy A,
+-- WMER = recruiter firmy A (bez roli admina/właściciela), WMEA = właściciel firmy A.
+-- Kolejność ma znaczenie w kontroli (RLS off): UPDATE przed DELETE, przeniesienia na końcu.
+insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only) values
+  -- candidate_profiles
+  ('candidate_profiles', 'UPDATE', :'WMCB', format('update public.candidate_profiles set headline = %L where profile_id = %L', 'hak', :'WMCA'),
+     'candidate_profiles UPDATE cudzy kandydat', true),
+  ('candidate_profiles', 'UPDATE', :'WMEB', format('update public.candidate_profiles set headline = %L where profile_id = %L', 'hak', :'WMCA'),
+     'candidate_profiles UPDATE obcy pracodawca', true),
+  ('candidate_profiles', 'INSERT', :'WMCB', format('insert into public.candidate_profiles(profile_id, headline) values (%L, %L)', :'WMCC', 'hak'),
+     'candidate_profiles INSERT za innego kandydata', true),
+  ('candidate_profiles', 'DELETE', :'WMCB', format('delete from public.candidate_profiles where profile_id = %L', :'WMCA'),
+     'candidate_profiles DELETE cudzy kandydat', true),
+  ('candidate_profiles', 'DELETE', :'WMEB', format('delete from public.candidate_profiles where profile_id = %L', :'WMCB'),
+     'candidate_profiles DELETE obcy pracodawca', true),
+  -- employer_profiles
+  ('employer_profiles', 'UPDATE', :'WMEB', format('update public.employer_profiles set job_title = %L where profile_id = %L', 'hak', :'WMEA'),
+     'employer_profiles UPDATE obcy pracodawca', true),
+  ('employer_profiles', 'UPDATE', :'WMCB', format('update public.employer_profiles set job_title = %L where profile_id = %L', 'hak', :'WMEA'),
+     'employer_profiles UPDATE kandydat', true),
+  ('employer_profiles', 'INSERT', :'WMEB', format('insert into public.employer_profiles(profile_id, job_title) values (%L, %L)', :'WMEC', 'hak'),
+     'employer_profiles INSERT za innego pracodawcę', true),
+  ('employer_profiles', 'DELETE', :'WMEB', format('delete from public.employer_profiles where profile_id = %L', :'WMEA'),
+     'employer_profiles DELETE obcy pracodawca', true),
+  -- profiles (kolumny uprzywilejowane chroni osobno sekcja PG1041)
+  ('profiles', 'UPDATE', :'WMCB', format('update public.profiles set first_name = %L where id = %L', 'Hak', :'WMCA'),
+     'profiles UPDATE cudzy kandydat', true),
+  ('profiles', 'UPDATE', :'WMEB', format('update public.profiles set first_name = %L where id = %L', 'Hak', :'WMEA'),
+     'profiles UPDATE obcy pracodawca', true),
+  ('profiles', 'INSERT', :'WMCB', format('insert into public.profiles(id, role) values (%L, %L)', :'WMCD', 'candidate'),
+     'profiles INSERT profilu za inne konto', true),
+  ('profiles', 'INSERT', :'WMCE', format('insert into public.profiles(id, role) values (%L, %L)', :'WMCE', 'admin'),
+     'profiles INSERT własnego profilu z rolą admin', true),
+  -- files
+  ('files', 'UPDATE', :'WMCB', format('update public.files set file_name = %L where owner_id = %L', 'hak.pdf', :'WMCA'),
+     'files UPDATE cudzy plik', true),
+  ('files', 'INSERT', :'WMCB', format('insert into public.files(owner_id, bucket, path, entity_type) values (%L, %L, %L, %L)', :'WMCA', 'candidate-files', 'wm/hak.pdf', 'candidate_cv'),
+     'files INSERT z cudzym owner_id', true),
+  ('files', 'DELETE', :'WMCB', format('delete from public.files where owner_id = %L', :'WMCA'),
+     'files DELETE cudzy plik', true),
+  -- notifications (bez INSERT: tworzy je backend)
+  ('notifications', 'UPDATE', :'WMCB', format('update public.notifications set read_at = now() where profile_id = %L', :'WMCA'),
+     'notifications UPDATE cudze powiadomienie', true),
+  ('notifications', 'DELETE', :'WMCB', format('delete from public.notifications where profile_id = %L', :'WMCA'),
+     'notifications DELETE cudze powiadomienie', true),
+  -- notification_preferences
+  ('notification_preferences', 'UPDATE', :'WMCB', format('update public.notification_preferences set email_marketing = true where profile_id = %L', :'WMCA'),
+     'notification_preferences UPDATE cudze preferencje', true),
+  ('notification_preferences', 'INSERT', :'WMCB', format('insert into public.notification_preferences(profile_id, email_marketing) values (%L, true)', :'WMCC'),
+     'notification_preferences INSERT za inne konto', true),
+  -- saved_jobs
+  ('saved_jobs', 'INSERT', :'WMCB', format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'WMCA', :'WMJD'),
+     'saved_jobs INSERT zapisu za innego kandydata', true),
+  ('saved_jobs', 'DELETE', :'WMCB', format('delete from public.saved_jobs where candidate_id = %L', :'WMCA'),
+     'saved_jobs DELETE cudzy zapis', true),
+  -- companies (edycja tylko owner/admin firmy; bez INSERT/DELETE)
+  ('companies', 'UPDATE', :'WMEB', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+     'companies UPDATE obca firma', true),
+  ('companies', 'UPDATE', :'WMEM', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+     'companies UPDATE zwykły member', true),
+  ('companies', 'UPDATE', :'WMER', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+     'companies UPDATE recruiter (bez roli admin/owner)', true),
+  ('companies', 'UPDATE', :'WMCB', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+     'companies UPDATE kandydat', true),
+  -- company_members (bez INSERT: dołączenie tylko przez zaproszenie)
+  ('company_members', 'UPDATE', :'WMEB', format('update public.company_members set is_active = false where profile_id = %L', :'WMER'),
+     'company_members UPDATE członka obcej firmy', true),
+  ('company_members', 'UPDATE', :'WMEM', format('update public.company_members set is_active = false where profile_id = %L', :'WMER'),
+     'company_members UPDATE przez zwykłego membera', true),
+  ('company_members', 'UPDATE', :'WMER', format('update public.company_members set role = %L where profile_id = %L', 'admin', :'WMER'),
+     'company_members UPDATE własnej roli przez recruitera', true),
+  ('company_members', 'DELETE', :'WMEB', format('delete from public.company_members where profile_id = %L', :'WMEM'),
+     'company_members DELETE członka obcej firmy', true),
+  ('company_members', 'DELETE', :'WMEM', format('delete from public.company_members where profile_id = %L', :'WMER'),
+     'company_members DELETE innego członka przez membera', true),
+  -- jobs (szkic WMJD; aktywna WMJA chroni dodatkowo strażnik treści — poza „tylko RLS”)
+  ('jobs', 'UPDATE', :'WMEB', format('update public.jobs set title = %L where id = %L', 'hak', :'WMJD'),
+     'jobs UPDATE szkicu obca firma', true),
+  ('jobs', 'UPDATE', :'WMEM', format('update public.jobs set title = %L where id = %L', 'hak', :'WMJD'),
+     'jobs UPDATE szkicu zwykły member', true),
+  ('jobs', 'UPDATE', :'WMEB', format('update public.jobs set title = %L where id = %L', 'hak', :'WMJA'),
+     'jobs UPDATE aktywnej oferty obca firma', false),
+  ('jobs', 'INSERT', :'WMEB', format('insert into public.jobs(company_id, slug, title, category, contract_type, city, region) values (%L, %L, %L, %L, %L, %L, %L)',
+     :'WMCOA', 'wm-hak-1', 'hak', 'warehouse', 'permanent', 'Antwerpia', 'Flandria'),
+     'jobs INSERT do obcej firmy', true),
+  ('jobs', 'INSERT', :'WMEM', format('insert into public.jobs(company_id, slug, title, category, contract_type, city, region) values (%L, %L, %L, %L, %L, %L, %L)',
+     :'WMCOA', 'wm-hak-2', 'hak', 'warehouse', 'permanent', 'Antwerpia', 'Flandria'),
+     'jobs INSERT zwykły member', true),
+  ('jobs', 'UPDATE', :'WMEM', format('update public.jobs set title = %L where id = %L', 'hak', :'WMJD2'),
+     'jobs UPDATE drugiego szkicu zwykły member', true);
+
+-- Relacje oferty (te same polityki `is_job_manager`): obca firma i zwykły member.
+insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only)
+select r.tbl, 'UPDATE', a.actor,
+       format('update public.%I set %I = %L where job_id = %L', r.tbl, r.col, 'hak', :'WMJD'),
+       format('%s UPDATE %s', r.tbl, a.who), true
+from (values ('job_skills', 'skill_label'), ('job_languages', 'language_label'), ('job_certificates', 'certificate_label'),
+             ('job_requirements', 'content'), ('job_translations', 'title')) r(tbl, col)
+cross join (values (:'WMEB'::uuid, 'obca firma'), (:'WMEM'::uuid, 'zwykły member')) a(actor, who);
+insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only)
+select r.tbl, 'INSERT', a.actor,
+       format(r.ins, :'WMJD', case when r.tbl = 'job_translations' then a.loc else a.tag end),
+       format('%s INSERT %s', r.tbl, a.who), true
+from (values
+  ('job_skills',       'insert into public.job_skills(job_id, skill_label) values (%L, %L)'),
+  ('job_languages',    'insert into public.job_languages(job_id, language_label) values (%L, %L)'),
+  ('job_certificates', 'insert into public.job_certificates(job_id, certificate_label) values (%L, %L)'),
+  ('job_requirements', 'insert into public.job_requirements(job_id, kind, content) values (%L, ''optional'', %L)'),
+  ('job_translations', 'insert into public.job_translations(job_id, locale, title) values (%L, %L, ''hak'')')) r(tbl, ins)
+cross join (values (:'WMEB'::uuid, 'obca firma', 'wm-b', 'nl'), (:'WMEM'::uuid, 'zwykły member', 'wm-m', 'fr')) a(actor, who, tag, loc);
+insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only)
+select r.tbl, 'DELETE', a.actor, format('delete from public.%I where job_id = %L', r.tbl, a.job),
+       format('%s DELETE %s', r.tbl, a.who), true
+from (values ('job_skills'), ('job_languages'), ('job_certificates'), ('job_requirements'), ('job_translations')) r(tbl)
+cross join (values (:'WMEB'::uuid, 'obca firma', :'WMJD'::uuid), (:'WMEM'::uuid, 'zwykły member', :'WMJD2'::uuid)) a(actor, who, job);
+-- Przeniesienia „na końcu”: właściciel firmy A przenosi własną ofertę / członka do obcej firmy (WITH CHECK).
+insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only) values
+  ('jobs', 'UPDATE', :'WMEA', format('update public.jobs set company_id = %L where id = %L', :'WMCOB', :'WMJD'),
+     'jobs UPDATE przeniesienie oferty do obcej firmy', true),
+  ('company_members', 'UPDATE', :'WMEA', format('update public.company_members set company_id = %L where profile_id = %L', :'WMCOB', :'WMEA'),
+     'company_members UPDATE przeniesienie własnego członkostwa do obcej firmy', true),
+  ('jobs', 'DELETE', :'WMEB', format('delete from public.jobs where id = %L', :'WMJD'),
+     'jobs DELETE szkicu obca firma', true),
+  ('jobs', 'DELETE', :'WMEM', format('delete from public.jobs where id = %L', :'WMJD2'),
+     'jobs DELETE szkicu zwykły member', true);
+
+-- --- Przypadki: uprawnione zapisy własnych wierszy (kontrola dodatnia) ---------------------------
+insert into pg_temp.wm_cases(tbl, op, actor, sql, note, expect, rls_only) values
+  ('candidate_profiles', 'UPDATE', :'WMCA', format('update public.candidate_profiles set headline = %L where profile_id = %L', 'moje', :'WMCA'), 'własny profil kandydata', 'allow', false),
+  ('employer_profiles', 'UPDATE', :'WMEA', format('update public.employer_profiles set job_title = %L where profile_id = %L', 'moje', :'WMEA'), 'własny profil pracodawcy', 'allow', false),
+  ('profiles', 'UPDATE', :'WMCA', format('update public.profiles set first_name = %L where id = %L', 'Moje', :'WMCA'), 'własny profil (imię)', 'allow', false),
+  ('profiles', 'INSERT', :'WMCD', format('insert into public.profiles(id, role) values (%L, %L)', :'WMCD', 'candidate'), 'własny profil (wstawienie)', 'allow', false),
+  ('files', 'UPDATE', :'WMCA', format('update public.files set file_name = %L where owner_id = %L', 'moje.pdf', :'WMCA'), 'własny plik', 'allow', false),
+  ('notifications', 'UPDATE', :'WMCA', format('update public.notifications set read_at = now() where profile_id = %L', :'WMCA'), 'własne powiadomienie', 'allow', false),
+  ('notification_preferences', 'UPDATE', :'WMCA', format('update public.notification_preferences set email_marketing = true where profile_id = %L', :'WMCA'), 'własne preferencje', 'allow', false),
+  ('saved_jobs', 'DELETE', :'WMCA', format('delete from public.saved_jobs where candidate_id = %L', :'WMCA'), 'własny zapis oferty', 'allow', false),
+  ('companies', 'UPDATE', :'WMEA', format('update public.companies set description = %L where id = %L', 'moja firma', :'WMCOA'), 'własna firma (owner)', 'allow', false),
+  ('company_members', 'UPDATE', :'WMEA', format('update public.company_members set role = %L where profile_id = %L', 'admin', :'WMER'), 'owner zmienia rolę członka własnej firmy', 'allow', false),
+  ('jobs', 'UPDATE', :'WMER', format('update public.jobs set title = %L where id = %L', 'moje', :'WMJD'), 'szkic własnej firmy (recruiter)', 'allow', false),
+  ('job_skills', 'UPDATE', :'WMER', format('update public.job_skills set skill_label = %L where job_id = %L', 'moje', :'WMJD'), 'relacja szkicu własnej firmy (recruiter)', 'allow', false),
+  ('job_languages', 'UPDATE', :'WMER', format('update public.job_languages set language_label = %L where job_id = %L', 'moje', :'WMJD'), 'relacja szkicu własnej firmy (recruiter)', 'allow', false),
+  ('job_certificates', 'UPDATE', :'WMER', format('update public.job_certificates set certificate_label = %L where job_id = %L', 'moje', :'WMJD'), 'relacja szkicu własnej firmy (recruiter)', 'allow', false),
+  ('job_requirements', 'UPDATE', :'WMER', format('update public.job_requirements set content = %L where job_id = %L', 'moje', :'WMJD'), 'relacja szkicu własnej firmy (recruiter)', 'allow', false),
+  ('job_translations', 'UPDATE', :'WMER', format('update public.job_translations set title = %L where job_id = %L', 'moje', :'WMJD'), 'relacja szkicu własnej firmy (recruiter)', 'allow', false);
+
+-- --- 1. Strażnik pokrycia grantów -----------------------------------------------------------------
+select pg_temp.wm_uncovered() as wm_uncov \gset
+select pg_temp.assert(:'wm_uncov' = '',
+  format('WM-G1 grant zapisu dla authenticated bez przypadku w macierzy (dodaj ataki na cudze wiersze): %s', :'wm_uncov'));
+select pg_temp.wm_anon_writes() as wm_anon \gset
+select pg_temp.assert(:'wm_anon' = '', format('WM-G2 anon nie ma grantów zapisu ani TRUNCATE: %s', :'wm_anon'));
+select pg_temp.wm_tables_without_rls() as wm_norls \gset
+select pg_temp.assert(:'wm_norls' = '', format('WM-G3 każda tabela public ma włączone RLS (Inv. #5): %s', :'wm_norls'));
+select pg_temp.assert((select count(distinct tbl) from pg_temp.wm_cases where expect = 'deny') = 15
+  and (select count(*) from pg_temp.wm_cases where expect = 'deny') >= 60,
+  'WM-G4 macierz obejmuje 15 tabel i co najmniej 60 ataków (zabezpieczenie przed wyzerowaniem listy)');
+-- Kontrole ujemne strażnika (cofane): nowy grant, TRUNCATE, zapis dla anon, brak RLS.
+begin;
+grant insert on public.applications to authenticated;
+select pg_temp.wm_uncovered() as wm_n1 \gset
+rollback;
+select pg_temp.assert(:'wm_n1' like '%applications:INSERT%', 'WM-G1n nowy grant INSERT na applications wykryty przez strażnik');
+begin;
+grant truncate on public.jobs to authenticated;
+select pg_temp.wm_uncovered() as wm_n1b \gset
+rollback;
+select pg_temp.assert(:'wm_n1b' like '%jobs:TRUNCATE%', 'WM-G1o grant TRUNCATE dla authenticated wykryty przez strażnik');
+begin;
+grant update (headline) on public.candidate_profiles to anon;
+grant delete on public.saved_jobs to anon;
+select pg_temp.wm_anon_writes() as wm_n2 \gset
+rollback;
+select pg_temp.assert(:'wm_n2' like '%candidate_profiles:UPDATE%' and :'wm_n2' like '%saved_jobs:DELETE%',
+  'WM-G2n grant zapisu (także kolumnowy) dla anon wykryty przez strażnik');
+begin;
+alter table public.saved_jobs disable row level security;
+select pg_temp.wm_tables_without_rls() as wm_n3 \gset
+rollback;
+select pg_temp.assert(:'wm_n3' = 'saved_jobs', 'WM-G3n wyłączone RLS na tabeli public wykryte przez strażnik');
+
+-- --- 2. Ataki na cudze wiersze -----------------------------------------------------------------------
+select pg_temp.wm_fingerprint() as wm_fp0 \gset
+select pg_temp.wm_run('deny') as wm_deny \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'wm_deny' = '', format('WM-1 zapis cudzego wiersza odrzucony w każdej parze tabela/operacja: %s', :'wm_deny'));
+select pg_temp.assert(pg_temp.wm_fingerprint() = :'wm_fp0', 'WM-2 zawartość tabel po atakach identyczna jak przed (żaden cudzy wiersz nie zmieniony)');
+
+-- --- 3. Kontrola dodatnia: uprawniony zapis własnych wierszy przechodzi -----------------------------
+begin;
+select pg_temp.wm_run('positive') as wm_pos \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'wm_pos' = '', format('WM-3 uprawniony zapis własnych wierszy się udaje (ataki nie są odrzucane „na ślepo”): %s', :'wm_pos'));
+
+-- --- 4. Kontrola ujemna: bez RLS każdy atak „tylko RLS” zapisuje ------------------------------------
+begin;
+do $$
+declare t text;
+begin
+  for t in select distinct tbl from pg_temp.wm_cases loop
+    execute format('alter table public.%I disable row level security', t);
+  end loop;
+  -- company_members: dodatkowa warstwa (hierarchia ról, tożsamość członkostwa) też odrzuca — dla dowodu
+  -- działania samej polityki wyłączamy ją w tej kontroli.
+  alter table public.company_members disable trigger user;
+end $$;
+select pg_temp.wm_run('control') as wm_ctl \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'wm_ctl' = '',
+  format('WM-N1 kontrola ujemna: bez RLS każdy atak zapisuje wiersze (przypadek naprawdę sprawdza politykę): %s', :'wm_ctl'));
+
+-- --- 5. Kontrola ujemna: osłabiona polityka wskazuje dokładnie swój przypadek -----------------------
+-- UPDATE/DELETE z warunkiem WHERE wymaga też widoczności wiersza (polityki SELECT) — to druga warstwa
+-- obrony; dlatego dla cudzego kandydata osłabiamy razem SELECT i UPDATE, a dla członków tej samej
+-- firmy (widzą jej wiersze) wystarczy sama polityka zapisu.
+begin;
+alter policy candidate_profiles_select_own on public.candidate_profiles using (true);
+alter policy candidate_profiles_update_own on public.candidate_profiles using (true) with check (true);
+alter policy jobs_delete_member on public.jobs using (true);
+alter table public.company_members disable trigger user;
+alter policy company_members_update_admin on public.company_members using (true) with check (true);
+alter policy saved_jobs_insert_own on public.saved_jobs with check (true);
+alter policy job_skills_update_member on public.job_skills using (true) with check (true);
+select pg_temp.wm_run('deny') as wm_weak \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'wm_weak' like '%candidate_profiles UPDATE cudzy kandydat%'
+  and :'wm_weak' like '%jobs DELETE szkicu zwykły member%'
+  and :'wm_weak' like '%company_members UPDATE przez zwykłego membera%'
+  and :'wm_weak' like '%saved_jobs INSERT zapisu za innego kandydata%'
+  and :'wm_weak' like '%job_skills UPDATE zwykły member%',
+  format('WM-N2 osłabiona polityka zapisu zapala odpowiadający jej przypadek macierzy: %s', :'wm_weak'));
+select pg_temp.assert(:'wm_weak' not like '%: companies %' and :'wm_weak' not like '%: files %'
+  and :'wm_weak' not like '%: notifications %' and :'wm_weak' not like '%: job_languages %',
+  'WM-N2b osłabienie kilku polityk nie zapala przypadków innych tabel');
+select pg_temp.assert(pg_temp.wm_run('deny') = '', 'WM-N2c po cofnięciu osłabienia macierz znów przechodzi');
+
+-- ============================================================================
+-- PG1041. Strażnik uprzywilejowanych kolumn profilu (#1041, 0011 P1-02): klient nie zmienia
+--   własnej roli, aktywności, znacznika usunięcia ani języka zapisu; zwykłe pola (imię, telefon,
+--   język interfejsu) zmienia bez przeszkód; backend (auth.uid() = null) nadal może.
+--   Kontrole ujemne: osłabienie strażnika o JEDNĄ kolumnę oraz zdjęcie triggera otwierają
+--   dokładnie tę drogę (eskalacja do admina, dezaktywacja, ukrycie konta).
+-- ============================================================================
+\echo '--- PG1041 strażnik uprzywilejowanych kolumn profilu ---'
+reset role; reset app.current_uid;
+select case when signup_locale = 'en' then 'nl' else 'en' end as pg_other_locale from public.profiles where id = :'WMCA' \gset
+select to_jsonb(p) - 'updated_at' as pg_snap_c from public.profiles p where id = :'WMCA' \gset
+select to_jsonb(p) - 'updated_at' as pg_snap_e from public.profiles p where id = :'WMEA' \gset
+select pg_temp.assert(:'pg_other_locale' <> (select signup_locale from public.profiles where id = :'WMCA'),
+  'PG1041-0 fixture: docelowy język zapisu różni się od bieżącego');
+
+-- PG1041-1: kandydat — każda uprzywilejowana kolumna osobno odrzucona pełnym komunikatem strażnika.
+set role authenticated; set app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('update public.profiles set role = %L where id = %L', 'employer', :'WMCA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-1a kandydat nie zmienia roli na employer');
+select pg_temp.expect_error(format('update public.profiles set role = %L where id = %L', 'admin', :'WMCA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-1b kandydat nie nadaje sobie roli admin');
+select pg_temp.expect_error(format('update public.profiles set is_active = false where id = %L', :'WMCA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-1c kandydat nie zmienia is_active');
+select pg_temp.expect_error(format('update public.profiles set deleted_at = now() where id = %L', :'WMCA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-1d kandydat nie oznacza konta jako usuniętego');
+select pg_temp.expect_error(format('update public.profiles set signup_locale = %L where id = %L', :'pg_other_locale', :'WMCA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-1e kandydat nie zmienia języka zapisu');
+-- Zmiana zwykłego pola RAZEM z uprzywilejowaną: cała aktualizacja odrzucona, nic się nie zapisuje.
+select pg_temp.expect_error(format('update public.profiles set first_name = %L, role = %L where id = %L', 'Zmiana', 'admin', :'WMCA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-1f zwykłe pole razem z rolą — całość odrzucona');
+reset role; reset app.current_uid;
+
+-- PG1041-2: pracodawca — to samo (rola, aktywność, usunięcie, język zapisu).
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('update public.profiles set role = %L where id = %L', 'admin', :'WMEA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-2a pracodawca nie nadaje sobie roli admin');
+select pg_temp.expect_error(format('update public.profiles set role = %L where id = %L', 'candidate', :'WMEA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-2b pracodawca nie zmienia roli na candidate');
+select pg_temp.expect_error(format('update public.profiles set is_active = false where id = %L', :'WMEA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-2c pracodawca nie zmienia is_active');
+select pg_temp.expect_error(format('update public.profiles set deleted_at = now() where id = %L', :'WMEA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-2d pracodawca nie oznacza konta jako usuniętego');
+select pg_temp.expect_error(format('update public.profiles set signup_locale = %L where id = %L', :'pg_other_locale', :'WMEA'),
+  'PERMISSION_DENIED: nie można zmienić uprzywilejowanych kolumn profilu', 'PG1041-2e pracodawca nie zmienia języka zapisu');
+reset role; reset app.current_uid;
+
+-- PG1041-3: po wszystkich próbach profile są bit w bit takie jak przed (poza updated_at).
+select pg_temp.assert((select to_jsonb(p) - 'updated_at' from public.profiles p where id = :'WMCA') = :'pg_snap_c'::jsonb,
+  'PG1041-3 profil kandydata nietknięty po próbach eskalacji');
+select pg_temp.assert((select to_jsonb(p) - 'updated_at' from public.profiles p where id = :'WMEA') = :'pg_snap_e'::jsonb,
+  'PG1041-3b profil pracodawcy nietknięty po próbach eskalacji');
+
+-- PG1041-4: kontrole dodatnie — zwykłe pola przechodzą, a przypisanie tej samej wartości uprzywilejowanej też.
+begin;
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+update public.profiles set first_name = 'Nowe', last_name = 'Nazwisko', phone = '+32470000001', preferred_locale = 'nl'
+  where id = :'WMCA';
+update public.profiles set role = role, is_active = is_active, deleted_at = deleted_at, signup_locale = signup_locale
+  where id = :'WMCA';
+reset role;
+select pg_temp.assert(
+  (select first_name = 'Nowe' and last_name = 'Nazwisko' and phone = '+32470000001' and preferred_locale = 'nl'
+      and role::text = 'candidate' and is_active and deleted_at is null
+      and to_jsonb(p) - 'updated_at' - 'first_name' - 'last_name' - 'phone' - 'preferred_locale'
+          = :'pg_snap_c'::jsonb - 'first_name' - 'last_name' - 'phone' - 'preferred_locale'
+     from public.profiles p where id = :'WMCA'),
+  'PG1041-4 zmiana zwykłych pól przechodzi, uprzywilejowane bez zmian (kontrola dodatnia)');
+rollback;
+reset role; reset app.current_uid;
+
+-- PG1041-5: ścieżki backendu (brak sesji użytkownika) nie są blokowane — strażnik dotyczy klienta.
+begin;
+update public.profiles set is_active = false where id = :'WMCA';
+select pg_temp.assert((select not is_active from public.profiles where id = :'WMCA'),
+  'PG1041-5 właściciel/superuser bez sesji użytkownika zmienia is_active (ścieżka backendu)');
+rollback;
+begin;
+set local role service_role;
+update public.profiles set deleted_at = now() where id = :'WMCA';
+reset role;
+select pg_temp.assert((select deleted_at is not null from public.profiles where id = :'WMCA'),
+  'PG1041-5b service_role bez sesji użytkownika oznacza konto jako usunięte (ścieżka backendu)');
+rollback;
+reset role; reset app.current_uid;
+
+-- PG1041-N: kontrole ujemne — bez strażnika ta sama droga jest otwarta.
+create function pg_temp.pg1041_mutant(p_cond text) returns void
+language plpgsql as $$
+declare d text; d2 text;
+begin
+  d := pg_get_functiondef('public.protect_profiles_privileged()'::regprocedure);
+  d2 := replace(d, p_cond, 'false');
+  if d2 = d then raise exception 'PG1041: nie udało się osłabić strażnika (%)', p_cond; end if;
+  execute d2;
+end $$;
+-- Osłabienie o jedną kolumnę otwiera dokładnie tę kolumnę (pozostałe nadal zamknięte).
+begin;
+select pg_temp.pg1041_mutant('new.role is distinct from old.role');
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+update public.profiles set role = 'admin' where id = :'WMCA';
+select pg_temp.expect_error(format('update public.profiles set is_active = false where id = %L', :'WMCA'),
+  'PERMISSION_DENIED', 'PG1041-N1b bez warunku roli nadal zamknięte is_active');
+reset role;
+select pg_temp.assert((select role::text = 'admin' from public.profiles where id = :'WMCA'),
+  'PG1041-N1 kontrola ujemna: bez warunku roli kandydat awansuje się do admina');
+rollback;
+begin;
+select pg_temp.pg1041_mutant('new.is_active is distinct from old.is_active');
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+update public.profiles set is_active = false where id = :'WMCA';
+reset role;
+select pg_temp.assert((select not is_active from public.profiles where id = :'WMCA'),
+  'PG1041-N2 kontrola ujemna: bez warunku is_active klient dezaktywuje konto');
+rollback;
+begin;
+select pg_temp.pg1041_mutant('new.deleted_at is distinct from old.deleted_at');
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+update public.profiles set deleted_at = now() where id = :'WMCA';
+reset role;
+select pg_temp.assert((select deleted_at is not null from public.profiles where id = :'WMCA'),
+  'PG1041-N3 kontrola ujemna: bez warunku deleted_at klient oznacza konto jako usunięte');
+rollback;
+begin;
+select pg_temp.pg1041_mutant('new.signup_locale is distinct from old.signup_locale');
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+update public.profiles set signup_locale = :'pg_other_locale' where id = :'WMCA';
+reset role;
+select pg_temp.assert((select signup_locale = :'pg_other_locale' from public.profiles where id = :'WMCA'),
+  'PG1041-N4 kontrola ujemna: bez warunku signup_locale klient zmienia język zapisu');
+rollback;
+-- Zdjęty trigger: wszystkie cztery drogi otwarte naraz (dla pracodawcy też).
+begin;
+drop trigger trg_protect_profiles on public.profiles;
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+update public.profiles set role = 'admin', is_active = false, deleted_at = now(), signup_locale = :'pg_other_locale' where id = :'WMEA';
+reset role;
+select pg_temp.assert((select role::text = 'admin' and not is_active and deleted_at is not null
+                         and signup_locale = :'pg_other_locale' from public.profiles where id = :'WMEA'),
+  'PG1041-N5 kontrola ujemna: bez triggera pracodawca zmienia rolę, aktywność, usunięcie i język zapisu');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert((select role::text = 'employer' and is_active from public.profiles where id = :'WMEA')
+  and exists (select 1 from pg_trigger where tgrelid = 'public.profiles'::regclass and tgname = 'trg_protect_profiles' and not tgisinternal),
+  'PG1041-N6 po cofnięciu kontroli strażnik jest na miejscu, a profil nietknięty');
+
+-- ============================================================================
+-- PJ1071. Kompletność publikacji oferty — jeden przypadek = jedna reguła (#1071, 0172 publish_job).
+--   Zamiast jednej zbiorczej asercji ze wspólnym wzorcem `VALIDATION_FAILED` każdy brak ma własną
+--   ofertę (poza tym kompletną) i oczekuje PEŁNEGO komunikatu swojej reguły. Kontrole ujemne:
+--   usunięcie z definicji `publish_job` bloku JEDNEJ reguły zmienia wynik dokładnie jej przypadków
+--   (publikacja albo komunikat następnej warstwy), a przypadki pozostałych reguł nadal kończą się
+--   swoimi komunikatami — żadna reguła nie jest zasłonięta cudzym błędem.
+-- ============================================================================
+\echo '--- PJ1071 publish_job: osobne przypadki kompletności ---'
+reset role; reset app.current_uid;
+\set WMCOC 'd6000000-0000-0000-0000-0000000000c1'
+insert into public.companies(id, name, status) values (:'WMCOC', 'WM Firma C (niezweryfikowana)', 'pending');
+insert into public.company_members(company_id, profile_id, role, is_active) values (:'WMCOC', :'WMEC', 'owner', true);
+
+create function pg_temp.pj_id(p_n int) returns uuid language sql immutable as $$
+  select ('d6100000-0000-0000-0000-' || lpad(p_n::text, 12, '0'))::uuid
+$$;
+-- Kompletna oferta: tytuł, miasto, region, opis + obowiązki, wymaganie obowiązkowe, kanał aplikowania.
+create function pg_temp.pj_mk(p_n int, p_company uuid, p_status text default 'draft') returns uuid
+language plpgsql as $$
+declare v_id uuid := pg_temp.pj_id(p_n);
+begin
+  insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale, apply_email)
+    values (v_id, p_company, 'draft-pj' || p_n, 'Magazynier PJ', 'warehouse', 'permanent', 'Antwerpia', 'Flandria',
+            p_status::public.job_status, 'pl', 'praca@firma-pj.be');
+  insert into public.job_translations(job_id, locale, title, description, responsibilities)
+    values (v_id, 'pl', 'Magazynier PJ', 'Praca w magazynie, system dwuzmianowy.', array['Kompletowanie zamówień']);
+  insert into public.job_requirements(job_id, kind, content) values (v_id, 'mandatory', 'Dyspozycyjność');
+  return v_id;
+end $$;
+
+create temp table pj_cases (
+  id serial primary key, rule text not null, label text not null, job uuid not null, actor uuid,
+  msg text not null,       -- pełny komunikat reguły
+  mut_msg text             -- po usunięciu reguły: null = publikacja przechodzi, inaczej komunikat kolejnej warstwy
+);
+create function pg_temp.pj_add(p_rule text, p_label text, p_job uuid, p_actor uuid, p_msg text, p_mut_msg text default null)
+returns void language sql as $$
+  insert into pg_temp.pj_cases(rule, label, job, actor, msg, mut_msg) values (p_rule, p_label, p_job, p_actor, p_msg, p_mut_msg)
+$$;
+
+-- reguła → wyrażenie usuwające jej blok z definicji publish_job
+create temp table pj_mutations (rule text primary key, re text not null);
+insert into pg_temp.pj_mutations values
+  ('auth',        'if auth\.uid\(\) is null then.*?end if;'),
+  ('notfound',    'if v_company is null then.*?end if;'),
+  ('perm',        'if not public\.can_manage_jobs\(v_company\) then.*?end if;'),
+  ('verified',    'if v_cstatus <> ''verified'' then.*?end if;'),
+  ('draftonly',   'if v_status <> ''draft'' then.*?end if;'),
+  ('expired',     'if v_expires is not null and v_expires <= now\(\) then.*?end if;'),
+  ('title',       'if v_title is null or btrim\(v_title\).*?end if;'),
+  ('translation', 'if not v_has_translation then.*?end if;'),
+  ('mandatory',   'if not v_has_mandatory then.*?end if;'),
+  ('channel',     'if not v_has_channel then.*?end if;');
+
+-- --- Oferty i przypadki (każda oferta łamie dokładnie jedną regułę) -----------------------------
+select pg_temp.pj_mk(n, :'WMCOA') from generate_series(1, 40) n;   -- kompletne szkice firmy A (zmieniane niżej)
+select pg_temp.pj_mk(41, :'WMCOC');                                   -- firma niezweryfikowana
+select pg_temp.pj_mk(42, :'WMCOA', 'active');
+select pg_temp.pj_mk(43, :'WMCOA', 'paused');
+select pg_temp.pj_mk(44, :'WMCOA', 'closed');
+
+update public.jobs set expires_at = now() - interval '1 day' where id = pg_temp.pj_id(6);
+update public.jobs set title = '   ' where id = pg_temp.pj_id(7);
+update public.jobs set title = 'draft roboczy' where id = pg_temp.pj_id(8);
+update public.jobs set title = 'Tekst placeholder do uzupełnienia' where id = pg_temp.pj_id(9);
+update public.jobs set city = '  ' where id = pg_temp.pj_id(10);
+update public.jobs set region = '' where id = pg_temp.pj_id(11);
+delete from public.job_translations where job_id = pg_temp.pj_id(12);
+update public.job_translations set description = '   ' where job_id = pg_temp.pj_id(13);
+update public.job_translations set title = '' where job_id = pg_temp.pj_id(14);
+update public.job_translations set responsibilities = array[]::text[] where job_id = pg_temp.pj_id(15);
+delete from public.job_requirements where job_id = pg_temp.pj_id(16);
+update public.job_requirements set kind = 'optional' where job_id = pg_temp.pj_id(17);
+update public.job_requirements set content = '   ' where job_id = pg_temp.pj_id(18);
+update public.jobs set apply_email = null where id = pg_temp.pj_id(19);
+update public.jobs set deleted_at = now() where id = pg_temp.pj_id(20);
+
+select pg_temp.pj_add('auth', 'bez sesji użytkownika', pg_temp.pj_id(1), null, 'UNAUTHENTICATED',
+  'PERMISSION_DENIED: publikacja wymaga roli recruiter+');
+select pg_temp.pj_add('notfound', 'oferta nie istnieje', 'd6100000-0000-0000-0000-0000000000ff', :'WMEA'::uuid,
+  'NOT_FOUND: oferta nie istnieje', 'PERMISSION_DENIED: publikacja wymaga roli recruiter+');
+select pg_temp.pj_add('notfound', 'oferta usunięta (deleted_at)', pg_temp.pj_id(20), :'WMEA'::uuid,
+  'NOT_FOUND: oferta nie istnieje', 'PERMISSION_DENIED: publikacja wymaga roli recruiter+');
+select pg_temp.pj_add('perm', 'zwykły member własnej firmy', pg_temp.pj_id(2), :'WMEM'::uuid,
+  'PERMISSION_DENIED: publikacja wymaga roli recruiter+');
+select pg_temp.pj_add('perm', 'właściciel obcej firmy', pg_temp.pj_id(3), :'WMEB'::uuid,
+  'PERMISSION_DENIED: publikacja wymaga roli recruiter+');
+select pg_temp.pj_add('verified', 'firma niezweryfikowana', pg_temp.pj_id(41), :'WMEC'::uuid,
+  'COMPANY_NOT_VERIFIED: firma nie jest zweryfikowana');
+select pg_temp.pj_add('draftonly', 'oferta już aktywna', pg_temp.pj_id(42), :'WMEA'::uuid,
+  'VALIDATION_FAILED: publikować można tylko szkic', 'VALIDATION_FAILED: oferta zmieniła stan równolegle');
+select pg_temp.pj_add('draftonly', 'oferta wstrzymana', pg_temp.pj_id(43), :'WMEA'::uuid,
+  'VALIDATION_FAILED: publikować można tylko szkic', 'VALIDATION_FAILED: oferta zmieniła stan równolegle');
+select pg_temp.pj_add('draftonly', 'oferta zamknięta (ponowna publikacja)', pg_temp.pj_id(44), :'WMEA'::uuid,
+  'VALIDATION_FAILED: publikować można tylko szkic', 'VALIDATION_FAILED: oferta zmieniła stan równolegle');
+select pg_temp.pj_add('expired', 'data ważności w przeszłości', pg_temp.pj_id(6), :'WMEA'::uuid,
+  'JOB_EXPIRED: termin ważności oferty minął');
+select pg_temp.pj_add('title', 'tytuł z samych spacji', pg_temp.pj_id(7), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
+select pg_temp.pj_add('title', 'tytuł zaczyna się od „draft”', pg_temp.pj_id(8), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
+select pg_temp.pj_add('title', 'tytuł zawiera „placeholder”', pg_temp.pj_id(9), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
+select pg_temp.pj_add('title', 'miasto z samych spacji', pg_temp.pj_id(10), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
+select pg_temp.pj_add('title', 'pusty region', pg_temp.pj_id(11), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
+select pg_temp.pj_add('translation', 'brak tłumaczenia', pg_temp.pj_id(12), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (opis i obowiązki w tłumaczeniu)');
+select pg_temp.pj_add('translation', 'pusty opis', pg_temp.pj_id(13), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (opis i obowiązki w tłumaczeniu)');
+select pg_temp.pj_add('translation', 'pusty tytuł tłumaczenia', pg_temp.pj_id(14), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (opis i obowiązki w tłumaczeniu)');
+select pg_temp.pj_add('translation', 'brak obowiązków', pg_temp.pj_id(15), :'WMEA'::uuid,
+  'VALIDATION_FAILED: oferta niekompletna (opis i obowiązki w tłumaczeniu)');
+select pg_temp.pj_add('mandatory', 'brak jakichkolwiek wymagań', pg_temp.pj_id(16), :'WMEA'::uuid,
+  'VALIDATION_FAILED: brak wymagań obowiązkowych');
+select pg_temp.pj_add('mandatory', 'tylko wymaganie dodatkowe', pg_temp.pj_id(17), :'WMEA'::uuid,
+  'VALIDATION_FAILED: brak wymagań obowiązkowych');
+select pg_temp.pj_add('mandatory', 'wymaganie obowiązkowe z samych spacji', pg_temp.pj_id(18), :'WMEA'::uuid,
+  'VALIDATION_FAILED: brak wymagań obowiązkowych');
+select pg_temp.pj_add('channel', 'brak kanału aplikowania', pg_temp.pj_id(19), :'WMEA'::uuid,
+  'JOB_APPLY_CHANNEL_REQUIRED: oferta wymaga adresu strony, e-maila albo telefonu do aplikowania');
+
+-- Próba publikacji każdego przypadku; p_rule = reguła usunięta z definicji (null = definicja produkcyjna).
+create function pg_temp.pj_run(p_rule text) returns text
+language plpgsql as $$
+declare c record; v_err text; v_status text; v_fail text := ''; v_want text;
+begin
+  for c in select * from pg_temp.pj_cases order by id loop
+    perform set_config('app.current_uid', coalesce(c.actor::text, ''), true);
+    execute 'set local role authenticated';
+    perform pg_temp.assert_client_role();
+    v_err := null;
+    begin
+      perform public.publish_job(c.job, 'wm-pj-' || c.id);
+    exception when others then v_err := sqlerrm;
+    end;
+    reset role;
+    v_want := case when p_rule is not null and c.rule = p_rule then c.mut_msg else c.msg end;
+    select status::text into v_status from public.jobs where id = c.job;
+    if v_want is null then
+      if v_err is not null or v_status is distinct from 'active' then
+        v_fail := v_fail || format('[%s: %s — po usunięciu reguły oczekiwano publikacji, jest: %s / %s] ', c.rule, c.label, coalesce(v_err, 'brak błędu'), v_status);
+      end if;
+    elsif v_err is distinct from v_want then
+      v_fail := v_fail || format('[%s: %s — oczekiwano „%s”, jest „%s”] ', c.rule, c.label, v_want, coalesce(v_err, 'publikacja przeszła'));
+    elsif v_status = 'active' and c.rule not in ('draftonly') then
+      v_fail := v_fail || format('[%s: %s — błąd, ale oferta stała się aktywna] ', c.rule, c.label);
+    end if;
+  end loop;
+  perform set_config('app.current_uid', '', true);
+  return v_fail;
+end $$;
+create function pg_temp.pj_mutate(p_rule text) returns void
+language plpgsql as $$
+declare d text; d2 text;
+begin
+  d := pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure);
+  d2 := regexp_replace(d, (select re from pg_temp.pj_mutations where rule = p_rule), '', 's');
+  if d2 = d then raise exception 'PJ1071: nie udało się usunąć reguły %', p_rule; end if;
+  execute d2;
+end $$;
+
+-- PJ1071-1: definicja produkcyjna — każdy brak kończy się pełnym komunikatem własnej reguły,
+-- a stan ofert (status) pozostaje bez zmian.
+select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 23
+  and (select count(distinct rule) from pg_temp.pj_cases) = 10
+  and (select count(distinct rule) from pg_temp.pj_mutations) = 10,
+  'PJ1071-0 lista przypadków obejmuje 10 reguł (23 przypadki)');
+select pg_temp.pj_run(null) as pj_base \gset
+select pg_temp.assert(:'pj_base' = '', format('PJ1071-1 każdy brak ma własny, pełny komunikat: %s', :'pj_base'));
+select pg_temp.assert(
+  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 19
+  and (select count(*) from public.jobs where id in (pg_temp.pj_id(42)) and status = 'active') = 1,
+  'PJ1071-1b odrzucone szkice pozostają szkicami, oferta aktywna nie zmienia się');
+
+-- PJ1071-2: kontrola dodatnia — kompletna oferta publikuje się (slug z parametru, znacznik czasu).
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select public.publish_job(pg_temp.pj_id(21), 'wm-pj-ok') as pj_slug \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_slug' = 'wm-pj-ok'
+  and (select status::text = 'active' and published_at is not null and slug = 'wm-pj-ok' from public.jobs where id = pg_temp.pj_id(21)),
+  'PJ1071-2 kompletna oferta publikuje się jako aktywna z podanym slugiem');
+-- Recruiter (nie owner) też publikuje — reguła to recruiter+, nie „tylko właściciel”.
+set role authenticated; set app.current_uid = :'WMER'; select pg_temp.assert_client_role();
+select public.publish_job(pg_temp.pj_id(22), 'wm-pj-ok-2') as pj_slug2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_slug2' = 'wm-pj-ok-2', 'PJ1071-2b recruiter publikuje kompletną ofertę');
+
+-- PJ1071-N: usunięcie bloku JEDNEJ reguły zmienia wynik dokładnie jej przypadków.
+begin;
+select pg_temp.pj_mutate('mandatory');
+select pg_temp.pj_run('mandatory') as pj_n1 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n1' = '', format('PJ1071-N1 bez reguły wymagań obowiązkowych publikują się tylko oferty bez wymagań: %s', :'pj_n1'));
+begin;
+select pg_temp.pj_mutate('translation');
+select pg_temp.pj_run('translation') as pj_n2 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n2' = '', format('PJ1071-N2 bez reguły opisu/obowiązków publikują się tylko oferty bez treści: %s', :'pj_n2'));
+begin;
+select pg_temp.pj_mutate('title');
+select pg_temp.pj_run('title') as pj_n3 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n3' = '', format('PJ1071-N3 bez reguły tytułu/miasta/regionu publikują się tylko oferty z brakami w tytule/mieście/regionie: %s', :'pj_n3'));
+begin;
+select pg_temp.pj_mutate('draftonly');
+select pg_temp.pj_run('draftonly') as pj_n4 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n4' = '', format('PJ1071-N4 bez reguły „tylko szkic” ponowna publikacja trafia na warstwę równoległej zmiany stanu: %s', :'pj_n4'));
+begin;
+select pg_temp.pj_mutate('expired');
+select pg_temp.pj_run('expired') as pj_n5 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n5' = '', format('PJ1071-N5 bez reguły terminu ważności publikuje się szkic po terminie: %s', :'pj_n5'));
+begin;
+select pg_temp.pj_mutate('channel');
+select pg_temp.pj_run('channel') as pj_n6 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n6' = '', format('PJ1071-N6 bez reguły kanału aplikowania publikuje się szkic bez kanału: %s', :'pj_n6'));
+begin;
+select pg_temp.pj_mutate('verified');
+select pg_temp.pj_run('verified') as pj_n7 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n7' = '', format('PJ1071-N7 bez reguły weryfikacji firmy publikuje oferta firmy niezweryfikowanej: %s', :'pj_n7'));
+begin;
+select pg_temp.pj_mutate('perm');
+select pg_temp.pj_run('perm') as pj_n8 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n8' = '', format('PJ1071-N8 bez reguły recruiter+ publikują member i obca firma: %s', :'pj_n8'));
+begin;
+select pg_temp.pj_mutate('auth');
+select pg_temp.pj_run('auth') as pj_n9 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n9' = '', format('PJ1071-N9 bez reguły sesji wywołanie bez użytkownika trafia na kontrolę uprawnień: %s', :'pj_n9'));
+begin;
+select pg_temp.pj_mutate('notfound');
+select pg_temp.pj_run('notfound') as pj_n10 \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'pj_n10' = '', format('PJ1071-N10 bez reguły „oferta nie istnieje” brak oferty trafia na kontrolę uprawnień: %s', :'pj_n10'));
+select pg_temp.assert(pg_temp.pj_run(null) = '',
+  'PJ1071-N11 po cofnięciu mutacji definicja produkcyjna jest przywrócona (każdy brak nadal ma swój komunikat)');
+
+-- ============================================================================
+-- RD1114. Polityki ODCZYTU bez wcześniejszych testów regresyjnych (#1114, TQ2-05): historia statusów
+--   zgłoszenia, relacje profilu kandydata (umiejętności, języki, certyfikaty), profil pracodawcy,
+--   zapisane oferty i pliki. Propozycje (`offers`) poza zakresem — funkcja wyłączona (#1141).
+--   Macierz (aktor × tabela → liczba widocznych wierszy) w obu trybach portalu:
+--     RECRUITMENT      — recruiter+ firmy zgłoszenia, firma widząca profil przez zgłoszenie lub
+--                        wyszukiwalność (tylko zweryfikowana), właściciel;
+--     CLASSIFIEDS_ONLY — zapis w bazie (RESTRICTIVE): firma nie widzi danych procesu ani profili,
+--                        kandydat nadal widzi własne.
+--   Kontrole ujemne: bez RLS wszystko widoczne; osłabiona polityka SELECT ujawnia dane obcemu;
+--   zdjęta polityka RESTRICTIVE ujawnia dane firmie w trybie ogłoszeniowym.
+-- ============================================================================
+\echo '--- RD1114 macierz odczytu: historia zgłoszenia, relacje profilu, profil pracodawcy, pliki ---'
+reset role; reset app.current_uid;
+-- Zgłoszenie WMCA do oferty firmy A i dwa wpisy historii (viewed, shortlisted).
+set role authenticated; set app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select public.apply_to_job(:'WMJA'::uuid, 'rd1114-app-1', null, null, 'zgłoszenie testowe') as rd_app \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMER'; select pg_temp.assert_client_role();
+select public.transition_application(:'rd_app'::uuid, 'viewed');
+select public.transition_application(:'rd_app'::uuid, 'shortlisted');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.application_status_history where application_id = :'rd_app') = 2,
+  'RD1114-0 fixture: zgłoszenie ma dwa wpisy historii');
+
+-- Relacje profilu: WMCA (bez wyszukiwalności, ma zgłoszenie do firmy A) i WMCB (wyszukiwalny, ukończony).
+update public.candidate_profiles set is_searchable = true, profile_completed = true where profile_id = :'WMCB';
+select id as rd_cpa from public.candidate_profiles where profile_id = :'WMCA' \gset
+select id as rd_cpb from public.candidate_profiles where profile_id = :'WMCB' \gset
+insert into public.candidate_skills(candidate_profile_id, skill_label) values (:'rd_cpa', 'rd-skill'), (:'rd_cpb', 'rd-skill');
+insert into public.candidate_languages(candidate_profile_id, language_label, level) values (:'rd_cpa', 'rd-lang', 'intermediate'), (:'rd_cpb', 'rd-lang', 'intermediate');
+insert into public.candidate_certificates(candidate_profile_id, certificate_label) values (:'rd_cpa', 'rd-cert'), (:'rd_cpb', 'rd-cert');
+insert into public.files(owner_id, bucket, path, entity_type, visibility) values
+  (:'WMCA', 'candidate-files', 'wm/rd-public-a.png', 'candidate_cv', 'public');
+
+create temp table rd_cases (
+  id serial primary key, tbl text not null, actor uuid, role text not null, label text not null,
+  sql text not null, expect int not null, expect_cl int not null, open_cnt int not null
+);
+-- expect / expect_cl: liczba widocznych wierszy w RECRUITMENT / CLASSIFIEDS_ONLY; -1 = brak uprawnień do tabeli.
+create function pg_temp.rd_add(p_tbl text, p_actor uuid, p_role text, p_label text, p_from text, p_expect int, p_expect_cl int)
+returns void language plpgsql as $$
+declare v_sql text := 'select count(*)::int from ' || p_from; v_open int;
+begin
+  execute v_sql into v_open;   -- superuser: liczba wierszy bez RLS
+  insert into pg_temp.rd_cases(tbl, actor, role, label, sql, expect, expect_cl, open_cnt)
+    values (p_tbl, p_actor, p_role, p_label, v_sql, p_expect, p_expect_cl, v_open);
+end $$;
+create function pg_temp.rd_run(p_mode text) returns text
+language plpgsql as $$
+declare c record; v_n int; v_want int; v_fail text := '';
+begin
+  for c in select * from pg_temp.rd_cases where not (p_mode = 'control' and (expect = -1)) order by id loop
+    perform set_config('app.current_uid', coalesce(c.actor::text, ''), true);
+    if c.role = 'anon' then set local role anon; else set local role authenticated; end if;
+    perform pg_temp.assert_client_role();
+    begin
+      execute c.sql into v_n;
+    exception when insufficient_privilege then v_n := -1;
+    end;
+    reset role;
+    v_want := case p_mode when 'strict' then c.expect when 'classifieds' then c.expect_cl else c.open_cnt end;
+    if v_n is distinct from v_want then
+      v_fail := v_fail || format('[%s / %s: widzi %s, oczekiwano %s] ', c.tbl, c.label, v_n, v_want);
+    end if;
+  end loop;
+  perform set_config('app.current_uid', '', true);
+  return v_fail;
+end $$;
+
+-- Historia statusów zgłoszenia WMCA (2 wpisy): kandydat-właściciel i recruiter+ firmy zgłoszenia.
+select pg_temp.rd_add('application_status_history', a.actor, a.role, a.label,
+  format('public.application_status_history where application_id = %L', :'rd_app'), a.n, a.ncl)
+from (values
+  (:'WMCA'::uuid, 'authenticated', 'kandydat-właściciel', 2, 2),
+  (:'WMEA'::uuid, 'authenticated', 'owner firmy zgłoszenia', 2, 0),
+  (:'WMER'::uuid, 'authenticated', 'recruiter firmy zgłoszenia', 2, 0),
+  (:'WMEM'::uuid, 'authenticated', 'zwykły member firmy zgłoszenia', 0, 0),
+  (:'WMEB'::uuid, 'authenticated', 'obca firma', 0, 0),
+  (:'WMEC'::uuid, 'authenticated', 'obca firma niezweryfikowana', 0, 0),
+  (:'WMCB'::uuid, 'authenticated', 'obcy kandydat', 0, 0),
+  (null::uuid, 'anon', 'anon', 0, 0)) a(actor, role, label, n, ncl);
+
+-- Relacje profilu: WMCA — dostęp firmy tylko przez zgłoszenie (recruiter+); WMCB — wyszukiwalny profil
+-- widzą wyłącznie zweryfikowane firmy. W trybie ogłoszeniowym firma nie widzi żadnego z nich.
+select pg_temp.rd_add(r.tbl, a.actor, a.role, 'profil ze zgłoszeniem: ' || a.label,
+  format('public.%I where candidate_profile_id = %L', r.tbl, :'rd_cpa'), a.n, a.ncl)
+from (values ('candidate_skills'), ('candidate_languages'), ('candidate_certificates')) r(tbl)
+cross join (values
+  (:'WMCA'::uuid, 'authenticated', 'kandydat-właściciel', 1, 1),
+  (:'WMEA'::uuid, 'authenticated', 'owner firmy zgłoszenia', 1, 0),
+  (:'WMER'::uuid, 'authenticated', 'recruiter firmy zgłoszenia', 1, 0),
+  (:'WMEM'::uuid, 'authenticated', 'zwykły member firmy zgłoszenia', 0, 0),
+  (:'WMEB'::uuid, 'authenticated', 'obca firma', 0, 0),
+  (:'WMEC'::uuid, 'authenticated', 'obca firma niezweryfikowana', 0, 0),
+  (:'WMCB'::uuid, 'authenticated', 'obcy kandydat', 0, 0),
+  (null::uuid, 'anon', 'anon', 0, 0)) a(actor, role, label, n, ncl);
+select pg_temp.rd_add(r.tbl, a.actor, a.role, 'profil wyszukiwalny: ' || a.label,
+  format('public.%I where candidate_profile_id = %L', r.tbl, :'rd_cpb'), a.n, a.ncl)
+from (values ('candidate_skills'), ('candidate_languages'), ('candidate_certificates')) r(tbl)
+cross join (values
+  (:'WMCB'::uuid, 'authenticated', 'kandydat-właściciel', 1, 1),
+  (:'WMEB'::uuid, 'authenticated', 'firma zweryfikowana', 1, 0),
+  (:'WMEA'::uuid, 'authenticated', 'firma zweryfikowana (A)', 1, 0),
+  (:'WMEC'::uuid, 'authenticated', 'firma niezweryfikowana', 0, 0),
+  (:'WMCA'::uuid, 'authenticated', 'obcy kandydat', 0, 0),
+  (null::uuid, 'anon', 'anon', 0, 0)) a(actor, role, label, n, ncl);
+
+-- Profil pracodawcy: właściciel i współpracownicy firmy głównej; obca firma, kandydat i anon nie.
+select pg_temp.rd_add('employer_profiles', a.actor, a.role, a.label,
+  format('public.employer_profiles where profile_id = %L', :'WMEA'), a.n, a.n)
+from (values
+  (:'WMEA'::uuid, 'authenticated', 'właściciel profilu', 1),
+  (:'WMEM'::uuid, 'authenticated', 'współpracownik firmy głównej', 1),
+  (:'WMEB'::uuid, 'authenticated', 'obca firma', 0),
+  (:'WMCA'::uuid, 'authenticated', 'kandydat', 0),
+  (null::uuid, 'anon', 'anon', 0)) a(actor, role, label, n);
+
+-- Zapisane oferty: wyłącznie własne.
+select pg_temp.rd_add('saved_jobs', a.actor, a.role, a.label,
+  format('public.saved_jobs where candidate_id = %L', :'WMCA'), a.n, a.n)
+from (values
+  (:'WMCA'::uuid, 'authenticated', 'kandydat-właściciel', 1),
+  (:'WMCB'::uuid, 'authenticated', 'obcy kandydat', 0),
+  (:'WMEA'::uuid, 'authenticated', 'firma, do której zgłoszono', 0),
+  (null::uuid, 'anon', 'anon', 0)) a(actor, role, label, n);
+
+-- Pliki: prywatny plik CV widzi tylko właściciel; plik publiczny każdy (także anon).
+select pg_temp.rd_add('files', a.actor, a.role, 'plik prywatny: ' || a.label,
+  format('public.files where owner_id = %L and visibility = %L', :'WMCA', 'private'), a.n, a.n)
+from (values
+  (:'WMCA'::uuid, 'authenticated', 'właściciel', 1),
+  (:'WMCB'::uuid, 'authenticated', 'obcy kandydat', 0),
+  (:'WMEA'::uuid, 'authenticated', 'firma, do której zgłoszono', 0),
+  (null::uuid, 'anon', 'anon', 0)) a(actor, role, label, n);
+select pg_temp.rd_add('files', a.actor, a.role, 'plik publiczny: ' || a.label,
+  format('public.files where owner_id = %L and visibility = %L', :'WMCA', 'public'), 1, 1)
+from (values
+  (:'WMCB'::uuid, 'authenticated', 'obcy kandydat'), (:'WMEB'::uuid, 'authenticated', 'obca firma'),
+  (null::uuid, 'anon', 'anon')) a(actor, role, label);
+
+select pg_temp.assert((select count(*) from pg_temp.rd_cases) >= 60
+  and not exists (select 1 from pg_temp.rd_cases where expect >= 0 and open_cnt = 0),
+  'RD1114-1 macierz ma co najmniej 60 przypadków, a każdy ma w bazie widoczne (bez RLS) wiersze');
+
+-- RD1114-2: tryb RECRUITMENT — dokładnie oczekiwana widoczność.
+select pg_temp.rd_run('strict') as rd_strict \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'rd_strict' = '', format('RD1114-2 widoczność wierszy w trybie RECRUITMENT: %s', :'rd_strict'));
+
+-- RD1114-3: tryb CLASSIFIEDS_ONLY (polityki RESTRICTIVE) — firma nie widzi danych procesu ani profili.
+begin;
+set local role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql RD1114: odczyt w trybie ogłoszeniowym', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'RD1114-3a fixture: tryb ogłoszeniowy włączony');
+select pg_temp.rd_run('classifieds') as rd_cl \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'rd_cl' = '', format('RD1114-3 widoczność wierszy w trybie CLASSIFIEDS_ONLY: %s', :'rd_cl'));
+select pg_temp.assert(public.recruitment_enabled(), 'RD1114-3b po cofnięciu kontroli znów tryb RECRUITMENT');
+
+-- RD1114-N1: bez RLS każdy aktor widzi wszystko (przypadki „0” naprawdę zależą od polityk).
+begin;
+do $$
+declare t text;
+begin
+  for t in select distinct tbl from pg_temp.rd_cases loop
+    execute format('alter table public.%I disable row level security', t);
+  end loop;
+end $$;
+select pg_temp.rd_run('control') as rd_ctl \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'rd_ctl' = '', format('RD1114-N1 kontrola ujemna: bez RLS każdy aktor widzi wszystkie wiersze: %s', :'rd_ctl'));
+
+-- RD1114-N2: osłabiona polityka SELECT ujawnia dane obcym — macierz to wykrywa.
+begin;
+alter policy application_status_history_select on public.application_status_history using (true);
+alter policy candidate_skills_select on public.candidate_skills using (true);
+alter policy saved_jobs_select_own on public.saved_jobs using (true);
+alter policy employer_profiles_select_own on public.employer_profiles using (true);
+select pg_temp.rd_run('strict') as rd_weak \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'rd_weak' like '%application_status_history / zwykły member firmy zgłoszenia%'
+  and :'rd_weak' like '%application_status_history / obcy kandydat%'
+  and :'rd_weak' like '%candidate_skills / profil ze zgłoszeniem: obcy kandydat%'
+  and :'rd_weak' like '%saved_jobs / obcy kandydat%'
+  and :'rd_weak' like '%employer_profiles / obca firma%',
+  format('RD1114-N2 osłabiona polityka SELECT wskazuje dokładnie odpowiadające przypadki: %s', :'rd_weak'));
+select pg_temp.assert(:'rd_weak' not like '%candidate_languages%' and :'rd_weak' not like '%candidate_certificates%'
+  and :'rd_weak' not like '%/ plik%', 'RD1114-N2b osłabienie kilku polityk nie zapala przypadków pozostałych tabel');
+
+-- RD1114-N3: zdjęta polityka RESTRICTIVE — w trybie ogłoszeniowym firma znów widzi dane procesu i profil.
+begin;
+set local role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql RD1114: kontrola ujemna polityki trybu', 'RECRUITMENT');
+reset role;
+drop policy application_status_history_recruitment_mode on public.application_status_history;
+select pg_temp.rd_run('classifieds') as rd_norestr \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  :'rd_norestr' like '%application_status_history / owner firmy zgłoszenia%'
+  and :'rd_norestr' like '%application_status_history / recruiter firmy zgłoszenia%'
+  and :'rd_norestr' not like '%candidate_skills%',
+  format('RD1114-N3 bez polityki RESTRICTIVE trybu firma widzi historię zgłoszenia w trybie ogłoszeniowym (relacje profilu mają drugą warstwę — funkcje trybu): %s', :'rd_norestr'));
+select pg_temp.assert(pg_temp.rd_run('strict') = '' and public.recruitment_enabled(),
+  'RD1114-N4 po cofnięciu kontroli macierz znów przechodzi w trybie RECRUITMENT');
+
+-- ============================================================================
+-- IM1114. Niezmienność bez wcześniejszego testu (#1114, TQ2-06): TRUNCATE rejestru naruszeń
+--   (wpisy i historia) oraz historia przywróceń moderacji (append-only: bez UPDATE/DELETE, z jedynymi
+--   wyjątkami — odpięcie FK przy usunięciu konta i anonimizacja retencyjna).
+--   Dane z sekcji BR490 i RA43 (wcześniejsze w tym pliku); brak danych = czerwony fixture.
+--   OCZEKUJĄCE (obserwacja, wymaga migracji — poza zakresem tej paczki): tabele `moderation_decisions`,
+--   `moderation_restorations`, `report_events` i `document_acceptances` mają triggery wierszowe
+--   „append-only”, ale bez odpowiednika `before truncate` z rejestru naruszeń (0106) — TRUNCATE może
+--   wykonać wyłącznie właściciel tabeli/superuser (klient nie ma uprawnień).
+-- ============================================================================
+\echo '--- IM1114 niezmienność: rejestr naruszeń (TRUNCATE) i historia przywróceń moderacji ---'
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.breach_incidents) > 0
+  and (select count(*) from public.breach_incident_events) > 0,
+  'IM1114-0 fixture: rejestr naruszeń z sekcji BR490 zawiera wpisy i historię');
+select count(*) as im_inc from public.breach_incidents \gset
+select count(*) as im_ev from public.breach_incident_events \gset
+-- Bez CASCADE tabelę wpisów chroni już klucz obcy historii; z CASCADE (jedyna droga omijająca FK) trigger.
+select pg_temp.expect_error('truncate public.breach_incidents cascade', 'BREACH_HISTORY_IMMUTABLE',
+  'IM1114-1 wpisów rejestru naruszeń nie da się opróżnić (TRUNCATE … CASCADE)');
+select pg_temp.expect_error('truncate public.breach_incident_events', 'BREACH_HISTORY_IMMUTABLE',
+  'IM1114-1c historii wpisów nie da się opróżnić (TRUNCATE)');
+select pg_temp.assert((select count(*) from public.breach_incidents) = :'im_inc'::int
+  and (select count(*) from public.breach_incident_events) = :'im_ev'::int,
+  'IM1114-1d po próbach TRUNCATE rejestr i historia bez zmian');
+-- Kontrole ujemne: zdjęty trigger wpisów albo historii — dane znikają (cofnięte).
+begin;
+alter table public.breach_incidents disable trigger trg_breach_incidents_no_truncate;
+alter table public.breach_incident_events disable trigger trg_breach_events_no_truncate;
+truncate public.breach_incidents cascade;
+select pg_temp.assert((select count(*) from public.breach_incidents) = 0
+  and (select count(*) from public.breach_incident_events) = 0,
+  'IM1114-N1 kontrola ujemna: bez triggerów TRUNCATE kasuje rejestr i historię');
+rollback;
+begin;
+alter table public.breach_incident_events disable trigger trg_breach_events_no_truncate;
+truncate public.breach_incident_events;
+select pg_temp.assert((select count(*) from public.breach_incident_events) = 0,
+  'IM1114-N1b kontrola ujemna: bez triggera samej historii TRUNCATE ją kasuje');
+rollback;
+begin;
+alter table public.breach_incidents disable trigger trg_breach_incidents_no_truncate;
+select pg_temp.expect_error('truncate public.breach_incidents cascade', 'BREACH_HISTORY_IMMUTABLE',
+  'IM1114-N1c trigger historii zatrzymuje TRUNCATE … CASCADE także bez triggera wpisów (druga warstwa)');
+rollback;
+select pg_temp.assert((select count(*) from public.breach_incidents) = :'im_inc'::int
+  and (select count(*) from public.breach_incident_events) = :'im_ev'::int,
+  'IM1114-N1d po kontrolach ujemnych rejestr i historia nietknięte');
+
+-- Historia przywróceń moderacji: bez UPDATE/DELETE treści (dla każdej roli, tu właściciel tabel).
+select pg_temp.assert((select count(*) from public.moderation_restorations r where r.restored_by is not null
+                        and r.reason is not null and r.redacted_at is null and not exists (select 1 from public.moderation_appeals a where a.restoration_id = r.id or a.appealed_restoration_id = r.id)) > 0,
+  'IM1114-2 fixture: sekcja RA43 zostawiła przywrócenie z autorem, niezanonimizowanym powodem i bez odwołania');
+select r.id as im_rest, r.restored_by as im_rest_by from public.moderation_restorations r
+  where r.restored_by is not null and r.reason is not null and r.redacted_at is null and not exists (select 1 from public.moderation_appeals a where a.restoration_id = r.id or a.appealed_restoration_id = r.id) order by r.id limit 1 \gset
+select pg_temp.expect_error(format('update public.moderation_restorations set reason = %L where id = %L', 'Przepisany powód przywrócenia decyzji', :'im_rest'),
+  'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna', 'IM1114-3 powód przywrócenia niezmienny');
+select pg_temp.expect_error(format('update public.moderation_restorations set restored_at = now() + interval ''1 day'' where id = %L', :'im_rest'),
+  'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna', 'IM1114-3b data przywrócenia niezmienna');
+select pg_temp.expect_error(format('update public.moderation_restorations set restored_by = %L where id = %L', :'WMEA', :'im_rest'),
+  'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna', 'IM1114-3c autora przywrócenia nie da się podmienić na inne konto');
+select pg_temp.expect_error(format('delete from public.moderation_restorations where id = %L', :'im_rest'),
+  'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna', 'IM1114-3d przywrócenia nie da się usunąć');
+-- Anonimizacja retencyjna wymaga znacznika retencji i wyzerowania obu pól naraz.
+select pg_temp.expect_error(format('update public.moderation_restorations set reason = null, redacted_at = now() where id = %L', :'im_rest'),
+  'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna', 'IM1114-3e anonimizacja bez znacznika retencji odrzucona');
+begin;
+select set_config('pracujbe.retention', 'on', true);
+select pg_temp.expect_error(format('update public.moderation_restorations set reason = %L, redacted_at = now() where id = %L', 'inny tekst powodu', :'im_rest'),
+  'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna', 'IM1114-3f z retencją, ale bez wyzerowania powodu — odrzucone');
+update public.moderation_restorations set reason = null, redacted_at = now() where id = :'im_rest';
+select pg_temp.assert((select reason is null and redacted_at is not null from public.moderation_restorations where id = :'im_rest'),
+  'IM1114-4 kontrola dodatnia: retencja anonimizuje powód (jedyny wyjątek treści)');
+rollback;
+-- Odpięcie FK przy usunięciu konta (autor → null) jest dozwolone, treść pozostaje.
+begin;
+update public.moderation_restorations set restored_by = null where id = :'im_rest';
+select pg_temp.assert((select restored_by is null and reason is not null from public.moderation_restorations where id = :'im_rest'),
+  'IM1114-4b kontrola dodatnia: odpięcie autora (usunięcie konta) przechodzi, powód zostaje');
+rollback;
+-- Kontrola ujemna: bez triggera append-only treść przywrócenia da się przepisać i usunąć.
+begin;
+alter table public.moderation_restorations disable trigger trg_moderation_restorations_append_only;
+update public.moderation_restorations set reason = 'Przepisany powód przywrócenia decyzji' where id = :'im_rest';
+select pg_temp.assert((select reason = 'Przepisany powód przywrócenia decyzji' from public.moderation_restorations where id = :'im_rest'),
+  'IM1114-N2 kontrola ujemna: bez triggera powód przywrócenia da się przepisać');
+delete from public.moderation_restorations where id = :'im_rest';
+select pg_temp.assert(not exists (select 1 from public.moderation_restorations where id = :'im_rest'),
+  'IM1114-N2b kontrola ujemna: bez triggera przywrócenie da się usunąć');
+rollback;
+select pg_temp.assert(exists (select 1 from public.moderation_restorations where id = :'im_rest'
+    and reason <> 'Przepisany powód przywrócenia decyzji'),
+  'IM1114-N2c po kontrolach ujemnych przywrócenie nietknięte');
+
+-- ============================================================================
+-- JL1114. Blokada edycji treści opublikowanej oferty dla WSZYSTKICH relacji (#1114, TQ2-07):
+--   RR5 sprawdza wymagania i tłumaczenia; tu umiejętności, języki i certyfikaty (INSERT/UPDATE/DELETE
+--   i przenoszenie wiersza między ofertami) dla oferty aktywnej, wstrzymanej i zamkniętej. Recruiter+
+--   własnej firmy nie ominie `update_published_job` ani bezpośrednim DML, ani ścieżką szkicu (set_job_*).
+--   Kontrola dodatnia: to samo na szkicu przechodzi. Kontrola ujemna: bez triggera relacji przechodzi.
+-- ============================================================================
+\echo '--- JL1114 blokada edycji relacji opublikowanej oferty (skills, languages, certificates) ---'
+reset role; reset app.current_uid;
+insert into public.job_skills(job_id, skill_label)
+  select j, 'jl-pub' from unnest(array[:'WMJA'::uuid, pg_temp.pj_id(43), pg_temp.pj_id(44)]) j;
+insert into public.job_languages(job_id, language_label)
+  select j, 'jl-pub' from unnest(array[:'WMJA'::uuid, pg_temp.pj_id(43), pg_temp.pj_id(44)]) j;
+insert into public.job_certificates(job_id, certificate_label)
+  select j, 'jl-pub' from unnest(array[:'WMJA'::uuid, pg_temp.pj_id(43), pg_temp.pj_id(44)]) j;
+select pg_temp.assert((select status::text from public.jobs where id = :'WMJA') = 'active'
+  and (select status::text from public.jobs where id = pg_temp.pj_id(43)) = 'paused'
+  and (select status::text from public.jobs where id = pg_temp.pj_id(44)) = 'closed',
+  'JL1114-0 fixture: oferty aktywna, wstrzymana i zamknięta');
+
+create temp table jl_cases (id serial primary key, ord int not null, actor uuid not null, sql text not null, msg text, note text not null);
+-- msg: oczekiwany komunikat odmowy. ord: kolejność (INSERT, UPDATE, przeniesienia, DELETE, RPC), by po zdjęciu
+-- strażnika każdy przypadek naprawdę zapisywał wiersze.
+insert into jl_cases(ord, actor, sql, msg, note)
+select case c.op when 'INSERT' then 1 when 'UPDATE' then 2 else 4 end, :'WMEA'::uuid,
+       case c.op
+         when 'INSERT' then format('insert into public.%I(job_id, %I) values (%L, %L)', t.tbl, t.col, j.id, 'jl-new')
+         when 'UPDATE' then format('update public.%I set %I = %L where job_id = %L and %I = %L', t.tbl, t.col, 'jl-changed', j.id, t.col, 'jl-pub')
+         else format('delete from public.%I where job_id = %L', t.tbl, j.id) end,
+       'JOB_NOT_DRAFT: treść opublikowanej oferty zmienia wyłącznie update_published_job',
+       format('%s %s oferty %s', t.tbl, c.op, j.label)
+from (values ('job_skills', 'skill_label'), ('job_languages', 'language_label'), ('job_certificates', 'certificate_label')) t(tbl, col)
+cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) c(op)
+cross join (values (:'WMJA'::uuid, 'aktywnej'), (pg_temp.pj_id(43), 'wstrzymanej'), (pg_temp.pj_id(44), 'zamkniętej')) j(id, label);
+-- Przeniesienie wiersza: DO opublikowanej oferty (z własnego szkicu) i Z opublikowanej do szkicu.
+insert into jl_cases(ord, actor, sql, msg, note)
+select 3, :'WMEA'::uuid, format('update public.%I set job_id = %L where job_id = %L and %I = %L', t.tbl, :'WMJA', :'WMJD', t.col, t.l),
+       'JOB_NOT_DRAFT: treść opublikowanej oferty zmienia wyłącznie update_published_job',
+       format('%s przeniesienie wiersza ze szkicu do aktywnej', t.tbl)
+from (values ('job_skills', 'skill_label', 'wm-skill'), ('job_languages', 'language_label', 'wm-lang'),
+             ('job_certificates', 'certificate_label', 'wm-cert')) t(tbl, col, l);
+insert into jl_cases(ord, actor, sql, msg, note)
+select 3, :'WMEA'::uuid, format('update public.%I set job_id = %L where job_id = %L and %I in (%L, %L)', t.tbl, :'WMJD', :'WMJA', t.col, 'jl-pub', 'jl-changed'),
+       'JOB_NOT_DRAFT: treść opublikowanej oferty zmienia wyłącznie update_published_job',
+       format('%s przeniesienie wiersza z aktywnej do szkicu', t.tbl)
+from (values ('job_skills', 'skill_label'), ('job_languages', 'language_label'), ('job_certificates', 'certificate_label')) t(tbl, col);
+-- Ścieżka szkicu (set_job_*) też nie zmienia opublikowanej oferty.
+insert into jl_cases(ord, actor, sql, msg, note) values
+  (5, :'WMEA'::uuid, format('select public.set_job_skills(%L::uuid, true, array[%L])', :'WMJA', 'jl-rpc'),
+     'JOB_NOT_DRAFT', 'set_job_skills na aktywnej'),
+  (5, :'WMEA'::uuid, format($q$select public.set_job_languages(%L::uuid, '[{"language":"nl","level":"basic"}]'::jsonb)$q$, :'WMJA'),
+     'JOB_NOT_DRAFT', 'set_job_languages na aktywnej'),
+  (5, :'WMEA'::uuid, format('select public.set_job_certificates(%L::uuid, array[%L])', :'WMJA', 'jl-rpc'),
+     'JOB_NOT_DRAFT', 'set_job_certificates na aktywnej'),
+  (5, :'WMEA'::uuid, format('select public.set_job_skills(%L::uuid, true, array[]::text[])', pg_temp.pj_id(44)),
+     'JOB_NOT_DRAFT', 'set_job_skills (opróżnienie) na zamkniętej');
+
+-- Tryby: 'deny' = każdy zapis odrzucony komunikatem strażnika; 'open' = po zdjęciu strażnika KAŻDY zapis DML
+-- rzeczywiście zmienia wiersze (przypadek nie jest pusty).
+create function pg_temp.jl_run(p_mode text) returns text
+language plpgsql as $$
+declare c record; v_err text; v_rows bigint; v_fail text := '';
+begin
+  for c in select * from pg_temp.jl_cases order by ord, id loop
+    perform set_config('app.current_uid', c.actor::text, true);
+    execute 'set local role authenticated';
+    perform pg_temp.assert_client_role();
+    v_err := null; v_rows := 0;
+    begin
+      execute c.sql;
+      get diagnostics v_rows = row_count;
+    exception when others then v_err := sqlerrm;
+    end;
+    reset role;
+    if p_mode = 'deny' and v_err is distinct from c.msg and not (c.msg = 'JOB_NOT_DRAFT' and v_err like 'JOB_NOT_DRAFT%') then
+      v_fail := v_fail || format('[%s: oczekiwano „%s”, jest „%s”] ', c.note, c.msg, coalesce(v_err, 'zapis przeszedł'));
+    elsif p_mode = 'open' and left(c.sql, 6) in ('insert', 'update', 'delete') and (v_err is not null or v_rows = 0) then
+      v_fail := v_fail || format('[%s: po zdjęciu strażnika %s] ', c.note, coalesce('błąd „' || v_err || '”', 'zero zmienionych wierszy'));
+    end if;
+  end loop;
+  perform set_config('app.current_uid', '', true);
+  return v_fail;
+end $$;
+create function pg_temp.jl_fingerprint() returns text
+language sql as $$
+  select md5(coalesce((select string_agg(to_jsonb(x)::text, '|' order by to_jsonb(x)::text) from public.job_skills x
+                         where job_id in (select id from public.jobs where status <> 'draft')), '')
+          || coalesce((select string_agg(to_jsonb(x)::text, '|' order by to_jsonb(x)::text) from public.job_languages x
+                         where job_id in (select id from public.jobs where status <> 'draft')), '')
+          || coalesce((select string_agg(to_jsonb(x)::text, '|' order by to_jsonb(x)::text) from public.job_certificates x
+                         where job_id in (select id from public.jobs where status <> 'draft')), ''))
+$$;
+
+select pg_temp.assert((select count(*) from jl_cases) = 37, 'JL1114-1a lista obejmuje 27 zapisów DML, 6 przeniesień wierszy i 4 wywołania RPC');
+select pg_temp.jl_fingerprint() as jl_fp0 \gset
+select pg_temp.jl_run('deny') as jl_deny \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'jl_deny' = '', format('JL1114-1 każda próba zmiany relacji opublikowanej oferty odrzucona: %s', :'jl_deny'));
+select pg_temp.assert(pg_temp.jl_fingerprint() = :'jl_fp0', 'JL1114-2 relacje opublikowanych ofert bez zmian po wszystkich próbach');
+
+-- JL1114-3: kontrola dodatnia — ta sama edycja szkicu przez recruitera przechodzi (ścieżka kreatora).
+begin;
+set local role authenticated; set local app.current_uid = :'WMER'; select pg_temp.assert_client_role();
+select public.set_job_skills(:'WMJD'::uuid, true, array['jl-draft']);
+select public.set_job_certificates(:'WMJD'::uuid, array['jl-draft']);
+select public.set_job_languages(:'WMJD'::uuid, '[{"language":"nl","level":"basic"}]'::jsonb);
+insert into public.job_skills(job_id, skill_label) values (:'WMJD', 'jl-direct');
+update public.job_certificates set certificate_label = 'jl-changed' where job_id = :'WMJD';
+delete from public.job_languages where job_id = :'WMJD';
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.job_skills where job_id = :'WMJD' and skill_label in ('jl-draft', 'jl-direct')) = 2
+  and exists (select 1 from public.job_certificates where job_id = :'WMJD' and certificate_label = 'jl-changed')
+  and not exists (select 1 from public.job_languages where job_id = :'WMJD'),
+  'JL1114-3 szkic zapisuje relacje (RPC i bezpośredni DML) — blokada dotyczy tylko opublikowanych ofert');
+rollback;
+reset role; reset app.current_uid;
+
+-- JL1114-N: bez triggera relacji ta sama droga jest otwarta (tabele bez kontroli zostają zablokowane).
+begin;
+alter table public.job_skills disable trigger trg_guard_published_job_children;
+alter table public.job_languages disable trigger trg_guard_published_job_children;
+alter table public.job_certificates disable trigger trg_guard_published_job_children;
+select pg_temp.jl_run('open') as jl_open \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'jl_open' not like '%INSERT oferty%' and :'jl_open' not like '%UPDATE oferty%' and :'jl_open' not like '%DELETE oferty%'
+  and :'jl_open' not like '%przeniesienie%',
+  format('JL1114-N1 kontrola ujemna: bez triggera relacji zapisy DML do opublikowanej oferty faktycznie zmieniają wiersze: %s', :'jl_open'));
+select pg_temp.assert(pg_temp.jl_fingerprint() = :'jl_fp0' and pg_temp.jl_run('deny') = '',
+  'JL1114-N2 po cofnięciu kontroli blokada działa, a relacje bez zmian');
+begin;
+alter table public.job_skills disable trigger trg_guard_published_job_children;
+select pg_temp.jl_run('deny') as jl_one \gset
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(:'jl_one' like '%job_skills INSERT oferty aktywnej%' and :'jl_one' not like '%job_languages %'
+  and :'jl_one' not like '%job_certificates %',
+  'JL1114-N3 zdjęcie triggera jednej tabeli otwiera tylko tę tabelę (każda z trzech ma własny strażnik)');
+
+-- ============================================================================
+-- AT1114. Ponowne sprawdzenie prawa do załączników przy WYSYŁCE wiadomości po blokadzie firmy
+--   przez kandydata (#1114, TQ2-08, 0119 + 0078). Plik przygotowany przez firmę przed blokadą nie
+--   może zostać wysłany po niej. Dwie warstwy: trigger blokady wiadomości i ponowna kontrola
+--   `can_attach_in_conversation` w `send_message`; test dowodzi każdej osobno (druga warstwa przy
+--   wyłączonych triggerach `messages`, a kontrola ujemna — z jej zdjęciem — wysyła plik).
+-- ============================================================================
+\echo '--- AT1114 send_message: ponowne sprawdzenie załączników po blokadzie firmy ---'
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select public.get_or_create_conversation(:'rd_app'::uuid, null) as at_conv \gset
+reset role; reset app.current_uid;
+select :'at_conv' || '/att-' || gen_random_uuid()::text || '.pdf' as at_path, repeat('b', 64) as at_sha \gset
+-- Firma (owner) przygotowuje plik PRZED blokadą.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select attachment_id as at_att from public.stage_message_attachment(
+  :'at_conv'::uuid, gen_random_uuid(), :'at_path', 'oferta.pdf', 'application/pdf', 1000, :'at_sha') \gset
+select pg_temp.assert(public.can_attach_in_conversation(:'at_conv'::uuid), 'AT1114-0 przed blokadą firma może dołączać pliki');
+reset role; reset app.current_uid;
+select count(*) as at_msgs from public.messages where conversation_id = :'at_conv' \gset
+
+-- AT1114-1: po blokadzie firmy przez kandydata firma nie wyśle wiadomości z przygotowanym plikiem.
+begin;
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select public.set_company_block(:'WMCOA'::uuid, true);
+select pg_temp.assert(public.can_attach_in_conversation(:'at_conv'::uuid),
+  'AT1114-1a kandydat (blokujący) nadal może dołączać pliki w swojej rozmowie');
+reset role;
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.can_attach_in_conversation(:'at_conv'::uuid), 'AT1114-1b zablokowana firma nie może dołączać plików');
+select pg_temp.expect_error(format($$select public.send_message(%L, 'Po blokadzie', gen_random_uuid(), array[%L::uuid])$$, :'at_conv', :'at_att'),
+  'PERMISSION_DENIED', 'AT1114-1c firma zablokowana nie wyśle wiadomości z przygotowanym plikiem');
+reset role;
+select pg_temp.assert((select count(*) from public.messages where conversation_id = :'at_conv') = :'at_msgs'::int
+  and (select message_id is null from public.message_attachments where id = :'at_att'),
+  'AT1114-1d brak nowej wiadomości, plik nadal niewysłany');
+-- AT1114-2: druga warstwa działa sama — bez triggerów `messages` odmawia ponowna kontrola załączników.
+alter table public.messages disable trigger user;
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($$select public.send_message(%L, 'Po blokadzie 2', gen_random_uuid(), array[%L::uuid])$$, :'at_conv', :'at_att'),
+  'PERMISSION_DENIED', 'AT1114-2 bez triggerów wiadomości ponowna kontrola załączników odmawia');
+reset role;
+select pg_temp.assert((select count(*) from public.messages where conversation_id = :'at_conv') = :'at_msgs'::int
+  and (select message_id is null from public.message_attachments where id = :'at_att'),
+  'AT1114-2b odmowa cofa całą wiadomość (żadnej wiadomości, plik niewysłany)');
+-- AT1114-N: kontrola ujemna — bez triggerów i bez ponownej kontroli zablokowana firma wysyła plik.
+create or replace function public.can_attach_in_conversation(p_conversation_id uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$ select true $$;
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select public.send_message(:'at_conv'::uuid, 'Po blokadzie 3', gen_random_uuid(), array[:'at_att'::uuid]) as at_leak \gset
+reset role;
+select pg_temp.assert((select count(*) from public.messages where conversation_id = :'at_conv') = :'at_msgs'::int + 1
+  and (select message_id = :'at_leak'::uuid from public.message_attachments where id = :'at_att'),
+  'AT1114-N1 kontrola ujemna: bez ponownej kontroli zablokowana firma wysyła plik w wiadomości');
+rollback;
+reset role; reset app.current_uid;
+
+-- AT1114-3: kontrola dodatnia — bez blokady ta sama wiadomość z tym samym plikiem przechodzi.
+begin;
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select public.send_message(:'at_conv'::uuid, 'Bez blokady', gen_random_uuid(), array[:'at_att'::uuid]) as at_ok \gset
+reset role;
+select pg_temp.assert((select message_id = :'at_ok'::uuid from public.message_attachments where id = :'at_att'),
+  'AT1114-3 bez blokady plik przygotowany przez firmę zostaje wysłany');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid)'::regprocedure) like '%candidate_blocked_company%',
+  'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
+
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
