@@ -304,6 +304,7 @@ export const AUDIT_ACTION_KEY: Record<string, string> = {
   'company.links_reviewed': 'auditActionCompanyLinksReviewed',
   'job.update_published': 'auditActionJobUpdatePublished',
   'job.duplicated': 'auditActionJobDuplicated',
+  'job.deleted': 'auditActionJobDeleted',
   'report.resolved': 'auditActionReportStatus',
   'moderation.decided': 'auditActionModerationDecided',
   'moderation.restored': 'auditActionModerationRestored',

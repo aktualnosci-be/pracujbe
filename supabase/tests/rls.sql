@@ -11426,6 +11426,8 @@ reset role;
 -- KONTROLA UJEMNA: bez strażnika właściciel podmieniłby ścieżkę (pobranie cudzego obiektu).
 begin;
 alter table public.files disable trigger trg_files_guard_message_attachment;
+-- 0185: metadane plików chroni też ogólny strażnik `guard_files_client_write` (niezależna warstwa).
+alter table public.files disable trigger trg_files_guard_client_write;
 select set_config('app.current_uid', :'MAC', true);
 set local role authenticated; select pg_temp.assert_client_role();
 update public.files set path = :'mapathx' where path = :'mapath1';
@@ -19394,6 +19396,447 @@ set role service_role;
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
 reset role;
 
+\echo '--- M2RD: utwardzenie warstwy danych — oferty, pola firmy, pliki, sesje i tokeny (0185, #1033/#1034/#1089/#1091/#1090) ---'
+-- Sekcja niezależna od trybu portalu (rekordy procesu wstawia superuser ze znacznikiem seedu).
+\set M2OWN 'd2961000-0000-0000-0000-000000000001'
+\set M2REC 'd2961000-0000-0000-0000-000000000002'
+\set M2MEM 'd2961000-0000-0000-0000-000000000003'
+\set M2CAND 'd2961000-0000-0000-0000-000000000004'
+\set M2ADM 'd2961000-0000-0000-0000-000000000005'
+\set M2ADX 'd2961000-0000-0000-0000-000000000006'
+\set M2ADD 'd2961000-0000-0000-0000-000000000007'
+\set M2COMP 'd2961000-0000-0000-0000-0000000000f1'
+\set M2J1 'd2961000-0000-0000-0000-0000000000a1'
+\set M2J2 'd2961000-0000-0000-0000-0000000000a2'
+\set M2J3 'd2961000-0000-0000-0000-0000000000a3'
+\set M2J4 'd2961000-0000-0000-0000-0000000000a4'
+\set M2J5 'd2961000-0000-0000-0000-0000000000a5'
+\set M2J6 'd2961000-0000-0000-0000-0000000000a6'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'M2OWN','m2own@test.be','Otto M2','{"role":"employer","first_name":"Otto","last_name":"M2","locale":"pl"}'),
+  (:'M2REC','m2rec@test.be','Rex M2','{"role":"employer","first_name":"Rex","last_name":"M2","locale":"pl"}'),
+  (:'M2MEM','m2mem@test.be','Mila M2','{"role":"employer","first_name":"Mila","last_name":"M2","locale":"pl"}'),
+  (:'M2CAND','m2cand@test.be','Kasia M2','{"role":"candidate","first_name":"Kasia","last_name":"M2","locale":"pl"}'),
+  (:'M2ADM','m2adm@test.be','Ada M2','{"role":"employer","first_name":"Ada","last_name":"M2","locale":"pl"}'),
+  (:'M2ADX','m2adx@test.be','Adx M2','{"role":"employer","first_name":"Adx","last_name":"M2","locale":"pl"}'),
+  (:'M2ADD','m2add@test.be','Add M2','{"role":"employer","first_name":"Add","last_name":"M2","locale":"pl"}');
+select test_fixture.attest_candidates();
+update public.profiles set role = 'admin' where id in (:'M2ADM', :'M2ADX', :'M2ADD');
+update public.profiles set is_active = false where id = :'M2ADX';
+update public.profiles set deleted_at = now() where id = :'M2ADD';
+insert into public.companies(id,name,slug,status,vat_number,registration_number,verified_at) values
+  (:'M2COMP','Firma M2','firma-m2-slug','verified','BE0622222222','0622.222.222',now());
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'M2COMP',:'M2OWN','owner',true), (:'M2COMP',:'M2REC','recruiter',true), (:'M2COMP',:'M2MEM','member',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'M2J1',:'M2COMP','m2-j1','Szkic 1','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J2',:'M2COMP','m2-j2','Szkic ze zgłoszeniem','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J3',:'M2COMP','m2-j3','Szkic zapisany','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J4',:'M2COMP','m2-j4','Oferta aktywna','warehouse','permanent','Antwerpia','Flandria','active','pl'),
+  (:'M2J5',:'M2COMP','m2-j5','Szkic 5','warehouse','permanent','Antwerpia','Flandria','draft','pl'),
+  (:'M2J6',:'M2COMP','m2-j6','Szkic 6','warehouse','permanent','Antwerpia','Flandria','draft','pl');
+select set_config('pracujbe.allow_recruitment_write', 'on', false);
+insert into public.applications(job_id, candidate_id, company_id, status) values (:'M2J2', :'M2CAND', :'M2COMP', 'submitted');
+select set_config('pracujbe.allow_recruitment_write', '', false);
+insert into public.saved_jobs(candidate_id, job_id) values (:'M2CAND', :'M2J3');
+
+-- M2-1 (#1033): recruiter usuwa szkic bez powiązań; audyt `job.deleted` z aktorem, bez treści.
+set role authenticated; set app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = :'M2J1' returning id)
+select pg_temp.assert((select count(*) = 1 from del), 'M2-1 recruiter usuwa szkic bez powiązań');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs where action = 'job.deleted' and entity_id = :'M2J1' and actor_id = :'M2REC'
+            and before_data = jsonb_build_object('status', 'draft', 'company_id', :'M2COMP'::uuid, 'slug', 'm2-j1')),
+  'M2-1b audyt usunięcia oferty (aktor, status, firma, slug — bez treści)');
+
+-- M2-2: zwykły member, oferta aktywna, szkic ze zgłoszeniem i szkic z zapisem kandydata — zero wierszy.
+set role authenticated; set app.current_uid = :'M2MEM'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = :'M2J5' returning id)
+select pg_temp.assert((select count(*) = 0 from del), 'M2-2 member nie usuwa nawet szkicu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id in (:'M2J4', :'M2J2', :'M2J3') returning id)
+select pg_temp.assert((select count(*) = 0 from del),
+  'M2-2b recruiter nie usuwa oferty aktywnej, szkicu ze zgłoszeniem ani szkicu zapisanego przez kandydata');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) = 4 from public.jobs where id in (:'M2J2', :'M2J3', :'M2J4', :'M2J5'))
+  and (select count(*) = 1 from public.applications where job_id = :'M2J2')
+  and (select count(*) = 1 from public.saved_jobs where job_id = :'M2J3'),
+  'M2-2c oferty i ich rekordy procesu zostały');
+select pg_temp.assert(public.job_has_process_records(:'M2J2') and public.job_has_process_records(:'M2J3')
+  and not public.job_has_process_records(:'M2J4'), 'M2-2d job_has_process_records: zgłoszenie i zapis tak, oferta bez rekordów nie');
+
+-- M2-3 (kontrola ujemna): polityka z 0033 pozwalała recruiterowi usunąć aktywną ofertę i szkic
+-- ze zgłoszeniem — kaskada kasuje zgłoszenie bez śladu (poza audytem usunięcia oferty).
+begin;
+drop policy jobs_delete_member on public.jobs;
+create policy jobs_delete_member on public.jobs for delete to authenticated using (public.can_manage_jobs(company_id));
+set local role authenticated; set local app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id in (:'M2J4', :'M2J2') returning id)
+select pg_temp.assert((select count(*) = 2 from del), 'M2-3 kontrola ujemna: polityka 0033 usuwa ofertę aktywną i szkic ze zgłoszeniem');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.applications where job_id = :'M2J2'),
+  'M2-3b kontrola ujemna: kaskada skasowała zgłoszenie kandydata');
+rollback;
+select pg_temp.assert(exists (select 1 from public.applications where job_id = :'M2J2') and exists (select 1 from public.jobs where id = :'M2J4'),
+  'M2-3c po cofnięciu transakcji oferta i zgłoszenie są');
+
+-- M2-4: usunięcie ofert przez właściciela tabel/service_role dalej możliwe, z audytem bez aktora.
+delete from public.jobs where id = :'M2J6';
+select pg_temp.assert(exists (select 1 from public.audit_logs where action = 'job.deleted' and entity_id = :'M2J6' and actor_id is null),
+  'M2-4 usunięcie poza sesją klienta też zostawia wpis audytu (bez aktora)');
+
+-- M2-5 (#1034): numer rejestrowy zweryfikowanej firmy działa jak VAT — zmiana cofa weryfikację.
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set registration_number = '0633.333.333' where id = :'M2COMP';
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'pending' and verified_at is null and verified_by is null
+                         from public.companies where id = :'M2COMP'),
+  'M2-5 zmiana numeru rejestrowego zweryfikowanej firmy → pending (jak VAT)');
+update public.companies set status = 'verified', verified_at = now() where id = :'M2COMP';
+-- Zapis tej samej wartości (bez zmiany) nie cofa weryfikacji.
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set registration_number = '0633.333.333' where id = :'M2COMP';
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'verified' from public.companies where id = :'M2COMP'),
+  'M2-5b ta sama wartość numeru nie cofa weryfikacji');
+-- M2-5c (kontrola ujemna): funkcja z 0084 (tylko nazwa/VAT) zostawia firmę zweryfikowaną po zmianie numeru.
+begin;
+create or replace function public.protect_company_verification()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if auth.uid() is not null and not public.is_admin() then
+    if old.status = 'verified' and (new.name is distinct from old.name or new.vat_number is distinct from old.vat_number) then
+      new.status := 'pending'; new.verified_at := null; new.verified_by := null;
+    end if;
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set registration_number = '0644.444.444' where id = :'M2COMP';
+reset role;
+select pg_temp.assert((select status::text = 'verified' from public.companies where id = :'M2COMP'),
+  'M2-5c kontrola ujemna: strażnik 0084 przepuszcza zmianę numeru bez ponownej weryfikacji');
+rollback;
+
+-- M2-6: pola techniczne firmy niezmienne dla roli klienta (owner firmy też nie zmieni).
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.companies set slug = 'inny-slug' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6 slug niezmienny');
+select pg_temp.expect_error($q$update public.companies set is_demo = true where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6b is_demo niezmienne');
+select pg_temp.expect_error($q$update public.companies set deleted_at = now() where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6c deleted_at niezmienne');
+select pg_temp.expect_error($q$update public.companies set created_at = now() - interval '1 year' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
+  'pola techniczne firmy', 'M2-6e created_at niezmienne');
+-- Dozwolone dane (opis) nadal się zapisują.
+update public.companies set description = 'Opis firmy M2' where id = :'M2COMP';
+reset role; reset app.current_uid;
+select pg_temp.assert((select description = 'Opis firmy M2' and slug = 'firma-m2-slug' and not is_demo and deleted_at is null
+                         from public.companies where id = :'M2COMP'), 'M2-6f opis zapisany, pola techniczne bez zmian');
+-- Właściciel tabel / service_role (RPC definer, migracje) zmieniają je bez przeszkód.
+update public.companies set created_at = timestamptz '2026-01-01 00:00:00+00' where id = :'M2COMP';
+select pg_temp.assert((select created_at = timestamptz '2026-01-01 00:00:00+00' from public.companies where id = :'M2COMP'),
+  'M2-6g zaufana ścieżka (poza rolą klienta) zmienia pole techniczne');
+-- M2-6h (kontrola ujemna): bez strażnika owner firmy zmienia slug publicznego profilu.
+begin;
+drop trigger trg_guard_company_immutable_fields on public.companies;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.companies set slug = 'przejety-slug' where id = :'M2COMP';
+reset role;
+select pg_temp.assert((select slug = 'przejety-slug' from public.companies where id = :'M2COMP'),
+  'M2-6h kontrola ujemna: bez strażnika slug profilu publicznego się zmienia');
+rollback;
+
+-- M2-7 (#1034): blokada moderacyjna — sama flaga sesji nie wystarcza roli klienta.
+insert into public.companies(id,name,status) values ('d2961000-0000-0000-0000-0000000000f2','Firma M2 zablokowana','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  ('d2961000-0000-0000-0000-0000000000f2', :'M2OWN', 'owner', true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('d2961000-0000-0000-0000-0000000000a7', 'd2961000-0000-0000-0000-0000000000f2', 'm2-j7', 'Oferta do decyzji', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'active', 'pl');
+set role service_role;
+select report_id as m2r1 from public.submit_content_report(null, gen_random_uuid(), 'ABCDEFGHIJKLMNOPQRSTUVWX',
+  'job', 'd2961000-0000-0000-0000-0000000000a7', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, 'Gość M2', 'm2r1@test.be', 'fr', true) \gset
+reset role;
+set role authenticated; set app.current_uid = :'M2ADM'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'m2r1', 'open', 'job_removed',
+  'Oferta wymaga od kandydatów opłaty za rekrutację z góry.', 'terms', '§ 4') as m2d1 \gset
+reset role; reset app.current_uid;
+select id as m2dec from public.moderation_decisions where report_id = :'m2r1' \gset
+select pg_temp.assert((select moderation_decision_id = :'m2dec'::uuid and status::text = 'closed'
+                         from public.jobs where id = 'd2961000-0000-0000-0000-0000000000a7'),
+  'M2-7a decyzja przez RPC (definer) ustawia blokadę i zamyka ofertę (ścieżka zaufana działa)');
+
+-- Recruiter firmy: flaga sesji + zdjęcie blokady z oferty → odrzucone (dawniej przechodziło).
+begin;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select set_config('pracujbe.moderation', 'on', true);
+select pg_temp.expect_error($q$update public.jobs set moderation_decision_id = null where id = 'd2961000-0000-0000-0000-0000000000a7'$q$,
+  'blokadę moderacyjną', 'M2-7b flaga sesji nie zdejmuje blokady z oferty roli klienta');
+rollback;
+begin;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select set_config('pracujbe.moderation', 'on', true);
+select pg_temp.expect_error(format($q$update public.companies set moderation_decision_id = %L where id = 'd2961000-0000-0000-0000-0000000000f2'$q$, :'m2dec'),
+  'blokadę moderacyjną', 'M2-7c flaga sesji nie ustawia blokady na firmie roli klienta');
+rollback;
+-- M2-7d (kontrola ujemna): bramka z 0099 (samo GUC) przepuszcza rolę klienta — właściciel firmy
+-- przypisuje jej cudzą decyzję i zdejmuje ją z powrotem, poza ścieżką administracyjną.
+begin;
+create or replace function public.guard_company_moderation_lock()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if coalesce(current_setting('pracujbe.moderation', true), '') <> 'on' then
+    if new.moderation_decision_id is distinct from old.moderation_decision_id then
+      raise exception 'PERMISSION_DENIED: blokadę moderacyjną zmienia tylko decyzja' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end $$;
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select set_config('pracujbe.moderation', 'on', true);
+update public.companies set moderation_decision_id = :'m2dec' where id = 'd2961000-0000-0000-0000-0000000000f2';
+reset role;
+select pg_temp.assert((select moderation_decision_id = :'m2dec'::uuid from public.companies where id = 'd2961000-0000-0000-0000-0000000000f2'),
+  'M2-7d kontrola ujemna: bramka 0099 pozwala pracodawcy ustawić blokadę moderacyjną flagą sesji');
+rollback;
+-- Bez flagi zwykła próba nadal odrzucona (bez zmiany).
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.jobs set moderation_decision_id = null where id = 'd2961000-0000-0000-0000-0000000000a7'$q$,
+  'blokadę moderacyjną', 'M2-7e bez flagi sesji też odrzucone');
+reset role; reset app.current_uid;
+
+-- M2-8 (#1033): szkic objęty decyzją moderacyjną (blokada ustawiona zaufaną ścieżką) nie jest usuwalny.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('d2961000-0000-0000-0000-0000000000a8', 'd2961000-0000-0000-0000-0000000000f2', 'm2-j8', 'Szkic zablokowany', 'warehouse', 'permanent', 'Antwerpia', 'Flandria', 'draft', 'pl');
+begin;
+select set_config('pracujbe.moderation', 'on', true);
+update public.jobs set moderation_decision_id = :'m2dec' where id = 'd2961000-0000-0000-0000-0000000000a8';
+select set_config('pracujbe.moderation', '', true);
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = 'd2961000-0000-0000-0000-0000000000a8' returning id)
+select pg_temp.assert((select count(*) = 0 from del), 'M2-8 szkic z decyzją moderacyjną nie jest usuwalny przez klienta');
+reset role;
+-- Kontrola ujemna: ten sam szkic bez decyzji jest usuwalny.
+select set_config('pracujbe.moderation', 'on', true);
+update public.jobs set moderation_decision_id = null where id = 'd2961000-0000-0000-0000-0000000000a8';
+select set_config('pracujbe.moderation', '', true);
+set local role authenticated; set local app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+with del as (delete from public.jobs where id = 'd2961000-0000-0000-0000-0000000000a8' returning id)
+select pg_temp.assert((select count(*) = 1 from del), 'M2-8b kontrola ujemna: bez decyzji ten sam szkic jest usuwalny');
+reset role;
+rollback;
+
+-- M2-9 (#1089): tabela files — role klienta: folder właściciela, prywatność, status skanu.
+set role authenticated; set app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+insert into public.files(owner_id, bucket, path, file_name, mime_type, size_bytes, entity_type, visibility, scan_status)
+  values (:'M2CAND', 'm2-bucket', 'd2961000-0000-0000-0000-000000000004/doc.pdf', 'doc.pdf', 'application/pdf', 10, 'm2_doc', 'private', 'skipped');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.files where bucket = 'm2-bucket' and owner_id = :'M2CAND'),
+  'M2-9 własny plik w folderze właściciela, prywatny, status skanu skipped — zapisany');
+set role authenticated; set app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$insert into public.files(owner_id, bucket, path, entity_type, scan_status)
+  values ('d2961000-0000-0000-0000-000000000004', 'm2-bucket', 'd2961000-0000-0000-0000-000000000099/x.pdf', 'm2_doc', 'pending')$q$,
+  'nowy plik tylko prywatny', 'M2-9b ścieżka w folderze cudzego konta odrzucona');
+select pg_temp.expect_error($q$insert into public.files(owner_id, bucket, path, entity_type, scan_status)
+  values ('d2961000-0000-0000-0000-000000000004', 'm2-bucket', 'd2961000-0000-0000-0000-000000000004/y.pdf', 'm2_doc', 'clean')$q$,
+  'nowy plik tylko prywatny', 'M2-9c klient nie ustawia statusu skanu clean');
+select pg_temp.expect_error($q$insert into public.files(owner_id, bucket, path, entity_type, scan_status, visibility)
+  values ('d2961000-0000-0000-0000-000000000004', 'm2-bucket', 'd2961000-0000-0000-0000-000000000004/z.pdf', 'm2_doc', 'pending', 'public')$q$,
+  'nowy plik tylko prywatny', 'M2-9d klient nie tworzy pliku publicznego');
+select pg_temp.expect_error($q$update public.files set scan_status = 'clean' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9e klient nie zmienia statusu skanu');
+select pg_temp.expect_error($q$update public.files set path = 'd2961000-0000-0000-0000-000000000004/inny.pdf' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9f klient nie zmienia ścieżki');
+select pg_temp.expect_error($q$update public.files set entity_type = 'candidate_cv' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9g klient nie zmienia typu encji');
+select pg_temp.expect_error($q$update public.files set visibility = 'public' where bucket = 'm2-bucket'$q$,
+  'niezmienne po utworzeniu', 'M2-9h klient nie upublicznia pliku');
+update public.files set file_name = 'nowa-nazwa.pdf' where bucket = 'm2-bucket';
+reset role; reset app.current_uid;
+select pg_temp.assert((select file_name = 'nowa-nazwa.pdf' and scan_status = 'skipped' from public.files where bucket = 'm2-bucket'),
+  'M2-9i nazwa pliku edytowalna, status skanu bez zmian');
+-- Zaufana ścieżka (skaner/serwer) ustawia status skanu.
+update public.files set scan_status = 'clean' where bucket = 'm2-bucket';
+select pg_temp.assert((select scan_status = 'clean' from public.files where bucket = 'm2-bucket'), 'M2-9j serwer ustawia status skanu');
+-- M2-9k (kontrola ujemna): bez strażnika klient sam oznacza plik jako czysty.
+begin;
+drop trigger trg_files_guard_client_write on public.files;
+update public.files set scan_status = 'infected' where bucket = 'm2-bucket';
+set local role authenticated; set local app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+update public.files set scan_status = 'clean', visibility = 'public' where bucket = 'm2-bucket';
+reset role;
+select pg_temp.assert((select scan_status = 'clean' and visibility::text = 'public' from public.files where bucket = 'm2-bucket'),
+  'M2-9k kontrola ujemna: bez strażnika klient zmienia status skanu i widoczność');
+rollback;
+
+-- M2-10 (#1089): is_admin() — tylko aktywny, nieusunięty profil admina.
+set role authenticated; set app.current_uid = :'M2ADM'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_admin(), 'M2-10 aktywny admin przechodzi is_admin()');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'M2ADX'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_admin(), 'M2-10b dezaktywowany admin nie przechodzi is_admin()');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'M2ADD'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_admin(), 'M2-10c usunięty admin nie przechodzi is_admin()');
+select pg_temp.expect_error('select public.admin_set_company_status(''d2961000-0000-0000-0000-0000000000f2'', ''suspended'', ''verified'', ''powód'')',
+  'PERMISSION_DENIED', 'M2-10d RPC administracyjne odrzucają dezaktywowanego admina');
+reset role; reset app.current_uid;
+-- M2-10e (kontrola ujemna): definicja z 0019 (tylko rola) przepuszcza dezaktywowany profil.
+begin;
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
+$$;
+set local role authenticated; set local app.current_uid = :'M2ADX'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_admin(), 'M2-10e kontrola ujemna: is_admin() z 0019 przepuszcza dezaktywowanego admina');
+reset role;
+rollback;
+
+-- M2-11 (#1089): licznik właścicieli bez EXECUTE dla ról klienta; strażnik ostatniego właściciela działa.
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.count_other_active_owners(uuid, uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.count_other_active_owners(uuid, uuid)', 'execute'),
+  'M2-11 count_other_active_owners bez EXECUTE dla anon/authenticated');
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.company_members set is_active = false
+  where company_id = 'd2961000-0000-0000-0000-0000000000f1' and profile_id = 'd2961000-0000-0000-0000-000000000001'$q$,
+  'co najmniej jednego aktywnego właściciela', 'M2-11b ostatni aktywny właściciel nie dezaktywuje się (licznik inline pod RLS)');
+select pg_temp.expect_error($q$delete from public.company_members
+  where company_id = 'd2961000-0000-0000-0000-0000000000f1' and profile_id = 'd2961000-0000-0000-0000-000000000001'$q$,
+  'ostatniego aktywnego właściciela', 'M2-11c ostatni aktywny właściciel nie opuści firmy');
+reset role; reset app.current_uid;
+-- Drugi właściciel → pierwszy może zostać zdezaktywowany (ścieżka pozytywna tego samego strażnika).
+insert into public.company_members(company_id, profile_id, role, is_active) values ('d2961000-0000-0000-0000-0000000000f1', :'M2ADM', 'owner', true);
+set role authenticated; set app.current_uid = :'M2OWN'; select pg_temp.assert_client_role();
+update public.company_members set is_active = false
+  where company_id = 'd2961000-0000-0000-0000-0000000000f1' and profile_id = 'd2961000-0000-0000-0000-000000000001';
+reset role; reset app.current_uid;
+select pg_temp.assert((select not is_active from public.company_members where company_id = :'M2COMP' and profile_id = :'M2OWN'),
+  'M2-11d przy drugim właścicielu pierwszy może zostać zdezaktywowany');
+update public.company_members set is_active = true where company_id = :'M2COMP' and profile_id = :'M2OWN';
+delete from public.company_members where company_id = :'M2COMP' and profile_id = :'M2ADM';
+
+-- M2-12 (#1091): retencja wygasłych sesji i tokenów weryfikacji (7 dni po wygaśnięciu).
+insert into auth.sessions(id, user_id, token, expires_at, ip_address, user_agent) values
+  ('d2961000-0000-0000-0000-0000000000b1', :'M2CAND', 'm2-tok-old', now() - interval '10 days', '10.0.0.1', 'agent-old'),
+  ('d2961000-0000-0000-0000-0000000000b2', :'M2CAND', 'm2-tok-recent', now() - interval '2 days', '10.0.0.2', 'agent-recent'),
+  ('d2961000-0000-0000-0000-0000000000b3', :'M2CAND', 'm2-tok-live', now() + interval '2 days', '10.0.0.3', 'agent-live');
+insert into auth.verifications(id, identifier, value, expires_at) values
+  ('d2961000-0000-0000-0000-0000000000c1', 'm2-verif-old', 'v', now() - interval '10 days'),
+  ('d2961000-0000-0000-0000-0000000000c2', 'm2-verif-recent', 'v', now() - interval '1 day'),
+  ('d2961000-0000-0000-0000-0000000000c3', 'm2-verif-live', 'v', now() + interval '1 hour');
+-- Kategorie są danymi (retention_policies) — domyślnie 7 dni, zadanie czytają run_retention_purge i krok auth.
+select pg_temp.assert(
+  (select count(*) = 2 from public.retention_policies
+    where key in ('expired_auth_session', 'expired_auth_verification') and period = interval '7 days' and enforcement = 'job'),
+  'M2-12 kategorie retencji sesji i tokenów (7 dni, zadanie job)');
+-- Dry-run zlicza bez usuwania.
+set role service_role;
+select (public.run_retention_purge(200, true)->>'expiredAuthSessions')::int as m2_dry_s,
+       (public.run_retention_purge(200, true)->>'expiredAuthVerifications')::int as m2_dry_v \gset
+reset role;
+select pg_temp.assert(:m2_dry_s = 1 and :m2_dry_v = 1
+  and (select count(*) = 3 from auth.sessions where user_id = :'M2CAND')
+  and (select count(*) = 3 from auth.verifications where identifier like 'm2-verif-%'),
+  'M2-12b dry-run: liczniki 1/1, dane nietknięte');
+-- Kontrola ujemna: kategoria wyłączona (okres null) — nic nie jest usuwane.
+begin;
+update public.retention_policies set period = null where key in ('expired_auth_session', 'expired_auth_verification');
+select public.retention_purge_auth_batch(200) as m2_off \gset
+select pg_temp.assert((:'m2_off'::jsonb->>'expiredAuthSessions')::int = 0 and (:'m2_off'::jsonb->>'expiredAuthVerifications')::int = 0
+  and (select count(*) = 3 from auth.sessions where user_id = :'M2CAND'),
+  'M2-12c kontrola ujemna: wyłączona kategoria niczego nie usuwa');
+rollback;
+select public.retention_purge_auth_batch(200) as m2_run \gset
+select pg_temp.assert((:'m2_run'::jsonb->>'expiredAuthSessions')::int = 1 and (:'m2_run'::jsonb->>'expiredAuthVerifications')::int = 1
+  and not exists (select 1 from auth.sessions where id = 'd2961000-0000-0000-0000-0000000000b1')
+  and exists (select 1 from auth.sessions where id = 'd2961000-0000-0000-0000-0000000000b2')
+  and exists (select 1 from auth.sessions where id = 'd2961000-0000-0000-0000-0000000000b3')
+  and not exists (select 1 from auth.verifications where id = 'd2961000-0000-0000-0000-0000000000c1')
+  and exists (select 1 from auth.verifications where id = 'd2961000-0000-0000-0000-0000000000c2')
+  and exists (select 1 from auth.verifications where id = 'd2961000-0000-0000-0000-0000000000c3'),
+  'M2-12d usunięta tylko sesja i token wygasłe > 7 dni; świeżo wygasłe i aktywne zostają');
+-- Partia ograniczona limitem: fullBatches = 1 przy wyczerpaniu limitu.
+insert into auth.sessions(user_id, token, expires_at) select :'M2CAND', 'm2-bulk-' || g, now() - interval '30 days' from generate_series(1, 3) g;
+select public.retention_purge_auth_batch(1) as m2_lim \gset
+select pg_temp.assert((:'m2_lim'::jsonb->>'expiredAuthSessions')::int = 1 and (:'m2_lim'::jsonb->>'fullBatches')::int = 1,
+  'M2-12e limit partii = 1 → jedna sesja i fullBatches = 1 (worker woła kolejną)');
+delete from auth.sessions where token like 'm2-bulk-%' or token like 'm2-tok-%';
+delete from auth.verifications where identifier like 'm2-verif-%';
+-- Klient nie woła zadania retencji.
+set role authenticated; set app.current_uid = :'M2CAND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.retention_purge_auth_batch(10)', 'permission denied', 'M2-12f rola klienta nie uruchamia kroku retencji');
+reset role; reset app.current_uid;
+
+-- M2-13 (#1091): usunięcie konta usuwa tokeny resetu hasła zapisane pod identyfikatorem konta.
+\set M2GONE 'd2961000-0000-0000-0000-000000000008'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'M2GONE','m2gone@test.be','Gone M2','{"role":"candidate","first_name":"Gone","last_name":"M2","locale":"pl"}');
+insert into auth.verifications(identifier, value, expires_at) values
+  ('reset-password:m2-gone-1', :'M2GONE', now() + interval '1 hour'),
+  ('reset-password:m2-gone-2', :'M2GONE', now() - interval '1 day'),
+  ('m2gone@test.be', 'mail-token', now() + interval '1 hour'),
+  ('reset-password:m2-other', :'M2CAND', now() + interval '1 hour');
+-- Kontrola ujemna: bez triggera tokeny zostają po usunięciu konta (stan sprzed 0185).
+begin;
+drop trigger trg_auth_users_delete_cleanup on auth.users;
+delete from auth.users where id = :'M2GONE';
+select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2-gone-%'),
+  'M2-13 kontrola ujemna: bez triggera tokeny resetu usuniętego konta zostają');
+rollback;
+delete from auth.users where id = :'M2GONE';
+select pg_temp.assert(not exists (select 1 from auth.verifications where identifier in ('reset-password:m2-gone-1', 'reset-password:m2-gone-2', 'm2gone@test.be'))
+  and exists (select 1 from auth.verifications where identifier = 'reset-password:m2-other'),
+  'M2-13b usunięcie konta kasuje jego tokeny resetu i weryfikacje po adresie; cudze zostają');
+delete from auth.verifications where identifier = 'reset-password:m2-other';
+
+-- M2-14 (#1090): ustawienie hasła unieważnia pozostałe linki resetu tego konta.
+\set M2PW 'd2961000-0000-0000-0000-000000000009'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'M2PW','m2pw@test.be','Pw M2','{"role":"candidate","first_name":"Pw","last_name":"M2","locale":"pl"}');
+insert into auth.accounts(id, user_id, account_id, provider_id, password)
+  values ('d2961000-0000-0000-0000-0000000000d1', :'M2PW', :'M2PW', 'credential', 'hash-stare');
+insert into auth.verifications(identifier, value, expires_at) values
+  ('reset-password:m2pw-1', :'M2PW', now() + interval '1 hour'),
+  ('reset-password:m2pw-2', :'M2PW', now() + interval '1 hour'),
+  ('reset-password:m2pw-cand', :'M2CAND', now() + interval '1 hour'),
+  ('m2-inne-zadanie', :'M2PW', now() + interval '1 hour');
+insert into auth.email_outbox(user_id, kind, recipient_email, first_name, recipient_role, locale, token, expires_at, idempotency_key, status)
+  values (:'M2PW', 'password_reset', 'm2pw@test.be', 'Pw', 'candidate', 'pl', 'm2pw-1', now() + interval '1 hour', repeat('a', 64), 'queued'),
+         (:'M2PW', 'password_reset', 'm2pw@test.be', 'Pw', 'candidate', 'pl', 'm2pw-sent', now() + interval '1 hour', repeat('b', 64), 'queued');
+update auth.email_outbox set status = 'sent', token = null, sent_at = now() where idempotency_key = repeat('b', 64);
+-- Zapis tego samego hasła i zmiana konta innego niż credential nie unieważniają linków.
+update auth.accounts set password = 'hash-stare' where id = 'd2961000-0000-0000-0000-0000000000d1';
+select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2pw-%' and value = :'M2PW'),
+  'M2-14 ten sam hash hasła nie unieważnia linków');
+-- Kontrola ujemna: bez triggera nowe hasło zostawia stare linki ważne (stan sprzed 0185).
+begin;
+drop trigger trg_auth_accounts_invalidate_reset_links on auth.accounts;
+update auth.accounts set password = 'hash-nowe' where id = 'd2961000-0000-0000-0000-0000000000d1';
+select pg_temp.assert((select count(*) = 2 from auth.verifications where identifier like 'reset-password:m2pw-%' and value = :'M2PW'),
+  'M2-14b kontrola ujemna: bez triggera stare linki resetu zostają po zmianie hasła');
+rollback;
+update auth.accounts set password = 'hash-nowe' where id = 'd2961000-0000-0000-0000-0000000000d1';
+select pg_temp.assert(not exists (select 1 from auth.verifications where value = :'M2PW' and identifier like 'reset-password:%')
+  and exists (select 1 from auth.verifications where identifier = 'reset-password:m2pw-cand')
+  and exists (select 1 from auth.verifications where identifier = 'm2-inne-zadanie'),
+  'M2-14c nowe hasło kasuje wszystkie linki resetu konta; cudze i inne rodzaje weryfikacji zostają');
+select pg_temp.assert(
+  (select status = 'expired' and token is null from auth.email_outbox where idempotency_key = repeat('a', 64))
+  and (select status = 'sent' from auth.email_outbox where idempotency_key = repeat('b', 64)),
+  'M2-14d niewysłany list resetu wycofany z kolejki, wysłany bez zmian');
+-- Ustawienie hasła przy tworzeniu konta credential (INSERT) też działa: nowe konto, świeże linki.
+insert into auth.verifications(identifier, value, expires_at) values ('reset-password:m2pw-3', :'M2CAND', now() + interval '1 hour');
+delete from auth.accounts where id = 'd2961000-0000-0000-0000-0000000000d1';
+insert into auth.accounts(user_id, account_id, provider_id, password) values (:'M2CAND', :'M2CAND', 'credential', 'hash-cand');
+select pg_temp.assert(not exists (select 1 from auth.verifications where identifier in ('reset-password:m2pw-cand', 'reset-password:m2pw-3')),
+  'M2-14e utworzenie konta credential z hasłem unieważnia linki resetu tego konta');
+delete from auth.accounts where user_id = :'M2CAND' and provider_id = 'credential';
+delete from auth.verifications where identifier = 'm2-inne-zadanie';
+delete from auth.users where id = :'M2PW';
 -- ============================================================================
 -- EMQ1038 / EL1049 (0186 — numer tymczasowy): marketing tylko na potwierdzony adres
 -- i zmiana języka e-maili przez użytkownika.
@@ -20146,6 +20589,8 @@ begin
   -- company_members: dodatkowa warstwa (hierarchia ról, tożsamość członkostwa) też odrzuca — dla dowodu
   -- działania samej polityki wyłączamy ją w tej kontroli.
   alter table public.company_members disable trigger user;
+  -- files: strażnik zapisu klienta (0185, #1089) odrzuca cudzy owner_id niezależnie od polityki.
+  alter table public.files disable trigger trg_files_guard_client_write;
 end $$;
 select pg_temp.wm_run('control') as wm_ctl \gset
 rollback;

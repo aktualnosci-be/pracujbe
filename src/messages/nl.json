@@ -2935,6 +2935,7 @@
     "entityJob": "Vacature",
     "auditActionJobUpdatePublished": "Gepubliceerde vacature bewerkt",
     "auditActionJobDuplicated": "Kopie van vacature",
+    "auditActionJobDeleted": "Vacature verwijderd",
     "companyJobsAllLink": "Alle vacatures van het bedrijf",
     "auditActionRetentionPolicyChanged": "Wijziging van bewaartermijn",
     "auditActionRetentionPoliciesSeeded": "Bewaartermijnen vastgelegd",
@@ -3909,6 +3910,14 @@
       "erasure_tombstone": {
         "label": "Register van wissingen",
         "description": "Register van wissingen om na herstel van een back-up opnieuw toe te passen; moet de oudste back-up overleven."
+      },
+      "expired_auth_session": {
+        "label": "Verlopen inlogsessie",
+        "description": "De rij van een verlopen sessie (met IP-adres en user-agent) wordt 7 dagen na het verlopen verwijderd."
+      },
+      "expired_auth_verification": {
+        "label": "Verlopen verificatietoken",
+        "description": "De rij van een verlopen verificatietoken (e-mailbevestiging, wachtwoordreset) wordt 7 dagen na het verlopen verwijderd."
       },
       "guest_ip_user_agent": {
         "label": "IP en user-agent van gast",

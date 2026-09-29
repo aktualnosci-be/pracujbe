@@ -2935,6 +2935,7 @@
     "entityJob": "Offre d’emploi",
     "auditActionJobUpdatePublished": "Modification d’une offre publiée",
     "auditActionJobDuplicated": "Copie d’une offre",
+    "auditActionJobDeleted": "Offre supprimée",
     "companyJobsAllLink": "Toutes les offres de l’entreprise",
     "auditActionRetentionPolicyChanged": "Modification d’une durée de conservation",
     "auditActionRetentionPoliciesSeeded": "Enregistrement des durées de conservation",
@@ -3909,6 +3910,14 @@
       "erasure_tombstone": {
         "label": "Registre des effacements",
         "description": "Registre des effacements à réappliquer après restauration ; doit survivre à la plus ancienne sauvegarde."
+      },
+      "expired_auth_session": {
+        "label": "Session de connexion expirée",
+        "description": "La ligne d’une session expirée (avec adresse IP et user-agent) est supprimée 7 jours après l’expiration."
+      },
+      "expired_auth_verification": {
+        "label": "Jeton de vérification expiré",
+        "description": "La ligne d’un jeton de vérification expiré (confirmation d’e-mail, réinitialisation du mot de passe) est supprimée 7 jours après l’expiration."
       },
       "guest_ip_user_agent": {
         "label": "IP et user-agent de l’invité",
