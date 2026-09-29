@@ -1,5 +1,5 @@
 -- =============================================================================
--- SRCH1076-R — rollback migracji 0963 (części gmin w filtrach, #1076). Uruchamiany przez
+-- SRCH1076-R — rollback migracji 0183 (części gmin w filtrach, #1076). Uruchamiany przez
 -- scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji
 -- i jest cofany.
 -- =============================================================================
@@ -25,7 +25,7 @@ select pg_temp.assert(
          from public.get_public_job_filter_facets('pl', 'srch1076r') where dimension = 'location') = array['Leuven:2'],
   'SRCH1076-R0 stan przed rollbackiem');
 
-\ir ../rollback/0963_city_sections_in_filters.down.sql
+\ir ../rollback/0183_city_sections_in_filters.down.sql
 
 -- Po rollbacku (0153/0167): sama gmina, facet po nazwie miejscowości oferty.
 select pg_temp.assert(
@@ -41,4 +41,4 @@ select pg_temp.assert(
   public.get_public_jobs_count('pl', null, p_locations => array['Leuven']) >= 0
   and to_regclass('public.locations_parent_active_idx') is not null,
   'SRCH1076-R2 rollback testu cofnięty');
-\echo 'SRCH1076-R rollback 0963: PASS'
+\echo 'SRCH1076-R rollback 0183: PASS'

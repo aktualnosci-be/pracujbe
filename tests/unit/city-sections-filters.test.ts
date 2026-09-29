@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * #1076 (SRCH-01, migracja 0963 — numer tymczasowy): filtr po gminie obejmuje jej części
+ * #1076 (SRCH-01, migracja 0183 — numer tymczasowy): filtr po gminie obejmuje jej części
  * (dzielnice, `locations.parent_location_id`), a facet „miasto” grupuje część pod gminą.
  * Zachowanie na żywej bazie dowodzi `rls.sql` sekcja SRCH1076; ten test pilnuje kształtu
  * NAJNOWSZYCH definicji w migracjach (kontrole ujemne: funkcje z 0153/0167).

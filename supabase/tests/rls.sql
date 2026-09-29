@@ -14439,7 +14439,7 @@ reset role; reset app.current_uid;
 
 -- ============================================================================
 -- SRCH1076. Części gmin (dzielnice) w filtrze, liczniku, facetach, wyszukiwaniu miasta i alertach
---           zapisanych wyszukiwań (#1076, audyt SRCH-01, migracja 0963/tymczasowa): filtr po gminie
+--           zapisanych wyszukiwań (#1076, audyt SRCH-01, migracja 0183/tymczasowa): filtr po gminie
 --           obejmuje aktywne części gminy (`parent_location_id`), filtr po części zwraca tylko ją,
 --           facet „miasto” grupuje część pod gminą nadrzędną. Kontrole ujemne: funkcje z 0153.
 -- ============================================================================

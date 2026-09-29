@@ -1,25 +1,59 @@
 -- =============================================================================
--- Rollback 0963 — części gmin w filtrach (#1076). Uruchamiać ręcznie jako migrator,
--- w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć wpis z app_migrations.history.
--- Plik celowo BEZ BEGIN/COMMIT (supabase/tests/city-sections-filters-rollback.sql wykonuje go
--- w transakcji i cofa). Przywraca location_filter_ids i search_city_candidates z 0153 oraz
--- facety z 0167; get_public_jobs/_count/saved_search_jobs_after nie były zmieniane.
--- Rollback 0151 (części gmin) wykonać PO tym pliku.
+-- 0183_city_sections_in_filters.sql — części gmin w filtrze, liczniku, facetach i wyszukiwaniu
+-- miasta (#1076, audyt SRCH-01). NUMER TYMCZASOWY — ostateczny nada integrator.
+--
+-- Problem: oferta zapisana z częścią gminy (np. „Deurne”, „Heverlee”, „Haren”; 0151:
+-- `locations.kind = 'section'` + `parent_location_id`) ma `jobs.location_id` = część, ale filtr
+-- po gminie („Antwerpen”, „Leuven”, „Bruksela”, landing miasta, licznik huba, zapisane
+-- wyszukiwania) porównywał tylko z samą gminą (`location_filter_ids` → jej id), więc oferty
+-- z dzielnic wypadały z listy, licznika i landingu, a facet miał osobną pozycję na dzielnicę.
+--
+-- Naprawa (bez zmiany sygnatur, typów zwrotu i grantów):
+-- 1. `location_filter_ids(text[])` — miejscowości wskazane wartościami filtra ORAZ ich aktywne
+--    części (`parent_location_id`, jeden poziom: część ma gminę, gminą nie bywa część —
+--    strażnik 0151). Ta jedna funkcja zasila `get_public_jobs`, `get_public_jobs_count`,
+--    `get_public_job_filter_facets` i `saved_search_jobs_after`, więc BLOKI FROM … WHERE
+--    tych funkcji zostają bez zmian (test saved-search-keyset-sync) — alerty zapisanych
+--    wyszukiwań i lista widzą to samo. Filtr po samej części („Heverlee”) zwraca tylko tę część.
+-- 2. `search_city_candidates(text)` — wpis rozpoznany jako gmina obejmuje oferty jej części
+--    (wcześniej tylko `resolve_location_id`, czyli jedna miejscowość).
+-- 3. `get_public_job_filter_facets` (stan 0167) — pozycja facetu „miasto” = gmina nadrzędna
+--    dla oferty w części gminy (nazwa kanoniczna `locations.name` gminy), spójna z filtrem:
+--    zaznaczenie pozycji zwraca dokładnie tyle ofert, ile pokazuje licznik.
+-- Kod TS (city-aliases.ts, job-list-query.ts) nie wymaga zmian — wartości filtra są nadal
+-- tekstami rozwiązywanymi po aliasach w bazie.
+--
+-- Nakładanie z innymi zmianami: `get_public_jobs`, `_count` i `saved_search_jobs_after` NIE są tu
+-- redefiniowane (PR #999, `updated_at` w `get_public_jobs`, może przejść niezależnie i nadal
+-- woła `location_filter_ids`). Facety redefiniuje tylko ta migracja.
+--
+-- Rollback: supabase/rollback/0183_city_sections_in_filters.down.sql (funkcje z 0153 i 0167).
 -- =============================================================================
 
-drop index if exists public.locations_parent_active_idx;
+create index if not exists locations_parent_active_idx
+  on public.locations (parent_location_id) where parent_location_id is not null and is_active;
 
+-- --- 1. Wartości filtra → miejscowości + ich części --------------------------------------------
 create or replace function public.location_filter_ids(p_values text[])
 returns uuid[] language sql stable parallel safe security definer set search_path = public, pg_temp as $$
-  select coalesce(array_agg(distinct a.location_id), '{}'::uuid[])
-  from unnest(p_values[1:100]) v
-  join public.location_aliases a on a.alias_key = public.city_key(left(v, 200))
-  join public.locations l on l.id = a.location_id and l.is_active;
+  with matched as (
+    select distinct a.location_id
+    from unnest(p_values[1:100]) v
+    join public.location_aliases a on a.alias_key = public.city_key(left(v, 200))
+    join public.locations l on l.id = a.location_id and l.is_active
+  )
+  select coalesce(array_agg(distinct x.location_id), '{}'::uuid[])
+  from (
+    select m.location_id from matched m
+    union
+    select s.id from matched m
+    join public.locations s on s.parent_location_id = m.location_id and s.is_active
+  ) x;
 $$;
 revoke all on function public.location_filter_ids(text[]) from public;
 grant execute on function public.location_filter_ids(text[]) to anon, authenticated, service_role;
 
-
+-- --- 2. Wyszukiwanie tekstowe miasta: + części gminy rozpoznanej z wpisu -----------------------
 create or replace function public.search_city_candidates(p_city text)
 returns setof uuid language sql stable strict
 set search_path = public, pg_temp as $$
@@ -29,11 +63,11 @@ set search_path = public, pg_temp as $$
   union
   select j.id from public.jobs j
   where j.status = 'active' and j.deleted_at is null
-    and j.location_id = (select public.resolve_location_id(p_city));
+    and j.location_id in (select unnest(public.location_filter_ids(array[left(p_city, 200)])));
 $$;
 revoke all on function public.search_city_candidates(text) from public;
 
-
+-- --- 3. Facety (stan 0167) + pozycja „miasto” = gmina nadrzędna części ------------------------
 create or replace function public.get_public_job_filter_facets(
   p_locale text default 'pl', p_keyword text default null, p_city text default null,
   p_categories text[] default null, p_locations text[] default null,
@@ -54,11 +88,14 @@ language sql stable security definer set search_path = public, pg_temp as $$
       (select array_agg(distinct left(v,100)) from unnest(p_contract_types[1:100]) v where v <> '') contracts
   ), base as materialized (
     select j.id, j.category::text category, j.city, j.location_id,
-      coalesce(l.name, j.city) city_label, j.contract_type::text contract_type,
+      -- SRCH-01 (#1076): część gminy (dzielnica) liczy się w pozycji swojej gminy nadrzędnej —
+      -- tak samo jak filtr `location_filter_ids` (gmina obejmuje swoje części).
+      coalesce(pl.name, l.name, j.city) city_label, j.contract_type::text contract_type,
       j.accommodation, j.immediate, j.no_language_required, c.is_agency
     from public.jobs j
     join public.companies c on c.id=j.company_id
     left join public.locations l on l.id=j.location_id and l.is_active
+    left join public.locations pl on pl.id=l.parent_location_id and pl.is_active
     cross join input i
     left join lateral (
       select jt.title from public.job_translations jt where jt.job_id=j.id

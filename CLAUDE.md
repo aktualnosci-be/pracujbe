@@ -856,13 +856,13 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Dowód: `rls.sql` sekcja LC153 (kontrole ujemne: bez `location_id` / bez triggera), unit
   `job-location` (parzystość klucza, 10 miast landingów → jedna miejscowość, facet),
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
-  `portal-employer`. Części gmin w filtrach (#1076, migracja `0963` — numer tymczasowy):
+  `portal-employer`. Części gmin w filtrach (#1076, migracja `0183` — numer tymczasowy):
   `location_filter_ids` obejmuje aktywne części wskazanej gminy (`parent_location_id`, jeden
   poziom), więc lista, licznik, landing miasta, facety i `saved_search_jobs_after` widzą oferty
   z dzielnic bez zmiany bloków FROM … WHERE; filtr po samej części zwraca tylko ją,
   `search_city_candidates` rozwija wpis o gminie, facet miasta grupuje część pod gminą
   nadrzędną. Dowód: `rls.sql` sekcja SRCH1076 (kontrole ujemne: funkcje z 0153), rollback
-  `supabase/rollback/0963_…down.sql` (`city-sections-filters-rollback.sql`), unit
+  `supabase/rollback/0183_…down.sql` (`city-sections-filters-rollback.sql`), unit
   `city-sections-filters`. **Otwarte:** matching nadal liczy odległość z tekstu (`cityKey`).
   Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
   „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
