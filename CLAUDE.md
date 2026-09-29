@@ -2090,14 +2090,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
   ręcznej.
-  Nazwy chronione (#740, migracja `0977` — numer tymczasowy): nazwa firmy (`companies.name`,
+  Nazwy chronione (#740, migracja `0190` — numer tymczasowy): nazwa firmy (`companies.name`,
   wyłącznie z bazy) = `translation_source_revisions.protected_terms` rewizji oferty
   (`sync_job_translation_source` → `record_translation_source(…, p_protected_terms)`,
   normalizacja `translation_protected_terms`: ≤ 10 nazw po ≤ 200 znaków), część odcisku — zmiana
   nazwy firmy (trigger `companies` z `name`) = nowa rewizja; `claim_translation_jobs` zwraca
   listę, worker podaje ją dostawcy i `validateTranslation` (nazwa ze źródła musi zostać bez zmian,
   inaczej `facts_terms`). Pipeline `translation-v2`. Dowód: `rls.sql` sekcja TP740 (kontrole
-  ujemne: odcisk bez nazw, trigger bez `name`), rollback `0977_…down.sql`
+  ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
   (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
   unit `translation-worker`, `translation-job-sync`.
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)

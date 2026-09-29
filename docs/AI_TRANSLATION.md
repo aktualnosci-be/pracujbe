@@ -174,7 +174,7 @@ wstrzymana/wygasła, firma zawieszona, przekład po edycji, granty) z kontrolą 
 unit `job-list-machine-translation` (flaga wyłączona = brak odczytu, lista bez kart = brak
 odczytu, jedno wywołanie na stronę, fallback, awaria).
 
-## Nazwy chronione (#740, migracja 0977 — numer tymczasowy)
+## Nazwy chronione (#740, migracja 0190 — numer tymczasowy)
 
 Nazwa firmy jest nazwą chronioną każdej rewizji oferty. Źródło wyłącznie serwerowe:
 `sync_job_translation_source` czyta `companies.name` z bazy i przekazuje ją do
@@ -191,7 +191,7 @@ odrzucany kodem `facts_terms` i nie trafia do bazy. Wersja pipeline
 `translation-v2+prompt-v1+glossary-v1`; migracja ponownie synchronizuje aktywne źródła ofert.
 
 Dowód: `rls.sql` sekcja TP740 (kontrole ujemne: odcisk bez nazw, trigger firmy bez `name`),
-rollback `supabase/rollback/0977_translation_protected_terms.down.sql`
+rollback `supabase/rollback/0190_translation_protected_terms.down.sql`
 (`translation-protected-terms-rollback.sql`), unit `translation-worker` (nazwa zmieniona przez
 model = `facts_terms`, kontrola ujemna bez nazw), `translation-job-sync`.
 

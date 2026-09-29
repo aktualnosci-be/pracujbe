@@ -1,7 +1,7 @@
 -- =============================================================================
--- TP740-R — rollback migracji 0977 (nazwy chronione w kolejce tłumaczeń, #740). Uruchamiany
+-- TP740-R — rollback migracji 0190 (nazwy chronione w kolejce tłumaczeń, #740). Uruchamiany
 -- przez scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się
--- w transakcji i jest cofany, więc baza po teście nadal ma stan po 0977.
+-- w transakcji i jest cofany, więc baza po teście nadal ma stan po 0190.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -11,14 +11,14 @@ begin
   if p_cond is distinct from true then raise exception 'ASSERT FAILED: %', p_name; end if;
 end $$;
 
--- Punkt wyjścia: stan po 0977.
+-- Punkt wyjścia: stan po 0190.
 select pg_temp.assert(to_regprocedure('public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])') is not null
   and exists (select 1 from information_schema.columns where table_schema = 'public'
                and table_name = 'translation_source_revisions' and column_name = 'protected_terms'),
-  'TP740-R0 baza w stanie po 0977');
+  'TP740-R0 baza w stanie po 0190');
 
 begin;
-\ir ../rollback/0977_translation_protected_terms.down.sql
+\ir ../rollback/0190_translation_protected_terms.down.sql
 
 select pg_temp.assert(
   to_regprocedure('public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])') is null
@@ -34,7 +34,7 @@ select pg_temp.assert(
   and position('company_name' in pg_get_functiondef('public.sync_job_translation_source(uuid)'::regprocedure)) = 0
   and public.translation_pipeline_version() = 'translation-v1+prompt-v1+glossary-v1'
   and not has_function_privilege('authenticated', 'public.record_translation_source(text, uuid, text, jsonb, text, integer)', 'execute'),
-  'TP740-R1 rollback przywraca funkcje sprzed 0977 (claim z 0176, sync i wersja z 0146) i usuwa kolumnę');
+  'TP740-R1 rollback przywraca funkcje sprzed 0190 (claim z 0176, sync i wersja z 0146) i usuwa kolumnę');
 
 -- TP740-R2: po rollbacku zmiana nazwy firmy nie tworzy rewizji (trigger z 0146), a kolejka działa.
 update public.companies set name = 'Logistiek Noord Rollback' where id = 'f0740000-0000-0000-0000-0000000000c1';
@@ -51,4 +51,4 @@ rollback;
 
 select pg_temp.assert(to_regprocedure('public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])') is not null
   and public.translation_pipeline_version() = 'translation-v2+prompt-v1+glossary-v1',
-  'TP740-R4 po cofnięciu transakcji baza wraca do stanu po 0977');
+  'TP740-R4 po cofnięciu transakcji baza wraca do stanu po 0190');

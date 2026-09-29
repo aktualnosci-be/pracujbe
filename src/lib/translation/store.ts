@@ -24,7 +24,7 @@ export interface ClaimedTranslationJob {
   pipeline_version: string;
   fields: TranslationFields;
   /**
-   * Nazwy chronione rewizji (#740, 0977) — źródło wyłącznie serwerowe (nazwa firmy z bazy),
+   * Nazwy chronione rewizji (#740, 0190) — źródło wyłącznie serwerowe (nazwa firmy z bazy),
    * muszą wystąpić w przekładzie bez zmian. Starsza baza bez kolumny = brak (pusta lista).
    */
   protected_terms?: readonly string[] | null;

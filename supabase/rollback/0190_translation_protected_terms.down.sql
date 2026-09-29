@@ -1,82 +1,30 @@
 -- =============================================================================
--- 0977_translation_protected_terms.sql — #740: chronione nazwy (nazwa firmy) w kolejce
--- tłumaczeń AI.
+-- Rollback 0190 — chronione nazwy w kolejce tłumaczeń (#740).
+-- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
+-- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
+-- (supabase/tests/translation-protected-terms-rollback.sql i portal-legal-mode-rollback.sql
+-- wykonują go w transakcji i cofają).
 --
--- NUMER TYMCZASOWY (0977) — ostateczny nadaje integrator. Zależy od 0145, 0146 i 0176.
---
--- Problem: rdzeń (0145) i worker nie przenosiły listy nazw własnych — walidator faktów
--- (`src/lib/translation/facts.ts`) dostawał pustą listę, więc zmieniona albo przetłumaczona
--- nazwa firmy w przekładzie oferty przechodziła walidację.
---
--- Zmiana:
---   1. `translation_source_revisions.protected_terms text[]` — niezmienna część rewizji
---      (trigger `translation_revision_immutable`), znormalizowana przez
---      `translation_protected_terms`: trim, NFC, bez pustych, bez duplikatów, posortowane,
---      najwyżej 10 nazw po 1–200 znaków, bez znaków sterujących (inaczej
---      VALIDATION_FAILED). Źródło WYŁĄCZNIE serwerowe: RPC tylko dla service_role.
---   2. `record_translation_source(…, p_protected_terms)` — nazwy wchodzą do odcisku rewizji
---      (ta sama treść + inna nazwa = nowa rewizja, stare zadania superseded, przekłady
---      nieaktualne); bez nazw odcisk jak w 0145. Stara 6-argumentowa sygnatura usunięta
---      (nowa ma wartość domyślną, więc wywołania 5/6 argumentów działają bez zmian).
---   3. `claim_translation_jobs` zwraca `protected_terms` (treść = 0176 poza tą kolumną) —
---      worker przekazuje je dostawcy (prompt) i walidatorowi (nazwa w źródle musi wystąpić
---      bez zmian w przekładzie, inaczej wynik odrzucony `facts_terms`).
---   4. `sync_job_translation_source` przekazuje `companies.name`; trigger na `companies`
---      reaguje też na zmianę nazwy (zmiana nazwy firmy = nowa rewizja każdej jej oferty
---      publicznej).
---   5. Wersja pipeline `translation-v2+prompt-v1+glossary-v1` (= TS
---      `TRANSLATION_PIPELINE_VERSION`, test `translation-job-sync.test.ts`).
---   6. Aktywne źródła ofert są synchronizowane ponownie (nowa rewizja z nazwą firmy), więc
---      zaległe zadania bez nazw chronionych są wygaszane.
---
--- Dowód: supabase/tests/rls.sql sekcja TP740 (kontrole ujemne: odcisk bez nazw, trigger
--- firmy bez `name`). Rollback: supabase/rollback/0977_translation_protected_terms.down.sql.
+-- Przywraca record_translation_source z 0145, claim_translation_jobs z 0176,
+-- sync_job_translation_source, translation_pipeline_version i trigger na companies z 0146
+-- (treść 1:1), usuwa normalizację i kolumnę `protected_terms`. Rewizje utworzone po 0190
+-- zostają (ich odcisk zawiera nazwy — kolejna zmiana treści i tak utworzy nową rewizję).
 -- =============================================================================
 
--- --- 1. Kolumna rewizji i normalizacja -----------------------------------------------------
-alter table public.translation_source_revisions
-  add column if not exists protected_terms text[] not null default '{}'::text[];
-alter table public.translation_source_revisions
-  drop constraint if exists translation_revisions_protected_terms;
-alter table public.translation_source_revisions
-  add constraint translation_revisions_protected_terms
-  check (cardinality(protected_terms) <= 10 and array_position(protected_terms, null) is null);
+drop function if exists public.record_translation_source(text, uuid, text, jsonb, text, integer, text[]);
+drop function if exists public.claim_translation_jobs(integer, integer);
 
-create or replace function public.translation_protected_terms(p_terms text[])
-returns text[] language plpgsql immutable set search_path = public, pg_temp as $$
-declare
-  v_out text[];
-begin
-  select coalesce(array_agg(t order by t), '{}'::text[]) into v_out
-    from (select distinct normalize(btrim(x, E' \t\n\r'), NFC) as t
-            from unnest(coalesce(p_terms, '{}'::text[])) x
-           where x is not null and btrim(x, E' \t\n\r') <> '') s;
-  if cardinality(v_out) > 10 then
-    raise exception 'VALIDATION_FAILED: protected_terms' using errcode = '22023';
-  end if;
-  if exists (select 1 from unnest(v_out) t
-              where char_length(t) > 200 or t ~ '[[:cntrl:]]') then
-    raise exception 'VALIDATION_FAILED: protected_term' using errcode = '22023';
-  end if;
-  return v_out;
-end $$;
-revoke all on function public.translation_protected_terms(text[]) from public;
-grant execute on function public.translation_protected_terms(text[]) to service_role;
-
--- --- 2. Zapis źródła z nazwami chronionymi -----------------------------------------------------
-drop function if exists public.record_translation_source(text, uuid, text, jsonb, text, integer);
+-- record_translation_source — treść z 0145.
 create or replace function public.record_translation_source(
   p_entity_type text,
   p_entity_id uuid,
   p_source_locale text,
   p_fields jsonb,
   p_pipeline_version text,
-  p_delay_seconds integer default 0,
-  p_protected_terms text[] default '{}'::text[]
+  p_delay_seconds integer default 0
 ) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_fields jsonb;
-  v_terms text[];
   v_hash text;
   v_head public.translation_sources;
   v_rev public.translation_source_revisions;
@@ -98,12 +46,7 @@ begin
   end if;
 
   v_fields := public.translation_canonical_fields(p_fields);
-  v_terms := public.translation_protected_terms(p_protected_terms);
-  -- Chronione nazwy wchodzą do odcisku rewizji: zmiana nazwy firmy = nowa rewizja. Bez nazw
-  -- odcisk jest taki sam jak w 0145 (rewizje encji bez nazw chronionych bez zmian).
-  v_hash := encode(sha256(convert_to(p_source_locale || E'\n' || v_fields::text
-              || case when cardinality(v_terms) > 0 then E'\n' || to_jsonb(v_terms)::text else '' end,
-              'UTF8')), 'hex');
+  v_hash := encode(sha256(convert_to(p_source_locale || E'\n' || v_fields::text, 'UTF8')), 'hex');
 
   insert into public.translation_sources (entity_type, entity_id)
   values (p_entity_type, p_entity_id)
@@ -156,8 +99,8 @@ begin
   end if;
 
   insert into public.translation_source_revisions
-    (entity_type, entity_id, revision_no, source_locale, content_hash, fields, protected_terms)
-  values (p_entity_type, p_entity_id, v_head.current_revision_no + 1, p_source_locale, v_hash, v_fields, v_terms)
+    (entity_type, entity_id, revision_no, source_locale, content_hash, fields)
+  values (p_entity_type, p_entity_id, v_head.current_revision_no + 1, p_source_locale, v_hash, v_fields)
   returning * into v_rev;
 
   update public.translation_sources
@@ -187,11 +130,10 @@ begin
   return jsonb_build_object('status', 'created', 'revisionId', v_rev.id,
     'revisionNo', v_rev.revision_no, 'jobsQueued', v_count);
 end $$;
-revoke all on function public.record_translation_source(text, uuid, text, jsonb, text, integer, text[]) from public;
-grant execute on function public.record_translation_source(text, uuid, text, jsonb, text, integer, text[]) to service_role;
+revoke all on function public.record_translation_source(text, uuid, text, jsonb, text, integer) from public;
+grant execute on function public.record_translation_source(text, uuid, text, jsonb, text, integer) to service_role;
 
--- --- 3. Claim z nazwami chronionymi (treść = 0176 poza kolumną protected_terms) ---------------
-drop function if exists public.claim_translation_jobs(integer, integer);
+-- claim_translation_jobs — treść z 0176.
 create or replace function public.claim_translation_jobs(
   p_limit integer default 10,
   p_lease_seconds integer default 300
@@ -207,8 +149,7 @@ create or replace function public.claim_translation_jobs(
   source_locale text,
   target_locale text,
   pipeline_version text,
-  fields jsonb,
-  protected_terms text[]
+  fields jsonb
 ) language plpgsql security definer set search_path = public, pg_temp as $$
 #variable_conflict use_column
 declare
@@ -245,23 +186,22 @@ begin
     returning j.*
   )
   select l.id, l.lease_id, l.lease_expires_at, l.attempts, l.entity_type, l.entity_id,
-         r.id, r.revision_no, r.source_locale, l.target_locale, l.pipeline_version, r.fields,
-         r.protected_terms
+         r.id, r.revision_no, r.source_locale, l.target_locale, l.pipeline_version, r.fields
     from leased l
     join public.translation_source_revisions r on r.id = l.revision_id;
 end $$;
 revoke all on function public.claim_translation_jobs(integer, integer) from public;
 grant execute on function public.claim_translation_jobs(integer, integer) to service_role;
 
--- --- 4. Wersja pipeline = TS -----------------------------------------------------------------
+-- translation_pipeline_version — treść z 0146.
 create or replace function public.translation_pipeline_version()
 returns text language sql immutable set search_path = public, pg_temp as $$
-  select 'translation-v2+prompt-v1+glossary-v1'::text;
+  select 'translation-v1+prompt-v1+glossary-v1'::text;
 $$;
 revoke all on function public.translation_pipeline_version() from public;
 grant execute on function public.translation_pipeline_version() to service_role;
 
--- --- 5. Synchronizacja oferty: nazwa firmy z bazy (treść = 0146 poza nazwą) ---------------------
+-- sync_job_translation_source — treść z 0146.
 create or replace function public.sync_job_translation_source(p_job_id uuid)
 returns text language plpgsql security definer set search_path = public, pg_temp as $$
 declare
@@ -272,8 +212,7 @@ begin
   if p_job_id is null then return 'purged'; end if;
 
   select j.status::text as status, j.deleted_at, j.expires_at, j.is_demo,
-         c.status::text as company_status, c.deleted_at as company_deleted_at,
-         c.name as company_name
+         c.status::text as company_status, c.deleted_at as company_deleted_at
     into v_job
     from public.jobs j join public.companies c on c.id = j.company_id
    where j.id = p_job_id;
@@ -293,10 +232,8 @@ begin
 
   select * into v_src from public.job_translation_source_fields(p_job_id);
   begin
-    -- #740: nazwa firmy z bazy (nigdy od klienta) = nazwa chroniona rewizji.
     v_res := public.record_translation_source('job', p_job_id, v_src.source_locale, v_src.fields,
-                                              public.translation_pipeline_version(), 0,
-                                              array[v_job.company_name]);
+                                              public.translation_pipeline_version(), 0);
   exception when sqlstate '22023' then
     -- Treść poza limitami rdzenia: publikacja idzie dalej, stare przekłady nie udają aktualnych.
     perform public.deactivate_translation_source('job', p_job_id, false);
@@ -307,13 +244,11 @@ end $$;
 revoke all on function public.sync_job_translation_source(uuid) from public;
 grant execute on function public.sync_job_translation_source(uuid) to service_role;
 
--- Zmiana nazwy firmy = nowa rewizja ofert publicznych (trigger z 0146 + kolumna `name`).
 drop trigger if exists trg_job_translation_sync_companies on public.companies;
 create constraint trigger trg_job_translation_sync_companies
-  after update of status, deleted_at, name on public.companies deferrable initially deferred
+  after update of status, deleted_at on public.companies deferrable initially deferred
   for each row execute function public.trg_job_translation_sync();
 
--- --- 6. Ponowna synchronizacja aktywnych źródeł ofert ------------------------------------------
-select count(public.sync_job_translation_source(s.entity_id))
-  from public.translation_sources s
- where s.entity_type = 'job' and s.is_active;
+drop function if exists public.translation_protected_terms(text[]);
+alter table public.translation_source_revisions drop constraint if exists translation_revisions_protected_terms;
+alter table public.translation_source_revisions drop column if exists protected_terms;

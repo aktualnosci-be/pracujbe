@@ -12628,7 +12628,7 @@ select pg_temp.assert((select count(*) from public.translation_jobs where entity
   'TR33-Nb z triggerem ta sama edycja kolejkuje trzy zadania');
 
 -- =============================================================================
--- TP740 (#740, 0977): nazwy chronione w kolejce tłumaczeń. Nazwa firmy z bazy trafia do
+-- TP740 (#740, 0190): nazwy chronione w kolejce tłumaczeń. Nazwa firmy z bazy trafia do
 -- rewizji oferty (nigdy od klienta), claim wydaje ją workerowi, zmiana nazwy firmy = nowa
 -- rewizja; normalizacja i limity; rewizja niezmienna. Kontrole ujemne: odcisk z 0145 (bez
 -- nazw) nie odróżnia zmiany nazwy, trigger firmy z 0146 (bez `name`) nie reaguje na zmianę.
@@ -12691,7 +12691,7 @@ begin;
 update public.companies set name = 'Northern Logistics' where id = :'TPCO';
 set constraints all immediate;
 select pg_temp.assert((select current_revision_no from public.translation_sources where entity_id = :'TPJ1') = 3,
-  'TP740-2Nc z triggerem 0977 ta sama zmiana tworzy rewizję');
+  'TP740-2Nc z triggerem 0190 ta sama zmiana tworzy rewizję');
 rollback;
 
 -- TP740-3: normalizacja — kolejność, spacje, duplikaty i puste nie zmieniają rewizji; inna nazwa
