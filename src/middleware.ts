@@ -90,6 +90,9 @@ function cityAliasRedirect(request: NextRequest): NextResponse | null {
   return NextResponse.redirect(url, 308);
 }
 
+/** Jeden segment z kropką tuż pod korzeniem (`/plik.ext`) — nigdy adres z prefiksem języka. */
+const ROOT_DOTTED_SEGMENT_RE = /^\/[^/]*\.[^/]*\/?$/;
+
 const FAQ_RE = /^\/([a-z]{2})\/faq\/?$/;
 
 /**
@@ -156,6 +159,17 @@ export default async function middleware(request: NextRequest) {
 
   const cityRedirect = cityAliasRedirect(request) ?? faqRedirect(request);
   if (cityRedirect) return cityRedirect;
+
+  // 0b) Ścieżka z jednym segmentem z kropką w korzeniu (np. `/brak-takiego-pliku.png`): dawniej
+  // omijała middleware (wzorzec `.*\\..*`), więc next-intl jej nie przekierowywał pod prefiks
+  // języka, a wielojęzyczny 404 powłoki (`src/app/not-found.tsx`) zostawał na tym adresie (#1035).
+  // Bramka hasła i gotowość działają już wyżej; tu tylko zachowujemy stary routing bez i18n.
+  if (ROOT_DOTTED_SEGMENT_RE.test(request.nextUrl.pathname)) {
+    const passthrough = NextResponse.next();
+    protectOneTimeResponse(request, passthrough);
+    if (getSiteAccessPassword()) passthrough.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
+    return passthrough;
+  }
 
   // 1) next-intl — bazowa odpowiedź (może być redirectem/rewrite z prefiksem locale).
   const response = handleIntl(request);
