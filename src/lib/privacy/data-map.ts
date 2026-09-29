@@ -520,8 +520,15 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
   'public.saved_searches': {
     activities: ['matching-search'],
     subjects: ['candidate'],
-    columns: { profile_id: 'reference', name: 'preferences', filters: 'preferences', query: 'preferences', locale: 'preferences' },
+    columns: { profile_id: 'reference', name: 'preferences', filters: 'preferences', query: 'preferences', locale: 'preferences', company_id: 'preferences' },
     notPersonal: { filters_hash: 'Skrót filtrów do deduplikacji wyszukiwań — nie identyfikuje osoby poza wierszem.' },
+  },
+  'public.saved_search_alert_pauses': {
+    activities: ['matching-search', 'email-notifications'],
+    subjects: ['candidate'],
+    columns: { profile_id: 'reference', paused_until: 'preferences' },
+    notPersonal: { updated_at: 'Czas ostatniej zmiany pauzy alertów.' },
+    note: 'Czasowa pauza alertów o nowych ofertach (#810, 0969): jeden wiersz na konto, sama data wznowienia.',
   },
   'public.saved_search_alerts': {
     activities: ['matching-search', 'email-notifications'],

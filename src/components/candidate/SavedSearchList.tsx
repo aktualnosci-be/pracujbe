@@ -35,7 +35,14 @@ export interface SavedSearchListProps {
   /** Bieżący język panelu (z adresu strony) — do porównania z `search.locale`. */
   currentLocale: Locale;
   /** `filterLabels` = filtry wyszukiwania w języku widza (serwer, `savedSearchFilterLabels`). */
-  searches: Array<SavedSearch & { lastAlertLabel: string | null; filterLabels?: string[] }>;
+  searches: Array<
+    SavedSearch & {
+      lastAlertLabel: string | null;
+      filterLabels?: string[];
+      /** #855: obserwowana firma (wyszukiwanie z kluczem firmy); `slug` null = profil niedostępny. */
+      company?: { slug: string | null } | null;
+    }
+  >;
 }
 
 /** Zapisany adres zaczyna się od `?` — locale ma znaczenie wyłącznie przy słowie kluczowym (0092). */
@@ -185,6 +192,9 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
                       </div>
                     </form>
                   ) : null}
+                  {search.company ? (
+                    <p className="mt-2 text-[13px] font-semibold text-muted-foreground">{t('followedCompany')}</p>
+                  ) : null}
                   {search.filterLabels && search.filterLabels.length > 0 ? (
                     <ul
                       aria-label={t('filtersLabel', { name: search.name })}
@@ -209,15 +219,30 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
                     </p>
                   ) : null}
                 </div>
-                <Link
-                  href={`/oferty-pracy${search.query}`}
-                  locale={search.locale}
-                  className={cn(BTN_SECONDARY, 'min-h-11 shrink-0 px-[17px] py-[11px] text-xs')}
-                >
-                  <Search className="h-4 w-4" aria-hidden="true" />
-                  {t('open')}
-                  <span className="sr-only">: {search.name}</span>
-                </Link>
+                {search.company ? (
+                  search.company.slug ? (
+                    <Link
+                      href={`/pracodawcy/${search.company.slug}`}
+                      className={cn(BTN_SECONDARY, 'min-h-11 shrink-0 px-[17px] py-[11px] text-xs')}
+                    >
+                      <Search className="h-4 w-4" aria-hidden="true" />
+                      {t('openCompany')}
+                      <span className="sr-only">: {search.name}</span>
+                    </Link>
+                  ) : (
+                    <p className="shrink-0 text-[13px] text-muted-foreground">{t('companyUnavailable')}</p>
+                  )
+                ) : (
+                  <Link
+                    href={`/oferty-pracy${search.query}`}
+                    locale={search.locale}
+                    className={cn(BTN_SECONDARY, 'min-h-11 shrink-0 px-[17px] py-[11px] text-xs')}
+                  >
+                    <Search className="h-4 w-4" aria-hidden="true" />
+                    {t('open')}
+                    <span className="sr-only">: {search.name}</span>
+                  </Link>
+                )}
               </div>
               <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
                 <div className="flex min-h-11 items-center gap-3">

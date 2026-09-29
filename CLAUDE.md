@@ -1123,6 +1123,15 @@ Dowód: `rls.sql` sekcja SV162 (kontrola ujemna: definicja z 0066 gubi 5 z 6 zap
 `saved-job-availability` i `candidate-saved-jobs` (kontrole ujemne), E2E `candidate-saved-closed`
 (fixture, 4 języki, 320 px, axe; mutacja strony = czerwony).
 
+Porównanie zapisanych ofert (#816, bez migracji): `/candidate/zapisane` ma checkbox „Porównaj” przy każdej
+DOSTĘPNEJ ofercie (formularz GET `?porownaj=`, działa bez JS; skrypt tylko pilnuje limitu 3 i przycisku od 2)
+i tabelę `SavedJobsComparison` nad listą: wynagrodzenie (waluta i okres z oferty, bez przeliczeń), rodzaj umowy,
+godziny, zmiany, zakwaterowanie i dojazd („Koszty i dodatki” albo flagi), kluczowe wymagania obowiązkowe (≤ 5),
+jawny „Brak danych”, link do oferty. Wybór ograniczony do własnych zapisów (`parseCompareSelection`), oferta
+zamknięta/wygasła/wstrzymana albo z błędem odczytu = kolumna ze stanem bez linku; szczegóły z `getJobBySlug`
+(bez nowych zapytań o dane procesu). Model: `src/lib/saved-job-compare.ts`. Dowód: unit `saved-job-compare`,
+`saved-search-pause-follow-ui`, E2E `candidate-saved-closed` (porównanie, 4 języki, 320 px, axe).
+
 Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
 prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
 + `src/components/candidate/candidate-styles.ts`; odstępstwa w `docs/design/people-passport/README.md`.
@@ -1308,6 +1317,24 @@ publiczna, akcje/strony/trasy bez bramki trybu, `/api/maintenance` woła worker 
 profilem: zapis, nazwa, alert, digest, wyłączenie z linku; kontrola ujemna: wymóg onboardingu).
 E2E `tests/e2e-real/saved-search-classifieds.spec.ts` (`E2E_PORTAL_LEGAL_MODE=`, mutacja
 `saved-search-requires-onboarding` = czerwony).
+Pauza alertów i obserwowanie firmy (#810, #855, migracja `0969` — numer tymczasowy, bez zmiany
+`get_public_jobs` ani `saved_search_jobs_after`): jedna czasowa pauza dla konta (`saved_search_alert_pauses`,
+RPC `set_saved_search_alerts_pause(date)`: jutro..+366 dni, Europe/Brussels; `null` = wznów od razu). Worker
+`process_saved_search_alerts` pomija konta w pauzie (wyszukiwanie zostaje do wykonania), a po jej końcu liczy
+nowości od `paused_until` — oferty z okresu pauzy nie wracają lawiną, późniejsze trafiają do kolejnych alertów;
+ustawienia pojedynczych wyszukiwań bez zmian. Panel `/candidate/wyszukiwania`: `SavedSearchesPause` (data,
+„Wstrzymaj”/„Wznów teraz”; błąd odczytu = jawny komunikat, nie „brak pauzy”). Obserwowanie firmy = zapisane
+wyszukiwanie z `saved_searches.company_id` (filtry v1 `{}`, hash `md5('company:'||id)`, limit 20 wspólny):
+RPC `follow_company`/`unfollow_company`/`get_my_followed_companies` (tylko kandydat, firma `verified` z profilem,
+zablokowana przez kandydata = `NOT_FOUND`); worker bierze dla nich nowe aktywne niewygasłe oferty firmy po
+`company_id` (blokady #97, deduplikacja pary wyszukiwanie–oferta, digest `jobMatch` w języku odbiorcy, zgody,
+wypisanie z linku jak przy wyszukiwaniu). Przycisk „Obserwuj firmę” (`FollowCompanyButton`, wyspa na ISR-owym
+profilu `/pracodawcy/<slug>`: gość = link logowania z powrotem, pracodawca/demo nic); firma nie ma odczytu
+obserwujących. Dowód: `rls.sql` sekcje PS969/FC969 (kontrole ujemne na definicji workera: bez klauzuli pauzy,
+bez dolnej granicy, bez filtra firmy), rollback `0969_…down.sql`, unit `saved-search-pause-follow`,
+`saved-search-pause-follow-ui`. **Otwarte:** digest już zakolejkowany przed pauzą może wyjść (kolejka nie
+sprawdza pauzy — `email_delivery_suppression_reason` bez zmian), osobny szablon e-mail dla obserwowanej firmy
+(dziś teksty „zapisanego wyszukiwania” z nazwą firmy), wypisanie z alertów firmy w jednym kliknięciu z pauzą.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`

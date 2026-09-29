@@ -20378,4 +20378,246 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- ============================================================================
+-- PS969 / FC969 — pauza alertów (#810) i obserwowanie firmy (#855), migracja 0969.
+-- Działa w trybie ogłoszeniowym (bez profilu kandydata). Kontrole ujemne: definicja
+-- workera z usuniętą klauzulą pauzy / dolną granicą / filtrem firmy (zmiana cofana).
+-- ============================================================================
+\echo '--- PS969 pauza alertów i obserwowanie firmy w trybie ogłoszeniowym ---'
+\set PSA 'f0969000-0000-4000-8000-0000000000a1'
+\set PSB 'f0969000-0000-4000-8000-0000000000a2'
+\set PSE 'f0969000-0000-4000-8000-0000000000b1'
+\set PSC1 'f0969000-0000-4000-8000-0000000000c1'
+\set PSC2 'f0969000-0000-4000-8000-0000000000c2'
+\set PSC3 'f0969000-0000-4000-8000-0000000000c3'
+\set PSJ1 'f0969000-0000-4000-8000-0000000000d1'
+\set PSJ2 'f0969000-0000-4000-8000-0000000000d2'
+\set PSJ3 'f0969000-0000-4000-8000-0000000000d3'
+\set PSJ4 'f0969000-0000-4000-8000-0000000000d4'
+\set PSJ5 'f0969000-0000-4000-8000-0000000000d5'
+reset role; reset app.current_uid;
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql PS969', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'PS969-0 tryb ogłoszeniowy na czas sekcji');
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'PSA','psa@test.be','Pola A','{"role":"candidate","first_name":"Pola","last_name":"A","locale":"nl"}'),
+  (:'PSB','psb@test.be','Pola B','{"role":"candidate","first_name":"Pola","last_name":"B","locale":"en"}'),
+  (:'PSE','pse@test.be','Pola E','{"role":"employer","first_name":"Pola","last_name":"E","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,slug,status) values
+  (:'PSC1','Firma PS969 Jeden','ps969-jeden','verified'),
+  (:'PSC2','Firma PS969 Dwa','ps969-dwa','verified'),
+  (:'PSC3','Firma PS969 Trzy','ps969-trzy','pending');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'PSC1',:'PSE','owner',true);
+
+-- PS969-1: pauza — walidacja i uprawnienia.
+set role authenticated; set app.current_uid = :'PSE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 3)$$,
+  'PERMISSION_DENIED', 'PS969-1a pracodawca nie wstrzymuje alertów');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date)$$,
+  'VALIDATION_FAILED', 'PS969-1b dzisiejsza data odrzucona (wznowienie najwcześniej jutro)');
+select pg_temp.expect_error($$select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 400)$$,
+  'VALIDATION_FAILED', 'PS969-1c pauza dłuższa niż rok odrzucona');
+select saved_search_id as ps1 from public.save_saved_search(
+  'Magazyn PS969', 'nl', '{"keyword":"Magazijnier PS969","categories":["warehouse"]}',
+  '?keyword=Magazijnier+PS969&category=warehouse') \gset
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select saved_search_id as ps2 from public.save_saved_search(
+  'Magazyn B PS969', 'en', '{"keyword":"Magazijnier PS969","categories":["warehouse"]}',
+  '?keyword=Magazijnier+PS969&category=warehouse') \gset
+reset role; reset app.current_uid;
+
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'PSJ1',:'PSC1','ps969-j1','Magazijnier PS969 pauza','warehouse','permanent','Gent','Flandria','active','nl', now() - interval '3 hours'),
+  (:'PSJ2',:'PSC1','ps969-j2','Magazijnier PS969 po pauzie','warehouse','permanent','Gent','Flandria','active','nl', now() - interval '30 minutes');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days'
+  where id in (:'ps1', :'ps2');
+
+-- PS969-2: pauza do za 3 dni — konto A nie dostaje niczego, konto B (bez pauzy) tak.
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 3) is not null as ps_paused \gset
+select pg_temp.assert(:'ps_paused'::boolean, 'PS969-2a RPC zwraca koniec pauzy');
+select pg_temp.assert((select paused_until > now() + interval '2 days' from public.saved_search_alert_pauses where profile_id = :'PSA'),
+  'PS969-2b własna pauza widoczna pod RLS');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select pg_temp.assert(not exists (select 1 from public.saved_search_alert_pauses where profile_id = :'PSA'),
+  'PS969-2c cudzej pauzy nie widać');
+reset role; reset app.current_uid;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.saved_search_alerts where saved_search_id = :'ps1')
+  and not exists (select 1 from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch')
+  and not exists (select 1 from public.notifications where profile_id = :'PSA' and type = 'job_match')
+  and (select next_run_at <= now() from public.saved_searches where id = :'ps1'),
+  'PS969-2d w pauzie: brak alertu, e-maila i powiadomienia; wyszukiwanie zostaje do wykonania');
+select pg_temp.assert(
+  exists (select 1 from public.saved_search_alerts where saved_search_id = :'ps2' and job_id in (:'PSJ1', :'PSJ2'))
+  and exists (select 1 from public.email_deliveries where profile_id = :'PSB' and template = 'jobMatch'),
+  'PS969-2e konto bez pauzy dostaje alert (pauza jest per konto)');
+
+-- PS969-N1: kontrola ujemna — bez klauzuli pauzy worker wysyła alert mimo pauzy.
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure);
+  d := replace(d, 'and (ap.paused_until is null or ap.paused_until <= v_run_at)', 'and true');
+  -- Bez klauzuli pauzy dolna granica „od końca pauzy” (przyszłość) też by nic nie zwróciła — zdejmij ją.
+  d := replace(d, $r$coalesce(v_search.paused_until, '-infinity'::timestamptz)$r$, $r$'-infinity'::timestamptz$r$);
+  execute d;
+end $do$;
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(exists (select 1 from public.saved_search_alerts where saved_search_id = :'ps1'),
+  'PS969-N1 kontrola ujemna: bez klauzuli pauzy konto w pauzie dostaje alert');
+rollback;
+reset role; reset app.current_uid;
+
+-- PS969-3: koniec pauzy — oferta z okresu pauzy nie wraca, oferta po wznowieniu trafia do alertu.
+update public.saved_search_alert_pauses set paused_until = now() - interval '1 hour' where profile_id = :'PSA';
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure);
+  d := replace(d, $r$coalesce(v_search.paused_until, '-infinity'::timestamptz)$r$, $r$'-infinity'::timestamptz$r$);
+  execute d;
+end $do$;
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id order by job_id) from public.saved_search_alerts where saved_search_id = :'ps1') = array[:'PSJ1'::uuid, :'PSJ2'::uuid],
+  'PS969-N2 kontrola ujemna: bez dolnej granicy oferta z okresu pauzy wraca w digeście');
+rollback;
+reset role; reset app.current_uid;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id) from public.saved_search_alerts where saved_search_id = :'ps1') = array[:'PSJ2'::uuid]
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch' and locale = 'nl') = 1
+  and (select count(*) from public.notifications where profile_id = :'PSA' and type = 'job_match'
+         and entity_type = 'saved_search' and entity_id = :'ps1') = 1,
+  'PS969-3 po pauzie: tylko oferta opublikowana po wznowieniu, jeden digest (bez lawiny zaległych)');
+
+-- PS969-4: wcześniejsze wznowienie (null) kończy pauzę „teraz”; brak pauzy = bez zmian.
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause((now() at time zone 'Europe/Brussels')::date + 5);
+select public.set_saved_search_alerts_pause(null) is null as ps_none \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(:'ps_none'::boolean and (select paused_until <= now() from public.saved_search_alert_pauses where profile_id = :'PSA'),
+  'PS969-4 wznowienie null kończy trwającą pauzę od razu');
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select public.set_saved_search_alerts_pause(null);
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.saved_search_alert_pauses where profile_id = :'PSB'),
+  'PS969-4b wznowienie bez pauzy niczego nie tworzy');
+
+-- FC969-1: obserwowanie firmy — uprawnienia i idempotencja.
+delete from public.saved_search_alert_pauses where profile_id = :'PSA';
+delete from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch';
+set role authenticated; set app.current_uid = :'PSE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select * from public.follow_company('f0969000-0000-4000-8000-0000000000c1', 'pl')$$,
+  'PERMISSION_DENIED', 'FC969-1a pracodawca nie obserwuje firm');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select saved_search_id as fc1, created as fc1c from public.follow_company(:'PSC1'::uuid, 'nl') \gset
+select created as fc1d from public.follow_company(:'PSC1'::uuid, 'nl') \gset
+select pg_temp.assert(:'fc1c'::boolean and not :'fc1d'::boolean, 'FC969-1b druga obserwacja tej samej firmy = ten sam wiersz');
+select pg_temp.expect_error($$select * from public.follow_company('f0969000-0000-4000-8000-0000000000c3', 'nl')$$,
+  'NOT_FOUND', 'FC969-1c firma niezweryfikowana nie jest obserwowalna');
+select pg_temp.expect_error($$select * from public.follow_company(gen_random_uuid(), 'nl')$$,
+  'NOT_FOUND', 'FC969-1d nieistniejąca firma');
+select pg_temp.assert(
+  (select count(*) = 1 and min(company_slug) = 'ps969-jeden' from public.get_my_followed_companies()),
+  'FC969-1e własne obserwacje z adresem profilu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select name = 'Firma PS969 Jeden' and company_id = :'PSC1'::uuid and filters = '{}'::jsonb and alerts_enabled
+     from public.saved_searches where id = :'fc1'),
+  'FC969-1f obserwacja = wyszukiwanie z kluczem firmy i pustymi filtrami v1');
+set role authenticated; set app.current_uid = :'PSB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.get_my_followed_companies()) = 0
+  and not exists (select 1 from public.saved_searches where id = :'fc1'),
+  'FC969-1g cudzej obserwacji nie widać (firma nie ma żadnego odczytu obserwujących)');
+select public.set_company_block(:'PSC2'::uuid, true);
+select pg_temp.expect_error($$select * from public.follow_company('f0969000-0000-4000-8000-0000000000c2', 'en')$$,
+  'NOT_FOUND', 'FC969-1h firma zablokowana przez kandydata nie jest obserwowalna');
+reset role; reset app.current_uid;
+
+-- FC969-2: worker — tylko nowe, publiczne oferty obserwowanej firmy, raz na parę.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (:'PSJ3',:'PSC2','ps969-j3','Inna firma PS969','warehouse','permanent','Gent','Flandria','active','nl', now() - interval '20 minutes'),
+  (:'PSJ4',:'PSC1','ps969-j4','Wstrzymana oferta PS969','warehouse','permanent','Gent','Flandria','paused','nl', now() - interval '10 minutes');
+update public.saved_searches set next_run_at = now() - interval '1 minute',
+  last_checked_at = now() - interval '1 day', alerts_since = now() - interval '2 days'
+  where id = :'fc1';
+begin;
+do $do$
+declare d text;
+begin
+  d := pg_get_functiondef('public.process_saved_search_alerts(integer)'::regprocedure);
+  d := replace(d, 'where j.company_id = v_search.company_id', 'where true');
+  execute d;
+end $do$;
+set local role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(exists (select 1 from public.saved_search_alerts where saved_search_id = :'fc1' and job_id = :'PSJ3'),
+  'FC969-N1 kontrola ujemna: bez filtra firmy obserwacja dostaje oferty innej firmy');
+rollback;
+reset role; reset app.current_uid;
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select array_agg(job_id order by job_id) from public.saved_search_alerts where saved_search_id = :'fc1') = array[:'PSJ1'::uuid, :'PSJ2'::uuid]
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch' and locale = 'nl') = 1
+  and (select count(*) from public.notifications where profile_id = :'PSA' and type = 'job_match'
+         and entity_type = 'saved_search' and entity_id = :'fc1') = 1,
+  'FC969-2 obserwacja: oferty tej firmy (aktywne), bez innej firmy i wstrzymanej; jeden digest');
+-- Kolejny przebieg bez nowych ofert: brak drugiego alertu (deduplikacja pary).
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'fc1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'fc1') = 2
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch' and locale = 'nl') = 1,
+  'FC969-3 ponowny przebieg nie dubluje alertów ani e-maila');
+-- Nowa oferta obserwowanej firmy po pierwszym alercie trafia do następnego digestu.
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at)
+  values (:'PSJ5', :'PSC1','ps969-j5','Nowa oferta PS969','warehouse','permanent','Gent','Flandria','active','nl', now());
+update public.saved_searches set next_run_at = now() - interval '1 minute' where id = :'fc1';
+set role service_role;
+select public.process_saved_search_alerts(1000);
+reset role;
+select pg_temp.assert(
+  (select count(*) from public.saved_search_alerts where saved_search_id = :'fc1') = 3
+  and (select count(*) from public.email_deliveries where profile_id = :'PSA' and template = 'jobMatch') = 2,
+  'FC969-4 nowa oferta obserwowanej firmy → kolejny digest');
+
+-- FC969-5: odobserwowanie — wiersz i historia alertów znikają, ponowne wywołanie bez błędu.
+set role authenticated; set app.current_uid = :'PSA'; select pg_temp.assert_client_role();
+select public.unfollow_company(:'PSC1'::uuid);
+select public.unfollow_company(:'PSC1'::uuid);
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.saved_searches where id = :'fc1')
+  and not exists (select 1 from public.saved_search_alerts where saved_search_id = :'fc1'),
+  'FC969-5 odobserwowanie usuwa obserwację i historię alertów (idempotentnie)');
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql PS969: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

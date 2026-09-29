@@ -17,6 +17,7 @@ import {
 } from '@/lib/seo/structured-data';
 import { getCompanyProfile } from '@/lib/companies';
 import { JobCard } from '@/components/public/JobCard';
+import { FollowCompanyButton } from '@/components/candidate/FollowCompanyButton';
 
 /**
  * Profil publiczny firmy `/pracodawcy/<slug>` (#591, SSR/ISR, INDEKSOWALNY).
@@ -198,6 +199,21 @@ export default async function CompanyProfilePage({ params }: PageProps) {
         <p className="mt-4 max-w-2xl text-muted-foreground">
           {company.description || t('noDescription')}
         </p>
+
+        {/* #855: obserwowanie firmy — wyspa klienta (strona zostaje ISR, stan z sesji po załadowaniu). */}
+        <FollowCompanyButton
+          companyId={company.id}
+          companySlug={company.slug}
+          labels={{
+            follow: t('follow'),
+            following: t('following'),
+            followed: t('followed'),
+            unfollowed: t('unfollowed'),
+            login: t('followLogin'),
+            stateError: t('followStateError'),
+            networkError: t('followNetworkError'),
+          }}
+        />
 
         <section className="mt-8" aria-labelledby="company-jobs-heading">
           <h2 id="company-jobs-heading" className="text-lg font-semibold text-foreground">

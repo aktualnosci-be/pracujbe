@@ -6,7 +6,7 @@
  */
 
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
-import { queryRows } from '@/lib/db/sql';
+import { queryRows, rpcRows } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
 import { isLocale, routing, type Locale } from '@/i18n/routing';
 
@@ -83,4 +83,57 @@ export async function loadMySavedSearches(): Promise<SavedSearchesLoad> {
     captureError(error, { area: 'saved-searches.load' });
     return { status: 'error' };
   }
+}
+
+/**
+ * Czasowa pauza alertów konta (#810, 0969) — odczyt pod sesją (RLS `saved_search_alert_pauses_select_own`).
+ * `pausedUntil` = koniec TRWAJĄCEJ pauzy (ISO) albo null (brak/zakończona). Błąd odczytu = jawny `error`,
+ * nie „brak pauzy” (kandydat nie może uznać, że alerty działają, gdy nie znamy stanu).
+ */
+export type AlertsPauseLoad =
+  | { status: 'ready'; pausedUntil: string | null }
+  | { status: 'error' };
+
+export async function loadMyAlertsPause(): Promise<AlertsPauseLoad> {
+  if (!isPortalDataConfigured()) return { status: 'ready', pausedUntil: null };
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return { status: 'ready', pausedUntil: null };
+    const rows = await withPortalTransaction(me, (tx) =>
+      queryRows(tx, 'saved-searches.pause',
+        `SELECT paused_until
+           FROM public.saved_search_alert_pauses
+          WHERE profile_id = $1 AND paused_until > now()`, [me.id]),
+    );
+    const raw = (rows[0] as Record<string, unknown> | undefined)?.['paused_until'];
+    const iso = raw instanceof Date ? raw.toISOString() : typeof raw === 'string' ? raw : '';
+    return { status: 'ready', pausedUntil: iso && !Number.isNaN(new Date(iso).getTime()) ? iso : null };
+  } catch (error) {
+    captureError(error, { area: 'saved-searches.pause.load' });
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Obserwowane firmy kandydata (#855, 0969): wyszukiwania z kluczem firmy → adres profilu.
+ * Klucz mapy = id wyszukiwania; `slug` null = profil niedostępny (firma niezweryfikowana/usunięta).
+ * Awaria odczytu nie blokuje listy — wyszukiwania pokazują się bez odnośnika do profilu.
+ */
+export async function loadMyFollowedCompanies(): Promise<Map<string, { slug: string | null }>> {
+  const out = new Map<string, { slug: string | null }>();
+  if (!isPortalDataConfigured()) return out;
+  try {
+    const me = await getPortalIdentity();
+    if (!me) return out;
+    const rows = await withPortalTransaction(me, (tx) => rpcRows(tx, 'get_my_followed_companies', {}));
+    for (const row of rows) {
+      const r = row as Record<string, unknown>;
+      const id = asStr(r['saved_search_id']);
+      if (!id) continue;
+      out.set(id, { slug: asStr(r['company_slug']) || null });
+    }
+  } catch (error) {
+    captureError(error, { area: 'saved-searches.followed.load' });
+  }
+  return out;
 }
