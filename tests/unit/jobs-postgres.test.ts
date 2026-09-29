@@ -17,6 +17,7 @@ const adapters = vi.hoisted(() => ({
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
 vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobs: adapters.list,
+  getPublicJobsPage: adapters.list,
   getPublicJob: adapters.detail,
   getPublicJobCategoryCounts: adapters.categoryCounts,
   getPublicJobCityCounts: adapters.cityCounts,

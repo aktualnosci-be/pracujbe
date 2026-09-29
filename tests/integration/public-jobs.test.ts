@@ -10,6 +10,7 @@ import {
   getPublicJobTranslations,
   getPublicJobs,
   getPublicJobsCount,
+  getPublicJobsPage,
 } from '../../src/lib/db/public-jobs';
 import { createRuntimePool } from '../../src/lib/db/pool';
 import type { TransactionPool } from '../../src/lib/db/transaction';
@@ -451,6 +452,8 @@ describe('Publiczne oferty — pełne migracje i rzeczywisty PostgreSQL 16', () 
     expect(result.total).toBe(slugs.length);
     expect(Number.isSafeInteger(result.total)).toBe(true);
     expect(await getPublicJobsCount(app!, params)).toBe(slugs.length);
+    // #1230: strona bez licznika = te same wiersze co lista z licznikiem.
+    expect((await getPublicJobsPage(app!, params)).rows).toEqual(result.rows);
     },
   );
 
