@@ -1,6 +1,6 @@
 import type { ErrorReport, ErrorReporter } from '@/lib/error-report';
 
-import { buildErrorWebhookPayload, buildErrorWebhookText, safeErrorCode } from './message';
+import { buildErrorWebhookPayload, buildErrorWebhookText, safeErrorArea, safeErrorCode, safeSqlState } from './message';
 import { errorWebhookFromEnv, type ErrorWebhookTarget } from './url';
 
 /** Ten sam kod najwyżej raz na to okno — TYLKO po udanej (2xx) wysyłce. */
@@ -11,6 +11,14 @@ const MAX_BACKOFF_MS = 60 * 60 * 1000;
 /** Krótki, stały odstęp między próbami po błędzie sieci/serwera (nie rośnie z powtórzeniami). */
 export const ERROR_WEBHOOK_FAILURE_BACKOFF_MS = 5000;
 const MAX_TRACKED_CODES = 200;
+/**
+ * Zbiorczy budżet zgłoszeń z PRZEGLĄDARKI na kanał alarmowy (#1105): najwyżej tyle wiadomości
+ * `client` na okno, niezależnie od adresów i kodów. Endpoint jest anonimowy, więc bez sufitu
+ * rozproszony ruch (wiele adresów × wiele kodów) mógłby zalać webhook, a odpowiedź 429
+ * Discorda wyciszałaby wspólnie także błędy serwera (`blockedUntil`).
+ */
+export const ERROR_WEBHOOK_CLIENT_BUDGET = 10;
+export const ERROR_WEBHOOK_CLIENT_BUDGET_WINDOW_MS = 10 * 60 * 1000;
 
 export interface ErrorWebhookDeps {
   fetch?: typeof fetch;
@@ -21,6 +29,8 @@ export interface ErrorWebhookDeps {
   dedupMs?: number;
   timeoutMs?: number;
   failureBackoffMs?: number;
+  clientBudget?: number;
+  clientBudgetWindowMs?: number;
 }
 
 export type ErrorWebhookResult = 'sent' | 'disabled' | 'deduplicated' | 'rate_limited' | 'failed';
@@ -49,6 +59,10 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
   const dedupMs = deps.dedupMs ?? ERROR_WEBHOOK_DEDUP_MS;
   const timeoutMs = deps.timeoutMs ?? ERROR_WEBHOOK_TIMEOUT_MS;
   const failureBackoffMs = deps.failureBackoffMs ?? ERROR_WEBHOOK_FAILURE_BACKOFF_MS;
+  const clientBudget = deps.clientBudget ?? ERROR_WEBHOOK_CLIENT_BUDGET;
+  const clientBudgetWindowMs = deps.clientBudgetWindowMs ?? ERROR_WEBHOOK_CLIENT_BUDGET_WINDOW_MS;
+  /** Czasy prób wysyłki błędów z przeglądarki w bieżącym oknie budżetu (nie liczy deduplikacji). */
+  let clientAttempts: number[] = [];
 
   // `lastSent` = ostatnia POTWIERDZONA (2xx) wysyłka tego kodu — jedyny stan liczący się do
   // pełnego okna deduplikacji. `lastFailure` = ostatnia nieudana próba (sieć/timeout/5xx) —
@@ -76,7 +90,11 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
     const code = safeErrorCode(report.code);
     const source = report.source === 'client' ? 'client' : 'server';
     // Błędy przeglądarki mają osobne okno deduplikacji — nie zagłuszają błędów serwera.
-    const key = source === 'client' ? `client:${code}` : code;
+    // Obszar (#1066) należy do klucza: ten sam kod z różnych zadań/workerów to osobne wpisy.
+    const area = source === 'client' ? undefined : safeErrorArea(report.area);
+    const sqlstate = source === 'client' ? undefined : safeSqlState(report.sqlstate);
+    const baseKey = area ? `${code}@${area}${sqlstate ? `#${sqlstate}` : ''}` : code;
+    const key = source === 'client' ? `client:${baseKey}` : baseKey;
     const at = now();
 
     if (at < blockedUntil) {
@@ -98,12 +116,23 @@ export function createErrorWebhookSender(deps: ErrorWebhookDeps = {}) {
       return 'deduplicated';
     }
 
+    if (source === 'client') {
+      clientAttempts = clientAttempts.filter((time) => at - time < clientBudgetWindowMs);
+      if (clientAttempts.length >= clientBudget) {
+        suppressed.set(key, (suppressed.get(key) ?? 0) + 1);
+        return 'rate_limited';
+      }
+      clientAttempts.push(at);
+    }
+
     const repeated = suppressed.get(key) ?? 0;
     suppressed.delete(key);
     inFlight.add(key);
 
     const text = buildErrorWebhookText({
       code,
+      area,
+      sqlstate,
       route: report.route,
       release: source === 'client' && report.release ? report.release : release(),
       source,

@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import pg from 'pg';
 import { loadMigrations } from './migration-files.mjs';
-import { applyMigrations, planMigrations } from './migrate.mjs';
+import { applyMigrations, describeMigrationError, planMigrations } from './migrate.mjs';
 
 /** Jedna historia bootstrapu i domeny; kolejne zmiany dopisujemy po ostatnim numerze. */
 export async function loadProductionMigrations(root = fileURLToPath(new URL('../../', import.meta.url))) {
@@ -60,9 +60,10 @@ export async function main() {
       console.log(`Migracja produkcyjna: ${result.applied} nowych, ${result.total} łącznie.`);
     }
     return 0;
-  } catch {
-    // Sterownik może umieścić dane i parametry SQL w błędzie — nie wypisujemy ich.
-    console.error('Migracja produkcyjna nie powiodła się. Sprawdź historię i uprawnienia migratora.');
+  } catch (error) {
+    // Sterownik może umieścić dane i parametry SQL w błędzie — nie wypisujemy ich; operator
+    // dostaje nazwę migracji i SQLSTATE (#1105), bez komunikatu i szczegółów bazy.
+    console.error(`Migracja produkcyjna nie powiodła się: ${describeMigrationError(error)}. Sprawdź historię i uprawnienia migratora.`);
     return 1;
   } finally {
     await client.end();

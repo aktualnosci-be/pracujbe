@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -94,8 +95,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const description = t(`city_${city}`);
 
   // Pusty landing (0 ofert) działa dla użytkownika, ale nie jest indeksowany (thin content, #299).
-  // Ten sam filtr co treść strony, więc w trybie demo wynik jest spójny z listą.
-  const { total } = await getJobs({ locale, city: name, page: 1, pageSize: 1 });
+  // Ten sam filtr co treść strony (wszystkie nazwy miasta, #189), więc indeksowalność i wynik
+  // są spójne z listą także w trybie demo (#1119: dawniej tekst po nazwie w języku strony).
+  const { total } = await getJobs({ locale, locations: cityAliases(city), page: 1, pageSize: 1 });
   const indexable = total > 0;
 
   return {
@@ -110,7 +112,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       siteName: 'Pracuj.be',
       type: 'website',
-      locale,
+      ...openGraphLocales(locale),
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
     twitter: { card: 'summary_large_image', title, description, images: [shareImage] },

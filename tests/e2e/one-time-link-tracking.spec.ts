@@ -45,3 +45,46 @@ test('jednorazowe linki nie uruchamiają beaconu Cloudflare Web Analytics po wcz
     expect(response?.headers()['referrer-policy'], 'jednorazowy link bez Referer').toBe('no-referrer');
   }
 });
+
+test('nawigacja kliencka z trasy publicznej na prywatną nie zostaje w karcie z beaconem (#1046)', async ({ page, context, baseURL }) => {
+  const consent = {
+    v: process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION ?? '2.0',
+    categories: { necessary: true, preferences: true, analytics: true, marketing: true },
+    ts: new Date().toISOString(),
+    id: 'spa-navigation-tracking-e2e',
+  };
+  await context.addCookies([{
+    name: 'pracujbe_consent',
+    value: encodeURIComponent(JSON.stringify(consent)),
+    url: baseURL!,
+    sameSite: 'Lax',
+  }]);
+
+  const trackerRequests: string[] = [];
+  await page.route(TRACKER_URL, async (route) => {
+    trackerRequests.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
+  });
+
+  await page.goto('/pl');
+  await expect.poll(() => trackerRequests.length).toBeGreaterThan(0);
+  // Beacon dostaje wyłączone śledzenie nawigacji SPA.
+  const config = await page.locator('script#cf-web-analytics').getAttribute('data-cf-beacon');
+  expect(JSON.parse(config!)).toMatchObject({ spa: false });
+
+  // Znacznik w oknie: znika tylko przy pełnym przeładowaniu dokumentu (klik SPA go zachowuje).
+  await page.evaluate(() => { (window as unknown as { __spaMarker?: string }).__spaMarker = 'same-document'; });
+  trackerRequests.length = 0;
+
+  await page.locator('a[href$="/pl/logowanie"]').first().click();
+  await page.waitForURL(/\/pl\/logowanie$/);
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1_000);
+
+  expect(
+    await page.evaluate(() => (window as unknown as { __spaMarker?: string }).__spaMarker),
+    'przejście na trasę prywatną ma być pełnym przeładowaniem (nowy dokument bez beaconu)',
+  ).toBeUndefined();
+  expect(await page.locator('script#cf-web-analytics').count()).toBe(0);
+  expect(trackerRequests, 'zewnętrzne żądania po przejściu na /pl/logowanie').toEqual([]);
+});

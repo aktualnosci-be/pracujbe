@@ -28,10 +28,7 @@ import {
 /**
  * Zadania utrzymaniowe (P1-20) — wywoływane przez cron Railway (`scripts/railway-cron-call.mjs`,
  * POST co godzinę, `CRON_AUTH_SECRET` = `MAINTENANCE_SECRET`; patrz `docs/railway/README.md`).
- * Zwalnia porzucone rezerwacje kodów rabatowych (`release_stale_discount_reservations`) oraz
- * otwarte, nieukończone checkouty (`release_stale_checkout_intents`) — inaczej limit kodu i
- * blokada „jeden otwarty checkout na firmę" utknęłyby po porzuceniu płatności. #72: zmienia
- * przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
+ * #72: zmienia przeterminowane aktywne oferty na `expired` (`expire_due_jobs`, 0085; idempotentne).
  * #100: alerty zapisanych wyszukiwań (`process_saved_search_alerts`, 0092) — digest nowych
  * ofert per wyszukiwanie najwyżej raz na dobę/tydzień, bez ponownej wysyłki tej samej oferty;
  * e-maile trafiają do outboxa (`enqueue_email`), wysyła je `/api/email/process`.
@@ -135,8 +132,6 @@ async function run(request: Request): Promise<Response> {
   }
 
   type Task =
-    | 'discounts'
-    | 'checkouts'
     | 'aiBudgetReservations'
     | 'jobExpiry'
     | 'portalMode'
@@ -166,12 +161,6 @@ async function run(request: Request): Promise<Response> {
     }
   }
 
-  const releasedDiscounts = await task('discounts', 'release_stale_discount_reservations', {
-    p_older_than_hours: 24,
-  });
-  const releasedCheckouts = await task('checkouts', 'release_stale_checkout_intents', {
-    p_older_than_minutes: 30,
-  });
   // #609: rezerwacje budżetu AI porzucone po awarii procesu (crash/restart między rezerwacją
   // i rozliczeniem) — GC po TTL, niezależnie od pozostałych zadań.
   const releasedAiBudgetReservations = await task(
@@ -306,15 +295,17 @@ async function run(request: Request): Promise<Response> {
     failures.push({ task: 'storageDeletions', error });
   }
 
-  const [first] = failures;
-  if (first) {
-    captureError(first.error, { area: 'maintenance.gc', task: first.task });
+  if (failures.length > 0) {
+    // #1066: każde nieudane zadanie osobno; `task` dopina się do obszaru w `captureError`
+    // (`maintenance.gc.retention`), więc operator odróżnia GC bucketu od retencji czy
+    // wygaszania ofert, a deduplikacja (kod, obszar) nie zlewa ich w jeden wpis.
+    for (const failure of failures) {
+      captureError(failure.error, { area: 'maintenance.gc', task: failure.task });
+    }
     return NextResponse.json({ error: 'gc failed' }, { status: 503 });
   }
   return NextResponse.json({
     ok: true,
-    releasedDiscounts: releasedDiscounts ?? 0,
-    releasedCheckouts: releasedCheckouts ?? 0,
     releasedAiBudgetReservations: releasedAiBudgetReservations ?? 0,
     expiredJobs: expiredJobs ?? 0,
     matches,

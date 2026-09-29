@@ -25,7 +25,6 @@ i [`data-map.generated.md`](data-map.generated.md) sekcja 2 (usługi) i 4 (treś
 | Google Analytics | analityka po zgodzie | ID pomiaru + zgoda `analytics` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | Meta Pixel | marketing po zgodzie | ID piksela + zgoda `marketing` | do ustalenia | do ustalenia | do ustalenia | do ustalenia |
 | VIES (Komisja Europejska) | sprawdzenie VAT firmy | akcja administratora | do ustalenia | do ustalenia | do ustalenia | nie dotyczy / do ustalenia |
-| Stripe | płatności — wyłączone | tylko `BILLING_ENABLED=true` | nie dotyczy do czasu włączenia | — | — | — |
 
 Stan konfiguracji produkcji (które klucze są ustawione) nie wynika z repozytorium — **do
 potwierdzenia przez właściciela** w panelu Railway, bez publikowania wartości.
