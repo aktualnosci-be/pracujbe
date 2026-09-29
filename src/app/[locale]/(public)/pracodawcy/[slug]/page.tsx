@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -105,7 +106,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       siteName: 'Pracuj.be',
       type: 'website',
-      locale,
+      ...openGraphLocales(locale),
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
     twitter: { card: 'summary_large_image', title, description, images: [shareImage] },

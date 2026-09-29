@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
@@ -61,14 +62,6 @@ import {
 const BASE_PATH = '/oferty-pracy';
 const PAGE_SIZE = 12;
 
-/** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
-const OG_LOCALE: Record<string, string> = {
-  pl: 'pl_PL',
-  nl: 'nl_BE',
-  fr: 'fr_BE',
-  en: 'en_GB',
-};
-
 type SearchParams = Record<string, string | string[] | undefined>;
 
 type PageProps = {
@@ -127,7 +120,7 @@ export async function generateMetadata({
       url,
       siteName: 'Pracuj.be',
       type: 'website',
-      locale: OG_LOCALE[locale] ?? locale,
+      ...openGraphLocales(locale),
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
     twitter: {

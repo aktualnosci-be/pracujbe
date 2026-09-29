@@ -12,11 +12,19 @@ test("bez sieci nawigacja pokazuje wielojęzyczny ekran offline w nowej identyfi
   context,
 }) => {
   await page.goto("/pl");
-  // Rejestrujemy SW jawnie: test dotyczy zachowania fallbacku, nie momentu rejestracji.
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.register("/sw.js");
-    await navigator.serviceWorker.ready;
-  });
+  // Czekamy na rejestrację, którą aplikacja wykonuje sama (`ServiceWorkerRegister`, adres
+  // `/sw.js?v=<build>` od #1088). Własne `register("/sw.js")` z testu miało INNY adres skryptu
+  // niż aplikacja, więc po przeładowaniu aplikacja podmieniała workera w trakcie testu
+  // (install → activate → `clients.claim`) i nawigacja offline bywała przerywana
+  // (`ERR_ABORTED`) zamiast dostać fallback — flaky mimo niezmienionej logiki fallbacku.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        return registration?.active?.state ?? "";
+      }),
+    )
+    .toBe("activated");
   // Pierwsze załadowanie nie jest jeszcze kontrolowane przez SW — przeładuj pod jego kontrolą.
   await page.reload();
   await expect

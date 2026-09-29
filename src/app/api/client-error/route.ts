@@ -20,6 +20,9 @@ import { createFunnelRateLimiter } from '@/lib/job-funnel/rate-limit';
  *   NIGDY z `X-Forwarded-For`/`X-Real-IP` wprost, który klient może dowolnie zmieniać przy
  *   każdym żądaniu (jak `#646` dla lejka ofert). Adres nie trafia do wiadomości, logów ani
  *   bazy. Cookies nie są czytane.
+ * - Zbiorczy budżet na kanał (#1105): niezależnie od adresów najwyżej
+ *   `ERROR_WEBHOOK_CLIENT_BUDGET` wiadomości z przeglądarki na okno (`send.ts`) — rozproszony
+ *   ruch nie zaleje webhooka ani nie wywoła 429 Discorda, który wyciszałby też błędy serwera.
  * - Brak (poprawnego) `ERROR_WEBHOOK_URL` = 204 bez wysyłki.
  * Odpowiedzi bez treści, zawsze `no-store`.
  */

@@ -13,8 +13,7 @@ Legenda: `[ ]` do sprawdzenia · `[x]` potwierdzone.
 - [ ] RLS **enabled** na każdej tabeli z danymi użytkownika (deny-by-default).
 - [ ] Każda tabela ma polityki `SELECT/INSERT/UPDATE/DELETE` zawężone do właściciela /
       członka firmy (nie polegaj na filtrach w aplikacji jako jedynej granicy).
-- [ ] Tabele serwisowe (`audit_logs`, `system_events`, `email_deliveries`,
-      `discount_codes`) mają RLS enabled i **brak polityk** (dostęp tylko service role).
+- [ ] Tabele serwisowe (`audit_logs`, `system_events`, `email_deliveries`) mają RLS enabled i **brak polityk** (dostęp tylko service role).
 - [ ] Funkcje pomocnicze RLS są `SECURITY DEFINER` + `set search_path = public`
       (`is_company_member`, `is_company_admin`, `company_is_verified`,
       `is_job_company_member`, `job_is_public`, `owns_candidate_profile`).
