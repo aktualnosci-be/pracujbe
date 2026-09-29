@@ -21541,4 +21541,140 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- ============================================================================
+-- OD981. Decyzje właściciela 29.09.2026 (migracja 0981 — numer tymczasowy):
+--   #1222 ponowne otwarcie oferty odświeża published_at (nowa publikacja: alerty, filtr daty),
+--   #1233 usunięcie konta pracodawcy cofa oczekujące zaproszenia na jego adres i zeruje adres
+--         w rozstrzygniętych (ślad zdarzenia zostaje).
+-- ============================================================================
+\echo '--- OD981 reopen = nowa publikacja; zaproszenia usuwanego pracodawcy ---'
+reset role; reset app.current_uid;
+\set ODO  'e9810000-0000-4000-8000-000000000001'
+\set ODX  'e9810000-0000-4000-8000-000000000002'
+\set ODY  'e9810000-0000-4000-8000-000000000003'
+\set ODC  'e9810000-0000-4000-8000-0000000000c1'
+\set ODJ  'e9810000-0000-4000-8000-0000000000b1'
+\set ODJ2 'e9810000-0000-4000-8000-0000000000b2'
+\set ODI1 'e9810000-0000-4000-8000-0000000000d1'
+\set ODI2 'e9810000-0000-4000-8000-0000000000d2'
+\set ODI3 'e9810000-0000-4000-8000-0000000000d3'
+\set ODI4 'e9810000-0000-4000-8000-0000000000d4'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ODO','od-owner@test.be','Olga Od','{"role":"employer","first_name":"Olga","last_name":"Od","locale":"pl"}'),
+  (:'ODX','od-x@test.be','Xawery Od','{"role":"employer","first_name":"Xawery","last_name":"Od","locale":"nl"}'),
+  (:'ODY','od-y@test.be','Yvonne Od','{"role":"employer","first_name":"Yvonne","last_name":"Od","locale":"fr"}');
+insert into public.companies(id, name, status) values (:'ODC', 'Firma OD981', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'ODC', :'ODO', 'owner', true), (:'ODC', :'ODX', 'recruiter', true), (:'ODC', :'ODY', 'member', true);
+
+-- --- #1222: reopen -----------------------------------------------------------------------------
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at,apply_email) values
+  (:'ODJ',  :'ODC','od981-reopen','Magazynier OD981 unikat','warehouse','permanent','Antwerpia','Flandria','closed','pl', now() - interval '60 days','praca@example.be'),
+  (:'ODJ2', :'ODC','od981-pause', 'Magazynier OD981 pauza','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '20 days','praca@example.be');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'ODJ',  'pl', 'Magazynier OD981 unikat', 'Opis oferty magazynowej OD981.', array['Kompletacja']),
+  (:'ODJ2', 'pl', 'Magazynier OD981 pauza',  'Opis oferty magazynowej OD981.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'ODJ', 'pl', 'mandatory', 0, 'Dyspozycyjność'), (:'ODJ2', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- OD981-N1 (kontrola ujemna): definicja sprzed 0981 (warunek z 0085) zostawia starą datę.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.set_job_status(uuid,text)'::regprocedure);
+  d := replace(d, 'when p_action = ''reopen'' then now()', 'when false then now()');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select public.set_job_status(:'ODJ'::uuid, 'reopen');
+reset role;
+select pg_temp.assert((select published_at < now() - interval '59 days' from public.jobs where id = :'ODJ'),
+  'OD981-N1 kontrola ujemna: bez zmiany reopen zostawia published_at sprzed 60 dni');
+rollback;
+
+-- OD981-1: reopen zamkniętej oferty → published_at = teraz.
+set role authenticated; set app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'ODJ'::uuid, 'reopen') = 'active', 'OD981-1 reopen closed → active');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'active' and published_at > now() - interval '1 minute'
+                         from public.jobs where id = :'ODJ'),
+  'OD981-1b reopen odświeża published_at (nowa publikacja)');
+-- OD981-2: oferta ponownie otwarta trafia do okna alertów zapisanych wyszukiwań (published_at >= watermark).
+set role service_role;
+select count(*) as od_alert from public.saved_search_jobs_after(
+  'pl', 'OD981 unikat', null, null, null, null, null, null, null, null, null,
+  now() - interval '1 hour', null, null, null, 100, null) where id = :'ODJ' \gset
+reset role;
+select pg_temp.assert(:od_alert = 1, 'OD981-2 alert zapisanego wyszukiwania widzi ponownie otwartą ofertę');
+-- OD981-3: pauza i wznowienie NIE zmieniają daty publikacji (tylko reopen).
+set role authenticated; set app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select public.set_job_status(:'ODJ2'::uuid, 'pause');
+select public.set_job_status(:'ODJ2'::uuid, 'resume');
+reset role; reset app.current_uid;
+select pg_temp.assert((select published_at < now() - interval '19 days' from public.jobs where id = :'ODJ2'),
+  'OD981-3 pauza/wznowienie zachowują published_at');
+
+-- --- #1233: zaproszenia usuwanego pracodawcy ----------------------------------------------------
+insert into public.company_invitations(id, company_id, email, role, status, invited_by, responded_at) values
+  (:'ODI1', :'ODC', 'OD-X@test.be', 'recruiter', 'pending',  :'ODO', null),
+  (:'ODI2', :'ODC', 'od-x@test.be', 'member',    'accepted', :'ODO', now() - interval '3 days'),
+  (:'ODI3', :'ODC', 'inna.osoba@test.be', 'member', 'pending', :'ODO', null),
+  (:'ODI4', :'ODC', 'od-y@test.be', 'member',    'pending',  :'ODO', null);
+insert into public.email_deliveries
+  (profile_id, to_email, template, locale, subject, status, entity_type, entity_id, idempotency_key, payload, queued_at, next_attempt_at, attempts)
+values
+  (null, 'od-x@test.be', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued', 'company_invitation', :'ODI1',
+   'od981-signup-x', '{}'::jsonb, now(), now(), 0),
+  (null, 'inna.osoba@test.be', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued', 'company_invitation', :'ODI3',
+   'od981-signup-other', '{}'::jsonb, now(), now(), 0);
+
+-- OD981-4: CHECK — oczekujące zaproszenie musi mieć adres (zerować wolno tylko rozstrzygnięte).
+select pg_temp.expect_error('update public.company_invitations set email = null where id = ''' || :'ODI3' || '''',
+  'company_invitations_email_when_pending', 'OD981-4 oczekujące zaproszenie bez adresu odrzucone');
+
+-- OD981-N2 (kontrola ujemna): bez nowego bloku zaproszenia Y zostają oczekujące z adresem.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.erase_employer_subject(uuid,text,uuid)'::regprocedure);
+  d := replace(d, 'where i.email is not null and lower(i.email::text) = lower(v_email)', 'where false');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ODY'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('od-y@test.be');
+reset role;
+select pg_temp.assert((select status = 'pending' and email = 'od-y@test.be' from public.company_invitations where id = :'ODI4'),
+  'OD981-N2 kontrola ujemna: bez zmiany zaproszenie usuniętej osoby dalej oczekuje z jej adresem');
+rollback;
+reset role; reset app.current_uid;
+
+-- OD981-5: usunięcie konta X — oczekujące cofnięte, adres wyzerowany w obu, ślad zostaje.
+set role authenticated; set app.current_uid = :'ODX'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('od-x@test.be')::text as od_erase \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'revoked' and email is null and responded_at is not null and company_id = :'ODC' and role = 'recruiter'
+     from public.company_invitations where id = :'ODI1')
+  and (select status = 'accepted' and email is null and role = 'member' from public.company_invitations where id = :'ODI2'),
+  'OD981-5 oczekujące → revoked, adres wyzerowany także w rozstrzygniętym; firma/rola/status zostają');
+select pg_temp.assert(
+  (select status = 'pending' and email = 'inna.osoba@test.be' from public.company_invitations where id = :'ODI3')
+  and (select status = 'pending' and email = 'od-y@test.be' from public.company_invitations where id = :'ODI4')
+  and exists (select 1 from public.email_deliveries where idempotency_key = 'od981-signup-other')
+  and not exists (select 1 from public.email_deliveries where idempotency_key = 'od981-signup-x'),
+  'OD981-5b zaproszenia innych osób nietknięte; e-mail rejestracyjny usuniętej osoby usunięty z kolejki');
+select pg_temp.assert(
+  (select (details->>'invitationsRevoked')::int = 1 and (details->>'invitationsAnonymized')::int = 2
+     from public.data_rights_requests where subject_id = :'ODX' and kind = 'erasure'),
+  'OD981-5c liczniki w śladzie wniosku');
+-- OD981-6: ponowna rejestracja tym adresem nie widzi zaproszenia (nic nie oczekuje na ten adres).
+select pg_temp.assert(not exists (select 1 from public.company_invitations
+                                    where lower(email::text) = 'od-x@test.be' and status = 'pending'),
+  'OD981-6 po usunięciu na adres nie czeka żadne zaproszenie');
+
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

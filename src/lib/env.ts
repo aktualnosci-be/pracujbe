@@ -231,6 +231,13 @@ export function isFileStorageConfigured(): boolean {
  * Dostawcy opcjonalni (poczta EmailLabs/Resend, worker poczty, webhook błędów) NIE blokują gotowości — ich stan raportuje
  * /api/health jako `checks` (obserwowalność bez twardego 503).
  */
+/** Webhook EmailLabs gotowy: sekret, a w produkcji także login i hasło Basic auth (#1234). */
+export function isEmailLabsWebhookConfigured(): boolean {
+  if (!process.env.EMAILLABS_WEBHOOK_SECRET?.trim()) return false;
+  if (!isProductionMode()) return true;
+  return Boolean(process.env.EMAILLABS_WEBHOOK_BASIC_USER?.trim() && process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD);
+}
+
 export function readinessChecks(): Record<string, boolean> {
   return {
     database: isDatabaseConfigured(),
@@ -245,7 +252,8 @@ export function readinessChecks(): Record<string, boolean> {
     // Dostawca wybrany przez `EMAIL_PROVIDER` (albo domyślny) ma komplet kluczy — nazwa
     // dostawcy w `/api/health` jako `emailProvider`.
     emailProviderReady: emailProviderFromEnv().ready,
-    emaillabsWebhook: Boolean(process.env.EMAILLABS_WEBHOOK_SECRET?.trim()),
+    // #1234: w produkcji webhook działa tylko z Basic auth (inaczej route zwraca 503).
+    emaillabsWebhook: isEmailLabsWebhookConfigured(),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
     // #13: osobny sekret maintenance, rozdział sekretów cron, przejściowy CRON_SECRET.
     ...cronSecretChecks(),

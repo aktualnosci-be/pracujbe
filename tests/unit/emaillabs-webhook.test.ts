@@ -1,6 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { emailLabsChecksum, verifyEmailLabsWebhook } from '@/lib/email/emaillabs-webhook';
+import {
+  EMAILLABS_WEBHOOK_MAX_AGE_MS,
+  emailLabsChecksum,
+  isEmailLabsWebhookDateFresh,
+  parseEmailLabsWebhookDate,
+  verifyEmailLabsWebhook,
+} from '@/lib/email/emaillabs-webhook';
 import { normalizeEmailLabsEvent } from '@/lib/email/provider-events';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
@@ -26,6 +32,11 @@ const SECRET = 'emaillabs-webhook-secret-test';
 const DATE = '2026-09-25 09:00:00';
 const REQUEST_ID = 'req-7f3a';
 const MESSAGE_ID = '0a1b2c3d-0000-4000-8000-000000000001@pracuj.be';
+/** „Teraz” w testach = chwila z `DATE` (czas bez strefy czytany jako UTC). */
+const NOW = Date.UTC(2026, 8, 25, 9, 0, 0);
+const BASIC_USER = 'el';
+const BASIC_PASSWORD = 'haslo';
+const GOOD_BASIC = `Basic ${Buffer.from(`${BASIC_USER}:${BASIC_PASSWORD}`).toString('base64')}`;
 
 function event(status: string, extra: Record<string, unknown> = {}) {
   return {
@@ -44,14 +55,22 @@ function event(status: string, extra: Record<string, unknown> = {}) {
 
 function request(
   body: unknown,
-  opts: { secret?: string; requestId?: string | null; checksum?: string; authorization?: string } = {},
+  opts: {
+    secret?: string;
+    requestId?: string | null;
+    checksum?: string;
+    authorization?: string | null;
+    date?: string;
+  } = {},
 ): Request {
   const requestId = opts.requestId === undefined ? REQUEST_ID : opts.requestId;
-  const headers: Record<string, string> = { 'x-webhook-date': DATE };
+  const date = opts.date ?? DATE;
+  const headers: Record<string, string> = { 'x-webhook-date': date };
   if (requestId !== null) headers['request-id'] = requestId;
   headers['x-webhook-checksum'] = opts.checksum ??
-    emailLabsChecksum(opts.secret ?? SECRET, DATE, requestId ?? '');
-  if (opts.authorization) headers['authorization'] = opts.authorization;
+    emailLabsChecksum(opts.secret ?? SECRET, date, requestId ?? '');
+  const authorization = opts.authorization === undefined ? GOOD_BASIC : opts.authorization;
+  if (authorization) headers['authorization'] = authorization;
   return new Request('https://pracuj.be/api/email/webhook/emaillabs', {
     method: 'POST',
     headers,
@@ -77,10 +96,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   prodMode.value = true;
   process.env.EMAILLABS_WEBHOOK_SECRET = SECRET;
-  delete process.env.EMAILLABS_WEBHOOK_BASIC_USER;
-  delete process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD;
+  process.env.EMAILLABS_WEBHOOK_BASIC_USER = BASIC_USER;
+  process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD = BASIC_PASSWORD;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
   resetFakeDb(null);
   mockRpc();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('normalizeEmailLabsEvent — mapowanie statusów', () => {
@@ -155,7 +180,81 @@ describe('verifyEmailLabsWebhook', () => {
   });
 });
 
+describe('świeżość X-Webhook-Date (#1234)', () => {
+  it('tolerancyjny parser: ISO, RFC 2822, czas bez strefy (UTC), epoka s/ms; śmieci = null', () => {
+    expect(parseEmailLabsWebhookDate('2026-09-25 09:00:00')).toBe(NOW);
+    expect(parseEmailLabsWebhookDate('2026-09-25T09:00:00')).toBe(NOW);
+    expect(parseEmailLabsWebhookDate('2026-09-25T11:00:00+02:00')).toBe(NOW);
+    expect(parseEmailLabsWebhookDate('Fri, 25 Sep 2026 09:00:00 GMT')).toBe(NOW);
+    expect(parseEmailLabsWebhookDate(String(NOW / 1000))).toBe(NOW);
+    expect(parseEmailLabsWebhookDate(String(NOW))).toBe(NOW);
+    for (const bad of [null, '', 'wczoraj', '2026-02-31 10:00:00', '12:00', 'x'.repeat(300)]) {
+      expect(parseEmailLabsWebhookDate(bad)).toBeNull();
+    }
+  });
+
+  it('okno ±24 h: w oknie = świeże; starsze, dalsza przyszłość albo nieczytelne = nie', () => {
+    expect(isEmailLabsWebhookDateFresh(DATE, NOW)).toBe(true);
+    expect(isEmailLabsWebhookDateFresh(DATE, NOW + EMAILLABS_WEBHOOK_MAX_AGE_MS)).toBe(true);
+    expect(isEmailLabsWebhookDateFresh(DATE, NOW + EMAILLABS_WEBHOOK_MAX_AGE_MS + 1000)).toBe(false);
+    expect(isEmailLabsWebhookDateFresh(DATE, NOW - EMAILLABS_WEBHOOK_MAX_AGE_MS - 1000)).toBe(false);
+    expect(isEmailLabsWebhookDateFresh('wczoraj', NOW)).toBe(false);
+  });
+
+  it('suma poprawna, ale data sprzed ponad doby → odrzucone (przechwycone nagłówki po GC inboxu)', () => {
+    const sum = emailLabsChecksum(SECRET, DATE, REQUEST_ID);
+    const headers = { date: DATE, requestId: REQUEST_ID, checksum: sum, authorization: null };
+    expect(verifyEmailLabsWebhook({ secret: SECRET, now: NOW }, headers)).toBe(true);
+    expect(verifyEmailLabsWebhook({ secret: SECRET, now: NOW + 31 * 24 * 3600 * 1000 }, headers)).toBe(false);
+  });
+
+  it('inbox pamięta Request-Id dłużej niż okno świeżości (minimum GC z migracji 0163)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const sql = readFileSync('supabase/migrations/0163_maintenance_technical_gc.sql', 'utf8');
+    const min = /greatest\(coalesce\(p_older_than_days, 30\), (\d+)\)/.exec(sql);
+    expect(min).not.toBeNull();
+    const minDaysMs = Number(min?.[1]) * 24 * 3600 * 1000;
+    // Okno obejmuje przeszłość i przyszłość: podpisane żądanie jest ważne najwyżej 2 × okno.
+    expect(minDaysMs).toBeGreaterThan(2 * EMAILLABS_WEBHOOK_MAX_AGE_MS);
+  });
+
+  it('requireBasic bez skonfigurowanego loginu = zawsze odrzucone (kontrola ujemna produkcji)', () => {
+    const sum = emailLabsChecksum(SECRET, DATE, REQUEST_ID);
+    const headers = { date: DATE, requestId: REQUEST_ID, checksum: sum, authorization: GOOD_BASIC };
+    expect(verifyEmailLabsWebhook({ secret: SECRET, requireBasic: true }, headers)).toBe(false);
+    expect(verifyEmailLabsWebhook({ secret: SECRET, requireBasic: false }, headers)).toBe(true);
+  });
+});
+
 describe('POST /api/email/webhook/emaillabs', () => {
+  it('produkcja bez Basic auth → 503 bez przetwarzania (#1234)', async () => {
+    delete process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD;
+    const res = await post(request([event('hardbounce')], { authorization: null }));
+    expect(res.status).toBe(503);
+    expect(fakeDb.calls).toHaveLength(0);
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+
+  it('poza produkcją bez Basic auth działa jak dotąd (kontrola ujemna trybu)', async () => {
+    prodMode.value = false;
+    delete process.env.EMAILLABS_WEBHOOK_BASIC_USER;
+    delete process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD;
+    const res = await post(request([event('ok')], { authorization: null }));
+    expect(res.status).toBe(200);
+  });
+
+  it('produkcja: brak nagłówka Authorization → 401', async () => {
+    const res = await post(request([event('hardbounce')], { authorization: null }));
+    expect(res.status).toBe(401);
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
+  it('stara data z poprawną sumą → 401, nic nie trafia do bazy', async () => {
+    const res = await post(request([event('hardbounce')], { date: '2026-08-01 09:00:00' }));
+    expect(res.status).toBe(401);
+    expect(fakeDb.calls).toHaveLength(0);
+  });
+
   it('brak sekretu → 503 bez przetwarzania (fail-closed) i sygnał w produkcji', async () => {
     delete process.env.EMAILLABS_WEBHOOK_SECRET;
     const res = await post(request([event('hardbounce')]));
