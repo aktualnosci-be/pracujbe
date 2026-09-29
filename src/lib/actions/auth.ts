@@ -48,6 +48,7 @@ import { getDomainPool } from '@/lib/db/runtime';
 import { withUserTransaction } from '@/lib/db/transaction';
 import { env, isPortalAuthConfigured } from '@/lib/env';
 import { AppError, isAppError, type ErrorCode } from '@/lib/errors';
+import { accountRateLimitKey } from '@/lib/auth/account-rate-limit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
@@ -225,6 +226,16 @@ async function discardSession(
   await clearSessionCookies();
 }
 
+/** Limit prób liczony na konto/adres (bez adresu IP); identyfikator to skrót adresu, nie sam adres. */
+async function checkAccountLimit(
+  action: string,
+  email: string,
+  max: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  return checkRateLimit(action, { max, windowSeconds, perIp: false, identifier: accountRateLimitKey(email) });
+}
+
 /**
  * Logowanie e-mail + hasło. Sukces → bezpieczny `next` (np. oferta, z której kandydat przyszedł)
  * albo panel wg roli. `next` jest walidowany ponownie po stronie serwera (`safeNextPath`) —
@@ -246,6 +257,10 @@ export async function signIn(
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  // Limit na konto (niezależny od adresu IP): próby rozłożone na wiele adresów nie omijają ograniczenia.
+  if (!(await checkAccountLimit('signin-account', parsed.data.email, 20, 900))) {
+    return { ok: false, error: 'RATE_LIMITED' };
   }
 
   const locale = await currentLocale();
@@ -365,6 +380,9 @@ export async function registerCandidate(
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
+  if (!(await checkAccountLimit('register-account', parsed.data.email, 3, 3600))) {
+    return { ok: false, error: 'RATE_LIMITED' };
+  }
   const locale = parsed.data.locale ?? (await currentLocale());
 
   try {
@@ -395,6 +413,9 @@ export async function registerEmployer(
   const parsed = registerEmployerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (!(await checkAccountLimit('register-account', parsed.data.email, 3, 3600))) {
+    return { ok: false, error: 'RATE_LIMITED' };
   }
   const locale = parsed.data.locale ?? (await currentLocale());
 
@@ -431,6 +452,9 @@ export async function registerInvitedEmployer(
   const parsed = registerInvitedEmployerSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (!(await checkAccountLimit('register-account', parsed.data.email, 3, 3600))) {
+    return { ok: false, error: 'RATE_LIMITED' };
   }
   const locale = parsed.data.locale ?? (await currentLocale());
   const email = parsed.data.email.toLowerCase();
@@ -480,6 +504,11 @@ export async function requestPasswordReset(
   const parsed = resetSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  // Limit na odbiorcę (niezależny od IP): żądania z wielu adresów nie zalewają jednej skrzynki
+  // ani wspólnego okna wysyłki. Ponad limit — wynik neutralny jak przy sukcesie, bez zlecenia listu.
+  if (!(await checkAccountLimit('password-reset-account', parsed.data.email, 3, 3600))) {
+    return { ok: true };
   }
 
   let auth: AuthRuntime;
@@ -576,6 +605,10 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
       }
     }
 
+    // Przeglądarka z aktywną sesją (np. inne konto) nie dostaje automatycznego logowania z linku:
+    // nowa sesja nie nadpisuje istniejącej — adres zostaje potwierdzony, użytkownik loguje się sam.
+    const sessionCookie = context.authCookies.sessionToken.name;
+    const browserHasSession = Boolean((await cookies()).get(sessionCookie)?.value);
     let sessionIssued = false;
     try {
       const verified = await auth.api.verifyEmail({
@@ -583,14 +616,22 @@ export async function confirmEmail(token: string): Promise<AuthActionResult> {
         headers: await headers(),
         returnHeaders: true,
       });
-      const sessionCookie = context.authCookies.sessionToken.name;
       sessionIssued = verified.headers.getSetCookie().some((c) => c.startsWith(`${sessionCookie}=`));
-      await applyAuthCookies(verified.headers);
+      if (!(sessionIssued && browserHasSession)) await applyAuthCookies(verified.headers);
     } catch (error) {
       throw mapAuthError(error);
     }
 
-    if (!sessionIssued) {
+    if (sessionIssued && browserHasSession) {
+      // Wydanej sesji nikt nie odbierze (cookie nie zostało zapisane) — unieważniamy ją w bazie.
+      try {
+        const created = email ? await context.internalAdapter.findUserByEmail(email) : null;
+        if (created) await context.internalAdapter.deleteUserSessions((created.user as { id: string }).id);
+      } catch (error) {
+        captureError(error, { area: 'auth.confirmEmail.discardUnusedSession' });
+      }
+      target = { login: true };
+    } else if (!sessionIssued) {
       target = { login: true };
     } else {
       // Token przeszedł weryfikację podpisu w SDK; e-mail z jego treści wskazuje konto.

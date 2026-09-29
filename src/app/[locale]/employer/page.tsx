@@ -11,6 +11,7 @@ import {
   getEmployerShellData,
   getFunnelStats,
   getRecentApplications,
+  getTopListingJobs,
   getTopMatchedCandidatesLoad,
 } from '@/lib/data/employer';
 import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
@@ -22,6 +23,7 @@ import { EmployerOffersPreview } from '@/components/employer/EmployerOffersPrevi
 import { EmployerOverviewStats } from '@/components/employer/EmployerOverviewStats';
 import { EmployerFunnelSection } from '@/components/employer/EmployerFunnelSection';
 import { EmployerTopMatched } from '@/components/employer/EmployerTopMatched';
+import { EmployerListingStats } from '@/components/employer/EmployerListingStats';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import {
   BTN_PRIMARY,
@@ -88,12 +90,15 @@ export default async function EmployerDashboardPage({
   // zgłoszeń nie jest renderowana, a jej loader nie jest wołany.
   const recruitment = isRecruitmentEnabled();
   const matching = isRecruitmentEnabled('matching') && isRecruitmentEnabled('candidateSearch');
-  const [overview, jobsLoad, recentApplications, topMatched, funnel, shell] = await Promise.all([
+  const [overview, jobsLoad, recentApplications, topMatched, topListing, funnel, shell] = await Promise.all([
     getEmployerOverview(),
     getCompanyJobsLoad(),
     recruitment ? getRecentApplications() : null,
     // #1133: tryb ogłoszeniowy — bez rankingu kandydatów (loader niewywoływany).
     matching ? getTopMatchedCandidatesLoad() : Promise.resolve({ status: 'disabled' as const }),
+    // Tryb ogłoszeniowy: w miejscu „Top dopasowani” skrót statystyk ogłoszeń (lejek ofert, bez
+    // tabel procesu); w trybie RECRUITMENT loader zwraca `disabled` bez zapytań.
+    getTopListingJobs(),
     getFunnelStats(),
     getEmployerShellData(),
   ]);
@@ -112,9 +117,10 @@ export default async function EmployerDashboardPage({
           ) : null}
           <h1 className={H1}>{td('greetingEmployer')}</h1>
           <p className={INTRO}>
+            {/* Tryb ogłoszeniowy: bez „rekrutacji” — pulpit pokazuje ogłoszenia. */}
             {firstName
-              ? td('employerGreetingSub', { name: firstName })
-              : td('employerGreetingSubGeneric')}
+              ? td(recruitment ? 'employerGreetingSub' : 'employerGreetingSubListing', { name: firstName })
+              : td(recruitment ? 'employerGreetingSubGeneric' : 'employerGreetingSubListingGeneric')}
           </p>
         </div>
         {/* Kreator oferty (Etap 5) — 9 kroków z autozapisem szkicu. Rola member → wyjaśnienie (#403). */}
@@ -162,77 +168,81 @@ export default async function EmployerDashboardPage({
           Bazy w rem zamiast stałych kolumn: przy 200% tekstu (#318) kolumna boczna przechodzi
           pod główną zamiast wystawać poza ekran. */}
       <div className="mt-6 flex min-w-0 flex-wrap gap-[19px]">
-        <div className="flex min-w-0 flex-[1.4_1_36rem] flex-col gap-[19px]">
-          {/* Najnowsze aplikacje — zmiana statusu (transitionApplication); wiersze `.job` */}
-          {recentApplications ? (
-            <section className={PANEL}>
-              <div className={SECTION_HEAD}>
-                <h2 className={PANEL_H2}>{td('recentApplications')}</h2>
-                <Link href="/employer/aplikacje" className={TEXT_LINK}>
-                  {td('seeAll')}
-                  <ArrowRight className="size-3.5" aria-hidden="true" />
-                </Link>
-              </div>
-              {recentApplications.status === 'error' ? (
-                <RecentApplicationsError message={td('recentApplicationsError')} retryLabel={tc('retry')} />
-              ) : recentApplications.applications.length === 0 ? (
-                <p className={EMPTY}>{td('emptyState')}</p>
-              ) : (
-                <ul>
-                  {recentApplications.applications.map((application) => (
-                    <li key={application.id} className={cn(ROW, 'flex-wrap items-center')}>
-                      <span className={ICON_BOX} aria-hidden="true">
-                        {initials(application.candidateName || td('candidateFallback'))}
-                      </span>
-                      <div className="min-w-0 flex-1 basis-40">
-                        <p className={ROW_TITLE}>
-                          {application.candidateName || td('candidateFallback')}
-                        </p>
-                        <p className={ROW_META}>{application.jobTitle}</p>
-                        {application.isGuest ? (
-                          <p className={cn(TAG, 'mt-1.5 font-semibold text-foreground')}>
-                            {td('employerApplicationGuestBadge')}
+        {recentApplications || funnel.status !== 'disabled' ? (
+          <div className="flex min-w-0 flex-[1.4_1_36rem] flex-col gap-[19px]">
+            {/* Najnowsze aplikacje — zmiana statusu (transitionApplication); wiersze `.job` */}
+            {recentApplications ? (
+              <section className={PANEL}>
+                <div className={SECTION_HEAD}>
+                  <h2 className={PANEL_H2}>{td('recentApplications')}</h2>
+                  <Link href="/employer/aplikacje" className={TEXT_LINK}>
+                    {td('seeAll')}
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                  </Link>
+                </div>
+                {recentApplications.status === 'error' ? (
+                  <RecentApplicationsError message={td('recentApplicationsError')} retryLabel={tc('retry')} />
+                ) : recentApplications.applications.length === 0 ? (
+                  <p className={EMPTY}>{td('emptyState')}</p>
+                ) : (
+                  <ul>
+                    {recentApplications.applications.map((application) => (
+                      <li key={application.id} className={cn(ROW, 'flex-wrap items-center')}>
+                        <span className={ICON_BOX} aria-hidden="true">
+                          {initials(application.candidateName || td('candidateFallback'))}
+                        </span>
+                        <div className="min-w-0 flex-1 basis-40">
+                          <p className={ROW_TITLE}>
+                            {application.candidateName || td('candidateFallback')}
                           </p>
-                        ) : null}
-                        <div className="mt-1.5">
-                          <StatusPill status={application.status} />
+                          <p className={ROW_META}>{application.jobTitle}</p>
+                          {application.isGuest ? (
+                            <p className={cn(TAG, 'mt-1.5 font-semibold text-foreground')}>
+                              {td('employerApplicationGuestBadge')}
+                            </p>
+                          ) : null}
+                          <div className="mt-1.5">
+                            <StatusPill status={application.status} />
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <Link
-                          href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
-                          aria-label={td('employerApplicationViewLabel', {
-                            name: application.candidateName || td('candidateFallback'),
-                            job: application.jobTitle || td('applicationUnknownJob'),
-                          })}
-                          className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
-                        >
-                          {td('employerApplicationView')}
-                        </Link>
-                        <ApplicationStatusMenu
-                          applicationId={application.id}
-                          status={application.status}
-                          candidateName={application.candidateName || td('candidateFallback')}
-                          jobTitle={application.jobTitle}
-                        />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ) : null}
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <Link
+                            href={`/employer/aplikacje/${encodeURIComponent(application.id)}`}
+                            aria-label={td('employerApplicationViewLabel', {
+                              name: application.candidateName || td('candidateFallback'),
+                              job: application.jobTitle || td('applicationUnknownJob'),
+                            })}
+                            className={cn(BTN_SMALL, 'border-border text-foreground hover:bg-soft')}
+                          >
+                            {td('employerApplicationView')}
+                          </Link>
+                          <ApplicationStatusMenu
+                            applicationId={application.id}
+                            status={application.status}
+                            candidateName={application.candidateName || td('candidateFallback')}
+                            jobTitle={application.jobTitle}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
 
-          {/* Lejek rekrutacyjny („Rekrutacja w liczbach”) */}
-          <EmployerFunnelSection locale={locale} funnel={funnel} />
-        </div>
+            {/* Lejek rekrutacyjny („Rekrutacja w liczbach”) */}
+            <EmployerFunnelSection locale={locale} funnel={funnel} />
+          </div>
+        ) : null}
 
-        {/* Kolumna boczna. #1133: w trybie ogłoszeniowym „Top dopasowani” nie istnieje — kolumny
-            nie ma (bez sekcji zastępczej, decyzja produktowa: portal ogłoszeniowy). */}
-        {topMatched.status !== 'disabled' ? (
+        {/* Kolumna boczna. #1133: w trybie ogłoszeniowym „Top dopasowani” nie istnieje — w jego
+            miejscu skrót statystyk ogłoszeń (decyzja produktowa: portal ogłoszeniowy). Gdy nie ma
+            kolumny głównej, kolumna boczna zajmuje całą szerokość. */}
+        {topMatched.status !== 'disabled' || topListing.status !== 'disabled' ? (
           <div className="flex min-w-0 flex-[1_1_18rem] flex-col gap-[19px]">
             {/* Top dopasowani kandydaci — wysyłka propozycji (sendOffer) */}
             <EmployerTopMatched locale={locale} topMatched={topMatched} />
+            <EmployerListingStats locale={locale} top={topListing} />
           </div>
         ) : null}
       </div>
