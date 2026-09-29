@@ -19247,15 +19247,16 @@ select pg_temp.assert(
   'SM1042-4 niepełny kursor bez wyników, limit 0 = 1 wiersz');
 
 -- SM1042-5 (KONTROLE UJEMNE): błędne kursory dają dziury albo duble na granicy strony przy remisie.
--- Kursor tylko po published_at (bez id): strona 2 zaczyna się „po całym remisie” — gubi oferty;
--- kursor „włącznie” po published_at: strona 2 powtarza oferty strony 1.
+-- Kursor tylko po published_at, ścisły („<”): strona 2 zaczyna się PO całym remisie — gubi oferty
+-- (odpowiada po = (published_at, najmniejsze id)); kursor „włącznie” („<=”, po = (published_at,
+-- największe id)): strona 2 powtarza oferty strony 1.
 select pg_temp.assert(
   (with p1 as (select * from public.get_public_jobs_sitemap_page(null, null, null, null, 20) order by published_at desc, id desc),
         last1 as (select published_at from p1 order by published_at asc, id asc limit 1),
         skip as (select count(*) c from public.get_public_jobs_sitemap_page(
-                   (select published_at from last1), 'ffffffff-ffff-ffff-ffff-ffffffffffff', null, null, 1000)),
+                   (select published_at from last1), '00000000-0000-0000-0000-000000000000', null, null, 1000)),
         dup as (select count(*) c from public.get_public_jobs_sitemap_page(
-                  (select published_at from last1), '00000000-0000-0000-0000-000000000000', null, null, 1000) d
+                  (select published_at from last1), 'ffffffff-ffff-ffff-ffff-ffffffffffff', null, null, 1000) d
                 where d.id in (select id from p1))
    select (select count(*) from p1) = 20
       and 20 + (select c from skip) < :sm_total          -- dziura: brakuje ofert remisu
