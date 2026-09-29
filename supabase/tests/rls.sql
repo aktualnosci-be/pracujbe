@@ -19128,6 +19128,112 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CL174: powrót
 reset role;
 
 -- ============================================================================
+-- CLTPL — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211; migracja 0979, numer tymczasowy).
+-- RPC zapisu i usunięcia ze strażnikiem trybu (nakładki na treść z 0170), BEFORE INSERT na
+-- tabelach szablonów dla każdej roli. Odczyt istniejących szablonów pod RLS bez zmian.
+-- Fixture z RT170 (firma RTCO, rekruter RTE1, szablon rttpl). Kontrole ujemne: bez nakładki
+-- treść z 0170 zapisuje w trybie ogłoszeniowym; bez triggera service_role wstawia szablon.
+-- ============================================================================
+\echo '--- CLTPL tryb ogłoszeniowy: szablony odpowiedzi (0979) ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'CLTPL-pre tryb RECRUITMENT na starcie sekcji');
+-- Tryb RECRUITMENT: usunięcie przez nakładkę działa (kontrola dodatnia; zwalnia miejsce pod limit).
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select public.delete_company_message_template(:'RTCO'::uuid,
+  (select id from public.company_message_templates where company_id = :'RTCO'::uuid and name = 'T1'));
+select public.save_company_message_template(:'RTCO'::uuid, null, 'CLTPL tymczasowy', '{"pl":"x"}'::jsonb) as cltpltmp \gset
+select public.delete_company_message_template(:'RTCO'::uuid, :'cltpltmp'::uuid);
+select pg_temp.assert((select count(*) = 0 from public.company_message_templates where id = :'cltpltmp'::uuid),
+  'CLTPL-pre zapis i usunięcie działają w trybie RECRUITMENT');
+select pg_temp.expect_error('select public.save_company_message_template_impl(''e9400000-0000-4000-8000-0000000000f1''::uuid, null, ''X'', ''{"pl":"x"}''::jsonb)',
+  'permission denied', 'CLTPL-pre klient nie woła treści bez strażnika (_impl zapisu)');
+select pg_temp.expect_error('select public.delete_company_message_template_impl(''e9400000-0000-4000-8000-0000000000f1''::uuid, gen_random_uuid())',
+  'permission denied', 'CLTPL-pre klient nie woła treści bez strażnika (_impl usunięcia)');
+reset role; reset app.current_uid;
+select count(*) as cltpl_before from public.company_message_templates where company_id = :'RTCO'::uuid \gset
+
+set role service_role;
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CLTPL', 'RECRUITMENT');
+reset role;
+select pg_temp.assert(not public.recruitment_enabled(), 'CLTPL-0 tryb ogłoszeniowy');
+
+-- CLTPL-1: RPC odrzucają zapis nowego, edycję i usunięcie — przed walidacją i uprawnieniami.
+select set_config('app.current_uid', :'RTE1', false);
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'CLTPL nowy', '{"pl":"x"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1 nowy szablon → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, %L::uuid, %L, %L::jsonb)', :'RTCO', :'rttpl', 'CLTPL edycja', '{"pl":"x"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1b edycja szablonu → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('select public.delete_company_message_template(%L::uuid, %L::uuid)', :'RTCO', :'rttpl'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1c usunięcie szablonu → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'X', '{"de":"Hallo"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-1d strażnik trybu przed walidacją');
+-- CLTPL-2: istniejące szablony nadal czytelne dla recruiter+ (odczyt bez zmian).
+select pg_temp.assert((select name = 'Zaproszenie 2' from public.company_message_templates where id = :'rttpl'::uuid),
+  'CLTPL-2 odczyt istniejącego szablonu pod RLS bez zmian');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.company_message_templates where company_id = :'RTCO'::uuid) = :cltpl_before
+  and (select name = 'Zaproszenie 2' from public.company_message_templates where id = :'rttpl'::uuid),
+  'CLTPL-2b brak zmian po odrzuconych wywołaniach');
+
+-- CLTPL-3: bezpośredni INSERT odrzucony także dla service_role (obie tabele).
+set role service_role;
+select pg_temp.expect_error(
+  format('insert into public.company_message_templates(company_id, name) values (%L::uuid, %L)', :'RTCO', 'CLTPL sr'),
+  'RECRUITMENT_DISABLED', 'CLTPL-3 INSERT szablonu (service_role) → RECRUITMENT_DISABLED');
+select pg_temp.expect_error(
+  format('insert into public.company_message_template_variants(template_id, locale, body) values (%L::uuid, %L, %L)', :'rttpl', 'en', 'Hello'),
+  'RECRUITMENT_DISABLED', 'CLTPL-3b INSERT wariantu (service_role) → RECRUITMENT_DISABLED');
+reset role;
+
+-- CLTPL-N (kontrole ujemne).
+-- N1: bez triggera service_role wstawia szablon w trybie ogłoszeniowym.
+begin;
+drop trigger trg_aa_recruitment_mode on public.company_message_templates;
+set local role service_role;
+insert into public.company_message_templates(company_id, name) values (:'RTCO', 'CLTPL neg');
+reset role;
+select pg_temp.assert((select count(*) = 1 from public.company_message_templates where name = 'CLTPL neg'),
+  'CLTPL-N1 kontrola ujemna: bez triggera nowy szablon powstaje w trybie ogłoszeniowym');
+rollback;
+-- N2: treść bez nakładki (0170) zapisuje w trybie ogłoszeniowym, gdy zdjęty jest też trigger —
+-- nakładka jest więc niezależną blokadą (nie zasłania jej wyłącznie trigger tabeli).
+begin;
+drop trigger trg_aa_recruitment_mode on public.company_message_templates;
+drop trigger trg_aa_recruitment_mode on public.company_message_template_variants;
+select set_config('app.current_uid', :'RTE1', true);
+select pg_temp.assert(public.save_company_message_template_impl(:'RTCO'::uuid, null, 'CLTPL neg2', '{"pl":"x"}'::jsonb) is not null,
+  'CLTPL-N2 kontrola ujemna: bez nakładki ze strażnikiem szablon zapisuje się w trybie ogłoszeniowym');
+rollback;
+-- N3: nakładka sama (trigger zdjęty) nadal odrzuca zapis — strażnik RPC działa bez triggera.
+begin;
+drop trigger trg_aa_recruitment_mode on public.company_message_templates;
+drop trigger trg_aa_recruitment_mode on public.company_message_template_variants;
+set local role authenticated; select set_config('app.current_uid', :'RTE1', true); select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_company_message_template(%L::uuid, null, %L, %L::jsonb)', :'RTCO', 'CLTPL neg3', '{"pl":"x"}'),
+  'RECRUITMENT_DISABLED', 'CLTPL-N3 nakładka odrzuca zapis bez triggera tabeli');
+rollback;
+reset role; reset app.current_uid;
+
+-- CLTPL-4: kaskada usunięcia (UPDATE created_by → null) nie jest blokowana w trybie ogłoszeniowym.
+begin;
+update public.company_message_templates set created_by = null where id = :'rttpl'::uuid;
+select pg_temp.assert((select created_by is null from public.company_message_templates where id = :'rttpl'::uuid),
+  'CLTPL-4 UPDATE istniejącego szablonu (np. kaskada set null) bez strażnika');
+rollback;
+
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLTPL: powrót do trybu testów', 'CLASSIFIEDS_ONLY');
+reset role;
+
+-- ============================================================================
 -- CA1142 / NT1145 — konto bez profilu zawodowego i komunikacja bez zdarzeń rekrutacyjnych
 -- (#1142, #1145; migracja 0175). Tryb ogłoszeniowy: każde RPC profilu
 -- zawodowego i bezpośredni zapis pól zawodowych odrzucone; powiadomienia o aplikacjach,

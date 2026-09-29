@@ -84,7 +84,7 @@ export default async function CandidateSettingsPage({
 
       <AgeStatusProvider initialAdult={initialAdult}>
         {age.status === 'ready' ? (
-          <AgeAttestationSettings initial={age} />
+          <AgeAttestationSettings initial={age} recruitmentEnabled={recruitment} />
         ) : (
           <section aria-labelledby="age-attestation-title" className={PAPER}>
             <h2 id="age-attestation-title" className={H2_EXTENDED}>
@@ -114,7 +114,7 @@ export default async function CandidateSettingsPage({
       </AgeStatusProvider>
 
       {blocks.status === 'ready' ? (
-        <CompanyBlocksSettings initialBlocks={blocks.blocks} />
+        <CompanyBlocksSettings initialBlocks={blocks.blocks} recruitmentEnabled={recruitment} />
       ) : (
         <section aria-labelledby="company-blocks-title" className={PAPER}>
           <h2 id="company-blocks-title" className={H2_EXTENDED}>
@@ -126,7 +126,7 @@ export default async function CandidateSettingsPage({
         </section>
       )}
 
-      <AccountDataSettings />
+      <AccountDataSettings recruitmentEnabled={recruitment} />
     </div>
   );
 }

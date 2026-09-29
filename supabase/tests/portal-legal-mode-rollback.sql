@@ -14,6 +14,8 @@ select count(*) as clr_apps from public.applications \gset
 
 begin;
 -- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
+-- 0979 (#1211, numer tymczasowy) stoi na 0171 (strażnik trybu szablonów) — cofana przed 0177.
+\ir ../rollback/0979_classifieds_message_templates_off.down.sql
 -- 0177 (usunięcie schematu billingu) stoi na 0171 (ops_metrics) — cofana jako pierwsza.
 \ir ../rollback/0177_drop_dead_billing_schema.down.sql
 -- 0176 (#1152, #1153) stoi na 0175 — cofana jako pierwsza.

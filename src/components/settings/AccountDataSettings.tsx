@@ -69,10 +69,14 @@ function fileNameFrom(disposition: string | null): string {
 
 export function AccountDataSettings({
   variant = 'candidate',
+  recruitmentEnabled = false,
 }: {
   variant?: AccountDataVariant;
+  /** #1213: tryb z serwera; domyślnie ogłoszeniowy — opisy bez zgłoszeń, propozycji i dopasowań. */
+  recruitmentEnabled?: boolean;
 } = {}): React.JSX.Element {
   const t = useTranslations('accountData');
+  const v = (key: string): string => (recruitmentEnabled ? key : `${key}Listing`);
   const [exportState, setExportState] = React.useState<ExportState>('idle');
   const [confirming, setConfirming] = React.useState(false);
   const [email, setEmail] = React.useState('');
@@ -156,7 +160,7 @@ export function AccountDataSettings({
       <div className="mt-5">
         <h3 className="text-base font-semibold text-foreground">{t('exportTitle')}</h3>
         <p id="account-export-description" className="mt-1 text-sm text-muted-foreground">
-          {variant === 'employer' ? t('exportDescriptionEmployer') : t('exportDescription')}
+          {variant === 'employer' ? t(v('exportDescriptionEmployer')) : t(v('exportDescription'))}
         </p>
         <Button
           type="button"
@@ -217,7 +221,7 @@ export function AccountDataSettings({
         ) : (
           <>
             <p id="account-delete-description" className="mt-1 text-sm text-muted-foreground">
-              {variant === 'employer' ? t('deleteDescriptionEmployer') : t('deleteDescription')}
+              {variant === 'employer' ? t(v('deleteDescriptionEmployer')) : t(v('deleteDescription'))}
             </p>
             {confirming ? (
               <form className="mt-3" noValidate onSubmit={(event) => void deleteAccount(event)}>

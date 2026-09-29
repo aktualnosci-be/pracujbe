@@ -235,6 +235,21 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   ponowieniem (nie pusta lista; wyszukiwania czytane raz, przekazane do `loadSavedSearchJobs`); powitanie pracodawcy bez „rekrutacji”
   (`employerGreetingSubListing*`). Tryb `RECRUITMENT`: stare sekcje. Dowód: unit `classifieds-employer-stats`, `classifieds-candidate-saved-search-jobs`, `classifieds-candidate-account`, `legal`
   `classifieds-panels` (kontrole ujemne), E2E `classifieds-dashboards` (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px).
+- **Resztki trybu ogłoszeniowego (#1211/#1212/#1213/#1225, migracja `0979` — numer tymczasowy):** szablony
+  odpowiedzi (narzędzie wiadomości) — `/employer/szablony` = 404 (`notFoundUnlessRecruitment('messaging')`, wpis
+  w `GUARDED_ROUTES`), pozycja nawigacji tylko przy `recruitmentEnabled`, akcje `saveMessageTemplate`/
+  `deleteMessageTemplate` → `RECRUITMENT_DISABLED` jako pierwszy krok; baza: `save_/delete_company_message_template`
+  = nakładki ze strażnikiem trybu (treść 0170 w `*_impl` bez EXECUTE dla klientów), BEFORE INSERT
+  `trg_aa_recruitment_mode` na `company_message_templates`/`_variants` (każda rola, wyjątek seedu jak 0171; UPDATE/
+  DELETE bez strażnika — kaskady działają). Dowód: `rls.sql` sekcja CLTPL (kontrole ujemne: bez triggera, bez
+  nakładki), rollback `0979_…down.sql` (`classifieds-message-templates-rollback.sql`, także w
+  `portal-legal-mode-rollback.sql`). E-maile spoza `RECRUITMENT_EMAIL_TEMPLATES`: treść bazowa `copy.ts` = portal
+  ogłoszeń, dawne brzmienie w `EmailCopy.recruitment` (wybór w `resolveCopy` przy `isRecruitmentEnabled()`) —
+  `jobPublished`, `companyVerified`, `inactiveAccountWarning`. Ekrany konta: `AgeAttestationSettings`,
+  `CompanyBlocksSettings`, `AccountDataSettings`, `JobCompanyBlockControl`, `TeamMembers`, `JobWizard` (podtytuł
+  edycji) z propsem `recruitmentEnabled` (domyślnie `false` → klucze `*Listing`), `roleDescKey(role, recruitment)`,
+  `RecruiterOnlyNote` sam czyta tryb. Strażnik `classifieds-copy.test.ts` (e-maile spoza procesu i klucze `*Listing`,
+  kontrole ujemne: dawne brzmienia = czerwony). **Do akceptacji właściciela:** nowe brzmienia.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---

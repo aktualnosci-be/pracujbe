@@ -25,8 +25,16 @@ import { cn } from '@/lib/utils';
  * Potwierdzony przedział trafia też do `AgeStatusProvider` (#828) — sekcja widoczności
  * odblokowuje się bez przeładowania; nieudany zapis niczego nie zgłasza.
  */
-export function AgeAttestationSettings({ initial }: { initial: AgeAttestationState }): React.JSX.Element {
+export function AgeAttestationSettings({
+  initial,
+  recruitmentEnabled = false,
+}: {
+  initial: AgeAttestationState;
+  /** #1213: tryb z serwera; domyślnie ogłoszeniowy — teksty bez aplikowania i widoczności profilu. */
+  recruitmentEnabled?: boolean;
+}): React.JSX.Element {
   const t = useTranslations('ageAttestation');
+  const v = (key: string): string => (recruitmentEnabled ? key : `${key}Listing`);
   const tAuth = useTranslations('auth');
   const [meets, setMeets] = React.useState(initial.meetsPolicy);
   const [adult, setAdult] = React.useState(initial.isAdult);
@@ -82,15 +90,15 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
         {t('sectionTitle')}
       </h2>
       <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">
-        {t('sectionDescription', { age: initial.requiredMinAge, adultAge: CANDIDATE_ADULT_AGE })}
+        {t(v('sectionDescription'), { age: initial.requiredMinAge, adultAge: CANDIDATE_ADULT_AGE })}
       </p>
 
       <p className="mt-4 text-sm font-medium text-foreground" data-testid="age-attestation-state">
         {!meets
-          ? t('stateMissing')
+          ? t(v('stateMissing'))
           : adult
             ? t('stateAdult', { age: CANDIDATE_ADULT_AGE })
-            : t('stateMinor', { adultAge: CANDIDATE_ADULT_AGE })}
+            : t(v('stateMinor'), { adultAge: CANDIDATE_ADULT_AGE })}
       </p>
 
       {meets && adult ? null : (

@@ -57,6 +57,9 @@ echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
+echo ">> rollback 0979 (tryb ogłoszeniowy: szablony odpowiedzi, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-message-templates-rollback.sql"
+
 echo ">> rollback 0183 (części gmin w filtrach, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/city-sections-filters-rollback.sql"
 
