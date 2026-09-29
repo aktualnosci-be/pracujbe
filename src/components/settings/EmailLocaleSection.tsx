@@ -22,7 +22,7 @@ export async function EmailLocaleSection({ locale }: { locale: string }): Promis
       <h2 id="email-locale-title" className={H2_EXTENDED}>
         {t('emailLocaleTitle')}
       </h2>
-      <p role="alert" className="mt-2 text-sm text-error">
+      <p role="alert" className="mt-2 text-sm text-error-text">
         {t('emailLocaleLoadError')}
       </p>
     </section>
