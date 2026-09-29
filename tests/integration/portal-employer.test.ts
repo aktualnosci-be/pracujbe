@@ -17,7 +17,6 @@ const employer = await import('../../src/lib/data/employer');
 const { decodeScoreCursor, decodeTimeCursor } = await import('../../src/lib/employer/list-cursor');
 const older = (token: string | null) => ({ cursor: decodeTimeCursor(token), direction: 'next' as const });
 const newer = (token: string | null) => ({ cursor: decodeTimeCursor(token), direction: 'prev' as const });
-const { getBilling } = await import('../../src/lib/data/billing');
 const { jobCityAssist } = await import('../../src/lib/actions/job-location');
 
 // #25: loadery panelu pracodawcy pod RLS na PostgreSQL 16 — izolacja firm, rola member,
@@ -125,11 +124,6 @@ beforeAll(async () => {
   await conversation(ids.companyA, candidates[2]!, [[candidates[2]!, 10], [memberA.id, 5]]);
   await conversation(ids.companyA, candidates[3]!, [[ownerA.id, 10], [candidates[3]!, 5, true]]);
   await conversation(ids.companyB, candidates[13]!, [[candidates[13]!, 5]]);
-
-  const sub = (await pg.admin.query(`INSERT INTO public.subscriptions(company_id, plan, status) VALUES ($1, 'standard', 'active') RETURNING id`,
-    [ids.companyA])).rows[0].id;
-  await pg.admin.query(`INSERT INTO public.invoices(company_id, subscription_id, number, status, amount_cents, issued_at)
-    VALUES ($1, $2, 'PB-1', 'paid', 9900, now())`, [ids.companyA, sub]);
 });
 
 afterAll(async () => { await realSession.db?.stop(); });
@@ -441,15 +435,15 @@ describe('panel pracodawcy na PostgreSQL (#25)', () => {
     expect(await employer.getEmployerApplicationDetail(appsA[0]!)).toEqual({ status: 'not_found' });
   });
 
-  it('płatności (odczyt, billing wyłączony): owner widzi subskrypcję i faktury, member i firma B nie', async () => {
+  it('plan firmy bez tabel billingu (0177): każda firma ma plan free i limit z katalogu', async () => {
     actAs(ownerA);
-    const own = await getBilling();
-    expect(own.subscription).toMatchObject({ plan: 'standard', status: 'active' });
-    expect(own.invoices).toEqual([expect.objectContaining({ number: 'PB-1', status: 'paid', amountCents: 9900, pdfUrl: null })]);
-    actAs(memberA);
-    expect(await getBilling()).toMatchObject({ subscription: null, invoices: [] });
+    expect(await employer.getCompanyEntitlements()).toMatchObject({ plan: 'free', maxActiveJobs: 1 });
     actAs(ownerB);
-    expect(await getBilling()).toMatchObject({ subscription: null, invoices: [] });
+    expect(await employer.getCompanyEntitlements()).toMatchObject({ plan: 'free', maxActiveJobs: 1 });
+    const gone = await pg.admin.query(
+      `SELECT to_regclass('public.subscriptions') AS s, to_regclass('public.invoices') AS i,
+              to_regclass('public.payments') AS p, to_regclass('public.discount_codes') AS d`);
+    expect(gone.rows[0]).toEqual({ s: null, i: null, p: null, d: null });
   });
 
   it('kanoniczne miasto (P1-10): podpowiedź kreatora ze słownika pod RLS i location_id ofert', async () => {

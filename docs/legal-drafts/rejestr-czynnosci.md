@@ -75,7 +75,6 @@ użytkownika. Ocena tego ryzyka i reguły postępowania: **do ustalenia przez pr
 | `job-statistics` | Statystyki ofert | Liczniki per oferta i dzień, bez identyfikatora osoby | Recruiter+ firmy | Railway, Supabase | Nonce deduplikacji 2 dni | Bez IP i cookies, filtr botów | do ustalenia, czy to w ogóle dane osobowe | właściciel + prawnik |
 | `analytics-marketing` | Analityka i marketing | Zakres ustala skrypt dostawcy (GA, Meta Pixel) | — | Google Analytics, Meta Pixel | Cookie zgody 180 dni; wycofanie usuwa cookies | Ładowanie wyłącznie po zgodzie (Invariant #7) | do ustalenia | właściciel + prawnik |
 | `backups` | Kopie zapasowe | Pełny zrzut bazy | Osoby z kluczem age | Railway (miejsce kopii do ustalenia) | 14 najnowszych kopii (domyślnie) | Szyfrowanie age, weryfikacja odtworzenia | do ustalenia | właściciel + prawnik |
-| `billing-disabled` | Płatności | Brak aktywnego przepływu | — | Stripe (wyłączony) | — | Flaga `BILLING_ENABLED` domyślnie wyłączona | nie dotyczy do czasu włączenia | właściciel |
 
 ### Czynności z zakresu #485, których kod dziś nie wykonuje
 
