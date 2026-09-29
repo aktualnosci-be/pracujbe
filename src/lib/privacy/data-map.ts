@@ -86,8 +86,7 @@ export type ActivityId =
   | 'job-statistics'
   | 'analytics-marketing'
   | 'backups'
-  | 'data-rights'
-  | 'billing-disabled';
+  | 'data-rights';
 
 export interface Activity {
   name: string;
@@ -231,12 +230,6 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
     retentionInCode:
       'BACKUP_RETENTION najnowszych kopii (domyślnie 14) lokalnie i w buckecie R2; opcjonalnie BACKUP_S3_MAX_AGE_DAYS (najnowsza kopia zostaje zawsze).',
   },
-  'billing-disabled': {
-    name: 'Płatności (wyłączone)',
-    inCode: 'Martwy schemat po wyłączonym billingu (#51); brak aktywnego przepływu.',
-    processors: ['stripe'],
-    retentionInCode: null,
-  },
 };
 
 export interface TableClassification {
@@ -277,13 +270,6 @@ const DICTIONARY = (what: string): TableClassification => ({
   subjects: [],
   columns: {},
   note: `Słownik/konfiguracja (${what}) — bez danych osobowych.`,
-});
-
-const BILLING = (note: string): TableClassification => ({
-  activities: ['billing-disabled'],
-  subjects: ['employer'],
-  columns: {},
-  note,
 });
 
 export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
@@ -1044,13 +1030,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       'Klucz idempotencji „Kopiuj jako szkic” (0148): oferta źródłowa, nowy szkic, kto skopiował i losowy klucz operacji. Bez treści oferty.',
   },
 
-  // --- Płatności (wyłączone, #51) --------------------------------------------------------------
-  'public.subscriptions': BILLING('Martwy schemat billingu; provider_customer_id identyfikuje firmę u dostawcy płatności.'),
-  'public.payments': BILLING('Martwy schemat billingu.'),
-  'public.invoices': BILLING('Martwy schemat billingu.'),
-  'public.checkout_intents': BILLING('Martwy schemat billingu.'),
-  'public.discount_redemptions': BILLING('Martwy schemat billingu.'),
-  'public.discount_codes': DICTIONARY('kody rabatowe'),
+  // --- Płatności: schemat billingu usunięty (#51, migracja 0177) — zostaje tylko katalog limitów ---
   'public.plan_entitlements': DICTIONARY('limity planów'),
 
   // --- Słowniki i konfiguracja --------------------------------------------------------------

@@ -304,7 +304,8 @@ export function isSalaryNarrowed(f: SidebarFilters): boolean {
 
 /**
  * Widełki wynagrodzenia jako parametry `getJobs`/RPC: jednostka zawsze (steruje też
- * sortowaniem), kwoty tylko przy zawężeniu, górna granica suwaka = „i więcej” (bez limitu).
+ * sortowaniem), kwoty tylko przy zawężeniu; skrajne położenie suwaka (dół = „bez dolnej
+ * granicy”, góra = „i więcej”) nie wysyła granicy.
  */
 export function salaryQueryParams(f: SidebarFilters): {
   salaryUnit: SalaryUnit;
@@ -312,10 +313,12 @@ export function salaryQueryParams(f: SidebarFilters): {
   salaryMax?: number;
 } {
   if (!isSalaryNarrowed(f)) return { salaryUnit: f.salaryUnit };
-  const { max } = salaryBounds(f.salaryUnit);
+  const { min, max } = salaryBounds(f.salaryUnit);
+  // Każda granica tylko wtedy, gdy użytkownik ją ruszył: dolny koniec suwaka = „bez dolnej
+  // granicy”, więc „do 2000” nie dokłada niewidocznego „od 1500” (#1119).
   return {
     salaryUnit: f.salaryUnit,
-    salaryMin: f.salaryMin,
+    ...(f.salaryMin > min ? { salaryMin: f.salaryMin } : {}),
     ...(f.salaryMax < max ? { salaryMax: f.salaryMax } : {}),
   };
 }
@@ -332,12 +335,12 @@ export function matchesSidebar(item: FacetItem, f: SidebarFilters): boolean {
     return false;
 
   if (isSalaryNarrowed(f)) {
-    const maxEff =
-      f.salaryMax >= salaryBounds(f.salaryUnit).max
-        ? Number.POSITIVE_INFINITY
-        : f.salaryMax;
+    const bounds = salaryBounds(f.salaryUnit);
+    const maxEff = f.salaryMax >= bounds.max ? Number.POSITIVE_INFINITY : f.salaryMax;
+    // Jak `salaryQueryParams`: nieruszony dolny koniec suwaka = bez dolnej granicy (#1119).
+    const minEff = f.salaryMin > bounds.min ? f.salaryMin : Number.NEGATIVE_INFINITY;
     // Kwota w wybranej jednostce (#188); oferta bez porównywalnej kwoty nie jest wykluczana.
-    if (!salaryInRange(item, f.salaryMin, maxEff, f.salaryUnit)) return false;
+    if (!salaryInRange(item, minEff, maxEff, f.salaryUnit)) return false;
   }
 
   if (f.accommodation.length === 1) {

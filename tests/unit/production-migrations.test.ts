@@ -53,3 +53,77 @@ describe('Pełna historia produkcyjna', () => {
     expect(source).toContain("process.env.MIGRATION_MODE ?? 'status'");
   });
 });
+
+describe('Diagnostyka nieudanej migracji (#1105)', () => {
+  const SECRET = 'Key (email)=(kandydat@example.com) already exists.';
+
+  /** Klient-atrapa: zapytanie zawierające `marker` rzuca błąd w stylu sterownika pg. */
+  function client(marker: string, failure: Record<string, unknown>) {
+    const queries: string[] = [];
+    return {
+      queries,
+      async query(text: string) {
+        queries.push(text);
+        if (text === marker) throw Object.assign(new Error(SECRET), failure);
+        if (text.startsWith('SELECT name, checksum')) return { rows: [] };
+        return { rows: [] };
+      },
+    };
+  }
+  const migrations = [
+    { name: '0001_a.sql', sql: 'SELECT 1', checksum: 'a' },
+    { name: '0002_b.sql', sql: 'INSERT INTO t VALUES (1)', checksum: 'b' },
+  ];
+
+  it('błąd SQL wskazuje migrację i SQLSTATE, bez komunikatu i szczegółów bazy', async () => {
+    const { applyMigrations, describeMigrationError, MigrationFailure } = await import('../../scripts/db/migrate.mjs');
+    const c = client('INSERT INTO t VALUES (1)', {
+      code: '23505',
+      table: 'profiles',
+      constraint: 'profiles_email_key',
+      detail: SECRET,
+    });
+    const error = await applyMigrations(c, migrations).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(MigrationFailure);
+    const line = describeMigrationError(error);
+    expect(line).toBe('przy migracji 0002_b.sql (SQLSTATE 23505, tabela profiles, ograniczenie profiles_email_key)');
+    expect(line).not.toContain('example.com');
+    expect(String((error as Error).message)).not.toContain('example.com');
+    // Transakcja została wycofana.
+    expect(c.queries.at(-1)).toBe('ROLLBACK');
+  });
+
+  it('P0001 (RAISE z migracji) pokazuje własny komunikat, oryginał zostaje w cause; inne SQLSTATE nie', async () => {
+    const { applyMigrations, describeMigrationError } = await import('../../scripts/db/migrate.mjs');
+    const raise = client('INSERT INTO t VALUES (1)', { code: 'P0001' });
+    const error = await applyMigrations(raise, migrations).catch((e: unknown) => e) as Error & { cause?: Error };
+    expect(error.message).toContain(SECRET);
+    expect(error.cause).toBeInstanceOf(Error);
+    expect(describeMigrationError(error)).toContain(SECRET);
+
+    // Kontrola ujemna: ten sam komunikat przy innym SQLSTATE nie trafia do message ani do linii.
+    const other = client('INSERT INTO t VALUES (1)', { code: '23505' });
+    const otherError = await applyMigrations(other, migrations).catch((e: unknown) => e) as Error & { cause?: Error };
+    expect(otherError.message).not.toContain('example.com');
+    expect(describeMigrationError(otherError)).not.toContain('example.com');
+    expect(otherError.cause?.message).toContain('example.com');
+  });
+
+  it('wartości spoza wzorców identyfikatorów nie trafiają do diagnostyki', async () => {
+    const { describeMigrationError, MigrationFailure } = await import('../../scripts/db/migrate.mjs');
+    // Wartości spoza wzorców (np. cudzysłowy, spacje) nie trafiają do diagnostyki.
+    const failure = new MigrationFailure('0148_x.sql', { code: '42P01', table: 'bad name; DROP', constraint: "x'y" });
+    expect(describeMigrationError(failure)).toBe('przy migracji 0148_x.sql (SQLSTATE 42P01)');
+  });
+
+  it('kontrole ujemne: błąd połączenia to sam kod, historia i nieznany błąd bez treści', async () => {
+    const { describeMigrationError } = await import('../../scripts/db/migrate.mjs');
+    expect(describeMigrationError(Object.assign(new Error(`connect ECONNREFUSED postgresql://u:pw@db`), { code: 'ECONNREFUSED' })))
+      .toBe('kod błędu ECONNREFUSED');
+    expect(describeMigrationError(new Error('Historia migracji różni się od plików. Przywróć zastosowane pliki.')))
+      .toBe('historia migracji różni się od plików');
+    const unknown = describeMigrationError(new Error(SECRET));
+    expect(unknown).toBe('nieokreślony błąd (poza migracją)');
+    expect(unknown).not.toContain('example.com');
+  });
+});

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v3';
 
 import { routing } from '@/i18n/routing';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -100,7 +100,7 @@ export async function saveSearchAction(input: unknown): Promise<SaveSearchResult
     if (isDatabaseError(error)) {
       const message = databaseErrorMessage(error);
       if (message.startsWith('UNAUTHENTICATED')) return { ok: false, error: 'UNAUTHENTICATED' };
-      return { ok: false, error: mapPgError(message) };
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.save', mapPgError(message)) };
     }
     captureError(error, { area: 'saved-searches.save' });
     return { ok: false, error: 'INTERNAL' };
@@ -134,7 +134,9 @@ export async function setSavedSearchAlertsAction(
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.setAlerts', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'saved-searches.setAlerts' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -156,7 +158,9 @@ export async function renameSavedSearchAction(id: unknown, name: unknown): Promi
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.rename', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'saved-searches.rename' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -177,7 +181,9 @@ export async function deleteSavedSearchAction(id: unknown): Promise<SavedSearchM
     revalidateSavedSearches();
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'saved-searches.delete', mapPgError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'saved-searches.delete' });
     return { ok: false, error: 'INTERNAL' };
   }

@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -49,14 +50,6 @@ const SECTORS = [
   { category: 'production', label: 'fieldsTechnical', image: '/images/people/workshop.webp', height: 1422, className: 'pp-sector-technical' },
 ] as const;
 
-/** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). */
-const OG_LOCALE: Record<string, string> = {
-  pl: 'pl_PL',
-  nl: 'nl_BE',
-  fr: 'fr_BE',
-  en: 'en_GB',
-};
-
 /** ISR (#298): oferty zmieniają się w ciągu dnia — HTML z cache, odświeżany co 60 s. */
 export const revalidate = 60;
 
@@ -86,7 +79,7 @@ export async function generateMetadata({ params }: HomePageProps): Promise<Metad
       description,
       url: canonical,
       siteName: 'Pracuj.be',
-      locale: OG_LOCALE[locale] ?? locale,
+      ...openGraphLocales(locale),
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
     twitter: { card: 'summary_large_image', title, description, images: [shareImage] },

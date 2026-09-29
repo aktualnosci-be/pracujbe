@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { captureError } from '@/lib/error-report';
+
 /**
  * Błąd zgłoszony przez PostgreSQL (pg.DatabaseError): ma SQLSTATE w `code`. Zastępuje
  * pole `error` odpowiedzi PostgREST — akcje mapują `message`/`code` na kody użytkowe
@@ -19,4 +21,19 @@ export function isDatabaseError(error: unknown): error is DatabaseErrorLike {
 /** Komunikat błędu bazy albo pusty string (dla dopasowań `includes('…')`). */
 export function databaseErrorMessage(error: unknown): string {
   return isDatabaseError(error) ? error.message : '';
+}
+
+/**
+ * Nieoczekiwany błąd bazy do kanału błędów (#1068). Akcje mapują komunikat bazy na kod
+ * użytkowy; gdy wynik to `INTERNAL` (SQLSTATE spoza znanej listy — np. rozjazd schematu po
+ * nieudanym wdrożeniu, przeciążenie bazy), użytkownik widzi ogólny komunikat, a operator
+ * dostaje wpis z obszarem i kodem SQLSTATE. Komunikat bazy (może zawierać wiersz z danymi)
+ * NIE jest przekazywany. Zwraca `mapped` bez zmian, więc owija się wprost wokół mapowania:
+ * `reportUnmappedDbError(error, 'company.update', mapPgError(databaseErrorMessage(error)))`.
+ */
+export function reportUnmappedDbError<T extends string>(error: unknown, area: string, mapped: T): T {
+  if (mapped === 'INTERNAL' && isDatabaseError(error)) {
+    captureError(error, { area, sqlstate: error.code });
+  }
+  return mapped;
 }

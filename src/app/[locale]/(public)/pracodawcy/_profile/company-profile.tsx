@@ -10,6 +10,7 @@ import { Pagination } from '@/components/public/Pagination';
 import { PublicSavedJobsProvider } from '@/components/public/PublicSavedJobs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { openGraphLocales } from '@/lib/seo/locales';
 import {
   brandShareImageUrl,
   buildBreadcrumbListJsonLd,
@@ -92,7 +93,7 @@ export async function companyProfileMetadata(locale: string, slug: string, page:
       url,
       siteName: 'Pracuj.be',
       type: 'website',
-      locale,
+      ...openGraphLocales(locale),
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
     twitter: { card: 'summary_large_image', title, description, images: [shareImage] },
