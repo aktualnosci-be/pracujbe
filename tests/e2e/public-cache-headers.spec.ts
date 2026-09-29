@@ -211,8 +211,9 @@ test("lejek ofert: endpoint no-store bez cookies, strona oferty nadal z cache", 
   // Zdarzenie nie przyjmuje dodatkowych danych (np. tekstu wyszukiwania).
   expect((await request.post("/api/job-funnel", { data: { ...event, keyword: "magazyn" } })).status()).toBe(400);
 
-  const after = await request.get(path, { maxRedirects: 0 });
-  expect(after.headers()["x-nextjs-cache"]).toBe("HIT");
+  // Wpis ISR ma 60 s ważności: jeśli odczyt wypadnie na granicy odświeżenia, pierwsza odpowiedź
+  // bywa STALE (i uruchamia regenerację) — czekamy na stabilne trafienie, jak przy pierwszym odczycie.
+  const after = await getCached(request, path);
   expect(sMaxAge(after)).toBe(60);
   expect(after.headers()["set-cookie"]).toBeUndefined();
   expect(await after.text()).toBe(await before.text());
