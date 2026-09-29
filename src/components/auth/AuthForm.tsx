@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import {
   Controller,
@@ -280,6 +282,9 @@ export function AuthForm({
   const [serverError, setServerError] = React.useState<ErrorCode | null>(initialError);
   const [success, setSuccess] = React.useState(false);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
+  // #1236: przed hydracją (albo bez JS) natywna wysyłka wysłałaby hasło w adresie URL —
+  // przycisk odblokowuje się dopiero po hydracji, `method="post"` obronnie.
+  const hydrated = useHydrated();
   // Fokus na komunikat tylko po wysyłce (nie przy wejściu z `?error=`): przycisk jest `disabled`
   // w trakcie zapisu, więc przeglądarka zdejmuje z niego fokus — bez tego ląduje on na <body>.
   const focusAlertRef = React.useRef(false);
@@ -429,7 +434,8 @@ export function AuthForm({
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form onSubmit={onSubmit} noValidate method="post" className="space-y-4">
+      <NoScriptFormNotice />
       {serverError ? (
         <div
           ref={alertRef}
@@ -551,7 +557,7 @@ export function AuthForm({
         />
       ) : null}
 
-      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting}>
+      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting || !hydrated}>
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

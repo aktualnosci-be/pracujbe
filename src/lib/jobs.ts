@@ -497,24 +497,25 @@ async function getJobsFromDb(
   pageSize: number,
   viewerId: string | null,
   translateCards: boolean,
-): Promise<GetJobsResult> {
-  const [{ getDomainPool }, { getPublicJobs }] = await Promise.all([
+  withTotal: boolean,
+): Promise<GetJobsResult | JobsPage> {
+  const [{ getDomainPool }, { getPublicJobs, getPublicJobsPage }] = await Promise.all([
     import('@/lib/db/runtime'),
     import('@/lib/db/public-jobs'),
   ]);
   const pool = await getDomainPool();
-  const result = await getPublicJobs(pool, {
-    ...params,
-    page,
-    pageSize,
-  }, viewerId);
-  const jobs = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
+  const query = { ...params, page, pageSize };
+  const counted = withTotal ? await getPublicJobs(pool, query, viewerId) : null;
+  const result = counted ?? (await getPublicJobsPage(pool, query, viewerId));
+  const listed = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
+  const jobs = translateCards ? await withListMachineTranslations(pool, listed, toLocale(params.locale)) : listed;
+  if (!counted) return { jobs, page: result.page, pageSize: result.pageSize };
   return {
-    jobs: translateCards ? await withListMachineTranslations(pool, jobs, toLocale(params.locale)) : jobs,
-    total: result.total,
-    page: result.page,
-    pageSize: result.pageSize,
-    maxPage: result.maxPage,
+    jobs,
+    total: counted.total,
+    page: counted.page,
+    pageSize: counted.pageSize,
+    maxPage: counted.maxPage,
   };
 }
 
@@ -664,25 +665,44 @@ export interface JobsViewer {
 /**
  * Opcje odczytu listy. `translateCards` — lista trafia na karty ofert (`JobCard`), więc
  * dostaje przekład tytułu w języku strony (#33). Sitemap, liczniki i facety go nie potrzebują.
+ * `withTotal: false` (PERF-04, #1230) — bez `get_public_jobs_count`: dla sekcji, które nie
+ * pokazują licznika ani paginacji (wynik bez `total`/`maxPage`, pilnuje tego typ).
  */
 export interface GetJobsOptions {
   translateCards?: boolean;
+  withTotal?: boolean;
 }
 
+/** Strona listy bez licznika (`getJobs(…, { withTotal: false })`). */
+export type JobsPage = Omit<GetJobsResult, 'total' | 'maxPage'>;
+
+export async function getJobs(
+  params: GetJobsParams,
+  viewer: JobsViewer | undefined,
+  options: GetJobsOptions & { withTotal: false },
+): Promise<JobsPage>;
+export async function getJobs(
+  params: GetJobsParams,
+  viewer?: JobsViewer,
+  options?: GetJobsOptions,
+): Promise<GetJobsResult>;
 export async function getJobs(
   params: GetJobsParams,
   viewer?: JobsViewer,
   options: GetJobsOptions = {},
-): Promise<GetJobsResult> {
+): Promise<GetJobsResult | JobsPage> {
   const locale = toLocale(params.locale);
   const page = Math.max(1, Math.trunc(params.page ?? 1));
   const pageSize = Math.max(
     1,
     Math.trunc(params.pageSize ?? DEFAULT_PAGE_SIZE),
   );
+  const withTotal = options.withTotal !== false;
 
   if (isDatabaseConfigured()) {
-    if (isBuildPhase()) return { jobs: [], total: 0, page, pageSize, maxPage: 1 };
+    if (isBuildPhase()) {
+      return withTotal ? { jobs: [], total: 0, page, pageSize, maxPage: 1 } : { jobs: [], page, pageSize };
+    }
     try {
       return await getJobsFromDb(
         params,
@@ -690,6 +710,7 @@ export async function getJobs(
         pageSize,
         viewer?.candidateId ?? null,
         options.translateCards === true,
+        withTotal,
       );
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
@@ -700,7 +721,33 @@ export async function getJobs(
   }
 
   if (isProductionMode()) throw new AppError('INTERNAL');
-  return getJobsFromDemo(locale, params, page, pageSize);
+  const demo = getJobsFromDemo(locale, params, page, pageSize);
+  if (withTotal) return demo;
+  return { jobs: demo.jobs, page: demo.page, pageSize: demo.pageSize };
+}
+
+/**
+ * PERF-04 (#1230): sam licznik publicznych ofert dla filtra (metadane landingów, liczba partii
+ * sitemap) — bez odczytu wierszy listy. Widok gościa (bez blokad kandydata, #97), tak jak
+ * wywołujący, którzy zastąpili nim `getJobs({ pageSize: 1 }).total`. Błąd = `AppError('INTERNAL')`.
+ */
+export async function getJobsCount(params: GetJobsParams): Promise<number> {
+  if (isDatabaseConfigured()) {
+    if (isBuildPhase()) return 0;
+    try {
+      const [{ getDomainPool }, { getPublicJobsCount }] = await Promise.all([
+        import('@/lib/db/runtime'),
+        import('@/lib/db/public-jobs'),
+      ]);
+      return await getPublicJobsCount(await getDomainPool(), params);
+    } catch (error) {
+      captureError(error, { area: 'jobs.getJobsCount' });
+      throw new AppError('INTERNAL');
+    }
+  }
+
+  if (isProductionMode()) throw new AppError('INTERNAL');
+  return getJobsFromDemo(toLocale(params.locale), params, 1, 1).total;
 }
 
 export async function getJobBySlug(
@@ -754,7 +801,11 @@ export async function getSimilarJobs(
   const safeLimit = Math.max(1, Math.trunc(limit));
   try {
     if (isSimilarJobsErrorFixture()) throw new Error('Isolated similar jobs fixture failure');
-    const result = await getJobs({ locale, category: job.category, page: 1, pageSize: safeLimit + 1 });
+    const result = await getJobs(
+      { locale, category: job.category, page: 1, pageSize: safeLimit + 1 },
+      undefined,
+      { withTotal: false },
+    );
     return {
       status: 'ok',
       jobs: result.jobs.filter((item) => item.slug !== job.slug).slice(0, safeLimit),
@@ -770,7 +821,11 @@ export async function getLatestJobs(
   limit: number = DEFAULT_LATEST_LIMIT,
 ): Promise<JobListItem[]> {
   const safeLimit = Math.max(1, Math.trunc(limit));
-  const result = await getJobs({ locale, page: 1, pageSize: safeLimit }, undefined, { translateCards: true });
+  const result = await getJobs(
+    { locale, page: 1, pageSize: safeLimit },
+    undefined,
+    { translateCards: true, withTotal: false },
+  );
   return result.jobs;
 }
 

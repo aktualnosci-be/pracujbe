@@ -31,6 +31,8 @@ vi.mock('next-intl/server', () => ({
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
+// Język e-maili (#1049, async komponent serwerowy) ma własne testy (email-locale-settings, rls.sql EL1049).
+vi.mock('@/components/settings/EmailLocaleSection', () => ({ EmailLocaleSection: () => null }));
 // Sekcja zablokowanych firm (#97) ma własne testy (company-blocks-action, E2E).
 vi.mock('@/lib/data/company-blocks', () => ({
   loadMyCompanyBlocks: async () => ({ status: 'ready', blocks: [], demo: false }),

@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -53,6 +55,7 @@ export function JobImportPanel({
   /** Firma, dla której wyrenderowano kreator — serwer odrzuca import dla innej aktywnej (EMP-02). */
   companyId?: string | null;
 }): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('jobImport');
   const tRoot = useTranslations();
   const locale = useLocale();
@@ -214,6 +217,7 @@ export function JobImportPanel({
         </div>
 
         <form
+          method="post"
           noValidate
           className={FORM_FIELD}
           onSubmit={(e) => {
@@ -221,6 +225,7 @@ export function JobImportPanel({
             void submit('url');
           }}
         >
+          <NoScriptFormNotice />
           <Label htmlFor={`${panelId}-url`} className={FORM_LABEL_TEXT}>{t('urlLabel')}</Label>
           <p id={`${panelId}-url-hint`} className={FORM_HINT}>
             {t('urlHint')}
@@ -241,7 +246,7 @@ export function JobImportPanel({
                 .join(' ')}
               className={cn(FORM_INPUT, 'sm:flex-1')}
             />
-            <Button type="submit" disabled={busy !== null} className={`${BTN_PRIMARY} ${BTN_RESET} shrink-0`}>
+            <Button type="submit" disabled={busy !== null || !hydrated} className={`${BTN_PRIMARY} ${BTN_RESET} shrink-0`}>
               {busy === 'url' ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (

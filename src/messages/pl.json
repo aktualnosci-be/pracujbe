@@ -222,7 +222,8 @@
     "no": "Nie",
     "home": "Strona główna",
     "breadcrumb": "Ścieżka nawigacji",
-    "skipToContent": "Przejdź do treści"
+    "skipToContent": "Przejdź do treści",
+    "formJsRequired": "Ten formularz wymaga włączonego JavaScriptu. Włącz go w przeglądarce, żeby wysłać dane."
   },
   "nav": {
     "jobs": "Oferty pracy",
@@ -1737,6 +1738,8 @@
     "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "goToOffers": "Przejdź do listy ofert",
+    "draftConflict": "Ten szkic zmienił się w międzyczasie — w innej karcie albo przez innego członka zespołu. Zmiany z tego kroku nie zostały zapisane, żeby nie nadpisać cudzych. Wczytaj aktualną wersję szkicu.",
+    "reloadDraft": "Wczytaj aktualną wersję szkicu",
     "editTitle": "Edytuj ofertę",
     "editSubtitleActive": "Oferta jest opublikowana. Zmiany zapiszesz przyciskiem „Zapisz zmiany” i od razu zobaczą je kandydaci. Status oferty i zgłoszenia zostają bez zmian.",
     "editSubtitleActiveListing": "Oferta jest opublikowana. Zmiany zapiszesz przyciskiem „Zapisz zmiany” i od razu zobaczą je kandydaci. Status oferty zostaje bez zmian.",
@@ -2890,6 +2893,7 @@
     "opsRow_dbConnections": "Wykorzystanie połączeń",
     "opsRow_appPoolWaiting": "Żądania czekające na połączenie",
     "opsRow_portalModeMismatch": "Niezgodność trybu portalu (env i baza)",
+    "opsRow_schemaBehind": "Schemat bazy starszy niż kod (migracje)",
     "opsRow_backupAge": "Wiek ostatniej kopii",
     "filterCompanyLinks": "Strona i logo do zatwierdzenia",
     "sectionCompanyLinks": "Strona WWW i logo",
@@ -2934,6 +2938,7 @@
     "entityJob": "Oferta pracy",
     "auditActionJobUpdatePublished": "Edycja opublikowanej oferty",
     "auditActionJobDuplicated": "Kopia oferty",
+    "auditActionJobDeleted": "Oferta usunięta",
     "companyJobsAllLink": "Wszystkie oferty firmy",
     "auditActionRetentionPolicyChanged": "Zmiana okresu retencji",
     "auditActionRetentionPoliciesSeeded": "Wpisanie okresów retencji",
@@ -3019,7 +3024,9 @@
     "auditActionJobPausedForReview": "Wstrzymanie oferty do przeglądu treści",
     "auditActionCompanyAgencyChanged": "Zmiana deklaracji agencji",
     "auditActionCompanyAgencyChecked": "Sprawdzenie numeru uznania agencji",
-    "aiCostsFeatureFraudCheck": "Kontrola treści ofert"
+    "aiCostsFeatureFraudCheck": "Kontrola treści ofert",
+    "auditActionEmailLocaleChanged": "Zmiana języka e-maili przez użytkownika",
+    "entityProfile": "Profil"
   },
   "settings": {
     "title": "Preferencje powiadomień",
@@ -3049,7 +3056,14 @@
     "loadErrorHint": "Nie pokazujemy formularza, żeby zapis nie nadpisał Twoich wcześniejszych wyborów. Spróbuj ponownie za chwilę.",
     "employerEmailApplicationsDescription": "Nowe zgłoszenia kandydatów na Twoje oferty.",
     "employerEmailOffersDescription": "Gdy kandydat przyjmie lub odrzuci Twoją propozycję pracy.",
-    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach."
+    "employerEmailMessagesDescription": "Nowe wiadomości od kandydatów w Twoich konwersacjach.",
+    "emailLocaleTitle": "Język e-maili i powiadomień",
+    "emailLocaleDescription": "W tym języku wysyłamy do Ciebie e-maile i powiadomienia. Nie zależy od języka, w którym oglądasz stronę. Zmiana dotyczy kolejnych wiadomości.",
+    "emailLocaleLabel": "Język e-maili i powiadomień",
+    "emailLocaleSave": "Zapisz język",
+    "emailLocaleSaving": "Zapisywanie...",
+    "emailLocaleSaved": "Język e-maili i powiadomień został zapisany.",
+    "emailLocaleLoadError": "Nie udało się wczytać języka e-maili i powiadomień. Spróbuj ponownie za chwilę."
   },
   "guides": {
     "pageTitle": "Poradniki",
@@ -3917,6 +3931,14 @@
       "erasure_tombstone": {
         "label": "Rejestr usunięć",
         "description": "Rejestr usunięć do ponownego zastosowania po odtworzeniu kopii; musi przeżyć najstarszą kopię."
+      },
+      "expired_auth_session": {
+        "label": "Wygasła sesja logowania",
+        "description": "Wiersz wygasłej sesji (z adresem IP i user-agentem) jest usuwany 7 dni po wygaśnięciu."
+      },
+      "expired_auth_verification": {
+        "label": "Wygasły token weryfikacji",
+        "description": "Wiersz wygasłego tokenu weryfikacji (potwierdzenie e-maila, reset hasła) jest usuwany 7 dni po wygaśnięciu."
       },
       "guest_ip_user_agent": {
         "label": "IP i user-agent gościa",

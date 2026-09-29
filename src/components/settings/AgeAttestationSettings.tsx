@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
@@ -33,6 +35,7 @@ export function AgeAttestationSettings({
   /** #1213: tryb z serwera; domyślnie ogłoszeniowy — teksty bez aplikowania i widoczności profilu. */
   recruitmentEnabled?: boolean;
 }): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('ageAttestation');
   const v = (key: string): string => (recruitmentEnabled ? key : `${key}Listing`);
   const tAuth = useTranslations('auth');
@@ -102,7 +105,8 @@ export function AgeAttestationSettings({
       </p>
 
       {meets && adult ? null : (
-        <form onSubmit={(event) => void submit(event)} noValidate className="mt-4 space-y-4">
+        <form method="post" onSubmit={(event) => void submit(event)} noValidate className="mt-4 space-y-4">
+          <NoScriptFormNotice />
           <AgeDeclarationField
             ref={fieldRef}
             id="age-attestation-confirm"
@@ -115,7 +119,7 @@ export function AgeAttestationSettings({
             error={fieldError}
             disabled={pending}
           />
-          <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET)} disabled={pending} aria-busy={pending || undefined}>
+          <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET)} disabled={pending || !hydrated} aria-busy={pending || undefined}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             {pending ? t('saving') : t('submit')}
           </Button>

@@ -224,7 +224,7 @@ export function AccountDataSettings({
               {variant === 'employer' ? t(v('deleteDescriptionEmployer')) : t(v('deleteDescription'))}
             </p>
             {confirming ? (
-              <form className="mt-3" noValidate onSubmit={(event) => void deleteAccount(event)}>
+              <form method="post" className="mt-3" noValidate onSubmit={(event) => void deleteAccount(event)}>
                 <Label htmlFor="account-delete-email">{t('confirmLabel')}</Label>
                 <Input
                   ref={inputRef}

@@ -22,6 +22,8 @@ const requireShim = resolve(__dirname, 'tests/e2e/fixtures/require-globals.cjs')
 export default defineConfig({
   testDir: './tests/e2e-real',
   // Jeden scenariusz na wspólnej bazie: kroki zależą od siebie, więc bez równoległości i ponowień.
+  // `test.only` pozostawione w specu nie może cicho wyłączyć reszty zestawu w CI (#1241).
+  forbidOnly: !!process.env.CI,
   workers: 1,
   fullyParallel: false,
   retries: 0,

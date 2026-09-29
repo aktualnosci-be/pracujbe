@@ -222,7 +222,8 @@
     "no": "Nee",
     "home": "Startpagina",
     "breadcrumb": "Broodkruimelpad",
-    "skipToContent": "Ga naar de inhoud"
+    "skipToContent": "Ga naar de inhoud",
+    "formJsRequired": "Dit formulier vereist JavaScript. Schakel het in je browser in om de gegevens te verzenden."
   },
   "nav": {
     "jobs": "Vacatures",
@@ -1737,6 +1738,8 @@
     "itemTooLongMax": "Dit item is te lang (max. {max} tekens). Maak het korter om het aan de lijst toe te voegen.",
     "stepAnnounce": "Stap {current} van {total}: {title}",
     "goToOffers": "Naar je vacatures",
+    "draftConflict": "Dit concept is intussen gewijzigd — in een ander tabblad of door een ander teamlid. De wijzigingen van deze stap zijn niet opgeslagen, zodat het werk van de ander niet wordt overschreven. Laad de actuele versie van het concept.",
+    "reloadDraft": "Actuele versie van het concept laden",
     "editTitle": "Vacature bewerken",
     "editSubtitleActive": "De vacature is geplaatst. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze meteen. De status en sollicitaties blijven ongewijzigd.",
     "editSubtitleActiveListing": "De vacature is geplaatst. Sla je wijzigingen op met „Wijzigingen opslaan”; kandidaten zien ze meteen. De status blijft ongewijzigd.",
@@ -2890,6 +2893,7 @@
     "opsRow_dbConnections": "Gebruik van verbindingen",
     "opsRow_appPoolWaiting": "Verzoeken wachtend op een verbinding",
     "opsRow_portalModeMismatch": "Portaalmodus niet gelijk (env en database)",
+    "opsRow_schemaBehind": "Databaseschema loopt achter op de code (migraties)",
     "opsRow_backupAge": "Leeftijd van de laatste back-up",
     "filterCompanyLinks": "Website en logo goed te keuren",
     "sectionCompanyLinks": "Website en logo",
@@ -2934,6 +2938,7 @@
     "entityJob": "Vacature",
     "auditActionJobUpdatePublished": "Gepubliceerde vacature bewerkt",
     "auditActionJobDuplicated": "Kopie van vacature",
+    "auditActionJobDeleted": "Vacature verwijderd",
     "companyJobsAllLink": "Alle vacatures van het bedrijf",
     "auditActionRetentionPolicyChanged": "Wijziging van bewaartermijn",
     "auditActionRetentionPoliciesSeeded": "Bewaartermijnen vastgelegd",
@@ -3019,7 +3024,9 @@
     "auditActionJobPausedForReview": "Vacature gepauzeerd voor controle",
     "auditActionCompanyAgencyChanged": "Wijziging aangifte uitzendbureau",
     "auditActionCompanyAgencyChecked": "Controle erkenningsnummer uitzendbureau",
-    "aiCostsFeatureFraudCheck": "Controle vacatureteksten"
+    "aiCostsFeatureFraudCheck": "Controle vacatureteksten",
+    "auditActionEmailLocaleChanged": "Taal van e-mails door gebruiker gewijzigd",
+    "entityProfile": "Profiel"
   },
   "settings": {
     "title": "Meldingsvoorkeuren",
@@ -3049,7 +3056,14 @@
     "loadErrorHint": "We tonen het formulier niet, zodat opslaan je eerdere keuzes niet overschrijft. Probeer het zo meteen opnieuw.",
     "employerEmailApplicationsDescription": "Nieuwe sollicitaties van kandidaten op je vacatures.",
     "employerEmailOffersDescription": "Wanneer een kandidaat je werkaanbod aanvaardt of weigert.",
-    "employerEmailMessagesDescription": "Nieuwe berichten van kandidaten in je gesprekken."
+    "employerEmailMessagesDescription": "Nieuwe berichten van kandidaten in je gesprekken.",
+    "emailLocaleTitle": "Taal van e-mails en meldingen",
+    "emailLocaleDescription": "In deze taal sturen we je e-mails en meldingen. Dit staat los van de taal waarin je de website bekijkt. De wijziging geldt voor volgende berichten.",
+    "emailLocaleLabel": "Taal van e-mails en meldingen",
+    "emailLocaleSave": "Taal opslaan",
+    "emailLocaleSaving": "Opslaan...",
+    "emailLocaleSaved": "De taal van e-mails en meldingen is opgeslagen.",
+    "emailLocaleLoadError": "De taal van e-mails en meldingen kon niet worden geladen. Probeer het zo meteen opnieuw."
   },
   "guides": {
     "pageTitle": "Gidsen",
@@ -3917,6 +3931,14 @@
       "erasure_tombstone": {
         "label": "Register van wissingen",
         "description": "Register van wissingen om na herstel van een back-up opnieuw toe te passen; moet de oudste back-up overleven."
+      },
+      "expired_auth_session": {
+        "label": "Verlopen inlogsessie",
+        "description": "De rij van een verlopen sessie (met IP-adres en user-agent) wordt 7 dagen na het verlopen verwijderd."
+      },
+      "expired_auth_verification": {
+        "label": "Verlopen verificatietoken",
+        "description": "De rij van een verlopen verificatietoken (e-mailbevestiging, wachtwoordreset) wordt 7 dagen na het verlopen verwijderd."
       },
       "guest_ip_user_agent": {
         "label": "IP en user-agent van gast",
