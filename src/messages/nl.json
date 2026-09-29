@@ -789,7 +789,8 @@
     "cvImportNoProposals": "We vonden in het cv niets om voor te stellen. Vul je profiel handmatig in.",
     "cvImportFailed": "We konden geen voorstellen voorbereiden. Probeer het later opnieuw of vul je profiel handmatig in.",
     "jobContentReviewRequired": "De inhoud van de vacature moet eerst door het team van het portaal worden nagekeken. Je kunt ze publiceren na goedkeuring of na aanpassing van de tekst.",
-    "jobContentRejected": "De inhoud van de vacature is niet goedgekeurd. Pas ze aan om de vacature te publiceren."
+    "jobContentRejected": "De inhoud van de vacature is niet goedgekeurd. Pas ze aan om de vacature te publiceren.",
+    "journalLimitReached": "Je logboek heeft al 200 items. Verwijder er een om een nieuw item toe te voegen."
   },
   "offerStatus": {
     "draft": "Concept",
@@ -1221,7 +1222,8 @@
     "savedSearchJobsShow": "Vacatures tonen: {name}",
     "savedSearchJobsFrom": "Zoekopdracht: {name}",
     "employerGreetingSubListing": "Welkom {name}! Bekijk hoe je vacatures presteren.",
-    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren."
+    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren.",
+    "navJournal": "Sollicitatielogboek"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -3865,5 +3867,53 @@
     "reviewRejected": "De tekst is niet goedgekeurd ({categories}). Pas hem aan.",
     "reviewReason": "Motivering: {reason}",
     "editPaused": "Wijzigingen opgeslagen. De vacature is gepauzeerd tot het team van het portaal de tekst heeft nagekeken."
+  },
+  "applicationJournal": {
+    "title": "Sollicitatielogboek",
+    "intro": "Een privélijst van vacatures waarop je bij werkgevers solliciteert buiten Pracuj.be. Je noteert zelf — het portaal verstuurt of controleert niets.",
+    "privacy": "Alleen jij ziet dit. Werkgevers en andere gebruikers hebben geen toegang tot deze items en Pracuj.be geeft ze aan niemand door.",
+    "add": "Item toevoegen",
+    "empty": "Je hebt nog geen items. Voeg een vacature toe waarop je bij een werkgever solliciteert, zodat je termijnen en vervolgcontact niet vergeet.",
+    "demo": "In de demoversie slaan we geen items op.",
+    "loadError": "Het sollicitatielogboek kon niet worden geladen.",
+    "retry": "Probeer opnieuw",
+    "browse": "Bekijk vacatures",
+    "formNewTitle": "Nieuw item",
+    "formEditTitle": "Item bewerken",
+    "jobTitle": "Functie",
+    "company": "Bedrijf",
+    "sourceUrl": "Adres van de vacature",
+    "sourceUrlHint": "Optioneel, een adres dat begint met https://",
+    "location": "Plaats",
+    "appliedOn": "Sollicitatiedatum",
+    "stage": "Fase",
+    "note": "Notitie",
+    "noteHint": "Optioneel. Vul geen documentnummers of rijksregisternummer in.",
+    "remindOn": "Herinner me aan contact",
+    "stages": {
+      "planned": "Gepland",
+      "sent": "Verstuurd",
+      "interview": "Gesprek",
+      "offer": "Aanbod",
+      "closed": "Afgesloten"
+    },
+    "save": "Item opslaan",
+    "saving": "Opslaan…",
+    "cancel": "Annuleren",
+    "edit": "Bewerken",
+    "delete": "Verwijderen",
+    "deleteTitle": "Item “{name}” verwijderen?",
+    "deleteDescription": "Het item wordt definitief uit het logboek verwijderd.",
+    "saved": "We hebben het item opgeslagen.",
+    "deleted": "We hebben het item verwijderd.",
+    "errorNetwork": "Geen verbinding. Controleer je internet en probeer opnieuw.",
+    "required": "Dit veld is verplicht.",
+    "urlInvalid": "Geef een adres op dat begint met https://.",
+    "noteSensitive": "De notitie lijkt een identificatienummer te bevatten. Verwijder het en probeer opnieuw.",
+    "appliedLabel": "Sollicitatie: {date}",
+    "remindLabel": "Herinnering: {date}",
+    "remindDue": "Tijd voor contact",
+    "openSource": "Vacature openen",
+    "listLabel": "Items in het sollicitatielogboek"
   }
 }

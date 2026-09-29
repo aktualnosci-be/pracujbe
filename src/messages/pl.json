@@ -789,7 +789,8 @@
     "cvImportNoProposals": "Nie znaleźliśmy w CV nic do zaproponowania. Wypełnij profil ręcznie.",
     "cvImportFailed": "Nie udało się przygotować propozycji. Spróbuj ponownie później albo wypełnij profil ręcznie.",
     "jobContentReviewRequired": "Treść oferty przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji albo po zmianie treści.",
-    "jobContentRejected": "Treść oferty nie została zaakceptowana. Zmień ją, aby opublikować ofertę."
+    "jobContentRejected": "Treść oferty nie została zaakceptowana. Zmień ją, aby opublikować ofertę.",
+    "journalLimitReached": "Dziennik ma już 200 wpisów. Usuń jeden, aby dodać nowy."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1221,7 +1222,8 @@
     "savedSearchJobsShow": "Pokaż oferty: {name}",
     "savedSearchJobsFrom": "Wyszukiwanie: {name}",
     "employerGreetingSubListing": "Witaj {name}! Sprawdź, jak radzą sobie Twoje ogłoszenia.",
-    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia."
+    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia.",
+    "navJournal": "Dziennik aplikacji"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -3865,5 +3867,53 @@
     "reviewRejected": "Treść nie została zaakceptowana ({categories}). Zmień ją.",
     "reviewReason": "Uzasadnienie: {reason}",
     "editPaused": "Zmiany zapisane. Oferta jest wstrzymana do czasu sprawdzenia treści przez zespół portalu."
+  },
+  "applicationJournal": {
+    "title": "Dziennik aplikacji",
+    "intro": "Prywatna lista ofert, na które aplikujesz u pracodawców poza Pracuj.be. Notujesz sam — portal niczego nie wysyła ani nie sprawdza.",
+    "privacy": "Widzisz to tylko Ty. Pracodawcy i inni użytkownicy nie mają dostępu do tych wpisów, a Pracuj.be nie przekazuje ich nikomu.",
+    "add": "Dodaj wpis",
+    "empty": "Nie masz jeszcze wpisów. Dodaj ofertę, na którą aplikujesz u pracodawcy, aby pamiętać o terminach i dalszym kontakcie.",
+    "demo": "W wersji demonstracyjnej nie zapisujemy wpisów.",
+    "loadError": "Nie udało się wczytać dziennika aplikacji.",
+    "retry": "Spróbuj ponownie",
+    "browse": "Przeglądaj oferty",
+    "formNewTitle": "Nowy wpis",
+    "formEditTitle": "Edycja wpisu",
+    "jobTitle": "Stanowisko",
+    "company": "Firma",
+    "sourceUrl": "Adres ogłoszenia",
+    "sourceUrlHint": "Opcjonalnie, adres zaczynający się od https://",
+    "location": "Miejscowość",
+    "appliedOn": "Data aplikacji",
+    "stage": "Etap",
+    "note": "Notatka",
+    "noteHint": "Opcjonalnie. Nie wpisuj numerów dokumentów ani numeru rejestru narodowego.",
+    "remindOn": "Przypomnij mi o kontakcie",
+    "stages": {
+      "planned": "Planowana",
+      "sent": "Wysłana",
+      "interview": "Rozmowa",
+      "offer": "Oferta",
+      "closed": "Zamknięta"
+    },
+    "save": "Zapisz wpis",
+    "saving": "Zapisywanie…",
+    "cancel": "Anuluj",
+    "edit": "Edytuj",
+    "delete": "Usuń",
+    "deleteTitle": "Usunąć wpis „{name}”?",
+    "deleteDescription": "Wpis zostanie usunięty z dziennika bezpowrotnie.",
+    "saved": "Zapisaliśmy wpis.",
+    "deleted": "Usunęliśmy wpis.",
+    "errorNetwork": "Brak połączenia. Sprawdź internet i spróbuj ponownie.",
+    "required": "To pole jest wymagane.",
+    "urlInvalid": "Podaj adres zaczynający się od https://.",
+    "noteSensitive": "Notatka wygląda na zawierającą numer identyfikacyjny. Usuń go i spróbuj ponownie.",
+    "appliedLabel": "Aplikacja: {date}",
+    "remindLabel": "Przypomnienie: {date}",
+    "remindDue": "Czas na kontakt",
+    "openSource": "Otwórz ogłoszenie",
+    "listLabel": "Wpisy w dzienniku aplikacji"
   }
 }

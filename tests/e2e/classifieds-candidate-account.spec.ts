@@ -57,6 +57,7 @@ for (const locale of LOCALES) {
       [t.dashboard.navSummary, '/candidate'],
       [t.dashboard.navSaved, '/candidate/zapisane'],
       [t.dashboard.navSearches, '/candidate/wyszukiwania'],
+      [t.dashboard.navJournal, '/candidate/dziennik'],
       [t.dashboard.navSettings, '/candidate/ustawienia'],
     ] as const) {
       expect(await page.locator(`a[href="/${locale}${href}"]`).filter({ hasText: label }).count(), label).toBeGreaterThan(0);

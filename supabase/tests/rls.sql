@@ -20378,4 +20378,139 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- ============================================================================
+-- AJ904. Prywatny dziennik aplikacji kandydata (#904, 0970): odczyt tylko właściciela, zapis
+-- wyłącznie RPC, firma i inny kandydat nie czytają ani nie zmieniają, eksport i usunięcie konta
+-- obejmują tabelę. Kontrole ujemne: osłabiona polityka i wyłączone RLS ujawniają wiersz.
+-- ============================================================================
+\echo '--- AJ904 dziennik aplikacji kandydata ---'
+reset role; reset app.current_uid;
+\set AJ1 'd9040000-0000-4000-8000-000000000001'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'AJ1','aj1@test.be','Ada J','{"role":"candidate","first_name":"Ada","last_name":"J","locale":"pl"}');
+select test_fixture.attest_candidates();
+
+-- AJ904-1: anon nie czyta i nie woła RPC.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select count(*) from public.candidate_application_journal', 'permission denied', 'AJ904-1 anon bez odczytu');
+select pg_temp.expect_error('select public.save_application_journal_entry(gen_random_uuid(), null, ''T'', ''F'')', 'permission denied', 'AJ904-1b anon bez zapisu');
+reset role;
+
+-- AJ904-2: kandydat zapisuje wpis (RPC), tylko on go widzi.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select public.save_application_journal_entry(
+  '11111111-aaaa-4000-8000-000000000001'::uuid, null, '  Magazynier ', 'Firma X', 'https://vdab.be/vacature/1',
+  ' Antwerpia ', date '2026-09-20', 'interview', 'Rozmowa w czwartek', date '2026-10-01') as ajid \gset
+select pg_temp.assert(:'ajid' is not null
+  and (select count(*) = 1 and bool_and(job_title = 'Magazynier' and location = 'Antwerpia' and stage = 'interview')
+         from public.candidate_application_journal), 'AJ904-2 własny wpis widoczny, pola przycięte');
+select pg_temp.expect_error('insert into public.candidate_application_journal(profile_id, client_key, job_title, company_name) values (auth.uid(), gen_random_uuid(), ''a'', ''b'')',
+  'permission denied', 'AJ904-2b bezpośredni INSERT odrzucony');
+select pg_temp.expect_error('update public.candidate_application_journal set note = ''hak''', 'permission denied', 'AJ904-2c bezpośredni UPDATE odrzucony');
+select pg_temp.expect_error('delete from public.candidate_application_journal', 'permission denied', 'AJ904-2d bezpośredni DELETE odrzucony');
+-- Idempotencja: ten sam klucz = ten sam wpis.
+select public.save_application_journal_entry('11111111-aaaa-4000-8000-000000000001'::uuid, null, 'Inny tytuł', 'Inna firma') as ajid2 \gset
+select pg_temp.assert(:'ajid2'::uuid = :'ajid'::uuid and (select count(*) = 1 from public.candidate_application_journal),
+  'AJ904-2e ponowienie z tym samym kluczem nie tworzy duplikatu');
+reset role; reset app.current_uid;
+
+-- AJ904-3: inny kandydat i firma nie czytają, nie edytują, nie usuwają.
+set role authenticated; set app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_application_journal) = 0, 'AJ904-3 inny kandydat nie widzi cudzego wpisu');
+select pg_temp.expect_error(format('select public.save_application_journal_entry(gen_random_uuid(), %L, ''x'', ''y'')', :'ajid'),
+  'NOT_FOUND', 'AJ904-3b inny kandydat nie edytuje cudzego wpisu');
+select pg_temp.expect_error(format('select public.delete_application_journal_entry(%L)', :'ajid'),
+  'NOT_FOUND', 'AJ904-3c inny kandydat nie usuwa cudzego wpisu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_application_journal) = 0, 'AJ904-3d pracodawca (członek firmy) nie widzi dziennika');
+select pg_temp.expect_error('select public.save_application_journal_entry(gen_random_uuid(), null, ''x'', ''y'')',
+  'PERMISSION_DENIED', 'AJ904-3e pracodawca nie prowadzi dziennika');
+select pg_temp.expect_error(format('select public.delete_application_journal_entry(%L)', :'ajid'),
+  'NOT_FOUND', 'AJ904-3f pracodawca nie usuwa wpisu');
+reset role; reset app.current_uid;
+select pg_temp.assert((select count(*) from public.candidate_application_journal where id = :'ajid') = 1
+  and (select job_title from public.candidate_application_journal where id = :'ajid') = 'Magazynier',
+  'AJ904-3g wpis bez zmian po próbach cudzych');
+
+-- AJ904-4: walidacja i edycja właściciela.
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.save_application_journal_entry(gen_random_uuid(), null, ''x'', ''y'', ''http://nie-https.be'')',
+  'VALIDATION_FAILED', 'AJ904-4 adres bez https odrzucony');
+select pg_temp.expect_error('select public.save_application_journal_entry(gen_random_uuid(), null, ''x'', ''y'', null, null, null, ''hired'')',
+  'VALIDATION_FAILED', 'AJ904-4b nieznany etap odrzucony');
+select pg_temp.expect_error('select public.save_application_journal_entry(gen_random_uuid(), null, '' '', ''y'')',
+  'VALIDATION_FAILED', 'AJ904-4c pusty tytuł odrzucony');
+select public.save_application_journal_entry(gen_random_uuid(), :'ajid'::uuid, 'Magazynier', 'Firma X', null, null, null, 'closed', null, null);
+select pg_temp.assert((select stage = 'closed' and note is null and source_url is null and remind_on is null
+                        from public.candidate_application_journal where id = :'ajid'), 'AJ904-4d edycja właściciela');
+select public.delete_application_journal_entry(:'ajid'::uuid);
+select pg_temp.assert((select count(*) = 0 from public.candidate_application_journal), 'AJ904-4e usunięcie własnego wpisu');
+reset role; reset app.current_uid;
+
+-- AJ904-5: limit 200 wpisów na kandydata (transakcja cofana).
+begin;
+insert into public.candidate_application_journal(profile_id, client_key, job_title, company_name)
+  select :'CANDA', gen_random_uuid(), 'T' || g, 'F' from generate_series(1, 200) g;
+set local role authenticated; set local app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.save_application_journal_entry(gen_random_uuid(), null, ''x'', ''y'')',
+  'JOURNAL_LIMIT_REACHED', 'AJ904-5 201. wpis odrzucony');
+rollback;
+reset role; reset app.current_uid;
+
+-- AJ904-6: dziennik nie jest rekordem procesu — nie tworzy aplikacji, dopasowań ani zdarzeń lejka.
+select pg_temp.assert(
+  (select count(*) from pg_constraint where conrelid = 'public.candidate_application_journal'::regclass and contype = 'f') = 1
+  and (select confrelid::regclass::text from pg_constraint where conrelid = 'public.candidate_application_journal'::regclass and contype = 'f') = 'profiles'
+  and (select count(*) from information_schema.columns where table_schema = 'public'
+        and table_name = 'candidate_application_journal' and column_name in ('job_id', 'company_id')) = 0,
+  'AJ904-6 wpis bez job_id/company_id, jedyny klucz obcy = profiles (nie rekord procesu)');
+
+-- AJ904-7: eksport (#486) i usunięcie konta.
+set role authenticated; set app.current_uid = :'AJ1'; select pg_temp.assert_client_role();
+select public.save_application_journal_entry(gen_random_uuid(), null, 'Kierowca', 'Firma Y', 'https://actiris.brussels/o/1', 'Bruksela',
+  date '2026-09-21', 'sent', 'Notatka eksportu', null) as ajexp \gset
+select pg_temp.assert(
+  jsonb_array_length(public.export_my_data()->'applicationJournal') = 1
+  and public.export_my_data()->'applicationJournal'->0->>'note' = 'Notatka eksportu'
+  and public.export_my_data() ? 'ageAttestations',
+  'AJ904-7 eksport zawiera dziennik i zachowuje poprzednie klucze');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CANDA'; select pg_temp.assert_client_role();
+select pg_temp.assert(jsonb_array_length(public.export_my_data()->'applicationJournal') = 0, 'AJ904-7b eksport nie zawiera cudzych wpisów');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'AJ1'; select pg_temp.assert_client_role();
+select public.request_account_erasure('aj1@test.be');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (select 1 from public.candidate_application_journal where profile_id = :'AJ1')
+  and not exists (select 1 from auth.users where id = :'AJ1'), 'AJ904-7c usunięcie konta kasuje dziennik');
+
+-- AJ904-N: kontrole ujemne — bez polityki własności / bez RLS cudzy wpis wycieka.
+begin;
+insert into public.candidate_application_journal(profile_id, client_key, job_title, company_name)
+  values (:'CANDA', gen_random_uuid(), 'Wpis kontrolny', 'F');
+drop policy candidate_application_journal_select_own on public.candidate_application_journal;
+create policy candidate_application_journal_select_own on public.candidate_application_journal for select to authenticated using (true);
+set local role authenticated; set local app.current_uid = :'CANDB'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_application_journal) = 1,
+  'AJ904-N1 kontrola ujemna: polityka USING true ujawnia wpis innemu kandydatowi');
+rollback;
+reset role; reset app.current_uid;
+begin;
+insert into public.candidate_application_journal(profile_id, client_key, job_title, company_name)
+  values (:'CANDA', gen_random_uuid(), 'Wpis kontrolny', 'F');
+alter table public.candidate_application_journal no force row level security;
+alter table public.candidate_application_journal disable row level security;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.candidate_application_journal) = 1,
+  'AJ904-N2 kontrola ujemna: bez RLS pracodawca czyta wpis');
+rollback;
+reset role; reset app.current_uid;
+select pg_temp.assert((select relrowsecurity and relforcerowsecurity from pg_class where oid = 'public.candidate_application_journal'::regclass)
+  and not has_table_privilege('authenticated', 'public.candidate_application_journal', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.candidate_application_journal', 'UPDATE')
+  and not has_table_privilege('authenticated', 'public.candidate_application_journal', 'DELETE')
+  and not has_any_column_privilege('anon', 'public.candidate_application_journal', 'SELECT'),
+  'AJ904-8 RLS wymuszone, brak grantów zapisu dla klienta i odczytu dla anon');
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

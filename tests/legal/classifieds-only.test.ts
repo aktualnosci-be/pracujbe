@@ -430,8 +430,8 @@ describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
     expect(read('src/app/[locale]/candidate/profil/page.tsx')).toMatch(/notFoundUnlessRecruitment\(\)/);
   });
 
-  it('nawigacja w trybie ogłoszeniowym = pulpit, zapisane oferty, zapisane wyszukiwania, ustawienia', () => {
-    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'settings']);
+  it('nawigacja w trybie ogłoszeniowym = pulpit, zapisane oferty, zapisane wyszukiwania, dziennik aplikacji, ustawienia', () => {
+    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'journal', 'settings']);
     expect(candidateNavKeys(false)).toBe(CLASSIFIEDS_CANDIDATE_NAV);
   });
 });
