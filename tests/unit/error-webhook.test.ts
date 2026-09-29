@@ -14,9 +14,10 @@ import {
   installErrorWebhook,
   parseErrorWebhookUrl,
   reportRequestError,
+  safeErrorArea,
   safeRoute,
 } from '@/lib/error-webhook';
-import { AppError } from '@/lib/errors';
+import { AppError, ErrorCodes } from '@/lib/errors';
 import { readinessChecks } from '@/lib/env';
 
 import { PII, UUID, expectNoPii } from '../helpers/privacy-fixtures';
@@ -164,8 +165,121 @@ describe('payload', () => {
     await vi.waitFor(() => expect(rec.calls).toHaveLength(1));
     const raw = String(rec.calls[0]!.init.body);
     expectNoPii(raw);
-    expect(raw).not.toContain('candidate.private');
+    // #1066: z kontekstu wychodzi wyłącznie etykieta obszaru — nie bio, e-mail ani reszta pól.
+    expect(bodyOf(rec.calls[0]!).content).toContain('Obszar: candidate.private');
+    expect(raw).not.toContain('bio');
     expect(bodyOf(rec.calls[0]!).content).toContain('Kod: PERMISSION_DENIED');
+  });
+
+  describe('#1066 obszar awarii', () => {
+    it('safeErrorArea: przepuszcza etykiety kodu, odrzuca dane', () => {
+      expect(safeErrorArea('maintenance.gc.retention')).toBe('maintenance.gc.retention');
+      expect(safeErrorArea('email.outbox.markSent.leaseLost')).toBe('email.outbox.markSent.leaseLost');
+      expect(safeErrorArea('ops.metrics')).toBe('ops.metrics');
+      for (const bad of [
+        PII.email,
+        `jobs.${UUID}`,
+        'jobs.getJob 12345678',
+        'jobs.123456789',
+        'a b',
+        'x'.repeat(120),
+        '**bold**',
+        '',
+        42,
+        undefined,
+      ]) {
+        expect(safeErrorArea(bad), String(bad)).toBeUndefined();
+      }
+    });
+
+    it('wiadomość zawiera linię Obszar tylko dla poprawnej etykiety', () => {
+      const withArea = buildErrorWebhookText({ code: 'INTERNAL', area: 'ops.metrics', time: new Date(0) });
+      expect(withArea).toContain('Obszar: ops.metrics');
+      const bad = buildErrorWebhookText({ code: 'INTERNAL', area: PII.email, time: new Date(0) });
+      expect(bad).not.toContain('Obszar');
+      expectNoPii(bad);
+      expect(buildErrorWebhookText({ code: 'INTERNAL', time: new Date(0) })).not.toContain('Obszar');
+    });
+
+    it('captureError dopina task do obszaru (maintenance.gc + retention)', async () => {
+      vi.stubEnv('ERROR_WEBHOOK_URL', NATIVE);
+      const rec = recorder();
+      setErrorReporter(createErrorWebhookSender({ fetch: rec.fetch }).reporter);
+      captureError(new Error('x'), { area: 'maintenance.gc', task: 'retention', email: PII.email });
+      await vi.waitFor(() => expect(rec.calls).toHaveLength(1));
+      expect(bodyOf(rec.calls[0]!).content).toContain('Obszar: maintenance.gc.retention');
+      expectNoPii(String(rec.calls[0]!.init.body));
+    });
+
+    it('deduplikacja po parze (kod, obszar): inny obszar = osobny wpis, ten sam = pominięty', async () => {
+      const rec = recorder();
+      const sender = createErrorWebhookSender({
+        fetch: rec.fetch,
+        target: () => ({ url: 'https://discord.com/api/webhooks/1/x', format: 'discord' }),
+        now: () => 1_000,
+      });
+      expect(await sender.send({ code: 'INTERNAL', area: 'maintenance.gc.retention' })).toBe('sent');
+      expect(await sender.send({ code: 'INTERNAL', area: 'email.outbox.send' })).toBe('sent');
+      expect(await sender.send({ code: 'INTERNAL', area: 'maintenance.gc.retention' })).toBe('deduplicated');
+      // Kontrola ujemna: obszar niepoprawny wpada do wspólnego wpisu bez obszaru.
+      expect(await sender.send({ code: 'INTERNAL', area: PII.email })).toBe('sent');
+      expect(await sender.send({ code: 'INTERNAL' })).toBe('deduplicated');
+      expect(rec.calls).toHaveLength(3);
+    });
+
+    it('#1068: SQLSTATE w wiadomości tylko w poprawnej postaci, osobny wpis per SQLSTATE', async () => {
+      const text = buildErrorWebhookText({ code: 'INTERNAL', area: 'team.invite', sqlstate: '42P01', time: new Date(0) });
+      expect(text).toContain('SQLSTATE: 42P01');
+      const bad = buildErrorWebhookText({ code: 'INTERNAL', sqlstate: `bad ${PII.email}`, time: new Date(0) });
+      expect(bad).not.toContain('SQLSTATE');
+      expectNoPii(bad);
+
+      const rec = recorder();
+      const sender = createErrorWebhookSender({
+        fetch: rec.fetch,
+        target: () => ({ url: 'https://discord.com/api/webhooks/1/x', format: 'discord' }),
+        now: () => 1_000,
+      });
+      expect(await sender.send({ code: 'INTERNAL', area: 'team.invite', sqlstate: '42P01' })).toBe('sent');
+      expect(await sender.send({ code: 'INTERNAL', area: 'team.invite', sqlstate: '42P01' })).toBe('deduplicated');
+      expect(await sender.send({ code: 'INTERNAL', area: 'team.invite', sqlstate: '40001' })).toBe('sent');
+    });
+
+    it('#1105: zbiorczy budżet błędów z przeglądarki nie zalewa kanału i nie wycisza błędów serwera', async () => {
+      const rec = recorder();
+      let time = 1_000;
+      const sender = createErrorWebhookSender({
+        fetch: rec.fetch,
+        target: () => ({ url: 'https://discord.com/api/webhooks/1/x', format: 'discord' }),
+        now: () => time,
+        clientBudget: 3,
+        clientBudgetWindowMs: 60_000,
+      });
+      const codes = Object.values(ErrorCodes);
+      expect(codes.length).toBeGreaterThan(5);
+      const results: string[] = [];
+      for (const code of codes.slice(0, 6)) results.push(await sender.send({ code, source: 'client' }));
+      expect(results).toEqual(['sent', 'sent', 'sent', 'rate_limited', 'rate_limited', 'rate_limited']);
+      expect(rec.calls).toHaveLength(3);
+
+      // Kontrola ujemna: błąd serwera nadal wychodzi (budżet dotyczy tylko `client`).
+      expect(await sender.send({ code: 'INTERNAL' })).toBe('sent');
+      expect(rec.calls).toHaveLength(4);
+
+      // Deduplikowane powtórki nie zużywają budżetu; po oknie budżet wraca.
+      time += 61_000;
+      expect(await sender.send({ code: codes[3]!, source: 'client' })).toBe('sent');
+    });
+
+    it('błąd przeglądarki nie niesie obszaru', async () => {
+      const rec = recorder();
+      const sender = createErrorWebhookSender({
+        fetch: rec.fetch,
+        target: () => ({ url: 'https://discord.com/api/webhooks/1/x', format: 'discord' }),
+      });
+      await sender.send({ code: 'INTERNAL', source: 'client', area: 'ops.metrics' });
+      expect(bodyOf(rec.calls[0]!).content).not.toContain('Obszar');
+    });
   });
 
   it('trasa z żądania: bez query/fragmentu i segmentów z danymi; kod spoza słownika = INTERNAL', () => {

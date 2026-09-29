@@ -3,7 +3,7 @@
 import { getLocale } from 'next-intl/server';
 import { headers } from 'next/headers';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -164,7 +164,9 @@ export async function saveOnboardingStep(
     }
     return { ok: true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'onboarding.saveOnboardingStep', mapPgError(databaseErrorMessage(error))) };
+    }
     // Nieoczekiwany błąd — bez technikaliów dla użytkownika (Invariant #8).
     captureError(error, { area: 'onboarding.saveOnboardingStep' });
     return { ok: false, error: 'INTERNAL' };
