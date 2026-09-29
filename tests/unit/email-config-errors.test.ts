@@ -99,7 +99,7 @@ describe('czujki (#1214, #1227)', () => {
   it('listy odłożone po błędzie konfiguracji = alarm krytyczny email_provider_config', () => {
     expect(evaluateOps(metrics({ configBlocked: 3 })).alerts).toContain('email_provider_config');
     expect(evaluateOps(metrics({ configBlocked: 0 })).alerts).not.toContain('email_provider_config');
-    // baza sprzed 0193 (bez pola) — czujka milczy
+    // baza sprzed 0192 (bez pola) — czujka milczy
     expect(evaluateOps(metrics()).status).toBe('ok');
   });
 

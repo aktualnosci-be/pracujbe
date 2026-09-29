@@ -41,8 +41,8 @@ identyfikatorów ani konfiguracji.
 | `maintenance_run_failed` | ostrzeżenie | ostatni przebieg zakończył się błędem zadania (nazwa zadania w wierszu panelu) | awaria jednego zadania; szczegół: kod na webhooku błędów |
 | `maintenance_run_unavailable` | ostrzeżenie | nie da się odczytać `ops_last_maintenance_run()` | brak uprawnień `pracujbe_ops`; baza sprzed 0180 = czujka milczy |
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
-| `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h; dla `email_deliveries` od `0193` bez wierszy wygaszonych (wypisanie, blokada adresu, funkcja wyłączona — osobno `suppressedLast24h`, bez sygnału) | błędne adresy, odrzucenia dostawcy |
-| `email_provider_config` | alarm | listy odłożone po błędzie konfiguracji nadawcy/dostawcy (`ops_metrics().email.configBlocked`, 0193): zły `EMAIL_FROM`, niezweryfikowana domena, 401/403 klucza, złe konto SMTP | popraw zmienną/konto u dostawcy — listy wyjdą same w ciągu 10 min, próby nie są zużywane (#1214) |
+| `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h; dla `email_deliveries` od `0192` bez wierszy wygaszonych (wypisanie, blokada adresu, funkcja wyłączona — osobno `suppressedLast24h`, bez sygnału) | błędne adresy, odrzucenia dostawcy |
+| `email_provider_config` | alarm | listy odłożone po błędzie konfiguracji nadawcy/dostawcy (`ops_metrics().email.configBlocked`, 0192): zły `EMAIL_FROM`, niezweryfikowana domena, 401/403 klucza, złe konto SMTP | popraw zmienną/konto u dostawcy — listy wyjdą same w ciągu 10 min, próby nie są zużywane (#1214) |
 | `email_sender_invalid` | alarm | `EMAIL_FROM` ustawiony, ale nieużywalny (zły zapis skrzynki); worker nie pobiera kolejki, `/api/health` → `emailProviderReady: false` | wpisz `Nazwa <adres@domena>` albo sam adres; otaczające cudzysłowy z `.env.example` są zdejmowane (#1214) |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
 | `ai_budget_exhausted` | alarm | wydatek AI doby lub miesiąca ≥ limit, limit 0 albo brak limitu (#36) | wyczerpany budżet — funkcje AI zablokowane; decyzja o limicie w `docs/AI_BUDGET.md` |
@@ -84,7 +84,7 @@ zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Do
 `rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
 z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
 
-### Poczta: błąd konfiguracji nadawcy (#1214, migracja `0193` — numer tymczasowy)
+### Poczta: błąd konfiguracji nadawcy (#1214, migracja `0192` — numer tymczasowy)
 
 Błąd wspólny dla wszystkich listów (zły/nieparsowalny `EMAIL_FROM`, `validation_error`
 Resend o domenie/nadawcy, `invalid_from_address`/`invalid_api_key`, EmailLabs 401/403 albo

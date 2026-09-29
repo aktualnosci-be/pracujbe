@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0193 (numer tymczasowy) — poczta: czujki bez szumu wygaszeń, błąd konfiguracji nadawcy
+-- 0192 (numer tymczasowy) — poczta: czujki bez szumu wygaszeń, błąd konfiguracji nadawcy
 -- i ponowne zakolejkowanie nieudanych listów (#1227 OPS-2, #1214 OPS-1).
 --
 -- 1. ops_metrics() — bazuje na NAJNOWSZEJ definicji z 0177 (0180–0183 jej nie zmieniają; żadna
@@ -19,7 +19,7 @@
 --    (provider_message_id/sent_at puste). attempts = 0, bez dzierżawy; claim_email_batch ponownie
 --    sprawdza zgodę, blokadę adresu i uprawnienie odbiorcy, więc wypisany nie dostanie listu.
 --    Domyślnie dry-run (same liczby). Audyt `email_delivery.requeued` z liczbami, bez adresów.
--- Rollback: supabase/rollback/0193_email_ops_config_requeue.down.sql.
+-- Rollback: supabase/rollback/0192_email_ops_config_requeue.down.sql.
 -- =============================================================================
 
 create or replace function public.ops_metrics()

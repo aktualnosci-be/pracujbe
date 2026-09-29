@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0193 — przywraca ops_metrics() z 0177 i usuwa requeue_failed_email_deliveries.
+-- Rollback 0192 — przywraca ops_metrics() z 0177 i usuwa requeue_failed_email_deliveries.
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
 -- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/email-ops-config-rollback.sql wykonuje go w transakcji i cofa).
