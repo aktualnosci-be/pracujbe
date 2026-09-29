@@ -193,6 +193,27 @@ describe('budżet okna dostawcy (pula auth, 0137)', () => {
     expectNoSecretsInCapturedErrors();
   });
 
+  it('#1214: błąd konfiguracji dostawcy → to i pozostałe zlecenia odłożone bez fail_email, ok=false', async () => {
+    const pool = fakePool([delivery(), delivery({ id: second })]);
+    const configSend = vi.fn(async () => { throw new AuthMailSendError('configuration_error'); });
+    const before = Date.now();
+    const result = await processAuthEmailBatch(pool as never, { send: configSend }, { baseURL, from: 'x <x@pracuj.be>' });
+    expect(result).toMatchObject({ processed: 2, sent: 0, failed: 0, deferred: 2, ok: false });
+    expect(configSend).toHaveBeenCalledTimes(1);
+    expect(pool.calls.some((c) => c.sql.includes('fail_email'))).toBe(false);
+    const deferred = pool.calls.filter((c) => c.sql.includes('defer_email')).map((c) => c.params);
+    expect(deferred.map((p) => p?.[0])).toEqual(['11111111-1111-4111-8111-111111111111', second]);
+    expect((deferred[0]?.[2] as Date).getTime()).toBeGreaterThan(before);
+  });
+
+  it('KONTROLA UJEMNA #1214: odrzucenie listu (delivery_failed) nadal woła fail_email', async () => {
+    const pool = fakePool([delivery()]);
+    const rejectSend = vi.fn(async () => { throw new AuthMailSendError('delivery_failed'); });
+    const result = await processAuthEmailBatch(pool as never, { send: rejectSend }, { baseURL, from: 'x <x@pracuj.be>' });
+    expect(result).toMatchObject({ failed: 1, deferred: 0, ok: true });
+    expect(pool.calls.some((c) => c.sql.includes('fail_email'))).toBe(true);
+  });
+
   it('błąd renderu nie zużywa budżetu', async () => {
     const pool = fakePool([delivery()]);
     await processAuthEmailBatch(pool as never, { send }, { baseURL: 'http://pracuj.be', from: 'x <x@pracuj.be>' });
@@ -207,10 +228,23 @@ describe('transport Resend', () => {
     ['internal_server_error', 'provider_unavailable'],
     ['concurrent_idempotent_requests', 'provider_unavailable'],
     ['validation_error', 'delivery_failed'],
-    ['invalid_from_address', 'delivery_failed'],
+    // #1214: błędy konfiguracji wspólne dla wszystkich listów (klucz, nadawca, domena).
+    ['invalid_from_address', 'configuration_error'],
+    ['invalid_api_key', 'configuration_error'],
+    ['restricted_api_key', 'configuration_error'],
+    ['daily_quota_exceeded', 'provider_unavailable'],
     [undefined, 'delivery_failed'],
   ])('klasyfikacja błędu %s → %s', (name, code) => {
     expect(classifyProviderError(name)).toBe(code);
+  });
+
+  it.each([
+    ['The pracuj.be domain is not verified. Please, add and verify your domain on https://resend.com/domains', 'configuration_error'],
+    ['Invalid `from` field. The email address needs to follow the `email@example.com` format.', 'configuration_error'],
+    // KONTROLA UJEMNA: odrzucenie adresata zostaje odrzuceniem listu.
+    ['Invalid `to` field. The email address needs to follow the `email@example.com` format.', 'delivery_failed'],
+  ])('validation_error „%s” → %s (#1214)', (message, code) => {
+    expect(classifyProviderError('validation_error', message)).toBe(code);
   });
 
   it('błąd dostawcy → AuthMailSendError z kodem, bez komunikatu dostawcy', async () => {
