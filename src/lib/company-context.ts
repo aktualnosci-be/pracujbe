@@ -16,6 +16,28 @@ import type { TransactionQuery } from '@/lib/db/transaction';
 
 export const ACTIVE_COMPANY_COOKIE = 'pb_active_company';
 
+/**
+ * Atrybuty cookie aktywnej firmy — jedno miejsce dla `setActiveCompany`, `createAdditionalCompany`
+ * i przyjęcia zaproszenia (#1109). `Secure` w produkcji (jak cookie linków gościa,
+ * `guest-apply/link-cookie.ts`); na `http://localhost` w dev/testach bez, żeby przeglądarka
+ * zapisała cookie.
+ */
+export function activeCompanyCookieOptions(): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: 'lax';
+  path: '/';
+  maxAge: number;
+} {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+  };
+}
+
 export interface CompanyOption {
   id: string;
   name: string;

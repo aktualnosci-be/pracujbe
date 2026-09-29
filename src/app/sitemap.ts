@@ -13,6 +13,8 @@ import {
 } from '@/lib/jobs';
 import { MAX_JOB_LIST_OFFSET } from '@/lib/job-list-pagination';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
+import { pickXDefaultLocale } from '@/lib/seo/locales';
+import { sitemapEntriesCache, sitemapIdsCache } from '@/lib/cache/sitemap-cache';
 
 /**
  * Mapa strony — Pracuj.be. Sitemap INDEX (#599): id `0` = strony statyczne, landing-page'e
@@ -45,6 +47,10 @@ import { getAllGuideSlugs } from '@/lib/guides/guides';
  * zgadywać — prerender przerywał build z `APP_MODE=production` (Railway buduje ze zmiennymi
  * usługi). Per żądanie sitemap widzi aktualne oferty; roboty pobierają go rzadko.
  * Strażnik: `tests/unit/readiness-postgres-only.test.ts`.
+ *
+ * Koszt powtarzanych żądań (#1042, krok 1): wynik każdego pliku i lista partii są trzymane w
+ * pamięci procesu przez 3600 s z deduplikacją równoległych obliczeń (`sitemap-cache.ts`), więc
+ * anonimowe pobieranie sitemapy nie liczy ofert za każdym razem.
  */
 export const dynamic = 'force-dynamic';
 
@@ -67,8 +73,10 @@ async function jobSitemapShardCount(): Promise<number> {
 
 /** Identyfikatory plików sitemap: `0` = core, `1..N` = partie ofert (Next.js: `generateSitemaps`). */
 export async function generateSitemaps(): Promise<{ id: number }[]> {
-  const jobShards = await jobSitemapShardCount();
-  return Array.from({ length: jobShards + 1 }, (_, id) => ({ id }));
+  return sitemapIdsCache.run('ids', async () => {
+    const jobShards = await jobSitemapShardCount();
+    return Array.from({ length: jobShards + 1 }, (_, id) => ({ id }));
+  });
 }
 
 const JOBS_PATH = '/oferty-pracy';
@@ -132,7 +140,8 @@ function buildLanguages(
   for (const locale of locales) {
     languages[locale] = `${base}${pathForLocale(locale)}`;
   }
-  const xDefault = locales.includes(routing.defaultLocale) ? routing.defaultLocale : locales[0];
+  // #1097: ta sama reguła co hreflang w metadata oferty (kolejność `routing.locales`, nie kolejność z bazy).
+  const xDefault = pickXDefaultLocale(locales);
   if (xDefault) languages['x-default'] = `${base}${pathForLocale(xDefault)}`;
   return languages;
 }
@@ -215,7 +224,15 @@ export default async function sitemap({
 
   const shard = parseSitemapId(id);
   if (shard === null) return [];
-  return shard === 0 ? coreSitemap() : jobsSitemapShard(shard - 1);
+
+  // #1042: 3600 s w pamięci procesu. Wynik zdegradowany (nieznane języki tłumaczeń) nie zostaje.
+  const health = { degraded: false };
+  const key = String(shard);
+  const entries = await sitemapEntriesCache.run(key, () =>
+    shard === 0 ? coreSitemap() : jobsSitemapShard(shard - 1, health),
+  );
+  if (health.degraded) sitemapEntriesCache.delete(key);
+  return entries;
 }
 
 /** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji i poradniki. */
@@ -294,7 +311,10 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
  * partie to kolejne zakresy stron `getJobs` (P1-13: `get_public_jobs` klampuje limit do
  * 100/stronę, więc iterujemy stronami w obrębie tej partii).
  */
-async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitemap> {
+async function jobsSitemapShard(
+  shardIndex: number,
+  health: { degraded: boolean },
+): Promise<MetadataRoute.Sitemap> {
   const base = env.siteUrl;
   const locales = routing.locales;
   const now = new Date();
@@ -315,6 +335,7 @@ async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitem
     }
     // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
     const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
+    if (!availableByJob) health.degraded = true; // błąd odczytu: wszystkie wersje, ale nie trzymamy tego w cache
     for (const job of result.jobs) {
       const path = `${JOBS_PATH}/${job.slug}`;
       const available = availableByJob?.[job.id];
