@@ -16,7 +16,7 @@ import { AppError, ErrorCodes } from '@/lib/errors';
  * przepływów rekrutacyjnych ustawiają `RECRUITMENT` jawnie (Vitest: `tests/helpers/portal-mode.ts`,
  * Playwright: `env` serwera w `playwright*.config.ts`).
  *
- * Moduł bez `server-only` i `node:*` (jak `src/lib/billing/flag.ts`): działa w middleware/edge
+ * Moduł bez `server-only` i `node:*`: działa w middleware/edge
  * i w kodzie serwera. W bundlu przeglądarki zmienna nie istnieje (nie ma prefiksu
  * `NEXT_PUBLIC_`), więc klient zawsze widzi tryb ogłoszeniowy — komponent kliencki dostaje tryb
  * od serwera w propsach, a nie liczy go sam. Odczyt leniwy (`process.env` przy wywołaniu), więc
