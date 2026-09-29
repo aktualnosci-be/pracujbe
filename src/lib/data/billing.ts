@@ -104,14 +104,14 @@ export const PLANS: BillingPlan[] = [
     priceCents: 9900,
     currency: 'EUR',
     recommended: true,
-    features: ['standardFeat1', 'standardFeat2', 'standardFeat3', 'standardFeat4'],
+    features: ['standardFeat1', 'standardFeat2', 'standardFeat4'],
   },
   {
     id: 'pro',
     priceCents: 19900,
     currency: 'EUR',
     recommended: false,
-    features: ['proFeat1', 'proFeat2', 'proFeat3', 'proFeat4'],
+    features: ['proFeat1', 'proFeat2', 'proFeat4'],
   },
 ];
 

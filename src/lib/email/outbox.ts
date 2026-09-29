@@ -564,7 +564,11 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       sent += 1;
     } catch (err) {
       const attempts = row.attempts + 1;
-      const isFinal = attempts >= MAX_ATTEMPTS;
+      // Trwałe odrzucenie listu przez dostawcę (`delivery_failed`) ponowienie nie naprawi — kończymy
+      // od razu, bez zajmowania okna wysyłki kolejnymi próbami. Awaria przejściowa
+      // (`provider_unavailable`, termin, błąd bazy/sieci) zachowuje backoff do `MAX_ATTEMPTS`.
+      const permanentRejection = err instanceof MailSendError && err.code === 'delivery_failed';
+      const isFinal = permanentRejection || attempts >= MAX_ATTEMPTS;
       const backoffMin = Math.min(2 ** attempts, 60);
       // #628: po przekroczeniu terminu wynik u dostawcy jest nieznany — wiersz wraca do puli
       // najwcześniej po pełnej dzierżawie (spóźnione żądanie zdąży się rozstrzygnąć).

@@ -54,6 +54,11 @@ vi.mock('@/components/employer/SendOfferButton', () => ({ SendOfferButton: () =>
 // Sekcje matchingu (#1133/#1139, osobny PR) — asynchroniczne komponenty serwerowe; tu znaczniki.
 vi.mock('@/components/employer/EmployerTopMatched', () => ({ EmployerTopMatched: () => null }));
 vi.mock('@/components/candidate/CandidateRecommendedPreview', () => ({ CandidateRecommendedPreview: () => null }));
+// Skrót statystyk ogłoszeń (tryb ogłoszeniowy) — znacznik; treść pokrywa unit `classifieds-employer-stats`.
+vi.mock('@/components/employer/EmployerListingStats', () => ({
+  EmployerListingStats: ({ top }: { top: { status: string } }) =>
+    top.status === 'disabled' ? null : <span data-testid="listing-stats" />,
+}));
 vi.mock('@/components/employer/EmployerOverviewStats', () => ({ EmployerOverviewStats: () => null }));
 vi.mock('@/components/employer/EmployerFunnelSection', () => ({ EmployerFunnelSection: () => null }));
 vi.mock('@/components/employer/EmployerOffersPreview', () => ({ EmployerOffersPreview: () => null }));
@@ -134,6 +139,16 @@ describe('tryb ogłoszeniowy (domyślny)', () => {
   });
 });
 
+describe('tryb ogłoszeniowy: pulpit pracodawcy zamiast sekcji rekrutacyjnych', () => {
+  it('pulpit pracodawcy: skrót statystyk ogłoszeń w miejscu „Top dopasowani”', async () => {
+    await renderEmployerDashboard();
+    expect(screen.getByTestId('listing-stats')).toBeInTheDocument();
+    // Podtytuł bez „rekrutacji”.
+    expect(screen.getByText('employerGreetingSubListingGeneric')).toBeInTheDocument();
+    expect(screen.queryByText('employerGreetingSubGeneric')).toBeNull();
+  });
+});
+
 describe('kontrola ujemna: tryb RECRUITMENT', () => {
   recruitmentModeInTests();
 
@@ -163,5 +178,11 @@ describe('kontrola ujemna: tryb RECRUITMENT', () => {
     expect(candidateData.getMyApplicationsPreview).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('proposal-banner')).toBeInTheDocument();
     expect(screen.getByTestId('applications-preview')).toBeInTheDocument();
+  });
+
+  it('pulpit pracodawcy: bez skrótu statystyk ogłoszeń, stary podtytuł', async () => {
+    await renderEmployerDashboard();
+    expect(screen.queryByTestId('listing-stats')).toBeNull();
+    expect(screen.getByText('employerGreetingSubGeneric')).toBeInTheDocument();
   });
 });
