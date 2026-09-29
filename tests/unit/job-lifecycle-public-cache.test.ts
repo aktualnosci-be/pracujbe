@@ -15,17 +15,15 @@ vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }))
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
+const { PUBLIC_JOB_ROUTES } = await import('@/lib/jobs/public-cache');
+const PUBLIC_CALLS = PUBLIC_JOB_ROUTES.map((path) => [path, 'page']);
+
 const JOB_ID = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
 
 function publicPathCalls(): unknown[] {
   return revalidatePath.mock.calls.filter(
-    (call) =>
-      typeof call[0] === 'string' &&
-      (call[0] === '/[locale]' ||
-        call[0] === '/[locale]/oferty-pracy/[slug]' ||
-        call[0] === '/[locale]/praca/kategoria/[category]' ||
-        call[0] === '/[locale]/praca/miasto/[city]'),
+    (call) => typeof call[0] === 'string' && (PUBLIC_JOB_ROUTES as readonly string[]).includes(call[0]),
   );
 }
 
@@ -46,14 +44,7 @@ describe('publishJob i setJobStatus unieważniają publiczne strony ISR (#775)',
 
     expect(result).toEqual({ ok: true });
     const calls = publicPathCalls();
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        ['/[locale]', 'page'],
-        ['/[locale]/oferty-pracy/[slug]', 'page'],
-        ['/[locale]/praca/kategoria/[category]', 'page'],
-        ['/[locale]/praca/miasto/[city]', 'page'],
-      ]),
-    );
+    expect(calls).toEqual(PUBLIC_CALLS);
   });
 
   it('kontrola ujemna: nieudana publikacja (brak oferty) nie rewaliduje niczego', async () => {
@@ -77,7 +68,7 @@ describe('publishJob i setJobStatus unieważniają publiczne strony ISR (#775)',
       const result = await setJobStatus(JOB_ID, action);
 
       expect(result.ok).toBe(true);
-      expect(publicPathCalls().length).toBe(4);
+      expect(publicPathCalls()).toEqual(PUBLIC_CALLS);
     },
   );
 
