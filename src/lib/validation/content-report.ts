@@ -1,6 +1,7 @@
 import { z } from 'zod/v3';
 
 import { routing } from '@/i18n/routing';
+import { isSimpleDisplayName } from '@/lib/validation/display-name';
 
 /**
  * Walidacja publicznego zgłoszenia treści (DSA, #41) — ten sam schemat w formularzu
@@ -82,7 +83,12 @@ export const contentReportSchema = z.object({
     .trim()
     .max(REPORT_LIMITS.urlMax, 'contentReport.error.urlInvalid')
     .refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'contentReport.error.urlInvalid'),
-  reporterName: z.string().trim().max(REPORT_LIMITS.nameMax, 'contentReport.error.nameTooLong'),
+  reporterName: z
+    .string()
+    .trim()
+    .max(REPORT_LIMITS.nameMax, 'contentReport.error.nameTooLong')
+    // Imię trafia do powitania w e-mailu z potwierdzeniem: tylko prosta postać (litery, spacja, myślnik).
+    .refine((v) => isSimpleDisplayName(v), 'contentReport.error.nameInvalid'),
   reporterEmail: z
     .string()
     .trim()

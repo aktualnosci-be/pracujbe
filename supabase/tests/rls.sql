@@ -19025,6 +19025,94 @@ reset role; reset app.current_uid;
 select pg_temp.assert(exists (select 1 from public.candidate_skills where candidate_profile_id = :'cacp'),
   'CA1142-7 kontrola ujemna: w trybie RECRUITMENT krok 3 zapisuje umiejętności');
 
+\echo '--- CLAIB AI tylko na treści ogłoszenia i katalog planów bez dostępu do kandydatów (0176, #1152, #1153) ---'
+-- Start i koniec w RECRUITMENT. Encje kolejki = identyfikatory bez wierszy w jobs (jak TR31).
+\set CLAIP1 'c1a10176-0000-0000-0000-0000000000c1'
+\set CLAIP2 'c1a10176-0000-0000-0000-0000000000c2'
+\set CLAIJ1 'c1a10176-0000-0000-0000-0000000000d1'
+\set CLAIF '{"title":"Magazynier","description":"Szukam pracy na zmianie nocnej."}'
+reset role; reset app.current_uid;
+select set_config('pracujbe.allow_recruitment_write', '', false);
+
+-- Stan sprzed trybu: w RECRUITMENT profil kandydata trafia do kolejki (zadania nl/fr/en).
+set role service_role;
+select pg_temp.assert(((public.record_translation_source('candidate_profile', :'CLAIP1', 'pl', :'CLAIF'::jsonb, 'tr-v1'))->>'jobsQueued')::int = 3,
+  'CLAIB-0 tryb RECRUITMENT: profil kandydata w kolejce (3 zadania)');
+select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rls.sql CLAIB', 'RECRUITMENT');
+reset role;
+
+-- CLAIB-1: nowe źródło profilu kandydata odrzucone (także service_role), bez żadnego wiersza.
+set role service_role;
+select pg_temp.expect_error(
+  format('select public.record_translation_source(%L, %L::uuid, %L, %L::jsonb, %L)', 'candidate_profile', :'CLAIP2', 'pl', :'CLAIF', 'tr-v1'),
+  'RECRUITMENT_DISABLED', 'CLAIB-1 record_translation_source(candidate_profile) → RECRUITMENT_DISABLED');
+-- Istniejące źródło (nowa treść = nowa rewizja) też odrzucone.
+select pg_temp.expect_error(
+  format('select public.record_translation_source(%L, %L::uuid, %L, %L::jsonb, %L)', 'candidate_profile', :'CLAIP1', 'pl', '{"title":"Kierowca"}', 'tr-v1'),
+  'RECRUITMENT_DISABLED', 'CLAIB-1b nowa rewizja istniejącego profilu odrzucona');
+reset role;
+select pg_temp.assert(not exists (select 1 from public.translation_sources where entity_id = :'CLAIP2')
+  and not exists (select 1 from public.translation_jobs where entity_id = :'CLAIP2')
+  and (select current_revision_no from public.translation_sources where entity_type = 'candidate_profile' and entity_id = :'CLAIP1') = 1,
+  'CLAIB-1c brak źródła, rewizji i zadań; istniejąca rewizja bez zmian');
+select pg_temp.expect_error(
+  format($q$insert into public.translation_sources(entity_type, entity_id) values ('candidate_profile', %L)$q$, :'CLAIP2'),
+  'RECRUITMENT_DISABLED', 'CLAIB-1d bezpośredni INSERT (superuser bez znacznika) odrzucony');
+
+-- CLAIB-2: tłumaczenie oferty działa bez zmian. Pozostałe źródła (fixture'y ofert) wygaszone,
+-- żeby claim sekcji widział tylko jej zadania.
+select count(public.deactivate_translation_source(entity_type, entity_id, false))
+  from public.translation_sources where entity_id not in (:'CLAIP1', :'CLAIJ1') and is_active;
+set role service_role;
+select pg_temp.assert(((public.record_translation_source('job', :'CLAIJ1', 'pl', :'CLAIF'::jsonb, 'tr-v1'))->>'jobsQueued')::int = 3,
+  'CLAIB-2 record_translation_source(job) w trybie ogłoszeniowym: 3 zadania');
+select count(*) filter (where c.entity_id = :'CLAIJ1') as clai_job,
+       count(*) filter (where c.entity_type = 'candidate_profile') as clai_prof
+  from public.claim_translation_jobs(100, 300) c \gset
+reset role;
+select pg_temp.assert(:clai_job = 3, 'CLAIB-2b claim wydaje zadania oferty');
+-- CLAIB-3: zakolejkowane wcześniej zadania profilu nie są wydawane workerowi.
+select pg_temp.assert(:clai_prof = 0
+  and (select count(*) from public.translation_jobs where entity_id = :'CLAIP1' and status = 'queued') = 3,
+  'CLAIB-3 claim pomija zadania candidate_profile (czekają w kolejce)');
+
+-- CLAIB-4 (kontrola ujemna: definicje sprzed 0176 przyjmują profil kandydata) jest w
+-- supabase/tests/portal-legal-mode-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
+
+-- CLAIB-5: katalog planów bez dostępu do kandydatów (CHECK dla każdej roli).
+select pg_temp.assert((select bool_and(not candidate_access) from public.plan_entitlements)
+  and (select count(*) from public.plan_entitlements) >= 4,
+  'CLAIB-5 candidate_access = false dla wszystkich planów');
+set role service_role;
+select pg_temp.expect_error($q$update public.plan_entitlements set candidate_access = true where plan = 'pro'$q$,
+  'plan_entitlements_no_candidate_access', 'CLAIB-5b service_role nie ustawi candidate_access = true');
+reset role;
+select pg_temp.expect_error($q$insert into public.plan_entitlements(plan, max_active_jobs, candidate_access) values ('clai', 5, true)$q$,
+  'plan_entitlements_no_candidate_access', 'CLAIB-5c nowy plan z dostępem do kandydatów odrzucony (superuser)');
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$update public.plan_entitlements set candidate_access = true$q$,
+  'permission denied', 'CLAIB-5d authenticated bez zapisu katalogu');
+reset role; reset app.current_uid;
+-- CLAIB-5e (kontrola ujemna): definicja z 0055 (bez CHECK) przyjmuje candidate_access = true.
+begin;
+alter table public.plan_entitlements drop constraint plan_entitlements_no_candidate_access;
+update public.plan_entitlements set candidate_access = true where plan = 'pro';
+select pg_temp.assert((select candidate_access from public.plan_entitlements where plan = 'pro'),
+  'CLAIB-5e kontrola ujemna: bez CHECK plan pro znów sprzedaje dostęp do kandydatów');
+rollback;
+
+-- CLAIB-6: budżet AI zna osobną funkcję tłumaczenia profili (lista = AI_FEATURE_IDS).
+select pg_temp.assert(position('candidate_profile_translation' in pg_get_functiondef('public.ai_budget_reserve(text, text, bigint)'::regprocedure)) > 0
+  and position('candidate_profile_translation' in (select pg_get_constraintdef(oid) from pg_constraint where conname = 'ai_usage_ledger_feature')) > 0,
+  'CLAIB-6 ai_budget_reserve i CHECK rejestru przyjmują candidate_profile_translation');
+
+-- Sprzątanie kolejki sekcji i powrót do RECRUITMENT.
+select count(public.deactivate_translation_source(entity_type, entity_id, false))
+  from public.translation_sources where entity_id in (:'CLAIP1', :'CLAIJ1');
+set role service_role;
+select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót', 'CLASSIFIEDS_ONLY');
+reset role;
+
 -- ============================================================================
 -- WM1040. Macierz zapisu cudzych wierszy (#1040) + strażnik pokrycia grantów.
 --   * Strażnik: zbiór (tabela, operacja) z grantem zapisu dla `authenticated` musi być pokryty
