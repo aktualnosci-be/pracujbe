@@ -174,9 +174,30 @@ wstrzymana/wygasła, firma zawieszona, przekład po edycji, granty) z kontrolą 
 unit `job-list-machine-translation` (flaga wyłączona = brak odczytu, lista bez kart = brak
 odczytu, jedno wywołanie na stronę, fallback, awaria).
 
+## Nazwy chronione (#740, migracja 0190 — numer tymczasowy)
+
+Nazwa firmy jest nazwą chronioną każdej rewizji oferty. Źródło wyłącznie serwerowe:
+`sync_job_translation_source` czyta `companies.name` z bazy i przekazuje ją do
+`record_translation_source(…, p_protected_terms)` — klient nie ma do tego ścieżki (RPC tylko
+dla service_role). Lista jest częścią niezmiennej rewizji (`translation_source_revisions.
+protected_terms`, normalizacja `translation_protected_terms`: trim, NFC, bez duplikatów,
+posortowana, najwyżej 10 nazw po 1–200 znaków, bez znaków sterujących) i wchodzi do odcisku
+treści — zmiana nazwy firmy (trigger na `companies` reaguje na `name`) tworzy nową rewizję
+każdej jej oferty publicznej, stare zadania są superseded, przekłady nieaktualne. Bez nazw
+odcisk jest taki jak w 0145. `claim_translation_jobs` zwraca `protected_terms`, worker
+przekazuje je dostawcy (prompt: „Keep these terms exactly as written”) i walidatorowi: nazwa
+obecna w polu źródła musi wystąpić bez zmian w tym samym polu przekładu, inaczej wynik jest
+odrzucany kodem `facts_terms` i nie trafia do bazy. Wersja pipeline
+`translation-v2+prompt-v1+glossary-v1`; migracja ponownie synchronizuje aktywne źródła ofert.
+
+Dowód: `rls.sql` sekcja TP740 (kontrole ujemne: odcisk bez nazw, trigger firmy bez `name`),
+rollback `supabase/rollback/0190_translation_protected_terms.down.sql`
+(`translation-protected-terms-rollback.sql`), unit `translation-worker` (nazwa zmieniona przez
+model = `facts_terms`, kontrola ujemna bez nazw), `translation-job-sync`.
+
 Otwarte (#33 → kolejne kroki): JobPosting/hreflang wersji
 przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach”, UI korekty ręcznej dla
-rekrutera, ochrona nazwy firmy (`protectedTerms`) w zleceniu, budżet AI (#36/#552 — po
+rekrutera, inne nazwy własne poza nazwą firmy, budżet AI (#36/#552 — po
 scaleniu: `costBudgeted: true` w inwentarzu i rezerwacja budżetu przed wywołaniem w
 `run.ts`), oferty ponad limit pól (podział na kilka zleceń).
 

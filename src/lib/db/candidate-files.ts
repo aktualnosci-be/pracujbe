@@ -110,6 +110,17 @@ async function withCandidate<T>(
     );
   } catch (error) {
     if (error instanceof AppError) throw error;
+    // Limit plików CV na konto (trigger 0189, SQLSTATE 54000) — jedyny błąd bazy z własnym powodem.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      (error as { code?: unknown }).code === "54000" &&
+      String((error as { message?: unknown }).message).includes("CV_ACCOUNT_LIMIT")
+    ) {
+      throw new AppError("VALIDATION_FAILED", {
+        context: { reason: "accountLimit" },
+      });
+    }
     // Komunikat/cause pg może zawierać nazwę CV, parametry SQL lub adres serwera.
     throw new AppError("INTERNAL");
   }
