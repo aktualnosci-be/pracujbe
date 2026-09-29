@@ -45,8 +45,6 @@ const USER = '11111111-1111-4111-8111-111111111111';
 const CANDIDATE = '22222222-2222-4222-8222-222222222222';
 
 const MAINTENANCE_RPCS = [
-  'release_stale_discount_reservations',
-  'release_stale_checkout_intents',
   'ai_budget_release_stale_reservations',
   'expire_due_jobs',
   'match_recompute_claim',

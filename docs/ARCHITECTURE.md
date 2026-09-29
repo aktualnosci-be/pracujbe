@@ -46,7 +46,7 @@ import modułu nigdy nie rzuca. W `APP_MODE=production` brak konfiguracji = 503,
 │  Panele (candidate/*, employer/*, admin/*) → SSR + wyspy klienta │
 │     NOINDEX, wymagana sesja, RLS + walidacja w Server Actions    │
 ├─────────────────────────────────────────────────────────────────┤
-│  API routes (/api/*)  → webhooki (Resend, płatności), kolejka    │
+│  API routes (/api/*)  → webhooki (poczta), kolejka    │
 │     e-mail (cron/worker), operacje serwerowe                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -282,7 +282,7 @@ Komunikacja:
    notifications · notification_preferences (1:1 profil) · email_deliveries
 
 Pliki/zgody/zgłoszenia: files · consents · consent_versions · reports
-Płatności:              subscriptions · invoices · payments · discount_codes
+Płatności:              (schemat billingu usunięty w 0177; zostaje katalog limitów plan_entitlements)
 Audyt:                  audit_logs · system_events
 ```
 
@@ -345,7 +345,7 @@ Wszystkie `stable` + `set search_path = public`.
 
 ### Tabele bez polityk (celowo — dostęp tylko service role)
 
-`audit_logs`, `system_events`, `email_deliveries`, `discount_codes`. RLS włączone,
+`audit_logs`, `system_events`, `email_deliveries`. RLS włączone,
 brak polityk = deny dla anon/authenticated; backend czyta przez service role.
 
 ---
