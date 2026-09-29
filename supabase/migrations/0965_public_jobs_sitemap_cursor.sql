@@ -102,11 +102,15 @@ language sql stable security definer set search_path = public, pg_temp as $$
       and j.published_at is not null
       -- Kursor „po”: obie części albo żadna. Niepełny kursor (jedna część) = brak wyników
       -- (fail-closed), nigdy cicho pierwsza strona.
+      -- (Jawne sprawdzenie NULL: porównanie wierszy rozstrzyga po pierwszej parze, więc kursor
+      -- z samą datą dawałby wynik mimo braku `id`.)
       and ((p_after_published_at is null and p_after_id is null)
-           or (j.published_at, j.id) < (p_after_published_at, p_after_id))
+           or (p_after_published_at is not null and p_after_id is not null
+               and (j.published_at, j.id) < (p_after_published_at, p_after_id)))
       -- Kursor „do” (włącznie), analogicznie.
       and ((p_until_published_at is null and p_until_id is null)
-           or (j.published_at, j.id) >= (p_until_published_at, p_until_id))
+           or (p_until_published_at is not null and p_until_id is not null
+               and (j.published_at, j.id) >= (p_until_published_at, p_until_id)))
     order by j.published_at desc, j.id desc
     limit least(greatest(coalesce(p_limit, 1000), 1), 1000)
   )
