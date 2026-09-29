@@ -5,6 +5,7 @@ import { loadNotificationPreferences } from '@/lib/data/notification-preferences
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
+import { EmailLocaleSection } from '@/components/settings/EmailLocaleSection';
 import { EYEBROW, H1_EXTENDED, INTRO, PAPER } from '@/components/dashboard/panel-styles';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 
@@ -63,6 +64,9 @@ export default async function EmployerSettingsPage({
           <NotificationPreferencesLoadError />
         )}
       </section>
+
+      {/* #1049: język e-maili i powiadomień (Invariant #1). */}
+      <EmailLocaleSection locale={locale} />
 
       {/* #486 (0161): eksport danych konta pracodawcy i usunięcie konta. */}
       <AccountDataSettings variant="employer" />

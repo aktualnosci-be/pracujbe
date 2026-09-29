@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -130,6 +132,7 @@ export function BreachIncidentForm({
   version,
   readOnly = false,
 }: BreachIncidentFormProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('admin');
   const tRoot = useTranslations();
   const router = useRouter();
@@ -395,7 +398,8 @@ export function BreachIncidentForm({
   const categoriesError = errors.dataCategories;
 
   return (
-    <form ref={formRef} noValidate onSubmit={submit} aria-busy={pending || undefined} className="min-w-0 space-y-[22px]">
+    <form method="post" ref={formRef} noValidate onSubmit={submit} aria-busy={pending || undefined} className="min-w-0 space-y-[22px]">
+      <NoScriptFormNotice />
       {readOnly ? <p className={PANEL_P}>{t('breachReadOnlyHint')}</p> : null}
 
       {section('event', t('breachSectionEvent'), null, (
@@ -514,7 +518,7 @@ export function BreachIncidentForm({
       ) : null}
 
       {readOnly ? null : (
-        <button type="submit" disabled={pending} className={BTN_PRIMARY}>
+        <button type="submit" disabled={pending || !hydrated} className={BTN_PRIMARY}>
           {pending ? t('confirmSaving') : mode === 'create' ? t('breachCreateSubmit') : t('breachSaveSubmit')}
         </button>
       )}
