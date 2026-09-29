@@ -10,6 +10,7 @@ import { CompanyForm } from '@/components/employer/CompanyForm';
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
 import { CompanyAgencyForm } from '@/components/employer/CompanyAgencyForm';
 import { env } from '@/lib/env';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import { CompanyStatusBanner } from '@/components/employer/CompanyStatusBanner';
 import { CompanyLoadError } from '@/components/employer/CompanyLoadError';
 import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
@@ -108,7 +109,9 @@ export default async function EmployerCompanyPage({
     const targetStatusLabel = target && STATUS_KEY[target.status] ? t(STATUS_KEY[target.status]!) : '';
     const targetVerifiedLabel =
       target?.verifiedAt != null
-        ? new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(target.verifiedAt))
+        ? new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: APP_TIME_ZONE }).format(
+            new Date(target.verifiedAt),
+          )
         : null;
 
     return (
@@ -175,7 +178,7 @@ export default async function EmployerCompanyPage({
       : (company?.status ?? '');
   const verifiedLabel =
     company?.verifiedAt != null
-      ? new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(
+      ? new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: APP_TIME_ZONE }).format(
           new Date(company.verifiedAt),
         )
       : null;

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
+import { useRouter } from '@/i18n/navigation';
 import { setCandidateMinAge } from '@/lib/actions/admin-age-policy';
 import { AGE_POLICY_REASON_MAX, agePolicyReasonError } from '@/lib/admin/age-policy';
 import { ADMIN_PAGE_HEADING_FOCUS } from '@/lib/admin/focus';
@@ -42,9 +43,12 @@ const AGE_OPTIONS = [CANDIDATE_MIN_AGE_LOWEST, CANDIDATE_ADULT_AGE] as const;
 export interface AgePolicyFormProps {
   minAge: number;
   confirmed: boolean;
+  /** Znacznik ostatniej zmiany progu widziany przez admina (CAS, #1102); `null` = brak zmiany. */
+  updatedAt: string | null;
 }
 
-export function AgePolicyForm({ minAge, confirmed }: AgePolicyFormProps): React.JSX.Element {
+export function AgePolicyForm({ minAge, confirmed, updatedAt }: AgePolicyFormProps): React.JSX.Element {
+  const router = useRouter();
   const t = useTranslations('admin');
   const tRoot = useTranslations();
   const feedback = useAdminFeedback();
@@ -85,7 +89,7 @@ export function AgePolicyForm({ minAge, confirmed }: AgePolicyFormProps): React.
     if (pending) return;
     startTransition(async () => {
       try {
-        const res = await setCandidateMinAge(selectedAge, selectedConfirmed, reasonValue);
+        const res = await setCandidateMinAge(selectedAge, selectedConfirmed, reasonValue, updatedAt);
         if (!res.ok && res.field === 'reason') {
           setConfirming(false);
           setReasonError(res.reason ?? 'required');
@@ -101,6 +105,11 @@ export function AgePolicyForm({ minAge, confirmed }: AgePolicyFormProps): React.
                 : t('agePolicySuccess'),
             focusKey: ADMIN_PAGE_HEADING_FOCUS,
           });
+        } else if (res.error === 'STALE_STATE') {
+          // Próg zmienił inny administrator: pokaż aktualny stan i nie nadpisuj po cichu (#1102).
+          setConfirming(false);
+          feedback.fail(t('agePolicyStale'));
+          router.refresh();
         } else {
           setConfirming(false);
           feedback.fail(tRoot(toUserMessageKey(res.error as ErrorCode)));

@@ -12,12 +12,16 @@ import { expect, type Page } from '@playwright/test';
 export const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
 export type TestLocale = (typeof LOCALES)[number];
 
+/**
+ * Klucze użyte w helperach są opisane jawnie; pozostałe przestrzenie nazw (np. `settings`,
+ * `admin`) speców to zwykłe teksty z `src/messages/*.json` — indeks zamiast luki w typie.
+ */
 type Messages = {
   cookies: { bannerTitle: string; acceptAll: string; rejectOptional: string; customize: string };
   dashboard: { greeting: string; greetingNoName: string };
   footer: { langLabel: string };
   jobs: { applyNow: string };
-};
+} & Record<string, Record<string, string>>;
 
 const cache = new Map<string, Messages>();
 
