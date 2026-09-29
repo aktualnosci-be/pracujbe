@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0183_retention_warning_due_sync.sql
+-- 0182_retention_warning_due_sync.sql
 --
 -- #862: `admin_set_retention_policy` zmieniała wyłącznie `retention_policies.period`, nie
 -- dotykając już zapisanych `retention_warnings.due_at`. Wydłużenie okresu retencji PO

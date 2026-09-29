@@ -19174,12 +19174,12 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót
 reset role;
 
 -- ============================================================================
--- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0183):
+-- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0182):
 --        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
 --        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
 --        już ustalonego, dłuższego terminu ostrzeżenia (e-mail z konkretną datą był wysłany).
 -- ============================================================================
-\echo '--- RW862 wydłużenie retencji odracza usunięcie (0183) ---'
+\echo '--- RW862 wydłużenie retencji odracza usunięcie (0182) ---'
 reset role; reset app.current_uid;
 \set RW1 '86200000-0000-4000-8000-0000000000c1'
 \set RW2 '86200000-0000-4000-8000-0000000000c2'

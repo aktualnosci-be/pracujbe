@@ -2772,7 +2772,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, literówka trybu nie włącza usuwania; strażnik: kategorie z migracji = klucze
   tłumaczeń w 4 językach), E2E `admin-retention` (4 języki), trasa w `admin-a11y`.
   **Otwarte:** edycja okresu z panelu (RPC 0105 bez uzasadnienia i CAS — osobna migracja).
-  Wydłużenie okresu po wysłanym ostrzeżeniu (#862, migracja `0183`):
+  Wydłużenie okresu po wysłanym ostrzeżeniu (#862, migracja `0182`):
   `admin_set_retention_policy` synchronizuje teraz `due_at` już zapisanych `retention_warnings`
   danej kategorii do co najmniej `activity_at + nowy_okres` (`greatest()`, nigdy nie obniża) —
   wcześniej zmieniała wyłącznie `retention_policies.period`, więc wydłużenie okresu PO wysłaniu
