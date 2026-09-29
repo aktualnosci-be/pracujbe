@@ -19390,6 +19390,138 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CLAIB: powrót
 reset role;
 
 -- ============================================================================
+-- DC1070. Token wersji szkicu oferty (0184, #1070): save_job_draft z p_expected_updated_at —
+--         zapis ze starą wersją (druga karta / drugi rekruter) = JOB_EDIT_CONFLICT bez zmian;
+--         każdy udany zapis (także krok tylko z relacjami) podbija wersję i zwraca ją.
+-- ============================================================================
+\set JOBDC 'e9640000-0000-0000-0000-0000000000b1'
+select pg_temp.remote_connect('dc_setup');
+select dbl.dblink_exec('dc_setup', format($fx$
+  insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+    values (%L, 'e7500000-0000-0000-0000-0000000000f1', 'draft-dc1070', '', 'logistics', 'permanent', '', '', 'draft', 'pl')
+$fx$, :'JOBDC'));
+select dbl.dblink_disconnect('dc_setup');
+select updated_at::text as dc_v0 from public.jobs where id = :'JOBDC' \gset
+
+-- DC1070-1: zapis bez tokenu (świeży szkic tej samej karty) przechodzi i zwraca nową wersję.
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)::text', :'JOBDC',
+    '{"job": {"title": "Karta A v1"}}')))::jsonb ->> 'updated_at' as dc_v1 \gset
+select pg_temp.assert(:'dc_v1'::timestamptz > :'dc_v0'::timestamptz
+  and (select updated_at = :'dc_v1'::timestamptz from public.jobs where id = :'JOBDC'),
+  'DC1070-1 zapis bez tokenu zwraca wersję = jobs.updated_at, większą od poprzedniej');
+
+-- DC1070-2: kolejny zapis z tokenem z poprzedniej odpowiedzi przechodzi (łańcuch wersji).
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Karta A v2"}}', :'dc_v1')))::jsonb ->> 'updated_at' as dc_v2 \gset
+select pg_temp.assert(:'dc_v2'::timestamptz > :'dc_v1'::timestamptz,
+  'DC1070-2 zapis z aktualnym tokenem przechodzi, wersja rośnie');
+
+-- DC1070-3: krok zmieniający WYŁĄCZNIE relacje (bez kolumn jobs) też podbija wersję.
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"skills_optional": ["Excel"]}', :'dc_v2')))::jsonb ->> 'updated_at' as dc_v3 \gset
+select pg_temp.assert(:'dc_v3'::timestamptz > :'dc_v2'::timestamptz
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel'],
+  'DC1070-3 krok tylko z relacjami zapisany i podbija wersję');
+
+-- DC1070-4 (kontrola ujemna): stara wersja (druga karta) = konflikt i ŻADNEJ zmiany
+-- (kolumny, tłumaczenie i relacje z tego samego kroku zostają jak były).
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC', $j${
+    "job": {"title": "Karta B (stara wersja)"}, "translation": {"description": "Nadpisany opis z drugiej karty."},
+    "skills_optional": ["Nadpisana umiejętność"]
+  }$j$, :'dc_v1'),
+  'JOB_EDIT_CONFLICT', 'DC1070-4 zapis ze starą wersją szkicu = JOB_EDIT_CONFLICT');
+-- Wersja z chwili sprzed ostatniego zapisu (v2) też jest już nieaktualna.
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
+    '{"job": {"title": "Karta B"}}', :'dc_v2'),
+  'JOB_EDIT_CONFLICT', 'DC1070-4b poprzednia wersja (v2) po zapisie v3 = konflikt');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Karta A v2' and updated_at = :'dc_v3'::timestamptz from public.jobs where id = :'JOBDC')
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel']
+  and not exists (select 1 from public.job_translations where job_id = :'JOBDC' and description is not null),
+  'DC1070-4c odrzucony zapis nic nie zmienił (kolumny, tłumaczenie, relacje, wersja)');
+
+-- DC1070-5: dwa RÓWNOLEGŁE zapisy z tym samym tokenem — wygrywa pierwszy, drugi po odblokowaniu
+-- widzi nową wersję i kończy się konfliktem (nie nadpisuje).
+select pg_temp.remote_begin('dc_s1', :'OWNP'::uuid) as dc_pid1 \gset
+select pg_temp.remote_begin('dc_s2', :'OWNP'::uuid) as dc_pid2 \gset
+select t.v as dc_s1_res from dbl.dblink('dc_s1',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Sesja 1"}}', :'dc_v3')) as t(v text) \gset
+select dbl.dblink_send_query('dc_s2',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Sesja 2"}}', :'dc_v3')) as dc_sent \gset
+select pg_temp.wait_blocked(:dc_pid2, 'DC1070-5 druga sesja czeka na blokadę szkicu');
+select dbl.dblink_exec('dc_s1', 'commit');
+select pg_temp.remote_result('dc_s2') as dc_s2_res \gset
+select dbl.dblink_exec('dc_s2', 'rollback');
+select dbl.dblink_disconnect('dc_s1');
+select dbl.dblink_disconnect('dc_s2');
+select pg_temp.assert(:'dc_s2_res' like 'ERROR:%JOB_EDIT_CONFLICT%'
+  and (:'dc_s1_res')::jsonb ->> 'updated_at' is not null
+  and (select title = 'Sesja 1' from public.jobs where id = :'JOBDC'),
+  'DC1070-5 równoległy zapis z tym samym tokenem: pierwszy wygrywa, drugi = konflikt, tytuł z sesji 1');
+
+-- DC1070-6: granice — oferta po publikacji nadal JOB_NOT_DRAFT (przed kontrolą wersji), nie-członek
+-- i anon bez dostępu; stara sygnatura dwuargumentowa nie istnieje osobno (jedna funkcja z domyślnym
+-- tokenem), więc wywołania bez tokenu działają, a EXECUTE ma wyłącznie authenticated.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', 'e7500000-0000-0000-0000-0000000000b1',
+    '{"job": {"title": "Opublikowana"}}', now()::text),
+  'JOB_NOT_DRAFT', 'DC1070-6 opublikowana oferta = JOB_NOT_DRAFT także z tokenem');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
+    '{"job": {"title": "Cudzy"}}', now()::text),
+  'PERMISSION_DENIED', 'DC1070-6b nie-członek firmy nie zapisze cudzego szkicu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  to_regprocedure('public.save_job_draft(uuid, jsonb)') is null
+  and has_function_privilege('authenticated', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute')
+  and not has_function_privilege('anon', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute'),
+  'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
+
+-- ============================================================================
+-- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
+--         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
+-- ============================================================================
+-- SS1065-1: baza bez historii (pliki nałożone ręcznie) = applied 0, latest null (bez błędu).
+select pg_temp.assert(public.ops_schema_state() = '{"applied": 0, "latest": null}'::jsonb,
+  'SS1065-1 brak app_migrations.history: applied 0, latest null');
+begin;
+create schema app_migrations;
+create table app_migrations.history (name text primary key, checksum text not null, applied_at timestamptz not null default now());
+insert into app_migrations.history(name, checksum) values
+  ('0000_bootstrap_roles_and_identity.sql', 'a'), ('0170_recruiter_tools.sql', 'b'), ('0999_ostatnia.sql', 'c');
+select pg_temp.assert(public.ops_schema_state() = '{"applied": 3, "latest": "0999_ostatnia.sql"}'::jsonb,
+  'SS1065-2 historia: liczba zastosowanych i najwyższa nazwa');
+-- Kontrola ujemna: nowa migracja zmienia wynik (czujka widzi rozjazd, gdy kod zna nowszą nazwę).
+insert into app_migrations.history(name, checksum) values ('1000_kolejna.sql', 'd');
+select pg_temp.assert(public.ops_schema_state()->>'latest' = '1000_kolejna.sql'
+  and (public.ops_schema_state()->>'applied')::int = 4,
+  'SS1065-2b kolejna migracja podbija stan (najwyższa nazwa wg porządku C)');
+-- Role: monitoring i service_role czytają, klient nie.
+set role pracujbe_ops;
+select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3 rola pracujbe_ops czyta stan schematu');
+reset role;
+set role service_role;
+select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3b service_role czyta stan schematu');
+reset role;
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4 authenticated nie czyta stanu schematu');
+reset role; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4b anon nie czyta stanu schematu');
+reset role;
+rollback;
 -- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0182):
 --        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
 --        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
