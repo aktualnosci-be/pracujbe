@@ -3,14 +3,14 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { execute, queryOne, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { ACTIVE_COMPANY_COOKIE, getExpectedActiveCompany } from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 import { scheduleCompanyViesAutoCheck } from '@/lib/vies/auto-check';
 
@@ -108,7 +108,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Wyjątek transakcji → kod użytkowy (błąd bazy wg komunikatu; reszta → kanał błędów + INTERNAL). */
 function failureCode(error: unknown, area: string): ErrorCode {
-  if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
+  if (isDatabaseError(error)) return reportUnmappedDbError(error, area, mapPgError(databaseErrorMessage(error)));
   captureError(error, { area });
   return 'INTERNAL';
 }
@@ -183,12 +183,7 @@ export async function setActiveCompany(
     if (!asRecord(member)['id']) return { ok: false };
 
     const store = await cookies();
-    store.set(ACTIVE_COMPANY_COOKIE, companyId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 365,
-    });
+    store.set(ACTIVE_COMPANY_COOKIE, companyId, activeCompanyCookieOptions());
     revalidatePath('/employer', 'layout');
     return { ok: true };
   } catch (error) {
@@ -290,19 +285,19 @@ export async function createAdditionalCompany(
         }),
       );
     } catch (e) {
-      if (isDatabaseError(e)) return { ok: false, error: mapTeamError(databaseErrorMessage(e)) };
+      if (isDatabaseError(e)) {
+        return {
+          ok: false,
+          error: reportUnmappedDbError(e, 'company.createAdditionalCompany', mapTeamError(databaseErrorMessage(e))),
+        };
+      }
       throw e;
     }
 
     const id = asString(asRecord(data[0])['company_id']);
     if (!UUID_RE.test(id)) return { ok: false, error: 'INTERNAL' };
 
-    (await cookies()).set(ACTIVE_COMPANY_COOKIE, id, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 365,
-    });
+    (await cookies()).set(ACTIVE_COMPANY_COOKIE, id, activeCompanyCookieOptions());
     revalidatePath('/employer', 'layout');
     scheduleCompanyViesAutoCheck(id);
     return { ok: true, id };
