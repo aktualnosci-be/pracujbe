@@ -78,6 +78,7 @@ export async function loadSavedSearchJobs(preloaded?: SavedSearchesLoad): Promis
         const result = await getJobs(
           { ...filterParams, sort: 'newest', page: 1, pageSize: DASHBOARD_SEARCH_JOBS_LIMIT },
           viewer,
+          { withTotal: false },
         );
         return result.jobs.map((job) => ({ job, searchId: search.id }));
       }),

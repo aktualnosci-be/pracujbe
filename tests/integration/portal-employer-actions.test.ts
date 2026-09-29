@@ -504,12 +504,8 @@ describe('kreator ofert (#25)', () => {
     vi.mocked(revalidatePath).mockClear();
     expect(await jobs.updatePublishedJob(draftA, STEPS, null)).toMatchObject({ ok: true });
     const paths = vi.mocked(revalidatePath).mock.calls.map(([path]) => path);
-    expect(paths).toEqual(expect.arrayContaining([
-      '/[locale]',
-      '/[locale]/oferty-pracy/[slug]',
-      '/[locale]/praca/kategoria/[category]',
-      '/[locale]/praca/miasto/[city]',
-    ]));
+    const { PUBLIC_JOB_ROUTES } = await import('@/lib/jobs/public-cache');
+    expect(paths).toEqual(expect.arrayContaining([...PUBLIC_JOB_ROUTES]));
   });
 
   it('importJobListing (atrapa AI): kontekst firmy pod sesją, zapis wyłącznie do szkicu', async () => {

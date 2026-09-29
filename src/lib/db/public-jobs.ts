@@ -100,6 +100,29 @@ async function readCount(
   return total;
 }
 
+/** Wiersze jednej strony listy (bez licznika). */
+async function readRows(
+  transaction: TransactionQuery,
+  params: GetJobsParams,
+  values: unknown[],
+  page: number,
+  pageSize: number,
+): Promise<PublicJobRow[]> {
+  // #593: strona POZA rzeczywistą granicą danych (naturalny offset > 10 000) nie odpytuje
+  // RPC — inaczej różne numery stron zmapowałyby się na ten sam klampowany offset i
+  // zwróciły identyczny wycinek. Jawny, pusty koniec listy zamiast duplikatu.
+  if (isJobListPageBeyondLimit(page, pageSize)) return [];
+  // to_jsonb zachowuje daty jako tekst ISO oraz liczby/NULL/tablice, bez parserów
+  // typów pg zmieniających timestamptz/date na obiekty Date w starej warstwie UI.
+  const result = (await transaction.query(
+    `SELECT to_jsonb(job) AS job
+    FROM public.get_public_jobs(${FILTER_ARGUMENTS},
+      p_sort => $15::text, p_limit => $16::integer, p_offset => $17::integer) AS job`,
+    [...values, params.sort ?? 'newest', pageSize, jobListNaturalOffset(page, pageSize)],
+  )) as { rows: { job: PublicJobRow }[] };
+  return result.rows.map((row) => row.job);
+}
+
 /**
  * Wyłącznie publiczne RPC. Domyślnie pod anon; `viewerId` (UUID ze zweryfikowanej sesji
  * serwera, nigdy z URL/formularza) uruchamia te same RPC pod tożsamością kandydata, żeby
@@ -115,28 +138,29 @@ export async function getPublicJobs(
   const values = filterValues(params);
   return withUserTransaction(pool, viewerId, async (transaction) => {
     const total = await readCount(transaction, values);
-    // #593: strona POZA rzeczywistą granicą danych (naturalny offset > 10 000) nie odpytuje
-    // RPC — inaczej różne numery stron zmapowałyby się na ten sam klampowany offset i
-    // zwróciły identyczny wycinek. Jawny, pusty koniec listy zamiast duplikatu.
-    const rows = isJobListPageBeyondLimit(page, pageSize)
-      ? []
-      : // to_jsonb zachowuje daty jako tekst ISO oraz liczby/NULL/tablice, bez parserów
-        // typów pg zmieniających timestamptz/date na obiekty Date w starej warstwie UI.
-        (
-          (await transaction.query(
-            `SELECT to_jsonb(job) AS job
-            FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-              p_sort => $15::text, p_limit => $16::integer, p_offset => $17::integer) AS job`,
-            [
-              ...values,
-              params.sort ?? 'newest',
-              pageSize,
-              jobListNaturalOffset(page, pageSize),
-            ],
-          )) as { rows: { job: PublicJobRow }[] }
-        ).rows.map((row) => row.job);
+    const rows = await readRows(transaction, params, values, page, pageSize);
     return { rows, total, page, pageSize, maxPage: jobListLastPage(total, pageSize) };
   });
+}
+
+/**
+ * PERF-04 (#1230): ta sama strona listy co `getPublicJobs`, BEZ `get_public_jobs_count` — dla
+ * sekcji pomocniczych (strona główna, podobne oferty, pulpit kandydata, partie sitemap), które
+ * licznika nie pokazują. Jeden przebieg RPC zamiast dwóch.
+ */
+export async function getPublicJobsPage(
+  pool: TransactionPool,
+  params: GetJobsParams,
+  viewerId: string | null = null,
+): Promise<Pick<PublicJobsResult, 'rows' | 'page' | 'pageSize'>> {
+  const page = positiveInteger(params.page, 1, Number.MAX_SAFE_INTEGER);
+  const pageSize = positiveInteger(params.pageSize, 12, 100);
+  const values = filterValues(params);
+  return withUserTransaction(pool, viewerId, async (transaction) => ({
+    rows: await readRows(transaction, params, values, page, pageSize),
+    page,
+    pageSize,
+  }));
 }
 
 export async function getPublicJobsCount(
