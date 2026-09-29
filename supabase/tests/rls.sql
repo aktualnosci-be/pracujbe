@@ -22572,17 +22572,7 @@ select pg_temp.assert((select sum(size_bytes) from public.files where owner_id =
   'SD1111-N3 kontrola ujemna: bez triggera limit rozmiaru nie działa');
 rollback;
 
--- Rollback 0189 przywraca polityki bez deleted_at i zdejmuje strażniki (w transakcji cofanej).
-begin;
-\ir ../rollback/0189_soft_delete_contract_cv_quota.down.sql
-select pg_temp.assert(
-  (select count(*) from pg_policies where schemaname = 'public' and policyname in
-     ('applications_select', 'offers_select', 'conversations_select_member', 'messages_select_member')
-     and qual like '%deleted_at%') = 0
-  and to_regprocedure('public.enforce_soft_delete_contract()') is null
-  and to_regprocedure('public.enforce_cv_account_quota()') is null,
-  'SD1111-R rollback 0189 przywraca stan sprzed migracji');
-rollback;
+-- Rollback 0189: supabase/tests/soft-delete-cv-quota-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
 
 
 -- ============================================================================
