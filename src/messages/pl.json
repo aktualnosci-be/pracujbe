@@ -2073,6 +2073,7 @@
     "nameFallback": "Bez nazwy",
     "statusChanged": "Status firmy został zmieniony.",
     "noActions": "Brak akcji",
+    "moderationCaseRedacted": "Sprawa zanonimizowana — bez dalszych działań",
     "actionVerify": "Zweryfikuj",
     "actionSuspend": "Zawieś",
     "actionReactivate": "Przywróć",
