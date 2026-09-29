@@ -190,7 +190,7 @@ describe('dziennik zdarzeń — wpisy o ofertach', () => {
   it('typ obiektu `job` i akcje ofert mają etykiety', () => {
     const admin = (pl as { admin: Record<string, string> }).admin;
     expect(AUDIT_ENTITY_TYPES).toContain('job');
-    for (const action of ['job.update_published', 'job.duplicated']) {
+    for (const action of ['job.update_published', 'job.duplicated', 'job.deleted']) {
       expect(admin[AUDIT_ACTION_KEY[action]!], action).toBeTruthy();
     }
   });

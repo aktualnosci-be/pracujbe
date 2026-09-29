@@ -17,6 +17,7 @@ const adapters = vi.hoisted(() => ({
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
 vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobs: adapters.list,
+  getPublicJobsPage: adapters.list,
   getPublicJobsMachineTitles: adapters.titles,
 }));
 const captureError = vi.hoisted(() => vi.fn());

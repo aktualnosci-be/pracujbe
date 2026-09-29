@@ -109,7 +109,7 @@ export function ApplicationScreeningAnswers({
               )
             ) : state.status === 'error' ? (
               <div className="mt-3 min-w-0">
-                <p role="alert" className="text-[15px] text-error">{t('applicationAnswersError')}</p>
+                <p role="alert" className="text-[15px] text-error-text">{t('applicationAnswersError')}</p>
                 <button type="button" onClick={load} className={cn(BTN_SMALL, 'mt-3 border-[color:var(--pp-line)] text-foreground hover:bg-soft')}>
                   {t('candidateListRetry')}
                 </button>

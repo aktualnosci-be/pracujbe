@@ -9,6 +9,7 @@ import { useRouter } from '@/i18n/navigation';
 import { submitModerationAppeal, submitReportAppeal, type AppealActionResult } from '@/lib/actions/appeals';
 import { APPEAL_GROUNDS_MAX, APPEAL_GROUNDS_MIN, appealGroundsError } from '@/lib/admin/appeals';
 import type { ModerationFieldError } from '@/lib/admin/moderation';
+import { payloadKey, type PayloadKeyState } from '@/lib/idempotency/payload-key';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 
 /**
@@ -56,15 +57,23 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
   const [serverError, setServerError] = React.useState<ErrorCode | 'NETWORK' | null>(null);
   const [sent, setSent] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
-  const keyRef = React.useRef<string | null>(null);
+  const keyRef = React.useRef<PayloadKeyState | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const alertRef = React.useRef<HTMLDivElement | null>(null);
   const sentRef = React.useRef<HTMLParagraphElement | null>(null);
+  // #1243: „Anuluj” odmontowuje formularz razem z aktywnym przyciskiem — fokus wraca na
+  // przycisk „Odwołaj się”, zamiast spadać na <body>.
+  const openButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const restoreOpenFocusRef = React.useRef(false);
 
   const idBase = React.useId();
   const ids = { grounds: `${idBase}-grounds`, hint: `${idBase}-hint`, error: `${idBase}-error` };
 
   React.useEffect(() => {
+    if (!open && restoreOpenFocusRef.current) {
+      restoreOpenFocusRef.current = false;
+      openButtonRef.current?.focus();
+    }
     if (open && !pending) textareaRef.current?.focus();
     // Fokus tylko przy otwarciu formularza.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,10 +104,11 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
   if (!open) {
     return (
       <Button
+        ref={openButtonRef}
         type="button"
         variant="outline"
         onClick={() => {
-          keyRef.current = crypto.randomUUID();
+          keyRef.current = null;
           setOpen(true);
         }}
       >
@@ -118,7 +128,8 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
       return;
     }
     setFieldError(null);
-    const key = (keyRef.current ??= crypto.randomUUID());
+    // Ponowienie bez zmian = ten sam klucz; poprawione uzasadnienie = nowy klucz (#1103).
+    const key = payloadKey(keyRef, grounds);
     startTransition(async () => {
       let result: AppealActionResult;
       try {
@@ -153,13 +164,13 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
     serverError === 'NETWORK' ? t('appealNetworkError') : serverError ? tRoot(toUserMessageKey(serverError)) : null;
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-3" aria-busy={pending || undefined}>
+    <form method="post" onSubmit={submit} noValidate className="space-y-3" aria-busy={pending || undefined}>
       {serverMessage ? (
         <div
           ref={alertRef}
           tabIndex={-1}
           role="alert"
-          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <p>{serverMessage}</p>
@@ -206,7 +217,15 @@ export function AppealForm({ target, messages, onSubmitted }: AppealFormProps): 
             <span>{t('appealSubmit')}</span>
           )}
         </Button>
-        <Button type="button" variant="ghost" disabled={pending} onClick={() => setOpen(false)}>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={pending}
+          onClick={() => {
+            restoreOpenFocusRef.current = true;
+            setOpen(false);
+          }}
+        >
           {t('appealCancel')}
         </Button>
       </div>

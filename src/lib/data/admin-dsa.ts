@@ -172,9 +172,13 @@ export async function listAppeals(query: AdminAppealsQuery = {}): Promise<AdminA
          ORDER BY a.due_at ASC, a.id ASC LIMIT $${limitIdx}`, pendingParams),
       decided: await queryRows(tx, 'admin-dsa.appeals-decided',
         `${APPEAL_SELECT} WHERE a.status <> 'pending' ORDER BY a.decided_at DESC NULLS LAST, a.id DESC LIMIT 20`),
+      // #909: konto wyłączone (is_active = false) nie liczy się jako dostępny drugi
+      // recenzent — inaczej odwołanie zostaje nierozpatrywalne, gdy jedyny „inny" admin
+      // nie może się zalogować. Zgodne z admin_decide_appeal (0146).
       admins: await queryCount(tx, 'admin-dsa.other-admins',
         `SELECT 1 FROM public.profiles
-          WHERE role = 'admin' AND deleted_at IS NULL AND ($1::uuid IS NULL OR id <> $1::uuid)`,
+          WHERE role = 'admin' AND deleted_at IS NULL AND is_active = true
+            AND ($1::uuid IS NULL OR id <> $1::uuid)`,
         [viewerId]),
     }));
     const otherAdmins = admins > 0;

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
+import { captureFocus } from '@/lib/a11y/restore-focus';
 import { toggleSavedJob } from '@/lib/actions/candidate';
 import { SAVED_JOB_STATE_KEYS, type SavedJob } from '@/lib/saved-job-availability';
 import { P_EXTENDED, PAPER, TAG, TEXT_LINK } from '@/components/dashboard/panel-styles';
@@ -40,12 +41,15 @@ export function SavedJobUnavailableItem({
 
   const remove = async () => {
     if (state === 'pending') return;
+    const restoreFocus = captureFocus(); // przycisk jest wyłączony na czas zapisu (#1095)
     setState('pending');
     try {
       const res = await toggleSavedJob(job.id, false);
       setState(res.ok ? 'removed' : 'error');
     } catch {
       setState('error');
+    } finally {
+      restoreFocus();
     }
   };
 
@@ -82,7 +86,7 @@ export function SavedJobUnavailableItem({
         ) : null}
         <p className={cn(P_EXTENDED, 'mt-3 text-sm')}>{t('savedUnavailableHint')}</p>
         {state === 'error' ? (
-          <p role="alert" className="mt-2 text-[15px] text-error">{t('savedRemoveError')}</p>
+          <p role="alert" className="mt-2 text-[15px] text-error-text">{t('savedRemoveError')}</p>
         ) : null}
         <footer>
           <span className="pp-passport-brand" aria-hidden="true">

@@ -31,6 +31,7 @@ const { getMyCompany, getCompanyModerationDecisions } = await import('../../src/
 const { getTeamPageData, getMyTeamInvitations } = await import('../../src/lib/data/team');
 const { withPortalTransaction } = await import('@/lib/db/portal');
 const { execute } = await import('../../src/lib/db/sql');
+const { revalidatePath } = await import('next/cache');
 
 const STEPS: unknown[] = [
   { title: 'Magazynier nocny', category: 'warehouse', occupation: 'Magazynier' },
@@ -286,17 +287,66 @@ describe('kreator ofert (#25)', () => {
 
   it('updateJobDraft: każdy krok jednym RPC save_job_draft; relacje zapisane', async () => {
     actAs(as(recruiterA));
+    // #1070: kreator odsyła wersję z poprzedniej odpowiedzi — łańcuch wersji przez wszystkie kroki.
+    let version: string | undefined;
     for (let step = 1; step <= 9; step += 1) {
-      expect(await jobs.updateJobDraft(draftA, step, STEPS[step - 1]), `krok ${step}`).toEqual({ ok: true });
+      const res = await jobs.updateJobDraft(draftA, step, STEPS[step - 1], version);
+      expect(res, `krok ${step}`).toMatchObject({ ok: true, version: expect.any(String) });
+      const next = (res as { version: string }).version;
+      if (version) expect(Date.parse(next), `krok ${step}: wersja rośnie`).toBeGreaterThanOrEqual(Date.parse(version));
+      expect(next).not.toBe(version);
+      version = next;
     }
+    expect(await admin('SELECT (updated_at = $2::timestamptz) AS same FROM public.jobs WHERE id = $1', [draftA, version]))
+      .toEqual([{ same: true }]);
     expect(await admin('SELECT title, city FROM public.jobs WHERE id = $1', [draftA]))
       .toEqual([{ title: 'Magazynier nocny', city: 'Gandawa' }]);
     expect(await admin('SELECT count(*)::int AS n FROM public.job_languages WHERE job_id = $1', [draftA]))
       .toEqual([{ n: 1 }]);
     // Powtórzenie kroku (replace-all) nie dubluje relacji.
-    expect(await jobs.updateJobDraft(draftA, 7, STEPS[6])).toEqual({ ok: true });
+    expect(await jobs.updateJobDraft(draftA, 7, STEPS[6], version)).toMatchObject({ ok: true });
     expect(await admin('SELECT count(*)::int AS n FROM public.job_certificates WHERE job_id = $1', [draftA]))
       .toEqual([{ n: 1 }]);
+  });
+
+  it('#1070: token wersji szkicu — stara wersja (druga karta) = JOB_EDIT_CONFLICT, równoległe zapisy nie nadpisują', async () => {
+    actAs(as(recruiterA));
+    // Wersja tak, jak widzi ją loader (`to_json` → ISO z pełną precyzją).
+    const versionRow = await realSession.db!.admin.query<{ v: string }>(
+      'SELECT to_json(updated_at) #>> \'{}\' AS v FROM public.jobs WHERE id = $1', [draftA]);
+    const v0 = versionRow.rows[0]!.v;
+    const titled = (title: string) => ({ ...(STEPS[0] as object), title });
+
+    // Karta A zapisuje z aktualną wersją, karta B nadal trzyma poprzednią.
+    const a = await jobs.updateJobDraft(draftA, 1, titled('Karta A'), v0);
+    expect(a).toMatchObject({ ok: true });
+    const vA = (a as { version: string }).version;
+    // Kontrola ujemna: stara wersja NIE przechodzi i niczego nie zmienia (kolumny ani relacje).
+    expect(await jobs.updateJobDraft(draftA, 1, titled('Karta B'), v0)).toEqual({ ok: false, error: 'JOB_EDIT_CONFLICT' });
+    expect(await jobs.updateJobDraft(draftA, 7, { ...(STEPS[6] as object), skills: ['Nadpisana'] }, v0))
+      .toEqual({ ok: false, error: 'JOB_EDIT_CONFLICT' });
+    expect(await admin('SELECT title FROM public.jobs WHERE id = $1', [draftA])).toEqual([{ title: 'Karta A' }]);
+    expect(await admin('SELECT skill_label FROM public.job_skills WHERE job_id = $1 AND NOT is_mandatory', [draftA]))
+      .toEqual([{ skill_label: 'Excel' }]);
+
+    // Po wczytaniu aktualnej wersji karta B zapisuje normalnie.
+    const b = await jobs.updateJobDraft(draftA, 1, titled('Karta B'), vA);
+    expect(b).toMatchObject({ ok: true });
+    const vB = (b as { version: string }).version;
+
+    // Dwa RÓWNOLEGŁE zapisy z tą samą wersją: dokładnie jeden wygrywa, drugi to konflikt.
+    const results = await Promise.all([
+      jobs.updateJobDraft(draftA, 1, titled('Równoległy 1'), vB),
+      jobs.updateJobDraft(draftA, 1, titled('Równoległy 2'), vB),
+    ]);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, error: 'JOB_EDIT_CONFLICT' }]);
+    const winner = results.findIndex((r) => r.ok) + 1;
+    expect(await admin('SELECT title FROM public.jobs WHERE id = $1', [draftA])).toEqual([{ title: `Równoległy ${winner}` }]);
+
+    // Nieprawidłowy token odrzucony przed bazą; zapis bez tokenu (świeży szkic) nadal działa.
+    expect(await jobs.updateJobDraft(draftA, 1, titled('X'), 'to-nie-data')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await jobs.updateJobDraft(draftA, 1, STEPS[0])).toMatchObject({ ok: true });
   });
 
   it('obca firma i member nie edytują ani nie publikują cudzej oferty', async () => {
@@ -349,6 +399,113 @@ describe('kreator ofert (#25)', () => {
     actAs(as(recruiterA));
     expect(await jobs.setJobStatus(draftA, 'pause')).toEqual({ ok: true, status: 'paused' });
     expect(await jobs.setJobStatus(draftA, 'resume')).toEqual({ ok: true, status: 'active' });
+  });
+
+  it('szkic: ten sam klucz operacji = ten sam szkic; obcy klucz nie zwraca cudzego (#1099 EMP-05)', async () => {
+    actAs(as(recruiterA));
+    const key = '6f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f';
+    const first = await jobs.createJobDraft('pl', companyA, key);
+    expect(first).toMatchObject({ ok: true });
+    const id = (first as { id: string }).id;
+    const before = await admin('SELECT count(*)::int AS n FROM public.jobs WHERE company_id = $1', [companyA]);
+    // Ponowienie po utraconej odpowiedzi / podwójne kliknięcie: ten sam szkic, bez nowego wiersza.
+    expect(await jobs.createJobDraft('pl', companyA, key)).toEqual({ ok: true, id });
+    expect(await admin('SELECT count(*)::int AS n FROM public.jobs WHERE company_id = $1', [companyA])).toEqual(before);
+    // Kontrola ujemna: nowy klucz albo brak klucza = nowy szkic (nie sklejamy różnych operacji).
+    const other = await jobs.createJobDraft('pl', companyA, '7a1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f');
+    expect(other).toMatchObject({ ok: true });
+    expect((other as { id: string }).id).not.toBe(id);
+    const noKey = await jobs.createJobDraft('pl', companyA);
+    expect((noKey as { id: string }).id).not.toBe(id);
+    // Cudzy klucz (inna firma, ten sam UUID) nie wydaje cudzego szkicu.
+    actAs(as(ownerB));
+    expect(await jobs.createJobDraft('pl', companyB, key)).toEqual({ ok: false, error: 'INTERNAL' });
+  });
+
+  it('język ogłoszenia (#1048): zmiana w szkicu przenosi treść i wymagania; brak zmiany nic nie rusza', async () => {
+    actAs(as(recruiterA));
+    const created = await jobs.createJobDraft('pl', companyA);
+    const id = (created as { id: string }).id;
+    for (const step of [1, 5, 6]) {
+      expect(await jobs.updateJobDraft(id, step, STEPS[step - 1]), `krok ${step}`).toMatchObject({ ok: true });
+    }
+    const langs = async (table: string) =>
+      (await admin(`SELECT DISTINCT locale FROM public.${table} WHERE job_id = $1 ORDER BY 1`, [id])).map((r) => r['locale']);
+    expect(await langs('job_translations')).toEqual(['pl']);
+    expect(await langs('job_requirements')).toEqual(['pl']);
+
+    // Ten sam język w kroku 1 = bez zmian.
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'pl' })).toMatchObject({ ok: true });
+    expect(await langs('job_translations')).toEqual(['pl']);
+
+    // Zmiana na nl: default_locale i cała dotychczasowa treść w nl, nic w pl.
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' })).toMatchObject({ ok: true });
+    expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'nl' }]);
+    expect(await langs('job_translations')).toEqual(['nl']);
+    expect(await langs('job_requirements')).toEqual(['nl']);
+    // #1070 + #1048: zmiana języka z aktualnym tokenem wersji przechodzi (zmiana języka sama
+    // podbija wersję szkicu), ze starym tokenem = JOB_EDIT_CONFLICT bez żadnej zmiany.
+    const ver = async () => (await realSession.db!.admin.query<{ v: string }>(
+      'SELECT to_json(updated_at) #>> \'{}\' AS v FROM public.jobs WHERE id = $1', [id])).rows[0]!.v;
+    const vStale = await ver();
+    const toFr = await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'fr' }, vStale);
+    expect(toFr).toMatchObject({ ok: true });
+    expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'fr' }]);
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' }, vStale))
+      .toEqual({ ok: false, error: 'JOB_EDIT_CONFLICT' });
+    expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'fr' }]);
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' }, await ver()))
+      .toMatchObject({ ok: true });
+    expect(await langs('job_translations')).toEqual(['nl']);
+    // Kolejny zapis treści trafia do nl — bez osieroconego kompletu w pl.
+    expect(await jobs.updateJobDraft(id, 5, STEPS[4])).toMatchObject({ ok: true });
+    expect(await langs('job_translations')).toEqual(['nl']);
+
+    // Kontrola ujemna: sama zmiana kolumny (bez przeniesienia) zostawia dwa języki — właśnie to
+    // zapobiega `setDraftContentLocale`.
+    await admin("UPDATE public.jobs SET default_locale = 'fr' WHERE id = $1", [id]);
+    expect(await jobs.updateJobDraft(id, 5, STEPS[4])).toMatchObject({ ok: true });
+    expect(await langs('job_translations')).toEqual(['fr', 'nl']);
+
+    // Nieobsługiwany język odrzucony walidacją, obca firma nie zmienia języka.
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'de' }))
+      .toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    actAs(as(ownerB));
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'en' }))
+      .toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'fr' }]);
+  });
+
+  it('deleteJobDraft (#1099 EMP-04): recruiter usuwa szkic; member, obca firma i opublikowana oferta nie', async () => {
+    actAs(as(recruiterA));
+    const created = await jobs.createJobDraft('pl', companyA);
+    const id = (created as { id: string }).id;
+
+    // Member nie widzi szkiców (RLS) albo nie ma prawa zapisu — w obu przypadkach nic się nie zmienia.
+    actAs(as(memberA));
+    expect(await jobs.deleteJobDraft(id)).toMatchObject({ ok: false });
+    actAs(as(ownerB));
+    expect(await jobs.deleteJobDraft(id)).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await admin('SELECT deleted_at FROM public.jobs WHERE id = $1', [id])).toEqual([{ deleted_at: null }]);
+
+    actAs(as(recruiterA));
+    expect(await jobs.deleteJobDraft(id)).toEqual({ ok: true });
+    const [row] = await admin('SELECT deleted_at FROM public.jobs WHERE id = $1', [id]);
+    expect(row!['deleted_at']).not.toBeNull();
+    // Ponowienie na już usuniętym szkicu.
+    expect(await jobs.deleteJobDraft(id)).toEqual({ ok: false, error: 'NOT_FOUND' });
+    // Opublikowanej oferty nie usuwa się.
+    expect(await jobs.deleteJobDraft(draftA)).toEqual({ ok: false, error: 'JOB_NOT_DRAFT' });
+    expect(await admin('SELECT deleted_at FROM public.jobs WHERE id = $1', [draftA])).toEqual([{ deleted_at: null }]);
+  });
+
+  it('updatePublishedJob unieważnia stronę główną i landingi, nie tylko szczegół (#1099 EMP-06)', async () => {
+    actAs(as(recruiterA));
+    vi.mocked(revalidatePath).mockClear();
+    expect(await jobs.updatePublishedJob(draftA, STEPS, null)).toMatchObject({ ok: true });
+    const paths = vi.mocked(revalidatePath).mock.calls.map(([path]) => path);
+    const { PUBLIC_JOB_ROUTES } = await import('@/lib/jobs/public-cache');
+    expect(paths).toEqual(expect.arrayContaining([...PUBLIC_JOB_ROUTES]));
   });
 
   it('importJobListing (atrapa AI): kontekst firmy pod sesją, zapis wyłącznie do szkicu', async () => {

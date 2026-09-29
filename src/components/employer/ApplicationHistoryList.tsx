@@ -90,7 +90,7 @@ export function ApplicationHistoryList({
         ))}
       </ol>
       {failed ? (
-        <p role="alert" className="mt-3 text-[13px] text-error">
+        <p role="alert" className="mt-3 text-[13px] text-error-text">
           {t('employerApplicationHistoryMoreError')}
         </p>
       ) : null}

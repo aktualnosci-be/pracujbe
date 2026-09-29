@@ -250,6 +250,6 @@ test("kontrola ujemna wykrywa kafel szerszy od viewportu", async ({ page }) => {
     ),
   ).toBe(true);
 
-  await mutation.evaluate((style) => style.remove());
+  await mutation.evaluate((node) => (node as Element).remove());
   await expectNoOverflow(page, "kontrola ujemna po przywróceniu");
 });

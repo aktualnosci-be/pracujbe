@@ -24,8 +24,8 @@ test('kreator oferty: fokus i ogłoszenie kroku po „Dalej” i „Wstecz”', 
   const step2 = page.getByRole('heading', { level: 2, name: t.step2Title });
   await expect(step2).toBeFocused();
   await expect(page.getByText(`Krok 2 z 9: ${t.step2Title}`)).toHaveAttribute('aria-live', 'polite');
-  await expect(page.getByRole('status')).toHaveCount(1);
-  await expect(page.getByRole('status')).toHaveText(t.savedDemo);
+  await expect(page.getByRole('status').filter({ hasText: /\S/ })).toHaveCount(1);
+  await expect(page.getByRole('status').filter({ hasText: /\S/ })).toHaveText(t.savedDemo);
 
   // Tab z nagłówka prowadzi do pola kroku 2, nie do sidebaru.
   await page.keyboard.press('Tab');

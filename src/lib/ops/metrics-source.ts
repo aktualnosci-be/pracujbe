@@ -1,16 +1,24 @@
 import 'server-only';
 
+import { isDatabaseError } from '@/lib/db/errors';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
 
 import { parseAiBudgetStatus, type AiBudgetStatus } from '@/lib/admin/ai-costs';
 
-import { parseOpsMetrics, type OpsMetrics } from './sensors';
+import { parseMaintenanceRun, parseOpsMetrics, type MaintenanceRun, type OpsMetrics } from './sensors';
+import { parseSchemaState, type SchemaStateResult } from './schema-state';
 
 export type OpsMetricsResult =
   /** `aiBudget` = `null`, gdy stanu budżetu AI (#36) nie udało się odczytać. */
-  | { kind: 'ok'; metrics: OpsMetrics; aiBudget: AiBudgetStatus | null }
+  | {
+      kind: 'ok';
+      metrics: OpsMetrics;
+      aiBudget: AiBudgetStatus | null;
+      /** 0180: `null` = odczyt się nie udał; `undefined` = baza sprzed 0180 (brak funkcji). */
+      maintenanceRun?: MaintenanceRun | null;
+    }
   | { kind: 'unconfigured' }
   | { kind: 'error' };
 
@@ -26,6 +34,7 @@ export async function readOpsMetrics(): Promise<OpsMetricsResult> {
   try {
     let raw: unknown;
     let rawBudget: unknown;
+    let rawRun: unknown;
     if (process.env.DATABASE_OPS_URL) {
       const { getOpsPool } = await import('@/lib/db/runtime');
       const pool = await getOpsPool();
@@ -35,9 +44,16 @@ export async function readOpsMetrics(): Promise<OpsMetricsResult> {
         const budget = await pool.query<{ budget: unknown }>('SELECT public.ai_budget_status() AS budget');
         return budget.rows[0]?.budget;
       });
+      rawRun = await readOptional('ops_last_maintenance_run', async () => {
+        const run = await pool.query<{ run: unknown }>('SELECT public.ops_last_maintenance_run() AS run');
+        return run.rows[0]?.run;
+      });
     } else if (isServiceDatabaseConfigured()) {
       raw = await withServiceRole((tx) => rpc(tx, 'ops_metrics'));
       rawBudget = await readBudget(() => withServiceRole((tx) => rpc(tx, 'ai_budget_status')));
+      rawRun = await readOptional('ops_last_maintenance_run', () =>
+        withServiceRole((tx) => rpc(tx, 'ops_last_maintenance_run')),
+      );
     } else {
       return { kind: 'unconfigured' };
     }
@@ -50,7 +66,16 @@ export async function readOpsMetrics(): Promise<OpsMetricsResult> {
     if (rawBudget !== undefined && !aiBudget) {
       captureError(new Error('ai_budget_status: nieoczekiwany kształt'), { area: 'ops.metrics' });
     }
-    return { kind: 'ok', metrics, aiBudget };
+    let maintenanceRun: MaintenanceRun | null | undefined;
+    if (rawRun === MISSING_FUNCTION) maintenanceRun = undefined;
+    else if (rawRun === undefined) maintenanceRun = null;
+    else {
+      maintenanceRun = parseMaintenanceRun(rawRun);
+      if (!maintenanceRun) {
+        captureError(new Error('ops_last_maintenance_run: nieoczekiwany kształt'), { area: 'ops.metrics' });
+      }
+    }
+    return { kind: 'ok', metrics, aiBudget, maintenanceRun };
   } catch (e) {
     captureError(e, { area: 'ops.metrics' });
     return { kind: 'error' };
@@ -63,6 +88,51 @@ async function readBudget(read: () => Promise<unknown>): Promise<unknown> {
     return (await read()) ?? undefined;
   } catch (e) {
     captureError(e, { area: 'ops.metrics', step: 'ai_budget_status' });
+    return undefined;
+  }
+}
+
+/**
+ * Odczyt `public.ops_schema_state()` (0184, #1065) tym samym kanałem co `ops_metrics()`: login
+ * `DATABASE_OPS_URL`, zapasowo pula zadań serwerowych. Brak funkcji (SQLSTATE 42883) = baza
+ * sprzed migracji 0184, czyli za kodem — osobny wynik, nie błąd.
+ */
+export async function readSchemaState(): Promise<SchemaStateResult> {
+  try {
+    let raw: unknown;
+    if (process.env.DATABASE_OPS_URL) {
+      const { getOpsPool } = await import('@/lib/db/runtime');
+      const pool = await getOpsPool();
+      const result = await pool.query<{ state: unknown }>('SELECT public.ops_schema_state() AS state');
+      raw = result.rows[0]?.state;
+    } else if (isServiceDatabaseConfigured()) {
+      raw = await withServiceRole((tx) => rpc(tx, 'ops_schema_state'));
+    } else {
+      return { kind: 'unconfigured' };
+    }
+    const state = parseSchemaState(raw);
+    if (!state) {
+      captureError(new Error('ops_schema_state: nieoczekiwany kształt'), { area: 'ops.schema-state' });
+      return { kind: 'error' };
+    }
+    return { kind: 'ok', state };
+  } catch (e) {
+    if (isDatabaseError(e) && e.code === '42883') return { kind: 'missing' };
+    captureError(e, { area: 'ops.schema-state' });
+    return { kind: 'error' };
+  }
+}
+
+/** Znacznik „funkcja nie istnieje” (baza sprzed migracji) — czujka milczy zamiast ostrzegać. */
+const MISSING_FUNCTION = Symbol('missing-function');
+
+/** Odczyt opcjonalny: brak funkcji (42883) = MISSING_FUNCTION, inny błąd = `undefined` (ostrzeżenie). */
+async function readOptional(step: string, read: () => Promise<unknown>): Promise<unknown> {
+  try {
+    return (await read()) ?? undefined;
+  } catch (e) {
+    if ((e as { code?: unknown } | null)?.code === '42883') return MISSING_FUNCTION;
+    captureError(e, { area: 'ops.metrics', step });
     return undefined;
   }
 }

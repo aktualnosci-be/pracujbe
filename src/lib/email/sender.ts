@@ -43,6 +43,22 @@ export function emailFromEnv(source: Record<string, string | undefined> = proces
 }
 
 /**
+ * Adres odpowiedzi (nagłówek Reply-To) z `EMAIL_REPLY_TO`: `adres@domena` albo
+ * `Nazwa <adres@domena>`. Zła wartość (nie adres, więcej adresów, znaki sterujące) = `null`
+ * (bez nagłówka), nigdy niepoprawny nagłówek. Bez wartości domyślnej — odpowiedzi trafiają
+ * tam, gdzie operator jawnie wskaże skrzynkę.
+ */
+export function replyToFromEnv(source: Record<string, string | undefined> = process.env): string | null {
+  const value = clean(source.EMAIL_REPLY_TO);
+  if (!value) return null;
+  // `clean` zwija białe znaki (CR/LF/tab), więc zostają tylko pozostałe znaki sterujące.
+  // eslint-disable-next-line no-control-regex -- świadome odrzucenie znaków sterujących w nagłówku
+  if (/[\u0000-\u001f\u007f]/.test(value)) return null;
+  const mailbox = /^(?:[^<>@,;]*<)?[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+>?$/;
+  return mailbox.test(value) && (value.includes('<') === value.includes('>')) ? value : null;
+}
+
+/**
  * Komplet wymagany do wysyłki marketingowej: jawny `EMAIL_FROM` (bez wartości domyślnej)
  * oraz tożsamość z adresem pocztowym. `null` = marketing nie może wyjść.
  */

@@ -28,7 +28,7 @@ describe("Zapis oferty przy błędzie transportu", () => {
       });
       fireEvent.click(button);
       await waitFor(() =>
-        expect(screen.getByRole("status")).toHaveTextContent("generic"),
+        expect(screen.getByRole("alert")).toHaveTextContent("generic"),
       );
       expect(button).toHaveAttribute("aria-pressed", String(initialSaved));
       await waitFor(() => expect(button).toBeEnabled());
@@ -40,7 +40,7 @@ describe("Zapis oferty przy błędzie transportu", () => {
       );
       // Stan docelowy, nie toggle: ponowienie po błędzie transportu nie odwraca zapisu.
       expect(toggleSavedJob).toHaveBeenLastCalledWith("job-1", !initialSaved);
-      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeEmptyDOMElement();
     },
   );
 });

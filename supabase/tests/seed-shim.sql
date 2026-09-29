@@ -20,6 +20,7 @@ create table if not exists auth.users(
   email text,
   encrypted_password text,
   email_confirmed_at timestamptz,
+  email_verified boolean not null default false,
   raw_app_meta_data jsonb default '{}'::jsonb,
   raw_user_meta_data jsonb default '{}'::jsonb,
   created_at timestamptz default now(),

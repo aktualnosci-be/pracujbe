@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { messages, rejectOptionalCookies } from './fixtures/messages';
+import { waitForHydrated } from './fixtures/hydration';
 
 const localizedWizard = [
   { locale: 'pl', title: 'Twój profil kandydata', firstName: 'Imię', lastName: 'Nazwisko', error: 'Podaj nazwisko.', next: 'Dalej: Preferencje pracy' },
@@ -15,6 +16,8 @@ for (const { locale, title, firstName, lastName, error, next } of localizedWizar
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/${locale}/candidate/onboarding`);
       await rejectOptionalCookies(page, locale);
+      // Wpis i klik przed hydratacją giną (#1032) — bez tego krok 2 bywał niedostępny pod obciążeniem.
+      await waitForHydrated(page.locator('#onb-firstName'));
 
       await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
       await expect(page.locator('main').locator('..')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
@@ -57,6 +60,8 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await page.goto('/pl/candidate/onboarding');
 
   await page.getByRole('button', { name: 'Tylko niezbędne' }).click();
+  // Wpis i klik przed hydratacją giną (#1032) — bez tego krok 2 bywał niedostępny pod obciążeniem.
+  await waitForHydrated(page.locator('#onb-firstName'));
 
   await expect(page.getByRole('heading', { level: 1, name: 'Twój profil kandydata' })).toBeVisible();
 
@@ -72,8 +77,10 @@ test('kreator zachowuje dane klienta i przechodzi przez sześć kroków', async 
   await expect(page.getByRole('heading', { level: 2, name: 'Preferencje pracy' })).toBeVisible();
   await expectMinimumTarget(page.getByRole('button', { name: 'Zamknij' }));
 
-  // Krok 2: zawód i branża.
-  await page.getByLabel('Zawody i stanowiska').fill('Magazynier');
+  // Krok 2: zawód i branża. Pole czeka na hydratację (wpis przed nią ginie, #1032).
+  const occupations = page.getByLabel('Zawody i stanowiska');
+  await waitForHydrated(occupations);
+  await occupations.fill('Magazynier');
   await page.getByRole('button', { name: 'Dodaj' }).click();
   await page.getByRole('button', { name: 'Magazyn', exact: true }).click();
   await page.getByRole('button', { name: /Dalej: Doświadczenie i umiejętności/ }).click();

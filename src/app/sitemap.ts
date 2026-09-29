@@ -7,6 +7,7 @@ import {
   getCityCounts,
   getJobs,
   getJobsAvailableLocales,
+  getJobsCount,
   type CategoryKey,
   type LocationKey,
 } from '@/lib/jobs';
@@ -31,9 +32,9 @@ import { sitemapEntriesCache, sitemapIdsCache } from '@/lib/cache/sitemap-cache'
  * Każdy wpis ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
  * celowo pominięte (patrz `robots.ts`). Działa bez env (dane demonstracyjne z `getJobs`).
  *
- * Profile firm (#591) trafiają do partii ofert: jeden wpis na `companySlug` zebrany przy tej
- * samej iteracji po ofertach partii (bez osobnego zapytania). Firma z ofertami w dwóch partiach
- * pojawi się w obu (dopuszczalny duplikat URL-a między plikami; dopiero powyżej 5000 ofert).
+ * Profile firm (#591) są w partii `0` (PERF-05, #1231): jeden wpis na `companySlug` zebrany
+ * z jednej iteracji po WSZYSTKICH osiągalnych ofertach (strony listy bez licznika, #1230),
+ * więc firma z ofertami w kilku partiach ofert nie powtarza się między plikami sitemap.
  * Dane demonstracyjne nie mają `companySlug`, więc profili firm tam nie ma.
  *
  * TODO(i18n-slugs): segment listy ofert jest wspólny (`oferty-pracy`) — po wdrożeniu
@@ -60,13 +61,13 @@ const SITEMAP_JOBS_PAGE = 100;
 
 /**
  * Liczba partii ofert (id `1..N`) potrzebna dla obecnego wolumenu. Poza produkcją = 0 (sam
- * core sitemap, #429 — bez odczytu bazy). `getJobs({ pageSize: 1 }).total` jest dokładnym
- * licznikiem publicznych ofert (P1-12), niezależnym od sufitu paginacji offsetowej.
+ * core sitemap, #429 — bez odczytu bazy). `getJobsCount` jest dokładnym licznikiem publicznych
+ * ofert (P1-12), niezależnym od sufitu paginacji offsetowej; bez odczytu wierszy (#1230).
  */
 async function jobSitemapShardCount(): Promise<number> {
   if (!isProductionDeployment()) return 0;
-  const probe = await getJobs({ locale: routing.defaultLocale, page: 1, pageSize: 1 });
-  const reachable = Math.min(probe.total, MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE);
+  const total = await getJobsCount({ locale: routing.defaultLocale });
+  const reachable = Math.min(total, MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE);
   return Math.max(0, Math.ceil(reachable / JOBS_PER_SITEMAP_SHARD));
 }
 
@@ -219,7 +220,30 @@ export default async function sitemap({
   return entries;
 }
 
-/** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji i poradniki. */
+/** Stron listy (po `SITEMAP_JOBS_PAGE`) osiągalnych paginacją — ta sama granica co partie ofert. */
+const MAX_SITEMAP_JOB_PAGES = Math.ceil((MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE) / SITEMAP_JOBS_PAGE);
+
+/**
+ * PERF-05 (#1231): slugi firm z aktywnymi, osiągalnymi ofertami — jedna iteracja po całej
+ * liście (bez licznika i przekładu), w kolejności pierwszego wystąpienia.
+ */
+async function collectCompanySlugs(): Promise<string[]> {
+  const slugs = new Set<string>();
+  for (let page = 1; page <= MAX_SITEMAP_JOB_PAGES; page += 1) {
+    const result = await getJobs(
+      { locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE },
+      undefined,
+      { withTotal: false },
+    );
+    for (const job of result.jobs) {
+      if (job.companySlug) slugs.add(job.companySlug);
+    }
+    if (result.jobs.length < SITEMAP_JOBS_PAGE) break; // ostatnia strona całej listy
+  }
+  return [...slugs];
+}
+
+/** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji, poradniki i profile firm. */
 async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
   const base = env.siteUrl;
   const locales = routing.locales;
@@ -286,6 +310,21 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
+  // --- Profile firm (#591; #1231: tylko tutaj, raz na firmę w całym indeksie) — komplet
+  // języków (treść nie zależy od tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
+  for (const slug of await collectCompanySlugs()) {
+    const path = `${COMPANIES_PATH}/${slug}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+        alternates: { languages },
+      });
+    }
+  }
+
   return entries;
 }
 
@@ -307,16 +346,14 @@ async function jobsSitemapShard(
   const pagesPerShard = JOBS_PER_SITEMAP_SHARD / SITEMAP_JOBS_PAGE;
   const firstPage = shardIndex * pagesPerShard + 1;
   const lastPage = firstPage + pagesPerShard - 1;
-  // #591: profile firm zbierane PRZY OKAZJI tej samej iteracji (bez osobnego zapytania) —
-  // `job.companySlug` jest już w wyniku (0140). Jeden wpis na firmę w partii.
-  const companySlugs = new Set<string>();
-
   for (let page = firstPage; page <= lastPage; page += 1) {
-    const result = await getJobs({ locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE });
+    // #1230: partia nie potrzebuje licznika — jedno zapytanie na stronę zamiast dwóch.
+    const result = await getJobs(
+      { locale: routing.defaultLocale, page, pageSize: SITEMAP_JOBS_PAGE },
+      undefined,
+      { withTotal: false },
+    );
     if (result.jobs.length === 0) break;
-    for (const job of result.jobs) {
-      if (job.companySlug) companySlugs.add(job.companySlug);
-    }
     // Tylko wersje językowe z tłumaczeniem (#301); nieznane (błąd odczytu) = wszystkie, jak dotąd.
     const availableByJob = await getJobsAvailableLocales(result.jobs.map((job) => job.id));
     if (!availableByJob) health.degraded = true; // błąd odczytu: wszystkie wersje, ale nie trzymamy tego w cache
@@ -338,21 +375,6 @@ async function jobsSitemapShard(
       }
     }
     if (result.jobs.length < SITEMAP_JOBS_PAGE) break; // ostatnia strona całej listy
-  }
-
-  // --- Profile firm (#591) — jeden wpis na slug, komplet języków (treść nie zależy od
-  // tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
-  for (const slug of companySlugs) {
-    const path = `${COMPANIES_PATH}/${slug}`;
-    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
-    for (const locale of locales) {
-      entries.push({
-        url: `${base}/${locale}${path}`,
-        changeFrequency: 'weekly',
-        priority: 0.5,
-        alternates: { languages },
-      });
-    }
   }
 
   return entries;
