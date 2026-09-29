@@ -1920,6 +1920,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
   TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
   unit `team-invitation-signup-preview`.
+  Oczekujące zaproszenia (migracja `0187`): `get_company_invitations`
+  zwraca też `locale` (null dla zaproszeń sprzed 0121) i `inviter_name` (bramka owner/admin
+  bez zmian; zmiana typu wyniku = DROP + CREATE). Wiersz listy w `/employer/zespol` pokazuje
+  język zaproszenia, kto i kiedy zaprosił. „Odnów” (`renewTeamInvitation(id, expectedCompanyId)`, firma widoku jak przy
+  zapraszaniu — inna aktywna firma = `ACTIVE_COMPANY_CHANGED`): klient podaje tylko
+  id, adres/rolę/język akcja czyta z listy AKTYWNEJ firmy w tej samej transakcji i woła
+  `invite_company_member` z nowym tokenem (14 dni, nowy link dla adresu bez konta, limit 3/dobę
+  jak dotąd; zaproszenie bez języka → `en`); spoza listy = `NOT_FOUND`. „Cofnij” dopiero po
+  potwierdzeniu w `ConfirmDialog` (własna etykieta `team.revokeConfirm` — po francusku „Annuler”
+  = także „Anuluj”, test pilnuje różnicy); po sukcesie fokus na komunikacie `role="status"`. Dowód:
+  `rls.sql` sekcja TI179 (kontrola ujemna: definicja z 0086 bez `locale`), unit
+  `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
+  (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
   Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
   `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
   `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
@@ -2689,6 +2702,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Trwały dowód poinformowania i limity DSA (paczka M-1, migracja `0188` — numer tymczasowy;
+  #1037/#1045/#1063/#1098/#1107; terminy 6 mies./14 dni/12 mies. bez zmian, strażnik
+  `dsa-approved-terms`): początek biegu terminu odwołania zapisuje niezmienna tabela
+  `moderation_informed` (bez grantów; triggery na `email_deliveries` + RPC odczytu decyzji), a nie
+  mutowalna tabela powiadomień ani bieżący stan poczty — `email_sent` (odbicie/błąd unieważnia wpis),
+  `panel_view` (odczyt decyzji w `get_company_moderation_decisions`; „oznacz jako przeczytane” nie
+  liczy się), reguły zastępcze `delivery_failed` (od ostatecznej porażki wysyłki) i `no_recipient`
+  (od chwili decyzji/cofnięcia; odroczony trigger przy zatwierdzeniu). Retencja i stan drogi
+  odwołania korzystają z tego bez zmian; `dsa_retention_report` ma `informedByFallback`
+  (kafelek w `/admin/raport-dsa`). Kod dostępu do sprawy (`reportReceived`) znika z payloadu
+  zlecenia, gdy przestaje być oczekujące (strażnik BEFORE INSERT/UPDATE + jednorazowe czyszczenie).
+  `submit_content_report`: limit 5/adres/24 h i „jedna otwarta sprawa na treść” pod blokadą
+  doradczą per adres + częściowy indeks `reports_dsa_open_uq`. `admin_set_company_status`: zawieszenie
+  także z `unverified`/`pending`, z `suspended` również `rejected` (przyciski = macierz bazy,
+  test `dsa-informed-limits`). Dowód: `rls.sql` sekcja DSA960 (kontrole ujemne: zdjęty strażnik,
+  trigger poczty, trigger zatwierdzenia, indeks; wyścigi dblink), rollback
+  `supabase/rollback/0188_…down.sql` + `dsa-informed-rollback.sql`. **Otwarte (poza M-1):** blokada
+  wiersza przy „Kopiuj jako szkic”, odpowiedź na propozycję (wyłączona), zgłoszenie wiadomości
+  „otwórz ponownie” (#1107 pkt 2).
   Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0179`,
   `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
   dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
@@ -3285,6 +3317,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
   next-intl) — strażnik `tests/unit/pwa-manifest-route.test.ts`, E2E `pwa-locale-manifest.spec`.
+  Limit CV na konto (decyzja właściciela 29.09.2026, migracja `0189`): najwyżej 10 nieusuniętych plików
+  i 50 MB łącznie (trigger `enforce_cv_account_quota`, lustro `CV_MAX_FILES_PER_ACCOUNT`/
+  `CV_MAX_TOTAL_BYTES_PER_ACCOUNT`, komunikat `files.errorAccountLimit`); dowód `rls.sql` SD1111, unit `cv-account-quota`.
+  Kontrakt soft-delete (0189): usunięta (`deleted_at`) aplikacja i propozycja są niewidoczne dla stron
+  (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
+  jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
+  `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
