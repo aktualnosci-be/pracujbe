@@ -19256,7 +19256,7 @@ select pg_temp.assert(
                  where published_at = :'sm_tie'::timestamptz),
         p1 as (select * from ties order by id desc limit 20),   -- strona kończy się W ŚRODKU remisu
         correct as (select count(*) c from public.get_public_jobs_sitemap_page(
-                      :'sm_tie'::timestamptz, (select min(id) from p1), null, null, 1000) where published_at = :'sm_tie'::timestamptz),
+                      :'sm_tie'::timestamptz, (select id from p1 order by id asc limit 1), null, null, 1000) where published_at = :'sm_tie'::timestamptz),
         skip as (select count(*) c from public.get_public_jobs_sitemap_page(
                    :'sm_tie'::timestamptz, '00000000-0000-0000-0000-000000000000', null, null, 1000)
                  where published_at = :'sm_tie'::timestamptz),
