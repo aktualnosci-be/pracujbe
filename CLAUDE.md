@@ -2761,6 +2761,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   długość po `trim()` — fail-closed zamiast fałszywej gotowości. Dowód:
   `tests/unit/auth-secret-length.test.ts` (pozytywne 32 znaki, kontrole ujemne: 31 znaków, z
   otaczającymi spacjami, pusty sekret, `isAppReady()` z resztą rdzenia gotową).
+- [x] Middleware i SEO-meta (audyt 2026-09-28, bez migracji): matcher `src/middleware.ts` (#1035) nie pomija już
+  ścieżek z kropką w segmencie (`/pl/oferty-pracy/a.b` szło do tras dynamicznych z pominięciem bramki hasła
+  i 503 „niegotowe”) — wyłączone są tylko `api|auth|_next|_vercel|images|.well-known` (granica segmentu),
+  jawna lista plików z korzenia, `/sitemap/<n>.xml` i `/<locale>/manifest.webmanifest`; drugi matcher
+  przepuszcza każde żądanie z nagłówkiem `next-action`. Strażnik `middleware-matcher.test.ts` (każdy plik
+  z `public/` musi omijać middleware; kontrola ujemna dawnego wzorca; kompilacja przez Next). `alternateLinks:
+  false` w `src/i18n/routing.ts` (#1057): brak nagłówka HTTP `Link` z hreflang (jego `x-default` bez prefiksu
+  języka był sprzeczny z metadata i sitemapą; test uruchamia prawdziwe middleware next-intl w podprocesie).
+  `src/lib/seo/locales.ts` (#1084/#1097): jedno źródło `og:locale` (`język_KRAJ` + `alternateLocale`) dla
+  wszystkich stron z własnym `openGraph` oraz `pickXDefaultLocale` (kolejność `routing.locales`, nie
+  kolejność z bazy) dla sitemapy i hreflang oferty. Sitemap (#1042, krok 1): zostaje `force-dynamic`
+  (prerender w buildzie zamroziłby pustą listę partii), ale wynik pliku i lista partii są w pamięci procesu
+  3600 s z single-flight (`src/lib/cache/sitemap-cache.ts`; błąd i wynik zdegradowany nie są cache'owane).
+  **Otwarte (#1042):** RPC kursorowe bez licznika (migracja); druga linia obrony (helper bramki w publicznych
+  Server Actions, #1035).
 - [x] Rate limiting aplikacyjny — RPC `rate_limit_hit` (`0015`) wpięty w auth/apply/wiadomości.
   Odporność osobnej bazy limitera (#608): `checkDatabaseRateLimit` (`src/lib/db/rate-limit.ts`)
   zwraca `boolean` wyłącznie dla rzeczywistej odpowiedzi RPC (`allowed`/`limited`); błędna
