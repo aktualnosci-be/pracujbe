@@ -19184,12 +19184,15 @@ begin
   return res;
 end $$;
 
--- Oczekiwana lista = publiczna lista ofert (get_public_jobs, strony po 100) w porządku klucza kursora.
+-- Oczekiwana lista = publiczna lista ofert z datą publikacji (get_public_jobs, strony po 100)
+-- w porządku klucza kursora.
 create function pg_temp.sm_expected() returns uuid[]
 language sql as $$
   select coalesce(array_agg(j.id order by j.published_at desc, j.id desc), '{}')
   from generate_series(0, 900, 100) o
   cross join lateral public.get_public_jobs(p_limit => 100, p_offset => o) j
+  -- Oferta aktywna bez daty publikacji jest na liście, ale poza sitemapą (klucz kursora, jak 0158).
+  where j.published_at is not null
 $$;
 
 select coalesce(slug, '') as sm_cslug from public.companies where id = :'SMC' \gset

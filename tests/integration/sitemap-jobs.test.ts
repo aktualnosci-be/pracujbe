@@ -66,7 +66,7 @@ beforeAll(async () => {
     await insert(companyId, 'new-', 3, 'active', `timestamptz '2026-09-25 09:00:00.000001+00' + g * interval '1 microsecond'`);
     await insert(companyId, 'old-', 2, 'active', `timestamptz '2026-08-01 09:00:00+00'`);
     await insert(companyId, 'hid-draft-', 2, 'draft', 'now()');
-    await insert(companyId, 'hid-exp-', 2, 'active', 'now()', "now() - interval '1 day'");
+    await insert(companyId, 'hid-exp-', 2, 'active', 'now()', new Date(Date.now() - 86_400_000).toISOString());
     await insert(companyId, 'hid-del-', 2, 'active', 'now()', null, true);
     await insert(unverified, 'hid-unv-', 2, 'active', 'now()');
     await client.query('COMMIT');
@@ -129,9 +129,11 @@ describe('sitemap ofert — kursorowe RPC na PostgreSQL 16 (#1042)', () => {
     for (let i = 1; i < rows.length; i += 1) {
       const a = rows[i - 1]!;
       const b = rows[i]!;
-      const ta = Date.parse(a.publishedAt);
-      const tb = Date.parse(b.publishedAt);
-      expect(ta > tb || (ta === tb && a.id > b.id), `${a.id} → ${b.id}`).toBe(true);
+      // Ten sam format tekstu (ISO, mikrosekundy, +00:00) — porównanie leksykograficzne = chronologiczne.
+      expect(
+        a.publishedAt > b.publishedAt || (a.publishedAt === b.publishedAt && a.id > b.id),
+        `${a.id} → ${b.id}`,
+      ).toBe(true);
     }
   });
 
@@ -152,7 +154,16 @@ describe('sitemap ofert — kursorowe RPC na PostgreSQL 16 (#1042)', () => {
   });
 
   it('updated_at odzwierciedla edycję (lastmod)', async () => {
-    await pg.admin.query(`UPDATE public.jobs SET updated_at = timestamptz '2026-09-28 12:00:00+00' WHERE slug = 'old-1'`);
+    // Trigger set_updated_at nadpisałby wartość — wyłączamy go tylko dla tej instrukcji testu.
+    const client = await pg.admin.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SET LOCAL session_replication_role = replica');
+      await client.query(`UPDATE public.jobs SET updated_at = timestamptz '2026-09-28 12:00:00+00' WHERE slug = 'old-1'`);
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
     const { rows } = await walk(5000, 1000);
     expect(new Date(rows.find((r) => r.slug === 'old-1')!.updatedAt).toISOString()).toBe('2026-09-28T12:00:00.000Z');
   });
