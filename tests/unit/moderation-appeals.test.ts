@@ -15,6 +15,7 @@ import {
 } from '@/lib/admin/appeals';
 import { ADMIN_PAGE_SIZE } from '@/lib/admin/list-params';
 import { dsaCsvStream } from '@/lib/admin/dsa-csv-stream';
+import { dsaJsonStream } from '@/lib/admin/dsa-json-stream';
 import { parseDsaReportRange } from '@/lib/admin/dsa-report';
 import { parseReportCase } from '@/lib/content-reports/case';
 import {
@@ -466,27 +467,37 @@ describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606
     expect(decodeDsaExportCursor(Buffer.from('brak-separatora', 'utf8').toString('base64url'))).toBeNull();
   });
 
-  it('trasa JSON: zniekształcony cursor → 400 invalid_cursor, bez zapytania; kontrola ujemna: poprawny → 200', async () => {
+  it('trasa JSON/CSV: parametr cursor jest ignorowany — eksport zawsze zaczyna od pierwszej strony i jest kompletny (bez 400)', async () => {
     const { GET } = await import('@/app/api/admin/dsa-report/route');
-    fakeDb.rpc('dsa_statements_export', []).rpc('dsa_transparency_report', {
-      period: { from: '2026-01-01T00:00:00Z', to: '2026-02-01T00:00:00Z' },
+    const total = DSA_EXPORT_PAGE_SIZE + 3;
+    const all = Array.from({ length: total }, (_, i) => ({ ...exportRow(i), decision_reference: `DEC-${String(i).padStart(5, '0')}` }));
+    fakeDb.rpc('dsa_statements_export', ({ args }: { args: Record<string, unknown> }) =>
+      args['p_cursor_decided_at'] ? all.slice(DSA_EXPORT_PAGE_SIZE) : all.slice(0, DSA_EXPORT_PAGE_SIZE),
+    ).rpc('dsa_transparency_report', {
+      period: { from: '2026-01-01T00:00:00Z', to: '2026-12-31T00:00:00Z' },
       notices: { total: 0, byCategory: {} },
       decisions: { total: 0, medianHoursToDecision: null, automatedDecision: 0 },
       appeals: { total: 0, byStatus: {}, reversedDecisions: 0, medianHoursToDecision: null },
     });
-    const base = 'https://pracuj.be/api/admin/dsa-report?format=json&od=2026-01-01&do=2026-01-31';
+    const base = 'https://pracuj.be/api/admin/dsa-report?od=2026-01-01&do=2026-12-31';
+    const stale = encodeURIComponent('!!! nie base64url ###');
 
-    const bad = await GET(new Request(`${base}&cursor=${encodeURIComponent('!!! nie base64url ###')}`));
-    expect(bad.status).toBe(400);
-    expect(await bad.json()).toEqual({ error: 'invalid_cursor' });
-    expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(0);
+    const json = await GET(new Request(`${base}&format=json&cursor=zly`));
+    expect(json.status).toBe(200);
+    const parsed = JSON.parse(await json.text()) as { statements: Array<{ decision_reference: string }> };
+    expect(parsed.statements).toHaveLength(total);
+    expect(parsed.statements[0]?.decision_reference).toBe('DEC-00000');
+    // Pierwsze zapytanie bez kursora, mimo `cursor=zly` w adresie.
+    expect(fakeDb.callsTo('dsa_statements_export')[0]?.args).toMatchObject({ p_cursor_decided_at: null });
 
-    const token = encodeDsaExportCursor('2026-01-20T10:00:00.000Z', 'DEC-ABCD-1234');
-    const ok = await GET(new Request(`${base}&cursor=${token}`));
-    expect(ok.status).toBe(200);
-    expect(fakeDb.callsTo('dsa_statements_export')[0]?.args).toMatchObject({
-      p_cursor_decided_at: '2026-01-20T10:00:00.000Z', p_cursor_reference: 'DEC-ABCD-1234',
-    });
+    const csv = await GET(new Request(`${base}&format=csv&cursor=${stale}`));
+    expect(csv.status).toBe(200);
+    expect((await csv.text()).trim().split('\r\n')).toHaveLength(total + 1);
+
+    // Kontrola ujemna: gdyby trasa honorowała `cursor`, plik zaczynałby się od drugiej strony i gubił wiersze.
+    const honoured = all.slice(DSA_EXPORT_PAGE_SIZE);
+    expect(honoured).toHaveLength(3);
+    expect(honoured.length).toBeLessThan(total);
   });
 
   it('trasa CSV: strony 2+ dociągane po zakończeniu żądania nie wymagają sesji — plik nie urywa się po 2000 wierszach (#1110)', async () => {
@@ -521,7 +532,7 @@ describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606
     expect(fakeDb.callsTo('dsa_statements_export')).toHaveLength(0);
   });
 
-  it('CSV: bezpiecznik stron przy niepustym kursorze kończy strumień BŁĘDEM, nie cichym obcięciem', async () => {
+  it('CSV/JSON: liczba stron powyżej dawnego limitu → eksport KOMPLETNY, bez znacznika export_truncated (kontrola ujemna: dawny limit gubi wiersze)', async () => {
     const read = async (stream: ReadableStream<Uint8Array>) => {
       const reader = stream.getReader();
       let text = '';
@@ -531,19 +542,25 @@ describe('eksport decyzji DSA: stronicowanie zamiast całego zakresu naraz (#606
         text += new TextDecoder().decode(value);
       }
     };
-    const endless = () => Promise.resolve({ status: 'ok' as const, rows: ['r'], nextCursor: 'next' });
-    const truncated = dsaCsvStream({
-      header: 'h\n', first: { rows: ['r'], nextCursor: 'next' }, toCsv: (rows) => rows.join('\n') + '\n',
-      fetchPage: endless, maxPages: 2,
-    });
-    await expect(read(truncated)).rejects.toThrow('export_truncated');
+    const pages = 300; // więcej niż dawne 250 stron
+    const page = (n: number) => ({ status: 'ok' as const, rows: [`r${n}`], nextCursor: n + 1 < pages ? String(n + 1) : null });
+    const fetchPage = (cursor: string) => Promise.resolve(page(Number(cursor)));
+    const first = { rows: ['r0'], nextCursor: '1' };
 
-    // Kontrola ujemna: dane kończą się przed limitem → pełny plik bez błędu.
-    const finite = dsaCsvStream({
-      header: 'h\n', first: { rows: ['a'], nextCursor: 'next' }, toCsv: (rows) => rows.join('\n') + '\n',
-      fetchPage: () => Promise.resolve({ status: 'ok' as const, rows: ['b'], nextCursor: null }), maxPages: 2,
-    });
-    expect(await read(finite)).toBe('h\na\nb\n');
+    const csv = await read(dsaCsvStream({ header: 'h\n', first, toCsv: (rows) => rows.join('\n') + '\n', fetchPage }));
+    const lines = csv.trim().split('\n');
+    expect(lines).toHaveLength(pages + 1);
+    expect(lines.at(-1)).toBe(`r${pages - 1}`);
+    expect(csv).not.toContain('export_truncated');
+
+    const json = JSON.parse(await read(dsaJsonStream({ report: {}, first, fetchPage }))) as { statements: string[] };
+    expect(json.statements).toHaveLength(pages);
+    expect(JSON.stringify(json)).not.toContain('export_truncated');
+
+    // Kontrola ujemna: atrapa z dawnym limitem 250 stron gubi końcówkę.
+    const capped = (cursor: string) => Promise.resolve(Number(cursor) >= 250 ? { status: 'ok' as const, rows: [], nextCursor: null } : page(Number(cursor)));
+    const truncated = await read(dsaCsvStream({ header: 'h\n', first, toCsv: (rows) => rows.join('\n') + '\n', fetchPage: capped }));
+    expect(truncated.trim().split('\n').length).toBeLessThan(pages + 1);
   });
 });
 

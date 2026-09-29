@@ -1568,6 +1568,26 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `tests/legal/classifieds-only.test.ts` (ApplyModal/„Wyślij wiadomość” tylko w gałęzi
   `recruitment`, kontrola ujemna), E2E `job-detail-employer-apply` (4 języki, axe 320/1280 px;
   uruchamiany z `E2E_PORTAL_LEGAL_MODE=`). Helper Vitest: `withRecruitmentMode`/`withClassifiedsMode`.
+  Język ogłoszenia, szkice i data rozpoczęcia (#1048, #1099, #1112, bez migracji): krok 1
+  ma pole „Język ogłoszenia” (domyślnie język panelu lub zapisany w szkicu; w edycji opublikowanej
+  oferty zablokowane). Zmiana w szkicu: krok 1 niesie `contentLocale` → `setDraftContentLocale`
+  (`src/lib/actions/jobs.ts`) w jednej transakcji ustawia `jobs.default_locale` i przenosi
+  `job_translations`/`job_requirements` do nowego języka (bez tego `save_job_draft` zostawiłby
+  osierocony komplet); `createJobDraft` tworzy szkic od razu w wybranym języku. Tworzenie szkicu
+  jest idempotentne po kluczu operacji z przeglądarki (`draft-<uuid>` jako slug, `ON CONFLICT`):
+  ponowienie po utraconej odpowiedzi zwraca ten sam szkic. „Usuń szkic” na `/employer/oferty`
+  (`deleteJobDraft`, miękkie usunięcie, tylko `draft`, recruiter+, `ConfirmDialog`). Poprawka
+  opublikowanej oferty rewaliduje też stronę główną i landingi (`revalidatePublicJobPaths`).
+  Szczegół oferty pokazuje „Praca od zaraz” i datę rozpoczęcia (`src/lib/job-start.ts`, komponent
+  serwerowy, bez JS). Combobox poziomu języka w kroku 7 ma nazwę (`jobWizard.languageLevelAria`).
+  Dowód: unit `job-wizard-content-locale`, `job-detail-start`, `job-start`, `delete-job-draft-button`,
+  integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
+  inny klucz = nowy szkic). **Otwarte (wymaga migracji):** kontrola kompletności w `publish_job`/
+  `update_published_job` odrzuca tytuły zaczynające się od „draft” lub zawierające „placeholder”
+  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), język
+  proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
+  przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
+  i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -1822,6 +1842,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
   TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
   unit `team-invitation-signup-preview`.
+  Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
+  `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
+  `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
+  bo `get_company_invitations` od 0086 filtruje po dacie) zajmowały limit na zawsze i blokowały
+  zapraszanie nowych osób bez żadnej akcji „Cofnij” w UI dla tych rekordów. Ujednolicone: limit
+  liczy `pending` z `expires_at > now()`, dokładnie jak panel; sama tabela i sygnatura RPC bez
+  zmian. Dowód: `rls.sql` sekcja TM403-13 (50 wygasłych nie blokuje nowego zaproszenia; limit
+  nadal działa przy 51 realnie ważnych; kontrola ujemna: cofnięcie migracji `0178` czerwoni
+  TM403-13c przez `INVITATION_LIMIT_REACHED`).
 
 ### Etap 5 — procesy
 - [x] Matching (logika + test jednostkowy + integracja z UI) — **wyłączone w trybie ogłoszeniowym (#1131)** — deterministyczny `scoreMatch` (test), RPC `get_job_match_profile` (0024, tokeny wymagań oferty), loader `getMyJobMatch` (profil kandydata pod RLS + oferta przez RPC), wyspa kliencka `JobMatchCard` na detalu oferty (SSR/SEO bez zmian dla anonimów; kandydat widzi „Twoje dopasowanie" %, atuty, braki). i18n `match` (pl/nl/fr/en). Dowód RPC: `rls.sql` I10.
@@ -2562,7 +2591,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (service_role, `dsa_retention_runs`) anonimizują sprawy dopiero po końcu drogi odwołania
   i okresie retencji — wiersze i liczby zostają. Raport: `dsa_transparency_report` + eksport
   `dsa_statements_export` (bez danych osobowych i faktów) w `/admin/raport-dsa` i
-  `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
+  `GET /api/admin/dsa-report` (CSV/JSON). Oba formaty to KOMPLET zakresu strumieniowany stronami po kursorze
+  (#641, #670, `src/lib/admin/dsa-export-stream.ts`, `dsa-csv-stream.ts`, `dsa-json-stream.ts`): bez limitu
+  stron i bez `nextCursor` w JSON; błąd bazy albo kursor niepostępujący przerywa odpowiedź (niepełny plik nie
+  udaje kompletnego). Dowód: unit `dsa-export-stream` (kontrole ujemne). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
   APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Zatwierdzone przez właściciela 26.09.2026 (#40):** okno
@@ -2788,6 +2820,20 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `tests/unit/csp-inline-scripts.test.ts` (enforced bez regresji, Report-Only z hashem i kontrolą
   ujemną). **Otwarte (decyzja właściciela):** warianty A–D z analizy (nonce + rezygnacja z ISR
   na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
+- [~] Narzędzia i konfiguracja (audyt CFG29, #1121, bez migracji). `@react-email/*` w `dependencies`
+  (#1175). Typecheck specyfikacji Playwrighta: `tsconfig.e2e.json` (rozszerza `tsconfig.json`,
+  bez `noUncheckedIndexedAccess` — 151 błędów z tej flagi w `tests/e2e` to osobny follow-up,
+  reszta naprawiona) wołany przez `npm run typecheck` (job „Typecheck” bez zmian), strażnik
+  `scripts/check-ci-workflows.mjs` pilnuje skryptu i zakresu (kontrola ujemna w
+  `ci-workflows-guard.test`). `EMAIL_REPLY_TO` jest czytany (`replyToFromEnv`, `sender.ts`):
+  nagłówek Reply-To we wszystkich listach obu workerów (kolejka domenowa i kont; Resend
+  `replyTo`, EmailLabs nagłówek), zła wartość albo wstrzyknięcie CRLF = bez nagłówka, bez
+  wartości domyślnej (`email-reply-to.test`, kontrole ujemne). Limit Server Actions 6 MB
+  zostaje globalny (Next nie ma go per akcja), ale middleware odrzuca 413 żądanie Server Action
+  spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
+  `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). **Otwarte:**
+  `noUncheckedIndexedAccess` w `tsconfig.e2e.json`, ESLint 9 (wymaga instalacji; `next lint`
+  zastąpione `eslint` CLI bez zmiany wersji, lint obejmuje też pliki konfiguracyjne), usunięcie nieużywanych zależności (lista w PR #1121).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,
@@ -3366,7 +3412,8 @@ npm run db:migrate:production  # migracje na wskazanej bazie (MIGRATION_DATABASE
 - Dostęp do DB: `src/lib/db/portal.ts` + `src/lib/db/sql.ts` (#25); nazwy zapytań/funkcji tylko stałe, wartości w `$n`. Operacje wrażliwe = Server Actions/route handlers.
 - Błędy: rzucaj `AppError` z kodem (`src/lib/errors`); mapuj na komunikat tłumaczony.
 - Nazwy plików: `kebab-case`; komponenty React: `PascalCase`.
-- Lint obejmuje `src/`, `tests/` i `scripts/` (`next lint --dir …`); `.eslintrc.json` ma `"root": true`,
+- Lint (`eslint` CLI zamiast przestarzałego `next lint`, ta sama konfiguracja i wersja ESLint 8) obejmuje `src/`, `tests/`,
+  `scripts/` oraz pliki `*.config.{mjs,ts}` z korzenia; `.eslintrc.json` ma `"root": true`,
   więc worktree w `.claude/worktrees/` nie dziedziczy konfiguracji z checkoutu nadrzędnego (konflikt
   pluginu `@next/next`). Reguł nie wyłączamy globalnie — lokalny `eslint-disable` tylko z komentarzem
   uzasadnienia (np. `require` w preloadzie CommonJS `tests/e2e-real/support/server-only-hook.cjs`).

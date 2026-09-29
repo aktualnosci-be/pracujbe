@@ -553,7 +553,8 @@
       "none": "Ta oferta nie podaje sposobu aplikowania.",
       "mailSubject": "Oferta pracy: {title}",
       "contact": "Kontakt bezpośrednio z ogłoszeniodawcą"
-    }
+    },
+    "startImmediate": "Praca od zaraz"
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1222,7 +1223,14 @@
     "savedSearchJobsShow": "Pokaż oferty: {name}",
     "savedSearchJobsFrom": "Wyszukiwanie: {name}",
     "employerGreetingSubListing": "Witaj {name}! Sprawdź, jak radzą sobie Twoje ogłoszenia.",
-    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia."
+    "employerGreetingSubListingGeneric": "Sprawdź, jak radzą sobie Twoje ogłoszenia.",
+    "deleteJobDraft": "Usuń szkic",
+    "deleteJobDraftLabel": "Usuń szkic: {title}",
+    "deleteJobDraftTitle": "Usunąć szkic oferty?",
+    "deleteJobDraftDescription": "Szkic „{title}” zostanie usunięty razem z wpisaną treścią. Tej operacji nie można cofnąć.",
+    "deleteJobDraftConfirm": "Usuń szkic",
+    "deleteJobDraftCancel": "Anuluj",
+    "deleteJobDraftUntitled": "bez tytułu"
   },
   "candidatePassport": {
     "eyebrow": "PASZPORT PRACY",
@@ -1316,6 +1324,7 @@
     "levelIntermediate": "Średni",
     "levelFluent": "Biegły",
     "levelNative": "Ojczysty",
+    "languageLevelLabel": "Poziom znajomości języka",
     "addLanguage": "Dodaj język",
     "certificatesLabel": "Certyfikaty i uprawnienia",
     "certificatesPlaceholder": "np. VCA, świadectwo kwalifikacji",
@@ -1799,7 +1808,11 @@
     "jointCommitteeLabel": "Komisja parytetowa (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "Na stronie oferty pokażemy numer komisji i link do oficjalnej bazy stawek minimalnych. Portal nie ocenia wysokości stawki.",
-    "languageSelectPlaceholder": "Wybierz język"
+    "languageSelectPlaceholder": "Wybierz język",
+    "contentLocaleLabel": "Język ogłoszenia",
+    "contentLocaleHint": "W tym języku piszesz treść ogłoszenia. Może być inny niż język panelu; od niego zależy oznaczenie języka i tłumaczenia dla kandydatów.",
+    "contentLocaleLocked": "Języka opublikowanej oferty nie można zmienić.",
+    "languageLevelAria": "Poziom języka: {level}"
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",
@@ -3364,7 +3377,8 @@
     "renameSave": "Zapisz nazwę",
     "renameCancel": "Anuluj",
     "renamed": "Zmieniliśmy nazwę wyszukiwania.",
-    "renameHint": "Od 1 do 80 znaków."
+    "renameHint": "Od 1 do 80 znaków.",
+    "renameErrorRequired": "Wpisz nazwę wyszukiwania (od 1 do 80 znaków)."
   },
   "contentReport": {
     "metaTitle": "Zgłoś treść",
@@ -3401,6 +3415,7 @@
     "successTitle": "Zgłoszenie przyjęte",
     "successBody": "Twoja sprawa ma numer podany poniżej. Potwierdzenie wyślemy na podany adres e-mail.",
     "successDuplicate": "To zgłoszenie zostało już przyjęte wcześniej — poniżej ta sama sprawa.",
+    "successDuplicateEdited": "To zgłoszenie zostało już przyjęte wcześniej — poniżej ta sama sprawa. Późniejsze zmiany treści nie zostały do niej dopisane.",
     "caseNumberLabel": "Numer sprawy",
     "accessCodeLabel": "Kod dostępu",
     "accessCodeHint": "Zapisz numer sprawy i kod dostępu — są potrzebne do sprawdzenia statusu. Kod jest też w e-mailu z potwierdzeniem.",

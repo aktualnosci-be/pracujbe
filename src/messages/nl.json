@@ -553,7 +553,8 @@
       "none": "Deze vacature vermeldt geen manier om te solliciteren.",
       "mailSubject": "Vacature: {title}",
       "contact": "Rechtstreeks contact met de adverteerder"
-    }
+    },
+    "startImmediate": "Onmiddellijke start"
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1222,7 +1223,14 @@
     "savedSearchJobsShow": "Vacatures tonen: {name}",
     "savedSearchJobsFrom": "Zoekopdracht: {name}",
     "employerGreetingSubListing": "Welkom {name}! Bekijk hoe je vacatures presteren.",
-    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren."
+    "employerGreetingSubListingGeneric": "Bekijk hoe je vacatures presteren.",
+    "deleteJobDraft": "Concept verwijderen",
+    "deleteJobDraftLabel": "Concept verwijderen: {title}",
+    "deleteJobDraftTitle": "Concept van de vacature verwijderen?",
+    "deleteJobDraftDescription": "Het concept \"{title}\" wordt verwijderd, samen met de ingevoerde tekst. Dit kan niet ongedaan worden gemaakt.",
+    "deleteJobDraftConfirm": "Concept verwijderen",
+    "deleteJobDraftCancel": "Annuleren",
+    "deleteJobDraftUntitled": "zonder titel"
   },
   "candidatePassport": {
     "eyebrow": "WERKPASPOORT",
@@ -1316,6 +1324,7 @@
     "levelIntermediate": "Gemiddeld",
     "levelFluent": "Vloeiend",
     "levelNative": "Moedertaal",
+    "languageLevelLabel": "Taalniveau",
     "addLanguage": "Taal toevoegen",
     "certificatesLabel": "Certificaten en attesten",
     "certificatesPlaceholder": "bijv. VCA, kwalificatiegetuigschrift",
@@ -1799,7 +1808,11 @@
     "jointCommitteeLabel": "Paritair comité (PC)",
     "jointCommitteeCode": "PC {code}",
     "jointCommitteeHint": "Op de vacaturepagina tonen we het nummer van het comité en een link naar de officiële databank met minimumlonen. Het portaal beoordeelt het loon niet.",
-    "languageSelectPlaceholder": "Kies een taal"
+    "languageSelectPlaceholder": "Kies een taal",
+    "contentLocaleLabel": "Taal van de vacature",
+    "contentLocaleHint": "In deze taal schrijf je de tekst van de vacature. Dit mag afwijken van de taal van het paneel; de taalaanduiding en vertalingen voor kandidaten hangen ervan af.",
+    "contentLocaleLocked": "De taal van een gepubliceerde vacature kan niet worden gewijzigd.",
+    "languageLevelAria": "Taalniveau: {level}"
   },
   "jobImport": {
     "title": "Importeren uit een vacature",
@@ -3364,7 +3377,8 @@
     "renameSave": "Naam opslaan",
     "renameCancel": "Annuleren",
     "renamed": "We hebben de naam van de zoekopdracht gewijzigd.",
-    "renameHint": "1 tot 80 tekens."
+    "renameHint": "1 tot 80 tekens.",
+    "renameErrorRequired": "Vul een naam in voor de zoekopdracht (1 tot 80 tekens)."
   },
   "contentReport": {
     "metaTitle": "Inhoud melden",
@@ -3401,6 +3415,7 @@
     "successTitle": "Melding ontvangen",
     "successBody": "Je dossier heeft het nummer hieronder. We sturen een bevestiging naar het opgegeven e-mailadres.",
     "successDuplicate": "Deze melding was al ontvangen — hieronder staat hetzelfde dossier.",
+    "successDuplicateEdited": "Deze melding is al eerder ontvangen — hieronder zie je hetzelfde dossier. Latere wijzigingen in de tekst zijn er niet aan toegevoegd.",
     "caseNumberLabel": "Dossiernummer",
     "accessCodeLabel": "Toegangscode",
     "accessCodeHint": "Bewaar het dossiernummer en de toegangscode — je hebt ze nodig om de status te bekijken. De code staat ook in de bevestigingsmail.",
