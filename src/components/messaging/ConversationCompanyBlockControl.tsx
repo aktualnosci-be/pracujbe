@@ -73,7 +73,7 @@ export function ConversationCompanyBlockControl({
       </p>
       <div aria-live="polite">
         {error ? (
-          <p role="alert" className="mt-2 flex items-start gap-2 text-xs text-error">
+          <p role="alert" className="mt-2 flex items-start gap-2 text-xs text-error-text">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             {t('saveError')}
           </p>

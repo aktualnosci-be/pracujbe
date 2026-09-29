@@ -201,7 +201,10 @@
     "noDescription": "Cette entreprise n'a pas encore ajouté de description.",
     "jobsHeading": "Offres actives de cette entreprise",
     "empty": "Cette entreprise n'a actuellement aucune offre active.",
-    "backToJobs": "Voir toutes les offres d'emploi"
+    "backToJobs": "Voir toutes les offres d'emploi",
+    "metaTitlePage": "Offres d'emploi chez {name} — page {page}",
+    "jobsCount": "{count, plural, one {# offre active} other {# offres actives}}",
+    "pageStatus": "Page {page} sur {lastPage}"
   },
   "common": {
     "appName": "Pracuj.be",
@@ -219,7 +222,8 @@
     "no": "Non",
     "home": "Accueil",
     "breadcrumb": "Fil d'Ariane",
-    "skipToContent": "Aller au contenu"
+    "skipToContent": "Aller au contenu",
+    "formJsRequired": "Ce formulaire nécessite JavaScript. Activez-le dans votre navigateur pour envoyer les données."
   },
   "nav": {
     "jobs": "Offres d'emploi",
@@ -553,7 +557,8 @@
       "none": "Cette offre n'indique pas comment postuler.",
       "mailSubject": "Offre d'emploi : {title}",
       "contact": "Contact direct avec l'annonceur"
-    }
+    },
+    "startImmediate": "Début immédiat"
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -764,6 +769,7 @@
     "jobImportFailed": "Nous n’avons pas pu lire l’annonce. Réessayez ou remplissez le formulaire vous-même.",
     "savedSearchLimitReached": "Vous avez déjà 20 recherches enregistrées. Supprimez-en une pour en ajouter une nouvelle.",
     "moderationLocked": "Ce contenu est restreint par une décision de modération : son statut ne peut pas être modifié.",
+    "moderationRestoreBlocked": "La restriction ne peut pas être levée : les questions de cette offre ont changé depuis la décision et doivent être réexaminées. La restriction reste en vigueur — traitez le réexamen puis réessayez.",
     "guestApplyUnavailable": "La candidature sans compte est temporairement indisponible. Réessayez plus tard ou connectez-vous.",
     "siteAccessUnavailable": "L’accès au site est temporairement indisponible. Réessayez plus tard.",
     "emailNotVerified": "Confirmez d’abord l’adresse e-mail de votre compte — cliquez sur le lien envoyé lors de l’inscription.",
@@ -1221,7 +1227,14 @@
     "savedSearchJobsShow": "Voir les offres : {name}",
     "savedSearchJobsFrom": "Recherche : {name}",
     "employerGreetingSubListing": "Bonjour {name} ! Découvrez les résultats de vos annonces.",
-    "employerGreetingSubListingGeneric": "Découvrez les résultats de vos annonces."
+    "employerGreetingSubListingGeneric": "Découvrez les résultats de vos annonces.",
+    "deleteJobDraft": "Supprimer le brouillon",
+    "deleteJobDraftLabel": "Supprimer le brouillon : {title}",
+    "deleteJobDraftTitle": "Supprimer le brouillon de l'offre ?",
+    "deleteJobDraftDescription": "Le brouillon « {title} » sera supprimé avec le contenu saisi. Cette action est irréversible.",
+    "deleteJobDraftConfirm": "Supprimer le brouillon",
+    "deleteJobDraftCancel": "Annuler",
+    "deleteJobDraftUntitled": "sans titre"
   },
   "candidatePassport": {
     "eyebrow": "PASSEPORT EMPLOI",
@@ -1315,6 +1328,7 @@
     "levelIntermediate": "Intermédiaire",
     "levelFluent": "Courant",
     "levelNative": "Langue maternelle",
+    "languageLevelLabel": "Niveau de langue",
     "addLanguage": "Ajouter une langue",
     "certificatesLabel": "Certificats et attestations",
     "certificatesPlaceholder": "ex. VCA, certificat de qualification",
@@ -1596,6 +1610,7 @@
       "languagesTooMany": "Trop de langues ajoutées.",
       "certificatesTooMany": "Trop de certificats ajoutés.",
       "certificateExpiryInvalid": "Indiquez une date d’expiration valide pour le certificat.",
+      "textInvalid": "Ce texte contient un caractère non autorisé. Supprimez-le.",
       "contractTypesTooMany": "Trop de types de contrat sélectionnés.",
       "salaryInvalid": "Indiquez un montant de salaire valide.",
       "bioTooLong": "La description est trop longue.",
@@ -1723,6 +1738,8 @@
     "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
     "stepAnnounce": "Étape {current} sur {total} : {title}",
     "goToOffers": "Voir la liste des offres",
+    "draftConflict": "Ce brouillon a été modifié entre-temps — dans un autre onglet ou par un autre membre de l'équipe. Les modifications de cette étape n'ont pas été enregistrées, pour ne pas écraser le travail d'un autre. Rechargez la version actuelle du brouillon.",
+    "reloadDraft": "Recharger la version actuelle du brouillon",
     "editTitle": "Modifier l'offre",
     "editSubtitleActive": "L'offre est publiée. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront aussitôt. Le statut et les candidatures ne changent pas.",
     "editSubtitlePaused": "L'offre est suspendue. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront à la reprise de l'offre. Les candidatures ne changent pas.",
@@ -1797,7 +1814,11 @@
     "jointCommitteeLabel": "Commission paritaire (CP)",
     "jointCommitteeCode": "CP {code}",
     "jointCommitteeHint": "La page de l'offre affichera le numéro de la commission et un lien vers la base officielle des salaires minimums. Le portail n'évalue pas le salaire.",
-    "languageSelectPlaceholder": "Choisissez une langue"
+    "languageSelectPlaceholder": "Choisissez une langue",
+    "contentLocaleLabel": "Langue de l'annonce",
+    "contentLocaleHint": "C'est dans cette langue que vous rédigez le texte de l'annonce. Elle peut différer de la langue du panneau ; l'indication de langue et les traductions pour les candidats en dépendent.",
+    "contentLocaleLocked": "La langue d'une offre publiée ne peut pas être modifiée.",
+    "languageLevelAria": "Niveau de langue : {level}"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
@@ -2761,6 +2782,7 @@
     "agePolicyConfirmTitle": "Modifier le seuil d'âge des candidats ?",
     "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
     "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
+    "agePolicyStale": "Le seuil d’âge a été modifié entre-temps par un autre administrateur. La page a été actualisée — vérifiez la valeur actuelle et, si besoin, enregistrez à nouveau.",
     "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche.",
     "reportsSortLabel": "Ordre",
     "reportsSortNewest": "Plus récents",
@@ -2799,6 +2821,78 @@
     "webVitalsAboutSampling": "Cloudflare échantillonne les événements : le nombre de mesures est une estimation. Les valeurs correspondent au 75e centile.",
     "webVitalsAboutThresholds": "Évaluation selon les seuils Core Web Vitals : LCP 2,5 / 4 s, INP 200 / 500 ms, CLS 0,1 / 0,25.",
     "webVitalsOpenCloudflare": "Ouvrir Web Analytics dans Cloudflare (nouvel onglet)",
+    "navOperations": "État opérationnel",
+    "opsTitle": "État opérationnel",
+    "opsSubtitle": "Files d’attente, tâches périodiques, e-mails, budget IA et sauvegarde de la base — les mêmes chiffres et seuils que les sondes de surveillance. Lecture seule.",
+    "opsDemoNotice": "Mode démo : valeurs d’exemple sans connexion à la base.",
+    "opsUnconfiguredTitle": "Aucune source de mesures",
+    "opsUnconfiguredText": "L’application n’a pas de connexion configurée pour lire les sondes. Configuration : docs/railway/OPERATIONS.md.",
+    "opsOverall": "État général",
+    "opsOverall_ok": "Tout est normal",
+    "opsOverall_warning": "Des avertissements sont à examiner",
+    "opsOverall_alert": "Alerte — action requise",
+    "opsLastMaintenance": "Dernière exécution des tâches de maintenance : {when}",
+    "opsCheckedAt": "Lecture : {when}",
+    "opsSameAsHealth": "Les états proviennent des mêmes règles que les sondes de surveillance : une alerte ici est aussi une alerte dans la surveillance.",
+    "opsSectionQueues": "Files d’e-mails et webhooks",
+    "opsSectionMaintenance": "Tâches de maintenance",
+    "opsSectionStorage": "Suppression des fichiers",
+    "opsSectionMail": "Délivrabilité des e-mails",
+    "opsSectionAiBudget": "Budget IA",
+    "opsSectionDatabase": "Base de données",
+    "opsSectionBackup": "Sauvegarde de la base",
+    "opsColValue": "Valeur",
+    "opsColThreshold": "Seuil",
+    "opsColState": "État",
+    "opsState_ok": "OK",
+    "opsState_warning": "Avertissement",
+    "opsState_alert": "Alerte",
+    "opsState_noData": "Pas de données",
+    "opsDurationSeconds": "{value} s",
+    "opsDurationMinutes": "{value} min",
+    "opsDurationHours": "{value} h",
+    "opsDurationDays": "{value} j",
+    "opsNoValue": "—",
+    "opsThresholdPositive": "plus de 0",
+    "opsThresholdMax": "au-delà de {value}",
+    "opsThresholdBudget": "avertissement dès {warning}, alerte dès {alert}",
+    "opsNoteQueueReady": "Prêts à l’envoi : {ready}",
+    "opsNoteLastRunNever": "La base ne connaît aucune exécution — la planification (cron) ne fonctionne pas encore.",
+    "opsNoteLastRunFailed": "La dernière exécution a échoué sur la tâche : {task}",
+    "opsNoteLastRunUnknown": "Impossible de lire la dernière exécution.",
+    "opsNoteLagDetail": "Offres échues : {jobs}",
+    "opsNoteStoragePending": "Objets en attente : {pending}",
+    "opsNoteConnections": "Connexions : {used} sur {available} disponibles",
+    "opsNoteSmallSample": "Échantillon trop petit pour un taux : {sent} e-mails en 24 h (minimum {min}).",
+    "opsNoteAiNoLimit": "Aucune limite définie — les fonctions IA sont bloquées.",
+    "opsNoteBackup_unconfigured": "La lecture des sauvegardes n’est pas configurée.",
+    "opsNoteBackup_misconfigured": "La configuration de lecture des sauvegardes est incorrecte.",
+    "opsNoteBackup_unavailable": "Le stockage des sauvegardes est indisponible.",
+    "opsNoteBackup_missing": "Aucune sauvegarde complète trouvée.",
+    "opsRow_emailQueueAge": "E-mail le plus ancien en file",
+    "opsRow_emailLeases": "Baux abandonnés (e-mail)",
+    "opsRow_emailFailed": "E-mails en échec (24 h)",
+    "opsRow_authQueueAge": "E-mail de compte le plus ancien en file",
+    "opsRow_authLeases": "Baux abandonnés (e-mails de compte)",
+    "opsRow_authFailed": "E-mails de compte en échec (24 h)",
+    "opsRow_webhooksStuck": "Webhooks bloqués",
+    "opsRow_webhooksFailed": "Webhooks en échec (24 h)",
+    "opsRow_maintenanceLastRun": "Depuis la dernière exécution",
+    "opsRow_maintenanceLag": "Retard des tâches de maintenance",
+    "opsRow_storageAge": "Objet le plus ancien à supprimer",
+    "opsRow_storageDeadLetters": "Objets après épuisement des tentatives",
+    "opsRow_mailBounceRate": "Rebonds définitifs (24 h)",
+    "opsRow_mailComplaintRate": "Plaintes pour spam (24 h)",
+    "opsRow_mailNewSuppressions": "Nouveaux blocages d’adresses (24 h)",
+    "opsRow_mailActiveSuppressions": "Blocages d’adresses actifs",
+    "opsRow_aiBudgetDay": "Utilisation de la limite quotidienne",
+    "opsRow_aiBudgetMonth": "Utilisation de la limite mensuelle",
+    "opsRow_aiStaleReservations": "Réservations non réglées",
+    "opsRow_dbConnections": "Utilisation des connexions",
+    "opsRow_appPoolWaiting": "Requêtes en attente de connexion",
+    "opsRow_portalModeMismatch": "Mode du portail incohérent (env et base)",
+    "opsRow_schemaBehind": "Schéma de la base en retard sur le code (migrations)",
+    "opsRow_backupAge": "Âge de la dernière sauvegarde",
     "filterCompanyLinks": "Site et logo à approuver",
     "sectionCompanyLinks": "Site web et logo",
     "detailLogoUrl": "Adresse du logo",
@@ -2842,6 +2936,7 @@
     "entityJob": "Offre d’emploi",
     "auditActionJobUpdatePublished": "Modification d’une offre publiée",
     "auditActionJobDuplicated": "Copie d’une offre",
+    "auditActionJobDeleted": "Offre supprimée",
     "companyJobsAllLink": "Toutes les offres de l’entreprise",
     "auditActionRetentionPolicyChanged": "Modification d’une durée de conservation",
     "auditActionRetentionPoliciesSeeded": "Enregistrement des durées de conservation",
@@ -2927,7 +3022,9 @@
     "auditActionJobPausedForReview": "Offre suspendue pour vérification",
     "auditActionCompanyAgencyChanged": "Modification de la déclaration d’agence",
     "auditActionCompanyAgencyChecked": "Vérification du numéro d’agrément",
-    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres"
+    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres",
+    "auditActionEmailLocaleChanged": "Langue des e-mails modifiée par l’utilisateur",
+    "entityProfile": "Profil"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -2957,7 +3054,14 @@
     "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
     "employerEmailApplicationsDescription": "Nouvelles candidatures à vos offres d’emploi.",
     "employerEmailOffersDescription": "Lorsqu’un candidat accepte ou refuse votre proposition d’emploi.",
-    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations."
+    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations.",
+    "emailLocaleTitle": "Langue des e-mails et des notifications",
+    "emailLocaleDescription": "C’est dans cette langue que nous vous envoyons e-mails et notifications, quelle que soit la langue dans laquelle vous consultez le site. Le changement s’applique aux messages suivants.",
+    "emailLocaleLabel": "Langue des e-mails et des notifications",
+    "emailLocaleSave": "Enregistrer la langue",
+    "emailLocaleSaving": "Enregistrement...",
+    "emailLocaleSaved": "La langue des e-mails et des notifications a été enregistrée.",
+    "emailLocaleLoadError": "Impossible de charger la langue des e-mails et des notifications. Réessayez dans un instant."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -3361,7 +3465,8 @@
     "renameSave": "Enregistrer le nom",
     "renameCancel": "Annuler",
     "renamed": "Nous avons renommé la recherche.",
-    "renameHint": "De 1 à 80 caractères."
+    "renameHint": "De 1 à 80 caractères.",
+    "renameErrorRequired": "Saisissez un nom pour la recherche (de 1 à 80 caractères)."
   },
   "contentReport": {
     "metaTitle": "Signaler un contenu",
@@ -3398,6 +3503,7 @@
     "successTitle": "Signalement reçu",
     "successBody": "Votre dossier porte le numéro ci-dessous. Nous enverrons une confirmation à l’adresse e-mail indiquée.",
     "successDuplicate": "Ce signalement avait déjà été reçu — voici le même dossier.",
+    "successDuplicateEdited": "Ce signalement a déjà été enregistré — voici le même dossier. Les modifications apportées ensuite au texte n’y ont pas été ajoutées.",
     "caseNumberLabel": "Numéro de dossier",
     "accessCodeLabel": "Code d’accès",
     "accessCodeHint": "Conservez le numéro de dossier et le code d’accès — ils sont nécessaires pour consulter le statut. Le code figure aussi dans l’e-mail de confirmation.",
@@ -3805,6 +3911,14 @@
       "erasure_tombstone": {
         "label": "Registre des effacements",
         "description": "Registre des effacements à réappliquer après restauration ; doit survivre à la plus ancienne sauvegarde."
+      },
+      "expired_auth_session": {
+        "label": "Session de connexion expirée",
+        "description": "La ligne d’une session expirée (avec adresse IP et user-agent) est supprimée 7 jours après l’expiration."
+      },
+      "expired_auth_verification": {
+        "label": "Jeton de vérification expiré",
+        "description": "La ligne d’un jeton de vérification expiré (confirmation d’e-mail, réinitialisation du mot de passe) est supprimée 7 jours après l’expiration."
       },
       "guest_ip_user_agent": {
         "label": "IP et user-agent de l’invité",

@@ -176,7 +176,7 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
     fireEvent.click(buttons[buttons.length - 1]!);
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('errors.permissionDenied'),
+      expect(screen.getByRole('alert')).toHaveTextContent('errors.permissionDenied'),
     );
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
@@ -209,7 +209,7 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
 
     reject(new Error('boom'));
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('errors.internal'),
+      expect(screen.getByRole('alert')).toHaveTextContent('errors.internal'),
     );
 
     const dialog = screen.getByRole('alertdialog');
@@ -249,7 +249,7 @@ describe('CompanyStatusActions — fokus po potwierdzeniu (#415, WCAG 2.4.3)', (
     const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
     fireEvent.click(buttons[buttons.length - 1]!);
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('errors.staleState'));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('errors.staleState'));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(refresh).toHaveBeenCalledOnce();
   });

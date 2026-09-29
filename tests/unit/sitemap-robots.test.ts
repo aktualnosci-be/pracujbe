@@ -18,6 +18,7 @@ const jobs = vi.hoisted(() => ({
 const catalog = vi.hoisted(() => ({
   getSitemapJobShardStarts: vi.fn(),
   getSitemapJobsShard: vi.fn(),
+  getSitemapCompanySlugs: vi.fn(),
 }));
 
 vi.mock('@/lib/env', () => ({
@@ -43,6 +44,23 @@ async function allSitemapEntries() {
 }
 
 const SITE = 'https://pracuj.be';
+
+/**
+ * Dopasowanie reguł robots jak Google (RFC 9309): `*` = dowolny ciąg (także `/`), `$` = koniec
+ * adresu, reguła = prefiks; wygrywa najdłuższa pasująca reguła, przy remisie `Allow`.
+ */
+function robotsAllows(path: string, allow: string[], disallow: string[]): boolean {
+  const matches = (rule: string) => {
+    const anchored = rule.endsWith('$');
+    const body = (anchored ? rule.slice(0, -1) : rule)
+      .split('*')
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*');
+    return new RegExp(`^${body}${anchored ? '$' : ''}`).test(path);
+  };
+  const longest = (rules: string[]) => Math.max(-1, ...rules.filter(matches).map((rule) => rule.length));
+  return longest(allow) >= longest(disallow);
+}
 const LOCALES = ['pl', 'nl', 'fr', 'en'];
 const APP = join(process.cwd(), 'src/app/[locale]');
 
@@ -95,6 +113,7 @@ beforeEach(() => {
     Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 2 : 0])),
   );
   setCatalog(1, () => [job('a'), job('b')]);
+  catalog.getSitemapCompanySlugs.mockResolvedValue([]);
 });
 
 describe('sitemap (produkcja)', () => {
@@ -195,25 +214,38 @@ describe('sitemap (produkcja)', () => {
     expect(catalog.getSitemapJobsShard).not.toHaveBeenCalled();
   });
 
-  it('#591: profil firmy — jeden wpis na companySlug (zebrany z ofert, bez osobnego zapytania)', async () => {
-    setCatalog(1, () => [
-      { ...job('a'), companySlug: 'firma-x' },
-      { ...job('b'), companySlug: 'firma-x' }, // druga oferta tej samej firmy — bez duplikatu wpisu
-    ]);
-    const entries = await sitemap({ id: 1 }); // partia ofert (#599) — profile firm idą z ofertami
-    const companyUrls = entries
-      .filter((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))
-      .map((entry) => entry.url);
-    for (const locale of LOCALES) {
-      expect(companyUrls).toContain(`${SITE}/${locale}/pracodawcy/firma-x`);
+  it('#591/#1231: profil firmy — jeden wpis na companySlug w CAŁYM indeksie (partia 0)', async () => {
+    // Firma X ma oferty w dwóch partiach ofert; slugi firm (zdeduplikowane kursorem po całym
+    // katalogu, `getSitemapCompanySlugs`) trafiają tylko do partii 0.
+    setCatalog(2, (shard) =>
+      shard === 1
+        ? [{ ...job('a'), companySlug: 'firma-x' }, { ...job('b'), companySlug: 'firma-x' }]
+        : [{ ...job('c'), companySlug: 'firma-x' }, { ...job('d'), companySlug: 'firma-y' }],
+    );
+    catalog.getSitemapCompanySlugs.mockResolvedValue(['firma-x', 'firma-y']);
+    const perFile = [];
+    for (const { id } of await generateSitemaps()) {
+      perFile.push({
+        id,
+        companies: (await sitemap({ id }))
+          .map((entry) => entry.url)
+          .filter((url) => new URL(url).pathname.includes('/pracodawcy/')),
+      });
     }
-    // Kontrola ujemna: bez deduplikacji dwie oferty tej samej firmy dałyby 8 wpisów (2 × 4 języki),
-    // nie 4 — ta asercja złapałaby regresję z Set → tablicą.
-    expect(companyUrls).toHaveLength(LOCALES.length);
+    const all = perFile.flatMap((file) => file.companies);
+    for (const locale of LOCALES) {
+      expect(all).toContain(`${SITE}/${locale}/pracodawcy/firma-x`);
+      expect(all).toContain(`${SITE}/${locale}/pracodawcy/firma-y`);
+    }
+    // Kontrola ujemna: dawny Set per partia dawał firma-x w partiach 1 i 2 (8 wpisów zamiast 4).
+    expect(all).toHaveLength(2 * LOCALES.length);
+    expect(new Set(all).size).toBe(all.length);
+    expect(perFile.filter((file) => file.companies.length > 0).map((file) => file.id)).toEqual([0]);
+    expect(catalog.getSitemapCompanySlugs).toHaveBeenCalledTimes(1);
   });
 
   it('#591 kontrola ujemna: oferta demo/bez companySlug nie tworzy profilu firmy', async () => {
-    const entries = await sitemap({ id: 1 });
+    const entries = [...(await sitemap({ id: 0 })), ...(await sitemap({ id: 1 }))];
     expect(entries.some((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))).toBe(false);
   });
 });
@@ -235,7 +267,7 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
     expect(loader).toContain('handler({ id: targetId })');
   });
 
-  it("id '0' = strony statyczne, landingi i poradniki; bez odczytu listy ofert", async () => {
+  it("id '0' = strony statyczne, landingi, poradniki i profile firm; bez URL-i ofert", async () => {
     const urls = (await sitemap({ id: '0' })).map((entry) => entry.url);
     for (const locale of LOCALES) {
       expect(urls).toContain(`${SITE}/${locale}`);
@@ -292,7 +324,7 @@ describe('robots', () => {
     const result = await robots();
     const rules = Array.isArray(result.rules) ? result.rules[0]! : result.rules;
     expect(rules.allow).toBe('/');
-    expect(rules.disallow).toEqual(expect.arrayContaining(['/api/', '/*/candidate', '/*/employer', '/*/admin']));
+    expect(rules.disallow).toEqual(expect.arrayContaining(['/api/', '/pl/candidate$', '/pl/candidate/', '/nl/admin/']));
     // Jedna partia (fixture domyślna z beforeEach) → core (id 0) + jedna partia ofert (id 1).
     expect(result.sitemap).toEqual([`${SITE}/sitemap/0.xml`, `${SITE}/sitemap/1.xml`]);
   });
@@ -313,8 +345,41 @@ describe('robots', () => {
     const disallow = (Array.isArray(rules) ? rules[0]! : rules).disallow as string[];
     for (const panel of ['candidate', 'employer', 'admin']) {
       expect(dirs(APP)).toContain(panel);
-      expect(disallow).toContain(`/*/${panel}`);
+      for (const locale of LOCALES) {
+        expect(disallow).toContain(`/${locale}/${panel}$`);
+        expect(disallow).toContain(`/${locale}/${panel}/`);
+      }
     }
+  });
+
+  it('#1217: slugi zaczynające się od nazwy panelu nie są blokowane, same panele tak', async () => {
+    const result = await robots();
+    const rules = Array.isArray(result.rules) ? result.rules[0]! : result.rules;
+    const disallow = rules.disallow as string[];
+    const allow = [rules.allow as string];
+    const allowed = [
+      '/nl/oferty-pracy/administratief-bediende-1a2b3c4d',
+      '/pl/pracodawcy/administratiekantoor-peeters',
+      '/pl/oferty-pracy/employer-branding-specialist-12ab',
+      '/fr/oferty-pracy/candidate-experience-manager-9f8e',
+      '/pl/oferty-pracy/magazynier-1a2b',
+      '/pl/candidates-guide',
+    ];
+    const blocked = [
+      '/pl/candidate',
+      '/pl/candidate/profil',
+      '/nl/employer',
+      '/nl/employer/oferty?x=1',
+      '/en/admin',
+      '/fr/admin/firmy/1',
+      '/api/health',
+    ];
+    for (const path of allowed) expect(robotsAllows(path, allow, disallow), path).toBe(true);
+    for (const path of blocked) expect(robotsAllows(path, allow, disallow), path).toBe(false);
+    // Kontrola ujemna: dawne reguły z gwiazdką blokowały slug „administratief-…”.
+    const legacy = ['/api/', '/*/candidate', '/*/employer', '/*/admin'];
+    expect(robotsAllows('/nl/oferty-pracy/administratief-bediende-1a2b3c4d', allow, legacy)).toBe(false);
+    expect(robotsAllows('/pl/oferty-pracy/employer-branding-specialist-12ab', allow, legacy)).toBe(false);
   });
 
   it('poza produkcją: Disallow: / i brak sitemap', async () => {

@@ -10,7 +10,7 @@ import { Breadcrumbs } from '@/components/public/Breadcrumbs';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
-import { getJobs, isShowingDemoJobs, type CategoryKey } from '@/lib/jobs';
+import { getJobs, getJobsCount, isShowingDemoJobs, type CategoryKey } from '@/lib/jobs';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
 import { JobCard } from '@/components/public/JobCard';
@@ -93,7 +93,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   // Pusty landing (0 ofert) działa dla użytkownika, ale nie jest indeksowany (thin content, #299).
   // Ten sam filtr co treść strony, więc w trybie demo wynik jest spójny z listą.
-  const { total } = await getJobs({ locale, category, page: 1, pageSize: 1 });
+  const total = await getJobsCount({ locale, category });
   const indexable = total > 0;
 
   return {

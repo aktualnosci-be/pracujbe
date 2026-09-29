@@ -9,6 +9,7 @@ import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
 import { AgeStatusProvider } from '@/components/settings/age-status-context';
 import { AccountDataSettings } from '@/components/settings/AccountDataSettings';
+import { EmailLocaleSection } from '@/components/settings/EmailLocaleSection';
 import { CompanyBlocksSettings } from '@/components/settings/CompanyBlocksSettings';
 import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm';
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
@@ -82,6 +83,8 @@ export default async function CandidateSettingsPage({
         )}
       </section>
 
+      <EmailLocaleSection locale={locale} />
+
       <AgeStatusProvider initialAdult={initialAdult}>
         {age.status === 'ready' ? (
           <AgeAttestationSettings initial={age} />
@@ -90,7 +93,7 @@ export default async function CandidateSettingsPage({
             <h2 id="age-attestation-title" className={H2_EXTENDED}>
               {tAge('sectionTitle')}
             </h2>
-            <p role="alert" className="mt-2 text-sm text-error">
+            <p role="alert" className="mt-2 text-sm text-error-text">
               {tAge('loadError')}
             </p>
           </section>
@@ -106,7 +109,7 @@ export default async function CandidateSettingsPage({
             <h2 id="profile-visibility-title" className={H2_EXTENDED}>
               {tVisibility('sectionTitle')}
             </h2>
-            <p role="alert" className="mt-2 text-sm text-error">
+            <p role="alert" className="mt-2 text-sm text-error-text">
               {tVisibility('loadError')}
             </p>
           </section>
@@ -120,7 +123,7 @@ export default async function CandidateSettingsPage({
           <h2 id="company-blocks-title" className={H2_EXTENDED}>
             {tBlocks('sectionTitle')}
           </h2>
-          <p role="alert" className="mt-2 text-sm text-error">
+          <p role="alert" className="mt-2 text-sm text-error-text">
             {tBlocks('loadError')}
           </p>
         </section>

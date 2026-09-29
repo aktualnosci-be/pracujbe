@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 
@@ -78,6 +80,7 @@ export interface EmailCampaignEditorProps {
 }
 
 export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('admin');
   const tRoot = useTranslations();
   const router = useRouter();
@@ -204,7 +207,8 @@ export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps)
   const slugHintId = `${idOf('slug')}-hint`;
 
   return (
-    <form ref={formRef} noValidate onSubmit={submit} aria-busy={pending} className="min-w-0 space-y-[22px]">
+    <form method="post" ref={formRef} noValidate onSubmit={submit} aria-busy={pending} className="min-w-0 space-y-[22px]">
+      <NoScriptFormNotice />
       <section aria-labelledby={`${idBase}-slug-heading`} className={PANEL}>
         <div className={SECTION_HEAD}>
           <h2 id={`${idBase}-slug-heading`} className={PANEL_H2}>
@@ -361,7 +365,7 @@ export function EmailCampaignEditor({ mode, initial }: EmailCampaignEditorProps)
         {notice ? <p className={PANEL_P}>{notice}</p> : null}
       </div>
 
-      <button type="submit" disabled={pending} className={BTN_PRIMARY}>
+      <button type="submit" disabled={pending || !hydrated} className={BTN_PRIMARY}>
         {pending ? t('confirmSaving') : t('campaignEditorSave')}
       </button>
     </form>

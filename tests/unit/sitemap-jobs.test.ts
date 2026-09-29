@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   production: true,
   build: false,
   naive: false,
-  rows: [] as { id: string; publishedAt: string }[],
+  rows: [] as { id: string; publishedAt: string; companySlug?: string }[],
   pageCalls: 0,
   failNext: false,
 }));
@@ -56,7 +56,7 @@ vi.mock('@/lib/db/sitemap-jobs', () => ({
   },
 }));
 
-const { getSitemapJobShardStarts, getSitemapJobsShard } = await import('@/lib/sitemap-jobs');
+const { getSitemapCompanySlugs, getSitemapJobShardStarts, getSitemapJobsShard } = await import('@/lib/sitemap-jobs');
 
 const TIE = '2026-09-01T10:00:00.123456+00:00';
 function rows(n: number, at: (i: number) => string = () => TIE) {
@@ -164,5 +164,31 @@ describe('sitemap ofert: środowisko i błędy', () => {
     state.build = true;
     state.rows = rows(3);
     expect(await getSitemapJobShardStarts(5000)).toEqual([]);
+  });
+});
+
+describe('getSitemapCompanySlugs (#1231)', () => {
+  it('jeden slug na firmę z całego katalogu, kursorem przez granice stron (remis published_at)', async () => {
+    state.rows = rows(2500).map((row, i) => ({
+      ...row,
+      companySlug: i % 3 === 0 ? 'firma-x' : i === 5 ? 'firma-y' : undefined,
+    }));
+    const slugs = await getSitemapCompanySlugs();
+    expect([...slugs].sort()).toEqual(['firma-x', 'firma-y']);
+    // 2500 ofert po 1000 na stronę = 3 strony (firma-y jest dopiero na trzeciej).
+    expect(state.pageCalls).toBe(3);
+  });
+
+  it('kontrola ujemna: kursor bez `id` (naiwny) na remisie gubi oferty z dalszych stron', async () => {
+    state.naive = true;
+    state.rows = rows(2500).map((row, i) => ({ ...row, companySlug: i === 5 ? 'firma-y' : undefined }));
+    expect(await getSitemapCompanySlugs()).not.toContain('firma-y');
+  });
+
+  it('poza bazą (build) — pusta lista bez zapytań', async () => {
+    state.build = true;
+    state.rows = rows(10).map((row) => ({ ...row, companySlug: 'firma-x' }));
+    expect(await getSitemapCompanySlugs()).toEqual([]);
+    expect(state.pageCalls).toBe(0);
   });
 });

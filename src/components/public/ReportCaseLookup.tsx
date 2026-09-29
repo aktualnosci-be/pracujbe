@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -61,6 +63,7 @@ function readFragment(): ReportCaseLookupInput | null {
 }
 
 export function ReportCaseLookup(): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('contentReport');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -157,13 +160,14 @@ export function ReportCaseLookup(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={onSubmit} noValidate className="space-y-4" aria-busy={isSubmitting || undefined}>
+      <form method="post" onSubmit={onSubmit} noValidate className="space-y-4" aria-busy={isSubmitting || undefined}>
+        <NoScriptFormNotice />
         {serverMessage ? (
           <div
             ref={alertRef}
             tabIndex={-1}
             role="alert"
-            className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <p>{serverMessage}</p>
@@ -181,7 +185,7 @@ export function ReportCaseLookup(): React.JSX.Element {
             {...register('caseNumber')}
           />
           {caseError ? (
-            <p id="case-number-error" className="text-sm text-error">
+            <p id="case-number-error" className="text-sm text-error-text">
               {caseError}
             </p>
           ) : null}
@@ -198,12 +202,12 @@ export function ReportCaseLookup(): React.JSX.Element {
             {...register('accessCode')}
           />
           {codeError ? (
-            <p id="access-code-error" className="text-sm text-error">
+            <p id="access-code-error" className="text-sm text-error-text">
               {codeError}
             </p>
           ) : null}
         </div>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || !hydrated}>
           {isSubmitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

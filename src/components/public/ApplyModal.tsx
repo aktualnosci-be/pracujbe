@@ -480,10 +480,10 @@ export function ApplyModal({
             </div>
 
             {formReady ? (
-              <form className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate>
+              <form method="post" className="flex min-w-0 flex-col gap-5" onSubmit={handleSubmit} noValidate>
                 <div className={FORM_FIELD}>
                   <Label htmlFor="apply-phone" className={FORM_LABEL_TEXT}>
-                    {t('phone')} <span className="text-error" aria-hidden="true">*</span>
+                    {t('phone')} <span className="text-error-text" aria-hidden="true">*</span>
                   </Label>
                   <div className="flex gap-2">
                     <Select value={dial} onValueChange={(value) => setDial(value as PhoneCountry)}>
@@ -521,7 +521,7 @@ export function ApplyModal({
 
                 <div className={FORM_FIELD}>
                   <Label htmlFor="apply-availability" className={FORM_LABEL_TEXT}>
-                    {t('availability')} <span className="text-error" aria-hidden="true">*</span>
+                    {t('availability')} <span className="text-error-text" aria-hidden="true">*</span>
                   </Label>
                   <Select
                     value={availability}
@@ -628,7 +628,7 @@ export function ApplyModal({
                     ref={formErrorRef}
                     role="alert"
                     tabIndex={-1}
-                    className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {formError === 'login' ? (
                       <Link href={loginHref(pathname)} className="font-medium underline">

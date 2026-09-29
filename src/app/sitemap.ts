@@ -8,7 +8,11 @@ import {
   type CategoryKey,
   type LocationKey,
 } from '@/lib/jobs';
-import { getSitemapJobShardStarts, getSitemapJobsShard } from '@/lib/sitemap-jobs';
+import {
+  getSitemapCompanySlugs,
+  getSitemapJobShardStarts,
+  getSitemapJobsShard,
+} from '@/lib/sitemap-jobs';
 import type { SitemapJobRow } from '@/lib/db/sitemap-jobs';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
 import { pickXDefaultLocale } from '@/lib/seo/locales';
@@ -31,9 +35,10 @@ import { sitemapEntriesCache, sitemapIdsCache } from '@/lib/cache/sitemap-cache'
  * Każdy wpis ma alternatywy językowe (hreflang). Panele (candidate/employer/admin) i API są
  * celowo pominięte (patrz `robots.ts`). Poza produkcją pusta (bez odczytu bazy).
  *
- * Profile firm (#591) trafiają do partii ofert: jeden wpis na `companySlug` zebrany przy tej
- * samej iteracji po ofertach partii (bez osobnego zapytania). Firma z ofertami w dwóch partiach
- * pojawi się w obu (dopuszczalny duplikat URL-a między plikami; dopiero powyżej 5000 ofert).
+ * Profile firm (#591) są w partii `0` (PERF-05, #1231): jeden wpis na `companySlug` zebrany
+ * z jednej iteracji kursorem po WSZYSTKICH publicznych ofertach (`getSitemapCompanySlugs`,
+ * to samo RPC co partie ofert, #1042), więc firma z ofertami w kilku partiach nie powtarza się
+ * między plikami sitemap.
  * Dane demonstracyjne nie mają `companySlug`, więc profili firm tam nie ma.
  *
  * TODO(i18n-slugs): segment listy ofert jest wspólny (`oferty-pracy`) — po wdrożeniu
@@ -210,7 +215,7 @@ export default async function sitemap({
   );
 }
 
-/** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji i poradniki. */
+/** `id=0`: strony statyczne, landing-page'e kategorii/lokalizacji, poradniki i profile firm. */
 async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
   const base = env.siteUrl;
   const locales = routing.locales;
@@ -277,6 +282,21 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
     }
   }
 
+  // --- Profile firm (#591; #1231: tylko tutaj, raz na firmę w całym indeksie) — komplet
+  // języków (treść nie zależy od tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
+  for (const slug of await getSitemapCompanySlugs()) {
+    const path = `${COMPANIES_PATH}/${slug}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        changeFrequency: 'weekly',
+        priority: 0.5,
+        alternates: { languages },
+      });
+    }
+  }
+
   return entries;
 }
 
@@ -304,13 +324,10 @@ async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitem
   const now = new Date();
   const entries: MetadataRoute.Sitemap = [];
 
+  // Profile firm (#591) są wyłącznie w partii `0` (#1231) — tu same oferty.
   const jobs = await getSitemapJobsShard(shardIndex + 1, JOBS_PER_SITEMAP_SHARD);
-  // #591: profile firm zbierane PRZY OKAZJI tej samej iteracji (bez osobnego zapytania) —
-  // `companySlug` jest już w wyniku (0140). Jeden wpis na firmę w partii.
-  const companySlugs = new Set<string>();
 
   for (const job of jobs) {
-    if (job.companySlug) companySlugs.add(job.companySlug);
     const path = `${JOBS_PATH}/${job.slug}`;
     // Tylko wersje językowe z tłumaczeniem (#301); oferta bez żadnego wpisu = wszystkie, jak dotąd.
     const jobLocales = job.locales.length > 0 ? job.locales : locales;
@@ -322,21 +339,6 @@ async function jobsSitemapShard(shardIndex: number): Promise<MetadataRoute.Sitem
         lastModified,
         changeFrequency: 'daily',
         priority: 0.8,
-        alternates: { languages },
-      });
-    }
-  }
-
-  // --- Profile firm (#591) — jeden wpis na slug, komplet języków (treść nie zależy od
-  // tłumaczenia oferty, w przeciwieństwie do samej oferty). ---
-  for (const slug of companySlugs) {
-    const path = `${COMPANIES_PATH}/${slug}`;
-    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
-    for (const locale of locales) {
-      entries.push({
-        url: `${base}/${locale}${path}`,
-        changeFrequency: 'weekly',
-        priority: 0.5,
         alternates: { languages },
       });
     }

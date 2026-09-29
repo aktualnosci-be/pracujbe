@@ -83,9 +83,11 @@ describe('loadSavedSearchJobs', () => {
     const load = await loadSavedSearchJobs();
     expect(load.status).toBe('ok');
     expect(getJobs).toHaveBeenCalledTimes(1);
-    const [params, viewer] = vi.mocked(getJobs).mock.calls[0]!;
+    const [params, viewer, options] = vi.mocked(getJobs).mock.calls[0]!;
     expect(params).toMatchObject({ locale: 'nl', keyword: 'magazynier', categories: ['warehouse'], sort: 'newest', page: 1, pageSize: 3 });
     expect(viewer).toEqual({ candidateId: 'cand-1' });
+    // #1230: pulpit nie pokazuje licznika — bez get_public_jobs_count.
+    expect(options).toEqual({ withTotal: false });
   });
 
   it('łączy wyszukiwania: najnowsze najpierw, bez duplikatów, najwyżej 3 oferty, z wyszukiwaniem źródłowym', async () => {

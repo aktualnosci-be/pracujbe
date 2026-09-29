@@ -33,7 +33,7 @@ for (const locale of LOCALES) {
     await rejectOptionalCookies(page, locale);
     await expect(page.locator('main h1')).toHaveText(m.settings.title);
     // Pozostałe sekcje zostają (wiek, dane konta), sekcji widoczności nie ma wcale.
-    await expect(page.getByRole('heading', { name: m.ageAttestation.sectionTitle })).toBeVisible();
+    await expect(page.getByRole('heading', { name: m.ageAttestation.sectionTitle, exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: m.profileVisibility.sectionTitle })).toHaveCount(0);
     await expect(page.locator('#profile-visibility-title')).toHaveCount(0);
     await expect(page.getByRole('switch')).toHaveCount(0);

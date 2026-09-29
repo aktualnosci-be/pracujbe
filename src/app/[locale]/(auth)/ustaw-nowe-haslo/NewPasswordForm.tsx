@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -50,6 +52,7 @@ function errorMessageKey(code: ErrorCode): string {
 }
 
 export function NewPasswordForm(): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('auth');
   const tRoot = useTranslations();
   const tCommon = useTranslations('common');
@@ -153,7 +156,8 @@ export function NewPasswordForm(): React.JSX.Element {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-4">
+    <form method="post" onSubmit={onSubmit} noValidate className="space-y-4">
+      <NoScriptFormNotice />
       {serverError ? (
         <div
           ref={alertRef}
@@ -188,7 +192,7 @@ export function NewPasswordForm(): React.JSX.Element {
           {t('passwordHint')}
         </p>
         {errors.password?.message ? (
-          <p id="password-error" className="text-sm text-error">
+          <p id="password-error" className="text-sm text-error-text">
             {tRoot(String(errors.password.message))}
           </p>
         ) : null}
@@ -206,13 +210,13 @@ export function NewPasswordForm(): React.JSX.Element {
           {...register('passwordConfirm')}
         />
         {errors.passwordConfirm?.message ? (
-          <p id="passwordConfirm-error" className="text-sm text-error">
+          <p id="passwordConfirm-error" className="text-sm text-error-text">
             {tRoot(String(errors.passwordConfirm.message))}
           </p>
         ) : null}
       </div>
 
-      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting || token === undefined}>
+      <Button type="submit" className="w-full" size="passport" disabled={isSubmitting || token === undefined || !hydrated}>
         {isSubmitting ? (
           <>
             <Loader2 className={cn('h-4 w-4 animate-spin')} aria-hidden="true" />

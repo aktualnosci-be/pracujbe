@@ -18,6 +18,7 @@ const jobs = vi.hoisted(() => ({
 const catalog = vi.hoisted(() => ({
   getSitemapJobShardStarts: vi.fn(),
   getSitemapJobsShard: vi.fn(),
+  getSitemapCompanySlugs: vi.fn(async () => [] as string[]),
 }));
 vi.mock('@/lib/env', () => ({ env: { siteUrl: 'https://pracuj.be' }, isProductionDeployment: () => true }));
 vi.mock('@/lib/jobs', () => jobs);

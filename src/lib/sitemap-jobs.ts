@@ -101,3 +101,37 @@ export async function getSitemapJobsShard(
     [],
   );
 }
+
+/**
+ * Bezpiecznik pętli profili firm: tyle stron kursora mieści się w `MAX_JOB_SITEMAP_SHARDS`
+ * partiach po 5000 ofert (500 000 ofert = 500 stron po 1000).
+ */
+const MAX_COMPANY_SLUG_PAGES = 500;
+
+/**
+ * PERF-05 (#1231): slugi zweryfikowanych firm z publicznymi ofertami — jedna iteracja kursorem
+ * po całym katalogu (to samo RPC co partie, bez licznika i OFFSET), w kolejności pierwszego
+ * wystąpienia. Profile trafiają tylko do partii `0`, więc firma nie powtarza się między plikami.
+ */
+export async function getSitemapCompanySlugs(): Promise<string[]> {
+  return withPool(
+    'sitemap.companySlugs',
+    async (pool) => {
+      const { getSitemapJobsPage } = await import('@/lib/db/sitemap-jobs');
+      const slugs = new Set<string>();
+      let cursor: SitemapJobCursor | null = null;
+      for (let page = 0; page < MAX_COMPANY_SLUG_PAGES; page += 1) {
+        const batch = await getSitemapJobsPage(pool, cursor, null, SITEMAP_JOBS_PAGE);
+        for (const job of batch) {
+          if (job.companySlug) slugs.add(job.companySlug);
+        }
+        const last = batch[batch.length - 1];
+        if (!last || batch.length < SITEMAP_JOBS_PAGE) return [...slugs];
+        cursor = { publishedAt: last.publishedAt, id: last.id };
+      }
+      captureError(new Error('sitemap: profile firm ponad limit stron'), { area: 'sitemap.companySlugsLimit' });
+      return [...slugs];
+    },
+    [],
+  );
+}
