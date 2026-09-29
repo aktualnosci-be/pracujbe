@@ -97,7 +97,17 @@ import {
 export type CreateDraftResult =
   | { ok: true; id: string; demo?: boolean }
   | { ok: false; error: ErrorCode };
-export type SaveDraftResult = { ok: true; demo?: boolean } | { ok: false; error: ErrorCode };
+export type SaveDraftResult =
+  | {
+      ok: true;
+      demo?: boolean;
+      /**
+       * #1070: nowa wersja szkicu (`jobs.updated_at`, pełna precyzja) — kreator odsyła ją przy
+       * kolejnym zapisie. Brak = tryb demo albo baza sprzed 0964 (zapis bez kontroli wersji).
+       */
+      version?: string;
+    }
+  | { ok: false; error: ErrorCode };
 export type PublishResult =
   | { ok: true; demo?: boolean }
   | {
@@ -352,13 +362,26 @@ export async function duplicateJobAsDraft(
 /**
  * Zapisuje pojedynczy krok szkicu. Waliduje danymi z `@/lib/validation/job` i utrwala
  * właściwe kolumny/relacje. RLS pilnuje, że użytkownik edytuje ofertę własnej firmy.
+ *
+ * `expectedVersion` (#1070, 0964) — wersja szkicu wczytana do kreatora albo zwrócona przez
+ * poprzedni zapis. Szkic zmieniony w międzyczasie (druga karta, inny rekruter firmy) →
+ * `JOB_EDIT_CONFLICT` bez żadnej zmiany. Brak wersji (świeży szkic tej karty, import) = zapis
+ * bez kontroli; odpowiedź niesie wtedy pierwszą wersję do kolejnych zapisów.
  */
 export async function updateJobDraft(
   jobId: string,
   step: number,
   data: unknown,
+  expectedVersion?: string | null,
 ): Promise<SaveDraftResult> {
   if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && jobId !== DEMO_DRAFT_ID)) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  if (
+    expectedVersion !== undefined &&
+    expectedVersion !== null &&
+    (typeof expectedVersion !== 'string' || Number.isNaN(Date.parse(expectedVersion)))
+  ) {
     return { ok: false, error: 'VALIDATION_FAILED' };
   }
   if (!Number.isInteger(step) || step < 1 || step > 9) {
@@ -381,7 +404,7 @@ export async function updateJobDraft(
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
 
-    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
+    const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | { version?: string }> => {
       // Odczyt oferty (RLS jobs_select_member) — potwierdza własność i stan szkicu.
       const job = await queryOne<Record<string, unknown>>(tx, 'jobs.draft-state',
         'SELECT id, status FROM public.jobs WHERE id = $1 AND deleted_at IS NULL', [jobId]);
@@ -397,11 +420,16 @@ export async function updateJobDraft(
       const content = buildDraftStepContent(step, parsed);
       if (!content) return 'VALIDATION_FAILED';
       if (screeningOff) delete content['screening_questions'];
-      await rpc(tx, 'save_job_draft', { p_job_id: jobId, p_content: jsonArg(content) });
-      return null;
+      // #1070: wersja w RPC tylko przy znanym tokenie (undefined = pominięty argument).
+      const saved = await rpc(tx, 'save_job_draft', {
+        p_job_id: jobId,
+        p_content: jsonArg(content),
+        p_expected_updated_at: expectedVersion || undefined,
+      });
+      return { version: asString(asRecord(saved)['updated_at']) || undefined };
     });
-    if (outcome) return { ok: false, error: outcome };
-    return { ok: true };
+    if (typeof outcome === 'string') return { ok: false, error: outcome };
+    return { ok: true, ...(outcome.version ? { version: outcome.version } : {}) };
   } catch (error) {
     return { ok: false, error: failureCode(error) };
   }

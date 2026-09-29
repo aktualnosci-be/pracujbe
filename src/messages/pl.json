@@ -1723,6 +1723,8 @@
     "itemTooLongMax": "Ta pozycja jest za długa (maks. {max} znaków). Skróć ją, aby dodać do listy.",
     "stepAnnounce": "Krok {current} z {total}: {title}",
     "goToOffers": "Przejdź do listy ofert",
+    "draftConflict": "Ten szkic zmienił się w międzyczasie — w innej karcie albo przez innego członka zespołu. Zmiany z tego kroku nie zostały zapisane, żeby nie nadpisać cudzych. Wczytaj aktualną wersję szkicu.",
+    "reloadDraft": "Wczytaj aktualną wersję szkicu",
     "editTitle": "Edytuj ofertę",
     "editSubtitleActive": "Oferta jest opublikowana. Zmiany zapiszesz przyciskiem „Zapisz zmiany” i od razu zobaczą je kandydaci. Status oferty i zgłoszenia zostają bez zmian.",
     "editSubtitlePaused": "Oferta jest wstrzymana. Zmiany zapiszesz przyciskiem „Zapisz zmiany”; kandydaci zobaczą je po wznowieniu oferty. Zgłoszenia zostają bez zmian.",

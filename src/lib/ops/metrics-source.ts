@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isDatabaseError } from '@/lib/db/errors';
 import { isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import { captureError } from '@/lib/error-report';
@@ -7,6 +8,7 @@ import { captureError } from '@/lib/error-report';
 import { parseAiBudgetStatus, type AiBudgetStatus } from '@/lib/admin/ai-costs';
 
 import { parseOpsMetrics, type OpsMetrics } from './sensors';
+import { parseSchemaState, type SchemaStateResult } from './schema-state';
 
 export type OpsMetricsResult =
   /** `aiBudget` = `null`, gdy stanu budżetu AI (#36) nie udało się odczytać. */
@@ -64,5 +66,36 @@ async function readBudget(read: () => Promise<unknown>): Promise<unknown> {
   } catch (e) {
     captureError(e, { area: 'ops.metrics', step: 'ai_budget_status' });
     return undefined;
+  }
+}
+
+/**
+ * Odczyt `public.ops_schema_state()` (0964, #1065) tym samym kanałem co `ops_metrics()`: login
+ * `DATABASE_OPS_URL`, zapasowo pula zadań serwerowych. Brak funkcji (SQLSTATE 42883) = baza
+ * sprzed migracji 0964, czyli za kodem — osobny wynik, nie błąd.
+ */
+export async function readSchemaState(): Promise<SchemaStateResult> {
+  try {
+    let raw: unknown;
+    if (process.env.DATABASE_OPS_URL) {
+      const { getOpsPool } = await import('@/lib/db/runtime');
+      const pool = await getOpsPool();
+      const result = await pool.query<{ state: unknown }>('SELECT public.ops_schema_state() AS state');
+      raw = result.rows[0]?.state;
+    } else if (isServiceDatabaseConfigured()) {
+      raw = await withServiceRole((tx) => rpc(tx, 'ops_schema_state'));
+    } else {
+      return { kind: 'unconfigured' };
+    }
+    const state = parseSchemaState(raw);
+    if (!state) {
+      captureError(new Error('ops_schema_state: nieoczekiwany kształt'), { area: 'ops.schema-state' });
+      return { kind: 'error' };
+    }
+    return { kind: 'ok', state };
+  } catch (e) {
+    if (isDatabaseError(e) && e.code === '42883') return { kind: 'missing' };
+    captureError(e, { area: 'ops.schema-state' });
+    return { kind: 'error' };
   }
 }

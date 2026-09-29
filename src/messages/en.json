@@ -1723,6 +1723,8 @@
     "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
     "stepAnnounce": "Step {current} of {total}: {title}",
     "goToOffers": "Go to your job list",
+    "draftConflict": "This draft changed in the meantime — in another tab or by another team member. The changes from this step were not saved, so nobody else's work gets overwritten. Load the current version of the draft.",
+    "reloadDraft": "Load the current version of the draft",
     "editTitle": "Edit job",
     "editSubtitleActive": "This job is published. Save your changes with “Save changes” and candidates will see them right away. The job status and applications stay as they are.",
     "editSubtitlePaused": "This job is paused. Save your changes with “Save changes”; candidates will see them once you resume the job. Applications stay as they are.",

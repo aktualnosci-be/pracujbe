@@ -286,17 +286,66 @@ describe('kreator ofert (#25)', () => {
 
   it('updateJobDraft: każdy krok jednym RPC save_job_draft; relacje zapisane', async () => {
     actAs(as(recruiterA));
+    // #1070: kreator odsyła wersję z poprzedniej odpowiedzi — łańcuch wersji przez wszystkie kroki.
+    let version: string | undefined;
     for (let step = 1; step <= 9; step += 1) {
-      expect(await jobs.updateJobDraft(draftA, step, STEPS[step - 1]), `krok ${step}`).toEqual({ ok: true });
+      const res = await jobs.updateJobDraft(draftA, step, STEPS[step - 1], version);
+      expect(res, `krok ${step}`).toMatchObject({ ok: true, version: expect.any(String) });
+      const next = (res as { version: string }).version;
+      if (version) expect(Date.parse(next), `krok ${step}: wersja rośnie`).toBeGreaterThanOrEqual(Date.parse(version));
+      expect(next).not.toBe(version);
+      version = next;
     }
+    expect(await admin('SELECT (updated_at = $2::timestamptz) AS same FROM public.jobs WHERE id = $1', [draftA, version]))
+      .toEqual([{ same: true }]);
     expect(await admin('SELECT title, city FROM public.jobs WHERE id = $1', [draftA]))
       .toEqual([{ title: 'Magazynier nocny', city: 'Gandawa' }]);
     expect(await admin('SELECT count(*)::int AS n FROM public.job_languages WHERE job_id = $1', [draftA]))
       .toEqual([{ n: 1 }]);
     // Powtórzenie kroku (replace-all) nie dubluje relacji.
-    expect(await jobs.updateJobDraft(draftA, 7, STEPS[6])).toEqual({ ok: true });
+    expect(await jobs.updateJobDraft(draftA, 7, STEPS[6], version)).toMatchObject({ ok: true });
     expect(await admin('SELECT count(*)::int AS n FROM public.job_certificates WHERE job_id = $1', [draftA]))
       .toEqual([{ n: 1 }]);
+  });
+
+  it('#1070: token wersji szkicu — stara wersja (druga karta) = JOB_EDIT_CONFLICT, równoległe zapisy nie nadpisują', async () => {
+    actAs(as(recruiterA));
+    // Wersja tak, jak widzi ją loader (`to_json` → ISO z pełną precyzją).
+    const versionRow = await realSession.db!.admin.query<{ v: string }>(
+      'SELECT to_json(updated_at) #>> \'{}\' AS v FROM public.jobs WHERE id = $1', [draftA]);
+    const v0 = versionRow.rows[0]!.v;
+    const titled = (title: string) => ({ ...(STEPS[0] as object), title });
+
+    // Karta A zapisuje z aktualną wersją, karta B nadal trzyma poprzednią.
+    const a = await jobs.updateJobDraft(draftA, 1, titled('Karta A'), v0);
+    expect(a).toMatchObject({ ok: true });
+    const vA = (a as { version: string }).version;
+    // Kontrola ujemna: stara wersja NIE przechodzi i niczego nie zmienia (kolumny ani relacje).
+    expect(await jobs.updateJobDraft(draftA, 1, titled('Karta B'), v0)).toEqual({ ok: false, error: 'JOB_EDIT_CONFLICT' });
+    expect(await jobs.updateJobDraft(draftA, 7, { ...(STEPS[6] as object), skills: ['Nadpisana'] }, v0))
+      .toEqual({ ok: false, error: 'JOB_EDIT_CONFLICT' });
+    expect(await admin('SELECT title FROM public.jobs WHERE id = $1', [draftA])).toEqual([{ title: 'Karta A' }]);
+    expect(await admin('SELECT skill_label FROM public.job_skills WHERE job_id = $1 AND NOT is_mandatory', [draftA]))
+      .toEqual([{ skill_label: 'Excel' }]);
+
+    // Po wczytaniu aktualnej wersji karta B zapisuje normalnie.
+    const b = await jobs.updateJobDraft(draftA, 1, titled('Karta B'), vA);
+    expect(b).toMatchObject({ ok: true });
+    const vB = (b as { version: string }).version;
+
+    // Dwa RÓWNOLEGŁE zapisy z tą samą wersją: dokładnie jeden wygrywa, drugi to konflikt.
+    const results = await Promise.all([
+      jobs.updateJobDraft(draftA, 1, titled('Równoległy 1'), vB),
+      jobs.updateJobDraft(draftA, 1, titled('Równoległy 2'), vB),
+    ]);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, error: 'JOB_EDIT_CONFLICT' }]);
+    const winner = results.findIndex((r) => r.ok) + 1;
+    expect(await admin('SELECT title FROM public.jobs WHERE id = $1', [draftA])).toEqual([{ title: `Równoległy ${winner}` }]);
+
+    // Nieprawidłowy token odrzucony przed bazą; zapis bez tokenu (świeży szkic) nadal działa.
+    expect(await jobs.updateJobDraft(draftA, 1, titled('X'), 'to-nie-data')).toEqual({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(await jobs.updateJobDraft(draftA, 1, STEPS[0])).toMatchObject({ ok: true });
   });
 
   it('obca firma i member nie edytują ani nie publikują cudzej oferty', async () => {

@@ -87,8 +87,8 @@ const MUTATIONS = {
   'transition-noop': `CREATE OR REPLACE FUNCTION public.transition_application(p_application_id uuid, p_target text)
     RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
   // Kreator oferty (Etap 8): zapis kroku zwraca sukces bez zmian w bazie (pozorny zapis szkicu).
-  'wizard-draft-noop': `CREATE OR REPLACE FUNCTION public.save_job_draft(p_job_id uuid, p_content jsonb)
-    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
+  'wizard-draft-noop': `CREATE OR REPLACE FUNCTION public.save_job_draft(p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz DEFAULT NULL)
+    RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN RETURN NULL; END $$`,
   // Kreator oferty (Etap 8): publikacja bez sprawdzenia weryfikacji firmy (reszta publish_job bez zmian).
   'publish-unverified': `DO $mut$ DECLARE d text; BEGIN
       d := pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure);

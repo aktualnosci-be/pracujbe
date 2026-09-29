@@ -1723,6 +1723,8 @@
     "itemTooLongMax": "Cet élément est trop long (max. {max} caractères). Raccourcissez-le pour l'ajouter à la liste.",
     "stepAnnounce": "Étape {current} sur {total} : {title}",
     "goToOffers": "Voir la liste des offres",
+    "draftConflict": "Ce brouillon a été modifié entre-temps — dans un autre onglet ou par un autre membre de l'équipe. Les modifications de cette étape n'ont pas été enregistrées, pour ne pas écraser le travail d'un autre. Rechargez la version actuelle du brouillon.",
+    "reloadDraft": "Recharger la version actuelle du brouillon",
     "editTitle": "Modifier l'offre",
     "editSubtitleActive": "L'offre est publiée. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront aussitôt. Le statut et les candidatures ne changent pas.",
     "editSubtitlePaused": "L'offre est suspendue. Enregistrez vos modifications avec « Enregistrer les modifications » : les candidats les verront à la reprise de l'offre. Les candidatures ne changent pas.",
