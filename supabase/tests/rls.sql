@@ -16418,9 +16418,6 @@ reset role; reset app.current_uid;
 -- get_company_invitations zwraca `locale` (0121) i `inviter_name`; bramka owner/admin bez
 -- zmian. Odnowienie = invite_company_member z językiem z bazy: ten sam wiersz, nowa ważność,
 -- autor = odnawiający. Kontrola ujemna: definicja z 0086 nie ma kolumny `locale`.
--- =====================================================================rollback;
-reset role; reset app.current_uid;
-
 -- ============================================================================
 \set TIO 'e8700000-0000-0000-0000-0000000179a1'
 \set TIA 'e8700000-0000-0000-0000-0000000179a2'
@@ -16516,7 +16513,10 @@ grant execute on function public.get_company_invitations(uuid) to authenticated;
 set local role authenticated; set local app.current_uid = :'TIO'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select locale from public.get_company_invitations(%L)', :'TIC'),
   'column "locale" does not exist', 'TI179-5 kontrola ujemna: stara definicja bez języka');
-=======
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- CPP638. Stronicowanie ofert profilu firmy (#638, migracja 0181). Profil pokazywał tylko
 --         pierwsze 50 ofert; kolejne strony `/pracodawcy/<slug>/strona/<n>` używają offsetu,
 --         więc `get_public_company_jobs` musi mieć deterministyczny porządek. Pięć ofert
