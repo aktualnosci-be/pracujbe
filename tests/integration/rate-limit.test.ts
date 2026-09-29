@@ -188,10 +188,15 @@ describe('Limiter PostgreSQL — atomowość i wąska rola', () => {
         'exec', '-i', container, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'limiter_test',
         '-c', "SELECT public.admin_set_portal_legal_mode('RECRUITMENT', 'rate-limit.test: zestaw RLS', 'CLASSIFIEDS_ONLY')"],
       { encoding: 'utf8', timeout: 30_000 });
-    const guard = readFileSync(new URL('../../supabase/tests/role-assert.sql', import.meta.url), 'utf8');
-    const suite = readFileSync(new URL('../../supabase/tests/rls.sql', import.meta.url), 'utf8');
+    // psql ze stdin nie ma katalogu bazowego dla \ir, więc każdą dyrektywę \ir rozwijamy
+    // treścią pliku względem supabase/tests/ (strażnik roli, skrypty rollbacku).
+    const testsDir = new URL('../../supabase/tests/', import.meta.url);
+    const suite = readFileSync(new URL('rls.sql', testsDir), 'utf8');
     expect(suite).toContain('\\ir role-assert.sql');
-    const input = `BEGIN;\n${suite.replace('\\ir role-assert.sql', () => guard)}\nROLLBACK;`;
+    const expanded = suite.replace(/^\\ir\s+(\S+)\s*$/gm, (_line, rel: string) =>
+      readFileSync(new URL(rel, testsDir), 'utf8'));
+    expect(expanded).not.toMatch(/^\\ir\s/m);
+    const input = `BEGIN;\n${expanded}\nROLLBACK;`;
     const args = ['exec', '-i', container, 'psql', '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'limiter_test'];
     const windows = process.platform === 'win32';
     const output = execFileSync(windows ? 'wsl.exe' : 'docker',
