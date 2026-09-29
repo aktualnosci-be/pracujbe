@@ -1375,7 +1375,7 @@ bez dolnej granicy, bez filtra firmy, bez klauzuli pauzy w kolejce), rollback `0
 (`saved-search-pause-follow-rollback.sql` w `test-rls.sh`), unit `saved-search-pause-follow`,
 `saved-search-pause-follow-ui`, `saved-search-followups`. Digest zakolejkowany przed pauzą jest wygaszany
 (`suppressed_alert_paused`) przy claimie i tuż przed wysyłką — `email_delivery_suppression_reason` w 0969 bazuje na
-definicji z 0175 (oba szablony alertu). **Otwarte:** wypisanie z alertów firmy w jednym kliknięciu z pauzą.
+definicji z 0186 (oba szablony alertu, z niepotwierdzonym adresem marketingu #1038). **Otwarte:** wypisanie z alertów firmy w jednym kliknięciu z pauzą.
 Filtry przy wyszukiwaniu (bez migracji): każda karta w `/candidate/wyszukiwania` pokazuje listę
 filtrów (`<ul>` nazwana `savedSearches.filtersLabel` z nazwą wyszukiwania) w języku PANELU —
 etykiety liczy serwer z kanonicznego `saved_searches.query` (`savedSearchFilterLabels`
