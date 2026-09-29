@@ -21,7 +21,7 @@ const classifieds = (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().
 test.skip(!classifieds, 'serwer testowy w trybie RECRUITMENT (E2E_PORTAL_LEGAL_MODE=)');
 
 type Texts = {
-  dashboard: Record<'profileCompleteness' | 'accountIntro' | 'navSaved' | 'navSearches' | 'navSettings' | 'navSummary', string>;
+  dashboard: Record<'profileCompleteness' | 'accountIntro' | 'navSaved' | 'navJournal' | 'navSearches' | 'navSettings' | 'navSummary', string>;
   settings: Record<'emailApplicationsLabel' | 'emailOffersLabel' | 'emailMessagesLabel' | 'emailJobMatchesLabel', string>;
 };
 const texts = (locale: string): Texts =>
