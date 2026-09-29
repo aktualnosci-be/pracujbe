@@ -1,5 +1,7 @@
 'use client';
 
+import { useHydrated } from '@/components/forms/use-hydrated';
+import { NoScriptFormNotice } from '@/components/forms/NoScriptFormNotice';
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
@@ -26,6 +28,7 @@ import { cn } from '@/lib/utils';
  * odblokowuje się bez przeładowania; nieudany zapis niczego nie zgłasza.
  */
 export function AgeAttestationSettings({ initial }: { initial: AgeAttestationState }): React.JSX.Element {
+  const hydrated = useHydrated();
   const t = useTranslations('ageAttestation');
   const tAuth = useTranslations('auth');
   const [meets, setMeets] = React.useState(initial.meetsPolicy);
@@ -94,7 +97,8 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
       </p>
 
       {meets && adult ? null : (
-        <form onSubmit={(event) => void submit(event)} noValidate className="mt-4 space-y-4">
+        <form method="post" onSubmit={(event) => void submit(event)} noValidate className="mt-4 space-y-4">
+          <NoScriptFormNotice />
           <AgeDeclarationField
             ref={fieldRef}
             id="age-attestation-confirm"
@@ -107,7 +111,7 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
             error={fieldError}
             disabled={pending}
           />
-          <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET)} disabled={pending} aria-busy={pending || undefined}>
+          <Button type="submit" className={cn(BTN_PRIMARY, BTN_RESET)} disabled={pending || !hydrated} aria-busy={pending || undefined}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
             {pending ? t('saving') : t('submit')}
           </Button>

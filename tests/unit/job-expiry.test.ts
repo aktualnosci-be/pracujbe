@@ -140,12 +140,9 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // #775: oferty wygaszone w tym przebiegu muszą zniknąć z publicznych stron ISR od razu,
     // nie dopiero po 60 s okna rewalidacji.
     expect(revalidatePath.mock.calls).toEqual(
-      expect.arrayContaining([
-        ['/[locale]', 'page'],
-        ['/[locale]/oferty-pracy/[slug]', 'page'],
-        ['/[locale]/praca/kategoria/[category]', 'page'],
-        ['/[locale]/praca/miasto/[city]', 'page'],
-      ]),
+      expect.arrayContaining(
+        (await import('@/lib/jobs/public-cache')).PUBLIC_JOB_ROUTES.map((path) => [path, 'page']),
+      ),
     );
   });
 

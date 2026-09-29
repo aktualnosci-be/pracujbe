@@ -15,6 +15,7 @@ const jobs = vi.hoisted(() => ({
   getCategoryCounts: vi.fn(),
   getCityCounts: vi.fn(),
   getJobsAvailableLocales: vi.fn(),
+  getJobsCount: vi.fn(),
 }));
 
 vi.mock('@/lib/env', () => ({
@@ -39,6 +40,23 @@ async function allSitemapEntries() {
 }
 
 const SITE = 'https://pracuj.be';
+
+/**
+ * Dopasowanie reguł robots jak Google (RFC 9309): `*` = dowolny ciąg (także `/`), `$` = koniec
+ * adresu, reguła = prefiks; wygrywa najdłuższa pasująca reguła, przy remisie `Allow`.
+ */
+function robotsAllows(path: string, allow: string[], disallow: string[]): boolean {
+  const matches = (rule: string) => {
+    const anchored = rule.endsWith('$');
+    const body = (anchored ? rule.slice(0, -1) : rule)
+      .split('*')
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*');
+    return new RegExp(`^${body}${anchored ? '$' : ''}`).test(path);
+  };
+  const longest = (rules: string[]) => Math.max(-1, ...rules.filter(matches).map((rule) => rule.length));
+  return longest(allow) >= longest(disallow);
+}
 const LOCALES = ['pl', 'nl', 'fr', 'en'];
 const APP = join(process.cwd(), 'src/app/[locale]');
 
@@ -77,6 +95,7 @@ beforeEach(() => {
     Object.fromEntries(keys.map((key) => [key, key === 'ghent' ? 2 : 0])),
   );
   jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
+  jobs.getJobsCount.mockResolvedValue(2);
   jobs.getJobsAvailableLocales.mockResolvedValue(null);
 });
 
@@ -143,9 +162,9 @@ describe('sitemap (produkcja)', () => {
 
   it('#599: katalog >5000 ofert dostaje WIĘCEJ partii zamiast ucięcia na pierwszej', async () => {
     let n = 0;
+    jobs.getJobsCount.mockResolvedValue(12_000);
     jobs.getJobs.mockImplementation(async () => ({
       jobs: Array.from({ length: 100 }, () => job(String((n += 1)))),
-      total: 12_000,
       page: 1,
       pageSize: 100,
     }));
@@ -153,7 +172,9 @@ describe('sitemap (produkcja)', () => {
     // 12 000 ofert → reachable = min(12000, MAX_JOB_LIST_OFFSET(10000) + 100) = 10100 →
     // 3 partie po 5000 (id 1, 2, 3) + core (id 0) = 4 pliki sitemap. Dawny sztywny sufit
     // dawałby TYLKO 5000 ofert łącznie, bez żadnej dalszej partii.
-    const ids = await generateSitemaps(); // 1 wywołanie `getJobs` (sonda licznika)
+    const ids = await generateSitemaps(); // sam licznik (#1230), bez odczytu listy
+    expect(jobs.getJobsCount).toHaveBeenCalledTimes(1);
+    expect(jobs.getJobs).not.toHaveBeenCalled();
     expect(ids).toEqual([{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }]);
 
     const entries = [];
@@ -162,7 +183,10 @@ describe('sitemap (produkcja)', () => {
 
     // Każda partia jest sama w sobie ograniczona (50 stron × 100 ofert = 5000) — pętla
     // wewnątrz jednej partii kończy się zawsze, niezależnie od `total`.
-    expect(jobs.getJobs).toHaveBeenCalledTimes(1 /* sonda licznika */ + 3 * 50);
+    // + core: profile firm z jednej iteracji po całej osiągalnej liście (101 stron po 100, #1231).
+    expect(jobs.getJobs).toHaveBeenCalledTimes(101 + 3 * 50);
+    // #1230: żadna strona listy w sitemap nie liczy `get_public_jobs_count`.
+    for (const [, , options] of jobs.getJobs.mock.calls) expect(options).toEqual({ withTotal: false });
     expect(urls).toHaveLength(3 * 5000 * LOCALES.length);
   });
 
@@ -171,33 +195,43 @@ describe('sitemap (produkcja)', () => {
     expect(await generateSitemaps()).toEqual([{ id: 0 }]);
     expect(await sitemap({ id: 0 })).toEqual([]);
     expect(jobs.getJobs).not.toHaveBeenCalled();
+    expect(jobs.getJobsCount).not.toHaveBeenCalled();
   });
 
-  it('#591: profil firmy — jeden wpis na companySlug (zebrany z ofert, bez osobnego zapytania)', async () => {
-    jobs.getJobs.mockResolvedValue({
-      jobs: [
-        { ...job('a'), companySlug: 'firma-x' },
-        { ...job('b'), companySlug: 'firma-x' }, // druga oferta tej samej firmy — bez duplikatu wpisu
-      ],
-      total: 2,
-      page: 1,
-      pageSize: 100,
+  it('#591/#1231: profil firmy — jeden wpis na companySlug w CAŁYM indeksie (partia 0)', async () => {
+    // Firma X ma oferty w dwóch partiach ofert (strona 1 i strona 51); firma Y tylko w drugiej.
+    jobs.getJobsCount.mockResolvedValue(10_000);
+    jobs.getJobs.mockImplementation(async ({ page }: { page: number }) => {
+      const slugs = page === 1 ? ['firma-x', 'firma-x'] : page === 51 ? ['firma-x', 'firma-y'] : [undefined];
+      return {
+        jobs: Array.from({ length: 100 }, (_, i) => ({ ...job(`${page}-${i}`), companySlug: slugs[i % slugs.length] })),
+        page,
+        pageSize: 100,
+      };
     });
-    const entries = await sitemap({ id: 1 }); // partia ofert (#599) — profile firm idą z ofertami
-    const companyUrls = entries
-      .filter((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))
-      .map((entry) => entry.url);
-    for (const locale of LOCALES) {
-      expect(companyUrls).toContain(`${SITE}/${locale}/pracodawcy/firma-x`);
+    const perFile = [];
+    for (const { id } of await generateSitemaps()) {
+      perFile.push({
+        id,
+        companies: (await sitemap({ id }))
+          .map((entry) => entry.url)
+          .filter((url) => new URL(url).pathname.includes('/pracodawcy/')),
+      });
     }
-    // Kontrola ujemna: bez deduplikacji dwie oferty tej samej firmy dałyby 8 wpisów (2 × 4 języki),
-    // nie 4 — ta asercja złapałaby regresję z Set → tablicą.
-    expect(companyUrls).toHaveLength(LOCALES.length);
+    const all = perFile.flatMap((file) => file.companies);
+    for (const locale of LOCALES) {
+      expect(all).toContain(`${SITE}/${locale}/pracodawcy/firma-x`);
+      expect(all).toContain(`${SITE}/${locale}/pracodawcy/firma-y`);
+    }
+    // Kontrola ujemna: dawny Set per partia dawał firma-x w partiach 1 i 2 (8 wpisów zamiast 4).
+    expect(all).toHaveLength(2 * LOCALES.length);
+    expect(new Set(all).size).toBe(all.length);
+    expect(perFile.filter((file) => file.companies.length > 0).map((file) => file.id)).toEqual([0]);
   });
 
   it('#591 kontrola ujemna: oferta demo/bez companySlug nie tworzy profilu firmy', async () => {
     jobs.getJobs.mockResolvedValue({ jobs: [job('a'), job('b')], total: 2, page: 1, pageSize: 100 });
-    const entries = await sitemap({ id: 1 });
+    const entries = [...(await sitemap({ id: 0 })), ...(await sitemap({ id: 1 }))];
     expect(entries.some((entry) => new URL(entry.url).pathname.includes('/pracodawcy/'))).toBe(false);
   });
 });
@@ -219,7 +253,7 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
     expect(loader).toContain('handler({ id: targetId })');
   });
 
-  it("id '0' = strony statyczne, landingi i poradniki; bez odczytu listy ofert", async () => {
+  it("id '0' = strony statyczne, landingi, poradniki i profile firm; bez URL-i ofert", async () => {
     const urls = (await sitemap({ id: '0' })).map((entry) => entry.url);
     for (const locale of LOCALES) {
       expect(urls).toContain(`${SITE}/${locale}`);
@@ -230,7 +264,11 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
     // Kontrola ujemna: stare `id === 0` dawało dla '0' partię ofert (-1) — oferty, getJobs
     // z numerem strony ≤ 0 i zero stron statycznych; każda z tych asercji byłaby czerwona.
     expect(urls.some((url) => url.includes('/oferty-pracy/oferta-'))).toBe(false);
-    expect(jobs.getJobs).not.toHaveBeenCalled();
+    // #1231: core czyta listę tylko po slugi firm — od strony 1, bez licznika.
+    for (const [params, , options] of jobs.getJobs.mock.calls) {
+      expect(params.page).toBeGreaterThanOrEqual(1);
+      expect(options).toEqual({ withTotal: false });
+    }
   });
 
   it("id '1' = pierwsza partia ofert od strony 1, bez stron statycznych; '0' i '1' się nie dublują", async () => {
@@ -239,7 +277,9 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
     expect(urls).toContain(`${SITE}/pl/oferty-pracy/oferta-a`);
     expect(urls).not.toContain(`${SITE}/pl/praca`);
     expect(jobs.getJobs).toHaveBeenCalledTimes(1);
-    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 1, pageSize: 100 }));
+    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 1, pageSize: 100 }), undefined, {
+      withTotal: false,
+    });
     const core = new Set((await sitemap({ id: '0' })).map((entry) => entry.url));
     expect(urls.filter((url) => core.has(url))).toEqual([]);
   });
@@ -247,7 +287,7 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
   it("id '2' zaczyna od strony 51 (partie nie są przesunięte)", async () => {
     jobs.getJobs.mockResolvedValue({ jobs: [job('z')], total: 12_000, page: 51, pageSize: 100 });
     await sitemap({ id: '2' });
-    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 51 }));
+    expect(jobs.getJobs).toHaveBeenCalledWith(expect.objectContaining({ page: 51 }), undefined, { withTotal: false });
   });
 
   it('niepoprawne id = pusty plik bez zapytań do bazy', async () => {
@@ -275,13 +315,13 @@ describe('robots', () => {
     const result = await robots();
     const rules = Array.isArray(result.rules) ? result.rules[0]! : result.rules;
     expect(rules.allow).toBe('/');
-    expect(rules.disallow).toEqual(expect.arrayContaining(['/api/', '/*/candidate', '/*/employer', '/*/admin']));
+    expect(rules.disallow).toEqual(expect.arrayContaining(['/api/', '/pl/candidate$', '/pl/candidate/', '/nl/admin/']));
     // total=2 (fixture domyślna z beforeEach) → core (id 0) + jedna partia ofert (id 1).
     expect(result.sitemap).toEqual([`${SITE}/sitemap/0.xml`, `${SITE}/sitemap/1.xml`]);
   });
 
   it('katalog z kilkoma partiami ofert: robots wskazuje WSZYSTKIE, nie tylko pierwszą', async () => {
-    jobs.getJobs.mockResolvedValue({ jobs: [job('a')], total: 12_000, page: 1, pageSize: 1 });
+    jobs.getJobsCount.mockResolvedValue(12_000);
     const result = await robots();
     expect(result.sitemap).toEqual([
       `${SITE}/sitemap/0.xml`,
@@ -296,8 +336,41 @@ describe('robots', () => {
     const disallow = (Array.isArray(rules) ? rules[0]! : rules).disallow as string[];
     for (const panel of ['candidate', 'employer', 'admin']) {
       expect(dirs(APP)).toContain(panel);
-      expect(disallow).toContain(`/*/${panel}`);
+      for (const locale of LOCALES) {
+        expect(disallow).toContain(`/${locale}/${panel}$`);
+        expect(disallow).toContain(`/${locale}/${panel}/`);
+      }
     }
+  });
+
+  it('#1217: slugi zaczynające się od nazwy panelu nie są blokowane, same panele tak', async () => {
+    const result = await robots();
+    const rules = Array.isArray(result.rules) ? result.rules[0]! : result.rules;
+    const disallow = rules.disallow as string[];
+    const allow = [rules.allow as string];
+    const allowed = [
+      '/nl/oferty-pracy/administratief-bediende-1a2b3c4d',
+      '/pl/pracodawcy/administratiekantoor-peeters',
+      '/pl/oferty-pracy/employer-branding-specialist-12ab',
+      '/fr/oferty-pracy/candidate-experience-manager-9f8e',
+      '/pl/oferty-pracy/magazynier-1a2b',
+      '/pl/candidates-guide',
+    ];
+    const blocked = [
+      '/pl/candidate',
+      '/pl/candidate/profil',
+      '/nl/employer',
+      '/nl/employer/oferty?x=1',
+      '/en/admin',
+      '/fr/admin/firmy/1',
+      '/api/health',
+    ];
+    for (const path of allowed) expect(robotsAllows(path, allow, disallow), path).toBe(true);
+    for (const path of blocked) expect(robotsAllows(path, allow, disallow), path).toBe(false);
+    // Kontrola ujemna: dawne reguły z gwiazdką blokowały slug „administratief-…”.
+    const legacy = ['/api/', '/*/candidate', '/*/employer', '/*/admin'];
+    expect(robotsAllows('/nl/oferty-pracy/administratief-bediende-1a2b3c4d', allow, legacy)).toBe(false);
+    expect(robotsAllows('/pl/oferty-pracy/employer-branding-specialist-12ab', allow, legacy)).toBe(false);
   });
 
   it('poza produkcją: Disallow: / i brak sitemap', async () => {
