@@ -2562,7 +2562,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (service_role, `dsa_retention_runs`) anonimizują sprawy dopiero po końcu drogi odwołania
   i okresie retencji — wiersze i liczby zostają. Raport: `dsa_transparency_report` + eksport
   `dsa_statements_export` (bez danych osobowych i faktów) w `/admin/raport-dsa` i
-  `GET /api/admin/dsa-report` (CSV/JSON). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
+  `GET /api/admin/dsa-report` (CSV/JSON). Oba formaty to KOMPLET zakresu strumieniowany stronami po kursorze
+  (#641, #670, `src/lib/admin/dsa-export-stream.ts`, `dsa-csv-stream.ts`, `dsa-json-stream.ts`): bez limitu
+  stron i bez `nextCursor` w JSON; błąd bazy albo kursor niepostępujący przerywa odpowiedź (niepełny plik nie
+  udaje kompletnego). Dowód: unit `dsa-export-stream` (kontrole ujemne). Opis: `docs/DATABASE.md`. Dowód: `rls.sql` sekcja
   APL43 (kontrole ujemne: jedyny admin, naiwna retencja, flaga bez odwołania); unit
   `moderation-appeals`; E2E `content-report-form` (odwołanie zgłaszającego, fixture),
   `admin-a11y` (nowe trasy). **Zatwierdzone przez właściciela 26.09.2026 (#40):** okno
