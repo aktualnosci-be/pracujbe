@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0960 (paczka M-1: DSA — trwały dowód poinformowania, limity, kod dostępu,
+-- Rollback 0188 (paczka M-1: DSA — trwały dowód poinformowania, limity, kod dostępu,
 -- zawieszenie firmy niezweryfikowanej). Przywraca definicje z 0084/0094/0104/0109.
 -- UWAGA: tabela `moderation_informed` jest pochodna (odtwarzalna z `email_deliveries` i
 -- powiadomień) — jej usunięcie przywraca dawne wyprowadzanie terminów odwołania. Kod dostępu

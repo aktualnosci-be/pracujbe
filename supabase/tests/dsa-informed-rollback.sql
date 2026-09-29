@@ -1,5 +1,5 @@
 -- =============================================================================
--- DSA960-R — rollback migracji 0960 (paczka M-1). Uruchamiany przez scripts/test-rls.sh
+-- DSA960-R — rollback migracji 0188 (paczka M-1). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -10,7 +10,7 @@ begin
   if p_cond is distinct from true then raise exception 'ASSERT FAILED: %', p_name; end if;
 end $$;
 
--- Stan przed: migracja 0960 obowiązuje.
+-- Stan przed: migracja 0188 obowiązuje.
 select pg_temp.assert(
   to_regclass('public.moderation_informed') is not null
   and position('moderation_informed' in pg_get_functiondef('public.moderation_informed_at(uuid)'::regprocedure)) > 0
@@ -19,10 +19,10 @@ select pg_temp.assert(
   and exists (select 1 from pg_trigger where tgname = 'trg_email_deliveries_scrub_access_code')
   and position('''verified'', ''rejected'', ''suspended''' in pg_get_functiondef(
         'public.admin_set_company_status(uuid, text, text, text)'::regprocedure)) > 0,
-  'DSA960-R0 przed rollbackiem obowiązuje migracja 0960');
+  'DSA960-R0 przed rollbackiem obowiązuje migracja 0188');
 
 begin;
-\ir ../rollback/0960_dsa_informed_limits.down.sql
+\ir ../rollback/0188_dsa_informed_limits.down.sql
 select pg_temp.assert(
   to_regclass('public.moderation_informed') is null
   and to_regprocedure('public.moderation_record_informed(text, uuid, text, timestamptz, uuid)') is null
@@ -65,5 +65,5 @@ select pg_temp.assert(
   and exists (select 1 from pg_trigger where tgname = 'trg_email_deliveries_scrub_access_code')
   and position('report-email' in pg_get_functiondef(
         'public.submit_content_report(uuid, uuid, text, text, uuid, text, text, text, text, text, text, boolean)'::regprocedure)) > 0,
-  'DSA960-R3 po cofnięciu transakcji migracja 0960 zostaje');
-\echo '=================== 0960 ROLLBACK OK ==================='
+  'DSA960-R3 po cofnięciu transakcji migracja 0188 zostaje');
+\echo '=================== 0188 ROLLBACK OK ==================='

@@ -280,7 +280,7 @@ koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
   z polami odwołania), zgłaszający — wynik i własne odwołanie (`get_report_case`); zdarzenia
   odwołań nie są widoczne w RLS historii sprawy dla zgłaszającego.
 - **Termin od poinformowania.** `moderation_informed_at(decision)` = najwcześniejszy nieunieważniony
-  wpis niezmiennej tabeli `moderation_informed` (0960, numer tymczasowy; #1045/#1063), zapisywanej
+  wpis niezmiennej tabeli `moderation_informed` (0188, numer tymczasowy; #1045/#1063), zapisywanej
   wyłącznie triggerami i RPC odczytu decyzji — nie tabelą powiadomień UI ani bieżącym stanem
   poczty. Podstawy: `email_sent` (pierwszy faktycznie wysłany e-mail; trwałe odbicie/błąd
   UNIEWAŻNIA wpis z tego listu), `panel_view` (pierwszy odczyt decyzji przez aktywnego
@@ -345,7 +345,7 @@ rozszerza tę samą maszynę odwołań:
   zgłaszającego w jego języku (profil → `resolve_recipient_locale`, gość — język formularza),
   bez powodu cofnięcia i danych autora. Termin odwołania biegnie od poinformowania zgłaszającego (wysłany
   e-mail; przy nieudanym doręczeniu od chwili porażki — `moderation_restoration_informed_at`/`_appeal_deadline`,
-  wpisy `moderation_informed`, 0960).
+  wpisy `moderation_informed`, 0188).
 - `moderation_restoration_appealable(id)`: od cofnięcia po uwzględnionym odwołaniu autora
   (albo przy jego odwołaniu w toku) i od cofnięcia decyzji, która już nie rozstrzyga sprawy —
   `INVALID_TRANSITION` (e-mail też nie wychodzi).

@@ -2668,7 +2668,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
-  Trwały dowód poinformowania i limity DSA (paczka M-1, migracja `0960` — numer tymczasowy;
+  Trwały dowód poinformowania i limity DSA (paczka M-1, migracja `0188` — numer tymczasowy;
   #1037/#1045/#1063/#1098/#1107; terminy 6 mies./14 dni/12 mies. bez zmian, strażnik
   `dsa-approved-terms`): początek biegu terminu odwołania zapisuje niezmienna tabela
   `moderation_informed` (bez grantów; triggery na `email_deliveries` + RPC odczytu decyzji), a nie
@@ -2684,7 +2684,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   także z `unverified`/`pending`, z `suspended` również `rejected` (przyciski = macierz bazy,
   test `dsa-informed-limits`). Dowód: `rls.sql` sekcja DSA960 (kontrole ujemne: zdjęty strażnik,
   trigger poczty, trigger zatwierdzenia, indeks; wyścigi dblink), rollback
-  `supabase/rollback/0960_…down.sql` + `dsa-informed-rollback.sql`. **Otwarte (poza M-1):** blokada
+  `supabase/rollback/0188_…down.sql` + `dsa-informed-rollback.sql`. **Otwarte (poza M-1):** blokada
   wiersza przy „Kopiuj jako szkic”, odpowiedź na propozycję (wyłączona), zgłoszenie wiadomości
   „otwórz ponownie” (#1107 pkt 2).
   Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0179`,

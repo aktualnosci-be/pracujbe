@@ -6,7 +6,7 @@ import { COMPANY_ACTIONS_BY_STATUS } from '@/components/admin/CompanyStatusActio
 import { parseRetentionReport } from '@/lib/data/admin-dsa';
 
 /**
- * Paczka M-1 (migracja 0960, #1037/#1045/#1063/#1098/#1107): zgodność aplikacji z bazą.
+ * Paczka M-1 (migracja 0188, #1037/#1045/#1063/#1098/#1107): zgodność aplikacji z bazą.
  * Zachowanie bazy dowodzi `supabase/tests/rls.sql` (sekcja DSA960) i rollback
  * `dsa-informed-rollback.sql`; tu — kontrakty, które da się sprawdzić bez PostgreSQL:
  *   - przyciski akcji firmy = macierz przejść z NAJNOWSZEJ definicji `admin_set_company_status`,
@@ -61,11 +61,11 @@ function uiTransitions(): Set<string> {
   return pairs;
 }
 
-describe('macierz statusów firmy: przyciski = baza (#1107, 0960)', () => {
+describe('macierz statusów firmy: przyciski = baza (#1107, 0188)', () => {
   it('najnowsza definicja admin_set_company_status pozwala zawiesić firmę pending/unverified', () => {
     const latest = latestDefinition(migrations(), 'admin_set_company_status');
     const db = companyTransitions(latest.body);
-    expect(latest.name).toMatch(/^0960_/);
+    expect(latest.name).toMatch(/^0188_/);
     expect(db.has('pending>suspended')).toBe(true);
     expect(db.has('unverified>suspended')).toBe(true);
     expect(db.has('suspended>rejected')).toBe(true);
@@ -103,8 +103,8 @@ describe('raport retencji DSA: reguła zastępcza terminu (#1063)', () => {
   });
 });
 
-describe('kod dostępu do sprawy w kolejce e-mail (#1037, 0960)', () => {
-  const sql = migrations().find((m) => m.name.startsWith('0960_'))?.sql ?? '';
+describe('kod dostępu do sprawy w kolejce e-mail (#1037, 0188)', () => {
+  const sql = migrations().find((m) => m.name.startsWith('0188_'))?.sql ?? '';
 
   it('migracja czyści kod po wysyłce niezależnie od ścieżki zapisu (trigger BEFORE) i wstecznie', () => {
     expect(sql).toMatch(/create trigger trg_email_deliveries_scrub_access_code\s+before insert or update on public\.email_deliveries/);

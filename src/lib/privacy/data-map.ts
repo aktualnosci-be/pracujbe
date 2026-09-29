@@ -827,7 +827,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['dsa-moderation'],
     subjects: [],
     columns: {},
-    note: 'Niezmienny dowód poinformowania strony decyzji/cofnięcia (początek biegu terminu odwołania, 0960/#1045/#1063): identyfikatory decyzji, podstawa (e-mail wysłany / odczyt w panelu / reguła zastępcza) i czas — bez danych osobowych i bez treści.',
+    note: 'Niezmienny dowód poinformowania strony decyzji/cofnięcia (początek biegu terminu odwołania, 0188/#1045/#1063): identyfikatory decyzji, podstawa (e-mail wysłany / odczyt w panelu / reguła zastępcza) i czas — bez danych osobowych i bez treści.',
   },
   'public.ai_budget_limits': DICTIONARY('globalne limity kosztów AI, #36'),
   'public.ai_usage_ledger': {

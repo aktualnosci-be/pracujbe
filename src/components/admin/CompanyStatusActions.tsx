@@ -47,7 +47,7 @@ interface StatusAction {
 }
 
 /**
- * Dostępne akcje zależnie od bieżącego statusu firmy (zgodne z macierzą w DB, 0081/0960).
+ * Dostępne akcje zależnie od bieżącego statusu firmy (zgodne z macierzą w DB, 0081/0188).
  * Pilna blokada (zawieszenie) jest dostępna także dla firmy jeszcze niezweryfikowanej, a
  * zawieszoną firmę można odrzucić zamiast „reaktywować” do zweryfikowanej (#1107).
  */

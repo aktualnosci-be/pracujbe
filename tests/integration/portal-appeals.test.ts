@@ -266,9 +266,9 @@ describe('odwołania na PostgreSQL (#25) — panel admina', () => {
   });
 });
 
-// 0960 (#1045): poinformowanie autora = odczyt decyzji w panelu (niezmienny zapis), nie odczyt
+// 0188 (#1045): poinformowanie autora = odczyt decyzji w panelu (niezmienny zapis), nie odczyt
 // powiadomienia; osoba spoza firmy nie rozpoczyna biegu terminu.
-describe('dowód poinformowania autora przy odczycie decyzji (0960)', () => {
+describe('dowód poinformowania autora przy odczycie decyzji (0188)', () => {
   it('odczyt przez właściciela zapisuje panel_view; obca firma nic nie zapisuje', async () => {
     const companyId = (await db().admin.query(
       `SELECT j.company_id AS id FROM public.jobs j WHERE j.id = $1`, [restrictedJob])).rows[0].id as string;

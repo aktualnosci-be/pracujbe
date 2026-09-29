@@ -447,7 +447,7 @@ export interface DsaRetentionOverview {
   eligibleDecisions: number;
   eligibleAppeals: number;
   waitingForAppealPath: number;
-  /** Sprawy, których termin odwołania biegnie z reguły zastępczej (nikt nie został faktycznie poinformowany, 0960). */
+  /** Sprawy, których termin odwołania biegnie z reguły zastępczej (nikt nie został faktycznie poinformowany, 0188). */
   informedByFallback: number;
   withinRetention: number;
   openCases: number;

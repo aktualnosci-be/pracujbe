@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0960 — DSA: trwały dowód poinformowania, limity zgłoszeń pod blokadą, kod dostępu poza
+-- 0188 — DSA: trwały dowód poinformowania, limity zgłoszeń pod blokadą, kod dostępu poza
 -- kolejką e-mail, zawieszenie firmy niezweryfikowanej (paczka M-1 audytu 2026-09-28).
 -- Numer TYMCZASOWY — ostateczny nada integrator. Buduje na 0084, 0094, 0104, 0109.
 --
@@ -39,7 +39,7 @@
 --    (pilna blokada firmy jeszcze niezweryfikowanej); z `suspended` dodatkowo `rejected`, by
 --    firmy nigdy niezweryfikowanej nie trzeba było „reaktywować” do `verified`.
 --
--- Rollback: supabase/rollback/0960_dsa_informed_limits.down.sql (test:
+-- Rollback: supabase/rollback/0188_dsa_informed_limits.down.sql (test:
 -- supabase/tests/dsa-informed-rollback.sql). Tabela `moderation_informed` jest pochodna
 -- (odtwarzalna z poczty) — po rollbacku terminy wracają do wyprowadzania z `email_deliveries`
 -- i powiadomień (0104/0109).
@@ -410,7 +410,7 @@ begin
   if exists (select 1 from public.reports r
               where r.kind = 'dsa_notice' and r.status in ('open', 'reviewing')
               group by r.reporter_email, r.target_type, r.target_id having count(*) > 1) then
-    raise warning '0960: duplikaty otwartych spraw DSA — indeks reports_dsa_open_uq pominięty';
+    raise warning '0188: duplikaty otwartych spraw DSA — indeks reports_dsa_open_uq pominięty';
   else
     create unique index if not exists reports_dsa_open_uq
       on public.reports(reporter_email, target_type, target_id)

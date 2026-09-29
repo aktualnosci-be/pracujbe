@@ -8995,7 +8995,7 @@ update public.email_deliveries set status = 'bounced', sent_at = now() - interva
 set role service_role;
 select pg_temp.assert(public.moderation_informed_at(:'ad4') between now() - interval '1 minute' and now() + interval '1 minute'
   and not exists (select 1 from public.moderation_informed where decision_id = :'ad4' and basis = 'email_sent' and voided_at is null),
-  'APL43-3b odbity e-mail nie jest poinformowaniem wysyłką (0960/#1063: termin od chwili porażki, nie od wysyłki)');
+  'APL43-3b odbity e-mail nie jest poinformowaniem wysyłką (0188/#1063: termin od chwili porażki, nie od wysyłki)');
 reset role;
 update public.email_deliveries set status = 'delivered' where entity_id = :'ar4' and template = 'reportDecisionNoAction';
 set role service_role;
@@ -9006,7 +9006,7 @@ select pg_temp.expect_error('select * from public.submit_report_appeal(''' || :'
 select (public.get_report_case(:'acase4', 'ABCDEFGHIJKLMNOPQRSTUVWX'))->>'appealState' as astate4 \gset
 reset role;
 select pg_temp.assert(:'astate4' = 'APPEAL_WINDOW_CLOSED', 'APL43-3e zgłaszający widzi, że termin upłynął');
--- Autor: sam odczyt/oznaczenie powiadomienia NIE jest poinformowaniem (0960/#1045); poinformowaniem
+-- Autor: sam odczyt/oznaczenie powiadomienia NIE jest poinformowaniem (0188/#1045); poinformowaniem
 -- jest odczyt decyzji w panelu (get_company_moderation_decisions), zapisany niezmiennie.
 update public.notifications set read_at = now() - interval '1 day'
   where data->>'decisionId' = :'ad3' and profile_id = :'EMPA';
@@ -9410,7 +9410,7 @@ set role service_role;
 select pg_temp.assert(public.moderation_restoration_informed_at(:'rs2') between now() - interval '1 minute' and now() + interval '1 minute'
   and not exists (select 1 from public.moderation_informed where restoration_id = :'rs2' and basis = 'email_sent' and voided_at is null)
   and public.moderation_restoration_appealable(:'rs2') = 'OK',
-  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem wysyłką (0960/#1063: termin od chwili porażki)');
+  'RA43-4 odbity e-mail o cofnięciu nie jest poinformowaniem wysyłką (0188/#1063: termin od chwili porażki)');
 reset role;
 update public.email_deliveries set status = 'delivered' where entity_id = :'rs2' and template = 'reportRestored';
 update public.email_deliveries set status = 'sent', sent_at = now() where entity_id = :'rs1' and template = 'reportRestored';
@@ -20241,7 +20241,7 @@ select pg_temp.assert(
   'RW862-5 kontrola ujemna: bez synchronizacji przez RPC (goła zmiana period) CV nadal ginie mimo wydłużenia');
 
 -- ============================================================================
--- DSA960 (0960, paczka M-1): kod dostępu poza kolejką e-mail (#1037), trwały dowód
+-- DSA960 (0188, paczka M-1): kod dostępu poza kolejką e-mail (#1037), trwały dowód
 -- poinformowania niezależny od powiadomień (#1045) z regułami zastępczymi (#1063), limity
 -- zgłoszeń pod blokadą (#1098, część DSA), zawieszenie firmy niezweryfikowanej (#1107).
 -- Kontrole ujemne: zdjęty strażnik/trigger/indeks daje wykrywalny, błędny wynik; dla blokady
@@ -21742,7 +21742,7 @@ rollback;
 -- Kontrola ujemna: bez triggera append-only treść przywrócenia da się przepisać i usunąć.
 begin;
 alter table public.moderation_restorations disable trigger trg_moderation_restorations_append_only;
--- 0960: dowód poinformowania (moderation_informed) wskazuje na przywrócenie kluczem obcym — przed
+-- 0188: dowód poinformowania (moderation_informed) wskazuje na przywrócenie kluczem obcym — przed
 -- usunięciem przywrócenia trzeba usunąć wpisy zależne (strażnik tabeli pochodnej też wyłączony).
 alter table public.moderation_informed disable trigger trg_moderation_informed_guard;
 update public.moderation_restorations set reason = 'Przepisany powód przywrócenia decyzji' where id = :'im_rest';
