@@ -1,5 +1,5 @@
--- 0179_team_invitation_details.sql — oczekujące zaproszenia do zespołu: język, autor i data
--- wysłania na liście w `/employer/zespol` (numer 0179).
+-- 0187_team_invitation_details.sql — oczekujące zaproszenia do zespołu: język, autor i data
+-- wysłania na liście w `/employer/zespol` (numer 0187).
 --
 -- `get_company_invitations` (0086) zwracał tylko adres, rolę i ważność. Panel zespołu nie
 -- pokazywał więc, w jakim języku poszło zaproszenie (0121: decyduje o języku e-maila dla

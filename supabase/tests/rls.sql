@@ -16550,17 +16550,17 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- TI179. Oczekujące zaproszenia: język, autor, odnowienie (0179).
+-- TI179. Oczekujące zaproszenia: język, autor, odnowienie (0187).
 -- get_company_invitations zwraca `locale` (0121) i `inviter_name`; bramka owner/admin bez
 -- zmian. Odnowienie = invite_company_member z językiem z bazy: ten sam wiersz, nowa ważność,
 -- autor = odnawiający. Kontrola ujemna: definicja z 0086 nie ma kolumny `locale`.
 -- ============================================================================
-\set TIO 'e8700000-0000-0000-0000-0000000179a1'
-\set TIA 'e8700000-0000-0000-0000-0000000179a2'
-\set TIR 'e8700000-0000-0000-0000-0000000179a3'
-\set TIX 'e8700000-0000-0000-0000-0000000179b1'
-\set TIC 'e8700000-0000-0000-0000-0000000179f1'
-\set TICX 'e8700000-0000-0000-0000-0000000179f2'
+\set TIO 'e8700000-0000-0000-0000-0000000187a1'
+\set TIA 'e8700000-0000-0000-0000-0000000187a2'
+\set TIR 'e8700000-0000-0000-0000-0000000187a3'
+\set TIX 'e8700000-0000-0000-0000-0000000187b1'
+\set TIC 'e8700000-0000-0000-0000-0000000187f1'
+\set TICX 'e8700000-0000-0000-0000-0000000187f2'
 
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values

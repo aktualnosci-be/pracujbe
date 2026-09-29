@@ -28,7 +28,7 @@ vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
 /**
- * „Odnów zaproszenie” (0179): klient podaje tylko id; adres, rolę i język akcja bierze
+ * „Odnów zaproszenie” (0187): klient podaje tylko id; adres, rolę i język akcja bierze
  * z `get_company_invitations` AKTYWNEJ firmy i woła ten sam `invite_company_member` co
  * zaproszenie — z nowym tokenem linku rejestracji.
  */
@@ -72,7 +72,7 @@ beforeEach(() => {
   vi.mocked(getActiveCompany).mockResolvedValue({ activeId: COMPANY, activeRole: 'owner' } as never);
 });
 
-describe('renewTeamInvitation (0179)', () => {
+describe('renewTeamInvitation (0187)', () => {
   it('odnawia zaproszenie adresem, rolą i JĘZYKIEM z bazy, z nowym tokenem', async () => {
     const db = setup([pendingRow()]);
     expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: true });
@@ -137,9 +137,9 @@ describe('renewTeamInvitation (0179)', () => {
     expect(await renewTeamInvitation(INVITE, COMPANY)).toEqual({ ok: true, demo: true });
   });
 
-  it('migracja 0179 zwraca język i autora bez zmiany bramki owner/admin', () => {
+  it('migracja 0187 zwraca język i autora bez zmiany bramki owner/admin', () => {
     const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/0179_team_invitation_details.sql'),
+      resolve(process.cwd(), 'supabase/migrations/0187_team_invitation_details.sql'),
       'utf8',
     );
     expect(sql).toMatch(/locale text, inviter_name text/);

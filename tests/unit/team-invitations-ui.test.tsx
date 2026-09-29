@@ -11,7 +11,7 @@ import fr from '@/messages/fr.json';
 import en from '@/messages/en.json';
 
 /**
- * Oczekujące zaproszenia w `/employer/zespol` (0179): język zaproszenia, kto i kiedy
+ * Oczekujące zaproszenia w `/employer/zespol` (0187): język zaproszenia, kto i kiedy
  * zaprosił, „Odnów” bez potwierdzenia (niczego nie odbiera) i „Cofnij” dopiero po
  * potwierdzeniu w dialogu. Przyciski tylko dla ról, którymi zapraszający zarządza.
  */
@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('oczekujące zaproszenia (0179)', () => {
+describe('oczekujące zaproszenia (0187)', () => {
   it('pokazuje język, autora i datę; brak języka i autora = neutralne etykiety', () => {
     renderInvite('owner');
     const rec = rowOf('rita@firma.be');
