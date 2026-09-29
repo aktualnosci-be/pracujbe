@@ -193,29 +193,41 @@ test("lejek ofert: endpoint no-store bez cookies, strona oferty nadal z cache", 
   const slug = /href="\/pl\/oferty-pracy\/([a-z0-9-]+)"/.exec(await list.text())?.[1];
   expect(slug, "lista ofert linkuje do szczegółu").toBeTruthy();
   const path = `/pl/oferty-pracy/${slug}`;
-  const before = await getCached(request, path);
-
-  const event = {
-    event: "detail_view",
-    nonce: "5b0f7a1e-2c3d-4e5f-8a9b-0c1d2e3f4a5b",
-    jobIds: ["3f1c7a52-6f7e-4d0b-9a55-1a2b3c4d5e6f"],
-  };
-  const beacon = await request.post("/api/job-funnel", {
-    data: event,
-    headers: { cookie: VISITOR_COOKIES, "sec-fetch-site": "same-origin" },
-  });
-  expect(beacon.status()).toBe(204);
-  expect(beacon.headers()["cache-control"]).toBe("private, no-store");
-  expect(beacon.headers()["set-cookie"]).toBeUndefined();
+  // Zgłoszenie z cookies „w klamrze” dwóch odczytów anonimowych (jak getCachedBracketed):
+  // wpis ISR szczegółu (revalidate 60 s) może się odświeżyć w trakcie współbieżnych testów,
+  // więc porównujemy HTML dopiero, gdy oba odczyty to HIT z tego samego wpisu (flaky #375).
+  await getCached(request, path);
+  await expect
+    .poll(
+      async () => {
+        const before = await request.get(path, { maxRedirects: 0 });
+        const event = {
+          event: "detail_view",
+          nonce: crypto.randomUUID(),
+          jobIds: ["3f1c7a52-6f7e-4d0b-9a55-1a2b3c4d5e6f"],
+        };
+        const beacon = await request.post("/api/job-funnel", {
+          data: event,
+          headers: { cookie: VISITOR_COOKIES, "sec-fetch-site": "same-origin" },
+        });
+        expect(beacon.status()).toBe(204);
+        expect(beacon.headers()["cache-control"]).toBe("private, no-store");
+        expect(beacon.headers()["set-cookie"]).toBeUndefined();
+        // Zdarzenie nie przyjmuje dodatkowych danych (np. tekstu wyszukiwania).
+        expect(
+          (await request.post("/api/job-funnel", { data: { ...event, keyword: "magazyn" } })).status(),
+        ).toBe(400);
+        const after = await request.get(path, { maxRedirects: 0 });
+        expect(sMaxAge(after)).toBe(60);
+        expect(after.headers()["set-cookie"]).toBeUndefined();
+        const states = [before, after].map((r) => r.headers()["x-nextjs-cache"]);
+        if (!states.every((state) => state === "HIT")) return `stany cache: ${states.join(", ")}`;
+        return (await after.text()) === (await before.text()) ? "bez zmian" : "HTML zmieniony";
+      },
+      { message: `${path}: zgłoszenie lejka nie zmienia strony z cache` },
+    )
+    .toBe("bez zmian");
   expect((await request.get("/api/job-funnel")).status()).toBe(405);
-  // Zdarzenie nie przyjmuje dodatkowych danych (np. tekstu wyszukiwania).
-  expect((await request.post("/api/job-funnel", { data: { ...event, keyword: "magazyn" } })).status()).toBe(400);
-
-  const after = await request.get(path, { maxRedirects: 0 });
-  expect(after.headers()["x-nextjs-cache"]).toBe("HIT");
-  expect(sMaxAge(after)).toBe(60);
-  expect(after.headers()["set-cookie"]).toBeUndefined();
-  expect(await after.text()).toBe(await before.text());
 
   // Oferty demonstracyjne (dane E2E) nie są zliczane: przeglądarka nie wysyła zgłoszeń
   // ani z listy, ani ze szczegółu, i nie dostaje żadnego cookie od lejka.

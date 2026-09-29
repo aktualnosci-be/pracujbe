@@ -148,6 +148,7 @@ export function SavedSearchList({ currentLocale, searches }: SavedSearchListProp
                   <h2 className={H2_EXTENDED}>{search.name}</h2>
                   {editingId === search.id ? (
                     <form
+                      method="post"
                       noValidate
                       className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
                       onSubmit={(event) => {

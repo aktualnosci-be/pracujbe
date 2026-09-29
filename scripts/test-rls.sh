@@ -57,6 +57,9 @@ echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
+echo ">> rollback 0183 (części gmin w filtrach, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/city-sections-filters-rollback.sql"
+
 echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-sections-rollback.sql"
 
@@ -66,6 +69,12 @@ echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 echo ">> rollback 0969 (pauza alertów, obserwowanie firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-search-pause-follow-rollback.sql"
 
+echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-verified-locale-rollback.sql"
+echo ">> rollback 0185 (utwardzenie warstwy danych: oferty, firmy, pliki, sesje i tokeny; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls-data-hardening-rollback.sql"
+echo ">> rollback 0184 (token wersji szkicu oferty i czujka schematu, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-draft-cas-rollback.sql"
 echo ">> rollback 0177 (schemat billingu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/billing-schema-rollback.sql"
 

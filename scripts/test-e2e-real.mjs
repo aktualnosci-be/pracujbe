@@ -23,6 +23,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { appendNodeOptions, requireNodeOption } from './lib/node-options.mjs';
 import { applyMigrations } from './db/migrate.mjs';
 import { loadProductionMigrations } from './db/production-migrations.mjs';
 
@@ -87,8 +88,8 @@ const MUTATIONS = {
   'transition-noop': `CREATE OR REPLACE FUNCTION public.transition_application(p_application_id uuid, p_target text)
     RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
   // Kreator oferty (Etap 8): zapis kroku zwraca sukces bez zmian w bazie (pozorny zapis szkicu).
-  'wizard-draft-noop': `CREATE OR REPLACE FUNCTION public.save_job_draft(p_job_id uuid, p_content jsonb)
-    RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN END $$`,
+  'wizard-draft-noop': `CREATE OR REPLACE FUNCTION public.save_job_draft(p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz DEFAULT NULL)
+    RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ BEGIN RETURN NULL; END $$`,
   // Kreator oferty (Etap 8): publikacja bez sprawdzenia weryfikacji firmy (reszta publish_job bez zmian).
   'publish-unverified': `DO $mut$ DECLARE d text; BEGIN
       d := pg_get_functiondef('public.publish_job(uuid, text)'::regprocedure);
@@ -207,7 +208,8 @@ function runPlaywright() {
           // #1136: proces testów importuje moduły aplikacji — przepływ rekrutacyjny jawnie włączony.
           PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT',
           // Proces testów importuje moduły serwerowe aplikacji — patrz server-only-hook.cjs.
-          NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${serverOnlyHook}`].filter(Boolean).join(' '),
+          // Ścieżka repozytorium może zawierać spację (#915) — wartość ujęta w cudzysłów.
+          NODE_OPTIONS: appendNodeOptions(process.env.NODE_OPTIONS, requireNodeOption(serverOnlyHook)),
         },
       },
     );

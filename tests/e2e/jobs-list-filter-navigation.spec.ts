@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { waitForHydrated } from './fixtures/hydration';
 
 /**
  * #222 — po zatwierdzeniu filtrów nawigacja (RSC) może trwać. W tym czasie przycisk
@@ -70,7 +71,9 @@ for (const locale of locales) {
     const navigations = await delayFilteredNavigations(page);
 
     const rail = page.locator('[data-filter-passport="desktop"]');
-    await rail.getByRole('checkbox').first().click();
+    const firstCheckbox = rail.getByRole('checkbox').first();
+    await waitForHydrated(firstCheckbox);
+    await firstCheckbox.click();
     const apply = rail.locator('[data-filter-apply="desktop"]');
     await expect(apply).toHaveAttribute('aria-busy', 'false');
     await apply.click();
@@ -108,6 +111,7 @@ test('mobile: wyzwalacz filtrów niesie stan ładowania i nie otwiera arkusza po
   const navigations = await delayFilteredNavigations(page);
 
   const trigger = page.locator('[data-filter-passport="mobile-trigger"]');
+  await waitForHydrated(trigger);
   await trigger.click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('checkbox').first().click();

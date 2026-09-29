@@ -3,7 +3,7 @@
 -- tabelę pauz oraz kolumnę `saved_searches.company_id` (obserwacje firm są usuwane; zwykłe
 -- zapisane wyszukiwania zostają bez zmian).
 -- Przywraca też definicje kolejki e-mail sprzed 0969: `email_preference_category`/`email_send_pool`
--- (0087) i `email_delivery_suppression_reason` (0175, bez przyczyny `suppressed_alert_paused`).
+-- (0087) i `email_delivery_suppression_reason` (0186, bez przyczyny `suppressed_alert_paused`).
 -- =============================================================================
 
 -- Niewysłane digesty obserwowanych firm (szablon znika razem z migracją) nie mogą zostać w kolejce.
@@ -151,6 +151,9 @@ create or replace function public.email_delivery_suppression_reason(
     when not public.recruitment_enabled() and public.email_recruitment_template(p_template)
       then 'suppressed_feature_disabled'
     when public.email_address_suppressed(p_to_email) then 'suppressed_address'
+    -- #1038: marketing nie wychodzi na adres, którego właściciel nie potwierdził.
+    when public.email_preference_category(p_template) = 'marketing'
+         and not public.email_address_verified(p_profile_id) then 'suppressed_unverified_address'
     when public.email_allowed(p_profile_id, p_template) is not true then 'suppressed_opt_out'
     when public.email_recipient_authorized(p_template, p_entity_type, p_entity_id, p_profile_id)
            is not true then 'suppressed_recipient_unauthorized'

@@ -54,8 +54,10 @@ select pg_temp.assert(
   and position('suppressed_feature_disabled' in pg_get_functiondef(
         'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) > 0
   and position('suppressed_alert_disabled' in pg_get_functiondef(
+        'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) > 0
+  and position('suppressed_unverified_address' in pg_get_functiondef(
         'public.email_delivery_suppression_reason(uuid, text, text, uuid, text, uuid)'::regprocedure)) > 0,
-  'PS969-R3 rollback przywraca kolejkę z 0175 (bez pauzy, z trybem ogłoszeniowym i alertem)');
+  'PS969-R3 rollback przywraca kolejkę z 0186 (bez pauzy, z trybem ogłoszeniowym, alertem i #1038)');
 rollback;
 select pg_temp.assert(
   to_regclass('public.saved_search_alert_pauses') is not null

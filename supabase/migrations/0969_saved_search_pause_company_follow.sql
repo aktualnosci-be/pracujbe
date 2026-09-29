@@ -21,7 +21,7 @@
 --    („Nowe oferty firmy …”, kategoria `job_matches`, pula marketingowa jak `jobMatch`).
 --    Firma nie widzi obserwujących (brak jakiegokolwiek odczytu po stronie firm).
 -- 3. Kolejka e-mail: `email_preference_category`/`email_send_pool` znają `followedCompanyJobs`;
---    `email_delivery_suppression_reason` (definicja z 0175) wygasza digesty obu szablonów
+--    `email_delivery_suppression_reason` (definicja z 0186) wygasza digesty obu szablonów
 --    alertu przy pauzie konta (`suppressed_alert_paused`) — także zakolejkowane PRZED pauzą (#810) —
 --    i przy wyłączonym alercie.
 --
@@ -349,7 +349,8 @@ $$;
 revoke all on function public.email_send_pool(text) from public;
 grant execute on function public.email_send_pool(text) to service_role;
 
--- Definicja bazuje na NAJNOWSZEJ z 0175 (przyczyny 0174/0175 zachowane). Zmiany: alert
+-- Definicja bazuje na NAJNOWSZEJ z 0186 (przyczyny 0174/0175 i niepotwierdzony adres
+-- marketingu #1038 zachowane). Zmiany: alert
 -- obserwowanej firmy jak alert wyszukiwania; pauza konta (#810) wygasza digest zakolejkowany
 -- przed jej ustawieniem — przy claimie i tuż przed wysyłką (`email_delivery_send_check`).
 create or replace function public.email_delivery_suppression_reason(
@@ -366,6 +367,9 @@ create or replace function public.email_delivery_suppression_reason(
     when not public.recruitment_enabled() and public.email_recruitment_template(p_template)
       then 'suppressed_feature_disabled'
     when public.email_address_suppressed(p_to_email) then 'suppressed_address'
+    -- #1038 (0186): marketing nie wychodzi na adres, którego właściciel nie potwierdził.
+    when public.email_preference_category(p_template) = 'marketing'
+         and not public.email_address_verified(p_profile_id) then 'suppressed_unverified_address'
     when public.email_allowed(p_profile_id, p_template) is not true then 'suppressed_opt_out'
     when public.email_recipient_authorized(p_template, p_entity_type, p_entity_id, p_profile_id)
            is not true then 'suppressed_recipient_unauthorized'
