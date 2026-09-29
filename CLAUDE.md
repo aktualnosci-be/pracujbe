@@ -856,8 +856,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Dowód: `rls.sql` sekcja LC153 (kontrole ujemne: bez `location_id` / bez triggera), unit
   `job-location` (parzystość klucza, 10 miast landingów → jedna miejscowość, facet),
   `job-wizard-city-hint` (podpowiedź, kontrole ujemne), integracja
-  `portal-employer`. **Otwarte:** oferta w części gminy (po #675) nie trafia do landingu gminy
-  (dopasowanie po `parent_location_id`), matching nadal liczy odległość z tekstu (`cityKey`).
+  `portal-employer`. Części gmin w filtrach (#1076, migracja `0183` — numer tymczasowy):
+  `location_filter_ids` obejmuje aktywne części wskazanej gminy (`parent_location_id`, jeden
+  poziom), więc lista, licznik, landing miasta, facety i `saved_search_jobs_after` widzą oferty
+  z dzielnic bez zmiany bloków FROM … WHERE; filtr po samej części zwraca tylko ją,
+  `search_city_candidates` rozwija wpis o gminie, facet miasta grupuje część pod gminą
+  nadrzędną. Dowód: `rls.sql` sekcja SRCH1076 (kontrole ujemne: funkcje z 0153), rollback
+  `supabase/rollback/0183_…down.sql` (`city-sections-filters-rollback.sql`), unit
+  `city-sections-filters`. **Otwarte:** matching nadal liczy odległość z tekstu (`cityKey`).
   Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
   „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
   wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
@@ -1512,6 +1518,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   przy polu, bez wyjścia. Tryb edycji opublikowanej oferty po takim zapisie nie pokazuje
   „Zapisano” (ponowne „Zapisz zmiany” z nową wersją). Test: `job-wizard-save-revision`
   (kontrola ujemna: bez poprawki 5 z 7 czerwonych).
+  Token wersji szkicu (#1070, migracja `0184` — numer tymczasowy): `save_job_draft(job, content,
+  p_expected_updated_at default null)` zwraca `{updated_at}` (nowa wersja szkicu) i przy starej
+  wersji rzuca `JOB_EDIT_CONFLICT` bez żadnej zmiany (kolumny, tłumaczenie, relacje, pytania)
+  — jak `update_published_job` (0077); kontrola po `FOR UPDATE` i po sprawdzeniu `JOB_NOT_DRAFT`,
+  więc równoległe zapisy z tym samym tokenem: wygrywa pierwszy. Każdy udany zapis podbija
+  `jobs.updated_at` (także krok tylko z relacjami; `strict_job_version` 0077 = ścisły wzrost).
+  Ciało funkcji = 0172 + kontrola wersji; zmiana typu wyniku wymagała `drop function` starej
+  sygnatury (wywołania dwuargumentowe działają dzięki wartości domyślnej). `updateJobDraft(…,
+  expectedVersion?)` zwraca `version`; loader szkicu podaje `updatedAt`, a `JobWizard` (prop
+  `draftVersion`, ref z wersją z ostatniej odpowiedzi — także w pętli #829) odsyła ją przy
+  kolejnym zapisie. Świeży szkic tej karty i import zaczynają bez tokenu (pierwsza odpowiedź niesie
+  wersję). Konflikt: komunikat `jobWizard.draftConflict` + link `jobWizard.reloadDraft` (pełne
+  przeładowanie `/employer/oferty/<id>/edycja`) w 4 językach; zapisu nie ponawiamy. Krok bez zmian
+  od ostatniego udanego zapisu w tej karcie nie wysyła żądania (publikacja zawsze zapisuje).
+  Dowód: `rls.sql` sekcja DC1070 (kontrole ujemne: stara wersja, równoległe sesje przez dblink,
+  krok tylko z relacjami), rollback `supabase/rollback/0184_…down.sql` + `job-draft-cas-rollback.sql`,
+  integracja `portal-employer-actions`, unit `job-wizard-draft-version`. **Otwarte:** wersja
+  szkicu po imporcie (pierwszy zapis bez kontroli), szkic wczytany i niezmieniony wysyła zapis
+  przy pierwszym „Dalej” (brak migawki z bazy).
   Flaga „bez wymogu języka” kontra wymagane języki (#910, bez migracji): pole `noLanguageRequired`
   i lista `languages` w kroku 7 wykluczają się nawzajem — zapisane niezależnie dawały sprzeczny
   wynik dla kandydata (filtr „bez języka” czyta tylko flagę, dopasowanie tylko listę). `JobWizard`
@@ -2798,6 +2823,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, literówka trybu nie włącza usuwania; strażnik: kategorie z migracji = klucze
   tłumaczeń w 4 językach), E2E `admin-retention` (4 języki), trasa w `admin-a11y`.
   **Otwarte:** edycja okresu z panelu (RPC 0105 bez uzasadnienia i CAS — osobna migracja).
+  Wydłużenie okresu po wysłanym ostrzeżeniu (#862, migracja `0182`):
+  `admin_set_retention_policy` synchronizuje teraz `due_at` już zapisanych `retention_warnings`
+  danej kategorii do co najmniej `activity_at + nowy_okres` (`greatest()`, nigdy nie obniża) —
+  wcześniej zmieniała wyłącznie `retention_policies.period`, więc wydłużenie okresu PO wysłaniu
+  ostrzeżenia (e-mail z konkretną datą) nie odraczało terminu i `run_retention_purge` wciąż kasował
+  CV/konto wg starego, krótszego `due_at`. Skrócenie okresu też nie cofa już ustalonego, dłuższego
+  terminu (nie przyspiesza usunięcia ponad to, co już obiecano). Dowód: `rls.sql` sekcja RW862
+  (kontrola ujemna: goła zmiana `retention_policies.period` bez przejścia przez RPC nadal gubi CV).
 - [x] Płatności — **USUNIĘTE w bezpłatnym MVP (#51, `docs/PRODUCT_DECISIONS.md`).** Portal bez
   cennika, pakietów, CTA zakupu i sprzedaży; `/employer/platnosci` → przekierowanie na `/employer`,
   brak trasy cennika (404), brak linków w nawigacji/stopce/sitemap, `/api/stripe/webhook` nie istnieje
@@ -2868,6 +2901,35 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   długość po `trim()` — fail-closed zamiast fałszywej gotowości. Dowód:
   `tests/unit/auth-secret-length.test.ts` (pozytywne 32 znaki, kontrole ujemne: 31 znaków, z
   otaczającymi spacjami, pusty sekret, `isAppReady()` z resztą rdzenia gotową).
+- [x] Utwardzenie warstwy danych (audyt 2026-09-28, #1033/#1034/#1089/#1091/#1090, migracja `0185` —
+  numer tymczasowy, rollback `supabase/rollback/0185_…down.sql`, bez zmian w trybie ogłoszeniowym):
+  (1) usuwanie ofert: polityka `jobs_delete_member` pozwala roli klienta usunąć WYŁĄCZNIE szkic bez
+  decyzji moderacyjnej i bez rekordów procesu (`job_has_process_records`: zgłoszenia, propozycje,
+  dopasowania, zgłoszenia gościa, zapisane oferty); opublikowana oferta = zamknięcie/wygaśnięcie;
+  każde usunięcie (także service_role/migracja) zapisuje audyt `job.deleted` (aktor, status, firma,
+  slug — bez treści; etykieta w dzienniku admina); (2) firmy: numer rejestrowy zweryfikowanej firmy
+  cofa weryfikację jak VAT, `slug`/`is_demo`/`deleted_at`/`created_at` niezmienne
+  dla roli klienta (`guard_company_immutable_fields`), a bramki blokady moderacyjnej (oferta i firma)
+  nie ufają samej fladze sesji `pracujbe.moderation` — działa tylko poza rolą klienta (RPC decyzji są
+  definerami); (3) `files`: rola klienta tworzy plik tylko prywatny, w folderze własnego `owner_id`,
+  ze statusem skanu `pending`/`skipped`, a po utworzeniu właściciel/bucket/ścieżka/typ i id encji/
+  widoczność/status skanu/suma kontrolna/MIME/rozmiar są niezmienne (`guard_files_client_write`);
+  `is_admin()` wymaga aktywnego i nieusuniętego profilu; `count_other_active_owners` bez EXECUTE dla
+  ról klienta (strażnik `enforce_owner_invariants` liczy właścicieli zapytaniem inline pod RLS);
+  (4) sesje i tokeny konta: kategorie retencji `expired_auth_session` i `expired_auth_verification`
+  (7 dni po wygaśnięciu, krok `retention_purge_auth_batch` w `run_retention_purge`, jak reszta za
+  `RETENTION_MODE`), usunięcie konta (`auth.users`) każdą ścieżką kasuje tokeny resetu hasła
+  (`auth.verifications.value` + `reset-password:*`) i weryfikacje po adresie e-mail
+  (`trg_auth_users_delete_cleanup`); (5) ustawienie/zmiana hasła (`auth.accounts`, `credential`)
+  unieważnia pozostałe linki resetu konta i wycofuje niewysłane listy resetu z `auth.email_outbox`
+  (`trg_auth_accounts_invalidate_reset_links`; wykorzystany link zużywa Better Auth). Strona statusu
+  sprawy DSA (`/zglos-tresc/sprawa`, kod dostępu we fragmencie) wyłączona z analityki
+  (`src/lib/analytics/route-policy.ts`). Dowód: `rls.sql` sekcja M2RD (kontrole ujemne: polityka 0033,
+  strażnik 0084, bramki 0099, `is_admin` z 0019, brak triggerów), rollback `rls-data-hardening-rollback.sql`
+  (w `scripts/test-rls.sh`), unit `analytics-route-policy`, `admin-retention`, `admin-jobs`, integracja
+  `auth-actions` (dwa linki resetu). **Otwarte (#1091):** eksport `export_my_data` bez zgłoszeń treści
+  kandydata i ostrzeżeń retencji (osobny krok), historia widoczności profilu (wyłączona w trybie
+  ogłoszeniowym); (#1090): pozostałe punkty zamknięte w #1176.
 - [x] Middleware i SEO-meta (audyt 2026-09-28, bez migracji): matcher `src/middleware.ts` (#1035) nie pomija już
   ścieżek z kropką w segmencie (`/pl/oferty-pracy/a.b` szło do tras dynamicznych z pominięciem bramki hasła
   i 503 „niegotowe”) — wyłączone są tylko `api|auth|_next|_vercel|images|.well-known` (granica segmentu),
@@ -2980,6 +3042,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`backup.sh` raportowałby wtedy sukces R2 bez żadnej wysyłki). Dowód:
   `backup-r2-space-path.test` (prawdziwy podproces z repozytorium skopiowanym do katalogu ze
   spacją; kontrola ujemna: ta sama ścieżka bez spacji ma ten sam kontrakt).
+  Zgodność schematu z kodem (#1065, migracja `0184` — numer tymczasowy): build zapisuje najwyższą
+  migrację (`PRACUJBE_EXPECTED_MIGRATION` z `next.config.mjs`, `scripts/db/expected-migration.mjs`),
+  `public.ops_schema_state()` (EXECUTE tylko `pracujbe_ops`/`service_role`) zwraca liczbę i najwyższą
+  nazwę z `app_migrations.history`, a `/api/health/ops` (`src/lib/ops/schema-state.ts`) alarmuje
+  `schema_behind_code` (baza za kodem albo bez funkcji) i `schema_state_unreadable`; baza nowsza
+  od kodu (rollback wdrożenia) nie jest alarmem, sekcja `schema` podaje nazwy migracji. Publiczny
+  `/api/health` celowo bez porównania (nie wstrzymuje wdrożenia) — `docs/railway/WDROZENIE_MIGRACJI.md`.
+  Dowód: `rls.sql` sekcja SS1065, unit `ops-schema-state`, integracja `portal-service`.
   `idx_jobs_city_trgm` + pomiar `npm run db:search-benchmark` (PG16/PG18). Dowód: `rls.sql`
   sekcja OPS47, `tests/integration/ops-metrics.test.ts`. Runbook i kroki właściciela:
   `docs/railway/OPERATIONS.md`. **Otwarte:** konfiguracja infrastruktury (sekret, login, uptime,

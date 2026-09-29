@@ -1737,6 +1737,8 @@
     "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
     "stepAnnounce": "Step {current} of {total}: {title}",
     "goToOffers": "Go to your job list",
+    "draftConflict": "This draft changed in the meantime — in another tab or by another team member. The changes from this step were not saved, so nobody else's work gets overwritten. Load the current version of the draft.",
+    "reloadDraft": "Load the current version of the draft",
     "editTitle": "Edit job",
     "editSubtitleActive": "This job is published. Save your changes with “Save changes” and candidates will see them right away. The job status and applications stay as they are.",
     "editSubtitlePaused": "This job is paused. Save your changes with “Save changes”; candidates will see them once you resume the job. Applications stay as they are.",
@@ -2888,6 +2890,7 @@
     "opsRow_dbConnections": "Connection usage",
     "opsRow_appPoolWaiting": "Requests waiting for a connection",
     "opsRow_portalModeMismatch": "Portal mode mismatch (env vs database)",
+    "opsRow_schemaBehind": "Database schema behind the code (migrations)",
     "opsRow_backupAge": "Age of the last backup",
     "filterCompanyLinks": "Website and logo to approve",
     "sectionCompanyLinks": "Website and logo",
@@ -2932,6 +2935,7 @@
     "entityJob": "Job offer",
     "auditActionJobUpdatePublished": "Published job edited",
     "auditActionJobDuplicated": "Job copied",
+    "auditActionJobDeleted": "Job deleted",
     "companyJobsAllLink": "All company jobs",
     "auditActionRetentionPolicyChanged": "Retention period changed",
     "auditActionRetentionPoliciesSeeded": "Retention periods recorded",
@@ -3017,7 +3021,9 @@
     "auditActionJobPausedForReview": "Job paused for content review",
     "auditActionCompanyAgencyChanged": "Agency declaration changed",
     "auditActionCompanyAgencyChecked": "Agency recognition number checked",
-    "aiCostsFeatureFraudCheck": "Job content check"
+    "aiCostsFeatureFraudCheck": "Job content check",
+    "auditActionEmailLocaleChanged": "Email language changed by the user",
+    "entityProfile": "Profile"
   },
   "settings": {
     "title": "Notification preferences",
@@ -3047,7 +3053,14 @@
     "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment.",
     "employerEmailApplicationsDescription": "New candidate applications to your job offers.",
     "employerEmailOffersDescription": "When a candidate accepts or declines your job proposal.",
-    "employerEmailMessagesDescription": "New messages from candidates in your conversations."
+    "employerEmailMessagesDescription": "New messages from candidates in your conversations.",
+    "emailLocaleTitle": "Language of emails and notifications",
+    "emailLocaleDescription": "We send you emails and notifications in this language, whatever language you browse the site in. The change applies to messages sent from now on.",
+    "emailLocaleLabel": "Language of emails and notifications",
+    "emailLocaleSave": "Save language",
+    "emailLocaleSaving": "Saving...",
+    "emailLocaleSaved": "The language of emails and notifications has been saved.",
+    "emailLocaleLoadError": "Could not load the language of emails and notifications. Please try again in a moment."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -3907,6 +3920,14 @@
       "erasure_tombstone": {
         "label": "Erasure register",
         "description": "Erasure register reapplied after a restore; must outlive the oldest backup."
+      },
+      "expired_auth_session": {
+        "label": "Expired login session",
+        "description": "The row of an expired session (with IP address and user agent) is deleted 7 days after it expires."
+      },
+      "expired_auth_verification": {
+        "label": "Expired verification token",
+        "description": "The row of an expired verification token (email confirmation, password reset) is deleted 7 days after it expires."
       },
       "guest_ip_user_agent": {
         "label": "Guest IP and user agent",

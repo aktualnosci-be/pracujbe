@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readOpsMetrics = vi.fn();
 const domainPoolStats = vi.fn(() => null);
-vi.mock('@/lib/ops/metrics-source', () => ({ readOpsMetrics: () => readOpsMetrics() }));
+const readSchemaState = vi.fn();
+vi.mock('@/lib/ops/metrics-source', () => ({
+  readOpsMetrics: () => readOpsMetrics(),
+  readSchemaState: () => readSchemaState(),
+}));
 vi.mock('@/lib/db/runtime', () => ({ domainPoolStats: () => domainPoolStats() }));
 const readBackupFreshness = vi.fn();
 vi.mock('@/lib/ops/backup-freshness', async (importOriginal) => ({
@@ -30,6 +34,7 @@ function call(token?: string) {
 
 beforeEach(() => {
   readOpsMetrics.mockReset();
+  readSchemaState.mockReset();
   readBackupFreshness.mockReset();
   readBackupFreshness.mockResolvedValue(freshBackup);
   vi.stubEnv('HEALTH_CHECK_SECRET', SECRET);
@@ -87,6 +92,26 @@ describe('GET /api/health/ops (#47)', () => {
     const body = await res.json();
     expect(body).toMatchObject({ status: 'alert', alerts: ['portal_legal_mode_mismatch'] });
     expect(body.portalLegalMode.effective).toBe('CLASSIFIEDS_ONLY');
+  });
+
+  it('#1065: baza za kodem → 503 schema_behind_code i pole schema (te same dane co panel)', async () => {
+    vi.stubEnv('PRACUJBE_EXPECTED_MIGRATION', '0185_x.sql');
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics });
+    readSchemaState.mockResolvedValue({ kind: 'missing' });
+    const res = await call(SECRET);
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.alerts).toContain('schema_behind_code');
+    expect(body.schema).toMatchObject({ expected: '0185_x.sql', status: 'behind' });
+  });
+
+  it('#1065: bez oczekiwanej migracji w buildzie stan schematu nie jest czytany (kontrola ujemna)', async () => {
+    vi.stubEnv('PRACUJBE_EXPECTED_MIGRATION', '');
+    readOpsMetrics.mockResolvedValue({ kind: 'ok', metrics });
+    const res = await call(SECRET);
+    expect(res.status).toBe(200);
+    expect(readSchemaState).not.toHaveBeenCalled();
+    expect((await res.json()).schema.status).toBe('skipped');
   });
 
   it('przekroczony próg → 503 alert z kodem sygnału', async () => {
