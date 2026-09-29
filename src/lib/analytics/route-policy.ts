@@ -20,9 +20,17 @@ const PRIVATE_ROOTS = new Set([
 ]);
 
 export function allowsTrackingOnPath(pathname: string): boolean {
+  return !isPrivateRoutePath(pathname);
+}
+
+/**
+ * Trasa prywatna (`/{locale}/<root prywatny>/…`) — bez analityki i bez przekazywania pełnego
+ * adresu jako referrera (#1218, `Referrer-Policy` w middleware).
+ */
+export function isPrivateRoutePath(pathname: string): boolean {
   const segments = pathname.split('/').filter(Boolean);
   const root = segments[1];
-  return !root || !PRIVATE_ROOTS.has(root);
+  return Boolean(root && PRIVATE_ROOTS.has(root));
 }
 
 /** HTTP responses for one-time links must not enter browser or shared caches. */
