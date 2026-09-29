@@ -6,6 +6,7 @@ import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server
 import { pickClientMessages } from '@/i18n/client-messages';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
+import { APP_TIME_ZONE } from '@/lib/datetime';
 import { CookieConsent } from '@/components/cookies/CookieConsent';
 import { SkipLink } from '@/components/layout/SkipLink';
 import { consentBootScript, NOSCRIPT_HIDE_BANNER } from '@/lib/consent-boot';
@@ -109,7 +110,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
         <noscript dangerouslySetInnerHTML={{ __html: NOSCRIPT_HIDE_BANNER }} />
       </head>
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        <NextIntlClientProvider locale={locale} messages={messages} timeZone={APP_TIME_ZONE}>
           <SkipLink locale={locale} />
           <CookieConsent />
           {children}

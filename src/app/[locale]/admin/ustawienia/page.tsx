@@ -122,7 +122,12 @@ export default async function AdminAgePolicyPage({ params }: { params: Promise<{
             )}
           </section>
 
-          <AgePolicyForm minAge={result.minAge} confirmed={result.confirmed} />
+          <AgePolicyForm
+            key={result.updatedAt ?? 'never'}
+            minAge={result.minAge}
+            confirmed={result.confirmed}
+            updatedAt={result.updatedAt}
+          />
         </>
       )}
 

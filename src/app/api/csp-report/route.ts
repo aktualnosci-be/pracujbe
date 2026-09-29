@@ -14,7 +14,8 @@ import { isCspReportContentType, parseCspReports } from '@/lib/security/csp-repo
  * logujemy nagłówków, adresu IP, user agenta, `script-sample` ani referrera. Adres służy
  * wyłącznie limiterowi (HMAC z solą procesu, bez zapisu).
  *
- * Limity: body ≤ 16 KB, ≤ 10 raportów w żądaniu, 20 żądań/min z adresu i 300 wpisów/min
+ * Limity: body ≤ 64 KB, ≤ 10 raportów przetwarzanych z żądania (dalsze pomijane, paczka nie jest
+ * odrzucana w całości, #1110), 20 żądań/min z adresu i 300 wpisów/min
  * na proces (zalew raportów nie zapcha logów). Odpowiedź zawsze bez treści i `no-store`.
  *
  * Report-Only (#585) ma OSOBNĄ grupę i adres (`?policy=report-only`) oraz osobne, mniejsze
@@ -24,7 +25,7 @@ import { isCspReportContentType, parseCspReports } from '@/lib/security/csp-repo
  */
 export const dynamic = 'force-dynamic';
 
-const MAX_BODY_BYTES = 16 * 1024;
+const MAX_BODY_BYTES = 64 * 1024;
 const NO_STORE = { 'Cache-Control': 'private, no-store' } as const;
 
 const perAddress = createFunnelRateLimiter({ max: 20, windowMs: 60_000 });
