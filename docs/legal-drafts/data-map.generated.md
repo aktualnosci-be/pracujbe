@@ -555,14 +555,14 @@ Tabele w migracjach: 109; z danymi osobowymi: 75; bez danych osobowych: 34.
 
 ### `public.company_vies_auto_queue`
 
-- **Migracja:** `supabase/migrations/0192_company_vies_auto_queue.sql`
+- **Migracja:** `supabase/migrations/0191_company_vies_auto_queue.sql`
 - **Czynności:** Konta firm, zespół i weryfikacja
 - **Osoby:** Pracodawcy i członkowie firm
-- **Uwaga:** Kolejka zadań (0192, #706/#879): tylko numer przedsiębiorstwa; wiersz znika po wyniku, usunięciu numeru albo firmy.
+- **Uwaga:** Kolejka zadań (0191, #706/#879): tylko numer przedsiębiorstwa; wiersz znika po wyniku, usunięciu numeru albo firmy.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `vat_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0192_company_vies_auto_queue.sql` |
+| `vat_number` | Dane firmy mogące identyfikować osobę (np. jednoosobowa działalność) | `supabase/migrations/0191_company_vies_auto_queue.sql` |
 | `attempts` | nie dotyczy: Liczba prób automatycznego sprawdzenia VIES. | — |
 | `next_attempt_at` | nie dotyczy: Termin kolejnej próby (backoff). | — |
 | `lease_until` | nie dotyczy: Dzierżawa zadania workera. | — |

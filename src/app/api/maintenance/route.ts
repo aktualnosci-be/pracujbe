@@ -317,7 +317,7 @@ async function run(request: Request): Promise<Response> {
   } catch (error) {
     failures.push({ task: 'storageDeletions', error });
   }
-  // #706/#879 (0192): kolejka automatycznego sprawdzenia VIES — ponowienia po chwilowej
+  // #706/#879 (0191): kolejka automatycznego sprawdzenia VIES — ponowienia po chwilowej
   // niedostępności usługi i numery dopisane po założeniu firmy. Status firmy bez zmian.
   let viesAutoChecks: ViesAutoQueueRun | null = null;
   try {

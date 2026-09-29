@@ -64,7 +64,7 @@ const FORMAT_KEY: Record<string, string> = {
 export interface CompanyViesCheckProps {
   companyId: string;
   initial: AdminViesState;
-  /** 0192 (#706/#879): automatyczne sprawdzenie czeka w kolejce / na ponowienie. */
+  /** 0191 (#706/#879): automatyczne sprawdzenie czeka w kolejce / na ponowienie. */
   autoRetry?: ViesAutoRetry | null;
 }
 

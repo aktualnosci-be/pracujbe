@@ -134,7 +134,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
       purgedWebhookInbox: 0,
       // #17/#833: bez bucketu Railway oba GC bucketu (CV i załączników wiadomości) pominięte.
       storageGc: null,
-      // #706/#879 (0192): pusta kolejka automatycznego sprawdzenia VIES.
+      // #706/#879 (0191): pusta kolejka automatycznego sprawdzenia VIES.
       viesAutoChecks: { claimed: 0, saved: 0, notSaved: 0, skipped: 0, deferred: 0, errors: 0 },
       messageAttachmentsGc: null,
       // #43: czyszczenie spraw DSA wyłączone bez jawnej flagi — bez wywołania bazy.

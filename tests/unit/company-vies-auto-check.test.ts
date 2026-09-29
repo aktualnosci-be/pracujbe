@@ -4,7 +4,7 @@ import { fakeDb, resetFakeDb } from '../helpers/fake-db';
 
 /**
  * Automatyczne sprawdzenie VAT w VIES (decyzja właściciela 26.09.2026) z trwałą kolejką w bazie
- * (0192, #706/#879). VIES wyłącznie jako atrapa `fetch`; kolejkę bazy modeluje `queue` niżej
+ * (0191, #706/#879). VIES wyłącznie jako atrapa `fetch`; kolejkę bazy modeluje `queue` niżej
  * (claim / finish / record = te same RPC co w produkcji, reguły sprawdza rls.sql sekcja VQ976).
  * Kontrole ujemne: chwilowa awaria VIES nie jest zapisywana jako wynik, ale NIE gubi zadania;
  * brak zadania = brak zapytania do VIES; sama zmiana nazwy nie planuje sprawdzenia.
@@ -38,7 +38,7 @@ const VALID_BODY = { countryCode: 'BE', vatNumber: VAT, requestDate: '2026-09-26
 const INVALID_BODY = { countryCode: 'BE', vatNumber: VAT, requestDate: '2026-09-26+02:00', valid: false, name: '---' };
 const fast = { sleep: async () => {}, random: () => 0 };
 
-/** Model kolejki 0192: jeden wiersz na firmę, próba liczona przy pobraniu, termin po awarii. */
+/** Model kolejki 0191: jeden wiersz na firmę, próba liczona przy pobraniu, termin po awarii. */
 interface QueueRow {
   vat: string;
   attempts: number;
@@ -81,7 +81,7 @@ function installQueue(): void {
     const vat = String(args['p_vat_number']);
     if (stored.get(id)?.vat === vat) return false;
     stored.set(id, { vat, result: String(args['p_result']) });
-    // Trigger 0192: wynik dla bieżącego numeru zdejmuje zadanie.
+    // Trigger 0191: wynik dla bieżącego numeru zdejmuje zadanie.
     if (queue.get(id)?.vat === vat) queue.delete(id);
     return true;
   });
@@ -244,7 +244,7 @@ describe('zapis firmy planuje próbę po odpowiedzi', () => {
 
   it('createCompany: sukces zwracany PRZED VIES; potem zapis wyniku', async () => {
     fakeDb.rpc('create_first_company', () => {
-      enqueue(COMPANY, VAT); // trigger 0192 na companies
+      enqueue(COMPANY, VAT); // trigger 0191 na companies
       return [{ company_id: COMPANY, created: true }];
     });
     const fetch = vi.fn(async () => jsonResponse(200, VALID_BODY));
@@ -304,7 +304,7 @@ describe('zapis firmy planuje próbę po odpowiedzi', () => {
 
       membership();
       fakeDb.exec('company.update', () => {
-        enqueue(COMPANY, VAT); // trigger 0192: nowy prawidłowy numer bez wyniku
+        enqueue(COMPANY, VAT); // trigger 0191: nowy prawidłowy numer bez wyniku
         return { rows: [{ id: COMPANY, status: 'unverified' }] };
       });
       expect(await updateCompany(COMPANY, { vatNumber: 'BE 0417.497.106' })).toEqual({ ok: true });

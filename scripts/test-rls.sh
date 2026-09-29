@@ -66,7 +66,7 @@ echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-rollback.sql"
 
-echo ">> rollback 0192 (kolejka automatycznego VIES, w transakcji cofanej)"
+echo ">> rollback 0191 (kolejka automatycznego VIES, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/vies-auto-queue-rollback.sql"
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"

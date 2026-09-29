@@ -74,11 +74,11 @@ export function buildViesState(input: {
   return { kind: 'invalid', vatNumber, checkedAt: stored.checkedAt };
 }
 
-/** Lustro `company_vies_auto_max_attempts()` (0192) — najwyżej tyle prób automatycznych. */
+/** Lustro `company_vies_auto_max_attempts()` (0191) — najwyżej tyle prób automatycznych. */
 export const VIES_AUTO_MAX_ATTEMPTS = 10;
 
 /**
- * Zadanie automatycznego sprawdzenia w kolejce (0192, #706/#879) — pokazywane adminowi, żeby
+ * Zadanie automatycznego sprawdzenia w kolejce (0191, #706/#879) — pokazywane adminowi, żeby
  * było widać, że wynik czeka na ponowienie (VIES był niedostępny) albo próby się wyczerpały.
  */
 export interface ViesAutoRetry {

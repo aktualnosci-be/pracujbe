@@ -1,6 +1,6 @@
 -- =============================================================================
--- Rollback 0192 (kolejka automatycznego sprawdzenia VIES, #706/#879) — usuwa kolejkę,
--- triggery i funkcje z 0192 oraz przywraca `record_company_vies_check_auto` z 0164
+-- Rollback 0191 (kolejka automatycznego sprawdzenia VIES, #706/#879) — usuwa kolejkę,
+-- triggery i funkcje z 0191 oraz przywraca `record_company_vies_check_auto` z 0164
 -- (bez nadpisywania wyniku dla innego numeru). Zadania w kolejce giną (to tylko termin
 -- ponowienia — wyniki w `company_vies_checks` zostają).
 -- =============================================================================

@@ -11,7 +11,7 @@ import { VIES_AUTO_MAX_ATTEMPTS } from '@/lib/vies/state';
 /**
  * Automatyczne sprawdzenie VAT w VIES (decyzja właściciela 26.09.2026; kolejka #706/#879).
  *
- * Zadania tworzy BAZA (0192): trigger na `companies` kolejkuje firmę przy każdym zapisie
+ * Zadania tworzy BAZA (0191): trigger na `companies` kolejkuje firmę przy każdym zapisie
  * nowego prawidłowego numeru VAT/KBO bez wyniku dla tego numeru — założenie firmy, późniejsze
  * dopisanie numeru w `/employer/firma` (#879) albo zmiana numeru. Klient nie ma na to wpływu.
  *

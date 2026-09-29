@@ -379,7 +379,7 @@ export async function updateCompany(
       return { ok: false, error: 'PERMISSION_DENIED' };
     }
 
-    // #879: numer dopisany/zmieniony po założeniu firmy — baza (0192) zakolejkowała sprawdzenie
+    // #879: numer dopisany/zmieniony po założeniu firmy — baza (0191) zakolejkowała sprawdzenie
     // VIES; próbujemy od razu po odpowiedzi (bez zadania w kolejce = bez zapytania do VIES).
     if (setVat) scheduleCompanyViesAutoCheck(companyId);
 
