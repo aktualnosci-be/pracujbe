@@ -21,6 +21,7 @@ interface Copy {
     markRead: string;
     markedRead: string;
     markedAllRead: string;
+    markReadItem: string;
     itemJobMatch: string;
     itemApplicationStatusChanged: string;
     itemMessageReceived: string;
@@ -108,7 +109,7 @@ for (const locale of LOCALES) {
       await page.goto(`/${locale}/${role}/powiadomienia`);
       await rejectOptionalCookies(page, locale);
       const main = page.getByRole('main');
-      const markOne = main.getByRole('button', { name: `${c.markRead}: ${c.itemJobMatch}` });
+      const markOne = main.getByRole('button', { name: c.markReadItem.replace('{title}', c.itemJobMatch), exact: true });
       await expect(markOne).toBeVisible();
 
       const { scrollWidth, innerWidth } = await page.evaluate(() => ({
