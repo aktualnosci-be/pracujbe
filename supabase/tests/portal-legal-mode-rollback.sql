@@ -13,8 +13,10 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
--- 0177 (usunięcie schematu billingu) stoi na 0171 (ops_metrics) — cofana jako pierwsza.
+-- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0190 → 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
+-- 0190 (#740) nadpisuje claim_translation_jobs z 0176 (nowa kolumna wyniku) — cofana przed 0176.
+\ir ../rollback/0190_translation_protected_terms.down.sql
+-- 0177 (usunięcie schematu billingu) stoi na 0171 (ops_metrics) — cofana po 0190.
 \ir ../rollback/0177_drop_dead_billing_schema.down.sql
 -- 0176 (#1152, #1153) stoi na 0175 — cofana jako pierwsza.
 \ir ../rollback/0176_classifieds_ai_billing.down.sql
