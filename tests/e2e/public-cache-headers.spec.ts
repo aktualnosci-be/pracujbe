@@ -91,17 +91,52 @@ test("szczegół oferty: ISR na żądanie (60 s), drugie żądanie z cache", asy
   expect(response.headers()["x-nextjs-cache"]).toBe("HIT");
 });
 
+/**
+ * Anonimowy odczyt, odczyt z cookies i drugi anonimowy odczyt, w tej kolejności, z jednego
+ * wpisu ISR. Wpis odświeża się po `revalidate` (60 s dla `/pl`): żądanie po terminie dostaje
+ * `STALE`, a strona jest renderowana od nowa w tle i podmieniana w dowolnej chwili przy
+ * współbieżnych testach na tym samym serwerze. Pojedyncze żądanie z cookies po `HIT` mogło
+ * więc trafić w `STALE` albo w świeżo podmienioną wersję i nie dało się go porównać z
+ * odczytem anonimowym (flaky #375). Cookies odczytujemy „w klamrze” dwóch odczytów
+ * anonimowych i porównujemy dopiero, gdy wszystkie trzy to `HIT`, a oba anonimowe mają tę
+ * samą treść — wtedy wpis nie zmienił się w trakcie, a środkowa odpowiedź pochodzi z niego.
+ * Regres (cookies zmieniają HTML albo strona przestaje być z cache) zostaje stałym błędem:
+ * treść z cookies różni się od stabilnego wpisu, a bez `HIT` odczyt nigdy się nie ustabilizuje.
+ */
+async function getCachedBracketed(request: import("@playwright/test").APIRequestContext, path: string) {
+  const stable: { value?: { anonymous: string; withCookies: string; cookiesResponse: APIResponse } } = {};
+  await expect
+    .poll(
+      async () => {
+        const first = await request.get(path, { maxRedirects: 0 });
+        const cookies = await request.get(path, { headers: { cookie: VISITOR_COOKIES }, maxRedirects: 0 });
+        const second = await request.get(path, { maxRedirects: 0 });
+        const states = [first, cookies, second].map((r) => r.headers()["x-nextjs-cache"]);
+        if (!states.every((state) => state === "HIT")) return `stany cache: ${states.join(", ")}`;
+        const [anonymous, withCookies, anonymousAgain] = await Promise.all([
+          first.text(),
+          cookies.text(),
+          second.text(),
+        ]);
+        if (anonymous !== anonymousAgain) return "wpis zmienił się w trakcie odczytu";
+        stable.value = { anonymous, withCookies, cookiesResponse: cookies };
+        return "stabilny";
+      },
+      { message: `${path}: stabilny wpis cache ISR wokół odczytu z cookies` },
+    )
+    .toBe("stabilny");
+  return stable.value!;
+}
+
 test("HTML z cache nie zależy od cookies sesji ani zgód i nie zawiera trackerów", async ({ request }) => {
   for (const path of ["/pl", "/pl/regulamin"]) {
-    const anonymous = await getCached(request, path);
-    const withCookies = await request.get(path, { headers: { cookie: VISITOR_COOKIES } });
-    expect(withCookies.headers()["x-nextjs-cache"]).toBe("HIT");
-    const html = await withCookies.text();
-    expect(html).toBe(await anonymous.text());
+    const { anonymous, withCookies, cookiesResponse } = await getCachedBracketed(request, path);
+    expect(cookiesResponse.headers()["x-nextjs-cache"]).toBe("HIT");
+    expect(withCookies).toBe(anonymous);
     // Invariant #7: nawet przy zapisanej zgodzie serwer nie wstawia beaconu Cloudflare Web
     // Analytics (renderowany wyłącznie po stronie klienta, po odczycie zgody).
-    expect(html).not.toContain("cloudflareinsights.com");
-    expect(html).not.toContain(E2E_CF_ANALYTICS_TOKEN);
+    expect(withCookies).not.toContain("cloudflareinsights.com");
+    expect(withCookies).not.toContain(E2E_CF_ANALYTICS_TOKEN);
   }
 });
 
