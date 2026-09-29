@@ -257,7 +257,7 @@ export const FORM_LABEL_TEXT = 'text-[13px] font-semibold leading-[1.4] text-for
 export const FORM_HINT = 'text-xs font-normal leading-[1.6] text-muted-foreground';
 
 /** Błąd przy polu — 13 px, kolor błędu. */
-export const FORM_ERROR = 'text-[13px] font-normal leading-[1.5] text-error';
+export const FORM_ERROR = 'text-[13px] font-normal leading-[1.5] text-error-text';
 
 /** `FORM_CONTROL` dla `ui/Input` i `ui/Textarea` (zdejmuje `h-11` i cień). */
 export const FORM_INPUT = `${FORM_CONTROL} h-auto shadow-none`;

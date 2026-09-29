@@ -18,7 +18,7 @@ export function NotificationPreferencesLoadError(): React.JSX.Element {
 
   return (
     <div role="alert" className="flex items-start gap-3">
-      <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error" aria-hidden="true" />
+      <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-error-text" aria-hidden="true" />
       <div className="min-w-0">
         <p className="text-base font-semibold text-foreground">{t('loadError')}</p>
         <p className="mt-1 text-sm text-muted-foreground">{t('loadErrorHint')}</p>

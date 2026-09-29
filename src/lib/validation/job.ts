@@ -65,6 +65,9 @@ const step1Base = z.object({
     .min(5, 'job.error.titleTooShort')
     .max(120, 'job.error.titleTooLong'),
   category: categoryKeySchema,
+  // #1048 (I18N-01): jawny język ogłoszenia (`jobs.default_locale` szkicu). Opcjonalny —
+  // brak = język bez zmian (edycja opublikowanej oferty i starsi wołający nie wysyłają pola).
+  contentLocale: localeSchema.optional(),
   occupation: z
     .string({ required_error: 'job.error.occupationRequired' })
     .trim()

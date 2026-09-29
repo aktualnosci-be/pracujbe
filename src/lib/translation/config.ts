@@ -32,6 +32,14 @@ export function translationProvider(): TranslationProviderKind | null {
   return isOpenAiConfigured() ? 'openai' : null;
 }
 
+/**
+ * Flaga funkcji włączona (i tryb produktu ją dopuszcza), ale brak dostawcy (#692): brak
+ * `OPENAI_API_KEY` albo atrapa w produkcji. To błąd konfiguracji, nie wyłączenie funkcji.
+ */
+export function isTranslationMisconfigured(): boolean {
+  return isAiFeatureEnabled('content_translation') && translationProvider() === null;
+}
+
 export function isTranslationEnabled(): boolean {
   return translationProvider() !== null;
 }

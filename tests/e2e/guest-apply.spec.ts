@@ -30,9 +30,9 @@ const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['critical', 'serious']);
 
 type Messages = {
-  auth: { ageBandAdult: string };
+  auth: { ageBandAdult: string; ageBandLegend: string };
   jobs: { applyNow: string };
-  apply: { submit: string; privacyNoticeAck: string; message: string; sensitiveIdHint: string };
+  apply: { submit: string; close: string; privacyNoticeAck: string; message: string; sensitiveIdHint: string };
   guestApply: {
     fullName: string;
     email: string;

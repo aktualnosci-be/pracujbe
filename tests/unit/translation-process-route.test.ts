@@ -44,6 +44,20 @@ describe('/api/translation/process', () => {
     expect(runQueue).not.toHaveBeenCalled();
   });
 
+  it('#692: flaga włączona bez klucza OpenAI → 503, kolejka nietknięta (nie skipped)', async () => {
+    vi.stubEnv('AI_TRANSLATION_ENABLED', 'true');
+    vi.stubEnv('AI_TRANSLATION_PROVIDER', '');
+    const { POST } = await import('@/app/api/translation/process/route');
+    const res = await POST(req(`Bearer ${SECRET}`));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'translation_misconfigured' });
+    expect(runQueue).not.toHaveBeenCalled();
+    // Kontrola ujemna: z kluczem ten sam stan przechodzi do workera.
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    expect((await POST(req(`Bearer ${SECRET}`))).status).toBe(200);
+    expect(runQueue).toHaveBeenCalledTimes(1);
+  });
+
   it('kontrola ujemna: flaga + atrapa → worker rusza', async () => {
     vi.stubEnv('AI_TRANSLATION_ENABLED', '1');
     vi.stubEnv('AI_TRANSLATION_PROVIDER', 'fixture');

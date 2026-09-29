@@ -118,7 +118,7 @@ export function AgeAttestationSettings({ initial }: { initial: AgeAttestationSta
         {error ? (
           <div
             role="alert"
-            className="mt-4 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+            className="mt-4 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{t('saveError')}</p>
