@@ -59,9 +59,37 @@ function asRows(value: unknown): ClaimedRow[] {
   });
 }
 
+/** Rozmiar jednej partii (SQL przycina `p_limit` do 200). */
+export const STORAGE_DELETION_BATCH = 100;
+/** Najwyżej tyle partii na przebieg — sufit czasu żądania `/api/maintenance`. */
+export const STORAGE_DELETION_MAX_BATCHES = 10;
+
+/**
+ * #1105: przebieg workera nie kończy się na jednej partii. Pełna partia (`claimed === limit`)
+ * oznacza, że w kolejce może czekać więcej — bierzemy kolejne, do `maxBatches` (domyślnie
+ * 10 × 100 = 1000 obiektów na godzinę zamiast 50), żeby fizyczne usunięcie danych (zobowiązanie
+ * retencji) nie zostawało w tyle za kolejką. Partia bez żadnego usunięcia (np. bucket
+ * niedostępny, `STORAGE_UNCONFIGURED`) kończy przebieg — wiersze i tak wracają z backoffem.
+ */
 export async function processStorageDeletions(
   deleteObject: ObjectDeleter,
-  limit = 50,
+  limit = STORAGE_DELETION_BATCH,
+  maxBatches = STORAGE_DELETION_MAX_BATCHES,
+): Promise<StorageDeletionRun> {
+  const total: StorageDeletionRun = { claimed: 0, deleted: 0, failed: 0 };
+  for (let batch = 0; batch < Math.max(1, maxBatches); batch += 1) {
+    const run = await processStorageDeletionBatch(deleteObject, limit);
+    total.claimed += run.claimed;
+    total.deleted += run.deleted;
+    total.failed += run.failed;
+    if (run.claimed < limit || run.deleted === 0) break;
+  }
+  return total;
+}
+
+async function processStorageDeletionBatch(
+  deleteObject: ObjectDeleter,
+  limit: number,
 ): Promise<StorageDeletionRun> {
   const rows = asRows(
     await withServiceRole((tx) => rpcRows(tx, 'claim_storage_deletions', { p_limit: limit })),

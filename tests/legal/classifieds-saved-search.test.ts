@@ -309,7 +309,6 @@ describe('#1148 akcje w trybie ogłoszeniowym (konto kandydata bez onboardingu)'
 
   describe('/api/maintenance', () => {
     const RPCS = [
-      'release_stale_discount_reservations', 'release_stale_checkout_intents',
       'ai_budget_release_stale_reservations', 'expire_due_jobs', 'purge_guest_application_requests',
       'process_saved_search_alerts', 'process_email_campaigns', 'purge_job_funnel_data',
       'purge_stale_message_attachments', 'rate_limit_gc', 'processed_webhooks_gc',

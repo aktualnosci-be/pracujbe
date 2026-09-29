@@ -3,13 +3,13 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc, rpcRows, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { captureError } from '@/lib/error-report';
-import { ACTIVE_COMPANY_COOKIE, getExpectedActiveCompany } from '@/lib/company-context';
+import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
 import { issueTeamInviteToken } from '@/lib/team/invite-token';
 import { isLocale } from '@/i18n/routing';
@@ -48,7 +48,9 @@ const MANAGE_RATE_MAX = 120;
  * (sieć, konfiguracja) → kanał błędów + INTERNAL. Tekst bazy nie trafia do użytkownika.
  */
 function failure(error: unknown, area: string): TeamActionResult {
-  if (isDatabaseError(error)) return fail(mapTeamError(databaseErrorMessage(error)));
+  if (isDatabaseError(error)) {
+    return fail(reportUnmappedDbError(error, area, mapTeamError(databaseErrorMessage(error))));
+  }
   captureError(error, { area });
   return fail('INTERNAL');
 }
@@ -234,12 +236,7 @@ export async function respondToTeamInvitation(
     // i tak waliduje członkostwo przy każdym odczycie).
     const companyId = typeof data === 'string' ? data : '';
     if (accept && uuidSchema.safeParse(companyId).success) {
-      (await cookies()).set(ACTIVE_COMPANY_COOKIE, companyId, {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 365,
-      });
+      (await cookies()).set(ACTIVE_COMPANY_COOKIE, companyId, activeCompanyCookieOptions());
     }
     refreshPanel();
     return { ok: true };

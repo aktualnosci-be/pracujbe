@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import { GET } from '@/app/api/job-filter-facets/route';
+import { getJobs } from '@/lib/jobs';
+import { parseJobListQuery } from '@/lib/job-list-query';
+import { cityKey } from '@/lib/matching/belgian-cities';
 import {
+  LOCATION_KEYS,
   cityAliases,
   countByLocationKey,
   expandLocationAliases,
   localizeLocationFacets,
   localizeLocations,
   mergeLocationFacets,
+  nameKey,
   resolveCityFilters,
   resolveLocationKey,
 } from '@/lib/locations/city-aliases';
@@ -102,6 +107,92 @@ describe('GET /api/job-filter-facets (demo) — język strony nie zmienia zbioru
     for (const locale of ['nl', 'fr', 'en']) {
       expect(await total(`locale=${locale}&location=Bruksela`)).toBe(pl);
       expect(await total(`locale=${locale}&city=Bruksela`)).toBe(pl);
+    }
+  });
+});
+
+/**
+ * #1077 — wynik wyszukiwania miasta nie zależy od wielkości liter, diakrytyków ani rodzaju
+ * spacji/myślnika wpisu. Dawniej „Bruxelles” było rozpoznawane jako miasto (aliasy), a
+ * „bruxelles” zostawało tekstem, więc ten sam zamiar dawał inny zbiór ofert.
+ */
+describe('#1077 — rozpoznanie miasta bez względu na zapis', () => {
+  const variants = ['Bruxelles', 'bruxelles', 'BRUXELLES', '  bruxelles ', 'Bruxelles\u00a0'];
+
+  it.each(variants)('%j → brussels', (value) => {
+    expect(resolveLocationKey(value)).toBe('brussels');
+  });
+
+  it('znaki diakrytyczne i myślniki: liege = Liège, kolejne spacje nie zmieniają klucza', () => {
+    expect(resolveLocationKey('liege')).toBe('liege');
+    expect(resolveLocationKey('LIÈGE')).toBe('liege');
+    expect(resolveLocationKey('Bru xelles')).toBeNull();
+  });
+
+  it('nadal nie zgaduje po fragmencie ani nie łączy różnych nazw', () => {
+    expect(resolveLocationKey('brux')).toBeNull();
+    expect(resolveLocationKey('bruxelles 1000')).toBeNull();
+    expect(resolveLocationKey('')).toBeNull();
+  });
+
+  it('klucze wszystkich aliasów są rozłączne między miastami (bez cichych kolizji po złożeniu)', () => {
+    const owner = new Map<string, string>();
+    for (const key of LOCATION_KEYS) {
+      for (const alias of cityAliases(key)) {
+        const folded = nameKey(alias);
+        expect(owner.get(folded) ?? key, `${alias} koliduje z ${owner.get(folded)}`).toBe(key);
+        owner.set(folded, key);
+        expect(resolveLocationKey(alias)).toBe(key);
+      }
+    }
+  });
+
+  it('nameKey = cityKey z matchingu (i lustro SQL city_key)', () => {
+    for (const value of ['Liège', 'Sint-Niklaas', 'La  Louvière', 'BRUXELLES', 'Gent ']) {
+      expect(nameKey(value)).toBe(cityKey(value));
+    }
+  });
+
+  it('ten sam zbiór parametrów zapytania dla każdego zapisu nazwy', () => {
+    const reference = resolveCityFilters({ city: 'Bruxelles', locations: [] }, 'fr');
+    for (const value of variants) {
+      const other = resolveCityFilters({ city: value.trim(), locations: [] }, 'fr');
+      expect(other.city).toBeUndefined();
+      expect(new Set(other.queryLocations)).toEqual(new Set(reference.queryLocations));
+    }
+    // Filtr `location` z sidebara: ta sama reguła.
+    expect(new Set(expandLocationAliases(['bruxelles']))).toEqual(new Set(cityAliases('brussels')));
+  });
+
+  it('lista ofert: „Bruxelles” i „bruxelles” dają identyczny zbiór wyników', async () => {
+    const ids = async (city: string) => {
+      const q = parseJobListQuery({ city }, 'fr');
+      const result = await getJobs({ ...q.filterParams, page: 1, pageSize: 100 });
+      return result.jobs.map((job) => job.id).sort();
+    };
+    const reference = await ids('Bruxelles');
+    expect(reference.length).toBeGreaterThan(0);
+    expect(await ids('bruxelles')).toEqual(reference);
+    expect(await ids('BRUXELLES')).toEqual(reference);
+  });
+
+  it('kontrola ujemna: porównanie dokładne (dawna reguła) rozróżniało zapisy', () => {
+    const exact = (value: string) => cityAliases('brussels').includes(value.trim());
+    expect(exact('Bruxelles')).toBe(true);
+    expect(exact('bruxelles')).toBe(false);
+  });
+
+  it('facet w bazie z innym zapisem nazwy jest scalany i pokazany w języku strony', () => {
+    const facets = [
+      { city: 'BRUXELLES', count: 1 },
+      { city: 'Brussels', count: 2 },
+      { city: 'liege', count: 1 },
+    ];
+    for (const locale of ['pl', 'nl', 'fr', 'en']) {
+      expect(mergeLocationFacets(facets, locale)).toEqual([
+        { city: localizeLocations(['Brussels'], locale)[0], count: 3 },
+        { city: localizeLocations(['Liège'], locale)[0], count: 1 },
+      ]);
     }
   });
 });

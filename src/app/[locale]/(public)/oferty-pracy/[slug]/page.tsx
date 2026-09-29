@@ -1,3 +1,4 @@
+import { openGraphLocales } from '@/lib/seo/locales';
 import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
 import { PublicSavedJobsProvider, PublicSaveJobButton } from '@/components/public/PublicSavedJobs';
@@ -102,13 +103,6 @@ const BASE_PATH = '/oferty-pracy';
 const HUB_PATH = '/praca';
 const CATEGORY_BASE = '/praca/kategoria';
 
-/** Mapowanie locale aplikacji → locale Open Graph (format język_KRAJ). Spójne z layoutem/stroną główną. */
-const OG_LOCALE: Record<string, string> = {
-  pl: 'pl_PL',
-  nl: 'nl_BE',
-  fr: 'fr_BE',
-  en: 'en_GB',
-};
 const SIMILAR_LIMIT = 3;
 
 type PageProps = {
@@ -205,7 +199,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       url,
       siteName: 'Pracuj.be',
       type: 'article',
-      locale: OG_LOCALE[version.canonicalLocale] ?? version.canonicalLocale,
+      ...openGraphLocales(version.canonicalLocale, version.alternates),
       publishedTime: job.publishedAt,
       images: [{ url: shareImage, width: 1200, height: 630, alt: 'Pracuj.be' }],
     },
