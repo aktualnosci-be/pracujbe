@@ -19849,12 +19849,404 @@ delete from auth.accounts where user_id = :'M2CAND' and provider_id = 'credentia
 delete from auth.verifications where identifier = 'm2-inne-zadanie';
 delete from auth.users where id = :'M2PW';
 -- ============================================================================
+-- EMQ1038 / EL1049 (0186 — numer tymczasowy): marketing tylko na potwierdzony adres
+-- i zmiana języka e-maili przez użytkownika.
+-- ============================================================================
+\set EQ1 'e1038000-0000-0000-0000-0000000000a1'
+\set EQ2 'e1038000-0000-0000-0000-0000000000a2'
+\set EQ3 'e1038000-0000-0000-0000-0000000000a3'
+\set EQ4 'e1038000-0000-0000-0000-0000000000a4'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'EQ1','eq1@test.be','Eq 1','{"role":"candidate","first_name":"Eq","last_name":"1","locale":"pl"}'),
+  (:'EQ2','eq2@test.be','Eq 2','{"role":"candidate","first_name":"Eq","last_name":"2","locale":"nl"}'),
+  (:'EQ3','eq3@test.be','Eq 3','{"role":"candidate","first_name":"Eq","last_name":"3","locale":"fr"}'),
+  (:'EQ4','eq4@test.be','Eq 4','{"role":"candidate","first_name":"Eq","last_name":"4","locale":"en"}');
+select test_fixture.attest_candidates();
+-- EQ1 potwierdzony + zgoda; EQ2 zgoda, ale adres niepotwierdzony; EQ3 potwierdzony bez zgody.
+update auth.users set email_verified = true where id in (:'EQ1', :'EQ3');
+insert into public.notification_preferences (profile_id, email_marketing)
+values (:'EQ1', true), (:'EQ2', true), (:'EQ3', false)
+on conflict (profile_id) do update set email_marketing = excluded.email_marketing;
+
+-- EMQ1038-1: zgoda odbiorcy.
+select pg_temp.assert(
+  public.email_address_verified(:'EQ1') and not public.email_address_verified(:'EQ2'),
+  'EMQ1038-1 potwierdzenie adresu czytane z konta');
+select pg_temp.assert(
+  public.email_allowed(:'EQ1', 'newsletter') is true
+  and public.email_allowed(:'EQ2', 'newsletter') is false
+  and public.email_allowed(:'EQ3', 'newsletter') is false,
+  'EMQ1038-1b marketing = zgoda ORAZ potwierdzony adres');
+select pg_temp.assert(
+  public.email_allowed(:'EQ2', 'statusChanged') is true and public.email_allowed(:'EQ2', 'jobPublished') is true,
+  'EMQ1038-1c poczta transakcyjna nie zależy od potwierdzenia adresu');
+
+-- EMQ1038-2: kolejkowanie z wynikiem.
+select pg_temp.assert(
+  (select outcome = 'unverified_address' and delivery_id is null
+     from public.enqueue_email_outcome(:'EQ2', 'newsletter', null, null, 'emq1038-news-2', '{}'::jsonb))
+  and not exists (select 1 from public.email_deliveries where idempotency_key = 'emq1038-news-2'),
+  'EMQ1038-2 niepotwierdzony adres: wynik unverified_address, brak wiersza w kolejce');
+select pg_temp.assert(
+  (select outcome = 'opted_out' from public.enqueue_email_outcome(:'EQ3', 'newsletter', null, null, 'emq1038-news-3', '{}'::jsonb)),
+  'EMQ1038-2b potwierdzony bez zgody: nadal opted_out');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ2', 'statusChanged', 'application', null, 'emq1038-status-2', '{}'::jsonb)),
+  'EMQ1038-2d transakcyjny e-mail do niepotwierdzonego adresu bez zmian');
+
+-- EMQ1038-3: kampania. Treść w 4 językach jak w CM45 (zmienna CMJOBS).
+-- Zgody z wcześniejszych sekcji wyłączone, żeby paczka dotyczyła tylko odbiorców tej sekcji.
+update public.notification_preferences set email_marketing = false
+ where profile_id not in (:'EQ1', :'EQ2', :'EQ3', :'EQ4') and email_marketing;
+update public.notification_preferences set email_marketing = true where profile_id = :'EQ4';
+set role service_role;
+select public.create_email_campaign_revision('emq1038-news', :'CMJOBS'::jsonb) as eq_rev \gset
+select public.activate_email_campaign(:'eq_rev');
+select public.enqueue_campaign_batch(:'eq_rev', 5000);
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ1'
+            and status = 'queued')
+  and not exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ2')
+  and not exists (select 1 from public.email_deliveries where campaign_id = :'eq_rev'::uuid and profile_id = :'EQ2'),
+  'EMQ1038-3 potwierdzony adres zakolejkowany; niepotwierdzony nie jest rezerwowany ani kolejkowany');
+-- EMQ1038-3n: KONTROLA UJEMNA — wybór odbiorców z 0101 (sama zgoda) obejmuje niepotwierdzony adres.
+select pg_temp.assert(
+  exists (select 1 from public.notification_preferences np
+           where np.email_marketing and np.profile_id = :'EQ2'
+             and not exists (select 1 from public.email_campaign_recipients r
+                              where r.campaign_id = :'eq_rev' and r.profile_id = np.profile_id))
+  and not public.email_address_verified(:'EQ2'),
+  'EMQ1038-3n kontrola ujemna: wybór po samej zgodzie (0101) wskazałby niepotwierdzony adres');
+select pg_temp.assert((select status from public.email_campaigns where id = :'eq_rev') = 'active',
+  'EMQ1038-3b kampania nadal aktywna po pierwszej paczce');
+-- Potwierdzenie adresu w trakcie aktywnej kampanii: odbiorca trafia do następnej paczki.
+update auth.users set email_verified = true where id = :'EQ2';
+set role service_role;
+select public.enqueue_campaign_batch(:'eq_rev', 5000);
+reset role;
+select pg_temp.assert(
+  (select d.locale = 'nl' and d.status::text = 'queued'
+     from public.email_deliveries d where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2'),
+  'EMQ1038-3c po potwierdzeniu adresu odbiorca dostaje list w swoim języku (Invariant #1)');
+
+-- EMQ1038-4: wiersz już w kolejce, adres przestaje być potwierdzony → worker go nie wydaje.
+update auth.users set email_verified = false where id = :'EQ2';
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'EQ2', 'newsletter', 'eq2@test.be', null, null, null)
+    = 'suppressed_unverified_address',
+  'EMQ1038-4 przyczyna wygaszenia dla niepotwierdzonego adresu');
+select pg_temp.assert(
+  not exists (select 1 from public.claim_email_batch(100000) c
+               where c.campaign_id = :'eq_rev'::uuid and c.profile_id = :'EQ2'),
+  'EMQ1038-4b claim nie wydaje marketingu na niepotwierdzony adres');
+select pg_temp.assert(
+  (select d.status::text || '/' || d.error_message from public.email_deliveries d
+    where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2') = 'failed/suppressed_unverified_address'
+  and (select r.status || '/' || r.reason from public.email_campaign_recipients r
+        where r.campaign_id = :'eq_rev' and r.profile_id = :'EQ2') = 'skipped_consent/unverified_address',
+  'EMQ1038-4c wiersz wygaszony, odbiorca kampanii = skipped_consent/unverified_address');
+select pg_temp.assert(
+  public.email_delivery_suppression_reason(:'EQ2', 'jobPublished', 'eq2@test.be', null, null, null) is null,
+  'EMQ1038-4d e-mail transakcyjny nie jest wygaszany z powodu niepotwierdzenia');
+-- EMQ1038-4n: KONTROLA UJEMNA — bez tej klauzuli (0175) o wysyłce decydowałaby sama zgoda.
+create function pg_temp.emq1038_old_allowed(p_profile_id uuid) returns boolean language sql as $$
+  select coalesce((select np.email_marketing from public.notification_preferences np
+                    where np.profile_id = p_profile_id), false);
+$$;
+select pg_temp.assert(pg_temp.emq1038_old_allowed(:'EQ2') is true
+  and public.email_allowed(:'EQ2', 'newsletter') is false,
+  'EMQ1038-4n kontrola ujemna: sama zgoda (0087) przepuściłaby niepotwierdzony adres, 0186 nie');
+
+-- EMQ1038-5: uprawnienia.
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.email_address_verified(%L)', :'EQ1'), 'permission denied',
+  'EMQ1038-5 zalogowany nie odpytuje potwierdzenia adresu');
+reset role; reset app.current_uid;
+
+-- EL1049: język e-maili.
+select public.resolve_recipient_locale(:'EQ3') as eq3_locale \gset
+select pg_temp.assert(public.resolve_recipient_locale(:'EQ1') = 'pl', 'EL1049-0 język startowy = język rejestracji');
+select public.enqueue_email_outcome(:'EQ1', 'jobPublished', null, null, 'el1049-pre', '{}'::jsonb);
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_my_email_locale('nl') = 'nl', 'EL1049-1 zmiana języka zwraca nowy język');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select preferred_locale = 'nl' and signup_locale = 'pl' from public.profiles where id = :'EQ1')
+  and public.resolve_recipient_locale(:'EQ1') = 'nl',
+  'EL1049-1b preferred_locale zapisany, język rejestracji bez zmian, odbiorca rozwiązany na nl');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(actor_id = :'EQ1'::uuid
+            and before_data ->> 'preferred_locale' is null
+            and after_data ->> 'preferred_locale' = 'nl')
+     from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid),
+  'EL1049-2 audyt zmiany: aktor, język przed i po');
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select public.set_my_email_locale('nl');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid) = 1,
+  'EL1049-2b ponowne ustawienie tego samego języka nie dopisuje audytu');
+select pg_temp.assert(
+  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ1', 'statusChanged', 'application', null, 'el1049-1', '{}'::jsonb)),
+  'EL1049-3 e-mail po zmianie języka zakolejkowany');
+select pg_temp.assert(
+  (select locale = 'nl' from public.email_deliveries where idempotency_key = 'el1049-1'),
+  'EL1049-3a kolejne e-maile w nowym języku (Invariant #1)');
+select pg_temp.assert(
+  (select locale = 'pl' from public.email_deliveries where idempotency_key = 'el1049-pre'),
+  'EL1049-3b e-mail zakolejkowany wcześniej zachowuje język z chwili kolejkowania');
+set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('de')$$, 'VALIDATION_FAILED',
+  'EL1049-4 język spoza listy odrzucony');
+select pg_temp.expect_error($$select public.set_my_email_locale(null)$$, 'VALIDATION_FAILED',
+  'EL1049-4b brak języka odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert((select preferred_locale = 'nl' from public.profiles where id = :'EQ1'),
+  'EL1049-4c odrzucone wywołania nie zmieniły języka');
+select pg_temp.assert(
+  (select preferred_locale is null from public.profiles where id = :'EQ3')
+  and public.resolve_recipient_locale(:'EQ3') = :'eq3_locale',
+  'EL1049-5 cudzy profil bez zmian');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'permission denied',
+  'EL1049-6 anon nie ustawia języka');
+reset role;
+set role authenticated; set app.current_uid = ''; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'UNAUTHENTICATED',
+  'EL1049-6b bez tożsamości sesji odrzucone');
+reset role; reset app.current_uid;
+update public.profiles set deleted_at = now() where id = :'EQ4';
+set role authenticated; set app.current_uid = :'EQ4'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.set_my_email_locale('pl')$$, 'PERMISSION_DENIED',
+  'EL1049-7 konto usunięte nie ustawia języka');
+reset role; reset app.current_uid;
+update public.profiles set deleted_at = null where id = :'EQ4';
+-- DC1070. Token wersji szkicu oferty (0184, #1070): save_job_draft z p_expected_updated_at —
+--         zapis ze starą wersją (druga karta / drugi rekruter) = JOB_EDIT_CONFLICT bez zmian;
+--         każdy udany zapis (także krok tylko z relacjami) podbija wersję i zwraca ją.
+-- ============================================================================
+\set JOBDC 'e9640000-0000-0000-0000-0000000000b1'
+select pg_temp.remote_connect('dc_setup');
+select dbl.dblink_exec('dc_setup', format($fx$
+  insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
+    values (%L, 'e7500000-0000-0000-0000-0000000000f1', 'draft-dc1070', '', 'logistics', 'permanent', '', '', 'draft', 'pl')
+$fx$, :'JOBDC'));
+select dbl.dblink_disconnect('dc_setup');
+select updated_at::text as dc_v0 from public.jobs where id = :'JOBDC' \gset
+
+-- DC1070-1: zapis bez tokenu (świeży szkic tej samej karty) przechodzi i zwraca nową wersję.
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb)::text', :'JOBDC',
+    '{"job": {"title": "Karta A v1"}}')))::jsonb ->> 'updated_at' as dc_v1 \gset
+select pg_temp.assert(:'dc_v1'::timestamptz > :'dc_v0'::timestamptz
+  and (select updated_at = :'dc_v1'::timestamptz from public.jobs where id = :'JOBDC'),
+  'DC1070-1 zapis bez tokenu zwraca wersję = jobs.updated_at, większą od poprzedniej');
+
+-- DC1070-2: kolejny zapis z tokenem z poprzedniej odpowiedzi przechodzi (łańcuch wersji).
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Karta A v2"}}', :'dc_v1')))::jsonb ->> 'updated_at' as dc_v2 \gset
+select pg_temp.assert(:'dc_v2'::timestamptz > :'dc_v1'::timestamptz,
+  'DC1070-2 zapis z aktualnym tokenem przechodzi, wersja rośnie');
+
+-- DC1070-3: krok zmieniający WYŁĄCZNIE relacje (bez kolumn jobs) też podbija wersję.
+select (pg_temp.remote_commit_call(:'OWNP',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"skills_optional": ["Excel"]}', :'dc_v2')))::jsonb ->> 'updated_at' as dc_v3 \gset
+select pg_temp.assert(:'dc_v3'::timestamptz > :'dc_v2'::timestamptz
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel'],
+  'DC1070-3 krok tylko z relacjami zapisany i podbija wersję');
+
+-- DC1070-4 (kontrola ujemna): stara wersja (druga karta) = konflikt i ŻADNEJ zmiany
+-- (kolumny, tłumaczenie i relacje z tego samego kroku zostają jak były).
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC', $j${
+    "job": {"title": "Karta B (stara wersja)"}, "translation": {"description": "Nadpisany opis z drugiej karty."},
+    "skills_optional": ["Nadpisana umiejętność"]
+  }$j$, :'dc_v1'),
+  'JOB_EDIT_CONFLICT', 'DC1070-4 zapis ze starą wersją szkicu = JOB_EDIT_CONFLICT');
+-- Wersja z chwili sprzed ostatniego zapisu (v2) też jest już nieaktualna.
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
+    '{"job": {"title": "Karta B"}}', :'dc_v2'),
+  'JOB_EDIT_CONFLICT', 'DC1070-4b poprzednia wersja (v2) po zapisie v3 = konflikt');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Karta A v2' and updated_at = :'dc_v3'::timestamptz from public.jobs where id = :'JOBDC')
+  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel']
+  and not exists (select 1 from public.job_translations where job_id = :'JOBDC' and description is not null),
+  'DC1070-4c odrzucony zapis nic nie zmienił (kolumny, tłumaczenie, relacje, wersja)');
+
+-- DC1070-5: dwa RÓWNOLEGŁE zapisy z tym samym tokenem — wygrywa pierwszy, drugi po odblokowaniu
+-- widzi nową wersję i kończy się konfliktem (nie nadpisuje).
+select pg_temp.remote_begin('dc_s1', :'OWNP'::uuid) as dc_pid1 \gset
+select pg_temp.remote_begin('dc_s2', :'OWNP'::uuid) as dc_pid2 \gset
+select t.v as dc_s1_res from dbl.dblink('dc_s1',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Sesja 1"}}', :'dc_v3')) as t(v text) \gset
+select dbl.dblink_send_query('dc_s2',
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
+    '{"job": {"title": "Sesja 2"}}', :'dc_v3')) as dc_sent \gset
+select pg_temp.wait_blocked(:dc_pid2, 'DC1070-5 druga sesja czeka na blokadę szkicu');
+select dbl.dblink_exec('dc_s1', 'commit');
+select pg_temp.remote_result('dc_s2') as dc_s2_res \gset
+select dbl.dblink_exec('dc_s2', 'rollback');
+select dbl.dblink_disconnect('dc_s1');
+select dbl.dblink_disconnect('dc_s2');
+select pg_temp.assert(:'dc_s2_res' like 'ERROR:%JOB_EDIT_CONFLICT%'
+  and (:'dc_s1_res')::jsonb ->> 'updated_at' is not null
+  and (select title = 'Sesja 1' from public.jobs where id = :'JOBDC'),
+  'DC1070-5 równoległy zapis z tym samym tokenem: pierwszy wygrywa, drugi = konflikt, tytuł z sesji 1');
+
+-- DC1070-6: granice — oferta po publikacji nadal JOB_NOT_DRAFT (przed kontrolą wersji), nie-członek
+-- i anon bez dostępu; stara sygnatura dwuargumentowa nie istnieje osobno (jedna funkcja z domyślnym
+-- tokenem), więc wywołania bez tokenu działają, a EXECUTE ma wyłącznie authenticated.
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', 'e7500000-0000-0000-0000-0000000000b1',
+    '{"job": {"title": "Opublikowana"}}', now()::text),
+  'JOB_NOT_DRAFT', 'DC1070-6 opublikowana oferta = JOB_NOT_DRAFT także z tokenem');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
+    '{"job": {"title": "Cudzy"}}', now()::text),
+  'PERMISSION_DENIED', 'DC1070-6b nie-członek firmy nie zapisze cudzego szkicu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  to_regprocedure('public.save_job_draft(uuid, jsonb)') is null
+  and has_function_privilege('authenticated', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute')
+  and not has_function_privilege('anon', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute'),
+  'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
+
+-- ============================================================================
+-- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
+--         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
+-- ============================================================================
+-- SS1065-1: baza bez historii (pliki nałożone ręcznie) = applied 0, latest null (bez błędu).
+select pg_temp.assert(public.ops_schema_state() = '{"applied": 0, "latest": null}'::jsonb,
+  'SS1065-1 brak app_migrations.history: applied 0, latest null');
+begin;
+create schema app_migrations;
+create table app_migrations.history (name text primary key, checksum text not null, applied_at timestamptz not null default now());
+insert into app_migrations.history(name, checksum) values
+  ('0000_bootstrap_roles_and_identity.sql', 'a'), ('0170_recruiter_tools.sql', 'b'), ('0999_ostatnia.sql', 'c');
+select pg_temp.assert(public.ops_schema_state() = '{"applied": 3, "latest": "0999_ostatnia.sql"}'::jsonb,
+  'SS1065-2 historia: liczba zastosowanych i najwyższa nazwa');
+-- Kontrola ujemna: nowa migracja zmienia wynik (czujka widzi rozjazd, gdy kod zna nowszą nazwę).
+insert into app_migrations.history(name, checksum) values ('1000_kolejna.sql', 'd');
+select pg_temp.assert(public.ops_schema_state()->>'latest' = '1000_kolejna.sql'
+  and (public.ops_schema_state()->>'applied')::int = 4,
+  'SS1065-2b kolejna migracja podbija stan (najwyższa nazwa wg porządku C)');
+-- Role: monitoring i service_role czytają, klient nie.
+set role pracujbe_ops;
+select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3 rola pracujbe_ops czyta stan schematu');
+reset role;
+set role service_role;
+select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3b service_role czyta stan schematu');
+reset role;
+set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4 authenticated nie czyta stanu schematu');
+reset role; reset app.current_uid;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4b anon nie czyta stanu schematu');
+reset role;
+rollback;
+-- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0182):
+--        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
+--        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
+--        już ustalonego, dłuższego terminu ostrzeżenia (e-mail z konkretną datą był wysłany).
+-- ============================================================================
+\echo '--- RW862 wydłużenie retencji odracza usunięcie (0182) ---'
+reset role; reset app.current_uid;
+\set RW1 '86200000-0000-4000-8000-0000000000c1'
+\set RW2 '86200000-0000-4000-8000-0000000000c2'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RW1','rw862c1@test.be','Rw Jeden','{"role":"candidate","first_name":"Rw","last_name":"Jeden","locale":"pl"}'),
+  (:'RW2','rw862c2@test.be','Rw Dwa','{"role":"candidate","first_name":"Rw","last_name":"Dwa","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW1', 'candidate-files', :'RW1' || '/cv-rw1.pdf', 'candidate_cv');
+-- RW2 (plik + aktywność + ostrzeżenie) powstaje dopiero tuż przed RW862-5: wcześniejsze
+-- wywołania admin_set_retention_policy (RW862-1/3, które SŁUSZNIE synchronizują WSZYSTKIE
+-- ostrzeżenia tej kategorii, więc RW2 też by odsunęły, gdyby już istniał) nie mogą go dotknąć
+-- — kontrola ujemna ma sprawdzać goły zapis retention_policies.period, nie efekt uboczny
+-- poprawnie działającej naprawy.
+
+-- Ostrzeżenie RW1 wysłane pod poprzednią, krótszą polityką: aktywność dawno temu, termin już
+-- minięty (25 dni temu) — dokładnie stan tuż po wysłaniu e-maila z konkretną datą usunięcia.
+select (now() - interval '400 days')::text as rw_activity \gset
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW1';
+set session_replication_role = origin;
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW1', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+
+-- RW862-1: admin WYDŁUŻA okres (365→500 dni) przez admin_set_retention_policy — termin już
+-- wysłanego ostrzeżenia RW1 ma się odsunąć do activity_at + 500 dni (w przyszłość).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 500);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days'
+  and (select due_at > now() + interval '90 days' from public.retention_warnings
+        where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv'),
+  'RW862-1 wydłużenie okresu przez admin_set_retention_policy przesuwa due_at już wysłanego ostrzeżenia w przyszłość');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp1 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-2 po wydłużeniu przez RPC CV nie jest usuwane mimo minięcia dawnego, krótszego terminu');
+
+-- RW862-3: skrócenie do 300 dni NIE cofa już ustalonego (dłuższego) terminu RW1.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_set_retention_policy('inactive_candidate_cv', 300);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
+    = :'rw_activity'::timestamptz + interval '500 days',
+  'RW862-3 skrócenie okresu nie obniża już ustalonego, dłuższego terminu ostrzeżenia');
+
+set role service_role;
+select public.run_retention_purge(200)::text as rwp2 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
+  'RW862-4 po skróceniu RW1 nadal nie jest usuwany przed odroczonym terminem');
+
+-- RW862-5 (kontrola ujemna): świeże ostrzeżenie RW2 pod tym samym, dawno minionym terminem,
+-- a potem sama zmiana retention_policies.period z pominięciem RPC (czyli dokładnie to, co
+-- robił kod SPRZED naprawy #862 — bez synchronizacji due_at) NIE odracza tego ostrzeżenia:
+-- CV znika mimo że okres formalnie „wydłużono" do 500 dni.
+set session_replication_role = replica;
+update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW2';
+set session_replication_role = origin;
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RW2', 'candidate-files', :'RW2' || '/cv-rw2.pdf', 'candidate_cv');
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'RW2', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
+update public.retention_policies set period = interval '500 days' where key = 'inactive_candidate_cv';
+set role service_role;
+select public.run_retention_purge(200)::text as rwp3 \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RW2' || '/cv-rw2.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RW2' || '/cv-rw2.pdf'),
+  'RW862-5 kontrola ujemna: bez synchronizacji przez RPC (goła zmiana period) CV nadal ginie mimo wydłużenia');
+
+-- ============================================================================
 -- DSA960 (0960, paczka M-1): kod dostępu poza kolejką e-mail (#1037), trwały dowód
 -- poinformowania niezależny od powiadomień (#1045) z regułami zastępczymi (#1063), limity
 -- zgłoszeń pod blokadą (#1098, część DSA), zawieszenie firmy niezweryfikowanej (#1107).
 -- Kontrole ujemne: zdjęty strażnik/trigger/indeks daje wykrywalny, błędny wynik; dla blokady
 -- per adres samo `wait_blocked` jest kontrolą (bez blokady druga sesja nie czeka).
--- =====================================================================-- ============================================================================
+-- ============================================================================
 \echo '--- DSA960 dowód poinformowania, limity, kod dostępu, zawieszenie ---'
 \set D9CO1 'e9960000-0000-0000-0000-0000000000c1'
 \set D9CO2 'e9960000-0000-0000-0000-0000000000c2'
@@ -20258,397 +20650,6 @@ set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_cli
 select pg_temp.expect_error('select public.admin_set_company_status(''' || :'D9CO1' || '''::uuid, ''suspended'')',
   'PERMISSION_DENIED', 'DSA960-6f właściciel firmy nie zawiesza firmy (tylko admin)');
 reset role; reset app.current_uid;
-=======
--- EMQ1038 / EL1049 (0186 — numer tymczasowy): marketing tylko na potwierdzony adres
--- i zmiana języka e-maili przez użytkownika.
--- ============================================================================
-\set EQ1 'e1038000-0000-0000-0000-0000000000a1'
-\set EQ2 'e1038000-0000-0000-0000-0000000000a2'
-\set EQ3 'e1038000-0000-0000-0000-0000000000a3'
-\set EQ4 'e1038000-0000-0000-0000-0000000000a4'
-reset role; reset app.current_uid;
-insert into auth.users(id,email,name,raw_user_meta_data) values
-  (:'EQ1','eq1@test.be','Eq 1','{"role":"candidate","first_name":"Eq","last_name":"1","locale":"pl"}'),
-  (:'EQ2','eq2@test.be','Eq 2','{"role":"candidate","first_name":"Eq","last_name":"2","locale":"nl"}'),
-  (:'EQ3','eq3@test.be','Eq 3','{"role":"candidate","first_name":"Eq","last_name":"3","locale":"fr"}'),
-  (:'EQ4','eq4@test.be','Eq 4','{"role":"candidate","first_name":"Eq","last_name":"4","locale":"en"}');
-select test_fixture.attest_candidates();
--- EQ1 potwierdzony + zgoda; EQ2 zgoda, ale adres niepotwierdzony; EQ3 potwierdzony bez zgody.
-update auth.users set email_verified = true where id in (:'EQ1', :'EQ3');
-insert into public.notification_preferences (profile_id, email_marketing)
-values (:'EQ1', true), (:'EQ2', true), (:'EQ3', false)
-on conflict (profile_id) do update set email_marketing = excluded.email_marketing;
-
--- EMQ1038-1: zgoda odbiorcy.
-select pg_temp.assert(
-  public.email_address_verified(:'EQ1') and not public.email_address_verified(:'EQ2'),
-  'EMQ1038-1 potwierdzenie adresu czytane z konta');
-select pg_temp.assert(
-  public.email_allowed(:'EQ1', 'newsletter') is true
-  and public.email_allowed(:'EQ2', 'newsletter') is false
-  and public.email_allowed(:'EQ3', 'newsletter') is false,
-  'EMQ1038-1b marketing = zgoda ORAZ potwierdzony adres');
-select pg_temp.assert(
-  public.email_allowed(:'EQ2', 'statusChanged') is true and public.email_allowed(:'EQ2', 'jobPublished') is true,
-  'EMQ1038-1c poczta transakcyjna nie zależy od potwierdzenia adresu');
-
--- EMQ1038-2: kolejkowanie z wynikiem.
-select pg_temp.assert(
-  (select outcome = 'unverified_address' and delivery_id is null
-     from public.enqueue_email_outcome(:'EQ2', 'newsletter', null, null, 'emq1038-news-2', '{}'::jsonb))
-  and not exists (select 1 from public.email_deliveries where idempotency_key = 'emq1038-news-2'),
-  'EMQ1038-2 niepotwierdzony adres: wynik unverified_address, brak wiersza w kolejce');
-select pg_temp.assert(
-  (select outcome = 'opted_out' from public.enqueue_email_outcome(:'EQ3', 'newsletter', null, null, 'emq1038-news-3', '{}'::jsonb)),
-  'EMQ1038-2b potwierdzony bez zgody: nadal opted_out');
-select pg_temp.assert(
-  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ2', 'statusChanged', 'application', null, 'emq1038-status-2', '{}'::jsonb)),
-  'EMQ1038-2d transakcyjny e-mail do niepotwierdzonego adresu bez zmian');
-
--- EMQ1038-3: kampania. Treść w 4 językach jak w CM45 (zmienna CMJOBS).
--- Zgody z wcześniejszych sekcji wyłączone, żeby paczka dotyczyła tylko odbiorców tej sekcji.
-update public.notification_preferences set email_marketing = false
- where profile_id not in (:'EQ1', :'EQ2', :'EQ3', :'EQ4') and email_marketing;
-update public.notification_preferences set email_marketing = true where profile_id = :'EQ4';
-set role service_role;
-select public.create_email_campaign_revision('emq1038-news', :'CMJOBS'::jsonb) as eq_rev \gset
-select public.activate_email_campaign(:'eq_rev');
-select public.enqueue_campaign_batch(:'eq_rev', 5000);
-reset role;
-select pg_temp.assert(
-  exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ1'
-            and status = 'queued')
-  and not exists (select 1 from public.email_campaign_recipients where campaign_id = :'eq_rev' and profile_id = :'EQ2')
-  and not exists (select 1 from public.email_deliveries where campaign_id = :'eq_rev'::uuid and profile_id = :'EQ2'),
-  'EMQ1038-3 potwierdzony adres zakolejkowany; niepotwierdzony nie jest rezerwowany ani kolejkowany');
--- EMQ1038-3n: KONTROLA UJEMNA — wybór odbiorców z 0101 (sama zgoda) obejmuje niepotwierdzony adres.
-select pg_temp.assert(
-  exists (select 1 from public.notification_preferences np
-           where np.email_marketing and np.profile_id = :'EQ2'
-             and not exists (select 1 from public.email_campaign_recipients r
-                              where r.campaign_id = :'eq_rev' and r.profile_id = np.profile_id))
-  and not public.email_address_verified(:'EQ2'),
-  'EMQ1038-3n kontrola ujemna: wybór po samej zgodzie (0101) wskazałby niepotwierdzony adres');
-select pg_temp.assert((select status from public.email_campaigns where id = :'eq_rev') = 'active',
-  'EMQ1038-3b kampania nadal aktywna po pierwszej paczce');
--- Potwierdzenie adresu w trakcie aktywnej kampanii: odbiorca trafia do następnej paczki.
-update auth.users set email_verified = true where id = :'EQ2';
-set role service_role;
-select public.enqueue_campaign_batch(:'eq_rev', 5000);
-reset role;
-select pg_temp.assert(
-  (select d.locale = 'nl' and d.status::text = 'queued'
-     from public.email_deliveries d where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2'),
-  'EMQ1038-3c po potwierdzeniu adresu odbiorca dostaje list w swoim języku (Invariant #1)');
-
--- EMQ1038-4: wiersz już w kolejce, adres przestaje być potwierdzony → worker go nie wydaje.
-update auth.users set email_verified = false where id = :'EQ2';
-select pg_temp.assert(
-  public.email_delivery_suppression_reason(:'EQ2', 'newsletter', 'eq2@test.be', null, null, null)
-    = 'suppressed_unverified_address',
-  'EMQ1038-4 przyczyna wygaszenia dla niepotwierdzonego adresu');
-select pg_temp.assert(
-  not exists (select 1 from public.claim_email_batch(100000) c
-               where c.campaign_id = :'eq_rev'::uuid and c.profile_id = :'EQ2'),
-  'EMQ1038-4b claim nie wydaje marketingu na niepotwierdzony adres');
-select pg_temp.assert(
-  (select d.status::text || '/' || d.error_message from public.email_deliveries d
-    where d.campaign_id = :'eq_rev'::uuid and d.profile_id = :'EQ2') = 'failed/suppressed_unverified_address'
-  and (select r.status || '/' || r.reason from public.email_campaign_recipients r
-        where r.campaign_id = :'eq_rev' and r.profile_id = :'EQ2') = 'skipped_consent/unverified_address',
-  'EMQ1038-4c wiersz wygaszony, odbiorca kampanii = skipped_consent/unverified_address');
-select pg_temp.assert(
-  public.email_delivery_suppression_reason(:'EQ2', 'jobPublished', 'eq2@test.be', null, null, null) is null,
-  'EMQ1038-4d e-mail transakcyjny nie jest wygaszany z powodu niepotwierdzenia');
--- EMQ1038-4n: KONTROLA UJEMNA — bez tej klauzuli (0175) o wysyłce decydowałaby sama zgoda.
-create function pg_temp.emq1038_old_allowed(p_profile_id uuid) returns boolean language sql as $$
-  select coalesce((select np.email_marketing from public.notification_preferences np
-                    where np.profile_id = p_profile_id), false);
-$$;
-select pg_temp.assert(pg_temp.emq1038_old_allowed(:'EQ2') is true
-  and public.email_allowed(:'EQ2', 'newsletter') is false,
-  'EMQ1038-4n kontrola ujemna: sama zgoda (0087) przepuściłaby niepotwierdzony adres, 0186 nie');
-
--- EMQ1038-5: uprawnienia.
-set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(format('select public.email_address_verified(%L)', :'EQ1'), 'permission denied',
-  'EMQ1038-5 zalogowany nie odpytuje potwierdzenia adresu');
-reset role; reset app.current_uid;
-
--- EL1049: język e-maili.
-select public.resolve_recipient_locale(:'EQ3') as eq3_locale \gset
-select pg_temp.assert(public.resolve_recipient_locale(:'EQ1') = 'pl', 'EL1049-0 język startowy = język rejestracji');
-select public.enqueue_email_outcome(:'EQ1', 'jobPublished', null, null, 'el1049-pre', '{}'::jsonb);
-set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
-select pg_temp.assert(public.set_my_email_locale('nl') = 'nl', 'EL1049-1 zmiana języka zwraca nowy język');
-reset role; reset app.current_uid;
-select pg_temp.assert(
-  (select preferred_locale = 'nl' and signup_locale = 'pl' from public.profiles where id = :'EQ1')
-  and public.resolve_recipient_locale(:'EQ1') = 'nl',
-  'EL1049-1b preferred_locale zapisany, język rejestracji bez zmian, odbiorca rozwiązany na nl');
-select pg_temp.assert(
-  (select count(*) = 1 and bool_and(actor_id = :'EQ1'::uuid
-            and before_data ->> 'preferred_locale' is null
-            and after_data ->> 'preferred_locale' = 'nl')
-     from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid),
-  'EL1049-2 audyt zmiany: aktor, język przed i po');
-set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
-select public.set_my_email_locale('nl');
-reset role; reset app.current_uid;
-select pg_temp.assert(
-  (select count(*) from public.audit_logs where action = 'profile.email_locale_changed' and entity_id = :'EQ1'::uuid) = 1,
-  'EL1049-2b ponowne ustawienie tego samego języka nie dopisuje audytu');
-select pg_temp.assert(
-  (select outcome = 'queued' from public.enqueue_email_outcome(:'EQ1', 'statusChanged', 'application', null, 'el1049-1', '{}'::jsonb)),
-  'EL1049-3 e-mail po zmianie języka zakolejkowany');
-select pg_temp.assert(
-  (select locale = 'nl' from public.email_deliveries where idempotency_key = 'el1049-1'),
-  'EL1049-3a kolejne e-maile w nowym języku (Invariant #1)');
-select pg_temp.assert(
-  (select locale = 'pl' from public.email_deliveries where idempotency_key = 'el1049-pre'),
-  'EL1049-3b e-mail zakolejkowany wcześniej zachowuje język z chwili kolejkowania');
-set role authenticated; set app.current_uid = :'EQ1'; select pg_temp.assert_client_role();
-select pg_temp.expect_error($$select public.set_my_email_locale('de')$$, 'VALIDATION_FAILED',
-  'EL1049-4 język spoza listy odrzucony');
-select pg_temp.expect_error($$select public.set_my_email_locale(null)$$, 'VALIDATION_FAILED',
-  'EL1049-4b brak języka odrzucony');
-reset role; reset app.current_uid;
-select pg_temp.assert((select preferred_locale = 'nl' from public.profiles where id = :'EQ1'),
-  'EL1049-4c odrzucone wywołania nie zmieniły języka');
-select pg_temp.assert(
-  (select preferred_locale is null from public.profiles where id = :'EQ3')
-  and public.resolve_recipient_locale(:'EQ3') = :'eq3_locale',
-  'EL1049-5 cudzy profil bez zmian');
-set role anon; select pg_temp.assert_client_role();
-select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'permission denied',
-  'EL1049-6 anon nie ustawia języka');
-reset role;
-set role authenticated; set app.current_uid = ''; select pg_temp.assert_client_role();
-select pg_temp.expect_error($$select public.set_my_email_locale('en')$$, 'UNAUTHENTICATED',
-  'EL1049-6b bez tożsamości sesji odrzucone');
-reset role; reset app.current_uid;
-update public.profiles set deleted_at = now() where id = :'EQ4';
-set role authenticated; set app.current_uid = :'EQ4'; select pg_temp.assert_client_role();
-select pg_temp.expect_error($$select public.set_my_email_locale('pl')$$, 'PERMISSION_DENIED',
-  'EL1049-7 konto usunięte nie ustawia języka');
-reset role; reset app.current_uid;
-update public.profiles set deleted_at = null where id = :'EQ4';
--- DC1070. Token wersji szkicu oferty (0184, #1070): save_job_draft z p_expected_updated_at —
---         zapis ze starą wersją (druga karta / drugi rekruter) = JOB_EDIT_CONFLICT bez zmian;
---         każdy udany zapis (także krok tylko z relacjami) podbija wersję i zwraca ją.
--- ============================================================================
-\set JOBDC 'e9640000-0000-0000-0000-0000000000b1'
-select pg_temp.remote_connect('dc_setup');
-select dbl.dblink_exec('dc_setup', format($fx$
-  insert into public.jobs(id, company_id, slug, title, category, contract_type, city, region, status, default_locale)
-    values (%L, 'e7500000-0000-0000-0000-0000000000f1', 'draft-dc1070', '', 'logistics', 'permanent', '', '', 'draft', 'pl')
-$fx$, :'JOBDC'));
-select dbl.dblink_disconnect('dc_setup');
-select updated_at::text as dc_v0 from public.jobs where id = :'JOBDC' \gset
-
--- DC1070-1: zapis bez tokenu (świeży szkic tej samej karty) przechodzi i zwraca nową wersję.
-select (pg_temp.remote_commit_call(:'OWNP',
-  format('select public.save_job_draft(%L::uuid, %L::jsonb)::text', :'JOBDC',
-    '{"job": {"title": "Karta A v1"}}')))::jsonb ->> 'updated_at' as dc_v1 \gset
-select pg_temp.assert(:'dc_v1'::timestamptz > :'dc_v0'::timestamptz
-  and (select updated_at = :'dc_v1'::timestamptz from public.jobs where id = :'JOBDC'),
-  'DC1070-1 zapis bez tokenu zwraca wersję = jobs.updated_at, większą od poprzedniej');
-
--- DC1070-2: kolejny zapis z tokenem z poprzedniej odpowiedzi przechodzi (łańcuch wersji).
-select (pg_temp.remote_commit_call(:'OWNP',
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
-    '{"job": {"title": "Karta A v2"}}', :'dc_v1')))::jsonb ->> 'updated_at' as dc_v2 \gset
-select pg_temp.assert(:'dc_v2'::timestamptz > :'dc_v1'::timestamptz,
-  'DC1070-2 zapis z aktualnym tokenem przechodzi, wersja rośnie');
-
--- DC1070-3: krok zmieniający WYŁĄCZNIE relacje (bez kolumn jobs) też podbija wersję.
-select (pg_temp.remote_commit_call(:'OWNP',
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
-    '{"skills_optional": ["Excel"]}', :'dc_v2')))::jsonb ->> 'updated_at' as dc_v3 \gset
-select pg_temp.assert(:'dc_v3'::timestamptz > :'dc_v2'::timestamptz
-  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel'],
-  'DC1070-3 krok tylko z relacjami zapisany i podbija wersję');
-
--- DC1070-4 (kontrola ujemna): stara wersja (druga karta) = konflikt i ŻADNEJ zmiany
--- (kolumny, tłumaczenie i relacje z tego samego kroku zostają jak były).
-set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC', $j${
-    "job": {"title": "Karta B (stara wersja)"}, "translation": {"description": "Nadpisany opis z drugiej karty."},
-    "skills_optional": ["Nadpisana umiejętność"]
-  }$j$, :'dc_v1'),
-  'JOB_EDIT_CONFLICT', 'DC1070-4 zapis ze starą wersją szkicu = JOB_EDIT_CONFLICT');
--- Wersja z chwili sprzed ostatniego zapisu (v2) też jest już nieaktualna.
-select pg_temp.expect_error(
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
-    '{"job": {"title": "Karta B"}}', :'dc_v2'),
-  'JOB_EDIT_CONFLICT', 'DC1070-4b poprzednia wersja (v2) po zapisie v3 = konflikt');
-reset role; reset app.current_uid;
-select pg_temp.assert(
-  (select title = 'Karta A v2' and updated_at = :'dc_v3'::timestamptz from public.jobs where id = :'JOBDC')
-  and (select array_agg(skill_label) from public.job_skills where job_id = :'JOBDC') = array['Excel']
-  and not exists (select 1 from public.job_translations where job_id = :'JOBDC' and description is not null),
-  'DC1070-4c odrzucony zapis nic nie zmienił (kolumny, tłumaczenie, relacje, wersja)');
-
--- DC1070-5: dwa RÓWNOLEGŁE zapisy z tym samym tokenem — wygrywa pierwszy, drugi po odblokowaniu
--- widzi nową wersję i kończy się konfliktem (nie nadpisuje).
-select pg_temp.remote_begin('dc_s1', :'OWNP'::uuid) as dc_pid1 \gset
-select pg_temp.remote_begin('dc_s2', :'OWNP'::uuid) as dc_pid2 \gset
-select t.v as dc_s1_res from dbl.dblink('dc_s1',
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
-    '{"job": {"title": "Sesja 1"}}', :'dc_v3')) as t(v text) \gset
-select dbl.dblink_send_query('dc_s2',
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)::text', :'JOBDC',
-    '{"job": {"title": "Sesja 2"}}', :'dc_v3')) as dc_sent \gset
-select pg_temp.wait_blocked(:dc_pid2, 'DC1070-5 druga sesja czeka na blokadę szkicu');
-select dbl.dblink_exec('dc_s1', 'commit');
-select pg_temp.remote_result('dc_s2') as dc_s2_res \gset
-select dbl.dblink_exec('dc_s2', 'rollback');
-select dbl.dblink_disconnect('dc_s1');
-select dbl.dblink_disconnect('dc_s2');
-select pg_temp.assert(:'dc_s2_res' like 'ERROR:%JOB_EDIT_CONFLICT%'
-  and (:'dc_s1_res')::jsonb ->> 'updated_at' is not null
-  and (select title = 'Sesja 1' from public.jobs where id = :'JOBDC'),
-  'DC1070-5 równoległy zapis z tym samym tokenem: pierwszy wygrywa, drugi = konflikt, tytuł z sesji 1');
-
--- DC1070-6: granice — oferta po publikacji nadal JOB_NOT_DRAFT (przed kontrolą wersji), nie-członek
--- i anon bez dostępu; stara sygnatura dwuargumentowa nie istnieje osobno (jedna funkcja z domyślnym
--- tokenem), więc wywołania bez tokenu działają, a EXECUTE ma wyłącznie authenticated.
-set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', 'e7500000-0000-0000-0000-0000000000b1',
-    '{"job": {"title": "Opublikowana"}}', now()::text),
-  'JOB_NOT_DRAFT', 'DC1070-6 opublikowana oferta = JOB_NOT_DRAFT także z tokenem');
-reset role; reset app.current_uid;
-set role authenticated; set app.current_uid = :'EMPB'; select pg_temp.assert_client_role();
-select pg_temp.expect_error(
-  format('select public.save_job_draft(%L::uuid, %L::jsonb, %L::timestamptz)', :'JOBDC',
-    '{"job": {"title": "Cudzy"}}', now()::text),
-  'PERMISSION_DENIED', 'DC1070-6b nie-członek firmy nie zapisze cudzego szkicu');
-reset role; reset app.current_uid;
-select pg_temp.assert(
-  to_regprocedure('public.save_job_draft(uuid, jsonb)') is null
-  and has_function_privilege('authenticated', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute')
-  and not has_function_privilege('anon', 'public.save_job_draft(uuid, jsonb, timestamptz)', 'execute'),
-  'DC1070-6c jedna sygnatura save_job_draft; EXECUTE tylko authenticated');
-
--- ============================================================================
--- SS1065. Czujka zgodności schematu z kodem (0184, #1065): ops_schema_state() zwraca liczbę
---         zastosowanych migracji i najwyższą nazwę z app_migrations.history.
--- ============================================================================
--- SS1065-1: baza bez historii (pliki nałożone ręcznie) = applied 0, latest null (bez błędu).
-select pg_temp.assert(public.ops_schema_state() = '{"applied": 0, "latest": null}'::jsonb,
-  'SS1065-1 brak app_migrations.history: applied 0, latest null');
-begin;
-create schema app_migrations;
-create table app_migrations.history (name text primary key, checksum text not null, applied_at timestamptz not null default now());
-insert into app_migrations.history(name, checksum) values
-  ('0000_bootstrap_roles_and_identity.sql', 'a'), ('0170_recruiter_tools.sql', 'b'), ('0999_ostatnia.sql', 'c');
-select pg_temp.assert(public.ops_schema_state() = '{"applied": 3, "latest": "0999_ostatnia.sql"}'::jsonb,
-  'SS1065-2 historia: liczba zastosowanych i najwyższa nazwa');
--- Kontrola ujemna: nowa migracja zmienia wynik (czujka widzi rozjazd, gdy kod zna nowszą nazwę).
-insert into app_migrations.history(name, checksum) values ('1000_kolejna.sql', 'd');
-select pg_temp.assert(public.ops_schema_state()->>'latest' = '1000_kolejna.sql'
-  and (public.ops_schema_state()->>'applied')::int = 4,
-  'SS1065-2b kolejna migracja podbija stan (najwyższa nazwa wg porządku C)');
--- Role: monitoring i service_role czytają, klient nie.
-set role pracujbe_ops;
-select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3 rola pracujbe_ops czyta stan schematu');
-reset role;
-set role service_role;
-select pg_temp.assert((public.ops_schema_state()->>'applied')::int = 4, 'SS1065-3b service_role czyta stan schematu');
-reset role;
-set role authenticated; set app.current_uid = :'OWNP'; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4 authenticated nie czyta stanu schematu');
-reset role; reset app.current_uid;
-set role anon; reset app.current_uid; select pg_temp.assert_client_role();
-select pg_temp.expect_error('select public.ops_schema_state()', 'permission denied', 'SS1065-4b anon nie czyta stanu schematu');
-reset role;
-rollback;
--- RW862. Wydłużenie okresu retencji odracza termin już wysłanego ostrzeżenia (#862, 0182):
---        admin_set_retention_policy podnosi due_at istniejących retention_warnings do co
---        najmniej activity_at + nowy_okres (nigdy nie obniża) — skrócenie okresu nie cofa
---        już ustalonego, dłuższego terminu ostrzeżenia (e-mail z konkretną datą był wysłany).
--- ============================================================================
-\echo '--- RW862 wydłużenie retencji odracza usunięcie (0182) ---'
-reset role; reset app.current_uid;
-\set RW1 '86200000-0000-4000-8000-0000000000c1'
-\set RW2 '86200000-0000-4000-8000-0000000000c2'
-insert into auth.users(id,email,name,raw_user_meta_data) values
-  (:'RW1','rw862c1@test.be','Rw Jeden','{"role":"candidate","first_name":"Rw","last_name":"Jeden","locale":"pl"}'),
-  (:'RW2','rw862c2@test.be','Rw Dwa','{"role":"candidate","first_name":"Rw","last_name":"Dwa","locale":"pl"}');
-select test_fixture.attest_candidates();
-insert into public.files(owner_id, bucket, path, entity_type) values
-  (:'RW1', 'candidate-files', :'RW1' || '/cv-rw1.pdf', 'candidate_cv');
--- RW2 (plik + aktywność + ostrzeżenie) powstaje dopiero tuż przed RW862-5: wcześniejsze
--- wywołania admin_set_retention_policy (RW862-1/3, które SŁUSZNIE synchronizują WSZYSTKIE
--- ostrzeżenia tej kategorii, więc RW2 też by odsunęły, gdyby już istniał) nie mogą go dotknąć
--- — kontrola ujemna ma sprawdzać goły zapis retention_policies.period, nie efekt uboczny
--- poprawnie działającej naprawy.
-
--- Ostrzeżenie RW1 wysłane pod poprzednią, krótszą polityką: aktywność dawno temu, termin już
--- minięty (25 dni temu) — dokładnie stan tuż po wysłaniu e-maila z konkretną datą usunięcia.
-select (now() - interval '400 days')::text as rw_activity \gset
-set session_replication_role = replica;
-update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW1';
-set session_replication_role = origin;
-insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
-  (:'RW1', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
-
--- RW862-1: admin WYDŁUŻA okres (365→500 dni) przez admin_set_retention_policy — termin już
--- wysłanego ostrzeżenia RW1 ma się odsunąć do activity_at + 500 dni (w przyszłość).
-set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
-select public.admin_set_retention_policy('inactive_candidate_cv', 500);
-reset role; reset app.current_uid;
-select pg_temp.assert(
-  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
-    = :'rw_activity'::timestamptz + interval '500 days'
-  and (select due_at > now() + interval '90 days' from public.retention_warnings
-        where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv'),
-  'RW862-1 wydłużenie okresu przez admin_set_retention_policy przesuwa due_at już wysłanego ostrzeżenia w przyszłość');
-
-set role service_role;
-select public.run_retention_purge(200)::text as rwp1 \gset
-reset role;
-select pg_temp.assert(
-  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
-  'RW862-2 po wydłużeniu przez RPC CV nie jest usuwane mimo minięcia dawnego, krótszego terminu');
-
--- RW862-3: skrócenie do 300 dni NIE cofa już ustalonego (dłuższego) terminu RW1.
-set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
-select public.admin_set_retention_policy('inactive_candidate_cv', 300);
-reset role; reset app.current_uid;
-select pg_temp.assert(
-  (select due_at from public.retention_warnings where profile_id = :'RW1' and policy_key = 'inactive_candidate_cv')
-    = :'rw_activity'::timestamptz + interval '500 days',
-  'RW862-3 skrócenie okresu nie obniża już ustalonego, dłuższego terminu ostrzeżenia');
-
-set role service_role;
-select public.run_retention_purge(200)::text as rwp2 \gset
-reset role;
-select pg_temp.assert(
-  exists (select 1 from public.files where path = :'RW1' || '/cv-rw1.pdf' and deleted_at is null),
-  'RW862-4 po skróceniu RW1 nadal nie jest usuwany przed odroczonym terminem');
-
--- RW862-5 (kontrola ujemna): świeże ostrzeżenie RW2 pod tym samym, dawno minionym terminem,
--- a potem sama zmiana retention_policies.period z pominięciem RPC (czyli dokładnie to, co
--- robił kod SPRZED naprawy #862 — bez synchronizacji due_at) NIE odracza tego ostrzeżenia:
--- CV znika mimo że okres formalnie „wydłużono" do 500 dni.
-set session_replication_role = replica;
-update public.profiles set last_seen_at = :'rw_activity'::timestamptz where id = :'RW2';
-set session_replication_role = origin;
-insert into public.files(owner_id, bucket, path, entity_type) values
-  (:'RW2', 'candidate-files', :'RW2' || '/cv-rw2.pdf', 'candidate_cv');
-insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
-  (:'RW2', 'inactive_candidate_cv', :'rw_activity'::timestamptz, now() - interval '25 days');
-update public.retention_policies set period = interval '500 days' where key = 'inactive_candidate_cv';
-set role service_role;
-select public.run_retention_purge(200)::text as rwp3 \gset
-reset role;
-select pg_temp.assert(
-  not exists (select 1 from public.files where path = :'RW2' || '/cv-rw2.pdf')
-  and exists (select 1 from public.storage_deletion_queue where path = :'RW2' || '/cv-rw2.pdf'),
-  'RW862-5 kontrola ujemna: bez synchronizacji przez RPC (goła zmiana period) CV nadal ginie mimo wydłużenia');
 
 -- WM1040. Macierz zapisu cudzych wierszy (#1040) + strażnik pokrycia grantów.
 --   * Strażnik: zbiór (tabela, operacja) z grantem zapisu dla `authenticated` musi być pokryty
