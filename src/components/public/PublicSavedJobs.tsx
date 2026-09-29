@@ -193,7 +193,7 @@ export function PublicSaveJobButton({
         {content}
       </button>
       {context?.errors.has(jobId) && (
-        <span role="alert" className="block max-w-xs text-sm text-error">
+        <span role="alert" className="block max-w-xs text-sm text-error-text">
           {t('saveFailed')}
         </span>
       )}

@@ -55,7 +55,7 @@ const TONE_CLASS: Record<Tone, string> = {
 const ICON_CLASS: Record<Tone, string> = {
   info: 'text-primary',
   success: 'text-success',
-  error: 'text-error',
+  error: 'text-error-text',
 };
 
 function ToneIcon({ tone }: { tone: Tone }): React.JSX.Element {

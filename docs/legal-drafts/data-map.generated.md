@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 106; z danymi osobowymi: 74; bez danych osobowych: 32.
+Tabele w migracjach: 107; z danymi osobowymi: 74; bez danych osobowych: 33.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
@@ -1307,6 +1307,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |
 | `public.occupations` | Słownik/konfiguracja (zawody) — bez danych osobowych. |
+| `public.ops_job_runs` | Ostatni przebieg zadań utrzymaniowych (0180, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych. |
 | `public.plan_entitlements` | Słownik/konfiguracja (limity planów) — bez danych osobowych. |
 | `public.processed_webhooks` | Identyfikatory zdarzeń webhooków do deduplikacji — bez danych osobowych. |
 | `public.skill_labels` | Słownik/konfiguracja (etykiety umiejętności ESCO) — bez danych osobowych. |

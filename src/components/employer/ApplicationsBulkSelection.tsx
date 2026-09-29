@@ -190,7 +190,7 @@ export function ApplicationsBulkSelection({
         </p>
         <div ref={reportRef} tabIndex={-1} className="outline-none">
           {error ? (
-            <p role="alert" className="text-[13px] text-error">
+            <p role="alert" className="text-[13px] text-error-text">
               {error}
             </p>
           ) : null}

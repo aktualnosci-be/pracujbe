@@ -364,7 +364,7 @@ export function GuestApplyForm({
 
       <div className={FORM_FIELD}>
         <Label htmlFor="guest-apply-name" className={FORM_LABEL_TEXT}>
-          {t('fullName')} <span className="text-error" aria-hidden="true">*</span>
+          {t('fullName')} <span className="text-error-text" aria-hidden="true">*</span>
         </Label>
         <Input
           ref={refs.fullName}
@@ -383,7 +383,7 @@ export function GuestApplyForm({
 
       <div className={FORM_FIELD}>
         <Label htmlFor="guest-apply-email" className={FORM_LABEL_TEXT}>
-          {t('email')} <span className="text-error" aria-hidden="true">*</span>
+          {t('email')} <span className="text-error-text" aria-hidden="true">*</span>
         </Label>
         <Input
           ref={refs.email}
@@ -583,7 +583,7 @@ export function GuestApplyForm({
           ref={formErrorRef}
           role="alert"
           tabIndex={-1}
-          className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-[16px] border border-error/30 bg-error/5 px-5 py-4 text-[13px] text-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {formError === 'network'
             ? ta('errorNetwork')

@@ -68,7 +68,7 @@ async function armProbe(page: Page) {
     w.__probe = null;
     w.__clickDurations = [];
     new PerformanceObserver((list) => {
-      for (const entry of list.getEntries() as PerformanceEventTiming[]) {
+      for (const entry of list.getEntries() as Array<PerformanceEventTiming & { interactionId?: number }>) {
         if (entry.name === "click" && entry.interactionId) w.__clickDurations.push(entry.duration);
       }
     }).observe({ type: "event", durationThreshold: 16 } as PerformanceObserverInit);

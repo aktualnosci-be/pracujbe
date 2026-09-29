@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { AlertCircle, Ban, CheckCircle2, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { captureFocus } from '@/lib/a11y/restore-focus';
 import { setCompanyBlockAction } from '@/lib/actions/company-blocks';
 import type { CompanyBlock } from '@/lib/data/company-blocks';
 import { PAPER } from '@/components/dashboard/panel-styles';
@@ -28,6 +29,7 @@ export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: Compan
 
   const unblock = async (block: CompanyBlock): Promise<void> => {
     if (pendingId) return;
+    const restoreFocus = captureFocus(); // przyciski są wyłączone na czas zapisu (#1095)
     setPendingId(block.companyId);
     setError(false);
     setUnblocked(null);
@@ -44,6 +46,7 @@ export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: Compan
       setError(true);
     } finally {
       setPendingId(null);
+      restoreFocus();
     }
   };
 
@@ -64,7 +67,7 @@ export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: Compan
         {error ? (
           <div
             role="alert"
-            className="mt-4 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error"
+            className="mt-4 flex items-start gap-3 rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error-text"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{t('saveError')}</p>

@@ -567,7 +567,7 @@ export function OnboardingWizard({
     const message = errors[name]?.message;
     if (!message) return null;
     return (
-      <p id={errorId(name)} className="text-sm text-error">
+      <p id={errorId(name)} className="text-sm text-error-text">
         {tRoot(String(message))}
       </p>
     );
@@ -961,7 +961,7 @@ export function OnboardingWizard({
                         value={levelDraft}
                         onValueChange={(val) => setLevelDraft(val as LanguageLevel)}
                       >
-                        <SelectTrigger className={FORM_SELECT} aria-label={LEVEL_LABEL[levelDraft]}>
+                        <SelectTrigger className={FORM_SELECT} aria-label={t('languageLevelLabel')}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1365,7 +1365,7 @@ function SaveIndicator({
   }
   if (state === 'error') {
     return (
-      <p role="alert" className="inline-flex items-center gap-2 text-[13px] text-error">
+      <p role="alert" className="inline-flex items-center gap-2 text-[13px] text-error-text">
         <AlertCircle className="h-4 w-4" aria-hidden="true" />
         {labels.error}
       </p>

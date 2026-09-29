@@ -175,6 +175,15 @@ export interface JobDetail extends JobListItem {
    * własna oferty (w `contentLocale`). Strona oznacza przekład i linkuje do oryginału.
    */
   machineTranslation?: JobMachineTranslation;
+  /**
+   * #792: POTWIERDZONY tryb pracy. `remote` = 100% zdalnie (tylko wtedy JSON-LD może dostać
+   * `jobLocationType: TELECOMMUTE`). Brak pola = tryb nieznany: dawny boolean `jobs.remote` NIE
+   * gwarantuje pełnej zdalności i nie jest tu mapowany. Źródło (trójstanowy wybór w kreatorze +
+   * odczyt w `get_public_job`) wymaga migracji — do czasu jej wdrożenia pole nie jest ustawiane.
+   */
+  workMode?: 'onsite' | 'hybrid' | 'remote';
+  /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
+  remoteApplicantCountries?: string[];
 }
 
 export interface GetJobsParams {

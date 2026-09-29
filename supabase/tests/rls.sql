@@ -4017,6 +4017,52 @@ select pg_temp.expect_error('select * from public.create_additional_company(''A'
   'permission denied', 'TM403-12b anon bez EXECUTE na kolejnej firmie');
 reset role;
 
+-- TM403-13 (#893, migracja 0178): limit 50 oczekujących zaproszeń
+-- liczy WYŁĄCZNIE ważne (jak panel `get_company_invitations`), nie dawno wygasłe.
+\set TMIO 'e8700000-0000-0000-0000-0000000000d1'
+\set TMIC 'e8700000-0000-0000-0000-0000000000f3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TMIO','tmio@test.be','Ivo O','{"role":"employer","first_name":"Ivo","last_name":"Owner","locale":"pl"}');
+update auth.users set email_verified = true where id = :'TMIO';
+insert into public.companies(id,name,status) values (:'TMIC','Firma TM Limit','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'TMIC',:'TMIO','owner',true);
+-- 50 dawno wygasłych oczekujących zaproszeń — dane testowe wstawione bezpośrednio (nie przez RPC),
+-- odtwarzające stan „nagromadzonych, niesprzątniętych" zaproszeń z odtworzenia w #893.
+insert into public.company_invitations(company_id, email, role, invited_by, locale, status, expires_at)
+  select :'TMIC', ('wygasly' || g || '@test.be')::public.citext, 'member', :'TMIO', 'pl', 'pending',
+         now() - interval '1 minute'
+  from generate_series(1, 50) as g;
+select pg_temp.assert(
+  (select count(*) from public.company_invitations where company_id = :'TMIC' and status = 'pending') = 50,
+  'TM403-13 przygotowano 50 wygasłych oczekujących zaproszeń');
+set role authenticated; set app.current_uid = :'TMIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 0,
+  'TM403-13b panel nie pokazuje żadnego z nich (spójne z filtrem expires_at > now())');
+-- Nowe zaproszenie mimo 50 wygasłych w bazie: przed poprawką RPC liczyło je razem
+-- z ważnymi i zwracało INVITATION_LIMIT_REACHED (kontrola ujemna: cofnięcie 0178
+-- przywraca ten błąd — `count(*) where status='pending'` bez `expires_at > now()`).
+select invitation_id as tmilinv, created as tmilcreated
+  from public.invite_company_member(:'TMIC', 'swiezy@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+select pg_temp.assert(:'tmilcreated'::boolean,
+  'TM403-13c nowe zaproszenie mimo 50 wygasłych — limit liczy tylko ważne (#893)');
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 1,
+  'TM403-13d panel pokazuje dokładnie nowe zaproszenie');
+reset role; reset app.current_uid;
+-- Limit nadal egzekwowany, gdy zaproszenia są REALNIE ważne (nie tylko przy wygasłych).
+update public.company_invitations set expires_at = now() + interval '14 days'
+  where company_id = :'TMIC' and email like 'wygasly%@test.be';
+set role authenticated; set app.current_uid = :'TMIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 51,
+  'TM403-13e po odświeżeniu ważności 51 zaproszeń jest widocznych');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMIC' || ''', ''kolejny@test.be'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
+  'INVITATION_LIMIT_REACHED', 'TM403-13f limit nadal działa przy 51 ważnych zaproszeniach');
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- UN45 (#45, 0087): wypisanie, ponowna kontrola zgody przy claimie, atomowy budżet.
 -- ============================================================================
@@ -15519,6 +15565,66 @@ select pg_temp.assert(public.get_conversation_company_name(:'conv_cn') is null,
   'CN6b poprawna funkcja znów odmawia obcemu');
 rollback;
 reset role; reset app.current_uid;
+
+-- =============================================================================
+-- OPSM — ostatni przebieg maintenance (0180, #47): zapis tylko service_role, odczyt
+-- pracujbe_ops/service_role, same liczby i stały identyfikator zadania; „nigdy” = null.
+-- =============================================================================
+\echo '--- OPSM ops_last_maintenance_run ---'
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied', 'OPSM-1 anon bez EXECUTE odczytu');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied', 'OPSM-1b anon bez zapisu');
+reset role;
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied', 'OPSM-1c authenticated bez odczytu');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied', 'OPSM-1d authenticated bez zapisu');
+select pg_temp.expect_error('select count(*) from public.ops_job_runs', 'permission denied', 'OPSM-1e authenticated nie czyta tabeli');
+reset role; reset app.current_uid;
+
+begin;
+delete from public.ops_job_runs;
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (select public.ops_last_maintenance_run() -> 'ageSeconds') = 'null'::jsonb,
+  'OPSM-2 brak przebiegu = ageSeconds null');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied',
+  'OPSM-2b pracujbe_ops nie zapisuje przebiegów');
+select pg_temp.expect_error('select count(*) from public.ops_job_runs', 'permission denied',
+  'OPSM-2c pracujbe_ops nie czyta tabeli');
+reset role;
+set local role service_role;
+select public.record_ops_job_run('maintenance', false, 1500, 'jobExpiry');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', false, 10, 'x y@z')$q$, 'VALIDATION_FAILED',
+  'OPSM-3 nazwa zadania tylko jako stały identyfikator');
+select pg_temp.expect_error($q$select public.record_ops_job_run('inne', true, 10)$q$, 'VALIDATION_FAILED',
+  'OPSM-3b nieznane zadanie odrzucone');
+reset role;
+update public.ops_job_runs set last_finished_at = now() - interval '3 hours';
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (select (r ->> 'ageSeconds')::int >= 10800 and (r ->> 'ok')::boolean = false
+      and r ->> 'failedTask' = 'jobExpiry' and (r ->> 'durationMs')::int = 1500
+     from public.ops_last_maintenance_run() r),
+  'OPSM-4 odczyt: wiek, wynik, czas trwania, zadanie z błędem');
+reset role;
+set local role service_role;
+select public.record_ops_job_run('maintenance', true, 20);
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 from public.ops_job_runs)
+  and (select (r ->> 'ageSeconds')::int < 60 and (r ->> 'ok')::boolean and r -> 'failedTask' = 'null'::jsonb
+         from public.ops_last_maintenance_run() r),
+  'OPSM-5 kolejny przebieg nadpisuje jeden wiersz (brak historii do retencji)');
+rollback;
+
+-- Kontrola ujemna: bez GRANT dla pracujbe_ops odczyt jest odrzucany (grant jest jedyną ścieżką).
+begin;
+revoke execute on function public.ops_last_maintenance_run() from pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied',
+  'OPSM-6 kontrola ujemna: bez GRANT odmowa');
+rollback;
+reset role;
 
 -- =============================================================================
 -- TM159 (#33, 0159): odczyt przekładu oferty na publicznej stronie.

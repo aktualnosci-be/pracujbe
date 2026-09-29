@@ -187,7 +187,7 @@ export const TurnstileWidget = React.forwardRef<TurnstileHandle, TurnstileWidget
         ) : null}
         <div id={statusId} aria-live="polite">
           {message ? (
-            <p className="flex items-start gap-2 text-sm text-error">
+            <p className="flex items-start gap-2 text-sm text-error-text">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{message}</span>
             </p>
