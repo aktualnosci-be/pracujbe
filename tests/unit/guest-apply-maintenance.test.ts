@@ -25,6 +25,7 @@ const MAINTENANCE_RPCS = [
   'rate_limit_gc',
   'processed_webhooks_gc',
   'claim_storage_deletions',
+  'record_ops_job_run',
 ];
 
 const request = () =>

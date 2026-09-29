@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { toggleSavedJob } from '@/lib/actions/candidate';
 import { cn } from '@/lib/utils';
-import { Toast } from '@/components/ui/toast';
+import { ToastRegion } from '@/components/ui/toast';
 
 /**
  * SaveJobButton — przełącznik „zapisz ofertę" (ikona zakładki) w panelu kandydata.
@@ -74,11 +74,10 @@ export function SaveJobButton({
         <Bookmark className={cn('h-4 w-4', saved && 'fill-current')} aria-hidden="true" />
       </button>
 
-      {error ? (
-        <div className="fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm">
-          <Toast message={te('generic')} tone="error" onClose={() => setError(false)} />
-        </div>
-      ) : null}
+      <ToastRegion
+        toast={error ? { tone: 'error', message: te('generic') } : null}
+        onClose={() => setError(false)}
+      />
     </>
   );
 }

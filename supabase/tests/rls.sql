@@ -4017,6 +4017,52 @@ select pg_temp.expect_error('select * from public.create_additional_company(''A'
   'permission denied', 'TM403-12b anon bez EXECUTE na kolejnej firmie');
 reset role;
 
+-- TM403-13 (#893, migracja 0178): limit 50 oczekujących zaproszeń
+-- liczy WYŁĄCZNIE ważne (jak panel `get_company_invitations`), nie dawno wygasłe.
+\set TMIO 'e8700000-0000-0000-0000-0000000000d1'
+\set TMIC 'e8700000-0000-0000-0000-0000000000f3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'TMIO','tmio@test.be','Ivo O','{"role":"employer","first_name":"Ivo","last_name":"Owner","locale":"pl"}');
+update auth.users set email_verified = true where id = :'TMIO';
+insert into public.companies(id,name,status) values (:'TMIC','Firma TM Limit','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'TMIC',:'TMIO','owner',true);
+-- 50 dawno wygasłych oczekujących zaproszeń — dane testowe wstawione bezpośrednio (nie przez RPC),
+-- odtwarzające stan „nagromadzonych, niesprzątniętych" zaproszeń z odtworzenia w #893.
+insert into public.company_invitations(company_id, email, role, invited_by, locale, status, expires_at)
+  select :'TMIC', ('wygasly' || g || '@test.be')::public.citext, 'member', :'TMIO', 'pl', 'pending',
+         now() - interval '1 minute'
+  from generate_series(1, 50) as g;
+select pg_temp.assert(
+  (select count(*) from public.company_invitations where company_id = :'TMIC' and status = 'pending') = 50,
+  'TM403-13 przygotowano 50 wygasłych oczekujących zaproszeń');
+set role authenticated; set app.current_uid = :'TMIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 0,
+  'TM403-13b panel nie pokazuje żadnego z nich (spójne z filtrem expires_at > now())');
+-- Nowe zaproszenie mimo 50 wygasłych w bazie: przed poprawką RPC liczyło je razem
+-- z ważnymi i zwracało INVITATION_LIMIT_REACHED (kontrola ujemna: cofnięcie 0178
+-- przywraca ten błąd — `count(*) where status='pending'` bez `expires_at > now()`).
+select invitation_id as tmilinv, created as tmilcreated
+  from public.invite_company_member(:'TMIC', 'swiezy@test.be', 'member', 'pl', pg_temp.tm_hash(), pg_temp.tm_nonce()) \gset
+select pg_temp.assert(:'tmilcreated'::boolean,
+  'TM403-13c nowe zaproszenie mimo 50 wygasłych — limit liczy tylko ważne (#893)');
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 1,
+  'TM403-13d panel pokazuje dokładnie nowe zaproszenie');
+reset role; reset app.current_uid;
+-- Limit nadal egzekwowany, gdy zaproszenia są REALNIE ważne (nie tylko przy wygasłych).
+update public.company_invitations set expires_at = now() + interval '14 days'
+  where company_id = :'TMIC' and email like 'wygasly%@test.be';
+set role authenticated; set app.current_uid = :'TMIO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select count(*) from public.get_company_invitations(:'TMIC')) = 51,
+  'TM403-13e po odświeżeniu ważności 51 zaproszeń jest widocznych');
+select pg_temp.expect_error(
+  'select * from public.invite_company_member(''' || :'TMIC' || ''', ''kolejny@test.be'', ''member'', ''pl'', pg_temp.tm_hash(), pg_temp.tm_nonce())',
+  'INVITATION_LIMIT_REACHED', 'TM403-13f limit nadal działa przy 51 ważnych zaproszeniach');
+reset role; reset app.current_uid;
+
 -- ============================================================================
 -- UN45 (#45, 0087): wypisanie, ponowna kontrola zgody przy claimie, atomowy budżet.
 -- ============================================================================
@@ -15523,6 +15569,66 @@ rollback;
 reset role; reset app.current_uid;
 
 -- =============================================================================
+-- OPSM — ostatni przebieg maintenance (0180, #47): zapis tylko service_role, odczyt
+-- pracujbe_ops/service_role, same liczby i stały identyfikator zadania; „nigdy” = null.
+-- =============================================================================
+\echo '--- OPSM ops_last_maintenance_run ---'
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied', 'OPSM-1 anon bez EXECUTE odczytu');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied', 'OPSM-1b anon bez zapisu');
+reset role;
+set role authenticated; set app.current_uid = :'TMX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied', 'OPSM-1c authenticated bez odczytu');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied', 'OPSM-1d authenticated bez zapisu');
+select pg_temp.expect_error('select count(*) from public.ops_job_runs', 'permission denied', 'OPSM-1e authenticated nie czyta tabeli');
+reset role; reset app.current_uid;
+
+begin;
+delete from public.ops_job_runs;
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (select public.ops_last_maintenance_run() -> 'ageSeconds') = 'null'::jsonb,
+  'OPSM-2 brak przebiegu = ageSeconds null');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', true, 1)$q$, 'permission denied',
+  'OPSM-2b pracujbe_ops nie zapisuje przebiegów');
+select pg_temp.expect_error('select count(*) from public.ops_job_runs', 'permission denied',
+  'OPSM-2c pracujbe_ops nie czyta tabeli');
+reset role;
+set local role service_role;
+select public.record_ops_job_run('maintenance', false, 1500, 'jobExpiry');
+select pg_temp.expect_error($q$select public.record_ops_job_run('maintenance', false, 10, 'x y@z')$q$, 'VALIDATION_FAILED',
+  'OPSM-3 nazwa zadania tylko jako stały identyfikator');
+select pg_temp.expect_error($q$select public.record_ops_job_run('inne', true, 10)$q$, 'VALIDATION_FAILED',
+  'OPSM-3b nieznane zadanie odrzucone');
+reset role;
+update public.ops_job_runs set last_finished_at = now() - interval '3 hours';
+set local role pracujbe_ops;
+select pg_temp.assert(
+  (select (r ->> 'ageSeconds')::int >= 10800 and (r ->> 'ok')::boolean = false
+      and r ->> 'failedTask' = 'jobExpiry' and (r ->> 'durationMs')::int = 1500
+     from public.ops_last_maintenance_run() r),
+  'OPSM-4 odczyt: wiek, wynik, czas trwania, zadanie z błędem');
+reset role;
+set local role service_role;
+select public.record_ops_job_run('maintenance', true, 20);
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 from public.ops_job_runs)
+  and (select (r ->> 'ageSeconds')::int < 60 and (r ->> 'ok')::boolean and r -> 'failedTask' = 'null'::jsonb
+         from public.ops_last_maintenance_run() r),
+  'OPSM-5 kolejny przebieg nadpisuje jeden wiersz (brak historii do retencji)');
+rollback;
+
+-- Kontrola ujemna: bez GRANT dla pracujbe_ops odczyt jest odrzucany (grant jest jedyną ścieżką).
+begin;
+revoke execute on function public.ops_last_maintenance_run() from pracujbe_ops;
+set local role pracujbe_ops;
+select pg_temp.expect_error('select public.ops_last_maintenance_run()', 'permission denied',
+  'OPSM-6 kontrola ujemna: bez GRANT odmowa');
+rollback;
+reset role;
+
+-- =============================================================================
 -- TM159 (#33, 0159): odczyt przekładu oferty na publicznej stronie.
 -- `get_public_job_machine_translation` zwraca przekład (anon) wyłącznie dla oferty publicznej,
 -- bieżącej rewizji i języka bez własnego tłumaczenia; tylko pola wyświetlane. Kontrola ujemna
@@ -16306,6 +16412,93 @@ delete from public.job_duplications where client_key = :'KEYJD'::uuid;
 set local role authenticated; set local app.current_uid = :'RECJD'; select pg_temp.assert_client_role();
 select public.duplicate_job_as_draft(:'JOBJD'::uuid, :'KEYJD'::uuid) as jdneg \gset
 select pg_temp.assert(:'jdneg' <> :'jdnew', 'JD216-8 kontrola ujemna: bez zapisu klucza powstaje duplikat');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- CPP638. Stronicowanie ofert profilu firmy (#638, migracja 0181). Profil pokazywał tylko
+--         pierwsze 50 ofert; kolejne strony `/pracodawcy/<slug>/strona/<n>` używają offsetu,
+--         więc `get_public_company_jobs` musi mieć deterministyczny porządek. Pięć ofert
+--         z IDENTYCZNYM `published_at` (+ jedna nowsza): strony po 2 sklejone = jedno
+--         zapytanie o wszystkie, każda oferta dokładnie raz, suma = `active_jobs_count`.
+--         Introspekcja pilnuje tie-breakera `j.id desc`; kontrola ujemna = definicja z 0140.
+-- ============================================================================
+\set CPPCO 'cc638000-0000-0000-0000-000000000001'
+reset role; reset app.current_uid;
+begin;
+insert into public.companies(id, name, slug, status) values
+  (:'CPPCO', 'CPP638 Firma', 'cpp638-firma', 'verified');
+insert into public.jobs(company_id, slug, title, category, contract_type, city, region, status, default_locale, published_at)
+select :'CPPCO', 'cpp638-oferta-' || n, 'Pracownik CPP638', 'warehouse', 'permanent', 'Gent', 'Flandria', 'active', 'pl',
+       case when n = 0 then '2026-06-02 12:00:00+00'::timestamptz else '2026-06-01 12:00:00+00'::timestamptz end
+from generate_series(0, 5) as n;
+
+set local role anon; select pg_temp.assert_client_role();
+
+-- CPP638-1: strony rozmiaru 2 (offset 0/2/4) sklejone = jedno zapytanie o 6 wierszy.
+select pg_temp.assert(
+  (select array_agg(slug) from public.get_public_company_jobs('cpp638-firma', 'pl', 6, 0))
+  = (select array_agg(slug) from (
+       select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 0)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 2)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 4)
+     ) pages),
+  'CPP638-1 strony po 2 dają ten sam porządek co jedno zapytanie o wszystkie oferty');
+
+-- CPP638-2: każda oferta dokładnie raz, a suma stron = licznik profilu (link do każdej).
+select pg_temp.assert(
+  (select count(distinct slug) = 6 and count(*) = 6 from (
+       select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 0)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 2)
+       union all select slug from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 4)
+     ) pages)
+  and (select active_jobs_count = 6 from public.get_public_company('cpp638-firma')),
+  'CPP638-2 bez pominięć i duplikatów, suma stron = active_jobs_count');
+
+-- CPP638-3: najnowsza pierwsza, remis rozstrzyga id malejąco; strona za końcem jest pusta.
+select pg_temp.assert(
+  (select slug = 'cpp638-oferta-0' from public.get_public_company_jobs('cpp638-firma', 'pl', 1, 0))
+  and (select array_agg(id::text) = array_agg(id::text order by id desc)
+         from public.get_public_company_jobs('cpp638-firma', 'pl', 5, 1))
+  and (select count(*) = 0 from public.get_public_company_jobs('cpp638-firma', 'pl', 2, 6)),
+  'CPP638-3 porządek published_at desc, id desc; strona za końcem pusta');
+reset role;
+
+-- CPP638-4: definicja kończy ORDER BY tie-breakerem `j.id desc` przed limit/offset.
+select pg_temp.assert(
+  regexp_replace(pg_get_functiondef('public.get_public_company_jobs(text,text,integer,integer)'::regprocedure),
+    '--[^\n]*', '', 'g') ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
+  'CPP638-4 ORDER BY get_public_company_jobs kończy się tie-breakerem j.id');
+
+-- KONTROLA UJEMNA: definicja z 0140 (tylko `published_at desc`) — introspekcja CPP638-4
+-- wykrywa brak tie-breakera (sam SQL nie obiecuje wtedy stabilnego podziału na strony).
+savepoint cpp_neg;
+create or replace function public.get_public_company_jobs(
+  p_slug text, p_locale text default 'pl', p_limit integer default 20, p_offset integer default 0
+)
+returns table (
+  id uuid, slug text, title text, company_name text, company_verified boolean,
+  city text, region text, contract_type text, salary_min integer, salary_max integer,
+  currency text, salary_period text, published_at timestamptz, highlights text[], category text,
+  accommodation boolean, immediate boolean, no_language_required boolean
+)
+language sql stable security definer set search_path = public, pg_temp as $cppneg$
+  select j.id, j.slug, j.title, c.name, true, j.city, j.region, j.contract_type::text,
+    j.salary_min, j.salary_max, coalesce(j.currency, 'EUR'), j.salary_period::text,
+    j.published_at, '{}'::text[], j.category::text, j.accommodation, j.immediate, j.no_language_required
+  from public.jobs j join public.companies c on c.id = j.company_id
+  where c.slug = p_slug and c.status = 'verified' and c.deleted_at is null
+    and j.status = 'active' and j.deleted_at is null
+    and (j.expires_at is null or j.expires_at > now())
+  order by j.published_at desc
+  limit least(greatest(coalesce(p_limit, 20), 1), 100)
+  offset least(greatest(coalesce(p_offset, 0), 0), 10000);
+$cppneg$;
+select pg_temp.assert(
+  not (regexp_replace(pg_get_functiondef('public.get_public_company_jobs(text,text,integer,integer)'::regprocedure),
+    '--[^\n]*', '', 'g') ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
+  'CPP638-5 kontrola ujemna: definicja z 0140 nie przechodzi bramki CPP638-4');
+rollback to savepoint cpp_neg;
 rollback;
 reset role; reset app.current_uid;
 

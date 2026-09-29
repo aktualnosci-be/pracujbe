@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
+import { waitForHydrated } from './fixtures/hydration';
 
 /**
  * #216 — na desktopie panel filtrów był wyższy niż viewport i przyklejony (sticky), więc dolne
@@ -70,7 +71,9 @@ for (const viewport of [
     );
 
     // Zatwierdzenie nadal działa.
-    await rail.getByRole('checkbox', { name: 'Budownictwo' }).click();
+    const construction = rail.getByRole('checkbox', { name: 'Budownictwo' });
+    await waitForHydrated(construction);
+    await construction.click();
     await expect(apply).toBeEnabled();
     await apply.click();
     await expect(page).toHaveURL(/category=construction/);

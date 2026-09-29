@@ -137,7 +137,7 @@ export function ThreadMessageList({
       {failed || olderCursor || loadedOlder ? (
         <div className="mb-3 flex flex-col items-center gap-2 text-center">
           {failed ? (
-            <p role="alert" className="text-sm text-error">
+            <p role="alert" className="text-sm text-error-text">
               {t('loadOlderError')}
             </p>
           ) : null}
