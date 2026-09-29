@@ -120,8 +120,10 @@ const FIXTURE_ONLY_SPECS = [
 
 /**
  * Speci z asercją czasu (INP otwarcia dialogu przy CPU 4×, #393). Mierzą czas interakcji, więc
- * biegną w osobnym projekcie na jednym workerze i dopiero PO reszcie zestawu — równoległe
- * karty nie zabierają im CPU. Pozostałe testy nie mierzą czasu i biegną równolegle.
+ * biegną w osobnym projekcie na jednym workerze, niezależnym od projektu `chromium` (#732:
+ * zależność powodowała pominięcie pomiaru po awarii dowolnego testu). W CI biegną w jobie
+ * `e2e-perf` (`--project=chromium-timing`), bez konkurencji o CPU. Pozostałe testy nie
+ * mierzą czasu i biegną równolegle.
  */
 const TIMING_SPECS = ['**/dialog-open-inp.spec.ts'];
 
@@ -373,7 +375,10 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    // W CI trace pierwszej (nieudanej) próby, nie dopiero ponowienia (#1032): flaki przechodzą
+    // przy retry, więc `on-first-retry` zapisywał ślad udanego przebiegu.
+    trace: process.env.CI ? 'retain-on-first-failure' : 'on-first-retry',
+    screenshot: process.env.CI ? 'only-on-failure' : 'off',
   },
   projects: [
     {
@@ -396,10 +401,14 @@ export default defineConfig({
       testMatch: TIMING_SPECS,
       // INP otwarcia ApplyModal (#393) — dialog istnieje tylko przy serwerze RECRUITMENT.
       ...(CLASSIFIEDS_SERVER ? { testIgnore: TIMING_SPECS } : {}),
-      // Jeden worker i start po zakończeniu projektu `chromium` = pomiar bez konkurencji o CPU.
+      // Jeden worker. BEZ `dependencies: ['chromium']` (#732): Playwright pomija projekt zależny,
+      // gdy w zależności padnie dowolny test, więc pomiar INP znikałby z każdego przebiegu z
+      // niezwiązaną awarią. Izolację od CPU zapewnia job `e2e-perf` (osobny runner,
+      // `--project=chromium-timing`); lokalny pełny przebieg mierzy równolegle z resztą, więc
+      // do rzetelnego pomiaru uruchom `--project=chromium-timing` osobno.
       workers: 1,
-      dependencies: ['chromium'],
-      use: BROWSER,
+      // Bez śladu i zrzutów: rejestrowanie trace zawyżałoby mierzony czas interakcji.
+      use: { ...BROWSER, trace: 'off', screenshot: 'off' },
     },
   ],
   webServer: {

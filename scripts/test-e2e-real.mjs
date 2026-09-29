@@ -23,6 +23,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { appendNodeOptions, requireNodeOption } from './lib/node-options.mjs';
 import { applyMigrations } from './db/migrate.mjs';
 import { loadProductionMigrations } from './db/production-migrations.mjs';
 
@@ -207,7 +208,8 @@ function runPlaywright() {
           // #1136: proces testów importuje moduły aplikacji — przepływ rekrutacyjny jawnie włączony.
           PORTAL_LEGAL_MODE: process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT',
           // Proces testów importuje moduły serwerowe aplikacji — patrz server-only-hook.cjs.
-          NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${serverOnlyHook}`].filter(Boolean).join(' '),
+          // Ścieżka repozytorium może zawierać spację (#915) — wartość ujęta w cudzysłów.
+          NODE_OPTIONS: appendNodeOptions(process.env.NODE_OPTIONS, requireNodeOption(serverOnlyHook)),
         },
       },
     );
