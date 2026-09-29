@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { renderEmail } from '@/emails/templates';
-import { emailFromEnv } from '@/lib/email/sender';
+import { emailFromEnv, replyToFromEnv } from '@/lib/email/sender';
 import { env, isAuthMailConfigured, isPortalAuthConfigured, isProductionMode } from '@/lib/env';
 import { captureError } from '@/lib/error-report';
 import {
@@ -81,7 +81,7 @@ export function resendSender(apiKey: string): MailSender {
 export async function processAuthEmailBatch(
   pool: MailPool,
   sender: MailSender,
-  options: { baseURL: string; from: string; limit?: number },
+  options: { baseURL: string; from: string; /** `EMAIL_REPLY_TO` (Reply-To); brak = bez nagłówka. */ replyTo?: string | null; limit?: number },
 ): Promise<AuthEmailProcessResult> {
   let expired = 0;
   let queue: AuthEmailDelivery[];
@@ -129,7 +129,7 @@ export async function processAuthEmailBatch(
     let providerMessageId: string;
     try {
       providerMessageId = (await sender.send(
-        { from: options.from, to: prepared.to, ...message },
+        { from: options.from, to: prepared.to, ...message, ...(options.replyTo ? { replyTo: options.replyTo } : {}) },
         { idempotencyKey: prepared.idempotencyKey },
       )).id;
     } catch (error) {
@@ -176,6 +176,7 @@ export async function processAuthEmailQueue(limit = 20): Promise<AuthEmailProces
     return await processAuthEmailBatch(await getAuthMailPool(), transport, {
       baseURL,
       from: emailFromEnv(),
+      replyTo: replyToFromEnv(),
       limit,
     });
   } catch (error) {

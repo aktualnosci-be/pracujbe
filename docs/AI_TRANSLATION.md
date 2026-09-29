@@ -64,7 +64,8 @@ ujemną TR31-N (bez kontroli rewizji spóźniony wynik v1 zostałby opublikowany
   `gpt-6-luna` — decyzja właściciela 2026-09-26), structured output `strict` ze schematem
   o dokładnie tych kluczach co źródło, bez narzędzi, `store: false`, pola w `<source_fields>`
   (próby zamknięcia znacznika neutralizowane), glosariusz pary języków. Klient: timeout 60 s,
-  jedna szybka ponowna próba; dalej ponawia kolejka. Mapowanie: odmowa i filtr treści → trwałe
+  bez ponowień SDK (`maxRetries: 0` — rezerwacja budżetu = jedno wywołanie, #1106); ponawia
+  kolejka (backoff zadania, każda próba rezerwuje budżet od nowa). Mapowanie: odmowa i filtr treści → trwałe
   (`refused`); limit dostawcy → `rate_limited`; każda inna awaria (sieć, 5xx, ucięta
   odpowiedź, zły JSON) → `provider_unavailable`, ponawiane w granicy `max_attempts`. Klient
   nie przekazuje komunikatu dostawcy ani `Retry-After`.

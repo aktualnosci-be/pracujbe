@@ -54,7 +54,7 @@ export function SwitchToCompanyButton({ companyId }: { companyId: string }): Rea
         <span>{t('targetSwitchAction')}</span>
       </Button>
       {failed ? (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="text-sm text-error-text">
           {t('targetSwitchError')}
         </p>
       ) : null}

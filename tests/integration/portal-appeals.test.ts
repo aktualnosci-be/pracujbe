@@ -226,6 +226,44 @@ describe('odwołania na PostgreSQL (#25) — panel admina', () => {
     expect(retention.overview.appealWindowDays).toBeGreaterThan(0);
     expect(retention.overview.runs).toEqual([]);
   });
+
+  // Ostatni w pliku: dokłada trzecią sprawę/decyzję/odwołanie, więc nie może wyprzedzać raportu wyżej.
+  it('#909: administrator WYŁĄCZONY (is_active = false) nie liczy się jako inny recenzent', async () => {
+    // Firma i sprawa niezależne od pozostałych testów tego pliku.
+    const company = (await db().admin.query(
+      `INSERT INTO public.companies(name, status) VALUES ('Firma 909 IT', 'verified') RETURNING id`,
+    )).rows[0].id;
+    await db().admin.query(
+      `INSERT INTO public.company_members(company_id, profile_id, role, is_active) VALUES ($1, $2, 'owner', true)`,
+      [company, owner.id],
+    );
+    const job = await makeJob(company, 'apl-it-909');
+    const r = await report(job, 'apl-it-909@example.invalid');
+    const decisionId = await decide(decider.id, r.id, 'job_removed', FACTS, ['terms', 'Regulamin § 4']);
+
+    actAs(owner);
+    const grounds = 'Nie wymagaliśmy opłaty; wpis w ogłoszeniu był pomyłką.';
+    const submitted = await actions.submitModerationAppeal(decisionId, grounds, randomUUID());
+    if (!submitted.ok) throw new Error('expected ok');
+
+    // reviewer jest jedynym „innym” administratorem — wyłączamy go operacyjnie, bez
+    // zmiany roli/deleted_at (jak w #909: konto istnieje, ale nie może się zalogować).
+    await db().admin.query(`UPDATE public.profiles SET is_active = false WHERE id = $1`, [reviewer.id]);
+    try {
+      actAs(decider);
+      const queue = await dsa.listAppeals();
+      if (queue.status !== 'ok') throw new Error('expected ok');
+      const appeal = queue.pending.find((a) => a.reference === submitted.reference)!;
+      expect(appeal).toBeDefined();
+      // Loader nie zgłasza konfliktu: jedyny inny admin jest wyłączony.
+      expect(appeal.reviewerConflict).toBe(false);
+      const input = { outcome: 'reversed' as const, reasoning: REASONING };
+      // Autor pierwotnej decyzji może rozpatrzyć — RPC też nie widzi dostępnego recenzenta.
+      expect(await actions.decideAppeal(appeal.id, 'pending', 'author', 'job', input)).toEqual({ ok: true });
+    } finally {
+      await db().admin.query(`UPDATE public.profiles SET is_active = true WHERE id = $1`, [reviewer.id]);
+    }
+  });
 });
 
 // 0960 (#1045): poinformowanie autora = odczyt decyzji w panelu (niezmienny zapis), nie odczyt

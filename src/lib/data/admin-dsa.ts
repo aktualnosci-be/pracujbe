@@ -172,9 +172,13 @@ export async function listAppeals(query: AdminAppealsQuery = {}): Promise<AdminA
          ORDER BY a.due_at ASC, a.id ASC LIMIT $${limitIdx}`, pendingParams),
       decided: await queryRows(tx, 'admin-dsa.appeals-decided',
         `${APPEAL_SELECT} WHERE a.status <> 'pending' ORDER BY a.decided_at DESC NULLS LAST, a.id DESC LIMIT 20`),
+      // #909: konto wyłączone (is_active = false) nie liczy się jako dostępny drugi
+      // recenzent — inaczej odwołanie zostaje nierozpatrywalne, gdy jedyny „inny" admin
+      // nie może się zalogować. Zgodne z admin_decide_appeal (0146).
       admins: await queryCount(tx, 'admin-dsa.other-admins',
         `SELECT 1 FROM public.profiles
-          WHERE role = 'admin' AND deleted_at IS NULL AND ($1::uuid IS NULL OR id <> $1::uuid)`,
+          WHERE role = 'admin' AND deleted_at IS NULL AND is_active = true
+            AND ($1::uuid IS NULL OR id <> $1::uuid)`,
         [viewerId]),
     }));
     const otherAdmins = admins > 0;
@@ -361,6 +365,23 @@ export async function getStatementsExport(
 ): Promise<DsaExportResult> {
   if (!isPortalDataConfigured()) return { status: 'ok', rows: [], nextCursor: null };
   await requireAdmin();
+  return fetchStatementsExportPage(from, to, cursorToken);
+}
+
+/**
+ * Kolejna strona eksportu BEZ ponownego sprawdzania sesji — wyłącznie dla trasy CSV po tym, jak
+ * pierwsza strona (`getStatementsExport`) potwierdziła rolę admina w kontekście żądania.
+ * Strony 2+ są dociągane wewnątrz strumienia odpowiedzi (`pull()`), gdzie żądanie jest już
+ * zakończone: `requireAdmin` (cookies/nagłówki sesji, `notFound()`) rzucał tam wyjątek i eksport
+ * urywał się po pierwszej stronie (2000 wierszy, #1110). Nie eksportować do warstw
+ * niezwiązanych z tą trasą.
+ */
+export async function fetchStatementsExportPage(
+  from: Date,
+  to: Date,
+  cursorToken?: string | null,
+): Promise<DsaExportResult> {
+  if (!isPortalDataConfigured()) return { status: 'ok', rows: [], nextCursor: null };
   try {
     const cursor = decodeDsaExportCursor(cursorToken);
     const data = await withServiceRole((tx) =>

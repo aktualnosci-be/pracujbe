@@ -98,6 +98,74 @@ describe('JobPosting JSON-LD (#313)', () => {
     expect(buildJobPostingJsonLd(job(), 'u', labels, { directApply: true }).directApply).toBe(true);
   });
 
+  // #792 — TELECOMMUTE tylko dla potwierdzonej pracy w 100% zdalnej z krajem kandydata.
+  describe('#792: jobLocationType TELECOMMUTE', () => {
+    const physical = { '@type': 'Place' };
+
+    it('praca w 100% zdalna z krajem: TELECOMMUTE + applicantLocationRequirements, bez jobLocation', () => {
+      const data = buildJobPostingJsonLd(
+        job({ workMode: 'remote', remoteApplicantCountries: ['be'] }),
+        'u',
+        labels,
+      );
+      expect(data.jobLocationType).toBe('TELECOMMUTE');
+      expect(data.applicantLocationRequirements).toEqual({ '@type': 'Country', name: 'BE' });
+      expect(data).not.toHaveProperty('jobLocation');
+    });
+
+    it('kilka krajów (bez duplikatów i błędnych kodów) = lista Country', () => {
+      const data = buildJobPostingJsonLd(
+        job({ workMode: 'remote', remoteApplicantCountries: ['BE', 'nl', 'BE', 'Belgium', ''] }),
+        'u',
+        labels,
+      );
+      expect(data.applicantLocationRequirements).toEqual([
+        { '@type': 'Country', name: 'BE' },
+        { '@type': 'Country', name: 'NL' },
+      ]);
+    });
+
+    it('kontrola ujemna: stacjonarna zostaje z jobLocation, bez TELECOMMUTE', () => {
+      const data = buildJobPostingJsonLd(
+        job({ workMode: 'onsite', remoteApplicantCountries: ['BE'] }),
+        'u',
+        labels,
+      );
+      expect(data).not.toHaveProperty('jobLocationType');
+      expect(data).not.toHaveProperty('applicantLocationRequirements');
+      expect(data.jobLocation).toMatchObject(physical);
+    });
+
+    it('kontrola ujemna: hybrydowa nigdy nie dostaje TELECOMMUTE', () => {
+      const data = buildJobPostingJsonLd(
+        job({ workMode: 'hybrid', remoteApplicantCountries: ['BE'] }),
+        'u',
+        labels,
+      );
+      expect(data).not.toHaveProperty('jobLocationType');
+      expect(data.jobLocation).toMatchObject(physical);
+    });
+
+    it('kontrola ujemna: tryb nieznany (dawny boolean remote) nie jest mapowany na TELECOMMUTE', () => {
+      const data = buildJobPostingJsonLd(job({ remoteApplicantCountries: ['BE'] }), 'u', labels);
+      expect(data).not.toHaveProperty('jobLocationType');
+      expect(data.jobLocation).toMatchObject(physical);
+    });
+
+    it('kontrola ujemna: zdalna bez poprawnego kraju kandydata = zwykły jobLocation', () => {
+      for (const countries of [undefined, [], ['Belgium', '  ']]) {
+        const data = buildJobPostingJsonLd(
+          job({ workMode: 'remote', remoteApplicantCountries: countries }),
+          'u',
+          labels,
+        );
+        expect(data).not.toHaveProperty('jobLocationType');
+        expect(data).not.toHaveProperty('applicantLocationRequirements');
+        expect(data.jobLocation).toMatchObject(physical);
+      }
+    });
+  });
+
   // #842 — umowa na stałe nie mówi nic o wymiarze etatu (patrz `job.workingHours`, wolny tekst);
   // fałszywe `FULL_TIME` przy realnej ofercie na część etatu wprowadzało w błąd wyszukiwarki.
   it('#842: umowa na stałe (permanent) NIE emituje employmentType — wymiar etatu nieznany', () => {
