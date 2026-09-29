@@ -1947,6 +1947,7 @@
     "attachmentSensitiveId": "De bestandsnaam bevat een identificatienummer (bv. rijksregisternummer, PESEL, nummer van identiteitskaart of paspoort). Wijzig de bestandsnaam en voeg het bestand opnieuw toe.",
     "attachmentLimit": "Je kunt hoogstens {max} bestanden aan één bericht toevoegen.",
     "attachmentRemove": "Bestand {name} verwijderen",
+    "attachmentsRemoveAll": "Alle bijlagen verwijderen",
     "attachmentDownload": "{name} downloaden ({size})",
     "attachmentDownloadError": "Het bestand kon niet worden gedownload. Probeer het opnieuw.",
     "attachmentUnavailable": "Bestand wordt gecontroleerd — downloaden niet beschikbaar.",
@@ -1999,6 +2000,7 @@
     "deleteConfirmDescription": "Het bestand „{name}” wordt definitief verwijderd. Dit kan niet ongedaan worden gemaakt.",
     "deleteSuccess": "Het document is verwijderd.",
     "errorTooLarge": "Het bestand is te groot (max. 5 MB).",
+    "errorAccountLimit": "Je hebt de bestandslimiet van je account bereikt (max. 5 bestanden en 20 MB in totaal). Verwijder een ouder document.",
     "errorType": "Toegestane formaten: PDF, DOC, DOCX.",
     "errorEmpty": "Het gekozen bestand is leeg."
   },

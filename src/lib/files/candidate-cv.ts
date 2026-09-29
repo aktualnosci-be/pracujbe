@@ -132,6 +132,9 @@ export async function storeCandidateCv(
     return { ok: true, id: record.id };
   } catch (error) {
     await discardObject(deps.store, key, 'files.upload.orphan');
+    if (isAppError(error) && error.code === 'VALIDATION_FAILED' && error.context?.reason === 'accountLimit') {
+      return { ok: false, error: 'VALIDATION_FAILED', reason: 'accountLimit' };
+    }
     return { ok: false, error: repositoryError(error) };
   }
 }

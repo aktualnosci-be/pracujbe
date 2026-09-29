@@ -20378,4 +20378,120 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- ============================================================================
+-- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0966) i limit CV na konto (#1101, CF-06).
+--   Polityki odczytu applications/offers/conversations/messages ukrywają wiersze z `deleted_at`;
+--   strażnik `trg_soft_delete_contract` blokuje zapis do usuniętych rekordów (także dla ról z
+--   ominięciem RLS). Limit CV: 5 plików / 20 MB, usunięte pliki nie liczą się.
+--   Kontrole ujemne: zdjęte polityki (stara definicja) i zdjęte triggery.
+-- ============================================================================
+\echo '--- SD1111 soft-delete kontrakt + limit CV ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from pg_policies where schemaname = 'public'
+     and ((tablename = 'applications' and policyname = 'applications_select')
+       or (tablename = 'offers' and policyname = 'offers_select')
+       or (tablename = 'conversations' and policyname = 'conversations_select_member')
+       or (tablename = 'messages' and policyname = 'messages_select_member'))
+     and qual like '%deleted_at IS NULL%') = 4,
+  'SD1111-0 wszystkie cztery polityki odczytu sprawdzają deleted_at');
+
+begin;
+insert into public.messages(conversation_id, sender_id, body) values (:'at_conv', :'WMCA', 'sd1111 wiadomość');
+select pg_temp.assert((select count(*) from public.messages where conversation_id = :'at_conv' and body = 'sd1111 wiadomość') = 1, 'SD1111-1a fixture');
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.messages where body = 'sd1111 wiadomość') = 1
+  and (select count(*) from public.conversations where id = :'at_conv') = 1
+  and (select count(*) from public.applications where id = :'rd_app') = 1, 'SD1111-1b przed usunięciem kandydat widzi wiersze');
+reset role;
+update public.messages set deleted_at = now() where body = 'sd1111 wiadomość';
+update public.applications set deleted_at = now() where id = :'rd_app';
+update public.conversations set deleted_at = now() where id = :'at_conv';
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.messages where body = 'sd1111 wiadomość') = 0
+  and (select count(*) from public.conversations where id = :'at_conv') = 0
+  and (select count(*) from public.applications where id = :'rd_app') = 0,
+  'SD1111-2 po soft-delete kandydat nie widzi wiadomości, rozmowy ani aplikacji');
+reset role; set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'rd_app') = 0
+  and (select count(*) from public.conversations where id = :'at_conv') = 0,
+  'SD1111-2b firma też nie widzi usuniętej aplikacji ani rozmowy');
+reset role;
+-- Strażnik zapisu.
+select pg_temp.expect_error(format($$insert into public.messages(conversation_id, sender_id, body) values (%L, %L, 'do usuniętej')$$, :'at_conv', :'WMCA'),
+  'NOT_FOUND', 'SD1111-3a wiadomość do usuniętej rozmowy odrzucona');
+select pg_temp.expect_error(format($$update public.messages set body = 'zmiana' where body = 'sd1111 wiadomość'$$),
+  'NOT_FOUND', 'SD1111-3b treść usuniętej wiadomości nie do zmiany');
+select pg_temp.expect_error(format($$update public.applications set status = 'rejected' where id = %L$$, :'rd_app'),
+  'NOT_FOUND', 'SD1111-3c status usuniętej aplikacji nie do zmiany');
+-- Zmiana samego klucza obcego (anonimizacja) i przywrócenie nie są blokowane.
+update public.messages set sender_id = null where body = 'sd1111 wiadomość';
+update public.conversations set deleted_at = null where id = :'at_conv';
+select pg_temp.assert((select count(*) from public.conversations where id = :'at_conv' and deleted_at is null) = 1,
+  'SD1111-3d przywrócenie rozmowy działa');
+-- Kontrola ujemna: bez strażnika zapis do usuniętej aplikacji przechodzi.
+alter table public.applications disable trigger trg_soft_delete_contract;
+select pg_temp.assert(
+  (select count(*) from pg_trigger where tgname = 'trg_soft_delete_contract' and tgenabled = 'D') >= 1,
+  'SD1111-N0 fixture kontroli ujemnej');
+alter table public.applications enable trigger trg_soft_delete_contract;
+alter table public.messages disable trigger trg_soft_delete_contract;
+update public.conversations set deleted_at = now() where id = :'at_conv';
+insert into public.messages(conversation_id, sender_id, body) values (:'at_conv', :'WMCA', 'bez strażnika');
+select pg_temp.assert((select count(*) from public.messages where body = 'bez strażnika') = 1,
+  'SD1111-N1 kontrola ujemna: bez strażnika wiadomość trafia do usuniętej rozmowy');
+rollback;
+reset role; reset app.current_uid;
+
+-- Kontrola ujemna polityki: definicja sprzed 0966 pokazuje usuniętą aplikację.
+begin;
+update public.applications set deleted_at = now() where id = :'rd_app';
+drop policy applications_select on public.applications;
+create policy applications_select on public.applications for select to authenticated
+  using (candidate_id = auth.uid() or public.is_job_manager(job_id));
+set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert((select count(*) from public.applications where id = :'rd_app') = 1,
+  'SD1111-N2 kontrola ujemna: stara polityka pokazuje usuniętą aplikację');
+rollback;
+reset role; reset app.current_uid;
+
+-- Limit CV na konto.
+begin;
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes)
+  select :'WMCA', 'candidate-files', :'WMCA' || '/sd-' || g || '.pdf', 'candidate_cv', 1000 from generate_series(1, 4) g;
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (%L, 'candidate-files', %L, 'candidate_cv', 1000), (%L, 'candidate-files', %L, 'candidate_cv', 1000)$$,
+  :'WMCA', :'WMCA' || '/sd-5.pdf', :'WMCA', :'WMCA' || '/sd-6.pdf'), 'CV_ACCOUNT_LIMIT', 'SD1111-4a szósty plik CV odrzucony');
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/sd-5.pdf', 'candidate_cv', 1000);
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (%L, 'candidate-files', %L, 'candidate_cv', 1000)$$,
+  :'WMCA', :'WMCA' || '/sd-6.pdf'), 'CV_ACCOUNT_LIMIT', 'SD1111-4b limit liczby: piąty plik przechodzi, szósty nie');
+update public.files set deleted_at = now() where path = :'WMCA' || '/sd-1.pdf';
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/sd-6.pdf', 'candidate_cv', 1000);
+select pg_temp.assert(true, 'SD1111-4c usunięty plik nie liczy się do limitu');
+-- Limit rozmiaru łącznego.
+delete from public.files where owner_id = :'WMCA' and entity_type = 'candidate_cv';
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes)
+  select :'WMCA', 'candidate-files', :'WMCA' || '/big-' || g || '.pdf', 'candidate_cv', 5 * 1024 * 1024 from generate_series(1, 4) g;
+select pg_temp.expect_error(format($$insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (%L, 'candidate-files', %L, 'candidate_cv', 1)$$,
+  :'WMCA', :'WMCA' || '/big-5.pdf'), 'CV_ACCOUNT_LIMIT', 'SD1111-5 przekroczenie 20 MB łącznie odrzucone');
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/msg.pdf', 'message_attachment', 5 * 1024 * 1024);
+select pg_temp.assert(true, 'SD1111-5b inne typy plików poza limitem CV');
+-- Kontrola ujemna: bez triggera szósty plik przechodzi.
+alter table public.files disable trigger trg_cv_account_quota;
+insert into public.files(owner_id, bucket, path, entity_type, size_bytes) values (:'WMCA', 'candidate-files', :'WMCA' || '/big-5.pdf', 'candidate_cv', 5 * 1024 * 1024);
+select pg_temp.assert((select sum(size_bytes) from public.files where owner_id = :'WMCA' and entity_type = 'candidate_cv') = 25 * 1024 * 1024,
+  'SD1111-N3 kontrola ujemna: bez triggera limit rozmiaru nie działa');
+rollback;
+
+-- Rollback 0966 przywraca polityki bez deleted_at i zdejmuje strażniki (w transakcji cofanej).
+begin;
+\ir ../rollback/0966_soft_delete_contract_cv_quota.down.sql
+select pg_temp.assert(
+  (select count(*) from pg_policies where schemaname = 'public' and policyname in
+     ('applications_select', 'offers_select', 'conversations_select_member', 'messages_select_member')
+     and qual like '%deleted_at%') = 0
+  and to_regprocedure('public.enforce_soft_delete_contract()') is null
+  and to_regprocedure('public.enforce_cv_account_quota()') is null,
+  'SD1111-R rollback 0966 przywraca stan sprzed migracji');
+rollback;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

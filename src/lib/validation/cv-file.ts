@@ -6,6 +6,9 @@
  */
 
 export const CV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+/** Limity konta (CF-06): lustro triggera `enforce_cv_account_quota` (migracja 0966). */
+export const CV_MAX_FILES_PER_ACCOUNT = 5;
+export const CV_MAX_TOTAL_BYTES_PER_ACCOUNT = 20 * 1024 * 1024; // 20 MB
 
 /** Dozwolone typy MIME → rozszerzenie zapisywanego pliku. */
 export const CV_ALLOWED_TYPES: ReadonlyMap<string, 'pdf' | 'doc' | 'docx'> = new Map([
@@ -15,7 +18,7 @@ export const CV_ALLOWED_TYPES: ReadonlyMap<string, 'pdf' | 'doc' | 'docx'> = new
 ]);
 
 /** Powód odrzucenia pliku (mapowany na komunikat i18n `files.error*`). */
-export type CvFileProblem = 'empty' | 'tooLarge' | 'type';
+export type CvFileProblem = 'empty' | 'tooLarge' | 'type' | 'accountLimit';
 
 /**
  * Kontrola metadanych pliku (bez czytania treści), identyczna z pierwszymi krokami serwera.

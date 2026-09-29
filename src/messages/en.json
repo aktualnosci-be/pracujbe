@@ -1947,6 +1947,7 @@
     "attachmentSensitiveId": "The file name contains an identification number (e.g. national register number, PESEL, ID card or passport number). Rename the file and add it again.",
     "attachmentLimit": "You can attach up to {max} files to one message.",
     "attachmentRemove": "Remove file {name}",
+    "attachmentsRemoveAll": "Remove all attachments",
     "attachmentDownload": "Download {name} ({size})",
     "attachmentDownloadError": "The file could not be downloaded. Please try again.",
     "attachmentUnavailable": "File is being checked — download unavailable.",
@@ -1999,6 +2000,7 @@
     "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
     "deleteSuccess": "The document has been deleted.",
     "errorTooLarge": "The file is too large (max 5 MB).",
+    "errorAccountLimit": "You reached the file limit for your account (max. 5 files and 20 MB in total). Delete an older document.",
     "errorType": "Allowed formats: PDF, DOC, DOCX.",
     "errorEmpty": "The selected file is empty."
   },
