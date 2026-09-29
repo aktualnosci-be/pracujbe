@@ -99,7 +99,7 @@ drop trigger if exists trg_files_guard_client_write on public.files;
 drop function if exists public.guard_files_client_write();
 
 create or replace function public.is_admin()
-returns boolean language sql stable security definer set search_path = public as $$
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
 $$;
 
