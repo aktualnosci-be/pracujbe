@@ -3021,7 +3021,9 @@
     "auditActionJobPausedForReview": "Job paused for content review",
     "auditActionCompanyAgencyChanged": "Agency declaration changed",
     "auditActionCompanyAgencyChecked": "Agency recognition number checked",
-    "aiCostsFeatureFraudCheck": "Job content check"
+    "aiCostsFeatureFraudCheck": "Job content check",
+    "auditActionEmailLocaleChanged": "Email language changed by the user",
+    "entityProfile": "Profile"
   },
   "settings": {
     "title": "Notification preferences",
@@ -3051,7 +3053,14 @@
     "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment.",
     "employerEmailApplicationsDescription": "New candidate applications to your job offers.",
     "employerEmailOffersDescription": "When a candidate accepts or declines your job proposal.",
-    "employerEmailMessagesDescription": "New messages from candidates in your conversations."
+    "employerEmailMessagesDescription": "New messages from candidates in your conversations.",
+    "emailLocaleTitle": "Language of emails and notifications",
+    "emailLocaleDescription": "We send you emails and notifications in this language, whatever language you browse the site in. The change applies to messages sent from now on.",
+    "emailLocaleLabel": "Language of emails and notifications",
+    "emailLocaleSave": "Save language",
+    "emailLocaleSaving": "Saving...",
+    "emailLocaleSaved": "The language of emails and notifications has been saved.",
+    "emailLocaleLoadError": "Could not load the language of emails and notifications. Please try again in a moment."
   },
   "guides": {
     "pageTitle": "Guides",

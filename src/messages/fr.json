@@ -3021,7 +3021,9 @@
     "auditActionJobPausedForReview": "Offre suspendue pour vérification",
     "auditActionCompanyAgencyChanged": "Modification de la déclaration d’agence",
     "auditActionCompanyAgencyChecked": "Vérification du numéro d’agrément",
-    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres"
+    "aiCostsFeatureFraudCheck": "Contrôle du contenu des offres",
+    "auditActionEmailLocaleChanged": "Langue des e-mails modifiée par l’utilisateur",
+    "entityProfile": "Profil"
   },
   "settings": {
     "title": "Préférences de notification",
@@ -3051,7 +3053,14 @@
     "loadErrorHint": "Nous n’affichons pas le formulaire afin que l’enregistrement n’écrase pas vos choix précédents. Réessayez dans un instant.",
     "employerEmailApplicationsDescription": "Nouvelles candidatures à vos offres d’emploi.",
     "employerEmailOffersDescription": "Lorsqu’un candidat accepte ou refuse votre proposition d’emploi.",
-    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations."
+    "employerEmailMessagesDescription": "Nouveaux messages de candidats dans vos conversations.",
+    "emailLocaleTitle": "Langue des e-mails et des notifications",
+    "emailLocaleDescription": "C’est dans cette langue que nous vous envoyons e-mails et notifications, quelle que soit la langue dans laquelle vous consultez le site. Le changement s’applique aux messages suivants.",
+    "emailLocaleLabel": "Langue des e-mails et des notifications",
+    "emailLocaleSave": "Enregistrer la langue",
+    "emailLocaleSaving": "Enregistrement...",
+    "emailLocaleSaved": "La langue des e-mails et des notifications a été enregistrée.",
+    "emailLocaleLoadError": "Impossible de charger la langue des e-mails et des notifications. Réessayez dans un instant."
   },
   "guides": {
     "pageTitle": "Guides",
