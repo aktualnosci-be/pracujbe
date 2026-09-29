@@ -223,7 +223,7 @@ describe("OnboardingWizard: data ważności certyfikatu (#96)", () => {
     expect(vca).toHaveAttribute("aria-invalid", "true");
     expect(screen.getAllByText("certificateExpired")).toHaveLength(1);
 
-    fireEvent.change(vca, { target: { value: "2999-12-31" } });
+    fireEvent.change(vca, { target: { value: "2099-12-31" } });
     expect(screen.queryByText("certificateExpired")).toBeNull();
     expect(vca).not.toHaveAttribute("aria-invalid");
 
@@ -233,10 +233,29 @@ describe("OnboardingWizard: data ważności certyfikatu (#96)", () => {
         5,
         expect.objectContaining({
           certificates: ["VCA", "ADR"],
-          certificateExpiry: { VCA: "2999-12-31" },
+          certificateExpiry: { VCA: "2099-12-31" },
         }),
         expect.anything(),
       ),
     );
+  });
+
+  it("data poza zakresem lat 1900–2100 (#1108) nie zapisuje kroku 5 i pokazuje błąd przy polu", async () => {
+    saveOnboardingStep.mockClear();
+    render(
+      <OnboardingWizard
+        initialStep={5}
+        initialValues={{
+          ...onboardingValues,
+          certificates: ["VCA"],
+          certificateExpiry: { VCA: "2099-12-31" },
+        }}
+      />,
+    );
+    const vca = screen.getByLabelText(`certificateExpiryLabel:${JSON.stringify({ certificate: "VCA" })}`);
+    fireEvent.change(vca, { target: { value: "2999-12-31" } });
+    fireEvent.click(screen.getByRole("button", { name: /^next/ }));
+    await waitFor(() => expect(vca).toHaveAttribute("aria-invalid", "true"));
+    expect(saveOnboardingStep).not.toHaveBeenCalled();
   });
 });

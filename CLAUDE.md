@@ -2907,7 +2907,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   undici/`fetch`/`pg`) i `globalThis.fetch` do hosta spoza localhost/127.0.0.0/8/::1 i
   `TEST_NETWORK_ALLOW` (przecinki) → `NetworkBlockedError` z podpowiedzią atrapy; gniazda Unix
   dozwolone; połączenie z własnym `lookup` (atrapa DNS, np. `jobs.test` w safe-fetch) sprawdzane
-  po rozwiązaniu adresu (tylko loopback). `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
+  po rozwiązaniu adresu (tylko loopback); literalny adres IP spoza allow-listy jest blokowany od
+  razu także z własnym `lookup` (Node go dla IP nie woła, #772). Metody sieciowe `node:dns`
+  (`resolve*`/`reverse`, `dns.promises`, instancje `Resolver`) dla nazw spoza allow-listy →
+  `NetworkBlockedError` (#812; `dns.lookup` i `node:dgram` bez zmian). Etykieta pliku testu zawsze
+  z `/` (`testFileLabel`, #885, wariant Windows sprawdzany przez `path.win32`).
+  `VIES_LIVE_SMOKE=1` dopuszcza wyłącznie `ec.europa.eu`.
   Chromium z Playwrighta to osobny proces (poza blokadą). Błąd wskazuje test (`plik > opis > nazwa`
   ze stanu `expect`, pole `NetworkBlockedError.test`) i host. Integracja PG
   (`vitest.integration.config.ts` → `tests/integration/setup.ts`) ma tę samą blokadę: PG z Dockera
@@ -2919,7 +2924,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `search_fold(title/city)` (oferty + tłumaczenia), dokładny warunek na tytule w locale; parametry
   jak w `0091`. Demo: lustro `src/lib/search-fold.ts`. Pomiar przed/po: `docs/railway/OPERATIONS.md` §3.
   Dowód: `rls.sql` sekcja SU47 (kontrola ujemna: stary ILIKE). Raporty CSP: `report-uri`/`report-to`
-  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 16 KB, 20/min
+  → `POST /api/csp-report` (tylko log: dyrektywa, origin zasobu, ścieżka bez query/ID; 64 KB, dłuższa paczka niż 10 raportów = pierwsze 10, 20/min
   z adresu, 300 wpisów/min na proces; `src/lib/security/csp-report.ts`), `Referrer-Policy:
   strict-origin-when-cross-origin` globalnie — test `csp-report`. Limiter per adres (#648): klucz
   wyłącznie z `@/lib/http/trusted-ip` (jeden jawnie skonfigurowany nagłówek proxy, #588/#602) —

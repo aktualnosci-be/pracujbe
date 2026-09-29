@@ -16,12 +16,16 @@ import { captureError } from '@/lib/error-report';
  *
  * Odpowiedź nigdy nie jest cache'owana ani indeksowana (`private, no-store`, `X-Robots-Tag`),
  * a CSP/`sandbox` blokują wykonanie czegokolwiek, gdyby SVG otwarto jako dokument.
- * Limit: 60 banerów na godzinę na konto.
+ * Limity (na konto, osobne wiadra, #1110): 60 pobrań (`download=1`) na godzinę oraz 600 podglądów
+ * na godzinę. Strona generatora ładuje po jednym podglądzie na format przy każdym wejściu i zmianie
+ * języka (a eksport PNG czyta ten sam adres), więc wspólny limit 60/h wyczerpywały same podglądy
+ * i nie zostawał zapas na rzeczywiste pobrania grafiki.
  */
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const RATE_LIMIT = { max: 60, windowSeconds: 3600 } as const;
+const DOWNLOAD_LIMIT = { max: 60, windowSeconds: 3600 } as const;
+const PREVIEW_LIMIT = { max: 600, windowSeconds: 3600 } as const;
 
 const BASE_HEADERS = {
   'Cache-Control': 'private, no-store',
@@ -48,7 +52,12 @@ export async function GET(
     const me = await getPortalIdentity();
     if (!me) return empty(401);
 
-    const allowed = await checkRateLimit('campaign-banner', { identifier: me.id, perIp: false, ...RATE_LIMIT });
+    const isDownload = search.get('download') === '1';
+    const allowed = await checkRateLimit(isDownload ? 'campaign-banner' : 'campaign-banner-preview', {
+      identifier: me.id,
+      perIp: false,
+      ...(isDownload ? DOWNLOAD_LIMIT : PREVIEW_LIMIT),
+    });
     if (!allowed) return empty(429);
 
     const loaded = await loadManagedCampaignJob(me, id, locale);
@@ -69,7 +78,7 @@ export async function GET(
         ...BASE_HEADERS,
         'Content-Type': 'image/svg+xml; charset=utf-8',
         'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; font-src data:; sandbox",
-        'Content-Disposition': `${search.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`,
+        'Content-Disposition': `${isDownload ? 'attachment' : 'inline'}; filename="${filename}"`,
       },
     });
   } catch (error) {
