@@ -1968,6 +1968,7 @@
     "attachmentSensitiveId": "Nazwa pliku zawiera numer identyfikacyjny (np. NISS, PESEL, numer dowodu lub paszportu). Zmień nazwę pliku i dodaj go ponownie.",
     "attachmentLimit": "Do jednej wiadomości możesz dołączyć najwyżej {max} pliki.",
     "attachmentRemove": "Usuń plik {name}",
+    "attachmentsRemoveAll": "Usuń wszystkie załączniki",
     "attachmentDownload": "Pobierz {name} ({size})",
     "attachmentDownloadError": "Nie udało się pobrać pliku. Spróbuj ponownie.",
     "attachmentUnavailable": "Plik czeka na sprawdzenie — pobieranie niedostępne.",
@@ -2020,6 +2021,7 @@
     "deleteConfirmDescription": "Plik „{name}” zostanie trwale usunięty. Tej operacji nie można cofnąć.",
     "deleteSuccess": "Dokument został usunięty.",
     "errorTooLarge": "Plik jest za duży (maks. 5 MB).",
+    "errorAccountLimit": "Osiągnięto limit plików na koncie (maks. 10 plików i 50 MB łącznie). Usuń starszy dokument.",
     "errorType": "Dozwolone formaty: PDF, DOC, DOCX.",
     "errorEmpty": "Wybrany plik jest pusty."
   },

@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { prepareMessageAttachmentDownload } from '@/lib/actions/message-attachments';
 import type { ThreadAttachment } from '@/lib/data/messages';
 import { toUserMessageKey } from '@/lib/errors';
+import { downloadPrivateFile } from '@/lib/files/client-download';
 import { cn } from '@/lib/utils';
 
 /**
@@ -121,7 +122,9 @@ function AttachmentItem({ attachment }: { attachment: ThreadAttachment }): React
       try {
         const result = await prepareMessageAttachmentDownload(attachment.id);
         if (result.ok) {
-          window.location.assign(result.url);
+          if (!(await downloadPrivateFile(result.url, attachment.fileName))) {
+            setError(t('attachmentDownloadError'));
+          }
           return;
         }
         setError(

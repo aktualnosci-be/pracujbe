@@ -1968,6 +1968,7 @@
     "attachmentSensitiveId": "Le nom du fichier contient un numéro d’identification (p. ex. numéro de registre national, PESEL, numéro de carte d’identité ou de passeport). Renommez le fichier et ajoutez-le à nouveau.",
     "attachmentLimit": "Vous pouvez joindre au plus {max} fichiers à un message.",
     "attachmentRemove": "Retirer le fichier {name}",
+    "attachmentsRemoveAll": "Retirer toutes les pièces jointes",
     "attachmentDownload": "Télécharger {name} ({size})",
     "attachmentDownloadError": "Impossible de télécharger le fichier. Veuillez réessayer.",
     "attachmentUnavailable": "Fichier en cours de vérification — téléchargement indisponible.",
@@ -2020,6 +2021,7 @@
     "deleteConfirmDescription": "Le fichier « {name} » sera définitivement supprimé. Cette action est irréversible.",
     "deleteSuccess": "Le document a été supprimé.",
     "errorTooLarge": "Le fichier est trop volumineux (max. 5 Mo).",
+    "errorAccountLimit": "Limite de fichiers du compte atteinte (max. 10 fichiers et 50 Mo au total). Supprimez un ancien document.",
     "errorType": "Formats acceptés : PDF, DOC, DOCX.",
     "errorEmpty": "Le fichier choisi est vide."
   },
