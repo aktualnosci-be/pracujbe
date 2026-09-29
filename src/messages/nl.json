@@ -1436,7 +1436,7 @@
     "near": "Gemeente",
     "nearPlaceholder": "bv. Gent",
     "radiusKm": "{km} km",
-    "radiusNote": "We meten de afstand in vogelvlucht vanaf een gemeente uit onze lijst. Vacatures zonder herkende gemeente worden bij deze filter niet getoond.",
+    "radiusNote": "We meten de afstand in vogelvlucht vanaf een gemeente uit onze lijst. Vacatures zonder herkende gemeente worden bij deze filter niet getoond. Vacatures voor thuiswerk worden bij elke straal getoond.",
     "radiusChip": "Binnen {km} km van {place}",
     "nearUnknown": "We herkennen de gemeente „{place}” niet. Vul de naam van een Belgische gemeente of stad in, bijvoorbeeld Gent of Luik.",
     "salaryCurrencyNote": "Bedragen in een andere munt dan de euro rekenen we niet om — die vacatures blijven zichtbaar bij deze filter en staan achteraan bij sorteren op loon."

@@ -1436,7 +1436,7 @@
     "near": "Commune",
     "nearPlaceholder": "p. ex. Gand",
     "radiusKm": "{km} km",
-    "radiusNote": "La distance est mesurée à vol d’oiseau depuis une commune de notre liste. Les offres sans commune reconnue ne sont pas affichées avec ce filtre.",
+    "radiusNote": "La distance est mesurée à vol d’oiseau depuis une commune de notre liste. Les offres sans commune reconnue ne sont pas affichées avec ce filtre. Les offres en télétravail sont affichées quel que soit le rayon.",
     "radiusChip": "À {km} km maximum de {place}",
     "nearUnknown": "Nous n’avons pas reconnu la commune « {place} ». Indiquez le nom d’une commune ou d’une ville belge, par exemple Gand ou Liège.",
     "salaryCurrencyNote": "Les montants dans une autre devise que l’euro ne sont pas convertis : ces offres restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire."

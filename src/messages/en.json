@@ -1436,7 +1436,7 @@
     "near": "Town",
     "nearPlaceholder": "e.g. Ghent",
     "radiusKm": "{km} km",
-    "radiusNote": "Distance is measured in a straight line from a town on our list. Jobs without a recognised town are not shown with this filter.",
+    "radiusNote": "Distance is measured in a straight line from a town on our list. Jobs without a recognised town are not shown with this filter. Remote jobs are shown with every radius.",
     "radiusChip": "Within {km} km of {place}",
     "nearUnknown": "We did not recognise the town “{place}”. Enter the name of a Belgian municipality or city, for example Ghent or Liège.",
     "salaryCurrencyNote": "Amounts in currencies other than the euro are not converted — those jobs stay visible with this filter and appear last when sorting by salary."

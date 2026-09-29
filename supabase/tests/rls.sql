@@ -22608,6 +22608,7 @@ rollback;
 \set FLJ4 'f9740000-0000-4000-8000-000000000004'
 \set FLJ5 'f9740000-0000-4000-8000-000000000005'
 \set FLJ6 'f9740000-0000-4000-8000-000000000006'
+\set FLJ7 'f9740000-0000-4000-8000-000000000007'
 \set FLJD 'f9740000-0000-4000-8000-0000000000d1'
 reset role; reset app.current_uid;
 insert into auth.users(id,email,name,raw_user_meta_data) values
@@ -22623,7 +22624,9 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   (:'FLJ3',:'FLC','fl974-3','Magazynier FL974 Aalst','warehouse','permanent','Aalst','Flandria','active','pl', now() - interval '3 minutes', 2000,2000,'EUR','month','both',false),
   (:'FLJ4',:'FLC','fl974-4','Magazynier FL974 Liège','warehouse','permanent','Liège','Walonia','active','pl', now() - interval '4 minutes', 5000,5000,'EUR','month',null,false),
   (:'FLJ5',:'FLC','fl974-5','Magazynier FL974 Nigdzie','warehouse','permanent','Nigdziebądź FL974','Flandria','active','pl', now() - interval '5 minutes', null,null,'EUR','month','full_time',true),
-  (:'FLJ6',:'FLC','fl974-6','Magazynier FL974 Antwerpen','warehouse','permanent','Antwerpen','Flandria','active','pl', now() - interval '6 minutes', null,null,'EUR','month','part_time',false);
+  (:'FLJ6',:'FLC','fl974-6','Magazynier FL974 Antwerpen','warehouse','permanent','Antwerpen','Flandria','active','pl', now() - interval '6 minutes', null,null,'EUR','month','part_time',false),
+  -- Praca zdalna w Arlon (≈ 210 km od Gent — dalej niż największy promień).
+  (:'FLJ7',:'FLC','fl974-7','Magazynier FL974 Arlon zdalnie','warehouse','permanent','Arlon','Walonia','active','pl', now() - interval '7 minutes', null,null,'EUR','month',null,true);
 insert into public.job_languages(job_id, language_label, level) values
   (:'FLJ1', 'nl', 'intermediate'),
   (:'FLJ2', 'Nederlands', 'fluent'),
@@ -22637,8 +22640,9 @@ alter table public.job_languages enable trigger trg_job_languages_fill_id;
 select pg_temp.assert(
   (select location_id is null from public.jobs where id = :'FLJ5')
   and (select language_id is null from public.job_languages where job_id = :'FLJ6')
-  and (select language_id is not null from public.job_languages where job_id = :'FLJ2'),
-  'FL974-0 fikstura: oferta bez miejscowości, stary wpis języka bez id');
+  and (select language_id is not null from public.job_languages where job_id = :'FLJ2')
+  and (select location_id is not null from public.jobs where id = :'FLJ7'),
+  'FL974-0 fikstura: oferta bez miejscowości, stary wpis języka bez id, zdalna z miejscowością');
 
 create function pg_temp.fl_ids(p_sql text) returns text[] language plpgsql as $$
 declare v text[];
@@ -22659,15 +22663,15 @@ begin
 end $$;
 
 set role anon; select pg_temp.assert_client_role();
-select pg_temp.fl_check('', array['1','2','3','4','5','6'], 'FL974-1 bez nowych filtrów: wszystkie oferty sekcji');
+select pg_temp.fl_check('', array['1','2','3','4','5','6','7'], 'FL974-1 bez nowych filtrów: wszystkie oferty sekcji');
 
 -- FL974-2 (#787): waluta. Widełki EUR nie porównują PLN (oferta nieporównywalna jak inny okres),
 -- sortowanie po wynagrodzeniu stawia PLN za ofertami w EUR (razem z ofertami bez kwoty).
-select pg_temp.fl_check(', p_salary_min => 4000', array['2','4','5','6'], 'FL974-2a od 4000 EUR: 3000 PLN nie jest „3000 EUR” (nieporównywalna), 3000 EUR odpada');
-select pg_temp.fl_check(', p_salary_min => 2500, p_salary_max => 3500', array['1','2','5','6'], 'FL974-2b 2500–3500 EUR');
+select pg_temp.fl_check(', p_salary_min => 4000', array['2','4','5','6','7'], 'FL974-2a od 4000 EUR: 3000 PLN nie jest „3000 EUR” (nieporównywalna), 3000 EUR odpada');
+select pg_temp.fl_check(', p_salary_min => 2500, p_salary_max => 3500', array['1','2','5','6','7'], 'FL974-2b 2500–3500 EUR');
 select pg_temp.assert(
   (select array_agg(right(slug, 1)) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_sort => 'salary', p_limit => 100))
-    = array['4','1','3','2','5','6'],
+    = array['4','1','3','2','5','6','7'],
   'FL974-2c sortowanie: 5000, 3000, 2000 EUR, potem PLN i oferty bez kwoty (najnowsze najpierw)');
 select pg_temp.assert(
   public.job_salary_sort_key(3000, 3000, 'month', 'PLN', 'month') is null
@@ -22693,13 +22697,19 @@ select pg_temp.fl_check(', p_work_time => ''part_time''', array['2','3','6'], 'F
 select pg_temp.fl_check(', p_work_time => ''both''', array[]::text[], 'FL974-4c wartość spoza filtra: brak wyników');
 
 -- FL974-5 (#824): promień od miejscowości. Gent–Aalst ≈ 26 km, Gent–Antwerpen ≈ 51 km.
-select pg_temp.fl_check(', p_near => ''Gent'', p_radius_km => 25', array['1','2'], 'FL974-5a 25 km od Gent: tylko Gent');
-select pg_temp.fl_check(', p_near => ''Gandawa'', p_radius_km => 50', array['1','2','3'], 'FL974-5b 50 km od „Gandawa” (alias PL): + Aalst, bez Antwerpii');
-select pg_temp.fl_check(', p_near => ''ghent'', p_radius_km => 100', array['1','2','3','6'], 'FL974-5c 100 km: + Antwerpia; Liège i oferta bez miejscowości (także zdalna) poza wynikiem');
-select pg_temp.fl_check(', p_near => ''Heverlee'', p_radius_km => 10', array[]::text[], 'FL974-5d część gminy jako środek (Heverlee): brak ofert w 10 km');
-select pg_temp.fl_check(', p_near => ''Heverlee'', p_radius_km => 50', array['3','6'], 'FL974-5e środek = część gminy ze współrzędnymi (Aalst, Antwerpia ≈ 45 km)');
-select pg_temp.fl_check(', p_near => ''Nigdziebądź FL974'', p_radius_km => 100', array[]::text[], 'FL974-5f miejscowość nierozpoznana: brak wyników');
+-- Oferty zdalne (5: bez miejscowości, 7: Arlon ≈ 210 km) pasują do KAŻDEGO promienia (decyzja
+-- właściciela 29.09.2026); niezdalna poza promieniem (Liège) odpada.
+select pg_temp.fl_check(', p_near => ''Gent'', p_radius_km => 25', array['1','2','5','7'], 'FL974-5a 25 km od Gent: Gent + oferty zdalne');
+select pg_temp.fl_check(', p_near => ''Gandawa'', p_radius_km => 50', array['1','2','3','5','7'], 'FL974-5b 50 km od „Gandawa” (alias PL): + Aalst, bez Antwerpii');
+select pg_temp.fl_check(', p_near => ''ghent'', p_radius_km => 100', array['1','2','3','5','6','7'], 'FL974-5c 100 km: + Antwerpia; niezdalna Liège poza wynikiem');
+select pg_temp.fl_check(', p_near => ''Heverlee'', p_radius_km => 10', array['5','7'], 'FL974-5d część gminy jako środek (Heverlee): w 10 km tylko oferty zdalne');
+select pg_temp.fl_check(', p_near => ''Heverlee'', p_radius_km => 50', array['3','5','6','7'], 'FL974-5e środek = część gminy ze współrzędnymi (Aalst, Antwerpia ≈ 45 km)');
+select pg_temp.fl_check(', p_near => ''Nigdziebądź FL974'', p_radius_km => 100', array['5','7'], 'FL974-5f miejscowość nierozpoznana: same oferty zdalne');
 select pg_temp.fl_check(', p_near => ''Gent'', p_radius_km => 25, p_work_time => ''part_time'', p_language => ''nl''', array['2'], 'FL974-5g filtry łączą się (AND)');
+select pg_temp.assert(
+  'fl974-7' in (select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 5))
+  and 'fl974-4' not in (select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 100)),
+  'FL974-5h zdalna daleko poza promieniem zostaje, niezdalna poza promieniem odpada');
 reset role;
 
 -- FL974-6: zapisane wyszukiwanie — klucze kanoniczne i ten sam zbiór w stronie kursora alertów.
@@ -22777,8 +22787,8 @@ select pg_temp.fl_patch(:'FLSIG', 'j.salary_period, j.currency, p_salary_unit) e
 select pg_temp.fl_patch(:'FLSIG', 'j.salary_period, j.currency, p_salary_min', 'j.salary_period, p_salary_min');
 select pg_temp.assert(
   (select array_agg(right(slug, 1)) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_sort => 'salary', p_limit => 100))
-    = array['4','1','2','3','5','6']
-  and pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_salary_min => 4000)$q$) = array['4','5','6'],
+    = array['4','1','2','3','5','6','7']
+  and pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_salary_min => 4000)$q$) = array['4','5','6','7'],
   'FL974-N1 bez waluty PLN sortuje się i filtruje jak EUR (FL974-2 wykrywa regresję)');
 rollback;
 -- N2: bez poziomu wymaganie fluent przechodzi przy poziomie kandydata intermediate.
@@ -22806,7 +22816,7 @@ rollback;
 begin;
 select pg_temp.fl_patch('public.locations_within_radius(text,integer)', '<= least(greatest(coalesce(p_radius_km, 25), 1), 200)', '<= 100000');
 select pg_temp.assert(
-  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2','3','4','6'],
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2','3','4','5','6','7'],
   'FL974-N5 bez limitu promienia FL974-5a wykrywa regresję');
 rollback;
 -- N6: kopia dla alertów bez nowego warunku daje inny zbiór niż lista.
@@ -22820,6 +22830,35 @@ select pg_temp.assert(
    cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-6'],
   'FL974-N6 rozjazd kopii filtrów wykrywa FL974-6f');
 rollback;
+-- N7: bez gałęzi pracy zdalnej oferty zdalne odpadają z promienia (FL974-5a/5h wykrywają regresję);
+-- to samo w liczniku, facetach i kopii alertów.
+begin;
+select pg_temp.fl_patch(:'FLSIG', 'or j.remote is true', 'or false');
+select pg_temp.fl_patch('public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)',
+  'or j.remote is true', 'or false');
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2']
+  and public.get_public_jobs_count(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25) = 2,
+  'FL974-N7 bez gałęzi pracy zdalnej zdalna oferta daleko poza promieniem odpada');
+rollback;
+begin;
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer)',
+  'or j.remote is true', 'or false');
+set local role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     '{"keyword":"fl974","near":"gent","radiusKm":25}'::jsonb, 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-2'],
+  'FL974-N7b kopia alertów bez gałęzi pracy zdalnej gubi oferty zdalne');
+rollback;
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     '{"keyword":"fl974","near":"gent","radiusKm":25}'::jsonb, 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-2', 'fl974-5', 'fl974-7'],
+  'FL974-7g kopia alertów: oferty zdalne w każdym promieniu (= lista FL974-5a)');
+reset role;
 reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='

@@ -40,8 +40,8 @@ import type { JobFilterFacets } from '@/types/job-filter-facets';
 import { resolveLanguageCode, type LanguageCode } from '@/lib/languages';
 import { belgianCityCoordinates } from '@/lib/matching/belgian-cities';
 import {
-  distanceKm,
   isWorkTime,
+  jobWithinRadius,
   workTimeMatches,
   type LanguageFilterLevel,
   type RadiusKm,
@@ -125,6 +125,11 @@ export interface JobListItem {
    * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
    */
   isAgency?: true;
+  /**
+   * Praca zdalna (`jobs.remote`, pole kreatora „Praca zdalna”) — tylko zestaw demonstracyjny
+   * niesie to pole na liście (lustro filtra promienia 0974: zdalna pasuje do każdego promienia).
+   */
+  remote?: boolean;
 }
 
 export interface JobApplyChannel {
@@ -370,7 +375,8 @@ function getJobsFromDemo(
     jobs = jobs.filter((job) => job.noLanguageRequired);
   // 0974 — lustro warunków SQL dla danych demo: język (demo nie ma poziomów → każdy poziom
   // pasuje), wymiar pracy (`both` pasuje do obu, brak deklaracji — do żadnego), promień po
-  // współrzędnych miast (nieznane miasto oferty albo środka = brak wyników).
+  // współrzędnych miast (nieznane miasto oferty albo środka = brak wyników); oferta zdalna
+  // (`remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026, jak SQL 0974).
   if (params.language) {
     const code = params.language;
     jobs = jobs.filter((job) => job.languages.some((label) => resolveLanguageCode(label) === code));
@@ -382,10 +388,9 @@ function getJobsFromDemo(
   if (params.near?.trim()) {
     const center = belgianCityCoordinates(params.near.trim());
     const radius = params.radiusKm ?? 25;
-    jobs = jobs.filter((job) => {
-      const point = belgianCityCoordinates(job.city);
-      return Boolean(center && point && distanceKm(center, point) <= radius);
-    });
+    jobs = jobs.filter((job) =>
+      jobWithinRadius({ remote: job.remote, point: belgianCityCoordinates(job.city) }, center, radius),
+    );
   }
   if (params.since) {
     const sinceTs = Date.parse(params.since);

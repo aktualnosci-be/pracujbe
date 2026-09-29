@@ -1436,7 +1436,7 @@
     "near": "Miejscowość",
     "nearPlaceholder": "np. Gandawa",
     "radiusKm": "{km} km",
-    "radiusNote": "Liczymy odległość w linii prostej od miejscowości z naszej listy. Oferty bez rozpoznanej miejscowości nie są pokazywane przy tym filtrze.",
+    "radiusNote": "Liczymy odległość w linii prostej od miejscowości z naszej listy. Oferty bez rozpoznanej miejscowości nie są pokazywane przy tym filtrze. Oferty pracy zdalnej są pokazywane przy każdym promieniu.",
     "radiusChip": "Do {km} km od: {place}",
     "nearUnknown": "Nie rozpoznaliśmy miejscowości „{place}”. Wpisz nazwę belgijskiej gminy albo miasta, np. Gandawa lub Liège.",
     "salaryCurrencyNote": "Kwot w innej walucie niż euro nie przeliczamy — takie oferty pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu."

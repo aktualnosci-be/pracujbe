@@ -83,3 +83,20 @@ export function distanceKm(
     Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
+
+type GeoPoint = { lat: number; lng: number };
+
+/**
+ * #824 — czy oferta mieści się w filtrze promienia (lustro SQL 0974). Oferta zdalna pasuje do
+ * KAŻDEGO promienia — także przy nierozpoznanej miejscowości środka (decyzja właściciela
+ * 29.09.2026: dojazd nie dotyczy pracy zdalnej). Inaczej odległość tylko ze znanych
+ * współrzędnych obu miejsc; nieznane = nie pasuje (nie zgadujemy).
+ */
+export function jobWithinRadius(
+  job: { remote?: boolean; point: GeoPoint | undefined },
+  center: GeoPoint | undefined,
+  radiusKm: number,
+): boolean {
+  if (job.remote === true) return true;
+  return Boolean(center && job.point && distanceKm(center, job.point) <= radiusKm);
+}

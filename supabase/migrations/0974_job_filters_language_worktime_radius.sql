@@ -24,9 +24,11 @@
 -- #824 — promień: `p_near` (miejscowość rozpoznana w `location_aliases`, jak filtr lokalizacji)
 --   i `p_radius_km` (1–200, UI: 5/10/25/50/100). Odległość po współrzędnych `locations`
 --   (część gminy bez współrzędnych = współrzędne gminy, 0151). Oferta bez rozpoznanej
---   miejscowości albo bez współrzędnych NIE pasuje (nieznana odległość nie jest faktem);
---   `jobs.remote` nie omija promienia (dawny boolean nie oznacza pracy w 100% zdalnej, #792).
---   Nierozpoznana miejscowość promienia = brak wyników (strona pokazuje komunikat).
+--   miejscowości albo bez współrzędnych NIE pasuje (nieznana odległość nie jest faktem).
+--   Oferta zdalna (`jobs.remote` = true, pole kreatora „Praca zdalna”) pasuje do KAŻDEGO
+--   filtra promienia, bez względu na odległość i miejscowość środka (decyzja właściciela
+--   29.09.2026 — dojazd nie dotyczy pracy zdalnej).
+--   Nierozpoznana miejscowość promienia = same oferty zdalne (strona pokazuje komunikat).
 --
 -- Te same filtry w `get_public_jobs`, `get_public_jobs_count`, `get_public_job_filter_facets`
 -- (baza wszystkich wymiarów) i kopii dla alertów `saved_search_jobs_after` (blok 1:1 —
@@ -235,8 +237,10 @@ language sql stable security definer set search_path = public, pg_temp as $$
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
     -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
-    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana).
+    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
+    -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
+         or j.remote is true
          or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
   order by
     (case when p_sort = 'salary' then public.job_salary_sort_key(
@@ -325,8 +329,10 @@ create or replace function public.get_public_jobs_count(
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
     -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
-    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana).
+    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
+    -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
+         or j.remote is true
          or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))));
 $$;
 revoke all on function public.get_public_jobs_count(
@@ -405,8 +411,10 @@ language sql stable security definer set search_path = public, pg_temp as $$
       and (coalesce(p_work_time, '') = ''
            or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
       -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
-      -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana).
+      -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
+      -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
       and (coalesce(btrim(p_near), '') = ''
+           or j.remote is true
            or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
       and (p_since is null or j.published_at>=p_since)
   ), selected as (select * from input)
@@ -555,8 +563,10 @@ language sql stable security definer set search_path = public, pg_temp as $$
     and (coalesce(p_work_time, '') = ''
          or (p_work_time in ('full_time', 'part_time') and j.work_time in (p_work_time, 'both')))
     -- 0974 (#824): promień od miejscowości ze słownika (współrzędne `locations`); oferta bez
-    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana).
+    -- rozpoznanej miejscowości albo bez współrzędnych nie pasuje (odległość nieznana); oferta
+    -- zdalna (`jobs.remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026).
     and (coalesce(btrim(p_near), '') = ''
+         or j.remote is true
          or j.location_id in (select unnest(public.locations_within_radius(left(btrim(p_near), 100), p_radius_km))))
   -- END get_public_jobs filters
     and j.published_at is not null

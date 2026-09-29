@@ -17,6 +17,7 @@ import {
 import { getJobs } from '@/lib/jobs';
 import {
   distanceKm,
+  jobWithinRadius,
   LANGUAGE_FILTER_LEVELS,
   languageLevelSatisfies,
   RADIUS_KM_OPTIONS,
@@ -108,6 +109,30 @@ describe('0974: lustro list wartości z migracją', () => {
     expect(workTimeMatches(undefined, 'full_time')).toBe(false);
     // Gent–Antwerpia ≈ 51 km (ta sama wartość co `geo_distance_km`, rls.sql FL974-5).
     expect(distanceKm({ lat: 51.0541, lng: 3.7172 }, { lat: 51.2194, lng: 4.4025 })).toBeCloseTo(51.22, 1);
+  });
+
+  it('promień: oferta zdalna pasuje do każdego promienia (decyzja właściciela 29.09.2026)', () => {
+    const gent = { lat: 51.0541, lng: 3.7172 };
+    const arlon = { lat: 49.6833, lng: 5.8167 }; // ≈ 210 km od Gandawy
+    // Zdalna daleko poza promieniem, bez współrzędnych albo przy nieznanym środku — pasuje.
+    expect(jobWithinRadius({ remote: true, point: arlon }, gent, 5)).toBe(true);
+    expect(jobWithinRadius({ remote: true, point: undefined }, gent, 5)).toBe(true);
+    expect(jobWithinRadius({ remote: true, point: arlon }, undefined, 5)).toBe(true);
+    // Kontrola ujemna: ta sama oferta niezdalna poza promieniem odpada, w promieniu — zostaje.
+    expect(jobWithinRadius({ remote: false, point: arlon }, gent, 100)).toBe(false);
+    expect(jobWithinRadius({ point: arlon }, gent, 100)).toBe(false);
+    expect(jobWithinRadius({ remote: false, point: undefined }, gent, 100)).toBe(false);
+    expect(jobWithinRadius({ remote: false, point: gent }, gent, 5)).toBe(true);
+  });
+
+  it('SQL: `jobs.remote` omija promień w liście, liczniku, facetach i kopii alertów', () => {
+    const conditions =
+      MIGRATION.match(
+        /and \(coalesce\(btrim\(p_near\), ''\) = ''\s+or j\.remote is true\s+or j\.location_id in/g,
+      ) ?? [];
+    expect(conditions).toHaveLength(4);
+    // Kontrola ujemna: żaden warunek promienia bez gałęzi pracy zdalnej.
+    expect(MIGRATION).not.toMatch(/and \(coalesce\(btrim\(p_near\), ''\) = ''\s+or j\.location_id in/);
   });
 });
 
