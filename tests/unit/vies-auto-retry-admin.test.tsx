@@ -10,7 +10,7 @@ import nl from '@/messages/nl.json';
 import pl from '@/messages/pl.json';
 
 /**
- * #706 (0976): admin widzi, że automatyczne sprawdzenie VIES czeka na ponowienie po chwilowej
+ * #706 (0192): admin widzi, że automatyczne sprawdzenie VIES czeka na ponowienie po chwilowej
  * niedostępności usługi albo wyczerpało próby. Kontrole ujemne: zadanie dla innego numeru
  * i wiersz bez terminu nie są pokazywane; zapisany wynik rozstrzygający ukrywa informację.
  */

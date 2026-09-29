@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0976_company_vies_auto_queue.sql  (numer tymczasowy — ostateczny nada integrator)
+-- 0192_company_vies_auto_queue.sql  (numer tymczasowy — ostateczny nada integrator)
 -- Trwała kolejka automatycznego sprawdzenia VAT w VIES (#706, #879).
 --
 -- 0164 sprawdzało numer tylko raz, zaraz po założeniu firmy (`after()` w akcji). Chwilowa
@@ -32,7 +32,7 @@
 -- Status firmy nadal zmienia wyłącznie admin. Worker: `/api/maintenance` (co godzinę)
 -- i jednorazowa próba po zapisie firmy (`src/lib/vies/auto-check.ts`).
 --
--- Rollback: supabase/rollback/0976_company_vies_auto_queue.down.sql
+-- Rollback: supabase/rollback/0192_company_vies_auto_queue.down.sql
 -- =============================================================================
 
 create or replace function public.company_vies_number(p_vat text, p_kbo text)

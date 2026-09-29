@@ -2607,7 +2607,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
   NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
   (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
-  Trwała kolejka (#706/#879, migracja `0976` — numer tymczasowy): trigger na `companies`
+  Trwała kolejka (#706/#879, migracja `0192` — numer tymczasowy): trigger na `companies`
   kolejkuje firmę w `company_vies_auto_queue` przy KAŻDYM zapisie nowego prawidłowego numeru
   VAT/KBO bez wyniku dla tego numeru (założenie, dopisanie numeru w `/employer/firma`, zmiana);
   sama zmiana nazwy nie kolejkuje, usunięty numer/firma zdejmuje zadanie, wynik dla bieżącego

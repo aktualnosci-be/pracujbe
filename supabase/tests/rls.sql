@@ -4421,7 +4421,7 @@ reset role;
 
 
 -- ============================================================================
--- VQ976. Trwała kolejka automatycznego sprawdzenia VIES (0976, #706/#879)
+-- VQ976. Trwała kolejka automatycznego sprawdzenia VIES (0192, #706/#879)
 -- Trigger kolejkuje każdy nowy prawidłowy numer (także dopisany po założeniu firmy), claim
 -- z dzierżawą i limitem prób, backoff po awarii VIES, wynik rozstrzygający zdejmuje zadanie.
 -- Kontrole ujemne: bez triggera dopisany numer nie trafia do kolejki; klient bez dostępu;
@@ -4466,7 +4466,7 @@ delete from public.company_vies_auto_queue where company_id = :'COMPVQ2';
 update public.companies set vat_number = 'BE0403170701' where id = :'COMPVQ2';
 select pg_temp.assert(
   not exists (select 1 from public.company_vies_auto_queue where company_id = :'COMPVQ2'),
-  'VQ976-2n bez triggera numer dopisany w edycji nie jest sprawdzany (stan sprzed 0976)');
+  'VQ976-2n bez triggera numer dopisany w edycji nie jest sprawdzany (stan sprzed 0192)');
 rollback;
 
 -- VQ976-3: claim tylko service_role; dzierżawa blokuje drugie pobranie; próba liczona.

@@ -647,7 +647,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       lease_until: 'Dzierżawa zadania workera.',
       last_outcome: 'Ostatni wynik nierozstrzygający (niedostępność / limit / błąd).',
     },
-    note: 'Kolejka zadań (0976, #706/#879): tylko numer przedsiębiorstwa; wiersz znika po wyniku, usunięciu numeru albo firmy.',
+    note: 'Kolejka zadań (0192, #706/#879): tylko numer przedsiębiorstwa; wiersz znika po wyniku, usunięciu numeru albo firmy.',
   },
   'public.jobs': {
     activities: ['companies'],

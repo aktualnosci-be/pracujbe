@@ -1651,7 +1651,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   jobsTotal: number;
   /** Weryfikacja numeru VAT w VIES (#92) — informacja dla admina, nie decyzja. */
   vies: AdminViesState;
-  /** 0976 (#706/#879): automatyczne sprawdzenie VIES czekające na ponowienie; `null` = brak. */
+  /** 0192 (#706/#879): automatyczne sprawdzenie VIES czekające na ponowienie; `null` = brak. */
   viesAutoRetry: ViesAutoRetry | null;
   /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia numeru uznania. */
   agency: AdminCompanyAgency;
@@ -1756,7 +1756,7 @@ async function readStoredViesCheck(
 }
 
 /**
- * Zadanie automatycznego sprawdzenia VIES (0976) dla bieżącego numeru firmy. Błąd odczytu
+ * Zadanie automatycznego sprawdzenia VIES (0192) dla bieżącego numeru firmy. Błąd odczytu
  * nie psuje szczegółu (SAVEPOINT) — sekcja VIES pokazuje wtedy sam zapisany wynik.
  */
 async function readViesAutoRetry(
