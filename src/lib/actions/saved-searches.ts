@@ -9,6 +9,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
+import { codePointLength, hasNoNul } from '@/lib/validation/text';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
@@ -20,8 +21,16 @@ import { captureError } from '@/lib/error-report';
  * zapisuje (`DEMO_UNAVAILABLE`) — bez udawanego sukcesu.
  */
 
-const text100 = z.string().trim().min(1).max(100);
-const list = z.array(z.string().trim().min(1).max(100)).max(50);
+// Limity liczone w punktach kodowych jak `char_length` w bazie (0092): `.max(100)` liczyłoby
+// jednostki UTF-16 i odrzucało poprawne teksty z emoji/znakami spoza BMP (#1108). NUL baza
+// odrzuca błędem technicznym, więc wycinamy go już tu.
+const text100 = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => codePointLength(v) <= 100)
+  .refine(hasNoNul);
+const list = z.array(text100).max(50);
 
 const filtersSchema = z
   .object({
@@ -41,7 +50,12 @@ const filtersSchema = z
   .refine((f) => Object.keys(f).length > 0);
 
 const saveSchema = z.object({
-  name: z.string().trim().min(1).max(80),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((v) => codePointLength(v) <= 80)
+    .refine(hasNoNul),
   locale: z.enum(routing.locales),
   filters: filtersSchema,
   query: z.string().max(2000).regex(/^(\?.*)?$/),
@@ -50,7 +64,12 @@ const saveSchema = z.object({
 const idSchema = z.string().uuid();
 /** Te same reguły co w bazie (0124): 1–80 znaków po przycięciu, bez znaków sterujących. */
 // eslint-disable-next-line no-control-regex
-const nameSchema = z.string().trim().min(1).max(80).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/);
+const nameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^\u0000-\u001f\u007f-\u009f]*$/)
+  .refine((v) => codePointLength(v) <= 80);
 const frequencySchema = z.enum(['daily', 'weekly']);
 
 export type SaveSearchResult =

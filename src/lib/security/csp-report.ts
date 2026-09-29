@@ -20,7 +20,11 @@ export interface CspViolation {
   disposition: 'enforce' | 'report';
 }
 
-/** Najwyżej tyle raportów z jednego żądania (Reporting API grupuje je w tablicę). */
+/**
+ * Najwyżej tyle raportów z jednego żądania jest PRZETWARZANYCH (Reporting API grupuje je
+ * w tablicę). Dłuższa paczka nie jest odrzucana w całości (#1110) — bierzemy pierwsze wpisy,
+ * a reszta jest pomijana; zalewowi logów i tak zapobiegają budżety trasy.
+ */
 export const MAX_REPORTS_PER_REQUEST = 10;
 
 const DIRECTIVE = /^[a-z][a-z-]{1,39}$/;
@@ -118,9 +122,9 @@ function fromReportingApi(body: Record<string, unknown>): CspViolation | null {
  */
 export function parseCspReports(payload: unknown): CspViolation[] | null {
   if (Array.isArray(payload)) {
-    if (payload.length === 0 || payload.length > MAX_REPORTS_PER_REQUEST) return null;
+    if (payload.length === 0) return null;
     const violations: CspViolation[] = [];
-    for (const entry of payload) {
+    for (const entry of payload.slice(0, MAX_REPORTS_PER_REQUEST)) {
       const report = record(entry);
       if (!report || report.type !== 'csp-violation') continue;
       const body = record(report.body);

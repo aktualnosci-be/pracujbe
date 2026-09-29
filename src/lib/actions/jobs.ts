@@ -34,6 +34,7 @@ import {
   type ScreeningReviewNotice,
 } from '@/lib/screening/review';
 import { routing } from '@/i18n/routing';
+import { asciiSlugBase } from '@/lib/slug';
 import {
   step1Schema,
   step2Schema,
@@ -190,13 +191,7 @@ function nullIfEmpty(value: string | undefined | null): string | null {
 }
 
 function slugify(input: string): string {
-  return input
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
+  return asciiSlugBase(input, 60);
 }
 
 /**
