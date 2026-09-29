@@ -106,6 +106,26 @@ function retentionCounters(value: unknown): Record<string, number> {
 }
 
 /**
+ * 0180: ostatni przebieg dla czujek (`ops_last_maintenance_run`, panel `/admin/operacje`).
+ * Tylko czas, wynik i stała nazwa zadania z błędem. Awaria zapisu nie zmienia wyniku przebiegu
+ * (baza sprzed 0180 = brak funkcji) — tylko kanał błędów.
+ */
+async function recordRun(durationMs: number, failedTask: string | null): Promise<void> {
+  try {
+    await withServiceRole((tx) =>
+      rpc(tx, 'record_ops_job_run', {
+        p_job: 'maintenance',
+        p_ok: failedTask === null,
+        p_duration_ms: Math.max(0, Math.round(durationMs)),
+        p_failed_task: failedTask,
+      }),
+    );
+  } catch (error) {
+    captureError(error, { area: 'maintenance.record_run' });
+  }
+}
+
+/**
  * Tryb efektywny dla zadań rekrutacyjnych (#1143): env `PORTAL_LEGAL_MODE=RECRUITMENT` (#1136)
  * ORAZ `recruitment_enabled()` w bazie (0171). Bez klucza env baza nie jest pytana.
  * Błąd odczytu bazy = tryb ogłoszeniowy (fail-closed) i zapamiętany błąd (503 dla monitoringu).
@@ -131,6 +151,7 @@ async function run(request: Request): Promise<Response> {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
+  const startedAt = Date.now();
   type Task =
     | 'aiBudgetReservations'
     | 'jobExpiry'
@@ -295,6 +316,8 @@ async function run(request: Request): Promise<Response> {
     failures.push({ task: 'storageDeletions', error });
   }
 
+  const [first] = failures;
+  await recordRun(Date.now() - startedAt, first?.task ?? null);
   if (failures.length > 0) {
     // #1066: każde nieudane zadanie osobno; `task` dopina się do obszaru w `captureError`
     // (`maintenance.gc.retention`), więc operator odróżnia GC bucketu od retencji czy
