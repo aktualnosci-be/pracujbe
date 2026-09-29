@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // =============================================================================
 // scripts/db/requeue-failed-emails.mjs — ponowne zakolejkowanie nieudanych e-maili
-// (#1214, migracja 0980 — numer tymczasowy).
+// (#1214, migracja 0193 — numer tymczasowy).
 //
 // Poza CI, bez UI. Po naprawie błędu konfiguracji nadawcy/dostawcy (np. EMAIL_FROM wpisany
 // z cudzysłowami, niezweryfikowana domena) listy, które przed poprawką przeszły w `failed`,

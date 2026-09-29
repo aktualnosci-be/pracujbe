@@ -22,10 +22,10 @@ const queueSchema = z.object({
 
 export const opsMetricsSchema = z.object({
   /**
-   * 0980 (#1227/#1214): `failedLast24h` = same porażki wysyłki (bez wierszy wygaszonych),
+   * 0193 (#1227/#1214): `failedLast24h` = same porażki wysyłki (bez wierszy wygaszonych),
    * `suppressedLast24h` = wygaszone (wypisanie, blokada adresu, funkcja wyłączona) — bez alarmu,
    * `configBlocked` = listy czekające po błędzie konfiguracji nadawcy/dostawcy. Brak pól = baza
-   * sprzed 0980 (czujka konfiguracji milczy, licznik porażek zawiera wygaszone).
+   * sprzed 0193 (czujka konfiguracji milczy, licznik porażek zawiera wygaszone).
    */
   email: queueSchema.extend({
     suppressedLast24h: count.optional(),

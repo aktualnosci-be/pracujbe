@@ -1,5 +1,5 @@
 -- =============================================================================
--- OM1227-R — rollback migracji 0980 (czujki poczty i requeue, #1227/#1214). Uruchamiany przez
+-- OM1227-R — rollback migracji 0193 (czujki poczty i requeue, #1227/#1214). Uruchamiany przez
 -- scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji
 -- i jest cofany.
 -- =============================================================================
@@ -17,7 +17,7 @@ select pg_temp.assert(
   'OM1227-R0 stan przed rollbackiem');
 
 begin;
-\ir ../rollback/0980_email_ops_config_requeue.down.sql
+\ir ../rollback/0193_email_ops_config_requeue.down.sql
 select pg_temp.assert(
   not ((public.ops_metrics() -> 'email') ? 'configBlocked')
   and not ((public.ops_metrics() -> 'email') ? 'suppressedLast24h')
@@ -32,4 +32,4 @@ select pg_temp.assert(
   (public.ops_metrics() -> 'email') ? 'configBlocked'
   and to_regprocedure('public.requeue_failed_email_deliveries(integer,boolean,text[],text[])') is not null,
   'OM1227-R2 rollback testu cofnięty');
-\echo 'OM1227-R rollback 0980: PASS'
+\echo 'OM1227-R rollback 0193: PASS'

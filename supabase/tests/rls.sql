@@ -22079,7 +22079,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- =============================================================================
--- OM1227 — poczta (0980, #1227/#1214): ops_metrics.email liczy porażki bez wygaszonych,
+-- OM1227 — poczta (0193, #1227/#1214): ops_metrics.email liczy porażki bez wygaszonych,
 -- osobno wygaszone i listy odłożone po błędzie konfiguracji; requeue_failed_email_deliveries
 -- (tylko service_role) wraca do kolejki wyłącznie niewygaszone, nieprzyjęte, z okna N dni.
 -- =============================================================================

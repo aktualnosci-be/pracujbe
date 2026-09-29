@@ -1,12 +1,26 @@
 -- =============================================================================
--- Rollback 0980 — przywraca ops_metrics() z 0177 i usuwa requeue_failed_email_deliveries.
--- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
--- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
--- (supabase/tests/email-ops-config-rollback.sql wykonuje go w transakcji i cofa).
--- Aplikacja po rollbacku działa: pola suppressedLast24h/configBlocked są w czujkach opcjonalne.
+-- 0193 (numer tymczasowy) — poczta: czujki bez szumu wygaszeń, błąd konfiguracji nadawcy
+-- i ponowne zakolejkowanie nieudanych listów (#1227 OPS-2, #1214 OPS-1).
+--
+-- 1. ops_metrics() — bazuje na NAJNOWSZEJ definicji z 0177 (0180–0183 jej nie zmieniają; żadna
+--    gałąź w kolejce na dzień 29.09 — w tym 0184 — nie nadpisuje ops_metrics). Sekcja `email`:
+--    * `failedLast24h` liczy tylko porażki wysyłki (`suppressed_at is null`) — wygaszenie
+--      (wypisanie po zakolejkowaniu, blokada adresu #44, funkcja wyłączona 0175, wyłączony alert)
+--      ustawia `status='failed', suppressed_at=now()` (claim_email_batch/email_delivery_send_check)
+--      i dotąd zawyżało ostrzeżenie `email_failed` (#1227);
+--    * `suppressedLast24h` — wygaszone w 24 h (informacyjnie, bez progu);
+--    * `configBlocked` — listy czekające po błędzie konfiguracji nadawcy/dostawcy (worker odkłada
+--      je bez zużycia próby z kodem `EMAIL_PROVIDER_CONFIG`, #1214) → alarm `email_provider_config`.
+--    Reszta funkcji bez zmian. Gdy inna migracja w kolejce zmieni ops_metrics, musi przejąć te pola.
+-- 2. requeue_failed_email_deliveries(p_since_days, p_dry_run, p_templates, p_error_messages) —
+--    tylko service_role (skrypt operatora scripts/db/requeue-failed-emails.mjs, bez UI). Wraca do
+--    kolejki listy `failed` z ostatnich N dni (1–30), które NIE zostały wygaszone (suppressed_at),
+--    nie należą do kampanii (kampanie mają własne rewizje) i nie zostały przyjęte przez dostawcę
+--    (provider_message_id/sent_at puste). attempts = 0, bez dzierżawy; claim_email_batch ponownie
+--    sprawdza zgodę, blokadę adresu i uprawnienie odbiorcy, więc wypisany nie dostanie listu.
+--    Domyślnie dry-run (same liczby). Audyt `email_delivery.requeued` z liczbami, bez adresów.
+-- Rollback: supabase/rollback/0193_email_ops_config_requeue.down.sql.
 -- =============================================================================
-
-drop function if exists public.requeue_failed_email_deliveries(integer, boolean, text[], text[]);
 
 create or replace function public.ops_metrics()
 returns jsonb
@@ -30,7 +44,13 @@ begin
       filter (where status = 'queued' and next_attempt_at <= now())))::bigint, 0),
     'abandonedLeases', count(*) filter (where status = 'queued' and locked_at is not null
       and locked_at < now() - interval '300 seconds'),
-    'failedLast24h', count(*) filter (where status = 'failed' and updated_at > now() - interval '24 hours')
+    -- #1227: same porażki wysyłki; wiersze wygaszone (suppressed_at) liczone osobno, bez alarmu.
+    'failedLast24h', count(*) filter (where status = 'failed' and suppressed_at is null
+      and updated_at > now() - interval '24 hours'),
+    'suppressedLast24h', count(*) filter (where status = 'failed' and suppressed_at is not null
+      and updated_at > now() - interval '24 hours'),
+    -- #1214: listy odłożone po błędzie konfiguracji nadawcy/dostawcy (worker bez zużycia próby).
+    'configBlocked', count(*) filter (where status = 'queued' and error_message = 'EMAIL_PROVIDER_CONFIG')
   ) into v_email
   from public.email_deliveries
   where status in ('queued', 'failed');
@@ -131,3 +151,60 @@ drop type if exists public.subscription_status;
 
 revoke all on function public.ops_metrics() from public, anon, authenticated;
 grant execute on function public.ops_metrics() to pracujbe_ops, service_role;
+
+
+create or replace function public.requeue_failed_email_deliveries(
+  p_since_days integer,
+  p_dry_run boolean default true,
+  p_templates text[] default null,
+  p_error_messages text[] default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  v_dry boolean := coalesce(p_dry_run, true);
+  v_matched integer;
+  v_requeued integer := 0;
+begin
+  if p_since_days is null or p_since_days < 1 or p_since_days > 30
+     or coalesce(cardinality(p_templates), 0) > 50 or coalesce(cardinality(p_error_messages), 0) > 20 then
+    raise exception 'VALIDATION_FAILED' using errcode = '22023';
+  end if;
+
+  select count(*) into v_matched
+    from public.email_deliveries d
+   where d.status = 'failed'
+     and d.suppressed_at is null
+     and d.campaign_id is null
+     and d.provider_message_id is null
+     and d.sent_at is null
+     and d.updated_at > now() - make_interval(days => p_since_days)
+     and (p_templates is null or d.template = any(p_templates))
+     and (p_error_messages is null or d.error_message = any(p_error_messages));
+
+  if not v_dry and v_matched > 0 then
+    update public.email_deliveries d
+       set status = 'queued', attempts = 0, next_attempt_at = now(), error_message = null,
+           locked_at = null, lock_token = null
+     where d.status = 'failed'
+     and d.suppressed_at is null
+     and d.campaign_id is null
+     and d.provider_message_id is null
+     and d.sent_at is null
+     and d.updated_at > now() - make_interval(days => p_since_days)
+     and (p_templates is null or d.template = any(p_templates))
+     and (p_error_messages is null or d.error_message = any(p_error_messages));
+    get diagnostics v_requeued = row_count;
+    perform public.write_audit('email_delivery.requeued', 'email_delivery', null, null,
+      jsonb_build_object('sinceDays', p_since_days, 'requeued', v_requeued,
+        'templates', coalesce(to_jsonb(p_templates), 'null'::jsonb),
+        'errorMessages', coalesce(to_jsonb(p_error_messages), 'null'::jsonb)));
+  end if;
+
+  return jsonb_build_object('matched', v_matched, 'requeued', v_requeued, 'dryRun', v_dry);
+end $$;
+revoke all on function public.requeue_failed_email_deliveries(integer, boolean, text[], text[])
+  from public, anon, authenticated;
+grant execute on function public.requeue_failed_email_deliveries(integer, boolean, text[], text[]) to service_role;

@@ -43,7 +43,7 @@ export interface MailSendOptions {
 
 export type MailErrorCode = 'delivery_failed' | 'provider_unavailable' | 'configuration_error';
 
-/** Kod błędu konfiguracji zapisywany w `email_deliveries.error_message` (czujka `ops_metrics`, 0980). */
+/** Kod błędu konfiguracji zapisywany w `email_deliveries.error_message` (czujka `ops_metrics`, 0193). */
 export const MAIL_CONFIG_ERROR_MESSAGE = 'EMAIL_PROVIDER_CONFIG';
 
 const MESSAGES: Record<MailErrorCode, string> = {
