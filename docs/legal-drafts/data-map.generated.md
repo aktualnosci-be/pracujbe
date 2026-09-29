@@ -1326,7 +1326,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |
 | `public.occupations` | Słownik/konfiguracja (zawody) — bez danych osobowych. |
-| `public.ops_job_runs` | Ostatni przebieg zadań utrzymaniowych (0950, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych. |
+| `public.ops_job_runs` | Ostatni przebieg zadań utrzymaniowych (0178, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych. |
 | `public.payments` | Martwy schemat billingu. |
 | `public.plan_entitlements` | Słownik/konfiguracja (limity planów) — bez danych osobowych. |
 | `public.processed_webhooks` | Identyfikatory zdarzeń webhooków do deduplikacji — bez danych osobowych. |

@@ -963,7 +963,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['security-audit'],
     subjects: [],
     columns: {},
-    note: 'Ostatni przebieg zadań utrzymaniowych (0950, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych.',
+    note: 'Ostatni przebieg zadań utrzymaniowych (0178, #47): czas, wynik, czas trwania i stała nazwa zadania z błędem — jeden wiersz na zadanie, bez danych osobowych.',
   },
 
   // --- Statystyki ofert (bez danych osobowych z założenia #99) --------------------------------

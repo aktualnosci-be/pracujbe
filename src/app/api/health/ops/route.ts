@@ -20,7 +20,7 @@ import { readOpsStatus } from '@/lib/ops/status';
  * #569: `backup` = wiek ostatniej kopii w R2 (klucz odczytu `BACKUP_S3_READ_*`). Każdy stan
  * poza `ok` — także `unconfigured` — dokłada alarm `backup_*` do `alerts` (503).
  *
- * 0950: `maintenanceRun` = ostatni przebieg `/api/maintenance` (brak = ostrzeżenie, > 2 h = alarm).
+ * 0178: `maintenanceRun` = ostatni przebieg `/api/maintenance` (brak = ostrzeżenie, > 2 h = alarm).
  * Ten sam odczyt (`readOpsStatus`) pokazuje panel `/admin/operacje`.
  */
 

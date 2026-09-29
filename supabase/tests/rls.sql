@@ -15567,7 +15567,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- =============================================================================
--- OPSM — ostatni przebieg maintenance (0950, #47): zapis tylko service_role, odczyt
+-- OPSM — ostatni przebieg maintenance (0178, #47): zapis tylko service_role, odczyt
 -- pracujbe_ops/service_role, same liczby i stały identyfikator zadania; „nigdy” = null.
 -- =============================================================================
 \echo '--- OPSM ops_last_maintenance_run ---'

@@ -36,10 +36,10 @@ identyfikatorów ani konfiguracji.
 | `auth_email_lease_abandoned` | alarm | dzierżawa `leased` po `lease_expires_at` | worker auth padł |
 | `webhook_stuck` | alarm | webhook `processing` > 15 min | awaria w trakcie przetwarzania (0038) |
 | `maintenance_lag` | alarm | aktywna oferta > 2 h po `expires_at`, rezerwacja kodu > 26 h, checkout `pending` > 150 min | cron `/api/maintenance` nie działa |
-| `maintenance_run_stale` | alarm | ostatni zapisany przebieg `/api/maintenance` starszy niż 2 h (0950) | cron maintenance przestał działać |
-| `maintenance_run_missing` | ostrzeżenie | baza nie zna żadnego przebiegu maintenance (0950) | cron jeszcze nie uruchomiony — celowo ostrzeżenie, nie alarm, żeby świeża baza nie dawała stale 503 |
+| `maintenance_run_stale` | alarm | ostatni zapisany przebieg `/api/maintenance` starszy niż 2 h (0178) | cron maintenance przestał działać |
+| `maintenance_run_missing` | ostrzeżenie | baza nie zna żadnego przebiegu maintenance (0178) | cron jeszcze nie uruchomiony — celowo ostrzeżenie, nie alarm, żeby świeża baza nie dawała stale 503 |
 | `maintenance_run_failed` | ostrzeżenie | ostatni przebieg zakończył się błędem zadania (nazwa zadania w wierszu panelu) | awaria jednego zadania; szczegół: kod na webhooku błędów |
-| `maintenance_run_unavailable` | ostrzeżenie | nie da się odczytać `ops_last_maintenance_run()` | brak uprawnień `pracujbe_ops`; baza sprzed 0950 = czujka milczy |
+| `maintenance_run_unavailable` | ostrzeżenie | nie da się odczytać `ops_last_maintenance_run()` | brak uprawnień `pracujbe_ops`; baza sprzed 0178 = czujka milczy |
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
 | `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
@@ -80,11 +80,11 @@ zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Do
 `rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
 z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
 
-### Ostatni przebieg maintenance (migracja `0950` — numer tymczasowy)
+### Ostatni przebieg maintenance (migracja `0178`)
 
 `ops_metrics()` widzi pominięty maintenance tylko pośrednio (oferty po terminie,
 porzucone rezerwacje). Przy małym ruchu nic nie rośnie, więc brak crona był
-niewidoczny. Od `0950` `/api/maintenance` na końcu każdego przebiegu (także
+niewidoczny. Od `0178` `/api/maintenance` na końcu każdego przebiegu (także
 nieudanego) woła `record_ops_job_run` (tylko `service_role`): tabela
 `ops_job_runs` trzyma JEDEN wiersz na zadanie — czas zakończenia, wynik, czas
 trwania i stałą nazwę pierwszego zadania z błędem (np. `jobExpiry`). Bez danych

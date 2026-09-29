@@ -107,7 +107,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // Każde zadanie po kolei, alerty po wygaszeniu ofert (alert nie zgłosi właśnie wygasłej).
     // #574: retencja bez RETENTION_MODE wyłączona — bez wywołania run_retention_purge.
     // #1143: tryb bazy sprawdzany tuż przed materializacją dopasowań.
-    // 0950: na końcu przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
+    // 0178: na końcu przebieg zapisany dla czujek (`/admin/operacje`, `/api/health/ops`).
     const expected = TASKS.filter((t) => t !== 'run_retention_purge');
     expected.splice(expected.indexOf('match_recompute_claim'), 0, 'recruitment_enabled');
     expect(fakeDb.calls.map((c) => c.name)).toEqual([...expected, 'record_ops_job_run']);
@@ -170,7 +170,7 @@ describe('/api/maintenance — expire_due_jobs (#72)', () => {
     // Bez wygaszenia nie wysyłamy alertów; pozostałe zadania idą dalej (osobne transakcje).
     expect(fakeDb.callsTo('process_saved_search_alerts')).toHaveLength(0);
     expect(fakeDb.callsTo('process_email_campaigns')).toHaveLength(1);
-    // 0950: nieudany przebieg też jest zapisany — z samą nazwą zadania (bez treści błędu).
+    // 0178: nieudany przebieg też jest zapisany — z samą nazwą zadania (bez treści błędu).
     expect(fakeDb.callsTo('record_ops_job_run')).toEqual([
       expect.objectContaining({ args: expect.objectContaining({ p_ok: false, p_failed_task: 'jobExpiry' }) }),
     ]);

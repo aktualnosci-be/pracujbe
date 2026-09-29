@@ -52,7 +52,7 @@ export const opsMetricsSchema = z.object({
 export type OpsMetrics = z.infer<typeof opsMetricsSchema>;
 
 /**
- * Ostatni przebieg `/api/maintenance` (0950, `ops_last_maintenance_run()`). `ageSeconds = null`
+ * Ostatni przebieg `/api/maintenance` (0178, `ops_last_maintenance_run()`). `ageSeconds = null`
  * = baza nie zna żadnego przebiegu (cron jeszcze nie działa). Same liczby i stały identyfikator
  * zadania z kodu (`failedTask`) — bez treści i danych osobowych.
  */
@@ -152,8 +152,8 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
 /**
  * @param aiBudget stan budżetu AI (#36, `ai_budget_status()` z 0120): `null` = odczyt się nie
  *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
- * @param maintenanceRun ostatni przebieg maintenance (0950): `null` = odczyt się nie udał
- *   (ostrzeżenie), `undefined` = nie mierzono (baza sprzed 0950 — bez sygnału).
+ * @param maintenanceRun ostatni przebieg maintenance (0178): `null` = odczyt się nie udał
+ *   (ostrzeżenie), `undefined` = nie mierzono (baza sprzed 0178 — bez sygnału).
  */
 export function evaluateOps(
   metrics: OpsMetrics,
@@ -183,7 +183,7 @@ export function evaluateOps(
     alerts.push('maintenance_lag');
   }
 
-  // 0950: brak jakiegokolwiek przebiegu (cron jeszcze nie działa) = ostrzeżenie, nie alarm —
+  // 0178: brak jakiegokolwiek przebiegu (cron jeszcze nie działa) = ostrzeżenie, nie alarm —
   // świeża baza nie może stale zwracać 503. Stary ostatni przebieg = alarm; nieudany = ostrzeżenie
   // (cron i tak dostał 503 z nazwą zadania w kanale błędów).
   if (maintenanceRun === null) {
