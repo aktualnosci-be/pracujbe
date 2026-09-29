@@ -6,6 +6,7 @@ import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
 import { isOneTimeLinkPath } from '@/lib/analytics/route-policy';
 import { guestLinkPurpose } from '@/lib/guest-apply/link-state';
 import { isAppReady } from '@/lib/env';
+import { isOversizedPublicAction } from '@/lib/http/public-action-body-limit';
 import {
   SITE_ACCESS_COOKIE,
   SITE_ACCESS_DENIED_PARAM,
@@ -155,6 +156,12 @@ export default async function middleware(request: NextRequest) {
         'retry-after': '120',
       },
     }));
+  }
+
+  // Anonimowe formularze nie potrzebują globalnych 6 MB Server Actions (CFG29-07): duży POST
+  // poza panelami odpada przed renderem i akcją.
+  if (isOversizedPublicAction(request.nextUrl.pathname, request.method, request.headers)) {
+    return new NextResponse(null, { status: 413, headers: { 'cache-control': PRIVATE_CACHE_CONTROL } });
   }
 
   const cityRedirect = cityAliasRedirect(request) ?? faqRedirect(request);

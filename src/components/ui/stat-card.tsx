@@ -25,7 +25,7 @@ const ICON_TONE: Record<Tone, string> = {
   primary: 'bg-primary/10 text-primary',
   success: 'bg-success/10 text-success',
   warning: 'bg-warning/10 text-warning',
-  error: 'bg-error/10 text-error',
+  error: 'bg-error/10 text-error-text',
   accent: 'bg-accent/10 text-accent-dark',
 };
 
@@ -33,7 +33,7 @@ const VALUE_TONE: Record<Tone, string> = {
   primary: 'text-primary',
   success: 'text-success',
   warning: 'text-warning',
-  error: 'text-error',
+  error: 'text-error-text',
   accent: 'text-accent',
 };
 

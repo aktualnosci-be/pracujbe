@@ -93,7 +93,7 @@ export default async function CandidateSettingsPage({
             <h2 id="age-attestation-title" className={H2_EXTENDED}>
               {tAge('sectionTitle')}
             </h2>
-            <p role="alert" className="mt-2 text-sm text-error">
+            <p role="alert" className="mt-2 text-sm text-error-text">
               {tAge('loadError')}
             </p>
           </section>
@@ -109,7 +109,7 @@ export default async function CandidateSettingsPage({
             <h2 id="profile-visibility-title" className={H2_EXTENDED}>
               {tVisibility('sectionTitle')}
             </h2>
-            <p role="alert" className="mt-2 text-sm text-error">
+            <p role="alert" className="mt-2 text-sm text-error-text">
               {tVisibility('loadError')}
             </p>
           </section>
@@ -123,7 +123,7 @@ export default async function CandidateSettingsPage({
           <h2 id="company-blocks-title" className={H2_EXTENDED}>
             {tBlocks('sectionTitle')}
           </h2>
-          <p role="alert" className="mt-2 text-sm text-error">
+          <p role="alert" className="mt-2 text-sm text-error-text">
             {tBlocks('loadError')}
           </p>
         </section>

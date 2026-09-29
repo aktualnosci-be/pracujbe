@@ -130,7 +130,7 @@ export function NotificationsDropdown({
       </div>
 
       {!error && markAllError ? (
-        <p role="alert" className="border-b border-border px-5 py-2 text-[13px] text-error">
+        <p role="alert" className="border-b border-border px-5 py-2 text-[13px] text-error-text">
           {markAllError}
         </p>
       ) : null}
