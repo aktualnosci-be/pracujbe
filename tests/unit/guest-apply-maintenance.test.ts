@@ -25,6 +25,7 @@ const MAINTENANCE_RPCS = [
   'rate_limit_gc',
   'processed_webhooks_gc',
   'claim_storage_deletions',
+  'claim_company_vies_auto_checks',
   'record_ops_job_run',
 ];
 
