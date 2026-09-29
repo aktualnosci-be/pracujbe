@@ -19,7 +19,7 @@ const metrics = {
   email: { ready: 1, oldestReadyAgeSeconds: 30, abandonedLeases: 0, failedLast24h: 0 },
   authEmail: null,
   webhooks: { stuckProcessing: 0, failedLast24h: 0 },
-  maintenance: { overdueActiveJobs: 0, staleDiscountReservations: 0, staleCheckoutIntents: 0 },
+  maintenance: { overdueActiveJobs: 0 },
   connections: { used: 4, max: 100, reserved: 3 },
 };
 

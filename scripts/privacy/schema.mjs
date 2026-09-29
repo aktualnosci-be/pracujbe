@@ -4,7 +4,8 @@ import { join, relative, resolve } from "node:path";
 /**
  * Minimalny parser schematu z migracji SQL na potrzeby mapy danych osobowych (#485).
  *
- * Czyta `create table` i `alter table … add column` w kolejności wdrożenia produkcyjnego
+ * Czyta `create table`, `alter table … add column` oraz `drop table` / `alter table … drop column`
+ * (tabele i kolumny usunięte migracją znikają z wyniku) w kolejności wdrożenia produkcyjnego
  * (`database/bootstrap` → `supabase/migrations` → `database/auth`, jak
  * `scripts/db/production-migrations.mjs`). Treść funkcji (`$$ … $$`), literały i komentarze
  * są pomijane, więc tabele tymczasowe w ciałach funkcji nie trafiają do mapy.
@@ -138,6 +139,23 @@ export function parseSchema(files) {
           table.columns.set(column.name, { type: column.type, source: path });
         }
         tables.set(name, table);
+      }
+    }
+
+    // Usunięcia (np. 0177 — martwy schemat billingu): tabela albo kolumna znika z wyniku,
+    // więc mapa danych nie wymaga wpisów dla obiektów, których produkcyjny schemat już nie ma.
+    const dropTableRe =
+      /drop\s+table\s+(?:if\s+exists\s+)?((?:(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?[A-Za-z_][A-Za-z0-9_]*"?\s*,\s*)*(?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?[A-Za-z_][A-Za-z0-9_]*"?)\s*(?:cascade|restrict)?\s*;/gi;
+    while ((m = dropTableRe.exec(text))) {
+      for (const name of m[1].split(",")) tables.delete(qualify(name.trim()));
+    }
+    const dropColumnRe = /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?((?:"?[A-Za-z_][A-Za-z0-9_]*"?\.)?"?[A-Za-z_][A-Za-z0-9_]*"?)\s+([^;]*);/gi;
+    while ((m = dropColumnRe.exec(text))) {
+      const table = tables.get(qualify(m[1]));
+      if (!table) continue;
+      for (const part of splitTopLevel(m[2])) {
+        const drop = /^drop\s+column\s+(?:if\s+exists\s+)?("?[A-Za-z_][A-Za-z0-9_]*"?)/i.exec(part.trim());
+        if (drop) table.columns.delete(unquote(drop[1]));
       }
     }
   }

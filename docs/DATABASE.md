@@ -365,3 +365,26 @@ i unikat `moderation_decisions(report_id)`; z 0094 `reports_notice_immutable`,
 `reports_dsa_notice_complete`, politykę `report_events_select_own`; usuń tabele
 `dsa_retention_runs`, `moderation_appeals` i nowe kolumny. Zanonimizowanych danych rollback
 nie przywraca.
+
+## Usunięcie martwego schematu billingu (0177, #51)
+
+Migracja `0177` (na 0176) usuwa schemat płatności, który nigdy nie miał danych
+ani aktywnego przepływu: tabele `discount_redemptions`, `checkout_intents`, `payments`,
+`invoices`, `subscriptions`, `discount_codes`; funkcje `reserve_discount`, `finalize_discount`,
+`release_stale_discount_reservations`, `begin_checkout`, `complete_checkout`,
+`release_checkout_intent`, `release_stale_checkout_intents`; kolumnę
+`companies.provider_customer_id` z indeksem; typy `subscription_status`, `payment_status`,
+`invoice_status`. Zmienione funkcje: `company_plan(uuid)` (zawsze `free` — plan efektywny
+przy braku subskrypcji był taki sam) i `ops_metrics()` (sekcja `maintenance` tylko z
+`overdueActiveJobs`). Zostają `plan_entitlements` i limit aktywnych ofert oraz
+`processed_webhooks` (inbox webhooków poczty).
+
+Dowód: `supabase/tests/rls.sql` sekcja Z, `supabase/tests/billing-schema-rollback.sql`.
+
+### Rollback
+
+`supabase/rollback/0177_drop_dead_billing_schema.down.sql` odtwarza (puste) typy, tabele,
+indeksy, triggery `updated_at`, RLS i polityki, funkcje rabatów i checkoutu, kolumnę na
+`companies`, `company_plan` czytające subskrypcje oraz `ops_metrics()` z 0171. Uruchamiać
+przed rollbackiem migracji, które stoją na stanie po 0177 (np. 0176, 0175, 0174, 0173 i 0171 w tym samym
+transakcyjnym teście `portal-legal-mode-rollback.sql`).
