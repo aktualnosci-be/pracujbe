@@ -1899,6 +1899,19 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (token zużyty, zaproszenie nadal `pending` — czeka w panelu). Dowód: `rls.sql` sekcje
   TI610 (sekwencja preview → consume → preview) i TI611 (dwie równoległe sesje przez dblink),
   unit `team-invitation-signup-preview`.
+  Oczekujące zaproszenia (migracja `0187`): `get_company_invitations`
+  zwraca też `locale` (null dla zaproszeń sprzed 0121) i `inviter_name` (bramka owner/admin
+  bez zmian; zmiana typu wyniku = DROP + CREATE). Wiersz listy w `/employer/zespol` pokazuje
+  język zaproszenia, kto i kiedy zaprosił. „Odnów” (`renewTeamInvitation(id, expectedCompanyId)`, firma widoku jak przy
+  zapraszaniu — inna aktywna firma = `ACTIVE_COMPANY_CHANGED`): klient podaje tylko
+  id, adres/rolę/język akcja czyta z listy AKTYWNEJ firmy w tej samej transakcji i woła
+  `invite_company_member` z nowym tokenem (14 dni, nowy link dla adresu bez konta, limit 3/dobę
+  jak dotąd; zaproszenie bez języka → `en`); spoza listy = `NOT_FOUND`. „Cofnij” dopiero po
+  potwierdzeniu w `ConfirmDialog` (własna etykieta `team.revokeConfirm` — po francusku „Annuler”
+  = także „Anuluj”, test pilnuje różnicy); po sukcesie fokus na komunikacie `role="status"`. Dowód:
+  `rls.sql` sekcja TI179 (kontrola ujemna: definicja z 0086 bez `locale`), unit
+  `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
+  (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
   Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
   `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
   `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
@@ -2076,7 +2089,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zawieszona, tekst człowieka), unit `job-list-machine-translation` (flaga wyłączona = brak
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
-  ręcznej, `protectedTerms` (nazwa firmy).
+  ręcznej.
+  Nazwy chronione (#740, migracja `0190` — numer tymczasowy): nazwa firmy (`companies.name`,
+  wyłącznie z bazy) = `translation_source_revisions.protected_terms` rewizji oferty
+  (`sync_job_translation_source` → `record_translation_source(…, p_protected_terms)`,
+  normalizacja `translation_protected_terms`: ≤ 10 nazw po ≤ 200 znaków), część odcisku — zmiana
+  nazwy firmy (trigger `companies` z `name`) = nowa rewizja; `claim_translation_jobs` zwraca
+  listę, worker podaje ją dostawcy i `validateTranslation` (nazwa ze źródła musi zostać bez zmian,
+  inaczej `facts_terms`). Pipeline `translation-v2`. Dowód: `rls.sql` sekcja TP740 (kontrole
+  ujemne: odcisk bez nazw, trigger bez `name`), rollback `0190_…down.sql`
+  (`translation-protected-terms-rollback.sql`, też w `portal-legal-mode-rollback.sql` przed 0177),
+  unit `translation-worker`, `translation-job-sync`.
 - [x] Aplikacje — **wyłączone w trybie ogłoszeniowym (#1130, #1132, #1144)** — RPC `apply_to_job`/`transition_application` (idempotentne, historia auto, kolejka e-mail) + server actions + wpięcie do UI paneli/ApplyModal (zweryfikowane na PG)
   Dostępność w aplikacji (#190, 0074): osobna wartość `within_two_weeks` („w ciągu 2 tygodni”);
   profil kandydata zachowuje węższy zestaw `AVAILABILITY_VALUES`.
@@ -2328,6 +2351,21 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   SMTP z wyłączonym open trackingiem, własnym wypisem i stopką, klucze API z prawem odczytu
   statusów, webhook, włączenie statusów „OK” u wsparcia, zmienne w Railway.
   Harmonogram: cron Railway (`scripts/railway-cron-call.mjs` → `/api/email/process`), opis w `docs/RESEND_SETUP.md` §6 (#296).
+  Błąd konfiguracji nadawcy/dostawcy (#1214, migracja `0192` — numer tymczasowy): kod transportu
+  `configuration_error` (zły/nieparsowalny `EMAIL_FROM`, Resend `invalid_from_address`/`*_api_key`/
+  `validation_error` o domenie/nadawcy, EmailLabs 401/403 i odrzucenie wskazujące konto SMTP/domenę)
+  odkłada ten i pozostałe wiersze paczki o 10 min bez zużycia próby (`EMAIL_PROVIDER_CONFIG`
+  w `error_message`, 503 cronu; kolejka kont — `auth.defer_email`); odrzucenie adresata zostaje
+  trwałym `failed`. `EMAIL_FROM` bez otaczających cudzysłowów (`emailFromEnv`), nieużywalny =
+  worker nie pobiera kolejki, `/api/health` `emailProviderReady: false`, alarm
+  `email_sender_invalid`; `ops_metrics().email.configBlocked` → alarm `email_provider_config`.
+  Ponowne zakolejkowanie `failed` z N dni: RPC `requeue_failed_email_deliveries` (service_role,
+  bez wygaszonych/kampanii/przyjętych, audyt) + `scripts/db/requeue-failed-emails.mjs`. Licznik
+  `failedLast24h` bez wygaszonych, osobno `suppressedLast24h` (#1227). Dowód: `rls.sql` sekcja
+  OM1227, rollback `0192_…down.sql`, unit `email-config-errors`, `email-outbox-lease`,
+  `auth-email-worker`, `emaillabs-transport`. Pule `pg` z `query_timeout` 35 s i TCP keepalive
+  (#1229, `db-pool-query-timeout`); retencja R2 liczy tylko kompletne kopie, niekompletne > 24 h
+  sprzątane osobno (#1228, `backup-r2`).
   Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
   (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
   semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;
@@ -2594,6 +2632,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
   NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
   (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
+  Trwała kolejka (#706/#879, migracja `0191` — numer tymczasowy): trigger na `companies`
+  kolejkuje firmę w `company_vies_auto_queue` przy KAŻDYM zapisie nowego prawidłowego numeru
+  VAT/KBO bez wyniku dla tego numeru (założenie, dopisanie numeru w `/employer/firma`, zmiana);
+  sama zmiana nazwy nie kolejkuje, usunięty numer/firma zdejmuje zadanie, wynik dla bieżącego
+  numeru (auto albo admin) też. Worker `processCompanyViesAutoQueue` w `/api/maintenance`
+  (≤ 10 na przebieg) + jednorazowa próba po zapisie (`after`): `claim_company_vies_auto_checks`
+  (SKIP LOCKED, dzierżawa, ≤ 10 prób), niedostępność/limit/błąd → `finish_company_vies_auto_check`
+  z backoffem 5 min × 2^n (≤ 6 h). Wynik dla numeru, którego firma już nie ma, jest zastępowany.
+  Admin widzi stan kolejki w sekcji VIES (`admin.viesAuto*`). Dowód: `rls.sql` sekcja VQ976
+  (kontrola ujemna: bez triggera dopisany numer nie trafia do kolejki), rollback
+  `vies-auto-queue-rollback.sql`, unit `company-vies-auto-check`, `vies-auto-retry-admin`.
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
@@ -2668,6 +2717,25 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   rozpatruje inny admin niż cofający, uwzględnienie = nowa decyzja; od cofnięcia po odwołaniu
   autora — brak drogi. Dowód: `rls.sql` sekcja RA43. **Otwarte:** włączenie `apply` (po #40),
   retencja `audit_logs` z uzasadnieniami.
+  Trwały dowód poinformowania i limity DSA (paczka M-1, migracja `0188` — numer tymczasowy;
+  #1037/#1045/#1063/#1098/#1107; terminy 6 mies./14 dni/12 mies. bez zmian, strażnik
+  `dsa-approved-terms`): początek biegu terminu odwołania zapisuje niezmienna tabela
+  `moderation_informed` (bez grantów; triggery na `email_deliveries` + RPC odczytu decyzji), a nie
+  mutowalna tabela powiadomień ani bieżący stan poczty — `email_sent` (odbicie/błąd unieważnia wpis),
+  `panel_view` (odczyt decyzji w `get_company_moderation_decisions`; „oznacz jako przeczytane” nie
+  liczy się), reguły zastępcze `delivery_failed` (od ostatecznej porażki wysyłki) i `no_recipient`
+  (od chwili decyzji/cofnięcia; odroczony trigger przy zatwierdzeniu). Retencja i stan drogi
+  odwołania korzystają z tego bez zmian; `dsa_retention_report` ma `informedByFallback`
+  (kafelek w `/admin/raport-dsa`). Kod dostępu do sprawy (`reportReceived`) znika z payloadu
+  zlecenia, gdy przestaje być oczekujące (strażnik BEFORE INSERT/UPDATE + jednorazowe czyszczenie).
+  `submit_content_report`: limit 5/adres/24 h i „jedna otwarta sprawa na treść” pod blokadą
+  doradczą per adres + częściowy indeks `reports_dsa_open_uq`. `admin_set_company_status`: zawieszenie
+  także z `unverified`/`pending`, z `suspended` również `rejected` (przyciski = macierz bazy,
+  test `dsa-informed-limits`). Dowód: `rls.sql` sekcja DSA960 (kontrole ujemne: zdjęty strażnik,
+  trigger poczty, trigger zatwierdzenia, indeks; wyścigi dblink), rollback
+  `supabase/rollback/0188_…down.sql` + `dsa-informed-rollback.sql`. **Otwarte (poza M-1):** blokada
+  wiersza przy „Kopiuj jako szkic”, odpowiedź na propozycję (wyłączona), zgłoszenie wiadomości
+  „otwórz ponownie” (#1107 pkt 2).
   Nieaktywny administrator nie blokuje rozpatrzenia (#909, migracja `0179`,
   `create or replace` tej samej sygnatury `admin_decide_appeal` co 0109): „inny administrator”
   dla `REVIEWER_CONFLICT` (RPC) i dla podglądu konfliktu w kolejce (`listAppeals` →
@@ -3264,6 +3332,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w danym języku (generator `src/lib/pwa/manifest.ts`, języki z `routing.locales`), nieobsługiwany
   → 404, stary `/manifest.webmanifest` = PL. Adres manifestu omija middleware (bramka hasła,
   next-intl) — strażnik `tests/unit/pwa-manifest-route.test.ts`, E2E `pwa-locale-manifest.spec`.
+  Limit CV na konto (decyzja właściciela 29.09.2026, migracja `0189`): najwyżej 10 nieusuniętych plików
+  i 50 MB łącznie (trigger `enforce_cv_account_quota`, lustro `CV_MAX_FILES_PER_ACCOUNT`/
+  `CV_MAX_TOTAL_BYTES_PER_ACCOUNT`, komunikat `files.errorAccountLimit`); dowód `rls.sql` SD1111, unit `cv-account-quota`.
+  Kontrakt soft-delete (0189): usunięta (`deleted_at`) aplikacja i propozycja są niewidoczne dla stron
+  (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
+  jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
+  `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).

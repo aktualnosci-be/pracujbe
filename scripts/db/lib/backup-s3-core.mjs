@@ -106,26 +106,41 @@ export function latestComplete(names) {
   return groupBackups(names).find((b) => b.artifact && b.manifest) ?? null;
 }
 
+/** Kopia bez manifestu młodsza niż to okno może być w trakcie wysyłki — nie ruszamy jej. */
+export const INCOMPLETE_GRACE_HOURS = 24;
+
 /**
- * Plan retencji: zostaje `keep` najnowszych kopii; starsze niż `maxAgeDays` też są usuwane.
- * Najnowsza kompletna kopia zostaje zawsze. Tylko nazwy o dokładnym wzorcu.
+ * Plan retencji (#1228): `keep` liczy WYŁĄCZNIE kopie kompletne (artefakt + manifest) —
+ * niekompletne nie zajmują miejsca w limicie, więc po nieudanych wysyłkach manifestu
+ * nie wypierają kompletnych. Kompletne starsze niż `maxAgeDays` też są usuwane,
+ * najnowsza kompletna zostaje zawsze. Niekompletne (bez artefaktu albo bez manifestu —
+ * odtworzenie wymaga obu) są sprzątane osobno, gdy są starsze niż `incompleteGraceHours`
+ * (domyślnie 24 h; młodsza może być właśnie wysyłana). Tylko nazwy o dokładnym wzorcu.
  * @param {string[]} names
- * @param {{ keep: number, maxAgeDays?: number | null, now?: Date }} options
+ * @param {{ keep: number, maxAgeDays?: number | null, now?: Date, incompleteGraceHours?: number }} options
  * @returns {string[]} nazwy obiektów do usunięcia
  */
-export function retentionPlan(names, { keep, maxAgeDays, now = new Date() }) {
+export function retentionPlan(names, { keep, maxAgeDays, now = new Date(), incompleteGraceHours = INCOMPLETE_GRACE_HOURS }) {
   const groups = groupBackups(names);
   const newest = latestComplete(names)?.stamp;
   const limit = maxAgeDays ? now.getTime() - maxAgeDays * 86_400_000 : null;
+  const incompleteLimit = now.getTime() - incompleteGraceHours * 3_600_000;
   const doomed = [];
-  groups.forEach((group, index) => {
-    if (group.stamp === newest) return;
-    const tooMany = index >= keep;
-    const tooOld = limit !== null && (stampDate(group.stamp)?.getTime() ?? 0) < limit;
-    if (!tooMany && !tooOld) return;
+  let completeIndex = 0;
+  for (const group of groups) {
+    const time = stampDate(group.stamp)?.getTime() ?? 0;
+    const complete = group.artifact && group.manifest;
+    let remove;
+    if (complete) {
+      const index = completeIndex++;
+      if (group.stamp === newest) continue;
+      remove = index >= keep || (limit !== null && time < limit);
+    } else {
+      remove = time < incompleteLimit;
+    }
+    if (!remove) continue;
     if (group.artifact) doomed.push(`pracujbe-${group.stamp}.dump.age`);
     if (group.manifest) doomed.push(`pracujbe-${group.stamp}.json`);
-  });
+  }
   return doomed;
 }
-

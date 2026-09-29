@@ -338,4 +338,42 @@ describe('CompanyStatusActions — uzasadnienie decyzji (#310)', () => {
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
+  it('firma jeszcze niezweryfikowana (pending) ma pilną blokadę z uzasadnieniem (#1107)', async () => {
+    setCompanyStatus.mockResolvedValue({ ok: true });
+    render(
+      <Page>
+        <CompanyStatusActions company={{ ...company, status: 'pending' }} createdLabel="—" />
+      </Page>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'actionSuspend' }));
+    fillReason('Pilna blokada: podejrzenie podszycia.');
+    const buttons = screen.getAllByRole('button', { name: 'actionSuspend' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+
+    await waitFor(() =>
+      expect(setCompanyStatus).toHaveBeenCalledWith(
+        'company-1',
+        'suspended',
+        'pending',
+        'Pilna blokada: podejrzenie podszycia.',
+      ),
+    );
+  });
+
+  it('kontrola ujemna: odrzucona firma nie ma zawieszenia, zawieszona ma odrzucenie', () => {
+    const { unmount } = render(
+      <Page>
+        <CompanyStatusActions company={{ ...company, status: 'rejected' }} createdLabel="—" />
+      </Page>,
+    );
+    expect(screen.queryByRole('button', { name: 'actionSuspend' })).toBeNull();
+    unmount();
+    render(
+      <Page>
+        <CompanyStatusActions company={{ ...company, status: 'suspended' }} createdLabel="—" />
+      </Page>,
+    );
+    expect(screen.getByRole('button', { name: 'actionRejectCompany' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'actionReactivate' })).toBeInTheDocument();
+  });
 });

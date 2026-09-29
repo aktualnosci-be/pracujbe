@@ -508,6 +508,25 @@ describe("Prywatny adapter Railway Bucket przez rzeczywisty SDK S3", () => {
       expect(source.destroyed).toBe(true);
     },
   );
+  it("limit czasu body liczy bezczynność: wolny, ale płynący transfer nie jest przerywany", async () => {
+    vi.useFakeTimers();
+    const { store, handle } = fixture({ timeoutMs: 100 });
+    const source = new PassThrough();
+    handle.mockResolvedValue(download(source));
+    const file = await requireStream(store);
+    const reader = file.body.getReader();
+    for (let i = 0; i < 3; i += 1) {
+      const pending = reader.read();
+      await vi.advanceTimersByTimeAsync(80);
+      source.write(Buffer.from("x"));
+      const chunk = await pending;
+      expect(chunk.done).toBe(false);
+    }
+    // Łącznie 240 ms > limit 100 ms, a transfer trwa; dopiero cisza dłuższa niż limit przerywa.
+    const stalled = expect(reader.read()).rejects.toThrow(/^TIMEOUT$/);
+    await vi.advanceTimersByTimeAsync(100);
+    await stalled;
+  });
   it("limit czasu obejmuje także body po otrzymaniu nagłówków", async () => {
     vi.useFakeTimers();
     const { store, handle } = fixture({ timeoutMs: 100 });
