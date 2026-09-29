@@ -783,11 +783,13 @@ revoke all on function public.saved_search_keyset_page(jsonb, text, timestamptz,
 grant execute on function public.saved_search_keyset_page(jsonb, text, timestamptz, timestamptz, uuid, integer)
   to service_role;
 
--- --- 9. Kreator: save_job_draft (stan 0172) + work_time -------------------------------------------
-create or replace function public.save_job_draft(p_job_id uuid, p_content jsonb)
-returns void language plpgsql security definer set search_path = public, pg_temp as $$
+-- --- 9. Kreator: save_job_draft (stan 0184 — token wersji szkicu) + work_time ----------------------
+create or replace function public.save_job_draft(
+  p_job_id uuid, p_content jsonb, p_expected_updated_at timestamptz default null
+) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_company uuid; v_status text; v_locale text; v_title text;
+  v_updated timestamptz; v_new timestamptz;
   j jsonb := coalesce(p_content->'job', '{}'::jsonb);
   tr jsonb := coalesce(p_content->'translation', '{}'::jsonb);
   v_bad text;
@@ -824,8 +826,8 @@ begin
     raise exception 'VALIDATION_FAILED: nieznane pole %', v_bad using errcode = '42501';
   end if;
 
-  select j0.company_id, j0.status::text, j0.default_locale
-    into v_company, v_status, v_locale
+  select j0.company_id, j0.status::text, j0.default_locale, j0.updated_at
+    into v_company, v_status, v_locale, v_updated
     from public.jobs j0
     where j0.id = p_job_id and j0.deleted_at is null
     for update;
@@ -836,6 +838,12 @@ begin
   end if;
   if v_status <> 'draft' then
     raise exception 'JOB_NOT_DRAFT: kreator zapisuje wyłącznie szkic' using errcode = '42501';
+  end if;
+  -- #1070: token wersji szkicu. Wiersz jest już zablokowany (FOR UPDATE), więc równoległy zapis
+  -- czeka i po odblokowaniu widzi nową wersję → konflikt zamiast cichego nadpisania. Brak tokenu
+  -- (świeży szkic tej karty, import) = bez kontroli, jak `update_published_job`.
+  if p_expected_updated_at is not null and p_expected_updated_at <> v_updated then
+    raise exception 'JOB_EDIT_CONFLICT: szkic zmienił się w międzyczasie' using errcode = '40001';
   end if;
 
   if j <> '{}'::jsonb then
@@ -938,9 +946,19 @@ begin
   if p_content ? 'screening_questions' then
     perform public.set_job_screening_questions(p_job_id, p_content->'screening_questions');
   end if;
+
+  -- #1070: nowa wersja szkicu. Każdy zapis kroku ją podbija — także krok, który zmienia tylko
+  -- relacje albo tłumaczenie (nie dotyka wiersza `jobs`); `strict_job_version` (0077) gwarantuje
+  -- ścisły wzrost nawet w jednej transakcji.
+  select updated_at into v_new from public.jobs where id = p_job_id;
+  if v_new is not distinct from v_updated then
+    update public.jobs set updated_at = now() where id = p_job_id
+      returning updated_at into v_new;
+  end if;
+  return jsonb_build_object('updated_at', v_new);
 end $$;
-revoke all on function public.save_job_draft(uuid, jsonb) from public;
-grant execute on function public.save_job_draft(uuid, jsonb) to authenticated;
+revoke all on function public.save_job_draft(uuid, jsonb, timestamptz) from public;
+grant execute on function public.save_job_draft(uuid, jsonb, timestamptz) to authenticated;
 
 -- --- 10. update_published_job (stan 0172) + work_time -------------------------------------------
 create or replace function public.update_published_job(
