@@ -15979,11 +15979,11 @@ select pg_temp.expect_error(
 select pg_temp.expect_error(
   'update public.companies set website_pending = ''https://obejscie.example'', links_review_status = ''pending'', links_pending_at = now() where id = ''e2040000-0000-0000-0000-0000000000f1''',
   'PERMISSION_DENIED', 'CLR156-1b bezpośredni UPDATE kolumn propozycji odrzucony');
--- Nazwa firmy nadal edytowalna wprost (strażnik nie dotyka innych kolumn).
-update public.companies set description = 'Opis R' where id = :'COMPR';
+-- Inne kolumny nadal edytowalne wprost (strażnik nie dotyka miasta).
+update public.companies set city = 'Gent' where id = :'COMPR';
 reset role; reset app.current_uid;
 select pg_temp.assert(
-  (select description = 'Opis R' and website = 'https://www.firma-r.example' from public.companies where id = :'COMPR'),
+  (select city = 'Gent' and website = 'https://www.firma-r.example' from public.companies where id = :'COMPR'),
   'CLR156-1c inne kolumny bez zmian w zachowaniu, strona WWW nienaruszona');
 
 -- CLR156-2 (kontrola ujemna): member firmy nie zgłasza propozycji.
@@ -16122,6 +16122,193 @@ set role authenticated; set app.current_uid = :'OWNR'; select pg_temp.assert_cli
 select pg_temp.expect_error(
   'select public.submit_company_links(''e2040000-0000-0000-0000-0000000000f2'', true, ''https://obca.example'', false, null)',
   'PERMISSION_DENIED', 'CLR156-10 obca firma odrzucona');
+reset role; reset app.current_uid;
+
+-- ============================================================================
+-- CDR971. Opis firmy z zatwierdzaniem przez admina (migracja 0971, #868): opis publiczny
+--         (`description`) zmienia wyłącznie decyzja admina portalu, propozycja firmy czeka
+--         w `description_pending`; usunięcie opisu wchodzi od razu; limit długości; CAS po
+--         `description_pending_at`; odrzucenie z uzasadnieniem; klient nie pisze tych kolumn wprost.
+-- ============================================================================
+\set OWND 'e9710000-0000-0000-0000-000000000001'
+\set ADMD 'e9710000-0000-0000-0000-000000000002'
+\set MEMD 'e9710000-0000-0000-0000-000000000003'
+\set COMPD 'e9710000-0000-0000-0000-0000000000f1'
+\set COMPD2 'e9710000-0000-0000-0000-0000000000f2'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'OWND','ownd@test.be','Olga D','{"role":"employer","first_name":"Olga","last_name":"D","locale":"nl"}'),
+  (:'ADMD','admd@test.be','Adam D','{"role":"employer","first_name":"Adam","last_name":"D","locale":"pl"}'),
+  (:'MEMD','memd@test.be','Mira D','{"role":"employer","first_name":"Mira","last_name":"D","locale":"pl"}');
+insert into public.companies(id,name,slug,status,vat_number,verified_at,description) values
+  (:'COMPD','Firma D','firma-d-cdr971','verified','BE0644444444',now(),'Stary opis firmy D'),
+  (:'COMPD2','Firma D2','firma-d2-cdr971','verified','BE0655555555',now(),null);
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'COMPD',:'OWND','owner',true),
+  (:'COMPD',:'ADMD','admin',true),
+  (:'COMPD',:'MEMD','member',true);
+
+-- CDR971-1 (kontrola ujemna): owner firmy NIE zmieni opisu ani stanu przeglądu wprost (strażnik).
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'update public.companies set description = ''Obejscie'' where id = ''e9710000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'CDR971-1 bezpośredni UPDATE opisu odrzucony');
+select pg_temp.expect_error(
+  'update public.companies set description_pending = ''Obejscie'', description_review_status = ''pending'', description_pending_at = now() where id = ''e9710000-0000-0000-0000-0000000000f1''',
+  'PERMISSION_DENIED', 'CDR971-1b bezpośredni UPDATE kolumn propozycji odrzucony');
+reset role; reset app.current_uid;
+-- Kontrola ujemna samego strażnika: bez triggera ten sam UPDATE przechodzi.
+begin;
+savepoint cdr_neg;
+drop trigger trg_guard_company_description on public.companies;
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+update public.companies set description = 'Bez strażnika' where id = :'COMPD';
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select description = 'Bez strażnika' from public.companies where id = :'COMPD'),
+  'CDR971-1n bez strażnika bezpośredni zapis opisu przechodzi — CDR971-1 wykrywa regresję');
+rollback to savepoint cdr_neg;
+rollback;
+select pg_temp.assert(
+  (select description = 'Stary opis firmy D' from public.companies where id = :'COMPD'),
+  'CDR971-1c opis nietknięty');
+
+-- CDR971-2 (kontrola ujemna): member firmy nie zgłasza propozycji.
+set role authenticated; set app.current_uid = :'MEMD'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.submit_company_description(''e9710000-0000-0000-0000-0000000000f1'', ''Opis od membera'')',
+  'PERMISSION_DENIED', 'CDR971-2 member nie zgłasza opisu');
+reset role; reset app.current_uid;
+
+-- CDR971-3: owner zgłasza NOWY opis → pending; opis publiczny BEZ ZMIAN; retry idempotentny.
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'COMPD', '  Nowy opis firmy D.  ') = 'pending',
+  'CDR971-3 nowy tekst = propozycja do decyzji');
+reset role; reset app.current_uid;
+select description_pending_at as cdr_pending_at from public.companies where id = :'COMPD' \gset
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'COMPD', 'Nowy opis firmy D.') = 'pending',
+  'CDR971-3b ponowienie tej samej propozycji');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select description = 'Stary opis firmy D' and description_pending = 'Nowy opis firmy D.'
+      and description_review_status = 'pending' and description_pending_at = :'cdr_pending_at'::timestamptz
+      and status::text = 'verified'
+     from public.companies where id = :'COMPD'),
+  'CDR971-3c opis publiczny bez zmian, propozycja zapisana, weryfikacja nietknięta, retry idempotentny');
+select pg_temp.assert(
+  (select description from public.get_public_company('firma-d-cdr971')) = 'Stary opis firmy D',
+  'CDR971-3d profil publiczny nadal pokazuje zatwierdzony opis');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPD' and action = 'company.description_submitted' and actor_id = :'OWND')
+  and (select count(*) from public.audit_logs
+        where entity_id = :'COMPD' and action = 'company.description_submitted') = 1
+  and not exists (select 1 from public.audit_logs
+        where entity_id = :'COMPD' and action = 'company.description_submitted'
+          and after_data::text like '%Nowy opis%'),
+  'CDR971-3e audyt zgłoszenia jednokrotny i bez treści opisu');
+
+-- CDR971-4 (kontrola ujemna): opis ponad limit 1500 znaków odrzucony.
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.submit_company_description(%L, %L)', :'COMPD', repeat('x', 1501)),
+  'DESCRIPTION_TOO_LONG', 'CDR971-4 opis > 1500 znaków odrzucony');
+select pg_temp.assert(
+  public.submit_company_description(:'COMPD', 'Nowy opis firmy D.') = 'pending',
+  'CDR971-4b opis w limicie nadal przyjmowany');
+reset role; reset app.current_uid;
+
+-- CDR971-5 (kontrola ujemna): decyzja tylko dla admina portalu.
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_description(%L, ''approved'', %L, null)', :'COMPD', :'cdr_pending_at'),
+  'PERMISSION_DENIED', 'CDR971-5 owner nie zatwierdza własnego opisu');
+reset role; reset app.current_uid;
+
+-- CDR971-6: odrzucenie bez uzasadnienia → błąd; nieaktualny znacznik (CAS) → STALE_STATE.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_description(%L, ''rejected'', %L, ''  '')', :'COMPD', :'cdr_pending_at'),
+  'REASON_REQUIRED', 'CDR971-6 odrzucenie wymaga uzasadnienia');
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_description(%L, ''approved'', %L, null)', :'COMPD', '2020-01-01T00:00:00Z'),
+  'STALE_STATE', 'CDR971-6b decyzja na nieaktualnej propozycji (CAS) odrzucona');
+select public.admin_decide_company_description(:'COMPD', 'rejected', :'cdr_pending_at', 'Opis zawiera dane kontaktowe.');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select description = 'Stary opis firmy D' and description_review_status = 'rejected'
+      and description_review_reason = 'Opis zawiera dane kontaktowe.'
+      and description_pending = 'Nowy opis firmy D.'
+     from public.companies where id = :'COMPD'),
+  'CDR971-6c odrzucenie: publicznie bez zmian, propozycja i uzasadnienie widoczne dla firmy');
+select pg_temp.assert(
+  exists (select 1 from public.notifications
+           where profile_id = :'OWND' and entity_id = :'COMPD'
+             and data = jsonb_build_object('kind', 'company_description', 'status', 'rejected'))
+  and not exists (select 1 from public.notifications
+               where profile_id in (:'ADMD', :'MEMD') and data->>'kind' = 'company_description'),
+  'CDR971-6d powiadomienie tylko do właściciela');
+
+-- CDR971-7: drugie rozstrzygnięcie tej samej propozycji → STALE_STATE.
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.admin_decide_company_description(%L, ''approved'', %L, null)', :'COMPD', :'cdr_pending_at'),
+  'STALE_STATE', 'CDR971-7 odrzuconej propozycji nie da się zatwierdzić bez nowego zgłoszenia');
+reset role; reset app.current_uid;
+
+-- CDR971-8: firma poprawia propozycję → nowy pending; admin zatwierdza → tekst trafia do profilu.
+set role authenticated; set app.current_uid = :'ADMD'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'COMPD', 'Poprawiony opis firmy D.') = 'pending',
+  'CDR971-8 poprawiona propozycja wraca do kolejki');
+reset role; reset app.current_uid;
+select description_pending_at as cdr_pending_at2 from public.companies where id = :'COMPD' \gset
+select pg_temp.assert(
+  (select description_review_status = 'pending' and description_review_reason is null
+      and description_pending = 'Poprawiony opis firmy D.'
+     from public.companies where id = :'COMPD'),
+  'CDR971-8b uzasadnienie wyczyszczone');
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'COMPD', 'approved', :'cdr_pending_at2', null);
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select description = 'Poprawiony opis firmy D.' and description_review_status is null
+      and description_pending is null and description_pending_at is null
+      and status::text = 'verified'
+     from public.companies where id = :'COMPD'),
+  'CDR971-8c zatwierdzenie przenosi tekst do opisu publicznego, weryfikacja bez zmian');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select description from public.get_public_company('firma-d-cdr971')) = 'Poprawiony opis firmy D.',
+  'CDR971-8d profil publiczny widzi zatwierdzony opis');
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'COMPD' and action = 'company.description_reviewed'
+             and after_data->>'decision' = 'approved' and actor_id = :'ADMIN'),
+  'CDR971-8e audyt decyzji admina');
+
+-- CDR971-9: propozycja równa opisowi publicznemu = bez zmian; usunięcie opisu wchodzi od razu.
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'COMPD', 'Poprawiony opis firmy D.') = 'unchanged',
+  'CDR971-9 tekst równy publicznemu = bez zmian');
+select pg_temp.assert(
+  public.submit_company_description(:'COMPD', '') = 'applied',
+  'CDR971-9b usunięcie opisu wchodzi od razu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select description is null and description_review_status is null from public.companies where id = :'COMPD'),
+  'CDR971-9c opis wyczyszczony, brak propozycji w kolejce');
+
+-- CDR971-10 (kontrola ujemna): owner firmy A nie zgłasza opisu firmy B.
+set role authenticated; set app.current_uid = :'OWND'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  'select public.submit_company_description(''e9710000-0000-0000-0000-0000000000f2'', ''Obcy opis'')',
+  'PERMISSION_DENIED', 'CDR971-10 obca firma odrzucona');
 reset role; reset app.current_uid;
 
 -- ============================================================================
@@ -19279,13 +19466,13 @@ insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only) values
   ('saved_jobs', 'DELETE', :'WMCB', format('delete from public.saved_jobs where candidate_id = %L', :'WMCA'),
      'saved_jobs DELETE cudzy zapis', true),
   -- companies (edycja tylko owner/admin firmy; bez INSERT/DELETE)
-  ('companies', 'UPDATE', :'WMEB', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+  ('companies', 'UPDATE', :'WMEB', format('update public.companies set city = %L where id = %L', 'hak', :'WMCOA'),
      'companies UPDATE obca firma', true),
-  ('companies', 'UPDATE', :'WMEM', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+  ('companies', 'UPDATE', :'WMEM', format('update public.companies set city = %L where id = %L', 'hak', :'WMCOA'),
      'companies UPDATE zwykły member', true),
-  ('companies', 'UPDATE', :'WMER', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+  ('companies', 'UPDATE', :'WMER', format('update public.companies set city = %L where id = %L', 'hak', :'WMCOA'),
      'companies UPDATE recruiter (bez roli admin/owner)', true),
-  ('companies', 'UPDATE', :'WMCB', format('update public.companies set description = %L where id = %L', 'hak', :'WMCOA'),
+  ('companies', 'UPDATE', :'WMCB', format('update public.companies set city = %L where id = %L', 'hak', :'WMCOA'),
      'companies UPDATE kandydat', true),
   -- company_members (bez INSERT: dołączenie tylko przez zaproszenie)
   ('company_members', 'UPDATE', :'WMEB', format('update public.company_members set is_active = false where profile_id = %L', :'WMER'),
@@ -19359,7 +19546,7 @@ insert into pg_temp.wm_cases(tbl, op, actor, sql, note, expect, rls_only) values
   ('notifications', 'UPDATE', :'WMCA', format('update public.notifications set read_at = now() where profile_id = %L', :'WMCA'), 'własne powiadomienie', 'allow', false),
   ('notification_preferences', 'UPDATE', :'WMCA', format('update public.notification_preferences set email_marketing = true where profile_id = %L', :'WMCA'), 'własne preferencje', 'allow', false),
   ('saved_jobs', 'DELETE', :'WMCA', format('delete from public.saved_jobs where candidate_id = %L', :'WMCA'), 'własny zapis oferty', 'allow', false),
-  ('companies', 'UPDATE', :'WMEA', format('update public.companies set description = %L where id = %L', 'moja firma', :'WMCOA'), 'własna firma (owner)', 'allow', false),
+  ('companies', 'UPDATE', :'WMEA', format('update public.companies set city = %L where id = %L', 'moja firma', :'WMCOA'), 'własna firma (owner)', 'allow', false),
   ('company_members', 'UPDATE', :'WMEA', format('update public.company_members set role = %L where profile_id = %L', 'admin', :'WMER'), 'owner zmienia rolę członka własnej firmy', 'allow', false),
   ('jobs', 'UPDATE', :'WMER', format('update public.jobs set title = %L where id = %L', 'moje', :'WMJD'), 'szkic własnej firmy (recruiter)', 'allow', false),
   ('job_skills', 'UPDATE', :'WMER', format('update public.job_skills set skill_label = %L where job_id = %L', 'moje', :'WMJD'), 'relacja szkicu własnej firmy (recruiter)', 'allow', false),

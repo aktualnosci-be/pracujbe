@@ -54,6 +54,9 @@ echo ">> asercje RLS/triggery"
 echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/esco93-rollback.sql"
 
+echo ">> rollback 0971 (opis firmy z zatwierdzaniem, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-rollback.sql"
+
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 

@@ -32,6 +32,7 @@ import { CompanyStatusActions } from '@/components/admin/CompanyStatusActions';
 import { CompanyViesCheck } from '@/components/admin/CompanyViesCheck';
 import { AgencyCheckActions } from '@/components/admin/AgencyCheckActions';
 import { agencyCheckFocusKey } from '@/lib/admin/focus';
+import { CompanyDescriptionReviewActions } from '@/components/admin/CompanyDescriptionReviewActions';
 import { CompanyLinksReviewActions } from '@/components/admin/CompanyLinksReviewActions';
 
 /**
@@ -276,6 +277,58 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           </div>
         ) : !company.linksReview ? (
           <p className={cn(PANEL_P, 'mt-4')}>{t('companyLinksNoProposal')}</p>
+        ) : null}
+      </section>
+
+      {/* Opis firmy — propozycja firmy do decyzji (0971) */}
+      <section aria-labelledby="company-description-heading" className={PANEL}>
+        <div className={SECTION_HEAD}>
+          <h2 id="company-description-heading" className={PANEL_H2}>
+            {t('sectionCompanyDescription')}
+          </h2>
+          {company.descriptionReview ? (
+            <span
+              className={cn(
+                TAG,
+                company.descriptionReview.status === 'pending'
+                  ? 'bg-warning/10 text-warning-text'
+                  : 'bg-error/10 text-error-text',
+              )}
+            >
+              {t(
+                company.descriptionReview.status === 'pending'
+                  ? 'companyDescriptionStatusPending'
+                  : 'companyDescriptionStatusRejected',
+              )}
+            </span>
+          ) : null}
+        </div>
+        <dl className="grid grid-cols-1 gap-5">
+          <Field label={t('companyDescriptionPublished')} value={company.description ?? dash} />
+          {company.descriptionReview ? (
+            <>
+              <Field label={t('companyDescriptionProposed')} value={company.descriptionReview.text} />
+              <Field
+                label={t('companyDescriptionSubmittedAt')}
+                value={formatDate(company.descriptionReview.submittedAt)}
+              />
+              {company.descriptionReview.reason ? (
+                <Field label={t('statusReasonLabel')} value={company.descriptionReview.reason} />
+              ) : null}
+            </>
+          ) : null}
+        </dl>
+        {company.descriptionReview?.status === 'pending' && company.descriptionReview.submittedAt ? (
+          <div className="mt-6 border-t border-border pt-5">
+            <p className={cn(PANEL_P, 'mb-3')}>{t('companyDescriptionReviewHint')}</p>
+            <CompanyDescriptionReviewActions
+              companyId={company.id}
+              submittedAt={company.descriptionReview.submittedAt}
+              proposedText={company.descriptionReview.text}
+            />
+          </div>
+        ) : !company.descriptionReview ? (
+          <p className={cn(PANEL_P, 'mt-4')}>{t('companyDescriptionNoProposal')}</p>
         ) : null}
       </section>
 

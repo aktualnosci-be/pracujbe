@@ -95,6 +95,12 @@ const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
   rejected: 'itemCompanyLinksRejected',
 };
 
+/** Decyzja admina o opisie firmy (0971): `system` + `data.kind = 'company_description'`. */
+const COMPANY_DESCRIPTION_TITLE_KEY: Record<string, string> = {
+  approved: 'itemCompanyDescriptionApproved',
+  rejected: 'itemCompanyDescriptionRejected',
+};
+
 /**
  * Decyzja produktowa: portal ogłoszeniowy — powiadomienia o przeglądzie pytań screeningowych
  * (`data.kind = 'screening_review'`, w tym „ukryte”) są ukryte na listach i w liczniku;
@@ -158,6 +164,10 @@ export function titleKeyForType(type: string, data?: unknown, entityType = ''): 
   }
   if (d['kind'] === 'company_links') {
     const key = COMPANY_LINKS_TITLE_KEY[asStr(d['status'])];
+    if (key) return key;
+  }
+  if (d['kind'] === 'company_description') {
+    const key = COMPANY_DESCRIPTION_TITLE_KEY[asStr(d['status'])];
     if (key) return key;
   }
   if (d['kind'] === 'screening_review') {
