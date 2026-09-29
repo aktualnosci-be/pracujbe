@@ -3306,7 +3306,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i dokumenty migracji (`docs/railway/`) wspominają Supabase celowo (dostawca historyczny / źródło migracji).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
-- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
+- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 4.1.11 — #749, bez podatnego `@vitest/mocker` + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline DM Sans; wcześniej Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
   Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
   Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
