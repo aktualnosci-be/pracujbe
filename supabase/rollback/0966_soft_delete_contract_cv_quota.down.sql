@@ -7,8 +7,6 @@
 drop trigger if exists trg_cv_account_quota on public.files;
 drop function if exists public.enforce_cv_account_quota();
 
-drop trigger if exists trg_soft_delete_contract on public.applications;
-drop trigger if exists trg_soft_delete_contract on public.offers;
 drop trigger if exists trg_soft_delete_contract on public.messages;
 drop function if exists public.enforce_soft_delete_contract();
 

@@ -6,11 +6,12 @@
 --    rekord zostawał widoczny dla uczestników. Zmiana: `deleted_at IS NULL` w warunku odczytu
 --    (admin i workery czytają jako service_role, poza RLS — bez zmian). Polityki restrykcyjne
 --    trybu (0171) i reszta warunków bez zmian.
---    Strażnik `enforce_soft_delete_contract` (BEFORE INSERT/UPDATE, także SECURITY DEFINER RPC
---    i service_role) domyka zapis: nowa wiadomość w usuniętej rozmowie, zmiana treści usuniętej
---    wiadomości i zmiana statusu usuniętej aplikacji/propozycji → `NOT_FOUND`. Zmiany samych
---    kluczy obcych (anonimizacja przy usunięciu konta, retencja) i przywrócenie (zmiana
---    `deleted_at`) nie są blokowane.
+--    Strażnik `enforce_soft_delete_contract` na `messages` (BEFORE INSERT/UPDATE, także SECURITY
+--    DEFINER RPC i service_role): nowa wiadomość w usuniętej rozmowie i zmiana treści usuniętej
+--    wiadomości → `NOT_FOUND`. Zmiany samych kluczy obcych (anonimizacja przy usunięciu konta,
+--    retencja) i przywrócenie (zmiana `deleted_at`) nie są blokowane. Zmiany statusu usuniętej
+--    aplikacji/propozycji celowo NIE są blokowane w bazie: `transition_application` na usuniętej
+--    aplikacji jest udokumentowanym zachowaniem (GS98-6, bez e-maila); odczyt zamyka polityka.
 -- 2. Limit plików CV na konto (CF-06): najwyżej 5 nieusuniętych plików `candidate_cv` i 20 MB
 --    łącznie (`CV_ACCOUNT_LIMIT`, SQLSTATE 54000), serializowane blokadą doradczą właściciela.
 --    Lustro TS: `CV_MAX_FILES_PER_ACCOUNT`/`CV_MAX_TOTAL_BYTES_PER_ACCOUNT` (validation/cv-file.ts).
@@ -53,22 +54,11 @@ begin
           and new.body is distinct from old.body then
       raise exception 'NOT_FOUND' using errcode = 'P0002';
     end if;
-  elsif tg_op = 'UPDATE' and tg_table_name in ('applications', 'offers') then
-    if old.deleted_at is not null and new.deleted_at is not distinct from old.deleted_at
-       and new.status is distinct from old.status then
-      raise exception 'NOT_FOUND' using errcode = 'P0002';
-    end if;
   end if;
   return new;
 end $$;
 revoke all on function public.enforce_soft_delete_contract() from public, anon, authenticated;
 
-drop trigger if exists trg_soft_delete_contract on public.applications;
-create trigger trg_soft_delete_contract before update on public.applications
-  for each row execute function public.enforce_soft_delete_contract();
-drop trigger if exists trg_soft_delete_contract on public.offers;
-create trigger trg_soft_delete_contract before update on public.offers
-  for each row execute function public.enforce_soft_delete_contract();
 drop trigger if exists trg_soft_delete_contract on public.messages;
 create trigger trg_soft_delete_contract before insert or update on public.messages
   for each row execute function public.enforce_soft_delete_contract();
