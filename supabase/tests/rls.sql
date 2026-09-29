@@ -20378,4 +20378,87 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- ============================================================================
+-- EW788 (#788/#790, 0972): webhook doręczenia przed zapisem `provider_message_id` nie ginie
+-- (email_pending_events + trigger przypisania), a dzierżawa inboxu jest zwalniana po błędzie
+-- (release_webhook). Kontrole ujemne: zdjęty trigger → zdarzenie nieprzypisane; bez release
+-- retry dostaje `locked`.
+-- ============================================================================
+\set EWA 'e0972000-0000-0000-0000-0000000000a1'
+\set EWB 'e0972000-0000-0000-0000-0000000000a2'
+\set EWE 'e0972000-0000-0000-0000-0000000000e1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'EWA','ewa@test.be','Ew A','{"role":"candidate","first_name":"Ew","last_name":"A","locale":"pl"}'),
+  (:'EWB','ewb@test.be','Ew B','{"role":"candidate","first_name":"Ew","last_name":"B","locale":"nl"}');
+select test_fixture.attest_candidates();
+select public.enqueue_email(:'EWA', 'jobOffer', 'offer', :'EWE', 'ew788-a', '{}'::jsonb);
+select public.enqueue_email(:'EWB', 'jobOffer', 'offer', :'EWE', 'ew788-b', '{}'::jsonb);
+
+-- EW788-1: webhook przed zapisem identyfikatora → zdarzenie zachowane (i deduplikowane).
+set role service_role;
+select pg_temp.assert(public.record_email_event('resend', 'ew-msg-a', 'delivered', now(), null, null) = 'unknown_message',
+  'EW788-1 zdarzenie bez wysyłki = unknown_message');
+select public.record_email_event('resend', 'ew-msg-a', 'delivered', (select occurred_at from public.email_pending_events where provider_message_id = 'ew-msg-a'), null, null);
+select pg_temp.assert((select count(*) from public.email_pending_events where provider_message_id = 'ew-msg-a') = 1,
+  'EW788-1b powtórka tego samego zdarzenia nie mnoży wierszy');
+select public.record_email_event('resend', 'ew-msg-b', 'bounced', now(), null, 'permanent');
+reset role;
+
+-- EW788-2: worker zapisuje identyfikator → trigger przypisuje zdarzenia.
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-a'
+ where idempotency_key = 'ew788-a';
+select pg_temp.assert((select status = 'delivered' and delivered_at is not null from public.email_deliveries where idempotency_key = 'ew788-a'),
+  'EW788-2 po zapisie ID wysyłka ma status delivered i delivered_at');
+select pg_temp.assert((select count(*) from public.email_pending_events where provider_message_id = 'ew-msg-a') = 0,
+  'EW788-2b przypisane zdarzenie usunięte z kolejki');
+
+-- EW788-3: trwałe odbicie z wyprzedzeniem → status bounced i blokada adresu z wiersza wysyłki.
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-b'
+ where idempotency_key = 'ew788-b';
+select pg_temp.assert((select status = 'bounced' and bounced_at is not null and bounce_type = 'permanent'
+                         from public.email_deliveries where idempotency_key = 'ew788-b'),
+  'EW788-3 odbicie odebrane przed zapisem ID zapisane w wysyłce');
+select pg_temp.assert(exists (select 1 from public.email_suppressions where email = 'ewb@test.be' and lifted_at is null),
+  'EW788-3b blokada adresu z odbicia odebranego przed zapisem ID');
+
+-- EW788-4: KONTROLA UJEMNA — bez triggera przypisania zdarzenie zostaje nieprzypisane.
+select public.enqueue_email(:'EWA', 'jobOffer', 'offer', :'EWE', 'ew788-c', '{}'::jsonb);
+set role service_role;
+select public.record_email_event('resend', 'ew-msg-c', 'delivered', now(), null, null);
+reset role;
+begin;
+drop trigger trg_email_deliveries_apply_pending on public.email_deliveries;
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-c'
+ where idempotency_key = 'ew788-c';
+select pg_temp.assert((select status = 'sent' and delivered_at is null from public.email_deliveries where idempotency_key = 'ew788-c')
+  and (select count(*) from public.email_pending_events where provider_message_id = 'ew-msg-c') = 1,
+  'EW788-N1 kontrola ujemna: bez triggera zdarzenie zostaje nieprzypisane');
+rollback;
+-- ...a z triggerem to samo przypisanie działa.
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-c'
+ where idempotency_key = 'ew788-c';
+select pg_temp.assert((select status = 'delivered' from public.email_deliveries where idempotency_key = 'ew788-c'),
+  'EW788-4 z triggerem zdarzenie zostaje przypisane');
+
+-- EW788-5: klient nie czyta kolejki zdarzeń ani nie woła release_webhook.
+set role authenticated; set app.current_uid = :'EWA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$select count(*) from public.email_pending_events$q$, 'permission denied', 'EW788-5 authenticated nie czyta email_pending_events');
+select pg_temp.expect_error($q$select public.release_webhook('x')$q$, 'permission denied', 'EW788-5b authenticated nie woła release_webhook');
+reset role; reset app.current_uid;
+
+-- EW790: zwolnienie dzierżawy po błędzie pozwala na natychmiastowy retry.
+set role service_role;
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'claimed', 'EW790-1 pierwsza dostawa przejęta');
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'locked',
+  'EW790-N1 kontrola ujemna: bez zwolnienia retry dostaje locked');
+select pg_temp.assert(public.release_webhook('resend:ew790-1'), 'EW790-2 dzierżawa zwolniona');
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'claimed',
+  'EW790-3 po zwolnieniu retry przejmuje zdarzenie');
+select pg_temp.assert(public.complete_webhook('resend:ew790-1'), 'EW790-4 zakończone');
+select pg_temp.assert(not public.release_webhook('resend:ew790-1'), 'EW790-5 zakończonego wpisu nie da się zwolnić');
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'duplicate',
+  'EW790-6 zakończone zdarzenie nadal duplicate');
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
