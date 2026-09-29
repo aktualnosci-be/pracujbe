@@ -427,7 +427,7 @@ describe('kreator ofert (#25)', () => {
     const created = await jobs.createJobDraft('pl', companyA);
     const id = (created as { id: string }).id;
     for (const step of [1, 5, 6]) {
-      expect(await jobs.updateJobDraft(id, step, STEPS[step - 1]), `krok ${step}`).toEqual({ ok: true });
+      expect(await jobs.updateJobDraft(id, step, STEPS[step - 1]), `krok ${step}`).toMatchObject({ ok: true });
     }
     const langs = async (table: string) =>
       (await admin(`SELECT DISTINCT locale FROM public.${table} WHERE job_id = $1 ORDER BY 1`, [id])).map((r) => r['locale']);
@@ -435,22 +435,36 @@ describe('kreator ofert (#25)', () => {
     expect(await langs('job_requirements')).toEqual(['pl']);
 
     // Ten sam język w kroku 1 = bez zmian.
-    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'pl' })).toEqual({ ok: true });
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'pl' })).toMatchObject({ ok: true });
     expect(await langs('job_translations')).toEqual(['pl']);
 
     // Zmiana na nl: default_locale i cała dotychczasowa treść w nl, nic w pl.
-    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' })).toEqual({ ok: true });
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' })).toMatchObject({ ok: true });
     expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'nl' }]);
     expect(await langs('job_translations')).toEqual(['nl']);
     expect(await langs('job_requirements')).toEqual(['nl']);
+    // #1070 + #1048: zmiana języka z aktualnym tokenem wersji przechodzi (zmiana języka sama
+    // podbija wersję szkicu), ze starym tokenem = JOB_EDIT_CONFLICT bez żadnej zmiany.
+    const ver = async () => (await realSession.db!.admin.query<{ v: string }>(
+      'SELECT to_json(updated_at) #>> \'{}\' AS v FROM public.jobs WHERE id = $1', [id])).rows[0]!.v;
+    const vStale = await ver();
+    const toFr = await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'fr' }, vStale);
+    expect(toFr).toMatchObject({ ok: true });
+    expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'fr' }]);
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' }, vStale))
+      .toEqual({ ok: false, error: 'JOB_EDIT_CONFLICT' });
+    expect(await admin('SELECT default_locale FROM public.jobs WHERE id = $1', [id])).toEqual([{ default_locale: 'fr' }]);
+    expect(await jobs.updateJobDraft(id, 1, { ...(STEPS[0] as object), contentLocale: 'nl' }, await ver()))
+      .toMatchObject({ ok: true });
+    expect(await langs('job_translations')).toEqual(['nl']);
     // Kolejny zapis treści trafia do nl — bez osieroconego kompletu w pl.
-    expect(await jobs.updateJobDraft(id, 5, STEPS[4])).toEqual({ ok: true });
+    expect(await jobs.updateJobDraft(id, 5, STEPS[4])).toMatchObject({ ok: true });
     expect(await langs('job_translations')).toEqual(['nl']);
 
     // Kontrola ujemna: sama zmiana kolumny (bez przeniesienia) zostawia dwa języki — właśnie to
     // zapobiega `setDraftContentLocale`.
     await admin("UPDATE public.jobs SET default_locale = 'fr' WHERE id = $1", [id]);
-    expect(await jobs.updateJobDraft(id, 5, STEPS[4])).toEqual({ ok: true });
+    expect(await jobs.updateJobDraft(id, 5, STEPS[4])).toMatchObject({ ok: true });
     expect(await langs('job_translations')).toEqual(['fr', 'nl']);
 
     // Nieobsługiwany język odrzucony walidacją, obca firma nie zmienia języka.
