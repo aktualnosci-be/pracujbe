@@ -18,8 +18,8 @@ po zielonym lint/typecheck/unit, a E2E po buildzie — 3 shardy (zestaw demo pod
 czasie testów jawnymi listami speców w `playwright.config.ts`, nie po liczbie plików —
 `CLAUDE.md` §10), pomiary wydajności
 i fixture'y (tryb `full` w 2 częściach, `error` w jednej) równolegle; ich wynik zbiera job „E2E (Playwright)” (stała nazwa checka,
-na nią czeka Railway). Przepływ na PostgreSQL 16 („E2E real flow”) jest na razie
-informacyjny (`continue-on-error`) i nie wstrzymuje wdrożenia. Repo jest publiczne,
+na nią czeka Railway). Przepływ na PostgreSQL 16 („E2E real flow”, tryby RECRUITMENT
+i CLASSIFIEDS_ONLY) od #1239 wchodzi do tego checka, więc czerwony przepływ wstrzymuje wdrożenie. Repo jest publiczne,
 więc minuty hostowanych runnerów są darmowe. Nowy push do PR anuluje nieaktualny
 przebieg tego PR, ale przebiegi `main` nigdy nie są anulowane — Railway wdraża
 po zielonym CI dla SHA na `main` przez natywne `Wait for CI`; nie uruchamiamy
