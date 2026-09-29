@@ -97,7 +97,7 @@ export function AdminFeedbackProvider({
       <ToastRegion
         toast={toast}
         onClose={() => setToast(null)}
-        className="bottom-20 z-[80] lg:bottom-4"
+        className="max-lg:mb-16"
       />
     </AdminFeedbackContext.Provider>
   );

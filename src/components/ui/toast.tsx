@@ -137,6 +137,12 @@ function acquireLiveTargets(): LiveTargets {
     assertive.setAttribute('role', 'alert');
     assertive.setAttribute('aria-live', 'assertive');
     assertive.setAttribute('aria-atomic', 'true');
+    // Pozycja `fixed` na samych regionach (nie na karcie w środku): region z kartą ma wtedy
+    // niepusty prostokąt, więc jest widoczny dla czytnika i testów; pusty ma zerową wysokość.
+    for (const el of [polite, assertive]) {
+      el.className =
+        'pointer-events-none fixed bottom-4 right-4 z-[80] w-[calc(100vw-2rem)] max-w-sm [&>*]:pointer-events-auto';
+    }
     root.append(polite, assertive);
     document.body.appendChild(root);
     liveRoot = root;
@@ -158,7 +164,7 @@ function releaseLiveTargets(): void {
 /**
  * Toast wpisywany do stałego regionu na żywo (#1054): sukces do `role="status"` (polite), błąd
  * do `role="alert"` (assertive). Obie części są zawsze w DOM, gdy strona ma `ToastRegion`.
- * Puste regiony nie zajmują miejsca; karta ma pozycję `fixed` i nie przechwytuje kliknięć poza sobą.
+ * Puste regiony nie zajmują miejsca; regiony mają pozycję `fixed` i nie przechwytują kliknięć poza kartą.
  */
 export function ToastRegion({
   toast,
@@ -179,12 +185,7 @@ export function ToastRegion({
   const host = toast.tone === 'error' ? targets.assertive : targets.polite;
   return createPortal(
     <ToastInRegionContext.Provider value>
-      <div
-        className={cn(
-          'pointer-events-none fixed bottom-4 right-4 z-[60] w-[calc(100vw-2rem)] max-w-sm [&>*]:pointer-events-auto',
-          className,
-        )}
-      >
+      <div className={className}>
         <Toast
           key={toast.id ?? toast.message}
           message={toast.message}
