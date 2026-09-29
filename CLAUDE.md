@@ -948,7 +948,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   z aktywnych ofert. Serwer fixture E2E ma profile firm zweryfikowanych i jedną firmę bez ofert
   (`src/lib/company-fixture.ts`). Dowód: unit `company-profile-seo` (kontrole ujemne), E2E
   `company-profile` (linki, JSON-LD, noindex, 404 niezweryfikowanej, axe 320/1280 px w 4 językach).
-  Stronicowanie ofert profilu (#638, migracja `0952` — numer tymczasowy): profil pokazywał tylko
+  Stronicowanie ofert profilu (#638, migracja `0180`): profil pokazywał tylko
   pierwsze 50 ofert bez informacji o obcięciu. Kolejne strony pod ścieżką
   `/pracodawcy/<slug>/strona/<n>` (segment, nie `?page=` — strona zostaje ISR, #298), po 50 ofert,
   offset liczony w `getCompanyProfile(slug, locale, page)`; ostatnia strona z `active_jobs_count`

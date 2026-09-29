@@ -16354,7 +16354,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- CPP638. Stronicowanie ofert profilu firmy (#638, migracja 0952). Profil pokazywał tylko
+-- CPP638. Stronicowanie ofert profilu firmy (#638, migracja 0180). Profil pokazywał tylko
 --         pierwsze 50 ofert; kolejne strony `/pracodawcy/<slug>/strona/<n>` używają offsetu,
 --         więc `get_public_company_jobs` musi mieć deterministyczny porządek. Pięć ofert
 --         z IDENTYCZNYM `published_at` (+ jedna nowsza): strony po 2 sklejone = jedno

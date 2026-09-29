@@ -42,7 +42,7 @@ export interface CompanyProfile {
 
 export interface CompanyProfileResult {
   company: CompanyProfile;
-  /** Oferty bieżącej strony (najnowsze pierwsze, remis rozstrzyga id — migracja 0952). */
+  /** Oferty bieżącej strony (najnowsze pierwsze, remis rozstrzyga id — migracja 0180). */
   jobs: JobListItem[];
   /** Bieżąca strona (1-indeksowana) i ostatnia osiągalna strona ofert profilu (#638). */
   page: number;
