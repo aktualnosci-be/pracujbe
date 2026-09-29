@@ -2617,6 +2617,17 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i nie zmienia statusu; wynik widzi admin w `/admin/firmy/[id]`. Odznaki VIES dla kandydatów
   NIE pokazujemy (tylko admin — `docs/PRODUCT_DECISIONS.md`). Dowód: `rls.sql` sekcja VA164
   (kontrole ujemne), unit `company-vies-auto-check` (atrapa VIES, awaria nie blokuje).
+  Trwała kolejka (#706/#879, migracja `0191` — numer tymczasowy): trigger na `companies`
+  kolejkuje firmę w `company_vies_auto_queue` przy KAŻDYM zapisie nowego prawidłowego numeru
+  VAT/KBO bez wyniku dla tego numeru (założenie, dopisanie numeru w `/employer/firma`, zmiana);
+  sama zmiana nazwy nie kolejkuje, usunięty numer/firma zdejmuje zadanie, wynik dla bieżącego
+  numeru (auto albo admin) też. Worker `processCompanyViesAutoQueue` w `/api/maintenance`
+  (≤ 10 na przebieg) + jednorazowa próba po zapisie (`after`): `claim_company_vies_auto_checks`
+  (SKIP LOCKED, dzierżawa, ≤ 10 prób), niedostępność/limit/błąd → `finish_company_vies_auto_check`
+  z backoffem 5 min × 2^n (≤ 6 h). Wynik dla numeru, którego firma już nie ma, jest zastępowany.
+  Admin widzi stan kolejki w sekcji VIES (`admin.viesAuto*`). Dowód: `rls.sql` sekcja VQ976
+  (kontrola ujemna: bez triggera dopisany numer nie trafia do kolejki), rollback
+  `vies-auto-queue-rollback.sql`, unit `company-vies-auto-check`, `vies-auto-retry-admin`.
 - [~] Zgłoszenia treści DSA (#41, migracja `0094`) — przyjęcie sprawy, decyzja z egzekucją
   (#42) i odwołania z retencją i raportem (#43) gotowe; treść prawna i wartości terminów (#40) otwarte. Publiczny formularz `/zglos-tresc?oferta=<slug>[&cel=firma]`
   (linki „Zgłoś ofertę/firmę” na szczególe oferty, także bez konta): limiter → Turnstile `report`
