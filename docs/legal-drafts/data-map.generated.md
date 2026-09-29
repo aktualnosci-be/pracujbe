@@ -1305,6 +1305,7 @@ Wiersz dla odbiorcy firmowego wychodzi tylko, gdy przy odbiorze z kolejki nadal 
 | `public.languages` | Słownik/konfiguracja (języki) — bez danych osobowych. |
 | `public.location_aliases` | Słownik/konfiguracja (nazwy miejscowości PL/NL/FR/EN) — bez danych osobowych. |
 | `public.locations` | Słownik/konfiguracja (miejscowości) — bez danych osobowych. |
+| `public.moderation_informed` | Niezmienny dowód poinformowania strony decyzji/cofnięcia (początek biegu terminu odwołania, 0188/#1045/#1063): identyfikatory decyzji, podstawa (e-mail wysłany / odczyt w panelu / reguła zastępcza) i czas — bez danych osobowych i bez treści. |
 | `public.occupation_labels` | Słownik/konfiguracja (etykiety zawodów ESCO) — bez danych osobowych. |
 | `public.occupation_skills` | Słownik/konfiguracja (relacje ESCO) — bez danych osobowych. |
 | `public.occupations` | Słownik/konfiguracja (zawody) — bez danych osobowych. |
