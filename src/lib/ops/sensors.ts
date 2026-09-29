@@ -21,7 +21,16 @@ const queueSchema = z.object({
 });
 
 export const opsMetricsSchema = z.object({
-  email: queueSchema,
+  /**
+   * 0980 (#1227/#1214): `failedLast24h` = same porażki wysyłki (bez wierszy wygaszonych),
+   * `suppressedLast24h` = wygaszone (wypisanie, blokada adresu, funkcja wyłączona) — bez alarmu,
+   * `configBlocked` = listy czekające po błędzie konfiguracji nadawcy/dostawcy. Brak pól = baza
+   * sprzed 0980 (czujka konfiguracji milczy, licznik porażek zawiera wygaszone).
+   */
+  email: queueSchema.extend({
+    suppressedLast24h: count.optional(),
+    configBlocked: count.optional(),
+  }),
   authEmail: queueSchema.nullable(),
   webhooks: z.object({ stuckProcessing: count, failedLast24h: count }),
   maintenance: z.object({
@@ -110,6 +119,8 @@ export type OpsSignal =
   | 'email_queue_age'
   | 'email_lease_abandoned'
   | 'email_failed'
+  | 'email_provider_config'
+  | 'email_sender_invalid'
   | 'auth_email_queue_age'
   | 'auth_email_lease_abandoned'
   | 'auth_email_failed'
@@ -152,12 +163,15 @@ export function parseOpsMetrics(raw: unknown): OpsMetrics | null {
  *   udał (ostrzeżenie — rezerwacje i tak odmawiają przy błędzie bazy), `undefined` = nie mierzono.
  * @param maintenanceRun ostatni przebieg maintenance (0180): `null` = odczyt się nie udał
  *   (ostrzeżenie), `undefined` = nie mierzono (baza sprzed 0180 — bez sygnału).
+ * @param emailSenderValid #1214: `false` = `EMAIL_FROM` ustawiony, ale nieużywalny (alarm —
+ *   żaden list domenowy ani konta nie wychodzi); `undefined` = nie mierzono.
  */
 export function evaluateOps(
   metrics: OpsMetrics,
   pool: AppPoolStats | null = null,
   aiBudget?: AiBudgetStatus | null,
   maintenanceRun?: MaintenanceRun | null,
+  emailSenderValid?: boolean,
 ): OpsEvaluation {
   const alerts: OpsSignal[] = [];
   const warnings: OpsSignal[] = [];
@@ -165,6 +179,9 @@ export function evaluateOps(
   if (metrics.email.oldestReadyAgeSeconds > OPS_THRESHOLDS.emailOldestReadySeconds) alerts.push('email_queue_age');
   if (metrics.email.abandonedLeases > 0) alerts.push('email_lease_abandoned');
   if (metrics.email.failedLast24h > 0) warnings.push('email_failed');
+  // #1214: błąd konfiguracji wspólny dla wszystkich listów — krytyczny (nic nie wychodzi).
+  if ((metrics.email.configBlocked ?? 0) > 0) alerts.push('email_provider_config');
+  if (emailSenderValid === false) alerts.push('email_sender_invalid');
 
   const auth = metrics.authEmail;
   if (auth) {

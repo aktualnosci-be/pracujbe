@@ -41,7 +41,9 @@ identyfikatorów ani konfiguracji.
 | `maintenance_run_failed` | ostrzeżenie | ostatni przebieg zakończył się błędem zadania (nazwa zadania w wierszu panelu) | awaria jednego zadania; szczegół: kod na webhooku błędów |
 | `maintenance_run_unavailable` | ostrzeżenie | nie da się odczytać `ops_last_maintenance_run()` | brak uprawnień `pracujbe_ops`; baza sprzed 0180 = czujka milczy |
 | `db_connections` | alarm | użyte ≥ 80% z `max_connections − superuser_reserved_connections` | wyciek połączeń, za dużo replik |
-| `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h | błędne adresy, odrzucenia dostawcy |
+| `email_failed`, `auth_email_failed`, `webhook_failed` | ostrzeżenie | nieudane w ostatnich 24 h; dla `email_deliveries` od `0980` bez wierszy wygaszonych (wypisanie, blokada adresu, funkcja wyłączona — osobno `suppressedLast24h`, bez sygnału) | błędne adresy, odrzucenia dostawcy |
+| `email_provider_config` | alarm | listy odłożone po błędzie konfiguracji nadawcy/dostawcy (`ops_metrics().email.configBlocked`, 0980): zły `EMAIL_FROM`, niezweryfikowana domena, 401/403 klucza, złe konto SMTP | popraw zmienną/konto u dostawcy — listy wyjdą same w ciągu 10 min, próby nie są zużywane (#1214) |
+| `email_sender_invalid` | alarm | `EMAIL_FROM` ustawiony, ale nieużywalny (zły zapis skrzynki); worker nie pobiera kolejki, `/api/health` → `emailProviderReady: false` | wpisz `Nazwa <adres@domena>` albo sam adres; otaczające cudzysłowy z `.env.example` są zdejmowane (#1214) |
 | `app_pool_waiting` | ostrzeżenie | żądania czekają na połączenie puli **tego procesu** | pula za mała albo blokujące zapytania |
 | `ai_budget_exhausted` | alarm | wydatek AI doby lub miesiąca ≥ limit, limit 0 albo brak limitu (#36) | wyczerpany budżet — funkcje AI zablokowane; decyzja o limicie w `docs/AI_BUDGET.md` |
 | `ai_budget_near_limit` | ostrzeżenie | wydatek AI ≥ 80% limitu doby lub miesiąca | rosnące użycie importu/tłumaczeń |
@@ -79,6 +81,30 @@ gotowego wiersza obu kolejek (`email_deliveries`, `auth.email_outbox`) to istnie
 zapisuje zdarzeń doręczenia, więc odsetki dotyczą tylko poczty domenowej. Dowód:
 `rls.sql` sekcja OPS44 (z kontrolą ujemną na ciele z `0096`), test integracyjny
 z loginem monitoringu (alarm → recovery), `tests/unit/ops-sensors.test.ts`.
+
+### Poczta: błąd konfiguracji nadawcy (#1214, migracja `0980` — numer tymczasowy)
+
+Błąd wspólny dla wszystkich listów (zły/nieparsowalny `EMAIL_FROM`, `validation_error`
+Resend o domenie/nadawcy, `invalid_from_address`/`invalid_api_key`, EmailLabs 401/403 albo
+odrzucenie wskazujące konto SMTP/domenę/nadawcę) nie kończy już wiersza `failed`: worker
+odkłada ten i pozostałe wiersze paczki o 10 min bez zużycia próby, z kodem
+`EMAIL_PROVIDER_CONFIG` w `error_message`, cron dostaje 503, a czujka
+`email_provider_config` podnosi alarm (kolejka kont — `auth.defer_email`, jak odmowa
+budżetu). Odrzucenie konkretnego adresata zostaje trwałym `failed` po jednej próbie.
+
+Listy, które przeszły w `failed` przed poprawką (np. przed wdrożeniem tej zmiany), wracają
+do kolejki skryptem (tylko niewygaszone, spoza kampanii, nieprzyjęte przez dostawcę; claim
+ponownie sprawdza zgodę i blokadę adresu):
+
+```bash
+MIGRATION_DATABASE_URL=… node scripts/db/requeue-failed-emails.mjs --days 3            # podgląd
+MIGRATION_DATABASE_URL=… node scripts/db/requeue-failed-emails.mjs --days 3 \
+  --error EMAIL_PROVIDER_REJECTED --apply --confirm 3                                  # zakolejkowanie
+```
+
+Opcjonalnie `--template <nazwa>` (powtarzalne). Każde uruchomienie z `--apply` zapisuje
+wpis audytu `email_delivery.requeued` (same liczby). Dowód: `rls.sql` sekcja OM1227,
+unit `email-config-errors`, `email-outbox-lease` (#1214), `auth-email-worker`.
 
 ### Ostatni przebieg maintenance (migracja `0180`)
 

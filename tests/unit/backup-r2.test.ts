@@ -11,6 +11,7 @@ import {
   backupS3Config,
   createBackupS3Client,
   downloadBackup,
+  groupBackups,
   latestComplete,
   listBackupNames,
   pruneBackups,
@@ -101,17 +102,64 @@ describe('retencja', () => {
 
   it('zostawia N najnowszych, usuwa tylko pliki o wzorcu kopii, najnowsza kompletna zostaje zawsze', () => {
     expect(latestComplete(names)?.stamp).toBe('20260922T030000Z');
-    const plan = retentionPlan(names, { keep: 2 });
-    expect(plan.sort()).toEqual([
-      'pracujbe-20260920T030000Z.dump.age', 'pracujbe-20260920T030000Z.json',
-      'pracujbe-20260921T030000Z.dump.age', 'pracujbe-20260921T030000Z.json',
-    ]);
+    const plan = retentionPlan(names, { keep: 2, now: new Date('2026-09-23T12:00:00Z') });
+    // keep liczy tylko kompletne (#1228): zostają 22 i 21, świeża niekompletna 23 czeka na manifest.
+    expect(plan.sort()).toEqual(['pracujbe-20260920T030000Z.dump.age', 'pracujbe-20260920T030000Z.json']);
     expect(plan).not.toContain('inny-plik.txt');
     // Wiek: starsze niż 2 dni od 23.09 12:00 idą, najnowsza kompletna zostaje mimo keep=1.
     const byAge = retentionPlan(names, { keep: 10, maxAgeDays: 2, now: new Date('2026-09-23T12:00:00Z') });
     expect(byAge).toContain('pracujbe-20260920T030000Z.json');
     expect(byAge).not.toContain('pracujbe-20260922T030000Z.dump.age');
     expect(retentionPlan(names, { keep: 1 })).not.toContain('pracujbe-20260922T030000Z.json');
+  });
+
+  // #1228: 14 kompletnych, potem 5 dni bez manifestu (artefakt wysłany), potem udana kopia.
+  const day = (d: number) => {
+    const date = new Date(Date.UTC(2026, 8, 1 + d, 3, 0, 0));
+    return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  };
+  const series: string[] = [];
+  for (let d = 0; d < 14; d++) series.push(`pracujbe-${day(d)}.dump.age`, `pracujbe-${day(d)}.json`);
+  for (let d = 14; d < 19; d++) series.push(`pracujbe-${day(d)}.dump.age`);
+  series.push(`pracujbe-${day(19)}.dump.age`, `pracujbe-${day(19)}.json`);
+  const afterRun = new Date(Date.UTC(2026, 8, 20, 4, 0, 0));
+  const survivors = (plan: string[]) => {
+    const left = series.filter((n) => !plan.includes(n));
+    const groups = groupBackups(left);
+    return {
+      complete: groups.filter((g) => g.artifact && g.manifest).length,
+      incomplete: groups.filter((g) => !(g.artifact && g.manifest)).length,
+    };
+  };
+
+  it('keep liczy tylko kompletne kopie; niekompletne starsze niż okno są sprzątane osobno (#1228)', () => {
+    const plan = retentionPlan(series, { keep: 14, now: afterRun });
+    expect(survivors(plan)).toEqual({ complete: 14, incomplete: 0 });
+    // najstarsza kompletna (dzień 0) wypada, bo po nowej kopii kompletnych jest 15
+    expect(plan).toContain(`pracujbe-${day(0)}.json`);
+    for (let d = 14; d < 19; d++) expect(plan).toContain(`pracujbe-${day(d)}.dump.age`);
+  });
+
+  it('kontrola ujemna: stara reguła (indeks po wszystkich grupach) zostawia 9 kompletnych i 5 niekompletnych', () => {
+    const groups = groupBackups(series);
+    const newest = latestComplete(series)?.stamp;
+    const legacy: string[] = [];
+    groups.forEach((g, index) => {
+      if (g.stamp === newest || index < 14) return;
+      if (g.artifact) legacy.push(`pracujbe-${g.stamp}.dump.age`);
+      if (g.manifest) legacy.push(`pracujbe-${g.stamp}.json`);
+    });
+    expect(survivors(legacy)).toEqual({ complete: 9, incomplete: 5 });
+  });
+
+  it('niekompletna młodsza niż okno zostaje (może być w trakcie wysyłki); sam manifest bez artefaktu też jest sprzątany', () => {
+    const fresh = [...series, 'pracujbe-20260920T035000Z.dump.age', 'pracujbe-20260905T031500Z.json'];
+    const plan = retentionPlan(fresh, { keep: 14, now: afterRun });
+    expect(plan).not.toContain('pracujbe-20260920T035000Z.dump.age');
+    expect(plan).toContain('pracujbe-20260905T031500Z.json');
+    expect(retentionPlan(fresh, { keep: 14, now: afterRun, incompleteGraceHours: 0 })).toContain(
+      'pracujbe-20260920T035000Z.dump.age',
+    );
   });
 });
 

@@ -10,6 +10,7 @@
  */
 import { cronSecretChecks } from '@/lib/cron/secrets';
 import { emailProviderFromEnv, resendApiKeyFromEnv } from '@/lib/email/transport/select';
+import { emailFromProblem } from '@/lib/email/sender';
 import { errorWebhookFromEnv } from '@/lib/error-webhook/url';
 
 /**
@@ -244,7 +245,9 @@ export function readinessChecks(): Record<string, boolean> {
     resend: Boolean(resendApiKeyFromEnv()),
     // Dostawca wybrany przez `EMAIL_PROVIDER` (albo domyślny) ma komplet kluczy — nazwa
     // dostawcy w `/api/health` jako `emailProvider`.
-    emailProviderReady: emailProviderFromEnv().ready,
+    // #1214: nieużywalny `EMAIL_FROM` (np. wpisany z cudzysłowami bez nawiasów) = nie gotowy.
+    emailProviderReady: emailProviderFromEnv().ready && emailFromProblem() === null,
+    emailSender: emailFromProblem() === null,
     emaillabsWebhook: Boolean(process.env.EMAILLABS_WEBHOOK_SECRET?.trim()),
     queueSecret: Boolean(process.env.EMAIL_QUEUE_SECRET),
     // #13: osobny sekret maintenance, rozdział sekretów cron, przejściowy CRON_SECRET.

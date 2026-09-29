@@ -2869,6 +2869,7 @@
     "opsRow_emailQueueAge": "Oldest email in queue",
     "opsRow_emailLeases": "Abandoned leases (email)",
     "opsRow_emailFailed": "Failed emails (24 h)",
+    "opsRow_emailConfigBlocked": "Emails on hold: sender configuration error",
     "opsRow_authQueueAge": "Oldest account email in queue",
     "opsRow_authLeases": "Abandoned leases (account emails)",
     "opsRow_authFailed": "Failed account emails (24 h)",

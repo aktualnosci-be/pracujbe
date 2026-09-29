@@ -20785,4 +20785,82 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
   'AT1114-4 po cofnięciu kontroli definicja can_attach_in_conversation zawiera sprawdzenie blokady firmy');
 
 
+-- =============================================================================
+-- OM1227 — poczta (0980, #1227/#1214): ops_metrics.email liczy porażki bez wygaszonych,
+-- osobno wygaszone i listy odłożone po błędzie konfiguracji; requeue_failed_email_deliveries
+-- (tylko service_role) wraca do kolejki wyłącznie niewygaszone, nieprzyjęte, z okna N dni.
+-- =============================================================================
+\echo '--- OM1227 ops_metrics email + requeue ---'
+set role pracujbe_ops;
+select pg_temp.assert((public.ops_metrics() -> 'email') ?& array['failedLast24h', 'suppressedLast24h', 'configBlocked'],
+  'OM1227-1 pracujbe_ops widzi failedLast24h, suppressedLast24h, configBlocked');
+reset role;
+select public.ops_metrics() -> 'email' as om_base \gset
+begin;
+insert into public.email_deliveries(id, to_email, template, status, attempts, suppressed_at, error_message, provider_message_id, updated_at) values
+  ('f9800000-0000-0000-0000-000000000001', 'om1227-a@test.invalid', 'jobMatch', 'failed', 1, now(), 'suppressed_opt_out', null, now()),
+  ('f9800000-0000-0000-0000-000000000002', 'om1227-b@test.invalid', 'jobMatch', 'failed', 1, now(), 'suppressed_address', null, now()),
+  ('f9800000-0000-0000-0000-000000000003', 'om1227-c@test.invalid', 'supportContact', 'failed', 1, null, 'EMAIL_PROVIDER_REJECTED', null, now()),
+  ('f9800000-0000-0000-0000-000000000004', 'om1227-d@test.invalid', 'supportContact', 'queued', 0, null, 'EMAIL_PROVIDER_CONFIG', null, now()),
+  -- nieudane, ale przyjęte przez dostawcę (np. odbicie po wysyłce) i starsze niż okno — nie wracają
+  ('f9800000-0000-0000-0000-000000000005', 'om1227-e@test.invalid', 'supportContact', 'failed', 1, null, 'EMAIL_PROVIDER_REJECTED', 'om1227-provider', now()),
+  ('f9800000-0000-0000-0000-000000000006', 'om1227-f@test.invalid', 'supportContact', 'failed', 1, null, 'EMAIL_PROVIDER_REJECTED', null, now() - interval '10 days');
+set local role pracujbe_ops;
+select public.ops_metrics() -> 'email' as om_now \gset
+reset role;
+select pg_temp.assert(
+  ((:'om_now')::jsonb ->> 'failedLast24h')::int = ((:'om_base')::jsonb ->> 'failedLast24h')::int + 2
+  and ((:'om_now')::jsonb ->> 'suppressedLast24h')::int = ((:'om_base')::jsonb ->> 'suppressedLast24h')::int + 2
+  and ((:'om_now')::jsonb ->> 'configBlocked')::int = ((:'om_base')::jsonb ->> 'configBlocked')::int + 1,
+  'OM1227-2 failedLast24h bez wygaszonych, wygaszone osobno, odłożone po błędzie konfiguracji');
+-- OM1227-2N: kontrola ujemna — dawna reguła (0177: bez suppressed_at is null) liczy też wygaszone.
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where status = 'failed' and updated_at > now() - interval '24 hours')
+    = ((:'om_now')::jsonb ->> 'failedLast24h')::int + ((:'om_now')::jsonb ->> 'suppressedLast24h')::int
+  and ((:'om_now')::jsonb ->> 'suppressedLast24h')::int >= 2,
+  'OM1227-2N kontrola ujemna: licznik z 0177 zawyża porażki o wygaszone wiersze');
+
+set local role authenticated;
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(7, false)', 'permission denied',
+  'OM1227-3 authenticated nie wywoła requeue');
+reset role;
+set local role anon;
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(7, false)', 'permission denied',
+  'OM1227-3b anon nie wywoła requeue');
+reset role;
+set local role service_role;
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(0, true)', 'VALIDATION_FAILED',
+  'OM1227-4 okno poza 1–30 dni = VALIDATION_FAILED');
+select pg_temp.expect_error('select public.requeue_failed_email_deliveries(31, true)', 'VALIDATION_FAILED',
+  'OM1227-4b okno ponad 30 dni = VALIDATION_FAILED');
+select public.requeue_failed_email_deliveries(7, true, array['supportContact']) as om_dry \gset
+reset role;
+select pg_temp.assert(((:'om_dry')::jsonb ->> 'matched')::int >= 1
+  and ((:'om_dry')::jsonb ->> 'requeued')::int = 0 and ((:'om_dry')::jsonb ->> 'dryRun')::boolean
+  and (select status = 'failed' from public.email_deliveries where id = 'f9800000-0000-0000-0000-000000000003'),
+  'OM1227-5 dry-run tylko liczy, nic nie zmienia');
+select count(*) as om_audit_before from public.audit_logs where action = 'email_delivery.requeued' \gset
+set local role service_role;
+select public.requeue_failed_email_deliveries(7, false, array['supportContact', 'jobMatch']) as om_run \gset
+reset role;
+select pg_temp.assert(
+  (select status = 'queued' and attempts = 0 and error_message is null and next_attempt_at <= now()
+     from public.email_deliveries where id = 'f9800000-0000-0000-0000-000000000003')
+  and (select count(*) from public.email_deliveries where status = 'failed' and id in (
+       'f9800000-0000-0000-0000-000000000001', 'f9800000-0000-0000-0000-000000000002',
+       'f9800000-0000-0000-0000-000000000005', 'f9800000-0000-0000-0000-000000000006')) = 4
+  and ((:'om_run')::jsonb ->> 'requeued')::int = ((:'om_dry')::jsonb ->> 'matched')::int
+  and (select count(*) from public.audit_logs where action = 'email_delivery.requeued') = :'om_audit_before'::int + 1,
+  'OM1227-6 requeue: niewygaszony z okna wraca (attempts 0); wygaszone, przyjęte i stare zostają; audyt');
+-- OM1227-6N: kontrola ujemna — naiwny warunek (sam status i okno) objąłby wygaszone i przyjęte.
+select pg_temp.assert(
+  (select count(*) from public.email_deliveries where status = 'failed' and updated_at > now() - interval '7 days'
+     and id::text like 'f9800000-%') = 3,
+  'OM1227-6N kontrola ujemna: bez filtrów suppressed_at/provider_message_id wróciłyby 3 kolejne wiersze');
+select pg_temp.assert(pg_get_functiondef('public.requeue_failed_email_deliveries(integer,boolean,text[],text[])'::regprocedure)
+  like '%campaign_id is null%',
+  'OM1227-7 listy kampanii nie wracają (mają własne rewizje)');
+rollback;
+reset role;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
