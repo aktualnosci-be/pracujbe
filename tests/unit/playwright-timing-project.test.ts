@@ -32,8 +32,9 @@ describe('playwright.config.ts — projekt pomiaru czasu (#732)', () => {
     expect(projectBlock(withDependency, 'chromium-timing')).toMatch(/^\s*dependencies:/m);
   });
 
-  it('pomiar czasu biegnie bez śladu (trace zawyżałby INP), reszta w CI zapisuje ślad pierwszej próby', () => {
+  it('pomiar czasu biegnie bez śladu (trace zawyżałby INP), reszta zapisuje ślad dopiero przy ponowieniu (nagrywanie każdej próby wywracało Chromium w CI)', () => {
     expect(projectBlock(source, 'chromium-timing')).toMatch(/trace: 'off'/);
-    expect(source).toMatch(/process\.env\.CI \? 'retain-on-first-failure'/);
+    expect(source).toMatch(/trace: 'on-first-retry'/);
+    expect(source).not.toMatch(/retain-on-first-failure/);
   });
 });

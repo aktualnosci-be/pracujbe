@@ -375,9 +375,11 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   use: {
     baseURL: BASE_URL,
-    // W CI trace pierwszej (nieudanej) próby, nie dopiero ponowienia (#1032): flaki przechodzą
-    // przy retry, więc `on-first-retry` zapisywał ślad udanego przebiegu.
-    trace: process.env.CI ? 'retain-on-first-failure' : 'on-first-retry',
+    // Trace tylko przy ponowieniu. tryb `retain-on-first-…` nagrywa ślad KAŻDEJ pierwszej próby
+    // (zrzuty + migawki DOM), co w CI przeciążało Chromium: SEGV przy `browser.newContext`
+    // i flaki w niepowiązanych specach (`failOnFlakyTests` = czerwone shardy). Diagnostykę
+    // pierwszej awarii zapewniają zrzut ekranu i ślad z ponowienia.
+    trace: 'on-first-retry',
     screenshot: process.env.CI ? 'only-on-failure' : 'off',
   },
   projects: [
