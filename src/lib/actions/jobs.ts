@@ -730,8 +730,13 @@ async function readJobVersion(me: PortalIdentity, jobId: string): Promise<string
  * Trafienie zapisuje RPC service-role `record_job_content_ai_signal` (kolejka admina; aktywną
  * ofertę baza wstrzymuje). AI niczego nie odrzuca; każda awaria = same reguły (fail-open).
  */
-async function runAiContentCheck(me: PortalIdentity, jobId: string): Promise<void> {
+async function runAiContentCheck(
+  me: PortalIdentity,
+  jobId: string,
+  precondition?: () => Promise<boolean>,
+): Promise<void> {
   if (!jobFraudCheckProvider() || !isServiceDatabaseConfigured()) return;
+  if (precondition && !(await precondition())) return;
   const state = await loadJobTrustState(me, jobId);
   if (!state || state.status !== null) return;
   const signal = await checkJobContentWithAi(state.content);
@@ -782,6 +787,36 @@ async function loadScreeningReviewNotices(
   }
 }
 
+/**
+ * #1235: czy `publish_job` może się udać dla tej sesji — lustro warunków RPC sprawdzanych PRZED
+ * treścią (0172): recruiter+ firmy oferty (`can_manage_jobs`), firma `verified`, status `draft`,
+ * termin ważności nie minął, co najmniej jeden kanał aplikowania. Odczyt pod RLS (obca oferta =
+ * brak wiersza). Służy wyłącznie do tego, żeby płatny model AI (kontrola treści) nie był wołany
+ * dla publikacji, którą baza i tak odrzuci — zwykły `member`, oferta aktywna/wstrzymana, firma
+ * niezweryfikowana. Autorytatywna kontrola zostaje w `publish_job`. Błąd odczytu = `false`
+ * (bez AI; publikację i tak rozstrzyga RPC, reguły treści działają w bazie).
+ */
+async function canAttemptPublish(me: PortalIdentity, jobId: string): Promise<boolean> {
+  try {
+    const row = await withPortalTransaction(me, (tx) =>
+      queryOne<Record<string, unknown>>(tx, 'jobs.publish-precheck',
+        `SELECT public.can_manage_jobs(j.company_id) AS can_manage
+           FROM public.jobs j
+           JOIN public.companies c ON c.id = j.company_id
+          WHERE j.id = $1 AND j.deleted_at IS NULL
+            AND j.status = 'draft'
+            AND c.status = 'verified'
+            AND (j.expires_at IS NULL OR j.expires_at > now())
+            AND (j.apply_url IS NOT NULL OR j.apply_email IS NOT NULL OR j.apply_phone IS NOT NULL)`,
+        [jobId]),
+    );
+    return row?.['can_manage'] === true;
+  } catch (error) {
+    captureError(error, { area: 'jobs.publishPrecheck' });
+    return false;
+  }
+}
+
 /** Publikuje ofertę (status='active', published_at=now()). Wymaga firmy `verified`. */
 export async function publishJob(jobId: string): Promise<PublishResult> {
   if (typeof jobId !== 'string' || (!UUID_RE.test(jobId) && jobId !== DEMO_DRAFT_ID)) {
@@ -804,7 +839,11 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
 
     // 0167: drugi sygnał (AI) przed publikacją — trafienie trafia do kolejki, a strażnik
     // w bazie zablokuje aktywację do decyzji admina. Oferta obca/nieistniejąca → brak stanu.
-    await runAiContentCheck(me, jobId);
+    // #1235: model tylko, gdy publikacja może się udać (recruiter+, szkic, firma verified…) —
+    // inaczej `member` albo wywołanie dla aktywnej oferty zużywałoby budżet AI i mogło
+    // wstrzymać aktywną ofertę sygnałem.
+    const actor = me;
+    await runAiContentCheck(actor, jobId, () => canAttemptPublish(actor, jobId));
 
     const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
       // Odczyt tytułu (do zbudowania slug-a); pełna walidacja/kompletność/aktywacja atomowo w RPC.
