@@ -28,6 +28,7 @@ import {
   type OpsSignal,
 } from '@/lib/ops/sensors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
+import { emailFromProblem } from '@/lib/email/sender';
 
 /**
  * Jeden odczyt stanu czujek (#47) dla `/api/health/ops` i panelu `/admin/operacje` — oba widoki
@@ -66,7 +67,13 @@ export async function readOpsStatus(): Promise<OpsStatus> {
     return result.kind === 'unconfigured' ? { kind: 'unconfigured', backup } : { kind: 'unavailable', backup };
   }
   const appPool = domainPoolStats();
-  const evaluation = evaluateOps(result.metrics, appPool, result.aiBudget, result.maintenanceRun);
+  const evaluation = evaluateOps(
+    result.metrics,
+    appPool,
+    result.aiBudget,
+    result.maintenanceRun,
+    emailFromProblem(process.env) === null,
+  );
   // #1143: env i baza muszą mówić to samo; rozbieżność = alarm (tryb efektywny i tak ogłoszeniowy).
   const envRecruitment = isRecruitmentEnabled();
   const dbRecruitment = result.metrics.portalLegalMode?.recruitmentEnabled;

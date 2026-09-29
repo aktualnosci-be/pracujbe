@@ -1,83 +1,11 @@
 -- =============================================================================
 -- Rollback 0973 (numer tymczasowy) — przywraca definicje sprzed migracji:
--- moderation_append_only / moderation_informed_at / moderation_restore_core (0104),
--- moderation_restoration_informed_at (0109), retention_purge_batch (0127); usuwa triggery
--- utrwalające chwilę poinformowania i kolumny `informed_at`.
--- UWAGA: po rollbacku termin odwołania znów zależy od istnienia wierszy kolejki e-mail
--- i powiadomień (#860), a CV/konto są usuwane do `storage_physical_deletion` przed terminem (#784).
+-- moderation_restore_core (0104) i retention_purge_batch (0127). Chwili poinformowania
+-- (0188, `moderation_informed`) ta migracja nie zmienia, więc rollback jej nie dotyka.
+-- UWAGA: po rollbacku CV/konto są usuwane do `storage_physical_deletion` przed terminem (#784),
+-- a cofnięcie ograniczenia po anonimizacji sprawy znów przechodzi (#887).
 -- Test: supabase/tests/retention-dsa-0973-rollback.sql (scripts/test-rls.sh).
 -- =============================================================================
-
-drop trigger if exists trg_moderation_record_informed_email on public.email_deliveries;
-drop trigger if exists trg_moderation_record_informed_notification on public.notifications;
-drop function if exists public.moderation_record_informed_email();
-drop function if exists public.moderation_record_informed_notification();
-
--- Chwila poinformowania strony, której decyzja dotyczy (null = jeszcze nie poinformowana).
-create or replace function public.moderation_informed_at(p_decision_id uuid)
-returns timestamptz language sql stable security definer set search_path = public, pg_temp as $$
-  select case when d.decision = 'no_action' then
-      (select min(e.sent_at) from public.email_deliveries e
-        where e.entity_type = 'report' and e.entity_id = d.report_id
-          and e.template = 'reportDecisionNoAction'
-          and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null)
-    else
-      least(
-        (select min(e.sent_at) from public.email_deliveries e
-          where e.entity_type = 'moderation_decision' and e.entity_id = d.id
-            and e.template in ('moderationJobRemoved', 'moderationCompanySuspended')
-            and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null),
-        (select min(n.read_at) from public.notifications n
-          where n.entity_type = 'company' and n.entity_id = d.company_id
-            and n.data->>'kind' = 'moderation' and n.data->>'decisionId' = d.id::text
-            and n.read_at is not null))
-    end
-  from public.moderation_decisions d where d.id = p_decision_id;
-$$;
-revoke all on function public.moderation_informed_at(uuid) from public, anon, authenticated;
-grant execute on function public.moderation_informed_at(uuid) to service_role;
-
--- --- 2. Terminy od poinformowania zgłaszającego o cofnięciu -------------------------------
-create or replace function public.moderation_restoration_informed_at(p_restoration_id uuid)
-returns timestamptz language sql stable security definer set search_path = public, pg_temp as $$
-  select min(e.sent_at) from public.email_deliveries e
-   where e.entity_type = 'moderation_restoration' and e.entity_id = p_restoration_id
-     and e.template = 'reportRestored'
-     and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null;
-$$;
-revoke all on function public.moderation_restoration_informed_at(uuid) from public, anon, authenticated;
-grant execute on function public.moderation_restoration_informed_at(uuid) to service_role;
-
-
--- Niezmienność decyzji i przywróceń (0099) + jedyny wyjątek retencji: fakty/powód → null.
-create or replace function public.moderation_append_only()
-returns trigger language plpgsql set search_path = public, pg_temp as $$
-declare
-  v_fk constant text[] := array['job_id', 'company_id', 'decided_by', 'restored_by'];
-  v_redact constant text[] := array['facts', 'reason', 'redacted_at'];
-  v_key text;
-begin
-  if tg_op = 'UPDATE'
-     and coalesce(current_setting('pracujbe.retention', true), '') = 'on'
-     and to_jsonb(old)->>'redacted_at' is null and to_jsonb(new)->>'redacted_at' is not null
-     and to_jsonb(new)->>'facts' is null and to_jsonb(new)->>'reason' is null
-     and (to_jsonb(new) - v_redact) = (to_jsonb(old) - v_redact) then
-    return new;
-  end if;
-  -- Jedyna inna dozwolona zmiana: odwołanie FK przechodzi na null (usunięcie konta/treści).
-  if tg_op = 'UPDATE' and (to_jsonb(new) - v_fk) = (to_jsonb(old) - v_fk) then
-    foreach v_key in array v_fk loop
-      if to_jsonb(new) ? v_key
-         and to_jsonb(new)->v_key is distinct from to_jsonb(old)->v_key
-         and jsonb_typeof(to_jsonb(new)->v_key) <> 'null' then
-        raise exception 'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna' using errcode = '42501';
-      end if;
-    end loop;
-    return new;
-  end if;
-  raise exception 'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna' using errcode = '42501';
-end $$;
-revoke all on function public.moderation_append_only() from public;
 
 -- Definicja z 0104.
 create or replace function public.moderation_restore_core(p_decision_id uuid, p_reason text, p_notify boolean)
@@ -471,7 +399,3 @@ begin
   return v_out || jsonb_build_object('erasureTombstones', v_n, 'fullBatches', v_full);
 end $$;
 revoke all on function public.retention_purge_batch(integer) from public, anon, authenticated;
-
-
-alter table public.moderation_decisions drop column if exists informed_at;
-alter table public.moderation_restorations drop column if exists informed_at;

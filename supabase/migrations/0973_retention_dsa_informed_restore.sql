@@ -6,168 +6,25 @@
 --   Termin fizycznego usunięcia obiektu dotyczy kolejki storage, nie daty utraty dostępu:
 --   CV i konto usuwamy dopiero od `retention_warnings.due_at`. Pozostałe kategorie
 --   (`deleted_file`, `deleted_profile` — dane już oznaczone do usunięcia) bez zmian.
---   `retention_purge_batch` = definicja z 0127 z tą jedną zmianą (niezależna od #973/0182,
---   która zmienia tylko `admin_set_retention_policy`).
+--   `retention_purge_batch` = definicja z 0127 z tą jedną zmianą (0182 zmienia tylko
+--   `admin_set_retention_policy`, 0185 woła tę funkcję z `run_retention_purge` bez zmiany
+--   sygnatury).
 --
--- #860: chwila poinformowania o decyzji moderacyjnej (i o cofnięciu ograniczenia) była
---   liczona wyłącznie z `email_deliveries`/`notifications`. Usunięcie konta strony kasuje te
---   wiersze → termin odwołania wracał do NULL (odwołanie znów „OK”), a sprawa nie dostawała
---   daty kwalifikacji do retencji. Teraz pierwsza chwila poinformowania jest utrwalana jako
---   niezmienny fakt: `moderation_decisions.informed_at`, `moderation_restorations.informed_at`
---   (ustawiane raz, null → wartość, triggerami na e-mailu i odczycie powiadomienia; strażnik
---   niezmienności przepuszcza tylko to przejście). `moderation_informed_at` i
---   `moderation_restoration_informed_at` biorą najwcześniejszą z wartości utrwalonej
---   i wyliczonej. Backfill z istniejących wierszy.
+-- #860: chwila poinformowania o decyzji moderacyjnej (i o cofnięciu ograniczenia) jest od 0188
+--   trwałym faktem (`moderation_informed`, wpisy niezmienne, FK do poczty `on delete set null`),
+--   więc usunięcie konta strony nie zeruje już terminu odwołania ani daty retencji sprawy. Ta
+--   migracja NIE zmienia definicji z 0188 — dowód regresji #860 na definicjach 0188: `rls.sql`
+--   sekcja RD973 (DI860).
 --
--- #887: `moderation_restore_core` sprawdza anonimizację sprawy PO blokadzie wiersza sprawy
---   i odrzuca cofnięcie (`INVALID_TRANSITION: CASE_REDACTED`) bez zapisu i skutków — nowe
---   uzasadnienie po anonimizacji wypadłoby z cyklu retencji. UI ukrywa akcję dla takiej sprawy.
+-- #887: `moderation_restore_core` (definicja z 0104) sprawdza anonimizację sprawy PO blokadzie
+--   wiersza sprawy i odrzuca cofnięcie (`INVALID_TRANSITION: CASE_REDACTED`) bez zapisu
+--   i skutków — nowe uzasadnienie po anonimizacji wypadłoby z cyklu retencji. UI ukrywa akcję
+--   dla takiej sprawy.
 --
 -- Rollback: supabase/rollback/0973_retention_dsa_informed_restore.down.sql.
 -- =============================================================================
 
--- --- 1. Utrwalona chwila poinformowania (#860) ---------------------------------------------
-alter table public.moderation_decisions add column if not exists informed_at timestamptz;
-alter table public.moderation_restorations add column if not exists informed_at timestamptz;
-
--- Niezmienność decyzji i przywróceń (0104) + wyjątki: retencja (fakty/powód → null),
--- odwołanie FK na null oraz JEDNORAZOWE utrwalenie `informed_at` (null → wartość, #860).
-create or replace function public.moderation_append_only()
-returns trigger language plpgsql set search_path = public, pg_temp as $$
-declare
-  v_fk constant text[] := array['job_id', 'company_id', 'decided_by', 'restored_by'];
-  v_redact constant text[] := array['facts', 'reason', 'redacted_at'];
-  v_key text;
-begin
-  if tg_op = 'UPDATE'
-     and coalesce(current_setting('pracujbe.retention', true), '') = 'on'
-     and to_jsonb(old)->>'redacted_at' is null and to_jsonb(new)->>'redacted_at' is not null
-     and to_jsonb(new)->>'facts' is null and to_jsonb(new)->>'reason' is null
-     and (to_jsonb(new) - v_redact) = (to_jsonb(old) - v_redact) then
-    return new;
-  end if;
-  if tg_op = 'UPDATE'
-     and coalesce(current_setting('pracujbe.moderation_informed', true), '') = 'on'
-     and to_jsonb(old)->>'informed_at' is null and to_jsonb(new)->>'informed_at' is not null
-     and (to_jsonb(new) - 'informed_at') = (to_jsonb(old) - 'informed_at') then
-    return new;
-  end if;
-  -- Jedyna inna dozwolona zmiana: odwołanie FK przechodzi na null (usunięcie konta/treści).
-  if tg_op = 'UPDATE' and (to_jsonb(new) - v_fk) = (to_jsonb(old) - v_fk) then
-    foreach v_key in array v_fk loop
-      if to_jsonb(new) ? v_key
-         and to_jsonb(new)->v_key is distinct from to_jsonb(old)->v_key
-         and jsonb_typeof(to_jsonb(new)->v_key) <> 'null' then
-        raise exception 'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna' using errcode = '42501';
-      end if;
-    end loop;
-    return new;
-  end if;
-  raise exception 'PERMISSION_DENIED: decyzja moderacyjna jest niezmienna' using errcode = '42501';
-end $$;
-revoke all on function public.moderation_append_only() from public;
-
--- E-mail o decyzji / cofnięciu faktycznie wysłany → utrwal chwilę (tylko pierwszą).
-create or replace function public.moderation_record_informed_email()
-returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
-begin
-  if new.sent_at is null or new.status::text not in ('sent', 'delivered', 'opened', 'clicked') then
-    return null;
-  end if;
-  perform set_config('pracujbe.moderation_informed', 'on', true);
-  if new.template = 'reportDecisionNoAction' and new.entity_type = 'report' then
-    update public.moderation_decisions set informed_at = new.sent_at
-     where report_id = new.entity_id and decision = 'no_action' and informed_at is null;
-  elsif new.template in ('moderationJobRemoved', 'moderationCompanySuspended')
-        and new.entity_type = 'moderation_decision' then
-    update public.moderation_decisions set informed_at = new.sent_at
-     where id = new.entity_id and decision <> 'no_action' and informed_at is null;
-  elsif new.template = 'reportRestored' and new.entity_type = 'moderation_restoration' then
-    update public.moderation_restorations set informed_at = new.sent_at
-     where id = new.entity_id and informed_at is null;
-  end if;
-  perform set_config('pracujbe.moderation_informed', '', true);
-  return null;
-end $$;
-revoke all on function public.moderation_record_informed_email() from public, anon, authenticated;
-drop trigger if exists trg_moderation_record_informed_email on public.email_deliveries;
-create trigger trg_moderation_record_informed_email
-  after insert or update of status, sent_at on public.email_deliveries
-  for each row
-  when (new.sent_at is not null and new.template in (
-    'reportDecisionNoAction', 'moderationJobRemoved', 'moderationCompanySuspended', 'reportRestored'))
-  execute function public.moderation_record_informed_email();
-
--- Odczyt powiadomienia o ograniczeniu w panelu firmy → utrwal chwilę (tylko pierwszą).
-create or replace function public.moderation_record_informed_notification()
-returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
-declare
-  v_decision uuid;
-begin
-  if coalesce(new.data->>'decisionId', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
-    return null;
-  end if;
-  v_decision := (new.data->>'decisionId')::uuid;
-  perform set_config('pracujbe.moderation_informed', 'on', true);
-  update public.moderation_decisions set informed_at = new.read_at
-   where id = v_decision and company_id = new.entity_id and decision <> 'no_action' and informed_at is null;
-  perform set_config('pracujbe.moderation_informed', '', true);
-  return null;
-end $$;
-revoke all on function public.moderation_record_informed_notification() from public, anon, authenticated;
-drop trigger if exists trg_moderation_record_informed_notification on public.notifications;
-create trigger trg_moderation_record_informed_notification
-  after update of read_at on public.notifications
-  for each row
-  when (old.read_at is null and new.read_at is not null
-        and new.entity_type = 'company' and new.data->>'kind' = 'moderation')
-  execute function public.moderation_record_informed_notification();
-
--- Chwila poinformowania: najwcześniejsza z utrwalonej (#860) i wyliczonej z kolejki/panelu.
-create or replace function public.moderation_informed_at(p_decision_id uuid)
-returns timestamptz language sql stable security definer set search_path = public, pg_temp as $$
-  select least(d.informed_at, case when d.decision = 'no_action' then
-      (select min(e.sent_at) from public.email_deliveries e
-        where e.entity_type = 'report' and e.entity_id = d.report_id
-          and e.template = 'reportDecisionNoAction'
-          and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null)
-    else
-      least(
-        (select min(e.sent_at) from public.email_deliveries e
-          where e.entity_type = 'moderation_decision' and e.entity_id = d.id
-            and e.template in ('moderationJobRemoved', 'moderationCompanySuspended')
-            and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null),
-        (select min(n.read_at) from public.notifications n
-          where n.entity_type = 'company' and n.entity_id = d.company_id
-            and n.data->>'kind' = 'moderation' and n.data->>'decisionId' = d.id::text
-            and n.read_at is not null))
-    end)
-  from public.moderation_decisions d where d.id = p_decision_id;
-$$;
-revoke all on function public.moderation_informed_at(uuid) from public, anon, authenticated;
-grant execute on function public.moderation_informed_at(uuid) to service_role;
-
-create or replace function public.moderation_restoration_informed_at(p_restoration_id uuid)
-returns timestamptz language sql stable security definer set search_path = public, pg_temp as $$
-  select least(mr.informed_at,
-    (select min(e.sent_at) from public.email_deliveries e
-      where e.entity_type = 'moderation_restoration' and e.entity_id = mr.id
-        and e.template = 'reportRestored'
-        and e.status in ('sent', 'delivered', 'opened', 'clicked') and e.sent_at is not null))
-  from public.moderation_restorations mr where mr.id = p_restoration_id;
-$$;
-revoke all on function public.moderation_restoration_informed_at(uuid) from public, anon, authenticated;
-grant execute on function public.moderation_restoration_informed_at(uuid) to service_role;
-
--- Backfill: utrwal chwilę dla decyzji/cofnięć już poinformowanych.
-select set_config('pracujbe.moderation_informed', 'on', true);
-update public.moderation_decisions d set informed_at = public.moderation_informed_at(d.id)
- where d.informed_at is null and public.moderation_informed_at(d.id) is not null;
-update public.moderation_restorations mr set informed_at = public.moderation_restoration_informed_at(mr.id)
- where mr.informed_at is null and public.moderation_restoration_informed_at(mr.id) is not null;
-select set_config('pracujbe.moderation_informed', '', true);
-
--- --- 2. Cofnięcie ograniczenia po anonimizacji sprawy (#887) -------------------------------
+-- --- 1. Cofnięcie ograniczenia po anonimizacji sprawy (#887) -------------------------------
 -- Definicja z 0104 + kontrola `redacted_at` po blokadzie sprawy.
 create or replace function public.moderation_restore_core(p_decision_id uuid, p_reason text, p_notify boolean)
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
@@ -289,7 +146,7 @@ begin
 end $$;
 revoke all on function public.moderation_restore_core(uuid, text, boolean) from public, anon, authenticated;
 
--- --- 3. Retencja CV i konta od terminu z ostrzeżenia (#784) --------------------------------
+-- --- 2. Retencja CV i konta od terminu z ostrzeżenia (#784) --------------------------------
 -- Definicja z 0127; zmienione wyłącznie warunki usuwania CV i konta (`w.due_at <= now()`).
 -- Jedna partia wszystkich kategorii (funkcja wewnętrzna; wywołuje ją run_retention_purge).
 create or replace function public.retention_purge_batch(p_limit integer)
