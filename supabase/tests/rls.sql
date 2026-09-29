@@ -20820,11 +20820,11 @@ select pg_temp.assert(
   and ((:'om_now')::jsonb ->> 'suppressedLast24h')::int >= 2,
   'OM1227-2N kontrola ujemna: licznik z 0177 zawyża porażki o wygaszone wiersze');
 
-set local role authenticated;
+set local role authenticated; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.requeue_failed_email_deliveries(7, false)', 'permission denied',
   'OM1227-3 authenticated nie wywoła requeue');
 reset role;
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select pg_temp.expect_error('select public.requeue_failed_email_deliveries(7, false)', 'permission denied',
   'OM1227-3b anon nie wywoła requeue');
 reset role;
