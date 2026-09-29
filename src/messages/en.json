@@ -222,7 +222,8 @@
     "no": "No",
     "home": "Home",
     "breadcrumb": "Breadcrumb",
-    "skipToContent": "Skip to content"
+    "skipToContent": "Skip to content",
+    "formJsRequired": "This form requires JavaScript. Turn it on in your browser to submit the data."
   },
   "nav": {
     "jobs": "Jobs",
@@ -1737,6 +1738,8 @@
     "itemTooLongMax": "This item is too long (max. {max} characters). Shorten it to add it to the list.",
     "stepAnnounce": "Step {current} of {total}: {title}",
     "goToOffers": "Go to your job list",
+    "draftConflict": "This draft changed in the meantime — in another tab or by another team member. The changes from this step were not saved, so nobody else's work gets overwritten. Load the current version of the draft.",
+    "reloadDraft": "Load the current version of the draft",
     "editTitle": "Edit job",
     "editSubtitleActive": "This job is published. Save your changes with “Save changes” and candidates will see them right away. The job status and applications stay as they are.",
     "editSubtitlePaused": "This job is paused. Save your changes with “Save changes”; candidates will see them once you resume the job. Applications stay as they are.",
@@ -1965,6 +1968,7 @@
     "attachmentSensitiveId": "The file name contains an identification number (e.g. national register number, PESEL, ID card or passport number). Rename the file and add it again.",
     "attachmentLimit": "You can attach up to {max} files to one message.",
     "attachmentRemove": "Remove file {name}",
+    "attachmentsRemoveAll": "Remove all attachments",
     "attachmentDownload": "Download {name} ({size})",
     "attachmentDownloadError": "The file could not be downloaded. Please try again.",
     "attachmentUnavailable": "File is being checked — download unavailable.",
@@ -2017,6 +2021,7 @@
     "deleteConfirmDescription": "The file “{name}” will be permanently deleted. This cannot be undone.",
     "deleteSuccess": "The document has been deleted.",
     "errorTooLarge": "The file is too large (max 5 MB).",
+    "errorAccountLimit": "You reached the file limit for your account (max. 10 files and 50 MB in total). Delete an older document.",
     "errorType": "Allowed formats: PDF, DOC, DOCX.",
     "errorEmpty": "The selected file is empty."
   },
@@ -2391,6 +2396,7 @@
     "dsaRetentionPolicy": "Appeal window: {appealDays} days after notice · retention: {retentionDays} days. Provisional values — to be approved by the website owner.",
     "dsaRetentionEligible": "Due for anonymisation",
     "dsaRetentionWaiting": "Waiting for the appeal path to end",
+    "dsaRetentionFallback": "Deadline running on the fallback rule (not delivered / no recipient)",
     "dsaRetentionWithin": "Within retention",
     "dsaRetentionNext": "next: {date}",
     "dsaRetentionRedacted": "Anonymised",
@@ -2888,6 +2894,7 @@
     "opsRow_dbConnections": "Connection usage",
     "opsRow_appPoolWaiting": "Requests waiting for a connection",
     "opsRow_portalModeMismatch": "Portal mode mismatch (env vs database)",
+    "opsRow_schemaBehind": "Database schema behind the code (migrations)",
     "opsRow_backupAge": "Age of the last backup",
     "filterCompanyLinks": "Website and logo to approve",
     "sectionCompanyLinks": "Website and logo",
@@ -2932,6 +2939,7 @@
     "entityJob": "Job offer",
     "auditActionJobUpdatePublished": "Published job edited",
     "auditActionJobDuplicated": "Job copied",
+    "auditActionJobDeleted": "Job deleted",
     "companyJobsAllLink": "All company jobs",
     "auditActionRetentionPolicyChanged": "Retention period changed",
     "auditActionRetentionPoliciesSeeded": "Retention periods recorded",
@@ -3017,7 +3025,9 @@
     "auditActionJobPausedForReview": "Job paused for content review",
     "auditActionCompanyAgencyChanged": "Agency declaration changed",
     "auditActionCompanyAgencyChecked": "Agency recognition number checked",
-    "aiCostsFeatureFraudCheck": "Job content check"
+    "aiCostsFeatureFraudCheck": "Job content check",
+    "auditActionEmailLocaleChanged": "Email language changed by the user",
+    "entityProfile": "Profile"
   },
   "settings": {
     "title": "Notification preferences",
@@ -3047,7 +3057,14 @@
     "loadErrorHint": "We are not showing the form so that saving cannot overwrite your earlier choices. Please try again in a moment.",
     "employerEmailApplicationsDescription": "New candidate applications to your job offers.",
     "employerEmailOffersDescription": "When a candidate accepts or declines your job proposal.",
-    "employerEmailMessagesDescription": "New messages from candidates in your conversations."
+    "employerEmailMessagesDescription": "New messages from candidates in your conversations.",
+    "emailLocaleTitle": "Language of emails and notifications",
+    "emailLocaleDescription": "We send you emails and notifications in this language, whatever language you browse the site in. The change applies to messages sent from now on.",
+    "emailLocaleLabel": "Language of emails and notifications",
+    "emailLocaleSave": "Save language",
+    "emailLocaleSaving": "Saving...",
+    "emailLocaleSaved": "The language of emails and notifications has been saved.",
+    "emailLocaleLoadError": "Could not load the language of emails and notifications. Please try again in a moment."
   },
   "guides": {
     "pageTitle": "Guides",
@@ -3317,6 +3334,16 @@
     "revoke": "Revoke",
     "revokeLabel": "Revoke invitation for {email}",
     "revoked": "Invitation revoked.",
+    "invitationLanguage": "Invitation language: {language}",
+    "invitationLanguageUnknown": "Invitation language: not chosen",
+    "invitationSentBy": "Invited by {name}, {date}",
+    "invitationSentOn": "Sent on {date}",
+    "renew": "Renew",
+    "renewLabel": "Renew invitation for {email}",
+    "renewed": "Invitation renewed — valid for another 14 days. Someone without an account gets a new link in the invitation language (the previous one stops working).",
+    "revokeTitle": "Revoke the invitation for {email}?",
+    "revokeDesc": "The link in the email will stop working and the invitation will disappear from this person’s panel. You can invite them again later.",
+    "revokeConfirm": "Revoke invitation",
     "myInvitationsTitle": "Invitations for you",
     "myInvitationFrom": "{inviter} invites you to join {company}. Role: {role}.",
     "myInvitationNoInviter": "Invitation to join {company}. Role: {role}.",
@@ -3897,6 +3924,14 @@
       "erasure_tombstone": {
         "label": "Erasure register",
         "description": "Erasure register reapplied after a restore; must outlive the oldest backup."
+      },
+      "expired_auth_session": {
+        "label": "Expired login session",
+        "description": "The row of an expired session (with IP address and user agent) is deleted 7 days after it expires."
+      },
+      "expired_auth_verification": {
+        "label": "Expired verification token",
+        "description": "The row of an expired verification token (email confirmation, password reset) is deleted 7 days after it expires."
       },
       "guest_ip_user_agent": {
         "label": "Guest IP and user agent",

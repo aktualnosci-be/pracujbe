@@ -308,6 +308,37 @@ describe('konta portalu na PostgreSQL — Server Actions', () => {
     expect(await outcome(() => actions.signIn({ email, password: NEW_PASSWORD }))).toEqual({ redirect: '/pl/candidate' });
   });
 
+  it('reset: nowe hasło unieważnia pozostałe niewykorzystane linki resetu tego konta (#1090)', async () => {
+    const email = 'reset-two-links@example.invalid';
+    browser.locale = 'pl';
+    await outcome(() => actions.registerCandidate(form(email, 'pl'), null));
+    const [confirm] = await deliver(email);
+    await outcome(() => actions.confirmEmail(tokenOf(confirm!)));
+    browser.jar.clear();
+
+    // Dwa żądania resetu → dwa różne, ważne linki.
+    expect(await actions.requestPasswordReset({ email })).toEqual({ ok: true });
+    expect(await actions.requestPasswordReset({ email })).toEqual({ ok: true });
+    const links = await deliver(email);
+    expect(links).toHaveLength(2);
+    const [first, second] = links.map(tokenOf);
+    expect(first).not.toBe(second);
+    const pending = () => admin.query(
+      `SELECT count(*)::int AS n FROM auth.verifications v JOIN auth.users u ON u.id::text = v.value
+        WHERE u.email = $1 AND v.identifier LIKE 'reset-password:%'`, [email]);
+    expect((await pending()).rows[0].n).toBe(2);
+
+    // Przed zmianą hasła oba linki są ważne (kontrola ujemna dla asercji po zmianie).
+    expect(await actions.updatePassword({ password: NEW_PASSWORD, passwordConfirm: NEW_PASSWORD, token: first! }))
+      .toEqual({ ok: true });
+    // Ustawienie hasła usunęło niewykorzystany link (baza: trigger na auth.accounts).
+    expect((await pending()).rows[0].n).toBe(0);
+    expect(await actions.updatePassword({ password: 'Trzecie1Haslo', passwordConfirm: 'Trzecie1Haslo', token: second! }))
+      .toEqual({ ok: false, error: 'AUTH_LINK_INVALID' });
+    browser.jar.clear();
+    expect(await outcome(() => actions.signIn({ email, password: NEW_PASSWORD }))).toEqual({ redirect: '/pl/candidate' });
+  });
+
   it('ponowna rejestracja istniejącego adresu: ten sam wynik, bez zmiany roli ani nowego konta', async () => {
     const email = 'candidate-fr@example.invalid';
     const before = (await admin.query(`SELECT u.id, p.role FROM auth.users u JOIN public.profiles p ON p.id=u.id WHERE u.email=$1`, [email])).rows;

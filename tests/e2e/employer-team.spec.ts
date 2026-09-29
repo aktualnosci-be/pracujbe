@@ -95,6 +95,35 @@ test('odebranie dostępu wymaga potwierdzenia, anulowanie nic nie zmienia (#403)
   await expect(dialog).toHaveCount(0);
 });
 
+for (const locale of LOCALES) {
+  test(`oczekujące zaproszenie: język, autor, „Odnów” i „Cofnij” z potwierdzeniem (0187, ${locale})`, async ({ page }) => {
+    const t = messages[locale].team;
+    const email = 'nowa.osoba@example.be';
+    await page.goto(`/${locale}/employer/zespol`);
+    const main = page.getByRole('main');
+    const row = main.getByRole('listitem').filter({ hasText: email });
+    // Dane demo: zaproszenie w języku nl, wysłane przez Annę Peeters.
+    await expect(row.getByText(t.invitationLanguage.replace('{language}', 'Nederlands'), { exact: false })).toBeVisible();
+    await expect(row.getByText('Anna Peeters', { exact: false })).toBeVisible();
+
+    await row.getByRole('button', { name: t.renewLabel.replace('{email}', email) }).click();
+    const status = main.getByRole('status').filter({ hasText: t.demoNotice });
+    await expect(status).toBeVisible();
+    await expect(status).toBeFocused();
+
+    // Kontrola ujemna: „Cofnij” otwiera dialog, anulowanie zostawia zaproszenie.
+    await row.getByRole('button', { name: t.revokeLabel.replace('{email}', email) }).click();
+    const dialog = page.getByRole('alertdialog', { name: t.revokeTitle.replace('{email}', email) });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(t.revokeDesc);
+    const cancel = (messages[locale] as unknown as { common: { cancel: string } }).common.cancel;
+    await expect(dialog.getByRole('button', { name: t.revokeConfirm, exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: cancel, exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(row).toBeVisible();
+  });
+}
+
 test('„Dodaj kolejną firmę” z przełącznika otwiera formularz nowej firmy (#403)', async ({ page }) => {
   const t = messages.pl.team;
   await page.goto('/pl/employer');
