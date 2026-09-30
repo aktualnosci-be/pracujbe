@@ -44,8 +44,13 @@ create index if not exists idx_conversations_created_by
   on public.conversations (created_by) where created_by is not null;
 create index if not exists idx_contact_messages_sender
   on public.contact_messages (sender_id) where sender_id is not null;
-create index if not exists email_outbox_user_idx
-  on auth.email_outbox (user_id);
+-- auth.email_outbox (0061) istnieje tylko na ścieżce Better Auth (seed-shim go nie tworzy).
+do $$
+begin
+  if to_regclass('auth.email_outbox') is not null then
+    create index if not exists email_outbox_user_idx on auth.email_outbox (user_id);
+  end if;
+end $$;
 
 -- --- 2. Znaki sterujące (#1244) ----------------------------------------------------
 update public.saved_searches
