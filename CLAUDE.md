@@ -828,6 +828,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   kodu pocztowego w `resolve_location_id`; facet lokalizacji spoza 10 miast pokazuje nazwę
   kanoniczną `locations.name` (aliasy w bazie bez kolumny języka), więc nazwa w języku widoku
   wymaga kolumny `locale` w `location_aliases`.
+  Nowe filtry listy (migracja `0194` — numer tymczasowy): waluta (#787) — widełki i sort
+  „najwyższe wynagrodzenie” są w EUR, kwot w innej walucie nie przeliczamy (brak datowanego
+  kursu): oferta w PLN jest nieporównywalna jak inny okres stawki (nie odpada z filtra kwoty,
+  koniec sortowania; przeciążenia `job_salary_in_range/_sort_key(…, currency, …)`, lustro
+  `isComparableCurrency` w `salary-compare.ts`). Wymagany język i poziom (#786, URL
+  `lang`/`langLevel`, `job_requires_language`: kod `language_id` albo stara etykieta przez aliasy
+  0168; poziom = poziom kandydata, pasuje wymaganie najwyżej tego poziomu albo bez poziomu;
+  „bez wymogu języka” osobno). Wymiar pracy (#811): `jobs.work_time` (`full_time`/`part_time`/
+  `both`, null = brak deklaracji — starych ofert nie klasyfikujemy), pole w kroku 2 kreatora,
+  `save_job_draft` (na 0184), `update_published_job`, kopia szkicu, `get_public_job`; filtr
+  `workTime` (`both` pasuje do obu). Promień (#824, URL `near`/`radius` 5/10/25/50/100 km):
+  `locations_within_radius` po współrzędnych słownika (część gminy = współrzędne gminy),
+  oferta bez rozpoznanej miejscowości/współrzędnych nie pasuje, nierozpoznany środek = komunikat
+  `filters.nearUnknown`. Te same parametry w `get_public_jobs`/`_count`/facetach
+  i `saved_search_jobs_after`, klucze kanoniczne zapisanych wyszukiwań `language`,
+  `languageLevel`, `workTime`, `near`, `radiusKm`; formularz bez JS (`FilterSheet`) ma te same
+  pola. Dowód: `rls.sql` sekcja FL974 (kontrole ujemne N1–N6), rollback `0194_…down.sql`
+  (`job-filters-rollback.sql`; w `city-sections-filters-rollback.sql` przed 0183), unit
+  `job-filters-0194`, `job-work-time`, E2E `job-filters-0194` (bez JS, axe 320/1280 px).
   Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
   fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
   lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało
@@ -1556,6 +1575,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   integracja `portal-employer-actions`, unit `job-wizard-draft-version`. **Otwarte:** wersja
   szkicu po imporcie (pierwszy zapis bez kontroli), szkic wczytany i niezmieniony wysyła zapis
   przy pierwszym „Dalej” (brak migawki z bazy).
+  Podgląd wynagrodzenia w kroku 9 (#1224, bez migracji): `normalizeSalary`/`formatSalaryRange`
+  z etykietami `jobs.passport.*` (jak karta i szczegół) zamiast surowych pól formularza — „do 3000 €
+  brutto / mies.”, waluta i separatory wg locale. Test `job-wizard-salary-preview` (kontrola ujemna).
   Flaga „bez wymogu języka” kontra wymagane języki (#910, bez migracji): pole `noLanguageRequired`
   i lista `languages` w kroku 7 wykluczają się nawzajem — zapisane niezależnie dawały sprzeczny
   wynik dla kandydata (filtr „bez języka” czyta tylko flagę, dopasowanie tylko listę). `JobWizard`
@@ -3281,6 +3303,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
   worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
   i SQLSTATE bez komunikatu bazy (#1105).
+  Dokończenie (bez migracji): `reportUnmappedDbError` także w `jobs.ts` (`failureCode(error, obszar)`
+  zgłasza też wyjątki spoza bazy), panelu admina (`admin.ts`, kampanie, próg wieku, rejestr naruszeń,
+  zaufanie ofert), blokadach firm, języku e-maili i powiadomieniach (#1068, akcje rekrutacyjne poza
+  zakresem); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
+  + szeroki próg na IP (`checkAccountRateLimit`, `src/lib/rate-limit-account.ts`, wiadro `<akcja>-ip`
+  = 10 × limit), zły format identyfikatora w `setCompanyStatus`/`resolveReport`/
+  `markNotificationsRead` = `VALIDATION_FAILED` (#1109); panel `/admin/operacje` ocenia wiersz doby
+  i miesiąca budżetu AI według poziomu danego okresu — wspólny `ai_budget_exhausted` nie podnosi
+  drugiego okresu do alarmu ani nie kasuje jego ostrzeżenia (#789). Dowód: unit
+  `report-unmapped-db-error`, `server-actions-1109`, `admin-ops-dashboard` (kontrole ujemne).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
@@ -3555,6 +3587,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `registerHref`, `relocalizeNextParam`) w `src/lib/auth/next-path.ts` bez Zoda; schematy
   zostają w `validation/auth`. Straże: graf importów `public-bundle-no-zod.test` i chunki
   z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
+  Szczegół oferty bez Zoda i `libphonenumber-js` w przeglądarce (#1055, bez migracji): stałe
+  dostępności formularza aplikowania w `src/lib/apply/availability.ts` (bez zależności;
+  `validation/application.ts` je re-eksportuje), `ApplyModal`/`GuestApplyForm` importują stąd —
+  JS trasy `oferty-pracy/[slug]` 243,3 → 178,8 KB gzip. Strażnik grafu `public-bundle-no-zod`
+  obejmuje szczegół oferty i `libphonenumber-js` (kontrola ujemna: komponent kliencki ze schematem
+  aplikacji), `check-next-build.mjs` sprawdza chunki szczegółu (`ZodError`, `country_calling_codes`).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Unieważnianie cache po zmianie cyklu życia oferty (#775, bez migracji): `publishJob`,

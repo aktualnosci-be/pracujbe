@@ -42,7 +42,15 @@ const FILTER_ARGUMENTS = `
   p_no_language => $11::boolean,
   p_since => $12::timestamptz,
   p_salary_unit => $13::text,
-  p_direct_only => $14::boolean`;
+  p_direct_only => $14::boolean,
+  p_language => $15::text,
+  p_language_level => $16::text,
+  p_work_time => $17::text,
+  p_near => $18::text,
+  p_radius_km => $19::integer`;
+
+/** Liczba parametrów filtra — sortowanie i paginacja listy idą po nich. */
+const FILTER_ARGUMENT_COUNT = 19;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -70,6 +78,12 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.since ?? null,
     params.salaryUnit ?? 'month',
     params.directOnly ? true : null,
+    // 0194: język + poziom, wymiar pracy, promień (miejscowość bez promienia nic nie znaczy).
+    params.language ?? null,
+    params.language ? (params.languageLevel ?? null) : null,
+    params.workTime ?? null,
+    params.near?.trim() ? params.near.trim() : null,
+    params.near?.trim() ? (params.radiusKm ?? null) : null,
   ];
 }
 
@@ -117,7 +131,9 @@ async function readRows(
   const result = (await transaction.query(
     `SELECT to_jsonb(job) AS job
     FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-      p_sort => $15::text, p_limit => $16::integer, p_offset => $17::integer) AS job`,
+      p_sort => $${FILTER_ARGUMENT_COUNT + 1}::text,
+      p_limit => $${FILTER_ARGUMENT_COUNT + 2}::integer,
+      p_offset => $${FILTER_ARGUMENT_COUNT + 3}::integer) AS job`,
     [...values, params.sort ?? 'newest', pageSize, jobListNaturalOffset(page, pageSize)],
   )) as { rows: { job: PublicJobRow }[] };
   return result.rows.map((row) => row.job);
@@ -402,6 +418,21 @@ export async function getPublicJobsAgency(
       [jobIds.slice(0, 100)],
     )) as { rows: { job_id: string }[] };
     return new Set(result.rows.map((row) => row.job_id));
+  });
+}
+
+/**
+ * Czy miejscowość środka promienia (#824, 0194) jest w słowniku i ma współrzędne — ta sama
+ * funkcja co filtr listy (`locations_within_radius`): środek ze współrzędnymi leży w 1 km od
+ * siebie, więc niepusty wynik = miejscowość rozpoznana.
+ */
+export async function isPublicRadiusPlaceKnown(pool: TransactionPool, near: string): Promise<boolean> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT cardinality(public.locations_within_radius(p_near => $1::text, p_radius_km => 1)) > 0 AS known`,
+      [near.slice(0, 100)],
+    )) as { rows: { known: unknown }[] };
+    return result.rows[0]?.known === true;
   });
 }
 
