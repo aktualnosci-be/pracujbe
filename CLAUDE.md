@@ -986,6 +986,27 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   sam, CAS), unit `company-links-update`, `company-links-form`, `company-load`,
   `admin-company-links`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), adresy
   opublikowane przed 0156 zostają bez przeglądu.
+  Opis firmy z zatwierdzaniem przez admina (#868, migracja `0198` — numer tymczasowy): ten sam
+  wzorzec dla `companies.description` (jedyne pole publiczne = tekst ZATWIERDZONY; profil firmy,
+  Organization JSON-LD i szczegół oferty bez zmian). Propozycja w `description_pending` ze stanem
+  `description_review_status` (`pending`/`rejected`), `description_pending_at` (klucz CAS) i
+  uzasadnieniem; limit 1500 znaków (CHECK). Strażnik `guard_company_description` blokuje
+  bezpośredni zapis opisu i kolumn przeglądu (także owner/admin firmy — RLS 0040 sam by go
+  dopuścił); piszą tylko `submit_company_description` (owner/admin: `pending` / `applied` =
+  usunięcie opisu od razu / `unchanged`, idempotentne, audyt bez treści) i
+  `admin_decide_company_description` (CAS → `STALE_STATE`, odrzucenie z uzasadnieniem ≤ 1000,
+  powiadomienie in-app właścicieli `data.kind='company_description'`, audyt). Zmiana opisu nie cofa
+  weryfikacji. `/employer/firma`: `CompanyDescriptionForm` (licznik znaków i zasada moderacji przed
+  zapisem, podgląd profilu jako czysty tekst, stan propozycji i uzasadnienie odrzucenia obok
+  opublikowanego opisu); akcja `updateCompanyDescription` odrzuca numer rejestru narodowego/dokumentu
+  (`containsPersonalIdentifier`) przed bazą. Admin: kolejka `/admin/firmy?status=description`, sekcja
+  „Opis firmy” w `/admin/firmy/[id]` (`CompanyDescriptionReviewActions` → `decideCompanyDescription`).
+  Dowód: `rls.sql` sekcja CDR971 (kontrole ujemne: bezpośredni UPDATE, zdjęty strażnik, member,
+  obca firma, owner zatwierdzający sam, CAS, limit długości), rollback
+  `supabase/rollback/0198_company_description_review.down.sql` (test w `test-rls.sh`), unit
+  `company-description`, `company-description-update`, `company-description-form`,
+  `admin-company-description`. **Otwarte:** e-mail o decyzji (dziś tylko in-app), opisy sprzed 0198
+  zostają bez przeglądu, opis nie jest tłumaczony (#708).
   Zakres portu (#745): `isPublicHttpsUrl` (`src/lib/company-links.ts`, lustro Zod
   `companyLinksSchema`) dopuszcza port wyłącznie z prawdziwego zakresu TCP `1–65535` —
   `:0` i wartości powyżej `65535` (np. `:99999`) są odrzucane na jedynej ścieżce, którą
