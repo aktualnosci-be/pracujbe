@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0968_saved_jobs_target_and_alias_relink.sql (numer tymczasowy).
+-- Rollback 0199_saved_jobs_target_and_alias_relink.sql (numer tymczasowy).
 -- Przywraca: get_saved_jobs_display z 0162, brak strażnika celu zapisu i kolumny
 -- saved_while_public, trigger relinku aliasów z 0153 (tylko INSERT) i brak strażnika wersji.
 -- Powiązania jobs.location_id zostają (wartości zgodne ze słownikiem w chwili rollbacku).

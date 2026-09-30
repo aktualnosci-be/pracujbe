@@ -1,7 +1,7 @@
 -- =============================================================================
--- SJ968-R — rollback migracji 0968 (cel zapisu oferty #882, relink aliasów #715). Uruchamiany
+-- SJ968-R — rollback migracji 0199 (cel zapisu oferty #882, relink aliasów #715). Uruchamiany
 -- przez scripts/test-rls.sh po rls.sql. Rollback w transakcji cofanej: baza po teście nadal
--- ma stan po 0968.
+-- ma stan po 0199.
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -16,10 +16,10 @@ select pg_temp.assert(
   and exists (select 1 from pg_trigger where tgname = 'trg_location_aliases_relink_jobs_upd')
   and exists (select 1 from information_schema.columns
                where table_schema = 'public' and table_name = 'saved_jobs' and column_name = 'saved_while_public'),
-  'SJ968-R0 baza w stanie po 0968');
+  'SJ968-R0 baza w stanie po 0199');
 
 begin;
-\ir ../rollback/0968_saved_jobs_target_and_alias_relink.down.sql
+\ir ../rollback/0199_saved_jobs_target_and_alias_relink.down.sql
 
 select pg_temp.assert(
   not exists (select 1 from pg_trigger where tgname in ('trg_saved_jobs_guard_target',
@@ -41,4 +41,4 @@ rollback;
 
 select pg_temp.assert(
   exists (select 1 from pg_trigger where tgname = 'trg_saved_jobs_guard_target'),
-  'SJ968-R3 po cofnięciu transakcji stan 0968 zostaje');
+  'SJ968-R3 po cofnięciu transakcji stan 0199 zostaje');

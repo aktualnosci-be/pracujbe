@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0968_saved_jobs_target_and_alias_relink.sql — (numer tymczasowy)
+-- 0199_saved_jobs_target_and_alias_relink.sql — (numer tymczasowy)
 --
 -- Część A (#882) — zapis oferty nie daje dostępu do metadanych oferty niepublicznej.
 --   `saved_jobs_insert_own` (0009) sprawdzał tylko `candidate_id = auth.uid()`, a FK pomija RLS,
@@ -39,7 +39,7 @@
 --      CAS edycji opublikowanej oferty (#325). Każda inna zmiana wiersza podbija jak dotąd.
 --   8. Backfill jednorazowy (idempotentny) wszystkich ofert.
 --
--- Rollback: supabase/rollback/0968_saved_jobs_target_and_alias_relink.down.sql
+-- Rollback: supabase/rollback/0199_saved_jobs_target_and_alias_relink.down.sql
 -- (test: supabase/tests/saved-jobs-alias-relink-rollback.sql w scripts/test-rls.sh).
 -- =============================================================================
 
@@ -47,7 +47,7 @@
 alter table public.saved_jobs
   add column if not exists saved_while_public boolean not null default false;
 comment on column public.saved_jobs.saved_while_public is
-  'Oferta była publiczna w chwili zapisu (trigger trg_saved_jobs_guard_target, 0968). Tylko wtedy get_saved_jobs_display pokazuje metadane oferty niepublicznej.';
+  'Oferta była publiczna w chwili zapisu (trigger trg_saved_jobs_guard_target, 0199). Tylko wtedy get_saved_jobs_display pokazuje metadane oferty niepublicznej.';
 
 -- --- A2. Strażnik celu zapisu ------------------------------------------------------------------
 create or replace function public.saved_jobs_guard_target()

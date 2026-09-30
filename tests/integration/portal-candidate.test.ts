@@ -445,7 +445,7 @@ describe('aplikacje, propozycje i zapisane oferty (#25)', () => {
       expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: true, saved: true });
       expect(await toggleSavedJob(jobIds[2]!, false)).toEqual({ ok: true, saved: false });
       expect(await candidateData.getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
-      // #882 (0968): NOWY zapis oferty niepublicznej odrzuca baza — neutralnie jak brak oferty.
+      // #882 (0199): NOWY zapis oferty niepublicznej odrzuca baza — neutralnie jak brak oferty.
       expect(await toggleSavedJob(jobIds[2]!, true)).toEqual({ ok: false, error: 'NOT_FOUND' });
       expect(await candidateData.getSavedJobs('pl')).toEqual({ status: 'ready', jobs: [] });
     } finally {

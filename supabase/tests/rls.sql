@@ -20052,7 +20052,7 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   (:'M2J6',:'M2COMP','m2-j6','Szkic 6','warehouse','permanent','Antwerpia','Flandria','draft','pl');
 select set_config('pracujbe.allow_recruitment_write', 'on', false);
 insert into public.applications(job_id, candidate_id, company_id, status) values (:'M2J2', :'M2CAND', :'M2COMP', 'submitted');
--- Zapis szkicu = stan historyczny (od 0968, #882, nowy zapis oferty niepublicznej odrzuca
+-- Zapis szkicu = stan historyczny (od 0199, #882, nowy zapis oferty niepublicznej odrzuca
 -- strażnik; fixture przez wyjątek seedu superusera).
 insert into public.saved_jobs(candidate_id, job_id) values (:'M2CAND', :'M2J3');
 select set_config('pracujbe.allow_recruitment_write', '', false);
@@ -21463,7 +21463,7 @@ insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only) values
   ('notification_preferences', 'INSERT', :'WMCB', format('insert into public.notification_preferences(profile_id, email_marketing) values (%L, true)', :'WMCC'),
      'notification_preferences INSERT za inne konto', true),
   -- saved_jobs
-  -- Cel = oferta publiczna bez zapisu tego kandydata: od 0968 (#882) zapis szkicu blokuje też
+  -- Cel = oferta publiczna bez zapisu tego kandydata: od 0199 (#882) zapis szkicu blokuje też
   -- strażnik celu, a przypadek „tylko RLS” musi bez RLS zapisywać (kontrola ujemna (a)).
   ('saved_jobs', 'INSERT', :'WMCB', format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'WMCC', :'WMJA'),
      'saved_jobs INSERT zapisu za innego kandydata', true),
@@ -22576,7 +22576,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- ============================================================================
--- SJ968. Cel zapisu oferty (#882, 0968): kandydat zapisuje WYŁĄCZNIE ofertę publiczną
+-- SJ968. Cel zapisu oferty (#882, 0199): kandydat zapisuje WYŁĄCZNIE ofertę publiczną
 --        (szkic, oferta usunięta, firma niezweryfikowana = NOT_FOUND), a
 --        `get_saved_jobs_display` pokazuje metadane oferty niepublicznej tylko przy dowodzie
 --        zapisu w czasie publikacji (`saved_while_public`). Legalny zapis po zamknięciu oferty
@@ -22647,7 +22647,7 @@ select pg_temp.assert(
   'SJ6c zapis seedu bez dowodu nie ujawnia metadanych');
 reset role; reset app.current_uid;
 rollback to savepoint sj6b;
--- Oferta zamknięta po legalnym zapisie + „historyczny” zapis szkicu sprzed 0968 (bez dowodu;
+-- Oferta zamknięta po legalnym zapisie + „historyczny” zapis szkicu sprzed 0199 (bez dowodu;
 -- symulacja: wiersz wstawiony z wyłączonym strażnikiem, jak dane sprzed migracji).
 update public.jobs set status = 'closed' where id = :'SJP';
 alter table public.saved_jobs disable trigger trg_saved_jobs_guard_target;
@@ -22778,7 +22778,7 @@ $fx$);
 select dbl.dblink_disconnect('sj_setup');
 
 -- ============================================================================
--- AR968. Powiązanie `jobs.location_id` po zmianie słownika (#715, 0968): zmiana `alias_key`,
+-- AR968. Powiązanie `jobs.location_id` po zmianie słownika (#715, 0199): zmiana `alias_key`,
 --        przeniesienie aliasu, usunięcie aliasu, dezaktywacja/aktywacja i usunięcie miejscowości
 --        przeliczają dotknięte oferty; `jobs.city` i `updated_at` (token CAS) bez zmian; zwykła
 --        edycja oferty nadal podbija `updated_at`.
