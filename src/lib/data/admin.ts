@@ -218,6 +218,8 @@ export interface AdminDsaCase {
   reviewPriority: number;
   reviewFlag: string | null;
   decision: AdminModerationDecision | null;
+  /** #887: chwila anonimizacji sprawy przez retencję DSA (null = dane sprawy zachowane). */
+  redactedAt: string | null;
 }
 
 /**
@@ -324,6 +326,7 @@ const DEMO_REPORTS: AdminReportRow[] = [
       reviewPriority: 0,
       reviewFlag: null,
       decision: null,
+      redactedAt: null,
     },
     targetType: 'job',
     targetId: 'demo-job-2',
@@ -864,7 +867,7 @@ async function readReportPage(
     await queryRows(tx, 'admin.reports',
       `SELECT id, reporter_id, target_type, target_id, reason, details, status, created_at, kind,
               case_number, due_at, content_url, reporter_name, reporter_email, target_snapshot,
-              decision_id, review_priority, review_flag
+              decision_id, review_priority, review_flag, redacted_at
          FROM public.reports
          ${where}
         ORDER BY ${order}
@@ -1007,6 +1010,7 @@ export async function listReports(
                 reviewPriority: Number(row['review_priority'] ?? 0) || 0,
                 reviewFlag: asNullableString(row['review_flag']),
                 decision: decisionById.get(asString(row['decision_id'])) ?? null,
+                redactedAt: asNullableString(row['redacted_at']),
               }
             : null,
           messageReport: messageReport?.view ?? null,

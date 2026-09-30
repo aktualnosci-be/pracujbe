@@ -37,6 +37,17 @@ import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
 import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
+import { resolveLanguageCode, type LanguageCode } from '@/lib/languages';
+import { belgianCityCoordinates } from '@/lib/matching/belgian-cities';
+import {
+  isWorkTime,
+  jobWithinRadius,
+  workTimeMatches,
+  type LanguageFilterLevel,
+  type RadiusKm,
+  type WorkTime,
+  type WorkTimeFilter,
+} from '@/lib/job-filter-options';
 
 export type ContractType =
   | 'permanent'
@@ -114,6 +125,11 @@ export interface JobListItem {
    * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
    */
   isAgency?: true;
+  /**
+   * Praca zdalna (`jobs.remote`, pole kreatora „Praca zdalna”) — tylko zestaw demonstracyjny
+   * niesie to pole na liście (lustro filtra promienia 0194: zdalna pasuje do każdego promienia).
+   */
+  remote?: boolean;
 }
 
 export interface JobApplyChannel {
@@ -184,6 +200,11 @@ export interface JobDetail extends JobListItem {
   workMode?: 'onsite' | 'hybrid' | 'remote';
   /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
   remoteApplicantCountries?: string[];
+  /**
+   * #811 (0194): wymiar czasu pracy zadeklarowany przez pracodawcę (`jobs.work_time`); brak =
+   * nie podano (nie zgadujemy z opisu godzin).
+   */
+  workTime?: WorkTime;
 }
 
 export interface GetJobsParams {
@@ -208,6 +229,16 @@ export interface GetJobsParams {
   noLanguageRequired?: boolean;
   /** 0167: tylko oferty spoza agencji pracy tymczasowej. */
   directOnly?: boolean;
+  /** #786 (0194): wymagany język oferty (kod słownika). */
+  language?: LanguageCode;
+  /** #786: poziom kandydata — oferty wymagające języka najwyżej na tym poziomie (albo bez poziomu). */
+  languageLevel?: LanguageFilterLevel;
+  /** #811 (0194): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
+  workTime?: WorkTimeFilter;
+  /** #824 (0194): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
+  near?: string;
+  /** #824: promień w km (z `near`). */
+  radiusKm?: RadiusKm;
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -342,6 +373,25 @@ function getJobsFromDemo(
   if (params.immediate) jobs = jobs.filter((job) => job.immediate);
   if (params.noLanguageRequired)
     jobs = jobs.filter((job) => job.noLanguageRequired);
+  // 0194 — lustro warunków SQL dla danych demo: język (demo nie ma poziomów → każdy poziom
+  // pasuje), wymiar pracy (`both` pasuje do obu, brak deklaracji — do żadnego), promień po
+  // współrzędnych miast (nieznane miasto oferty albo środka = brak wyników); oferta zdalna
+  // (`remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026, jak SQL 0194).
+  if (params.language) {
+    const code = params.language;
+    jobs = jobs.filter((job) => job.languages.some((label) => resolveLanguageCode(label) === code));
+  }
+  if (params.workTime) {
+    const wanted = params.workTime;
+    jobs = jobs.filter((job) => workTimeMatches(job.workTime, wanted));
+  }
+  if (params.near?.trim()) {
+    const center = belgianCityCoordinates(params.near.trim());
+    const radius = params.radiusKm ?? 25;
+    jobs = jobs.filter((job) =>
+      jobWithinRadius({ remote: job.remote, point: belgianCityCoordinates(job.city) }, center, radius),
+    );
+  }
   if (params.since) {
     const sinceTs = Date.parse(params.since);
     if (!Number.isNaN(sinceTs)) {
@@ -488,6 +538,7 @@ function rowToJobDetail(row: unknown): JobDetail {
       const applyChannel = parseJobApplyChannel(r);
       return applyChannel ? { applyChannel } : {};
     })(),
+    ...(isWorkTime(r['work_time']) ? { workTime: r['work_time'] } : {}),
   };
 }
 
@@ -879,6 +930,28 @@ export async function getJobFilterFacets(
       throw new AppError('INTERNAL');
     }
   });
+}
+
+/**
+ * Czy miejscowość promienia (#824) jest rozpoznana (słownik z współrzędnymi). Lista i tak jest
+ * wtedy pusta (SQL nie zgaduje odległości) — strona mówi, dlaczego. Awaria odczytu = `true`
+ * (bez fałszywego komunikatu; błąd w kanale).
+ */
+export async function isRadiusPlaceKnown(near: string): Promise<boolean> {
+  const place = near.trim();
+  if (!place) return true;
+  if (!isDatabaseConfigured()) return belgianCityCoordinates(place) !== undefined;
+  if (isBuildPhase()) return true;
+  try {
+    const [{ getDomainPool }, { isPublicRadiusPlaceKnown }] = await Promise.all([
+      import('@/lib/db/runtime'),
+      import('@/lib/db/public-jobs'),
+    ]);
+    return await isPublicRadiusPlaceKnown(await getDomainPool(), place);
+  } catch (error) {
+    captureError(error, { area: 'jobs.isRadiusPlaceKnown' });
+    return true;
+  }
 }
 
 /**

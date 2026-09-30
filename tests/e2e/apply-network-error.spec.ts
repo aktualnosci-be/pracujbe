@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { expect, test } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Regresja #360 (serwer fixture `playwright.applications-fixture.config.ts`: oferty fikcyjne
@@ -15,7 +16,7 @@ const DEMO_JOB_PATH = '/pl/oferty-pracy/bricklayer-brussels-1002';
 
 const pl = JSON.parse(
   readFileSync(resolve(process.cwd(), 'src', 'messages', 'pl.json'), 'utf-8'),
-) as { apply: Record<string, string>; jobs: { applyNow: string } };
+) as { apply: AppMessages['apply']; jobs: { applyNow: string } };
 
 test.beforeEach(async ({ context, baseURL }) => {
   await context.addCookies([

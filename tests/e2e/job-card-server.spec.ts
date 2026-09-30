@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { expect, test } from "@playwright/test";
+import { defined } from "./fixtures/defined";
 
 const pl = JSON.parse(
   readFileSync(resolve(process.cwd(), "src", "messages", "pl.json"), "utf-8"),
@@ -14,7 +15,7 @@ const pl = JSON.parse(
 
 function flightPayload(html: string): string {
   return [...html.matchAll(/self\.__next_f\.push\(\[1,(".*?")\]\)<\/script>/gs)]
-    .map((match) => JSON.parse(match[1]) as string)
+    .map((match) => JSON.parse(defined(match[1], "fragment payloadu RSC")) as string)
     .join("");
 }
 

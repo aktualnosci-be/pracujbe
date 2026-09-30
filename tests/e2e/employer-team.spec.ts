@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Zespół firmy i kolejna firma (#403) — panel pracodawcy w trybie demo (bez bazy).
@@ -10,12 +11,12 @@ import { expect, test, type Page } from '@playwright/test';
  * `supabase/tests/rls.sql` (sekcja TM403); tu: nawigacja, formularze, stany i a11y.
  */
 
-type TeamCopy = Record<string, string> & { error: Record<string, string>; signup: Record<string, string> };
+type TeamCopy = AppMessages['team'];
 type Messages = {
   team: TeamCopy;
-  dashboard: Record<string, string>;
-  company: Record<string, string> & { error: Record<string, string> };
-  auth: Record<string, string>;
+  dashboard: AppMessages['dashboard'];
+  company: AppMessages['company'];
+  auth: AppMessages['auth'];
 };
 
 const LOCALES = ['pl', 'nl', 'fr', 'en'] as const;
