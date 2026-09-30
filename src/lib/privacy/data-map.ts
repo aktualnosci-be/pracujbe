@@ -689,6 +689,20 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
     columns: { email: 'contact', reason: 'technical', lifted_by: 'reference', lift_reason: 'moderation' },
   },
+  'public.email_pending_events': {
+    activities: ['email-notifications'],
+    subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
+    columns: {
+      provider: 'technical',
+      provider_message_id: 'technical',
+      event: 'technical',
+      occurred_at: 'technical',
+      recipient: 'contact',
+      bounce_type: 'technical',
+      received_at: 'technical',
+    },
+    note: 'Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0195); przypisywane triggerem, czyszczone po 30 dniach.',
+  },
   'public.email_consent_events': {
     activities: ['email-notifications', 'consents'],
     subjects: ['candidate', 'employer'],
