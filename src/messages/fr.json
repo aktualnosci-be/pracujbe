@@ -1288,6 +1288,7 @@
     "salaryChipHourly": "Taux : {min} – {max} /heure",
     "sortSalaryHourly": "Taux horaire le plus élevé",
     "contractType": "Type de contrat",
+    "requiredLanguage": "Langue requise",
     "accommodation": "Logement",
     "provided": "Fourni",
     "unavailable": "Non disponible",

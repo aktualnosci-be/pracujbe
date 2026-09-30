@@ -1288,6 +1288,7 @@
     "salaryChipHourly": "Rate: {min} – {max} /hour",
     "sortSalaryHourly": "Highest hourly rate",
     "contractType": "Contract type",
+    "requiredLanguage": "Required language",
     "accommodation": "Accommodation",
     "provided": "Provided",
     "unavailable": "Unavailable",

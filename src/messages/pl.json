@@ -1288,6 +1288,7 @@
     "salaryChipHourly": "Stawka: {min} – {max} /godz.",
     "sortSalaryHourly": "Najwyższa stawka godzinowa",
     "contractType": "Rodzaj umowy",
+    "requiredLanguage": "Wymagany język",
     "accommodation": "Zakwaterowanie",
     "provided": "Zapewnione",
     "unavailable": "Niedostępne",

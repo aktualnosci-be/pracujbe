@@ -1288,6 +1288,7 @@
     "salaryChipHourly": "Uurloon: {min} – {max} /uur",
     "sortSalaryHourly": "Hoogste uurloon",
     "contractType": "Contracttype",
+    "requiredLanguage": "Vereiste taal",
     "accommodation": "Huisvesting",
     "provided": "Voorzien",
     "unavailable": "Niet beschikbaar",
