@@ -2982,18 +2982,24 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   na stronach publicznych = regres wydajności, sprzeczne z #298/#395).
 - [~] Narzędzia i konfiguracja (audyt CFG29, #1121, bez migracji). `@react-email/*` w `dependencies`
   (#1175). Typecheck specyfikacji Playwrighta: `tsconfig.e2e.json` (rozszerza `tsconfig.json`,
-  bez `noUncheckedIndexedAccess` — 151 błędów z tej flagi w `tests/e2e` to osobny follow-up,
-  reszta naprawiona) wołany przez `npm run typecheck` (job „Typecheck” bez zmian), strażnik
-  `scripts/check-ci-workflows.mjs` pilnuje skryptu i zakresu (kontrola ujemna w
-  `ci-workflows-guard.test`). `EMAIL_REPLY_TO` jest czytany (`replyToFromEnv`, `sender.ts`):
+  z tymi samymi `strict` i `noUncheckedIndexedAccess`) wołany przez `npm run typecheck` (job
+  „Typecheck” bez zmian). Komunikaty w specach typowane strukturą `src/messages/pl.json`
+  (`Messages` z `tests/e2e/fixtures/messages.ts`, import tylko typu) — literówka albo usunięty
+  klucz = błąd typecheck; wartości z indeksu przez `defined(value, 'opis')`
+  (`tests/e2e/fixtures/defined.ts`, czytelny błąd zamiast `!`). Strażnik
+  `scripts/check-ci-workflows.mjs` pilnuje skryptu, zakresu i tego, że `tsconfig.e2e.json` nie
+  wyłącza `noUncheckedIndexedAccess`/`strict` (kontrole ujemne w `ci-workflows-guard.test`). `EMAIL_REPLY_TO` jest czytany (`replyToFromEnv`, `sender.ts`):
   nagłówek Reply-To we wszystkich listach obu workerów (kolejka domenowa i kont; Resend
   `replyTo`, EmailLabs nagłówek), zła wartość albo wstrzyknięcie CRLF = bez nagłówka, bez
   wartości domyślnej (`email-reply-to.test`, kontrole ujemne). Limit Server Actions 6 MB
   zostaje globalny (Next nie ma go per akcja), ale middleware odrzuca 413 żądanie Server Action
   spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
-  `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). **Otwarte:**
-  `noUncheckedIndexedAccess` w `tsconfig.e2e.json`, ESLint 9 (wymaga instalacji; `next lint`
-  zastąpione `eslint` CLI bez zmiany wersji, lint obejmuje też pliki konfiguracyjne), usunięcie nieużywanych zależności (lista w PR #1121).
+  `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). Zależności:
+  martwych pakietów już nie ma (`stripe`, `prettier-plugin-tailwindcss`, `@radix-ui/react-slot`
+  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji),
+  `npm audit --package-lock-only` = 0. `next lint` zastąpione `eslint` CLI (ESLint 8), lint
+  obejmuje pliki konfiguracyjne. **Otwarte:** ESLint 9 (flat config, nowe `node_modules` —
+  osobny krok z pełną instalacją).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,

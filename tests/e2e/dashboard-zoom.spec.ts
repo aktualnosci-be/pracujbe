@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { defined } from "./fixtures/defined";
 
 const locales = ["pl", "nl", "fr", "en"] as const;
 const viewports = [
@@ -250,7 +251,8 @@ test("długie nazwy w panelu kandydata są w całości widoczne bez przewijania 
   }
 
   // Kontrola ujemna: dawna klasa obcinająca tekst powinna złamać asercję zawijania.
-  await labels[0].evaluate((element) => { element.classList.remove("break-words"); element.classList.add("truncate"); });
-  const truncated = await labels[0].evaluate((element) => element.getBoundingClientRect().height <= parseFloat(getComputedStyle(element).lineHeight) * 1.5);
+  const firstLabel = defined(labels[0], "pierwsza etykieta sekcji");
+  await firstLabel.evaluate((element) => { element.classList.remove("break-words"); element.classList.add("truncate"); });
+  const truncated = await firstLabel.evaluate((element) => element.getBoundingClientRect().height <= parseFloat(getComputedStyle(element).lineHeight) * 1.5);
   expect(truncated).toBe(true);
 });
