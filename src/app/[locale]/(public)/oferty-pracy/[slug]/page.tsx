@@ -40,6 +40,7 @@ import { minimumWagesUrl } from '@/lib/joint-committees';
 import { defaultAlternateLocale } from '@/lib/job-content-locale';
 import { jobStartDateInstant, jobStartInfo } from '@/lib/job-start';
 import { getJobBySlug, getSimilarJobs, type JobDetail } from '@/lib/jobs';
+import type { TranslatableScalar } from '@/lib/job-machine-translation';
 import { getCandidateMinAge } from '@/lib/data/age-policy';
 import {
   brandShareImageUrl,
@@ -327,6 +328,12 @@ export default async function JobDetailPage({ params }: PageProps) {
   // SEO bez zmian: wersja z przekładem nadal kanonizuje się do oryginału i nie ma JobPosting.
   const translation = job.machineTranslation;
   const contentLang = version.fallback && !translation ? version.contentLocale : undefined;
+  // #896: przy częściowym przekładzie pole bez klucza w przekładzie zostaje w oryginale —
+  // oznaczamy je językiem źródła, a nie językiem dokumentu (WCAG 3.1.2).
+  const fieldLang = (field: TranslatableScalar): string | undefined =>
+    translation
+      ? (translation.untranslated?.includes(field) ? translation.sourceLocale : undefined)
+      : contentLang;
 
   // Podobne oferty (ta sama kategoria, bez bieżącej). Sekcja pomocnicza: jej błąd odczytu
   // nie przerywa strony — opis, firma i aplikowanie zostają dostępne (#191).
@@ -571,7 +578,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           {/* Treść oferty w jednej karcie `.paper` (h2 23 px, h3 18 px, akapity 15 px / 1,7). */}
           <div className={cn(PAPER, 'mt-[25px] lg:space-y-8')}>
             <Section id="opis" title={t('aboutRole')}>
-              <p lang={contentLang} className={cn(P_EXTENDED, 'whitespace-pre-line')}>{job.description}</p>
+              <p lang={fieldLang('description')} className={cn(P_EXTENDED, 'whitespace-pre-line')}>{job.description}</p>
             </Section>
 
             {job.responsibilities.length > 0 ? (
@@ -712,7 +719,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                   </p>
                 </div>
               </div>
-              <p lang={contentLang} className={cn(P_EXTENDED, 'mt-3')}>{job.companyDescription}</p>
+              <p lang={fieldLang('companyDescription')} className={cn(P_EXTENDED, 'mt-3')}>{job.companyDescription}</p>
               {/* #591: CTA prowadzi do stabilnego profilu firmy; bez sluga (nie powinno się
                   zdarzyć dla zweryfikowanej firmy) — ukryte zamiast linkować donikąd. */}
               {job.companySlug ? (
