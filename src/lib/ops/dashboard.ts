@@ -228,14 +228,26 @@ export function buildOpsRows(input: OpsDashboardInput): OpsRow[] {
   );
 
   // --- Budżet AI (#36) --------------------------------------------------------------------------
-  // Sygnały budżetu są wspólne dla doby i miesiąca — okres poniżej progu (`aiBudgetLevel` = ok)
-  // nie przejmuje stanu drugiego okresu.
+  // Sygnały budżetu są wspólne dla doby i miesiąca (`ai_budget_exhausted` wygrywa z
+  // `ai_budget_near_limit`), więc każdy okres bierze tylko sygnał swojego poziomu
+  // (`aiBudgetLevel`): wyczerpana doba nie oznacza wyczerpanego miesiąca (#789), a miesiąc przy
+  // 85% zachowuje ostrzeżenie mimo wspólnego alarmu. Stan nadal wynika wyłącznie z czujek.
   const period = (id: 'aiBudgetDay' | 'aiBudgetMonth', p: AiBudgetStatus['day'] | undefined): OpsRow => {
+    const signals: readonly OpsSignal[] = ['ai_budget_exhausted', 'ai_budget_near_limit', 'ai_budget_unavailable'];
     const built = row(id, 'aiBudget', p ? percent(aiBudgetPercent(p)) : NONE,
       { kind: 'budget', warningPercent: 80, alertPercent: 100 },
-      ['ai_budget_exhausted', 'ai_budget_near_limit', 'ai_budget_unavailable'], aiBudget !== null,
+      signals, aiBudget !== null,
       p && p.limitMicroUsd === null ? { key: 'aiNoLimit' } : undefined);
-    return p && aiBudgetLevel(p) === 'ok' ? { ...built, state: stateOf(['ai_budget_unavailable']) } : built;
+    if (!p) return built;
+    const level = aiBudgetLevel(p);
+    const budgetFired = alerts.has('ai_budget_exhausted') || warnings.has('ai_budget_near_limit');
+    const state: OpsRowState =
+      level === 'exhausted'
+        ? stateOf(['ai_budget_exhausted', 'ai_budget_unavailable'])
+        : level === 'warning' && budgetFired
+          ? 'warning'
+          : stateOf(['ai_budget_unavailable']);
+    return { ...built, state };
   };
   rows.push(
     period('aiBudgetDay', aiBudget?.day),
