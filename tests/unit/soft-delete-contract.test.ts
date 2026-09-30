@@ -240,7 +240,7 @@ export const EXCEPTIONS: Record<string, string> = {
   'public.job_has_process_records:offers': `${GUARD} — blokada usunięcia szkicu oferty (0185); propozycja usunięta logicznie nadal blokuje kaskadowe usunięcie`,
   'public.job_translation_source_fields:jobs': `${MAINT} — pola źródła tłumaczenia; sync_job_translation_source ukrywa/usuwa niepubliczne`,
   'public.job_trust_content:jobs': `${MAINT} — migawka treści do przeglądu zaufania`,
-  'public.location_aliases_relink_jobs:jobs': `${MAINT} — dowiązanie miejscowości po nowym aliasie`,
+  'public.relink_jobs_for_city_keys:jobs': `${MAINT} — dowiązanie miejscowości ofert po zmianie słownika (także usuniętych; bez ujawniania danych)`,
   'public.match_candidate_input:candidate_profiles': `${MATCH} — dane wejściowe scoreMatch`,
   'public.match_enqueue:candidate_profiles': `${MATCH} — blokada wiersza podmiotu przed kolejką (0149)`,
   'public.match_enqueue:jobs': `${MATCH} — blokada wiersza podmiotu przed kolejką (0149)`,
