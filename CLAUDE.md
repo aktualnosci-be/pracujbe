@@ -1751,6 +1751,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `job-terms-notification`.
   **Otwarte (decyzja produktowa):** e-mail o zmianie warunków, wskazanie w powiadomieniu, co się
   zmieniło.
+  Kontekst zaufanej edycji (#753/#752/#750, migracja `0200` — numer tymczasowy): znaczniki GUC
+  `pracujbe.job_edit`/`pracujbe.job_terms_notify` klient mógł ustawić sam (`set_config`) i
+  wywołać `set_job_*` dla opublikowanej oferty albo wywołać powiadomienie bezpośrednim UPDATE.
+  Teraz `update_published_job` wstawia wiersz do `job_operation_context` (transakcja, oferta,
+  rodzaj; RLS, bez grantów dla klientów i service_role), `assert_job_draft_or_editing` i trigger
+  powiadomień czytają tylko ten wiersz (trigger go zużywa — jedna rewizja = jedno powiadomienie).
+  Audyt `job.update_published` = `job_edit_audit_snapshot(jobs)` (dotychczasowe pola + godziny,
+  zmiany, okres stawki, waluta, koszt zakwaterowania + `terms` = `job_material_terms`). Dowód:
+  `rls.sql` RR5g–RR5n, JT7b–JT7n, JT10–JT10n (kontrole ujemne: strażnik z GUC, migawka z 0172),
+  rollback `0200_…down.sql` (`job-edit-context-rollback.sql`).
 - [x] Kopiuj jako szkic (migracja `0148`): przycisk „Kopiuj jako szkic” przy
   każdej ofercie listy `/employer/oferty` (dowolny status, recruiter+; `DuplicateJobButton`,
   klucz UUID operacji w `useRef` — podwójne kliknięcie/ponowienie po błędzie sieci = ten sam

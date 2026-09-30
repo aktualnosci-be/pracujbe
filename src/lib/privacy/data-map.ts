@@ -1079,6 +1079,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     note:
       'Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
   },
+  'public.job_operation_context': {
+    activities: ['companies'],
+    subjects: [],
+    columns: {},
+    note:
+      'Kontekst zaufanej edycji opublikowanej oferty (0200): identyfikator transakcji, oferty i rodzaj operacji — wiersz istnieje tylko w trakcie update_published_job. Bez danych osobowych.',
+  },
   'public.job_duplications': {
     activities: ['companies'],
     subjects: ['employer'],
