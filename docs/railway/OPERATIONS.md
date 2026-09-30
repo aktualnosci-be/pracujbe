@@ -276,6 +276,53 @@ w innych językach w SQL (`Brussels`, `Luik`; dziś rozwija je aplikacja przez
 `src/lib/job-list-query.ts`). Przed wdrożeniem `0110` sprawdź na Railway:
 `select * from pg_available_extensions where name = 'unaccent'`.
 
+### Po `0960` — lista, licznik i facety bez planu generycznego (#1215, 30.09.2026)
+
+Migracja `0960_public_jobs_custom_plan.sql` (numer tymczasowy) przepisuje `get_public_jobs`,
+`get_public_jobs_count`, `get_public_job_filter_facets` i `saved_search_jobs_after` z
+`LANGUAGE sql` na `plpgsql` z `set plan_cache_mode = force_custom_plan` i `set jit = off`.
+Funkcje `LANGUAGE sql SECURITY DEFINER` nie są inline'owane, a ich ciało było planowane
+z parametrami jako `$n` (plan generyczny): warunki `p_x is null or …` i klucz
+`case when p_sort = 'salary' … end` zostawały w planie, więc każde wywołanie czytało wszystkie
+aktywne oferty, liczyło dla każdej lateral tłumaczeń i funkcje wynagrodzenia, a dopiero potem
+sortowało top-N. W plpgsql każde wywołanie jest planowane z wartościami parametrów (stałe),
+więc nieużyte filtry znikają z planu. Dodatkowo: tytuł do filtra słowa kluczowego = podzapytanie
+(liczone tylko przy słowie kluczowym), lista dołącza tłumaczenie dopiero do wierszy strony,
+widełki bez wartości nie wołają `job_salary_in_range`, dwa indeksy częściowe klucza wynagrodzenia
+(`idx_jobs_public_salary_month`/`_hour`) obsługują sortowanie „najwyższe wynagrodzenie”, a facety
+biorą nazwę miejscowości podzapytaniem po kluczu głównym. Sygnatury, wyniki (także kolejność),
+filtry, `SECURITY DEFINER` i granty bez zmian — dowód `supabase/tests/rls.sql` sekcja PF1215
+(odciski wyników 34 kombinacji filtrów/sortowań/stron = definicje z `0194`; kontrola ujemna:
+definicja z `0194` czyta wszystkie oferty dla strony 1).
+
+Pomiar: PG16 lokalnie, baza z `scripts/db/search-benchmark.sh` (`BENCH_JOBS=12000`,
+`BENCH_KEEP=1`; 9600 aktywnych ofert, 200 firm, tłumaczenia `en` połowy ofert, wynagrodzenie
+w 2/3 ofert, `location_id` ze słownika), wywołanie pod `set role anon`, najlepszy z 7 przebiegów
+po rozgrzaniu (ms). „Przed” = definicje z `0194`, „po” = `0960`.
+
+| Wywołanie | przed | po |
+|---|---:|---:|
+| `get_public_jobs('pl', p_limit => 20)` — strona 1 bez filtrów | 233 | 1,0 |
+| `… p_sort => 'salary'` (miesięcznie) | 616 | 1,9 |
+| `… p_sort => 'salary', p_salary_unit => 'hour'` | 465 | 1,5 |
+| `… p_offset => 9000` | 250 | 8,2 |
+| `… p_salary_min => 2000, p_salary_max => 3000` | 1105 | 3,0 |
+| `… p_categories => array['transport']` | 37 | 4,6 |
+| `… p_locations => array['Gent']` | 26 | 2,7 |
+| `… p_keyword => 'kierowca'` | 27 | 18,5 |
+| `get_public_jobs_count('pl')` | 212 | 5,3 |
+| `get_public_jobs_count('pl', p_categories => array['transport'])` | 34 | 3,9 |
+| `get_public_jobs_count('pl', 'kierowca')` | 25 | 17,6 |
+| `get_public_job_filter_facets('pl')` | 245 | 41 |
+| `get_public_job_filter_facets('pl', 'kierowca')` | 28 | 23 |
+
+Plan strony 1 po zmianie: `Index Scan using idx_jobs_published_at` z `LIMIT` (kilkadziesiąt
+odczytanych ofert zamiast wszystkich); sortowanie po wynagrodzeniu: `Index Scan using
+idx_jobs_public_salary_month`. Facety bez filtrów nadal czytają wszystkie aktywne oferty (liczą
+wszystkie wymiary), ale bez tłumaczeń i funkcji wynagrodzenia. Słowo kluczowe kosztuje głównie
+prefiltr `search_title_candidates` (bez zmian). Railway = PG18 — czasy do ponownego pomiaru
+na kopii produkcyjnej bazy po wdrożeniu.
+
 ## 4. Rollback — kod, schemat, dane
 
 | Warstwa | Jak cofnąć | Czego NIE robić |

@@ -113,6 +113,9 @@ echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofane
 echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
 
+echo ">> rollback 0960 (publiczne RPC ofert z planem dla wartości parametrów, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/public-jobs-plan-rollback.sql"
+
 echo ">> sprzątanie"
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null
 
