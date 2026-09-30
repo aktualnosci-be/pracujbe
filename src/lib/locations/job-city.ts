@@ -1,4 +1,4 @@
-import { BELGIAN_CITIES, cityKey } from '@/lib/matching/belgian-cities';
+import { BELGIAN_CITIES, cityKey, cityLookupKey } from '@/lib/matching/belgian-cities';
 
 /**
  * Kanoniczne miasto oferty w kreatorze (audyt P1-10, migracja 0153). Zapis `jobs.location_id`
@@ -67,7 +67,11 @@ export function pickSuggestions(
 export function demoJobCityAssist(city: string): { slug: string | null; suggestions: string[] } {
   const key = cityKey(city);
   if (!key) return { slug: null, suggestions: [] };
-  const exact = BELGIAN_CITIES.find((c) => [c.slug, ...c.aliases].some((a) => cityKey(a) === key));
+  // Jak `resolve_location_id` (0996): pełny klucz, potem klucz bez kodu pocztowego/kraju.
+  const findBy = (wanted: string) => wanted
+    ? BELGIAN_CITIES.find((c) => [c.slug, ...c.aliases].some((a) => cityKey(a) === wanted))
+    : undefined;
+  const exact = findBy(key) ?? findBy(cityLookupKey(city));
   const rows = key.length < JOB_CITY_MIN_PREFIX ? [] : BELGIAN_CITIES.flatMap((c, index) =>
     c.aliases.filter((a) => cityKey(a).startsWith(key))
       .map((alias) => ({ locationId: c.slug, alias, sortOrder: index })));

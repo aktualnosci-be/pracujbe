@@ -111,6 +111,7 @@ export function buildLocations({ curated, snapshot }) {
       qid: match?.qid ?? null,
       tier: 0,
       names: [city.slug, ...city.aliases, ...(match?.names ?? [])],
+      labels: match?.labels ?? null,
     });
   });
 
@@ -133,6 +134,7 @@ export function buildLocations({ curated, snapshot }) {
       qid: item.qid,
       tier: item.formerUntil ? 2 : 1,
       names: [slug, name, ...item.names],
+      labels: item.labels,
     });
   }
 
@@ -477,6 +479,69 @@ export function generateSections(cwd = process.cwd()) {
   return { ...built, municipalities, sections, sql: renderSectionsMigrationSql(built, sections) };
 }
 
+// -----------------------------------------------------------------------------
+// Nazwy miejscowości w języku widoku (#1119, migracja 0996 — numer tymczasowy): blok danych
+// `location_names` w ręcznie pisanej migracji, między znacznikami BEGIN/END GENERATED.
+// -----------------------------------------------------------------------------
+
+/** Numer tymczasowy — ostateczny nada integrator (zmiana nazwy pliku = zmiana tej stałej). */
+export const NAMES_MIGRATION_FILE = 'supabase/migrations/0996_location_postal_codes_names.sql';
+export const NAMES_BLOCK_BEGIN = '-- BEGIN GENERATED location_names (node scripts/locations/build-migration.mjs)';
+export const NAMES_BLOCK_END = '-- END GENERATED location_names';
+export const NAME_LOCALES = ['pl', 'nl', 'fr', 'en'];
+
+/**
+ * Nazwa miejscowości w każdym języku serwisu z etykiet Wikidata. Pomijane: 10 miast z 0010
+ * (ich nazwy w języku strony dają pliki tłumaczeń, #189), nazwa równa `locations.name`
+ * (fallback funkcji `location_display_name`) i nazwa, której klucz należy do INNEJ miejscowości
+ * (np. „Saint-Nicolas” — francuska nazwa Sint-Niklaas, ale alias gminy w prowincji Liège):
+ * nazwa facetu jest też wartością filtra, więc musi wskazywać tę samą miejscowość.
+ */
+export function buildLocationNames({ rows, aliases }) {
+  const owner = new Map(aliases.map((a) => [a.key, a.slug]));
+  const names = [];
+  for (const row of rows) {
+    if (!row.labels || SEEDED_0010.includes(row.slug)) continue;
+    for (const locale of NAME_LOCALES) {
+      const raw = row.labels[locale];
+      if (!raw) continue;
+      const name = cleanLabel(raw.split(' / ')[0]);
+      if (!name || name === row.name || name.length > ALIAS_MAX) continue;
+      if (owner.get(cityKey(name)) !== row.slug) continue;
+      names.push({ slug: row.slug, locale, name });
+    }
+  }
+  return names;
+}
+
+export function renderLocationNamesBlock(names) {
+  const valuesSql = names.map((n) => `  (${q(n.slug)}, ${q(n.locale)}, ${q(n.name)})`).join(',\n');
+  return `${NAMES_BLOCK_BEGIN}
+-- ${names.length} nazw (PL/NL/FR/EN) z migawki Wikidata (CC0 1.0), tylko różne od locations.name.
+insert into public.location_names (location_id, locale, name)
+select l.id, v.locale, v.name
+from (values
+${valuesSql}
+) as v(slug, locale, name)
+join public.locations l on l.slug = v.slug
+on conflict (location_id, locale) do nothing;
+${NAMES_BLOCK_END}`;
+}
+
+/** Podmienia blok danych w migracji; brak znaczników = błąd (plik pisany ręcznie). */
+export function replaceNamesBlock(sql, block) {
+  const start = sql.indexOf(NAMES_BLOCK_BEGIN);
+  const end = sql.indexOf(NAMES_BLOCK_END);
+  if (start < 0 || end < start) throw new Error(`${NAMES_MIGRATION_FILE}: brak znaczników bloku location_names.`);
+  return sql.slice(0, start) + block + sql.slice(end + NAMES_BLOCK_END.length);
+}
+
+export function generateNames(cwd = process.cwd()) {
+  const municipalities = generate(cwd);
+  const names = buildLocationNames(municipalities);
+  return { names, block: renderLocationNamesBlock(names) };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { sql, rows, aliases, ambiguous, curated } = generate();
   writeFileSync(join(process.cwd(), MIGRATION_FILE), sql);
@@ -488,4 +553,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`${SECTIONS_MIGRATION_FILE}: ${sections.rows.length} części gmin, ${sections.aliases.length} aliasów; `
     + `pominięte: ${s.municipality} gmin, ${s.nameTaken} bez własnej nazwy, ${s.parent.length} bez gminy nadrzędnej.`);
   if (s.ambiguous.length) console.log(`Aliasy części niejednoznaczne (pominięte):\n  ${s.ambiguous.join('\n  ')}`);
+  const { names, block } = generateNames();
+  const namesPath = join(process.cwd(), NAMES_MIGRATION_FILE);
+  writeFileSync(namesPath, replaceNamesBlock(readFileSync(namesPath, 'utf8'), block));
+  console.log(`${NAMES_MIGRATION_FILE}: ${names.length} nazw miejscowości w językach serwisu.`);
 }

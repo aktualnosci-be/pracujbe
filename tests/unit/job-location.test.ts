@@ -110,6 +110,10 @@ describe('podpowiedź miasta w kreatorze — logika', () => {
     expect(demoJobCityAssist('antwerpia').slug).toBe('antwerp');
     expect(demoJobCityAssist(' ANVERS ').slug).toBe('antwerp');
     expect(demoJobCityAssist('Nieznanowo')).toEqual({ slug: null, suggestions: [] });
+    // #1119: kod pocztowy i nazwa kraju przy mieście jak w `resolve_location_id` (0996).
+    expect(demoJobCityAssist('Bruxelles 1000').slug).toBe('brussels');
+    expect(demoJobCityAssist('B-9000 Gent, België').slug).toBe('ghent');
+    expect(demoJobCityAssist('1000').slug).toBeNull();
     expect(demoJobCityAssist('Br').suggestions).toEqual(expect.arrayContaining(['Brussel', 'Bruges']));
     // Kontrola ujemna: jeden znak = bez propozycji.
     expect(demoJobCityAssist('B').suggestions).toEqual([]);
@@ -137,7 +141,8 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     expect(await jobCityAssist({ city: '  ANTWERPEN ', locale: 'pl' })).toEqual({
       status: 'ok', match: { slug: 'antwerp', name: 'Antwerpia' }, suggestions: ['Antwerpen'],
     });
-    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['antwerpen']);
+    // Wpis trafia do `resolve_location_id` bez zmian (reguła klucza i kodu pocztowego w bazie, 0996).
+    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['  ANTWERPEN ', 'pl']);
     expect(fakeDb.callsTo('job-city.suggest')[0]?.values).toEqual(['antwerpen%']);
     // Odczyt pod sesją (RLS), nie service_role; akcja niczego nie zapisuje.
     expect(new Set(fakeDb.calls.map((c) => c.as))).toEqual(new Set([USER]));
@@ -153,9 +158,10 @@ describe('jobCityAssist (akcja serwerowa)', () => {
     });
   });
 
-  it('gmina spoza 10 tłumaczonych miast: nazwa ze słownika', async () => {
-    dictionary({ exact: [{ slug: 'aalst', name: 'Aalst' }] });
-    expect(await jobCityAssist({ city: 'Alost', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Aalst' } });
+  it('gmina spoza 10 tłumaczonych miast: nazwa z bazy w języku strony (#1119)', async () => {
+    dictionary({ exact: [{ slug: 'aalst', name: 'Alost' }] });
+    expect(await jobCityAssist({ city: 'Aalst 9300', locale: 'fr' })).toMatchObject({ match: { slug: 'aalst', name: 'Alost' } });
+    expect(fakeDb.callsTo('job-city.lookup')[0]?.values).toEqual(['Aalst 9300', 'fr']);
   });
 
   it('nieznana nazwa = brak dopasowania (nie błąd)', async () => {

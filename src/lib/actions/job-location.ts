@@ -53,12 +53,13 @@ export async function jobCityAssist(input: unknown): Promise<JobCityAssist> {
   if (!identity) return { status: 'error' };
   try {
     return await withPortalTransaction(identity, async (tx) => {
+      // Ta sama reguła co trigger zapisu oferty (`resolve_location_id`, 0996: także z kodem
+      // pocztowym albo nazwą kraju przy mieście); nazwa w języku strony (`location_names`).
       const exact = await queryRows<{ slug: string; name: string }>(tx, 'job-city.lookup',
-        `SELECT l.slug, l.name
-           FROM public.location_aliases a
-           JOIN public.locations l ON l.id = a.location_id
-          WHERE l.is_active = true AND a.alias_key = $1
-          LIMIT 1`, [key]);
+        `SELECT l.slug, public.location_display_name(l.name, $2) AS name
+           FROM public.locations l
+          WHERE l.is_active = true AND l.id = public.resolve_location_id($1)
+          LIMIT 1`, [parsed.data.city, locale]);
       const prefix = key.length < JOB_CITY_MIN_PREFIX ? [] : await queryRows<{
         location_id: string; alias: string; name: string; slug: string; sort_order: number | null;
       }>(tx, 'job-city.suggest',

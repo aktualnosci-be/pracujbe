@@ -22672,4 +22672,154 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- PC1119. Miasto oferty z dopiskiem i nazwy miejscowości w języku widoku (#1119, #1076/M-4,
+--         migracja 0996): kod pocztowy / nazwa kraju przy mieście nie wyłączają oferty z filtra
+--         rozpoznanego miasta; facet lokalizacji w języku widoku (location_names), tylko gdy
+--         nazwa wskazuje tę samą miejscowość.
+-- ============================================================================
+\echo '--- PC1119 kod pocztowy przy mieście, nazwy miejscowości w języku widoku ---'
+\set PCCO  'f9500000-0000-0000-0000-000000099000'
+reset role; reset app.current_uid;
+
+-- PC1119-1: location_lookup_key = cityLookupKey z TS (te same przypadki w
+--           tests/unit/location-postal-names.test.ts).
+select pg_temp.assert(
+  public.location_lookup_key('Bruxelles 1000') = 'bruxelles'
+  and public.location_lookup_key('1000 Bruxelles') = 'bruxelles'
+  and public.location_lookup_key('B-1000 Bruxelles') = 'bruxelles'
+  and public.location_lookup_key('BE-1000 Bruxelles') = 'bruxelles'
+  and public.location_lookup_key('Leuven (3000)') = 'leuven'
+  and public.location_lookup_key('Gent, België') = 'gent'
+  and public.location_lookup_key('9000 Gent, Belgium') = 'gent'
+  and public.location_lookup_key('Sint-Niklaas') = 'sint niklaas'
+  and public.location_lookup_key('1000') = ''
+  and public.location_lookup_key('Bruxelles 10000') = 'bruxelles 10000'
+  and public.location_lookup_key('Bruxelles 0999') = 'bruxelles 0999'
+  and public.location_lookup_key('Bebe 1000') = 'bebe',
+  'PC1119-1 location_lookup_key: kod pocztowy (B/BE), nawiasy, przecinek, kraj');
+
+insert into public.companies(id, name, status) values (:'PCCO', 'PC1119 Firma', 'verified');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at) values
+  (gen_random_uuid(),:'PCCO','pc1119-a','Magazynier PC1119','warehouse','permanent','Bruxelles 1000','Bruxelles','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-b','Magazynier PC1119','warehouse','permanent','B-1050 Bruxelles','Bruxelles','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-c','Magazynier PC1119','warehouse','permanent','Leuven (3000)','Flandria','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-d','Magazynier PC1119','warehouse','permanent','Aalst, België','Flandria','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-e','Magazynier PC1119','warehouse','permanent','1000','Bruxelles','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-f','Magazynier PC1119','warehouse','permanent','Nieznanowo 1000','Flandria','active','pl', now()),
+  (gen_random_uuid(),:'PCCO','pc1119-g','Magazynier PC1119','warehouse','permanent','Bruxelles','Bruxelles','active','pl', now());
+
+-- PC1119-2: trigger rozpoznaje miasto z dopiskiem; wpisany tekst bez zmian; sam kod pocztowy
+--           i nieznana nazwa = null.
+select pg_temp.assert(
+  (select array_agg(coalesce(l.slug, '-') || '|' || j.city order by j.slug)
+     from public.jobs j left join public.locations l on l.id = j.location_id
+    where j.company_id = :'PCCO')
+  = array['brussels|Bruxelles 1000', 'brussels|B-1050 Bruxelles', 'leuven|Leuven (3000)', 'aalst|Aalst, België',
+          '-|1000', '-|Nieznanowo 1000', 'brussels|Bruxelles'],
+  'PC1119-2 location_id z miasta z kodem pocztowym / nazwą kraju');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+-- PC1119-3: filtr rozpoznanego miasta (lista, licznik, facety) obejmuje oferty z dopiskiem;
+--           wartość filtra z dopiskiem też wskazuje miejscowość.
+select pg_temp.assert(
+  (select array_agg(slug order by slug) from public.get_public_jobs('pl', 'pc1119', p_locations => array['Bruksela']))
+    = array['pc1119-a', 'pc1119-b', 'pc1119-g']
+  and public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Bruksela']) = 3
+  and public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Leuven 3000']) = 1
+  and (select total from public.get_public_job_filter_facets('pl', 'pc1119', p_locations => array['Brussel'])
+        where dimension = 'total') = 3,
+  'PC1119-3 lista, licznik i facety: Bruksela = Bruxelles 1000 / B-1050 Bruxelles / Bruxelles');
+-- PC1119-4: wyszukiwanie tekstowe miasta z kodem pocztowym wskazuje miejscowość.
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'pc1119', 'Gent 9000') = 0
+  and public.get_public_jobs_count('pl', 'pc1119', 'Aalst 9300') = 1
+  and public.get_public_jobs_count('pl', 'pc1119', '1000 Brussel') = 3,
+  'PC1119-4 search_city_candidates: miasto z kodem pocztowym');
+-- PC1119-5: facet w języku widoku przez location_display_name (zapytanie aplikacji wokół RPC):
+--           Aalst → Alost (fr), bez zmian po polsku; 10 miast z plików tłumaczeń bez podmiany.
+select pg_temp.assert(
+  (select array_agg(public.location_display_name(key, 'fr') || ':' || total
+                    order by public.location_display_name(key, 'fr') collate "C")
+     from public.get_public_job_filter_facets('fr', 'pc1119') where dimension = 'location')
+    = array['1000:1', 'Alost:1', 'Brussels:3', 'Leuven:1', 'Nieznanowo 1000:1']
+  and public.location_display_name('Aalst', 'pl') = 'Aalst'
+  and public.location_display_name('Namur', 'nl') = 'Namen'
+  and public.location_display_name('Antwerp', 'fr') = 'Antwerp'
+  and public.location_display_name('Nieznanowo', 'fr') = 'Nieznanowo'
+  and public.location_display_name('Aalst', 'xx') = 'Aalst',
+  'PC1119-5 location_display_name: nazwa w języku widoku, inaczej wartość bez zmian');
+-- PC1119-6: nazwa w języku widoku jest wartością filtra i wskazuje tę samą miejscowość.
+select pg_temp.assert(
+  public.get_public_jobs_count('fr', 'pc1119', p_locations => array[public.location_display_name('Aalst', 'fr')]) = 1,
+  'PC1119-6 wybranie pozycji „Alost” zwraca ofertę z Aalst');
+-- PC1119-7: słownik nazw czytelny publicznie, zapis tylko service_role.
+select pg_temp.assert((select count(*) from public.location_names) > 100, 'PC1119-7 anon czyta location_names');
+select pg_temp.expect_error($$insert into public.location_names(location_id, locale, name)
+  select id, 'pl', 'X' from public.locations where slug = 'aalst'$$, 'permission denied',
+  'PC1119-7b anon nie zapisuje location_names');
+reset role;
+set role authenticated; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$update public.location_names set name = 'X'$$, 'permission denied',
+  'PC1119-7c authenticated nie zmienia location_names');
+reset role;
+select pg_temp.assert(
+  (select relrowsecurity from pg_class where oid = 'public.location_names'::regclass),
+  'PC1119-7d RLS włączone na location_names');
+
+-- PC1119-8: nowy alias dowiązuje ofertę z dopiskiem (trigger słownika).
+begin;
+insert into public.location_aliases (location_id, alias, alias_key)
+  select id, 'Nieznanowo', 'nieznanowo' from public.locations where slug = 'aalst';
+select pg_temp.assert(
+  (select l.slug from public.jobs j join public.locations l on l.id = j.location_id where j.slug = 'pc1119-f') = 'aalst',
+  'PC1119-8 alias dodany do słownika dowiązuje ofertę „Nieznanowo 1000”');
+rollback;
+
+-- PC1119-9: nazwa, która wskazuje INNĄ miejscowość (egzonim zajęty przez inną gminę), nie jest
+--           pokazywana — facet nie może dać wartości filtra prowadzącej gdzie indziej.
+begin;
+insert into public.location_names (location_id, locale, name)
+  select id, 'fr', 'Saint-Nicolas' from public.locations where slug = 'sint-niklaas'
+  on conflict (location_id, locale) do update set name = excluded.name;
+select pg_temp.assert(
+  (select n.name from public.location_names n join public.locations l on l.id = n.location_id
+    where l.slug = 'sint-niklaas' and n.locale = 'fr') = 'Saint-Nicolas'
+  and public.location_display_name('Sint-Niklaas', 'fr') = 'Sint-Niklaas',
+  'PC1119-9 nazwa wskazująca inną gminę (Saint-Nicolas) → nazwa kanoniczna');
+rollback;
+
+-- KONTROLA UJEMNA (PC1119-N1): resolve_location_id z 0153 (sam pełny klucz) nie rozpoznaje
+-- miasta z kodem pocztowym — oferta wypada z filtra miasta.
+begin;
+create or replace function public.resolve_location_id(p_city text)
+returns uuid language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select a.location_id from public.location_aliases a
+  join public.locations l on l.id = a.location_id and l.is_active
+  where a.alias_key = public.city_key(left(p_city, 200)) limit 1;
+$$;
+update public.jobs set city = city || ' ' where company_id = :'PCCO';
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Bruksela']) = 1
+  and public.get_public_jobs_count('pl', 'pc1119', p_locations => array['Leuven 3000']) = 0,
+  'PC1119-N1 kontrola ujemna: bez klucza bez dopisku Bruksela = 1 oferta (bez „Bruxelles 1000”)');
+reset role;
+rollback;
+-- KONTROLA UJEMNA (PC1119-N2): bez sprawdzenia miejscowości nazwy funkcja pokazałaby egzonim
+-- innej gminy (dowód, że PC1119-9 nie przechodzi przypadkiem).
+begin;
+insert into public.location_names (location_id, locale, name)
+  select id, 'fr', 'Saint-Nicolas' from public.locations where slug = 'sint-niklaas'
+  on conflict (location_id, locale) do update set name = excluded.name;
+create or replace function public.location_display_name(p_value text, p_locale text)
+returns text language sql stable parallel safe security definer set search_path = public, pg_temp as $$
+  select coalesce((select n.name from public.location_names n
+    where n.location_id = public.resolve_location_id(p_value) and n.locale = p_locale), p_value);
+$$;
+select pg_temp.assert(public.location_display_name('Sint-Niklaas', 'fr') = 'Saint-Nicolas',
+  'PC1119-N2 kontrola ujemna: bez strażnika nazwa prowadzi do innej gminy');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

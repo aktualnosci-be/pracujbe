@@ -181,9 +181,15 @@ export async function getPublicJobFilterFacets(
   viewerId: string | null = null,
 ): Promise<JobFilterFacets> {
   return withUserTransaction(pool, viewerId, async (transaction) => {
+    // #1119 (0996): pozycja „miasto” w języku widoku (`location_display_name`: nazwa z
+    // `location_names`, tylko gdy wskazuje tę samą miejscowość — jest też wartością filtra).
+    // Nazwę podmienia zapytanie wokół RPC, więc treść facetów w bazie zostaje bez zmian.
     const result = (await transaction.query(
-      `SELECT dimension, key, to_jsonb(total) AS total
-       FROM public.get_public_job_filter_facets(${FILTER_ARGUMENTS})`,
+      `SELECT f.dimension,
+              CASE WHEN f.dimension = 'location'
+                   THEN public.location_display_name(f.key, $1::text) ELSE f.key END AS key,
+              to_jsonb(f.total) AS total
+       FROM public.get_public_job_filter_facets(${FILTER_ARGUMENTS}) AS f`,
       filterValues(params),
     )) as { rows: FilterFacetRow[] };
     const facets: JobFilterFacets = {
@@ -209,8 +215,12 @@ export async function getPublicJobFilterFacets(
         facets.total = row.total;
       else if (row.dimension === 'category')
         facets.categories[row.key] = row.total;
-      else if (row.dimension === 'location')
-        facets.locations.push({ city: row.key, count: row.total });
+      else if (row.dimension === 'location') {
+        // Dwie pozycje z tą samą nazwą w języku widoku = jedna pozycja z sumą ofert.
+        const same = facets.locations.find((entry) => entry.city === row.key);
+        if (same) same.count += row.total;
+        else facets.locations.push({ city: row.key, count: row.total });
+      }
       else if (row.dimension === 'contract')
         facets.contracts[row.key] = row.total;
       else if (
