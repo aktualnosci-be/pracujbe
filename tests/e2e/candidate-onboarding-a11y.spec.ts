@@ -12,6 +12,16 @@ import { rejectOptionalCookies } from './fixtures/messages';
 
 const locales = ['pl', 'nl', 'fr', 'en'] as const;
 
+// Bez Service Workera PWA. `ServiceWorkerRegister` rejestruje `/sw.js` zaraz po hydratacji,
+// a worker po instalacji woła `skipWaiting()` + `clients.claim()` — przejęcie kontroli nad kartą
+// wypada dokładnie w pierwszych krokach kreatora (pomiar lokalny: `controllerchange` 535–672 ms,
+// Enter w `#onb-occupations` 743–874 ms po nawigacji; w nieudanym przebiegu CI na PR #1197 Enter
+// ruszył 742 ms po nawigacji i renderer przestał odpowiadać: `press`, zrzut ekranu po błędzie
+// i zamknięcie kontekstu wisiały do limitu). Ten spec sprawdza dostępność kreatora, nie PWA —
+// worker jest tu wyłącznie równoległym procesem w tle o losowym czasie. Zachowanie workera ma
+// własny spec (`shell-offline-fallback.spec.ts`, `serviceWorkers: 'allow'`).
+test.use({ serviceWorkers: 'block' });
+
 async function openWizard(page: Page, locale: string): Promise<void> {
   await page.goto(`/${locale}/candidate/onboarding`);
   await rejectOptionalCookies(page, locale);

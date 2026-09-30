@@ -3306,7 +3306,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i dokumenty migracji (`docs/railway/`) wspominają Supabase celowo (dostawca historyczny / źródło migracji).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
-- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
+- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 4.1.11 — #749, bez podatnego `@vitest/mocker` + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline DM Sans; wcześniej Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
   Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
   Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
@@ -3345,6 +3345,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
   jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
   `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.
+  Przegląd funkcji SECURITY DEFINER (migracja `0193`, numer tymczasowy): funkcje omijają RLS, więc usunięty
+  wiersz nie daje roli (`current_profile_role` — brak/usunięty profil = `''`, więc wzorzec
+  `<> 'candidate'` odrzuca; `is_admin` od 0185), dostępu (`can_access_*`, `is_job_manager`/`is_job_company_member`,
+  `is_conversation_member`, `conversation_created_by_me`, `owns_candidate_profile`), listu
+  (`email_recipient_authorized`), profilu (`ensure_candidate_profile` → `NOT_FOUND`), sukcesu ponowienia
+  (`apply_to_job`) ani relacji/celu propozycji (`send_offer`). Strażnik `tests/unit/soft-delete-contract.test.ts`
+  czyta najnowsze definicje z migracji: każda para (funkcja SECURITY DEFINER, tabela z `deleted_at`) ma warunek,
+  funkcję pomocniczą sprawdzającą `deleted_at` albo wyjątek z uzasadnieniem (kategorie ERASE/GUARD/WRITE/NEW/
+  SESSION/FORMAT/ADMIN/EXPORT/MATCH/MAINT; nieaktualny wyjątek = czerwony; kontrola ujemna na definicjach sprzed
+  0193). Dowód: `rls.sql` SDR1111 (kontrole ujemne po rollbacku `0193_…down.sql`).
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
