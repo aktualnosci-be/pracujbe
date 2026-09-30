@@ -828,6 +828,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   kodu pocztowego w `resolve_location_id`; facet lokalizacji spoza 10 miast pokazuje nazwę
   kanoniczną `locations.name` (aliasy w bazie bez kolumny języka), więc nazwa w języku widoku
   wymaga kolumny `locale` w `location_aliases`.
+  Nowe filtry listy (migracja `0194` — numer tymczasowy): waluta (#787) — widełki i sort
+  „najwyższe wynagrodzenie” są w EUR, kwot w innej walucie nie przeliczamy (brak datowanego
+  kursu): oferta w PLN jest nieporównywalna jak inny okres stawki (nie odpada z filtra kwoty,
+  koniec sortowania; przeciążenia `job_salary_in_range/_sort_key(…, currency, …)`, lustro
+  `isComparableCurrency` w `salary-compare.ts`). Wymagany język i poziom (#786, URL
+  `lang`/`langLevel`, `job_requires_language`: kod `language_id` albo stara etykieta przez aliasy
+  0168; poziom = poziom kandydata, pasuje wymaganie najwyżej tego poziomu albo bez poziomu;
+  „bez wymogu języka” osobno). Wymiar pracy (#811): `jobs.work_time` (`full_time`/`part_time`/
+  `both`, null = brak deklaracji — starych ofert nie klasyfikujemy), pole w kroku 2 kreatora,
+  `save_job_draft` (na 0184), `update_published_job`, kopia szkicu, `get_public_job`; filtr
+  `workTime` (`both` pasuje do obu). Promień (#824, URL `near`/`radius` 5/10/25/50/100 km):
+  `locations_within_radius` po współrzędnych słownika (część gminy = współrzędne gminy),
+  oferta bez rozpoznanej miejscowości/współrzędnych nie pasuje, nierozpoznany środek = komunikat
+  `filters.nearUnknown`. Te same parametry w `get_public_jobs`/`_count`/facetach
+  i `saved_search_jobs_after`, klucze kanoniczne zapisanych wyszukiwań `language`,
+  `languageLevel`, `workTime`, `near`, `radiusKm`; formularz bez JS (`FilterSheet`) ma te same
+  pola. Dowód: `rls.sql` sekcja FL974 (kontrole ujemne N1–N6), rollback `0194_…down.sql`
+  (`job-filters-rollback.sql`; w `city-sections-filters-rollback.sql` przed 0183), unit
+  `job-filters-0194`, `job-work-time`, E2E `job-filters-0194` (bez JS, axe 320/1280 px).
   Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
   fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
   lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało
