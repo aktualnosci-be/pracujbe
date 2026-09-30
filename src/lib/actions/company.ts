@@ -8,7 +8,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { execute, queryOne, rpc, rpcRows } from '@/lib/db/sql';
 import type { TransactionQuery } from '@/lib/db/transaction';
 import type { ErrorCode } from '@/lib/errors';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkAccountRateLimit } from '@/lib/rate-limit-account';
 import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
@@ -214,19 +214,15 @@ export async function createCompany(
     return { ok: true, id: DEMO_COMPANY_ID, demo: true };
   }
 
-  // Rate limit per IP — ochrona przed masowym zakładaniem firm.
-  if (
-    !(await checkRateLimit('company-create', {
-      max: CREATE_RATE_MAX,
-      windowSeconds: RATE_WINDOW_SECONDS,
-    }))
-  ) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (po sesji) + szeroki próg na adres IP.
+    const withinLimit = await checkAccountRateLimit('company-create', me.id, {
+      max: CREATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return { ok: false, error: 'RATE_LIMITED' };
 
     const data = await withPortalTransaction(me, (tx) =>
       rpcRows(tx, 'create_first_company', {
@@ -264,18 +260,15 @@ export async function createAdditionalCompany(
 
   if (!isPortalDataConfigured()) return { ok: true, id: DEMO_COMPANY_ID, demo: true };
 
-  if (
-    !(await checkRateLimit('company-create', {
-      max: CREATE_RATE_MAX,
-      windowSeconds: RATE_WINDOW_SECONDS,
-    }))
-  ) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (po sesji) + szeroki próg na adres IP.
+    const withinLimit = await checkAccountRateLimit('company-create', me.id, {
+      max: CREATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return { ok: false, error: 'RATE_LIMITED' };
 
     let data: Record<string, unknown>[];
     try {
@@ -344,19 +337,15 @@ export async function updateCompany(
     return { ok: false, error: 'NOT_FOUND' };
   }
 
-  // Rate limit per IP — łagodny (edycja to częsta akcja).
-  if (
-    !(await checkRateLimit('company-update', {
-      max: UPDATE_RATE_MAX,
-      windowSeconds: RATE_WINDOW_SECONDS,
-    }))
-  ) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (po sesji) + szeroki próg na adres IP.
+    const withinLimit = await checkAccountRateLimit('company-update', me.id, {
+      max: UPDATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return { ok: false, error: 'RATE_LIMITED' };
 
     type Outcome =
       | { error: ErrorCode }
@@ -439,18 +428,15 @@ export async function updateCompanyLinks(
     return { ok: false, error: 'NOT_FOUND' };
   }
 
-  if (
-    !(await checkRateLimit('company-update', {
-      max: UPDATE_RATE_MAX,
-      windowSeconds: RATE_WINDOW_SECONDS,
-    }))
-  ) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (po sesji) + szeroki próg na adres IP.
+    const withinLimit = await checkAccountRateLimit('company-update', me.id, {
+      max: UPDATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return { ok: false, error: 'RATE_LIMITED' };
 
     type Outcome = { error: ErrorCode } | { error: null; result: unknown };
     const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
@@ -581,18 +567,15 @@ export async function requestCompanyReverification(
 ): Promise<ReverificationResult> {
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
 
-  if (
-    !(await checkRateLimit('company-reverify', {
-      max: REVERIFY_RATE_MAX,
-      windowSeconds: RATE_WINDOW_SECONDS,
-    }))
-  ) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (po sesji) + szeroki próg na adres IP.
+    const withinLimit = await checkAccountRateLimit('company-reverify', me.id, {
+      max: REVERIFY_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return { ok: false, error: 'RATE_LIMITED' };
 
     const outcome = await withPortalTransaction(me, async (tx): Promise<ErrorCode | null> => {
       // EMP-02: zgłaszamy firmę pokazaną na ekranie, nie firmę przełączoną w innej karcie.

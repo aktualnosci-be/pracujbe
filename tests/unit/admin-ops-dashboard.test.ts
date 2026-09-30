@@ -196,6 +196,42 @@ describe('mapowanie czujek na wiersze', () => {
     expect(byId(rows, 'aiBudgetMonth').state).toBe('ok');
   });
 
+  // #789: wspólny alarm `ai_budget_exhausted` nie może podnieść drugiego okresu przy 85% do alarmu,
+  // a jego ostrzeżenie nie może zniknąć (czujka zgłasza wtedy tylko alarm, bez `near_limit`).
+  describe('budżet AI: każdy okres według własnego poziomu (#789)', () => {
+    const at = (dayPct: number, monthPct: number): AiBudgetStatus => ({
+      day: { spentMicroUsd: dayPct * 10_000, limitMicroUsd: 1_000_000 },
+      month: { spentMicroUsd: monthPct * 100_000, limitMicroUsd: 10_000_000 },
+      staleReservations: 0,
+    });
+    const states = (b: AiBudgetStatus) => {
+      const rows = buildOpsRows(input({ aiBudget: b }));
+      return [byId(rows, 'aiBudgetDay').state, byId(rows, 'aiBudgetMonth').state];
+    };
+    it.each([
+      [100, 85, 'alert', 'warning'],
+      [85, 100, 'warning', 'alert'],
+      [100, 20, 'alert', 'ok'],
+      [20, 100, 'ok', 'alert'],
+      [85, 85, 'warning', 'warning'],
+      [85, 20, 'warning', 'ok'],
+      [100, 100, 'alert', 'alert'],
+    ])('doba %s / miesiąc %s (procent) → %s / %s', (day, month, dayState, monthState) => {
+      expect(states(at(day, month))).toEqual([dayState, monthState]);
+    });
+
+    it('kontrola ujemna: te same wartości bez sygnałów czujek nie dają alarmu ani ostrzeżenia', () => {
+      const b = at(100, 85);
+      const base = input({ aiBudget: b });
+      const rows = buildOpsRows({
+        ...base,
+        alerts: base.alerts.filter((a) => a !== 'ai_budget_exhausted'),
+        warnings: base.warnings.filter((w) => w !== 'ai_budget_near_limit'),
+      });
+      expect([byId(rows, 'aiBudgetDay').state, byId(rows, 'aiBudgetMonth').state]).toEqual(['ok', 'ok']);
+    });
+  });
+
   it('ostatni przebieg maintenance: brak = ostrzeżenie, stary = alarm, błąd = ostrzeżenie z nazwą zadania', () => {
     const never = parseMaintenanceRun({ finishedAt: null, ageSeconds: null, ok: null, durationMs: null, failedTask: null });
     expect(never).not.toBeNull();

@@ -14,7 +14,7 @@ import {
   type ModerationField,
   type ModerationFieldError,
 } from '@/lib/admin/moderation';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction, withServiceRole } from '@/lib/db/portal';
 import { queryOne, rpc, type RpcArgs } from '@/lib/db/sql';
@@ -92,7 +92,10 @@ function mapPgError(message: string | undefined): ErrorCode {
   return 'INTERNAL';
 }
 
-type AdminRpcCall = { status: 'ok' } | { status: 'unauthenticated' } | { status: 'db_error'; message: string };
+type AdminRpcCall =
+  | { status: 'ok' }
+  | { status: 'unauthenticated' }
+  | { status: 'db_error'; message: string; error: unknown };
 
 /**
  * RPC `admin_*` pod sesją bieżącego użytkownika (RLS/`is_admin()` decyduje w bazie). Błąd bazy
@@ -106,7 +109,7 @@ async function callAdminRpc(fn: string, args: RpcArgs): Promise<AdminRpcCall> {
     await withPortalTransaction(me, (tx) => rpc(tx, fn, args));
     return { status: 'ok' };
   } catch (error) {
-    if (isDatabaseError(error)) return { status: 'db_error', message: databaseErrorMessage(error) };
+    if (isDatabaseError(error)) return { status: 'db_error', message: databaseErrorMessage(error), error };
     throw error;
   }
 }
@@ -137,6 +140,8 @@ export async function setCompanyStatus(
   }
 
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  // #1109: identyfikator w złym formacie = błąd walidacji, nie INTERNAL z bazy (22P02).
+  if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
     const call = await callAdminRpc('admin_set_company_status', {
@@ -154,7 +159,10 @@ export async function setCompanyStatus(
       if (message.includes('REASON_TOO_LONG')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
       }
-      return { ok: false, error: mapPgError(message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.setCompanyStatus', mapPgError(call.message)),
+      };
     }
 
     // #1109: status firmy steruje widocznością jej ofert (weryfikacja/zawieszenie) — publiczny
@@ -182,6 +190,7 @@ export async function resolveReport(
   }
 
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (typeof reportId !== 'string' || !UUID_RE.test(reportId)) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
     const call = await callAdminRpc('admin_resolve_report', {
@@ -190,7 +199,12 @@ export async function resolveReport(
       p_expected_status: expectedStatus,
     });
     if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
-    if (call.status === 'db_error') return { ok: false, error: mapPgError(call.message) };
+    if (call.status === 'db_error') {
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.resolveReport', mapPgError(call.message)),
+      };
+    }
 
     return { ok: true };
   } catch (e) {
@@ -231,7 +245,10 @@ export async function liftEmailSuppression(
       if (message.includes('REASON_TOO_LONG')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
       }
-      return { ok: false, error: mapPgError(message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.liftEmailSuppression', mapPgError(call.message)),
+      };
     }
     return { ok: true };
   } catch (e) {
@@ -266,7 +283,12 @@ export async function setContactMessageStatus(
       p_expected_status: expectedStatus,
     });
     if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
-    if (call.status === 'db_error') return { ok: false, error: mapPgError(call.message) };
+    if (call.status === 'db_error') {
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.setContactMessageStatus', mapPgError(call.message)),
+      };
+    }
     return { ok: true };
   } catch (e) {
     captureError(e, { area: 'admin.setContactMessageStatus' });
@@ -324,7 +346,10 @@ export async function decideReport(
       const message = call.message;
       const field = message.includes('VALIDATION_FAILED') ? moderationFieldFromDbMessage(message) : null;
       if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
-      return { ok: false, error: mapPgError(message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.decideReport', mapPgError(call.message)),
+      };
     }
     // #1109: decyzja moderacyjna (usunięcie oferty, zawieszenie firmy, cofnięcie) od razu
     // unieważnia publiczne strony ofert — jak zwykłe zamknięcie oferty przez firmę (#775).
@@ -360,7 +385,10 @@ export async function restoreModeration(
       const message = call.message;
       const field = message.includes('VALIDATION_FAILED') ? moderationFieldFromDbMessage(message) : null;
       if (field) return { ok: false, error: 'VALIDATION_FAILED', field: field.field, fieldError: field.error };
-      return { ok: false, error: mapPgError(message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.restoreModeration', mapPgError(call.message)),
+      };
     }
     // #1109: decyzja moderacyjna (usunięcie oferty, zawieszenie firmy, cofnięcie) od razu
     // unieważnia publiczne strony ofert — jak zwykłe zamknięcie oferty przez firmę (#775).
@@ -419,7 +447,10 @@ export async function decideScreeningReview(
       if (message.includes('REASON_TOO_LONG')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
       }
-      return { ok: false, error: mapPgError(message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.decideScreeningReview', mapPgError(call.message)),
+      };
     }
     return { ok: true };
   } catch (e) {
@@ -472,7 +503,10 @@ export async function decideCompanyLinks(
       if (message.includes('REASON_TOO_LONG')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
       }
-      return { ok: false, error: mapPgError(message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'admin.decideCompanyLinks', mapPgError(call.message)),
+      };
     }
     return { ok: true };
   } catch (e) {
