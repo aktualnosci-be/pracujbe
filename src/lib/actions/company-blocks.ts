@@ -2,7 +2,7 @@
 
 import { z } from 'zod/v3';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -64,7 +64,10 @@ export async function setCompanyBlockAction(companyId: unknown, blocked: unknown
     );
     return { ok: true, blocked: data === true };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      const code = mapPgError(databaseErrorMessage(error));
+      return { ok: false, error: reportUnmappedDbError(error, 'company-blocks.setCompanyBlockAction', code) };
+    }
     captureError(error, { area: 'company-blocks.setCompanyBlockAction' });
     return { ok: false, error: 'INTERNAL' };
   }
