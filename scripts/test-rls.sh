@@ -72,6 +72,9 @@ echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 echo ">> rollback 0191 (kolejka automatycznego VIES, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/vies-auto-queue-rollback.sql"
 
+echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/soft-delete-cv-quota-rollback.sql"
+
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
