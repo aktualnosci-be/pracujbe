@@ -296,7 +296,7 @@ export default async function EmployerCompanyPage({
                 </div>
               </section>
 
-              {/* Opis firmy (#868) — nie cofa weryfikacji; nowy tekst zatwierdza admin portalu (0971). */}
+              {/* Opis firmy (#868) — nie cofa weryfikacji; nowy tekst zatwierdza admin portalu (0198). */}
               <section className={PAPER}>
                 <h2 className={H2_EXTENDED}>{t('descriptionTitle')}</h2>
                 <p className={INTRO}>{t('descriptionSubtitle')}</p>

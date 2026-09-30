@@ -81,7 +81,7 @@ describe('company read state', () => {
     });
   });
 
-  it('exposes a pending description proposal separately from the published description (0971)', async () => {
+  it('exposes a pending description proposal separately from the published description (0198)', async () => {
     db([{
       id: 'company-1', name: 'Acme', status: 'verified', description: 'Stary opis',
       description_pending: 'Nowy opis', description_review_status: 'pending',

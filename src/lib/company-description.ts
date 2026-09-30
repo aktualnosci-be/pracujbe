@@ -1,5 +1,5 @@
 /**
- * Opis firmy z zatwierdzaniem przez admina portalu (#868, migracja 0971).
+ * Opis firmy z zatwierdzaniem przez admina portalu (#868, migracja 0198).
  *
  * `companies.description` = tekst ZATWIERDZONY (jedyny czytany publicznie: profil firmy,
  * Organization JSON-LD, szczegół oferty). Propozycja firmy czeka w `description_pending` ze
@@ -28,7 +28,7 @@ function textOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/** Stan propozycji z wiersza `companies` (kolumny 0971); brak propozycji → `null`. */
+/** Stan propozycji z wiersza `companies` (kolumny 0198); brak propozycji → `null`. */
 export function parseCompanyDescriptionReview(
   row: Record<string, unknown>,
 ): CompanyDescriptionReview | null {

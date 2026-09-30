@@ -280,7 +280,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
         ) : null}
       </section>
 
-      {/* Opis firmy — propozycja firmy do decyzji (0971) */}
+      {/* Opis firmy — propozycja firmy do decyzji (0198) */}
       <section aria-labelledby="company-description-heading" className={PANEL}>
         <div className={SECTION_HEAD}>
           <h2 id="company-description-heading" className={PANEL_H2}>

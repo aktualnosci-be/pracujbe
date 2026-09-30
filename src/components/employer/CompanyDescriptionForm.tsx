@@ -43,7 +43,7 @@ export interface CompanyDescriptionFormProps {
   defaultValue: string;
   /** Zatwierdzony (publiczny) opis — pokazywany, gdy propozycja czeka albo została odrzucona. */
   published: string | null;
-  /** Stan propozycji (0971) albo null. */
+  /** Stan propozycji (0198) albo null. */
   review: CompanyDescriptionReview | null;
 }
 

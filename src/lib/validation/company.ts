@@ -74,7 +74,7 @@ export type CompanyLinksInput = z.infer<typeof companyLinksSchema>;
 export type CompanyLinksUpdateInput = z.infer<typeof companyLinksUpdateSchema>;
 
 /**
- * Opis firmy (#868, 0971) — tekst do publicznego profilu, po zapisie czeka na admina portalu.
+ * Opis firmy (#868, 0198) — tekst do publicznego profilu, po zapisie czeka na admina portalu.
  * Pusty tekst = usunięcie opisu. Limit 1500 znaków po przycięciu (CHECK w bazie); numer
  * rejestru narodowego/BIS albo numer dokumentu (ten sam detektor co w innych polach) → błąd
  * przy polu, bez zapisu.

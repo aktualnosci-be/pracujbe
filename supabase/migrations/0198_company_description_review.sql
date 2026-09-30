@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0971_company_description_review.sql — opis firmy z zatwierdzaniem przez admina (#868).
+-- 0198_company_description_review.sql — opis firmy z zatwierdzaniem przez admina (#868).
 -- NUMER TYMCZASOWY (ostateczny nada integrator).
 --
 -- Stan przed: `companies.description` był czytany publicznie (profil firmy `get_public_company`,
@@ -24,7 +24,7 @@
 --      właścicieli (`system`, `data.kind = 'company_description'`) + audyt.
 --
 -- Zmiana opisu NIE cofa weryfikacji firmy. Dowód: `supabase/tests/rls.sql` sekcja CDR971.
--- Rollback: `supabase/rollback/0971_company_description_review.down.sql`.
+-- Rollback: `supabase/rollback/0198_company_description_review.down.sql`.
 -- =============================================================================
 
 alter table public.companies

@@ -138,7 +138,7 @@ export const AWAITING_FILTER = 'awaiting';
 /** Wartość filtra listy firm dla kolejki zatwierdzania strony WWW/logo (`?status=links`, 0156). */
 export const LINKS_REVIEW_FILTER = 'links';
 
-/** Wartość filtra listy firm dla kolejki zatwierdzania opisu firmy (`?status=description`, 0971). */
+/** Wartość filtra listy firm dla kolejki zatwierdzania opisu firmy (`?status=description`, 0198). */
 export const DESCRIPTION_REVIEW_FILTER = 'description';
 
 /** Link w panelu (ścieżka bez prefiksu locale — dokłada go next-intl `Link`). */
@@ -1645,7 +1645,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   logoUrl: string | null;
   /** Propozycja zmiany strony WWW/logo do decyzji admina albo odrzucona (0156). */
   linksReview: CompanyLinksReview | null;
-  /** Propozycja opisu firmy do decyzji admina albo odrzucona (0971); `description` = zatwierdzony. */
+  /** Propozycja opisu firmy do decyzji admina albo odrzucona (0198); `description` = zatwierdzony. */
   descriptionReview: CompanyDescriptionReview | null;
   phone: string | null;
   address: string | null;

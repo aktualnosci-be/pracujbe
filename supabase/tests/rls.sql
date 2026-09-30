@@ -16691,7 +16691,7 @@ select pg_temp.expect_error(
 reset role; reset app.current_uid;
 
 -- ============================================================================
--- CDR971. Opis firmy z zatwierdzaniem przez admina (migracja 0971, #868): opis publiczny
+-- CDR971. Opis firmy z zatwierdzaniem przez admina (migracja 0198, #868): opis publiczny
 --         (`description`) zmienia wyłącznie decyzja admina portalu, propozycja firmy czeka
 --         w `description_pending`; usunięcie opisu wchodzi od razu; limit długości; CAS po
 --         `description_pending_at`; odrzucenie z uzasadnieniem; klient nie pisze tych kolumn wprost.
@@ -20145,7 +20145,7 @@ select pg_temp.expect_error($q$update public.companies set deleted_at = now() wh
   'pola techniczne firmy', 'M2-6c deleted_at niezmienne');
 select pg_temp.expect_error($q$update public.companies set created_at = now() - interval '1 year' where id = 'd2961000-0000-0000-0000-0000000000f1'$q$,
   'pola techniczne firmy', 'M2-6e created_at niezmienne');
--- Dozwolone dane (miasto) nadal się zapisują. (Opis od 0971 idzie wyłącznie przez
+-- Dozwolone dane (miasto) nadal się zapisują. (Opis od 0198 idzie wyłącznie przez
 -- `submit_company_description` — sekcja CDR971.)
 update public.companies set city = 'Miasto M2' where id = :'M2COMP';
 reset role; reset app.current_uid;

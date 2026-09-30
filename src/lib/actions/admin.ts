@@ -516,7 +516,7 @@ export async function decideCompanyLinks(
 }
 
 /**
- * Decyzja admina o proponowanym opisie firmy (0971, #868). Akceptacja przenosi tekst do danych
+ * Decyzja admina o proponowanym opisie firmy (0198, #868). Akceptacja przenosi tekst do danych
  * publicznych (profil firmy, JSON-LD, szczegół oferty); odrzucenie wymaga uzasadnienia (widzi je
  * firma). `expectedPendingAt` = czas zgłoszenia z odczytu (CAS): gdy firma w międzyczasie
  * zmieniła propozycję albo decyzja już zapadła → `STALE_STATE`.

@@ -1,4 +1,4 @@
--- Rollback 0971 (opis firmy z zatwierdzaniem przez admina). Zatwierdzony opis (`description`)
+-- Rollback 0198 (opis firmy z zatwierdzaniem przez admina). Zatwierdzony opis (`description`)
 -- zostaje; znikają tylko propozycje oczekujące/odrzucone (niezatwierdzone teksty).
 drop function if exists public.admin_decide_company_description(uuid, text, timestamptz, text);
 drop function if exists public.submit_company_description(uuid, text);

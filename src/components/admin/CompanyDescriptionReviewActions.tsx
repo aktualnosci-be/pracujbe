@@ -19,7 +19,7 @@ import {
 import { useAdminFeedback } from '@/components/admin/AdminFeedback';
 
 /**
- * CompanyDescriptionReviewActions — decyzja o proponowanym opisie firmy (0971, #868).
+ * CompanyDescriptionReviewActions — decyzja o proponowanym opisie firmy (0198, #868).
  *
  * „Zatwierdź” i „Odrzuć” otwierają dialog z proponowanym tekstem; odrzucenie wymaga
  * uzasadnienia (firma widzi je w `/employer/firma`, trafia do dziennika). Zatwierdzenie

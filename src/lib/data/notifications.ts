@@ -95,7 +95,7 @@ const COMPANY_LINKS_TITLE_KEY: Record<string, string> = {
   rejected: 'itemCompanyLinksRejected',
 };
 
-/** Decyzja admina o opisie firmy (0971): `system` + `data.kind = 'company_description'`. */
+/** Decyzja admina o opisie firmy (0198): `system` + `data.kind = 'company_description'`. */
 const COMPANY_DESCRIPTION_TITLE_KEY: Record<string, string> = {
   approved: 'itemCompanyDescriptionApproved',
   rejected: 'itemCompanyDescriptionRejected',

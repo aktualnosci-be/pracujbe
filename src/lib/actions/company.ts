@@ -42,7 +42,7 @@ import {
  *   - `updateCompanyLinks` — zgłasza stronę WWW i adres logo (#112); nowy adres czeka na
  *                        decyzję admina (RPC `submit_company_links`, 0156), NIE cofa weryfikacji.
  *   - `updateCompanyDescription` — zgłasza opis firmy (#868); nowy tekst czeka na decyzję
- *                        admina (RPC `submit_company_description`, 0971), NIE cofa weryfikacji.
+ *                        admina (RPC `submit_company_description`, 0198), NIE cofa weryfikacji.
  *   - `createAdditionalCompany` — KOLEJNA firma zalogowanego pracodawcy (#403) — RPC
  *                        `create_additional_company` (0086: owner, limit 5 firm, audyt,
  *                        idempotentne dla podwójnego kliknięcia); nowa firma staje się aktywna.
@@ -66,7 +66,7 @@ export type CompanyLinksOutcome = 'pending' | 'applied' | 'unchanged';
 export type UpdateCompanyLinksResult =
   | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
   | { ok: false; error: ErrorCode };
-/** Wynik zgłoszenia opisu firmy (0971): czeka na admina / weszło od razu / bez zmian. */
+/** Wynik zgłoszenia opisu firmy (0198): czeka na admina / weszło od razu / bez zmian. */
 export type UpdateCompanyDescriptionResult =
   | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
   | { ok: false; error: ErrorCode; field?: 'description'; reason?: 'sensitive' | 'tooLong' };

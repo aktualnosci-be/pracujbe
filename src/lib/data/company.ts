@@ -42,9 +42,9 @@ export interface MyCompany {
    * `logoUrl` powyżej to wartości ZATWIERDZONE (publiczne). Brak propozycji → null.
    */
   linksReview: CompanyLinksReview | null;
-  /** Zatwierdzony (publiczny) opis firmy (#868, 0971) albo null. */
+  /** Zatwierdzony (publiczny) opis firmy (#868, 0198) albo null. */
   description: string | null;
-  /** Propozycja opisu czekająca na admina albo odrzucona (0971) — brak propozycji → null. */
+  /** Propozycja opisu czekająca na admina albo odrzucona (0198) — brak propozycji → null. */
   descriptionReview: CompanyDescriptionReview | null;
   /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia przez admina. */
   agency: CompanyAgency;

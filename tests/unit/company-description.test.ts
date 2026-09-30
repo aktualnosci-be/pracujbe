@@ -8,7 +8,7 @@ import {
 } from '@/lib/company-description';
 import { companyDescriptionSchema } from '@/lib/validation/company';
 
-/** Opis firmy (#868, 0971): schemat wejścia, lustro limitów bazy i odczyt stanu propozycji. */
+/** Opis firmy (#868, 0198): schemat wejścia, lustro limitów bazy i odczyt stanu propozycji. */
 
 describe('companyDescriptionSchema', () => {
   it('accepts a normal text, trims it and accepts an empty one (removal)', () => {

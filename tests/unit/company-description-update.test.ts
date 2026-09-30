@@ -4,7 +4,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { fakeDb, fakeSession, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * Zgłoszenie opisu firmy WSKAZANEJ przez `companyId` (#868, 0971): akcja pyta o rolę TYLKO dla
+ * Zgłoszenie opisu firmy WSKAZANEJ przez `companyId` (#868, 0198): akcja pyta o rolę TYLKO dla
  * `companyId` z formularza, woła wyłącznie RPC `submit_company_description` pod sesją (bez
  * bezpośredniego UPDATE — blokuje go strażnik w bazie) i zwraca wynik RPC. Numer identyfikacyjny
  * w tekście i tekst ponad limit odpadają przed bazą; nieoczekiwany wynik nie udaje sukcesu.
@@ -34,7 +34,7 @@ beforeEach(() => {
   membership('owner');
 });
 
-describe('company description submission (scoped to companyId, review by admin, 0971)', () => {
+describe('company description submission (scoped to companyId, review by admin, 0198)', () => {
   it('rejects an invalid company id before touching the database', async () => {
     expect(await updateCompanyDescription('not-a-uuid', { description: 'Opis' })).toEqual({
       ok: false,

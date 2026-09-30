@@ -6,7 +6,7 @@ import { titleKeyForType } from '@/lib/data/notifications';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 /**
- * Zatwierdzanie opisu firmy przez admina (0971, #868): akcja waliduje uzasadnienie przed bazą
+ * Zatwierdzanie opisu firmy przez admina (0198, #868): akcja waliduje uzasadnienie przed bazą
  * (te same reguły co RPC), przekazuje znacznik CAS i mapuje odpowiedzi RPC; tytuł powiadomienia
  * firmy i etykiety dziennika dla nowych akcji audytu.
  */
