@@ -1575,6 +1575,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   integracja `portal-employer-actions`, unit `job-wizard-draft-version`. **Otwarte:** wersja
   szkicu po imporcie (pierwszy zapis bez kontroli), szkic wczytany i niezmieniony wysyła zapis
   przy pierwszym „Dalej” (brak migawki z bazy).
+  Podgląd wynagrodzenia w kroku 9 (#1224, bez migracji): `normalizeSalary`/`formatSalaryRange`
+  z etykietami `jobs.passport.*` (jak karta i szczegół) zamiast surowych pól formularza — „do 3000 €
+  brutto / mies.”, waluta i separatory wg locale. Test `job-wizard-salary-preview` (kontrola ujemna).
   Flaga „bez wymogu języka” kontra wymagane języki (#910, bez migracji): pole `noLanguageRequired`
   i lista `languages` w kroku 7 wykluczają się nawzajem — zapisane niezależnie dawały sprzeczny
   wynik dla kandydata (filtr „bez języka” czyta tylko flagę, dopasowanie tylko listę). `JobWizard`
@@ -3584,6 +3587,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `registerHref`, `relocalizeNextParam`) w `src/lib/auth/next-path.ts` bez Zoda; schematy
   zostają w `validation/auth`. Straże: graf importów `public-bundle-no-zod.test` i chunki
   z `ZodError` w `check-next-build.mjs` (layout `(public)`, home, lista ofert, poradnik).
+  Szczegół oferty bez Zoda i `libphonenumber-js` w przeglądarce (#1055, bez migracji): stałe
+  dostępności formularza aplikowania w `src/lib/apply/availability.ts` (bez zależności;
+  `validation/application.ts` je re-eksportuje), `ApplyModal`/`GuestApplyForm` importują stąd —
+  JS trasy `oferty-pracy/[slug]` 243,3 → 178,8 KB gzip. Strażnik grafu `public-bundle-no-zod`
+  obejmuje szczegół oferty i `libphonenumber-js` (kontrola ujemna: komponent kliencki ze schematem
+  aplikacji), `check-next-build.mjs` sprawdza chunki szczegółu (`ZodError`, `country_calling_codes`).
   Strony publiczne statyczne/ISR (#298): layout `(public)` woła `setRequestLocale` i podaje
   `locale` jawnie do Header/Footer, a `[locale]/layout` do SkipLink (inaczej next-intl czyta `headers()` → SSR `no-store`).
   Unieważnianie cache po zmianie cyklu życia oferty (#775, bez migracji): `publishJob`,
