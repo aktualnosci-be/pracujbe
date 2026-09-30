@@ -22732,16 +22732,104 @@ select pg_temp.assert((select sum(size_bytes) from public.files where owner_id =
   'SD1111-N3 kontrola ujemna: bez triggera limit rozmiaru nie działa');
 rollback;
 
--- Rollback 0189 przywraca polityki bez deleted_at i zdejmuje strażniki (w transakcji cofanej).
+-- Rollback 0189: supabase/tests/soft-delete-cv-quota-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
+
+
+-- ============================================================================
+-- SDR1111. Przegląd funkcji SECURITY DEFINER na tabelach z deleted_at (#1111, 0193).
+--   Funkcje omijają RLS, więc polityki 0189 ich nie obejmują. Po 0193 usunięty wiersz nie daje
+--   roli (current_profile_role; is_admin od 0185), dostępu (can_access_*, is_job_*, is_conversation_member,
+--   conversation_created_by_me, owns_candidate_profile), listu (email_recipient_authorized),
+--   profilu (ensure_candidate_profile), sukcesu ponowienia (apply_to_job) ani relacji/celu
+--   propozycji (send_offer). Kontrola ujemna: rollback 0193 przywraca dostęp do usuniętych wierszy.
+-- ============================================================================
+\echo '--- SDR1111 funkcje SECURITY DEFINER a deleted_at ---'
+reset role; reset app.current_uid;
+select pg_temp.assert(public.recruitment_enabled(), 'SDR1111-0 fixture: tryb RECRUITMENT');
+select id as sdr_offer, candidate_id as sdr_offer_cand from public.offers
+ where deleted_at is null and candidate_id is not null order by created_at limit 1 \gset
+select id as sdr_cp from public.candidate_profiles where profile_id = :'WMCA' \gset
+
+-- Stan przed usunięciem (kontrole pozytywne).
+set role authenticated; set app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_admin(), 'SDR1111-1a admin przed usunięciem profilu');
+reset role; set role authenticated; set app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.current_profile_role() = 'candidate'
+  and public.can_access_application(:'rd_app')
+  and public.is_conversation_member(:'at_conv')
+  and public.owns_candidate_profile(:'sdr_cp')
+  and public.apply_to_job(:'WMJA'::uuid, 'rd1114-app-1') = :'rd_app'::uuid,
+  'SDR1111-1b kandydat: rola, dostęp, profil i ponowienie przed usunięciem');
+reset role; set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_job_manager(:'WMJA') and public.is_job_company_member(:'WMJA')
+  and public.can_access_application(:'rd_app'), 'SDR1111-1c firma przed usunięciem oferty');
+reset role; set role authenticated; set app.current_uid = :'sdr_offer_cand'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.can_access_offer(:'sdr_offer'), 'SDR1111-1d odbiorca widzi propozycję');
+reset role; reset app.current_uid;
+select pg_temp.assert(public.email_recipient_authorized('newApplication', 'application', :'rd_app', :'WMEA'),
+  'SDR1111-1e list o zgłoszeniu dozwolony przed usunięciem');
+-- ensure_candidate_profile nie ma EXECUTE dla klientów (woła je RPC profilu) — kontekst właściciela.
+set app.current_uid = :'WMCA';
+select pg_temp.assert(public.ensure_candidate_profile() = :'sdr_cp'::uuid, 'SDR1111-1f profil kandydata przed usunięciem');
+reset app.current_uid;
+
 begin;
-\ir ../rollback/0189_soft_delete_contract_cv_quota.down.sql
-select pg_temp.assert(
-  (select count(*) from pg_policies where schemaname = 'public' and policyname in
-     ('applications_select', 'offers_select', 'conversations_select_member', 'messages_select_member')
-     and qual like '%deleted_at%') = 0
-  and to_regprocedure('public.enforce_soft_delete_contract()') is null
-  and to_regprocedure('public.enforce_cv_account_quota()') is null,
-  'SD1111-R rollback 0189 przywraca stan sprzed migracji');
+-- Usunięcie logiczne (superuser, jak retencja/moderacja).
+update public.profiles set deleted_at = now() where id = :'ADMIN';
+update public.applications set deleted_at = now() where id = :'rd_app';
+update public.offers set deleted_at = now() where id = :'sdr_offer';
+update public.conversations set deleted_at = now() where id = :'at_conv';
+update public.candidate_profiles set deleted_at = now(), is_searchable = false where profile_id = :'WMCA';
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_admin() and public.current_profile_role() = '',
+  'SDR1111-2a usunięty profil nie ma roli admina ani żadnej roli');
+reset role; set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.can_access_application(:'rd_app') and not public.is_conversation_member(:'at_conv')
+  and not public.owns_candidate_profile(:'sdr_cp'),
+  'SDR1111-2b usunięta aplikacja/rozmowa/profil nie dają dostępu');
+select pg_temp.expect_error($$select public.apply_to_job('$$ || :'WMJA' || $$'::uuid, 'rd1114-app-1')$$, 'NOT_FOUND',
+  'SDR1111-2d ponowienie na usuniętą aplikację nie zwraca sukcesu');
+select pg_temp.expect_error($$select public.get_or_create_conversation('$$ || :'rd_app' || $$'::uuid, null)$$,
+  'PERMISSION_DENIED', 'SDR1111-2e rozmowa do usuniętej aplikacji nie powstaje');
+reset role; set local role authenticated; set local app.current_uid = :'sdr_offer_cand'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.can_access_offer(:'sdr_offer'), 'SDR1111-2f usunięta propozycja bez dostępu');
+reset role;
+select pg_temp.assert(not public.email_recipient_authorized('newApplication', 'application', :'rd_app', :'WMEA'),
+  'SDR1111-2g list o usuniętej aplikacji wygaszany');
+set local app.current_uid = :'WMCA';
+select pg_temp.expect_error('select public.ensure_candidate_profile()', 'NOT_FOUND',
+  'SDR1111-2c ensure_candidate_profile odrzuca usunięty profil kandydata');
+reset app.current_uid;
+-- Propozycja: usunięta aplikacja nie tworzy relacji (profil niewyszukiwalny).
+set local role authenticated; set local app.current_uid = :'WMER'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.send_offer('$$ || :'WMJA' || $$'::uuid, '$$ || :'WMCA' || $$'::uuid, 'sdr1111-offer')$$,
+  'PERMISSION_DENIED', 'SDR1111-2h usunięta aplikacja nie daje relacji dla propozycji');
+reset role;
+update public.jobs set deleted_at = now() where id = :'WMJA';
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(not public.is_job_manager(:'WMJA') and not public.is_job_company_member(:'WMJA'),
+  'SDR1111-2i usunięta oferta nie daje uprawnień firmy');
+reset role; set local role authenticated; set local app.current_uid = :'WMER'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($$select public.send_offer('$$ || :'WMJA' || $$'::uuid, '$$ || :'WMCA' || $$'::uuid, 'sdr1111-offer-2')$$,
+  'NOT_FOUND', 'SDR1111-2j propozycja do usuniętej oferty odrzucona');
+reset role;
+-- Kontrola ujemna: definicje sprzed 0193 dają dostęp do usuniętych wierszy.
+\ir ../rollback/0193_soft_delete_definer_review.down.sql
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.current_profile_role() = 'admin', 'SDR1111-N1 kontrola ujemna: stara current_profile_role daje rolę usuniętemu profilowi');
+reset role; set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_job_manager(:'WMJA'), 'SDR1111-N2 kontrola ujemna: stara is_job_manager uznaje usuniętą ofertę');
+reset role; set local role authenticated; set local app.current_uid = :'WMCA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.is_conversation_member(:'at_conv'),
+  'SDR1111-N3 kontrola ujemna: stara is_conversation_member wpuszcza do usuniętej rozmowy');
+reset role;
+set local app.current_uid = :'WMCA';
+select pg_temp.assert(public.ensure_candidate_profile() = :'sdr_cp'::uuid,
+  'SDR1111-N3b kontrola ujemna: stara ensure_candidate_profile zwraca usunięty profil');
+reset app.current_uid;
+select pg_temp.assert(public.email_recipient_authorized('newApplication', 'application', :'rd_app', :'WMEA'),
+  'SDR1111-N4 kontrola ujemna: stara email_recipient_authorized przepuszcza list o usuniętej aplikacji');
 rollback;
+reset role; reset app.current_uid;
 
 \echo '=================== ALL RLS TESTS PASSED ==================='
