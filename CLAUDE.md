@@ -3296,6 +3296,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
   worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
   i SQLSTATE bez komunikatu bazy (#1105).
+  Dokończenie (bez migracji): `reportUnmappedDbError` także w `jobs.ts` (`failureCode(error, obszar)`
+  zgłasza też wyjątki spoza bazy), panelu admina (`admin.ts`, kampanie, próg wieku, rejestr naruszeń,
+  zaufanie ofert), blokadach firm, języku e-maili i powiadomieniach (#1068, akcje rekrutacyjne poza
+  zakresem); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
+  + szeroki próg na IP (`checkAccountRateLimit`, `src/lib/rate-limit-account.ts`, wiadro `<akcja>-ip`
+  = 10 × limit), zły format identyfikatora w `setCompanyStatus`/`resolveReport`/
+  `markNotificationsRead` = `VALIDATION_FAILED` (#1109); panel `/admin/operacje` ocenia wiersz doby
+  i miesiąca budżetu AI według poziomu danego okresu — wspólny `ai_budget_exhausted` nie podnosi
+  drugiego okresu do alarmu ani nie kasuje jego ostrzeżenia (#789). Dowód: unit
+  `report-unmapped-db-error`, `server-actions-1109`, `admin-ops-dashboard` (kontrole ujemne).
 - [x] Warstwa danych paneli bez PostgREST (#25): loadery/akcje/layouty/onboarding/outbox na `withPortalTransaction`
   (sesja → `SET LOCAL ROLE` + `app.current_uid`, RLS w bazie) i `withServiceRole` (pula `service`, login
   `pracujbe_service_runtime`); gotowość produkcji = PostgreSQL WWW + service + Better Auth. Migracja `0107`
