@@ -13,7 +13,7 @@ import {
   type BreachFieldError,
   type BreachFormErrors,
 } from '@/lib/admin/breach';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -64,6 +64,13 @@ export type BreachActionResult<T extends object = Record<never, never>> =
       existingVersion?: number;
     };
 
+/** `mapError` + zgłoszenie nieoczekiwanego błędu bazy (#1068: INTERNAL → kanał błędów z SQLSTATE). */
+function mapReportedError(error: { message: string; raw: unknown }, area: string): BreachActionResult {
+  const mapped = mapError(error.message);
+  if (!mapped.ok) reportUnmappedDbError(error.raw, area, mapped.error);
+  return mapped;
+}
+
 function mapError(message: string | undefined): BreachActionResult {
   const m = message ?? '';
   if (m.includes('STALE_STATE')) return { ok: false, error: 'STALE_STATE' };
@@ -91,7 +98,9 @@ function withFormField(result: BreachActionResult): BreachActionResult {
   return result;
 }
 
-type RpcOutcome = { data: unknown; error?: undefined } | { data?: undefined; error: { message: string } };
+type RpcOutcome =
+  | { data: unknown; error?: undefined }
+  | { data?: undefined; error: { message: string; raw: unknown } };
 
 /**
  * Jedno RPC pod sesją administratora. Brak sesji → `null` (PERMISSION_DENIED); błąd bazy →
@@ -103,7 +112,7 @@ async function adminRpc(fn: string, args: RpcArgs): Promise<RpcOutcome | null> {
   try {
     return { data: await withPortalTransaction(me, (tx) => callRpc(tx, fn, args)) };
   } catch (error) {
-    if (isDatabaseError(error)) return { error: { message: databaseErrorMessage(error) } };
+    if (isDatabaseError(error)) return { error: { message: databaseErrorMessage(error), raw: error } };
     throw error;
   }
 }
@@ -163,7 +172,7 @@ export async function createBreachIncident(
     });
     if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
     const { data, error } = outcome;
-    if (error) return withFormField(mapError(error.message));
+    if (error) return withFormField(mapReportedError(error, 'admin.createBreachIncident'));
     if (typeof data !== 'string') return { ok: false, error: 'INTERNAL' };
     const existing = await fetchBreachRecordForCompare(data);
     if (existing && !breachFormsMatch(existing.form, form)) {
@@ -202,7 +211,7 @@ export async function updateBreachIncident(
     });
     if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
     const { data, error } = outcome;
-    if (error) return withFormField(mapError(error.message));
+    if (error) return withFormField(mapReportedError(error, 'admin.updateBreachIncident'));
     return typeof data === 'number' ? { ok: true, version: data } : { ok: false, error: 'INTERNAL' };
   } catch (e) {
     captureError(e, { area: 'admin.updateBreachIncident' });
@@ -231,7 +240,7 @@ async function transition(
         : { p_id: id, p_expected_version: expectedVersion, p_reason: note.trim() };
     const outcome = await adminRpc(rpc, args);
     if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
-    if (outcome.error) return mapError(outcome.error.message);
+    if (outcome.error) return mapReportedError(outcome.error, `admin.${rpc}`);
     return { ok: true };
   } catch (e) {
     captureError(e, { area: `admin.${rpc}` });
@@ -332,7 +341,7 @@ export async function notifyBreachSubjects(
     if (!outcome) return { ok: false, error: 'PERMISSION_DENIED' };
     const { data, error } = outcome;
     if (error) {
-      const mapped = mapError(error.message);
+      const mapped = mapReportedError(error, 'admin.notifyBreachSubjects');
       return mapped.ok ? { ok: false, error: 'INTERNAL' } : mapped;
     }
     const result = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {};

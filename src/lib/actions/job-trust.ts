@@ -8,12 +8,12 @@ import {
   jobContentReviewReasonError,
   type JobContentReviewDecision,
 } from '@/lib/job-trust/review';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpc, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkAccountRateLimit } from '@/lib/rate-limit-account';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 
 /**
@@ -54,7 +54,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 type RpcCall =
   | { status: 'ok'; data: unknown }
   | { status: 'unauthenticated' }
-  | { status: 'db_error'; message: string };
+  | { status: 'db_error'; message: string; error: unknown };
 
 async function callRpc(fn: string, args: RpcArgs): Promise<RpcCall> {
   const me = await getPortalIdentity();
@@ -63,7 +63,7 @@ async function callRpc(fn: string, args: RpcArgs): Promise<RpcCall> {
     const data = await withPortalTransaction(me, (tx) => rpc(tx, fn, args));
     return { status: 'ok', data };
   } catch (error) {
-    if (isDatabaseError(error)) return { status: 'db_error', message: databaseErrorMessage(error) };
+    if (isDatabaseError(error)) return { status: 'db_error', message: databaseErrorMessage(error), error };
     throw error;
   }
 }
@@ -95,7 +95,10 @@ export async function decideJobContentReview(
       if (call.message.includes('REASON_TOO_LONG')) {
         return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
       }
-      return { ok: false, error: mapPgError(call.message) };
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'job-trust.decideJobContentReview', mapPgError(call.message)),
+      };
     }
     revalidatePath('/[locale]/admin/tresc-ofert', 'page');
     return { ok: true };
@@ -128,7 +131,12 @@ export async function recordAgencyCheck(
       p_note: text.length > 0 ? text : null,
     });
     if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
-    if (call.status === 'db_error') return { ok: false, error: mapPgError(call.message) };
+    if (call.status === 'db_error') {
+      return {
+        ok: false,
+        error: reportUnmappedDbError(call.error, 'job-trust.recordAgencyCheck', mapPgError(call.message)),
+      };
+    }
     revalidatePath('/[locale]/admin/firmy/[id]', 'page');
     return { ok: true };
   } catch (e) {
@@ -154,12 +162,13 @@ export async function updateCompanyAgency(
   }
   if (!isPortalDataConfigured()) return { ok: true, demo: true, outcome: 'unchanged' };
   if (typeof companyId !== 'string' || !UUID_RE.test(companyId)) return { ok: false, error: 'NOT_FOUND' };
-  if (!(await checkRateLimit('company-update', { max: 60, windowSeconds: 3600 }))) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (jak edycja firmy) + szeroki próg na adres IP.
+    if (!(await checkAccountRateLimit('company-update', me.id, { max: 60, windowSeconds: 3600 }))) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
     type Outcome = { error: ErrorCode } | { error: null; result: unknown };
     const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
       const membership = await queryOne<Record<string, unknown>>(tx, 'job-trust.agency-membership',
@@ -182,7 +191,10 @@ export async function updateCompanyAgency(
     if (result === 'saved') revalidatePublicJobPaths();
     return { ok: true, outcome: result };
   } catch (e) {
-    if (isDatabaseError(e)) return { ok: false, error: mapPgError(databaseErrorMessage(e)) };
+    if (isDatabaseError(e)) {
+      const code = mapPgError(databaseErrorMessage(e));
+      return { ok: false, error: reportUnmappedDbError(e, 'job-trust.updateCompanyAgency', code) };
+    }
     captureError(e, { area: 'job-trust.updateCompanyAgency' });
     return { ok: false, error: 'INTERNAL' };
   }

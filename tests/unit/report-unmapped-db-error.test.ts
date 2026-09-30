@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { setContactMessageStatus } from '@/lib/actions/admin';
+import { deleteJobDraft } from '@/lib/actions/jobs';
+import { markNotificationsRead } from '@/lib/actions/notifications';
 import { inviteTeamMember } from '@/lib/actions/team';
 import { reportUnmappedDbError } from '@/lib/db/errors';
 import { setErrorReporter, type ErrorReport } from '@/lib/error-report';
@@ -76,6 +79,69 @@ describe('akcje zespołu (#1068)', () => {
     });
     const result = await inviteTeamMember({ email: 'a@b.be', role: 'member', locale: 'pl' }, COMPANY);
     expect(result).toEqual({ ok: false, error: 'MEMBER_ALREADY_EXISTS' });
+    expect(reports).toEqual([]);
+  });
+});
+
+describe('dokończenie #1068: oferty i pozostałe akcje poza trybem rekrutacyjnym', () => {
+  const JOB = '5c4b1e5d-3a5f-4d29-8b47-2a8c3d0e9f12';
+
+  it('oferty: nieznany SQLSTATE → INTERNAL + wpis z obszarem akcji i SQLSTATE, bez komunikatu bazy', async () => {
+    fakeDb.rows('jobs.delete-draft-state', () => {
+      throw pgError('42703', SECRET_ROW);
+    });
+    const result = await deleteJobDraft(JOB);
+    expect(result).toEqual({ ok: false, error: 'INTERNAL' });
+    expect(reports).toEqual([{ code: 'INTERNAL', area: 'jobs.deleteJobDraft', sqlstate: '42703' }]);
+    expect(JSON.stringify(reports)).not.toContain('example.com');
+  });
+
+  it('oferty: wyjątek spoza bazy (sieć) też trafia do kanału, dawniej był cichym INTERNAL', async () => {
+    fakeDb.rows('jobs.delete-draft-state', () => {
+      throw new Error('connect ECONNREFUSED');
+    });
+    expect(await deleteJobDraft(JOB)).toEqual({ ok: false, error: 'INTERNAL' });
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ area: 'jobs.deleteJobDraft' });
+  });
+
+  it('kontrola ujemna: znany błąd biznesowy oferty (MODERATION_LOCKED) nie trafia do kanału', async () => {
+    fakeDb.rows('jobs.delete-draft-state', () => {
+      throw pgError('P0001', 'MODERATION_LOCKED');
+    });
+    expect(await deleteJobDraft(JOB)).toEqual({ ok: false, error: 'MODERATION_LOCKED' });
+    expect(reports).toEqual([]);
+  });
+
+  it('powiadomienia: nieznany SQLSTATE → wpis; znany (PERMISSION_DENIED) → bez wpisu', async () => {
+    fakeDb.rpc('mark_notifications_read', () => {
+      throw pgError('53300', SECRET_ROW);
+    });
+    expect(await markNotificationsRead()).toEqual({ ok: false, error: 'INTERNAL' });
+    expect(reports).toEqual([{ code: 'INTERNAL', area: 'notifications.markNotificationsRead', sqlstate: '53300' }]);
+
+    reports.length = 0;
+    fakeDb.rpc('mark_notifications_read', () => {
+      throw pgError('42501', 'new row violates row-level security policy');
+    });
+    expect(await markNotificationsRead()).toEqual({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(reports).toEqual([]);
+  });
+
+  it('panel admina: nieznany SQLSTATE w RPC → wpis; STALE_STATE → bez wpisu', async () => {
+    resetFakeDb({ id: USER, role: 'admin' });
+    fakeDb.rpc('admin_set_contact_message_status', () => {
+      throw pgError('XX000', SECRET_ROW);
+    });
+    const failed = await setContactMessageStatus(JOB, 'handled', 'new');
+    expect(failed).toEqual({ ok: false, error: 'INTERNAL' });
+    expect(reports).toEqual([{ code: 'INTERNAL', area: 'admin.setContactMessageStatus', sqlstate: 'XX000' }]);
+
+    reports.length = 0;
+    fakeDb.rpc('admin_set_contact_message_status', () => {
+      throw pgError('P0001', 'STALE_STATE');
+    });
+    expect(await setContactMessageStatus(JOB, 'handled', 'new')).toEqual({ ok: false, error: 'STALE_STATE' });
     expect(reports).toEqual([]);
   });
 });
