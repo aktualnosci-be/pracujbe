@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0981 (numer tymczasowy — ostateczny nada integrator) — decyzje właściciela 29.09.2026.
+-- 0202 (numer tymczasowy — ostateczny nada integrator) — decyzje właściciela 29.09.2026.
 --
 -- 1. #1222: ponowne otwarcie oferty (`set_job_status(..., 'reopen')` z closed/expired albo
 --    aktywnej/wstrzymanej po terminie) ustawia `published_at = now()` — liczy się jak nowa
@@ -15,7 +15,7 @@
 --    null; indeks unikalny oczekujących bez zmian — oczekujące zawsze mają adres).
 --    E-maile rejestracyjne tych zaproszeń (0121, bez profilu odbiorcy) są usuwane z kolejki.
 --
--- Rollback: supabase/rollback/0981_owner_decisions_reopen_invitations.down.sql.
+-- Rollback: supabase/rollback/0202_owner_decisions_reopen_invitations.down.sql.
 -- =============================================================================
 
 -- --- 1. set_job_status: reopen odświeża published_at -------------------------------------------

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0981 — przywraca `set_job_status` z 0085 i `erase_employer_subject` z 0161.
+-- Rollback 0202 — przywraca `set_job_status` z 0085 i `erase_employer_subject` z 0161.
 -- Zaproszenia z wyzerowanym adresem (skutek usunięcia konta) nie mogą wrócić do NOT NULL:
 -- dostają adres zastępczy w domenie `.invalid` (ślad zdarzenia zostaje, osoby nie da się
 -- odtworzyć). Opublikowane daty ponownie otwartych ofert zostają (dane, nie definicja).

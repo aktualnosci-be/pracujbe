@@ -1920,7 +1920,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
-  Reopen = nowa publikacja (#1222, decyzja właściciela 29.09.2026, migracja `0981` — numer tymczasowy):
+  Reopen = nowa publikacja (#1222, decyzja właściciela 29.09.2026, migracja `0202` — numer tymczasowy):
   `set_job_status(…, 'reopen')` ustawia `published_at = now()` (alerty zapisanych wyszukiwań, filtr daty, sort
   „najnowsze”, `datePosted`); pauza/wznowienie daty nie zmieniają; para (wyszukiwanie, oferta) już wysłana nie
   wraca. Dowód: `rls.sql` sekcja OD981 (kontrola ujemna: warunek z 0085 zostawia starą datę).
@@ -2993,7 +2993,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
   z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
   wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
-  Zaproszenia na adres osoby (#1233, migracja `0981`): oczekujące → `revoked`, adres zerowany we wszystkich
+  Zaproszenia na adres osoby (#1233, migracja `0202`): oczekujące → `revoked`, adres zerowany we wszystkich
   (`company_invitations.email` nullable, CHECK `company_invitations_email_when_pending`), e-maile rejestracyjne
   tych zaproszeń usunięte z kolejki; wiersz = ślad zdarzenia. Dowód: `rls.sql` OD981 (kontrola ujemna).
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez

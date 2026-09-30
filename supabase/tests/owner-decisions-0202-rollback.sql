@@ -1,5 +1,5 @@
 -- =============================================================================
--- OD981-R — rollback migracji 0981 (#1222, #1233). Uruchamiany przez scripts/test-rls.sh
+-- OD981-R — rollback migracji 0202 (#1222, #1233). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie (dane OD981 z rls.sql: zaproszenia z wyzerowanym adresem).
 -- Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
@@ -15,10 +15,10 @@ select pg_temp.assert(
   position('p_action = ''reopen'' then now()' in pg_get_functiondef('public.set_job_status(uuid,text)'::regprocedure)) > 0
   and position('company_invitations' in pg_get_functiondef('public.erase_employer_subject(uuid,text,uuid)'::regprocedure)) > 0
   and exists (select 1 from public.company_invitations where email is null),
-  'OD981-R0 stan wyjściowy: migracja 0981 zastosowana, są zaproszenia z wyzerowanym adresem');
+  'OD981-R0 stan wyjściowy: migracja 0202 zastosowana, są zaproszenia z wyzerowanym adresem');
 
 begin;
-\ir ../rollback/0981_owner_decisions_reopen_invitations.down.sql
+\ir ../rollback/0202_owner_decisions_reopen_invitations.down.sql
 select pg_temp.assert(
   position('p_action = ''reopen'' then now()' in pg_get_functiondef('public.set_job_status(uuid,text)'::regprocedure)) = 0
   and position('published_at is null then now()' in pg_get_functiondef('public.set_job_status(uuid,text)'::regprocedure)) > 0
@@ -32,4 +32,4 @@ select pg_temp.assert(
 rollback;
 select pg_temp.assert(exists (select 1 from public.company_invitations where email is null),
   'OD981-R2 rollback testu cofnięty');
-\echo 'OD981-R rollback 0981: PASS'
+\echo 'OD981-R rollback 0202: PASS'

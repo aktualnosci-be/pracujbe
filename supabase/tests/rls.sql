@@ -23532,7 +23532,7 @@ select pg_temp.assert(pg_get_functiondef('public.requeue_failed_email_deliveries
 rollback;
 reset role;
 -- ============================================================================
--- OD981. Decyzje właściciela 29.09.2026 (migracja 0981 — numer tymczasowy):
+-- OD981. Decyzje właściciela 29.09.2026 (migracja 0202 — numer tymczasowy):
 --   #1222 ponowne otwarcie oferty odświeża published_at (nowa publikacja: alerty, filtr daty),
 --   #1233 usunięcie konta pracodawcy cofa oczekujące zaproszenia na jego adres i zeruje adres
 --         w rozstrzygniętych (ślad zdarzenia zostaje).
@@ -23567,7 +23567,7 @@ insert into public.job_translations(job_id, locale, title, description, responsi
 insert into public.job_requirements(job_id, locale, kind, position, content) values
   (:'ODJ', 'pl', 'mandatory', 0, 'Dyspozycyjność'), (:'ODJ2', 'pl', 'mandatory', 0, 'Dyspozycyjność');
 
--- OD981-N1 (kontrola ujemna): definicja sprzed 0981 (warunek z 0085) zostawia starą datę.
+-- OD981-N1 (kontrola ujemna): definicja sprzed 0202 (warunek z 0085) zostawia starą datę.
 begin;
 do $neg$
 declare d text;
