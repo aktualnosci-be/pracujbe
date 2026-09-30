@@ -90,6 +90,7 @@ function mockRpc(claim = 'claimed', recordError: string | null = null) {
     return 'applied';
   });
   fakeDb.rpc('complete_webhook', true);
+  fakeDb.rpc('release_webhook', true);
 }
 
 beforeEach(() => {
@@ -308,7 +309,43 @@ describe('POST /api/email/webhook/emaillabs', () => {
     const res = await post(request([event('hardbounce')]));
     expect(res.status).toBe(500);
     expect(fakeDb.callsTo('complete_webhook')).toHaveLength(0);
+    expect(fakeDb.callsTo('release_webhook')).toHaveLength(1);
     expect(JSON.stringify(captureError.mock.calls)).not.toContain('@');
+  });
+
+  it('#790: równoległa paczka (locked) → 503 z Retry-After, nie 200; bez zapisu', async () => {
+    resetFakeDb(null);
+    mockRpc('locked');
+    const res = await post(request([event('hardbounce')]));
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('30');
+    expect(fakeDb.callsTo('record_email_event')).toHaveLength(0);
+  });
+
+  it('#790: po błędzie zapisu dzierżawa jest zwolniona i ponowienie zapisuje paczkę', async () => {
+    resetFakeDb(null);
+    let leaseHeld = false;
+    let fail = true;
+    fakeDb.rpc('claim_webhook', () => {
+      if (leaseHeld) return 'locked';
+      leaseHeld = true;
+      return 'claimed';
+    });
+    fakeDb.rpc('release_webhook', () => {
+      leaseHeld = false;
+      return true;
+    });
+    fakeDb.rpc('complete_webhook', true);
+    fakeDb.rpc('record_email_event', () => {
+      if (fail) {
+        fail = false;
+        throw pgError('XX000', 'blip');
+      }
+      return 'applied';
+    });
+    expect((await post(request([event('hardbounce')]))).status).toBe(500);
+    expect((await post(request([event('hardbounce')]))).status).toBe(200);
+    expect(fakeDb.callsTo('complete_webhook')).toHaveLength(1);
   });
 
   it('nie-JSON → 400; pojedynczy obiekt (nie tablica) też jest przyjmowany', async () => {

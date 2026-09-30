@@ -99,10 +99,17 @@ export async function POST(request: Request): Promise<Response> {
     if (normalized.status === 'event') events.push(normalized.event);
   }
 
-  const { claimWebhook, completeWebhook } = await import('@/lib/webhook-inbox');
+  const { claimWebhook, completeWebhook, releaseWebhook } = await import('@/lib/webhook-inbox');
   const inboxId = `emaillabs:${requestId}`;
   const claim = await claimWebhook(inboxId, INBOX_SOURCE);
-  if (claim === 'duplicate' || claim === 'locked') return ok();
+  if (claim === 'duplicate') return ok();
+  if (claim === 'locked') {
+    // #790: nie potwierdzamy paczki, którą aktywny worker mógł nie dokończyć.
+    return Response.json(
+      { error: 'in progress' },
+      { status: 503, headers: { ...NO_STORE, 'Retry-After': '30' } },
+    );
+  }
   if (claim === 'error') {
     captureError(new Error('webhook inbox unavailable'), { area: 'email.webhook.emaillabs.inbox' });
     return json({ error: 'unavailable' }, 503);
@@ -128,6 +135,7 @@ export async function POST(request: Request): Promise<Response> {
         area: 'email.webhook.emaillabs.record',
         events: events.length,
       });
+      await releaseWebhook(inboxId);
       return json({ error: 'processing failed' }, 500);
     }
   }

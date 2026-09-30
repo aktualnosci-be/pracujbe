@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { expect, test, type Page } from "@playwright/test";
+import { defined } from "./fixtures/defined";
 
 const locales = ["pl", "nl", "fr", "en"] as const;
 
@@ -36,7 +37,7 @@ function escapeRegExp(value: string): string {
 /** Wzorzec etykiety „Pokaż N ofert” — obsługuje odmianę ICU (`{count, plural, …}`, #226). */
 function resultsPattern(template: string): RegExp {
   const branches = [...template.matchAll(/\{([^{}]*#[^{}]*)\}/g)].map(
-    (match) => match[1],
+    (match) => defined(match[1], "gałąź odmiany ICU"),
   );
   const variants = branches.length > 0 ? branches : [template];
   const alternatives = variants.map((variant) =>

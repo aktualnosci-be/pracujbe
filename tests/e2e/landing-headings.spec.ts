@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
+import { defined } from "./fixtures/defined";
 
 /**
  * Landingi `/praca/kategoria/*` i `/praca/miasto/*`: hierarchia nagłówków w `main`
@@ -38,11 +39,11 @@ for (const locale of locales) {
         );
 
       expect(headings[0]?.level, JSON.stringify(headings)).toBe(1);
-      for (let i = 1; i < headings.length; i += 1) {
-        const jump = headings[i].level - headings[i - 1].level;
+      for (const [previous, current] of headings.slice(1).map((heading, i) => [defined(headings[i], "poprzedni nagłówek"), heading] as const)) {
+        const jump = current.level - previous.level;
         expect(
           jump,
-          `skok ${headings[i - 1].level}→${headings[i].level} przed „${headings[i].text}”\n${JSON.stringify(headings, null, 2)}`,
+          `skok ${previous.level}→${current.level} przed „${current.text}”\n${JSON.stringify(headings, null, 2)}`,
         ).toBeLessThanOrEqual(1);
       }
 

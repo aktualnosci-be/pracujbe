@@ -68,6 +68,7 @@ const NOT_OPERATOR: Readonly<Record<string, string>> = {
   CI_GUARD_FIXTURE_CONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia konfiguracji fixture w kontroli ujemnej',
   CI_GUARD_REAL_CONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia konfiguracji real-flow w kontroli ujemnej',
   CI_GUARD_ESLINT_CONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia .eslintrc.json w kontroli ujemnej',
+  CI_GUARD_E2E_TSCONFIG: 'strażnik CI (check-ci-workflows.mjs) — kopia tsconfig.e2e.json w kontroli ujemnej (#1121)',
   TEST_NETWORK_ALLOW: 'testy — zezwolenie na sieć w teście',
   // --- Deterministyczny build fontu (scripts/subset-font.py) ---
   PYTHONHASHSEED: 'powtarzalny podzbiór fontu (subset-font.py)',
