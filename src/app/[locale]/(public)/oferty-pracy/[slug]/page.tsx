@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Home,
+  Clock,
   Languages as LanguagesIcon,
   MapPin,
   MessageSquare,
@@ -682,6 +683,18 @@ export default async function JobDetailPage({ params }: PageProps) {
                     </div>
                   );
                 })}
+                {job.workTime ? (
+                  <div className="relative pl-[1.875rem]" data-testid="job-work-time">
+                    <dt className="text-sm text-muted-foreground">
+                      <Clock
+                        className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      {t('workTimeLabel')}
+                    </dt>
+                    <dd className="font-medium text-foreground">{t(`workTimeValues.${job.workTime}`)}</dd>
+                  </div>
+                ) : null}
                 {job.languages.length > 0 ? (
                   <div className="relative pl-[1.875rem]">
                     <dt className="text-sm text-muted-foreground">

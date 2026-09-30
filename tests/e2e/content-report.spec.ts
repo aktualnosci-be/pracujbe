@@ -5,6 +5,7 @@ import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * #41 w trybie DEMO (bez bazy): strona zgłoszenia bez wskazanej treści i dla oferty
@@ -14,9 +15,9 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  */
 
 type Messages = {
-  contentReport: Record<string, string> & { error: Record<string, string> };
-  admin: Record<string, string>;
-  errors: Record<string, string>;
+  contentReport: AppMessages['contentReport'];
+  admin: AppMessages['admin'];
+  errors: AppMessages['errors'];
 };
 
 function messages(locale: string): Messages {

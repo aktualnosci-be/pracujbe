@@ -18,9 +18,10 @@ import { verifyStandardWebhook } from '@/lib/webhooks';
  *      (±300 s, anty-replay) → 401,
  *   4. normalizacja do modelu zdarzeń (`provider-events.ts`); zdarzenie spoza modelu → 200,
  *   5. inbox `processed_webhooks` (claim z dzierżawą): powtórzone zakończone zdarzenie
- *      (`duplicate`) albo równoległa dostawa (`locked`) → 200 bez zmian,
+ *      (`duplicate`) → 200 bez zmian; równoległa dostawa (`locked`) → 503 + `Retry-After` (#790),
  *   6. RPC `record_email_event` (0098): status tylko „w górę”, trwałe odbicie i skarga →
- *      blokada adresu. Błąd → 500 (dostawca ponowi; zapis jest idempotentny),
+ *      blokada adresu. Błąd → zwolnienie dzierżawy + 500 (dostawca ponowi; zapis jest idempotentny).
+ *      Zdarzenie bez wysyłki (`unknown_message`) baza zachowuje do przypisania (#788, 0195),
  *   7. inbox `completed` → 200.
  * #25: claim, zapis zdarzenia i complete to trzy osobne, krótkie transakcje service_role —
  * dzierżawa jest widoczna dla równoległych dostaw od chwili claimu.
@@ -83,11 +84,18 @@ export async function POST(request: Request): Promise<Response> {
   if (normalized.status === 'ignored') return json({ ok: true, ignored: true });
   const { event } = normalized;
 
-  const { claimWebhook, completeWebhook } = await import('@/lib/webhook-inbox');
+  const { claimWebhook, completeWebhook, releaseWebhook } = await import('@/lib/webhook-inbox');
   const inboxId = `resend:${eventId}`;
   const claim = await claimWebhook(inboxId, INBOX_SOURCE);
   if (claim === 'duplicate') return json({ ok: true, duplicate: true });
-  if (claim === 'locked') return json({ ok: true, locked: true });
+  if (claim === 'locked') {
+    // #790: 2xx potwierdziłby zdarzenie, którego aktywny worker mógł nie dokończyć (awaria
+    // procesu przed complete) — dostawca ma ponowić po wygaśnięciu dzierżawy.
+    return Response.json(
+      { error: 'in progress' },
+      { status: 503, headers: { ...NO_STORE, 'Retry-After': '30' } },
+    );
+  }
   if (claim === 'error') {
     captureError(new Error('webhook inbox unavailable'), { area: 'email.webhook.inbox' });
     return json({ error: 'unavailable' }, 503);
@@ -110,6 +118,8 @@ export async function POST(request: Request): Promise<Response> {
       area: 'email.webhook.record',
       kind: event.kind,
     });
+    // #790: zwolnij dzierżawę, żeby szybkie ponowienie dostawcy (Resend: po 5 s) nie dostało `locked`.
+    await releaseWebhook(inboxId);
     return json({ error: 'processing failed' }, 500);
   }
 
