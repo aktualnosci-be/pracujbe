@@ -174,7 +174,9 @@ describe('buildImportDraftContent', () => {
     join(process.cwd(), 'supabase/migrations', latestSaveJobDraftMigration()),
     'utf8',
   );
-    const lists = [...sql.matchAll(/k not in \(([^)]*)\)/g)].map(
+    // Tylko ciało `save_job_draft` — migracja może definiować też inne funkcje z listą kluczy.
+    const body = sql.slice(sql.indexOf('function public.save_job_draft('));
+    const lists = [...body.matchAll(/k not in \(([^)]*)\)/g)].map(
       (x) => new Set([...x[1]!.matchAll(/'([a-z_]+)'/g)].map((y) => y[1]!)),
     );
     return { job: lists[0]!, translation: lists[1]! };

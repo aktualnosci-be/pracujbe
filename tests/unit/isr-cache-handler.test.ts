@@ -5,9 +5,12 @@ import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { routing } from '@/i18n/routing';
 import {
+  BUILD_EMPTY_JOB_PAGE,
   createIsrCacheHandler,
   deserializeEntry,
+  isBuildSeedWithoutJobs,
   isNegativeValue,
   serializeEntry,
 } from '@/lib/cache/isr-cache-handler.mjs';
@@ -193,6 +196,70 @@ describe('isr-cache-handler', () => {
     expect(readFileSync(join(app, 'pl/regulamin.html'), 'utf8')).toBe('<h1>Regulamin</h1>');
     // Klucz spoza katalogu aplikacji nie jest czytany.
     expect(await handler().get('/../../etc/passwd', APP_PAGE)).toBeNull();
+  });
+
+  describe('#1115 (DVP-03): strony z ofertami z buildu przy prawdziwej bazie', () => {
+    const DB_ENV = { DATABASE_APP_URL: 'postgresql://app@db/app' } as unknown as NodeJS.ProcessEnv;
+    const NO_DB_ENV = {} as unknown as NodeJS.ProcessEnv;
+    async function seedPage(path: string, html: string) {
+      const app = join(serverDistDir, 'app');
+      await mkdir(join(app, path, '..'), { recursive: true });
+      await writeFile(join(app, `${path}.html`), html);
+      await writeFile(join(app, `${path}.rsc`), 'rsc');
+    }
+
+    it('z DATABASE_APP_URL strona główna i /praca nie są serwowane z buildu (pusta lista ofert)', async () => {
+      await seedPage('pl', 'home-bez-ofert');
+      await seedPage('pl/praca', 'hub-bez-ofert');
+      await seedPage('pl/regulamin', 'regulamin');
+      const Handler = createIsrCacheHandler({ env: { DATABASE_APP_URL: 'postgresql://app@db/app' } });
+      const h = new Handler({ serverDistDir, flushToDisk: false });
+      expect(await h.get('/pl', APP_PAGE)).toBeNull();
+      expect(await h.get('/pl/praca', APP_PAGE)).toBeNull();
+      // Strona bez ofert nadal z buildu.
+      expect((await h.get('/pl/regulamin', APP_PAGE))?.value.html).toBe('regulamin');
+      // Po pierwszym renderze z danymi wpis jest w cache jak zwykle.
+      await h.set('/pl', page('home-z-ofertami'), {});
+      expect((await h.get('/pl', APP_PAGE))?.value.html).toBe('home-z-ofertami');
+    });
+
+    it('kontrola ujemna: bez bazy (demo/CI) strona główna jest czytana z buildu jak dotąd', async () => {
+      await seedPage('pl', 'home-demo');
+      const Handler = createIsrCacheHandler({ env: {} });
+      expect((await new Handler({ serverDistDir, flushToDisk: false }).get('/pl', APP_PAGE))?.value.html).toBe('home-demo');
+    });
+
+    it('wzorzec obejmuje każdy język routingu i tylko te dwie strony', () => {
+      const env = DB_ENV;
+      for (const locale of routing.locales) {
+        expect(isBuildSeedWithoutJobs(`/${locale}`, env), locale).toBe(true);
+        expect(isBuildSeedWithoutJobs(`/${locale}/praca`, env), locale).toBe(true);
+        expect(isBuildSeedWithoutJobs(`/${locale}/praca/miasto/gent`, env)).toBe(false);
+        expect(isBuildSeedWithoutJobs(`/${locale}/regulamin`, env)).toBe(false);
+      }
+      const inPattern = BUILD_EMPTY_JOB_PAGE.source.match(/\(\?:([a-z|]+)\)/)?.[1]?.split('|') ?? [];
+      expect([...inPattern].sort()).toEqual([...routing.locales].sort());
+      expect(isBuildSeedWithoutJobs('/pl', NO_DB_ENV)).toBe(false);
+    });
+
+    it('strona z ofertami bez własnego generateStaticParams z prerenderParamsAtBuild jest na liście', () => {
+      // Strony ISR z ofertami: prerender w buildzie = pusta lista (isBuildPhase). Albo nie są
+      // prerenderowane przy bazie (prerenderParamsAtBuild / pusta lista parametrów), albo handler pomija ich wersję z buildu.
+      const pages: Array<[string, string]> = [
+        ['src/app/[locale]/(public)/page.tsx', '/pl'],
+        ['src/app/[locale]/(public)/praca/page.tsx', '/pl/praca'],
+        ['src/app/[locale]/(public)/praca/kategoria/[category]/page.tsx', ''],
+        ['src/app/[locale]/(public)/praca/miasto/[city]/page.tsx', ''],
+        ['src/app/[locale]/(public)/oferty-pracy/[slug]/page.tsx', ''],
+      ];
+      for (const [file, key] of pages) {
+        const source = readFileSync(file, 'utf8');
+        expect(source, file).toContain('export const revalidate = 60');
+        const guarded = source.includes('prerenderParamsAtBuild(') || /generateStaticParams\(\)[^\n]*\n\s*return \[\];/.test(source);
+        if (key) expect(isBuildSeedWithoutJobs(key, DB_ENV), file).toBe(true);
+        else expect(guarded, `${file}: bez prerenderParamsAtBuild dopisz stronę do BUILD_EMPTY_JOB_PAGE`).toBe(true);
+      }
+    });
   });
 
   it('strona z buildu nadpisana w runtime nie wraca do wersji z buildu po wypadnięciu z cache', async () => {

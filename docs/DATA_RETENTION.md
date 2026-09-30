@@ -78,8 +78,9 @@ telemetrię nie ma znaczenia (to nie telemetria).
 
 Przed usunięciem CV albo konta zadanie zapisuje `retention_warnings` (kandydat, kategoria,
 aktywność, termin = później z `aktywność + okres` i `teraz + 30 dni`) i kolejkuje e-mail
-w języku odbiorcy (Invariant #1) z datą usunięcia. Usunięcie następuje dopiero po terminie
-z ostrzeżenia; nowa aktywność unieważnia ostrzeżenie (wiersz znika, następne dopiero po
+w języku odbiorcy (Invariant #1) z datą usunięcia. Usunięcie następuje dopiero od terminu
+z ostrzeżenia (`retention_warnings.due_at <= now()`; okres `storage_physical_deletion` nie
+przyspiesza utraty CV ani konta — reguluje tylko kolejkę storage, 0197 #784); nowa aktywność unieważnia ostrzeżenie (wiersz znika, następne dopiero po
 kolejnym okresie). Treść e-maili (`src/emails/copy.ts`) do akceptacji właściciela.
 
 ## 2. Zadanie w `/api/maintenance`

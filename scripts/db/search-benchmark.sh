@@ -19,6 +19,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$ROOT/scripts/lib/migration-files.sh"
+MIGRATIONS="$(migration_files "$ROOT/supabase/migrations" "$ROOT/database/auth")"
 DB=pracujbe_search_bench
 JOBS="${BENCH_JOBS:-20000}"
 BASELINE="${BENCH_BASELINE:-0108}"
@@ -34,15 +36,16 @@ cleanup() { "${psql_base[@]}" -d postgres -c "drop database if exists $DB;" >/de
 [ -n "${BENCH_KEEP:-}" ] || trap cleanup EXIT
 
 # Pliki migracji w kolejności migratora; $1 = before|after względem BASELINE.
-migration_files() {
-  for f in "$ROOT"/supabase/migrations/0*.sql "$ROOT"/database/auth/0*.sql; do
-    printf '%s\t%s\n' "$(basename "$f")" "$f"
-  done | LC_ALL=C sort | while IFS=$'\t' read -r name file; do
+# Lista jak w produkcyjnym loaderze (każdy `NNNN_*.sql`, #1114): scripts/lib/migration-files.sh.
+bench_migration_files() {
+  local name file
+  while IFS= read -r file; do
+    name="${file##*/}"
     local after=0
     [[ "$file" == */supabase/migrations/* && "${name:0:4}" > "$BASELINE" ]] && after=1
     if [ "$1" = before ] && [ "$after" = 0 ]; then echo "$file"; fi
     if [ "$1" = after ] && [ "$after" = 1 ]; then echo "$file"; fi
-  done
+  done <<< "$MIGRATIONS"
 }
 
 echo ">> baza: bootstrap + migracje do $BASELINE"
@@ -50,7 +53,7 @@ echo ">> baza: bootstrap + migracje do $BASELINE"
 "${psql_base[@]}" -d "$DB" -1 -f "$ROOT/database/bootstrap/0001_roles_and_identity.sql" >/dev/null 2>&1
 while IFS= read -r file; do
   "${psql_base[@]}" -d "$DB" -1 -f "$file" >/dev/null 2>&1
-done < <(migration_files before)
+done < <(bench_migration_files before)
 
 echo ">> dane: $JOBS ofert (syntetyczne, is_demo=true)"
 "${psql_base[@]}" -d "$DB" -v jobs="$JOBS" <<'SQL' >/dev/null
@@ -155,7 +158,7 @@ echo ">> migracje po $BASELINE"
 while IFS= read -r file; do
   echo "   $(basename "$file")"
   "${psql_base[@]}" -d "$DB" -1 -f "$file" >/dev/null
-done < <(migration_files after)
+done < <(bench_migration_files after)
 "${psql_base[@]}" -d "$DB" -c 'analyze;' >/dev/null
 run_queries "PO (wszystkie migracje)"
 echo

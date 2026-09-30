@@ -109,6 +109,18 @@ Konto kandydata może mieć najwyżej 10 plików CV i 50 MB łącznie. Aplikacja
 oznaczona jako usunięta jest nieaktywna: baza odrzuca zmianę jej statusu (neutralny błąd „nie
 znaleziono”), a strony jej nie widzą; usuwanie konta i retencja działają jak dotąd.
 
+## 2026-09-29: filtry listy ofert — praca zdalna i waluta (#824, #787)
+
+Oferta oznaczona jako praca zdalna (`jobs.remote`, pole kreatora „Praca zdalna”) pasuje do
+każdego filtra promienia („w promieniu N km od miejscowości”): nie odpada, choćby miejscowość
+oferty była daleko albo nierozpoznana, także gdy nie rozpoznano miejscowości wpisanej przez
+kandydata — dojazd nie dotyczy pracy zdalnej. Warunek jest jeden w liście, liczniku, facetach
+i kopii filtrów dla alertów zapisanych wyszukiwań; notka pod filtrem to mówi.
+
+Oferta z wynagrodzeniem w innej walucie niż EUR (np. PLN) zostaje na liście przy filtrze kwoty
+(kwoty nie przeliczamy — portal nie ma datowanego źródła kursów; oferta jest nieporównywalna
+jak stawka za inny okres) i trafia na koniec sortowania „najwyższe wynagrodzenie”.
+
 ## Logowanie z linku potwierdzającego i adres IP za Cloudflare (30.09.2026)
 
 Link potwierdzający otwarty na innym urządzeniu lub w innej przeglądarce niż ta, w której

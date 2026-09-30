@@ -225,6 +225,20 @@ describe('strażnik workflowów CI', () => {
     expect(runGuard(undefined, undefined, undefined, env).code).toBe(0);
   });
 
+  it('kontrola ujemna: tsconfig.e2e.json wyłącza noUncheckedIndexedAccess (#1121)', () => {
+    const file = mutatedFile('tsconfig.e2e.json', (source) =>
+      source.replace('"compilerOptions": {', '"compilerOptions": { "noUncheckedIndexedAccess": false,'),
+    );
+    const { code, output } = runGuard(undefined, undefined, undefined, { CI_GUARD_E2E_TSCONFIG: file });
+    expect(code).not.toBe(0);
+    expect(output).toContain('nie wyłączaj noUncheckedIndexedAccess');
+  });
+
+  it('tsconfig.e2e.json bez zmian przechodzi strażnika (kontrola dodatnia #1121)', () => {
+    const file = mutatedFile('tsconfig.e2e.json', (source) => `${source}\n`);
+    expect(runGuard(undefined, undefined, undefined, { CI_GUARD_E2E_TSCONFIG: file }).code).toBe(0);
+  });
+
   it('kontrola ujemna: typecheck bez tests/e2e (tsconfig.e2e.json)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ci-guard-pkg-'));
     dirs.push(dir);

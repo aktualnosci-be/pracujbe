@@ -55,6 +55,9 @@ export default defineConfig({
       DATABASE_AUTH_URL: process.env.E2E_REAL_AUTH_URL,
       BETTER_AUTH_URL: 'https://auth.e2e-real.invalid',
       BETTER_AUTH_SECRET: 'e2e-real-flow-secret-not-for-production-0123456789abcdef',
+      // #1115: na prawdziwej bazie tokeny gościa/zaproszeń wymagają jawnego sekretu (bez
+      // publicznego sekretu deweloperskiego także w trybie demo).
+      GUEST_APPLY_SECRET: 'e2e-real-flow-guest-secret-not-for-production-0123456789',
       // Migrator nie trafia do procesu aplikacji.
       E2E_REAL_ADMIN_URL: '',
       E2E_REAL_AUTH_URL: '',

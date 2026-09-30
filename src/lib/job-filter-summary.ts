@@ -19,6 +19,8 @@ export interface FilterSummaryTranslators {
   categories: FilterTranslator;
   /** Przestrzeń `contractTypes`. */
   contractTypes: FilterTranslator;
+  /** Przestrzeń `languageNames` (nazwa języka w języku widza, 0194). */
+  languageNames: FilterTranslator;
 }
 
 /**
@@ -30,6 +32,8 @@ export interface JobFilterSummaryItem {
   label: string;
   removeKey: string;
   removeValue?: string;
+  /** Pozostałe parametry adresu tego filtra, usuwane razem z `removeKey` (np. poziom z językiem). */
+  alsoRemove?: string[];
 }
 
 export function describeJobListFilters(
@@ -82,6 +86,32 @@ export function describeJobListFilters(
   if (sf.immediate) items.push({ id: 'immediate', label: t.filters('immediate'), removeKey: 'immediate' });
   if (sf.noLanguageRequired) {
     items.push({ id: 'nolang', label: t.filters('noLanguageRequired'), removeKey: 'noLang' });
+  }
+  if (sf.language) {
+    const language = t.languageNames(sf.language);
+    items.push({
+      id: 'lang',
+      label: sf.languageLevel
+        ? t.filters('languageLevelChip', { language, level: t.filters(`languageLevels.${sf.languageLevel}`) })
+        : t.filters('languageChip', { language }),
+      removeKey: 'lang',
+      alsoRemove: ['langLevel'],
+    });
+  }
+  if (sf.workTime) {
+    items.push({
+      id: 'worktime',
+      label: t.filters(sf.workTime === 'full_time' ? 'workTimeFull' : 'workTimePart'),
+      removeKey: 'workTime',
+    });
+  }
+  if (sf.near) {
+    items.push({
+      id: 'near',
+      label: t.filters('radiusChip', { km: sf.radiusKm, place: sf.near }),
+      removeKey: 'near',
+      alsoRemove: ['radius'],
+    });
   }
   if (sf.date !== 'any') {
     const key = sf.date === '24h' ? 'date24h' : sf.date === '7d' ? 'date7d' : 'date30d';

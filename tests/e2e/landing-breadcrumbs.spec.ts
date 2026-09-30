@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Hub `/praca` i landingi kategorii/miasta (issue #215):
@@ -21,8 +22,8 @@ type Messages = {
     otherCategories: string;
     otherCities: string;
   };
-  categories: Record<string, string>;
-  locations: Record<string, string>;
+  categories: AppMessages['categories'];
+  locations: AppMessages['locations'];
 };
 
 function messages(locale: Locale): Messages {
