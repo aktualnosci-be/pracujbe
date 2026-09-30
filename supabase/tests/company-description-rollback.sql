@@ -13,6 +13,8 @@ end $$;
 select count(*) as cdrcompanies from public.companies \gset
 
 begin;
+-- 0975 (język opisu, numer tymczasowy) nadpisuje funkcje 0198 — cofany najpierw.
+\ir ../rollback/0975_company_description_locale.down.sql
 \ir ../rollback/0198_company_description_review.down.sql
 select pg_temp.assert(
   to_regprocedure('public.submit_company_description(uuid, text)') is null
@@ -27,6 +29,6 @@ select pg_temp.assert(
   and (select count(*) from public.companies) = :cdrcompanies,
   'CDR971-R rollback usuwa tylko obiekty 0198 (opis zatwierdzony i linki zostają)');
 rollback;
-select pg_temp.assert(to_regprocedure('public.submit_company_description(uuid, text)') is not null,
+select pg_temp.assert(exists (select 1 from pg_proc where proname = 'submit_company_description'),
   'CDR971-R2 rollback testu cofnięty');
 \echo 'CDR971-R rollback 0198: PASS'

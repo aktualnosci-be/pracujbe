@@ -548,6 +548,7 @@ Tabele w migracjach: 111; z danymi osobowymi: 77; bez danych osobowych: 34.
 | `agency_check_status` | nie dotyczy: Wynik ręcznego sprawdzenia numeru uznania (słownik, 0167). | — |
 | `agency_checked_at` | nie dotyczy: Czas ręcznego sprawdzenia numeru uznania (0167). | — |
 | `description_locale` | nie dotyczy: Język opisu firmy zadeklarowany przez firmę (#708, 0975) — kod języka serwisu. | — |
+| `description_locale_pending` | nie dotyczy: Język propozycji opisu firmy (0975) — kod języka serwisu; przy akceptacji przechodzi do description_locale. | — |
 
 ### `public.company_invitations`
 

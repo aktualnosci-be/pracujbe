@@ -112,6 +112,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'admin' });
   const tb = await getTranslations({ locale, namespace: 'campaignBanner' });
+  const tLang = await getTranslations({ locale, namespace: 'languageNames' });
   const formatDate = createAppDateFormatter(locale);
 
   const result = await getCompanyDetail(id);
@@ -305,9 +306,24 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
         </div>
         <dl className="grid grid-cols-1 gap-5">
           <Field label={t('companyDescriptionPublished')} value={company.description ?? dash} />
+          {company.description ? (
+            <Field
+              label={t('companyDescriptionPublishedLocale')}
+              value={company.descriptionLocale ? tLang(company.descriptionLocale) : t('companyDescriptionLocaleNone')}
+            />
+          ) : null}
           {company.descriptionReview ? (
             <>
               <Field label={t('companyDescriptionProposed')} value={company.descriptionReview.text} />
+              {/* 0975: język propozycji — przy akceptacji staje się językiem opisu. */}
+              <Field
+                label={t('companyDescriptionProposedLocale')}
+                value={
+                  company.descriptionReview.locale
+                    ? tLang(company.descriptionReview.locale)
+                    : t('companyDescriptionLocaleNone')
+                }
+              />
               <Field
                 label={t('companyDescriptionSubmittedAt')}
                 value={formatDate(company.descriptionReview.submittedAt)}

@@ -98,6 +98,7 @@ describe('company read state', () => {
       id: 'company-1', name: 'Acme', status: 'verified', description: 'Stary opis',
       description_pending: 'Nowy opis', description_review_status: 'pending',
       description_pending_at: '2026-09-29 10:00:00.123+00', description_review_reason: null,
+      description_locale_pending: 'fr',
     }]);
     expect(await getMyCompany()).toMatchObject({
       company: {
@@ -107,6 +108,7 @@ describe('company read state', () => {
           text: 'Nowy opis',
           submittedAt: '2026-09-29 10:00:00.123+00',
           reason: null,
+          locale: 'fr',
         },
       },
     });

@@ -12,6 +12,8 @@ export const COMPANY_DESCRIPTION_MAX = 1500;
 /** Maks. długość uzasadnienia odrzucenia — jak w RPC `admin_decide_company_description`. */
 export const COMPANY_DESCRIPTION_REASON_MAX = 1000;
 
+import { isLocale, type Locale } from '@/i18n/routing';
+
 export type CompanyDescriptionReviewStatus = 'pending' | 'rejected';
 
 export interface CompanyDescriptionReview {
@@ -22,6 +24,11 @@ export interface CompanyDescriptionReview {
   submittedAt: string | null;
   /** Uzasadnienie odrzucenia (tylko `rejected`). */
   reason: string | null;
+  /**
+   * Język propozycji (0975, `description_locale_pending`) — przy akceptacji staje się językiem
+   * zatwierdzonego opisu; null = nie wskazano (po akceptacji język nieznany).
+   */
+  locale: Locale | null;
 }
 
 function textOrNull(value: unknown): string | null {
@@ -41,6 +48,7 @@ export function parseCompanyDescriptionReview(
     text,
     submittedAt: textOrNull(row['description_pending_at']),
     reason: status === 'rejected' ? textOrNull(row['description_review_reason']) : null,
+    locale: isLocale(row['description_locale_pending']) ? row['description_locale_pending'] : null,
   };
 }
 

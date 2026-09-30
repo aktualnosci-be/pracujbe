@@ -1069,17 +1069,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   zatwierdzoną (0156) stronę WWW jako nazwany link zewnętrzny (host + ścieżka, nowa karta zapowiedziana
   czytnikowi, `rel="noopener noreferrer nofollow"`) i logo — ale obraz tylko z hosta witryny
   (`profileLogoSrc`: CSP `img-src`/`remotePatterns`, bez żądania do serwera firmy przed zgodą,
-  Invariant #7), inaczej inicjały. `companies.description_locale` (FK `supported_locales`) wskazuje
-  owner/admin w `/employer/firma` (`CompanyDescriptionLocaleForm` → `set_company_description_locale`,
-  audyt `company.description_locale_changed`); trigger zeruje język przy każdej zmianie treści opisu
-  bez jednoczesnego wskazania języka (stary język nie zostaje przy nowym tekście), CHECK — brak języka
-  bez opisu. `get_public_company` zwraca `description_locale`; opis ma `lang`, a gdy jest w innym
+  Invariant #7), inaczej inicjały. `companies.description_locale` (FK `supported_locales`) = język
+  ZATWIERDZONEGO opisu. Język wybiera się razem z tekstem w `CompanyDescriptionForm` (`/employer/firma`,
+  decyzja właściciela 30.09.2026): `submit_company_description(id, tekst, język)` zapisuje go w
+  `description_locale_pending` przy propozycji (ponowienie tej samej propozycji z innym językiem
+  poprawia tylko język, czas zgłoszenia bez zmian), `admin_decide_company_description` przy akceptacji
+  przenosi go do `description_locale` (osobnym zapisem po tekście), odrzucenie go nie zmienia
+  (propozycja z językiem zostaje do wglądu); tekst = zatwierdzony + inny język = sama zmiana języka od
+  razu (`locale_applied`, przez `set_company_description_locale`, audyt `company.description_locale_changed`).
+  Admin widzi język opisu i propozycji w `/admin/firmy/[id]`. Strażnik 0198 obejmuje obie kolumny
+  języka (bez bezpośredniego zapisu klienta); trigger zeruje język przy każdej zmianie treści bez
+  jednoczesnego wskazania języka, CHECK — brak języka bez opisu i brak języka propozycji bez propozycji.
+  `get_public_company` zwraca `description_locale`; opis ma `lang`, a gdy jest w innym
   języku niż strona albo język nieznany — dopisek `companyProfile.descriptionLanguage*`; metadane
   wersji w innym języku niż opis biorą ogólny `metaDescription` (nieznany = opis, #647). hreflang bez
   zmian (interfejs i karty ofert są w języku strony). Dowód: `rls.sql` sekcja CDL975 (kontrole ujemne:
-  bez triggera, CHECK, member/obca firma), rollback `0975_…down.sql`, unit `company-profile-view`,
-  `company-description-locale-*`, E2E `company-profile`. **Otwarte:** tłumaczenia opisu z zatwierdzaniem
-  (plan #31), język propozycji opisu po #868/#1197.
+  bez triggera, bez strażnika, CHECK, member/obca firma, akceptacja jednym zapisem gubi język),
+  rollback `0975_…down.sql` (też przed 0198 w `company-description-rollback.sql`), unit
+  `company-profile-view`, `company-description-{form,update}`, E2E `company-profile`. **Otwarte:**
+  tłumaczenia opisu z zatwierdzaniem (plan #31).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi
   wyłącznie z faktów produktu (`help.*`, PL/NL/FR/EN, natywne `<details>`, bez terminów i cen),
   `/kontakt` = formularz (`ContactForm`, kalka `.paper.demo-form`): temat ze słownika, treść

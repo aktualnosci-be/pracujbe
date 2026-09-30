@@ -160,7 +160,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
                 c.description, c.description_pending, c.description_review_status,
                 c.description_pending_at, c.description_review_reason,
                 c.is_agency, c.agency_recognition_number, c.agency_check_status,
-                c.description_locale, (btrim(coalesce(c.description, '')) <> '') AS has_description
+                c.description_locale, c.description_locale_pending,
+                (btrim(coalesce(c.description, '')) <> '') AS has_description
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true
@@ -237,7 +238,8 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
                 c.description, c.description_pending, c.description_review_status,
                 c.description_pending_at, c.description_review_reason, m.role,
                 c.is_agency, c.agency_recognition_number, c.agency_check_status,
-                c.description_locale, (btrim(coalesce(c.description, '')) <> '') AS has_description
+                c.description_locale, c.description_locale_pending,
+                (btrim(coalesce(c.description, '')) <> '') AS has_description
            FROM public.company_members m
            JOIN public.companies c ON c.id = m.company_id
           WHERE m.profile_id = $1 AND m.company_id = $2 AND m.is_active = true

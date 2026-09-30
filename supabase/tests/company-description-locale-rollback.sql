@@ -14,6 +14,7 @@ select pg_temp.assert(
   exists (select 1 from information_schema.columns
            where table_schema = 'public' and table_name = 'companies' and column_name = 'description_locale')
   and to_regprocedure('public.set_company_description_locale(uuid, text)') is not null
+  and to_regprocedure('public.submit_company_description(uuid, text, text)') is not null
   and position('description_locale' in pg_get_function_result('public.get_public_company(text)'::regprocedure)) > 0,
   'CDL975-R0 baza w stanie po 0975');
 
@@ -28,6 +29,15 @@ select pg_temp.assert(
   and position('description_locale' in pg_get_function_result('public.get_public_company(text)'::regprocedure)) = 0
   and position('active_jobs_count' in pg_get_function_result('public.get_public_company(text)'::regprocedure)) > 0,
   'CDL975-R1 rollback usuwa kolumnę, RPC i trigger; get_public_company wraca do definicji z 0140');
+select pg_temp.assert(
+  not exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'companies'
+                 and column_name = 'description_locale_pending')
+  and to_regprocedure('public.submit_company_description(uuid, text, text)') is null
+  and to_regprocedure('public.submit_company_description(uuid, text)') is not null
+  and position('description_locale' in pg_get_functiondef('public.admin_decide_company_description(uuid, text, timestamptz, text)'::regprocedure)) = 0
+  and position('description_locale' in pg_get_functiondef('public.guard_company_description()'::regprocedure)) = 0,
+  'CDL975-R1b język propozycji usunięty; submit/decyzja/strażnik wracają do definicji z 0198');
 
 -- Profil nadal działa dla anonima po rollbacku.
 set local role anon;

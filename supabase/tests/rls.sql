@@ -23450,7 +23450,8 @@ reset role; reset app.current_uid;
 
 -- CDL975-3: zmiana treści opisu bez wskazania języka zeruje język (każda ścieżka zapisu).
 -- Od 0198 (#868) treść opisu zmienia się tylko przez propozycję firmy i decyzję admina portalu:
--- sama propozycja (pending) nie rusza zatwierdzonego opisu ani jego języka; zatwierdzenie tak.
+-- sama propozycja (pending) nie rusza zatwierdzonego opisu ani jego języka; zatwierdzenie
+-- propozycji BEZ języka daje język nieznany (z językiem — CDL975-5).
 begin;
 set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
 select pg_temp.assert(public.submit_company_description(:'CDLC', 'Nous construisons des ponts.') = 'pending',
@@ -23502,6 +23503,151 @@ select pg_temp.assert(public.set_company_description_locale(:'CDLC', null) is nu
 reset role; reset app.current_uid;
 select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
   'CDL975-4d język wyczyszczony w bazie');
+
+-- CDL975-5: język zgłaszany razem z propozycją opisu (decyzja właściciela 30.09.2026).
+--   Propozycja nie rusza języka zatwierdzonego opisu; akceptacja przenosi język propozycji do
+--   `description_locale`; odrzucenie nie zmienia języka; ten sam tekst = sama zmiana języka.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Nous construisons des ponts.', 'fr') = 'pending',
+  'CDL975-5a owner zgłasza opis z językiem');
+reset role;
+select description_pending_at as cdl5_at from public.companies where id = :'CDLC' \gset
+select pg_temp.assert(
+  (select description = 'Wij bouwen bruggen.' and description_locale = 'nl'
+      and description_locale_pending = 'fr' and description_review_status = 'pending'
+     from public.companies where id = :'CDLC'),
+  'CDL975-5b propozycja trzyma swój język, zatwierdzony opis i jego język bez zmian');
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Nous construisons des ponts.', 'en') = 'pending',
+  'CDL975-5c ponowienie tej samej propozycji z innym językiem');
+select pg_temp.expect_error(
+  format('select public.submit_company_description(%L, %L, %L)', :'CDLC', 'Inny tekst.', 'de'),
+  'LOCALE_INVALID', 'CDL975-5d język spoza języków serwisu odrzucony');
+reset role;
+select pg_temp.assert(
+  (select description_locale_pending = 'en' and description_pending_at = :'cdl5_at'::timestamptz
+     from public.companies where id = :'CDLC'),
+  'CDL975-5e poprawka języka propozycji bez zmiany czasu zgłoszenia (klucz decyzji)');
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'approved', :'cdl5_at', null);
+reset role;
+select pg_temp.assert(
+  (select description = 'Nous construisons des ponts.' and description_locale = 'en'
+      and description_locale_pending is null and description_review_status is null
+     from public.companies where id = :'CDLC'),
+  'CDL975-5f akceptacja przenosi język propozycji do zatwierdzonego opisu');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select description_locale = 'en' from public.get_public_company('firma-d-cdl975')),
+  'CDL975-5g profil publiczny zwraca język zatwierdzony z propozycją');
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'CDLC' and action = 'company.description_reviewed'
+             and after_data->>'decision' = 'approved' and after_data->>'description_locale' = 'en'),
+  'CDL975-5h audyt decyzji z językiem');
+rollback;
+
+-- CDL975-6: nowy tekst w TYM SAMYM języku co zatwierdzony opis — akceptacja go zachowuje
+--   (trigger zerowania języka nie gubi języka wskazanego w propozycji).
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select public.submit_company_description(:'CDLC', 'Wij bouwen bruggen en tunnels.', 'nl');
+reset role;
+select description_pending_at as cdl6_at from public.companies where id = :'CDLC' \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'approved', :'cdl6_at', null);
+reset role;
+select pg_temp.assert(
+  (select description = 'Wij bouwen bruggen en tunnels.' and description_locale = 'nl'
+     from public.companies where id = :'CDLC'),
+  'CDL975-6 akceptacja zachowuje język propozycji równy poprzedniemu');
+rollback;
+-- CDL975-6N (kontrola ujemna): akceptacja jednym zapisem (tekst + język naraz) gubi język,
+--   gdy jest równy poprzedniemu — dlatego decyzja wpisuje język osobnym zapisem po tekście.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+update public.companies set description = 'Wij bouwen bruggen en tunnels.', description_locale = 'nl'
+ where id = :'CDLC';
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-6N kontrola ujemna: jeden zapis tekstu i niezmienionego języka zeruje język');
+rollback;
+
+-- CDL975-7: odrzucenie nie zmienia języka zatwierdzonego opisu; propozycja z językiem zostaje.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select public.submit_company_description(:'CDLC', 'Nous construisons des ponts.', 'fr');
+reset role;
+select description_pending_at as cdl7_at from public.companies where id = :'CDLC' \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'rejected', :'cdl7_at', 'Opis zawiera dane kontaktowe.');
+reset role;
+select pg_temp.assert(
+  (select description = 'Wij bouwen bruggen.' and description_locale = 'nl'
+      and description_review_status = 'rejected' and description_locale_pending = 'fr'
+     from public.companies where id = :'CDLC'),
+  'CDL975-7 odrzucenie: zatwierdzony opis i jego język bez zmian, język propozycji do wglądu');
+-- CDL975-7b: wycofanie propozycji (tekst = zatwierdzony) czyści też jej język.
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Wij bouwen bruggen.', 'nl') = 'unchanged',
+  'CDL975-7b tekst i język = zatwierdzone: bez zmian');
+reset role;
+select pg_temp.assert(
+  (select description_review_status is null and description_locale_pending is null and description_locale = 'nl'
+     from public.companies where id = :'CDLC'),
+  'CDL975-7c wycofanie propozycji czyści jej język, zatwierdzony język zostaje');
+rollback;
+
+-- CDL975-8: ten sam tekst z innym językiem = zmiana języka zatwierdzonego opisu bez przeglądu.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Wij bouwen bruggen.', 'en') = 'locale_applied',
+  'CDL975-8 sama zmiana języka zatwierdzonego opisu');
+reset role;
+select pg_temp.assert(
+  (select description_locale = 'en' and description_review_status is null
+     from public.companies where id = :'CDLC')
+  and exists (select 1 from public.audit_logs
+               where entity_id = :'CDLC' and action = 'company.description_locale_changed'
+                 and after_data = jsonb_build_object('description_locale', 'en')),
+  'CDL975-8b język zmieniony od razu, z audytem, bez propozycji');
+rollback;
+
+-- CDL975-9 (kontrola ujemna): język opisu i propozycji tylko przez RPC — bezpośredni zapis
+--   owner odrzuca strażnik; bez strażnika owner ustawiłby język z pominięciem przeglądu.
+begin;
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.companies set description_locale = ''fr'' where id = %L', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-9 owner nie zmienia języka opisu bezpośrednio');
+select pg_temp.expect_error(
+  format('update public.companies set description_locale_pending = ''fr'' where id = %L', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-9b owner nie zmienia języka propozycji bezpośrednio');
+reset role;
+rollback;
+begin;
+alter table public.companies disable trigger trg_guard_company_description;
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+update public.companies set description_locale = 'fr' where id = :'CDLC';
+reset role;
+select pg_temp.assert((select description_locale = 'fr' from public.companies where id = :'CDLC'),
+  'CDL975-9N kontrola ujemna: bez strażnika owner zmienia język z pominięciem RPC');
+rollback;
+-- CDL975-10: język propozycji bez propozycji odrzuca CHECK.
+begin;
+select pg_temp.expect_error(
+  format('update public.companies set description_locale_pending = ''fr'' where id = %L', :'CDLC'),
+  'companies_description_locale_pending_requires_proposal', 'CDL975-10 język propozycji bez propozycji odrzucony');
+rollback;
 
 
 -- ============================================================================

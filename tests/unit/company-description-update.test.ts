@@ -14,6 +14,7 @@ vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fake
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+import { revalidatePath } from 'next/cache';
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const COMPANY_ID = '22222222-2222-4222-8222-222222222222';
@@ -70,7 +71,7 @@ describe('company description submission (scoped to companyId, review by admin, 
     });
     const [call] = fakeDb.callsTo('submit_company_description');
     expect(call).toMatchObject({ as: USER });
-    expect(call?.args).toEqual({ p_company_id: COMPANY_ID, p_description: 'Nowy opis.' });
+    expect(call?.args).toEqual({ p_company_id: COMPANY_ID, p_description: 'Nowy opis.', p_description_locale: null });
     expect(fakeDb.callsTo('company.membership-for-company')[0]?.values).toEqual([USER, COMPANY_ID]);
   });
 
@@ -84,7 +85,41 @@ describe('company description submission (scoped to companyId, review by admin, 
     expect(fakeDb.callsTo('submit_company_description')[0]?.args).toEqual({
       p_company_id: COMPANY_ID,
       p_description: '',
+      p_description_locale: null,
     });
+  });
+
+  // 0975 (decyzja właściciela 30.09.2026): język opisu jedzie razem z propozycją.
+  it('sends the description language with the proposal (approved together with the text)', async () => {
+    submit('pending');
+    expect(
+      await updateCompanyDescription(COMPANY_ID, { description: 'Nous construisons des ponts.', descriptionLocale: 'fr' }),
+    ).toEqual({ ok: true, outcome: 'pending' });
+    expect(fakeDb.callsTo('submit_company_description')[0]?.args).toEqual({
+      p_company_id: COMPANY_ID,
+      p_description: 'Nous construisons des ponts.',
+      p_description_locale: 'fr',
+    });
+    // Propozycja nie zmienia profilu publicznego do decyzji admina.
+    expect(vi.mocked(revalidatePath).mock.calls.map(([path]) => path)).not.toContain('/[locale]/pracodawcy/[slug]');
+  });
+
+  it('a language change of the approved text is applied at once and refreshes the public profile', async () => {
+    submit('locale_applied');
+    expect(
+      await updateCompanyDescription(COMPANY_ID, { description: 'Opis', descriptionLocale: 'nl' }),
+    ).toEqual({ ok: true, outcome: 'locale_applied' });
+    expect(vi.mocked(revalidatePath).mock.calls.map(([path]) => path)).toContain('/[locale]/pracodawcy/[slug]');
+  });
+
+  it('negative control: a language outside the site languages is rejected before the database', async () => {
+    expect(
+      await updateCompanyDescription(COMPANY_ID, {
+        description: 'Opis',
+        descriptionLocale: 'de' as unknown as 'pl',
+      }),
+    ).toMatchObject({ ok: false, error: 'VALIDATION_FAILED' });
+    expect(fakeDb.calls).toHaveLength(0);
   });
 
   it('an identification number is rejected at the field before the database', async () => {
