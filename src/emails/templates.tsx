@@ -215,7 +215,7 @@ export interface EmailDataMap {
  * Dane e-maili odwołania (#43). `subjectRef` = opisany numer decyzji (autor) albo numer sprawy
  * (zgłaszający) — ustalany w `prepareVars` z tego, co przekazało RPC (#1117).
  */
-interface AppealEmailData {
+type AppealEmailData = {
   recipientName?: string | null;
   appealReference: string;
   decisionReference?: string | null;
@@ -223,7 +223,7 @@ interface AppealEmailData {
   /** `author` (autor treści) albo `reporter` (zgłaszający) — z RPC odwołania (#43). */
   appellantRole?: string | null;
   actionUrl: string;
-}
+};
 
 /** Wspólne dane uzasadnienia decyzji moderacyjnej (#42). */
 interface ModerationEmailData {
