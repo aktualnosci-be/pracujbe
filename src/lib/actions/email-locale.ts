@@ -3,7 +3,7 @@
 import { z } from 'zod/v3';
 
 import { routing, type Locale } from '@/i18n/routing';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -48,7 +48,10 @@ export async function setEmailLocaleAction(input: unknown): Promise<SetEmailLoca
     });
     return { ok: true, locale };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      const code = mapPgError(databaseErrorMessage(error));
+      return { ok: false, error: reportUnmappedDbError(error, 'email-locale.setAction', code) };
+    }
     captureError(error, { area: 'email-locale.setAction' });
     return { ok: false, error: 'INTERNAL' };
   }

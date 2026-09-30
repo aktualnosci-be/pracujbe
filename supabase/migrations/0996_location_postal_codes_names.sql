@@ -10,7 +10,7 @@
 -- opcjonalnie z prefiksem B/BE) i bez nazwy kraju na końcu. `resolve_location_id` najpierw
 -- szuka pełnego klucza (bez zmian dla nazw bez dopisku), dopiero potem klucza bez dopisku;
 -- `location_filter_ids` i przez nią `search_city_candidates` korzystają z tej samej reguły,
--- a trigger słownika (`location_aliases_relink_jobs`) dowiązuje oferty także po kluczu bez
+-- a triggery słownika (0199, przez `relink_jobs_for_city_keys`) dowiązują oferty także po kluczu bez
 -- dopisku. Sam kod pocztowy („1000”) nie wskazuje miejscowości (brak danych kodów w słowniku).
 -- Backfill istniejących ofert bez podbicia `updated_at` (token CAS edycji, #325).
 --
@@ -81,18 +81,33 @@ $$;
 revoke all on function public.location_filter_ids(text[]) from public;
 grant execute on function public.location_filter_ids(text[]) to anon, authenticated, service_role;
 
--- Nowy alias dowiązuje oferty bez miejscowości także zapisane z dopiskiem (stan 0153 + klucz).
-create or replace function public.location_aliases_relink_jobs()
-returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+-- Zmiana słownika (triggery `location_aliases_relink_jobs`/`locations_relink_jobs` z 0199)
+-- przelicza oferty także zapisane z dopiskiem: `relink_jobs_for_city_keys` (ciało z 0199)
+-- dopasowuje dotknięte klucze również po kluczu bez dopisku (`location_lookup_key`).
+create or replace function public.relink_jobs_for_city_keys(p_keys text[], p_location_ids uuid[] default '{}')
+returns integer language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_count integer;
 begin
+  if coalesce(array_length(p_keys, 1), 0) = 0 and coalesce(array_length(p_location_ids, 1), 0) = 0 then
+    return 0;
+  end if;
   update public.jobs j
-     set location_id = public.resolve_location_id(j.city)
-   where j.location_id is null
-     and (public.city_key(j.city) in (select n.alias_key from new_aliases n)
-          or public.location_lookup_key(j.city) in (select n.alias_key from new_aliases n));
-  return null;
+     set location_id = r.location_id
+    from (
+      select j2.id, public.resolve_location_id(j2.city) as location_id
+        from public.jobs j2
+       where (public.city_key(j2.city) = any(coalesce(p_keys, '{}'))
+              or public.location_lookup_key(j2.city) = any(coalesce(p_keys, '{}'))
+              or j2.location_id = any(coalesce(p_location_ids, '{}')))
+    ) r
+   where j.id = r.id
+     and j.location_id is distinct from r.location_id;
+  get diagnostics v_count = row_count;
+  return v_count;
 end $$;
-revoke all on function public.location_aliases_relink_jobs() from public, anon, authenticated;
+revoke all on function public.relink_jobs_for_city_keys(text[], uuid[]) from public, anon, authenticated;
+grant execute on function public.relink_jobs_for_city_keys(text[], uuid[]) to service_role;
 
 -- --- 3. Nazwy miejscowości w językach serwisu --------------------------------------------------
 create table if not exists public.location_names (

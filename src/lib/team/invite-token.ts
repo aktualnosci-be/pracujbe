@@ -10,7 +10,7 @@ import { guestApplySecret, hashGuestToken, isGuestTokenFormat } from '@/lib/gues
  * a `nonce` jest tylko w payloadzie e-maila. Token = `HMAC-SHA256(sekret, "team-invite:<nonce>")`
  * w base64url, liczony przez akcję zaproszenia (hash do zapisu) i przez worker e-mail (link).
  *
- * Sekret: `GUEST_APPLY_SECRET` (poza produkcją stały sekret deweloperski). Cel `team-invite`
+ * Sekret: `GUEST_APPLY_SECRET` (stały sekret deweloperski tylko w demo bez bazy, #1115). Cel `team-invite`
  * jest częścią podpisu, więc token zaproszenia nie działa jako token aplikacji gościa
  * (`confirm:` / `claim:`) i odwrotnie.
  */

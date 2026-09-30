@@ -293,6 +293,9 @@ koordynatora migracji). Buduje na sprawie z 0094 i decyzji z 0099.
   `dsa_appeal_window()`.
   Dopóki strona nie została poinformowana, termin nie biegnie. Stan drogi odwołania:
   `moderation_appealable` (`OK`, `APPEAL_EXISTS`, `APPEAL_WINDOW_CLOSED`, `INVALID_TRANSITION`).
+  Chwila poinformowania jest trwałym dowodem (`moderation_informed`, 0188), więc usunięcie
+  konta strony (a z nim wierszy kolejki i powiadomień) nie zeruje terminu ani daty retencji
+  sprawy (#860; regresję pilnuje `rls.sql` sekcja RD973/DI860).
 - **Rozpatrzenie.** `admin_decide_appeal(appeal, expected_status, outcome, reasoning,
   new_decision, ground_type, ground_reference)`. Autor decyzji nie rozpatruje odwołania, jeśli
   jest inny aktywny administrator (`REVIEWER_CONFLICT`); gdy go nie ma, zapisuje się
@@ -332,6 +335,11 @@ nadal: zakres publikacji raportu i przekazywania do bazy DSA oraz treść prawna
 (`dry-run` = podgląd z licznikami, `apply` = anonimizacja; brak/inna wartość = wyłączone,
 bez zapytania do bazy — `src/lib/admin/dsa-retention-mode.ts`). `apply` — dopiero po
 jawnej decyzji właściciela o przełączeniu z `dry-run`.
+
+- Cofnięcie ograniczenia po anonimizacji sprawy (`reports.redacted_at` albo
+  `moderation_decisions.redacted_at`) jest odrzucane (`INVALID_TRANSITION: CASE_REDACTED`,
+  0197, #887) — stan sprawdzany po blokadzie wiersza sprawy, więc także przy równoległym
+  `dsa_retention_run`; panel nie pokazuje akcji dla takiej sprawy.
 
 ### Odwołanie zgłaszającego od cofnięcia ograniczenia (0109)
 

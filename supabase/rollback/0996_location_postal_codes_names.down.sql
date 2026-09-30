@@ -3,8 +3,8 @@
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy usunąć
 -- wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT
 -- (supabase/tests/location-postal-names-rollback.sql wykonuje go w transakcji i cofa).
--- Przywraca resolve_location_id i location_aliases_relink_jobs z 0153 oraz location_filter_ids
--- z 0183, usuwa location_names, location_display_name i location_lookup_key. Oferty rozpoznane
+-- Przywraca resolve_location_id z 0153, location_filter_ids z 0183 i relink_jobs_for_city_keys
+-- z 0199, usuwa location_names, location_display_name i location_lookup_key. Oferty rozpoznane
 -- tylko po kluczu bez dopisku wracają do location_id = null (bez podbicia updated_at).
 -- Aplikacja po rollbacku: zapytanie facetów (src/lib/db/public-jobs.ts) i podpowiedź miasta
 -- (src/lib/actions/job-location.ts) wołają location_display_name — wycofać razem z kodem.
@@ -40,16 +40,29 @@ $$;
 revoke all on function public.location_filter_ids(text[]) from public;
 grant execute on function public.location_filter_ids(text[]) to anon, authenticated, service_role;
 
-create or replace function public.location_aliases_relink_jobs()
-returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+create or replace function public.relink_jobs_for_city_keys(p_keys text[], p_location_ids uuid[] default '{}')
+returns integer language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_count integer;
 begin
+  if coalesce(array_length(p_keys, 1), 0) = 0 and coalesce(array_length(p_location_ids, 1), 0) = 0 then
+    return 0;
+  end if;
   update public.jobs j
-     set location_id = public.resolve_location_id(j.city)
-   where j.location_id is null
-     and public.city_key(j.city) in (select n.alias_key from new_aliases n);
-  return null;
+     set location_id = r.location_id
+    from (
+      select j2.id, public.resolve_location_id(j2.city) as location_id
+        from public.jobs j2
+       where (public.city_key(j2.city) = any(coalesce(p_keys, '{}'))
+              or j2.location_id = any(coalesce(p_location_ids, '{}')))
+    ) r
+   where j.id = r.id
+     and j.location_id is distinct from r.location_id;
+  get diagnostics v_count = row_count;
+  return v_count;
 end $$;
-revoke all on function public.location_aliases_relink_jobs() from public, anon, authenticated;
+revoke all on function public.relink_jobs_for_city_keys(text[], uuid[]) from public, anon, authenticated;
+grant execute on function public.relink_jobs_for_city_keys(text[], uuid[]) to service_role;
 
 drop function if exists public.location_display_name(text, text);
 drop table if exists public.location_names;
