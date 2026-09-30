@@ -1647,7 +1647,7 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   linksReview: CompanyLinksReview | null;
   /** Propozycja opisu firmy do decyzji admina albo odrzucona (0198); `description` = zatwierdzony. */
   descriptionReview: CompanyDescriptionReview | null;
-  /** Język zatwierdzonego opisu (0975); null = nie wskazano. */
+  /** Język zatwierdzonego opisu (0201); null = nie wskazano. */
   descriptionLocale: Locale | null;
   phone: string | null;
   address: string | null;

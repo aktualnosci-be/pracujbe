@@ -1065,7 +1065,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   klucza `companyProfile.metaDescription` z samą nazwą dla każdej firmy; pusty/białe znaki opisu
   = fallback na ten klucz. Dotyczy też `og:description`/`twitter.description`. Dowód: unit
   `company-profile-seo` (kontrola ujemna: ogólny klucz nie trafia do metadanych przy niepustym opisie).
-  Logo, strona WWW i język opisu (#686/#708, migracja `0975` — numer tymczasowy): profil pokazuje
+  Logo, strona WWW i język opisu (#686/#708, migracja `0201` — numer tymczasowy): profil pokazuje
   zatwierdzoną (0156) stronę WWW jako nazwany link zewnętrzny (host + ścieżka, nowa karta zapowiedziana
   czytnikowi, `rel="noopener noreferrer nofollow"`) i logo — ale obraz tylko z hosta witryny
   (`profileLogoSrc`: CSP `img-src`/`remotePatterns`, bez żądania do serwera firmy przed zgodą,
@@ -1085,7 +1085,7 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   wersji w innym języku niż opis biorą ogólny `metaDescription` (nieznany = opis, #647). hreflang bez
   zmian (interfejs i karty ofert są w języku strony). Dowód: `rls.sql` sekcja CDL975 (kontrole ujemne:
   bez triggera, bez strażnika, CHECK, member/obca firma, akceptacja jednym zapisem gubi język),
-  rollback `0975_…down.sql` (też przed 0198 w `company-description-rollback.sql`), unit
+  rollback `0201_…down.sql` (też przed 0198 w `company-description-rollback.sql`), unit
   `company-profile-view`, `company-description-{form,update}`, E2E `company-profile`. **Otwarte:**
   tłumaczenia opisu z zatwierdzaniem (plan #31).
 - [x] Pomoc i Kontakt (#61, część techniczna, migracja `0125`): `/pomoc` = pytania i odpowiedzi

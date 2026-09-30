@@ -38,7 +38,7 @@ export interface CompanyProfile {
   logoUrl?: string;
   website?: string;
   /**
-   * Język, w którym firma napisała opis (#708, 0975); brak = nie wskazano (albo opis zmieniono
+   * Język, w którym firma napisała opis (#708, 0201); brak = nie wskazano (albo opis zmieniono
    * po wskazaniu języka — baza wtedy zeruje wartość). Nigdy wartość spoza języków serwisu.
    */
   descriptionLocale?: Locale;

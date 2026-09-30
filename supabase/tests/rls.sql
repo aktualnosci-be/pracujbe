@@ -23532,7 +23532,7 @@ select pg_temp.assert(pg_get_functiondef('public.requeue_failed_email_deliveries
 rollback;
 reset role;
 -- ============================================================================
--- CDL975. Język opisu firmy na publicznym profilu (#708, migracja 0975 — numer tymczasowy):
+-- CDL975. Język opisu firmy na publicznym profilu (#708, migracja 0201 — numer tymczasowy):
 --         `companies.description_locale` ustawia tylko owner/admin firmy przez RPC (audyt);
 --         zmiana treści opisu bez wskazania języka zeruje język (trigger); pusty opis = brak
 --         języka (CHECK); `get_public_company` zwraca język tylko firmy zweryfikowanej.

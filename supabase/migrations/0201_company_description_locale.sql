@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0975_company_description_locale.sql — #708: język opisu firmy na publicznym profilu.
+-- 0201_company_description_locale.sql — #708: język opisu firmy na publicznym profilu.
 -- (numer tymczasowy — ostateczny nada integrator)
 --
 -- Profil `/{locale}/pracodawcy/<slug>` ma adres w każdym języku serwisu (interfejs i karty
@@ -29,7 +29,7 @@
 -- Bez tłumaczeń opisu (wymagałyby zatwierdzania — osobny etap, plan #31); strona oznacza język
 -- opisu (`lang`) i informuje, gdy różni się od języka strony albo jest nieznany.
 --
--- Rollback: supabase/rollback/0975_company_description_locale.down.sql (test w test-rls.sh).
+-- Rollback: supabase/rollback/0201_company_description_locale.down.sql (test w test-rls.sh).
 -- Migracja nie zmienia istniejących danych (nowa kolumna = null).
 -- =============================================================================
 
@@ -151,7 +151,7 @@ alter table public.companies add constraint companies_description_locale_pending
   check (description_locale_pending is null or description_pending is not null);
 
 comment on column public.companies.description_locale_pending is
-  'Język propozycji opisu (0975); przy akceptacji przenoszony do description_locale, odrzucenie go nie zmienia.';
+  'Język propozycji opisu (0201); przy akceptacji przenoszony do description_locale, odrzucenie go nie zmienia.';
 
 -- Strażnik z 0198 + kolumny języka (bezpośredni zapis klienta odrzucony; RPC są definerami).
 create or replace function public.guard_company_description()

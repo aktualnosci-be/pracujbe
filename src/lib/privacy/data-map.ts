@@ -647,8 +647,8 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       is_agency: 'Deklaracja agencji pracy tymczasowej (0167).',
       agency_check_status: 'Wynik ręcznego sprawdzenia numeru uznania (słownik, 0167).',
       agency_checked_at: 'Czas ręcznego sprawdzenia numeru uznania (0167).',
-      description_locale: 'Język opisu firmy zadeklarowany przez firmę (#708, 0975) — kod języka serwisu.',
-      description_locale_pending: 'Język propozycji opisu firmy (0975) — kod języka serwisu; przy akceptacji przechodzi do description_locale.',
+      description_locale: 'Język opisu firmy zadeklarowany przez firmę (#708, 0201) — kod języka serwisu.',
+      description_locale_pending: 'Język propozycji opisu firmy (0201) — kod języka serwisu; przy akceptacji przechodzi do description_locale.',
     },
     note:
       'Każda kolumna tabeli ma wpis w columns albo notPersonal (strażnik tests/unit/privacy-data-map.test.ts, #729). ' +

@@ -87,7 +87,7 @@ export const companyDescriptionSchema = z.object({
     .max(COMPANY_DESCRIPTION_MAX, 'company.error.descriptionTooLong')
     .refine((v) => !containsPersonalIdentifier(v), 'company.error.descriptionSensitive'),
   /**
-   * Język opisu (0975): zgłaszany razem z propozycją i zatwierdzany z nią; pusty = nie wskazano.
+   * Język opisu (0201): zgłaszany razem z propozycją i zatwierdzany z nią; pusty = nie wskazano.
    * Tekst równy zatwierdzonemu = sama zmiana języka zatwierdzonego opisu (bez przeglądu).
    */
   descriptionLocale: z.enum(routing.locales).or(z.literal('')).optional(),

@@ -13,8 +13,8 @@ end $$;
 select count(*) as cdrcompanies from public.companies \gset
 
 begin;
--- 0975 (język opisu, numer tymczasowy) nadpisuje funkcje 0198 — cofany najpierw.
-\ir ../rollback/0975_company_description_locale.down.sql
+-- 0201 (język opisu, numer tymczasowy) nadpisuje funkcje 0198 — cofany najpierw.
+\ir ../rollback/0201_company_description_locale.down.sql
 \ir ../rollback/0198_company_description_review.down.sql
 select pg_temp.assert(
   to_regprocedure('public.submit_company_description(uuid, text)') is null

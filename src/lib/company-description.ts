@@ -25,7 +25,7 @@ export interface CompanyDescriptionReview {
   /** Uzasadnienie odrzucenia (tylko `rejected`). */
   reason: string | null;
   /**
-   * Język propozycji (0975, `description_locale_pending`) — przy akceptacji staje się językiem
+   * Język propozycji (0201, `description_locale_pending`) — przy akceptacji staje się językiem
    * zatwierdzonego opisu; null = nie wskazano (po akceptacji język nieznany).
    */
   locale: Locale | null;

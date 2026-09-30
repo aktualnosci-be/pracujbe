@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * Widok publicznego profilu firmy (#686, #708): logo i strona WWW zatwierdzone przez admina
  * (0156) są widoczne w dostępny sposób; opis jest oznaczony językiem wskazanym przez firmę
- * (0975), a odwiedzający dowiaduje się, gdy opis jest w innym języku niż strona albo język
+ * (0201), a odwiedzający dowiaduje się, gdy opis jest w innym języku niż strona albo język
  * nie jest znany. Kontrole ujemne: logo spoza witryny (CSP), link nie-https, brak pól.
  */
 

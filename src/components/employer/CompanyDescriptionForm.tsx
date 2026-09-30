@@ -33,7 +33,7 @@ import { updateCompanyDescription, type CompanyDescriptionOutcome } from '@/lib/
  * trafia do kolejki admina portalu (`pending`) — publicznie widać dotychczasowy opis, który
  * formularz pokazuje obok; odrzucona propozycja wraca z uzasadnieniem admina do poprawy.
  * Usunięcie opisu (puste pole) wchodzi od razu (`applied`). Podgląd pokazuje tekst tak, jak
- * wyrenderuje go profil (czysty tekst, bez HTML). Język opisu (0975) wybiera się razem z tekstem:
+ * wyrenderuje go profil (czysty tekst, bez HTML). Język opisu (0201) wybiera się razem z tekstem:
  * idzie z propozycją i staje się językiem opisu przy akceptacji admina (odrzucenie go nie
  * zmienia); ten sam tekst z innym językiem = sama zmiana języka zatwierdzonego opisu, od razu. Realizuje Invariant #11 (blokada przycisku
  * podczas zapisu, błąd przy polu z fokusem, zachowanie danych po błędzie, jasny sukces).
@@ -50,7 +50,7 @@ export interface CompanyDescriptionFormProps {
   published: string | null;
   /** Stan propozycji (0198) albo null. */
   review: CompanyDescriptionReview | null;
-  /** Język zatwierdzonego opisu (0975) albo null (nie wskazano). */
+  /** Język zatwierdzonego opisu (0201) albo null (nie wskazano). */
   publishedLocale?: Locale | null;
 }
 

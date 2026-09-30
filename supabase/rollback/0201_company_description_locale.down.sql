@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0975_company_description_locale.sql (#708) — ręczny, NIE jest migracją.
+-- Rollback 0201_company_description_locale.sql (#708) — ręczny, NIE jest migracją.
 -- Przywraca `get_public_company` z 0140 (bez `description_locale`), usuwa RPC, trigger,
 -- CHECK i kolumny; strażnik, `submit_company_description(uuid, text)` i
 -- `admin_decide_company_description` wracają do definicji z 0198 (bez języka propozycji). Test: supabase/tests/company-description-locale-rollback.sql.

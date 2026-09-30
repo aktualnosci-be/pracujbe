@@ -61,7 +61,7 @@ describe('parseCompanyDescriptionReview', () => {
     });
   });
 
-  it('carries the proposal language (0975); a value outside the site languages is ignored', () => {
+  it('carries the proposal language (0201); a value outside the site languages is ignored', () => {
     const row = {
       description_review_status: 'pending',
       description_pending: 'Nowy opis',

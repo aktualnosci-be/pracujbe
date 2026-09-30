@@ -67,7 +67,7 @@ export type UpdateCompanyLinksResult =
   | { ok: true; demo?: boolean; outcome: CompanyLinksOutcome }
   | { ok: false; error: ErrorCode };
 /** Wynik zgłoszenia opisu firmy (0198): czeka na admina / weszło od razu / bez zmian. */
-/** Wynik zgłoszenia opisu: jak linki (0156) + `locale_applied` — sama zmiana języka (0975). */
+/** Wynik zgłoszenia opisu: jak linki (0156) + `locale_applied` — sama zmiana języka (0201). */
 export type CompanyDescriptionOutcome = CompanyLinksOutcome | 'locale_applied';
 export type UpdateCompanyDescriptionResult =
   | { ok: true; demo?: boolean; outcome: CompanyDescriptionOutcome }
@@ -483,8 +483,8 @@ export async function updateCompanyLinks(
  *   - `pending`   — nowy tekst czeka na decyzję admina; opis publiczny bez zmian,
  *   - `applied`   — usunięcie opisu (niczego nowego nie publikuje) wchodzi od razu,
  *   - `unchanged` — tekst i język = zatwierdzone (wycofuje ewentualną propozycję),
- *   - `locale_applied` — tekst = zatwierdzony, inny język: sama zmiana języka opisu (0975).
- * Język opisu (0975) jedzie razem z propozycją i przechodzi do opisu przy akceptacji admina;
+ *   - `locale_applied` — tekst = zatwierdzony, inny język: sama zmiana języka opisu (0201).
+ * Język opisu (0201) jedzie razem z propozycją i przechodzi do opisu przy akceptacji admina;
  * odrzucenie go nie zmienia.
  * Numer rejestru narodowego/dokumentu w tekście → błąd przy polu przed bazą (jak w innych
  * polach). Bezpośredni zapis kolumn blokuje w bazie strażnik `guard_company_description`.

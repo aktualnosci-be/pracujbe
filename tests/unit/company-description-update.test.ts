@@ -89,7 +89,7 @@ describe('company description submission (scoped to companyId, review by admin, 
     });
   });
 
-  // 0975 (decyzja właściciela 30.09.2026): język opisu jedzie razem z propozycją.
+  // 0201 (decyzja właściciela 30.09.2026): język opisu jedzie razem z propozycją.
   it('sends the description language with the proposal (approved together with the text)', async () => {
     submit('pending');
     expect(

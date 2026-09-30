@@ -49,7 +49,7 @@ export interface MyCompany {
   descriptionReview: CompanyDescriptionReview | null;
   /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia przez admina. */
   agency: CompanyAgency;
-  /** #708 (0975): czy firma ma opis i w jakim języku go napisała (null = nie wskazano). */
+  /** #708 (0201): czy firma ma opis i w jakim języku go napisała (null = nie wskazano). */
   descriptionLanguage: CompanyDescriptionLanguage;
   canEdit: boolean;
 }

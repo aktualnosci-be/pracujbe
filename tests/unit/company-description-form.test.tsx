@@ -138,7 +138,7 @@ describe('CompanyDescriptionForm', () => {
     expect(screen.queryByTestId('company-description-review')).toBeNull();
   });
 
-  // 0975: język opisu wybierany razem z propozycją (decyzja właściciela 30.09.2026).
+  // 0201: język opisu wybierany razem z propozycją (decyzja właściciela 30.09.2026).
   it('sends the chosen language together with the proposed text', async () => {
     vi.mocked(updateCompanyDescription).mockResolvedValue({ ok: true, outcome: 'pending' });
     renderForm('Stary opis', null, 'Stary opis', 'nl');

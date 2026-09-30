@@ -315,7 +315,7 @@ export default async function AdminCompanyDetailPage({ params }: PageProps) {
           {company.descriptionReview ? (
             <>
               <Field label={t('companyDescriptionProposed')} value={company.descriptionReview.text} />
-              {/* 0975: język propozycji — przy akceptacji staje się językiem opisu. */}
+              {/* 0201: język propozycji — przy akceptacji staje się językiem opisu. */}
               <Field
                 label={t('companyDescriptionProposedLocale')}
                 value={
