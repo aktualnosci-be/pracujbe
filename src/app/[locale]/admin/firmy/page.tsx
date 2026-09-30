@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/i18n/navigation';
 import { companyFocusKey } from '@/lib/admin/focus';
 import { normalizeAdminSearch, parseUuid } from '@/lib/admin/list-params';
-import { AWAITING_FILTER, LINKS_REVIEW_FILTER, listCompanies } from '@/lib/data/admin';
+import { AWAITING_FILTER, DESCRIPTION_REVIEW_FILTER, LINKS_REVIEW_FILTER, listCompanies } from '@/lib/data/admin';
 import { createAppDateFormatter } from '@/lib/datetime';
 import { AdminLoadError } from '@/components/admin/AdminLoadError';
 import {
@@ -58,6 +58,7 @@ const FILTERS = [
   'all',
   AWAITING_FILTER,
   LINKS_REVIEW_FILTER,
+  DESCRIPTION_REVIEW_FILTER,
   'unverified',
   'pending',
   'verified',
@@ -70,6 +71,7 @@ const FILTER_LABEL: Record<string, string> = {
   all: 'filterAll',
   [AWAITING_FILTER]: 'filterAwaiting',
   [LINKS_REVIEW_FILTER]: 'filterCompanyLinks',
+  [DESCRIPTION_REVIEW_FILTER]: 'filterCompanyDescription',
   unverified: 'statusUnverified',
   pending: 'statusPending',
   verified: 'statusVerified',

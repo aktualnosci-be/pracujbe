@@ -14,6 +14,7 @@
 import { isAppealStatus, parseAppealState, type AppealState, type AppealStatus } from '@/lib/admin/appeals';
 import { getActiveCompany } from '@/lib/company-context';
 import { parseCompanyLinksReview, type CompanyLinksReview } from '@/lib/company-links';
+import { parseCompanyDescriptionReview, type CompanyDescriptionReview } from '@/lib/company-description';
 import { isAgencyCheckStatus, type AgencyCheckStatus } from '@/lib/job-trust/agency';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { queryOne, rpcRows } from '@/lib/db/sql';
@@ -42,6 +43,10 @@ export interface MyCompany {
    * `logoUrl` powyżej to wartości ZATWIERDZONE (publiczne). Brak propozycji → null.
    */
   linksReview: CompanyLinksReview | null;
+  /** Zatwierdzony (publiczny) opis firmy (#868, 0198) albo null. */
+  description: string | null;
+  /** Propozycja opisu czekająca na admina albo odrzucona (0198) — brak propozycji → null. */
+  descriptionReview: CompanyDescriptionReview | null;
   /** 0167: deklaracja agencji pracy tymczasowej i wynik ręcznego sprawdzenia przez admina. */
   agency: CompanyAgency;
   /** #708 (0975): czy firma ma opis i w jakim języku go napisała (null = nie wskazano). */
@@ -93,6 +98,8 @@ const DEMO_COMPANY: MyCompany = {
   website: 'https://example.com',
   logoUrl: null,
   linksReview: null,
+  description: null,
+  descriptionReview: null,
   agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
   descriptionLanguage: { hasDescription: false, locale: null },
   canEdit: true,
@@ -150,6 +157,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
                 c.website, c.logo_url, c.website_pending, c.logo_url_pending,
                 c.links_review_status, c.links_pending_at, c.links_review_reason,
+                c.description, c.description_pending, c.description_review_status,
+                c.description_pending_at, c.description_review_reason,
                 c.is_agency, c.agency_recognition_number, c.agency_check_status,
                 c.description_locale, (btrim(coalesce(c.description, '')) <> '') AS has_description
            FROM public.company_members m
@@ -182,6 +191,8 @@ export async function getMyCompany(): Promise<MyCompanyLoad> {
         website: asNullableString(company['website']),
         logoUrl: asNullableString(company['logo_url']),
         linksReview: parseCompanyLinksReview(company),
+        description: asNullableString(company['description']),
+        descriptionReview: parseCompanyDescriptionReview(company),
         agency: parseCompanyAgency(company),
         descriptionLanguage: parseDescriptionLanguage(company),
         canEdit: active.activeRole === 'owner' || active.activeRole === 'admin',
@@ -222,7 +233,9 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
       queryOne<Record<string, unknown>>(tx, 'company.by-id',
         `SELECT c.id, c.name, c.slug, c.status, c.status_reason, c.vat_number, c.verified_at,
                 c.website, c.logo_url, c.website_pending, c.logo_url_pending,
-                c.links_review_status, c.links_pending_at, c.links_review_reason, m.role,
+                c.links_review_status, c.links_pending_at, c.links_review_reason,
+                c.description, c.description_pending, c.description_review_status,
+                c.description_pending_at, c.description_review_reason, m.role,
                 c.is_agency, c.agency_recognition_number, c.agency_check_status,
                 c.description_locale, (btrim(coalesce(c.description, '')) <> '') AS has_description
            FROM public.company_members m
@@ -253,6 +266,8 @@ export async function getCompanyById(companyId: string): Promise<CompanyByIdLoad
         website: asNullableString(company['website']),
         logoUrl: asNullableString(company['logo_url']),
         linksReview: parseCompanyLinksReview(company),
+        description: asNullableString(company['description']),
+        descriptionReview: parseCompanyDescriptionReview(company),
         agency: parseCompanyAgency(company),
         descriptionLanguage: parseDescriptionLanguage(company),
         canEdit: role === 'owner' || role === 'admin',

@@ -84,11 +84,38 @@ describe('company read state', () => {
         website: 'https://acme.example',
         logoUrl: null,
         linksReview: null,
+        description: null,
+        descriptionReview: null,
         agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
         descriptionLanguage: { hasDescription: false, locale: null },
         canEdit: true,
       },
     });
+  });
+
+  it('exposes a pending description proposal separately from the published description (0198)', async () => {
+    db([{
+      id: 'company-1', name: 'Acme', status: 'verified', description: 'Stary opis',
+      description_pending: 'Nowy opis', description_review_status: 'pending',
+      description_pending_at: '2026-09-29 10:00:00.123+00', description_review_reason: null,
+    }]);
+    expect(await getMyCompany()).toMatchObject({
+      company: {
+        description: 'Stary opis',
+        descriptionReview: {
+          status: 'pending',
+          text: 'Nowy opis',
+          submittedAt: '2026-09-29 10:00:00.123+00',
+          reason: null,
+        },
+      },
+    });
+  });
+
+  it('negative control: an unknown description review status is not treated as a proposal', async () => {
+    db([{ id: 'company-1', name: 'Acme', status: 'verified', description_review_status: 'approved',
+          description_pending: 'Tekst' }]);
+    expect(await getMyCompany()).toMatchObject({ company: { descriptionReview: null } });
   });
 
   it('exposes a pending links proposal separately from the published addresses (0156)', async () => {
@@ -200,6 +227,8 @@ describe('getCompanyById (#843) — firma z linku decyzji, niezależnie od aktyw
         website: null,
         logoUrl: null,
         linksReview: null,
+        description: null,
+        descriptionReview: null,
         agency: { isAgency: false, recognitionNumber: null, checkStatus: 'unchecked' },
         descriptionLanguage: { hasDescription: false, locale: null },
         canEdit: true,

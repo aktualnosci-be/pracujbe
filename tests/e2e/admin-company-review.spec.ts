@@ -5,6 +5,7 @@ import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * #310 — decyzja admina o firmie w trybie DEMO: szczegół firmy (dane, VAT, członkowie,
@@ -13,7 +14,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  * z `src/messages`.
  */
 
-type AdminMessages = Record<string, string>;
+type AdminMessages = AppMessages['admin'];
 
 function admin(locale: string): AdminMessages {
   const all = JSON.parse(

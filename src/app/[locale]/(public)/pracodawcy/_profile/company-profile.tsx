@@ -283,7 +283,7 @@ export async function CompanyProfileView({
           <div className="mt-4 max-w-2xl">
             {/* #708: opis w języku wskazanym przez firmę — `lang` dla czytnika i wyszukiwarki. */}
             <p
-              className="text-muted-foreground"
+              className="whitespace-pre-line text-muted-foreground"
               {...(company.descriptionLocale ? { lang: company.descriptionLocale } : {})}
               data-testid="company-description"
             >

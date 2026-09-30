@@ -4,7 +4,7 @@ import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
 
 vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fakePortal());
 
-const { claimWebhook, completeWebhook } = await import('@/lib/webhook-inbox');
+const { claimWebhook, completeWebhook, releaseWebhook } = await import('@/lib/webhook-inbox');
 
 /**
  * Testy inboxu webhooków ze stanem + dzierżawą (P0-01/P0-02/P2-06). Claim jest atomowy po
@@ -70,5 +70,24 @@ describe('completeWebhook', () => {
       throw pgError('08006', 'db down');
     });
     expect(await completeWebhook('stripe:evt_1')).toBe(false);
+  });
+});
+
+describe('releaseWebhook (#790)', () => {
+  it('woła release_webhook jako service_role i zwraca true tylko przy zwolnionej dzierżawie', async () => {
+    fakeDb.rpc('release_webhook', true);
+    expect(await releaseWebhook('resend:evt_1')).toBe(true);
+    const [call] = fakeDb.callsTo('release_webhook');
+    expect(call?.args).toEqual({ p_id: 'resend:evt_1' });
+    expect(call?.as).toBe('service');
+  });
+
+  it('false gdy brak wpisu (RPC false) albo błąd bazy (nie rzuca)', async () => {
+    fakeDb.rpc('release_webhook', false);
+    expect(await releaseWebhook('resend:evt_1')).toBe(false);
+    fakeDb.rpc('release_webhook', () => {
+      throw pgError('08006', 'db down');
+    });
+    expect(await releaseWebhook('resend:evt_1')).toBe(false);
   });
 });

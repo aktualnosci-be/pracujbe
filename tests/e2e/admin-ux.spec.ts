@@ -5,6 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import AxeBuilder from './fixtures/axe';
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Panel administratora w trybie DEMO: fokus po potwierdzeniu (#415), zgłoszenia — cel, powód
@@ -13,7 +14,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  * z `src/messages` (#376).
  */
 
-type AdminMessages = Record<string, string>;
+type AdminMessages = AppMessages['admin'];
 
 function admin(locale: string): AdminMessages {
   const all = JSON.parse(
