@@ -10,7 +10,7 @@ import {
   type CampaignEditorForm,
 } from '@/lib/admin/campaign-editor';
 import { campaignSendingReady, isCampaignStatus } from '@/lib/admin/campaigns';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -63,7 +63,9 @@ async function callCampaignRpc(
         rpc(tx, fn, { p_campaign_id: campaignId, p_expected_status: expectedStatus }),
       );
     } catch (error) {
-      if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+      if (isDatabaseError(error)) {
+        return { ok: false, error: reportUnmappedDbError(error, area, mapPgError(databaseErrorMessage(error))) };
+      }
       throw error;
     }
     return { ok: true };
@@ -164,7 +166,8 @@ export async function createEmailCampaignRevision(
       if (message.includes('VALIDATION_FAILED: slug')) {
         return { ok: false, error: 'VALIDATION_FAILED', fields: { slug: 'slug' } };
       }
-      return { ok: false, error: mapPgError(message) };
+      const code = mapPgError(message);
+      return { ok: false, error: reportUnmappedDbError(error, 'admin.createEmailCampaignRevision', code) };
     }
     return typeof id === 'string' && UUID_RE.test(id) ? { ok: true, id } : { ok: false, error: 'INTERNAL' };
   } catch (error) {
