@@ -22384,6 +22384,284 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- ============================================================================
+-- RD973. Retencja i DSA (0197 — numer tymczasowy):
+--   #784 CV i konto nieaktywnego kandydata dopiero od terminu z ostrzeżenia (nie 72 h wcześniej);
+--   #860 chwila poinformowania o decyzji/cofnięciu trwała (dowód `moderation_informed` z 0188) —
+--        usunięcie konta (i wierszy kolejki e-mail/powiadomień) nie zeruje terminu odwołania ani
+--        daty retencji sprawy;
+--   #887 cofnięcie ograniczenia po anonimizacji sprawy odrzucone bez zapisu i skutków.
+-- Kontrole ujemne: stara reguła `due_at - v_lead`, brak trwałego dowodu, rdzeń bez kontroli.
+-- ============================================================================
+\echo '--- RD973 retencja i DSA (0197) ---'
+reset role; reset app.current_uid;
+\set RDC1 'e9730000-0000-4000-8000-0000000000c1'
+\set RDC2 'e9730000-0000-4000-8000-0000000000c2'
+\set RDC3 'e9730000-0000-4000-8000-0000000000c3'
+\set RDC4 'e9730000-0000-4000-8000-0000000000c4'
+\set RDC5 'e9730000-0000-4000-8000-0000000000c5'
+\set RDC6 'e9730000-0000-4000-8000-0000000000c6'
+\set RDC7 'e9730000-0000-4000-8000-0000000000c7'
+\set RDC8 'e9730000-0000-4000-8000-0000000000c8'
+\set RDCO 'e9730000-0000-4000-8000-0000000000a1'
+\set RDJ1 'e9730000-0000-4000-8000-0000000000b1'
+\set RDJ2 'e9730000-0000-4000-8000-0000000000b2'
+\set RDJ3 'e9730000-0000-4000-8000-0000000000b3'
+\set RDJ4 'e9730000-0000-4000-8000-0000000000b4'
+\set RDREASON 'Autor usunął wymóg opłaty i wyjaśnił sprawę.'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'RDC1','rdc1@test.be','Rd Jeden','{"role":"candidate","first_name":"Rd","last_name":"Jeden","locale":"pl"}'),
+  (:'RDC2','rdc2@test.be','Rd Dwa','{"role":"candidate","first_name":"Rd","last_name":"Dwa","locale":"pl"}'),
+  (:'RDC3','rdc3@test.be','Rd Trzy','{"role":"candidate","first_name":"Rd","last_name":"Trzy","locale":"nl"}'),
+  (:'RDC4','rdc4@test.be','Rd Cztery','{"role":"candidate","first_name":"Rd","last_name":"Cztery","locale":"fr"}'),
+  (:'RDC5','rdc5@test.be','Rd Piec','{"role":"candidate","first_name":"Rd","last_name":"Piec","locale":"en"}'),
+  (:'RDC6','rdc6@test.be','Rd Szesc','{"role":"candidate","first_name":"Rd","last_name":"Szesc","locale":"pl"}'),
+  (:'RDC7','rdc7@test.be','Rd Siedem','{"role":"candidate","first_name":"Rd","last_name":"Siedem","locale":"pl"}'),
+  (:'RDC8','rdc8@test.be','Rd Osiem','{"role":"candidate","first_name":"Rd","last_name":"Osiem","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'RDCO','Firma RD973','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'RDCO',:'EMPA','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'RDJ1',:'RDCO','rd973-job-1','Magazynier R1','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'RDJ2',:'RDCO','rd973-job-2','Magazynier R2','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'RDJ3',:'RDCO','rd973-job-3','Magazynier R3','warehouse','permanent','Gent','Flandria','active','pl'),
+  (:'RDJ4',:'RDCO','rd973-job-4','Magazynier R4','warehouse','permanent','Gent','Flandria','active','pl');
+
+-- ---- RD784: CV i konto od terminu z ostrzeżenia ---------------------------------------
+begin;
+select pg_temp.assert(public.retention_period('storage_physical_deletion') > interval '2 days'
+  and public.retention_period('inactive_candidate_cv') is not null
+  and public.retention_period('inactive_candidate_account') is not null,
+  'RD784-0 zapas fizycznego usunięcia > 2 dni (termin za 2 dni mieści się w dawnym oknie), kategorie włączone');
+set local session_replication_role = replica;
+update public.profiles set last_seen_at = now() - interval '800 days'
+ where id in (:'RDC1', :'RDC2', :'RDC3', :'RDC4', :'RDC5', :'RDC6');
+insert into public.files(owner_id, bucket, path, entity_type) values
+  (:'RDC1', 'candidate-files', :'RDC1' || '/cv-rd1.pdf', 'candidate_cv'),
+  (:'RDC3', 'candidate-files', :'RDC3' || '/cv-rd3.pdf', 'candidate_cv'),
+  (:'RDC5', 'candidate-files', :'RDC5' || '/cv-rd5.pdf', 'candidate_cv');
+set local session_replication_role = origin;
+-- Ostrzeżenia już wysłane: termin za 2 dni (< 72 h), dokładnie teraz, wczoraj.
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at)
+select p.id, v.k, p.last_seen_at, now() + v.off
+  from public.profiles p
+  join (values (:'RDC1'::uuid, 'inactive_candidate_cv', interval '2 days'),
+               (:'RDC2'::uuid, 'inactive_candidate_account', interval '2 days'),
+               (:'RDC3'::uuid, 'inactive_candidate_cv', interval '0'),
+               (:'RDC4'::uuid, 'inactive_candidate_account', interval '0'),
+               (:'RDC5'::uuid, 'inactive_candidate_cv', interval '-1 day'),
+               (:'RDC6'::uuid, 'inactive_candidate_account', interval '-1 day')) v(id, k, off)
+    on v.id = p.id;
+
+-- RD784-N: kontrola ujemna — dawny warunek `due_at - v_lead` usuwa CV i konto 2 dni przed terminem.
+savepoint rd784n;
+do $$ begin
+  execute replace(pg_get_functiondef('public.retention_purge_batch(integer)'::regprocedure),
+                  'w.due_at <= now()', 'w.due_at - v_lead <= now()');
+end $$;
+set local role service_role;
+select public.run_retention_purge(200) is not null as rd784n_ok \gset
+reset role;
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RDC1' || '/cv-rd1.pdf')
+  and not exists (select 1 from public.profiles where id = :'RDC2'),
+  'RD784-N kontrola ujemna: stara reguła usuwa CV i konto przed zapowiedzianym terminem');
+rollback to savepoint rd784n;
+reset role;
+select pg_temp.assert(position('w.due_at - v_lead' in
+    pg_get_functiondef('public.retention_purge_batch(integer)'::regprocedure)) = 0,
+  'RD784-N2 po kontroli ujemnej definicja bez odejmowania v_lead od terminu');
+
+set local role service_role;
+select public.run_retention_purge(200)::text as rd784 \gset
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.files where path = :'RDC1' || '/cv-rd1.pdf' and deleted_at is null)
+  and not exists (select 1 from public.storage_deletion_queue where path = :'RDC1' || '/cv-rd1.pdf'),
+  'RD784-1 termin za 2 dni (< 72 h): CV zostaje, obiekt nie trafia do kolejki');
+select pg_temp.assert(
+  exists (select 1 from public.profiles where id = :'RDC2' and deleted_at is null)
+  and exists (select 1 from auth.users where id = :'RDC2')
+  and not exists (select 1 from public.erasure_tombstones where subject_id = :'RDC2'),
+  'RD784-2 termin za 2 dni: konto i dane zostają');
+select pg_temp.assert(
+  not exists (select 1 from public.files where path = :'RDC3' || '/cv-rd3.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RDC3' || '/cv-rd3.pdf')
+  and not exists (select 1 from public.files where path = :'RDC5' || '/cv-rd5.pdf')
+  and exists (select 1 from public.storage_deletion_queue where path = :'RDC5' || '/cv-rd5.pdf'),
+  'RD784-3 termin teraz i w przeszłości: CV usunięte, obiekt w kolejce storage');
+select pg_temp.assert(
+  not exists (select 1 from public.profiles where id in (:'RDC4', :'RDC6'))
+  and (select count(*) from public.erasure_tombstones
+        where subject_id in (:'RDC4', :'RDC6') and channel = 'retention') = 2,
+  'RD784-4 termin teraz i w przeszłości: konto usunięte z tombstone kanału retention');
+rollback;
+reset role; reset app.current_uid;
+
+-- ---- DI860: chwila poinformowania trwała po usunięciu konta (dowód 0188) -------------------
+-- 0197 nie zmienia definicji z 0188 — sekcja pilnuje, że #860 jest domknięte przez
+-- `moderation_informed` (usunięcie konta/wierszy poczty nie zeruje terminu ani retencji).
+begin;
+set local role service_role;
+select report_id as di_r1, case_number as di_case1 from public.submit_content_report(:'RDC7', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RDJ1', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null,
+  'rdc7@test.be', 'pl', true) \gset
+select report_id as di_r2 from public.submit_content_report(:'RDC8', gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RDJ2', 'other', 'Opis oferty wydaje się niepełny i mylący.', null, null,
+  'rdc8@test.be', 'nl', true) \gset
+select report_id as di_r3 from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RDJ3', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'rdg3@test.be', 'fr', true) \gset
+reset role;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'di_r1', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as di_d1 \gset
+select public.admin_decide_report(:'di_r2', 'open', 'no_action', 'Treść nie narusza regulaminu ani prawa.') as di_d2 \gset
+select public.admin_decide_report(:'di_r3', 'open', 'job_removed',
+  'Oferta żąda od kandydatów opłaty za rekrutację z góry.', 'terms', 'Regulamin § 4') as di_d3 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  public.moderation_informed_at(:'di_d1') is null
+  and public.moderation_appeal_deadline(:'di_d1') is null,
+  'DI860-0 e-mail w kolejce: brak poinformowania, termin nie biegnie');
+
+-- Wysłanie e-maila o braku działań: jedna decyzja 7 miesięcy temu, druga miesiąc temu.
+update public.email_deliveries set status = 'delivered', sent_at = now() - interval '7 months'
+ where entity_id = :'di_r1' and template = 'reportDecisionNoAction';
+update public.email_deliveries set status = 'sent', sent_at = now() - interval '1 month'
+ where entity_id = :'di_r2' and template = 'reportDecisionNoAction';
+select pg_temp.assert(
+  public.moderation_informed_at(:'di_d1') = now() - interval '7 months'
+  and public.moderation_informed_at(:'di_d2') = now() - interval '1 month'
+  and public.moderation_appealable(:'di_d1') = 'APPEAL_WINDOW_CLOSED'
+  and public.moderation_appealable(:'di_d2') = 'OK',
+  'DI860-1 wysłany e-mail zapisuje dowód poinformowania; termin liczony od niego');
+select pg_temp.expect_error(format($$update public.moderation_informed set informed_at = now() where decision_id = %L$$, :'di_d1'),
+  'niezmienny', 'DI860-1b dowodu poinformowania nie da się nadpisać');
+select pg_temp.expect_error(format($$delete from public.moderation_informed where decision_id = %L$$, :'di_d1'),
+  'niezmienny', 'DI860-1c dowodu poinformowania nie da się usunąć');
+
+-- Usunięcie kont zgłaszających (samoobsługowe) kasuje e-maile — termin i retencja zostają.
+set local role authenticated; set local app.current_uid = :'RDC7'; select pg_temp.assert_client_role();
+select public.request_account_erasure('rdc7@test.be') is not null as di_e1 \gset
+reset role; reset app.current_uid;
+set local role authenticated; set local app.current_uid = :'RDC8'; select pg_temp.assert_client_role();
+select public.request_account_erasure('rdc8@test.be') is not null as di_e2 \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.profiles where id in (:'RDC7', :'RDC8'))
+  and not exists (select 1 from public.email_deliveries
+                   where entity_id in (:'di_r1', :'di_r2') and template = 'reportDecisionNoAction'),
+  'DI860-2 usunięcie kont skasowało e-maile o decyzji (dawne jedyne źródło daty)');
+select pg_temp.assert(
+  public.moderation_informed_at(:'di_d1') = now() - interval '7 months'
+  and public.moderation_appealable(:'di_d1') = 'APPEAL_WINDOW_CLOSED'
+  and public.moderation_appeal_deadline(:'di_d2') = now() - interval '1 month' + public.dsa_appeal_window()
+  and public.moderation_appealable(:'di_d2') = 'OK',
+  'DI860-3 po usunięciu konta termin bez zmian (zamknięty zostaje zamknięty, otwarty biegnie dalej)');
+set local role service_role;
+select pg_temp.expect_error(format($$select * from public.submit_report_appeal(%L, 'ABCDEFGHIJKLMNOPQRSTUVWX', gen_random_uuid(), %L)$$,
+  :'di_case1', 'Oferta nadal jest myląca; proszę o ponowne sprawdzenie treści.'),
+  'APPEAL_WINDOW_CLOSED', 'DI860-4 odwołanie numerem sprawy i kodem po terminie odrzucone mimo usunięcia konta');
+select pg_temp.assert(
+  (select eligible_at is not null from public.dsa_retention_cases() where report_id = :'di_r1')
+  and (select eligible_at is not null from public.dsa_retention_cases() where report_id = :'di_r2'),
+  'DI860-5 sprawy po usunięciu konta mają datę kwalifikacji do retencji');
+reset role;
+
+-- DI860-N: kontrola ujemna — bez trwałego dowodu usunięcie konta otwiera odwołanie i blokuje retencję.
+savepoint di860n;
+set local session_replication_role = replica;
+delete from public.moderation_informed where decision_id in (:'di_d1', :'di_d2');
+set local session_replication_role = origin;
+select pg_temp.assert(
+  public.moderation_appeal_deadline(:'di_d1') is null
+  and public.moderation_appealable(:'di_d1') = 'OK'
+  and (select eligible_at is null from public.dsa_retention_cases() where report_id = :'di_r1'),
+  'DI860-N kontrola ujemna: bez dowodu termin wraca do NULL, odwołanie „OK”, retencja bez daty');
+rollback to savepoint di860n;
+
+-- Autor: odczyt decyzji w panelu (nie „przeczytane” powiadomienie) jest poinformowaniem;
+-- usunięcie powiadomień/e-maili go nie kasuje.
+update public.notifications set read_at = now() - interval '2 days'
+ where data->>'decisionId' = :'di_d3' and profile_id = :'EMPA';
+select pg_temp.assert(public.moderation_informed_at(:'di_d3') is null,
+  'DI860-6a oznaczenie powiadomienia jako przeczytanego nie jest poinformowaniem (0188)');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select count(*) as di_panel from public.get_company_moderation_decisions(:'RDCO') \gset
+reset role; reset app.current_uid;
+delete from public.notifications where data->>'decisionId' = :'di_d3';
+delete from public.email_deliveries where entity_id = :'di_d3';
+select pg_temp.assert(:'di_panel'::int >= 1
+  and public.moderation_informed_at(:'di_d3') = now(),
+  'DI860-6 odczyt decyzji w panelu zapisuje dowód; usunięcie powiadomień i poczty go nie zeruje');
+
+-- Cofnięcie: e-mail do zgłaszającego zapisuje dowód poinformowania o cofnięciu.
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'di_d3', :'RDREASON') as di_rest \gset
+reset role; reset app.current_uid;
+update public.email_deliveries set status = 'delivered', sent_at = now() - interval '3 days'
+ where entity_id = :'di_rest' and template = 'reportRestored';
+delete from public.email_deliveries where entity_id = :'di_rest';
+select pg_temp.assert(
+  public.moderation_restoration_informed_at(:'di_rest') = now() - interval '3 days'
+  and public.moderation_restoration_appeal_deadline(:'di_rest') is not null,
+  'DI860-7 e-mail o cofnięciu zapisuje dowód; usunięcie wiersza kolejki go nie zeruje');
+rollback;
+reset role; reset app.current_uid;
+
+-- ---- RR887: brak cofnięcia ograniczenia po anonimizacji sprawy -----------------------------
+begin;
+set local role service_role;
+select report_id as rr_r from public.submit_content_report(null, gen_random_uuid(),
+  'ABCDEFGHIJKLMNOPQRSTUVWX', 'job', :'RDJ4', 'fraud', 'Oferta wymaga opłaty za rekrutację z góry.', null, null,
+  'rrg4@test.be', 'pl', true) \gset
+reset role;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_report(:'rr_r', 'open', 'job_removed',
+  'Oferta żąda od kandydatów opłaty za rekrutację z góry.', 'terms', 'Regulamin § 4') as rr_d \gset
+reset role; reset app.current_uid;
+-- Anonimizacja jak w dsa_retention_run (ta sama flaga i te same kolumny).
+select set_config('pracujbe.retention', 'on', true);
+update public.reports
+   set access_code_hash = null, content_url = null, reporter_name = null, reporter_email = null,
+       target_snapshot = null, details = null, reporter_id = null, redacted_at = now(), updated_at = now()
+ where id = :'rr_r';
+update public.moderation_decisions set facts = null, redacted_at = now() where id = :'rr_d';
+select set_config('pracujbe.retention', '', true);
+select count(*) as rr_emails from public.email_deliveries \gset
+select count(*) as rr_audit from public.audit_logs where action = 'moderation.restored' \gset
+
+-- RR887-N: kontrola ujemna — rdzeń bez kontroli zapisuje nowe uzasadnienie przy zamkniętym cyklu.
+savepoint rr887n;
+do $$ begin
+  execute replace(pg_get_functiondef('public.moderation_restore_core(uuid, text, boolean)'::regprocedure),
+                  'if v_report_redacted is not null or v_dec.redacted_at is not null then',
+                  'if false then');
+end $$;
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_restore_moderation(:'rr_d', :'RDREASON') as rr_leak \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select reason is not null and redacted_at is null from public.moderation_restorations where id = :'rr_leak')
+  and (select redacted_at is not null from public.reports where id = :'rr_r')
+  and not exists (select 1 from public.dsa_retention_cases() where report_id = :'rr_r'),
+  'RR887-N kontrola ujemna: bez kontroli nowe uzasadnienie powstaje poza cyklem retencji');
+rollback to savepoint rr887n;
+reset role; reset app.current_uid;
+
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.admin_restore_moderation(%L, %L)', :'rr_d', :'RDREASON'),
+  'CASE_REDACTED', 'RR887-1 cofnięcie po anonimizacji odrzucone');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  not exists (select 1 from public.moderation_restorations where decision_id = :'rr_d')
+  and (select status::text = 'closed' and moderation_decision_id = :'rr_d'::uuid from public.jobs where id = :'RDJ4')
+  and (select count(*) from public.email_deliveries) = :'rr_emails'::int
+  and (select count(*) from public.audit_logs where action = 'moderation.restored') = :'rr_audit'::int
+  and not exists (select 1 from public.report_events where report_id = :'rr_r' and event_type = 'restored'),
+  'RR887-2 odmowa bez skutków: brak przywrócenia, oferta nadal zamknięta, bez e-maili, audytu i historii');
+rollback;
+reset role; reset app.current_uid;
+
 -- AJ904. Prywatny dziennik aplikacji kandydata (#904, 0196): odczyt tylko właściciela, zapis
 -- wyłącznie RPC, firma i inny kandydat nie czytają ani nie zmieniają, eksport i usunięcie konta
 -- obejmują tabelę. Kontrole ujemne: osłabiona polityka i wyłączone RLS ujawniają wiersz.

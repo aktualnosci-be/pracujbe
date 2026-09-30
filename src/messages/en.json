@@ -2024,6 +2024,7 @@
     "nameFallback": "Unnamed",
     "statusChanged": "Company status updated.",
     "noActions": "No actions",
+    "moderationCaseRedacted": "Case anonymised — no further actions",
     "actionVerify": "Verify",
     "actionSuspend": "Suspend",
     "actionReactivate": "Reactivate",

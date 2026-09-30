@@ -2782,6 +2782,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `portal-appeals.test.ts` (wyłączenie `is_active`, brak konfliktu, decyzja przechodzi,
   przywrócenie), unit `moderation-appeals.test.ts` (SQL migracji i zapytania zawierają
   `is_active = true`; kontrola ujemna: stara treść 0109 bez tego warunku).
+  Anonimizacja i trwały termin (migracja `0197` — numer tymczasowy, #860/#887): #860 domyka
+  dowód `moderation_informed` z 0188 (usunięcie konta strony nie przywraca odwołania i nie
+  blokuje retencji sprawy; 0197 nie zmienia definicji 0188, regresję pilnuje DI860).
+  `moderation_restore_core` po blokadzie sprawy odrzuca
+  cofnięcie sprawy zanonimizowanej (`CASE_REDACTED`, bez zapisu i skutków); panel
+  (`AdminDsaCase.redactedAt` → `ModerationDecisionActions redacted`) pokazuje
+  `admin.moderationCaseRedacted` zamiast akcji. Dowód: `rls.sql` sekcja RD973 (DI860/RR887,
+  kontrole ujemne: bez trwałego dowodu, rdzeń bez kontroli), rollback
+  `retention-dsa-0197-rollback.sql`, unit `moderation-decision-actions`.
   Cel formularza odwołania = snapshot udanego odczytu (#884, bez migracji):
   `ReportCaseLookup` przechowuje numer sprawy i kod dostępu, którymi POWIODŁO SIĘ sprawdzenie
   (`reportTarget`, ustawiany razem z `report`), zamiast czytać `getValues()` z pól formularza
@@ -2920,6 +2929,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `retention-warning-email`. **Otwarte (#574):** włączenie `RETENTION_MODE` (właściciel), minimum
   rejestru usunięć po RET-09/RET-10, zadania dla zgód/audytu/`auth.email_outbox`/e-maili,
   kopie liczone w dniach (`backup.sh`), konto pracodawcy, język gościa na aplikacji (#546).
+  Termin z ostrzeżenia dotrzymany (migracja `0197` — numer tymczasowy, #784): CV i konto
+  nieaktywnego kandydata usuwane dopiero od `retention_warnings.due_at` (dawniej
+  `due_at - storage_physical_deletion`, czyli do 72 h przed datą z e-maila); okres fizycznego
+  usunięcia dotyczy tylko danych już oznaczonych i kolejki storage. Dowód: `rls.sql` RD784
+  (termin za 2 dni / teraz / wczoraj; kontrola ujemna: dawny warunek usuwa przed terminem).
   Podgląd w panelu admina (bez migracji): `/admin/ustawienia/retencja` (link z
   `/admin/ustawienia`), TYLKO ODCZYT — każda kategoria `retention_policies` z etykietą i opisem
   z `adminRetention.keys.*` (PL/NL/FR/EN), okres i ostrzeżenie w dniach („wyłączone” = null),

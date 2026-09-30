@@ -34,6 +34,7 @@ function renderActions(
   status = 'reviewing',
   decision: { id: string; reference: string; decision: string; restoredAt: string | null } | null = null,
   targetType = 'job',
+  redacted?: boolean,
 ) {
   return render(
     <AdminFeedbackProvider>
@@ -52,6 +53,7 @@ function renderActions(
         targetLabel="Magazynier – Gent"
         reasonLabel="Oszustwo"
         decision={decision}
+        redacted={redacted}
       />
     </AdminFeedbackProvider>,
   );
@@ -152,5 +154,16 @@ describe('ModerationDecisionActions (#42)', () => {
     cleanup();
     renderActions('dismissed', { id: 'd2', reference: 'DEC-2', decision: 'no_action', restoredAt: null });
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('#887: sprawa zanonimizowana nie oferuje cofnięcia ograniczenia (kontrola: ta sama bez anonimizacji — tak)', () => {
+    const restricted = { id: 'd1', reference: 'DEC-1', decision: 'job_removed', restoredAt: null };
+    renderActions('resolved', restricted, 'job', true);
+    expect(screen.queryByRole('button', { name: 'actionRestore' })).toBeNull();
+    expect(screen.getByText('moderationCaseRedacted')).toBeInTheDocument();
+    cleanup();
+    renderActions('resolved', restricted, 'job', false);
+    expect(screen.getByRole('button', { name: 'actionRestore' })).toBeInTheDocument();
+    expect(screen.queryByText('moderationCaseRedacted')).toBeNull();
   });
 });

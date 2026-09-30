@@ -2024,6 +2024,7 @@
     "nameFallback": "Naamloos",
     "statusChanged": "De bedrijfsstatus is gewijzigd.",
     "noActions": "Geen acties",
+    "moderationCaseRedacted": "Zaak geanonimiseerd — geen verdere acties",
     "actionVerify": "Verifiëren",
     "actionSuspend": "Schorsen",
     "actionReactivate": "Herstellen",
