@@ -20,7 +20,9 @@ describe('Harness testów RLS', () => {
   it('działa na produkcyjnym bootstrapie i migracjach auth, bez shimu Supabase', async () => {
     const script = await read('scripts/test-rls.sh');
     expect(script).toContain('database/bootstrap/0001_roles_and_identity.sql');
-    expect(script).toContain('database/auth/0*.sql');
+    // #1114 (TQ2-10): lista migracji z helpera zgodnego z produkcyjnym loaderem, nie wzorzec `0*.sql`.
+    expect(script).toContain('migration_files "$ROOT/supabase/migrations" "$ROOT/database/auth"');
+    expect(script).not.toContain('0*.sql');
     expect(script).toContain('supabase/tests/role-guard.sql');
     expect(script).not.toContain('shim.sql');
   });

@@ -440,8 +440,8 @@ describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
     expect(read('src/app/[locale]/candidate/profil/page.tsx')).toMatch(/notFoundUnlessRecruitment\(\)/);
   });
 
-  it('nawigacja w trybie ogłoszeniowym = pulpit, zapisane oferty, zapisane wyszukiwania, ustawienia', () => {
-    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'settings']);
+  it('nawigacja w trybie ogłoszeniowym = pulpit, zapisane oferty, zapisane wyszukiwania, dziennik aplikacji, ustawienia', () => {
+    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'journal', 'settings']);
     expect(candidateNavKeys(false)).toBe(CLASSIFIEDS_CANDIDATE_NAV);
   });
 });
@@ -517,6 +517,27 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
       .toEqual(['prepareCvDownload', 'deleteCandidateFile']);
     expect(read('src/lib/files/candidate-cv.ts'))
       .toMatch(/storeCandidateCv\([\s\S]*?\): Promise<CvUploadResult> \{\s*\/\/ #1138[^\n]*\n\s*if \(!isRecruitmentEnabled\('cvAccess'\)\)/);
+  });
+
+  /**
+   * #1226: istniejące CV ma ścieżkę UI w trybie ogłoszeniowym — lista w ustawieniach konta
+   * (odczyt i render tylko poza trybem rekrutacyjnym, bez `allowUpload`).
+   */
+  const settingsCvListOk = (src: string) =>
+    /const cvListInSettings = !isRecruitmentEnabled\('cvAccess'\)/.test(src)
+    && /cvListInSettings \? loadCandidateFiles\(\) : Promise\.resolve\(null\)/.test(src)
+    && /<CvUpload\b[^>]*variant="settings"/s.test(src)
+    && !/<CvUpload\b[^>]*allowUpload/s.test(src);
+
+  it('/candidate/ustawienia: lista istniejących CV (pobranie/usunięcie) bez wgrywania (#1226)', () => {
+    expect(settingsCvListOk(read('src/app/[locale]/candidate/ustawienia/page.tsx'))).toBe(true);
+  });
+
+  it('kontrola ujemna: lista z allowUpload albo bez strażnika trybu jest wykrywana (#1226)', () => {
+    const src = read('src/app/[locale]/candidate/ustawienia/page.tsx');
+    expect(settingsCvListOk(src.replace('variant="settings"', 'variant="settings"\n          allowUpload'))).toBe(false);
+    expect(settingsCvListOk(src.replace("!isRecruitmentEnabled('cvAccess')", 'true'))).toBe(false);
+    expect(settingsCvListOk(src.replace(/<CvUpload\b[\s\S]*?\/>/, ''))).toBe(false);
   });
 
   it('AI CV import niedostępny: konfiguracja i każda akcja sprawdzają tryb przed flagą AI', () => {

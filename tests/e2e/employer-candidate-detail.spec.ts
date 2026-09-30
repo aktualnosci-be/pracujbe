@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { expect, test } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Audyt P1-05/P1-06: szczegół kandydata w panelu pracodawcy (link z listy dopasowanych
@@ -12,7 +13,7 @@ import { expect, test } from '@playwright/test';
 
 const locales = ['pl', 'nl', 'fr', 'en'] as const;
 
-type Messages = { dashboard: Record<string, string> };
+type Messages = { dashboard: AppMessages['dashboard'] };
 
 function load(locale: string): Messages {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf8')) as Messages;

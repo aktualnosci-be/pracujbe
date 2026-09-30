@@ -22,6 +22,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Lista migracji jak w produkcyjnym loaderze (każdy `NNNN_*.sql`, #1114): scripts/lib/migration-files.sh.
+. "$ROOT/scripts/lib/migration-files.sh"
+MIGRATIONS="$(migration_files "$ROOT/supabase/migrations" "$ROOT/database/auth")"
 SRC_DB=pracujbe_backup_source_ci
 DST_DB=pracujbe_restore_bk_ci
 STRIP_DB=pracujbe_backup_strip_ci
@@ -83,9 +86,7 @@ recreate "$SRC_DB"
 "${psql_base[@]}" -d "$SRC_DB" -1 -f "$ROOT/database/bootstrap/0001_roles_and_identity.sql" >/dev/null 2>&1
 while IFS= read -r file; do
   "${psql_base[@]}" -d "$SRC_DB" -1 -f "$file" >/dev/null 2>&1
-done < <(for f in "$ROOT"/supabase/migrations/0*.sql "$ROOT"/database/auth/0*.sql; do
-  printf '%s\t%s\n' "$(basename "$f")" "$f"
-done | LC_ALL=C sort | cut -f2)
+done <<< "$MIGRATIONS"
 "${psql_base[@]}" -d "$SRC_DB" <<'SQL' >/dev/null
 create schema if not exists app_migrations;
 create table if not exists app_migrations.history(

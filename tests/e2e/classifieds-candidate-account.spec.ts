@@ -21,8 +21,9 @@ const classifieds = (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().
 test.skip(!classifieds, 'serwer testowy w trybie RECRUITMENT (E2E_PORTAL_LEGAL_MODE=)');
 
 type Texts = {
-  dashboard: Record<'profileCompleteness' | 'accountIntro' | 'navSaved' | 'navSearches' | 'navSettings' | 'navSummary', string>;
+  dashboard: Record<'profileCompleteness' | 'accountIntro' | 'navSaved' | 'navJournal' | 'navSearches' | 'navSettings' | 'navSummary', string>;
   settings: Record<'emailApplicationsLabel' | 'emailOffersLabel' | 'emailMessagesLabel' | 'emailJobMatchesLabel', string>;
+  files: Record<'existingTitle' | 'existingHint' | 'upload', string>;
 };
 const texts = (locale: string): Texts =>
   JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf-8')) as Texts;
@@ -57,6 +58,7 @@ for (const locale of LOCALES) {
       [t.dashboard.navSummary, '/candidate'],
       [t.dashboard.navSaved, '/candidate/zapisane'],
       [t.dashboard.navSearches, '/candidate/wyszukiwania'],
+      [t.dashboard.navJournal, '/candidate/dziennik'],
       [t.dashboard.navSettings, '/candidate/ustawienia'],
     ] as const) {
       expect(await page.locator(`a[href="/${locale}${href}"]`).filter({ hasText: label }).count(), label).toBeGreaterThan(0);
@@ -71,6 +73,17 @@ for (const locale of LOCALES) {
     for (const label of [t.settings.emailApplicationsLabel, t.settings.emailOffersLabel, t.settings.emailMessagesLabel]) {
       await expect(page.getByLabel(label, { exact: true }), label).toHaveCount(0);
     }
+  });
+
+  test(`ustawienia: lista wcześniej wgranych CV bez wgrywania (#1226, ${locale})`, async ({ page }) => {
+    const t = texts(locale);
+    await page.goto(`/${locale}/candidate/ustawienia`);
+    const section = page.getByRole('region', { name: t.files.existingTitle });
+    await expect(section).toBeVisible();
+    await expect(section.getByRole('heading', { level: 2, name: t.files.existingTitle })).toBeVisible();
+    await expect(section.getByText(t.files.existingHint, { exact: true })).toBeVisible();
+    await expect(section.getByRole('button', { name: t.files.upload, exact: true })).toHaveCount(0);
+    await expect(page.locator('input[type="file"]')).toHaveCount(0);
   });
 }
 
