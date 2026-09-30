@@ -511,6 +511,7 @@ export default async function AdminReportsPage({
                           targetLabel={targetText(report)}
                           reasonLabel={reasonLabel}
                           decision={report.dsa.decision}
+                          redacted={report.dsa.redactedAt !== null}
                         />
                       ) : (
                         <ReportActions

@@ -2,7 +2,7 @@
  * Nawigacja panelu kandydata (#1142) — jedno źródło listy pozycji zależnej od trybu produktu.
  *
  * Decyzja produktowa: portal ogłoszeniowy. W trybie `CLASSIFIEDS_ONLY` (domyślnym) konto służy
- * do zapisanych ofert, zapisanych wyszukiwań i ustawień — bez profilu zawodowego, zgłoszeń,
+ * do zapisanych ofert, zapisanych wyszukiwań, prywatnego dziennika aplikacji (#904) i ustawień — bez profilu zawodowego, zgłoszeń,
  * propozycji, polecanych ofert i wiadomości. Tryb `RECRUITMENT` przywraca pełny panel.
  *
  * Moduł bez `server-only` i bez odczytu trybu: tryb przychodzi z serwera (`isRecruitmentEnabled()`
@@ -15,6 +15,7 @@ export const CANDIDATE_NAV_HREF = {
   recommended: '/candidate/oferty-polecane',
   saved: '/candidate/zapisane',
   searches: '/candidate/wyszukiwania',
+  journal: '/candidate/dziennik',
   applications: '/candidate/aplikacje',
   proposals: '/candidate/propozycje',
   messages: '/candidate/wiadomosci',
@@ -30,6 +31,7 @@ const RECRUITMENT_NAV: readonly CandidateNavKey[] = [
   'recommended',
   'saved',
   'searches',
+  'journal',
   'applications',
   'proposals',
   'messages',
@@ -37,8 +39,8 @@ const RECRUITMENT_NAV: readonly CandidateNavKey[] = [
   'settings',
 ];
 
-/** Konto w portalu ogłoszeniowym: dokładnie te cztery pozycje (+ dzwonek w topbarze). */
-export const CLASSIFIEDS_CANDIDATE_NAV: readonly CandidateNavKey[] = ['summary', 'saved', 'searches', 'settings'];
+/** Konto w portalu ogłoszeniowym: dokładnie te pięć pozycji (+ dzwonek w topbarze); dziennik = prywatne notatki (#904). */
+export const CLASSIFIEDS_CANDIDATE_NAV: readonly CandidateNavKey[] = ['summary', 'saved', 'searches', 'journal', 'settings'];
 
 export function candidateNavKeys(recruitmentEnabled: boolean): readonly CandidateNavKey[] {
   return recruitmentEnabled ? RECRUITMENT_NAV : CLASSIFIEDS_CANDIDATE_NAV;

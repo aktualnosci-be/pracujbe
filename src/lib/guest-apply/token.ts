@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 
-import { isProductionMode } from '@/lib/env';
+import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 
 /**
  * Tokeny jednorazowej aplikacji gościa (#98, migracja 0095).
@@ -18,17 +18,25 @@ import { isProductionMode } from '@/lib/env';
 
 export type GuestTokenPurpose = 'confirm' | 'claim';
 
-/** Sekret tylko poza produkcją, gdy GUEST_APPLY_SECRET nie ustawiono (dev/test/E2E). */
+/**
+ * Sekret zastępczy tylko dla trybu demo BEZ prawdziwej bazy (dev/test/E2E na danych
+ * przykładowych). Wartość jest publiczna (repozytorium), więc na realnej bazie — także w trybie
+ * demo, np. przed startem za bramką hasła — pozwalałaby każdemu wyliczyć ważny token zaproszenia
+ * do zespołu albo aplikacji gościa (#1115, DVP-02). Tam brak `GUEST_APPLY_SECRET` = brak tokenów.
+ */
 const DEV_FALLBACK_SECRET = 'pracujbe-dev-guest-apply-secret-not-for-production';
 const MIN_SECRET_LENGTH = 32;
 /** Token z linku: base64url z 32 bajtów HMAC = 43 znaki. */
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
-/** Sekret podpisu albo `null`, gdy w produkcji brakuje poprawnego GUEST_APPLY_SECRET. */
+/**
+ * Sekret podpisu albo `null`, gdy brakuje poprawnego GUEST_APPLY_SECRET w produkcji albo na
+ * prawdziwej bazie (`DATABASE_APP_URL`) w dowolnym trybie.
+ */
 export function guestApplySecret(): string | null {
   const secret = process.env.GUEST_APPLY_SECRET ?? '';
   if (secret.length >= MIN_SECRET_LENGTH) return secret;
-  return isProductionMode() ? null : DEV_FALLBACK_SECRET;
+  return isProductionMode() || isDatabaseConfigured() ? null : DEV_FALLBACK_SECRET;
 }
 
 /** Czy aplikacja gościa może działać (sekret dostępny). */

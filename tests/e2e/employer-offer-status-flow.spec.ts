@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { expect, test } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 type Messages = {
-  dashboard: Record<string, string>;
-  status: Record<string, string>;
-  common: Record<string, string>;
+  dashboard: AppMessages['dashboard'];
+  status: AppMessages['status'];
+  common: AppMessages['common'];
 };
 
 const messages = JSON.parse(

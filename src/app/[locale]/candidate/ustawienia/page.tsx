@@ -5,6 +5,7 @@ import { loadNotificationPreferences } from '@/lib/data/notification-preferences
 import { loadMyCompanyBlocks } from '@/lib/data/company-blocks';
 import { loadProfileVisibility } from '@/lib/data/profile-visibility';
 import { loadMyAgeAttestation } from '@/lib/data/age-policy';
+import { loadCandidateFiles } from '@/lib/data/candidate-files';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { AgeAttestationSettings } from '@/components/settings/AgeAttestationSettings';
 import { AgeStatusProvider } from '@/components/settings/age-status-context';
@@ -15,6 +16,7 @@ import { NotificationPreferencesForm } from '@/components/settings/NotificationP
 import { NotificationPreferencesLoadError } from '@/components/settings/NotificationPreferencesLoadError';
 import { ProfileVisibilitySettings } from '@/components/settings/ProfileVisibilitySettings';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
+import { CvUpload } from '@/components/candidate/CvUpload';
 import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
@@ -28,6 +30,10 @@ import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
  *
  * Decyzja produktowa: portal ogłoszeniowy (#1135) — w trybie ogłoszeniowym firmy nie przeglądają
  * profili, więc sekcji widoczności profilu nie ma (bez odczytu z bazy).
+ *
+ * #1226: w trybie ogłoszeniowym profil zawodowy (z listą CV) jest 404 (#1142), więc CV wgrane
+ * wcześniej kandydat pobiera albo usuwa tutaj — sama lista (`CvUpload` bez `allowUpload`),
+ * bez wgrywania nowych plików (#1138). W trybie RECRUITMENT lista zostaje w profilu.
  */
 
 export const dynamic = 'force-dynamic';
@@ -62,11 +68,13 @@ export default async function CandidateSettingsPage({
   // rekrutacyjnych; widoczność profilu dla firm tylko w trybie RECRUITMENT (#1135).
   const recruitment = isRecruitmentEnabled();
   const visibilityEnabled = isRecruitmentEnabled('candidateSearch');
-  const [load, blocks, visibility, age] = await Promise.all([
+  const cvListInSettings = !isRecruitmentEnabled('cvAccess');
+  const [load, blocks, visibility, age, files] = await Promise.all([
     loadNotificationPreferences(),
     loadMyCompanyBlocks(),
     visibilityEnabled ? loadProfileVisibility() : Promise.resolve(null),
     loadMyAgeAttestation(),
+    cvListInSettings ? loadCandidateFiles() : Promise.resolve(null),
   ]);
   // Jeden stan wieku dla sekcji „Wiek” i widoczności (#828): nieznany = bez blokady w UI.
   const initialAdult = age.status === 'ready' && age.attestedMinAge !== null ? age.isAdult : undefined;
@@ -127,6 +135,14 @@ export default async function CandidateSettingsPage({
             {tBlocks('loadError')}
           </p>
         </section>
+      )}
+
+      {files === null ? null : (
+        <CvUpload
+          variant="settings"
+          items={files.status === 'ready' ? files.items : []}
+          loadFailed={files.status === 'error'}
+        />
       )}
 
       <AccountDataSettings recruitmentEnabled={recruitment} />

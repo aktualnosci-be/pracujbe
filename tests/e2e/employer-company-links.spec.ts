@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import AxeBuilder from './fixtures/axe';
 import { expect, test } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Strona WWW i logo firmy (#112) — panel pracodawcy w trybie demo (bez bazy). Realny zapis,
@@ -13,7 +14,7 @@ import { expect, test } from '@playwright/test';
 const pl = JSON.parse(
   readFileSync(resolve(process.cwd(), 'src', 'messages', 'pl.json'), 'utf8'),
 ) as {
-  company: Record<string, string> & { error: Record<string, string> };
+  company: AppMessages['company'];
 };
 
 test.beforeEach(async ({ page }) => {

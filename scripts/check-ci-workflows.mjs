@@ -310,11 +310,22 @@ assert.match(
   'package.json: skrypt typecheck musi sprawdzać tests/e2e (tsc --noEmit -p tsconfig.e2e.json)',
 );
 assert.match(ci.match(/^  typecheck:[\s\S]*?(?=^  [a-z][a-z0-9_-]*:\s*$)/m)?.[0] ?? '', /run: npm run typecheck\s*$/m, 'ci.yml: job Typecheck uruchamia npm run typecheck');
-const e2eTsconfig = JSON.parse(await readFile(new URL('tsconfig.e2e.json', root), 'utf8'));
+const e2eTsconfig = JSON.parse(await readFile(process.env.CI_GUARD_E2E_TSCONFIG ?? new URL('tsconfig.e2e.json', root), 'utf8'));
 assert.ok(
   (e2eTsconfig.include ?? []).some((pattern) => pattern.startsWith('tests/e2e/')),
   'tsconfig.e2e.json: include musi obejmować tests/e2e',
 );
+// #1121: specyfikacje E2E sprawdzane tak samo ściśle jak `src/` — bez wyłączania
+// `noUncheckedIndexedAccess` (dziedziczone z tsconfig.json) ani `strict`.
+const baseTsconfig = JSON.parse(await readFile(new URL('tsconfig.json', root), 'utf8'));
+assert.equal(baseTsconfig.compilerOptions?.noUncheckedIndexedAccess, true, 'tsconfig.json: noUncheckedIndexedAccess musi być włączone');
+for (const option of ['noUncheckedIndexedAccess', 'strict']) {
+  assert.notEqual(
+    e2eTsconfig.compilerOptions?.[option],
+    false,
+    `tsconfig.e2e.json: nie wyłączaj ${option} dla tests/e2e (#1121)`,
+  );
+}
 
 // Migration runner (#1246): luka numeracji (numer tymczasowy w PR sesji potomnej) ma własny
 // krok z czytelnym komunikatem; reszta integracji biegnie w osobnym kroku bez testu operatora

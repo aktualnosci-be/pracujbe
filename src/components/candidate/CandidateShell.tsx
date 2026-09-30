@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   MailCheck,
   MessageSquare,
+  NotebookPen,
   Settings,
   User,
 } from 'lucide-react';
@@ -102,6 +103,7 @@ export function CandidateShell({
     recommended: { label: td('navRecommended'), icon: <FileText /> },
     saved: { label: td('navSaved'), icon: <Heart /> },
     searches: { label: td('navSearches'), icon: <BellRing /> },
+    journal: { label: td('navJournal'), icon: <NotebookPen /> },
     applications: { label: td('navApplications'), icon: <Bookmark /> },
     proposals: { label: td('navProposals'), icon: <MailCheck /> },
     messages: { label: td('navMessages'), icon: <MessageSquare /> },
