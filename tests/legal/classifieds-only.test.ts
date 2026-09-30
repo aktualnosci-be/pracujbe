@@ -519,6 +519,27 @@ describe('wiadomości i CV wyłączone w trybie ogłoszeniowym (#1134/#1138)', (
       .toMatch(/storeCandidateCv\([\s\S]*?\): Promise<CvUploadResult> \{\s*\/\/ #1138[^\n]*\n\s*if \(!isRecruitmentEnabled\('cvAccess'\)\)/);
   });
 
+  /**
+   * #1226: istniejące CV ma ścieżkę UI w trybie ogłoszeniowym — lista w ustawieniach konta
+   * (odczyt i render tylko poza trybem rekrutacyjnym, bez `allowUpload`).
+   */
+  const settingsCvListOk = (src: string) =>
+    /const cvListInSettings = !isRecruitmentEnabled\('cvAccess'\)/.test(src)
+    && /cvListInSettings \? loadCandidateFiles\(\) : Promise\.resolve\(null\)/.test(src)
+    && /<CvUpload\b[^>]*variant="settings"/s.test(src)
+    && !/<CvUpload\b[^>]*allowUpload/s.test(src);
+
+  it('/candidate/ustawienia: lista istniejących CV (pobranie/usunięcie) bez wgrywania (#1226)', () => {
+    expect(settingsCvListOk(read('src/app/[locale]/candidate/ustawienia/page.tsx'))).toBe(true);
+  });
+
+  it('kontrola ujemna: lista z allowUpload albo bez strażnika trybu jest wykrywana (#1226)', () => {
+    const src = read('src/app/[locale]/candidate/ustawienia/page.tsx');
+    expect(settingsCvListOk(src.replace('variant="settings"', 'variant="settings"\n          allowUpload'))).toBe(false);
+    expect(settingsCvListOk(src.replace("!isRecruitmentEnabled('cvAccess')", 'true'))).toBe(false);
+    expect(settingsCvListOk(src.replace(/<CvUpload\b[\s\S]*?\/>/, ''))).toBe(false);
+  });
+
   it('AI CV import niedostępny: konfiguracja i każda akcja sprawdzają tryb przed flagą AI', () => {
     expect(read('src/lib/cv-import/config.ts'))
       .toMatch(/cvImportProvider\(\): CvImportProvider \| null \{\s*if \(!isRecruitmentEnabled\('cvImport'\)\) return null;/);

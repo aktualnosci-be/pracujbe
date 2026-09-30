@@ -2865,9 +2865,9 @@ reset role;
 
 -- SP188-7: granty jak dotąd — anon/authenticated tak, PUBLIC nie.
 select pg_temp.assert(
-  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)', 'execute')
-  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean)', 'execute')
+  has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)', 'execute')
+  and has_function_privilege('authenticated', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute')
   and not exists (
     select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
     where p.pronamespace = 'public'::regnamespace
@@ -12568,9 +12568,9 @@ select pg_temp.assert(
   and not has_function_privilege('authenticated', 'public.search_title_candidates(text)', 'execute')
   and not has_function_privilege('anon', 'public.search_city_candidates(text)', 'execute')
   and not has_function_privilege('authenticated', 'public.search_city_candidates(text)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)', 'execute')
-  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean)', 'execute')
-  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean)', 'execute'),
+  and has_function_privilege('anon', 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)', 'execute')
+  and has_function_privilege('anon', 'public.get_public_job_filter_facets(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute')
+  and not has_function_privilege('public', 'public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)', 'execute'),
   'SU47-8 funkcje kandydatów bez EXECUTE dla anon/authenticated; granty RPC jak w 0091');
 
 -- =============================================================================
@@ -14539,7 +14539,7 @@ reset role;
 -- (po kluczu wynagrodzenia), przed `limit`/`offset` — introspekcja niezależna od danych.
 select pg_temp.assert(
   regexp_replace(pg_get_functiondef(
-    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)'::regprocedure),
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)'::regprocedure),
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit',
   'JLP594-3 ORDER BY kończy się deterministycznym tie-breakerem j.id przed limit/offset');
@@ -14565,7 +14565,13 @@ create or replace function public.get_public_jobs(
   p_limit          integer     default 20,
   p_offset         integer     default 0,
   p_salary_unit    text        default 'month',
-  p_direct_only    boolean     default null
+  p_direct_only    boolean     default null,
+  -- 0194: sygnatura jak w migracji (mutacja nadpisuje funkcję, nie tworzy przeciążenia)
+  p_language       text        default null,
+  p_language_level text        default null,
+  p_work_time      text        default null,
+  p_near           text        default null,
+  p_radius_km      integer     default null
 )
 returns table (
   id uuid, slug text, title text, company_name text, company_verified boolean,
@@ -14627,7 +14633,7 @@ language sql stable security definer set search_path = public, pg_temp as $jlneg
 $jlneg$;
 select pg_temp.assert(
   not (regexp_replace(pg_get_functiondef(
-    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean)'::regprocedure),
+    'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)'::regprocedure),
     '--[^\n]*', '', 'g')
   ~ 'published_at desc,\s*j\.id desc\s*\n\s*limit'),
   'JLP594-N1 mutacja usunęła tie-breaker — introspekcja JLP594-3 wykrywa regresję');
@@ -17990,7 +17996,7 @@ reset role;
 begin;
 do $ft$
 declare
-  v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean)'::regprocedure);
+  v_def text := pg_get_functiondef('public.get_public_jobs_count(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, boolean, text, text, text, text, integer)'::regprocedure);
 begin
   if position('or not c.is_agency' in v_def) = 0 then
     raise exception 'ASSERT FAILED: FT167-9d brak warunku agencji w get_public_jobs_count';
@@ -22708,6 +22714,357 @@ rollback;
 
 -- Rollback 0189: supabase/tests/soft-delete-cv-quota-rollback.sql (\ir rollbacku nie działa przy wejściu ze stdin).
 
+-- ============================================================================
+-- EW788 (#788/#790, 0195): webhook doręczenia przed zapisem `provider_message_id` nie ginie
+-- (email_pending_events + trigger przypisania), a dzierżawa inboxu jest zwalniana po błędzie
+-- (release_webhook). Kontrole ujemne: zdjęty trigger → zdarzenie nieprzypisane; bez release
+-- retry dostaje `locked`.
+-- ============================================================================
+\set EWA 'e0195000-0000-0000-0000-0000000000a1'
+\set EWB 'e0195000-0000-0000-0000-0000000000a2'
+\set EWE 'e0195000-0000-0000-0000-0000000000e1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'EWA','ewa@test.be','Ew A','{"role":"candidate","first_name":"Ew","last_name":"A","locale":"pl"}'),
+  (:'EWB','ewb@test.be','Ew B','{"role":"candidate","first_name":"Ew","last_name":"B","locale":"nl"}');
+select test_fixture.attest_candidates();
+select public.enqueue_email(:'EWA', 'jobOffer', 'offer', :'EWE', 'ew788-a', '{}'::jsonb);
+select public.enqueue_email(:'EWB', 'jobOffer', 'offer', :'EWE', 'ew788-b', '{}'::jsonb);
+
+-- EW788-1: webhook przed zapisem identyfikatora → zdarzenie zachowane (i deduplikowane).
+set role service_role;
+select pg_temp.assert(public.record_email_event('resend', 'ew-msg-a', 'delivered', now(), null, null) = 'unknown_message',
+  'EW788-1 zdarzenie bez wysyłki = unknown_message');
+select public.record_email_event('resend', 'ew-msg-a', 'delivered', (select occurred_at from public.email_pending_events where provider_message_id = 'ew-msg-a'), null, null);
+select pg_temp.assert((select count(*) from public.email_pending_events where provider_message_id = 'ew-msg-a') = 1,
+  'EW788-1b powtórka tego samego zdarzenia nie mnoży wierszy');
+select public.record_email_event('resend', 'ew-msg-b', 'bounced', now(), null, 'permanent');
+reset role;
+
+-- EW788-2: worker zapisuje identyfikator → trigger przypisuje zdarzenia.
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-a'
+ where idempotency_key = 'ew788-a';
+select pg_temp.assert((select status = 'delivered' and delivered_at is not null from public.email_deliveries where idempotency_key = 'ew788-a'),
+  'EW788-2 po zapisie ID wysyłka ma status delivered i delivered_at');
+select pg_temp.assert((select count(*) from public.email_pending_events where provider_message_id = 'ew-msg-a') = 0,
+  'EW788-2b przypisane zdarzenie usunięte z kolejki');
+
+-- EW788-3: trwałe odbicie z wyprzedzeniem → status bounced i blokada adresu z wiersza wysyłki.
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-b'
+ where idempotency_key = 'ew788-b';
+select pg_temp.assert((select status = 'bounced' and bounced_at is not null and bounce_type = 'permanent'
+                         from public.email_deliveries where idempotency_key = 'ew788-b'),
+  'EW788-3 odbicie odebrane przed zapisem ID zapisane w wysyłce');
+select pg_temp.assert(exists (select 1 from public.email_suppressions where email = 'ewb@test.be' and lifted_at is null),
+  'EW788-3b blokada adresu z odbicia odebranego przed zapisem ID');
+
+-- EW788-4: KONTROLA UJEMNA — bez triggera przypisania zdarzenie zostaje nieprzypisane.
+select public.enqueue_email(:'EWA', 'jobOffer', 'offer', :'EWE', 'ew788-c', '{}'::jsonb);
+set role service_role;
+select public.record_email_event('resend', 'ew-msg-c', 'delivered', now(), null, null);
+reset role;
+begin;
+drop trigger trg_email_deliveries_apply_pending on public.email_deliveries;
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-c'
+ where idempotency_key = 'ew788-c';
+select pg_temp.assert((select status = 'sent' and delivered_at is null from public.email_deliveries where idempotency_key = 'ew788-c')
+  and (select count(*) from public.email_pending_events where provider_message_id = 'ew-msg-c') = 1,
+  'EW788-N1 kontrola ujemna: bez triggera zdarzenie zostaje nieprzypisane');
+rollback;
+-- ...a z triggerem to samo przypisanie działa.
+update public.email_deliveries set status = 'sent', sent_at = now(), provider = 'resend', provider_message_id = 'ew-msg-c'
+ where idempotency_key = 'ew788-c';
+select pg_temp.assert((select status = 'delivered' from public.email_deliveries where idempotency_key = 'ew788-c'),
+  'EW788-4 z triggerem zdarzenie zostaje przypisane');
+
+-- EW788-5: klient nie czyta kolejki zdarzeń ani nie woła release_webhook.
+set role authenticated; set app.current_uid = :'EWA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error($q$select count(*) from public.email_pending_events$q$, 'permission denied', 'EW788-5 authenticated nie czyta email_pending_events');
+select pg_temp.expect_error($q$select public.release_webhook('x')$q$, 'permission denied', 'EW788-5b authenticated nie woła release_webhook');
+reset role; reset app.current_uid;
+
+-- EW790: zwolnienie dzierżawy po błędzie pozwala na natychmiastowy retry.
+set role service_role;
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'claimed', 'EW790-1 pierwsza dostawa przejęta');
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'locked',
+  'EW790-N1 kontrola ujemna: bez zwolnienia retry dostaje locked');
+select pg_temp.assert(public.release_webhook('resend:ew790-1'), 'EW790-2 dzierżawa zwolniona');
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'claimed',
+  'EW790-3 po zwolnieniu retry przejmuje zdarzenie');
+select pg_temp.assert(public.complete_webhook('resend:ew790-1'), 'EW790-4 zakończone');
+select pg_temp.assert(not public.release_webhook('resend:ew790-1'), 'EW790-5 zakończonego wpisu nie da się zwolnić');
+select pg_temp.assert(public.claim_webhook('resend:ew790-1', 'resend-email-events', 300) = 'duplicate',
+  'EW790-6 zakończone zdarzenie nadal duplicate');
+reset role;
+
+-- FL974. Filtry listy ofert (migracja 0194 — numer tymczasowy): waluta wynagrodzenia (#787),
+--   wymagany język i poziom (#786), wymiar czasu pracy (#811), promień od miejscowości (#824).
+--   Lista, licznik, facety i kopia dla alertów (saved_search_jobs_after przez
+--   saved_search_keyset_page) zwracają ten sam zbiór; zapisane wyszukiwanie przechowuje nowe
+--   klucze kanoniczne. Kontrole ujemne: definicje bez waluty, bez poziomu, bez wykluczenia
+--   `both`/braku deklaracji i bez limitu promienia dają inny (błędny) wynik.
+-- ============================================================================
+\echo '--- FL974 filtry: waluta, język i poziom, wymiar pracy, promień ---'
+\set FLC  'f9740000-0000-4000-8000-0000000000c1'
+\set FLE  'f9740000-0000-4000-8000-0000000000e1'
+\set FLK  'f9740000-0000-4000-8000-0000000000a1'
+\set FLJ1 'f9740000-0000-4000-8000-000000000001'
+\set FLJ2 'f9740000-0000-4000-8000-000000000002'
+\set FLJ3 'f9740000-0000-4000-8000-000000000003'
+\set FLJ4 'f9740000-0000-4000-8000-000000000004'
+\set FLJ5 'f9740000-0000-4000-8000-000000000005'
+\set FLJ6 'f9740000-0000-4000-8000-000000000006'
+\set FLJ7 'f9740000-0000-4000-8000-000000000007'
+\set FLJD 'f9740000-0000-4000-8000-0000000000d1'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'FLE','fle@test.be','Flora E','{"role":"employer","first_name":"Flora","last_name":"E","locale":"nl"}'),
+  (:'FLK','flk@test.be','Filip K','{"role":"candidate","first_name":"Filip","last_name":"K","locale":"pl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values (:'FLC','Firma FL974','verified');
+insert into public.company_members(company_id,profile_id,role,is_active) values (:'FLC',:'FLE','owner',true);
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,
+                        published_at,salary_min,salary_max,currency,salary_period,work_time,remote) values
+  (:'FLJ1',:'FLC','fl974-1','Magazynier FL974 Gent EUR','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '1 minute', 3000,3000,'EUR','month','full_time',false),
+  (:'FLJ2',:'FLC','fl974-2','Magazynier FL974 Gent PLN','warehouse','permanent','Gent','Flandria','active','pl', now() - interval '2 minutes', 3000,3000,'PLN','month','part_time',false),
+  (:'FLJ3',:'FLC','fl974-3','Magazynier FL974 Aalst','warehouse','permanent','Aalst','Flandria','active','pl', now() - interval '3 minutes', 2000,2000,'EUR','month','both',false),
+  (:'FLJ4',:'FLC','fl974-4','Magazynier FL974 Liège','warehouse','permanent','Liège','Walonia','active','pl', now() - interval '4 minutes', 5000,5000,'EUR','month',null,false),
+  (:'FLJ5',:'FLC','fl974-5','Magazynier FL974 Nigdzie','warehouse','permanent','Nigdziebądź FL974','Flandria','active','pl', now() - interval '5 minutes', null,null,'EUR','month','full_time',true),
+  (:'FLJ6',:'FLC','fl974-6','Magazynier FL974 Antwerpen','warehouse','permanent','Antwerpen','Flandria','active','pl', now() - interval '6 minutes', null,null,'EUR','month','part_time',false),
+  -- Praca zdalna w Arlon (≈ 210 km od Gent — dalej niż największy promień).
+  (:'FLJ7',:'FLC','fl974-7','Magazynier FL974 Arlon zdalnie','warehouse','permanent','Arlon','Walonia','active','pl', now() - interval '7 minutes', null,null,'EUR','month',null,true);
+insert into public.job_languages(job_id, language_label, level) values
+  (:'FLJ1', 'nl', 'intermediate'),
+  (:'FLJ2', 'Nederlands', 'fluent'),
+  (:'FLJ3', 'français', null),
+  (:'FLJ6', 'Vlaams', null);
+-- Stary wpis tekstowy bez `language_id` (migracja 0168 go nie dopasowała): trigger wyłączony
+-- tylko na czas przygotowania fikstury.
+alter table public.job_languages disable trigger trg_job_languages_fill_id;
+update public.job_languages set language_id = null where job_id = :'FLJ6';
+alter table public.job_languages enable trigger trg_job_languages_fill_id;
+select pg_temp.assert(
+  (select location_id is null from public.jobs where id = :'FLJ5')
+  and (select language_id is null from public.job_languages where job_id = :'FLJ6')
+  and (select language_id is not null from public.job_languages where job_id = :'FLJ2')
+  and (select location_id is not null from public.jobs where id = :'FLJ7'),
+  'FL974-0 fikstura: oferta bez miejscowości, stary wpis języka bez id, zdalna z miejscowością');
+
+create function pg_temp.fl_ids(p_sql text) returns text[] language plpgsql as $$
+declare v text[];
+begin
+  execute format('select coalesce(array_agg(right(slug, 1) order by slug), ''{}'') from (%s) q', p_sql) into v;
+  return v;
+end $$;
+-- Lista (slugi posortowane), licznik i facety `total` muszą się zgadzać dla każdego zestawu.
+create function pg_temp.fl_check(p_args text, p_expected text[], p_name text) returns void language plpgsql as $$
+declare v_list text[]; v_count bigint; v_facet bigint;
+begin
+  v_list := pg_temp.fl_ids(format('select slug from public.get_public_jobs(p_locale => ''pl'', p_keyword => ''fl974'', p_limit => 100%s)', p_args));
+  execute format('select public.get_public_jobs_count(p_locale => ''pl'', p_keyword => ''fl974''%s)', p_args) into v_count;
+  execute format('select total from public.get_public_job_filter_facets(p_locale => ''pl'', p_keyword => ''fl974''%s) where dimension = ''total''', p_args) into v_facet;
+  if v_list is distinct from p_expected or v_count <> cardinality(p_expected) or v_facet <> cardinality(p_expected) then
+    raise exception 'ASSERT FAILED: % (lista %, licznik %, facety %, oczekiwano %)', p_name, v_list, v_count, v_facet, p_expected;
+  end if;
+end $$;
+
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.fl_check('', array['1','2','3','4','5','6','7'], 'FL974-1 bez nowych filtrów: wszystkie oferty sekcji');
+
+-- FL974-2 (#787): waluta. Widełki EUR nie porównują PLN (oferta nieporównywalna jak inny okres),
+-- sortowanie po wynagrodzeniu stawia PLN za ofertami w EUR (razem z ofertami bez kwoty).
+select pg_temp.fl_check(', p_salary_min => 4000', array['2','4','5','6','7'], 'FL974-2a od 4000 EUR: 3000 PLN nie jest „3000 EUR” (nieporównywalna), 3000 EUR odpada');
+select pg_temp.fl_check(', p_salary_min => 2500, p_salary_max => 3500', array['1','2','5','6','7'], 'FL974-2b 2500–3500 EUR');
+select pg_temp.assert(
+  (select array_agg(right(slug, 1)) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_sort => 'salary', p_limit => 100))
+    = array['4','1','3','2','5','6','7'],
+  'FL974-2c sortowanie: 5000, 3000, 2000 EUR, potem PLN i oferty bez kwoty (najnowsze najpierw)');
+select pg_temp.assert(
+  public.job_salary_sort_key(3000, 3000, 'month', 'PLN', 'month') is null
+  and public.job_salary_sort_key(3000, 3000, 'month', 'EUR', 'month') = 3000
+  and public.job_salary_in_range(3000, 3000, 'month', 'PLN', 4000, null, 'month')
+  and not public.job_salary_in_range(3000, 3000, 'month', 'EUR', 4000, null, 'month')
+  and public.job_salary_in_range(20, 20, 'hour', null, 10, 30, 'hour'),
+  'FL974-2d reguła waluty (brak waluty = EUR)');
+
+-- FL974-3 (#786): język i poziom. nl: intermediate, fluent i stary wpis „Vlaams” bez id.
+select pg_temp.fl_check(', p_language => ''nl''', array['1','2','6'], 'FL974-3a wymagany niderlandzki (aliasy i stary wpis)');
+select pg_temp.fl_check(', p_language => ''nl'', p_language_level => ''intermediate''', array['1','6'], 'FL974-3b poziom kandydata intermediate: wymaganie fluent odpada, brak poziomu pasuje');
+select pg_temp.fl_check(', p_language => ''nl'', p_language_level => ''native''', array['1','2','6'], 'FL974-3c poziom native spełnia każde wymaganie');
+select pg_temp.fl_check(', p_language => ''nl'', p_language_level => ''basic''', array['6'], 'FL974-3d poziom basic: tylko wymaganie bez poziomu');
+select pg_temp.fl_check(', p_language => ''fr''', array['3'], 'FL974-3e francuski („français”)');
+select pg_temp.fl_check(', p_language => ''de''', array[]::text[], 'FL974-3f niemiecki: brak ofert');
+select pg_temp.fl_check(', p_language => ''xx''', array[]::text[], 'FL974-3g nieznany kod: brak wyników (nie brak filtra)');
+select pg_temp.fl_check(', p_language => ''nl'', p_no_language => true', array[]::text[], 'FL974-3h „bez wymogu języka” zostaje osobnym warunkiem');
+
+-- FL974-4 (#811): wymiar pracy. `both` pasuje do obu, brak deklaracji do żadnego.
+select pg_temp.fl_check(', p_work_time => ''full_time''', array['1','3','5'], 'FL974-4a pełny etat (+ oba warianty)');
+select pg_temp.fl_check(', p_work_time => ''part_time''', array['2','3','6'], 'FL974-4b część etatu (+ oba warianty)');
+select pg_temp.fl_check(', p_work_time => ''both''', array[]::text[], 'FL974-4c wartość spoza filtra: brak wyników');
+
+-- FL974-5 (#824): promień od miejscowości. Gent–Aalst ≈ 26 km, Gent–Antwerpen ≈ 51 km.
+-- Oferty zdalne (5: bez miejscowości, 7: Arlon ≈ 210 km) pasują do KAŻDEGO promienia (decyzja
+-- właściciela 29.09.2026); niezdalna poza promieniem (Liège) odpada.
+select pg_temp.fl_check(', p_near => ''Gent'', p_radius_km => 25', array['1','2','5','7'], 'FL974-5a 25 km od Gent: Gent + oferty zdalne');
+select pg_temp.fl_check(', p_near => ''Gandawa'', p_radius_km => 50', array['1','2','3','5','7'], 'FL974-5b 50 km od „Gandawa” (alias PL): + Aalst, bez Antwerpii');
+select pg_temp.fl_check(', p_near => ''ghent'', p_radius_km => 100', array['1','2','3','5','6','7'], 'FL974-5c 100 km: + Antwerpia; niezdalna Liège poza wynikiem');
+select pg_temp.fl_check(', p_near => ''Heverlee'', p_radius_km => 10', array['5','7'], 'FL974-5d część gminy jako środek (Heverlee): w 10 km tylko oferty zdalne');
+select pg_temp.fl_check(', p_near => ''Heverlee'', p_radius_km => 50', array['3','5','6','7'], 'FL974-5e środek = część gminy ze współrzędnymi (Aalst, Antwerpia ≈ 45 km)');
+select pg_temp.fl_check(', p_near => ''Nigdziebądź FL974'', p_radius_km => 100', array['5','7'], 'FL974-5f miejscowość nierozpoznana: same oferty zdalne');
+select pg_temp.fl_check(', p_near => ''Gent'', p_radius_km => 25, p_work_time => ''part_time'', p_language => ''nl''', array['2'], 'FL974-5g filtry łączą się (AND)');
+select pg_temp.assert(
+  'fl974-7' in (select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 5))
+  and 'fl974-4' not in (select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 100)),
+  'FL974-5h zdalna daleko poza promieniem zostaje, niezdalna poza promieniem odpada');
+reset role;
+
+-- FL974-6: zapisane wyszukiwanie — klucze kanoniczne i ten sam zbiór w stronie kursora alertów.
+set role authenticated; set app.current_uid = :'FLK'; select pg_temp.assert_client_role();
+select saved_search_id as fls from public.save_saved_search('FL974', 'pl',
+  '{"keyword":"FL974","language":"nl","languageLevel":"intermediate","workTime":"part_time","near":" Gent ","radiusKm":100}',
+  '?keyword=FL974&lang=nl&langLevel=intermediate&workTime=part_time&near=Gent&radius=100') \gset
+select saved_search_id as fls2 from public.save_saved_search('FL974 bez promienia', 'pl', '{"keyword":"FL974","near":"Aalst"}') \gset
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"language":"xx"}')$$, 'nieznany język', 'FL974-6a nieznany język odrzucony');
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"languageLevel":"fluent"}')$$, 'poziom języka', 'FL974-6b poziom bez języka odrzucony');
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"workTime":"both"}')$$, 'wymiar pracy', 'FL974-6c wymiar spoza listy odrzucony');
+select pg_temp.expect_error($$select * from public.save_saved_search('X', 'pl', '{"near":"Gent","radiusKm":7}')$$, 'promień', 'FL974-6d promień spoza listy odrzucony');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select filters from public.saved_searches where id = :'fls')
+    = '{"keyword":"fl974","language":"nl","languageLevel":"intermediate","workTime":"part_time","near":"gent","radiusKm":100,"locale":"pl"}'::jsonb
+  and (select filters ->> 'radiusKm' from public.saved_searches where id = :'fls2') = '25',
+  'FL974-6e klucze kanoniczne zapisane; miejscowość bez promienia = 25 km');
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     (select filters from public.saved_searches where id = :'fls'), 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-6'],
+  'FL974-6f strona kursora alertów = lista (nl ≤ intermediate, część etatu, 100 km od Gent)');
+reset role;
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_language => 'nl',
+    p_language_level => 'intermediate', p_work_time => 'part_time', p_near => 'gent', p_radius_km => 100)$q$) = array['6'],
+  'FL974-6g lista z tymi samymi filtrami');
+
+-- FL974-7 (#811): kreator zapisuje wymiar pracy (szkic i rewizja), CHECK odrzuca inne wartości,
+-- szczegół oferty go zwraca, kopia szkicu go przenosi.
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'FLJD',:'FLC',:'FLE','draft-fl974','Magazynier FL974 szkic','warehouse','permanent','Gent','Flandria','draft','pl');
+set role authenticated; set app.current_uid = :'FLE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'FLJD'::uuid, '{"job":{"work_time":"part_time"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_time from public.jobs where id = :'FLJD') = 'part_time', 'FL974-7a save_job_draft zapisuje work_time');
+set role authenticated; set app.current_uid = :'FLE'; select pg_temp.assert_client_role();
+select public.save_job_draft(:'FLJD'::uuid, '{"job":{"title":"Magazynier FL974 szkic 2"}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_time from public.jobs where id = :'FLJD') = 'part_time', 'FL974-7b krok bez klucza nie czyści work_time');
+set role authenticated; set app.current_uid = :'FLE'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format($q$select public.save_job_draft(%L::uuid, '{"job":{"work_time":"weekend"}}'::jsonb)$q$, :'FLJD'),
+  'jobs_work_time_check', 'FL974-7c wartość spoza listy odrzucona przez CHECK');
+select public.save_job_draft(:'FLJD'::uuid, '{"job":{"work_time":""}}'::jsonb);
+reset role; reset app.current_uid;
+select pg_temp.assert((select work_time is null from public.jobs where id = :'FLJD'), 'FL974-7d pusty wybór = brak deklaracji');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select work_time from public.get_public_job('fl974-3', 'pl')) = 'both'
+  and (select work_time is null from public.get_public_job('fl974-4', 'pl')),
+  'FL974-7e get_public_job zwraca wymiar pracy');
+reset role;
+insert into public.jobs(id,company_id,created_by,slug,title,category,contract_type,city,region,status,default_locale) values
+  ('f9740000-0000-4000-8000-0000000000d2',:'FLC',:'FLE','draft-fl974-copy','Kopia FL974','warehouse','permanent','Gent','Flandria','draft','pl');
+insert into public.job_duplications(company_id, created_by, client_key, source_job_id, new_job_id)
+  values (:'FLC', :'FLE', gen_random_uuid(), :'FLJ3', 'f9740000-0000-4000-8000-0000000000d2');
+select pg_temp.assert((select work_time from public.jobs where id = 'f9740000-0000-4000-8000-0000000000d2') = 'both',
+  'FL974-7f kopia szkicu przenosi wymiar pracy');
+
+-- FL974-N: kontrole ujemne (zmiany definicji w transakcjach cofanych).
+create function pg_temp.fl_patch(p_sig text, p_from text, p_to text) returns void language plpgsql as $$
+declare v_def text := pg_get_functiondef(p_sig::regprocedure);
+begin
+  if position(p_from in v_def) = 0 then
+    raise exception 'ASSERT FAILED: FL974-N fragment „%” nie występuje w %', p_from, p_sig;
+  end if;
+  execute replace(v_def, p_from, p_to);
+end $$;
+\set FLSIG 'public.get_public_jobs(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,integer,integer,text,boolean,text,text,text,text,integer)'
+-- N1: bez waluty (stara reguła 0091) 3000 PLN staje się „3000 EUR” w sortowaniu i filtrze.
+begin;
+select pg_temp.fl_patch(:'FLSIG', 'j.salary_period, j.currency, p_salary_unit) end', 'j.salary_period, p_salary_unit) end');
+select pg_temp.fl_patch(:'FLSIG', 'j.salary_period, j.currency, p_salary_min', 'j.salary_period, p_salary_min');
+select pg_temp.assert(
+  (select array_agg(right(slug, 1)) from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_sort => 'salary', p_limit => 100))
+    = array['4','1','2','3','5','6','7']
+  and pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_salary_min => 4000)$q$) = array['4','5','6','7'],
+  'FL974-N1 bez waluty PLN sortuje się i filtruje jak EUR (FL974-2 wykrywa regresję)');
+rollback;
+-- N2: bez poziomu wymaganie fluent przechodzi przy poziomie kandydata intermediate.
+begin;
+select pg_temp.fl_patch('public.job_requires_language(uuid,text,text)', 'p_level is null or', 'true or');
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_language => 'nl', p_language_level => 'intermediate')$q$) = array['1','2','6'],
+  'FL974-N2 bez porównania poziomu FL974-3b wykrywa regresję');
+rollback;
+-- N3: bez aliasów starego wpisu (sam `language_id`) oferta z etykietą „Vlaams” znika.
+begin;
+select pg_temp.fl_patch('public.job_requires_language(uuid,text,text)', 'coalesce(jl.language_id, public.language_id_for_label(jl.language_label))', 'jl.language_id');
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_language => 'nl')$q$) = array['1','2'],
+  'FL974-N3 bez rozwiązywania etykiet stary wpis wypada (FL974-3a wykrywa regresję)');
+rollback;
+-- N4: bez warunku `both` oferta z oboma wariantami znika z obu filtrów.
+begin;
+select pg_temp.fl_patch(:'FLSIG', 'j.work_time in (p_work_time, ''both'')', 'j.work_time = p_work_time');
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_work_time => 'full_time')$q$) = array['1','5'],
+  'FL974-N4 bez `both` FL974-4a wykrywa regresję');
+rollback;
+-- N5: bez limitu promienia Liège (≈ 140 km od Gent) trafia do wyniku 25 km.
+begin;
+select pg_temp.fl_patch('public.locations_within_radius(text,integer)', '<= least(greatest(coalesce(p_radius_km, 25), 1), 200)', '<= 100000');
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2','3','4','5','6','7'],
+  'FL974-N5 bez limitu promienia FL974-5a wykrywa regresję');
+rollback;
+-- N6: kopia dla alertów bez nowego warunku daje inny zbiór niż lista.
+begin;
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer)',
+  'j.work_time in (p_work_time, ''both'')', 'true');
+set local role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     (select filters from public.saved_searches where id = :'fls'), 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-6'],
+  'FL974-N6 rozjazd kopii filtrów wykrywa FL974-6f');
+rollback;
+-- N7: bez gałęzi pracy zdalnej oferty zdalne odpadają z promienia (FL974-5a/5h wykrywają regresję);
+-- to samo w liczniku, facetach i kopii alertów.
+begin;
+select pg_temp.fl_patch(:'FLSIG', 'or j.remote is true', 'or false');
+select pg_temp.fl_patch('public.get_public_jobs_count(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,boolean,text,text,text,text,integer)',
+  'or j.remote is true', 'or false');
+select pg_temp.assert(
+  pg_temp.fl_ids($q$select slug from public.get_public_jobs(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25)$q$) = array['1','2']
+  and public.get_public_jobs_count(p_locale => 'pl', p_keyword => 'fl974', p_near => 'Gent', p_radius_km => 25) = 2,
+  'FL974-N7 bez gałęzi pracy zdalnej zdalna oferta daleko poza promieniem odpada');
+rollback;
+begin;
+select pg_temp.fl_patch('public.saved_search_jobs_after(text,text,text,text[],text[],text[],integer,integer,boolean,boolean,boolean,timestamptz,text,timestamptz,uuid,integer,boolean,text,text,text,text,integer)',
+  'or j.remote is true', 'or false');
+set local role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     '{"keyword":"fl974","near":"gent","radiusKm":25}'::jsonb, 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-2'],
+  'FL974-N7b kopia alertów bez gałęzi pracy zdalnej gubi oferty zdalne');
+rollback;
+reset role; reset app.current_uid;
+set role service_role;
+select pg_temp.assert(
+  (select array_agg(j.slug order by j.slug) from public.saved_search_keyset_page(
+     '{"keyword":"fl974","near":"gent","radiusKm":25}'::jsonb, 'pl', null, null, null, 1000) p
+   cross join unnest(p.ids) x(id) join public.jobs j on j.id = x.id) = array['fl974-1', 'fl974-2', 'fl974-5', 'fl974-7'],
+  'FL974-7g kopia alertów: oferty zdalne w każdym promieniu (= lista FL974-5a)');
+reset role;
 
 -- ============================================================================
 -- SDR1111. Przegląd funkcji SECURITY DEFINER na tabelach z deleted_at (#1111, 0193).

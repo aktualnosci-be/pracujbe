@@ -26,6 +26,7 @@ import {
 import { rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { checkAccountRateLimit } from '@/lib/rate-limit-account';
 import { captureError } from '@/lib/error-report';
 import { reportCaseLookupSchema } from '@/lib/validation/content-report';
 
@@ -132,13 +133,14 @@ export async function submitModerationAppeal(
     return { ok: true, reference: FIXTURE_APPEAL_REFERENCE, created: true, demo: true };
   }
   if (typeof decisionId !== 'string' || !UUID_RE.test(decisionId)) return { ok: false, error: 'NOT_FOUND' };
-  if (!(await checkRateLimit('moderation-appeal', { max: 10, windowSeconds: 3600 }))) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
 
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: autor decyzji jest zalogowany — limit na konto + szeroki próg na adres IP.
+    if (!(await checkAccountRateLimit('moderation-appeal', me.id, { max: 10, windowSeconds: 3600 }))) {
+      return { ok: false, error: 'RATE_LIMITED' };
+    }
 
     const rows = await withPortalTransaction(me, (tx) =>
       rpcRows<AppealRow>(tx, 'submit_moderation_appeal', {

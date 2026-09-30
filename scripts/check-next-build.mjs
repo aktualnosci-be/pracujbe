@@ -60,7 +60,11 @@ const zodFreeEntries = [
   "/[locale]/(public)/page",
   "/[locale]/(public)/oferty-pracy/page",
   "/[locale]/(public)/poradniki/[slug]/page",
+  // #1055: szczegół oferty — bez Zoda i bez metadanych `libphonenumber-js` (formularz aplikowania).
+  "/[locale]/(public)/oferty-pracy/[slug]/page",
 ];
+// Klucz metadanych `libphonenumber-js` (zostaje w zminifikowanym JSON-ie).
+const PHONE_METADATA_MARKER = "country_calling_codes";
 const zodChunks = [];
 for (const entry of zodFreeEntries) {
   const files = appPages[entry];
@@ -69,11 +73,13 @@ for (const entry of zodFreeEntries) {
     process.exit(1);
   }
   for (const file of files.filter((name) => name.endsWith(".js"))) {
-    if (readFileSync(`.next/${file}`, "utf8").includes("ZodError")) zodChunks.push(`${entry}: ${file}`);
+    const code = readFileSync(`.next/${file}`, "utf8");
+    if (code.includes("ZodError")) zodChunks.push(`${entry}: ${file} (Zod)`);
+    if (code.includes(PHONE_METADATA_MARKER)) zodChunks.push(`${entry}: ${file} (libphonenumber-js)`);
   }
 }
 if (zodChunks.length > 0) {
-  console.error(`Zod w JS stron publicznych (#390):\n  ${zodChunks.join("\n  ")}`);
+  console.error(`Zod albo libphonenumber-js w JS stron publicznych (#390, #1055):\n  ${zodChunks.join("\n  ")}`);
   process.exit(1);
 }
 console.log(`Build .next kompletny (BUILD_ID ${buildId}).`);

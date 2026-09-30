@@ -13,6 +13,10 @@
 //   i rozmiaru pojedynczego wpisu; najstarsze wpisy są usuwane; po restarcie indeks z katalogu;
 // - strony z buildu (prerender w `.next/server/app`) są czytane jak w domyślnym handlerze,
 //   ale nigdy nadpisywane ani usuwane;
+// - wyjątek (#1115, DVP-03): gdy runtime ma prawdziwą bazę (`DATABASE_APP_URL`), strony z listą
+//   ofert prerenderowane w buildzie (strona główna i hub `/praca` w każdym języku) NIE są
+//   serwowane z buildu — build nie czyta bazy (`isBuildPhase`), więc ich wersja ma pustą listę
+//   ofert. Pierwsze żądanie po starcie renderuje stronę z danych i dopiero ona trafia do cache;
 // - `revalidateTag`/`revalidatePath` działają przez mapę tagów w pamięci procesu.
 // Cache obrazów (`.next/cache/images`) ma osobną ścieżkę w Next i ten plik go nie dotyczy.
 import { createHash } from 'node:crypto';
@@ -32,6 +36,18 @@ export const DEFAULT_LIMITS = Object.freeze({
 });
 
 const TAGS_HEADER = 'x-next-cache-tags';
+
+/**
+ * Klucze stron z listą ofert, które build prerenderuje (strona główna nie ma własnego
+ * `generateStaticParams`, dziedziczy języki z `[locale]/layout`). Języki = `routing.locales`
+ * (`src/i18n/routing.ts`; zgodność pilnuje `tests/unit/isr-cache-handler.test.ts`).
+ */
+export const BUILD_EMPTY_JOB_PAGE = /^\/(?:pl|nl|fr|en)(?:\/praca)?$/;
+
+/** Czy wersja z buildu ma pustą listę ofert: runtime z prawdziwą bazą + strona z ofertami. */
+export function isBuildSeedWithoutJobs(key, env = process.env) {
+  return Boolean(env.DATABASE_APP_URL) && BUILD_EMPTY_JOB_PAGE.test(key);
+}
 const FILE_SUFFIX = '.json';
 
 /** Wpis negatywny: 404 (notFound), inny błąd albo brak wartości. */
@@ -383,7 +399,13 @@ export function createIsrCacheHandler(options = {}) {
         entry = await disk.read(key);
         if (entry) memory.set(key, entry, byteLength(entry.value));
       }
-      if (!entry && this.serverDistDir && ctx.kind !== 'FETCH' && !overriddenSeeds.has(key)) {
+      if (
+        !entry &&
+        this.serverDistDir &&
+        ctx.kind !== 'FETCH' &&
+        !overriddenSeeds.has(key) &&
+        !isBuildSeedWithoutJobs(key, options.env ?? process.env)
+      ) {
         entry = await readBuildSeed(this.fs, this.serverDistDir, key, ctx);
         if (entry) {
           seeded.add(key);

@@ -32,6 +32,18 @@ import {
   type SortValue,
 } from '@/components/public/job-filters';
 import { SALARY_UNITS, type SalaryUnit } from '@/lib/salary-compare';
+import {
+  isLanguageFilterCode,
+  isLanguageFilterLevel,
+  isWorkTimeFilter,
+  LANGUAGE_FILTER_CODES,
+  LANGUAGE_FILTER_LEVELS,
+  NEAR_MAX_LENGTH,
+  parseRadiusKm,
+  RADIUS_KM_OPTIONS,
+  WORK_TIME_FILTERS,
+  type WorkTimeFilter,
+} from '@/lib/job-filter-options';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 
 /**
@@ -247,6 +259,18 @@ export function FilterFields({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tLanguageNames = useTranslations('languageNames');
+
+  // 0194: języki w kolejności nazw w języku widza (kody ze słownika bazy).
+  const languageOptions = React.useMemo(
+    () =>
+      LANGUAGE_FILTER_CODES.map((code) => ({ code, label: tLanguageNames(code) })).sort((a, b) =>
+        a.label.localeCompare(b.label, locale),
+      ),
+    [locale, tLanguageNames],
+  );
+  const workTimeLabel = (option: WorkTimeFilter | 'any'): string =>
+    option === 'full_time' ? t('workTimeFull') : option === 'part_time' ? t('workTimePart') : t('workTimeAny');
 
   const dateLabel = React.useCallback(
     (option: DateValue): string => {
@@ -388,6 +412,46 @@ export function FilterFields({
         ) : null}
       </section>
 
+      {/* Odległość od miejscowości (#824, 0194) */}
+      <section>
+        <SectionTitle>{t('distance')}</SectionTitle>
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}-near`} className="text-[13px] font-normal text-muted-foreground">
+            {t('near')}
+          </Label>
+          <Input
+            id={`${idPrefix}-near`}
+            value={value.near}
+            maxLength={NEAR_MAX_LENGTH}
+            onChange={(event) => patch({ near: event.target.value.slice(0, NEAR_MAX_LENGTH) })}
+            onBlur={(event) => patch({ near: event.target.value.trim() })}
+            placeholder={t('nearPlaceholder')}
+            autoComplete="address-level2"
+            aria-describedby={`${idPrefix}-radius-note`}
+            data-filter-target="near"
+            className="h-12"
+          />
+          <Select
+            value={String(value.radiusKm)}
+            onValueChange={(next) => patch({ radiusKm: parseRadiusKm(next) })}
+          >
+            <SelectTrigger aria-label={t('radius')} data-filter-target="radius" className="h-12">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RADIUS_KM_OPTIONS.map((km) => (
+                <SelectItem key={km} value={String(km)}>
+                  {t('radiusKm', { km })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p id={`${idPrefix}-radius-note`} className="text-xs text-muted-foreground">
+            {t('radiusNote')}
+          </p>
+        </div>
+      </section>
+
       {/* Wynagrodzenie */}
       <section>
         <SectionTitle>{hourly ? t('salaryHourly') : t('salary')}</SectionTitle>
@@ -427,7 +491,8 @@ export function FilterFields({
           id={`${idPrefix}-salary-note`}
           className="mb-2 text-xs text-muted-foreground"
         >
-          {hourly ? t('salaryHourlyNote') : t('salaryPeriodNote')}
+          {hourly ? t('salaryHourlyNote') : t('salaryPeriodNote')}{' '}
+          {t('salaryCurrencyNote')}
         </p>
         <div className="space-y-2">
           <input
@@ -490,6 +555,45 @@ export function FilterFields({
         </div>
       </section>
 
+      {/* Wymiar pracy (#811, 0194) */}
+      <section>
+        <fieldset aria-describedby={`${idPrefix}-worktime-note`}>
+          <legend className="mb-[14px] break-words text-[15px] font-bold text-foreground">
+            {t('workTime')}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {(['any', ...WORK_TIME_FILTERS] as const).map((option) => {
+              const checked = (value.workTime ?? 'any') === option;
+              return (
+                <label
+                  key={option}
+                  data-filter-target="work-time"
+                  className={cn(
+                    'relative inline-flex min-h-12 flex-1 cursor-pointer items-center justify-center break-words rounded-[11px] border px-2 text-center text-[13px] font-semibold focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                    checked
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border text-foreground hover:bg-muted',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name={`${idPrefix}-work-time`}
+                    value={option}
+                    checked={checked}
+                    onChange={() => patch({ workTime: isWorkTimeFilter(option) ? option : null })}
+                    className="sr-only"
+                  />
+                  {workTimeLabel(option)}
+                </label>
+              );
+            })}
+          </div>
+          <p id={`${idPrefix}-worktime-note`} className="mt-2 text-xs text-muted-foreground">
+            {t('workTimeNote')}
+          </p>
+        </fieldset>
+      </section>
+
       {/* Zakwaterowanie */}
       <section>
         <SectionTitle>{t('accommodation')}</SectionTitle>
@@ -521,6 +625,59 @@ export function FilterFields({
             })
           }
         />
+      </section>
+
+      {/* Wymagany język i poziom (#786, 0194) */}
+      <section>
+        <SectionTitle>{t('requiredLanguage')}</SectionTitle>
+        <div className="space-y-2">
+          <Select
+            value={value.language ?? 'any'}
+            onValueChange={(next) =>
+              patch({
+                language: isLanguageFilterCode(next) ? next : null,
+                ...(isLanguageFilterCode(next) ? {} : { languageLevel: null }),
+              })
+            }
+          >
+            <SelectTrigger aria-label={t('requiredLanguage')} data-filter-target="language" className="h-12">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">{t('languageAny')}</SelectItem>
+              {languageOptions.map((option) => (
+                <SelectItem key={option.code} value={option.code}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={value.languageLevel ?? 'any'}
+            disabled={!value.language}
+            onValueChange={(next) => patch({ languageLevel: isLanguageFilterLevel(next) ? next : null })}
+          >
+            <SelectTrigger
+              aria-label={t('languageLevel')}
+              aria-describedby={`${idPrefix}-language-note`}
+              data-filter-target="language-level"
+              className="h-12"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">{t('languageLevelAny')}</SelectItem>
+              {LANGUAGE_FILTER_LEVELS.map((level) => (
+                <SelectItem key={level} value={level}>
+                  {t(`languageLevels.${level}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p id={`${idPrefix}-language-note`} className="text-xs text-muted-foreground">
+            {t('languageLevelNote')}
+          </p>
+        </div>
       </section>
 
       {/* Dodatkowe filtry */}
