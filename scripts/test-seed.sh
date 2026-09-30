@@ -24,9 +24,12 @@ echo ">> (re)tworzenie bazy: $DB"
 
 echo ">> seed-shim + migracje"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/seed-shim.sql" >/dev/null
-for f in "$ROOT"/supabase/migrations/0*.sql; do
+# Lista migracji domeny jak w produkcyjnym loaderze (każdy `NNNN_*.sql`, #1114).
+. "$ROOT/scripts/lib/migration-files.sh"
+MIGRATIONS="$(migration_files "$ROOT/supabase/migrations")"
+while IFS= read -r f; do
   "${psql_base[@]}" -d "$DB" -f "$f" >/dev/null
-done
+done <<< "$MIGRATIONS"
 
 echo ">> seed (musi przejść bez błędu — ON_ERROR_STOP)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/seed.sql" >/dev/null
