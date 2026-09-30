@@ -2981,12 +2981,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   cookie HttpOnly `pb_signup_browser` = HMAC adresu (`src/lib/auth/signup-browser.ts`, sekret
   Better Auth), inaczej adres potwierdzony, sesja cofnięta, logowanie ręczne; tryb
   `TRUSTED_PROXY_HEADER=cf-connecting-ip` przyjmuje `CF-Connecting-IP` tylko, gdy peer
-  z `X-Real-IP` należy do zakresów Cloudflare (`CLOUDFLARE_IP_RANGES` w
-  `src/lib/http/trusted-ip.ts`; ominięcie Cloudflare = adres peera, połączenie z Cloudflare bez
-  nagłówka = `null`); guardy paneli bez sesji kierują na `/logowanie?next=<strona panelu>`
+  z `X-Real-IP` należy do zakresów Cloudflare (ominięcie Cloudflare = adres peera, połączenie
+  z Cloudflare bez nagłówka = `null`); zakresy pobierane automatycznie (decyzja właściciela
+  30.09.2026, `src/lib/http/cloudflare-ranges.ts`: ips-v4/ips-v6, timeout 3 s, każda linia =
+  CIDR właściwej rodziny, lista pusta/krótka odrzucona, cache w procesie TTL 24 h,
+  single-flight, odświeżanie w tle — żądanie nie czeka; błąd = ostatnia dobra lista, bez niej
+  `CLOUDFLARE_IP_RANGES` w kodzie; po błędzie przerwa 5 min; test `cloudflare-ranges`); guardy paneli bez sesji kierują na `/logowanie?next=<strona panelu>`
   (middleware podaje ścieżkę w nagłówku żądania `x-pracujbe-return-path`, wartość od klienta
   usuwana; `safeNextPath` przy odczycie). Dowód: unit `auth-confirm-email`, `auth-email-kick`,
-  `trusted-ip`, `middleware-panel-return-path`, `panel-guards-production` (kontrole ujemne).
+  `trusted-ip`, `cloudflare-ranges`, `middleware-panel-return-path`, `panel-guards-production` (kontrole ujemne).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,

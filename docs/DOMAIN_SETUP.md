@@ -36,12 +36,12 @@ Uwagi:
   właściciel w [`LAUNCH_CHECKLIST.md`](./LAUNCH_CHECKLIST.md) (W16).
 - Przy `cf-connecting-ip` aplikacja przyjmuje `CF-Connecting-IP` tylko od połączeń z brzegu
   Cloudflare (#1090): adres peera z `X-Real-IP` (ustawia go brzeg Railway) musi należeć do
-  zakresów z <https://www.cloudflare.com/ips/> (lista `CLOUDFLARE_IP_RANGES` w
-  `src/lib/http/trusted-ip.ts`). Żądanie z pominięciem Cloudflare (np. na domenę wygenerowaną
-  przez Railway) jest liczone pod swoim prawdziwym adresem, a nie pod wpisanym nagłówkiem.
-  Nowe zakresy Cloudflare wymagają aktualizacji listy — do tego czasu ruch z nich liczy się
-  pod adresem brzegu (wspólny limit, bezpieczny kierunek błędu). Zbędną domenę Railway i tak
-  warto usunąć.
+  zakresów Cloudflare. Listę serwer pobiera sam z <https://www.cloudflare.com/ips-v4> i
+  `/ips-v6` (odświeżanie w tle raz na dobę, `src/lib/http/cloudflare-ranges.ts`); przy błędzie
+  pobrania zostaje ostatnia dobra lista, a bez niej zapas w kodzie (`CLOUDFLARE_IP_RANGES`).
+  Usługa potrzebuje więc wyjścia HTTPS do `www.cloudflare.com`. Żądanie z pominięciem
+  Cloudflare (np. na domenę wygenerowaną przez Railway) jest liczone pod swoim prawdziwym
+  adresem, a nie pod wpisanym nagłówkiem. Zbędną domenę Railway i tak warto usunąć.
 - Zmiana `TRUSTED_PROXY_HEADER` wymaga restartu usługi (zmienna czytana po stronie serwera).
 
 Weryfikacja po zmianie trybu lub nagłówka (przed zdjęciem bramki hasła):
