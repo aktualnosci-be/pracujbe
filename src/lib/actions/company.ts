@@ -511,18 +511,15 @@ export async function updateCompanyDescription(
     return { ok: false, error: 'NOT_FOUND' };
   }
 
-  if (
-    !(await checkRateLimit('company-update', {
-      max: UPDATE_RATE_MAX,
-      windowSeconds: RATE_WINDOW_SECONDS,
-    }))
-  ) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
-
   try {
     const me = await getPortalIdentity();
     if (!me) return { ok: false, error: 'PERMISSION_DENIED' };
+    // #1109: limit na konto (po sesji) + szeroki próg na adres IP.
+    const withinLimit = await checkAccountRateLimit('company-update', me.id, {
+      max: UPDATE_RATE_MAX,
+      windowSeconds: RATE_WINDOW_SECONDS,
+    });
+    if (!withinLimit) return { ok: false, error: 'RATE_LIMITED' };
 
     type Outcome = { error: ErrorCode } | { error: null; result: unknown };
     const outcome = await withPortalTransaction(me, async (tx): Promise<Outcome> => {
