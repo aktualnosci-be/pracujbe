@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { cookieBanner, LOCALES } from './fixtures/messages';
+import { defined } from './fixtures/defined';
 
 /**
  * #373: bramka axe-core WCAG 2.x A/AA (critical/serious + `target-size`) na WSZYSTKICH trasach
@@ -47,6 +48,7 @@ const ROUTES = [
   'candidate/wiadomosci',
   'candidate/wiadomosci?c=demo-conv-0',
   'candidate/wyszukiwania',
+  'candidate/dziennik',
   'candidate/zapisane',
   'employer',
   'employer/aplikacje',
@@ -158,7 +160,7 @@ for (const locale of ['pl', 'en'] as const) {
     await storeConsent(page);
     await page.goto(`/${locale}/employer/aplikacje`);
     await waitForPanel(page);
-    const prefix = m.dashboard.statusMenuTrigger.split('{name}')[0];
+    const prefix = defined(m.dashboard.statusMenuTrigger.split('{name}')[0], 'prefiks statusMenuTrigger');
     const trigger = page
       .getByRole('main')
       .getByRole('button', { name: new RegExp(`^${escapeRegExp(prefix)}Piotr Nowak`) })
@@ -176,7 +178,7 @@ for (const locale of ['pl', 'en'] as const) {
       await storeConsent(page);
       await page.goto(`/${locale}/candidate/aplikacje`);
       await waitForPanel(page);
-      const prefix = m.dashboard.applicationAnswersToggle.split('{count}')[0];
+      const prefix = defined(m.dashboard.applicationAnswersToggle.split('{count}')[0], 'prefiks applicationAnswersToggle');
       const toggle = page.getByRole('main').getByRole('button', { name: new RegExp(`^${escapeRegExp(prefix)}`) });
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -192,7 +194,7 @@ for (const locale of ['pl', 'en'] as const) {
       await storeConsent(page);
       await page.goto(`/${locale}/${role}/wiadomosci?c=demo-conv-0`);
       await waitForPanel(page);
-      const composerPrefix = m.messages.composerLabel.split('{name}')[0];
+      const composerPrefix = defined(m.messages.composerLabel.split('{name}')[0], 'prefiks composerLabel');
       await page.getByRole('textbox', { name: new RegExp(`^${escapeRegExp(composerPrefix)}`) }).fill('Test');
       await page.getByRole('button', { name: new RegExp(`^${escapeRegExp(m.notifications.title)}`) }).click();
       await expect(page.getByRole('region', { name: m.notifications.title, exact: true })).toBeVisible();

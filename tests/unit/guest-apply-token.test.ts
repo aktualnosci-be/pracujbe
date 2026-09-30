@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isProductionMode } from '@/lib/env';
+import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import {
   guestApplySecret,
   guestTokenFromNonce,
@@ -15,13 +15,14 @@ import {
  * nie działa „na domyślnym” kluczu.
  */
 
-vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => false) }));
+vi.mock('@/lib/env', () => ({ isProductionMode: vi.fn(() => false), isDatabaseConfigured: vi.fn(() => false) }));
 
 const SECRET = 'a'.repeat(40);
 
 beforeEach(() => {
   process.env.GUEST_APPLY_SECRET = SECRET;
   vi.mocked(isProductionMode).mockReturnValue(false);
+  vi.mocked(isDatabaseConfigured).mockReturnValue(false);
 });
 afterEach(() => {
   delete process.env.GUEST_APPLY_SECRET;
@@ -61,10 +62,33 @@ describe('guest apply tokens', () => {
     expect(guestTokenFromNonce('confirm', 'x'.repeat(32))).toBeNull();
   });
 
-  it('outside production a development secret keeps the flow testable', () => {
+  it('outside production without a real database a development secret keeps the flow testable', () => {
     delete process.env.GUEST_APPLY_SECRET;
     expect(guestApplySecret()).toBeTruthy();
     expect(issueGuestToken('confirm')).not.toBeNull();
+  });
+
+  it('#1115: demo mode on a REAL database never falls back to the public development secret', () => {
+    vi.mocked(isDatabaseConfigured).mockReturnValue(true);
+    delete process.env.GUEST_APPLY_SECRET;
+    expect(guestApplySecret()).toBeNull();
+    expect(issueGuestToken('claim')).toBeNull();
+    expect(guestTokenFromNonce('confirm', 'n'.repeat(32))).toBeNull();
+    process.env.GUEST_APPLY_SECRET = 'short';
+    expect(guestApplySecret()).toBeNull();
+    // Kontrola dodatnia: poprawny sekret działa także w demo na realnej bazie.
+    process.env.GUEST_APPLY_SECRET = SECRET;
+    expect(guestApplySecret()).toBe(SECRET);
+    expect(issueGuestToken('confirm')).not.toBeNull();
+  });
+
+  it('#1115 control: the same demo configuration without a database still gets the dev secret', () => {
+    delete process.env.GUEST_APPLY_SECRET;
+    vi.mocked(isDatabaseConfigured).mockReturnValue(true);
+    const onRealDb = guestApplySecret();
+    vi.mocked(isDatabaseConfigured).mockReturnValue(false);
+    expect(onRealDb).toBeNull();
+    expect(guestApplySecret()).not.toBeNull();
   });
 
   it('token format check rejects garbage before any database call', () => {

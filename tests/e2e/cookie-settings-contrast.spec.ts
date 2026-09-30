@@ -23,23 +23,24 @@ for (const locale of ['pl', 'nl', 'fr', 'en'] as const) {
       type Rgba = [number, number, number, number];
       const parse = (value: string): Rgba => {
         const m = value.match(/rgba?\(([^)]+)\)/);
-        if (!m) return [0, 0, 0, 0];
+        if (!m?.[1]) return [0, 0, 0, 0];
         const [r, g, b, a = '1'] = m[1].split(/[\s,/]+/).filter(Boolean);
         return [Number(r), Number(g), Number(b), Number(a)];
       };
       const over = (top: Rgba, bottom: Rgba): Rgba => {
         const a = top[3];
-        return [0, 1, 2].map((i) => top[i] * a + bottom[i] * (1 - a)).concat(1) as Rgba;
+        return [top[0] * a + bottom[0] * (1 - a), top[1] * a + bottom[1] * (1 - a), top[2] * a + bottom[2] * (1 - a), 1];
       };
       const lum = ([r, g, b]: Rgba) => {
-        const c = [r, g, b].map((v) => {
+        const channel = (v: number) => {
           const s = v / 255;
           return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-        });
-        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        };
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
       };
       const contrast = (x: Rgba, y: Rgba) => {
-        const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p);
+        const hi = Math.max(lum(x), lum(y));
+        const lo = Math.min(lum(x), lum(y));
         return (hi + 0.05) / (lo + 0.05);
       };
       return elements.map((el) => {
