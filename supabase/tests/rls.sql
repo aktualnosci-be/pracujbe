@@ -20158,8 +20158,10 @@ insert into public.jobs(id,company_id,slug,title,category,contract_type,city,reg
   (:'M2J6',:'M2COMP','m2-j6','Szkic 6','warehouse','permanent','Antwerpia','Flandria','draft','pl');
 select set_config('pracujbe.allow_recruitment_write', 'on', false);
 insert into public.applications(job_id, candidate_id, company_id, status) values (:'M2J2', :'M2CAND', :'M2COMP', 'submitted');
-select set_config('pracujbe.allow_recruitment_write', '', false);
+-- Zapis szkicu = stan historyczny (od 0199, #882, nowy zapis oferty niepublicznej odrzuca
+-- strażnik; fixture przez wyjątek seedu superusera).
 insert into public.saved_jobs(candidate_id, job_id) values (:'M2CAND', :'M2J3');
+select set_config('pracujbe.allow_recruitment_write', '', false);
 
 -- M2-1 (#1033): recruiter usuwa szkic bez powiązań; audyt `job.deleted` z aktorem, bez treści.
 set role authenticated; set app.current_uid = :'M2REC'; select pg_temp.assert_client_role();
@@ -21567,7 +21569,9 @@ insert into pg_temp.wm_cases(tbl, op, actor, sql, note, rls_only) values
   ('notification_preferences', 'INSERT', :'WMCB', format('insert into public.notification_preferences(profile_id, email_marketing) values (%L, true)', :'WMCC'),
      'notification_preferences INSERT za inne konto', true),
   -- saved_jobs
-  ('saved_jobs', 'INSERT', :'WMCB', format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'WMCA', :'WMJD'),
+  -- Cel = oferta publiczna bez zapisu tego kandydata: od 0199 (#882) zapis szkicu blokuje też
+  -- strażnik celu, a przypadek „tylko RLS” musi bez RLS zapisywać (kontrola ujemna (a)).
+  ('saved_jobs', 'INSERT', :'WMCB', format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'WMCC', :'WMJA'),
      'saved_jobs INSERT zapisu za innego kandydata', true),
   ('saved_jobs', 'DELETE', :'WMCB', format('delete from public.saved_jobs where candidate_id = %L', :'WMCA'),
      'saved_jobs DELETE cudzy zapis', true),
@@ -22678,6 +22682,310 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- ============================================================================
+-- SJ968. Cel zapisu oferty (#882, 0199): kandydat zapisuje WYŁĄCZNIE ofertę publiczną
+--        (szkic, oferta usunięta, firma niezweryfikowana = NOT_FOUND), a
+--        `get_saved_jobs_display` pokazuje metadane oferty niepublicznej tylko przy dowodzie
+--        zapisu w czasie publikacji (`saved_while_public`). Legalny zapis po zamknięciu oferty
+--        zostaje użyteczny; ponowienie zapisu (ON CONFLICT) przechodzi.
+--        Kontrole ujemne: bez strażnika zapis szkicu przechodzi; definicja odczytu z 0162
+--        ujawnia tytuł szkicu; strażnik bez FOR SHARE przepuszcza zapis równoległy z wycofaniem.
+-- ============================================================================
+\echo '--- SJ968 cel zapisu oferty ---'
+begin;
+reset role; reset app.current_uid;
+\set SJC   'e9680000-0000-0000-0000-00000000000c'
+\set SJC2  'e9680000-0000-0000-0000-00000000000d'
+\set SJCO  'e9680000-0000-0000-0000-0000000000f1'
+\set SJCOU 'e9680000-0000-0000-0000-0000000000f2'
+\set SJP   'e9680000-0000-0000-0000-0000000000b1'
+\set SJP2  'e9680000-0000-0000-0000-0000000000b2'
+\set SJD   'e9680000-0000-0000-0000-0000000000b3'
+\set SJX   'e9680000-0000-0000-0000-0000000000b4'
+\set SJU   'e9680000-0000-0000-0000-0000000000b5'
+\set SJE   'e9680000-0000-0000-0000-0000000000b6'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'SJC','sjc@test.be','Sj C','{"role":"candidate","first_name":"Sara","last_name":"J","locale":"pl"}'),
+  (:'SJC2','sjc2@test.be','Sj D','{"role":"candidate","first_name":"Sam","last_name":"J","locale":"nl"}');
+select test_fixture.attest_candidates();
+insert into public.companies(id,name,status) values
+  (:'SJCO','Firma SJ','verified'), (:'SJCOU','Firma SJ bez weryfikacji','pending');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,deleted_at,expires_at) values
+  (:'SJP',:'SJCO','sj-publiczna','Publiczna SJ','warehouse','permanent','Gent','Flandria','active','pl',null,null),
+  (:'SJP2',:'SJCO','sj-publiczna-2','Publiczna SJ 2','warehouse','permanent','Gent','Flandria','active','pl',null,null),
+  (:'SJD',:'SJCO','sj-szkic','Poufny nabór SJ','warehouse','permanent','Poufnowo','Flandria','draft','pl',null,null),
+  (:'SJX',:'SJCO','sj-usunieta','Usunięta SJ','warehouse','permanent','Gent','Flandria','active','pl',now(),null),
+  (:'SJU',:'SJCOU','sj-firma','Firma bez weryfikacji SJ','warehouse','permanent','Gent','Flandria','active','pl',null,null),
+  (:'SJE',:'SJCO','sj-po-terminie','Po terminie SJ','warehouse','permanent','Gent','Flandria','active','pl',null,now() - interval '1 day');
+
+set role authenticated; set app.current_uid = :'SJC'; select pg_temp.assert_client_role();
+-- SJ1: oferta publiczna — zapis przechodzi; wartość klienta flagi nie ma znaczenia.
+insert into public.saved_jobs(candidate_id, job_id, saved_while_public) values (:'SJC', :'SJP', false);
+-- SJ2–SJ5: cel niepubliczny = NOT_FOUND (także z flagą podaną przez klienta).
+select pg_temp.expect_error(format('insert into public.saved_jobs(candidate_id, job_id, saved_while_public) values (%L, %L, true)', :'SJC', :'SJD'),
+  'NOT_FOUND', 'SJ2 zapis nigdy niepublikowanego szkicu odrzucony');
+select pg_temp.expect_error(format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'SJC', :'SJX'),
+  'NOT_FOUND', 'SJ3 zapis oferty usuniętej odrzucony');
+select pg_temp.expect_error(format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'SJC', :'SJU'),
+  'NOT_FOUND', 'SJ4 zapis oferty firmy niezweryfikowanej odrzucony');
+select pg_temp.expect_error(format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'SJC', :'SJE'),
+  'NOT_FOUND', 'SJ5 zapis oferty po terminie odrzucony');
+select pg_temp.expect_error(format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L) on conflict (candidate_id, job_id) do nothing', :'SJC', :'SJD'),
+  'NOT_FOUND', 'SJ5b ON CONFLICT DO NOTHING nie omija strażnika dla nowej pary');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select saved_while_public from public.saved_jobs where candidate_id = :'SJC' and job_id = :'SJP')
+  and (select count(*) from public.saved_jobs where candidate_id = :'SJC') = 1,
+  'SJ1 zapis oferty publicznej z dowodem saved_while_public (ustawia trigger), odrzucone cele bez wiersza');
+
+-- SJ6: także ścieżka serwerowa (superuser) nie zapisze oferty niepublicznej.
+select pg_temp.expect_error(format('insert into public.saved_jobs(candidate_id, job_id) values (%L, %L)', :'SJC', :'SJD'),
+  'NOT_FOUND', 'SJ6 zapis szkicu odrzucony dla każdej roli');
+-- SJ6b: wyjątek seedu demo (sesja superusera + przełącznik z 0171) — bez błędu, ale bez dowodu.
+savepoint sj6b;
+select set_config('pracujbe.allow_recruitment_write', 'on', true);
+insert into public.saved_jobs(candidate_id, job_id, saved_while_public) values (:'SJC2', :'SJD', true);
+select pg_temp.assert(
+  not (select saved_while_public from public.saved_jobs where candidate_id = :'SJC2' and job_id = :'SJD'),
+  'SJ6b seed zapisuje ofertę niepubliczną bez dowodu (flaga z faktów, nie z wartości)');
+set role authenticated; set app.current_uid = :'SJC2'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select title = '' and city = '' from public.get_saved_jobs_display('pl') where id = :'SJD'),
+  'SJ6c zapis seedu bez dowodu nie ujawnia metadanych');
+reset role; reset app.current_uid;
+rollback to savepoint sj6b;
+-- Oferta zamknięta po legalnym zapisie + „historyczny” zapis szkicu sprzed 0199 (bez dowodu;
+-- symulacja: wiersz wstawiony z wyłączonym strażnikiem, jak dane sprzed migracji).
+update public.jobs set status = 'closed' where id = :'SJP';
+alter table public.saved_jobs disable trigger trg_saved_jobs_guard_target;
+insert into public.saved_jobs(candidate_id, job_id) values (:'SJC', :'SJD');
+alter table public.saved_jobs enable trigger trg_saved_jobs_guard_target;
+
+set role authenticated; set app.current_uid = :'SJC'; select pg_temp.assert_client_role();
+-- SJ7: ponowienie zapisu zamkniętej oferty (istniejąca para) przechodzi bez błędu.
+insert into public.saved_jobs(candidate_id, job_id) values (:'SJC', :'SJP')
+  on conflict (candidate_id, job_id) do nothing;
+-- SJ8: legalny zapis po zamknięciu — tytuł, firma i miasto zostają.
+select pg_temp.assert(
+  (select title = 'Publiczna SJ' and company_name = 'Firma SJ' and city = 'Gent' and slug is null
+          and job_availability = 'closed'
+     from public.get_saved_jobs_display('pl') where id = :'SJP'),
+  'SJ8 legalny zapis zamkniętej oferty zachowuje metadane (bez linku)');
+-- SJ9: zapis bez dowodu — wiersz widoczny (do usunięcia), metadane szkicu ukryte.
+select pg_temp.assert(
+  (select title = '' and company_name = '' and city = '' and slug is null and job_availability = 'unavailable'
+     from public.get_saved_jobs_display('pl') where id = :'SJD'),
+  'SJ9 zapis bez dowodu nie ujawnia tytułu, firmy ani miasta szkicu');
+select pg_temp.assert(
+  not exists (select 1 from public.get_saved_jobs_display('pl')
+               where title like '%Poufny%' or city = 'Poufnowo'),
+  'SJ9b żadne pole odczytu nie zawiera metadanych szkicu');
+-- SJ10: kandydat usuwa zapis bez dowodu.
+delete from public.saved_jobs where candidate_id = :'SJC' and job_id = :'SJD';
+select pg_temp.assert(not exists (select 1 from public.get_saved_jobs_display('pl') where id = :'SJD'),
+  'SJ10 zapis bez dowodu można usunąć z panelu');
+reset role; reset app.current_uid;
+
+-- SJ11: backfill — dowód dostają wyłącznie zapisy ofert publicznych w chwili migracji.
+alter table public.saved_jobs disable trigger trg_saved_jobs_guard_target;
+insert into public.saved_jobs(candidate_id, job_id) values (:'SJC2', :'SJP2'), (:'SJC2', :'SJD');
+alter table public.saved_jobs enable trigger trg_saved_jobs_guard_target;
+update public.saved_jobs s set saved_while_public = true
+  from public.jobs j join public.companies c on c.id = j.company_id
+ where j.id = s.job_id and not s.saved_while_public
+   and j.deleted_at is null and j.status = 'active'
+   and (j.expires_at is null or j.expires_at > now())
+   and c.status = 'verified' and c.deleted_at is null
+   and s.candidate_id = :'SJC2';
+select pg_temp.assert(
+  (select string_agg(job_id::text || '=' || saved_while_public::text, ',' order by job_id)
+     from public.saved_jobs where candidate_id = :'SJC2')
+  = format('%s=true,%s=false', :'SJP2', :'SJD'),
+  'SJ11 backfill: dowód tylko dla oferty publicznej, stary zapis szkicu bez dowodu');
+
+-- SJ-N1 (kontrola ujemna): bez strażnika zapis szkicu pod sesją kandydata przechodzi.
+savepoint sj_n1;
+drop trigger trg_saved_jobs_guard_target on public.saved_jobs;
+set role authenticated; set app.current_uid = :'SJC'; select pg_temp.assert_client_role();
+insert into public.saved_jobs(candidate_id, job_id) values (:'SJC', :'SJD');
+reset role; reset app.current_uid;
+select pg_temp.assert(exists (select 1 from public.saved_jobs where candidate_id = :'SJC' and job_id = :'SJD'),
+  'SJ-N1 bez strażnika RLS i FK przepuszczają zapis szkicu — SJ2 wykrywa regresję');
+rollback to savepoint sj_n1;
+
+-- SJ-N2 (kontrola ujemna): definicja odczytu z 0162 ujawnia metadane zapisu bez dowodu.
+savepoint sj_n2;
+create or replace function public.get_saved_jobs_display(p_locale text default 'pl')
+returns table (id uuid, slug text, title text, company_name text, city text, job_availability text)
+language sql stable security definer set search_path = public, pg_temp as $$
+  select j.id, null::text, j.title, coalesce(c.name, ''), coalesce(j.city, ''), 'unavailable'::text
+  from public.saved_jobs s join public.jobs j on j.id = s.job_id
+  left join public.companies c on c.id = j.company_id
+  where s.candidate_id = auth.uid();
+$$;
+set role authenticated; set app.current_uid = :'SJC2'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  exists (select 1 from public.get_saved_jobs_display('pl') where title = 'Poufny nabór SJ' and city = 'Poufnowo'),
+  'SJ-N2 odczyt bez bramki dowodu ujawnia tytuł i miasto szkicu — SJ9 wykrywa regresję');
+reset role; reset app.current_uid;
+rollback to savepoint sj_n2;
+rollback;
+reset role; reset app.current_uid;
+
+-- SJ12: równoległe wycofanie oferty (dwie sesje przez dblink, dane zatwierdzone).
+select pg_temp.remote_connect('sj_setup');
+select dbl.dblink_exec('sj_setup', $fx$
+  insert into auth.users(id,email,name,raw_user_meta_data) values
+    ('e9680000-0000-0000-0000-0000000000c1','sjr@test.be','Sj R',
+     '{"role":"candidate","first_name":"Rita","last_name":"J","locale":"pl"}');
+  insert into public.companies(id,name,status) values ('e9680000-0000-0000-0000-0000000000f3','Firma SJR','verified');
+  insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+    ('e9680000-0000-0000-0000-0000000000a1','e9680000-0000-0000-0000-0000000000f3','sjr-1','SJR 1','warehouse','permanent','Gent','Flandria','active','pl'),
+    ('e9680000-0000-0000-0000-0000000000a2','e9680000-0000-0000-0000-0000000000f3','sjr-2','SJR 2','warehouse','permanent','Gent','Flandria','active','pl');
+$fx$);
+select test_fixture.attest_candidates();
+-- Sesja A wycofuje ofertę (niezatwierdzone), sesja B zapisuje: B czeka i po commit A dostaje NOT_FOUND.
+select pg_temp.remote_connect('sj_a');
+select dbl.dblink_exec('sj_a', 'begin');
+select dbl.dblink_exec('sj_a', $q$update public.jobs set status = 'closed' where id = 'e9680000-0000-0000-0000-0000000000a1'$q$);
+select pg_temp.remote_begin('sj_b', 'e9680000-0000-0000-0000-0000000000c1') as sj_pid_b \gset
+select dbl.dblink_send_query('sj_b',
+  $q$insert into public.saved_jobs(candidate_id, job_id) values ('e9680000-0000-0000-0000-0000000000c1', 'e9680000-0000-0000-0000-0000000000a1') returning 'ok'::text$q$);
+select pg_temp.wait_blocked(:sj_pid_b, 'SJ12 zapis czeka na wycofanie oferty');
+select dbl.dblink_exec('sj_a', 'commit');
+select pg_temp.remote_result('sj_b') as sj_b1 \gset
+select dbl.dblink_exec('sj_b', 'rollback');
+select dbl.dblink_disconnect('sj_b');
+select pg_temp.assert(strpos(:'sj_b1', 'NOT_FOUND') > 0,
+  'SJ12 zapis równoległy z wycofaniem oferty widzi nowy stan i jest odrzucony');
+
+-- SJ-N3 (kontrola ujemna): strażnik bez FOR SHARE czyta starą wersję i przepuszcza zapis.
+select pg_get_functiondef('public.saved_jobs_guard_target()'::regprocedure) as sj_fixed_def \gset
+select dbl.dblink_exec('sj_setup', replace(:'sj_fixed_def', 'for share of j, c;', ';'));
+select dbl.dblink_exec('sj_a', 'begin');
+select dbl.dblink_exec('sj_a', $q$update public.jobs set status = 'closed' where id = 'e9680000-0000-0000-0000-0000000000a2'$q$);
+select pg_temp.remote_begin('sj_b', 'e9680000-0000-0000-0000-0000000000c1') as sj_pid_b \gset
+select t.v as sj_n3 from dbl.dblink('sj_b',
+  $q$insert into public.saved_jobs(candidate_id, job_id) values ('e9680000-0000-0000-0000-0000000000c1', 'e9680000-0000-0000-0000-0000000000a2') returning 'ok'::text$q$)
+  as t(v text) \gset
+select dbl.dblink_exec('sj_b', 'rollback'); select dbl.dblink_disconnect('sj_b');
+select dbl.dblink_exec('sj_a', 'rollback'); select dbl.dblink_disconnect('sj_a');
+select dbl.dblink_exec('sj_setup', :'sj_fixed_def');
+select pg_temp.assert(:'sj_n3' = 'ok',
+  'SJ-N3 strażnik bez FOR SHARE przepuszcza zapis oferty w trakcie wycofania — SJ12 wykrywa regresję');
+select pg_temp.assert(
+  pg_get_functiondef('public.saved_jobs_guard_target()'::regprocedure) ~ 'for share of j, c',
+  'SJ12b definicja strażnika z FOR SHARE przywrócona po kontroli ujemnej');
+select dbl.dblink_exec('sj_setup', $fx$
+  delete from public.saved_jobs where candidate_id = 'e9680000-0000-0000-0000-0000000000c1';
+  delete from public.jobs where company_id = 'e9680000-0000-0000-0000-0000000000f3';
+  delete from public.companies where id = 'e9680000-0000-0000-0000-0000000000f3';
+  delete from auth.users where id = 'e9680000-0000-0000-0000-0000000000c1';
+$fx$);
+select dbl.dblink_disconnect('sj_setup');
+
+-- ============================================================================
+-- AR968. Powiązanie `jobs.location_id` po zmianie słownika (#715, 0199): zmiana `alias_key`,
+--        przeniesienie aliasu, usunięcie aliasu, dezaktywacja/aktywacja i usunięcie miejscowości
+--        przeliczają dotknięte oferty; `jobs.city` i `updated_at` (token CAS) bez zmian; zwykła
+--        edycja oferty nadal podbija `updated_at`.
+--        Kontrole ujemne: triggery z 0153 (tylko INSERT) zostawiają stare powiązanie; bez
+--        `trg_zz_jobs_location_only_keep_version` przeliczenie podbija `updated_at`.
+-- ============================================================================
+\echo '--- AR968 powiązanie miejscowości po zmianie słownika ---'
+begin;
+reset role; reset app.current_uid;
+\set ARCO 'e9681000-0000-0000-0000-0000000000f1'
+\set ARL1 'e9681000-0000-0000-0000-0000000000a1'
+\set ARL2 'e9681000-0000-0000-0000-0000000000a2'
+\set ARJ1 'e9681000-0000-0000-0000-0000000000b1'
+\set ARJ2 'e9681000-0000-0000-0000-0000000000b2'
+\set ARJ3 'e9681000-0000-0000-0000-0000000000b3'
+insert into public.companies(id,name,status) values (:'ARCO','Firma AR','verified');
+insert into public.locations(id, slug, name, region, kind) values
+  (:'ARL1','ar968-jeden','Ar968 Jeden','Flandria','locality'),
+  (:'ARL2','ar968-dwa','Ar968 Dwa','Flandria','locality');
+insert into public.location_aliases(location_id, alias, alias_key) values
+  (:'ARL1', 'Ar968 Jeden', 'ar968 jeden'), (:'ARL2', 'Ar968 Dwa', 'ar968 dwa');
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale) values
+  (:'ARJ1',:'ARCO','ar-1','AR 1','warehouse','permanent','Ar968-Stad ','Flandria','active','pl'),
+  (:'ARJ2',:'ARCO','ar-2','AR 2','warehouse','permanent','AR968 Inna','Flandria','draft','pl'),
+  (:'ARJ3',:'ARCO','ar-3','AR 3','warehouse','permanent','Ar968 Stad','Flandria','draft','pl');
+select pg_temp.assert(
+  (select bool_and(location_id is null) from public.jobs where id in (:'ARJ1',:'ARJ2',:'ARJ3')),
+  'AR0 miasta spoza słownika: bez miejscowości');
+create temp table ar_v on commit drop as
+  select id, updated_at, city from public.jobs where id in (:'ARJ1',:'ARJ2',:'ARJ3');
+create function pg_temp.ar_unchanged() returns boolean language sql as $$
+  select bool_and(j.updated_at = v.updated_at and j.city = v.city)
+  from public.jobs j join ar_v v on v.id = j.id $$;
+
+-- AR1: nowy alias dowiązuje oferty (jak w 0153), bez podbicia wersji.
+insert into public.location_aliases(location_id, alias, alias_key) values (:'ARL1', 'Ar968 Stad', 'ar968 stad');
+select pg_temp.assert(
+  (select string_agg(coalesce(location_id::text, '-'), ',' order by id) from public.jobs where id in (:'ARJ1',:'ARJ2',:'ARJ3'))
+    = format('%s,-,%s', :'ARL1', :'ARL1') and pg_temp.ar_unchanged(),
+  'AR1 nowy alias dowiązuje oferty; city i updated_at bez zmian');
+-- AR2: przeniesienie aliasu do innej miejscowości.
+update public.location_aliases set location_id = :'ARL2' where alias_key = 'ar968 stad';
+select pg_temp.assert(
+  (select bool_and(location_id = :'ARL2') from public.jobs where id in (:'ARJ1',:'ARJ3')) and pg_temp.ar_unchanged(),
+  'AR2 przeniesienie aliasu przenosi oferty; updated_at bez zmian');
+select pg_temp.assert(
+  exists (select 1 from public.get_public_jobs(p_locations => array['Ar968 Dwa']) where id = :'ARJ1')
+  and not exists (select 1 from public.get_public_jobs(p_locations => array['Ar968 Jeden']) where id = :'ARJ1'),
+  'AR2b filtr listy: oferta w nowej miejscowości, nie w starej');
+-- AR3: zmiana alias_key — stary tekst traci miejscowość, nowy ją dostaje.
+update public.location_aliases set alias = 'Ar968 Inna', alias_key = 'ar968 inna' where alias_key = 'ar968 stad';
+select pg_temp.assert(
+  (select string_agg(coalesce(location_id::text, '-'), ',' order by id) from public.jobs where id in (:'ARJ1',:'ARJ2',:'ARJ3'))
+    = format('-,%s,-', :'ARL2') and pg_temp.ar_unchanged(),
+  'AR3 zmiana alias_key: oferty ze starym tekstem bez miejscowości, z nowym — dowiązane');
+-- AR4: dezaktywacja i ponowna aktywacja miejscowości.
+update public.locations set is_active = false where id = :'ARL2';
+select pg_temp.assert((select location_id is null from public.jobs where id = :'ARJ2') and pg_temp.ar_unchanged(),
+  'AR4 dezaktywacja miejscowości zdejmuje powiązanie');
+update public.locations set is_active = true where id = :'ARL2';
+select pg_temp.assert((select location_id = :'ARL2' from public.jobs where id = :'ARJ2') and pg_temp.ar_unchanged(),
+  'AR4b ponowna aktywacja przywraca powiązanie');
+-- AR5: usunięcie aliasu.
+delete from public.location_aliases where alias_key = 'ar968 inna';
+select pg_temp.assert((select location_id is null from public.jobs where id = :'ARJ2') and pg_temp.ar_unchanged(),
+  'AR5 usunięcie aliasu zdejmuje powiązanie');
+-- AR6: usunięcie miejscowości (kaskada aliasów).
+insert into public.location_aliases(location_id, alias, alias_key) values (:'ARL1', 'Ar968 Stad', 'ar968 stad');
+select pg_temp.assert((select bool_and(location_id = :'ARL1') from public.jobs where id in (:'ARJ1',:'ARJ3')),
+  'AR6a alias dodany ponownie');
+delete from public.locations where id = :'ARL1';
+select pg_temp.assert((select bool_and(location_id is null) from public.jobs where id in (:'ARJ1',:'ARJ3')) and pg_temp.ar_unchanged(),
+  'AR6 usunięcie miejscowości nie zostawia starych powiązań');
+-- AR7: zwykła edycja szkicu nadal podbija updated_at.
+update public.jobs set title = 'AR 3 zmieniony' where id = :'ARJ3';
+select pg_temp.assert(
+  (select j.updated_at > v.updated_at from public.jobs j join ar_v v on v.id = j.id where j.id = :'ARJ3'),
+  'AR7 zmiana treści oferty podbija updated_at (strażnik wersji tylko dla samego location_id)');
+update ar_v set updated_at = (select updated_at from public.jobs where id = :'ARJ3') where id = :'ARJ3';
+
+-- AR-N1 (kontrola ujemna): triggery z 0153 (tylko INSERT aliasu) — przeniesienie zostawia stare powiązanie.
+savepoint ar_n1;
+insert into public.locations(id, slug, name, region, kind) values (:'ARL1','ar968-jeden','Ar968 Jeden','Flandria','locality');
+insert into public.location_aliases(location_id, alias, alias_key) values (:'ARL1', 'Ar968 Stad', 'ar968 stad');
+drop trigger trg_location_aliases_relink_jobs_upd on public.location_aliases;
+update public.location_aliases set location_id = :'ARL2' where alias_key = 'ar968 stad';
+select pg_temp.assert((select location_id = :'ARL1' from public.jobs where id = :'ARJ1'),
+  'AR-N1 bez triggera UPDATE oferta zostaje w starej miejscowości — AR2 wykrywa regresję');
+rollback to savepoint ar_n1;
+
+-- AR-N2 (kontrola ujemna): bez strażnika wersji przeliczenie podbija updated_at (token CAS).
+savepoint ar_n2;
+drop trigger trg_zz_jobs_location_only_keep_version on public.jobs;
+insert into public.locations(id, slug, name, region, kind) values (:'ARL1','ar968-jeden','Ar968 Jeden','Flandria','locality');
+insert into public.location_aliases(location_id, alias, alias_key) values (:'ARL1', 'Ar968 Stad', 'ar968 stad');
+select pg_temp.assert((select location_id = :'ARL1' from public.jobs where id = :'ARJ1') and not pg_temp.ar_unchanged(),
+  'AR-N2 bez strażnika wersji przeliczenie podbija updated_at — AR1 wykrywa regresję');
+rollback to savepoint ar_n2;
+rollback;
+reset role; reset app.current_uid;
+
 -- RD973. Retencja i DSA (0197 — numer tymczasowy):
 --   #784 CV i konto nieaktywnego kandydata dopiero od terminu z ostrzeżenia (nie 72 h wcześniej);
 --   #860 chwila poinformowania o decyzji/cofnięciu trwała (dowód `moderation_informed` z 0188) —
