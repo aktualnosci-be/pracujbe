@@ -94,7 +94,7 @@ export const JOB_EXTRACTION_JSON_SCHEMA = {
     sourceLanguage: {
       ...text,
       description:
-        'Two-letter ISO 639-1 code of the language the advertisement text is written in (e.g. "nl", "fr", "pl", "en"), detected from the material itself; empty if unclear.',
+        'Two-letter ISO 639-1 code of the language the advertisement text is written in (for example nl, fr, pl or en), detected from the material itself; empty if unclear.',
     },
     uncertainFields: {
       type: 'array',

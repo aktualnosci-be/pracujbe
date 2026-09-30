@@ -2,6 +2,7 @@ import AxeBuilder from './fixtures/axe';
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Załączniki w polu wiadomości (0119) w trybie demo (bez bucketu): za duży plik odrzucony
@@ -10,9 +11,9 @@ import { resolve } from 'node:path';
  */
 
 interface Copy {
-  messages: Record<string, string>;
-  files: Record<string, string>;
-  errors: Record<string, string>;
+  messages: AppMessages['messages'];
+  files: AppMessages['files'];
+  errors: AppMessages['errors'];
 }
 
 function copy(locale: string): Copy {

@@ -7,7 +7,7 @@ import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc, rpcRows, type RpcArgs } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkAccountRateLimit } from '@/lib/rate-limit-account';
 import { captureError } from '@/lib/error-report';
 import { ACTIVE_COMPANY_COOKIE, activeCompanyCookieOptions, getExpectedActiveCompany } from '@/lib/company-context';
 import { mapTeamError, type TeamError } from '@/lib/team/errors';
@@ -56,10 +56,16 @@ function failure(error: unknown, area: string): TeamActionResult {
 }
 
 /** RPC zespołu (void) pod sesją zalogowanego użytkownika. */
-async function sessionRpc(fn: string, args: RpcArgs, area: string): Promise<TeamActionResult> {
+async function sessionRpc(
+  fn: string,
+  args: RpcArgs,
+  area: string,
+  limit: { bucket: string; max: number },
+): Promise<TeamActionResult> {
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
+    if (await limited(limit.bucket, limit.max, me.id)) return fail('RATE_LIMITED');
     await withPortalTransaction(me, (tx) => rpc(tx, fn, args));
     refreshPanel();
     return { ok: true };
@@ -72,8 +78,13 @@ function refreshPanel(): void {
   revalidatePath('/employer', 'layout');
 }
 
-async function limited(bucket: string, max: number): Promise<boolean> {
-  return !(await checkRateLimit(bucket, { max, windowSeconds: RATE_WINDOW_SECONDS }));
+/**
+ * #1109: limit na KONTO (zmiana sieci go nie omija) + szeroki próg na adres IP — liczony po
+ * odczycie sesji, więc anonimowe wywołanie ani współdzielony adres (biuro, NAT operatora) nie
+ * blokują legalnych użytkowników.
+ */
+async function limited(bucket: string, max: number, accountId: string): Promise<boolean> {
+  return !(await checkAccountRateLimit(bucket, accountId, { max, windowSeconds: RATE_WINDOW_SECONDS }));
 }
 
 const CLIENT_KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -106,11 +117,11 @@ export async function inviteTeamMember(
   const parsed = teamInviteSchema.safeParse(input);
   if (!parsed.success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  if (await limited('team-invite', INVITE_RATE_MAX)) return fail('RATE_LIMITED');
 
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
+    if (await limited('team-invite', INVITE_RATE_MAX, me.id)) return fail('RATE_LIMITED');
     // Token liczymy zawsze (baza wie, czy adres ma konto — akcja nie). Bez sekretu w produkcji
     // link rejestracji nie powstałby, więc zaproszenia nie przyjmujemy (nie udajemy wysyłki).
     // #1113: z kluczem operacji ponowienie po błędzie sieci daje ten sam token (bez drugiego
@@ -151,9 +162,11 @@ export async function inviteTeamMember(
 export async function revokeTeamInvitation(invitationId: string): Promise<TeamActionResult> {
   if (!uuidSchema.safeParse(invitationId).success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  if (await limited('team-manage', MANAGE_RATE_MAX)) return fail('RATE_LIMITED');
 
-  return sessionRpc('revoke_company_invitation', { p_invitation_id: invitationId }, 'team.revokeInvitation');
+  return sessionRpc('revoke_company_invitation', { p_invitation_id: invitationId }, 'team.revokeInvitation', {
+    bucket: 'team-manage',
+    max: MANAGE_RATE_MAX,
+  });
 }
 
 /**
@@ -176,11 +189,11 @@ export async function renewTeamInvitation(
 ): Promise<TeamActionResult> {
   if (!uuidSchema.safeParse(invitationId).success) return fail('VALIDATION_FAILED');
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  if (await limited('team-invite', INVITE_RATE_MAX)) return fail('RATE_LIMITED');
 
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
+    if (await limited('team-invite', INVITE_RATE_MAX, me.id)) return fail('RATE_LIMITED');
     // #1113: ponowienie TEGO SAMEGO odnowienia (klucz operacji) = ten sam nowy link.
     const signupToken = operationToken(clientKey, ['renew', me.id, expectedCompanyId, invitationId]);
     if (!signupToken) {
@@ -222,9 +235,11 @@ export async function setTeamMemberRole(memberId: string, role: string): Promise
     return fail('VALIDATION_FAILED');
   }
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  if (await limited('team-manage', MANAGE_RATE_MAX)) return fail('RATE_LIMITED');
 
-  return sessionRpc('set_company_member_role', { p_member_id: memberId, p_role: role }, 'team.setRole');
+  return sessionRpc('set_company_member_role', { p_member_id: memberId, p_role: role }, 'team.setRole', {
+    bucket: 'team-manage',
+    max: MANAGE_RATE_MAX,
+  });
 }
 
 export async function setTeamMemberActive(
@@ -235,9 +250,11 @@ export async function setTeamMemberActive(
     return fail('VALIDATION_FAILED');
   }
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  if (await limited('team-manage', MANAGE_RATE_MAX)) return fail('RATE_LIMITED');
 
-  return sessionRpc('set_company_member_active', { p_member_id: memberId, p_active: active }, 'team.setActive');
+  return sessionRpc('set_company_member_active', { p_member_id: memberId, p_active: active }, 'team.setActive', {
+    bucket: 'team-manage',
+    max: MANAGE_RATE_MAX,
+  });
 }
 
 export async function respondToTeamInvitation(
@@ -248,11 +265,11 @@ export async function respondToTeamInvitation(
     return fail('VALIDATION_FAILED');
   }
   if (!isPortalDataConfigured()) return { ok: true, demo: true };
-  if (await limited('team-respond', MANAGE_RATE_MAX)) return fail('RATE_LIMITED');
 
   try {
     const me = await getPortalIdentity();
     if (!me) return fail('PERMISSION_DENIED');
+    if (await limited('team-respond', MANAGE_RATE_MAX, me.id)) return fail('RATE_LIMITED');
     const data = await withPortalTransaction(me, (tx) =>
       rpc(tx, 'respond_to_company_invitation', { p_invitation_id: invitationId, p_accept: accept }),
     );

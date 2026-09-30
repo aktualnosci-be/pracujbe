@@ -48,6 +48,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'onboarding',
   'profileVisibility',
   'savedSearches',
+  'applicationJournal',
   'screeningReview',
   // 0167: podpowiedź i stan przeglądu treści w kreatorze oferty.
   'jobTrust',

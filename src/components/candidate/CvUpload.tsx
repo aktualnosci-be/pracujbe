@@ -9,6 +9,7 @@ import { downloadPrivateFile } from '@/lib/files/client-download';
 import { uploadCandidateCv, deleteCandidateFile, prepareCvDownload } from '@/lib/actions/files';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
+import { H2_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 
 /**
  * Upload CV kandydata (PDF/DOC/DOCX, <=5 MB) — prywatny bucket Railway (#26, Invariant #10).
@@ -30,7 +31,22 @@ import { checkCvFile, type CvUploadProblem } from '@/lib/validation/cv-file';
  * #1138: `allowUpload` podaje serwer (tryb produktu — komponent kliencki nie zna zmiennej
  * trybu). Bez niego (domyślnie, fail-closed) komponent jest samą listą istniejących plików
  * z „Pobierz”/„Usuń” — bez przycisku „Wgraj” i pola pliku (tryb ogłoszeniowy).
+ *
+ * #1226: `variant="settings"` = samodzielna sekcja strony ustawień konta (`PAPER`, nagłówek H2,
+ * kotwica `#pliki-cv`) — jedyne miejsce, w którym kandydat w trybie ogłoszeniowym pobiera albo
+ * usuwa wcześniej wgrane CV (profil jest wtedy 404, #1142). Domyślnie `panel` (karta w profilu).
  */
+/** Obramowanie listy: karta w profilu albo sekcja strony ustawień (#1226). Poza komponentem — stały typ, bez remountu. */
+function CvFrame({ settings, children }: { settings: boolean; children: React.ReactNode }): React.JSX.Element {
+  return settings ? (
+    <section id="pliki-cv" aria-labelledby="cv-files-title" className={`${PAPER} min-w-0`}>
+      {children}
+    </section>
+  ) : (
+    <div className="min-w-0 rounded-lg border border-border bg-background p-4">{children}</div>
+  );
+}
+
 export interface CvItem {
   id: string;
   fileName: string;
@@ -42,11 +58,17 @@ export function CvUpload({
   items,
   loadFailed = false,
   allowUpload = false,
+  variant = 'panel',
 }: {
   items: CvItem[];
   loadFailed?: boolean;
   allowUpload?: boolean;
+  variant?: 'panel' | 'settings';
 }): React.JSX.Element {
+  const inSettings = variant === 'settings';
+  const Heading = inSettings ? 'h2' : 'h3';
+  const headingClass = inSettings ? H2_EXTENDED : 'text-sm font-semibold text-foreground';
+
   const t = useTranslations('files');
   const tErrors = useTranslations('errors');
   const tc = useTranslations('common');
@@ -153,8 +175,10 @@ export function CvUpload({
 
   if (loadFailed) {
     return (
-      <div className="min-w-0 rounded-lg border border-border bg-background p-4">
-        <h3 className="mb-3 text-sm font-semibold text-foreground">{t('cvTitle')}</h3>
+      <CvFrame settings={inSettings}>
+        <Heading id={inSettings ? 'cv-files-title' : undefined} className={`mb-3 ${headingClass}`}>
+          {t(allowUpload ? 'cvTitle' : 'existingTitle')}
+        </Heading>
         <div role="alert">
           <p className="text-sm text-error-text">{t('loadError')}</p>
           <button
@@ -165,16 +189,21 @@ export function CvUpload({
             {tc('retry')}
           </button>
         </div>
-      </div>
+      </CvFrame>
     );
   }
 
   return (
-    <div className="min-w-0 rounded-lg border border-border bg-background p-4">
+    <CvFrame settings={inSettings}>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 ref={titleRef} tabIndex={-1} className="text-sm font-semibold text-foreground">
+        <Heading
+          ref={titleRef}
+          id={inSettings ? 'cv-files-title' : undefined}
+          tabIndex={-1}
+          className={headingClass}
+        >
           {t(allowUpload ? 'cvTitle' : 'existingTitle')}
-        </h3>
+        </Heading>
         {allowUpload ? (<>
         <button
           ref={uploadRef}
@@ -267,6 +296,6 @@ export function CvUpload({
         pending={pending}
         getReturnFocus={() => (deletedRef.current ? (uploadRef.current ?? titleRef.current) : deleteTriggerRef.current)}
       />
-    </div>
+    </CvFrame>
   );
 }

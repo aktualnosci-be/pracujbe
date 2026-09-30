@@ -71,6 +71,7 @@ function mockRpc(claim: string = 'claimed', recordError: string | null = null, c
     return 'applied';
   });
   fakeDb.rpc('complete_webhook', completed);
+  fakeDb.rpc('release_webhook', true);
 }
 
 /** Wywołania RPC w kształcie [nazwa, argumenty]; każde jako service_role. */
@@ -195,20 +196,79 @@ describe('POST /api/email/webhook/resend', () => {
     expect(fakeDb.calls).toHaveLength(0);
   });
 
-  it('powtórzone zakończone zdarzenie (duplicate) i równoległa dostawa (locked) nie zmieniają stanu', async () => {
+  it('powtórzone zakończone zdarzenie (duplicate) → 200 bez zapisu', async () => {
     mockRpc('duplicate');
     const dup = await post(signedRequest(JSON.stringify(bounced())));
     expect(dup.status).toBe(200);
     expect(await dup.json()).toMatchObject({ duplicate: true });
-    mockRpc('locked');
-    expect((await post(signedRequest(JSON.stringify(bounced())))).status).toBe(200);
     expect(rpcCalls('record_email_event')).toHaveLength(0);
+  });
+
+  it('#790: równoległa dostawa (locked) NIE jest potwierdzana 2xx — 503 z Retry-After, bez zapisu', async () => {
+    mockRpc('locked');
+    const res = await post(signedRequest(JSON.stringify(bounced())));
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('30');
+    expect(rpcCalls('record_email_event')).toHaveLength(0);
+    expect(rpcCalls('complete_webhook')).toHaveLength(0);
+  });
+
+  it('#790: chwilowy błąd zapisu zwalnia dzierżawę, a retry po 5 s zapisuje zdarzenie (claimed, nie locked)', async () => {
+    // Model lease zgodny z SQL: claim po nieudanej próbie = 'locked', dopóki dzierżawa nie zostanie zwolniona.
+    let leaseHeld = false;
+    let failNext = true;
+    const recorded: unknown[] = [];
+    fakeDb.rpc('claim_webhook', () => {
+      if (leaseHeld) return 'locked';
+      leaseHeld = true;
+      return 'claimed';
+    });
+    fakeDb.rpc('release_webhook', () => {
+      leaseHeld = false;
+      return true;
+    });
+    fakeDb.rpc('complete_webhook', true);
+    fakeDb.rpc('record_email_event', (args: unknown) => {
+      if (failNext) {
+        failNext = false;
+        throw pgError('XX000', 'db blip');
+      }
+      recorded.push(args);
+      return 'applied';
+    });
+    const body = JSON.stringify(bounced());
+    expect((await post(signedRequest(body))).status).toBe(500);
+    expect(rpcCalls('release_webhook')).toHaveLength(1);
+    expect((await post(signedRequest(body))).status).toBe(200);
+    expect(recorded).toHaveLength(1);
+  });
+
+  it('#790 KONTROLA UJEMNA: bez zwolnienia dzierżawy retry dostaje locked i zdarzenie nie jest zapisane', async () => {
+    let leaseHeld = false;
+    fakeDb.rpc('claim_webhook', () => {
+      if (leaseHeld) return 'locked';
+      leaseHeld = true;
+      return 'claimed';
+    });
+    fakeDb.rpc('release_webhook', () => false); // zwolnienie nie działa (awaria bazy)
+    fakeDb.rpc('complete_webhook', true);
+    let calls = 0;
+    fakeDb.rpc('record_email_event', () => {
+      calls += 1;
+      throw pgError('XX000', 'db blip');
+    });
+    const body = JSON.stringify(bounced());
+    expect((await post(signedRequest(body))).status).toBe(500);
+    const retry = await post(signedRequest(body));
+    expect(retry.status).toBe(503); // nigdy 200: dostawca nie może uznać niezapisanego zdarzenia za potwierdzone
+    expect(calls).toBe(1);
   });
 
   it('błąd zapisu zdarzenia → 500 bez oznaczenia completed (dostawca ponowi)', async () => {
     mockRpc('claimed', 'db down');
     expect((await post(signedRequest(JSON.stringify(bounced())))).status).toBe(500);
     expect(rpcCalls('complete_webhook')).toHaveLength(0);
+    expect(rpcCalls('release_webhook')).toHaveLength(1);
   });
 
   it('niedostępny inbox → 503, bez zapisu', async () => {
@@ -273,5 +333,21 @@ describe('kontrakt z migracją 0098', () => {
     const signature = sql.match(/function public\.record_email_event\(([\s\S]*?)\) returns/)?.[1] ?? '';
     const declared = [...signature.matchAll(/(p_[a-z_]+)/g)].map((m) => m[1]);
     expect(params).toEqual(declared);
+  });
+});
+
+describe('kontrakt z migracją 0195 (#788)', () => {
+  const sql = readFileSync(join(process.cwd(), 'supabase/migrations/0195_email_webhook_pending_events.sql'), 'utf8');
+
+  it('kolejka zdarzeń bez wysyłki przyjmuje te same rodzaje zdarzeń co model', async () => {
+    const { EMAIL_EVENT_KINDS } = await import('@/lib/email/provider-events');
+    const match = sql.match(/email_pending_events_event check \(event in \(([^)]+)\)\)/);
+    const kinds = (match?.[1] ?? '').split(',').map((k) => k.trim().replace(/'/g, ''));
+    expect(kinds).toEqual([...EMAIL_EVENT_KINDS]);
+  });
+
+  it('zdarzenie bez wysyłki jest zapisywane, a trigger przypisuje je po zapisie identyfikatora', () => {
+    expect(sql).toMatch(/insert into public\.email_pending_events/);
+    expect(sql).toMatch(/after insert or update of provider_message_id, provider on public\.email_deliveries/);
   });
 });

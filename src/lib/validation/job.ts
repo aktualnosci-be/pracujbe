@@ -21,6 +21,7 @@ import {
   ACCOMMODATION_COST_PERIODS,
   ACCOMMODATION_KINDS,
 } from '@/lib/job-costs';
+import { WORK_TIME_VALUES } from '@/lib/job-filter-options';
 
 /**
  * Walidacja kreatora oferty pracy — dziewięć kroków + pełny jobSchema.
@@ -85,6 +86,8 @@ const step2Base = z.object({
     .min(2, 'job.error.workingHoursRequired')
     .max(80, 'job.error.workingHoursTooLong'),
   shifts: z.string().trim().max(120, 'job.error.shiftsTooLong').optional(),
+  /** #811 (0194): wymiar pracy (filtr listy); brak = pracodawca nie podaje. */
+  workTime: z.enum(WORK_TIME_VALUES).optional(),
   startImmediately: z.boolean().default(false),
   startDate: z
     .string()

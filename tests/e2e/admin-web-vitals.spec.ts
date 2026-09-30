@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Dane polowe Core Web Vitals w panelu admina (tryb DEMO: bez bazy i bez Cloudflare —
@@ -11,7 +12,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  * (beacon po zgodzie analitycznej); strona nie ładuje w przeglądarce żadnego skryptu pomiaru.
  */
 
-type AdminMessages = { admin: Record<string, string> };
+type AdminMessages = { admin: AppMessages['admin'] };
 const admin = (locale: string) =>
   (JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf-8')) as AdminMessages)
     .admin;

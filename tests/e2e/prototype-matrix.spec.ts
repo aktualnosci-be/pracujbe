@@ -136,15 +136,13 @@ for (const locale of LOCALES) {
 
 const DEMO_JOB = '/oferty-pracy/bricklayer-brussels-1002';
 
-type JobMessages = { job: Record<string, string>; jobs: Record<string, string> };
-
 for (const locale of LOCALES) {
   for (const width of [1280, 390] as const) {
     test(`Z2: szczegół oferty = .offer-layout prototypu (${locale}, ${width} px)`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/${locale}${DEMO_JOB}`);
       await rejectOptionalCookies(page, locale);
-      const m = messages(locale) as unknown as JobMessages;
+      const m = messages(locale);
       const header = page.getByTestId('job-detail-passport');
       await expectStyle(header.getByRole('heading', { level: 1 }), {
         fontSize: width === 1280 ? '40px' : '30px',
