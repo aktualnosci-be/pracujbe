@@ -2,7 +2,7 @@
 
 import { agePolicyReasonError } from '@/lib/admin/age-policy';
 import { isCandidateAgeBand } from '@/lib/age-policy/constants';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -107,7 +107,7 @@ export async function setCandidateMinAge(
         if (message.includes('VALIDATION_FAILED')) {
           return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
         }
-        return { ok: false, error: mapPgError(message) };
+        return { ok: false, error: reportUnmappedDbError(error, 'admin.setCandidateMinAge', mapPgError(message)) };
       }
       throw error;
     }
