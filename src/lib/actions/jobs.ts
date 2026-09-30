@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 
 import { getActiveCompanyId, getExpectedActiveCompany } from '@/lib/company-context';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -209,8 +209,13 @@ function slugify(input: string): string {
  * Wyjątek transakcji → kod użytkowy: błąd bazy (RLS, RAISE w RPC) wg komunikatu, każdy inny
  * wyjątek (sieć, konfiguracja) → INTERNAL. Tekst bazy nigdy nie trafia do użytkownika.
  */
-function failureCode(error: unknown): ErrorCode {
-  return isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'INTERNAL';
+function failureCode(error: unknown, area: string): ErrorCode {
+  if (!isDatabaseError(error)) {
+    // #1068: wyjątek spoza bazy (sieć, konfiguracja) też trafia do kanału błędów.
+    captureError(error, { area });
+    return 'INTERNAL';
+  }
+  return reportUnmappedDbError(error, area, mapPgError(databaseErrorMessage(error)));
 }
 
 /** Waliduje dane kroku właściwym `stepNSchema`; zwraca sparsowaną wartość albo null. */
@@ -343,7 +348,7 @@ export async function createJobDraft(
     if (!id) return { ok: false, error: 'INTERNAL' };
     return { ok: true, id };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    return { ok: false, error: failureCode(error, 'jobs.createJobDraft') };
   }
 }
 
@@ -404,7 +409,7 @@ export async function duplicateJobAsDraft(
     revalidatePath('/employer');
     return { ok: true, id: outcome.id };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    return { ok: false, error: failureCode(error, 'jobs.duplicateJobAsDraft') };
   }
 }
 
@@ -451,7 +456,7 @@ export async function deleteJobDraft(jobId: string): Promise<SaveDraftResult> {
     revalidatePath('/employer');
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    return { ok: false, error: failureCode(error, 'jobs.deleteJobDraft') };
   }
 }
 
@@ -544,7 +549,7 @@ export async function updateJobDraft(
     if (typeof outcome === 'string') return { ok: false, error: outcome };
     return { ok: true, ...(outcome.version ? { version: outcome.version } : {}) };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    return { ok: false, error: failureCode(error, 'jobs.updateJobDraft') };
   }
 }
 
@@ -691,7 +696,7 @@ export async function updatePublishedJob(
       ...(contentReview ? { contentReview } : {}),
     };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    return { ok: false, error: failureCode(error, 'jobs.updatePublishedJob') };
   }
 }
 
@@ -865,7 +870,7 @@ export async function publishJob(jobId: string): Promise<PublishResult> {
     revalidatePublicJobPaths();
     return { ok: true };
   } catch (error) {
-    const code = failureCode(error);
+    const code = failureCode(error, 'jobs.publishJob');
     // #497: pytanie screeningowe czeka na przegląd albo zostało odrzucone — kreator pokazuje,
     // których pytań to dotyczy (i uzasadnienie odrzucenia), żeby firma mogła je poprawić.
     if (code === 'SCREENING_REVIEW_REQUIRED' || code === 'SCREENING_QUESTION_REJECTED') {
@@ -941,6 +946,6 @@ export async function setJobStatus(
     revalidatePublicJobPaths();
     return { ok: true, status: typeof data === 'string' ? data : undefined };
   } catch (error) {
-    return { ok: false, error: failureCode(error) };
+    return { ok: false, error: failureCode(error, 'jobs.setJobStatus') };
   }
 }
