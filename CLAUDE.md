@@ -897,7 +897,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `search_city_candidates` rozwija wpis o gminie, facet miasta grupuje część pod gminą
   nadrzędną. Dowód: `rls.sql` sekcja SRCH1076 (kontrole ujemne: funkcje z 0153), rollback
   `supabase/rollback/0183_…down.sql` (`city-sections-filters-rollback.sql`), unit
-  `city-sections-filters`. **Otwarte:** matching nadal liczy odległość z tekstu (`cityKey`).
+  `city-sections-filters`.
+  Zmiany słownika (#715, migracja `0199` — numer tymczasowy): `location_aliases` AFTER INSERT/
+  UPDATE/DELETE i `locations` AFTER UPDATE (`is_active`) przeliczają oferty dotkniętych kluczy
+  i miejscowości (`relink_jobs_for_city_keys`) — przeniesienie/zmiana klucza/usunięcie aliasu,
+  dezaktywacja i usunięcie miejscowości nie zostawiają starego `location_id`; `jobs.city` bez zmian,
+  a `trg_zz_jobs_location_only_keep_version` nie podbija `updated_at` (CAS #325) przy zmianie
+  samego `location_id`. Dowód: `rls.sql` sekcja AR968 (kontrole ujemne: trigger tylko INSERT z 0153,
+  bez strażnika wersji). **Otwarte:** matching nadal liczy odległość z tekstu (`cityKey`).
   Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
   „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
   wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym
@@ -1212,6 +1219,15 @@ Dowód: `rls.sql` sekcja SV162 (kontrola ujemna: definicja z 0066 gubi 5 z 6 zap
 `portal-candidate` (PG16: po terminie = `expired` bez slugu, usunięcie pod RLS), unit
 `saved-job-availability` i `candidate-saved-jobs` (kontrole ujemne), E2E `candidate-saved-closed`
 (fixture, 4 języki, 320 px, axe; mutacja strony = czerwony).
+Cel zapisu (#882, migracja `0199` — numer tymczasowy): nowy wiersz `saved_jobs` tylko dla oferty
+publicznej — BEFORE INSERT `trg_saved_jobs_guard_target` (warunki `get_public_job`, `FOR SHARE`
+oferty i firmy przeciw równoległemu wycofaniu; szkic/usunięta/firma niezweryfikowana = `NOT_FOUND`,
+ponowienie istniejącej pary przechodzi; wyjątek tylko seed demo jak w 0171). Dowód
+`saved_jobs.saved_while_public` ustala trigger; backfill tylko dla ofert publicznych w chwili
+migracji. `get_saved_jobs_display` zwraca tytuł/firmę/miasto oferty niepublicznej wyłącznie przy
+dowodzie (inaczej puste pola — karta „nieznana oferta”, zapis usuwalny). Dowód: `rls.sql` sekcja
+SJ968 (kontrole ujemne: bez strażnika, odczyt z 0162, strażnik bez `FOR SHARE` w dwóch sesjach),
+rollback `0199_…down.sql`, `portal-candidate` (PG16), unit `candidate-saved-jobs`.
 
 Wygląd panelu kandydata, onboardingu, wiadomości, powiadomień, toastu i aplikowania = kalka
 prototypu „04 Ludzie i praca” (#5/#6): klasy `panel-styles.ts` (wspólne z pracodawcą/adminem)
