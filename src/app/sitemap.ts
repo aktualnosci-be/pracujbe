@@ -1,7 +1,8 @@
 import type { MetadataRoute } from 'next';
 
 import { routing } from '@/i18n/routing';
-import { env, isProductionDeployment } from '@/lib/env';
+import { env } from '@/lib/env';
+import { isSearchIndexingEnabled } from '@/lib/seo/indexing';
 import {
   getCategoryCounts,
   getCityCounts,
@@ -60,12 +61,11 @@ const JOBS_PER_SITEMAP_SHARD = 5000;
 const SITEMAP_JOBS_PAGE = 100;
 
 /**
- * Liczba partii ofert (id `1..N`) potrzebna dla obecnego wolumenu. Poza produkcją = 0 (sam
- * core sitemap, #429 — bez odczytu bazy). `getJobsCount` jest dokładnym licznikiem publicznych
+ * Liczba partii ofert (id `1..N`) potrzebna dla obecnego wolumenu. Wołana tylko przy włączonym
+ * indeksowaniu — poza nim `generateSitemaps` zwraca sam core bez odczytu bazy (#429, #1115). `getJobsCount` jest dokładnym licznikiem publicznych
  * ofert (P1-12), niezależnym od sufitu paginacji offsetowej; bez odczytu wierszy (#1230).
  */
 async function jobSitemapShardCount(): Promise<number> {
-  if (!isProductionDeployment()) return 0;
   const total = await getJobsCount({ locale: routing.defaultLocale });
   const reachable = Math.min(total, MAX_JOB_LIST_OFFSET + SITEMAP_JOBS_PAGE);
   return Math.max(0, Math.ceil(reachable / JOBS_PER_SITEMAP_SHARD));
@@ -73,6 +73,9 @@ async function jobSitemapShardCount(): Promise<number> {
 
 /** Identyfikatory plików sitemap: `0` = core, `1..N` = partie ofert (Next.js: `generateSitemaps`). */
 export async function generateSitemaps(): Promise<{ id: number }[]> {
+  // Poza indeksowaniem (nie-produkcja albo bramka hasła, #1115): sam core, bez odczytu bazy.
+  // Sprawdzenie PRZED cache — lista partii policzona za bramką nie zostaje po jej zdjęciu.
+  if (!isSearchIndexingEnabled()) return [{ id: 0 }];
   return sitemapIdsCache.run('ids', async () => {
     const jobShards = await jobSitemapShardCount();
     return Array.from({ length: jobShards + 1 }, (_, id) => ({ id }));
@@ -203,9 +206,9 @@ export default async function sitemap({
   // Next.js przekazuje string (fragment adresu); liczba zostaje dla wywołań bezpośrednich.
   id?: number | string;
 }): Promise<MetadataRoute.Sitemap> {
-  // Staging/preview/local: pusty sitemap (spójne z robots.ts Disallow:/ i X-Robots-Tag).
-  // JEDNO źródło prawdy o środowisku (P1-19): isProductionDeployment().
-  if (!isProductionDeployment()) return [];
+  // Staging/preview/local albo bramka hasła (#1115): pusty sitemap (spójne z robots.ts Disallow:/).
+  // Jedno źródło: isSearchIndexingEnabled() (P1-19 + bramka).
+  if (!isSearchIndexingEnabled()) return [];
 
   const shard = parseSitemapId(id);
   if (shard === null) return [];

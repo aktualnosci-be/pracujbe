@@ -224,6 +224,8 @@ begin
     apply_url                = nullif(btrim(coalesce(j->>'apply_url', '')), ''),
     apply_email              = nullif(btrim(coalesce(j->>'apply_email', '')), ''),
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
+    -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji; przeniesione z main).
+    work_time                = nullif(j->>'work_time', ''),
     updated_at               = now()
   where id = p_job_id;
   delete from public.job_operation_context

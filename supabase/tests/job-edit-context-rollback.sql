@@ -32,8 +32,9 @@ select pg_temp.assert(
   and pg_get_functiondef('public.notify_job_terms_changed()'::regprocedure) like '%pracujbe.job_terms_notify%'
   and pg_get_functiondef('public.update_published_job(uuid, jsonb, timestamptz)'::regprocedure) like '%pracujbe.job_edit%'
   and pg_get_functiondef('public.update_published_job(uuid, jsonb, timestamptz)'::regprocedure) like '%JOB_APPLY_CHANNEL_REQUIRED%'
+  and pg_get_functiondef('public.update_published_job(uuid, jsonb, timestamptz)'::regprocedure) like '%work_time%'
   and has_function_privilege('authenticated', 'public.update_published_job(uuid, jsonb, timestamptz)', 'EXECUTE'),
-  'JC967-R2 definicje z 0077/0144/0172 przywrócone (z grantem RPC)');
+  'JC967-R2 definicje z 0077/0144/0194 przywrócone (z grantem RPC)');
 rollback;
 
 select pg_temp.assert(to_regclass('public.job_operation_context') is not null,

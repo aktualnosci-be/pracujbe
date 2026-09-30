@@ -5,6 +5,7 @@ import AxeBuilder from './fixtures/axe';
 import { expect, test } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Stan operacyjny w panelu admina (#47, `/admin/operacje`) w trybie DEMO (bez bazy): przykładowy
@@ -13,7 +14,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  * Strona noindex, bez dzwonka powiadomień, osiągalna z nawigacji panelu.
  */
 
-type AdminMessages = { admin: Record<string, string> };
+type AdminMessages = { admin: AppMessages['admin'] };
 const admin = (locale: string) =>
   (JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', `${locale}.json`), 'utf-8')) as AdminMessages)
     .admin;
@@ -45,7 +46,7 @@ for (const locale of LOCALES) {
     await expect(queue).toContainText(t.opsState_ok);
 
     await expect(page.locator('[data-ops-row="backupAge"]')).toContainText(t.opsState_alert);
-    for (const key of ['opsSectionQueues', 'opsSectionMaintenance', 'opsSectionStorage', 'opsSectionMail', 'opsSectionAiBudget']) {
+    for (const key of ['opsSectionQueues', 'opsSectionMaintenance', 'opsSectionStorage', 'opsSectionMail', 'opsSectionAiBudget'] as const) {
       await expect(page.getByRole('heading', { level: 2, name: t[key] })).toBeVisible();
     }
   });

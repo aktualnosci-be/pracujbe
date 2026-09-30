@@ -234,7 +234,8 @@ describe('pozycje checklisty pulpitu i profilu (#315, #317)', () => {
     render(<ProfileChecklist items={items} />);
     // Uzupełniona „Lokalizacja” nie ma akcji; pozostałych pięć da się uzupełnić w kreatorze.
     expect(screen.getAllByRole('link')).toHaveLength(5);
-    expect(screen.queryByText(pl.dashboard.checkPhoto)).not.toBeInTheDocument();
-    expect(screen.queryByText(pl.dashboard.checkEducation)).not.toBeInTheDocument();
+    // Dawne pozycje „Zdjęcie”/„Wykształcenie” (klucze usunięte w #1114) nie wracają na listę.
+    expect(screen.queryByText('Zdjęcie')).not.toBeInTheDocument();
+    expect(screen.queryByText('Wykształcenie')).not.toBeInTheDocument();
   });
 });

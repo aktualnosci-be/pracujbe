@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -27,12 +28,23 @@ const PUBLIC_ROUTES = [
   '[locale]/(public)/poradniki/page.tsx',
   '[locale]/(public)/poradniki/[slug]/page.tsx',
   '[locale]/(public)/praca/page.tsx',
+  // #1055: szczegół oferty — formularz aplikowania ładuje osobny chunk po otwarciu.
+  '[locale]/(public)/oferty-pracy/[slug]/page.tsx',
 ];
 
 const EXTENSIONS = ['.ts', '.tsx', '.js', '.mjs'];
 
 function isZod(specifier: string): boolean {
   return specifier === 'zod' || specifier.startsWith('zod/') || specifier === '@hookform/resolvers/zod';
+}
+
+/** #1055: pełne metadane numeracji telefonów (~ 60 KB gzip) — tylko serwer. */
+function isPhoneLib(specifier: string): boolean {
+  return specifier === 'libphonenumber-js' || specifier.startsWith('libphonenumber-js/');
+}
+
+function isForbidden(specifier: string): boolean {
+  return isZod(specifier) || isPhoneLib(specifier);
 }
 
 function resolveLocal(specifier: string, from: string): string | null {
@@ -88,7 +100,7 @@ function clientZodChains(entries: readonly string[]): string[] {
     if (seen.has(key)) continue;
     seen.add(key);
     for (const specifier of valueImports(source)) {
-      if (isZod(specifier)) {
+      if (isForbidden(specifier)) {
         if (client) chains.push([...path, specifier].map((p) => relative(ROOT, p) || p).join(' → '));
         continue;
       }
@@ -99,8 +111,8 @@ function clientZodChains(entries: readonly string[]): string[] {
   return chains;
 }
 
-describe('#390 — Zod poza bundlem klienta stron publicznych', () => {
-  it.each(PUBLIC_ROUTES)('%s: komponenty klienckie nie importują Zoda', (route) => {
+describe('#390/#1055 — Zod i libphonenumber-js poza bundlem klienta stron publicznych', () => {
+  it.each(PUBLIC_ROUTES)('%s: komponenty klienckie nie importują Zoda ani libphonenumber-js', (route) => {
     const entries = [...LAYOUTS, route].map((file) => join(APP, file));
     for (const entry of entries) expect(existsSync(entry), entry).toBe(true);
     expect(clientZodChains(entries)).toEqual([]);
@@ -118,6 +130,30 @@ describe('#390 — Zod poza bundlem klienta stron publicznych', () => {
     const chains = clientZodChains([join(APP, '[locale]/(auth)/logowanie/page.tsx')]);
     expect(chains.length).toBeGreaterThan(0);
     expect(chains.some((chain) => chain.includes('src/lib/validation/auth.ts'))).toBe(true);
+  });
+
+  it('stałe formularza aplikowania nie importują Zoda ani libphonenumber-js (#1055)', () => {
+    const file = join(SRC, 'lib/apply/availability.ts');
+    expect(valueImports(readFileSync(file, 'utf8')).filter(isForbidden)).toEqual([]);
+    expect(clientZodChains([file])).toEqual([]);
+  });
+
+  // Kontrola ujemna #1055: komponent kliencki importujący schematy aplikacji (jak ApplyModal przed
+  // poprawką) ciągnie do przeglądarki Zoda i pełne metadane telefonów — analiza musi to wykryć.
+  it('wykrywa Zoda i libphonenumber-js za schematami aplikacji (kontrola ujemna #1055)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-guard-'));
+    try {
+      const entry = join(dir, 'ClientForm.tsx');
+      writeFileSync(
+        entry,
+        "'use client';\nimport { APPLY_AVAILABILITY_OPTIONS } from '@/lib/validation/application';\nexport const x = APPLY_AVAILABILITY_OPTIONS;\n",
+      );
+      const chains = clientZodChains([entry]);
+      expect(chains.some((chain) => chain.endsWith('libphonenumber-js/max'))).toBe(true);
+      expect(chains.some((chain) => chain.endsWith('zod/v3'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('nie zgłasza Zoda używanego wyłącznie po stronie serwera (kontrola ujemna)', () => {

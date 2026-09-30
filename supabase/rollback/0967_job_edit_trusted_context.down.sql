@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Rollback 0967_job_edit_trusted_context.sql — przywraca definicje sprzed migracji:
--- assert_job_draft_or_editing (0077), notify_job_terms_changed (0144), update_published_job (0172),
+-- assert_job_draft_or_editing (0077), notify_job_terms_changed (0144), update_published_job (0194),
 -- a potem usuwa migawkę audytu, funkcje kontekstu i tabelę job_operation_context.
 -- UWAGA: przywraca też lukę #752/#753 (znaczniki GUC ustawialne przez klienta).
 -- Test: supabase/tests/job-edit-context-rollback.sql (scripts/test-rls.sh).
@@ -136,6 +136,8 @@ begin
     apply_url                = nullif(btrim(coalesce(j->>'apply_url', '')), ''),
     apply_email              = nullif(btrim(coalesce(j->>'apply_email', '')), ''),
     apply_phone              = nullif(btrim(coalesce(j->>'apply_phone', '')), ''),
+    -- 0194 (#811): wymiar czasu pracy (brak klucza = brak deklaracji).
+    work_time                = nullif(j->>'work_time', ''),
     updated_at               = now()
   where id = p_job_id;
   perform set_config('pracujbe.job_terms_notify', '', true);

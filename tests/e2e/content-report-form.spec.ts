@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * #41 na serwerze fixture (`playwright.applications-fixture.config.ts`, tryb `full`): oferty
@@ -16,7 +17,7 @@ const JOB_PATH = '/pl/oferty-pracy/bricklayer-brussels-1002';
 const FIXTURE_CASE = 'DSA-0000-0000-0000-0E2E';
 
 const pl = JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', 'pl.json'), 'utf-8')) as {
-  contentReport: Record<string, string> & { error: Record<string, string> };
+  contentReport: AppMessages['contentReport'];
 };
 const t = pl.contentReport;
 

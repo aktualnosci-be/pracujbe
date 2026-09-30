@@ -81,6 +81,11 @@ export interface ModerationDecisionActionsProps {
     decision: string;
     restoredAt: string | null;
   } | null;
+  /**
+   * #887: sprawa zanonimizowana przez retencję DSA — bez cofnięcia ograniczenia (nowe
+   * uzasadnienie wypadłoby z cyklu retencji). Baza odrzuca je niezależnie od UI.
+   */
+  redacted?: boolean;
   className?: string;
 }
 
@@ -95,6 +100,7 @@ export function ModerationDecisionActions({
   targetLabel,
   reasonLabel,
   decision,
+  redacted = false,
   className,
 }: ModerationDecisionActionsProps): React.JSX.Element {
   const t = useTranslations('admin');
@@ -141,6 +147,7 @@ export function ModerationDecisionActions({
   const restricts = choice !== '' && decisionRestricts(choice);
   const canDecide = status === 'open' || status === 'reviewing';
   const canRestore =
+    !redacted &&
     (status === 'resolved' || status === 'dismissed') &&
     decision !== null &&
     decisionRestricts(decision.decision) &&
@@ -273,7 +280,11 @@ export function ModerationDecisionActions({
   };
 
   if (!canDecide && !canRestore) {
-    return <span className="text-xs text-muted-foreground">{t('noActions')}</span>;
+    return (
+      <span className="text-xs text-muted-foreground">
+        {redacted ? t('moderationCaseRedacted') : t('noActions')}
+      </span>
+    );
   }
 
   const details = [
