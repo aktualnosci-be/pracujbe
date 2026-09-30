@@ -41,3 +41,22 @@ export function issueTeamInviteToken(): { nonce: string; hash: string } | null {
   if (!token) return null;
   return { nonce, hash: hashTeamInviteToken(token) };
 }
+
+/**
+ * #1113: token dla JEDNEJ operacji zaproszenia (klucz operacji z przeglądarki). Ponowienie tej
+ * samej operacji po błędzie sieci (ten sam klucz i te same dane) daje TEN SAM token, więc baza
+ * nie wysyła drugiego e-maila (klucz idempotencji e-maila zawiera skrót tokenu) i nie unieważnia
+ * linku z pierwszej wiadomości. Nonce = HMAC(sekret, cel operacji) — nieprzewidywalny bez
+ * sekretu, jak nonce losowy; `parts` wiążą go z kontem, firmą i treścią operacji.
+ */
+export function teamInviteTokenForOperation(parts: readonly string[]): { nonce: string; hash: string } | null {
+  const secret = guestApplySecret();
+  if (!secret) return null;
+  const nonce = createHmac('sha256', secret)
+    .update(`${PURPOSE}-op:${parts.join('\n')}`)
+    .digest('base64url')
+    .slice(0, 32);
+  const token = teamInviteTokenFromNonce(nonce);
+  if (!token) return null;
+  return { nonce, hash: hashTeamInviteToken(token) };
+}

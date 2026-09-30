@@ -1838,6 +1838,7 @@
     "successNoReview": "Przejrzyj wszystkie kroki przed publikacją.",
     "successDraftSaved": "Zapisaliśmy to jako szkic. Nic nie zostało opublikowane.",
     "successDraftPending": "Szkic zapiszesz przyciskiem „Dalej”. Nic nie zostało opublikowane.",
+    "detectedLanguage": "Wykryty język ogłoszenia: {language}. Możesz go zmienić w kroku 1 („Język ogłoszenia”).",
     "suspiciousWarning": "Ogłoszenie zawierało tekst, który wyglądał na polecenia dla AI. Nie wykonaliśmy ich, ale sprawdź dokładnie wszystkie pola, zwłaszcza opis.",
     "reviewStepTitle": "Sprawdź pola uzupełnione z ogłoszenia:",
     "errorFileMissing": "Wybierz plik ze zrzutem ekranu.",

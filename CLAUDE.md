@@ -1337,6 +1337,12 @@ ofert bez zmian); rozjazd kopii łapie `saved-search-keyset-sync.test` (z kontro
 bez zmian (blokady firm, digest ≤ 5, `count` = wszystkie nowe, para raz). Dowód: `rls.sql` sekcja
 SK100 (10 151 ofert z remisem + firma zablokowana; kontrola ujemna: offset z 0138 gubi oferty
 za 10 100). Zmiana filtrów `get_public_jobs` = ta sama zmiana w `saved_search_jobs_after`.
+Termin digestu bez dryfu (#1112, migracja `0997` — numer tymczasowy): worker liczył
+`next_run_at` od chwili przebiegu (cron co godzinę przesuwał porę digestu); teraz
+`saved_search_next_run_at` = poprzedni termin + pełne okresy w czasie ściennym Europe/Brussels
+(stała pora także przy zmianie czasu), pierwszy termin po przebiegu, zaległe okresy pominięte.
+Dowód: `rls.sql` sekcja SD1112 (kontrola ujemna: worker z 0138 dryfuje), rollback
+`0997_…down.sql` (`saved-search-schedule-rollback.sql`).
 Tryb ogłoszeniowy (#1148, bez migracji): zapisane wyszukiwania i alerty działają bez zmian, bo
 wynikają wyłącznie z filtrów użytkownika. Strażnik `tests/legal/classifieds-saved-search.test.ts`:
 najnowsze definicje funkcji `*saved_search*` bez profilu kandydata i dopasowań (wyjątek: blokada
@@ -1643,10 +1649,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
   inny klucz = nowy szkic). **Otwarte (wymaga migracji):** kontrola kompletności w `publish_job`/
   `update_published_job` odrzuca tytuły zaczynające się od „draft” lub zawierające „placeholder”
-  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), język
-  proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
+  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), screening-pytania nie są przenoszone
   przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
   i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
+  Import AI proponuje język treści wykryty w źródle (#1048, bez migracji): pole `sourceLanguage`
+  structured output (kod ISO 639-1) → `importContentLocale` (`src/lib/ai-import/map.ts`: tylko
+  podstawowy podznacznik z dwóch liter, `nl-BE` → `nl`; nazwa języka, `de` i śmieci → `null`)
+  → szkic tworzony w tym języku (`createJobDraft(contentLocale)`), wynik akcji niesie
+  `contentLocale`/`contentLocaleDetected`, kreator startuje z nim w polu „Język ogłoszenia”, panel
+  importu pokazuje `jobImport.detectedLanguage`; brak/język spoza serwisu = język panelu. Dowód:
+  unit `ai-import-map`, `job-import-action`, `job-import-panel` (kontrole ujemne), E2E `job-import`.
 - [x] Edycja opublikowanej oferty (#325, migracja `0077`): „Edytuj” na liście ofert dla
   aktywnej/wstrzymanej oferty otwiera kreator w trybie edycji — kroki tylko walidowane, „Zapisz
   zmiany” wysyła całość jednym RPC `update_published_job` (recruiter+, firma `verified`,
@@ -1914,6 +1926,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `rls.sql` sekcja TI179 (kontrola ujemna: definicja z 0086 bez `locale`), unit
   `team-invitation-renew` (kontrole ujemne: obce id, brak sesji/firmy), `team-invitations-ui`
   (cofnięcie bez potwierdzenia nie woła akcji), E2E `employer-team` (4 języki, demo).
+  Ponowienie po błędzie sieci (#1113, bez migracji): formularz zaproszenia i „Odnów” wysyłają
+  klucz operacji (UUID w `useRef`, nowy po sukcesie albo po zmianie adresu/roli/języka), a akcja
+  liczy z niego nonce linku (`teamInviteTokenForOperation`: HMAC sekretu z konta, firmy, danych
+  operacji i klucza) — ponowienie = ten sam token, więc `invite_company_member` nie wysyła
+  drugiego e-maila (klucz idempotencji e-maila zawiera skrót tokenu) i nie unieważnia linku
+  z pierwszej wiadomości; bez klucza token losowy jak dotąd. Dowód: unit `team-actions`,
+  `team-invitation-renew`, `team-invitations-ui` (kontrole ujemne: inny klucz/dane = nowy token).
   Limit 50 liczy tylko WAŻNE zaproszenia (#893, migracja `0178`):
   `invite_company_member` sprawdzał limit po `count(*) where status='pending'`, bez
   `expires_at > now()` — dawno wygasłe, niesprzątnięte zaproszenia (niewidoczne w panelu,
@@ -2788,6 +2807,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   nie blokuje zwykłego zapisu). Dowód: unit `breach-register` (`#835` — retry bez zmian = sukces,
   retry ze zmianą = konflikt z wersją, kontrola ujemna: awaria odczytu porównawczego nie blokuje
   zapisu; `breachFormsMatch` — zgodność po normalizacji i wykrycie różnicy pól).
+  Jesienna zmiana czasu (#1112, bez migracji): `appLocalInputToUtc(value, previousIso)` —
+  niezmienione pole `datetime-local` w niejednoznacznej godzinie 02:00–03:00 zwraca zapisaną
+  chwilę zamiast przesunięcia o godzinę (formularz podaje wartości z `initial`). Dowód: unit
+  `breach-register` (kontrola ujemna: bez podpowiedzi oba wystąpienia dają tę samą chwilę).
   Wspólny `csvCell` (#876, bez migracji): neutralizacja formuł arkusza rozszerzona o wiodący LF
   (`\n`) i pełnoszerokie warianty operatorów (`＝ ＋ － ＠`) — poprzedni regex `/^[=+\-@\t\r]/`
   pomijał oba przypadki z listy OWASP CSV Injection, więc kontrolowana wartość zaczynająca się

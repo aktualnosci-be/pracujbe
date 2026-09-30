@@ -57,6 +57,9 @@ echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
+echo ">> rollback 0997 (termin digestu zapisanych wyszukiwań, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-search-schedule-rollback.sql"
+
 echo ">> rollback 0192 (czujki poczty i requeue, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-ops-config-rollback.sql"
 
