@@ -123,7 +123,7 @@ describe('GET /api/health — cache + single-flight ping bazy (#600)', () => {
   });
 });
 
-describe('GET /api/health — szczegóły poza produkcją tylko z tokenem albo na loopbacku (#1105)', () => {
+describe('GET /api/health — szczegóły tylko z tokenem albo w next dev (#1105, #1219)', () => {
   async function body(url: string, headers: Record<string, string> = {}) {
     const GET = await loadGet();
     queryMock.mockResolvedValue({ rows: [{ ok: 1 }] });
@@ -148,16 +148,44 @@ describe('GET /api/health — szczegóły poza produkcją tylko z tokenem albo n
     expect(Object.keys(result)).toEqual(['status']);
   });
 
-  it.each(['http://localhost:3000/api/health', 'http://127.0.0.1:3000/api/health', 'http://[::1]:3000/api/health', 'http://app.localhost:3000/api/health'])(
-    'lokalny dev (%s) bez tokena: szczegóły',
-    async (url) => {
-      expect(await body(url)).toHaveProperty('checks');
-    },
-  );
+  // #1219: za proxy Railway `request.url` wskazuje adres wewnętrzny (localhost), a `Host` —
+  // publiczną domenę. Zbudowany artefakt ma NODE_ENV=production niezależnie od APP_MODE.
+  it.each([
+    'http://localhost:3000/api/health',
+    'http://127.0.0.1:8080/api/health',
+    'http://[::1]:3000/api/health',
+    'http://app.localhost:3000/api/health',
+  ])('zbudowany artefakt w trybie demo, wewnętrzny request.url (%s) bez tokena: tylko status (#1219)', async (url) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const result = await body(url, { host: 'pracuj.be', 'x-forwarded-host': 'pracuj.be' });
+    expect(Object.keys(result)).toEqual(['status']);
+  });
 
-  it('produkcja na loopbacku bez tokena: tylko status', async () => {
+  it('APP_MODE=production, request.url i Host = localhost, bez tokena: tylko status (#1219)', async () => {
     vi.stubEnv('APP_MODE', 'production');
+    vi.stubEnv('NODE_ENV', 'production');
+    const result = await body('http://localhost:3000/api/health', { host: 'localhost' });
+    expect(Object.keys(result)).toEqual(['status']);
+  });
+
+  it('APP_MODE=production nawet przy NODE_ENV=development: bez tokena tylko status', async () => {
+    vi.stubEnv('APP_MODE', 'production');
+    vi.stubEnv('NODE_ENV', 'development');
     const result = await body('http://localhost:3000/api/health');
     expect(Object.keys(result)).toEqual(['status']);
   });
+
+  it('zbudowany artefakt z poprawnym tokenem: szczegóły (ścieżka smoke/czujek zachowana)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('HEALTH_CHECK_SECRET', 'h'.repeat(40));
+    const result = await body('http://localhost:8080/api/health', { host: 'pracuj.be', 'x-health-token': 'h'.repeat(40) });
+    expect(result).toHaveProperty('checks');
+    expect(result).toHaveProperty('version');
+  });
+
+  it('lokalny next dev (NODE_ENV=development, tryb demo) bez tokena: szczegóły — niezależnie od adresu', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(await body('https://demo.pracuj.be/api/health')).toHaveProperty('checks');
+  });
+
 });
