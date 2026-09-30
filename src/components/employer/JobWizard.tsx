@@ -81,6 +81,7 @@ import {
   JOB_ITEM_LIMITS,
 } from '@/lib/validation/job';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
+import { formatSalaryRange } from '@/lib/salary';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import {
   createJobDraft,
@@ -2194,9 +2195,20 @@ export function JobWizard({
                   <PreviewRow
                     label={t('salaryPeriodLabel')}
                     value={
-                      values.salaryMin || values.salaryMax
-                        ? `${[values.salaryMin, values.salaryMax].filter(Boolean).join(' – ')} ${values.currency} / ${PERIOD_LABEL[values.salaryPeriod]}`
-                        : t('previewSalaryNotProvided')
+                      formatSalaryRange(
+                        {
+                          salaryMin: toOptionalNumber(values.salaryMin) ?? null,
+                          salaryMax: toOptionalNumber(values.salaryMax) ?? null,
+                          currency: values.currency,
+                          salaryPeriod: values.salaryPeriod,
+                        },
+                        locale,
+                        {
+                          from: (value) => tRoot('jobs.passport.salaryFrom', { value }),
+                          to: (value) => tRoot('jobs.passport.salaryTo', { value }),
+                          period: (period) => tRoot(`jobs.passport.salaryPeriods.${period}`),
+                        },
+                      ) ?? t('previewSalaryNotProvided')
                     }
                     empty={t('previewSalaryNotProvided')}
                   />
