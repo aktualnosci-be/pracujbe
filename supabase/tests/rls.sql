@@ -22384,7 +22384,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- ============================================================================
--- AJ904. Prywatny dziennik aplikacji kandydata (#904, 0970): odczyt tylko właściciela, zapis
+-- AJ904. Prywatny dziennik aplikacji kandydata (#904, 0196): odczyt tylko właściciela, zapis
 -- wyłącznie RPC, firma i inny kandydat nie czytają ani nie zmieniają, eksport i usunięcie konta
 -- obejmują tabelę. Kontrole ujemne: osłabiona polityka i wyłączone RLS ujawniają wiersz.
 -- ============================================================================

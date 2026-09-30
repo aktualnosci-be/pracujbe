@@ -13,7 +13,7 @@ import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
 import { journalEntrySchema, journalFieldNames, type JournalFieldName } from '@/lib/validation/application-journal';
 
 /**
- * Server Actions dziennika aplikacji (#904, 0970) — cienka warstwa nad RPC
+ * Server Actions dziennika aplikacji (#904, 0196) — cienka warstwa nad RPC
  * `save_application_journal_entry` / `delete_application_journal_entry` (pod sesją kandydata,
  * własność i limit 200 w bazie). Dziennik działa w obu trybach portalu: to prywatna notatka,
  * niczego nie wysyła do firm i nie tworzy zgłoszenia w procesie rekrutacyjnym.

@@ -1,7 +1,7 @@
 import { z } from 'zod/v3';
 
 /**
- * Dziennik aplikacji kandydata (#904, 0970) — wspólne reguły pól dla formularza i akcji.
+ * Dziennik aplikacji kandydata (#904, 0196) — wspólne reguły pól dla formularza i akcji.
  * Baza (RPC `save_application_journal_entry` + CHECK-i) egzekwuje te same limity niezależnie
  * od tego modułu.
  */

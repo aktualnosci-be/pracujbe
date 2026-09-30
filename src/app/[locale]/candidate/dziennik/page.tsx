@@ -10,7 +10,7 @@ import { loadMyJournal } from '@/lib/data/application-journal';
 import { cn } from '@/lib/utils';
 
 /**
- * Panel kandydata — prywatny dziennik aplikacji wysłanych poza portalem (#904, 0970).
+ * Panel kandydata — prywatny dziennik aplikacji wysłanych poza portalem (#904, 0196).
  * Odczyt pod sesją (RLS: tylko własne wpisy), zapis przez RPC w `ApplicationJournal`.
  * Działa w obu trybach portalu; NOINDEX + guard dziedziczone z `candidate/layout.tsx`.
  * Daty to dni kalendarzowe wpisane przez kandydata (bez strefy).

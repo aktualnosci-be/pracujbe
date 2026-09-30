@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0970 — prywatny dziennik aplikacji kandydata (#904; numer tymczasowy, ostateczny nada integrator).
+-- 0196 — prywatny dziennik aplikacji kandydata (#904; numer tymczasowy, ostateczny nada integrator).
 --
 -- Decyzja produktowa (portal ogłoszeniowy, #1128): kandydat sam notuje, gdzie aplikował u
 -- ogłoszeniodawcy poza portalem. Portal niczego nie przekazuje firmom i nie przyjmuje aplikacji;
@@ -14,7 +14,7 @@
 -- Eksport (#486): `export_my_data` dopisuje klucz `applicationJournal`. Usunięcie konta
 -- (`erase_candidate_subject`, kaskada auth.users → profiles) kasuje wpisy kaskadą FK.
 --
--- Rollback: supabase/rollback/0970_candidate_application_journal.down.sql.
+-- Rollback: supabase/rollback/0196_candidate_application_journal.down.sql.
 -- =============================================================================
 
 create table if not exists public.candidate_application_journal (
@@ -157,11 +157,11 @@ grant execute on function public.delete_application_journal_entry(uuid) to authe
 do $mig$
 begin
   if to_regprocedure('public.export_my_data()') is null
-     or to_regprocedure('public.export_my_data_pre0970()') is not null then
+     or to_regprocedure('public.export_my_data_pre0196()') is not null then
     return;
   end if;
-  alter function public.export_my_data() rename to export_my_data_pre0970;
-  revoke all on function public.export_my_data_pre0970() from public, anon, authenticated;
+  alter function public.export_my_data() rename to export_my_data_pre0196;
+  revoke all on function public.export_my_data_pre0196() from public, anon, authenticated;
 end
 $mig$;
 
@@ -169,7 +169,7 @@ create or replace function public.export_my_data()
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_out jsonb;
 begin
-  v_out := public.export_my_data_pre0970();
+  v_out := public.export_my_data_pre0196();
   return v_out || jsonb_build_object('applicationJournal',
     (select coalesce(jsonb_agg(jsonb_build_object(
               'jobTitle', j.job_title, 'companyName', j.company_name, 'sourceUrl', j.source_url,

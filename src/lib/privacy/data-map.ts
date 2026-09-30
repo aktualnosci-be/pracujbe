@@ -540,7 +540,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       applied_on: 'Data wpisana przez kandydata.',
       remind_on: 'Data przypomnienia wpisana przez kandydata.',
     },
-    note: 'Prywatny dziennik aplikacji wysłanych poza portalem (#904, 0970): tylko właściciel (RLS, zapis wyłącznie RPC), bez ścieżki dla firm, bez powiązania z ofertą ani procesem; eksport w export_my_data, usunięcie kaskadą z kontem.',
+    note: 'Prywatny dziennik aplikacji wysłanych poza portalem (#904, 0196): tylko właściciel (RLS, zapis wyłącznie RPC), bez ścieżki dla firm, bez powiązania z ofertą ani procesem; eksport w export_my_data, usunięcie kaskadą z kontem.',
   },
   'public.saved_search_alerts': {
     activities: ['matching-search', 'email-notifications'],

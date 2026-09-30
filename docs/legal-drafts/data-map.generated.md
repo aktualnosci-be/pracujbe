@@ -389,19 +389,19 @@ Tabele w migracjach: 110; z danymi osobowymi: 76; bez danych osobowych: 34.
 
 ### `public.candidate_application_journal`
 
-- **Migracja:** `supabase/migrations/0970_candidate_application_journal.sql`
+- **Migracja:** `supabase/migrations/0196_candidate_application_journal.sql`
 - **Czynności:** Profil zawodowy kandydata, Prawa osób i retencja
 - **Osoby:** Kandydaci (konto)
-- **Uwaga:** Prywatny dziennik aplikacji wysłanych poza portalem (#904, 0970): tylko właściciel (RLS, zapis wyłącznie RPC), bez ścieżki dla firm, bez powiązania z ofertą ani procesem; eksport w export_my_data, usunięcie kaskadą z kontem.
+- **Uwaga:** Prywatny dziennik aplikacji wysłanych poza portalem (#904, 0196): tylko właściciel (RLS, zapis wyłącznie RPC), bez ścieżki dla firm, bez powiązania z ofertą ani procesem; eksport w export_my_data, usunięcie kaskadą z kontem.
 
 | Kolumna | Kategoria | Wprowadzona w |
 |---|---|---|
-| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0970_candidate_application_journal.sql` |
-| `job_title` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0970_candidate_application_journal.sql` |
-| `company_name` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0970_candidate_application_journal.sql` |
-| `source_url` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0970_candidate_application_journal.sql` |
-| `location` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0970_candidate_application_journal.sql` |
-| `note` | Korespondencja i treści swobodne | `supabase/migrations/0970_candidate_application_journal.sql` |
+| `profile_id` | Powiązanie z osobą (identyfikator konta/profilu) | `supabase/migrations/0196_candidate_application_journal.sql` |
+| `job_title` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0196_candidate_application_journal.sql` |
+| `company_name` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0196_candidate_application_journal.sql` |
+| `source_url` | Preferencje i ustawienia (język, powiadomienia, wyszukiwania, blokady) | `supabase/migrations/0196_candidate_application_journal.sql` |
+| `location` | Profil zawodowy (doświadczenie, umiejętności, języki, certyfikaty, dostępność, lokalizacja) | `supabase/migrations/0196_candidate_application_journal.sql` |
+| `note` | Korespondencja i treści swobodne | `supabase/migrations/0196_candidate_application_journal.sql` |
 | `client_key` | nie dotyczy: Losowy klucz idempotencji operacji zapisu — nie identyfikuje osoby poza wierszem. | — |
 | `stage` | nie dotyczy: Etap wybrany przez kandydata (planowana/wysłana/rozmowa/oferta/zamknięta) — notatka własna, nie status procesu. | — |
 | `applied_on` | nie dotyczy: Data wpisana przez kandydata. | — |

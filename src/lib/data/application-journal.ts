@@ -1,5 +1,5 @@
 /**
- * Dziennik aplikacji kandydata (#904, 0970) — odczyt POD SESJĄ (`withPortalTransaction`, RLS
+ * Dziennik aplikacji kandydata (#904, 0196) — odczyt POD SESJĄ (`withPortalTransaction`, RLS
  * `candidate_application_journal_select_own`; nigdy service-role). To prywatne notatki kandydata
  * o aplikacjach składanych poza portalem — nie mają związku z ofertą ani procesem w portalu.
  * Błąd odczytu = jawny `error`; tryb demo: pusta lista z `demo: true`.

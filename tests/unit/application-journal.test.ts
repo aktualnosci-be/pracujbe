@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * #904 — prywatny dziennik aplikacji kandydata (0970).
+ * #904 — prywatny dziennik aplikacji kandydata (0196).
  * Walidacja pól, mapowanie wiersza, akcje (RPC pod sesją, demo, błędy bez technikaliów),
  * strażnik: tabela tylko w plikach dziennika (firmy i proces jej nie czytają), migracja bez
  * grantów zapisu. Zachowanie bazy (RLS, limit, eksport, usunięcie konta): rls.sql sekcja AJ904.
@@ -143,7 +143,7 @@ describe('strażnik prywatności dziennika', () => {
   });
 
   it('migracja: RLS wymuszone, tylko SELECT dla authenticated, brak związku z ofertą i procesem', () => {
-    const sql = readFileSync(join(ROOT, 'supabase/migrations/0970_candidate_application_journal.sql'), 'utf8')
+    const sql = readFileSync(join(ROOT, 'supabase/migrations/0196_candidate_application_journal.sql'), 'utf8')
       .split('\n')
       .filter((line) => !line.trimStart().startsWith('--'))
       .join('\n');
