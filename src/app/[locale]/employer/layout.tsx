@@ -5,6 +5,7 @@ import { EmployerShell, type EmployerShellMode } from '@/components/employer/Emp
 import { CompanyOnboarding } from '@/components/employer/CompanyOnboarding';
 import type { NotificationItem } from '@/components/dashboard/NotificationsDropdown';
 import { redirect } from '@/i18n/navigation';
+import { panelLoginHref } from '@/lib/auth/panel-login-redirect';
 import type { Locale } from '@/i18n/routing';
 import { getCurrentIdentity, type PortalIdentity } from '@/lib/auth/current';
 import { readSignupCompanyName } from '@/lib/auth/signup-company-name';
@@ -83,7 +84,8 @@ export default async function EmployerLayout({
   if (isPortalAuthConfigured()) {
     const identity = await getCurrentIdentity();
     if (!identity) {
-      redirect({ href: '/logowanie', locale: locale as Locale });
+      // #1090: powrót na otwieraną stronę panelu po zalogowaniu.
+      redirect({ href: await panelLoginHref(), locale: locale as Locale });
       return null; // nieosiągalne (redirect rzuca) — zawęża typ dla TS
     }
     hasSession = true;

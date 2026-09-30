@@ -2868,7 +2868,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
-  `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
+  `account-data`. Odwołania i zgłoszenia w eksporcie (#1232, migracja `0992` — numer
+  tymczasowy): `export_my_employer_data` = 0161 + `moderationAppeals` (kształt jak u kandydata)
+  i `contentReports` (zgłoszenia treści złożone przez osobę: numer, rodzaj, kategoria, opis,
+  podane dane kontaktowe, stan — bez `target_id`/`target_snapshot` i kodu dostępu); dowód
+  `rls.sql` sekcja EX1232 (kontrola ujemna: definicja z 0161), rollback
+  `0992_…down.sql` (`employer-export-0992-rollback.sql`); `contact_messages` poza eksportem
+  (decyzja otwarta). **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
   samoobsługowe zamknięcie firmy, retencja nieaktywnych kont pracodawców.
   Wartości z opracowania 2026-09-25 (#574, migracja `0127` — numer tymczasowy): okresy w
   `retention_policies` (pliki/profile oznaczone 7 dni łącznie z obiektem, aplikacje i ich
@@ -2969,6 +2975,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). **Otwarte:**
   `noUncheckedIndexedAccess` w `tsconfig.e2e.json`, ESLint 9 (wymaga instalacji; `next lint`
   zastąpione `eslint` CLI bez zmiany wersji, lint obejmuje też pliki konfiguracyjne), usunięcie nieużywanych zależności (lista w PR #1121).
+- [x] Utwardzenia logowania (#1090, bez migracji; limity na konto i sesja przy potwierdzeniu
+  w #1176, linki resetu w 0185): automatyczne logowanie z linku potwierdzającego tylko
+  w przeglądarce, która założyła konto albo podała poprawne hasło niepotwierdzonego konta —
+  cookie HttpOnly `pb_signup_browser` = HMAC adresu (`src/lib/auth/signup-browser.ts`, sekret
+  Better Auth), inaczej adres potwierdzony, sesja cofnięta, logowanie ręczne; tryb
+  `TRUSTED_PROXY_HEADER=cf-connecting-ip` przyjmuje `CF-Connecting-IP` tylko, gdy peer
+  z `X-Real-IP` należy do zakresów Cloudflare (`CLOUDFLARE_IP_RANGES` w
+  `src/lib/http/trusted-ip.ts`; ominięcie Cloudflare = adres peera, połączenie z Cloudflare bez
+  nagłówka = `null`); guardy paneli bez sesji kierują na `/logowanie?next=<strona panelu>`
+  (middleware podaje ścieżkę w nagłówku żądania `x-pracujbe-return-path`, wartość od klienta
+  usuwana; `safeNextPath` przy odczycie). Dowód: unit `auth-confirm-email`, `auth-email-kick`,
+  `trusted-ip`, `middleware-panel-return-path`, `panel-guards-production` (kontrole ujemne).
 - [x] Readiness: minimalna długość `BETTER_AUTH_SECRET` (#873). `isAuthRuntimeConfigured()`
   sprawdzała tylko obecność sekretu — produkcja mogła zostać uznana za gotową
   (`readinessChecks().auth`/`isAppReady()` = true) z sekretem krótszym niż wymagane 32 znaki,

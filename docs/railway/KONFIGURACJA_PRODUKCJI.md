@@ -89,7 +89,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `AI_CV_IMPORT_ENABLED`, `AI_CV_IMPORT_MODEL` | import CV przez AI (#487, #498, `docs/AI_CV_IMPORT.md`), domyślnie wyłączony; ten sam `OPENAI_API_KEY` |
 | `AI_TRANSLATION_ENABLED`, `AI_TRANSLATION_MODEL` | tłumaczenia AI — rdzeń kolejki (#31, #32, `docs/AI_TRANSLATION.md`), domyślnie wyłączone; ten sam `OPENAI_API_KEY` |
 | `PRACUJBE_RELEASE_VERSION` | tylko przy wydaniu 1.0.0 (#103) |
-| `TRUSTED_PROXY_HEADER` | domyślnie `x-real-ip` (brzeg Railway); `cf-connecting-ip`, gdy przed Railway stoi Cloudflare proxying ruch — jedyne źródło zaufanego IP klienta dla receiptu zgody, aplikacji bez konta i limitera (#588/#602). Nieznana wartość wraca do domyślnej. Wartość musi pasować do trybu rekordu DNS w Cloudflare (DNS-only = `x-real-ip`, proxied = `cf-connecting-ip`; [`DOMAIN_SETUP.md`](../DOMAIN_SETUP.md), #1073). Bramka hasła w produkcji odrzuca żądanie bez tego nagłówka (503 + alarm w kanale błędów), zamiast liczyć je we wspólnym limicie (#625) |
+| `TRUSTED_PROXY_HEADER` | domyślnie `x-real-ip` (brzeg Railway); `cf-connecting-ip`, gdy przed Railway stoi Cloudflare proxying ruch — jedyne źródło zaufanego IP klienta dla receiptu zgody, aplikacji bez konta i limitera (#588/#602). Nieznana wartość wraca do domyślnej. `cf-connecting-ip` liczy się tylko, gdy peer z `X-Real-IP` należy do zakresów Cloudflare (#1090) — inaczej adres peera. Wartość musi pasować do trybu rekordu DNS w Cloudflare (DNS-only = `x-real-ip`, proxied = `cf-connecting-ip`; [`DOMAIN_SETUP.md`](../DOMAIN_SETUP.md), #1073). Bramka hasła w produkcji odrzuca żądanie bez tego nagłówka (503 + alarm w kanale błędów), zamiast liczyć je we wspólnym limicie (#625) |
 
 ### 2D. Nie ustawiać w produkcji
 

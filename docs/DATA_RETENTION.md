@@ -212,7 +212,11 @@ konto, profil, profil pracodawcy, członkostwa (firma, rola, aktywność, daty),
 **wysłane** przez tę osobę (adres zaproszonego, rola, status, daty — bez hasha tokenu),
 zaproszenia otrzymane na jej adres, oferty utworzone przez nią (tytuł, status, firma, daty),
 akcje audytowe, w których jest aktorem, preferencje, powiadomienia, zgody, dowody zgód
-e-mail, akceptacje dokumentów, e-maile (bez treści), historia wniosków. **Bez danych
+e-mail, akceptacje dokumentów, e-maile (bez treści), historia wniosków, odwołania od
+decyzji moderacyjnych złożone przez tę osobę (`moderationAppeals`, kształt jak u kandydata) i jej
+zgłoszenia treści (`contentReports`: numer sprawy, rodzaj, kategoria, opis, podane dane
+kontaktowe, stan — bez identyfikatora i migawki zgłoszonej treści; migracja 0992, #1232).
+Wiadomości z formularza kontaktu — poza eksportem (decyzja otwarta). **Bez danych
 kandydatów:** z audytu tylko akcja, typ obiektu i czas — identyfikator wyłącznie dla
 obiektów firmowych (`company`/`job`/`company_member`/`company_invitation`), nigdy
 `before_data`/`after_data`; powiadomienia bez tytułu, treści i `data`. Limit i ślad jak
