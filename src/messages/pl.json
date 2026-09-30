@@ -503,7 +503,13 @@
       "mailSubject": "Oferta pracy: {title}",
       "contact": "Kontakt bezpośrednio z ogłoszeniodawcą"
     },
-    "startImmediate": "Praca od zaraz"
+    "startImmediate": "Praca od zaraz",
+    "workTimeLabel": "Wymiar pracy",
+    "workTimeValues": {
+      "full_time": "Pełny etat",
+      "part_time": "Część etatu",
+      "both": "Pełny lub część etatu"
+    }
   },
   "landing": {
     "hubMetaTitle": "Przeglądaj pracę w Belgii — branże i miasta | Pracuj.be",
@@ -1316,7 +1322,32 @@
     "showLess": "Pokaż mniej",
     "noLocations": "Brak lokalizacji",
     "close": "Zamknij",
-    "directOnly": "Bezpośrednio od pracodawcy"
+    "directOnly": "Bezpośrednio od pracodawcy",
+    "languageAny": "Dowolny język",
+    "languageLevel": "Mój poziom języka",
+    "languageLevelAny": "Dowolny poziom",
+    "languageLevelNote": "Pokazujemy oferty, które wymagają tego języka najwyżej na wybranym poziomie (albo bez określonego poziomu).",
+    "languageLevels": {
+      "basic": "Podstawowy",
+      "intermediate": "Średnio zaawansowany",
+      "fluent": "Biegły",
+      "native": "Ojczysty"
+    },
+    "languageChip": "Język: {language}",
+    "languageLevelChip": "Język: {language}, poziom do: {level}",
+    "workTime": "Wymiar pracy",
+    "workTimeAny": "Dowolny",
+    "workTimeFull": "Pełny etat",
+    "workTimePart": "Część etatu",
+    "workTimeNote": "Tylko oferty, w których pracodawca podał wymiar pracy.",
+    "distance": "Odległość",
+    "near": "Miejscowość",
+    "nearPlaceholder": "np. Gandawa",
+    "radiusKm": "{km} km",
+    "radiusNote": "Liczymy odległość w linii prostej od miejscowości z naszej listy. Oferty bez rozpoznanej miejscowości nie są pokazywane przy tym filtrze. Oferty pracy zdalnej są pokazywane przy każdym promieniu.",
+    "radiusChip": "Do {km} km od: {place}",
+    "nearUnknown": "Nie rozpoznaliśmy miejscowości „{place}”. Wpisz nazwę belgijskiej gminy albo miasta, np. Gandawa lub Liège.",
+    "salaryCurrencyNote": "Kwot w innej walucie niż euro nie przeliczamy — takie oferty pozostają widoczne przy tym filtrze, a w sortowaniu po wynagrodzeniu są na końcu."
   },
   "notifications": {
     "title": "Powiadomienia",
@@ -1724,7 +1755,13 @@
     "contentLocaleLabel": "Język ogłoszenia",
     "contentLocaleHint": "W tym języku piszesz treść ogłoszenia. Może być inny niż język panelu; od niego zależy oznaczenie języka i tłumaczenia dla kandydatów.",
     "contentLocaleLocked": "Języka opublikowanej oferty nie można zmienić.",
-    "languageLevelAria": "Poziom języka: {level}"
+    "languageLevelAria": "Poziom języka: {level}",
+    "workTimeLabel": "Wymiar pracy",
+    "workTimeHint": "Pozwala kandydatom znaleźć ofertę filtrem „pełny etat / część etatu”. Opis godzin zostaje uzupełnieniem.",
+    "workTimeNone": "Nie podaję",
+    "workTimeFull": "Pełny etat",
+    "workTimePart": "Część etatu",
+    "workTimeBoth": "Pełny lub część etatu"
   },
   "jobImport": {
     "title": "Zaimportuj z ogłoszenia",

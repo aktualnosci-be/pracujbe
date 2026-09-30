@@ -1,6 +1,6 @@
 import { z } from 'zod/v3';
 import { localeSchema } from '@/lib/validation/locale';
-import { AVAILABILITY_VALUES } from '@/lib/validation/candidate';
+import { APPLICATION_AVAILABILITY_VALUES } from '@/lib/apply/availability';
 import { normalizePhone, PHONE_COUNTRIES } from '@/lib/validation/phone';
 import { SCREENING_LIMITS } from '@/lib/screening/questions';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
@@ -80,35 +80,14 @@ function withNormalizedPhone<T extends z.infer<typeof phoneFields>>(
   return { ...value, phone };
 }
 
-/**
- * Dostępność w aplikacji: wartości profilu + „w ciągu 2 tygodni" (#190, enum 0074).
- * Profil kandydata zachowuje węższy zestaw (AVAILABILITY_VALUES).
- */
-type AvailabilityValue = (typeof AVAILABILITY_VALUES)[number];
-export const APPLICATION_AVAILABILITY_VALUES = [
-  'immediate',
-  'within_two_weeks',
-  'within_month',
-  'within_three_months',
-  'flexible',
-] as const satisfies readonly (AvailabilityValue | 'within_two_weeks')[];
-export type ApplicationAvailability = (typeof APPLICATION_AVAILABILITY_VALUES)[number];
+export {
+  APPLICATION_AVAILABILITY_VALUES,
+  APPLY_AVAILABILITY_OPTIONS,
+  APPLY_AVAILABILITY_TO_DB,
+  type ApplicationAvailability,
+  type ApplyAvailabilityOption,
+} from '@/lib/apply/availability';
 const applicationAvailabilitySchema = z.enum(APPLICATION_AVAILABILITY_VALUES);
-
-/** Opcje dostępności w formularzu aplikowania (ApplyModal). */
-export const APPLY_AVAILABILITY_OPTIONS = ['immediate', 'twoWeeks', 'oneMonth', 'flexible'] as const;
-export type ApplyAvailabilityOption = (typeof APPLY_AVAILABILITY_OPTIONS)[number];
-
-/**
- * Opcja formularza → wartość enuma `availability_status` (0001, 0074). Każda widoczna
- * opcja zapisuje rozróżnialną wartość (#190).
- */
-export const APPLY_AVAILABILITY_TO_DB: Record<ApplyAvailabilityOption, ApplicationAvailability> = {
-  immediate: 'immediate',
-  twoWeeks: 'within_two_weeks',
-  oneMonth: 'within_month',
-  flexible: 'flexible',
-};
 
 /** Sam telefon — sprawdzany przed resztą, aby błąd trafił do pola (także w trybie demo). */
 export const applicationPhoneSchema = phoneFields.transform(withNormalizedPhone);

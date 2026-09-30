@@ -25,6 +25,11 @@ select pg_temp.assert(
          from public.get_public_job_filter_facets('pl', 'srch1076r') where dimension = 'location') = array['Leuven:2'],
   'SRCH1076-R0 stan przed rollbackiem');
 
+-- Rollback w odwrotnej kolejności: 0194 (filtry listy ofert — numer tymczasowy) redefiniuje
+-- facety i listę ofert z nowymi parametrami, więc najpierw jej rollback, potem 0183.
+-- Odroczone triggery (tłumaczenia, zaufanie treści) po wstawieniu ofert blokują ALTER TABLE.
+set constraints all immediate;
+\ir ../rollback/0194_job_filters_language_worktime_radius.down.sql
 \ir ../rollback/0183_city_sections_in_filters.down.sql
 
 -- Po rollbacku (0153/0167): sama gmina, facet po nazwie miejscowości oferty.

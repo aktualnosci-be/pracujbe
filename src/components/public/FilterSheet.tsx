@@ -29,6 +29,13 @@ import {
   type SortValue,
 } from '@/components/public/job-filters';
 import { SALARY_UNITS } from '@/lib/salary-compare';
+import {
+  LANGUAGE_FILTER_CODES,
+  LANGUAGE_FILTER_LEVELS,
+  NEAR_MAX_LENGTH,
+  RADIUS_KM_OPTIONS,
+  WORK_TIME_FILTERS,
+} from '@/lib/job-filter-options';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
@@ -76,6 +83,10 @@ function NoScriptFilterForm({
   const t = useTranslations('filters');
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
+  const tLanguageNames = useTranslations('languageNames');
+  const languageOptions = LANGUAGE_FILTER_CODES.map((code) => ({ code, label: tLanguageNames(code) })).sort(
+    (a, b) => a.label.localeCompare(b.label),
+  );
   const locations = [...new Set([
     ...initial.locations,
     ...facets.locations.map((item) => item.city),
@@ -180,7 +191,7 @@ function NoScriptFilterForm({
           </select>
         </label>
         <p className="text-xs text-muted-foreground">
-          {t('salaryPeriodNote')} {t('salaryHourlyNote')}
+          {t('salaryPeriodNote')} {t('salaryHourlyNote')} {t('salaryCurrencyNote')}
         </p>
         <label className="block space-y-2 text-sm text-foreground">
           <span>{t('salaryMin')}</span>
@@ -273,6 +284,92 @@ function NoScriptFilterForm({
           />
           <span>{t('directOnly')}</span>
         </label>
+      </fieldset>
+
+      {/* 0194: odległość (#824), wymiar pracy (#811), język i poziom (#786) — bez JS te same
+          parametry adresu co panel z JS (`near`/`radius`, `workTime`, `lang`/`langLevel`). */}
+      <fieldset className="space-y-3 border-t border-border pt-5">
+        <legend className="text-sm font-semibold text-foreground">{t('distance')}</legend>
+        <label className="block space-y-2 text-sm text-foreground">
+          <span>{t('near')}</span>
+          <input
+            type="text"
+            name="near"
+            maxLength={NEAR_MAX_LENGTH}
+            defaultValue={initial.near}
+            placeholder={t('nearPlaceholder')}
+            autoComplete="address-level2"
+            aria-describedby="nojs-radius-note"
+            className={controlClass}
+          />
+        </label>
+        <label className="block space-y-2 text-sm text-foreground">
+          <span>{t('radius')}</span>
+          <select name="radius" defaultValue={String(initial.radiusKm)} className={controlClass}>
+            {RADIUS_KM_OPTIONS.map((km) => (
+              <option key={km} value={String(km)}>
+                {t('radiusKm', { km })}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p id="nojs-radius-note" className="text-xs text-muted-foreground">
+          {t('radiusNote')}
+        </p>
+      </fieldset>
+
+      <label className="block space-y-2 text-sm font-semibold text-foreground">
+        <span>{t('workTime')}</span>
+        <select
+          name="workTime"
+          defaultValue={initial.workTime ?? ''}
+          aria-describedby="nojs-worktime-note"
+          className={controlClass}
+        >
+          <option value="">{t('workTimeAny')}</option>
+          {WORK_TIME_FILTERS.map((option) => (
+            <option key={option} value={option}>
+              {option === 'full_time' ? t('workTimeFull') : t('workTimePart')}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p id="nojs-worktime-note" className="text-xs text-muted-foreground">
+        {t('workTimeNote')}
+      </p>
+
+      <fieldset className="space-y-3 border-t border-border pt-5">
+        <legend className="text-sm font-semibold text-foreground">{t('requiredLanguage')}</legend>
+        <label className="block space-y-2 text-sm text-foreground">
+          <span>{t('requiredLanguage')}</span>
+          <select name="lang" defaultValue={initial.language ?? ''} className={controlClass}>
+            <option value="">{t('languageAny')}</option>
+            {languageOptions.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block space-y-2 text-sm text-foreground">
+          <span>{t('languageLevel')}</span>
+          <select
+            name="langLevel"
+            defaultValue={initial.languageLevel ?? ''}
+            aria-describedby="nojs-language-note"
+            className={controlClass}
+          >
+            <option value="">{t('languageLevelAny')}</option>
+            {LANGUAGE_FILTER_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {t(`languageLevels.${level}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p id="nojs-language-note" className="text-xs text-muted-foreground">
+          {t('languageLevelNote')}
+        </p>
       </fieldset>
 
       <label className="block space-y-2 text-sm font-semibold text-foreground">

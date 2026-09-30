@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import {
   buildDemoFacets,
   parseSidebarFilters,
+  refinementQueryParams,
   salaryQueryParams,
   toFacetItem,
 } from '@/components/public/job-filters';
@@ -113,6 +114,10 @@ export async function GET(request: Request): Promise<NextResponse> {
       : {}),
     ...(filters.immediate ? { immediate: true } : {}),
     ...(filters.noLanguageRequired ? { noLanguageRequired: true } : {}),
+    // 0167: ten sam filtr co lista (licznik „Pokaż N ofert” uwzględnia „bezpośrednio”).
+    ...(filters.directOnly ? { directOnly: true } : {}),
+    // 0194: język, wymiar pracy, promień — jak `parseJobListQuery` listy ofert.
+    ...refinementQueryParams(filters),
     ...(days
       ? { since: new Date(Date.now() - days * 86_400_000).toISOString() }
       : {}),
@@ -144,6 +149,8 @@ export async function GET(request: Request): Promise<NextResponse> {
                 locale,
                 keyword: params.keyword,
                 ...cityFilters.cityQuery,
+                // 0194: filtry bazy facetów (jak w SQL) — demo filtruje je w `getJobs`.
+                ...refinementQueryParams(filters),
                 page: 1,
                 pageSize: 100,
               },

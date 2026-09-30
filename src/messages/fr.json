@@ -503,7 +503,13 @@
       "mailSubject": "Offre d'emploi : {title}",
       "contact": "Contact direct avec l'annonceur"
     },
-    "startImmediate": "Début immédiat"
+    "startImmediate": "Début immédiat",
+    "workTimeLabel": "Temps de travail",
+    "workTimeValues": {
+      "full_time": "Temps plein",
+      "part_time": "Temps partiel",
+      "both": "Temps plein ou partiel"
+    }
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1316,7 +1322,32 @@
     "showLess": "Afficher moins",
     "noLocations": "Aucun lieu",
     "close": "Fermer",
-    "directOnly": "Directement chez l’employeur"
+    "directOnly": "Directement chez l’employeur",
+    "languageAny": "Toutes les langues",
+    "languageLevel": "Mon niveau de langue",
+    "languageLevelAny": "Tous les niveaux",
+    "languageLevelNote": "Nous affichons les offres qui exigent cette langue au maximum au niveau choisi (ou sans niveau indiqué).",
+    "languageLevels": {
+      "basic": "Débutant",
+      "intermediate": "Intermédiaire",
+      "fluent": "Courant",
+      "native": "Langue maternelle"
+    },
+    "languageChip": "Langue : {language}",
+    "languageLevelChip": "Langue : {language}, niveau jusqu’à : {level}",
+    "workTime": "Temps de travail",
+    "workTimeAny": "Tous",
+    "workTimeFull": "Temps plein",
+    "workTimePart": "Temps partiel",
+    "workTimeNote": "Uniquement les offres pour lesquelles l’employeur a indiqué le temps de travail.",
+    "distance": "Distance",
+    "near": "Commune",
+    "nearPlaceholder": "p. ex. Gand",
+    "radiusKm": "{km} km",
+    "radiusNote": "La distance est mesurée à vol d’oiseau depuis une commune de notre liste. Les offres sans commune reconnue ne sont pas affichées avec ce filtre. Les offres en télétravail sont affichées quel que soit le rayon.",
+    "radiusChip": "À {km} km maximum de {place}",
+    "nearUnknown": "Nous n’avons pas reconnu la commune « {place} ». Indiquez le nom d’une commune ou d’une ville belge, par exemple Gand ou Liège.",
+    "salaryCurrencyNote": "Les montants dans une autre devise que l’euro ne sont pas convertis : ces offres restent visibles avec ce filtre et apparaissent en dernier dans le tri par salaire."
   },
   "notifications": {
     "title": "Notifications",
@@ -1724,7 +1755,13 @@
     "contentLocaleLabel": "Langue de l'annonce",
     "contentLocaleHint": "C'est dans cette langue que vous rédigez le texte de l'annonce. Elle peut différer de la langue du panneau ; l'indication de langue et les traductions pour les candidats en dépendent.",
     "contentLocaleLocked": "La langue d'une offre publiée ne peut pas être modifiée.",
-    "languageLevelAria": "Niveau de langue : {level}"
+    "languageLevelAria": "Niveau de langue : {level}",
+    "workTimeLabel": "Temps de travail",
+    "workTimeHint": "Permet aux candidats de trouver l’offre avec le filtre « temps plein / temps partiel ». La description des horaires reste un complément.",
+    "workTimeNone": "Non indiqué",
+    "workTimeFull": "Temps plein",
+    "workTimePart": "Temps partiel",
+    "workTimeBoth": "Temps plein ou partiel"
   },
   "jobImport": {
     "title": "Importer depuis une annonce",
