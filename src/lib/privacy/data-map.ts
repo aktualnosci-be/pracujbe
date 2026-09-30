@@ -1084,7 +1084,7 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     subjects: [],
     columns: {},
     note:
-      'Kontekst zaufanej edycji opublikowanej oferty (0967): identyfikator transakcji, oferty i rodzaj operacji — wiersz istnieje tylko w trakcie update_published_job. Bez danych osobowych.',
+      'Kontekst zaufanej edycji opublikowanej oferty (0200): identyfikator transakcji, oferty i rodzaj operacji — wiersz istnieje tylko w trakcie update_published_job. Bez danych osobowych.',
   },
   'public.job_duplications': {
     activities: ['companies'],

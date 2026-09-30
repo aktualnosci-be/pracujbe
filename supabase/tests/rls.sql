@@ -2316,7 +2316,7 @@ select pg_temp.assert(
   (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
   'RR5f wymagania aktywnej oferty nietknięte po próbach obejścia');
 
--- RR5g (#753, 0967): GUC `pracujbe.job_edit` z POPRAWNYM id opublikowanej oferty (set_config
+-- RR5g (#753, 0200): GUC `pracujbe.job_edit` z POPRAWNYM id opublikowanej oferty (set_config
 -- klienta) nie otwiera żadnej z publicznych funkcji set_job_*; relacje i audyt bez zmian.
 select count(*) as rr5g_audit from public.audit_logs where entity_id = :'JOBE'::uuid \gset
 select coalesce(jsonb_agg(to_jsonb(r) order by r.kind, r.position), '[]') as rr5g_req
@@ -14487,7 +14487,7 @@ update public.jobs set salary_max = 20 where id = :'JTJOB';
 select pg_temp.assert(
   (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
   'JT7 bezpośredni UPDATE warunków (bez update_published_job) nie tworzy powiadomień');
--- JT7b (#752, 0967): sfałszowany GUC `pracujbe.job_terms_notify` = id oferty nie otwiera bramki —
+-- JT7b (#752, 0200): sfałszowany GUC `pracujbe.job_terms_notify` = id oferty nie otwiera bramki —
 -- ani dla backendu z bezpośrednim UPDATE, ani dla klienta (bezpośredni UPDATE i tak zablokowany).
 savepoint jt_gate;
 select set_config('pracujbe.job_terms_notify', :'JTJOB', true);
@@ -14583,7 +14583,7 @@ select pg_temp.assert(
   'JT9b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
 rollback to savepoint jt_neg2;
 
--- JT10 (#750, 0967): audyt `job.update_published` ma ten sam zakres co powiadomienie — zmiana
+-- JT10 (#750, 0200): audyt `job.update_published` ma ten sam zakres co powiadomienie — zmiana
 -- wyłącznie godzin pracy zapisuje stare i nowe godziny (także w `terms` = job_material_terms).
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(current_setting('pb.jt_now')::jsonb,

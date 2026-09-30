@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0967_job_edit_trusted_context.sql — edycja opublikowanej oferty bez ufania GUC klienta
+-- 0200_job_edit_trusted_context.sql — edycja opublikowanej oferty bez ufania GUC klienta
 -- (#753, #752) i pełny audyt warunków oferty (#750). Numer tymczasowy.
 --
 -- Problem:
@@ -35,7 +35,7 @@
 -- 5. `update_published_job` (0172) — kontekst z pkt 1 zamiast `set_config`, audyt z pkt 4.
 --    Reszta 1:1 z 0172.
 --
--- Rollback: supabase/rollback/0967_job_edit_trusted_context.down.sql (test w scripts/test-rls.sh).
+-- Rollback: supabase/rollback/0200_job_edit_trusted_context.down.sql (test w scripts/test-rls.sh).
 -- =============================================================================
 
 -- --- 1. Kontekst zaufanej operacji ---------------------------------------------------------
@@ -46,7 +46,7 @@ create table public.job_operation_context (
   primary key (tx, job_id, kind)
 );
 comment on table public.job_operation_context is
-  'Kontekst zaufanej operacji na ofercie (0967): wstawia i usuwa wyłącznie update_published_job '
+  'Kontekst zaufanej operacji na ofercie (0200): wstawia i usuwa wyłącznie update_published_job '
   'w tej samej transakcji. Bez grantów dla klientów — nie da się go podrobić jak GUC.';
 alter table public.job_operation_context enable row level security;
 revoke all on public.job_operation_context from public, anon, authenticated, service_role;
@@ -80,7 +80,7 @@ begin
   if v_status is null then
     raise exception 'NOT_FOUND: oferta nie istnieje' using errcode = 'P0002';
   end if;
-  -- 0967: kontekst z tabeli bez grantów (wstawia go tylko update_published_job), nie GUC.
+  -- 0200: kontekst z tabeli bez grantów (wstawia go tylko update_published_job), nie GUC.
   if v_status <> 'draft' and not public.job_operation_context_active(p_job_id, 'job_edit') then
     raise exception 'JOB_NOT_DRAFT: treść opublikowanej oferty zmienia wyłącznie update_published_job'
       using errcode = '42501';
@@ -96,7 +96,7 @@ declare
   v_new jsonb := public.job_material_terms(new);
   v_fields text[];
 begin
-  -- 0967: źródło zapisu = wiersz kontekstu wstawiony przez update_published_job w tej
+  -- 0200: źródło zapisu = wiersz kontekstu wstawiony przez update_published_job w tej
   -- transakcji (tabela bez grantów dla klienta), nie GUC ustawialny przez set_config.
   -- Wiersz jest zużywany: jedna rewizja = najwyżej jedno powiadomienie na kandydata.
   if not public.job_operation_context_take(new.id, 'job_terms_notify') then
@@ -157,7 +157,7 @@ begin
     raise exception 'VALIDATION_FAILED: brak treści oferty' using errcode = '42501';
   end if;
 
-  -- 0967: migawka audytu z jednego źródła (job_edit_audit_snapshot ⊇ job_material_terms).
+  -- 0200: migawka audytu z jednego źródła (job_edit_audit_snapshot ⊇ job_material_terms).
   select j0.company_id, c.status::text, j0.status::text, j0.slug, j0.default_locale, j0.updated_at,
          public.job_edit_audit_snapshot(j0)
     into v_company, v_cstatus, v_status, v_slug, v_locale, v_updated, v_before
@@ -182,7 +182,7 @@ begin
 
   v_title := btrim(coalesce(j->>'title', ''));
 
-  -- 0967: kontekst tej rewizji w tabeli bez grantów dla klienta (zamiast GUC z 0144, który
+  -- 0200: kontekst tej rewizji w tabeli bez grantów dla klienta (zamiast GUC z 0144, który
   -- klient mógł ustawić sam przez set_config) — trigger powiadomień reaguje tylko na ten zapis.
   insert into public.job_operation_context (job_id, kind) values (p_job_id, 'job_terms_notify');
   update public.jobs set
@@ -257,7 +257,7 @@ begin
     conditions = excluded.conditions, benefits = excluded.benefits,
     highlights = excluded.highlights, company_description = excluded.company_description;
 
-  -- Relacje replace-all tymi samymi funkcjami co kreator; kontekst operacji (0967, zamiast GUC
+  -- Relacje replace-all tymi samymi funkcjami co kreator; kontekst operacji (0200, zamiast GUC
   -- z 0077) dopuszcza ofertę nie-szkic tylko na czas tych wywołań.
   insert into public.job_operation_context (job_id, kind) values (p_job_id, 'job_edit');
   perform public.set_job_requirements(p_job_id, v_locale, 'mandatory',

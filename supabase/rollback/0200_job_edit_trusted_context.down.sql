@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0967_job_edit_trusted_context.sql — przywraca definicje sprzed migracji:
+-- Rollback 0200_job_edit_trusted_context.sql — przywraca definicje sprzed migracji:
 -- assert_job_draft_or_editing (0077), notify_job_terms_changed (0144), update_published_job (0194),
 -- a potem usuwa migawkę audytu, funkcje kontekstu i tabelę job_operation_context.
 -- UWAGA: przywraca też lukę #752/#753 (znaczniki GUC ustawialne przez klienta).
