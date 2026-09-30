@@ -21666,8 +21666,8 @@ select pg_temp.pj_mk(44, :'WMCOA', 'closed');
 
 update public.jobs set expires_at = now() - interval '1 day' where id = pg_temp.pj_id(6);
 update public.jobs set title = '   ' where id = pg_temp.pj_id(7);
-update public.jobs set title = 'draft roboczy' where id = pg_temp.pj_id(8);
-update public.jobs set title = 'Tekst placeholder do uzupełnienia' where id = pg_temp.pj_id(9);
+-- Oferty 8 i 9 (dawniej tytuły „draft…”/„…placeholder…”) — reguła tytułu to od #1221 (0995)
+-- tylko pusty tytuł; realne tytuły z tymi słowami sprawdza sekcja BZ1221.
 update public.jobs set city = '  ' where id = pg_temp.pj_id(10);
 update public.jobs set region = '' where id = pg_temp.pj_id(11);
 delete from public.job_translations where job_id = pg_temp.pj_id(12);
@@ -21701,10 +21701,6 @@ select pg_temp.pj_add('draftonly', 'oferta zamknięta (ponowna publikacja)', pg_
 select pg_temp.pj_add('expired', 'data ważności w przeszłości', pg_temp.pj_id(6), :'WMEA'::uuid,
   'JOB_EXPIRED: termin ważności oferty minął');
 select pg_temp.pj_add('title', 'tytuł z samych spacji', pg_temp.pj_id(7), :'WMEA'::uuid,
-  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
-select pg_temp.pj_add('title', 'tytuł zaczyna się od „draft”', pg_temp.pj_id(8), :'WMEA'::uuid,
-  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
-select pg_temp.pj_add('title', 'tytuł zawiera „placeholder”', pg_temp.pj_id(9), :'WMEA'::uuid,
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
 select pg_temp.pj_add('title', 'miasto z samych spacji', pg_temp.pj_id(10), :'WMEA'::uuid,
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
@@ -21769,14 +21765,14 @@ end $$;
 
 -- PJ1071-1: definicja produkcyjna — każdy brak kończy się pełnym komunikatem własnej reguły,
 -- a stan ofert (status) pozostaje bez zmian.
-select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 23
+select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 21
   and (select count(distinct rule) from pg_temp.pj_cases) = 10
   and (select count(distinct rule) from pg_temp.pj_mutations) = 10,
-  'PJ1071-0 lista przypadków obejmuje 10 reguł (23 przypadki)');
+  'PJ1071-0 lista przypadków obejmuje 10 reguł (21 przypadków)');
 select pg_temp.pj_run(null) as pj_base \gset
 select pg_temp.assert(:'pj_base' = '', format('PJ1071-1 każdy brak ma własny, pełny komunikat: %s', :'pj_base'));
 select pg_temp.assert(
-  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 19
+  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 17
   and (select count(*) from public.jobs where id in (pg_temp.pj_id(42)) and status = 'active') = 1,
   'PJ1071-1b odrzucone szkice pozostają szkicami, oferta aktywna nie zmienia się');
 
@@ -21856,6 +21852,105 @@ reset role; reset app.current_uid;
 select pg_temp.assert(:'pj_n10' = '', format('PJ1071-N10 bez reguły „oferta nie istnieje” brak oferty trafia na kontrolę uprawnień: %s', :'pj_n10'));
 select pg_temp.assert(pg_temp.pj_run(null) = '',
   'PJ1071-N11 po cofnięciu mutacji definicja produkcyjna jest przywrócona (każdy brak nadal ma swój komunikat)');
+
+-- ============================================================================
+-- BZ1221. Tytuł oferty bez heurystyki „zaślepki” (#1221, audyt 29.09 BIZ-3, 0995).
+--   `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucały tytuł
+--   zaczynający się od „draft” albo zawierający „placeholder” — realne stanowisko
+--   „Draftsman (AutoCAD)” nie dało się opublikować. Od 0995 zaślepką jest tylko pusty tytuł.
+--   Kontrole ujemne: definicje sprzed 0995 (rollback w transakcji cofanej) odrzucają te same
+--   tytuły w każdej z trzech funkcji; pusty tytuł odrzucany w obu wariantach.
+-- ============================================================================
+\echo '--- BZ1221 tytuł oferty: tylko pusty tytuł to zaślepka ---'
+reset role; reset app.current_uid;
+select pg_temp.pj_mk(n, :'WMCOA') from generate_series(51, 53) n;
+update public.jobs set title = 'Draftsman (AutoCAD)' where id = pg_temp.pj_id(51);
+update public.jobs set title = 'Placeholder QA Tester' where id = pg_temp.pj_id(52);
+update public.jobs set title = '   ' where id = pg_temp.pj_id(53);
+select pg_temp.assert(not exists (
+    select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
+                               'public.update_published_job(uuid, jsonb, timestamptz)']) f
+     where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
+  'BZ1221-0 żadna z trzech funkcji nie zawiera heurystyki tytułu-zaślepki');
+
+-- BZ1221-N1: kontrola ujemna — definicje sprzed 0995 odrzucają oba realne tytuły.
+begin;
+\ir ../rollback/0995_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(51), 'bz1221-n1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N1a kontrola ujemna: stara publish_job odrzuca „Draftsman (AutoCAD)”');
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(52), 'bz1221-n1b'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N1b kontrola ujemna: stara publish_job odrzuca tytuł z „Placeholder”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
+-- BZ1221-1: realne tytuły publikują się; pusty tytuł nadal odrzucany.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.publish_job(pg_temp.pj_id(51), 'bz1221-draftsman') = 'bz1221-draftsman',
+  'BZ1221-1a „Draftsman (AutoCAD)” publikuje się');
+select pg_temp.assert(public.publish_job(pg_temp.pj_id(52), 'bz1221-placeholder') = 'bz1221-placeholder',
+  'BZ1221-1b tytuł z „Placeholder” publikuje się');
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(53), 'bz1221-empty'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)', 'BZ1221-1c pusty tytuł nadal odrzucany');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select string_agg(status::text, ',' order by id) from public.jobs
+    where id in (pg_temp.pj_id(51), pg_temp.pj_id(52), pg_temp.pj_id(53))) = 'active,active,draft',
+  'BZ1221-1d stan ofert po publikacji: dwie aktywne, pusta zostaje szkicem');
+
+-- BZ1221-2: edycja opublikowanej oferty — tytuł „Draftsman …” przechodzi, pusty nie.
+select set_config('pb.bz_upd', (current_setting('pb.rr_ok')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.rr_ok')::jsonb -> 'job')
+       || '{"title": "Draftsman (Revit)", "accommodation": false}'::jsonb))::text, false);
+select set_config('pb.bz_upd_empty', (current_setting('pb.bz_upd')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.bz_upd')::jsonb -> 'job') || '{"title": "  "}'::jsonb))::text, false);
+select updated_at as bz_v1 from public.jobs where id = pg_temp.pj_id(51) \gset
+begin;
+\ir ../rollback/0995_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+    pg_temp.pj_id(51), current_setting('pb.bz_upd'), :'bz_v1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N2 kontrola ujemna: stara update_published_job odrzuca „Draftsman (Revit)”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+    pg_temp.pj_id(51), current_setting('pb.bz_upd_empty'), :'bz_v1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)', 'BZ1221-2a edycja z pustym tytułem odrzucona');
+select public.update_published_job(pg_temp.pj_id(51), current_setting('pb.bz_upd')::jsonb, :'bz_v1'::timestamptz) as bz_res \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Draftsman (Revit)' and status::text = 'active' and slug = 'bz1221-draftsman'
+     from public.jobs where id = pg_temp.pj_id(51)),
+  'BZ1221-2b edycja zapisuje tytuł „Draftsman (Revit)”, status i slug bez zmian');
+
+-- BZ1221-3: ponowne otwarcie zamkniętej oferty z tytułem „Draftsman …”.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'close') = 'closed', 'BZ1221-3a zamknięcie oferty');
+reset role; reset app.current_uid;
+begin;
+\ir ../rollback/0995_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.set_job_status(%L::uuid, %L)', pg_temp.pj_id(51), 'reopen'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N3 kontrola ujemna: stary set_job_status(reopen) odrzuca „Draftsman (Revit)”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'reopen') = 'active',
+  'BZ1221-3b ponowne otwarcie oferty „Draftsman (Revit)” przechodzi');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (
+    select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
+                               'public.update_published_job(uuid, jsonb, timestamptz)']) f
+     where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
+  'BZ1221-4 po cofniętych kontrolach ujemnych definicje 0995 są na miejscu');
 
 -- ============================================================================
 -- RD1114. Polityki ODCZYTU bez wcześniejszych testów regresyjnych (#1114, TQ2-05): historia statusów

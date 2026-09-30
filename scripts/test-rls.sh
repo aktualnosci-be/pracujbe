@@ -77,6 +77,8 @@ echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji c
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
+echo ">> rollback 0995 (tytuł oferty bez heurystyki zaślepki, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-title-completeness-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-verified-locale-rollback.sql"
 echo ">> rollback 0185 (utwardzenie warstwy danych: oferty, firmy, pliki, sesje i tokeny; w transakcji cofanej)"

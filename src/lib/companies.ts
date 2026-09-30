@@ -17,6 +17,7 @@ import {
   isRealJobsFixture,
   rowToJobListItem,
   withAgencyFlags,
+  withListContentLocales,
   withListMachineTranslations,
   type JobListItem,
 } from '@/lib/jobs';
@@ -141,7 +142,8 @@ async function getCompanyProfileFromDb(
     jobs: await withListMachineTranslations(
       pool,
       // 0167: etykieta „agencja” na kartach profilu firmy.
-      await withAgencyFlags(pool, jobsResult.rows.map(rowToJobListItem)),
+      // #1223: język treści kart (atrybut `lang`, gdy inny niż język strony).
+      await withListContentLocales(pool, await withAgencyFlags(pool, jobsResult.rows.map(rowToJobListItem)), toLocale(locale)),
       toLocale(locale),
     ),
     page,
