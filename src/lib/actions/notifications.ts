@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { routing } from '@/i18n/routing';
 import { getNotificationsPage, type NotificationsPageResult } from '@/lib/data/notifications';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -37,8 +37,12 @@ function mapPgError(message: string | undefined): ErrorCode {
  * Oznacza powiadomienia jako przeczytane. `ids` puste/pominięte → wszystkie własne
  * nieprzeczytane. Zwraca liczbę zaktualizowanych rekordów. Bez env → `{ ok: true, count: 0 }`.
  */
+/** Identyfikatory z klienta (#1109): zły format = błąd walidacji, nie INTERNAL z bazy (22P02). */
+const notificationIdsSchema = z.array(z.uuid()).max(1000).optional();
+
 export async function markNotificationsRead(ids?: string[]): Promise<MarkReadResult> {
   if (!isPortalDataConfigured()) return { ok: true, count: 0 };
+  if (!notificationIdsSchema.safeParse(ids).success) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
     const me = await getPortalIdentity();
@@ -49,7 +53,10 @@ export async function markNotificationsRead(ids?: string[]): Promise<MarkReadRes
     const count = typeof data === 'number' ? data : Number(data);
     return { ok: true, count: Number.isFinite(count) ? count : 0 };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      const code = mapPgError(databaseErrorMessage(error));
+      return { ok: false, error: reportUnmappedDbError(error, 'notifications.markNotificationsRead', code) };
+    }
     captureError(error, { area: 'notifications.markNotificationsRead' });
     return { ok: false, error: 'INTERNAL' };
   }
