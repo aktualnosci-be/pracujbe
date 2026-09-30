@@ -360,7 +360,8 @@ Te reguły wynikają wprost ze specyfikacji i z błędów poprzedniego produktu.
    Fallback: `recipient.preferred_locale → account_locale → signup_locale → 'en'`.
    NIGDY nie używaj języka nadawcy / sesji pracodawcy / admina / przeglądarki nadawcy / domyślnego serwera.
    Implementacja: `src/lib/i18n/recipient-locale.ts`. Test: `tests/unit/recipient-locale.test.ts`.
-2. **Brak tekstów UI na sztywno.** Wszystkie stringi w `src/messages/*.json`. Test wykrywa brakujące/nieużywane klucze.
+2. **Brak tekstów UI na sztywno.** Wszystkie stringi w `src/messages/*.json`. Test wykrywa brakujące/nieużywane klucze
+   (`i18n-usage`, `i18n-unused-keys`) i literały tekstowe w JSX (`i18n-jsx-literals`, #1114 — wyjątki jawne, z powodem).
 3. **Wysyłka propozycji idempotentna.** Server action z kluczem idempotencyjnym + transakcja.
    Zapis w DB niezależny od wysyłki e-mail (e-mail w kolejce `email_deliveries`, ponawialny).
    Podwójne kliknięcie / retry z tym samym kluczem = brak duplikatu.
@@ -888,6 +889,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
+  Okno cutoveru (#1115, bez migracji): `isSearchIndexingEnabled()` (`src/lib/seo/indexing.ts`) =
+  `isProductionDeployment()` ORAZ brak `SITE_ACCESS_PASSWORD` — przy bramce hasła robots.txt =
+  `Disallow: /`, sitemapy puste, bez odczytu ofert (sprawdzenie przed cache listy partii; test
+  `search-indexing-gate`). Przy `DATABASE_APP_URL` handler ISR nie serwuje z buildu strony głównej
+  i `/praca` (pusta lista ofert z `isBuildPhase`) — pierwsze żądanie renderuje je z danych
+  (`isBuildSeedWithoutJobs`, test `isr-cache-handler`). Tokeny gościa/zaproszeń: publiczny sekret
+  deweloperski tylko w demo BEZ bazy — na prawdziwej bazie (także demo) wymagany `GUEST_APPLY_SECRET`
+  (`guest-apply-token`).
   robots (#1217, PERF-03): blokada paneli zakotwiczona na segmencie języka
   (`/<język>/<panel>$` i `/<język>/<panel>/`, `src/lib/seo/robots-rules.ts`) — dawne reguły z
   gwiazdką blokowały oferty i profile firm o slugach `administratief-…`/`employer-…` (test
@@ -3367,6 +3376,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
 
 ### Etap 8 — jakość
 - [x] Testy: Vitest (matching, recipient-locale, i18n keys, error-keys), integracyjne RLS+seed w CI (`postgres:16`), Playwright (smoke/seo/flows)
+  Strażniki #1114 (TQ2-09/10, bez migracji): `i18n-jsx-literals` (AST każdego `.tsx` w `src/`: tekst
+  z literą w treści JSX i w `aria-label`/`title`/`alt`/`placeholder`…; poza `<style>`/`<script>`;
+  wyjątki: `global-error.tsx` poza next-intl, znak marki, kody walut, dwa wpisy per plik; wpis
+  nieaktualny = czerwony), `i18n-unused-keys` (klucz, którego ostatniego członu nie buduje żaden
+  identyfikator/literał ani klucz dynamiczny `x_${…}`/`${…}Title` w `src/`+`scripts/`; wyjątki =
+  wzorce `free-mvp-no-sales`; usunięto 97 martwych kluczy × 4 języki), kontrole ujemne na
+  syntetycznym kodzie (`tests/helpers/i18n-source-scan.ts`). Skrypty testów SQL (test-rls, test-seed,
+  test-backup, test-restore, search-benchmark) biorą migracje z `scripts/lib/migration-files.sh`
+  (czysty bash, reguły produkcyjnego loadera: każdy `NNNN_[a-z0-9_]+.sql`, bez powtórzonych
+  numerów) zamiast `0*.sql` — test `migration-files-sh` (zgodność z `loadProductionMigrations`,
+  kontrola ujemna `1000_…`, strażnik wzorców w `scripts/**/*.sh`). Truncate na tabelach append-only
+  moderacji/DSA (obserwacja z #1180) wymaga migracji — osobno.
 - [~] Testy Playwright: języki/detal oferty/CTA/noindex paneli/cookies/SEO gotowe (`flows.spec`+smoke+seo, 12 pass); do rozbudowy: aplikowanie/propozycje pod realną sesją
   Przepływ na PostgreSQL 16 (#351, #66 — częściowo): `npm run test:e2e:real`
   (`scripts/test-e2e-real.mjs` + `playwright.real-flow.config.ts`, spec `tests/e2e-real/`).

@@ -18,6 +18,9 @@ set -euo pipefail
 
 DB="${RLS_TEST_DB:-pracujbe_rls_ci}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Lista migracji jak w produkcyjnym loaderze (każdy `NNNN_*.sql`, #1114): scripts/lib/migration-files.sh.
+. "$ROOT/scripts/lib/migration-files.sh"
+MIGRATIONS="$(migration_files "$ROOT/supabase/migrations" "$ROOT/database/auth")"
 
 # psql bez pliku ~/.psqlrc (-X), zatrzymanie na pierwszym błędzie, cicho.
 # Host/user/port dokładamy tylko gdy ustawione — pozwala to na lokalny peer auth
@@ -37,9 +40,7 @@ echo ">> bootstrap ról (produkcyjny, bez shimu Supabase)"
 echo ">> migracje domeny i auth (kolejność numerów jak w production-migrations.mjs)"
 while IFS= read -r name; do
   "${psql_base[@]}" -d "$DB" -1 -f "$name" >/dev/null
-done < <(for f in "$ROOT"/supabase/migrations/0*.sql "$ROOT"/database/auth/0*.sql; do
-  printf '%s\t%s\n' "$(basename "$f")" "$f"
-done | LC_ALL=C sort | cut -f2)
+done <<< "$MIGRATIONS"
 
 echo ">> model ról i kontrole ujemne"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/role-guard.sql"
