@@ -2358,6 +2358,9 @@ select pg_temp.assert(
 
 -- RR5i: błąd update_published_job złapany przez klienta (podtransakcja) cofa kontekst, a po
 -- udanej rewizji kontekst jest usunięty — w tej samej transakcji set_job_* nadal odrzucone.
+-- commit: w rate-limit.test cały zestaw biegnie w jednej transakcji; bez niego rollback
+-- niżej cofnąłby funkcje pg_temp (w test-rls.sh to tylko ostrzeżenie).
+commit;
 begin;
 set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select pg_temp.expect_error(
