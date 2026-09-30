@@ -15,9 +15,9 @@ import { portalLegalMode } from '@/lib/portal-mode';
  *
  * P3-01: publicznie zwracamy WYŁĄCZNIE ogólny `status` — mapa brakujących usług ułatwiłaby
  * rekonesans. Szczegółowy `checks`/`mode` jest widoczny tylko dla monitoringu wewnętrznego:
- * po podaniu tokena `HEALTH_CHECK_SECRET` (nagłówek `x-health-token`) albo w trybie
- * nieprodukcyjnym przy żądaniu na loopback (lokalny dev) — publiczny host demo/staging bez tokena
- * dostaje tylko `status` (#1105). Nigdy nie ujawnia sekretów ani treści błędu bazy.
+ * po podaniu tokena `HEALTH_CHECK_SECRET` (nagłówek `x-health-token`) albo na lokalnym
+ * `next dev` poza trybem produkcyjnym (`NODE_ENV=development`, nie adres żądania — #1219) —
+ * publiczny host demo/staging bez tokena dostaje tylko `status` (#1105). Nigdy nie ujawnia sekretów ani treści błędu bazy.
  * `emailProvider` = wybrany dostawca poczty, `checks.emailProviderReady` = ma komplet kluczy.
  * `checks.turnstile` (#46) = czy ochrona formularzy jest włączona — sam boolean, bez kluczy.
  * `portalLegalMode` (#1136) = tryb produktu (`CLASSIFIEDS_ONLY` | `RECRUITMENT`) — tylko w szczegółach,
@@ -72,20 +72,17 @@ async function pingDatabase(): Promise<boolean | null> {
   }
 }
 
-/** Żądanie skierowane na loopback (`localhost`, `*.localhost`, 127.0.0.0/8, `::1`) — dev lokalny. */
-function isLoopbackRequest(request: Request): boolean {
-  let hostname: string;
-  try {
-    hostname = new URL(request.url).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  return (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname === '[::1]' ||
-    /^127(\.\d{1,3}){3}$/.test(hostname)
-  );
+/**
+ * Lokalny serwer deweloperski (`next dev`) poza trybem produkcyjnym — jedyny wyjątek od tokena.
+ *
+ * #1219: decyzja NIE może opierać się na `request.url`/`Host`. Za proxy Railway `request.url`
+ * w route handlerze wskazuje adres wewnętrzny (localhost), więc dawny test „żądanie na loopback”
+ * (#1105) był prawdziwy dla KAŻDEGO żądania z internetu i publiczna instancja demo zwracała
+ * pełną mapę konfiguracji. Zbudowany artefakt (`next start`, także na Railway) ma zawsze
+ * `NODE_ENV=production`, więc ten warunek nigdy nie jest spełniony poza `next dev`.
+ */
+function isLocalDevServer(): boolean {
+  return process.env.NODE_ENV === 'development' && !isProductionMode();
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -97,12 +94,11 @@ export async function GET(request: Request): Promise<Response> {
   const httpStatus = ready ? 200 : 503;
   const headers = { 'cache-control': 'no-store' } as const;
 
-  // Szczegóły tylko dla monitoringu wewnętrznego: z tokenem albo lokalnie (dev na loopbacku).
+  // Szczegóły tylko dla monitoringu wewnętrznego: z tokenem albo w `next dev` (#1219).
   // #1105: sam tryb aplikacji nie wystarcza — publiczna instancja demo/staging nie może
   // wystawiać mapy włączonych zabezpieczeń każdemu, kto zna adres.
   const detailed =
-    healthTokenMatches(request.headers.get(HEALTH_TOKEN_HEADER)) ||
-    (!isProductionMode() && isLoopbackRequest(request));
+    healthTokenMatches(request.headers.get(HEALTH_TOKEN_HEADER)) || isLocalDevServer();
   if (detailed) {
     return Response.json(
       {

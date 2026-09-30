@@ -408,10 +408,12 @@ describe('matching wyłączony w trybie ogłoszeniowym (#1131/#1133/#1139)', () 
  * baza — `supabase/tests/rls.sql` sekcja CA1142 (kontrola ujemna: bez strażnika krok 3 zapisuje).
  */
 describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
-  const account = readdirSync(join(ROOT, 'supabase/migrations'))
+  const accountFiles = readdirSync(join(ROOT, 'supabase/migrations'))
     .map((f) => read(`supabase/migrations/${f}`))
-    .filter((sql) => sql.includes('create or replace function public.ensure_candidate_profile()'))
-    .at(-1) ?? '';
+    .filter((sql) => sql.includes('create or replace function public.ensure_candidate_profile()'));
+  // Najnowsza definicja (0193 dodała deleted_at, #1111); triggery tabel profilu zostały w 0175.
+  const account = accountFiles.at(-1) ?? '';
+  const accountTriggers = accountFiles.find((sql) => sql.includes("'candidate_certificates'")) ?? '';
   /** Najnowsza definicja `ensure_candidate_profile` zaczyna się od strażnika trybu. */
   const ensureGuarded = (sql: string) => {
     const fn = sql.slice(sql.lastIndexOf('create or replace function public.ensure_candidate_profile()'));
@@ -422,7 +424,7 @@ describe('konto kandydata nie tworzy profilu zawodowego (#1142)', () => {
   it('ensure_candidate_profile (wołane przez każde RPC profilu) ma strażnik trybu', () => {
     expect(ensureGuarded(account)).toBe(true);
     for (const t of ['candidate_profiles', 'candidate_skills', 'candidate_languages', 'candidate_certificates']) {
-      expect(account, t).toContain(`'${t}'`);
+      expect(accountTriggers, t).toContain(`'${t}'`);
     }
   });
 

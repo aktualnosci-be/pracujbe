@@ -90,6 +90,7 @@ describe('publishJob — treść z sygnałem', () => {
     vi.stubEnv('AI_JOB_FRAUD_CHECK_ENABLED', '1');
     vi.stubEnv('AI_JOB_FRAUD_CHECK_PROVIDER', 'fixture');
     fakeDb
+      .rows('jobs.publish-precheck', [{ can_manage: true }])
       .rpc('job_trust_state', {
         fingerprint: 'fp-1',
         content: { title: 'Pakowanie w domu', translations: [{ description: 'fixture-ai-scam jan@example.com' }] },
@@ -122,12 +123,97 @@ describe('publishJob — treść z sygnałem', () => {
     vi.stubEnv('AI_JOB_FRAUD_CHECK_ENABLED', '1');
     vi.stubEnv('AI_JOB_FRAUD_CHECK_PROVIDER', 'fixture');
     fakeDb
+      .rows('jobs.publish-precheck', [{ can_manage: true }])
       .rpc('job_trust_state', { fingerprint: 'f', content: { title: 'fixture-ai-scam' }, rule_categories: [], ai_categories: [], status: 'approved' })
       .rows('jobs.publish-title', [{ id: JOB_ID, title: 'X' }])
       .rpc('publish_job', 'slug');
     await expect(publishJob(JOB_ID)).resolves.toEqual({ ok: true });
     expect(fakeDb.callsTo('ai_budget_reserve')).toHaveLength(0);
     expect(fakeDb.callsTo('record_job_content_ai_signal')).toHaveLength(0);
+  });
+});
+
+describe('publishJob — AI dopiero, gdy publikacja może się udać (#1235)', () => {
+  const scamState = {
+    fingerprint: 'fp-1',
+    content: { title: 'Pakowanie w domu', translations: [{ description: 'fixture-ai-scam' }] },
+    rule_categories: [],
+    ai_categories: [],
+    status: null,
+  };
+
+  function withAiFlag() {
+    vi.stubEnv('AI_JOB_FRAUD_CHECK_ENABLED', '1');
+    vi.stubEnv('AI_JOB_FRAUD_CHECK_PROVIDER', 'fixture');
+  }
+
+  it('member / oferta aktywna / firma niezweryfikowana (brak wiersza warunków) → bez modelu, budżetu i sygnału', async () => {
+    withAiFlag();
+    fakeDb
+      .rows('jobs.publish-precheck', [])
+      .rpc('job_trust_state', scamState)
+      .rpc('ai_budget_reserve', 'budget-1')
+      .rpc('record_job_content_ai_signal', 'pending')
+      .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Pakowanie' }])
+      .rpc('publish_job', () => { throw pgError('42501', 'PERMISSION_DENIED: publikacja wymaga roli recruiter+'); });
+    await expect(publishJob(JOB_ID)).resolves.toMatchObject({ ok: false, error: 'PERMISSION_DENIED' });
+    expect(fakeDb.callsTo('jobs.publish-precheck')).toHaveLength(1);
+    expect(fakeDb.callsTo('job_trust_state')).toHaveLength(0);
+    expect(fakeDb.callsTo('ai_budget_reserve')).toHaveLength(0);
+    expect(fakeDb.callsTo('record_job_content_ai_signal')).toHaveLength(0);
+  });
+
+  it('member w firmie (can_manage = false) → bez modelu', async () => {
+    withAiFlag();
+    fakeDb
+      .rows('jobs.publish-precheck', [{ can_manage: false }])
+      .rpc('job_trust_state', scamState)
+      .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Pakowanie' }])
+      .rpc('publish_job', () => { throw pgError('42501', 'PERMISSION_DENIED'); });
+    await publishJob(JOB_ID);
+    expect(fakeDb.callsTo('ai_budget_reserve')).toHaveLength(0);
+    expect(fakeDb.callsTo('record_job_content_ai_signal')).toHaveLength(0);
+  });
+
+  it('błąd odczytu warunków → bez modelu (fail-closed dla kosztu), publikację rozstrzyga RPC', async () => {
+    withAiFlag();
+    fakeDb
+      .rows('jobs.publish-precheck', () => { throw pgError('XX000', 'boom'); })
+      .rpc('job_trust_state', scamState)
+      .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Pakowanie' }])
+      .rpc('publish_job', 'slug-1');
+    await expect(publishJob(JOB_ID)).resolves.toEqual({ ok: true });
+    expect(fakeDb.callsTo('ai_budget_reserve')).toHaveLength(0);
+  });
+
+  it('warunki odczytywane pod sesją (RLS), z kontrolą roli, statusu szkicu i weryfikacji firmy', async () => {
+    withAiFlag();
+    fakeDb
+      .rows('jobs.publish-precheck', [])
+      .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Pakowanie' }])
+      .rpc('publish_job', 'slug-1');
+    await publishJob(JOB_ID);
+    const [call] = fakeDb.callsTo('jobs.publish-precheck');
+    expect(call?.as).not.toBe('service');
+    expect(call?.text).toMatch(/can_manage_jobs\(j\.company_id\)/);
+    expect(call?.text).toMatch(/j\.status = 'draft'/);
+    expect(call?.text).toMatch(/c\.status = 'verified'/);
+    expect(call?.values).toContain(JOB_ID);
+  });
+
+  it('kontrola ujemna: recruiter+ szkicu zweryfikowanej firmy → model wołany (sygnał przed publikacją)', async () => {
+    withAiFlag();
+    fakeDb
+      .rows('jobs.publish-precheck', [{ can_manage: true }])
+      .rpc('job_trust_state', scamState)
+      .rpc('ai_budget_reserve', 'budget-1')
+      .rpc('ai_budget_settle', true)
+      .rpc('record_job_content_ai_signal', 'pending')
+      .rows('jobs.publish-title', [{ id: JOB_ID, title: 'Pakowanie' }])
+      .rpc('publish_job', () => { throw pgError('42501', 'JOB_CONTENT_REVIEW_REQUIRED'); });
+    await publishJob(JOB_ID);
+    expect(fakeDb.callsTo('ai_budget_reserve')).toHaveLength(1);
+    expect(fakeDb.callsTo('record_job_content_ai_signal')).toHaveLength(1);
   });
 });
 
