@@ -2789,7 +2789,7 @@
     "agePolicyConfirmDescription": "Le seuil passera de « {from} » à « {to} ».",
     "agePolicySuccess": "Le seuil d'âge des candidats a été enregistré.",
     "agePolicyStale": "Le seuil d’âge a été modifié entre-temps par un autre administrateur. La page a été actualisée — vérifiez la valeur actuelle et, si besoin, enregistrez à nouveau.",
-    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count} profils ont été masqués de la recherche.",
+    "agePolicySuccessHidden": "Le seuil d'âge des candidats a été enregistré. {count, plural, one {# profil a été masqué} other {# profils ont été masqués}} de la recherche.",
     "reportsSortLabel": "Ordre",
     "reportsSortNewest": "Plus récents",
     "reportsSortPriority": "Priorité et échéance",

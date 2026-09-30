@@ -30,9 +30,11 @@ import {
 } from '@/emails/_components';
 import type { EmailCopy, EmailType } from '@/emails/copy';
 import {
+  appealSubjectLabels,
   contactTopicLabels,
   emailCopy,
   greetings,
+  guestOfferSentLabel,
   interpolate,
   jobMatchAlertOffLabel,
   newMessageAttachmentsLabel,
@@ -210,14 +212,16 @@ export interface EmailDataMap {
 }
 
 /**
- * Dane e-maili odwołania (#43). `subjectRef` = numer decyzji (autor) albo numer sprawy
- * (zgłaszający) — ustalany w szablonie z tego, co przekazało RPC.
+ * Dane e-maili odwołania (#43). `subjectRef` = opisany numer decyzji (autor) albo numer sprawy
+ * (zgłaszający) — ustalany w `prepareVars` z tego, co przekazało RPC (#1117).
  */
 interface AppealEmailData {
   recipientName?: string | null;
   appealReference: string;
   decisionReference?: string | null;
   caseNumber?: string | null;
+  /** `author` (autor treści) albo `reporter` (zgłaszający) — z RPC odwołania (#43). */
+  appellantRole?: string | null;
   actionUrl: string;
 }
 
@@ -272,6 +276,17 @@ function prepareVars(
   if (type === 'statusChanged' || type === 'guestStatusChanged') {
     vars.status = applicationStatusLabel(locale, data.status) ?? '';
   }
+  // #1118: gość bez konta nie dostaje propozycji w portalu — zamiast etykiety panelu
+  // („Propozycja wysłana”) zapowiedź kontaktu pracodawcy. Statusy odpowiedzi na propozycję
+  // (offer_accepted/declined) gościa nie dotyczą → neutralny wariant bez etykiety.
+  if (type === 'guestStatusChanged' && typeof data.status === 'string') {
+    const raw = data.status.trim().toLowerCase();
+    if (raw === 'offer_sent') vars.status = guestOfferSentLabel[locale];
+    else if (raw === 'offer_accepted' || raw === 'offer_declined') vars.status = '';
+  }
+  if (type === 'appealReceived' || type === 'appealUpheld' || type === 'appealReversed') {
+    vars.subjectRef = appealSubjectRef(locale, data);
+  }
   if (type === 'inactiveCvWarning' || type === 'inactiveAccountWarning') {
     vars.deletionDate = formatEmailDate(data.deletionDate, locale) ?? '';
   }
@@ -280,12 +295,51 @@ function prepareVars(
   return vars;
 }
 
-/** Treść maila w języku odbiorcy — z neutralnym wariantem, gdy brak kluczowej danej. */
+/**
+ * Odwołanie złożył zgłaszający (#1117)? Rola z RPC (`appellantRole`); bez niej — sam numer
+ * sprawy bez numeru decyzji oznacza zgłaszającego.
+ */
+function isReporterAppeal(data: Record<string, unknown>): boolean {
+  if (data.appellantRole === 'reporter') return true;
+  if (data.appellantRole === 'author') return false;
+  return isBlank(data.decisionReference) && !isBlank(data.caseNumber);
+}
+
+/**
+ * `{subjectRef}` w e-mailach odwołań (#1117): autor widzi numer DECYZJI, zgłaszający — numer
+ * SPRAWY, każdy z opisem w języku odbiorcy (numer sprawy DSA nie jest „numerem decyzji”).
+ */
+function appealSubjectRef(locale: Locale, data: Record<string, unknown>): string {
+  const labels = appealSubjectLabels[locale];
+  const decision = isBlank(data.decisionReference) ? '' : String(data.decisionReference);
+  const caseNumber = isBlank(data.caseNumber) ? '' : String(data.caseNumber);
+  if (isReporterAppeal(data) && caseNumber) return interpolate(labels.case, { ref: caseNumber });
+  if (decision) return interpolate(labels.decision, { ref: decision });
+  if (caseNumber) return interpolate(labels.case, { ref: caseNumber });
+  return isBlank(data.appealReference) ? '' : String(data.appealReference);
+}
+
+/** Pole z liczbą pozycji, od którego zależy wariant `EmailCopy.single` (#1118). */
+const COUNT_FIELD: Partial<Record<EmailType, string>> = {
+  jobMatch: 'count',
+};
+
+/**
+ * Treść maila w języku odbiorcy — z neutralnym wariantem, gdy brak kluczowej danej, wariantem
+ * liczby pojedynczej (`count` = 1) i wariantem zgłaszającego w odwołaniach.
+ */
 function resolveCopy(type: EmailType, locale: Locale, vars: Record<string, unknown>): EmailCopy {
-  const copy = emailCopy[type][locale];
+  let copy = emailCopy[type][locale];
   const field = SUBJECT_FIELD[type];
   if (field && copy.anonymous && isBlank(vars[field])) {
-    return { ...copy, ...copy.anonymous };
+    copy = { ...copy, ...copy.anonymous };
+  }
+  const countField = COUNT_FIELD[type];
+  if (countField && copy.single && Number(vars[countField]) === 1) {
+    copy = { ...copy, ...copy.single };
+  }
+  if (copy.reporter && isReporterAppeal(vars)) {
+    copy = { ...copy, ...copy.reporter };
   }
   return copy;
 }
@@ -946,16 +1000,12 @@ export function ModerationRestoredEmail(props: EmailProps<'moderationRestored'>)
   );
 }
 
-function appealVars(props: AppealEmailData): Record<string, unknown> {
-  return { ...props, subjectRef: props.decisionReference ?? props.caseNumber ?? props.appealReference };
-}
-
 export function AppealReceivedEmail(props: EmailProps<'appealReceived'>): ReactElement {
   return (
     <EmailShell
       locale={props.locale}
       type="appealReceived"
-      vars={appealVars(props)}
+      vars={props}
       ctaHref={props.actionUrl}
       greetingName={props.recipientName ?? undefined}
     />
@@ -967,7 +1017,7 @@ export function AppealUpheldEmail(props: EmailProps<'appealUpheld'>): ReactEleme
     <EmailShell
       locale={props.locale}
       type="appealUpheld"
-      vars={appealVars(props)}
+      vars={props}
       ctaHref={props.actionUrl}
       greetingName={props.recipientName ?? undefined}
       quote={props.reasoning}
@@ -980,7 +1030,7 @@ export function AppealReversedEmail(props: EmailProps<'appealReversed'>): ReactE
     <EmailShell
       locale={props.locale}
       type="appealReversed"
-      vars={appealVars(props)}
+      vars={props}
       ctaHref={props.actionUrl}
       greetingName={props.recipientName ?? undefined}
       quote={props.reasoning}

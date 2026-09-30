@@ -2789,7 +2789,7 @@
     "agePolicyConfirmDescription": "Próg zmieni się z „{from}” na „{to}”.",
     "agePolicySuccess": "Próg wieku kandydatów został zapisany.",
     "agePolicyStale": "Próg wieku został w międzyczasie zmieniony przez innego administratora. Strona została odświeżona — sprawdź aktualną wartość i w razie potrzeby zapisz ponownie.",
-    "agePolicySuccessHidden": "Próg wieku kandydatów został zapisany. Ukryto {count} profili z wyszukiwania.",
+    "agePolicySuccessHidden": "Próg wieku kandydatów został zapisany. {count, plural, one {Ukryto # profil} few {Ukryto # profile} many {Ukryto # profili} other {Ukryto # profilu}} z wyszukiwania.",
     "reportsSortLabel": "Kolejność",
     "reportsSortNewest": "Najnowsze",
     "reportsSortPriority": "Priorytet i termin",

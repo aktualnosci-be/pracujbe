@@ -2789,7 +2789,7 @@
     "agePolicyConfirmDescription": "De drempel verandert van „{from}” naar „{to}”.",
     "agePolicySuccess": "De leeftijdsdrempel voor kandidaten is opgeslagen.",
     "agePolicyStale": "De leeftijdsdrempel is intussen door een andere beheerder gewijzigd. De pagina is vernieuwd — controleer de actuele waarde en sla zo nodig opnieuw op.",
-    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count} profielen zijn verborgen uit de zoekresultaten.",
+    "agePolicySuccessHidden": "De leeftijdsdrempel voor kandidaten is opgeslagen. {count, plural, one {# profiel is verborgen} other {# profielen zijn verborgen}} uit de zoekresultaten.",
     "reportsSortLabel": "Volgorde",
     "reportsSortNewest": "Nieuwste",
     "reportsSortPriority": "Prioriteit en termijn",

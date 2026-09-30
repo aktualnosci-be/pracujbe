@@ -13453,6 +13453,56 @@ select pg_temp.assert(
   'CT61-8d audyt zmiany statusu bez treści');
 
 -- ============================================================================
+-- CT1093. Potwierdzenie formularza kontaktu w języku ODBIORCY (#1093, 0998 — numer tymczasowy):
+--         zalogowany nadawca → język konta (resolve_recipient_locale), bez konta → język
+--         formularza; kolumna contact_messages.locale nadal = język formularza.
+--         Kontrola ujemna: definicja z 0125 (rollback) wysyła w języku formularza.
+-- ============================================================================
+reset role; reset app.current_uid;
+select public.resolve_recipient_locale(:'CANDB') as ct93_acc,
+       case when public.resolve_recipient_locale(:'CANDB') = 'nl' then 'fr' else 'nl' end as ct93_form \gset
+select pg_temp.assert(:'ct93_acc' <> :'ct93_form', 'CT1093-0 język formularza różny od języka konta');
+
+set role service_role;
+select message_id as ct93_id from public.submit_contact_message(
+  :'CANDB', gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-konto@test.be', :'ct93_form') \gset
+select message_id as ct93_guest from public.submit_contact_message(
+  null, gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-gosc@test.be', :'ct93_form') \gset
+select message_id as ct93_gone from public.submit_contact_message(
+  'c1093000-0000-0000-0000-00000000dead', gen_random_uuid(), 'other', :'CTMSG', null,
+  'ct1093-brak@test.be', :'ct93_form') \gset
+reset role;
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = :'ct93_acc')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_id'),
+  'CT1093-1 zalogowany nadawca: supportContact w języku konta, nie formularza');
+select pg_temp.assert(
+  (select locale = :'ct93_form' from public.contact_messages where id = :'ct93_id'),
+  'CT1093-2 wiadomość zachowuje język formularza');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = :'ct93_form')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_guest'),
+  'CT1093-3 nadawca bez konta: supportContact w języku formularza');
+select pg_temp.assert(
+  (select count(*) = 1 and bool_and(locale = :'ct93_form')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_gone'),
+  'CT1093-4 nieistniejący profil = jak bez konta (język formularza)');
+
+-- KONTROLA UJEMNA: definicja z 0125 wysyła potwierdzenie zalogowanemu w języku formularza.
+begin;
+\ir ../rollback/0998_contact_recipient_locale.down.sql
+set local role service_role;
+select message_id as ct93_old from public.submit_contact_message(
+  :'CANDB', gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-stara@test.be', :'ct93_form') \gset
+reset role;
+select pg_temp.assert(
+  (select bool_and(locale = :'ct93_form') and bool_and(locale <> :'ct93_acc')
+     from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_old'),
+  'CT1093-N kontrola ujemna: bez 0998 zalogowany dostaje język formularza (CT1093-1 by to złapał)');
+rollback;
+reset role; reset app.current_uid;
+
+-- ============================================================================
 -- AIB36. Globalny budżet AI (#36, 0120): rezerwacja przed API, dzienny i miesięczny limit,
 --        fail-closed (brak limitu / limit 0), rozliczenie idempotentne, uprawnienia.
 --        Kontrola ujemna: ai_budget_spent licząca tylko rozliczone wiersze przepuszcza

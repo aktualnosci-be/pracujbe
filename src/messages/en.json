@@ -2789,7 +2789,7 @@
     "agePolicyConfirmDescription": "The threshold will change from “{from}” to “{to}”.",
     "agePolicySuccess": "The candidate age threshold has been saved.",
     "agePolicyStale": "The age threshold was changed in the meantime by another administrator. The page has been refreshed — check the current value and save again if needed.",
-    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count} profiles were hidden from search.",
+    "agePolicySuccessHidden": "The candidate age threshold has been saved. {count, plural, one {# profile was hidden} other {# profiles were hidden}} from search.",
     "reportsSortLabel": "Order",
     "reportsSortNewest": "Newest",
     "reportsSortPriority": "Priority and deadline",
