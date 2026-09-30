@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * `/praca/miasto/<alias>` — nazwa miasta w dowolnym z 4 języków (lub inną wielkością liter)
@@ -12,9 +13,9 @@ import { expect, test } from "@playwright/test";
 const locales = ["pl", "nl", "fr", "en"] as const;
 type Locale = (typeof locales)[number];
 
-function locations(locale: Locale): Record<string, string> {
+function locations(locale: Locale): AppMessages['locations'] {
   const file = resolve(process.cwd(), "src", "messages", `${locale}.json`);
-  return (JSON.parse(readFileSync(file, "utf8")) as { locations: Record<string, string> }).locations;
+  return (JSON.parse(readFileSync(file, "utf8")) as { locations: AppMessages['locations'] }).locations;
 }
 
 /** Tak jak wpisałby to człowiek w pasku adresu: małe litery, bez akcentów, spacje → myślniki. */
@@ -26,7 +27,7 @@ function typed(name: string): string {
     .replace(/\s+/g, "-");
 }
 
-const keys = Object.keys(locations("pl"));
+const keys = Object.keys(locations("pl")) as Array<keyof AppMessages["locations"]>;
 
 for (const locale of locales) {
   test(`${locale}: przetłumaczone nazwy miast przekierowują na klucz`, async ({ request }) => {

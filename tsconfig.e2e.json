@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "incremental": false, "plugins": [], "noUncheckedIndexedAccess": false },
+  "compilerOptions": { "incremental": false, "plugins": [] },
   "include": ["next-env.d.ts", "tests/e2e/**/*.ts", "tests/e2e/**/*.tsx"],
   "exclude": ["node_modules"]
 }

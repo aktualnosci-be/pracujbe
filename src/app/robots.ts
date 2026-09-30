@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 
-import { env, isProductionDeployment } from '@/lib/env';
+import { env } from '@/lib/env';
+import { isSearchIndexingEnabled } from '@/lib/seo/indexing';
 import { panelDisallowRules } from '@/lib/seo/robots-rules';
 import { generateSitemaps } from './sitemap';
 
@@ -11,8 +12,9 @@ import { generateSitemaps } from './sitemap';
  * i API, wskazanie WSZYSTKICH plików sitemap. Środowiska staging/preview (oraz lokalne):
  * pełna blokada indeksowania (`Disallow: /`), aby wersje robocze nie trafiały do wyszukiwarek.
  *
- * Wykrywanie środowiska: JEDNO źródło prawdy `isProductionDeployment()` (P1-19) —
- * spójne z nagłówkami (next.config.mjs) i sitemap.
+ * Wykrywanie środowiska: `isSearchIndexingEnabled()` = `isProductionDeployment()` (P1-19,
+ * spójne z nagłówkami next.config.mjs i sitemap) ORAZ brak bramki hasła (#1115) — wspólne
+ * z sitemap.
  *
  * Sitemap index (#599): `sitemap.ts` dzieli katalog na `generateSitemaps()` plików
  * (`/sitemap/<id>.xml`, konwencja Next.js) zamiast jednego, ucinanego pliku. `robots.txt`
@@ -32,7 +34,7 @@ export const dynamic = 'force-dynamic';
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const base = env.siteUrl;
 
-  if (!isProductionDeployment()) {
+  if (!isSearchIndexingEnabled()) {
     return {
       rules: { userAgent: '*', disallow: '/' },
     };

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { expect, test } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * #300: pracodawca otwiera zgłoszenie z listy i z pulpitu; widzi wiadomość, telefon,
@@ -12,9 +13,9 @@ import { expect, test } from '@playwright/test';
 const locales = ['pl', 'nl', 'fr', 'en'] as const;
 
 type Messages = {
-  dashboard: Record<string, string>;
-  onboarding: Record<string, string>;
-  status: Record<string, string>;
+  dashboard: AppMessages['dashboard'];
+  onboarding: AppMessages['onboarding'];
+  status: AppMessages['status'];
 };
 
 function load(locale: string): Messages {
