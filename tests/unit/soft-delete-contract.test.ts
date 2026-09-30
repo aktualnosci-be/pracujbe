@@ -249,8 +249,6 @@ export const EXCEPTIONS: Record<string, string> = {
   'public.moderation_restore_core:companies': `${ADMIN} — cofnięcie decyzji moderacyjnej`,
   'public.moderation_restore_core:jobs': `${ADMIN} — cofnięcie decyzji moderacyjnej`,
   'public.ops_metrics:jobs': `${ADMIN} — liczniki operacyjne`,
-  'public.process_saved_search_alerts:companies': `${MAINT} — oferty z saved_search_matching_jobs (warunki get_public_jobs: deleted_at ofert i firm)`,
-  'public.process_saved_search_alerts:jobs': `${MAINT} — oferty z saved_search_matching_jobs (warunki get_public_jobs: deleted_at ofert i firm)`,
   'public.profile_full_name:profiles': `${FORMAT} — imię i nazwisko do treści powiadomienia`,
   'public.publish_job:companies': `${MAINT} — oferta sprawdzana deleted_at; oferta usuniętej firmy nie jest publiczna (job_is_public)`,
   'public.record_signup_consents:profiles': `${NEW} — profil tworzony w tej samej transakcji rejestracji`,
