@@ -6,7 +6,7 @@
 > Mapa opisuje fakty z kodu. Role administratorów, podstawy prawne, regiony, transfery i umowy
 > ustala właściciel z prawnikiem — pola „DO UZUPEŁNIENIA”. Nic z tego pliku nie trafia do UI.
 
-Tabele w migracjach: 110; z danymi osobowymi: 76; bez danych osobowych: 34.
+Tabele w migracjach: 111; z danymi osobowymi: 77; bez danych osobowych: 34.
 
 ## 1. Czynności przetwarzania → tabele i usługi
 
