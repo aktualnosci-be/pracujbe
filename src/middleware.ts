@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { routing } from './i18n/routing';
 import { resolveCitySlugAlias } from '@/lib/locations/city-aliases';
-import { isOneTimeLinkPath } from '@/lib/analytics/route-policy';
+import { isOneTimeLinkPath, isPrivateRoutePath } from '@/lib/analytics/route-policy';
 import { guestLinkPurpose } from '@/lib/guest-apply/link-state';
 import { isAppReady } from '@/lib/env';
 import { isOversizedPublicAction } from '@/lib/http/public-action-body-limit';
@@ -49,11 +49,23 @@ const handleIntl = createIntlMiddleware(routing);
  */
 const PRIVATE_CACHE_CONTROL = 'private, no-store';
 
+/**
+ * Trasy prywatne (panele, auth, jednorazowe linki — `isPrivateRoutePath`) nie mogą przekazać
+ * własnej ścieżki ani query jako `document.referrer` kolejnemu dokumentowi (#1218): globalne
+ * `strict-origin-when-cross-origin` wysyła pełny adres przy przejściu w obrębie witryny, więc
+ * publiczna strona otwarta z panelu w nowej karcie oddałaby np. `/admin/uzytkownicy?q=<e-mail>`
+ * beaconowi analityki. `strict-origin` = sam origin, zawsze (nie `no-referrer`: przy tej polityce
+ * przeglądarka wysyła `Origin: null` w POST z tego dokumentu, a Server Actions i trasy eksportu
+ * sprawdzają `Origin`). Jednorazowe linki (bez formularzy wymagających Origin) — `no-referrer`.
+ */
 function protectOneTimeResponse(request: NextRequest, response: NextResponse): NextResponse {
-  if (isOneTimeLinkPath(request.nextUrl.pathname)) {
+  const { pathname } = request.nextUrl;
+  if (isOneTimeLinkPath(pathname)) {
     response.headers.set('cache-control', PRIVATE_CACHE_CONTROL);
     response.headers.set('referrer-policy', 'no-referrer');
     response.headers.set('x-robots-tag', 'noindex, nofollow');
+  } else if (isPrivateRoutePath(pathname)) {
+    response.headers.set('referrer-policy', 'strict-origin');
   }
   return response;
 }

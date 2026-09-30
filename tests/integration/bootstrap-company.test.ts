@@ -62,12 +62,19 @@ beforeAll(async () => {
   if (!ready) throw new Error('Izolowany PostgreSQL nie uruchomił się.');
   await admin.query(readFileSync(new URL('../../database/bootstrap/0001_roles_and_identity.sql', import.meta.url), 'utf8'));
   // Rzeczywiste polityki RLS, strażniki ownera i RPC, bez ich testowych zamienników.
+  // Kolejność jak w produkcji (scripts/db/production-migrations.mjs): pliki domenowe i 0057
+  // (Better Auth) razem, po nazwie — migracja późniejsza niż 0057 (np. 0186 czytająca
+  // auth.users.email_verified) widzi wtedy kolumny auth tak samo jak na Railway.
   const migrations = new URL('../../supabase/migrations/', import.meta.url);
+  const betterAuth = new URL('../../database/auth/0057_better_auth_core.sql', import.meta.url);
+  const ordered = [
+    ...readdirSync(migrations).filter((name) => name.endsWith('.sql')).map((name) => ({ name, url: new URL(name, migrations) })),
+    { name: '0057_better_auth_core.sql', url: betterAuth },
+  ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   await admin.query('BEGIN');
-  for (const filename of readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()) {
-    await admin.query(readFileSync(new URL(filename, migrations), 'utf8'));
+  for (const { url } of ordered) {
+    await admin.query(readFileSync(url, 'utf8'));
   }
-  await admin.query(readFileSync(new URL('../../database/auth/0057_better_auth_core.sql', import.meta.url), 'utf8'));
   await admin.query('COMMIT');
   await admin.query(`CREATE ROLE bootstrap_web LOGIN PASSWORD '${password}'
     NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;

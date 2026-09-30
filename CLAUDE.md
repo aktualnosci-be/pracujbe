@@ -1612,6 +1612,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `withAiBudget` + log użycia bez treści, minimalizacja `redactSensitiveData`, treść jako dane
   w `<offer_text>`, strict schema; trafienie tylko kieruje do kolejki (`record_job_content_ai_signal`,
   service_role, odcisk jak CAS), awaria/brak budżetu = same reguły; inwentarz `job_fraud_check`.
+  Przy publikacji model woła się dopiero, gdy `publish_job` może się udać (`canAttemptPublish` pod RLS:
+  recruiter+, szkic, firma `verified`, termin, kanał — #1235; member/oferta aktywna = bez kosztu AI).
   Podpowiedź w kreatorze (kroki 5, 6, 8), kolejka admina `/admin/tresc-ofert` (źródło reguła/AI,
   uzasadnienie i pewność AI, treść z chwili zgłoszenia, `admin_decide_job_content_review` z CAS
   treści, audytem i powiadomieniem). **Agencje pracy tymczasowej** (decyzja właściciela 28.09):
@@ -3298,10 +3300,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `safeErrorArea`) i SQLSTATE, deduplikacja po (kod, obszar, SQLSTATE), maintenance zgłasza każde
   nieudane zadanie osobno (#1066); `reportUnmappedDbError` (`src/lib/db/errors.ts`) zgłasza
   `INTERNAL` z nieznanego błędu bazy w akcjach (kandydat, onboarding, ustawienia powiadomień,
-  zespół, firma, zapisane wyszukiwania; bez akcji rekrutacyjnych i `jobs.ts`, #1068); cookie aktywnej
+  zespół, firma, zapisane wyszukiwania; bez akcji rekrutacyjnych i `jobs.ts`, #1068); trasy prywatne (`isPrivateRoutePath`, lista
+  `route-policy.ts`) dostają w middleware `Referrer-Policy: strict-origin` (sam origin jako referrer
+  strony otwartej z panelu; jednorazowe linki `no-referrer`, #1218, unit `middleware-referrer-policy`,
+  E2E `one-time-link-tracking`); cookie aktywnej
   firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
   firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
-  poza produkcją pokazuje szczegóły tylko z tokenem albo na loopbacku, zbiorczy budżet błędów
+  pokazuje szczegóły tylko z tokenem albo w `next dev` (`NODE_ENV=development` poza trybem produkcyjnym —
+  nie po `request.url`, który za proxy Railway wskazuje localhost, #1219), zbiorczy budżet błędów
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
   worker kolejki storage bierze do 10 partii po 100 na przebieg, migrator wypisuje nazwę migracji
   i SQLSTATE bez komunikatu bazy (#1105).
@@ -3330,7 +3336,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i dokumenty migracji (`docs/railway/`) wspominają Supabase celowo (dostawca historyczny / źródło migracji).
 - [x] Integracyjne testy RLS/triggerów w CI — job `rls` (usługa `postgres:16`), `scripts/test-rls.sh`,
   `supabase/tests/{shim,rls}.sql`; `npm run test:rls`.
-- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 3 + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
+- [x] Zależności: **`npm audit` 0 podatności** (next-intl v4 + vitest 4.1.11 — #749, bez podatnego `@vitest/mocker` + overrides rollup/vite/esbuild/sharp/prismjs/postcss).
 - [x] `next/font/local` (offline DM Sans; wcześniej Inter), PWA (ikony/manifest/service worker), storage signed URLs + upload CV (0018, Invariant #10).
   Pliki CV na Railway (#26): upload, pobranie, usunięcie i kwarantanna przez prywatny bucket S3
   Railway (`src/lib/files/*`, repozytorium `db/candidate-files.ts`, adapter `storage/railway-bucket.ts`),
@@ -3369,6 +3375,16 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (polityki odczytu), a baza odrzuca zmianę ich statusu każdą ścieżką (także SECURITY DEFINER/service_role)
   jako `NOT_FOUND` (`trg_soft_delete_contract`); zmiana samego `deleted_at` i kluczy obcych (usuwanie konta
   `erase_*`, retencja) działa. Dowód: `rls.sql` GS98-6, SD1111-6/N4.
+  Przegląd funkcji SECURITY DEFINER (migracja `0193`, numer tymczasowy): funkcje omijają RLS, więc usunięty
+  wiersz nie daje roli (`current_profile_role` — brak/usunięty profil = `''`, więc wzorzec
+  `<> 'candidate'` odrzuca; `is_admin` od 0185), dostępu (`can_access_*`, `is_job_manager`/`is_job_company_member`,
+  `is_conversation_member`, `conversation_created_by_me`, `owns_candidate_profile`), listu
+  (`email_recipient_authorized`), profilu (`ensure_candidate_profile` → `NOT_FOUND`), sukcesu ponowienia
+  (`apply_to_job`) ani relacji/celu propozycji (`send_offer`). Strażnik `tests/unit/soft-delete-contract.test.ts`
+  czyta najnowsze definicje z migracji: każda para (funkcja SECURITY DEFINER, tabela z `deleted_at`) ma warunek,
+  funkcję pomocniczą sprawdzającą `deleted_at` albo wyjątek z uzasadnieniem (kategorie ERASE/GUARD/WRITE/NEW/
+  SESSION/FORMAT/ADMIN/EXPORT/MATCH/MAINT; nieaktualny wyjątek = czerwony; kontrola ujemna na definicjach sprzed
+  0193). Dowód: `rls.sql` SDR1111 (kontrole ujemne po rollbacku `0193_…down.sql`).
   Plik CV: wspólne reguły `src/lib/validation/cv-file.ts` (5 MB, PDF/DOC/DOCX) w przeglądarce i akcji;
   plik za duży/zły format odrzucony przed wysyłką (limit ciała akcji 6mb), akcja zwraca `reason`
   (`tooLarge`/`type`/`empty`) → komunikaty `files.error*` (#362).
