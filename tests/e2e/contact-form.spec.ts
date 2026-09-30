@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import AxeBuilder from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * #61 na serwerze fixture (`playwright.applications-fixture.config.ts`, tryb `full`): formularz
@@ -17,7 +18,7 @@ const NISS = '85.07.30-033.28';
 
 const pl = JSON.parse(readFileSync(resolve(process.cwd(), 'src', 'messages', 'pl.json'), 'utf-8')) as {
   help: { contactCta: string };
-  contact: Record<string, string> & { error: Record<string, string> };
+  contact: AppMessages['contact'];
 };
 const t = pl.contact;
 
