@@ -22384,7 +22384,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 
 
 -- ============================================================================
--- RD973. Retencja i DSA (0973 — numer tymczasowy):
+-- RD973. Retencja i DSA (0197 — numer tymczasowy):
 --   #784 CV i konto nieaktywnego kandydata dopiero od terminu z ostrzeżenia (nie 72 h wcześniej);
 --   #860 chwila poinformowania o decyzji/cofnięciu trwała (dowód `moderation_informed` z 0188) —
 --        usunięcie konta (i wierszy kolejki e-mail/powiadomień) nie zeruje terminu odwołania ani
@@ -22392,7 +22392,7 @@ select pg_temp.assert(pg_get_functiondef('public.can_attach_in_conversation(uuid
 --   #887 cofnięcie ograniczenia po anonimizacji sprawy odrzucone bez zapisu i skutków.
 -- Kontrole ujemne: stara reguła `due_at - v_lead`, brak trwałego dowodu, rdzeń bez kontroli.
 -- ============================================================================
-\echo '--- RD973 retencja i DSA (0973) ---'
+\echo '--- RD973 retencja i DSA (0197) ---'
 reset role; reset app.current_uid;
 \set RDC1 'e9730000-0000-4000-8000-0000000000c1'
 \set RDC2 'e9730000-0000-4000-8000-0000000000c2'
@@ -22498,7 +22498,7 @@ rollback;
 reset role; reset app.current_uid;
 
 -- ---- DI860: chwila poinformowania trwała po usunięciu konta (dowód 0188) -------------------
--- 0973 nie zmienia definicji z 0188 — sekcja pilnuje, że #860 jest domknięte przez
+-- 0197 nie zmienia definicji z 0188 — sekcja pilnuje, że #860 jest domknięte przez
 -- `moderation_informed` (usunięcie konta/wierszy poczty nie zeruje terminu ani retencji).
 begin;
 set local role service_role;

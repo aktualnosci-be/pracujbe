@@ -338,7 +338,7 @@ jawnej decyzji właściciela o przełączeniu z `dry-run`.
 
 - Cofnięcie ograniczenia po anonimizacji sprawy (`reports.redacted_at` albo
   `moderation_decisions.redacted_at`) jest odrzucane (`INVALID_TRANSITION: CASE_REDACTED`,
-  0973, #887) — stan sprawdzany po blokadzie wiersza sprawy, więc także przy równoległym
+  0197, #887) — stan sprawdzany po blokadzie wiersza sprawy, więc także przy równoległym
   `dsa_retention_run`; panel nie pokazuje akcji dla takiej sprawy.
 
 ### Odwołanie zgłaszającego od cofnięcia ograniczenia (0109)

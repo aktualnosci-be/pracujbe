@@ -1,31 +1,13 @@
 -- =============================================================================
--- 0973_retention_dsa_informed_restore.sql — numer TYMCZASOWY (ostateczny nada integrator).
---
--- #784: retencja usuwała CV i konto nieaktywnego kandydata do 72 h PRZED datą podaną
---   w ostrzeżeniu (`w.due_at - v_lead <= now()`, v_lead = okres `storage_physical_deletion`).
---   Termin fizycznego usunięcia obiektu dotyczy kolejki storage, nie daty utraty dostępu:
---   CV i konto usuwamy dopiero od `retention_warnings.due_at`. Pozostałe kategorie
---   (`deleted_file`, `deleted_profile` — dane już oznaczone do usunięcia) bez zmian.
---   `retention_purge_batch` = definicja z 0127 z tą jedną zmianą (0182 zmienia tylko
---   `admin_set_retention_policy`, 0185 woła tę funkcję z `run_retention_purge` bez zmiany
---   sygnatury).
---
--- #860: chwila poinformowania o decyzji moderacyjnej (i o cofnięciu ograniczenia) jest od 0188
---   trwałym faktem (`moderation_informed`, wpisy niezmienne, FK do poczty `on delete set null`),
---   więc usunięcie konta strony nie zeruje już terminu odwołania ani daty retencji sprawy. Ta
---   migracja NIE zmienia definicji z 0188 — dowód regresji #860 na definicjach 0188: `rls.sql`
---   sekcja RD973 (DI860).
---
--- #887: `moderation_restore_core` (definicja z 0104) sprawdza anonimizację sprawy PO blokadzie
---   wiersza sprawy i odrzuca cofnięcie (`INVALID_TRANSITION: CASE_REDACTED`) bez zapisu
---   i skutków — nowe uzasadnienie po anonimizacji wypadłoby z cyklu retencji. UI ukrywa akcję
---   dla takiej sprawy.
---
--- Rollback: supabase/rollback/0973_retention_dsa_informed_restore.down.sql.
+-- Rollback 0197 (numer tymczasowy) — przywraca definicje sprzed migracji:
+-- moderation_restore_core (0104) i retention_purge_batch (0127). Chwili poinformowania
+-- (0188, `moderation_informed`) ta migracja nie zmienia, więc rollback jej nie dotyka.
+-- UWAGA: po rollbacku CV/konto są usuwane do `storage_physical_deletion` przed terminem (#784),
+-- a cofnięcie ograniczenia po anonimizacji sprawy znów przechodzi (#887).
+-- Test: supabase/tests/retention-dsa-0197-rollback.sql (scripts/test-rls.sh).
 -- =============================================================================
 
--- --- 1. Cofnięcie ograniczenia po anonimizacji sprawy (#887) -------------------------------
--- Definicja z 0104 + kontrola `redacted_at` po blokadzie sprawy.
+-- Definicja z 0104.
 create or replace function public.moderation_restore_core(p_decision_id uuid, p_reason text, p_notify boolean)
 returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 declare
@@ -37,7 +19,6 @@ declare
   v_id      uuid;
   v_owner   uuid;
   v_title   text;
-  v_report_redacted timestamptz;
 begin
   if char_length(v_reason) < 20 then
     raise exception 'VALIDATION_FAILED: REASON_REQUIRED' using errcode = '22023';
@@ -51,14 +32,7 @@ begin
   if v_dec.decision = 'no_action' then
     raise exception 'INVALID_TRANSITION: decyzja bez ograniczenia' using errcode = '22023';
   end if;
-  select r.redacted_at into v_report_redacted from public.reports r where r.id = v_dec.report_id for update;
-  -- #887: stan anonimizacji sprawdzany PO blokadzie sprawy (równoległy dsa_retention_run czeka
-  -- albo już zakończył). Po anonimizacji cykl retencji sprawy jest zamknięty — nowy zapis
-  -- (uzasadnienie, e-mail) wypadłby z niego, więc cofnięcie jest odrzucane bez skutków.
-  select d.* into v_dec from public.moderation_decisions d where d.id = p_decision_id;
-  if v_report_redacted is not null or v_dec.redacted_at is not null then
-    raise exception 'INVALID_TRANSITION: CASE_REDACTED' using errcode = '22023';
-  end if;
+  perform 1 from public.reports r where r.id = v_dec.report_id for update;
   if exists (select 1 from public.moderation_restorations r where r.decision_id = p_decision_id) then
     raise exception 'STALE_STATE: decyzja już cofnięta';
   end if;
@@ -146,8 +120,7 @@ begin
 end $$;
 revoke all on function public.moderation_restore_core(uuid, text, boolean) from public, anon, authenticated;
 
--- --- 2. Retencja CV i konta od terminu z ostrzeżenia (#784) --------------------------------
--- Definicja z 0127; zmienione wyłącznie warunki usuwania CV i konta (`w.due_at <= now()`).
+
 -- Jedna partia wszystkich kategorii (funkcja wewnętrzna; wywołuje ją run_retention_purge).
 create or replace function public.retention_purge_batch(p_limit integer)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
@@ -157,8 +130,6 @@ declare
   v_period  interval;
   v_warn    interval;
   -- Fizyczne usunięcie obiektu mieści się w okresie kategorii: wiersz usuwamy o tyle wcześniej.
-  -- #784: dotyczy WYŁĄCZNIE danych już oznaczonych do usunięcia (deleted_file/deleted_profile).
-  -- CV i konto nieaktywnego kandydata — dopiero od terminu z ostrzeżenia (`w.due_at <= now()`).
   v_lead    interval := coalesce(public.retention_period('storage_physical_deletion'), interval '0');
   v_ids     uuid[];
   v_convs   uuid[];
@@ -275,7 +246,7 @@ begin
                         on w.profile_id = p.id and w.policy_key = 'inactive_candidate_cv'
                        and w.activity_at = coalesce(p.last_seen_at, p.created_at)
                      where x.entity_type = 'candidate_cv' and x.deleted_at is null
-                       and w.due_at <= now()
+                       and w.due_at - v_lead <= now()
                      order by w.due_at limit v_limit for update of x skip locked);
     get diagnostics v_n = row_count;
     if v_n >= v_limit then v_full := v_full + 1; end if;
@@ -319,7 +290,7 @@ begin
         join public.retention_warnings w
           on w.profile_id = p.id and w.policy_key = 'inactive_candidate_account'
          and w.activity_at = coalesce(p.last_seen_at, p.created_at)
-       where p.role = 'candidate' and w.due_at <= now()
+       where p.role = 'candidate' and w.due_at - v_lead <= now()
        order by w.due_at limit v_erase_limit
        for update of p skip locked
     loop
