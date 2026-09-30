@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BadgeCheck, SearchX } from 'lucide-react';
@@ -30,6 +31,12 @@ import { companyProfilePath, getCompanyProfile } from '@/lib/companies';
 
 const JOBS_PATH = '/oferty-pracy';
 
+/**
+ * Jeden odczyt profilu na żądanie (#1096): metadane i widok dzielą wynik przez `cache()`
+ * Reacta (zakres jednego renderu serwera), zamiast dwóch zapytań do bazy.
+ */
+const loadCompanyProfile = cache(getCompanyProfile);
+
 /** Jak w szczególe oferty (`oferty-pracy/[slug]/page.tsx`): jedna linia, granica słowa, wielokropek. */
 function truncate(text: string, max: number): string {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -49,7 +56,7 @@ function initials(name: string): string {
 }
 
 export async function companyProfileMetadata(locale: string, slug: string, page: number): Promise<Metadata> {
-  const result = await getCompanyProfile(slug, locale, page);
+  const result = await loadCompanyProfile(slug, locale, page);
   if (!result) {
     return { robots: { index: false, follow: false } };
   }
@@ -109,7 +116,7 @@ export async function CompanyProfileView({
   slug: string;
   page: number;
 }): Promise<React.JSX.Element> {
-  const result = await getCompanyProfile(slug, locale, page);
+  const result = await loadCompanyProfile(slug, locale, page);
   if (!result) {
     notFound();
   }

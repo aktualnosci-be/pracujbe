@@ -9,7 +9,7 @@ import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from
 import { jsonArg, rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
-import { codePointLength, hasNoNul } from '@/lib/validation/text';
+import { codePointLength, hasNoNul, NO_CONTROL_CHARS_REGEX } from '@/lib/validation/text';
 
 /**
  * Server Actions zapisanych wyszukiwań (#100) — cienka warstwa nad RPC z 0092.
@@ -54,6 +54,8 @@ const saveSchema = z.object({
     .string()
     .trim()
     .min(1)
+    // #1244: bez znaków sterujących (CR/LF…) — ta sama reguła co zmiana nazwy i baza (0991).
+    .regex(NO_CONTROL_CHARS_REGEX)
     .refine((v) => codePointLength(v) <= 80)
     .refine(hasNoNul),
   locale: z.enum(routing.locales),
@@ -62,13 +64,12 @@ const saveSchema = z.object({
 });
 
 const idSchema = z.string().uuid();
-/** Te same reguły co w bazie (0124): 1–80 znaków po przycięciu, bez znaków sterujących. */
-// eslint-disable-next-line no-control-regex
+/** Te same reguły co w bazie (0124/0991): 1–80 znaków po przycięciu, bez znaków sterujących. */
 const nameSchema = z
   .string()
   .trim()
   .min(1)
-  .regex(/^[^\u0000-\u001f\u007f-\u009f]*$/)
+  .regex(NO_CONTROL_CHARS_REGEX)
   .refine((v) => codePointLength(v) <= 80);
 const frequencySchema = z.enum(['daily', 'weekly']);
 

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { openGraphLocales } from '@/lib/seo/locales';
 import { languageDisplayName } from '@/lib/languages';
 import { formatSalaryRange } from '@/lib/salary';
@@ -163,9 +164,15 @@ export function generateStaticParams(): Array<{ locale: string; slug: string }> 
   return [];
 }
 
+/**
+ * Jeden odczyt oferty na żądanie (#1096): `generateMetadata` i strona dzielą wynik przez
+ * `cache()` Reacta (zakres jednego renderu serwera), zamiast dwóch zapytań do bazy.
+ */
+const loadJobBySlug = cache(getJobBySlug);
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { locale, slug } = await params;
-  const job = await getJobBySlug(slug, locale);
+  const job = await loadJobBySlug(slug, locale);
   if (!job) {
     return { robots: { index: false, follow: false } };
   }
@@ -225,7 +232,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
 
-  const job = await getJobBySlug(slug, locale);
+  const job = await loadJobBySlug(slug, locale);
   if (!job) {
     notFound();
   }

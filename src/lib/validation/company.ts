@@ -1,6 +1,7 @@
 import { z } from 'zod/v3';
 
 import { COMPANY_URL_MAX_LENGTH, isPublicHttpsUrl } from '@/lib/company-links';
+import { NO_CONTROL_CHARS_REGEX } from '@/lib/validation/text';
 
 /**
  * Walidacja danych firmy pracodawcy (Etap 4).
@@ -23,7 +24,10 @@ const nameSchema = z
   // Pusty string (formularz wysyła '') → „wymagane", „za krótka" dopiero dla 1 znaku (#367).
   .min(1, 'company.error.nameRequired')
   .min(2, 'company.error.nameTooShort')
-  .max(120, 'company.error.nameTooLong');
+  .max(120, 'company.error.nameTooLong')
+  // #1244: nazwa trafia do tematu e-maila (zaproszenie do zespołu) — bez CR/LF i innych znaków
+  // sterujących; lustro CHECK `companies_name_no_control` (0991).
+  .regex(NO_CONTROL_CHARS_REGEX, 'company.error.nameInvalid');
 
 // Lenient: pozwala na 2-literowy prefiks kraju + cyfry/kropki/spacje/myślniki (BE0123.456.789,
 // BE 0123456789, 0123456789). Puste = brak numeru. Twarda walidacja KBO/BCE = weryfikacja admina.

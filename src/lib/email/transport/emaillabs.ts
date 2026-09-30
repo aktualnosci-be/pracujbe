@@ -1,5 +1,6 @@
 import { parseMailbox } from '../mailbox';
 import { MailSendError, type MailMessage, type MailTransport } from './types';
+import { toSingleLineHeader } from '@/lib/validation/text';
 
 /**
  * Transport EmailLabs (REST API v2.1, https://apidocs.emaillabs.io).
@@ -44,7 +45,9 @@ export function emailLabsMessageId(idempotencyKey: string, fromEmail: string): s
   return `${idempotencyKey}@${domain}`;
 }
 
-function truncateSubject(subject: string): string {
+function truncateSubject(raw: string): string {
+  // #1244: temat bez CR/LF i znaków sterujących także dla tematów spoza `renderEmail` (kampanie).
+  const subject = toSingleLineHeader(raw);
   const chars = [...subject];
   return chars.length <= SUBJECT_MAX ? subject : `${chars.slice(0, SUBJECT_MAX - 1).join('')}…`;
 }

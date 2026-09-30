@@ -100,6 +100,7 @@
       "nameRequired": "Enter the company name.",
       "nameTooShort": "The company name is too short.",
       "nameTooLong": "The company name is too long.",
+      "nameInvalid": "The company name cannot contain control characters (such as a line break).",
       "vatInvalid": "Invalid VAT/KBO number.",
       "vatTooLong": "The VAT/KBO number is too long.",
       "urlInvalid": "Enter a full address starting with https://.",

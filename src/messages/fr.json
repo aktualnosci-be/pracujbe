@@ -100,6 +100,7 @@
       "nameRequired": "Indiquez le nom de l'entreprise.",
       "nameTooShort": "Le nom de l'entreprise est trop court.",
       "nameTooLong": "Le nom de l'entreprise est trop long.",
+      "nameInvalid": "Le nom de l’entreprise ne peut pas contenir de caractères de contrôle (comme un saut de ligne).",
       "vatInvalid": "Numéro de TVA/BCE invalide.",
       "vatTooLong": "Le numéro de TVA/BCE est trop long.",
       "urlInvalid": "Indiquez une adresse complète commençant par https://.",
