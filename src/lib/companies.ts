@@ -11,7 +11,7 @@ import { isDatabaseConfigured, isProductionMode } from '@/lib/env';
 import { isBuildPhase } from '@/lib/static-rendering';
 import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
-import { routing, type Locale } from '@/i18n/routing';
+import { isLocale, routing, type Locale } from '@/i18n/routing';
 import {
   getJobs,
   isRealJobsFixture,
@@ -37,6 +37,11 @@ export interface CompanyProfile {
   industry?: string;
   logoUrl?: string;
   website?: string;
+  /**
+   * Język, w którym firma napisała opis (#708, 0201); brak = nie wskazano (albo opis zmieniono
+   * po wskazaniu języka — baza wtedy zeruje wartość). Nigdy wartość spoza języków serwisu.
+   */
+  descriptionLocale?: Locale;
   activeJobsCount: number;
 }
 
@@ -74,6 +79,9 @@ function rowToCompanyProfile(row: Record<string, unknown>): CompanyProfile {
     ...(asOptString(row['industry']) ? { industry: asOptString(row['industry']) } : {}),
     ...(asOptString(row['logo_url']) ? { logoUrl: asOptString(row['logo_url']) } : {}),
     ...(asOptString(row['website']) ? { website: asOptString(row['website']) } : {}),
+    ...(isLocale(row['description_locale']) && asString(row['description']).trim()
+      ? { descriptionLocale: row['description_locale'] }
+      : {}),
     activeJobsCount: asNumber(row['active_jobs_count']),
   };
 }
