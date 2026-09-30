@@ -21,7 +21,7 @@ const classifieds = (process.env.E2E_PORTAL_LEGAL_MODE ?? 'RECRUITMENT').trim().
 test.skip(!classifieds, 'serwer testowy w trybie RECRUITMENT (E2E_PORTAL_LEGAL_MODE=)');
 
 type Texts = {
-  dashboard: Record<'profileCompleteness' | 'accountIntro' | 'navSaved' | 'navSearches' | 'navSettings' | 'navSummary', string>;
+  dashboard: Record<'profileCompleteness' | 'accountIntro' | 'navSaved' | 'navJournal' | 'navSearches' | 'navSettings' | 'navSummary', string>;
   settings: Record<'emailApplicationsLabel' | 'emailOffersLabel' | 'emailMessagesLabel' | 'emailJobMatchesLabel', string>;
   files: Record<'existingTitle' | 'existingHint' | 'upload', string>;
 };
@@ -58,6 +58,7 @@ for (const locale of LOCALES) {
       [t.dashboard.navSummary, '/candidate'],
       [t.dashboard.navSaved, '/candidate/zapisane'],
       [t.dashboard.navSearches, '/candidate/wyszukiwania'],
+      [t.dashboard.navJournal, '/candidate/dziennik'],
       [t.dashboard.navSettings, '/candidate/ustawienia'],
     ] as const) {
       expect(await page.locator(`a[href="/${locale}${href}"]`).filter({ hasText: label }).count(), label).toBeGreaterThan(0);

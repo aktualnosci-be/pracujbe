@@ -88,19 +88,19 @@ afterEach(() => {
 });
 
 describe('nawigacja kandydata: jedno źródło listy', () => {
-  it('tryb ogłoszeniowy = dokładnie pulpit, zapisane oferty, zapisane wyszukiwania, ustawienia', () => {
-    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'settings']);
+  it('tryb ogłoszeniowy = dokładnie pulpit, zapisane oferty, zapisane wyszukiwania, dziennik aplikacji, ustawienia', () => {
+    expect([...candidateNavKeys(false)]).toEqual(['summary', 'saved', 'searches', 'journal', 'settings']);
   });
 
   it('kontrola ujemna: lista z „Wiadomościami” nie przechodzi asercji', () => {
-    expect([...CLASSIFIEDS_CANDIDATE_NAV, 'messages']).not.toEqual(['summary', 'saved', 'searches', 'settings']);
+    expect([...CLASSIFIEDS_CANDIDATE_NAV, 'messages']).not.toEqual(['summary', 'saved', 'searches', 'journal', 'settings']);
     expect(candidateNavKeys(true)).toContain('messages');
   });
 
-  it('CandidateShell bez propsa (fail-closed): 4 pozycje, bez profilu i wiadomości', async () => {
+  it('CandidateShell bez propsa (fail-closed): 5 pozycji, bez profilu i wiadomości', async () => {
     const { CandidateShell } = await import('@/components/candidate/CandidateShell');
     render(<CandidateShell>{null}</CandidateShell>);
-    expect(navHrefs()).toEqual(['/candidate', '/candidate/zapisane', '/candidate/wyszukiwania', '/candidate/ustawienia']);
+    expect(navHrefs()).toEqual(['/candidate', '/candidate/zapisane', '/candidate/wyszukiwania', '/candidate/dziennik', '/candidate/ustawienia']);
   });
 
   it('CandidateShell: ścieżka kreatora w trybie ogłoszeniowym renderuje się w panelu (404 z nawigacją)', async () => {
