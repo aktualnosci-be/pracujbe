@@ -52,7 +52,13 @@ describe('setCompanyBlockAction (#97)', () => {
       throw new Error('ECONNREFUSED');
     });
     expect(await setCompanyBlockAction(COMPANY, true)).toEqual({ ok: false, error: 'INTERNAL' });
-    expect(captureError).toHaveBeenCalledTimes(1);
+    // #1068: nieoczekiwany SQLSTATE (42P01) i wyjątek sieci trafiają do kanału błędów; znana
+    // odmowa (PERMISSION_DENIED) — nie.
+    expect(captureError).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(captureError).mock.calls[0]![1]).toEqual({
+      area: 'company-blocks.setCompanyBlockAction',
+      sqlstate: '42P01',
+    });
 
     const before = fakeDb.calls.length;
     fakeSession.identity = null;
