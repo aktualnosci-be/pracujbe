@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { loadMigrations } from './migration-files.mjs';
 import { applyMigrations } from './migrate.mjs';
+import { loadProductionMigrations } from './production-migrations.mjs';
 
 // Operator uruchamia na NOWYM, jednorazowym klastrze: role PostgreSQL są globalne.
 // Nigdy nie używamy DATABASE_URL ani nie tworzymy/usuwamy domyślnej bazy.
@@ -17,7 +18,8 @@ try {
   const occupied = await client.query("SELECT to_regclass('auth.users') AS users, to_regclass('public.profiles') AS profiles, to_regclass('app_migrations.history') AS history");
   assert.deepEqual(occupied.rows[0], { users: null, profiles: null, history: null }, 'Test wymaga pustej bazy.');
   const bootstrap = await loadMigrations(fileURLToPath(new URL('../../database/bootstrap/', import.meta.url)));
-  const migrations = await loadMigrations(fileURLToPath(new URL('../../supabase/migrations/', import.meta.url)));
+  // Ta sama lista i kolejność co na produkcji: domena i auth razem, po nazwie (bez bootstrapu).
+  const migrations = (await loadProductionMigrations()).slice(1);
   await client.query('BEGIN');
   try {
     for (const file of bootstrap) await client.query(file.sql);
@@ -39,7 +41,7 @@ try {
 
   const alice = '11111111-1111-4111-8111-111111111111';
   const bob = '22222222-2222-4222-8222-222222222222';
-  await client.query("INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES ($1,'alice@example.invalid','{\"role\":\"candidate\"}'),($2,'bob@example.invalid','{\"role\":\"employer\"}')", [alice, bob]);
+  await client.query("INSERT INTO auth.users(id,name,email,raw_user_meta_data) VALUES ($1,'Alice','alice@example.invalid','{\"role\":\"candidate\"}'),($2,'Bob','bob@example.invalid','{\"role\":\"employer\"}')", [alice, bob]);
   assert.equal((await client.query('SELECT count(*)::int AS n FROM public.notification_preferences')).rows[0].n, 2);
 
   // Pozbawiamy połączenie możliwości odzyskania postgres; testujemy rzeczywistą rolę.
