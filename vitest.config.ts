@@ -55,7 +55,9 @@ export default defineConfig({
           name: 'chromium',
           include: CHROMIUM_TEST_FILES,
           pool: 'forks',
-          poolOptions: { forks: { singleFork: true } },
+          // Vitest 4 (#749): `poolOptions.forks.singleFork` usunięte — jeden worker naraz
+          // (plik po pliku), izolacja modułów między plikami zostaje domyślna.
+          maxWorkers: 1,
         },
       },
     ],
