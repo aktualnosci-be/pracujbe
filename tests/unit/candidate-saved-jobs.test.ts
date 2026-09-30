@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSavedJobs } from '@/lib/data/candidate';
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
@@ -78,5 +78,37 @@ describe('saved jobs read', () => {
     expect(sql).not.toMatch(/\blimit\s+(?:100|least)\b/i);
     expect(sql).toMatch(/revoke all on function public\.get_saved_jobs_display\(text\) from public, anon/i);
     expect(sql).toMatch(/grant execute on function public\.get_saved_jobs_display\(text\) to authenticated/i);
+  });
+
+  /** Ostatnia (wg numeru) migracja definiująca daną funkcję — definicja obowiązująca. */
+  function latestDefinition(pattern: RegExp): { file: string; sql: string } {
+    const files = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort();
+    const hits = files.filter((f) => pattern.test(readFileSync(`supabase/migrations/${f}`, 'utf8')));
+    const file = hits[hits.length - 1]!;
+    return { file, sql: readFileSync(`supabase/migrations/${file}`, 'utf8') };
+  }
+
+  it('#882: current get_saved_jobs_display gates metadata of non-public jobs by saved_while_public', () => {
+    const { file, sql } = latestDefinition(/function public\.get_saved_jobs_display\(/i);
+    expect(file).not.toBe('0162_saved_jobs_availability.sql');
+    const body = sql.slice(sql.search(/function public\.get_saved_jobs_display\(/i));
+    expect(body).toMatch(/v\.availability = 'available' or s\.saved_while_public/i);
+    for (const column of ['title', 'company_name', 'city']) {
+      expect(body).toMatch(new RegExp(`case when m\\.visible then [^\\n]+ else '' end as ${column}`, 'i'));
+    }
+    // Kontrola ujemna: definicja z 0162 zwraca metadane bez bramki dowodu.
+    const old = readFileSync('supabase/migrations/0162_saved_jobs_availability.sql', 'utf8');
+    expect(old).not.toMatch(/saved_while_public/);
+  });
+
+  it('#882: every new saved_jobs row goes through the public-target guard with row locks', () => {
+    const { sql } = latestDefinition(/function public\.saved_jobs_guard_target\(/i);
+    expect(sql).toMatch(/before insert on public\.saved_jobs/i);
+    expect(sql).toMatch(/for share of j, c/i);
+    expect(sql).toMatch(/raise exception 'NOT_FOUND/i);
+    // Kontrola ujemna: sama polityka RLS z 0009 nie sprawdza celu zapisu.
+    const rls = readFileSync('supabase/migrations/0009_rls.sql', 'utf8');
+    const policy = rls.slice(rls.indexOf('saved_jobs_insert_own'), rls.indexOf('saved_jobs_insert_own') + 200);
+    expect(policy).not.toMatch(/public\.jobs|job_is_public/);
   });
 });

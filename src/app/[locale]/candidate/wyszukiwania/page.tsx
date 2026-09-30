@@ -48,15 +48,21 @@ export default async function CandidateSavedSearchesPage({
 
   const t = await getTranslations({ locale, namespace: 'savedSearches' });
   const td = await getTranslations({ locale, namespace: 'dashboard' });
-  const [tFilters, tCat, tContract, load, pause, followed] = await Promise.all([
+  const [tFilters, tCat, tContract, tLanguageNames, load, pause, followed] = await Promise.all([
     getTranslations({ locale, namespace: 'filters' }),
     getTranslations({ locale, namespace: 'categories' }),
     getTranslations({ locale, namespace: 'contractTypes' }),
+    getTranslations({ locale, namespace: 'languageNames' }),
     loadMySavedSearches(),
     loadMyAlertsPause(),
     loadMyFollowedCompanies(),
   ]);
-  const filterTranslators = { filters: tFilters, categories: tCat, contractTypes: tContract };
+  const filterTranslators = {
+    filters: tFilters,
+    categories: tCat,
+    contractTypes: tContract,
+    languageNames: tLanguageNames,
+  };
   const formatDate = createAppDateFormatter(locale, { withTime: true });
   // #810: zakres dat wznowienia (jutro..+366 dni, Europe/Brussels — jak walidacja w bazie).
   const pauseRange = pauseDateRange();

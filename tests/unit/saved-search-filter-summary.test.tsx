@@ -40,12 +40,17 @@ type Locale = keyof typeof MESSAGES;
 
 function translators(locale: Locale): FilterSummaryTranslators {
   const messages = MESSAGES[locale];
-  const make = (namespace: 'filters' | 'categories' | 'contractTypes') => {
+  const make = (namespace: 'filters' | 'categories' | 'contractTypes' | 'languageNames') => {
     const t = createTranslator({ locale, messages, namespace });
     return (key: string, values?: Record<string, string | number>) =>
       (t as unknown as (k: string, v?: Record<string, string | number>) => string)(key, values);
   };
-  return { filters: make('filters'), categories: make('categories'), contractTypes: make('contractTypes') };
+  return {
+    filters: make('filters'),
+    categories: make('categories'),
+    contractTypes: make('contractTypes'),
+    languageNames: make('languageNames'),
+  };
 }
 
 const QUERY =

@@ -35,6 +35,12 @@ select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rollback test CLA
 select pg_temp.assert(((public.record_translation_source('candidate_profile', 'c1a10176-0000-0000-0000-0000000000e1'::uuid, 'pl',
     '{"title":"Magazynier","description":"Szukam pracy."}'::jsonb, 'tr-v1'))->>'status') = 'created',
   'CLAIB-4 kontrola ujemna: bez 0176 profil kandydata trafia do kolejki w trybie ogłoszeniowym');
+-- Claim bierze najwyżej 100 zadań wg next_attempt_at: zadania z wcześniejszych sekcji (oferty) odsuwamy
+-- w tej cofanej transakcji, żeby kontrola nie zależała od liczby ofert w rls.sql.
+reset role;
+update public.translation_jobs set next_attempt_at = now() + interval '1 day'
+ where entity_type <> 'candidate_profile' and status in ('queued', 'retry');
+set local role service_role;
 select pg_temp.assert(exists (select 1 from public.claim_translation_jobs(100, 300) where entity_type = 'candidate_profile'),
   'CLAIB-4b kontrola ujemna: bez 0176 claim wydaje zadania profilu');
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rollback test CLAIB-4: powrót', 'CLASSIFIEDS_ONLY');

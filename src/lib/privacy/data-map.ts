@@ -530,6 +530,25 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     notPersonal: { updated_at: 'Czas ostatniej zmiany pauzy alertów.' },
     note: 'Czasowa pauza alertów o nowych ofertach (#810, 0969): jeden wiersz na konto, sama data wznowienia.',
   },
+  'public.candidate_application_journal': {
+    activities: ['candidate-profile', 'data-rights'],
+    subjects: ['candidate'],
+    columns: {
+      profile_id: 'reference',
+      job_title: 'professional',
+      company_name: 'professional',
+      source_url: 'preferences',
+      location: 'professional',
+      note: 'correspondence',
+    },
+    notPersonal: {
+      client_key: 'Losowy klucz idempotencji operacji zapisu — nie identyfikuje osoby poza wierszem.',
+      stage: 'Etap wybrany przez kandydata (planowana/wysłana/rozmowa/oferta/zamknięta) — notatka własna, nie status procesu.',
+      applied_on: 'Data wpisana przez kandydata.',
+      remind_on: 'Data przypomnienia wpisana przez kandydata.',
+    },
+    note: 'Prywatny dziennik aplikacji wysłanych poza portalem (#904, 0196): tylko właściciel (RLS, zapis wyłącznie RPC), bez ścieżki dla firm, bez powiązania z ofertą ani procesem; eksport w export_my_data, usunięcie kaskadą z kontem.',
+  },
   'public.saved_search_alerts': {
     activities: ['matching-search', 'email-notifications'],
     subjects: ['candidate'],
@@ -695,6 +714,20 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['email-notifications'],
     subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
     columns: { email: 'contact', reason: 'technical', lifted_by: 'reference', lift_reason: 'moderation' },
+  },
+  'public.email_pending_events': {
+    activities: ['email-notifications'],
+    subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
+    columns: {
+      provider: 'technical',
+      provider_message_id: 'technical',
+      event: 'technical',
+      occurred_at: 'technical',
+      recipient: 'contact',
+      bounce_type: 'technical',
+      received_at: 'technical',
+    },
+    note: 'Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0195); przypisywane triggerem, czyszczone po 30 dniach.',
   },
   'public.email_consent_events': {
     activities: ['email-notifications', 'consents'],

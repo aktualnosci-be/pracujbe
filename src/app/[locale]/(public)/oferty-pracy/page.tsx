@@ -8,7 +8,7 @@ import { Link, redirect } from '@/i18n/navigation';
 import { routing } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { brandShareImageUrl, buildBreadcrumbListJsonLd, serializeJsonLd } from '@/lib/seo/structured-data';
-import { getJobFilterFacets, getJobs, isShowingDemoJobs } from '@/lib/jobs';
+import { getJobFilterFacets, getJobs, isRadiusPlaceKnown, isShowingDemoJobs } from '@/lib/jobs';
 import { readCandidateViewerId } from '@/lib/auth/candidate-viewer';
 import { DemoJobsNotice } from '@/components/public/DemoJobsNotice';
 
@@ -33,6 +33,7 @@ import {
   flattenSearchParams,
   parseLocationsParam,
   serializeLocations,
+  refinementQueryParams,
   sidebarFiltersToParams,
   splitParam,
   toFacetItem,
@@ -148,13 +149,14 @@ export default async function JobsListPage({
 
   const page = parsePage(flat['page']);
 
-  const [t, tFilters, tCat, tContract, tCommon, tNav] = await Promise.all([
+  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames] = await Promise.all([
     getTranslations('jobs'),
     getTranslations('filters'),
     getTranslations('categories'),
     getTranslations('contractTypes'),
     getTranslations('common'),
     getTranslations('nav'),
+    getTranslations('languageNames'),
   ]);
 
   // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
@@ -164,9 +166,11 @@ export default async function JobsListPage({
   // #97: zalogowany kandydat nie widzi ofert firm, które zablokował (lista, licznik i facety
   // filtruje baza — 0090). Gość i pracodawca dostają wspólny wynik publiczny.
   const viewer = { candidateId: await readCandidateViewerId() };
-  const [results, databaseFacets] = await Promise.all([
+  const [results, databaseFacets, nearKnown] = await Promise.all([
     getJobs({ ...filterParams, sort, page, pageSize: PAGE_SIZE }, viewer, { translateCards: true }),
     getJobFilterFacets(filterParams, viewer),
+    // #824: nierozpoznana miejscowość promienia daje pusty wynik — mówimy dlaczego.
+    sf.near ? isRadiusPlaceKnown(sf.near) : Promise.resolve(true),
   ]);
   const facets = databaseFacets
     ? {
@@ -183,6 +187,8 @@ export default async function JobsListPage({
             locale,
             keyword,
             ...cityFilters.cityQuery,
+            // 0194: filtry bazy facetów (jak w SQL) — demo filtruje je w `getJobs`.
+            ...refinementQueryParams(sf),
             page: 1,
             pageSize: 100,
           })
@@ -220,9 +226,10 @@ export default async function JobsListPage({
     });
   }
 
-  const withoutKey = (key: string): string => {
+  const withoutKey = (key: string, also: readonly string[] = []): string => {
     const next = { ...activeParams };
     delete next[key];
+    for (const extra of also) delete next[extra];
     return hrefFrom(next);
   };
   const withoutValue = (key: string, value: string): string => {
@@ -256,7 +263,7 @@ export default async function JobsListPage({
   const chips: Array<{ id: string; label: string; href: string }> = describeJobListFilters(
     listQuery,
     locale,
-    { filters: tFilters, categories: tCat, contractTypes: tContract },
+    { filters: tFilters, categories: tCat, contractTypes: tContract, languageNames: tLanguageNames },
   ).map((item) => ({
     id: item.id,
     label: item.label,
@@ -265,7 +272,7 @@ export default async function JobsListPage({
         ? withoutSalary()
         : item.removeValue !== undefined
           ? withoutValue(item.removeKey, item.removeValue)
-          : withoutKey(item.removeKey),
+          : withoutKey(item.removeKey, item.alsoRemove),
   }));
 
   // „Wyczyść filtry” usuwa wszystkie chipy — także słowo kluczowe i miasto; inaczej przy samym
@@ -439,6 +446,12 @@ export default async function JobsListPage({
           >
             {t('resultsCount', { count: total })}
           </h2>
+
+          {!nearKnown ? (
+            <p role="status" data-near-unknown className="mb-4 rounded-md border border-border bg-soft px-3 py-2 text-sm text-foreground">
+              {tFilters('nearUnknown', { place: sf.near })}
+            </p>
+          ) : null}
 
           {/* Chipy aktywnych filtrów */}
           {chips.length > 0 ? (

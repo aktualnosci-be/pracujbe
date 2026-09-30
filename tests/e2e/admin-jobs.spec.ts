@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Lista ofert panelu admina `/admin/oferty` w trybie DEMO (bez bazy): pozycja w menu, filtr
@@ -13,7 +14,7 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  * Axe na tych trasach: `admin-a11y.spec.ts`. Kontrola roli admina: unit `admin-jobs.test.ts`.
  */
 
-type Admin = Record<string, string>;
+type Admin = AppMessages['admin'];
 
 function admin(locale: string): Admin {
   return (JSON.parse(
