@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CandidateSettingsPage from '@/app/[locale]/candidate/ustawienia/page';
 import { CvUpload } from '@/components/candidate/CvUpload';
 import { deleteCandidateFile, prepareCvDownload, uploadCandidateCv } from '@/lib/actions/files';
 import { loadCandidateFiles } from '@/lib/data/candidate-files';
+import { PORTAL_LEGAL_MODE_ENV } from '@/lib/portal-mode';
 import pl from '@/messages/pl.json';
 import nl from '@/messages/nl.json';
 import fr from '@/messages/fr.json';
@@ -74,6 +75,21 @@ async function renderSettings(locale: LocaleKey) {
 beforeEach(() => {
   vi.mocked(loadCandidateFiles).mockResolvedValue({ status: 'ready', items: [CV] });
 });
+
+/**
+ * Rozgrzewka (limit hooka 10 s): pierwszy render strony i otwarcie dialogu potwierdzenia płacą
+ * jednorazowo leniwe importy i JIT — pod obciążeniem to właśnie pierwszy test był najwolniejszy.
+ */
+beforeAll(async () => {
+  vi.stubEnv(PORTAL_LEGAL_MODE_ENV, '');
+  vi.mocked(loadCandidateFiles).mockResolvedValue({ status: 'ready', items: [CV] });
+  await renderSettings('pl');
+  fireEvent.click(document.querySelector<HTMLButtonElement>(`button[aria-label="${pl.files.delete}: ${CV.fileName}"]`)!);
+  await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
+  cleanup();
+  vi.clearAllMocks();
+  vi.unstubAllEnvs();
+});
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -114,20 +130,33 @@ describe('/candidate/ustawienia w trybie ogłoszeniowym: istniejące CV (#1226)'
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('usunięcie po potwierdzeniu woła akcję i odświeża stronę; pobranie woła akcję linku', async () => {
-    vi.mocked(deleteCandidateFile).mockResolvedValue({ ok: true });
+  // Tanie zapytania DOM (atrybut `aria-label`) zamiast pollingu ról w całym drzewie jsdom.
+  const button = (label: string) => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  it('pobranie woła akcję linku, a po zakończeniu przyciski są znów aktywne', async () => {
     vi.mocked(prepareCvDownload).mockResolvedValue({ ok: true, url: '/api/files/cv/fixture-cv?t=x' });
     await renderSettings('pl');
-
-    fireEvent.click(screen.getByRole('button', { name: `${pl.files.download}: ${CV.fileName}` }));
+    const download = button(`${pl.files.download}: ${CV.fileName}`)!;
+    fireEvent.click(download);
     await waitFor(() => expect(prepareCvDownload).toHaveBeenCalledWith(CV.id));
+    // Jawny stan po akcji: koniec przejścia (useTransition) zdejmuje `disabled`.
+    await waitFor(() => expect(download.disabled).toBe(false));
+    expect(button(`${pl.files.delete}: ${CV.fileName}`)!.disabled).toBe(false);
+    expect(uploadCandidateCv).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: `${pl.files.delete}: ${CV.fileName}` }));
-    const dialog = await screen.findByRole('alertdialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: pl.files.delete }));
+  it('usunięcie po potwierdzeniu woła akcję, odświeża stronę i ogłasza sukces', async () => {
+    vi.mocked(deleteCandidateFile).mockResolvedValue({ ok: true });
+    await renderSettings('pl');
+
+    fireEvent.click(button(`${pl.files.delete}: ${CV.fileName}`)!);
+    await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    const confirm = [...dialog.querySelectorAll('button')].find((b) => b.textContent === pl.files.delete)!;
+    fireEvent.click(confirm);
     await waitFor(() => expect(deleteCandidateFile).toHaveBeenCalledWith(CV.id));
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
-    expect(await screen.findByRole('status')).toHaveTextContent(pl.files.deleteSuccess);
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(document.querySelector('[role="status"]')?.textContent).toBe(pl.files.deleteSuccess));
     expect(uploadCandidateCv).not.toHaveBeenCalled();
   });
 });
