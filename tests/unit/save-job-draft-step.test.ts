@@ -62,7 +62,9 @@ function allowedKeys(): { job: Set<string>; translation: Set<string> } {
     join(process.cwd(), 'supabase/migrations', latestSaveJobDraftMigration()),
     'utf8',
   );
-  const lists = [...sql.matchAll(/k not in \(([^)]*)\)/g)].map(
+  // Tylko ciało `save_job_draft` — migracja może definiować też inne funkcje z listą kluczy.
+    const body = sql.slice(sql.indexOf('function public.save_job_draft('));
+    const lists = [...body.matchAll(/k not in \(([^)]*)\)/g)].map(
     (m) => new Set([...m[1]!.matchAll(/'([a-z_]+)'/g)].map((x) => x[1]!)),
   );
   return { job: lists[0]!, translation: lists[1]! };

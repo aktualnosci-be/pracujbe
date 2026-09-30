@@ -18,7 +18,8 @@ select pg_temp.assert(
   to_regprocedure('public.get_public_jobs_sitemap_page(timestamptz, uuid, timestamptz, uuid, integer)') is null
   and to_regprocedure('public.get_public_jobs_sitemap_shard_starts(integer)') is null
   and to_regclass('public.idx_jobs_sitemap_cursor') is null
-  and to_regprocedure('public.get_public_jobs(text, text, text, text[], text[], text[], integer, integer, boolean, boolean, boolean, timestamptz, text, integer, integer, text, boolean)') is not null
+  -- Lista ofert zostaje (sygnatura zmienia się w kolejnych migracjach — sprawdzamy nazwę).
+  and exists (select 1 from pg_proc where proname = 'get_public_jobs' and pronamespace = 'public'::regnamespace)
   and (select count(*) from public.jobs) = :smjobs,
   'SM1042-R rollback usuwa tylko funkcje i indeks 0965');
 rollback;

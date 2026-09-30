@@ -190,7 +190,7 @@ export async function CompanyProfileView({
           </div>
         </header>
 
-        <p className="mt-4 max-w-2xl text-muted-foreground">
+        <p className="mt-4 max-w-2xl whitespace-pre-line text-muted-foreground">
           {company.description || t('noDescription')}
         </p>
 

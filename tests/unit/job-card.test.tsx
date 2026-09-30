@@ -69,7 +69,8 @@ describe('Paszport oferty', () => {
     expect(screen.getByText('Flanders')).toBeVisible();
     expect(screen.getByText(en.contractTypes.permanent)).toBeVisible();
     expect(screen.getByText('Transport')).toBeVisible();
-    expect(screen.queryByText(en.job.salaryNotProvided)).not.toBeInTheDocument();
+    // Dawny tekst zastępczy (klucz `job.salaryNotProvided` usunięty w #1114) — pole po prostu znika.
+    expect(screen.queryByText(/salary negotiable|not provided/i)).not.toBeInTheDocument();
   });
 
   it.each([

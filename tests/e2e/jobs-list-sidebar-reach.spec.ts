@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext } from '@playwright/test';
 import { waitForHydrated } from './fixtures/hydration';
+import { messages } from './fixtures/messages';
 
 /**
  * #216 — na desktopie panel filtrów był wyższy niż viewport i przyklejony (sticky), więc dolne
@@ -62,7 +63,8 @@ for (const viewport of [
     await expect(apply).toBeInViewport({ ratio: 1 });
 
     // Ostatnia sekcja filtrów da się osiągnąć przewijaniem wewnątrz panelu, bez ruszania strony.
-    const dateSelect = rail.getByRole('combobox');
+    // Po nazwie: panel ma też listy języka, poziomu i promienia (0194).
+    const dateSelect = rail.getByRole('combobox', { name: messages('pl').filters.datePosted, exact: true });
     await dateSelect.scrollIntoViewIfNeeded();
     await expect(dateSelect).toBeInViewport({ ratio: 1 });
     await expect(apply).toBeInViewport({ ratio: 1 });
