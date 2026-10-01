@@ -113,6 +113,14 @@ import {
 } from '@/lib/job-costs';
 import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
 import { isWorkTime, type WorkTime } from '@/lib/job-filter-options';
+import {
+  isWorkMode,
+  normalizeApplicantCountries,
+  APPLICANT_COUNTRIES,
+  WORK_MODES,
+  type ApplicantCountry,
+  type WorkMode,
+} from '@/lib/job-work-mode';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -174,7 +182,12 @@ interface FormValues {
   city: string;
   region: string;
   address: string;
+  /** Dawny boolean (#792): przy wybranym trybie liczony z trybu, bez trybu — wartość z bazy. */
   remote: boolean;
+  /** #792 (0956): tryb pracy; '' = oferta sprzed wyboru (tryb nieznany). */
+  workMode: '' | WorkMode;
+  /** #792 (0956): kraje kandydata przy pracy w 100% zdalnej. */
+  remoteApplicantCountries: ApplicantCountry[];
   // krok 4 — wynagrodzenie
   salaryMin: string;
   salaryMax: string;
@@ -239,6 +252,8 @@ const DEFAULT_VALUES: FormValues = {
   region: '',
   address: '',
   remote: false,
+  workMode: 'onsite',
+  remoteApplicantCountries: [],
   salaryMin: '',
   salaryMax: '',
   currency: 'EUR',
@@ -281,7 +296,7 @@ const DEFAULT_VALUES: FormValues = {
 const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   1: ['title', 'contentLocale', 'category', 'occupation'],
   2: ['contractType', 'workingHours', 'workTime', 'shifts', 'startDate'],
-  3: ['city', 'region', 'address'],
+  3: ['city', 'region', 'address', 'workMode', 'remoteApplicantCountries'],
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
   5: ['description', 'responsibilities'],
   6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
@@ -372,7 +387,14 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         startDate: toOptionalText(v.startDate),
       };
     case 3:
-      return { city: v.city, region: v.region, address: toOptionalText(v.address), remote: v.remote };
+      return {
+        city: v.city,
+        region: v.region,
+        address: toOptionalText(v.address),
+        remote: v.remote,
+        workMode: v.workMode || undefined,
+        remoteApplicantCountries: v.workMode === 'remote' ? v.remoteApplicantCountries : [],
+      };
     case 4:
       return {
         salaryMin: toOptionalNumber(v.salaryMin),
@@ -467,6 +489,8 @@ export interface JobWizardInitialValues
     | 'currency'
     | 'salaryPeriod'
     | 'workTime'
+    | 'workMode'
+    | 'remoteApplicantCountries'
     | 'languages'
     | 'screeningQuestions'
     | 'accommodationKind'
@@ -485,6 +509,8 @@ export interface JobWizardInitialValues
   currency?: string;
   salaryPeriod?: string;
   workTime?: string;
+  workMode?: string;
+  remoteApplicantCountries?: string[];
   languages?: { language: string; level: string }[];
   screeningQuestions?: { type: string; required: boolean; prompt: ScreeningQuestionDraft['prompt']; options: ScreeningQuestionDraft['options'] }[];
 }
@@ -553,7 +579,8 @@ const IMPORT_REVIEW_FIELDS: Record<string, { step: WizardStep; label: string }> 
   city: { step: 3, label: 'cityLabel' },
   region: { step: 3, label: 'regionLabel' },
   address: { step: 3, label: 'addressLabel' },
-  remote: { step: 3, label: 'remote' },
+  remote: { step: 3, label: 'workModeLabel' },
+  workMode: { step: 3, label: 'workModeLabel' },
   salaryMin: { step: 4, label: 'salaryMinLabel' },
   salaryMax: { step: 4, label: 'salaryMaxLabel' },
   currency: { step: 4, label: 'currencyLabel' },
@@ -588,6 +615,8 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     currency,
     salaryPeriod,
     workTime,
+    workMode,
+    remoteApplicantCountries,
     languages,
     screeningQuestions,
     accommodationKind,
@@ -626,6 +655,13 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
   }
   if (currency === 'EUR' || currency === 'PLN') narrowed.currency = currency;
   if (isWorkTime(workTime)) narrowed.workTime = workTime;
+  // #792: zapisany tryb; brak trybu w bazie = tryb nieznany ('') — bez zgadywania z dawnego
+  // `remote`. Import AI („praca zdalna” bez potwierdzenia 100%) też otwiera tryb nieznany.
+  if (isWorkMode(workMode)) narrowed.workMode = workMode;
+  else if (workMode !== undefined || rest.remote === true) narrowed.workMode = '';
+  if (remoteApplicantCountries) {
+    narrowed.remoteApplicantCountries = normalizeApplicantCountries(remoteApplicantCountries);
+  }
   if (salaryPeriod && (SALARY_PERIODS as readonly string[]).includes(salaryPeriod)) {
     narrowed.salaryPeriod = salaryPeriod as SalaryPeriod;
   }
@@ -668,6 +704,7 @@ export function JobWizard({
   const tCat = useTranslations('categories');
   const tContract = useTranslations('contractTypes');
   const tLang = useTranslations('languageNames');
+  const tCountry = useTranslations('countryNames');
   const locale = useLocale();
   const router = useRouter();
   // #1048: język wskazany przez stronę (szkic) albo język panelu — startowa wartość pola
@@ -1603,12 +1640,56 @@ export function JobWizard({
                   />
                   <FieldError name="address" />
                 </div>
-              <CheckboxField
-                id={domId('remote')}
-                label={t('remote')}
-                checked={values.remote}
-                onChange={(c) => setValue('remote', c, { shouldDirty: true })}
-              />
+              {/* #792 (0956): tryb pracy zamiast niejednoznacznego „Praca zdalna” — tylko „w pełni
+                  zdalna” z krajami kandydata daje w JobPosting `jobLocationType: TELECOMMUTE`. */}
+              {renderCostSelect({
+                field: 'workMode',
+                label: t('workModeLabel'),
+                value: values.workMode,
+                // Tryb nieznany (oferta sprzed wyboru) można zostawić bez zmian; nowa oferta wybiera.
+                allowUnset: values.workMode === '',
+                options: WORK_MODES.map((m) => ({ value: m, label: t(`workMode.${m}`) })),
+                onChange: (v) => {
+                  setValue('workMode', isWorkMode(v) ? v : '', { shouldDirty: true });
+                  if (v !== 'remote') setValue('remoteApplicantCountries', [], { shouldDirty: true });
+                  clearErrors('remoteApplicantCountries');
+                },
+              })}
+              <p className={`${FORM_HINT} ${FORM_WIDE}`}>{t('workModeHint')}</p>
+              {values.workMode === 'remote' ? (
+                <fieldset
+                  id={domId('remoteApplicantCountries')}
+                  className={`${FORM_WIDE} min-w-0`}
+                  aria-describedby={[`${domId('remoteApplicantCountries')}-hint`, errorDescription('remoteApplicantCountries')]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-invalid={errors.remoteApplicantCountries ? true : undefined}
+                >
+                  <legend className={cn(FORM_LABEL_TEXT, 'mb-1')}>{t('remoteCountriesLegend')}</legend>
+                  <p id={`${domId('remoteApplicantCountries')}-hint`} className={FORM_HINT}>
+                    {t('remoteCountriesHint')}
+                  </p>
+                  <div className="grid min-w-0 grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {APPLICANT_COUNTRIES.map((code) => (
+                      <CheckboxField
+                        key={code}
+                        id={`${domId('remoteApplicantCountries')}-${code}`}
+                        label={tCountry(code)}
+                        checked={values.remoteApplicantCountries.includes(code)}
+                        onChange={(c) => {
+                          const current = getValues('remoteApplicantCountries');
+                          const next: ApplicantCountry[] = c
+                            ? normalizeApplicantCountries([...current, code])
+                            : current.filter((x) => x !== code);
+                          setValue('remoteApplicantCountries', next, { shouldDirty: true });
+                          if (next.length > 0) clearErrors('remoteApplicantCountries');
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <FieldError name="remoteApplicantCountries" />
+                </fieldset>
+              ) : null}
             </div>
           ) : null}
 

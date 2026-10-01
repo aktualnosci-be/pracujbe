@@ -194,6 +194,29 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
       const camel = await jsonLd({ ...row, expires_at: undefined, expiresAt: row.expires_at });
       expect(camel).not.toHaveProperty('validThrough');
     });
+
+    // #792 (0956): tryb pracy z get_public_job → JobPosting.
+    it('#792: praca w 100% zdalna z krajami = TELECOMMUTE bez fizycznego jobLocation', async () => {
+      const data = await jsonLd({ ...row, work_mode: 'remote', remote_applicant_countries: ['BE', 'NL'], remote: true });
+      expect(data.jobLocationType).toBe('TELECOMMUTE');
+      expect(data.applicantLocationRequirements).toEqual([
+        { '@type': 'Country', name: 'BE' },
+        { '@type': 'Country', name: 'NL' },
+      ]);
+      expect(data).not.toHaveProperty('jobLocation');
+    });
+
+    it.each([
+      ['stacjonarna', { work_mode: 'onsite', remote_applicant_countries: [] }],
+      ['hybrydowa', { work_mode: 'hybrid', remote_applicant_countries: [] }],
+      ['tryb nieznany (stara oferta z remote = true)', { work_mode: null, remote_applicant_countries: [], remote: true }],
+      ['nieznana wartość trybu', { work_mode: 'sometimes', remote_applicant_countries: ['BE'] }],
+    ])('#792 kontrola ujemna: %s — zwykłe jobLocation, bez TELECOMMUTE', async (_c, fields) => {
+      const data = await jsonLd({ ...row, city: 'Gent', region: 'Flandria', ...fields });
+      expect(data).not.toHaveProperty('jobLocationType');
+      expect(data).not.toHaveProperty('applicantLocationRequirements');
+      expect(data).toHaveProperty('jobLocation');
+    });
   });
   it('#591: mapuje company_slug (link do profilu firmy), brak = CTA ukryte', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');

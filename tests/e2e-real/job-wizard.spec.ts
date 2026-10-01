@@ -127,8 +127,17 @@ test('kroki 1–9: błąd pola bez zapisu, potem każdy krok zapisuje szkic w ba
   // Krok 3: lokalizacja.
   await page.getByLabel(t('cityLabel'), { exact: true }).fill('Antwerpen');
   await page.getByLabel(t('regionLabel'), { exact: true }).fill('Vlaanderen');
+  // #792 (0956): praca w pełni zdalna wymaga kraju kandydata — błąd przy liście, krok bez zmian.
+  await chooseOption(page, page.getByRole('combobox', { name: t('workModeLabel') }), t('workMode.remote'));
+  const countries = page.getByRole('group', { name: t('remoteCountriesLegend') });
+  await next().click();
+  await expect(countries.getByText(msg(LOCALE, 'job.error.remoteCountriesRequired'))).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: t('step3Title') })).toBeVisible();
+  await countries.getByRole('checkbox', { name: msg(LOCALE, 'countryNames.BE'), exact: true }).check();
   await nextStep(4);
-  expect(await draft()).toMatchObject({ city: 'Antwerpen', region: 'Vlaanderen', remote: false });
+  expect(await draft()).toMatchObject({
+    city: 'Antwerpen', region: 'Vlaanderen', work_mode: 'remote', remote_applicant_countries: ['BE'], remote: true,
+  });
 
   // Krok 4: wynagrodzenie miesięczne.
   await page.getByLabel(t('salaryMinLabel'), { exact: true }).fill('2600');
@@ -232,6 +241,16 @@ test('publikacja: odmowa przy firmie niezweryfikowanej, po weryfikacji — ofert
     const view = await guest.newPage();
     await view.goto(`/${LOCALE}/oferty-pracy/${String(published.slug)}`);
     await expect(view.getByRole('heading', { level: 1, name: TITLE })).toBeVisible();
+    // #792 (0956): praca w pełni zdalna z krajem kandydata → JobPosting TELECOMMUTE (bez jobLocation).
+    const postings = (await view.locator('script[type="application/ld+json"]').allTextContents())
+      .map((text) => JSON.parse(text) as Record<string, unknown>)
+      .filter((data) => data['@type'] === 'JobPosting');
+    expect(postings).toHaveLength(1);
+    expect(postings[0]).toMatchObject({
+      jobLocationType: 'TELECOMMUTE',
+      applicantLocationRequirements: { '@type': 'Country', name: 'BE' },
+    });
+    expect(postings[0]).not.toHaveProperty('jobLocation');
   } finally {
     await guest.close();
   }

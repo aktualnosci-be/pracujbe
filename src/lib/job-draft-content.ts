@@ -11,6 +11,7 @@ import type {
 } from '@/lib/validation/job';
 import { cleanLocalizedText } from '@/lib/screening/questions';
 import { jobCostsPatch } from '@/lib/job-costs';
+import { workModePatch } from '@/lib/job-work-mode';
 
 /** Puste/whitespace → null (kolumny nullable), w innym wypadku wartość surowa. */
 function nullIfEmpty(value: string | undefined | null): string | null {
@@ -50,7 +51,8 @@ export function buildDraftStepContent(step: number, parsed: unknown): Record<str
     case 3: {
       const v = parsed as JobStep3;
       return {
-        job: { city: v.city, region: v.region, address: nullIfEmpty(v.address), remote: v.remote },
+        // #792 (0956): tryb pracy + kraje kandydata; `remote` liczony z trybu (tryb nieznany = bez zmian).
+        job: { city: v.city, region: v.region, address: nullIfEmpty(v.address), ...workModePatch(v) },
       };
     }
     case 4: {
