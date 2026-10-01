@@ -59,7 +59,8 @@
       "urlTooLong": "The address is too long.",
       "descriptionRequired": "Enter a description, or leave the field empty to remove it.",
       "descriptionTooLong": "The description can have at most 1500 characters.",
-      "descriptionSensitive": "The description contains a personal or document identification number. Remove it — the description is public."
+      "descriptionSensitive": "The description contains a personal or document identification number. Remove it — the description is public.",
+      "textInvalid": "This text contains a character that is not allowed. Please remove it."
     },
     "bannerUnverifiedTitle": "Your company is awaiting verification",
     "bannerUnverifiedDesc": "Before you publish your first job, a Pracuj.be administrator will check your company details. You don’t need to send anything — your company is already in the queue.",
@@ -432,6 +433,7 @@
       "workingHoursTooLong": "The working hours description is too long.",
       "shiftsTooLong": "The shifts description is too long.",
       "startDateInvalid": "Invalid start date.",
+      "textInvalid": "This text contains a character that is not allowed. Please remove it.",
       "cityRequired": "Enter a city.",
       "cityTooLong": "The city name is too long.",
       "regionRequired": "Enter a region.",
@@ -3459,6 +3461,7 @@
     "loginRequired": "To save the search, log in to your candidate account.",
     "login": "Log in",
     "errorNetwork": "No connection. Check your internet and try again.",
+    "tooManyFilters": "This search cannot be saved because it has too many or too long filters. Remove some filters and try again.",
     "defaultName": "My search",
     "intro": "Searches saved from the job list. When new jobs match these filters, you get a notification and an email.",
     "loadError": "We could not load your saved searches.",
@@ -3557,6 +3560,7 @@
       "detailsRequired": "Describe the problem.",
       "detailsTooShort": "The description must be at least 20 characters.",
       "detailsTooLong": "The description can be at most 5000 characters.",
+      "textInvalid": "This text contains a character that is not allowed. Please remove it.",
       "urlInvalid": "Enter a full address starting with http:// or https://.",
       "nameTooLong": "The name can be at most 200 characters.",
       "nameInvalid": "The name can only contain letters, spaces and hyphens.",
@@ -3761,7 +3765,8 @@
       "nameInvalid": "The name can only contain letters, spaces and hyphens.",
       "emailRequired": "Enter your email address.",
       "emailInvalid": "Enter a valid email address.",
-      "sensitiveId": "Remove the national register number, PESEL or document number — it is not needed to reply to your message."
+      "sensitiveId": "Remove the national register number, PESEL or document number — it is not needed to reply to your message.",
+      "textInvalid": "This text contains a character that is not allowed. Please remove it."
     }
   },
   "savedSearchAlertOff": {
