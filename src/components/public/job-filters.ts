@@ -37,6 +37,11 @@ import {
   type RadiusKm,
   type WorkTimeFilter,
 } from '@/lib/job-filter-options';
+import {
+  parseShiftPatternsParam,
+  SHIFT_PATTERN_PARAM,
+  type ShiftPattern,
+} from '@/lib/job-shift-patterns';
 
 /**
  * Widełki suwaka wynagrodzenia (brutto/mies., EUR). `SALARY_MAX_BOUND` oznacza „i więcej”.
@@ -91,6 +96,8 @@ export interface SidebarFilters {
   languageLevel: LanguageFilterLevel | null;
   /** #811 (0194): wymiar pracy (URL `workTime`); oferta z oboma wariantami pasuje do obu. */
   workTime: WorkTimeFilter | null;
+  /** #858 (0975): typy grafiku pracy (URL `shift`, CSV) — oferta z którymkolwiek z nich. */
+  shiftPatterns: ShiftPattern[];
   /** #824 (0194): miejscowość środka promienia (URL `near`); pusty = bez filtra. */
   near: string;
   /** #824: promień w km (URL `radius`), znaczący tylko z miejscowością. */
@@ -167,6 +174,7 @@ export function emptySidebarFilters(): SidebarFilters {
     language: null,
     languageLevel: null,
     workTime: null,
+    shiftPatterns: [],
     near: '',
     radiusKm: DEFAULT_RADIUS_KM,
     date: 'any',
@@ -318,6 +326,7 @@ export function parseSidebarFilters(
   f.languageLevel = f.language && isLanguageFilterLevel(level) ? level : null;
   const workTime = sp['workTime'];
   f.workTime = isWorkTimeFilter(workTime) ? workTime : null;
+  f.shiftPatterns = parseShiftPatternsParam(sp[SHIFT_PATTERN_PARAM]);
   f.near = (sp['near'] ?? '').trim().slice(0, NEAR_MAX_LENGTH).trim();
   f.radiusKm = f.near ? parseRadiusKm(sp['radius']) : DEFAULT_RADIUS_KM;
 
@@ -511,6 +520,7 @@ export function sidebarFiltersToParams(
     if (f.languageLevel) params['langLevel'] = f.languageLevel;
   }
   if (f.workTime) params['workTime'] = f.workTime;
+  if (f.shiftPatterns.length) params[SHIFT_PATTERN_PARAM] = f.shiftPatterns.join(',');
   if (f.near) {
     params['near'] = f.near;
     params['radius'] = String(f.radiusKm);
@@ -528,6 +538,7 @@ export function refinementQueryParams(f: SidebarFilters): {
   language?: LanguageCode;
   languageLevel?: LanguageFilterLevel;
   workTime?: WorkTimeFilter;
+  shiftPatterns?: ShiftPattern[];
   near?: string;
   radiusKm?: RadiusKm;
 } {
@@ -535,6 +546,7 @@ export function refinementQueryParams(f: SidebarFilters): {
     ...(f.language ? { language: f.language } : {}),
     ...(f.language && f.languageLevel ? { languageLevel: f.languageLevel } : {}),
     ...(f.workTime ? { workTime: f.workTime } : {}),
+    ...(f.shiftPatterns.length ? { shiftPatterns: f.shiftPatterns } : {}),
     ...(f.near ? { near: f.near, radiusKm: f.radiusKm } : {}),
   };
 }
@@ -552,6 +564,7 @@ export function countActiveSidebar(f: SidebarFilters): number {
     (f.directOnly ? 1 : 0) +
     (f.language ? 1 : 0) +
     (f.workTime ? 1 : 0) +
+    f.shiftPatterns.length +
     (f.near ? 1 : 0) +
     (f.date !== 'any' ? 1 : 0)
   );

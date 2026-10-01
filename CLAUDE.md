@@ -819,6 +819,22 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   Zgodność wstecz: istniejący adres wielu miast bez backslashy (`Brussels,Antwerp`) parsuje się
   jak dawny CSV. Dowód: `tests/unit/job-filters-location-param.test.ts` (round-trip, kontrola
   ujemna starego `split(',')`, zgodność wsteczna), E2E `job-filter-passport.spec.ts` bez zmian.
+  Grafik pracy (#858, migracja `0975` — numer tymczasowy): `jobs.shift_patterns text[]` = typy
+  z zamkniętej listy (`job_shift_pattern_values()`: day, two_shift, three_shift, night, weekend,
+  split, continuous; lustro `src/lib/job-shift-patterns.ts`), null = brak deklaracji; CHECK
+  `job_shift_patterns_valid`, zapis przez `job_shift_patterns_from_jsonb` (kolejność listy, bez
+  duplikatów). Kreator: pola wyboru w kroku 2 obok opisu zmian (tekst zostaje uzupełnieniem),
+  `save_job_draft` (stan 0194) i `update_published_job` (stan 0203) z kluczem `shift_patterns`,
+  kopia szkicu triggerem. Filtr `?shift=a,b` (parametr `p_shift_patterns`, ostatni) w liście,
+  liczniku, facetach (baza wymiarów) i kopii alertów (`saved_search_jobs_after`, blok 1:1):
+  oferta z którymkolwiek typem (`&&`), bez deklaracji nie pasuje; starych ofert nie
+  klasyfikujemy z tekstu. Zapisane wyszukiwanie: klucz `shiftPatterns`. Szczegół oferty:
+  „Grafik pracy” z `get_public_job_shift_patterns` (odczyt pomocniczy, `get_public_job` bez
+  zmian). Dowód: `rls.sql` sekcja SP858 (kontrole ujemne: bez warunku w liście i kopii alertów,
+  bez CHECK, bez klucza w kreatorze), rollback `0975_…down.sql` (`job-shift-patterns-rollback.sql`,
+  także przed 0194 w `job-filters-rollback.sql` i `city-sections-filters-rollback.sql`), unit
+  `job-shift-patterns`. **Otwarte:** grafik w JobPosting i audycie edycji, filtr wykluczający
+  (np. „bez weekendów”).
   Spójność wyszukiwania miast i filtrów (#1077/#1119, bez migracji): `resolveLocationKey`
   (`src/lib/locations/city-aliases.ts`) porównuje CAŁĄ nazwę po `nameKey` (lustro SQL `city_key` z
   0153: bez wielkości liter, diakrytyków i różnic spacji/myślnika), więc „Bruxelles”/„bruxelles”/
