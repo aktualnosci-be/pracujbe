@@ -101,6 +101,7 @@ export const AI_FEATURE_IDS = [
   'cv_profile_import',
   'job_fraud_check',
   'candidate_profile_translation',
+  'job_offer_explain',
 ] as const;
 export type AiFeatureId = (typeof AI_FEATURE_IDS)[number];
 
@@ -223,6 +224,27 @@ export const AI_FEATURES: readonly AiFeature[] = [
     decidesAboutPerson: false,
     usageLogged: true,
     // Adapter tłumaczeń (`withAiBudget`) rozlicza zadanie tej encji pod własnym identyfikatorem.
+    costBudgeted: true,
+  },
+  {
+    id: 'job_offer_explain',
+    issues: ['#773'],
+    status: 'behind_flag',
+    callSites: ['src/lib/ai/openai.ts', 'src/lib/ai-explain/explain.ts', 'src/lib/ai-explain/run.ts'],
+    enableFlag: 'AI_JOB_EXPLAIN_ENABLED',
+    provider: 'openai',
+    // Wyłącznie treść jednej publicznej oferty i język odpowiedzi — bez CV, profilu ani danych
+    // osobowych odwiedzającego.
+    inputs: ['job_offer_text'],
+    allowedInClassifieds: true,
+    output:
+      'Objaśnienie warunków oferty prostym językiem (JSON ze schematu) z odwołaniami do fragmentów oferty i listą brakujących/sprzecznych/niejasnych informacji; serwer odrzuca objaśnienia bez źródła, z danymi kontaktowymi albo z liczbami, kwotami, datami lub negacją niezgodnymi ze wskazanymi fragmentami. Wynik pokazywany tylko pytającemu, obok niezmienionej treści oferty; nic nie jest zapisywane.',
+    humanInTheLoop: false,
+    humanStep:
+      'Wynik jest informacją dla czytającego (src/components/public/JobExplainPanel.tsx): obok każdego objaśnienia źródło z oferty i zastrzeżenie, że wiąże treść oferty; akcja src/lib/actions/job-explain.ts niczego nie zapisuje i nie zmienia oferty.',
+    decidesAboutPerson: false,
+    usageLogged: true,
+    // `withAiBudget` w src/lib/ai-explain/run.ts (#36): rezerwacja przed wywołaniem modelu.
     costBudgeted: true,
   },
 ];

@@ -918,6 +918,28 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `DemoJobsNotice`, karty etykietę „przykładowa”, bez odznaki „Zweryfikowana firma”; szczegół demo
   = noindex, bez JobPosting i „Wyślij wiadomość”, ApplyModal z komunikatem zamiast formularza.
   Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
+- [x] „Wyjaśnij ofertę” prostym językiem (#773, migracja `0977` — numer tymczasowy; za flagą
+  `AI_JOB_EXPLAIN_ENABLED`, domyślnie wyłączone, atrapa `AI_JOB_EXPLAIN_PROVIDER=fixture` poza produkcją):
+  sekcja `JobExplainPanel` (osobny chunk `JobExplainPanelLazy`) pod treścią szczegółu oferty — na
+  żądanie, w wybranym języku PL/NL/FR/EN; treść oferty bez zmian. Akcja `explainJobOffer`: tylko oferta
+  publiczna (`getJobBySlug`, oryginał zamiast przekładu maszynowego), źródła = ponumerowane fragmenty
+  (`src/lib/ai-explain/sources.ts`: tytuł, pola strukturalne po angielsku dla modelu i w języku strony
+  dla czytelnika, zdania opisu, listy; bez kanału aplikowania, opisu firmy, e-maili/telefonów/
+  identyfikatorów), pamięć podręczna procesu (oferta × język × SHA-256 treści), limit per adres
+  10/h i 30/dobę (fail-closed), `withAiBudget` (#36), OpenAI `gpt-6-luna` (`src/lib/ai/openai.ts`,
+  strict schema, treść jako dane w `<offer_text>`). Bramki (`guard.ts`, ekstrakcja faktów tłumaczeń):
+  objaśnienie bez istniejącego źródła, z kontaktem, z innymi liczbami/walutą/datą/godziną/
+  brutto-netto/okresem stawki niż wskazane fragmenty, nową jednostką/kwalifikacją albo niezgodną
+  negacją jest pomijane (liczone); luki „brak/sprzeczne/niejasne” zamiast zgadywania; polecenia dla
+  AI w treści = brak wywołania. UI: źródło przy każdym objaśnieniu (`<q lang>`), zastrzeżenie (nie
+  porada prawna, wiąże treść oferty), stan ładowania, błąd z ponowieniem, fokus na wyniku. Inwentarz
+  AI `job_offer_explain` (`allowedInClassifieds: true`, wejście = treść oferty); baza: funkcja
+  w CHECK `ai_usage_ledger_feature` i allow-liście `ai_budget_reserve`. Dowód: `rls.sql` sekcja
+  AIX773, rollback `0977_…down.sql` (`ai-job-explain-rollback.sql`, też w `portal-legal-mode-rollback.sql`
+  przed 0176), unit `job-explain`, `job-explain-action`, `job-explain-panel` (kontrole ujemne), E2E
+  `job-explain` (4 języki, klawiatura, axe 1280/320 px). **Otwarte:** ewaluacja na reprezentatywnych
+  ofertach z prawdziwym modelem przed włączeniem (właściciel), Turnstile/limit globalny przy ruchu
+  anonimowym, data w objaśnieniu tylko w zapisie ze źródła (ISO).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
   Okno cutoveru (#1115, bez migracji): `isSearchIndexingEnabled()` (`src/lib/seo/indexing.ts`) =
