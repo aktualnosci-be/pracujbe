@@ -195,6 +195,7 @@ export interface JobDetail extends JobListItem {
    * nic nie podano — strona nie pokazuje sekcji.
    */
   benefits?: JobBenefits;
+  /**
    * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
    * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
    */
