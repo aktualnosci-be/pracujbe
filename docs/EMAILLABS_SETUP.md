@@ -90,8 +90,10 @@ zostanie skonfigurowane.
 
 1. **URL**: `https://pracuj.be/api/email/webhook/emaillabs`. Drugi URL zostaw pusty albo
    wpisz ten sam.
-2. **Tryb autentykacji**: Basic auth jest zalecany. Wpisz login i hasło, a potem te same
-   wartości w `EMAILLABS_WEBHOOK_BASIC_USER` i `EMAILLABS_WEBHOOK_BASIC_PASSWORD`.
+2. **Tryb autentykacji**: Basic auth jest **wymagany** w produkcji (decyzja właściciela
+   29.09.2026, #1234). Wpisz login i hasło, a potem te same wartości
+   w `EMAILLABS_WEBHOOK_BASIC_USER` i `EMAILLABS_WEBHOOK_BASIC_PASSWORD`. Bez nich endpoint
+   odpowiada 503.
 3. **Generuj SecretKey** → `EMAILLABS_WEBHOOK_SECRET`. Wymagany: bez niego endpoint
    odpowiada 503.
 4. Najpierw ustaw zmienne w Railway i poczekaj na wdrożenie. Dopiero potem kliknij **Test**
@@ -112,7 +114,7 @@ zostanie skonfigurowane.
 | `EMAILLABS_SECRET_KEY` | `Authorization` z pkt 1.3 |
 | `EMAILLABS_SMTP_ACCOUNT` | nazwa konta SMTP, np. `1.pracujbe.smtp` |
 | `EMAILLABS_WEBHOOK_SECRET` | SecretKey z pkt 1.4 |
-| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | login i hasło Basic auth z pkt 1.4 (oba albo żadne) |
+| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | login i hasło Basic auth z pkt 1.4 (w produkcji wymagane) |
 | `EMAIL_FROM` | bez zmian, np. `Pracuj.be <no-reply@pracuj.be>`. Domena musi być zautoryzowana w pkt 1.1. |
 
 Bez zmian zostają: `EMAIL_QUEUE_SECRET`, `EMAIL_UNSUBSCRIBE_SECRET`, `EMAIL_SENDER_*`,
@@ -162,11 +164,17 @@ treści**, dlatego:
 
 - `Request-Id` jest kluczem inboxu `processed_webhooks` (`emaillabs:<Request-Id>`): ta sama
   paczka nie zostanie zapisana drugi raz,
-- przy ustawionych zmiennych Basic auth wymagany jest też nagłówek `Authorization` (zalecane),
-- świeżość `X-Webhook-Date` nie jest sprawdzana, bo dokumentacja nie podaje formatu ani
-  strefy czasowej. Przed powtórzeniem chroni inbox.
+- w produkcji wymagany jest też nagłówek `Authorization` (Basic auth); brak
+  `EMAILLABS_WEBHOOK_BASIC_*` = 503. Poza produkcją Basic auth jest sprawdzany, gdy ustawiony,
+- świeżość: `X-Webhook-Date` (objęta sumą) musi mieścić się w oknie ±24 h od chwili odbioru.
+  Dokumentacja nie podaje formatu ani strefy, więc parser jest tolerancyjny (ISO 8601,
+  RFC 2822, `RRRR-MM-DD GG:MM:SS` czytane jako UTC, sekundy lub milisekundy epoki), a okno
+  pokrywa różnicę stref. Data nieczytelna albo spoza okna → 401,
+- inbox pamięta `Request-Id` dłużej niż okno (`processed_webhooks_gc`: co najmniej 7 dni,
+  domyślnie 30), więc przechwycone nagłówki nie działają ani przed, ani po czyszczeniu.
 
-Kolejność: brak sekretu albo bazy → 503, zła suma lub Basic auth → 401, body > 1 MB → 413,
+Kolejność: brak sekretu albo bazy (w produkcji także Basic auth) → 503, zła suma, Basic auth
+albo data spoza okna → 401, body > 1 MB → 413,
 nie-JSON → 400. Zdarzenia spoza modelu i uszkodzone są pomijane, bo EmailLabs zaleca nie
 odrzucać paczki. Wszystkie zdarzenia paczki zapisują się w jednej transakcji
 (`record_email_event`). Błąd → 500 i EmailLabs ponawia (zapis jest idempotentny). Sukces →
