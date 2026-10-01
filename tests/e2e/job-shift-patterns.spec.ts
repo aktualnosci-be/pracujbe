@@ -31,7 +31,8 @@ for (const locale of LOCALES) {
     await form.locator('button[type="submit"]').click();
     await page.waitForLoadState('domcontentloaded');
 
-    expect(new URL(page.url()).searchParams.get('shift')).toBe('day,weekend');
+    // Formularz bez JS wysyła powtórzony klucz (`shift=day&shift=weekend`); serwer łączy go w CSV.
+    expect(new URL(page.url()).searchParams.getAll('shift').sort()).toEqual(['day', 'weekend']);
     const again = page.locator('[data-filter-passport="no-js"]').getByRole('group', { name: t.shiftPatterns, exact: true });
     await expect(again.getByRole('checkbox', { name: t.shiftPatternValues['weekend']!, exact: true })).toBeChecked();
     await expect(again.getByRole('checkbox', { name: t.shiftPatternValues['night']!, exact: true })).not.toBeChecked();
