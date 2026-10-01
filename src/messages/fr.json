@@ -548,6 +548,12 @@
       "full_time": "Temps plein",
       "part_time": "Temps partiel",
       "both": "Temps plein ou partiel"
+    },
+    "qualifications": {
+      "title": "Compétences et certificats",
+      "skillsMandatory": "Compétences requises",
+      "skillsOptional": "Compétences appréciées",
+      "certificates": "Certificats et habilitations"
     }
   },
   "landing": {
