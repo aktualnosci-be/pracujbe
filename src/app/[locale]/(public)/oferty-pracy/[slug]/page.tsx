@@ -793,7 +793,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </Link>
               ) : null}
               {/* Blokada firmy (tylko zalogowany kandydat; wyspa kliencka, #97). Demo — brak. */}
-              {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
+              {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} recruitmentEnabled={recruitment} />}
             </div>
           </Section>
           </div>
