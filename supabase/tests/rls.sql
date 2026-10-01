@@ -24786,7 +24786,7 @@ select pg_temp.expect_error($$select public.revoke_push_subscription('$$ || :'wp
   'NOT_FOUND', 'WP724-4c cudzego urządzenia nie da się wycofać');
 select pg_temp.assert(public.unregister_push_subscription(:'WPEP1') = false, 'WP724-4d cudzy endpoint nie jest wycofywany');
 reset role;
-set role anon;
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
 select pg_temp.expect_error($$select public.register_push_subscription('https://fcm.googleapis.com/x/wp724-anon', 'B' || repeat('A', 86), repeat('Q', 22))$$,
   'permission denied', 'WP724-4e anon bez dostępu');
 reset role;
@@ -24834,12 +24834,13 @@ select pg_temp.expect_error($$select * from public.claim_push_deliveries(10)$$, 
   'WP724-6 klient nie pobiera kolejki');
 reset role;
 set role service_role;
-create temp table wp_claim as select * from public.claim_push_deliveries(10);
+select count(*) as wp_claimed,
+       coalesce(bool_and(locale = 'nl' and job_count = 3 and entity_type = 'saved_search' and attempts = 1), false) as wp_claim_ok
+  from public.claim_push_deliveries(10) \gset
 select count(*) as wp_again from public.claim_push_deliveries(10) \gset
 reset role;
-select pg_temp.assert((select count(*) from wp_claim) = 2 and :'wp_again' = '0', 'WP724-6b dwie wysyłki, dzierżawa blokuje drugie pobranie');
-select pg_temp.assert((select bool_and(locale = 'nl' and job_count = 3 and entity_type = 'saved_search' and attempts = 1) from wp_claim),
-  'WP724-6c język odbiorcy i liczba ofert w danych wysyłki');
+select pg_temp.assert(:'wp_claimed' = '2' and :'wp_again' = '0', 'WP724-6b dwie wysyłki, dzierżawa blokuje drugie pobranie');
+select pg_temp.assert(:'wp_claim_ok'::boolean, 'WP724-6c język odbiorcy i liczba ofert w danych wysyłki');
 select d.id as wp_d1 from public.push_deliveries d where d.subscription_id = :'wp_sub1' and d.notification_id = :'wp_n1' \gset
 select d.id as wp_d2 from public.push_deliveries d where d.subscription_id = :'wp_sub2' and d.notification_id = :'wp_n1' \gset
 

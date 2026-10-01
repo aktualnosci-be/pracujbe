@@ -7,7 +7,7 @@ import { AlertCircle, BellRing, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PAPER } from '@/components/dashboard/panel-styles';
 import { useRouter } from '@/i18n/navigation';
-import { registerPushDevice, revokePushDevice, unregisterPushDevice } from '@/lib/actions/push-subscriptions';
+import { registerPushDevice, revokePushDevice, unregisterPushDevice } from '@/lib/actions/push-devices';
 import type { PushDevice } from '@/lib/data/push-devices';
 import { APP_TIME_ZONE } from '@/lib/datetime';
 

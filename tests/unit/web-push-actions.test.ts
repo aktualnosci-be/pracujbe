@@ -16,7 +16,7 @@ vi.mock('@/lib/db/portal', async () => (await import('../helpers/fake-db')).fake
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => true) }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 
-import { registerPushDevice, revokePushDevice, unregisterPushDevice } from '@/lib/actions/push-subscriptions';
+import { registerPushDevice, revokePushDevice, unregisterPushDevice } from '@/lib/actions/push-devices';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 /**

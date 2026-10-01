@@ -21,7 +21,7 @@ const { refresh, register, unregister, revoke } = vi.hoisted(() => ({
   revoke: vi.fn(),
 }));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh }) }));
-vi.mock('@/lib/actions/push-subscriptions', () => ({
+vi.mock('@/lib/actions/push-devices', () => ({
   registerPushDevice: register,
   unregisterPushDevice: unregister,
   revokePushDevice: revoke,
