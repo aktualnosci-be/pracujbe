@@ -546,6 +546,12 @@
       "full_time": "Full-time",
       "part_time": "Part-time",
       "both": "Full-time or part-time"
+    },
+    "qualifications": {
+      "title": "Skills and certificates",
+      "skillsMandatory": "Required skills",
+      "skillsOptional": "Preferred skills",
+      "certificates": "Certificates and licences"
     }
   },
   "landing": {

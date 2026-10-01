@@ -546,6 +546,12 @@
       "full_time": "Voltijds",
       "part_time": "Deeltijds",
       "both": "Voltijds of deeltijds"
+    },
+    "qualifications": {
+      "title": "Vaardigheden en attesten",
+      "skillsMandatory": "Vereiste vaardigheden",
+      "skillsOptional": "Gewenste vaardigheden",
+      "certificates": "Attesten en certificaten"
     }
   },
   "landing": {

@@ -546,6 +546,12 @@
       "full_time": "Pełny etat",
       "part_time": "Część etatu",
       "both": "Pełny lub część etatu"
+    },
+    "qualifications": {
+      "title": "Umiejętności i certyfikaty",
+      "skillsMandatory": "Wymagane umiejętności",
+      "skillsOptional": "Mile widziane umiejętności",
+      "certificates": "Certyfikaty i uprawnienia"
     }
   },
   "landing": {
