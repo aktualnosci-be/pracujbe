@@ -86,8 +86,8 @@ describe('loadSavedSearchJobs', () => {
     const [params, viewer, options] = vi.mocked(getJobs).mock.calls[0]!;
     expect(params).toMatchObject({ locale: 'nl', keyword: 'magazynier', categories: ['warehouse'], sort: 'newest', page: 1, pageSize: 3 });
     expect(viewer).toEqual({ candidateId: 'cand-1' });
-    // #1230: pulpit nie pokazuje licznika — bez get_public_jobs_count.
-    expect(options).toEqual({ withTotal: false });
+    // #1230: pulpit nie pokazuje licznika — bez get_public_jobs_count; #1223: język tytułu.
+    expect(options).toEqual({ withTotal: false, withContentLocale: true });
   });
 
   it('łączy wyszukiwania: najnowsze najpierw, bez duplikatów, najwyżej 3 oferty, z wyszukiwaniem źródłowym', async () => {
@@ -160,6 +160,19 @@ describe('CandidateSavedSearchJobs', () => {
     expect(screen.queryByRole('link', { name: t.dashboard.navSearches })).toBeNull();
     expect(container.textContent).not.toMatch(/%/);
     expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+
+  it('#1223: tytuł w innym języku niż panel ma lang; w języku panelu albo nieznany — bez lang', async () => {
+    const jobs = [
+      { ...okResult.jobs[0]!, id: 'nl', slug: 'nl', title: 'Orderpicker magazijn', contentLocale: 'nl' },
+      { ...okResult.jobs[0]!, id: 'pl', slug: 'pl', title: 'Magazynier PL', contentLocale: 'pl' },
+      { ...okResult.jobs[0]!, id: 'x', slug: 'x', title: 'Bez języka' },
+    ];
+    await renderSection('pl', { ...okResult, jobs });
+    const heading = (name: string) => screen.getByRole('link', { name }).closest('h3');
+    expect(heading('Orderpicker magazijn')).toHaveAttribute('lang', 'nl');
+    expect(heading('Magazynier PL')).not.toHaveAttribute('lang');
+    expect(heading('Bez języka')).not.toHaveAttribute('lang');
   });
 
   it('brak zapisanych wyszukiwań → zachęta z linkiem do listy ofert', async () => {

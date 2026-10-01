@@ -1,6 +1,6 @@
 import type { GetJobsParams } from '@/lib/jobs';
 import { resolveCityFilters } from '@/lib/locations/city-aliases';
-import { truncateCodePoints } from '@/lib/validation/text';
+import { codePointLength, truncateCodePoints } from '@/lib/validation/text';
 import type { LanguageCode } from '@/lib/languages';
 import type { LanguageFilterLevel, RadiusKm, WorkTimeFilter } from '@/lib/job-filter-options';
 import {
@@ -146,10 +146,41 @@ export function savedSearchQueryString(query: JobListQuery): string {
   delete params['date'];
   // 0167: filtr „bezpośrednio od pracodawcy” nie jest częścią zapisanego wyszukiwania (etap 2).
   delete params['direct'];
-  if (query.keyword) params['keyword'] = query.keyword;
-  if (query.city) params['city'] = query.city;
+  // Ta sama ucięta wartość co w filtrach (`savedSearchFiltersFromQuery`): lista i tak ucina do
+  // 100 znaków, więc adres prowadzi do tego samego zbioru ofert, a nie przekracza limitu 2000
+  // znaków adresu w bazie przy bardzo długim słowie (#1108).
+  const keyword = query.keyword ? truncateCodePoints(query.keyword, SAVED_SEARCH_TEXT_MAX).trim() : '';
+  const city = query.city ? truncateCodePoints(query.city, SAVED_SEARCH_TEXT_MAX).trim() : '';
+  if (keyword) params['keyword'] = keyword;
+  if (city) params['city'] = city;
   const qs = new URLSearchParams(params).toString();
   return qs ? `?${qs}` : '';
+}
+
+/** Limity zapisu w bazie (0092): lista ≤ 50 pozycji, kategoria/umowa ≤ 50 znaków, miasto ≤ 100, adres ≤ 2000. */
+export const SAVED_SEARCH_LIST_MAX = 50;
+export const SAVED_SEARCH_QUERY_MAX = 2000;
+const SAVED_SEARCH_ENUM_MAX = 50;
+
+/**
+ * Czy wyszukiwanie mieści się w limitach zapisu (`save_saved_search`, 0092). Lista ofert
+ * obsługuje dowolnie wiele lokalizacji (np. kilkanaście miast rozwiniętych do wszystkich nazw)
+ * i dowolnie długi adres, a baza ich nie przyjmie — zamiast ogólnego błędu po kliknięciu
+ * „Zapisz” lista od razu mówi, że trzeba zawęzić filtry (#1108). Liczymy jak `char_length`
+ * (punkty kodowe).
+ */
+export function savedSearchExceedsLimits(filters: SavedSearchFilters, query: string): boolean {
+  const lists: Array<[readonly string[] | undefined, number]> = [
+    [filters.categories, SAVED_SEARCH_ENUM_MAX],
+    [filters.contractTypes, SAVED_SEARCH_ENUM_MAX],
+    [filters.locations, SAVED_SEARCH_TEXT_MAX],
+  ];
+  for (const [list, max] of lists) {
+    if (!list) continue;
+    if (list.length > SAVED_SEARCH_LIST_MAX) return true;
+    if (list.some((value) => codePointLength(value.trim()) > max)) return true;
+  }
+  return codePointLength(query) > SAVED_SEARCH_QUERY_MAX;
 }
 
 /** Czy wyszukiwanie ma choć jeden filtr (puste = wszystkie oferty — nie zapisujemy). */

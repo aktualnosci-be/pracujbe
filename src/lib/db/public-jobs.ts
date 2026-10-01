@@ -348,6 +348,34 @@ export async function getPublicJobTranslations(
   });
 }
 
+export interface PublicJobListTranslationRow {
+  job_id: string;
+  locale: string;
+  title: string | null;
+  highlights: string[] | null;
+}
+
+/**
+ * Tytuły i wyróżniki tłumaczeń ofert jednej strony listy (#1223) — JEDNO zapytanie pod rolą anon
+ * (RLS: tylko oferty publiczne). Z nich `resolveJobListContentLocale` ustala język treści karty.
+ */
+export async function getPublicJobListTranslations(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+): Promise<PublicJobListTranslationRow[]> {
+  if (jobIds.length === 0) return [];
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id, locale, title, highlights
+       FROM public.job_translations
+       WHERE job_id = ANY($1::uuid[])
+       ORDER BY job_id, locale`,
+      [jobIds],
+    )) as { rows: PublicJobListTranslationRow[] };
+    return result.rows.filter((row) => isLocale(row.locale));
+  });
+}
+
 export interface PublicJobMachineTranslationRow {
   source_locale: string;
   origin: string;

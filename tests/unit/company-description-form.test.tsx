@@ -29,6 +29,7 @@ function renderForm(
   defaultValue = '',
   review: CompanyDescriptionReview | null = null,
   published: string | null = null,
+  publishedLocale: 'pl' | 'nl' | 'fr' | 'en' | null = null,
 ) {
   return render(
     <NextIntlClientProvider locale="pl" messages={pl}>
@@ -38,6 +39,7 @@ function renderForm(
         defaultValue={defaultValue}
         published={published}
         review={review}
+        publishedLocale={publishedLocale}
       />
     </NextIntlClientProvider>,
   );
@@ -93,7 +95,10 @@ describe('CompanyDescriptionForm', () => {
     fireEvent.change(screen.getByLabelText(pl.company.descriptionLabel), { target: { value: 'Nowy opis.' } });
     fireEvent.click(screen.getByRole('button', { name: pl.company.descriptionSubmit }));
     await waitFor(() =>
-      expect(updateCompanyDescription).toHaveBeenCalledWith(COMPANY_ID, { description: 'Nowy opis.' }),
+      expect(updateCompanyDescription).toHaveBeenCalledWith(COMPANY_ID, {
+        description: 'Nowy opis.',
+        descriptionLocale: '',
+      }),
     );
     await waitForSelector('[role="status"]');
     expect(screen.getByRole('status')).toHaveTextContent(pl.company.descriptionSubmittedPending);
@@ -115,6 +120,7 @@ describe('CompanyDescriptionForm', () => {
       text: 'Odrzucony tekst',
       submittedAt: '2026-09-29 10:00:00+00',
       reason: 'Dane kontaktowe.',
+      locale: null,
     }, 'Opublikowany opis');
     const box = screen.getByTestId('company-description-review');
     expect(box).toHaveTextContent('Dane kontaktowe.');
@@ -123,12 +129,47 @@ describe('CompanyDescriptionForm', () => {
   });
 
   it('shows the pending state, and nothing when there is no proposal (negative control)', () => {
-    renderForm('Czeka', { status: 'pending', text: 'Czeka', submittedAt: '2026-09-29 10:00:00+00', reason: null }, null);
+    renderForm('Czeka', { status: 'pending', text: 'Czeka', submittedAt: '2026-09-29 10:00:00+00', reason: null, locale: null }, null);
     expect(screen.getByTestId('company-description-review')).toHaveTextContent(
       pl.company.descriptionReviewPendingTitle,
     );
     cleanup();
     renderForm('Opublikowany', null, 'Opublikowany');
     expect(screen.queryByTestId('company-description-review')).toBeNull();
+  });
+
+  // 0201: język opisu wybierany razem z propozycją (decyzja właściciela 30.09.2026).
+  it('sends the chosen language together with the proposed text', async () => {
+    vi.mocked(updateCompanyDescription).mockResolvedValue({ ok: true, outcome: 'pending' });
+    renderForm('Stary opis', null, 'Stary opis', 'nl');
+    const select = screen.getByLabelText(pl.company.descriptionLocaleLabel);
+    expect(select).toHaveValue('nl');
+    expect(select).toHaveAccessibleDescription(pl.company.descriptionLocaleHint);
+    fireEvent.change(screen.getByLabelText(pl.company.descriptionLabel), { target: { value: 'Nous construisons.' } });
+    fireEvent.change(select, { target: { value: 'fr' } });
+    fireEvent.click(screen.getByRole('button', { name: pl.company.descriptionSubmit }));
+    await waitFor(() =>
+      expect(updateCompanyDescription).toHaveBeenCalledWith(COMPANY_ID, {
+        description: 'Nous construisons.',
+        descriptionLocale: 'fr',
+      }),
+    );
+  });
+
+  it('a pending proposal shows its own language, not the approved one (negative control)', () => {
+    renderForm('Czeka', { status: 'pending', text: 'Czeka', submittedAt: '2026-09-29 10:00:00+00', reason: null, locale: 'en' }, 'Opis', 'nl');
+    expect(screen.getByLabelText(pl.company.descriptionLocaleLabel)).toHaveValue('en');
+    cleanup();
+    renderForm('Czeka', { status: 'pending', text: 'Czeka', submittedAt: '2026-09-29 10:00:00+00', reason: null, locale: null }, 'Opis', 'nl');
+    expect(screen.getByLabelText(pl.company.descriptionLocaleLabel)).toHaveValue('');
+  });
+
+  it('a language-only change reports that the language was saved', async () => {
+    vi.mocked(updateCompanyDescription).mockResolvedValue({ ok: true, outcome: 'locale_applied' });
+    renderForm('Opis', null, 'Opis', 'nl');
+    fireEvent.change(screen.getByLabelText(pl.company.descriptionLocaleLabel), { target: { value: 'en' } });
+    fireEvent.click(screen.getByRole('button', { name: pl.company.descriptionSubmit }));
+    await waitForSelector('[role="status"]');
+    expect(screen.getByRole('status')).toHaveTextContent(pl.company.descriptionLocaleSaved);
   });
 });

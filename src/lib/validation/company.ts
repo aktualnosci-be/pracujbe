@@ -1,5 +1,6 @@
 import { z } from 'zod/v3';
 
+import { routing } from '@/i18n/routing';
 import { COMPANY_DESCRIPTION_MAX } from '@/lib/company-description';
 import { COMPANY_URL_MAX_LENGTH, isPublicHttpsUrl } from '@/lib/company-links';
 import { containsPersonalIdentifier } from '@/lib/privacy/sensitive-data';
@@ -84,7 +85,14 @@ export const companyDescriptionSchema = z.object({
     .string({ required_error: 'company.error.descriptionRequired' })
     .trim()
     .max(COMPANY_DESCRIPTION_MAX, 'company.error.descriptionTooLong')
-    .refine((v) => !containsPersonalIdentifier(v), 'company.error.descriptionSensitive'),
+    .refine((v) => !containsPersonalIdentifier(v), 'company.error.descriptionSensitive')
+    // NUL baza odrzuca błędem technicznym — komunikat przy polu (#1108).
+    .refine((v) => !v.includes('\u0000'), 'company.error.textInvalid'),
+  /**
+   * Język opisu (0201): zgłaszany razem z propozycją i zatwierdzany z nią; pusty = nie wskazano.
+   * Tekst równy zatwierdzonemu = sama zmiana języka zatwierdzonego opisu (bez przeglądu).
+   */
+  descriptionLocale: z.enum(routing.locales).or(z.literal('')).optional(),
 });
 
 export type CompanyDescriptionInput = z.infer<typeof companyDescriptionSchema>;
