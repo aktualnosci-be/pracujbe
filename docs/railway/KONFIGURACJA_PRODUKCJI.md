@@ -55,7 +55,7 @@ Loginy tworzy `npm run db:logins` (`LOGINY_POSTGRESQL_ONE_OFF.md`) po migracjach
 | `EMAIL_UNSUBSCRIBE_SECRET` | brak linków wypisania → marketing nie wychodzi |
 | `RESEND_WEBHOOK_SECRET` | webhook doręczeń 503 (brak blokad po odbiciach, #44) |
 | `EMAILLABS_WEBHOOK_SECRET` | webhook raportów EmailLabs 503 (brak blokad po odbiciach) |
-| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | opcjonalnie; oba albo żaden — gdy ustawione, webhook wymaga też Basic auth |
+| `EMAILLABS_WEBHOOK_BASIC_USER`, `EMAILLABS_WEBHOOK_BASIC_PASSWORD` | w produkcji wymagane (#1234): bez nich webhook EmailLabs odpowiada 503, `checks.emaillabsWebhook` = false; poza produkcją opcjonalne (oba albo żaden) |
 | `EMAIL_QUEUE_SECRET` | cron `/api/email/process` bez autoryzacji (401) |
 | `MAINTENANCE_SECRET` | cron `/api/maintenance` bez autoryzacji |
 | `AUTH_EMAIL_IMMEDIATE_SEND` | opcjonalnie; puste = e-maile konta wychodzą zaraz po rejestracji/resecie (paczka workera po odpowiedzi), `off` = tylko z harmonogramu |
