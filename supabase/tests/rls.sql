@@ -15895,6 +15895,90 @@ select pg_temp.assert(
   (select count(*) from public.consents where profile_id = :'CANDA' and visitor_id = 'vis-cvr-shared') = 3,
   'CVR142-4b własny receipt A (3 kategorie, bez marketing — 0130) zapisany pod JEGO profile_id (CANDA), nie pod CANDB');
 
+-- ============================================================================
+-- CVL672. Receipt zgody cookies wskazuje wiersz consent_versions w JĘZYKU banera (#672,
+-- migracja 0971). Ta sama wersja w kilku językach: wiersz językowy → wspólny (locale null)
+-- → en → pozostałe alfabetycznie po kodzie; remis dat rozstrzyga id (deterministycznie).
+-- ============================================================================
+reset role; reset app.current_uid;
+-- '2026-05': pl i nl, nl opublikowany PÓŹNIEJ (0142 wybrałby nl dla banera po polsku).
+-- '2026-06': tylko nl i en (brak pl/fr). '2026-07': wspólny (null) i nl.
+-- '2026-08': pl i fr z IDENTYCZNYMI datami (remis).
+insert into public.consent_versions (id, document, version, locale, is_current, published_at, created_at) values
+  ('00000000-0000-0000-0000-000672000001', 'cookies', '2026-05', 'pl', false, '2026-05-01', '2026-05-01'),
+  ('00000000-0000-0000-0000-000672000002', 'cookies', '2026-05', 'nl', false, '2026-05-10', '2026-05-10'),
+  ('00000000-0000-0000-0000-000672000003', 'cookies', '2026-06', 'nl', false, '2026-06-10', '2026-06-10'),
+  ('00000000-0000-0000-0000-000672000004', 'cookies', '2026-06', 'en', false, '2026-06-01', '2026-06-01'),
+  ('00000000-0000-0000-0000-000672000005', 'cookies', '2026-07', null, false, '2026-07-01', '2026-07-01'),
+  ('00000000-0000-0000-0000-000672000006', 'cookies', '2026-07', 'nl', false, '2026-07-10', '2026-07-10'),
+  ('00000000-0000-0000-0000-000672000008', 'cookies', '2026-08', 'fr', false, '2026-08-01', '2026-08-01'),
+  ('00000000-0000-0000-0000-000672000007', 'cookies', '2026-08', 'pl', false, '2026-08-01', '2026-08-01');
+
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-1', null, null, '2026-05', 'pl');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-2', null, null, '2026-05', 'nl');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-3', null, null, '2026-06', 'fr');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-4', null, null, '2026-07', 'fr');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-5', null, null, '2026-08', 'nl');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-6', null, null, '2026-05', 'de');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-7', null, null, '2026-05');
+reset role;
+
+create function pg_temp.cvl_receipt(p_visitor text) returns uuid language sql as $$
+  select consent_version_id from public.consents where visitor_id = p_visitor limit 1
+$$;
+
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-1') = '00000000-0000-0000-0000-000672000001'::uuid
+  and (select count(distinct consent_version_id) from public.consents where visitor_id = 'vis-cvl-1') = 1,
+  'CVL672-1 baner pl -> wiersz pl, mimo późniejszej publikacji wiersza nl tej samej wersji');
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-2') = '00000000-0000-0000-0000-000672000002'::uuid,
+  'CVL672-2 baner nl -> wiersz nl');
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-3') = '00000000-0000-0000-0000-000672000004'::uuid,
+  'CVL672-3 brak tłumaczenia fr -> wiersz en (język domyślny), nie nowszy nl');
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-4') = '00000000-0000-0000-0000-000672000005'::uuid,
+  'CVL672-4 brak tłumaczenia fr -> wiersz wspólny (locale null) przed innymi językami');
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-5') = '00000000-0000-0000-0000-000672000008'::uuid,
+  'CVL672-5 remis dat bez tłumaczenia nl -> stała kolejność kodów (fr przed pl), nie plan zapytania');
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-6') = '00000000-0000-0000-0000-000672000002'::uuid,
+  'CVL672-6 język spoza listy (de) = brak języka -> deterministycznie nl przed pl');
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-7') = '00000000-0000-0000-0000-000672000002'::uuid,
+  'CVL672-7 wywołanie 6-argumentowe (stary klient) działa i jest deterministyczne');
+
+-- CVL672-8: fallback do bieżącej wersji też wybiera wiersz w języku banera.
+update public.consent_versions set is_current = false where document = 'cookies';
+update public.consent_versions set is_current = true
+  where id in ('00000000-0000-0000-0000-000672000001', '00000000-0000-0000-0000-000672000002');
+set role anon; reset app.current_uid; select pg_temp.assert_client_role();
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-8', null, null, 'brak-wersji', 'pl');
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-8n', null, null, null, 'nl');
+reset role;
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-8') = '00000000-0000-0000-0000-000672000001'::uuid
+  and pg_temp.cvl_receipt('vis-cvl-8n') = '00000000-0000-0000-0000-000672000002'::uuid,
+  'CVL672-8 fallback do bieżącej wersji: wiersz w języku banera (pl / nl)');
+
+-- CVL672-9 (kontrola ujemna): definicja z 0142 dla banera pl wybiera wiersz nl (błąd #672).
+begin;
+\ir ../rollback/0971_consent_receipt_locale.down.sql
+set local role anon;
+select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-neg', null, null, '2026-05');
+reset role;
+select pg_temp.assert(
+  pg_temp.cvl_receipt('vis-cvl-neg') = '00000000-0000-0000-0000-000672000002'::uuid,
+  'CVL672-9 kontrola ujemna: 0142 bez języka przypisuje receipt pl do wiersza nl');
+rollback;
+
+-- Przywrócenie stanu bieżącej wersji sprzed sekcji (CVR142).
+update public.consent_versions set is_current = false where document = 'cookies';
+update public.consent_versions set is_current = true where id = '00000000-0000-0000-0000-000142000001';
+
 -- GC163. Sprzątanie tabel technicznych z /api/maintenance (K2, migracja 0163).
 --        rate_limit_gc i processed_webhooks_gc: EXECUTE tylko service_role;
 --        limiter nie traci trwających okien (dolna granica doby), inbox webhooków nie

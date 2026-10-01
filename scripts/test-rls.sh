@@ -114,6 +114,9 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
 
+echo ">> rollback 0971 (język receiptu zgody cookies, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/consent-receipt-locale-rollback.sql"
+
 echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"
 echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"

@@ -50,7 +50,12 @@ async function trackTrackerRequests(page: Page): Promise<string[]> {
   return seen;
 }
 
-type ConsentCall = { categories: Record<string, boolean>; source: string };
+/** `locale` = 4. argument akcji: język banera, w którym pokazano politykę (#672). */
+type ConsentCall = {
+  categories: Record<string, boolean>;
+  source: string;
+  locale: unknown;
+};
 
 /**
  * Wywołania Server Action `recordConsent` (serwerowy dowód zgody → RPC `record_consent`).
@@ -75,7 +80,7 @@ function trackConsentActions(page: Page): ConsentCall[] {
       !("necessary" in categories)
     )
       return;
-    calls.push({ categories, source: args[1] });
+    calls.push({ categories, source: args[1], locale: args[3] });
   });
   return calls;
 }
@@ -196,7 +201,7 @@ for (const locale of routing.locales) {
       await expect
         .poll(() => calls.length, { message: "wywołanie recordConsent" })
         .toBe(1);
-      expect(calls[0]).toEqual({ categories: NONE, source: "cookie_banner" });
+      expect(calls[0]).toEqual({ categories: NONE, source: "cookie_banner", locale });
 
       const cookie = (await context.cookies()).find(
         (c) => c.name === CONSENT_COOKIE,
@@ -239,6 +244,7 @@ for (const locale of routing.locales) {
       expect(calls[0]).toEqual({
         categories: { ...NONE, analytics: true },
         source: "cookie_settings",
+        locale,
       });
 
       seen.length = 0;
@@ -260,6 +266,7 @@ for (const locale of routing.locales) {
       expect(calls[0]).toEqual({
         categories: { ...NONE, preferences: true },
         source: "cookie_settings",
+        locale,
       });
       await expectNoTrackers(page, seen);
 
@@ -302,10 +309,11 @@ for (const locale of routing.locales) {
 
       await expect.poll(() => calls.length).toBe(2);
       expect(calls).toEqual([
-        { categories: ALL, source: "cookie_banner" },
+        { categories: ALL, source: "cookie_banner", locale },
         {
           categories: { ...ALL, analytics: false },
           source: "cookie_settings",
+          locale,
         },
       ]);
 

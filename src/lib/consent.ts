@@ -71,6 +71,7 @@ export function hasConsent(category: ConsentCategory): boolean {
 export function saveConsent(
   categories: ConsentCategories,
   source: ConsentSource = 'cookie_banner',
+  locale?: string,
 ): ConsentRecord {
   const record: ConsentRecord = {
     v: CONSENT_POLICY_VERSION,
@@ -88,7 +89,8 @@ export function saveConsent(
     // Rozliczalność (RODO art. 7 ust. 1): serwerowy log zgody, PER KATEGORIA.
     // `record.v` = wersja polityki FAKTYCZNIE pokazana użytkownikowi (ta w jego cookie) —
     // serwer ją przyjmie tylko, jeśli istnieje w `consent_versions` (patrz `record_consent`).
-    void persistConsentToServer(record.categories, source, record.v);
+    // `locale` = język banera (#672) — receipt wskazuje wiersz polityki w tym języku.
+    void persistConsentToServer(record.categories, source, record.v, locale);
   }
 
   return record;
@@ -103,9 +105,10 @@ async function persistConsentToServer(
   categories: ConsentCategories,
   source: ConsentSource,
   version: string,
+  locale: string | undefined,
 ): Promise<void> {
   try {
-    await recordConsent(categories, source, version);
+    await recordConsent(categories, source, version, locale);
   } catch {
     // celowo połknięte — pomocniczy log zgód nie może zaburzyć zapisu w przeglądarce
   }

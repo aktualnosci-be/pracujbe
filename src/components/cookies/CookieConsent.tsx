@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Link, usePathname } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
@@ -128,6 +128,7 @@ const BANNER_BUTTON = 'h-auto min-h-12 w-full whitespace-normal text-center sm:w
 
 export function CookieConsent() {
   const t = useTranslations('cookies');
+  const locale = useLocale();
   const tNav = useTranslations('nav');
   const rowIdBase = useId();
 
@@ -206,12 +207,16 @@ export function CookieConsent() {
     };
   }, [mounted, bannerVisible]);
 
-  // Źródło trafia do serwerowego dowodu zgody (`record_consent`): baner albo centrum ustawień.
-  const persist = useCallback((categories: ConsentCategories, source: ConsentSource) => {
-    updateConsent(categories, source);
-    setBannerVisible(false);
-    setSettingsOpen(false);
-  }, []);
+  // Źródło trafia do serwerowego dowodu zgody (`record_consent`): baner albo centrum ustawień;
+  // język strony = język pokazanej polityki (#672), receipt wskazuje wiersz w tym języku.
+  const persist = useCallback(
+    (categories: ConsentCategories, source: ConsentSource) => {
+      updateConsent(categories, source, locale);
+      setBannerVisible(false);
+      setSettingsOpen(false);
+    },
+    [locale],
+  );
 
   const handleAcceptAll = useCallback(
     () => persist(acceptAllCategories(), 'cookie_settings'),
