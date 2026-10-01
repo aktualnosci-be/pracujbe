@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# ======================================================================# scripts/test-rls.sh — integracyjne testy RLS/triggerów na czystym PostgreSQL 16.
+# ======================================================================
+# scripts/test-rls.sh — integracyjne testy RLS/triggerów na czystym PostgreSQL 16.
 #
 # Tworzy świeżą bazę i nakłada PRODUKCYJNY zestaw: bootstrap ról (database/bootstrap)
 # oraz migracje domeny i auth (supabase/migrations + database/auth) w kolejności numerów —
@@ -12,7 +13,8 @@
 # Lokalnie (peer auth):   sudo -u postgres bash scripts/test-rls.sh
 # Lub z hasłem/hostem:    PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres bash scripts/test-rls.sh
 # W CI: usługa postgres:16 (patrz job „rls" w .github/workflows/ci.yml).
-# ======================================================================set -euo pipefail
+# ======================================================================
+set -euo pipefail
 
 DB="${RLS_TEST_DB:-pracujbe_rls_ci}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
