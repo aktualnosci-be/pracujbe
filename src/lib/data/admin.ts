@@ -50,7 +50,7 @@ import { attempt, execute, queryCount, queryOne, queryRows } from '@/lib/db/sql'
 import type { TransactionQuery } from '@/lib/db/transaction';
 import { captureError } from '@/lib/error-report';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
-import type { Locale } from '@/i18n/routing';
+import { isLocale, type Locale } from '@/i18n/routing';
 import { resolveRecipientLocale } from '@/lib/i18n/recipient-locale';
 import {
   isScreeningQuestionType,
@@ -1647,6 +1647,8 @@ export interface AdminCompanyDetail extends AdminCompanyRow {
   linksReview: CompanyLinksReview | null;
   /** Propozycja opisu firmy do decyzji admina albo odrzucona (0198); `description` = zatwierdzony. */
   descriptionReview: CompanyDescriptionReview | null;
+  /** Język zatwierdzonego opisu (0201); null = nie wskazano. */
+  descriptionLocale: Locale | null;
   phone: string | null;
   address: string | null;
   postalCode: string | null;
@@ -1700,6 +1702,7 @@ function demoCompanyDetail(id: string): AdminCompanyDetailResult {
       logoUrl: null,
       linksReview: null,
       descriptionReview: null,
+      descriptionLocale: null,
       phone: null,
       address: null,
       postalCode: null,
@@ -1812,7 +1815,7 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
                 country, industry, description, logo_url, website_pending, logo_url_pending,
                 links_review_status, links_pending_at, links_review_reason,
                 description_pending, description_review_status, description_pending_at,
-                description_review_reason,
+                description_review_reason, description_locale, description_locale_pending,
                 is_agency, agency_recognition_number, agency_check_status, agency_checked_at,
                 agency_check_note
            FROM public.companies
@@ -1873,6 +1876,7 @@ export async function getCompanyDetail(id: string): Promise<AdminCompanyDetailRe
         logoUrl: asNullableString(c['logo_url']),
         linksReview: parseCompanyLinksReview(c),
         descriptionReview: parseCompanyDescriptionReview(c),
+        descriptionLocale: isLocale(c['description_locale']) ? c['description_locale'] : null,
         phone: asNullableString(c['phone']),
         address: asNullableString(c['address']),
         postalCode: asNullableString(c['postal_code']),

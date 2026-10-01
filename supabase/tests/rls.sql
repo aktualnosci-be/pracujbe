@@ -2316,6 +2316,90 @@ select pg_temp.assert(
   (select count(*) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory') = 1,
   'RR5f wymagania aktywnej oferty nietknięte po próbach obejścia');
 
+-- RR5g (#753, 0200): GUC `pracujbe.job_edit` z POPRAWNYM id opublikowanej oferty (set_config
+-- klienta) nie otwiera żadnej z publicznych funkcji set_job_*; relacje i audyt bez zmian.
+select count(*) as rr5g_audit from public.audit_logs where entity_id = :'JOBE'::uuid \gset
+select coalesce(jsonb_agg(to_jsonb(r) order by r.kind, r.position), '[]') as rr5g_req
+  from public.job_requirements r where r.job_id = :'JOBE' \gset
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array['Nowe wymaganie'])$$, :'JOBE', :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5g1 znacznik z poprawnym id nie otwiera set_job_requirements');
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_skills(%L::uuid, true, array['Nowa umiejętność'])$$, :'JOBE', :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5g2 znacznik z poprawnym id nie otwiera set_job_skills');
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_languages(%L::uuid, '[{"language": "Niemiecki", "level": "basic"}]'::jsonb)$$, :'JOBE', :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5g3 znacznik z poprawnym id nie otwiera set_job_languages');
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_edit', %L, true), public.set_job_certificates(%L::uuid, array['Nowy certyfikat'])$$, :'JOBE', :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5g4 znacznik z poprawnym id nie otwiera set_job_certificates');
+-- RR5h: kontekstu operacji nie da się wstawić ani odczytać z roli klienta (brak grantów).
+select pg_temp.expect_error(
+  format($$insert into public.job_operation_context (job_id, kind) values (%L, 'job_edit')$$, :'JOBE'),
+  'permission denied', 'RR5h1 klient nie wstawi kontekstu operacji');
+select pg_temp.expect_error(
+  format($$select public.job_operation_context_active(%L::uuid, 'job_edit')$$, :'JOBE'),
+  'permission denied', 'RR5h2 klient nie wywoła sprawdzenia kontekstu');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select coalesce(jsonb_agg(to_jsonb(r) order by r.kind, r.position), '[]')
+     from public.job_requirements r where r.job_id = :'JOBE') = :'rr5g_req'::jsonb
+  and not exists (select 1 from public.job_skills where job_id = :'JOBE' and skill_label = 'Nowa umiejętność')
+  and not exists (select 1 from public.job_languages where job_id = :'JOBE' and language_label = 'Niemiecki')
+  and not exists (select 1 from public.job_certificates where job_id = :'JOBE' and certificate_label = 'Nowy certyfikat')
+  and (select count(*) from public.audit_logs where entity_id = :'JOBE'::uuid) = :'rr5g_audit'::int,
+  'RR5g5 relacje opublikowanej oferty i audyt nietknięte po sfałszowanym znaczniku');
+select pg_temp.assert(
+  (select count(*) from public.job_operation_context) = 0
+  and has_table_privilege('service_role', 'public.job_operation_context', 'INSERT') is false
+  and has_table_privilege('anon', 'public.job_operation_context', 'SELECT') is false,
+  'RR5h3 tabela kontekstu pusta poza RPC, bez grantów dla service_role/anon');
+
+-- RR5i: błąd update_published_job złapany przez klienta (podtransakcja) cofa kontekst, a po
+-- udanej rewizji kontekst jest usunięty — w tej samej transakcji set_job_* nadal odrzucone.
+-- commit: w rate-limit.test cały zestaw biegnie w jednej transakcji; bez niego rollback
+-- niżej cofnąłby funkcje pg_temp (w test-rls.sh to tylko ostrzeżenie).
+commit;
+begin;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.update_published_job(%L::uuid, %L::jsonb)', :'JOBE', current_setting('pb.rr_bad')),
+  'VALIDATION_FAILED', 'RR5i1 niekompletna rewizja odrzucona (błąd złapany przez klienta)');
+select pg_temp.expect_error(
+  format($$select public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array['Po błędzie RPC'])$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5i2 po złapanym błędzie RPC kontekst edycji nie zostaje');
+select public.update_published_job(:'JOBE'::uuid, current_setting('pb.rr_ok')::jsonb);
+select pg_temp.expect_error(
+  format($$select public.set_job_requirements(%L::uuid, 'pl', 'mandatory', array['Po rewizji'])$$, :'JOBE'),
+  'JOB_NOT_DRAFT', 'RR5i3 po udanej rewizji kontekst edycji nie zostaje w transakcji');
+rollback;
+reset role; reset app.current_uid;
+
+-- RR5n KONTROLA UJEMNA: strażnik oparty na GUC (0077) przepuszcza sfałszowany znacznik —
+-- RR5g1 łapie regresję.
+begin;
+create or replace function public.assert_job_draft_or_editing(p_job_id uuid)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_status text;
+begin
+  select status::text into v_status from public.jobs where id = p_job_id and deleted_at is null;
+  if v_status <> 'draft'
+     and coalesce(current_setting('pracujbe.job_edit', true), '') <> p_job_id::text then
+    raise exception 'JOB_NOT_DRAFT' using errcode = '42501';
+  end if;
+end $$;
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select set_config('pracujbe.job_edit', :'JOBE', true);
+select public.set_job_requirements(:'JOBE'::uuid, 'pl', 'mandatory', array['Nowe wymaganie']);
+reset role;
+select pg_temp.assert(
+  (select array_agg(content) from public.job_requirements where job_id = :'JOBE' and kind = 'mandatory')
+    = array['Nowe wymaganie'],
+  'RR5n KONTROLA UJEMNA: przy strażniku z GUC sfałszowany znacznik zmienia wymagania (RR5g1 byłby czerwony)');
+rollback;
+reset role; reset app.current_uid;
+
 -- OO6: wstrzymaną ofertę też można poprawić (status zostaje paused).
 set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
 select public.set_job_status(:'JOBE'::uuid, 'pause');
@@ -14406,14 +14490,38 @@ update public.jobs set salary_max = 20 where id = :'JTJOB';
 select pg_temp.assert(
   (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
   'JT7 bezpośredni UPDATE warunków (bez update_published_job) nie tworzy powiadomień');
+-- JT7b (#752, 0200): sfałszowany GUC `pracujbe.job_terms_notify` = id oferty nie otwiera bramki —
+-- ani dla backendu z bezpośrednim UPDATE, ani dla klienta (bezpośredni UPDATE i tak zablokowany).
 savepoint jt_gate;
 select set_config('pracujbe.job_terms_notify', :'JTJOB', true);
 update public.jobs set salary_max = 21 where id = :'JTJOB';
 select pg_temp.assert(
-  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3,
-  'JT7b KONTROLA UJEMNA: ze znacznikiem RPC ten sam UPDATE powiadamia (JT7 łapie brak bramki)');
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT7b sfałszowany znacznik GUC + bezpośredni UPDATE nie tworzy powiadomień');
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format($$select set_config('pracujbe.job_terms_notify', %L, true); update public.jobs set salary_max = 22 where id = %L$$, :'JTJOB', :'JTJOB'),
+  'JOB_NOT_DRAFT', 'JT7c klient ze sfałszowanym znacznikiem nie zmieni warunków bezpośrednio');
+select pg_temp.expect_error(
+  format($$insert into public.job_operation_context (job_id, kind) values (%L, 'job_terms_notify')$$, :'JTJOB'),
+  'permission denied', 'JT7d klient nie wstawi kontekstu powiadomienia');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 2,
+  'JT7e po próbach klienta nadal bez nowych powiadomień');
 rollback to savepoint jt_gate;
-select set_config('pracujbe.job_terms_notify', '', true);
+-- JT7n KONTROLA UJEMNA: to wiersz kontekstu (wstawiany tylko przez update_published_job) jest
+-- bramką — z nim ten sam UPDATE powiadamia (JT7b łapie brak bramki), a wiersz jest zużywany:
+-- drugi UPDATE tej samej rewizji nie powiadamia ponownie.
+savepoint jt_gate2;
+insert into public.job_operation_context (job_id, kind) values (:'JTJOB', 'job_terms_notify');
+update public.jobs set salary_max = 21 where id = :'JTJOB';
+update public.jobs set salary_max = 23 where id = :'JTJOB';
+select pg_temp.assert(
+  (select count(*) from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDA') = 3
+  and (select count(*) from public.job_operation_context) = 0,
+  'JT7n KONTROLA UJEMNA: z kontekstem RPC UPDATE powiadamia dokładnie raz (kontekst zużyty)');
+rollback to savepoint jt_gate2;
 update public.jobs set salary_max = 18 where id = :'JTJOB';
 
 -- JT8: sama wielkość liter/diakrytyki miasta (search_fold) nie jest zmianą warunków.
@@ -14463,7 +14571,7 @@ savepoint jt_neg2;
 create or replace function public.notify_job_terms_changed()
 returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  if coalesce(current_setting('pracujbe.job_terms_notify', true), '') <> new.id::text then return null; end if;
+  if not public.job_operation_context_take(new.id, 'job_terms_notify') then return null; end if;
   insert into public.notifications (profile_id, type, data, entity_type, entity_id)
   select a.candidate_id, 'system', '{}'::jsonb, 'job_terms', new.id
     from public.applications a where a.job_id = new.id and a.candidate_id is not null;
@@ -14477,6 +14585,61 @@ select pg_temp.assert(
   exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB' and profile_id = :'CANDB'),
   'JT9b KONTROLA UJEMNA: bez filtra stanu aplikacji wycofany kandydat dostaje powiadomienie (JT2b byłby czerwony)');
 rollback to savepoint jt_neg2;
+
+-- JT10 (#750, 0200): audyt `job.update_published` ma ten sam zakres co powiadomienie — zmiana
+-- wyłącznie godzin pracy zapisuje stare i nowe godziny (także w `terms` = job_material_terms).
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(current_setting('pb.jt_now')::jsonb,
+  '{job,city}', '"ANTWERPIA"'), '{job,working_hours}', '"36 h"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.notifications where entity_type = 'job_terms' and entity_id = :'JTJOB'
+             and profile_id = :'CANDA' and data->'fields' = '["working_hours"]'::jsonb),
+  'JT10 zmiana samych godzin → powiadomienie z polem working_hours');
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs a join public.jobs j on j.id = a.entity_id
+           where a.action = 'job.update_published' and a.entity_id = :'JTJOB'::uuid
+             and a.before_data->>'working_hours' = '38 h' and a.after_data->>'working_hours' = '36 h'
+             and a.before_data->'terms'->>'working_hours' = '38 h'
+             and a.after_data->'terms' = public.job_material_terms(j)),
+  'JT10b audyt zapisuje stare i nowe godziny oraz te same warunki co powiadomienie');
+-- JT10c: kilka warunków naraz (stawka, okres, zmiany) — każdy w migawce przed/po.
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.jt_now')::jsonb, '{job,city}', '"ANTWERPIA"'), '{job,working_hours}', '"36 h"'),
+  '{job,salary_min}', '17'), '{job,shifts}', '"dzień"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs a
+           where a.action = 'job.update_published' and a.entity_id = :'JTJOB'::uuid
+             and a.before_data->>'salary_min' = '16' and a.after_data->>'salary_min' = '17'
+             and a.before_data->'terms'->'salary'->>'min' = '16' and a.after_data->'terms'->'salary'->>'min' = '17'
+             and a.before_data->>'shifts' = 'noc' and a.after_data->>'shifts' = 'dzień'
+             and a.after_data ? 'salary_period' and a.after_data ? 'currency'
+             and a.after_data ? 'accommodation_cost' and a.after_data ? 'accommodation_deducted'),
+  'JT10c kilka warunków naraz: stawka, zmiany i pozostałe pola warunków w migawce audytu');
+-- JT10n KONTROLA UJEMNA: migawka w kształcie z 0172 gubi godziny pracy — JT10b byłby czerwony.
+savepoint jt_audit;
+create or replace function public.job_edit_audit_snapshot(j public.jobs)
+returns jsonb language sql stable set search_path = public, pg_temp as $$
+  select jsonb_build_object('title', j.title, 'city', j.city, 'region', j.region,
+    'salary_min', j.salary_min, 'salary_max', j.salary_max,
+    'start_date', j.start_date, 'contract_type', j.contract_type)
+$$;
+set role authenticated; set app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select public.update_published_job(:'JTJOB'::uuid, jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+  current_setting('pb.jt_now')::jsonb, '{job,city}', '"ANTWERPIA"'), '{job,working_hours}', '"30 h"'),
+  '{job,salary_min}', '17'), '{job,shifts}', '"noc"'));
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs a
+           where a.action = 'job.update_published' and a.entity_id = :'JTJOB'::uuid
+             and a.before_data->>'title' is not null)
+  and not exists (select 1 from public.audit_logs a
+                   where a.action = 'job.update_published' and a.entity_id = :'JTJOB'::uuid
+                     and a.after_data->>'working_hours' = '30 h'),
+  'JT10n KONTROLA UJEMNA: migawka z 0172 — wpis audytu jest, ale bez godzin pracy (JT10b byłby czerwony)');
+rollback to savepoint jt_audit;
 rollback;
 
 -- ============================================================================
@@ -23368,6 +23531,422 @@ select pg_temp.assert(pg_get_functiondef('public.requeue_failed_email_deliveries
   'OM1227-7 listy kampanii nie wracają (mają własne rewizje)');
 rollback;
 reset role;
+-- ============================================================================
+-- OD981. Decyzje właściciela 29.09.2026 (migracja 0202 — numer tymczasowy):
+--   #1222 ponowne otwarcie oferty odświeża published_at (nowa publikacja: alerty, filtr daty),
+--   #1233 usunięcie konta pracodawcy cofa oczekujące zaproszenia na jego adres i zeruje adres
+--         w rozstrzygniętych (ślad zdarzenia zostaje).
+-- ============================================================================
+\echo '--- OD981 reopen = nowa publikacja; zaproszenia usuwanego pracodawcy ---'
+reset role; reset app.current_uid;
+\set ODO  'e9810000-0000-4000-8000-000000000001'
+\set ODX  'e9810000-0000-4000-8000-000000000002'
+\set ODY  'e9810000-0000-4000-8000-000000000003'
+\set ODC  'e9810000-0000-4000-8000-0000000000c1'
+\set ODJ  'e9810000-0000-4000-8000-0000000000b1'
+\set ODJ2 'e9810000-0000-4000-8000-0000000000b2'
+\set ODI1 'e9810000-0000-4000-8000-0000000000d1'
+\set ODI2 'e9810000-0000-4000-8000-0000000000d2'
+\set ODI3 'e9810000-0000-4000-8000-0000000000d3'
+\set ODI4 'e9810000-0000-4000-8000-0000000000d4'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ODO','od-owner@test.be','Olga Od','{"role":"employer","first_name":"Olga","last_name":"Od","locale":"pl"}'),
+  (:'ODX','od-x@test.be','Xawery Od','{"role":"employer","first_name":"Xawery","last_name":"Od","locale":"nl"}'),
+  (:'ODY','od-y@test.be','Yvonne Od','{"role":"employer","first_name":"Yvonne","last_name":"Od","locale":"fr"}');
+insert into public.companies(id, name, status) values (:'ODC', 'Firma OD981', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'ODC', :'ODO', 'owner', true), (:'ODC', :'ODX', 'recruiter', true), (:'ODC', :'ODY', 'member', true);
+
+-- --- #1222: reopen -----------------------------------------------------------------------------
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at,apply_email) values
+  (:'ODJ',  :'ODC','od981-reopen','Magazynier OD981 unikat','warehouse','permanent','Antwerpia','Flandria','closed','pl', now() - interval '60 days','praca@example.be'),
+  (:'ODJ2', :'ODC','od981-pause', 'Magazynier OD981 pauza','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '20 days','praca@example.be');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'ODJ',  'pl', 'Magazynier OD981 unikat', 'Opis oferty magazynowej OD981.', array['Kompletacja']),
+  (:'ODJ2', 'pl', 'Magazynier OD981 pauza',  'Opis oferty magazynowej OD981.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'ODJ', 'pl', 'mandatory', 0, 'Dyspozycyjność'), (:'ODJ2', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- OD981-N1 (kontrola ujemna): definicja sprzed 0202 (warunek z 0085) zostawia starą datę.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.set_job_status(uuid,text)'::regprocedure);
+  d := replace(d, 'when p_action = ''reopen'' then now()', 'when false then now()');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select public.set_job_status(:'ODJ'::uuid, 'reopen');
+reset role;
+select pg_temp.assert((select published_at < now() - interval '59 days' from public.jobs where id = :'ODJ'),
+  'OD981-N1 kontrola ujemna: bez zmiany reopen zostawia published_at sprzed 60 dni');
+rollback;
+
+-- OD981-1: reopen zamkniętej oferty → published_at = teraz.
+set role authenticated; set app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'ODJ'::uuid, 'reopen') = 'active', 'OD981-1 reopen closed → active');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'active' and published_at > now() - interval '1 minute'
+                         from public.jobs where id = :'ODJ'),
+  'OD981-1b reopen odświeża published_at (nowa publikacja)');
+-- OD981-2: oferta ponownie otwarta trafia do okna alertów zapisanych wyszukiwań (published_at >= watermark).
+set role service_role;
+select count(*) as od_alert from public.saved_search_jobs_after(
+  'pl', 'OD981 unikat', null, null, null, null, null, null, null, null, null,
+  now() - interval '1 hour', null, null, null, 100, null) where id = :'ODJ' \gset
+reset role;
+select pg_temp.assert(:od_alert = 1, 'OD981-2 alert zapisanego wyszukiwania widzi ponownie otwartą ofertę');
+-- OD981-3: pauza i wznowienie NIE zmieniają daty publikacji (tylko reopen).
+set role authenticated; set app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select public.set_job_status(:'ODJ2'::uuid, 'pause');
+select public.set_job_status(:'ODJ2'::uuid, 'resume');
+reset role; reset app.current_uid;
+select pg_temp.assert((select published_at < now() - interval '19 days' from public.jobs where id = :'ODJ2'),
+  'OD981-3 pauza/wznowienie zachowują published_at');
+
+-- --- #1233: zaproszenia usuwanego pracodawcy ----------------------------------------------------
+insert into public.company_invitations(id, company_id, email, role, status, invited_by, responded_at) values
+  (:'ODI1', :'ODC', 'OD-X@test.be', 'recruiter', 'pending',  :'ODO', null),
+  (:'ODI2', :'ODC', 'od-x@test.be', 'member',    'accepted', :'ODO', now() - interval '3 days'),
+  (:'ODI3', :'ODC', 'inna.osoba@test.be', 'member', 'pending', :'ODO', null),
+  (:'ODI4', :'ODC', 'od-y@test.be', 'member',    'pending',  :'ODO', null);
+insert into public.email_deliveries
+  (profile_id, to_email, template, locale, subject, status, entity_type, entity_id, idempotency_key, payload, queued_at, next_attempt_at, attempts)
+values
+  (null, 'od-x@test.be', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued', 'company_invitation', :'ODI1',
+   'od981-signup-x', '{}'::jsonb, now(), now(), 0),
+  (null, 'inna.osoba@test.be', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued', 'company_invitation', :'ODI3',
+   'od981-signup-other', '{}'::jsonb, now(), now(), 0);
+
+-- OD981-4: CHECK — oczekujące zaproszenie musi mieć adres (zerować wolno tylko rozstrzygnięte).
+select pg_temp.expect_error('update public.company_invitations set email = null where id = ''' || :'ODI3' || '''',
+  'company_invitations_email_when_pending', 'OD981-4 oczekujące zaproszenie bez adresu odrzucone');
+
+-- OD981-N2 (kontrola ujemna): bez nowego bloku zaproszenia Y zostają oczekujące z adresem.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.erase_employer_subject(uuid,text,uuid)'::regprocedure);
+  d := replace(d, 'where i.email is not null and lower(i.email::text) = lower(v_email)', 'where false');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ODY'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('od-y@test.be');
+reset role;
+select pg_temp.assert((select status = 'pending' and email = 'od-y@test.be' from public.company_invitations where id = :'ODI4'),
+  'OD981-N2 kontrola ujemna: bez zmiany zaproszenie usuniętej osoby dalej oczekuje z jej adresem');
+rollback;
+reset role; reset app.current_uid;
+
+-- OD981-5: usunięcie konta X — oczekujące cofnięte, adres wyzerowany w obu, ślad zostaje.
+set role authenticated; set app.current_uid = :'ODX'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('od-x@test.be')::text as od_erase \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'revoked' and email is null and responded_at is not null and company_id = :'ODC' and role = 'recruiter'
+     from public.company_invitations where id = :'ODI1')
+  and (select status = 'accepted' and email is null and role = 'member' from public.company_invitations where id = :'ODI2'),
+  'OD981-5 oczekujące → revoked, adres wyzerowany także w rozstrzygniętym; firma/rola/status zostają');
+select pg_temp.assert(
+  (select status = 'pending' and email = 'inna.osoba@test.be' from public.company_invitations where id = :'ODI3')
+  and (select status = 'pending' and email = 'od-y@test.be' from public.company_invitations where id = :'ODI4')
+  and exists (select 1 from public.email_deliveries where idempotency_key = 'od981-signup-other')
+  and not exists (select 1 from public.email_deliveries where idempotency_key = 'od981-signup-x'),
+  'OD981-5b zaproszenia innych osób nietknięte; e-mail rejestracyjny usuniętej osoby usunięty z kolejki');
+select pg_temp.assert(
+  (select (details->>'invitationsRevoked')::int = 1 and (details->>'invitationsAnonymized')::int = 2
+     from public.data_rights_requests where subject_id = :'ODX' and kind = 'erasure'),
+  'OD981-5c liczniki w śladzie wniosku');
+-- OD981-6: ponowna rejestracja tym adresem nie widzi zaproszenia (nic nie oczekuje na ten adres).
+select pg_temp.assert(not exists (select 1 from public.company_invitations
+                                    where lower(email::text) = 'od-x@test.be' and status = 'pending'),
+  'OD981-6 po usunięciu na adres nie czeka żadne zaproszenie');
+
+-- CDL975. Język opisu firmy na publicznym profilu (#708, migracja 0201 — numer tymczasowy):
+--         `companies.description_locale` ustawia tylko owner/admin firmy przez RPC (audyt);
+--         zmiana treści opisu bez wskazania języka zeruje język (trigger); pusty opis = brak
+--         języka (CHECK); `get_public_company` zwraca język tylko firmy zweryfikowanej.
+-- =====================================================================
+\set CDLO 'e9750000-0000-0000-0000-000000000001'
+\set CDLM 'e9750000-0000-0000-0000-000000000002'
+\set CDLX 'e9750000-0000-0000-0000-000000000003'
+\set CDLC 'e9750000-0000-0000-0000-0000000000c1'
+\set CDLE 'e9750000-0000-0000-0000-0000000000c2'
+\set CDLU 'e9750000-0000-0000-0000-0000000000c3'
+reset role; reset app.current_uid;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CDLO','cdlo@test.be','Olga D','{"role":"employer","first_name":"Olga","last_name":"D","locale":"nl"}'),
+  (:'CDLM','cdlm@test.be','Mira D','{"role":"employer","first_name":"Mira","last_name":"D","locale":"pl"}'),
+  (:'CDLX','cdlx@test.be','Xavier D','{"role":"employer","first_name":"Xavier","last_name":"D","locale":"fr"}');
+insert into public.companies(id,name,slug,status,vat_number,verified_at,description) values
+  (:'CDLC','Firma D','firma-d-cdl975','verified','BE0644444444',now(),'Wij bouwen bruggen.'),
+  (:'CDLE','Firma D bez opisu','firma-d2-cdl975','verified','BE0655555555',now(),null),
+  (:'CDLU','Firma D niezweryfikowana','firma-d3-cdl975','pending','BE0666666666',null,'Opis');
+insert into public.company_members(company_id,profile_id,role,is_active) values
+  (:'CDLC',:'CDLO','owner',true),
+  (:'CDLC',:'CDLM','member',true),
+  (:'CDLE',:'CDLO','owner',true),
+  (:'CDLU',:'CDLX','owner',true);
+
+-- CDL975-0: nowa kolumna = język nieznany; profil publiczny zwraca null.
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select description_locale is null and description = 'Wij bouwen bruggen.'
+     from public.get_public_company('firma-d-cdl975')),
+  'CDL975-0 istniejący opis bez zadeklarowanego języka = null w profilu');
+reset role;
+
+-- CDL975-1: owner wskazuje język → zapis, audyt, profil publiczny zwraca kod.
+set role authenticated; set app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_company_description_locale(:'CDLC', ' nl ') = 'nl',
+  'CDL975-1 owner ustawia język opisu');
+select pg_temp.assert(public.set_company_description_locale(:'CDLC', 'nl') = 'nl',
+  'CDL975-1b ponowienie tej samej wartości');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select count(*) from public.audit_logs
+    where entity_id = :'CDLC' and action = 'company.description_locale_changed' and actor_id = :'CDLO'
+      and after_data = jsonb_build_object('description_locale', 'nl')) = 1,
+  'CDL975-1c jeden wpis audytu (ponowienie bez zmiany nie dubluje)');
+set role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select description_locale = 'nl' from public.get_public_company('firma-d-cdl975')),
+  'CDL975-1d profil publiczny zwraca język opisu');
+select pg_temp.assert(
+  not exists (select 1 from public.get_public_company('firma-d3-cdl975')),
+  'CDL975-1e firma niezweryfikowana nadal bez profilu');
+reset role;
+
+-- CDL975-2 (kontrole ujemne): member i owner innej firmy nie zmienią języka; zły kod odrzucony.
+set role authenticated; set app.current_uid = :'CDLM'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''fr'')', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-2 member nie ustawia języka opisu');
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'CDLX'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''fr'')', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-2b owner obcej firmy nie ustawia języka opisu');
+-- Bezpośredni UPDATE obcej firmy nic nie zmienia (RLS).
+update public.companies set description_locale = 'fr' where id = :'CDLC';
+reset role; reset app.current_uid;
+select pg_temp.assert((select description_locale = 'nl' from public.companies where id = :'CDLC'),
+  'CDL975-2c bezpośredni UPDATE obcej firmy nie zmienia języka (RLS)');
+set role authenticated; set app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''de'')', :'CDLC'),
+  'LOCALE_INVALID', 'CDL975-2d język spoza języków serwisu odrzucony');
+select pg_temp.expect_error(
+  format('select public.set_company_description_locale(%L, ''fr'')', :'CDLE'),
+  'DESCRIPTION_EMPTY', 'CDL975-2e firma bez opisu nie deklaruje języka opisu');
+reset role; reset app.current_uid;
+
+-- CDL975-3: zmiana treści opisu bez wskazania języka zeruje język (każda ścieżka zapisu).
+-- Od 0198 (#868) treść opisu zmienia się tylko przez propozycję firmy i decyzję admina portalu:
+-- sama propozycja (pending) nie rusza zatwierdzonego opisu ani jego języka; zatwierdzenie
+-- propozycji BEZ języka daje język nieznany (z językiem — CDL975-5).
+begin;
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.submit_company_description(:'CDLC', 'Nous construisons des ponts.') = 'pending',
+  'CDL975-3a owner zgłasza nowy opis (propozycja do decyzji)');
+reset role;
+select pg_temp.assert((select description_locale = 'nl' from public.companies where id = :'CDLC'),
+  'CDL975-3a2 propozycja opisu nie zmienia języka zatwierdzonego opisu');
+select description_pending_at as cdl_pending_at from public.companies where id = :'CDLC' \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'approved', :'cdl_pending_at', null);
+reset role;
+select pg_temp.assert((select description = 'Nous construisons des ponts.' and description_locale is null
+                         from public.companies where id = :'CDLC'),
+  'CDL975-3 nowa treść opisu = język nieznany (nie zostaje język starego tekstu)');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert((select description_locale is null from public.get_public_company('firma-d-cdl975')),
+  'CDL975-3b profil publiczny nie przypisuje starego języka nowemu opisowi');
+reset role;
+rollback;
+begin;
+update public.companies set description = 'Nous construisons des ponts.', description_locale = 'fr' where id = :'CDLC';
+select pg_temp.assert((select description_locale = 'fr' from public.companies where id = :'CDLC'),
+  'CDL975-3c nowa treść z jednoczesnym wskazaniem języka zachowuje wskazany język');
+rollback;
+-- CDL975-3N (kontrola ujemna): bez triggera stary język zostaje przypięty do nowej treści.
+begin;
+alter table public.companies disable trigger trg_reset_company_description_locale;
+update public.companies set description = 'Nous construisons des ponts.' where id = :'CDLC';
+select pg_temp.assert((select description_locale = 'nl' from public.companies where id = :'CDLC'),
+  'CDL975-3N kontrola ujemna: bez triggera nieaktualny język zostaje przy nowym opisie');
+rollback;
+
+-- CDL975-4: wyczyszczenie opisu czyści język; bez triggera CHECK nie dopuszcza języka bez opisu.
+begin;
+update public.companies set description = '   ' where id = :'CDLC';
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-4 pusty opis = brak języka');
+rollback;
+begin;
+alter table public.companies disable trigger trg_reset_company_description_locale;
+select pg_temp.expect_error(
+  format('update public.companies set description_locale = ''fr'' where id = %L', :'CDLE'),
+  'companies_description_locale_requires_text', 'CDL975-4b CHECK: język bez opisu odrzucony (bez triggera)');
+rollback;
+-- Wyczyszczenie języka przez owner (null) działa.
+set role authenticated; set app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_company_description_locale(:'CDLC', null) is null,
+  'CDL975-4c owner czyści język opisu');
+reset role; reset app.current_uid;
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-4d język wyczyszczony w bazie');
+
+-- CDL975-5: język zgłaszany razem z propozycją opisu (decyzja właściciela 30.09.2026).
+--   Propozycja nie rusza języka zatwierdzonego opisu; akceptacja przenosi język propozycji do
+--   `description_locale`; odrzucenie nie zmienia języka; ten sam tekst = sama zmiana języka.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Nous construisons des ponts.', 'fr') = 'pending',
+  'CDL975-5a owner zgłasza opis z językiem');
+reset role;
+select description_pending_at as cdl5_at from public.companies where id = :'CDLC' \gset
+select pg_temp.assert(
+  (select description = 'Wij bouwen bruggen.' and description_locale = 'nl'
+      and description_locale_pending = 'fr' and description_review_status = 'pending'
+     from public.companies where id = :'CDLC'),
+  'CDL975-5b propozycja trzyma swój język, zatwierdzony opis i jego język bez zmian');
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Nous construisons des ponts.', 'en') = 'pending',
+  'CDL975-5c ponowienie tej samej propozycji z innym językiem');
+select pg_temp.expect_error(
+  format('select public.submit_company_description(%L, %L, %L)', :'CDLC', 'Inny tekst.', 'de'),
+  'LOCALE_INVALID', 'CDL975-5d język spoza języków serwisu odrzucony');
+reset role;
+select pg_temp.assert(
+  (select description_locale_pending = 'en' and description_pending_at = :'cdl5_at'::timestamptz
+     from public.companies where id = :'CDLC'),
+  'CDL975-5e poprawka języka propozycji bez zmiany czasu zgłoszenia (klucz decyzji)');
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'approved', :'cdl5_at', null);
+reset role;
+select pg_temp.assert(
+  (select description = 'Nous construisons des ponts.' and description_locale = 'en'
+      and description_locale_pending is null and description_review_status is null
+     from public.companies where id = :'CDLC'),
+  'CDL975-5f akceptacja przenosi język propozycji do zatwierdzonego opisu');
+set local role anon; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  (select description_locale = 'en' from public.get_public_company('firma-d-cdl975')),
+  'CDL975-5g profil publiczny zwraca język zatwierdzony z propozycją');
+reset role;
+select pg_temp.assert(
+  exists (select 1 from public.audit_logs
+           where entity_id = :'CDLC' and action = 'company.description_reviewed'
+             and after_data->>'decision' = 'approved' and after_data->>'description_locale' = 'en'),
+  'CDL975-5h audyt decyzji z językiem');
+rollback;
+
+-- CDL975-6: nowy tekst w TYM SAMYM języku co zatwierdzony opis — akceptacja go zachowuje
+--   (trigger zerowania języka nie gubi języka wskazanego w propozycji).
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select public.submit_company_description(:'CDLC', 'Wij bouwen bruggen en tunnels.', 'nl');
+reset role;
+select description_pending_at as cdl6_at from public.companies where id = :'CDLC' \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'approved', :'cdl6_at', null);
+reset role;
+select pg_temp.assert(
+  (select description = 'Wij bouwen bruggen en tunnels.' and description_locale = 'nl'
+     from public.companies where id = :'CDLC'),
+  'CDL975-6 akceptacja zachowuje język propozycji równy poprzedniemu');
+rollback;
+-- CDL975-6N (kontrola ujemna): akceptacja jednym zapisem (tekst + język naraz) gubi język,
+--   gdy jest równy poprzedniemu — dlatego decyzja wpisuje język osobnym zapisem po tekście.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+update public.companies set description = 'Wij bouwen bruggen en tunnels.', description_locale = 'nl'
+ where id = :'CDLC';
+select pg_temp.assert((select description_locale is null from public.companies where id = :'CDLC'),
+  'CDL975-6N kontrola ujemna: jeden zapis tekstu i niezmienionego języka zeruje język');
+rollback;
+
+-- CDL975-7: odrzucenie nie zmienia języka zatwierdzonego opisu; propozycja z językiem zostaje.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select public.submit_company_description(:'CDLC', 'Nous construisons des ponts.', 'fr');
+reset role;
+select description_pending_at as cdl7_at from public.companies where id = :'CDLC' \gset
+set local role authenticated; set local app.current_uid = :'ADMIN'; select pg_temp.assert_client_role();
+select public.admin_decide_company_description(:'CDLC', 'rejected', :'cdl7_at', 'Opis zawiera dane kontaktowe.');
+reset role;
+select pg_temp.assert(
+  (select description = 'Wij bouwen bruggen.' and description_locale = 'nl'
+      and description_review_status = 'rejected' and description_locale_pending = 'fr'
+     from public.companies where id = :'CDLC'),
+  'CDL975-7 odrzucenie: zatwierdzony opis i jego język bez zmian, język propozycji do wglądu');
+-- CDL975-7b: wycofanie propozycji (tekst = zatwierdzony) czyści też jej język.
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Wij bouwen bruggen.', 'nl') = 'unchanged',
+  'CDL975-7b tekst i język = zatwierdzone: bez zmian');
+reset role;
+select pg_temp.assert(
+  (select description_review_status is null and description_locale_pending is null and description_locale = 'nl'
+     from public.companies where id = :'CDLC'),
+  'CDL975-7c wycofanie propozycji czyści jej język, zatwierdzony język zostaje');
+rollback;
+
+-- CDL975-8: ten sam tekst z innym językiem = zmiana języka zatwierdzonego opisu bez przeglądu.
+begin;
+update public.companies set description_locale = 'nl' where id = :'CDLC';
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.assert(
+  public.submit_company_description(:'CDLC', 'Wij bouwen bruggen.', 'en') = 'locale_applied',
+  'CDL975-8 sama zmiana języka zatwierdzonego opisu');
+reset role;
+select pg_temp.assert(
+  (select description_locale = 'en' and description_review_status is null
+     from public.companies where id = :'CDLC')
+  and exists (select 1 from public.audit_logs
+               where entity_id = :'CDLC' and action = 'company.description_locale_changed'
+                 and after_data = jsonb_build_object('description_locale', 'en')),
+  'CDL975-8b język zmieniony od razu, z audytem, bez propozycji');
+rollback;
+
+-- CDL975-9 (kontrola ujemna): język opisu i propozycji tylko przez RPC — bezpośredni zapis
+--   owner odrzuca strażnik; bez strażnika owner ustawiłby język z pominięciem przeglądu.
+begin;
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(
+  format('update public.companies set description_locale = ''fr'' where id = %L', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-9 owner nie zmienia języka opisu bezpośrednio');
+select pg_temp.expect_error(
+  format('update public.companies set description_locale_pending = ''fr'' where id = %L', :'CDLC'),
+  'PERMISSION_DENIED', 'CDL975-9b owner nie zmienia języka propozycji bezpośrednio');
+reset role;
+rollback;
+begin;
+alter table public.companies disable trigger trg_guard_company_description;
+set local role authenticated; set local app.current_uid = :'CDLO'; select pg_temp.assert_client_role();
+update public.companies set description_locale = 'fr' where id = :'CDLC';
+reset role;
+select pg_temp.assert((select description_locale = 'fr' from public.companies where id = :'CDLC'),
+  'CDL975-9N kontrola ujemna: bez strażnika owner zmienia język z pominięciem RPC');
+rollback;
+-- CDL975-10: język propozycji bez propozycji odrzuca CHECK.
+begin;
+select pg_temp.expect_error(
+  format('update public.companies set description_locale_pending = ''fr'' where id = %L', :'CDLC'),
+  'companies_description_locale_pending_requires_proposal', 'CDL975-10 język propozycji bez propozycji odrzucony');
+rollback;
+
+
 -- ============================================================================
 -- SD1111. Kontrakt soft-delete tabel procesu (#1111, DC-06, 0189) i limit CV na konto (#1101, CF-06).
 --   Polityki odczytu applications/offers/conversations/messages ukrywają wiersze z `deleted_at`;
