@@ -24787,7 +24787,7 @@ select pg_temp.expect_error(format('delete from public.job_work_locations where 
 reset role;
 select pg_temp.assert((select count(*) from public.job_work_locations where job_id = :'JWD') = 2,
   'JWL850-8 nieudane wywołania nie zmieniły listy');
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.set_job_work_locations(%L::uuid, array[%L])', :'JWD', 'Hasselt'),
   'permission denied', 'JWL850-8b anon nie woła zapisu');
 reset role;
@@ -24797,7 +24797,7 @@ insert into public.job_work_locations(job_id, position, name, name_key)
   values (:'JWA', 1, 'Hasselt', 'x'), (:'JWA', 2, 'Mol Jwtestowo', 'x2'), (:'JWA', 3, 'genk', 'x3');
 select pg_temp.assert((select name_key from public.job_work_locations where job_id = :'JWA' and position = 1) = 'hasselt',
   'JWL850-9 klucz ustala trigger, nie zapisujący');
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   (select string_agg(name, '|' order by position) from public.get_public_job_work_locations(:'JWA')) = 'Hasselt|Mol Jwtestowo',
   'JWL850-10 lista publiczna bez miasta głównego');
@@ -24815,7 +24815,7 @@ select pg_temp.assert(
   'JWL850-12b inne miasto nie zwraca oferty');
 reset role;
 update public.jobs set status = 'paused' where id = :'JWA';
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert((select count(*) from public.get_public_job_work_locations(:'JWA')) = 0
   and not exists (select 1 from public.get_public_jobs('pl', p_city => 'Hasselt', p_limit => 100) where id = :'JWA'),
   'JWL850-13 wstrzymana oferta bez listy i bez wyniku');
@@ -24848,7 +24848,7 @@ rollback to savepoint jwl_policy;
 
 -- Kontrola ujemna (b): definicja search_city_candidates z 0183 nie zna dodatkowych miejsc.
 \ir ../rollback/0982_job_work_locations.down.sql
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select pg_temp.assert(
   not exists (select 1 from public.get_public_jobs('pl', p_city => 'jwtestowo', p_limit => 100) where id = :'JWA'),
   'JWL850-N2 kontrola ujemna: bez 0982 wyszukiwanie po dodatkowym miejscu nie znajduje oferty');
