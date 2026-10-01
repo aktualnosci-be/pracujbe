@@ -26,6 +26,8 @@ export interface SavedSearchJob {
   companyName: string;
   city: string;
   publishedAt: string;
+  /** Język tytułu (#1223) — lista oznacza go `lang`, gdy różni się od języka panelu. */
+  contentLocale?: string;
   /** Wyszukiwanie, z którego pochodzi oferta (pierwsze, które ją zwróciło). */
   searchId: string;
 }
@@ -78,7 +80,7 @@ export async function loadSavedSearchJobs(preloaded?: SavedSearchesLoad): Promis
         const result = await getJobs(
           { ...filterParams, sort: 'newest', page: 1, pageSize: DASHBOARD_SEARCH_JOBS_LIMIT },
           viewer,
-          { withTotal: false },
+          { withTotal: false, withContentLocale: true },
         );
         return result.jobs.map((job) => ({ job, searchId: search.id }));
       }),
@@ -97,6 +99,7 @@ export async function loadSavedSearchJobs(preloaded?: SavedSearchesLoad): Promis
         companyName: job.companyName,
         city: job.city,
         publishedAt: job.publishedAt,
+        ...(job.contentLocale ? { contentLocale: job.contentLocale } : {}),
         searchId,
       }));
 

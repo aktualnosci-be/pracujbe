@@ -67,6 +67,9 @@ function mapFailure(error: unknown, area: string): ErrorCode {
   return 'INTERNAL';
 }
 
+/** Identyfikatory z klienta (#1109): zły format = błąd walidacji przed bazą. */
+const clientIdSchema = z.string().uuid();
+
 /**
  * Otwiera (lub zwraca istniejącą) konwersację powiązaną z aplikacją LUB propozycją.
  * Dokładnie jedno z pól musi być podane — RPC dodatkowo waliduje, że wywołujący jest stroną.
@@ -85,6 +88,10 @@ export async function openConversation(input: {
   }
 
   if (!isPortalDataConfigured()) return { ok: true, id: 'demo' };
+  // #1109: identyfikator w złym formacie = błąd walidacji, nie INTERNAL z bazy (22P02).
+  if (!clientIdSchema.safeParse(applicationId ?? offerId).success) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
 
   try {
     // Bez sesji RPC i tak odmawia (UNAUTHENTICATED → PERMISSION_DENIED) — nie pytamy bazy.
@@ -138,6 +145,10 @@ export async function sendMessage(
   }
 
   if (!isPortalDataConfigured()) return { ok: true, id: 'demo' };
+  // #1109: rozmowa w złym formacie = błąd walidacji (przed sesją i limitem, bez 22P02 z bazy).
+  if (!clientIdSchema.safeParse(conversationId).success) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
 
   // #852: sesja PRZED limitem — anonimowe, poprawnie sformatowane wywołanie nie może zużyć
   // wspólnego budżetu IP/NAT i zablokować prawdziwych uczestników rozmów za tym samym adresem.
@@ -187,6 +198,7 @@ export async function sendMessage(
 export async function markConversationRead(conversationId: string): Promise<OkResult> {
   if (messagingOff()) return DISABLED;
   if (!isPortalDataConfigured()) return { ok: true };
+  if (!clientIdSchema.safeParse(conversationId).success) return { ok: false, error: 'VALIDATION_FAILED' };
 
   try {
     const me = await getPortalIdentity();

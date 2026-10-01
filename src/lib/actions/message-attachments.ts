@@ -5,7 +5,7 @@ import { z } from 'zod/v3';
 import { getPortalIdentity } from '@/lib/db/portal';
 import { isProductionMode } from '@/lib/env';
 import type { ErrorCode } from '@/lib/errors';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkAccountRateLimit } from '@/lib/rate-limit-account';
 import { captureActionError } from '@/lib/db/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkAttachmentFile, type AttachmentFileProblem } from '@/lib/validation/message-attachment';
@@ -63,15 +63,16 @@ export async function uploadMessageAttachment(formData: FormData): Promise<Attac
   if (!(file instanceof File)) return { ok: false, error: 'VALIDATION_FAILED', reason: 'empty' };
   const problem = checkAttachmentFile(file);
   if (problem) return { ok: false, error: 'VALIDATION_FAILED', reason: problem };
-  if (!(await checkRateLimit('message-attachment', { max: 30, windowSeconds: 3600 }))) {
-    return { ok: false, error: 'RATE_LIMITED' };
-  }
   try {
     // Tryb demo (rozmowy bez UUID) dostaje jawny komunikat demo przed walidacją identyfikatorów.
     const context = await sessionContext();
     if (!context.ok) return context;
     if (!uuid.safeParse(conversationId).success || !uuid.safeParse(clientUploadId).success) {
       return { ok: false, error: 'VALIDATION_FAILED' };
+    }
+    // #1109: limit na konto PO sesji (+ szeroki próg na adres IP).
+    if (!(await checkAccountRateLimit('message-attachment', context.userId, { max: 30, windowSeconds: 3600 }))) {
+      return { ok: false, error: 'RATE_LIMITED' };
     }
     const { storeMessageAttachment } = await import('@/lib/files/message-attachments');
     return await storeMessageAttachment(
