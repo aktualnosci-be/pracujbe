@@ -64,7 +64,8 @@
       "urlTooLong": "Het adres is te lang.",
       "descriptionRequired": "Vul een beschrijving in, of laat het veld leeg om ze te verwijderen.",
       "descriptionTooLong": "De beschrijving mag maximaal 1500 tekens bevatten.",
-      "descriptionSensitive": "De beschrijving bevat een persoons- of documentnummer. Verwijder het — de beschrijving is openbaar."
+      "descriptionSensitive": "De beschrijving bevat een persoons- of documentnummer. Verwijder het — de beschrijving is openbaar.",
+      "textInvalid": "Deze tekst bevat een niet-toegestaan teken. Verwijder het."
     },
     "bannerUnverifiedTitle": "Je bedrijf wacht op verificatie",
     "bannerUnverifiedDesc": "Voordat je je eerste vacature publiceert, controleert een beheerder van Pracuj.be de bedrijfsgegevens. Je hoeft niets op te sturen — je bedrijf staat al in de wachtrij.",
@@ -437,6 +438,7 @@
       "workingHoursTooLong": "De omschrijving van de werkuren is te lang.",
       "shiftsTooLong": "De omschrijving van de ploegen is te lang.",
       "startDateInvalid": "Ongeldige startdatum.",
+      "textInvalid": "Deze tekst bevat een niet-toegestaan teken. Verwijder het.",
       "cityRequired": "Geef een stad op.",
       "cityTooLong": "De naam van de stad is te lang.",
       "regionRequired": "Geef een regio op.",
@@ -3465,6 +3467,7 @@
     "loginRequired": "Log in met je kandidatenaccount om de zoekopdracht op te slaan.",
     "login": "Inloggen",
     "errorNetwork": "Geen verbinding. Controleer je internet en probeer het opnieuw.",
+    "tooManyFilters": "Deze zoekopdracht kan niet worden opgeslagen omdat ze te veel of te lange filters heeft. Verwijder enkele filters en probeer het opnieuw.",
     "defaultName": "Mijn zoekopdracht",
     "intro": "Zoekopdrachten die je vanuit de vacaturelijst hebt opgeslagen. Komen er nieuwe vacatures met deze filters bij, dan krijg je een melding en een e-mail.",
     "loadError": "We konden je opgeslagen zoekopdrachten niet laden.",
@@ -3563,6 +3566,7 @@
       "detailsRequired": "Beschrijf het probleem.",
       "detailsTooShort": "De beschrijving moet minstens 20 tekens bevatten.",
       "detailsTooLong": "De beschrijving mag hoogstens 5000 tekens bevatten.",
+      "textInvalid": "Deze tekst bevat een niet-toegestaan teken. Verwijder het.",
       "urlInvalid": "Geef een volledig adres dat begint met http:// of https://.",
       "nameTooLong": "De naam mag hoogstens 200 tekens bevatten.",
       "nameInvalid": "De naam mag alleen letters, spaties en koppeltekens bevatten.",
@@ -3767,7 +3771,8 @@
       "nameInvalid": "De naam mag alleen letters, spaties en koppeltekens bevatten.",
       "emailRequired": "Vul je e-mailadres in.",
       "emailInvalid": "Vul een geldig e-mailadres in.",
-      "sensitiveId": "Verwijder het rijksregisternummer, PESEL of documentnummer — dat is niet nodig om je bericht te beantwoorden."
+      "sensitiveId": "Verwijder het rijksregisternummer, PESEL of documentnummer — dat is niet nodig om je bericht te beantwoorden.",
+      "textInvalid": "Deze tekst bevat een niet-toegestaan teken. Verwijder het."
     }
   },
   "savedSearchAlertOff": {
