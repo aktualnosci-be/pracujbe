@@ -24382,4 +24382,54 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- NT1120. Wiadomości serwisowe bez e-maila omijają opt-out in-app (#1120, migracja 0942)
+-- ============================================================================
+\echo '--- NT1120 wiadomości serwisowe a preferencja in-app ---'
+begin;
+reset role; reset app.current_uid;
+insert into public.notification_preferences (profile_id, in_app_enabled) values (:'EMPA', false)
+  on conflict (profile_id) do update set in_app_enabled = false;
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-links', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-desc', 'company', :'COMPA', '{"kind":"company_description","status":"approved"}'),
+  (:'EMPA', 'system', 'nt1120-content', 'company', :'COMPA', '{"kind":"job_content_review","status":"rejected"}'),
+  (:'EMPA', 'system', 'nt1120-status', 'company', :'COMPA', '{"kind":"company_status","status":"verified"}'),
+  (:'EMPA', 'system', 'nt1120-nokind', 'company', :'COMPA', null);
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-links', 'nt1120-desc', 'nt1120-content')) = 3,
+  'NT1120-1 decyzje bez e-maila (linki, opis, treść oferty) trafiają do panelu mimo opt-outu');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA'
+    and title in ('nt1120-status', 'nt1120-nokind')) = 0,
+  'NT1120-2 pozostałe powiadomienia nadal respektują in_app_enabled=false');
+-- Kind spoza listy w innym typie nie omija preferencji.
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'job_match', 'nt1120-type', 'company', :'COMPA', '{"kind":"company_links"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-type') = 0,
+  'NT1120-3 wyjątek tylko dla typu system');
+select pg_temp.assert(not public.notification_inapp_required('system', null)
+  and not public.notification_inapp_required('system', '{"kind":"company_status"}')
+  and public.notification_inapp_required('system', '{"kind":"company_links"}'),
+  'NT1120-4 lista wiadomości serwisowych');
+-- Preferencja włączona: wszystko jak dotąd.
+update public.notification_preferences set in_app_enabled = true where profile_id = :'EMPA';
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-on', 'company', :'COMPA', '{"kind":"company_status"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-on') = 1,
+  'NT1120-5 in_app_enabled=true → powiadomienie utworzone');
+-- Kontrola ujemna: filtr z 0035 ukrywa decyzję bez e-maila.
+update public.notification_preferences set in_app_enabled = false where profile_id = :'EMPA';
+\ir ../rollback/0942_notification_inapp_service_messages.down.sql
+insert into public.notifications (profile_id, type, title, entity_type, entity_id, data) values
+  (:'EMPA', 'system', 'nt1120-neg', 'company', :'COMPA', '{"kind":"company_links","status":"rejected"}');
+select pg_temp.assert(
+  (select count(*) from public.notifications where profile_id = :'EMPA' and title = 'nt1120-neg') = 0,
+  'NT1120-N kontrola ujemna: bez 0942 decyzja o linkach firmy znika przy opt-oucie');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
