@@ -615,7 +615,8 @@
     "analyticsName": "Analytics",
     "analyticsDesc": "Help us understand how you use the platform.",
     "alwaysOn": "Always on",
-    "cookieSettings": "Cookie settings"
+    "cookieSettings": "Cookie settings",
+    "analyticsWithdrawnNotice": "Your consent to analytics cookies has been withdrawn. The page was refreshed to turn off visit measurement."
   },
   "footer": {
     "tagline": "Jobs in Belgium. A site in four languages.",

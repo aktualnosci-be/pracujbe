@@ -615,7 +615,8 @@
     "analyticsName": "Analityczne",
     "analyticsDesc": "Pomagają nam zrozumieć, jak korzystasz z serwisu.",
     "alwaysOn": "Zawsze włączone",
-    "cookieSettings": "Ustawienia cookie"
+    "cookieSettings": "Ustawienia cookie",
+    "analyticsWithdrawnNotice": "Wycofano zgodę na cookies analityczne. Strona została odświeżona, aby wyłączyć pomiar odwiedzin."
   },
   "footer": {
     "tagline": "Oferty pracy w Belgii. Serwis w czterech językach.",

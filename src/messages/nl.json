@@ -615,7 +615,8 @@
     "analyticsName": "Analytisch",
     "analyticsDesc": "Helpen ons begrijpen hoe je het platform gebruikt.",
     "alwaysOn": "Altijd aan",
-    "cookieSettings": "Cookie-instellingen"
+    "cookieSettings": "Cookie-instellingen",
+    "analyticsWithdrawnNotice": "Je toestemming voor analytische cookies is ingetrokken. De pagina is vernieuwd om de bezoekmeting uit te schakelen."
   },
   "footer": {
     "tagline": "Vacatures in België. Een website in vier talen.",
