@@ -14,6 +14,7 @@ import type { ErrorCode } from '@/lib/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { ScreeningAnswer } from '@/lib/screening/questions';
 import { APPLICATION_FILTERS } from '@/lib/candidate-application-filter';
+import { captureActionError } from '@/lib/db/errors';
 
 /** #1144 — decyzja produktowa: portal ogłoszeniowy (historia zgłoszeń niedostępna). */
 type Disabled = Extract<ErrorCode, 'RECRUITMENT_DISABLED'>;
@@ -45,7 +46,8 @@ export async function loadMoreApplications(
 
   try {
     return { status: 'ready', page: await getMyApplicationsPage(locale, parsed.data, parsedFilter.data ?? null) };
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'candidate-applications.loadMoreApplications');
     return { status: 'error' };
   }
 }
@@ -65,7 +67,8 @@ export async function loadApplicationScreeningAnswers(applicationId: unknown): P
 
   try {
     return { status: 'ready', answers: await getMyApplicationScreeningAnswers(parsed.data) };
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'candidate-applications.loadApplicationScreeningAnswers');
     return { status: 'error' };
   }
 }
@@ -95,7 +98,8 @@ export async function loadMoreMyApplicationHistory(
 
   try {
     return { status: 'ready', page: await getMyApplicationHistoryPage(parsedId.data, parsedCursor.data) };
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'candidate-applications.loadMoreMyApplicationHistory');
     return { status: 'error' };
   }
 }

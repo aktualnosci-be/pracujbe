@@ -104,8 +104,8 @@ export function BreachNoticeForm({ incidentId }: { incidentId: string }): React.
             message: res.demo
               ? t('breachDemoNotSaved')
               : t('breachNoticeQueued', {
-                  queued: numberFormat.format(res.queued ?? 0),
-                  recipients: numberFormat.format(res.recipients ?? 0),
+                  queued: res.queued ?? 0,
+                  recipients: res.recipients ?? 0,
                 }),
             focusKey: ADMIN_PAGE_HEADING_FOCUS,
           });

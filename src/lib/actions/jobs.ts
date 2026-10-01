@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 
 import { getActiveCompanyId, getExpectedActiveCompany } from '@/lib/company-context';
-import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -729,7 +729,9 @@ async function readJobVersion(me: PortalIdentity, jobId: string): Promise<string
     );
     const value = row?.['updated_at'];
     return value instanceof Date ? value.toISOString() : typeof value === 'string' ? value : null;
-  } catch {
+  } catch (error) {
+    // #1068: awaria odczytu wersji nie może być cicha (CAS sygnału AI traci token).
+    captureActionError(error, 'jobs.readJobVersion');
     return null;
   }
 }
@@ -792,7 +794,8 @@ async function loadScreeningReviewNotices(
            FROM public.screening_question_reviews WHERE job_id = $1`, [jobId]);
       return buildScreeningReviewNotices(questions, reviews);
     });
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'jobs.loadScreeningReviewNotices');
     return [];
   }
 }
