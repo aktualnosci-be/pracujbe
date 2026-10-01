@@ -10,12 +10,12 @@ import {
   getJobsAvailableLocales,
   getJobsCount,
   type CategoryKey,
-  type LocationKey,
 } from '@/lib/jobs';
 import { MAX_JOB_LIST_OFFSET } from '@/lib/job-list-pagination';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
 import { pickXDefaultLocale } from '@/lib/seo/locales';
 import { sitemapEntriesCache, sitemapIdsCache } from '@/lib/cache/sitemap-cache';
+import { CITY_LANDING_KEYS, cityLandingQualifies } from '@/lib/locations/city-landings';
 
 /**
  * Mapa strony — Pracuj.be. Sitemap INDEX (#599): id `0` = strony statyczne, landing-page'e
@@ -119,19 +119,6 @@ const CATEGORY_KEYS: readonly CategoryKey[] = [
   'seasonal',
 ];
 
-const LOCATION_KEYS: readonly LocationKey[] = [
-  'brussels',
-  'antwerp',
-  'ghent',
-  'leuven',
-  'mechelen',
-  'hasselt',
-  'liege',
-  'charleroi',
-  'bruges',
-  'kortrijk',
-];
-
 /** Buduje mapę hreflang { locale -> absolutny URL } dla ścieżki (opcjonalnie zależnej od języka).
  *  Dodaje wpis `x-default` wskazujący na język domyślny — spójnie z hreflang stron. */
 function buildLanguages(
@@ -165,12 +152,13 @@ async function nonEmptyLandingLocales(
   }
 
   // #189: licznik per klucz miasta (wszystkie nazwy PL/NL/FR/EN) — landing ma te same oferty
-  // w każdym języku, więc jest pusty albo niepusty jednocześnie we wszystkich wersjach.
-  const cityCounts = await getCityCounts(routing.defaultLocale, LOCATION_KEYS);
+  // w każdym języku, więc kwalifikuje się albo nie jednocześnie we wszystkich wersjach.
+  // #920: katalog i próg podaży = metadane strony miasta i hub (`city-landings.ts`).
+  const cityCounts = await getCityCounts(routing.defaultLocale, CITY_LANDING_KEYS);
   if (!cityCounts) throw new Error('sitemap: brak liczników miast');
   const cities = new Map<string, string[]>();
-  for (const key of LOCATION_KEYS) {
-    cities.set(key, (cityCounts[key] ?? 0) > 0 ? [...locales] : []);
+  for (const key of CITY_LANDING_KEYS) {
+    cities.set(key, cityLandingQualifies(cityCounts[key]) ? [...locales] : []);
   }
   return { categories, cities };
 }
@@ -284,8 +272,8 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // --- Landing-page'e miast (dedykowana trasa /praca/miasto/<slug>, slug stabilny) ---
-  // Tylko języki, w których filtr miasta znajduje ≥1 ofertę (#299).
-  for (const key of LOCATION_KEYS) {
+  // Tylko miasta powyżej progu podaży (#920; dawniej ≥1 oferta, #299).
+  for (const key of CITY_LANDING_KEYS) {
     const path = `${HUB_PATH}/miasto/${key}`;
     const withJobs = landings.cities.get(key) ?? [];
     const languages = buildLanguages(base, withJobs, (locale) => `/${locale}${path}`);
