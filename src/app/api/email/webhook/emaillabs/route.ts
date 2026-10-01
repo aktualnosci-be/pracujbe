@@ -19,10 +19,12 @@ import { captureError } from '@/lib/error-report';
  *   4. treść = tablica zdarzeń; każde normalizowane do modelu (`provider-events.ts`),
  *      zdarzenia spoza modelu i uszkodzone są pomijane (EmailLabs zaleca nie odrzucać paczki),
  *   5. inbox `processed_webhooks` `emaillabs:<Request-Id>`: powtórzona paczka (`duplicate`)
- *      albo równoległa dostawa (`locked`) → 200 bez zmian,
- *   6. `record_email_event` (0098) dla każdego zdarzenia w JEDNEJ transakcji: status tylko
- *      „w górę”, trwałe odbicie → blokada adresu. Błąd → 500 (EmailLabs ponowi na drugi URL /
- *      później; zapis jest idempotentny),
+ *      → 200 bez zmian; równoległa dostawa (`locked`) → 503 + `Retry-After` (#790 — 2xx
+ *      potwierdziłby paczkę, której aktywny worker mógł nie dokończyć),
+ *   6. `record_email_event` (0098/0195) dla każdego zdarzenia w JEDNEJ transakcji: status tylko
+ *      „w górę”, trwałe odbicie → blokada adresu; zdarzenie bez wysyłki (`unknown_message`) baza
+ *      zachowuje do przypisania po zapisie identyfikatora (#788). Błąd → zwolnienie dzierżawy
+ *      (`release_webhook`, #790) i 500 (EmailLabs ponowi; zapis jest idempotentny),
  *   7. inbox `completed` → 200 `ok`.
  * EmailLabs czeka na odpowiedź 500 ms — paczka jest zapisywana jedną krótką transakcją.
  * Logi zawierają wyłącznie obszar i liczby — bez adresów, treści i sekretów.

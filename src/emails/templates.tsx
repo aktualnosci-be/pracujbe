@@ -42,6 +42,7 @@ import {
   moderationLabels,
 } from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
 
 /**
@@ -280,9 +281,13 @@ function prepareVars(
   return vars;
 }
 
-/** Treść maila w języku odbiorcy — z neutralnym wariantem, gdy brak kluczowej danej. */
+/**
+ * Treść maila w języku odbiorcy — z neutralnym wariantem, gdy brak kluczowej danej. Pola bazowe
+ * = portal ogłoszeniowy; wariant `recruitment` tylko w trybie rekrutacyjnym (#1212, #1225).
+ */
 function resolveCopy(type: EmailType, locale: Locale, vars: Record<string, unknown>): EmailCopy {
-  const copy = emailCopy[type][locale];
+  const base = emailCopy[type][locale];
+  const copy: EmailCopy = base.recruitment && isRecruitmentEnabled() ? { ...base, ...base.recruitment } : base;
   const field = SUBJECT_FIELD[type];
   if (field && copy.anonymous && isBlank(vars[field])) {
     return { ...copy, ...copy.anonymous };
