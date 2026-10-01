@@ -35,9 +35,9 @@ import {
 export type { NotificationPreferencesRole };
 
 /**
- * `pushEnabled` celowo pominięte (#312): Web Push nie jest zaimplementowany, więc kontrolka
- * obiecywałaby funkcję, której nie ma. Wartość z bazy przechodzi bez zmian w `defaultValues`
- * (zapis jej nie zmienia). Przywróć pole razem z realną subskrypcją push.
+ * `pushEnabled` celowo pominięte (#312, #724): push włącza i wyłącza sekcja urządzeń
+ * (`PushNotificationsSettings` — zgoda przeglądarki + rejestr urządzeń, 0983), a akcja zapisu
+ * tego formularza bierze `push_enabled` z bazy, nie z wejścia.
  */
 const CHANNEL_FIELDS: readonly ToggleField[] = ['inAppEnabled'];
 

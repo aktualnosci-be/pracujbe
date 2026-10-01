@@ -4064,5 +4064,39 @@
     "remindDue": "Tijd voor contact",
     "openSource": "Vacature openen",
     "listLabel": "Items in het sollicitatielogboek"
+  },
+  "push": {
+    "savedSearchTitle": "Nieuwe vacatures uit je opgeslagen zoekopdracht",
+    "savedSearchBody": "Nieuwe vacatures: {count}. Bekijk ze in je account.",
+    "savedSearchBodyNoCount": "Er zijn nieuwe vacatures die bij je zoekopdracht passen."
+  },
+  "pushSettings": {
+    "sectionTitle": "Pushmeldingen",
+    "intro": "Meldingen op dit apparaat over nieuwe vacatures uit je opgeslagen zoekopdrachten. Voor andere zaken sturen we geen pushmeldingen.",
+    "inAppNote": "Een pushmelding komt samen met de melding in je account — als je meldingen in je account uitzet, komt er ook geen pushmelding.",
+    "unsupported": "Deze browser ondersteunt geen pushmeldingen.",
+    "statusOn": "Meldingen staan aan op dit apparaat.",
+    "statusOff": "Meldingen staan uit op dit apparaat.",
+    "enable": "Aanzetten op dit apparaat",
+    "enabling": "Aanzetten…",
+    "disable": "Uitzetten op dit apparaat",
+    "disabling": "Uitzetten…",
+    "denied": "Meldingen voor deze site zijn geblokkeerd in de browser. Pas de sitemachtigingen aan in de browserinstellingen om ze aan te zetten.",
+    "enabled": "Meldingen staan nu aan op dit apparaat.",
+    "disabled": "Meldingen staan nu uit op dit apparaat.",
+    "removed": "Apparaat verwijderd.",
+    "errorGeneric": "De instelling kon niet worden opgeslagen. Probeer het opnieuw.",
+    "errorDeviceLimit": "Je hebt het maximum van 10 apparaten bereikt. Verwijder er een uit de lijst hieronder.",
+    "errorDenied": "De browser heeft meldingen geblokkeerd. Je kunt dit wijzigen in de site-instellingen.",
+    "errorDismissed": "Er is geen toestemming gegeven voor meldingen. Er is niets aangezet.",
+    "devicesTitle": "Apparaten met meldingen",
+    "devicesEmpty": "Geen apparaten.",
+    "loadError": "De lijst met apparaten kon niet worden geladen.",
+    "deviceUnknown": "Onbekend apparaat",
+    "thisDevice": "(dit apparaat)",
+    "deviceAdded": "Toegevoegd: {date}",
+    "deviceLastSent": "Laatste melding: {date}",
+    "removeDevice": "Verwijderen",
+    "removeDeviceLabel": "Apparaat {name} verwijderen"
   }
 }
