@@ -2680,6 +2680,18 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   w kategorii `analytics` (`src/components/cookies/Analytics.tsx`), CSP: `static.cloudflareinsights.com`
   (script-src) + `cloudflareinsights.com` (connect-src) — tylko gdy token jest ustawiony; bez
   tokenu (stan startowy, token doda właściciel) beacon się nie ładuje, a CSP nie ma tych hostów.
+  Wycofanie zgody przy działającym beaconie (#642, bez migracji): dostawca nie ma API do
+  zatrzymania wykonanego skryptu, a `next/script` go nie usuwa — `withdrawLoadedBeacon`
+  (`src/lib/analytics/withdraw.ts`) od razu odcina ruch do `*.cloudflareinsights.com`
+  w bieżącym dokumencie (CSP `connect-src 'self'` w `<meta>` — działa też na referencje do
+  `sendBeacon` trzymane przez skrypt — oraz nakładki na `sendBeacon`/`fetch`/XHR), czeka
+  najwyżej 3 s na zapis zgody w logu serwerowym (`pendingConsentPersistence`) i przeładowuje
+  stronę; po przeładowaniu `AnalyticsWithdrawnNotice` pokazuje jednorazowy komunikat
+  (`cookies.analyticsWithdrawnNotice`, znacznik w `sessionStorage`). Dowód: unit
+  `analytics-withdraw` (kontrole ujemne), E2E `cookie-consent-categories` (atrapa beaconu
+  z własną referencją do `sendBeacon` i wysyłką przy `pagehide`: zero pomiarów po wycofaniu,
+  także po nawigacji klienckiej). **Otwarte:** wycofanie w innej karcie (zdarzenie zmiany
+  zgody działa w obrębie jednej karty).
   Kategoria `marketing` usunięta (decyzja właściciela 25.09 — brak trackerów marketingowych):
   kategorie = necessary/preferences/analytics (`src/lib/consent-cookie.ts`, `CONSENT_CATEGORIES`),
   domyślna `CONSENT_POLICY_VERSION` = `2.0`, więc cookie sprzed zmiany (1.0, z marketingiem)

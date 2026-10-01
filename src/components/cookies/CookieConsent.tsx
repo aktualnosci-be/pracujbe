@@ -18,6 +18,7 @@ import {
 import { CONSENT_BOOT_ATTRIBUTE } from '@/lib/consent-boot';
 import { OPEN_SETTINGS_EVENT, updateConsent } from '@/lib/consent-store';
 import { Analytics } from './Analytics';
+import { AnalyticsWithdrawnNotice } from './AnalyticsWithdrawnNotice';
 import { LightDialogContent, LightDialogRoot } from '@/components/ui/light-dialog';
 
 /**
@@ -260,6 +261,7 @@ export function CookieConsent() {
   return (
     <>
       {mounted ? <Analytics /> : null}
+      {mounted ? <AnalyticsWithdrawnNotice /> : null}
 
       {bannerVisible ? (
         <div

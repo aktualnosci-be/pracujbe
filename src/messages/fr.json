@@ -609,7 +609,8 @@
     "analyticsName": "Analytiques",
     "analyticsDesc": "Nous aident à comprendre comment vous utilisez la plateforme.",
     "alwaysOn": "Toujours actifs",
-    "cookieSettings": "Paramètres des cookies"
+    "cookieSettings": "Paramètres des cookies",
+    "analyticsWithdrawnNotice": "Votre consentement aux cookies analytiques a été retiré. La page a été actualisée pour désactiver la mesure d’audience."
   },
   "footer": {
     "tagline": "Offres d’emploi en Belgique. Un site en quatre langues.",
