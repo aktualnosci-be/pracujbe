@@ -464,6 +464,43 @@ export async function isPublicRadiusPlaceKnown(pool: TransactionPool, near: stri
   });
 }
 
+export interface PublicJobQualificationRows {
+  skills: PublicJobRow[];
+  certificates: PublicJobRow[];
+}
+
+/**
+ * Umiejętności i certyfikaty publicznej oferty (#866, decyzja 01.10.2026) — bez RPC: odczyt
+ * relacji pod rolą anon, RLS `job_skills_select`/`job_certificates_select` przepuszcza tylko
+ * ofertę publiczną (`job_is_public`). Nazwa umiejętności ze słownika (`skill_labels`, odczyt
+ * publiczny) tylko w języku strony, gdy umiejętność ma `skill_id`; inaczej wpis pracodawcy.
+ */
+export async function getPublicJobQualifications(
+  pool: TransactionPool,
+  jobId: string,
+  requestedLocale: string,
+): Promise<PublicJobQualificationRows> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const skills = (await transaction.query(
+      `SELECT js.skill_label, js.is_mandatory, sl.label AS localized_label
+       FROM public.job_skills js
+       LEFT JOIN public.skill_labels sl
+         ON sl.skill_id = js.skill_id AND sl.locale = $2::text AND sl.kind = 'preferred'
+       WHERE js.job_id = $1::uuid
+       ORDER BY js.is_mandatory DESC, js.skill_label`,
+      [jobId, locale(requestedLocale)],
+    )) as { rows: PublicJobRow[] };
+    const certificates = (await transaction.query(
+      `SELECT jc.certificate_label
+       FROM public.job_certificates jc
+       WHERE jc.job_id = $1::uuid
+       ORDER BY jc.certificate_label`,
+      [jobId],
+    )) as { rows: PublicJobRow[] };
+    return { skills: skills.rows, certificates: certificates.rows };
+  });
+}
+
 /**
  * Pytania screeningowe publicznej oferty (#101) — RPC `get_public_job_screening_questions`
  * (0093) pod rolą anon zwraca wiersze tylko dla oferty publicznej (`job_is_public`).

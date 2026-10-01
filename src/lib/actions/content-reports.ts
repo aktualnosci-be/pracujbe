@@ -1,7 +1,7 @@
 'use server';
 
 import { getPortalIdentity, isServiceDatabaseConfigured, withServiceRole } from '@/lib/db/portal';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
 import { rpc, rpcRows } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -69,7 +69,7 @@ async function sessionUserId(): Promise<string | null> {
 /** Wyjątek bazy → kod użytkowy; nieznany błąd = INTERNAL (+ kanał błędów). */
 function failure(error: unknown, area: string): { ok: false; error: ErrorCode } {
   const code = isDatabaseError(error) ? mapPgError(databaseErrorMessage(error)) : 'INTERNAL';
-  if (code === 'INTERNAL') captureError(error, { area });
+  if (code === 'INTERNAL') captureActionError(error, area);
   return { ok: false, error: code };
 }
 
