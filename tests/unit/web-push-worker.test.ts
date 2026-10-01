@@ -34,7 +34,7 @@ const ENV = {
   WEB_PUSH_VAPID_PUBLIC_KEY: keys.publicKey,
   WEB_PUSH_VAPID_PRIVATE_KEY: keys.privateKey,
   WEB_PUSH_VAPID_SUBJECT: 'mailto:ops@example.com',
-} as NodeJS.ProcessEnv;
+} as unknown as NodeJS.ProcessEnv;
 
 const ua = createECDH('prime256v1');
 ua.generateKeys();

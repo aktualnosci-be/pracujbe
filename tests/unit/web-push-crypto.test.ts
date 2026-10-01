@@ -118,7 +118,7 @@ describe('konfiguracja Web Push (flaga + klucze ze zmiennych środowiska)', () =
     WEB_PUSH_VAPID_PUBLIC_KEY: pair.publicKey,
     WEB_PUSH_VAPID_PRIVATE_KEY: pair.privateKey,
     WEB_PUSH_VAPID_SUBJECT: 'mailto:ops@example.com',
-  } as NodeJS.ProcessEnv;
+  } as unknown as NodeJS.ProcessEnv;
 
   it('komplet = włączona, klucz publiczny dla przeglądarki', () => {
     expect(isWebPushEnabled(full)).toBe(true);

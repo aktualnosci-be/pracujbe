@@ -1,4 +1,4 @@
-import { createECDH, createPrivateKey, sign, type KeyObject } from 'node:crypto';
+import { createECDH, createPrivateKey, sign, type JsonWebKey, type KeyObject } from 'node:crypto';
 
 /**
  * VAPID (RFC 8292) dla Web Push (#724) na `node:crypto`: podpis JWT ES256 kluczem serwera.

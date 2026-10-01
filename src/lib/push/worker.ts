@@ -61,7 +61,7 @@ export async function processPushQueue(
   const keys = webPushConfig(env);
   if (!keys) return { skipped: 'disabled' };
 
-  const rows = await withServiceRole((tx) => rpcRows(tx, 'claim_push_deliveries', { p_limit: limit }));
+  const rows = await withServiceRole((tx) => rpcRows<unknown>(tx, 'claim_push_deliveries', { p_limit: limit }));
   const claimed = rows.filter(isClaimed);
   const run = { claimed: claimed.length, sent: 0, gone: 0, retried: 0, failed: 0 };
   for (const row of claimed) {
