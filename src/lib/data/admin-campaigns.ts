@@ -58,6 +58,12 @@ export interface AdminCampaignDetail extends AdminCampaignRow {
   content: unknown;
   /** Wszystkie rewizje tego sluga (najnowsza pierwsza), łącznie z bieżącą. */
   revisions: AdminCampaignRevision[];
+  /**
+   * #720 (0954): slugi ofert z treści, których dziś nie ma publicznie (brak, wygasła,
+   * wstrzymana, usunięta, demo, firma niezweryfikowana) — taka rewizja nie aktywuje się
+   * i nie wychodzi. Pusta lista = wszystkie oferty dostępne.
+   */
+  unavailableJobSlugs: string[];
 }
 
 export type AdminCampaignDetailResult =
@@ -110,7 +116,7 @@ function demoStats(values: Partial<CampaignRecipientStats>): CampaignRecipientSt
   return stats;
 }
 
-const DEMO_CAMPAIGNS: AdminCampaignDetail[] = [
+const DEMO_CAMPAIGNS: Omit<AdminCampaignDetail, 'unavailableJobSlugs'>[] = [
   {
     id: 'demo-k3',
     slug: 'newsletter-pazdziernik',
@@ -302,11 +308,15 @@ export async function listEmailCampaigns(
   }
 }
 
+function slugList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
+}
+
 /** Szczegół rewizji: dane, liczby odbiorców, treść do podglądu, rewizje tego sluga. */
 export async function getEmailCampaign(id: string): Promise<AdminCampaignDetailResult> {
   if (!isPortalDataConfigured()) {
     const demo = DEMO_CAMPAIGNS.find((c) => c.id === id);
-    return demo ? { status: 'ok', campaign: demo } : { status: 'not_found' };
+    return demo ? { status: 'ok', campaign: { ...demo, unavailableJobSlugs: [] } } : { status: 'not_found' };
   }
   await requireAdmin();
   const uuid = parseUuid(id);
@@ -331,7 +341,13 @@ export async function getEmailCampaign(id: string): Promise<AdminCampaignDetailR
           LIMIT $2`,
         [str(row['slug']), ADMIN_CAMPAIGN_REVISIONS_LIMIT],
       )) as Array<Record<string, unknown>>;
-      return { row, revisions, stats: await readRecipientStats(tx, [uuid]) };
+      const availability = (await queryOne(
+        tx,
+        'admin.email-campaign-unavailable-jobs',
+        'SELECT public.email_campaign_unavailable_slugs(content) AS slugs FROM public.email_campaigns WHERE id = $1::uuid',
+        [uuid],
+      )) as Record<string, unknown> | null;
+      return { row, revisions, availability, stats: await readRecipientStats(tx, [uuid]) };
     });
     if (!loaded) return { status: 'not_found' };
     const base = rowOf(loaded.row, loaded.stats);
@@ -341,6 +357,7 @@ export async function getEmailCampaign(id: string): Promise<AdminCampaignDetailR
       campaign: {
         ...base,
         content: loaded.row['content'],
+        unavailableJobSlugs: slugList(loaded.availability?.['slugs']),
         revisions: loaded.revisions.flatMap((r) => {
           const status = statusOf(r['status']);
           const revId = str(r['id']);

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fakeDb, pgError, resetFakeDb } from '../helpers/fake-db';
+import { TECHNICAL_GC_BATCH_LIMIT, TECHNICAL_GC_MAX_BATCHES } from '@/lib/maintenance/technical-gc';
 
 /** #98 — retencja zgłoszeń gościa w crona /api/maintenance: licznik i 503 przy błędzie. */
 
@@ -278,9 +279,52 @@ describe('maintenance: tabele techniczne (K2, 0163)', () => {
     fakeDb.rpc('rate_limit_gc', 7).rpc('processed_webhooks_gc', 3);
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect(fakeDb.callsTo('rate_limit_gc')[0]).toMatchObject({ args: { p_older_than_seconds: 86_400 }, as: 'service' });
-    expect(fakeDb.callsTo('processed_webhooks_gc')[0]).toMatchObject({ args: { p_older_than_days: 30 }, as: 'service' });
-    expect(await res.json()).toMatchObject({ ok: true, purgedRateLimits: 7, purgedWebhookInbox: 3 });
+    expect(fakeDb.callsTo('rate_limit_gc')).toHaveLength(1);
+    expect(fakeDb.callsTo('rate_limit_gc')[0]).toMatchObject({
+      args: { p_older_than_seconds: 86_400, p_limit: TECHNICAL_GC_BATCH_LIMIT },
+      as: 'service',
+    });
+    expect(fakeDb.callsTo('processed_webhooks_gc')[0]).toMatchObject({
+      args: { p_older_than_days: 30, p_limit: TECHNICAL_GC_BATCH_LIMIT },
+      as: 'service',
+    });
+    expect(await res.json()).toMatchObject({
+      ok: true, purgedRateLimits: 7, purgedWebhookInbox: 3, technicalGcBacklog: false,
+    });
+  });
+
+  it('#746: pełna partia = zaległość → kolejne partie (każda osobnym wywołaniem), do pierwszej niepełnej', async () => {
+    const batches = [TECHNICAL_GC_BATCH_LIMIT, TECHNICAL_GC_BATCH_LIMIT, 12];
+    fakeDb.rpc('rate_limit_gc', () => batches.shift() ?? 0).rpc('processed_webhooks_gc', 0);
+    const res = await POST(request());
+    expect(res.status).toBe(200);
+    expect(fakeDb.callsTo('rate_limit_gc')).toHaveLength(3);
+    expect(fakeDb.callsTo('processed_webhooks_gc')).toHaveLength(1);
+    expect(await res.json()).toMatchObject({
+      purgedRateLimits: 2 * TECHNICAL_GC_BATCH_LIMIT + 12, purgedWebhookInbox: 0, technicalGcBacklog: false,
+    });
+  });
+
+  it('#746: zaległość większa niż limit przebiegu → najwyżej TECHNICAL_GC_MAX_BATCHES partii i flaga backlog', async () => {
+    fakeDb.rpc('rate_limit_gc', 0).rpc('processed_webhooks_gc', TECHNICAL_GC_BATCH_LIMIT);
+    const res = await POST(request());
+    expect(fakeDb.callsTo('processed_webhooks_gc')).toHaveLength(TECHNICAL_GC_MAX_BATCHES);
+    expect(await res.json()).toMatchObject({
+      purgedWebhookInbox: TECHNICAL_GC_MAX_BATCHES * TECHNICAL_GC_BATCH_LIMIT, technicalGcBacklog: true,
+    });
+  });
+
+  it('#746 kontrola ujemna: błąd partii przerywa zadanie (bez kolejnych partii) i daje 503', async () => {
+    let calls = 0;
+    fakeDb.rpc('rate_limit_gc', () => {
+      calls += 1;
+      if (calls === 2) throw pgError('57014', 'canceling statement due to statement timeout');
+      return TECHNICAL_GC_BATCH_LIMIT;
+    });
+    const res = await POST(request());
+    expect(res.status).toBe(503);
+    expect(fakeDb.callsTo('rate_limit_gc')).toHaveLength(2);
+    expect(captureError).toHaveBeenCalledWith(expect.anything(), { area: 'maintenance.gc', task: 'rateLimits' });
   });
 
   it('kontrola ujemna: brak EXECUTE (stan sprzed 0163) → 503, nie cichy sukces', async () => {

@@ -44,12 +44,15 @@ import {
  * wyrenderuje), rewizje tego sluga oraz aktywacja/zatrzymanie (`EmailCampaignActions`, RPC
  * z CAS i audytem, 0111). Bez konfiguracji nadawcy marketingu — komunikat i brak aktywacji.
  * „Nowa rewizja” → edytor wstępnie wypełniony treścią tej rewizji (RPC 0155, szkic).
+ * #720 (0954): oferta z treści niedostępna publicznie — komunikat ze slugami (aktywacja
+ * odrzucona, harmonogram i worker listów nie wyślą takiej rewizji).
  */
 
 export const dynamic = 'force-dynamic';
 
 const BASE_PATH = '/admin/kampanie';
 const SENDER_NOTICE_ID = 'campaign-sender-missing';
+const JOBS_NOTICE_ID = 'campaign-jobs-unavailable';
 
 type PageProps = { params: Promise<{ locale: string; id: string }> };
 
@@ -119,6 +122,17 @@ export default async function AdminEmailCampaignPage({ params }: PageProps) {
           </div>
         </div>
       )}
+
+      {campaign.unavailableJobSlugs.length > 0 && ['draft', 'active'].includes(campaign.status) ? (
+        <div id={JOBS_NOTICE_ID} role="note" className={NOTICE}>
+          <div className="min-w-0">
+            <strong className={NOTICE_TITLE}>{t('campaignJobsUnavailableTitle')}</strong>
+            <p className={NOTICE_TEXT}>
+              {t('campaignJobsUnavailableText', { slugs: campaign.unavailableJobSlugs.join(', ') })}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <section aria-labelledby="campaign-state-heading" className={PANEL}>
         <div className={SECTION_HEAD}>

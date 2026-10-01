@@ -53,7 +53,9 @@ export type CampaignEditorError =
   | 'placeholder'
   | 'tooLong'
   | 'jobsCount'
-  | 'invalid';
+  | 'invalid'
+  /** #720: slug nie wskazuje oferty publicznej (sprawdza baza przy zapisie, 0954). */
+  | 'unavailable';
 
 /** Klucze: `slug`, `<język>.jobs`, `<język>.<indeks>.<pole>`. */
 export type CampaignEditorErrors = Partial<Record<string, CampaignEditorError>>;
@@ -66,6 +68,7 @@ export const CAMPAIGN_EDITOR_ERROR_KEY: Record<CampaignEditorError, string> = {
   tooLong: 'campaignEditorErrorTooLong',
   jobsCount: 'campaignEditorErrorJobsCount',
   invalid: 'campaignEditorErrorInvalid',
+  unavailable: 'campaignEditorErrorJobUnavailable',
 };
 
 export function jobFieldKey(locale: Locale, index: number, field: NewsletterJobField): string {
