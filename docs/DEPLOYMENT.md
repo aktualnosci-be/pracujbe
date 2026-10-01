@@ -25,6 +25,25 @@ przebieg tego PR, ale przebiegi `main` nigdy nie są anulowane — Railway wdra�
 po zielonym CI dla SHA na `main` przez natywne `Wait for CI`; nie uruchamiamy
 deployu jako joba Actions.
 
+### PR z forków (#671)
+
+PR z forka dostaje ten sam komplet jobów co PR z gałęzi repozytorium (lint,
+typecheck, unit, SCA, RLS, migracje, build, E2E). To bezpieczne, bo `ci.yml`
+działa na zdarzeniu `pull_request` (token tylko do odczytu, GitHub nie przekazuje
+sekretów do PR-ów z forków), a sam workflow nie używa sekretów ani uprawnień
+zapisu — wszystkie wartości to placeholdery, a PostgreSQL działa w kontenerze
+usługi jobu. Cache Actions zapisany przez PR jest dostępny tylko dla tego PR,
+więc nie trafia do przebiegów `main`. Strażnik `scripts/check-ci-workflows.mjs`
+odrzuca `pull_request_target`/`workflow_run`, `secrets.*`, przekazanie tokenu,
+uprawnienia inne niż `contents: read`, `permissions`/`environment` w jobie
+i warunki pomijające forki. Kontrole wymagające zaufanego środowiska lub sekretów
+(dziś brak) muszą trafić do osobnego workflowu uruchamianego po akceptacji PR.
+
+Ustawienia repozytorium (właściciel): Settings → Actions → General → „Approval for
+running fork pull request workflows” — wymagaj zatwierdzenia co najmniej dla nowych
+współtwórców; w ochronie gałęzi `main` wymagane checki to stałe nazwy jobów
+(m.in. „E2E (Playwright)”), więc PR z forka czeka na ich wynik zamiast na pominięcie.
+
 ## Konfiguracja usługi
 
 - środowisko: `production`;

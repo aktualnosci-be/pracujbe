@@ -13,7 +13,9 @@ end $$;
 select count(*) as clr_apps from public.applications \gset
 
 begin;
--- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0190 → 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
+-- Migracje zależne od 0171 wycofujemy najpierw (odwrotna kolejność numerów: 0977 → 0204 → 0190 → 0177 → 0176 → 0175 → 0174 → 0173 → 0171).
+-- 0204 (#1211, numer tymczasowy) stoi na 0171 (strażnik trybu szablonów) — cofana jako pierwsza.
+\ir ../rollback/0204_classifieds_message_templates_off.down.sql
 -- 0977 (#773) nadpisuje ai_budget_reserve z 0176 — cofana przed 0176.
 \ir ../rollback/0977_ai_job_explain.down.sql
 -- 0190 (#740) nadpisuje claim_translation_jobs z 0176 (nowa kolumna wyniku) — cofana przed 0176.
@@ -32,12 +34,28 @@ select pg_temp.assert(not exists (select 1 from pg_trigger t join pg_class c on 
 -- CLAIB-4 (kontrola ujemna): definicje sprzed 0176 przyjmują profil kandydata i wydają jego zadania
 -- w trybie ogłoszeniowym (w rls.sql: CLAIB-1..3 — z 0176 odrzucone/pominięte). Tryb przełączany
 -- w tej samej transakcji, więc cofa go końcowy rollback.
+-- Claim bierze najwyżej 100 najstarszych zadań, a wcześniejsze sekcje zostawiają w kolejce zadania
+-- ofert — pobieramy kolejne paczki, aż kolejka się opróżni (wynik nie zależy od liczby zadań).
+create function pg_temp.claim_until_candidate_profile() returns boolean
+language plpgsql as $$
+declare
+  v_found boolean;
+  v_n integer;
+begin
+  for i in 1..1000 loop
+    select count(*), coalesce(bool_or(c.entity_type = 'candidate_profile'), false)
+      into v_n, v_found from public.claim_translation_jobs(100, 300) c;
+    if v_found then return true; end if;
+    if v_n = 0 then return false; end if;
+  end loop;
+  return false;
+end $$;
 set local role service_role;
 select public.admin_set_portal_legal_mode('CLASSIFIEDS_ONLY', 'rollback test CLAIB-4', 'RECRUITMENT');
 select pg_temp.assert(((public.record_translation_source('candidate_profile', 'c1a10176-0000-0000-0000-0000000000e1'::uuid, 'pl',
     '{"title":"Magazynier","description":"Szukam pracy."}'::jsonb, 'tr-v1'))->>'status') = 'created',
   'CLAIB-4 kontrola ujemna: bez 0176 profil kandydata trafia do kolejki w trybie ogłoszeniowym');
-select pg_temp.assert(exists (select 1 from public.claim_translation_jobs(100, 300) where entity_type = 'candidate_profile'),
+select pg_temp.assert(pg_temp.claim_until_candidate_profile(),
   'CLAIB-4b kontrola ujemna: bez 0176 claim wydaje zadania profilu');
 select public.admin_set_portal_legal_mode('RECRUITMENT', 'rollback test CLAIB-4: powrót', 'CLASSIFIEDS_ONLY');
 reset role;

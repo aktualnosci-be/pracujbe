@@ -69,7 +69,18 @@ const expected = {
 };
 assert.deepEqual([...jobs.keys()], Object.keys(expected), 'zmieniono listę lub kolejność jobów CI');
 
-const forkGuard = "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository";
+// PR z forków dostają pełne CI (#671): workflow jest bezpieczny dla obcego kodu, bo działa
+// na `pull_request` (token tylko do odczytu, bez sekretów), nie używa sekretów ani zapisu
+// i nie pomija jobów dla forków. Zaufane kroki z sekretami wymagałyby osobnego workflowu.
+const ciCode = ci.replace(/^\s*#.*$/gm, '');
+const triggers = ciCode.match(/^on:\s*\r?\n((?:^[ \t]+.*\r?\n|^\s*\r?\n)+)/m)?.[1] ?? '';
+assert.match(triggers, /^  pull_request:\s*$/m, 'ci.yml: CI uruchamia się dla pull_request (także z forków)');
+assert.doesNotMatch(ciCode, /pull_request_target|workflow_run/, 'ci.yml: bez pull_request_target/workflow_run — obcy kod nie może dostać sekretów ani zapisu');
+assert.doesNotMatch(ciCode, /\$\{\{\s*secrets\./, 'ci.yml: bez sekretów — CI PR-ów z forków musi działać bez nich');
+assert.doesNotMatch(ciCode, /\$\{\{\s*github\.token\s*\}\}|GITHUB_TOKEN:/, 'ci.yml: bez przekazywania tokenu do kroków');
+const topPermissions = ciCode.match(/^permissions:\s*\r?\n((?:^[ \t]+.*\r?\n)+)/m)?.[1];
+assert.equal(topPermissions?.trim(), 'contents: read', 'ci.yml: uprawnienia tokenu tylko `contents: read`');
+const forkSkip = /head\.repo|\.fork\b|github\.repository_owner/;
 for (const [name, body] of jobs) {
   const [title, needs] = expected[name];
   assert.match(body, new RegExp(`^    name: ${escapeRegExp(title)}\\s*$`, 'm'), `${name}: nazwa checka musi zostać „${title}”`);
@@ -79,8 +90,10 @@ for (const [name, body] of jobs) {
   assert.match(body, /^    runs-on: ubuntu-latest\s*$/m, `${name}: użyj ubuntu-latest`);
   const timeout = Number(body.match(/^    timeout-minutes:\s*(\d+)\s*$/m)?.[1]);
   assert.ok(timeout > 0 && timeout <= 30, `${name}: ustaw timeout-minutes (1–30), żeby zawieszony job nie działał bez końca`);
-  // PR z forków nie dostają CI z tego repozytorium (bezpieczeństwo sekretów).
-  assert.ok(body.match(/^    if:\s*(.+?)\s*$/m)?.[1].includes(forkGuard), `${name}: brak warunku „bez PR z forków”`);
+  // Każdy job działa także dla PR z forków (#671) — bez warunku pomijającego forki,
+  // bez własnych uprawnień i środowiska z sekretami.
+  assert.doesNotMatch(body, forkSkip, `${name}: job nie może pomijać PR-ów z forków`);
+  assert.doesNotMatch(body, /^    (permissions|environment):/m, `${name}: bez uprawnień jobu i środowiska z sekretami`);
 }
 
 // Vitest ma startować z drzewa odtworzonego przez npm ci, także przy trafieniu
@@ -235,7 +248,7 @@ assert.match(real, /if: failure\(\)\s*\r?\n\s*with:\s*\r?\n\s*name: e2e-real-tes
 // Job zbiorczy: stała nazwa wymaganego checka; `always()`, bo pominięty job liczy się jako
 // zaliczony check; pada, gdy którakolwiek część nie jest `success`; łączy raporty blob.
 const aggregate = jobs.get('e2e');
-assert.match(aggregate, /^    if: always\(\) && \(/m, 'e2e: job zbiorczy musi działać także po czerwonym shardzie (always())');
+assert.match(aggregate, /^    if: always\(\)\s*$/m, 'e2e: job zbiorczy musi działać także po czerwonym shardzie (always())');
 assert.match(aggregate, /RESULTS: \$\{\{ toJSON\(needs\) \}\}/, 'e2e: sprawdź wynik każdej zależności');
 assert.match(aggregate, /job\.result !== "success"/, 'e2e: każda zależność inna niż success = czerwony check');
 assert.match(aggregate, /npx playwright merge-reports --config playwright\.merge\.config\.ts blob-report/, 'e2e: połącz raporty cząstkowe');

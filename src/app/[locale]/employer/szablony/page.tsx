@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 
 import { getMessageTemplatesPage } from '@/lib/data/message-templates';
+import { notFoundUnlessRecruitment } from '@/lib/portal-mode';
 import { MessageTemplatesManager } from '@/components/employer/MessageTemplatesManager';
 import { RecruiterOnlyNote } from '@/components/employer/RecruiterOnlyNote';
 import { BTN_SECONDARY, EYEBROW, H1_EXTENDED, INTRO, PANEL, PANEL_H2, PANEL_P, TAG } from '@/components/dashboard/panel-styles';
@@ -9,6 +10,7 @@ import { BTN_SECONDARY, EYEBROW, H1_EXTENDED, INTRO, PANEL, PANEL_H2, PANEL_P, T
 /**
  * Szablony odpowiedzi firmy (0170) — noindex, `force-dynamic` (sesja/RLS), guard z layoutu
  * panelu. Tylko recruiter+ aktywnej firmy; rola member widzi wyjaśnienie zamiast formularza.
+ * Tryb ogłoszeniowy (#1211): szablony służą wyłącznie kompozytorowi wiadomości (#1134) — 404.
  */
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 export default async function EmployerTemplatesPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
+  notFoundUnlessRecruitment('messaging');
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'messageTemplates' });
   const td = await getTranslations({ locale, namespace: 'dashboard' });

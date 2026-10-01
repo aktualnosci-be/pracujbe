@@ -514,7 +514,9 @@ export async function requestPasswordReset(
   let auth: AuthRuntime;
   try {
     auth = await portalAuth();
-  } catch {
+  } catch (error) {
+    // #1068: awaria inicjalizacji runtime auth (pula/baza) widoczna dla operatora.
+    captureError(error, { area: 'auth.requestPasswordReset.runtime' });
     return { ok: false, error: 'INTERNAL' };
   }
   try {

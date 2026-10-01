@@ -16,6 +16,11 @@ export function roleLabelKey(role: string): string {
   return LABEL[role] ?? 'roleMember';
 }
 
-export function roleDescKey(role: string): string {
-  return DESC[role] ?? 'roleMemberDesc';
+/**
+ * Opis roli. Tryb ogłoszeniowy (domyślny, #1225): wariant `*Listing` bez zgłoszeń, wiadomości,
+ * propozycji i rekrutacji; tryb rekrutacyjny = dotychczasowe opisy.
+ */
+export function roleDescKey(role: string, recruitmentEnabled = false): string {
+  const key = DESC[role] ?? 'roleMemberDesc';
+  return recruitmentEnabled ? key : `${key}Listing`;
 }

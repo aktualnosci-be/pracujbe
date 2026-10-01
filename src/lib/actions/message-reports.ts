@@ -1,6 +1,6 @@
 'use server';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -71,7 +71,12 @@ export async function reportConversationContent(
     if (!outcome) return { ok: false, error: 'INTERNAL' };
     return { ok: true, outcome };
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapPgError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return {
+        ok: false,
+        error: reportUnmappedDbError(error, 'messages.reportConversationContent', mapPgError(databaseErrorMessage(error))),
+      };
+    }
     captureError(error, { area: 'messages.reportConversationContent' });
     return { ok: false, error: 'INTERNAL' };
   }
