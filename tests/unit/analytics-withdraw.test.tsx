@@ -101,8 +101,8 @@ describe('blockBeaconTraffic', () => {
     expect(sendBeacon).toHaveBeenCalledTimes(1);
   });
 
-  it('odcina sendBeacon, fetch i XHR do dostawcy, przepuszcza własny origin; CSP w <meta>', async () => {
-    const { win, raw, sendBeacon, fetchFn, xhrSend, doc } = fakeWindow();
+  it('CSP connect-src w <meta> (fetch/XHR/sendBeacon) i zapasowa blokada sendBeacon do dostawcy', () => {
+    const { win, raw, sendBeacon, doc } = fakeWindow();
     blockBeaconTraffic(win);
     blockBeaconTraffic(win); // idempotentnie
 
@@ -110,20 +110,6 @@ describe('blockBeaconTraffic', () => {
     expect(sendBeacon).not.toHaveBeenCalled();
     expect(raw.navigator.sendBeacon('/api/job-funnel', '{}')).toBe(true);
     expect(sendBeacon).toHaveBeenCalledTimes(1);
-
-    await expect(raw.fetch('https://cloudflareinsights.com/cdn-cgi/rum')).rejects.toThrow();
-    expect(fetchFn).not.toHaveBeenCalled();
-    await raw.fetch('/api/x');
-    expect(fetchFn).toHaveBeenCalledTimes(1);
-
-    const blocked = new raw.XMLHttpRequest();
-    blocked.open('POST', 'https://cloudflareinsights.com/cdn-cgi/rum');
-    blocked.send('{}');
-    expect(xhrSend).not.toHaveBeenCalled();
-    const allowed = new raw.XMLHttpRequest();
-    allowed.open('POST', '/api/x');
-    allowed.send('{}');
-    expect(xhrSend).toHaveBeenCalledTimes(1);
 
     const metas = doc.head.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
     expect(metas).toHaveLength(1);

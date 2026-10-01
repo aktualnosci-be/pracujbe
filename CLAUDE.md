@@ -2716,10 +2716,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zatrzymania wykonanego skryptu, a `next/script` go nie usuwa — `withdrawLoadedBeacon`
   (`src/lib/analytics/withdraw.ts`) od razu odcina ruch do `*.cloudflareinsights.com`
   w bieżącym dokumencie (CSP `connect-src 'self'` w `<meta>` — działa też na referencje do
-  `sendBeacon` trzymane przez skrypt — oraz nakładki na `sendBeacon`/`fetch`/XHR), czeka
+  `sendBeacon` trzymane przez skrypt — i zapasowo nakładka na `sendBeacon`), czeka
   najwyżej 3 s na zapis zgody w logu serwerowym (`pendingConsentPersistence`) i przeładowuje
   stronę; po przeładowaniu `AnalyticsWithdrawnNotice` pokazuje jednorazowy komunikat
-  (`cookies.analyticsWithdrawnNotice`, znacznik w `sessionStorage`). Dowód: unit
+  (`cookies.analyticsWithdrawnNotice`, znacznik w `sessionStorage`, komponent w osobnym chunku `React.lazy` — budżet JS listy ofert #395). Dowód: unit
   `analytics-withdraw` (kontrole ujemne), E2E `cookie-consent-categories` (atrapa beaconu
   z własną referencją do `sendBeacon` i wysyłką przy `pagehide`: zero pomiarów po wycofaniu,
   także po nawigacji klienckiej). **Otwarte:** wycofanie w innej karcie (zdarzenie zmiany

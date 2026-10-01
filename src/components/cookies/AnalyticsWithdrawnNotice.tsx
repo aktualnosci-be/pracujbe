@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { ToastRegion, type ToastRegionState } from '@/components/ui/toast';
-import { takeWithdrawnNotice } from '@/lib/analytics/withdraw';
+import { takeWithdrawnNotice } from '@/lib/analytics/withdraw-flag';
 
 /**
  * Komunikat po przeładowaniu wymuszonym wycofaniem zgody na analitykę (#642): strona odświeżyła
