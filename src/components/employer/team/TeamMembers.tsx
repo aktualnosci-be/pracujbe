@@ -51,9 +51,12 @@ const controlClass = cn(FORM_CONTROL, 'min-h-11 py-2.5 sm:w-auto');
 export function TeamMembers({
   members,
   actorRole,
+  recruitmentEnabled = false,
 }: {
   members: TeamMemberView[];
   actorRole: string;
+  /** #1225: tryb z serwera; domyślnie ogłoszeniowy — opis odebrania dostępu bez zgłoszeń i wiadomości. */
+  recruitmentEnabled?: boolean;
 }): React.JSX.Element {
   const t = useTranslations('team');
   const tRoot = useTranslations();
@@ -219,7 +222,7 @@ export function TeamMembers({
           if (!open) setConfirm(null);
         }}
         title={confirm ? t('deactivateTitle', { name: displayName(confirm) }) : ''}
-        description={t('deactivateDesc')}
+        description={t(recruitmentEnabled ? 'deactivateDesc' : 'deactivateDescListing')}
         confirmLabel={t('deactivate')}
         cancelLabel={tRoot('common.cancel')}
         pending={confirm !== null && pendingId === confirm.id}
