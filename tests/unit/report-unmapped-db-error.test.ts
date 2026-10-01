@@ -210,9 +210,9 @@ describe('dokończenie #1068: pozostałe akcje', () => {
 const ACTIONS_DIR = path.join(process.cwd(), 'src/lib/actions');
 const REPORTS = /captureError|captureActionError|reportUnmappedDbError|failureCode\(|failure\(|unexpected\(|mapFailure\(|toErrorCode\(|appealFailure\(|throw /;
 const FAILS = /'INTERNAL'|status: 'error'|ok: false|'failed'/;
-/** Wyjątek: `auth.ts` — błędy Better Auth mapuje `mapAuthError` na kody kont (osobny przegląd,
- *  poza listą modułów #1068). Nowy plik akcji nie trafia tu automatycznie. */
-const ALLOWED = new Set(['auth.ts']);
+/** Wyjątki (plik albo `plik:linia`) — obecnie brak; `auth.ts` zgłasza błędy przez `failureCode`
+ *  (kontynuacja #1068, `auth-error-reporting.test.ts`). Nowy plik akcji nie trafia tu automatycznie. */
+const ALLOWED = new Set<string>();
 const SILENT_DB_MAPPING = /isDatabaseError\((\w+)\)\)\s*return[^;]*map\w*Error\(databaseErrorMessage\(\1\)\)/;
 
 function silentCatches(file: string, source: string): string[] {
@@ -254,5 +254,9 @@ describe('strażnik: Server Actions bez cichych błędów (#1068)', () => {
       ),
     ).toEqual(['y.ts:1 (mapowanie bez reportUnmappedDbError)']);
     expect(silentCatches('z.ts', "try { a(); } catch (e) {\n  captureActionError(e, 'z');\n  return { status: 'error' };\n}")).toEqual([]);
+    // Wzorzec akcji kont sprzed zdjęcia wyjątku `auth.ts`: kod z `mapAuthError` bez zgłoszenia.
+    expect(
+      silentCatches('auth.ts', "try { a(); } catch (e) {\n  return { ok: false, error: isAppError(e) ? e.code : 'INTERNAL' };\n}"),
+    ).toEqual(['auth.ts:1']);
   });
 });
