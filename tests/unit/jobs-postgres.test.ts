@@ -13,6 +13,7 @@ const adapters = vi.hoisted(() => ({
   screening: vi.fn(async () => [] as unknown[]),
   costs: vi.fn(async () => null as Record<string, unknown> | null),
   qualifications: vi.fn(async () => ({ skills: [] as unknown[], certificates: [] as unknown[] })),
+  benefits: vi.fn(async () => null as Record<string, unknown> | null),
   pool: {},
 }));
 vi.mock('@/lib/db/runtime', () => ({ getDomainPool: async () => adapters.pool }));
@@ -27,6 +28,7 @@ vi.mock('@/lib/db/public-jobs', () => ({
   getPublicJobScreeningQuestions: adapters.screening,
   getPublicJobCosts: adapters.costs,
   getPublicJobQualifications: adapters.qualifications,
+  getPublicJobBenefits: adapters.benefits,
 }));
 vi.mock('@/lib/error-report', () => ({ captureError: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -156,6 +158,26 @@ describe('Publiczne oferty po przełączeniu na PostgreSQL', () => {
 
     expect(job?.accommodation).toBe(true);
     expect(job).not.toHaveProperty('costs');
+  });
+  it('#826 (0976): detal niesie świadczenia z get_public_job_benefits (nieznane kody pomijane)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.benefits.mockResolvedValueOnce({ codes: ['eco_vouchers', 'free_beer'], other: ['Karta sportowa'] });
+
+    const job = await getJobBySlug('kierowca', 'nl');
+
+    expect(adapters.benefits).toHaveBeenCalledWith(adapters.pool, 'job-1', 'nl');
+    expect(job?.benefits).toEqual({ codes: ['eco_vouchers'], other: ['Karta sportowa'] });
+  });
+  it('#826: awaria odczytu świadczeń i pusty wynik = brak sekcji (oferta zostaje)', async () => {
+    vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
+    adapters.detail.mockResolvedValue({ id: 'job-1', slug: 'kierowca', title: 'Kierowca', published_at: '2026-01-01T00:00:00Z' });
+    adapters.translations.mockResolvedValue([]);
+    adapters.benefits.mockRejectedValueOnce(new Error('permission denied'));
+    expect(await getJobBySlug('kierowca', 'pl')).not.toHaveProperty('benefits');
+    adapters.benefits.mockResolvedValueOnce({ codes: [], other: [] });
+    expect(await getJobBySlug('kierowca', 'pl')).not.toHaveProperty('benefits');
   });
   it('#866: detal niesie umiejętności i certyfikaty (język strony), JobPosting skills/qualifications', async () => {
     vi.stubEnv('DATABASE_APP_URL', 'postgres://test-placeholder');
