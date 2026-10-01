@@ -19912,13 +19912,13 @@ select public.admin_set_portal_legal_mode('RECRUITMENT', 'rls.sql CL174: powrót
 reset role;
 
 -- ============================================================================
--- CLTPL — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211; migracja 0979, numer tymczasowy).
+-- CLTPL — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211; migracja 0204, numer tymczasowy).
 -- RPC zapisu i usunięcia ze strażnikiem trybu (nakładki na treść z 0170), BEFORE INSERT na
 -- tabelach szablonów dla każdej roli. Odczyt istniejących szablonów pod RLS bez zmian.
 -- Fixture z RT170 (firma RTCO, rekruter RTE1, szablon rttpl). Kontrole ujemne: bez nakładki
 -- treść z 0170 zapisuje w trybie ogłoszeniowym; bez triggera service_role wstawia szablon.
 -- ============================================================================
-\echo '--- CLTPL tryb ogłoszeniowy: szablony odpowiedzi (0979) ---'
+\echo '--- CLTPL tryb ogłoszeniowy: szablony odpowiedzi (0204) ---'
 reset role; reset app.current_uid;
 select pg_temp.assert(public.recruitment_enabled(), 'CLTPL-pre tryb RECRUITMENT na starcie sekcji');
 -- Tryb RECRUITMENT: usunięcie przez nakładkę działa (kontrola dodatnia; zwalnia miejsce pod limit).

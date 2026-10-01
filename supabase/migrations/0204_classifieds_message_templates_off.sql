@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0979 — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211; epik #1128).
+-- 0204 — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211; epik #1128).
 -- Numer TYMCZASOWY — ostateczny nada integrator. Zależy od 0170 (szablony) i 0171
 -- (`recruitment_enabled()`, `assert_recruitment_enabled()`, `recruitment_write_allowed()`).
 --
@@ -17,7 +17,7 @@
 --    tabeli — kaskady usunięcia firmy i konta (`created_by → null`) działają jak dotąd.
 -- Istniejące szablony zostają (brak danych produkcyjnych, jak #1150); odczyt pod RLS bez zmian.
 --
--- Rollback: supabase/rollback/0979_classifieds_message_templates_off.down.sql.
+-- Rollback: supabase/rollback/0204_classifieds_message_templates_off.down.sql.
 -- =============================================================================
 
 -- --- 1. Nakładki RPC ze strażnikiem trybu -------------------------------------------------------
@@ -34,7 +34,7 @@ create function public.save_company_message_template(
   p_expected_updated_at timestamptz default null
 ) returns uuid language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  -- 0979 (#1211): tryb ogłoszeniowy — szablony odpowiedzi należą do wyłączonych wiadomości.
+  -- 0204 (#1211): tryb ogłoszeniowy — szablony odpowiedzi należą do wyłączonych wiadomości.
   perform public.assert_recruitment_enabled();
   return public.save_company_message_template_impl(
     p_company_id, p_template_id, p_name, p_variants, p_expected_updated_at);
@@ -52,7 +52,7 @@ create function public.delete_company_message_template(
   p_template_id uuid
 ) returns void language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  -- 0979 (#1211): jak zapis — narzędzie wyłączone w trybie ogłoszeniowym.
+  -- 0204 (#1211): jak zapis — narzędzie wyłączone w trybie ogłoszeniowym.
   perform public.assert_recruitment_enabled();
   perform public.delete_company_message_template_impl(p_company_id, p_template_id);
 end $$;

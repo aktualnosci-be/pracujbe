@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0979 — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211).
+-- Rollback 0204 — tryb ogłoszeniowy: szablony odpowiedzi firmy (#1211).
 -- Uruchamiać ręcznie jako migrator, w jednej transakcji (psql -1 -f …), i dopiero wtedy
 -- usunąć wpis z app_migrations.history. Plik celowo BEZ BEGIN/COMMIT.
 -- Usuwa strażniki tabel i nakładki RPC; treść z 0170 wraca pod swoje nazwy (granty jak w 0170).

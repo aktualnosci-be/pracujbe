@@ -1,5 +1,5 @@
 -- =============================================================================
--- CLTPL-R — rollback migracji 0979 (#1211). Uruchamiany przez scripts/test-rls.sh
+-- CLTPL-R — rollback migracji 0204 (#1211). Uruchamiany przez scripts/test-rls.sh
 -- po rls.sql, na tej samej bazie. Rollback wykonuje się w transakcji i jest cofany.
 -- =============================================================================
 \set ON_ERROR_STOP on
@@ -11,7 +11,7 @@ begin
 end $$;
 
 begin;
-\ir ../rollback/0979_classifieds_message_templates_off.down.sql
+\ir ../rollback/0204_classifieds_message_templates_off.down.sql
 select pg_temp.assert(
   not exists (select 1 from pg_trigger t
                where t.tgname = 'trg_aa_recruitment_mode'
@@ -30,9 +30,9 @@ select pg_temp.assert(
         'public.save_company_message_template(uuid, uuid, text, jsonb, timestamptz)', 'execute')
   and has_function_privilege('authenticated', 'public.delete_company_message_template(uuid, uuid)', 'execute')
   and not has_function_privilege('anon', 'public.delete_company_message_template(uuid, uuid)', 'execute'),
-  'CLTPL-R rollback przywraca stan sprzed 0979 (0170)');
+  'CLTPL-R rollback przywraca stan sprzed 0204 (0170)');
 rollback;
 select pg_temp.assert(to_regprocedure('public.enforce_recruitment_message_template()') is not null
   and to_regprocedure('public.save_company_message_template_impl(uuid, uuid, text, jsonb, timestamptz)') is not null,
   'CLTPL-R2 rollback testu cofnięty');
-\echo 'CLTPL-R rollback 0979: PASS'
+\echo 'CLTPL-R rollback 0204: PASS'
