@@ -24382,4 +24382,92 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- CX1091. Eksport danych kandydata (#1091, 0949): zgłoszenia treści złożone przez kandydata
+-- (bez zgłoszonej treści, identyfikatora celu i kodu dostępu) i ostrzeżenia retencji wysłane
+-- do kandydata; bez danych innej osoby. Kontrole ujemne: rollback 0949 gubi oba klucze,
+-- definicja bez filtra właściciela ujawnia zgłoszenie innej osoby.
+-- ============================================================================
+\echo '--- CX1091 eksport kandydata: zgłoszenia treści i ostrzeżenia retencji ---'
+reset role; reset app.current_uid;
+\set CX1 'c1091000-0000-4000-8000-000000000001'
+\set CX2 'c1091000-0000-4000-8000-000000000002'
+begin;
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'CX1','cx1@test.be','Cx Jeden','{"role":"candidate","first_name":"Cx","last_name":"Jeden","locale":"pl"}'),
+  (:'CX2','cx2@test.be','Cx Dwa','{"role":"candidate","first_name":"Cx","last_name":"Dwa","locale":"nl"}');
+insert into public.reports(id, reporter_id, target_type, target_id, reason, details, category, content_url,
+                           reporter_name, reporter_email, access_code_hash, target_snapshot)
+values
+  ('c1091000-0000-4000-8000-0000000000a1', :'CX1', 'job', :'JOBA', 'spam', 'Opis zgłoszenia CX1',
+   'fraud', 'https://pracuj.be/pl/oferty-pracy/job-a', 'Cx Jeden', 'cx1@test.be',
+   'HASH-KODU-CX1', '{"thirdParty":"TRZECIA-OSOBA-CX"}'::jsonb),
+  ('c1091000-0000-4000-8000-0000000000a2', :'CX2', 'job', :'JOBA', 'spam', 'Opis zgłoszenia CX2',
+   null, null, null, null, null, null);
+insert into public.retention_warnings(profile_id, policy_key, activity_at, due_at) values
+  (:'CX1', 'inactive_candidate_cv', now() - interval '400 days', now() + interval '5 days'),
+  (:'CX2', 'inactive_candidate_account', now() - interval '700 days', now() + interval '20 days');
+
+-- CX1091-1: kandydat nie woła części wewnętrznej z pominięciem eksportu.
+set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data_pre_reports()', 'permission denied',
+  'CX1091-1 część wewnętrzna eksportu bez EXECUTE dla kandydata');
+select public.export_my_data()::text as cx_exp \gset
+reset role; reset app.current_uid;
+
+select pg_temp.assert(
+  jsonb_array_length(:'cx_exp'::jsonb->'contentReports') = 1
+  and :'cx_exp'::jsonb->'contentReports'->0->>'details' = 'Opis zgłoszenia CX1'
+  and :'cx_exp'::jsonb->'contentReports'->0->>'category' = 'fraud'
+  and :'cx_exp'::jsonb->'contentReports'->0->>'reporterEmail' = 'cx1@test.be'
+  and :'cx_exp'::jsonb->'contentReports'->0->>'status' = 'open',
+  'CX1091-2 eksport zawiera własne zgłoszenie treści z opisem i danymi podanymi w formularzu');
+select pg_temp.assert(
+  jsonb_array_length(:'cx_exp'::jsonb->'retentionWarnings') = 1
+  and :'cx_exp'::jsonb->'retentionWarnings'->0->>'policyKey' = 'inactive_candidate_cv'
+  and :'cx_exp'::jsonb->'retentionWarnings'->0 ? 'dueAt'
+  and :'cx_exp'::jsonb->'retentionWarnings'->0 ? 'warnedAt',
+  'CX1091-3 eksport zawiera własne ostrzeżenie retencji z terminem');
+select pg_temp.assert(
+  position('TRZECIA-OSOBA-CX' in :'cx_exp') = 0
+  and position('HASH-KODU-CX1' in :'cx_exp') = 0
+  and position(:'JOBA' in :'cx_exp') = 0
+  and position('Opis zgłoszenia CX2' in :'cx_exp') = 0
+  and position('inactive_candidate_account' in :'cx_exp') = 0,
+  'CX1091-4 bez zgłoszonej treści, kodu dostępu, identyfikatora celu i danych innego kandydata');
+select pg_temp.assert(:'cx_exp'::jsonb ? 'applicationJournal' and :'cx_exp'::jsonb ? 'ageAttestations'
+  and :'cx_exp'::jsonb ? 'profile',
+  'CX1091-5 dotychczasowe klucze eksportu zostają');
+
+-- CX1091-6: pracodawca nadal bez eksportu kandydata.
+set local role authenticated; set local app.current_uid = :'EMPA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error('select public.export_my_data()', 'PERMISSION_DENIED',
+  'CX1091-6 pracodawca bez eksportu kandydata po 0949');
+reset role; reset app.current_uid;
+
+-- CX1091-N1: kontrola ujemna — definicja bez filtra właściciela ujawnia cudze zgłoszenie.
+savepoint cx1091n1;
+do $$ begin
+  execute replace(pg_get_functiondef('public.export_my_data()'::regprocedure),
+                  'where rp.reporter_id = auth.uid()', 'where true');
+end $$;
+set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
+select public.export_my_data()::text as cx_leak \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(position('Opis zgłoszenia CX2' in :'cx_leak') > 0,
+  'CX1091-N1 kontrola ujemna: bez filtra właściciela eksport ujawnia zgłoszenie innej osoby');
+rollback to savepoint cx1091n1;
+
+-- CX1091-N2: kontrola ujemna — po rollbacku 0949 eksport gubi oba klucze.
+savepoint cx1091n2;
+\ir ../rollback/0949_candidate_export_reports_warnings.down.sql
+set local role authenticated; set local app.current_uid = :'CX1'; select pg_temp.assert_client_role();
+select public.export_my_data()::text as cx_old \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(not (:'cx_old'::jsonb ? 'contentReports') and not (:'cx_old'::jsonb ? 'retentionWarnings'),
+  'CX1091-N2 kontrola ujemna: definicja sprzed 0949 pomija zgłoszenia treści i ostrzeżenia retencji');
+rollback to savepoint cx1091n2;
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='
