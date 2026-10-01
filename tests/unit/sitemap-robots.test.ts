@@ -259,6 +259,9 @@ describe('sitemap: id jako tekst (Next.js 15.5, SEO-01)', () => {
       expect(urls).toContain(`${SITE}/${locale}`);
       expect(urls).toContain(`${SITE}/${locale}/praca`);
       expect(urls).toContain(`${SITE}/${locale}/praca/kategoria/construction`);
+      // #907: nawigator „Jak zacząć pracę w Belgii?” — wybór regionu i strona regionu.
+      expect(urls).toContain(`${SITE}/${locale}/poradniki/jak-zaczac-prace`);
+      expect(urls).toContain(`${SITE}/${locale}/poradniki/jak-zaczac-prace/flandria`);
     }
     expect(urls.some((url) => url.includes('/poradniki/'))).toBe(true);
     // Kontrola ujemna: stare `id === 0` dawało dla '0' partię ofert (-1) — oferty, getJobs

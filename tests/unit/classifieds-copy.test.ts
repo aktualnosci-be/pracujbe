@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { routing, type Locale } from '@/i18n/routing';
 import { emailCopy, layoutCopy } from '@/emails/copy';
 import { getAllGuideSlugs, getGuideBySlug } from '@/lib/guides/guides';
+import { getNavigatorRegionGuide, NAVIGATOR_REGIONS } from '@/lib/guides/start-navigator';
 import en from '@/messages/en.json';
 import fr from '@/messages/fr.json';
 import nl from '@/messages/nl.json';
@@ -135,6 +136,16 @@ function publicTexts(locale: Locale, messages: Messages = MESSAGES[locale]): Arr
       texts.forEach((text, j) => out.push([`guide:${slug}.body[${i}][${j}]`, text]));
     });
   }
+  // Nawigator „Jak zacząć pracę w Belgii?” (#907) — treść regionów i potrzeb.
+  for (const region of NAVIGATOR_REGIONS) {
+    const guide = getNavigatorRegionGuide(region, locale)!;
+    out.push([`navigator:${region}.name`, guide.name], [`navigator:${region}.summary`, guide.summary]);
+    for (const need of guide.needs) {
+      [need.title, need.summary, ...need.steps, ...need.regionFacts].forEach((text, i) =>
+        out.push([`navigator:${region}.${need.key}[${i}]`, text]),
+      );
+    }
+  }
   out.push([`email:layout.tagline`, layoutCopy[locale].tagline]);
   for (const [field, text] of Object.entries(emailCopy.welcome[locale])) {
     if (typeof text === 'string') out.push([`email:welcome.${field}`, text]);
@@ -164,6 +175,7 @@ describe('teksty publiczne = portal ogłoszeń (#1149, #1151)', () => {
     expect(texts.some(([k]) => k.startsWith('employers.'))).toBe(true);
     expect(texts.some(([k]) => k.startsWith('help.'))).toBe(true);
     expect(texts.some(([k]) => k.startsWith('guide:'))).toBe(true);
+    expect(texts.some(([k]) => k.startsWith('navigator:'))).toBe(true);
     expect(texts.some(([k]) => k === 'job.verified')).toBe(true);
   });
 

@@ -14,6 +14,7 @@ import {
 } from '@/lib/jobs';
 import { MAX_JOB_LIST_OFFSET } from '@/lib/job-list-pagination';
 import { getAllGuideSlugs } from '@/lib/guides/guides';
+import { NAVIGATOR_PATH, NAVIGATOR_REGIONS } from '@/lib/guides/start-navigator';
 import { pickXDefaultLocale } from '@/lib/seo/locales';
 import { sitemapEntriesCache, sitemapIdsCache } from '@/lib/cache/sitemap-cache';
 
@@ -302,6 +303,19 @@ async function coreSitemap(): Promise<MetadataRoute.Sitemap> {
   // --- Poradniki (blog) ---
   for (const slug of getAllGuideSlugs()) {
     const path = `${GUIDES_PATH}/${slug}`;
+    const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
+    for (const locale of locales) {
+      entries.push({
+        url: `${base}/${locale}${path}`,
+        changeFrequency: 'monthly',
+        priority: 0.5,
+        alternates: { languages },
+      });
+    }
+  }
+
+  // --- Nawigator „Jak zacząć pracę w Belgii?” (#907): wybór regionu + strona każdego regionu ---
+  for (const path of [NAVIGATOR_PATH, ...NAVIGATOR_REGIONS.map((region) => `${NAVIGATOR_PATH}/${region}`)]) {
     const languages = buildLanguages(base, locales, (locale) => `/${locale}${path}`);
     for (const locale of locales) {
       entries.push({
