@@ -918,6 +918,17 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   `DemoJobsNotice`, karty etykietę „przykładowa”, bez odznaki „Zweryfikowana firma”; szczegół demo
   = noindex, bez JobPosting i „Wyślij wiadomość”, ApplyModal z komunikatem zamiast formularza.
   Formularz aplikowania i JobPosting testuje serwer fixture (tryb `full` nie oznacza ofert jako demo).
+  Umiejętności i certyfikaty na szczególe (decyzja właściciela 01.10.2026, #866, bez migracji):
+  sekcja „Umiejętności i certyfikaty” (`job.qualifications.*`, układ `.info-pairs` jak „Koszty
+  i dodatki”, `data-testid="job-qualifications"`) — wymagane / mile widziane umiejętności i
+  certyfikaty jako lista. Odczyt pomocniczy `getPublicJobQualifications` (`src/lib/db/public-jobs.ts`)
+  = `job_skills`/`job_certificates` pod rolą anon (RLS `*_select`: tylko oferta publiczna), nazwa
+  umiejętności ze słownika `skill_labels` w języku strony przy `skill_id`, inaczej wpis pracodawcy
+  z `lang` języka treści; awaria = strona bez sekcji. Parser i JSON-LD `src/lib/job-qualifications.ts`:
+  JobPosting `skills` (Text) i `qualifications` (`EducationalOccupationalCredential`). Dowód: unit
+  `job-qualifications`, `jobs-postgres`; integracja `public-job-qualifications` (PG16, kontrola
+  ujemna: szkic i firma niezweryfikowana = pusto); E2E `job-qualifications` (4 języki, axe 320/1280,
+  kontrola ujemna oferty bez kwalifikacji), `job-posting-fixture` (pola JSON-LD).
 - [x] Landing pages: `/praca` (hub) + `/praca/kategoria/[category]` + `/praca/miasto/[city]` (filtrowane przez getJobs, generateStaticParams, metadata+hreflang, BreadcrumbList JSON-LD, indeksowalne)
 - [x] SEO: sitemap.ts (pusty na non-prod), robots.ts, metadata + hreflang, X-Robots-Tag
   Okno cutoveru (#1115, bez migracji): `isSearchIndexingEnabled()` (`src/lib/seo/indexing.ts`) =
@@ -3444,8 +3455,15 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   i SQLSTATE bez komunikatu bazy (#1105).
   Dokończenie (bez migracji): `reportUnmappedDbError` także w `jobs.ts` (`failureCode(error, obszar)`
   zgłasza też wyjątki spoza bazy), panelu admina (`admin.ts`, kampanie, próg wieku, rejestr naruszeń,
-  zaufanie ofert), blokadach firm, języku e-maili i powiadomieniach (#1068, akcje rekrutacyjne poza
-  zakresem); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
+  zaufanie ofert), blokadach firm, języku e-maili i powiadomieniach (#1068). Domknięcie #1068:
+  także akcje rekrutacyjne (aplikacje, wiadomości, propozycje, gość, szablony, CV, widoczność,
+  zgłoszenia wiadomości — samo zgłaszanie, bez włączania funkcji), kontakt, zgłoszenia treści,
+  odwołania, wiek, konto i jego eksport z SQLSTATE przez `captureActionError` (`src/lib/db/errors.ts`:
+  błąd bazy = obszar + SQLSTATE, inny wyjątek = sam obszar); dawne ciche `catch` (loadery
+  „Pokaż więcej”, zapisane oferty na liście, log zgód, wersja oferty, pliki CV/załączników, runtime
+  auth przy resecie) zgłaszają błąd. Strażnik w `report-unmapped-db-error.test` (każdy `catch`
+  w `src/lib/actions` kończący się błędem musi zgłaszać, mapowanie bazy bez `reportUnmappedDbError`
+  = czerwony; kontrole ujemne; wyjątek `auth.ts` — mapowanie Better Auth, otwarte); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
   + szeroki próg na IP (`checkAccountRateLimit`, `src/lib/rate-limit-account.ts`, wiadro `<akcja>-ip`
   = 10 × limit), zły format identyfikatora w `setCompanyStatus`/`resolveReport`/
   `markNotificationsRead` = `VALIDATION_FAILED` (#1109; dokończenie: upload CV i załączników liczy limit na konto po sesji przez `checkAccountRateLimit` — anonimowe wywołanie nie zużywa budżetu, a identyfikator rozmowy/zgłoszenia/propozycji w złym formacie w `sendMessage`/`markConversationRead`/`openConversation` = `VALIDATION_FAILED` przed sesją i bazą, tryb demo bez zmian; unit `candidate-cv-route-actions`, `message-attachments-actions`, `messages-actions`); panel `/admin/operacje` ocenia wiersz doby

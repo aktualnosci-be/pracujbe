@@ -2,6 +2,7 @@
 
 import { cookies, headers } from 'next/headers';
 
+import { captureActionError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
 import { trustedClientIp } from '@/lib/http/trusted-ip';
@@ -92,8 +93,10 @@ export async function recordConsent(
       }),
     );
     return { ok: true };
-  } catch {
-    // Log zgód jest pomocniczy — awaria nie może przerwać zapisu zgody w przeglądarce.
+  } catch (error) {
+    // Log zgód jest pomocniczy — awaria nie może przerwać zapisu zgody w przeglądarce,
+    // ale operator musi ją widzieć (#1068).
+    captureActionError(error, 'consent.recordConsent');
     return { ok: false };
   }
 }
