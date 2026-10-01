@@ -10797,7 +10797,7 @@ select pg_temp.expect_error('select public.admin_set_candidate_min_age(16, true,
 select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''x'')', :'apc_v1'),
   'permission denied', 'APC2b administrator (authenticated) nie zatwierdza progu za właściciela');
 reset role; reset app.current_uid;
-set role anon;
+set role anon; select pg_temp.assert_client_role();
 select pg_temp.expect_error(format('select public.owner_confirm_candidate_min_age(16, %L, ''x'')', :'apc_v1'),
   'permission denied', 'APC2c anon nie zatwierdza progu');
 reset role;
