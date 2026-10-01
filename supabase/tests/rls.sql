@@ -22027,8 +22027,8 @@ select pg_temp.pj_mk(44, :'WMCOA', 'closed');
 
 update public.jobs set expires_at = now() - interval '1 day' where id = pg_temp.pj_id(6);
 update public.jobs set title = '   ' where id = pg_temp.pj_id(7);
-update public.jobs set title = 'draft roboczy' where id = pg_temp.pj_id(8);
-update public.jobs set title = 'Tekst placeholder do uzupełnienia' where id = pg_temp.pj_id(9);
+-- Oferty 8 i 9 (dawniej tytuły „draft…”/„…placeholder…”) — reguła tytułu to od #1221 (0203)
+-- tylko pusty tytuł; realne tytuły z tymi słowami sprawdza sekcja BZ1221.
 update public.jobs set city = '  ' where id = pg_temp.pj_id(10);
 update public.jobs set region = '' where id = pg_temp.pj_id(11);
 delete from public.job_translations where job_id = pg_temp.pj_id(12);
@@ -22062,10 +22062,6 @@ select pg_temp.pj_add('draftonly', 'oferta zamknięta (ponowna publikacja)', pg_
 select pg_temp.pj_add('expired', 'data ważności w przeszłości', pg_temp.pj_id(6), :'WMEA'::uuid,
   'JOB_EXPIRED: termin ważności oferty minął');
 select pg_temp.pj_add('title', 'tytuł z samych spacji', pg_temp.pj_id(7), :'WMEA'::uuid,
-  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
-select pg_temp.pj_add('title', 'tytuł zaczyna się od „draft”', pg_temp.pj_id(8), :'WMEA'::uuid,
-  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
-select pg_temp.pj_add('title', 'tytuł zawiera „placeholder”', pg_temp.pj_id(9), :'WMEA'::uuid,
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
 select pg_temp.pj_add('title', 'miasto z samych spacji', pg_temp.pj_id(10), :'WMEA'::uuid,
   'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)');
@@ -22130,14 +22126,14 @@ end $$;
 
 -- PJ1071-1: definicja produkcyjna — każdy brak kończy się pełnym komunikatem własnej reguły,
 -- a stan ofert (status) pozostaje bez zmian.
-select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 23
+select pg_temp.assert((select count(*) from pg_temp.pj_cases) = 21
   and (select count(distinct rule) from pg_temp.pj_cases) = 10
   and (select count(distinct rule) from pg_temp.pj_mutations) = 10,
-  'PJ1071-0 lista przypadków obejmuje 10 reguł (23 przypadki)');
+  'PJ1071-0 lista przypadków obejmuje 10 reguł (21 przypadków)');
 select pg_temp.pj_run(null) as pj_base \gset
 select pg_temp.assert(:'pj_base' = '', format('PJ1071-1 każdy brak ma własny, pełny komunikat: %s', :'pj_base'));
 select pg_temp.assert(
-  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 19
+  (select count(*) from public.jobs where id in (select job from pg_temp.pj_cases) and status = 'draft') = 17
   and (select count(*) from public.jobs where id in (pg_temp.pj_id(42)) and status = 'active') = 1,
   'PJ1071-1b odrzucone szkice pozostają szkicami, oferta aktywna nie zmienia się');
 
@@ -22217,6 +22213,105 @@ reset role; reset app.current_uid;
 select pg_temp.assert(:'pj_n10' = '', format('PJ1071-N10 bez reguły „oferta nie istnieje” brak oferty trafia na kontrolę uprawnień: %s', :'pj_n10'));
 select pg_temp.assert(pg_temp.pj_run(null) = '',
   'PJ1071-N11 po cofnięciu mutacji definicja produkcyjna jest przywrócona (każdy brak nadal ma swój komunikat)');
+
+-- ============================================================================
+-- BZ1221. Tytuł oferty bez heurystyki „zaślepki” (#1221, audyt 29.09 BIZ-3, 0203).
+--   `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucały tytuł
+--   zaczynający się od „draft” albo zawierający „placeholder” — realne stanowisko
+--   „Draftsman (AutoCAD)” nie dało się opublikować. Od 0203 zaślepką jest tylko pusty tytuł.
+--   Kontrole ujemne: definicje sprzed 0203 (rollback w transakcji cofanej) odrzucają te same
+--   tytuły w każdej z trzech funkcji; pusty tytuł odrzucany w obu wariantach.
+-- ============================================================================
+\echo '--- BZ1221 tytuł oferty: tylko pusty tytuł to zaślepka ---'
+reset role; reset app.current_uid;
+select pg_temp.pj_mk(n, :'WMCOA') from generate_series(51, 53) n;
+update public.jobs set title = 'Draftsman (AutoCAD)' where id = pg_temp.pj_id(51);
+update public.jobs set title = 'Placeholder QA Tester' where id = pg_temp.pj_id(52);
+update public.jobs set title = '   ' where id = pg_temp.pj_id(53);
+select pg_temp.assert(not exists (
+    select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
+                               'public.update_published_job(uuid, jsonb, timestamptz)']) f
+     where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
+  'BZ1221-0 żadna z trzech funkcji nie zawiera heurystyki tytułu-zaślepki');
+
+-- BZ1221-N1: kontrola ujemna — definicje sprzed 0203 odrzucają oba realne tytuły.
+begin;
+\ir ../rollback/0203_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(51), 'bz1221-n1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N1a kontrola ujemna: stara publish_job odrzuca „Draftsman (AutoCAD)”');
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(52), 'bz1221-n1b'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N1b kontrola ujemna: stara publish_job odrzuca tytuł z „Placeholder”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+
+-- BZ1221-1: realne tytuły publikują się; pusty tytuł nadal odrzucany.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.publish_job(pg_temp.pj_id(51), 'bz1221-draftsman') = 'bz1221-draftsman',
+  'BZ1221-1a „Draftsman (AutoCAD)” publikuje się');
+select pg_temp.assert(public.publish_job(pg_temp.pj_id(52), 'bz1221-placeholder') = 'bz1221-placeholder',
+  'BZ1221-1b tytuł z „Placeholder” publikuje się');
+select pg_temp.expect_error(format('select public.publish_job(%L::uuid, %L)', pg_temp.pj_id(53), 'bz1221-empty'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)', 'BZ1221-1c pusty tytuł nadal odrzucany');
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select string_agg(status::text, ',' order by id) from public.jobs
+    where id in (pg_temp.pj_id(51), pg_temp.pj_id(52), pg_temp.pj_id(53))) = 'active,active,draft',
+  'BZ1221-1d stan ofert po publikacji: dwie aktywne, pusta zostaje szkicem');
+
+-- BZ1221-2: edycja opublikowanej oferty — tytuł „Draftsman …” przechodzi, pusty nie.
+select set_config('pb.bz_upd', (current_setting('pb.rr_ok')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.rr_ok')::jsonb -> 'job')
+       || '{"title": "Draftsman (Revit)", "accommodation": false}'::jsonb))::text, false);
+select set_config('pb.bz_upd_empty', (current_setting('pb.bz_upd')::jsonb
+  || jsonb_build_object('job', (current_setting('pb.bz_upd')::jsonb -> 'job') || '{"title": "  "}'::jsonb))::text, false);
+select updated_at as bz_v1 from public.jobs where id = pg_temp.pj_id(51) \gset
+begin;
+\ir ../rollback/0203_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+    pg_temp.pj_id(51), current_setting('pb.bz_upd'), :'bz_v1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N2 kontrola ujemna: stara update_published_job odrzuca „Draftsman (Revit)”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.update_published_job(%L::uuid, %L::jsonb, %L::timestamptz)',
+    pg_temp.pj_id(51), current_setting('pb.bz_upd_empty'), :'bz_v1'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)', 'BZ1221-2a edycja z pustym tytułem odrzucona');
+select public.update_published_job(pg_temp.pj_id(51), current_setting('pb.bz_upd')::jsonb, :'bz_v1'::timestamptz) as bz_res \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select title = 'Draftsman (Revit)' and status::text = 'active' and slug = 'bz1221-draftsman'
+     from public.jobs where id = pg_temp.pj_id(51)),
+  'BZ1221-2b edycja zapisuje tytuł „Draftsman (Revit)”, status i slug bez zmian');
+
+-- BZ1221-3: ponowne otwarcie zamkniętej oferty z tytułem „Draftsman …”.
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'close') = 'closed', 'BZ1221-3a zamknięcie oferty');
+reset role; reset app.current_uid;
+begin;
+\ir ../rollback/0203_job_title_completeness.down.sql
+set local role authenticated; set local app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.expect_error(format('select public.set_job_status(%L::uuid, %L)', pg_temp.pj_id(51), 'reopen'),
+  'VALIDATION_FAILED: oferta niekompletna (tytuł/miasto/region)',
+  'BZ1221-N3 kontrola ujemna: stary set_job_status(reopen) odrzuca „Draftsman (Revit)”');
+reset role;
+rollback;
+reset role; reset app.current_uid;
+set role authenticated; set app.current_uid = :'WMEA'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(pg_temp.pj_id(51), 'reopen') = 'active',
+  'BZ1221-3b ponowne otwarcie oferty „Draftsman (Revit)” przechodzi');
+reset role; reset app.current_uid;
+select pg_temp.assert(not exists (
+    select 1 from unnest(array['public.publish_job(uuid, text)', 'public.set_job_status(uuid, text)',
+                               'public.update_published_job(uuid, jsonb, timestamptz)']) f
+     where pg_get_functiondef(f::regprocedure) ~* 'ilike ''(draft|%placeholder)'),
+  'BZ1221-4 po cofniętych kontrolach ujemnych definicje 0203 są na miejscu');
 
 -- ============================================================================
 -- RD1114. Polityki ODCZYTU bez wcześniejszych testów regresyjnych (#1114, TQ2-05): historia statusów
@@ -23532,6 +23627,140 @@ select pg_temp.assert(pg_get_functiondef('public.requeue_failed_email_deliveries
 rollback;
 reset role;
 -- ============================================================================
+-- OD981. Decyzje właściciela 29.09.2026 (migracja 0202 — numer tymczasowy):
+--   #1222 ponowne otwarcie oferty odświeża published_at (nowa publikacja: alerty, filtr daty),
+--   #1233 usunięcie konta pracodawcy cofa oczekujące zaproszenia na jego adres i zeruje adres
+--         w rozstrzygniętych (ślad zdarzenia zostaje).
+-- ============================================================================
+\echo '--- OD981 reopen = nowa publikacja; zaproszenia usuwanego pracodawcy ---'
+reset role; reset app.current_uid;
+\set ODO  'e9810000-0000-4000-8000-000000000001'
+\set ODX  'e9810000-0000-4000-8000-000000000002'
+\set ODY  'e9810000-0000-4000-8000-000000000003'
+\set ODC  'e9810000-0000-4000-8000-0000000000c1'
+\set ODJ  'e9810000-0000-4000-8000-0000000000b1'
+\set ODJ2 'e9810000-0000-4000-8000-0000000000b2'
+\set ODI1 'e9810000-0000-4000-8000-0000000000d1'
+\set ODI2 'e9810000-0000-4000-8000-0000000000d2'
+\set ODI3 'e9810000-0000-4000-8000-0000000000d3'
+\set ODI4 'e9810000-0000-4000-8000-0000000000d4'
+insert into auth.users(id,email,name,raw_user_meta_data) values
+  (:'ODO','od-owner@test.be','Olga Od','{"role":"employer","first_name":"Olga","last_name":"Od","locale":"pl"}'),
+  (:'ODX','od-x@test.be','Xawery Od','{"role":"employer","first_name":"Xawery","last_name":"Od","locale":"nl"}'),
+  (:'ODY','od-y@test.be','Yvonne Od','{"role":"employer","first_name":"Yvonne","last_name":"Od","locale":"fr"}');
+insert into public.companies(id, name, status) values (:'ODC', 'Firma OD981', 'verified');
+insert into public.company_members(company_id, profile_id, role, is_active) values
+  (:'ODC', :'ODO', 'owner', true), (:'ODC', :'ODX', 'recruiter', true), (:'ODC', :'ODY', 'member', true);
+
+-- --- #1222: reopen -----------------------------------------------------------------------------
+insert into public.jobs(id,company_id,slug,title,category,contract_type,city,region,status,default_locale,published_at,apply_email) values
+  (:'ODJ',  :'ODC','od981-reopen','Magazynier OD981 unikat','warehouse','permanent','Antwerpia','Flandria','closed','pl', now() - interval '60 days','praca@example.be'),
+  (:'ODJ2', :'ODC','od981-pause', 'Magazynier OD981 pauza','warehouse','permanent','Antwerpia','Flandria','active','pl', now() - interval '20 days','praca@example.be');
+insert into public.job_translations(job_id, locale, title, description, responsibilities) values
+  (:'ODJ',  'pl', 'Magazynier OD981 unikat', 'Opis oferty magazynowej OD981.', array['Kompletacja']),
+  (:'ODJ2', 'pl', 'Magazynier OD981 pauza',  'Opis oferty magazynowej OD981.', array['Kompletacja']);
+insert into public.job_requirements(job_id, locale, kind, position, content) values
+  (:'ODJ', 'pl', 'mandatory', 0, 'Dyspozycyjność'), (:'ODJ2', 'pl', 'mandatory', 0, 'Dyspozycyjność');
+
+-- OD981-N1 (kontrola ujemna): definicja sprzed 0202 (warunek z 0085) zostawia starą datę.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.set_job_status(uuid,text)'::regprocedure);
+  d := replace(d, 'when p_action = ''reopen'' then now()', 'when false then now()');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select public.set_job_status(:'ODJ'::uuid, 'reopen');
+reset role;
+select pg_temp.assert((select published_at < now() - interval '59 days' from public.jobs where id = :'ODJ'),
+  'OD981-N1 kontrola ujemna: bez zmiany reopen zostawia published_at sprzed 60 dni');
+rollback;
+
+-- OD981-1: reopen zamkniętej oferty → published_at = teraz.
+set role authenticated; set app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select pg_temp.assert(public.set_job_status(:'ODJ'::uuid, 'reopen') = 'active', 'OD981-1 reopen closed → active');
+reset role; reset app.current_uid;
+select pg_temp.assert((select status::text = 'active' and published_at > now() - interval '1 minute'
+                         from public.jobs where id = :'ODJ'),
+  'OD981-1b reopen odświeża published_at (nowa publikacja)');
+-- OD981-2: oferta ponownie otwarta trafia do okna alertów zapisanych wyszukiwań (published_at >= watermark).
+set role service_role;
+select count(*) as od_alert from public.saved_search_jobs_after(
+  'pl', 'OD981 unikat', null, null, null, null, null, null, null, null, null,
+  now() - interval '1 hour', null, null, null, 100, null) where id = :'ODJ' \gset
+reset role;
+select pg_temp.assert(:od_alert = 1, 'OD981-2 alert zapisanego wyszukiwania widzi ponownie otwartą ofertę');
+-- OD981-3: pauza i wznowienie NIE zmieniają daty publikacji (tylko reopen).
+set role authenticated; set app.current_uid = :'ODO'; select pg_temp.assert_client_role();
+select public.set_job_status(:'ODJ2'::uuid, 'pause');
+select public.set_job_status(:'ODJ2'::uuid, 'resume');
+reset role; reset app.current_uid;
+select pg_temp.assert((select published_at < now() - interval '19 days' from public.jobs where id = :'ODJ2'),
+  'OD981-3 pauza/wznowienie zachowują published_at');
+
+-- --- #1233: zaproszenia usuwanego pracodawcy ----------------------------------------------------
+insert into public.company_invitations(id, company_id, email, role, status, invited_by, responded_at) values
+  (:'ODI1', :'ODC', 'OD-X@test.be', 'recruiter', 'pending',  :'ODO', null),
+  (:'ODI2', :'ODC', 'od-x@test.be', 'member',    'accepted', :'ODO', now() - interval '3 days'),
+  (:'ODI3', :'ODC', 'inna.osoba@test.be', 'member', 'pending', :'ODO', null),
+  (:'ODI4', :'ODC', 'od-y@test.be', 'member',    'pending',  :'ODO', null);
+insert into public.email_deliveries
+  (profile_id, to_email, template, locale, subject, status, entity_type, entity_id, idempotency_key, payload, queued_at, next_attempt_at, attempts)
+values
+  (null, 'od-x@test.be', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued', 'company_invitation', :'ODI1',
+   'od981-signup-x', '{}'::jsonb, now(), now(), 0),
+  (null, 'inna.osoba@test.be', 'teamInvitationSignup', 'pl', 'teamInvitationSignup', 'queued', 'company_invitation', :'ODI3',
+   'od981-signup-other', '{}'::jsonb, now(), now(), 0);
+
+-- OD981-4: CHECK — oczekujące zaproszenie musi mieć adres (zerować wolno tylko rozstrzygnięte).
+select pg_temp.expect_error('update public.company_invitations set email = null where id = ''' || :'ODI3' || '''',
+  'company_invitations_email_when_pending', 'OD981-4 oczekujące zaproszenie bez adresu odrzucone');
+
+-- OD981-N2 (kontrola ujemna): bez nowego bloku zaproszenia Y zostają oczekujące z adresem.
+begin;
+do $neg$
+declare d text;
+begin
+  d := pg_get_functiondef('public.erase_employer_subject(uuid,text,uuid)'::regprocedure);
+  d := replace(d, 'where i.email is not null and lower(i.email::text) = lower(v_email)', 'where false');
+  execute d;
+end
+$neg$;
+set local role authenticated; set local app.current_uid = :'ODY'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('od-y@test.be');
+reset role;
+select pg_temp.assert((select status = 'pending' and email = 'od-y@test.be' from public.company_invitations where id = :'ODI4'),
+  'OD981-N2 kontrola ujemna: bez zmiany zaproszenie usuniętej osoby dalej oczekuje z jej adresem');
+rollback;
+reset role; reset app.current_uid;
+
+-- OD981-5: usunięcie konta X — oczekujące cofnięte, adres wyzerowany w obu, ślad zostaje.
+set role authenticated; set app.current_uid = :'ODX'; select pg_temp.assert_client_role();
+select public.request_employer_account_erasure('od-x@test.be')::text as od_erase \gset
+reset role; reset app.current_uid;
+select pg_temp.assert(
+  (select status = 'revoked' and email is null and responded_at is not null and company_id = :'ODC' and role = 'recruiter'
+     from public.company_invitations where id = :'ODI1')
+  and (select status = 'accepted' and email is null and role = 'member' from public.company_invitations where id = :'ODI2'),
+  'OD981-5 oczekujące → revoked, adres wyzerowany także w rozstrzygniętym; firma/rola/status zostają');
+select pg_temp.assert(
+  (select status = 'pending' and email = 'inna.osoba@test.be' from public.company_invitations where id = :'ODI3')
+  and (select status = 'pending' and email = 'od-y@test.be' from public.company_invitations where id = :'ODI4')
+  and exists (select 1 from public.email_deliveries where idempotency_key = 'od981-signup-other')
+  and not exists (select 1 from public.email_deliveries where idempotency_key = 'od981-signup-x'),
+  'OD981-5b zaproszenia innych osób nietknięte; e-mail rejestracyjny usuniętej osoby usunięty z kolejki');
+select pg_temp.assert(
+  (select (details->>'invitationsRevoked')::int = 1 and (details->>'invitationsAnonymized')::int = 2
+     from public.data_rights_requests where subject_id = :'ODX' and kind = 'erasure'),
+  'OD981-5c liczniki w śladzie wniosku');
+-- OD981-6: ponowna rejestracja tym adresem nie widzi zaproszenia (nic nie oczekuje na ten adres).
+select pg_temp.assert(not exists (select 1 from public.company_invitations
+                                    where lower(email::text) = 'od-x@test.be' and status = 'pending'),
+  'OD981-6 po usunięciu na adres nie czeka żadne zaproszenie');
+
 -- CDL975. Język opisu firmy na publicznym profilu (#708, migracja 0201 — numer tymczasowy):
 --         `companies.description_locale` ustawia tylko owner/admin firmy przez RPC (audyt);
 --         zmiana treści opisu bez wskazania języka zeruje język (trigger); pusty opis = brak

@@ -209,9 +209,11 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   wiadomość”/„Kontakt przez platformę”, linki powiadomień/e-maili o rozmowie → pulpit. Upload CV (akcja +
   `storeCandidateCv`) → `RECRUITMENT_DISABLED`; pobranie/usunięcie własnych plików zostaje (`CvUpload` bez
   `allowUpload` = lista istniejących plików; profil jest w trybie 404 (#1142), więc lista jest w
-  `/candidate/ustawienia` jako sekcja `variant="settings"` z kotwicą `#pliki-cv`, także pusta — #1226; pulpit
-  bez sekcji; dowód: unit `classifieds-candidate-cv-files` (kontrole ujemne: RECRUITMENT, `allowUpload`),
-  strażnik `legal`, E2E `classifieds-candidate-account`). Import CV przez AI: `cvImportProvider()` =
+  `/candidate/ustawienia` jako sekcja `variant="settings"` z kotwicą `#pliki-cv`, także pusta — #1226; dowód: unit
+  `classifieds-candidate-cv-files` (kontrole ujemne: RECRUITMENT, `allowUpload`), strażnik `legal`, E2E
+  `classifieds-candidate-account`) oraz w sekcji „Twoje pliki” pulpitu konta `CandidateAccountDashboard`
+  (decyzja właściciela 29.09.2026: tylko gdy są pliki albo odczyt się nie udał; unit
+  `classifieds-candidate-account` z kontrolą ujemną RECRUITMENT = wgrywanie). Import CV przez AI: `cvImportProvider()` =
   null w trybie (mimo `AI_CV_IMPORT_ENABLED`), akcje bez modelu i budżetu, `import-cv` = 404, wpis inwentarza AI
   `classifiedsModeGuard`. Baza (uzupełnia 0171): `newMessage` w kolejce wygaszany (`suppressed_recruitment_disabled`),
   trigger `trg_aa_recruitment_mode_cv` na `files` (nowe CV odrzucone dla każdej roli), `apply_candidate_cv_proposals`
@@ -1518,6 +1520,12 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
 
 ### Etap 4 — pracodawca
 - [x] Konto firmy + weryfikacja — `/employer/firma` (create przez `create_company_with_owner`, edycja, baner statusu) + weryfikacja przez admina (`admin_set_company_status`, 0019)
+  Odebrany dostęp (#1210, decyzja właściciela 29.09.2026, bez migracji): konto z WYŁĄCZNIE nieaktywnymi
+  członkostwami widzi w layoucie `/employer` `RevokedCompanyAccess` — „Twój dostęp do firmy X został odebrany”
+  (nazwy z `getRevokedCompanyNames`: service_role, tylko `name`, identyfikator z sesji; awaria = komunikat ogólny,
+  bez szczegółów), zaproszenia i własna firma przez `createAdditionalCompany` (`create_additional_company`)
+  zamiast `create_first_company` (PERMISSION_DENIED). Testy: `employer-revoked-access(-layout)`,
+  `revoked-company-names` (kontrole ujemne: brak członkostw = pierwsza firma, aktywne = panel).
   Bootstrap po rejestracji (#28): callback Auth (`bootstrapCompany` w `actions/auth.ts`) woła
   wyłącznie `create_first_company` — blokada profilu i ponowne sprawdzenie członkostwa w jednej
   transakcji; dwa równoczesne callbacki = jedna firma, jeden owner. Bez migracji. Dowód: `rls.sql`
@@ -1689,6 +1697,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`?direct=1`, `p_direct_only` w liście, liczniku, facetach i kopii filtrów alertów). Dowód:
   `rls.sql` sekcja FT167 (kontrole ujemne: bez strażnika publikacja przechodzi, bez warunku filtr
   przepuszcza agencję), unit `job-fraud-risk`, `job-trust`; E2E `offer-trust` (demo).
+  Kolejka „oczekujące” filtruje bieżącą treść w SQL przed limitem (#1220, bez migracji) —
+  nieaktualne przeglądy (każdy zapis innej treści z sygnałem) nie zajmują stron; integracja
+  `portal-admin-job-content-queue` (PG16, kontrola ujemna: stary odczyt = strona nieaktualnych).
   **Otwarte (etap 2):** filtr w zapisanych wyszukiwaniach, sygnały w wiadomościach, etykieta
   na kartach polecanych w panelu kandydata, brzmienia (właściciel), katalog reguł/wyjątków.
   Kanał aplikowania u ogłoszeniodawcy (#1129, migracja `0172`; decyzja
@@ -1735,9 +1746,11 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   serwerowy, bez JS). Combobox poziomu języka w kroku 7 ma nazwę (`jobWizard.languageLevelAria`).
   Dowód: unit `job-wizard-content-locale`, `job-detail-start`, `job-start`, `delete-job-draft-button`,
   integracja `portal-employer-actions` (kontrole ujemne: sama zmiana kolumny zostawia dwa języki,
-  inny klucz = nowy szkic). **Otwarte (wymaga migracji):** kontrola kompletności w `publish_job`/
-  `update_published_job` odrzuca tytuły zaczynające się od „draft” lub zawierające „placeholder”
-  (`v_title ilike 'draft%' or '%placeholder%'` — od 0031; szkic ma teraz pusty tytuł), język
+  inny klucz = nowy szkic). Tytuł bez heurystyki zaślepki (#1221, migracja `0203` — numer
+  tymczasowy): `publish_job`, `update_published_job` i `set_job_status('reopen')` odrzucają już
+  tylko pusty tytuł (dawny warunek „draft%/placeholder” z 0031 blokował np. „Draftsman”); dowód
+  `rls.sql` sekcja BZ1221 (kontrole ujemne: definicje sprzed 0203), rollback
+  `0203_…down.sql` (`job-title-completeness-rollback.sql`). **Otwarte (wymaga migracji):** język
   proponowany przez import AI (zamiast języka panelu), screening-pytania nie są przenoszone
   przy zmianie języka szkicu (funkcja wyłączona w trybie ogłoszeniowym). Menu statusu zgłoszenia
   i „Wyślij propozycję” w demo — funkcje wyłączone w trybie ogłoszeniowym (nie dotyczy).
@@ -1917,6 +1930,10 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   (`src/lib/job-expiry.ts`) z akcją „Otwórz ponownie”, kreator jej nie edytuje. `publish_job` z
   minioną datą i `resume` wstrzymanej po terminie → `JOB_EXPIRED` (bez cichego czyszczenia daty);
   `reopen` usuwa minioną datę, także dla aktywnej/wstrzymanej po terminie. Dowód: `rls.sql` sekcja EX72.
+  Reopen = nowa publikacja (#1222, decyzja właściciela 29.09.2026, migracja `0202` — numer tymczasowy):
+  `set_job_status(…, 'reopen')` ustawia `published_at = now()` (alerty zapisanych wyszukiwań, filtr daty, sort
+  „najnowsze”, `datePosted`); pauza/wznowienie daty nie zmieniają; para (wyszukiwanie, oferta) już wysłana nie
+  wraca. Dowód: `rls.sql` sekcja OD981 (kontrola ujemna: warunek z 0085 zostawia starą datę).
 - [x] Szczegół zgłoszenia `/employer/aplikacje/[id]` (#300) — **wyłączone w trybie ogłoszeniowym (#1144)** — wiadomość, telefon, dostępność, data, profil zawodowy (umiejętności/języki/certyfikaty/doświadczenie), dopasowanie, historia statusów, „Napisz wiadomość” (`openConversation`) i zmiana statusu (`ApplicationStatusMenu`); odczyt pod RLS recruiter+ aktywnej firmy (`getEmployerApplicationDetail`), jawne stany błąd/404; linki z listy i pulpitu.
   Fokus po anulowaniu potwierdzenia (#800): „Anuluj” w kroku potwierdzenia (`rejected`/`hired`)
   przywraca fokus na status, który uruchomił potwierdzenie (referencje opcji listy), zamiast go
@@ -2211,6 +2228,14 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   odczytu, jedno wywołanie na stronę, fallback). **Otwarte:** JobPosting/hreflang wersji
   przetłumaczonych (decyzja SEO), przekład w „Podobnych ofertach” (bez znacznika), UI korekty
   ręcznej.
+  Język treści kart (#1223, bez migracji): `get_public_jobs`/profil firmy nie zwracają języka
+  wybranego tłumaczenia, więc `withListContentLocales` (`src/lib/jobs.ts`, jedno zapytanie
+  o tłumaczenia ofert strony pod anon) ustala `contentLocale` regułą
+  `resolveJobListContentLocale` (język strony, gdy oferta go ma; inaczej jednoznaczne
+  tłumaczenie z identycznym tytułem i wyróżnikami; przekład maszynowy = język strony). `JobCard`
+  i pulpit kandydata (zapisane wyszukiwania) ustawiają `lang` tytułu i wyróżników, gdy różni się
+  od języka strony. Awaria = karty bez `lang`. Dowód: unit `job-list-content-locale`, `job-card`,
+  `classifieds-candidate-saved-search-jobs` (kontrole ujemne).
   Nazwy chronione (#740, migracja `0190` — numer tymczasowy): nazwa firmy (`companies.name`,
   wyłącznie z bazy) = `translation_source_revisions.protected_terms` rewizji oferty
   (`sync_job_translation_source` → `record_translation_source(…, p_protected_terms)`,
@@ -2463,7 +2488,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `GET /v2.1/email?messageId` przed każdą wysyłką (brak Idempotency-Key u dostawcy), ACK tylko
   z tym identyfikatorem w odpowiedzi, `X-TRACKING-OFF: 1`, nagłówki wypisania bez zmian, kody
   `EMAIL_PROVIDER_*` zamiast komunikatu dostawcy. Webhook `POST /api/email/webhook/emaillabs`
-  (SHA1 sekret|data|Request-Id + opcjonalny Basic auth, inbox `emaillabs:<Request-Id>`,
+  (SHA1 sekret|data|Request-Id; Basic auth wymagany w produkcji — brak `EMAILLABS_WEBHOOK_BASIC_*` = 503, #1234;
+  `X-Webhook-Date` w oknie ±24 h, parser tolerancyjny, nieczytelna = 401; inbox `emaillabs:<Request-Id>`
+  pamiętany ≥ 7 dni > okno,
   hardbounce → blokada, softbounce/spambounce bez blokady, deferred → opóźnienie, ok →
   delivered). `/api/health`: `emailProvider`, `checks.emailProviderReady`/`emaillabsWebhook`.
   Opis i kroki panelu:
@@ -2994,6 +3021,9 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   sesje i konto znikają, dane firmy (oferty, propozycje, wiadomości, zaproszenia) zostają
   z FK → null, audyt z `actor_id = null`, tombstone; restore (`apply_erasure_tombstones`)
   wybiera funkcję po roli. `enforce_offer_integrity` przepuszcza wyłącznie `sender_id → null`.
+  Zaproszenia na adres osoby (#1233, migracja `0202`): oczekujące → `revoked`, adres zerowany we wszystkich
+  (`company_invitations.email` nullable, CHECK `company_invitations_email_when_pending`), e-maile rejestracyjne
+  tych zaproszeń usunięte z kolejki; wiersz = ślad zdarzenia. Dowód: `rls.sql` OD981 (kontrola ujemna).
   Dowód: `rls.sql` sekcja ER161 (kontrole ujemne: ostatni właściciel bez kontroli — firma bez
   właściciela, stara reguła propozycji wywraca usunięcie, cudzy adres nic nie usuwa), unit
   `account-data`. **Otwarte:** pracodawca bez aktywnego członkostwa nie wejdzie do ustawień,
@@ -3414,7 +3444,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   strony otwartej z panelu; jednorazowe linki `no-referrer`, #1218, unit `middleware-referrer-policy`,
   E2E `one-time-link-tracking`); cookie aktywnej
   firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
-  firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
+  firmy unieważniają publiczny ISR (#1109); `/api/health`
   pokazuje szczegóły tylko z tokenem albo w `next dev` (`NODE_ENV=development` poza trybem produkcyjnym —
   nie po `request.url`, który za proxy Railway wskazuje localhost, #1219), zbiorczy budżet błędów
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
@@ -3426,7 +3456,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zakresem); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
   + szeroki próg na IP (`checkAccountRateLimit`, `src/lib/rate-limit-account.ts`, wiadro `<akcja>-ip`
   = 10 × limit), zły format identyfikatora w `setCompanyStatus`/`resolveReport`/
-  `markNotificationsRead` = `VALIDATION_FAILED` (#1109); panel `/admin/operacje` ocenia wiersz doby
+  `markNotificationsRead` = `VALIDATION_FAILED` (#1109; dokończenie: upload CV i załączników liczy limit na konto po sesji przez `checkAccountRateLimit` — anonimowe wywołanie nie zużywa budżetu, a identyfikator rozmowy/zgłoszenia/propozycji w złym formacie w `sendMessage`/`markConversationRead`/`openConversation` = `VALIDATION_FAILED` przed sesją i bazą, tryb demo bez zmian; unit `candidate-cv-route-actions`, `message-attachments-actions`, `messages-actions`); panel `/admin/operacje` ocenia wiersz doby
   i miesiąca budżetu AI według poziomu danego okresu — wspólny `ai_budget_exhausted` nie podnosi
   drugiego okresu do alarmu ani nie kasuje jego ostrzeżenia (#789). Dowód: unit
   `report-unmapped-db-error`, `server-actions-1109`, `admin-ops-dashboard` (kontrole ujemne).
