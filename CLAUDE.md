@@ -241,6 +241,21 @@ niż LinkedIn/Indeed/StepStone. Użytkownik rozumie stronę w kilka sekund.
   ponowieniem (nie pusta lista; wyszukiwania czytane raz, przekazane do `loadSavedSearchJobs`); powitanie pracodawcy bez „rekrutacji”
   (`employerGreetingSubListing*`). Tryb `RECRUITMENT`: stare sekcje. Dowód: unit `classifieds-employer-stats`, `classifieds-candidate-saved-search-jobs`, `classifieds-candidate-account`, `legal`
   `classifieds-panels` (kontrole ujemne), E2E `classifieds-dashboards` (`E2E_PORTAL_LEGAL_MODE=`, axe 320/1280 px).
+- **Resztki trybu ogłoszeniowego (#1211/#1212/#1213/#1225, migracja `0204` — numer tymczasowy):** szablony
+  odpowiedzi (narzędzie wiadomości) — `/employer/szablony` = 404 (`notFoundUnlessRecruitment('messaging')`, wpis
+  w `GUARDED_ROUTES`), pozycja nawigacji tylko przy `recruitmentEnabled`, akcje `saveMessageTemplate`/
+  `deleteMessageTemplate` → `RECRUITMENT_DISABLED` jako pierwszy krok; baza: `save_/delete_company_message_template`
+  = nakładki ze strażnikiem trybu (treść 0170 w `*_impl` bez EXECUTE dla klientów), BEFORE INSERT
+  `trg_aa_recruitment_mode` na `company_message_templates`/`_variants` (każda rola, wyjątek seedu jak 0171; UPDATE/
+  DELETE bez strażnika — kaskady działają). Dowód: `rls.sql` sekcja CLTPL (kontrole ujemne: bez triggera, bez
+  nakładki), rollback `0204_…down.sql` (`classifieds-message-templates-rollback.sql`, także w
+  `portal-legal-mode-rollback.sql`). E-maile spoza `RECRUITMENT_EMAIL_TEMPLATES`: treść bazowa `copy.ts` = portal
+  ogłoszeń, dawne brzmienie w `EmailCopy.recruitment` (wybór w `resolveCopy` przy `isRecruitmentEnabled()`) —
+  `jobPublished`, `companyVerified`, `inactiveAccountWarning`. Ekrany konta: `AgeAttestationSettings`,
+  `CompanyBlocksSettings`, `AccountDataSettings`, `JobCompanyBlockControl`, `TeamMembers`, `JobWizard` (podtytuł
+  edycji) z propsem `recruitmentEnabled` (domyślnie `false` → klucze `*Listing`), `roleDescKey(role, recruitment)`,
+  `RecruiterOnlyNote` sam czyta tryb. Strażnik `classifieds-copy.test.ts` (e-maile spoza procesu i klucze `*Listing`,
+  kontrole ujemne: dawne brzmienia = czerwony). **Do akceptacji właściciela:** nowe brzmienia.
 - **i18n:** `next-intl`, routing z prefiksem locale (`/pl`, `/nl`, `/fr`, `/en`), teksty w `src/messages/*.json`.
 
 ---
@@ -494,6 +509,12 @@ Wdrożenie obsługuje natywna integracja Railway. Zobacz:
   przebiegi `main` nigdy nie są anulowane (Railway potrzebuje wyniku każdego SHA).
 - Nie wypychaj pustych commitów ani push-ów „na odświeżenie”; ponawiaj tylko uzasadnione joby.
 - Powrót na self-hosted tylko na wyraźną prośbę właściciela (`docs/SELF_HOSTED_RUNNERS.md` — archiwalnie).
+- PR z forków dostają pełne CI (#671): `pull_request` (nigdy `pull_request_target`/`workflow_run`),
+  token `contents: read`, żadnych sekretów, uprawnień jobu ani `environment` w `ci.yml`, bez warunków
+  `head.repo` pomijających forki (strażnik `check-ci-workflows.mjs`, kontrole ujemne). Krok wymagający
+  sekretów = osobny workflow uruchamiany po akceptacji. Pierwszy przebieg PR nowego współtwórcy
+  zatwierdza opiekun (Settings → Actions → „Require approval for fork pull requests”). Self-hosted
+  runner dla publicznego repo z forkami jest niedopuszczalny (strażnik odrzuca `self-hosted`).
 
 ---
 
@@ -3162,7 +3183,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
   `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). Zależności:
   martwych pakietów już nie ma (`stripe`, `prettier-plugin-tailwindcss`, `@radix-ui/react-slot`
-  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji),
+  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji — strażnik
+  `dependencies-used.test` z listą wyjątków bez importu sprawdzanych w pliku konfiguracji i kontrolami ujemnymi),
   `npm audit --package-lock-only` = 0. `next lint` zastąpione `eslint` CLI (ESLint 8), lint
   obejmuje pliki konfiguracyjne. **Otwarte:** ESLint 9 (flat config, nowe `node_modules` —
   osobny krok z pełną instalacją).

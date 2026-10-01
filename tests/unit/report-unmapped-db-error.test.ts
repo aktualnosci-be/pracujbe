@@ -10,6 +10,7 @@ import { getPublicSavedJobs } from '@/lib/actions/public-saved-jobs';
 import { markNotificationsRead } from '@/lib/actions/notifications';
 import { inviteTeamMember } from '@/lib/actions/team';
 import { captureActionError, reportUnmappedDbError } from '@/lib/db/errors';
+import { PORTAL_LEGAL_MODE_ENV } from '@/lib/portal-mode';
 import { setErrorReporter, type ErrorReport } from '@/lib/error-report';
 import { getActiveCompany } from '@/lib/company-context';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -48,7 +49,10 @@ beforeEach(() => {
   vi.mocked(checkRateLimit).mockResolvedValue(true);
   vi.mocked(getActiveCompany).mockResolvedValue({ activeId: COMPANY, activeRole: 'owner' } as never);
 });
-afterEach(() => setErrorReporter(null));
+afterEach(() => {
+  setErrorReporter(null);
+  vi.unstubAllEnvs();
+});
 
 describe('reportUnmappedDbError', () => {
   it('INTERNAL z błędu bazy → zgłoszenie z obszarem i SQLSTATE, bez komunikatu', () => {
@@ -171,6 +175,9 @@ describe('dokończenie #1068: pozostałe akcje', () => {
   const JOB = '5c4b1e5d-3a5f-4d29-8b47-2a8c3d0e9f12';
 
   it('szablony: nieznany SQLSTATE → INTERNAL + wpis; znany NOT_FOUND → bez wpisu', async () => {
+    // Szablony odpowiedzi są wyłączone w trybie ogłoszeniowym (#1211) — zgłaszanie błędów bazy
+    // sprawdzamy w trybie RECRUITMENT, w którym akcja dochodzi do RPC.
+    vi.stubEnv(PORTAL_LEGAL_MODE_ENV, 'RECRUITMENT');
     fakeDb.rpc('delete_company_message_template', () => {
       throw pgError('XX000', SECRET_ROW);
     });
