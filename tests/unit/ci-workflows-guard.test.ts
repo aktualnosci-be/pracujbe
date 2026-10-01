@@ -42,6 +42,18 @@ function mutated(edit: (ci: string) => string): string {
   return dir;
 }
 
+/** Kopia workflowów z jednym celowym błędem w delete-old-runs.yml (#1105). */
+function mutatedCleanup(edit: (cleanup: string) => string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'ci-guard-cleanup-'));
+  dirs.push(dir);
+  for (const file of FILES) copyFileSync(join(WORKFLOWS, file), join(dir, file));
+  const cleanup = readFileSync(join(dir, 'delete-old-runs.yml'), 'utf8');
+  const next = edit(cleanup);
+  expect(next, 'mutacja musi zmienić delete-old-runs.yml').not.toBe(cleanup);
+  writeFileSync(join(dir, 'delete-old-runs.yml'), next);
+  return dir;
+}
+
 /** Kopia playwright.config.ts z jednym celowym błędem (workflowy bez zmian). */
 function mutatedConfig(edit: (config: string) => string): string {
   const dir = mkdtempSync(join(tmpdir(), 'ci-guard-config-'));
@@ -75,6 +87,28 @@ describe('strażnik workflowów CI', () => {
     const { code, output } = runGuard();
     expect(output).toContain('shardy E2E (podział po czasie)');
     expect(code).toBe(0);
+  });
+
+  describe('sprzątanie przebiegów zachowuje historię main (#1105)', () => {
+    it('kopia delete-old-runs.yml bez zmian przechodzi', () => {
+      const dir = mutatedCleanup((cleanup) => `${cleanup}\n`);
+      expect(runGuard(dir).code).toBe(0);
+    });
+
+    it.each([
+      ['krótkie okno retain_days (dawne 6 dni)', (c: string) => c.replace(/retain_days: \d+/, 'retain_days: 6'), 'retain_days < 90'],
+      ['małe keep_minimum_runs (dawne 4)', (c: string) => c.replace(/keep_minimum_runs: \d+/, 'keep_minimum_runs: 4'), 'keep_minimum_runs < 50'],
+      ['brak retain_days', (c: string) => c.replace(/^\s+retain_days: \d+\n/m, ''), 'retain_days musi wystąpić'],
+      [
+        'zepsuty filtr check_branch_existence',
+        (c: string) => c.replace(/(keep_minimum_runs: \d+)/, '$1\n          check_branch_existence: true'),
+        'check_branch_existence',
+      ],
+    ])('kontrola ujemna: %s', (_name, edit, message) => {
+      const { code, output } = runGuard(mutatedCleanup(edit));
+      expect(code).not.toBe(0);
+      expect(output).toContain(message);
+    });
   });
 
   it('kopia bez zmian przechodzi (argument katalogu działa)', () => {

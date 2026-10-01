@@ -2510,6 +2510,13 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `auth-email-worker`, `emaillabs-transport`. Pule `pg` z `query_timeout` 35 s i TCP keepalive
   (#1229, `db-pool-query-timeout`); retencja R2 liczy tylko kompletne kopie, niekompletne > 24 h
   sprzątane osobno (#1228, `backup-r2`).
+  Kontrakt czasu (#731, bez migracji): `/api/email/process` daje obu kolejkom jeden budżet
+  `EMAIL_RUN_BUDGET_MS` = 90 s (< limit callera 120 s < dzierżawa 300 s) i sygnał żądania
+  (`src/lib/email/run-deadline.ts`); wysyłka startuje tylko z oknem ≥ 25 s do końca budżetu
+  i dzierżawy, jej termin nie wykracza poza budżet; rekordy bez próby wracają do kolejki bez
+  zużycia próby (`deadlineDeferred`, w auth też `leaseLost`), nie liczą się jako `failed`,
+  wynik `ok: false` (503). Test `email-run-deadline` (wolny GET/POST EmailLabs, 20 listów,
+  przerwanie, nakładające się przebiegi; kontrole ujemne bez budżetu). Opis `docs/CLOUDFLARE_CRON.md`.
   Zastępczo (plan Railway bez usług cron): Cloudflare Worker z Cron Triggers `infra/cloudflare-cron/`
   (`*/5` → `/api/email/process`, co godzinę → `/api/maintenance`, sekrety jako Worker secrets,
   semantyka i kody jak caller Railway; niewdrożony — kroki właściciela w `docs/CLOUDFLARE_CRON.md`;

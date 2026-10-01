@@ -64,7 +64,8 @@
       "urlTooLong": "Adres jest za długi.",
       "descriptionRequired": "Wpisz opis albo zostaw pole puste, aby go usunąć.",
       "descriptionTooLong": "Opis może mieć najwyżej 1500 znaków.",
-      "descriptionSensitive": "Opis zawiera numer identyfikacyjny osoby albo dokumentu. Usuń go — opis jest publiczny."
+      "descriptionSensitive": "Opis zawiera numer identyfikacyjny osoby albo dokumentu. Usuń go — opis jest publiczny.",
+      "textInvalid": "Ten tekst zawiera niedozwolony znak. Usuń go."
     },
     "bannerUnverifiedTitle": "Firma czeka na weryfikację",
     "bannerUnverifiedDesc": "Zanim opublikujesz pierwszą ofertę, administrator Pracuj.be sprawdzi dane firmy. Nie musisz niczego wysyłać — firma jest już w kolejce.",
@@ -437,6 +438,7 @@
       "workingHoursTooLong": "Opis godzin pracy jest za długi.",
       "shiftsTooLong": "Opis zmian jest za długi.",
       "startDateInvalid": "Nieprawidłowa data rozpoczęcia.",
+      "textInvalid": "Ten tekst zawiera niedozwolony znak. Usuń go.",
       "cityRequired": "Podaj miasto.",
       "cityTooLong": "Nazwa miasta jest za długa.",
       "regionRequired": "Podaj region.",
@@ -3471,6 +3473,7 @@
     "loginRequired": "Aby zapisać wyszukiwanie, zaloguj się na konto kandydata.",
     "login": "Zaloguj się",
     "errorNetwork": "Brak połączenia. Sprawdź internet i spróbuj ponownie.",
+    "tooManyFilters": "Tego wyszukiwania nie da się zapisać — ma zbyt wiele lub zbyt długich filtrów. Usuń część filtrów i spróbuj ponownie.",
     "defaultName": "Moje wyszukiwanie",
     "intro": "Wyszukiwania zapisane z listy ofert. Gdy pojawią się nowe oferty z tymi filtrami, dostaniesz powiadomienie i e-mail.",
     "loadError": "Nie udało się wczytać zapisanych wyszukiwań.",
@@ -3569,6 +3572,7 @@
       "detailsRequired": "Opisz problem.",
       "detailsTooShort": "Opis musi mieć co najmniej 20 znaków.",
       "detailsTooLong": "Opis może mieć najwyżej 5000 znaków.",
+      "textInvalid": "Ten tekst zawiera niedozwolony znak. Usuń go.",
       "urlInvalid": "Podaj pełny adres zaczynający się od http:// lub https://.",
       "nameTooLong": "Imię i nazwisko mogą mieć najwyżej 200 znaków.",
       "nameInvalid": "Imię może zawierać tylko litery, spacje i myślniki.",
@@ -3773,7 +3777,8 @@
       "nameInvalid": "Imię może zawierać tylko litery, spacje i myślniki.",
       "emailRequired": "Podaj adres e-mail.",
       "emailInvalid": "Podaj poprawny adres e-mail.",
-      "sensitiveId": "Usuń numer rejestru narodowego, PESEL lub numer dokumentu — nie jest potrzebny, żeby odpowiedzieć na wiadomość."
+      "sensitiveId": "Usuń numer rejestru narodowego, PESEL lub numer dokumentu — nie jest potrzebny, żeby odpowiedzieć na wiadomość.",
+      "textInvalid": "Ten tekst zawiera niedozwolony znak. Usuń go."
     }
   },
   "savedSearchAlertOff": {
