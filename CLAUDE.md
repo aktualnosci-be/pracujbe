@@ -3137,7 +3137,8 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   spoza paneli z `Content-Length` > 256 KB (`src/lib/http/public-action-body-limit.ts`,
   `public-action-body-limit.test`; bez `Content-Length` decyduje limit Next). Zależności:
   martwych pakietów już nie ma (`stripe`, `prettier-plugin-tailwindcss`, `@radix-ui/react-slot`
-  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji),
+  usunięte wcześniej; każdy wpis `package.json` ma import albo użycie w konfiguracji — strażnik
+  `dependencies-used.test` z listą wyjątków bez importu sprawdzanych w pliku konfiguracji i kontrolami ujemnymi),
   `npm audit --package-lock-only` = 0. `next lint` zastąpione `eslint` CLI (ESLint 8), lint
   obejmuje pliki konfiguracyjne. **Otwarte:** ESLint 9 (flat config, nowe `node_modules` —
   osobny krok z pełną instalacją).
