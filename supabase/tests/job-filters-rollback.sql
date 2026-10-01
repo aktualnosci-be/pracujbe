@@ -28,6 +28,8 @@ select pg_temp.assert(
 
 -- Odroczone triggery kolejki tłumaczeń (0146) z insertów fikstury — przed ALTER TABLE.
 set constraints all immediate;
+-- 0976 redefiniuje te same funkcje (nowy parametr p_benefits) — najpierw jego rollback.
+\ir ../rollback/0976_job_benefits.down.sql
 \ir ../rollback/0194_job_filters_language_worktime_radius.down.sql
 
 -- Po rollbacku: sygnatury i zachowanie sprzed 0194 (PLN porównywane liczbowo, bez work_time).

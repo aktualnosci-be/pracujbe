@@ -623,6 +623,8 @@ export interface JobDraftValues {
   noLanguageRequired: boolean;
   conditions: string[];
   benefits: string[];
+  /** #826 (0976): `jobs.benefit_codes` (kody katalogu); brak = nie podano. */
+  benefitCodes?: string[];
   accommodation: boolean;
   transport: boolean;
   /** 0169: koszty i dodatki — surowe wartości z bazy ('' / null = nie podano). */
@@ -814,6 +816,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
                 shifts, work_time, start_immediately, start_date, city, region, address, remote, salary_min,
                 salary_max, currency, salary_period, min_experience_years, requires_driving_license,
                 no_language_required, accommodation, transport, contact_email, default_locale, slug,
+                benefit_codes,
                 expires_at, updated_at,
                 accommodation_kind, accommodation_cost::text AS accommodation_cost,
                 accommodation_cost_period, accommodation_deducted, accommodation_registration,
@@ -923,6 +926,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         noLanguageRequired: job['no_language_required'] === true,
         conditions: asStringArray(tr['conditions']),
         benefits: asStringArray(tr['benefits']),
+        benefitCodes: asStringArray(job['benefit_codes']),
         accommodation: job['accommodation'] === true,
         transport: job['transport'] === true,
         ...jobCostsInitial(job),

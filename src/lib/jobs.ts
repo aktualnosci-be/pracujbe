@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { benefitsMatch, parseJobBenefitsRow, type JobBenefitCode, type JobBenefits } from '@/lib/job-benefits';
 import {
   isApplyEmail,
   isApplyPhone,
@@ -188,6 +189,12 @@ export interface JobDetail extends JobListItem {
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
   /**
+   * Świadczenia (#826, 0976 — `get_public_job_benefits`): kody efektywne z katalogu (z bonami
+   * i zwrotem dojazdu z „Kosztów i dodatków”) + tekstowe „inne”. Brak = odczyt nieudany albo
+   * nic nie podano — strona nie pokazuje sekcji.
+   */
+  benefits?: JobBenefits;
+  /**
    * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
    * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
    */
@@ -245,6 +252,8 @@ export interface GetJobsParams {
   near?: string;
   /** #824: promień w km (z `near`). */
   radiusKm?: RadiusKm;
+  /** #826 (0976): świadczenia — oferta ma KAŻDE wybrane (kody katalogu). */
+  benefits?: JobBenefitCode[];
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -390,6 +399,10 @@ function getJobsFromDemo(
   if (params.workTime) {
     const wanted = params.workTime;
     jobs = jobs.filter((job) => workTimeMatches(job.workTime, wanted));
+  }
+  if (params.benefits?.length) {
+    const wanted = params.benefits;
+    jobs = jobs.filter((job) => benefitsMatch(job.benefits?.codes ?? [], wanted));
   }
   if (params.near?.trim()) {
     const center = belgianCityCoordinates(params.near.trim());
@@ -596,7 +609,9 @@ async function getJobBySlugFromDb(
   if (!job) return null;
   // #101: pytania są częścią formularza aplikowania — błąd odczytu przerywa jak błąd oferty
   // (formularz bez pytań i tak zostałby odrzucony przez bazę przy pytaniach wymaganych).
-  const { getPublicJobScreeningQuestions, getPublicJobCosts } = await import('@/lib/db/public-jobs');
+  const { getPublicJobScreeningQuestions, getPublicJobCosts, getPublicJobBenefits } = await import(
+    '@/lib/db/public-jobs'
+  );
   // Decyzja produktowa: portal ogłoszeniowy — stare pytania ukryte, bez zapytania do bazy.
   const screeningQuestions = isRecruitmentEnabled('screening')
     ? parseScreeningQuestions(await getPublicJobScreeningQuestions(pool, job.id))
@@ -608,10 +623,18 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // 0976 (#826): świadczenia — odczyt pomocniczy; awaria = brak sekcji (reszta strony zostaje).
+  let benefits: JobBenefits | undefined;
+  try {
+    benefits = parseJobBenefitsRow(await getPublicJobBenefits(pool, job.id, locale));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobBenefits' });
+  }
   const requested = toLocale(locale);
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(benefits && (benefits.codes.length > 0 || benefits.other.length > 0) ? { benefits } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };

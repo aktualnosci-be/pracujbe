@@ -150,7 +150,7 @@ export default async function JobsListPage({
 
   const page = parsePage(flat['page']);
 
-  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames] = await Promise.all([
+  const [t, tFilters, tCat, tContract, tCommon, tNav, tLanguageNames, tBenefits] = await Promise.all([
     getTranslations('jobs'),
     getTranslations('filters'),
     getTranslations('categories'),
@@ -158,6 +158,7 @@ export default async function JobsListPage({
     getTranslations('common'),
     getTranslations('nav'),
     getTranslations('languageNames'),
+    getTranslations('jobBenefits'),
   ]);
 
   // WYNIKI: komplet filtrów sidebara + sort + paginacja + licznik PO STRONIE SQL (P1-12) —
@@ -264,7 +265,7 @@ export default async function JobsListPage({
   const chips: Array<{ id: string; label: string; href: string }> = describeJobListFilters(
     listQuery,
     locale,
-    { filters: tFilters, categories: tCat, contractTypes: tContract, languageNames: tLanguageNames },
+    { filters: tFilters, categories: tCat, contractTypes: tContract, languageNames: tLanguageNames, benefits: tBenefits },
   ).map((item) => ({
     id: item.id,
     label: item.label,

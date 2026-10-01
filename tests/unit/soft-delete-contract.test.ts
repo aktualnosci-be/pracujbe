@@ -236,6 +236,7 @@ export const EXCEPTIONS: Record<string, string> = {
   'public.job_duplications_copy_apply_channel:jobs': `${NEW} — kopia do szkicu NEW; źródło sprawdza duplicate_job_as_draft`,
   'public.job_duplications_copy_costs:jobs': `${NEW} — kopia do szkicu NEW; źródło sprawdza duplicate_job_as_draft`,
   'public.job_duplications_copy_work_time:jobs': `${NEW} — kopia do szkicu NEW; źródło sprawdza duplicate_job_as_draft`,
+  'public.job_duplications_copy_benefits:jobs': `${NEW} — kopia do szkicu NEW; źródło sprawdza duplicate_job_as_draft`,
   'public.job_has_process_records:applications': `${GUARD} — blokada usunięcia szkicu oferty (0185); aplikacja usunięta logicznie nadal blokuje kaskadowe usunięcie`,
   'public.job_has_process_records:offers': `${GUARD} — blokada usunięcia szkicu oferty (0185); propozycja usunięta logicznie nadal blokuje kaskadowe usunięcie`,
   'public.job_translation_source_fields:jobs': `${MAINT} — pola źródła tłumaczenia; sync_job_translation_source ukrywa/usuwa niepubliczne`,

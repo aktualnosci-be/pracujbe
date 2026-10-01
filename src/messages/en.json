@@ -548,7 +548,10 @@
       "full_time": "Full-time",
       "part_time": "Part-time",
       "both": "Full-time or part-time"
-    }
+    },
+    "benefitsTitle": "Benefits",
+    "benefitsOther": "Other benefits",
+    "benefitsDeclared": "Information provided by the employer."
   },
   "landing": {
     "hubMetaTitle": "Browse jobs in Belgium — industries and cities | Pracuj.be",
@@ -1390,7 +1393,9 @@
     "radiusNote": "Distance is measured in a straight line from a town on our list. Jobs without a recognised town are not shown with this filter. Remote jobs are shown with every radius.",
     "radiusChip": "Within {km} km of {place}",
     "nearUnknown": "We did not recognise the town “{place}”. Enter the name of a Belgian municipality or city, for example Ghent or Liège.",
-    "salaryCurrencyNote": "Amounts in currencies other than the euro are not converted — those jobs stay visible with this filter and appear last when sorting by salary."
+    "salaryCurrencyNote": "Amounts in currencies other than the euro are not converted — those jobs stay visible with this filter and appear last when sorting by salary.",
+    "benefits": "Benefits",
+    "benefitsNote": "We show jobs with every selected benefit. Jobs where the employer did not list benefits are not included."
   },
   "notifications": {
     "title": "Notifications",
@@ -1696,7 +1701,7 @@
     "noLanguageRequired": "Job without language skills",
     "conditionsLabel": "Working conditions",
     "conditionsPlaceholder": "e.g. Permanent contract",
-    "benefitsLabel": "Benefits",
+    "benefitsLabel": "Other benefits and details",
     "benefitsPlaceholder": "e.g. Bonuses and allowances",
     "companyDescriptionLabel": "Company description",
     "companyDescriptionPlaceholder": "Briefly introduce the company to candidates.",
@@ -1806,7 +1811,9 @@
     "workTimeNone": "Not stated",
     "workTimeFull": "Full-time",
     "workTimePart": "Part-time",
-    "workTimeBoth": "Full-time or part-time"
+    "workTimeBoth": "Full-time or part-time",
+    "benefitCodesLegend": "Benefits",
+    "benefitCodesHint": "Tick what you offer. Candidates can filter jobs by these benefits. Meal vouchers and commuting allowance also count from “Costs and extras”."
   },
   "jobImport": {
     "title": "Import from a job ad",
@@ -4058,5 +4065,19 @@
     "remindDue": "Time to follow up",
     "openSource": "Open listing",
     "listLabel": "Application journal entries"
+  },
+  "jobBenefits": {
+    "meal_vouchers": "Meal vouchers",
+    "eco_vouchers": "Eco vouchers",
+    "commute_allowance": "Commuting allowance",
+    "bike_allowance": "Bike allowance",
+    "company_car": "Company car",
+    "mobility_budget": "Mobility budget",
+    "hospital_insurance": "Hospitalisation insurance",
+    "group_insurance": "Group insurance (pension)",
+    "year_end_bonus": "End-of-year bonus (13th month)",
+    "extra_leave": "Extra days off",
+    "training": "Training paid by the employer",
+    "phone_laptop": "Work phone or laptop"
   }
 }

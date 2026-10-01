@@ -47,11 +47,12 @@ export default async function CandidateSavedSearchesPage({
 
   const t = await getTranslations({ locale, namespace: 'savedSearches' });
   const td = await getTranslations({ locale, namespace: 'dashboard' });
-  const [tFilters, tCat, tContract, tLanguageNames, load] = await Promise.all([
+  const [tFilters, tCat, tContract, tLanguageNames, tBenefits, load] = await Promise.all([
     getTranslations({ locale, namespace: 'filters' }),
     getTranslations({ locale, namespace: 'categories' }),
     getTranslations({ locale, namespace: 'contractTypes' }),
     getTranslations({ locale, namespace: 'languageNames' }),
+    getTranslations({ locale, namespace: 'jobBenefits' }),
     loadMySavedSearches(),
   ]);
   const filterTranslators = {
@@ -59,6 +60,7 @@ export default async function CandidateSavedSearchesPage({
     categories: tCat,
     contractTypes: tContract,
     languageNames: tLanguageNames,
+    benefits: tBenefits,
   };
   const formatDate = createAppDateFormatter(locale, { withTime: true });
 

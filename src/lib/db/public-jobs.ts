@@ -47,10 +47,11 @@ const FILTER_ARGUMENTS = `
   p_language_level => $16::text,
   p_work_time => $17::text,
   p_near => $18::text,
-  p_radius_km => $19::integer`;
+  p_radius_km => $19::integer,
+  p_benefits => $20::text[]`;
 
 /** Liczba parametrów filtra — sortowanie i paginacja listy idą po nich. */
-const FILTER_ARGUMENT_COUNT = 19;
+const FILTER_ARGUMENT_COUNT = 20;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -84,6 +85,8 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.workTime ?? null,
     params.near?.trim() ? params.near.trim() : null,
     params.near?.trim() ? (params.radiusKm ?? null) : null,
+    // 0976 (#826): świadczenia (oferta ma każde wybrane); pusta lista = bez filtra.
+    params.benefits?.length ? params.benefits : null,
   ];
 }
 
@@ -484,6 +487,24 @@ export async function getPublicJobCosts(
               meal_voucher_daily::text AS meal_voucher_daily, joint_committee
        FROM public.get_public_job_costs(p_job_id => $1::uuid)`,
       [jobId],
+    )) as { rows: PublicJobRow[] };
+    return result.rows[0] ?? null;
+  });
+}
+
+/**
+ * Świadczenia oferty publicznej (#826, 0976): kody efektywne i tekstowe „inne” z tłumaczenia
+ * wybieranego jak w `get_public_job`. Brak wiersza = oferta niepubliczna.
+ */
+export async function getPublicJobBenefits(
+  pool: TransactionPool,
+  jobId: string,
+  requestedLocale: string,
+): Promise<PublicJobRow | null> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT codes, other FROM public.get_public_job_benefits(p_job_id => $1::uuid, p_locale => $2::text)`,
+      [jobId, locale(requestedLocale)],
     )) as { rows: PublicJobRow[] };
     return result.rows[0] ?? null;
   });

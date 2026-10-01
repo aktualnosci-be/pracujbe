@@ -3,6 +3,7 @@ import { resolveCityFilters } from '@/lib/locations/city-aliases';
 import { codePointLength, truncateCodePoints } from '@/lib/validation/text';
 import type { LanguageCode } from '@/lib/languages';
 import type { LanguageFilterLevel, RadiusKm, WorkTimeFilter } from '@/lib/job-filter-options';
+import type { JobBenefitCode } from '@/lib/job-benefits';
 import {
   parseSidebarFilters,
   parseSort,
@@ -65,7 +66,8 @@ export function parseJobListQuery(flat: FlatSearchParams, locale: string, now = 
     // (etap 2) — `savedSearchFiltersFromQuery` i adres wyszukiwania go pomijają.
     ...(sidebar.directOnly ? { directOnly: true } : {}),
     // 0194: język + poziom (#786), wymiar pracy (#811), promień (#824) — zapisywane też
-    // w wyszukiwaniu (klucze `language`, `languageLevel`, `workTime`, `near`, `radiusKm`).
+    // w wyszukiwaniu (klucze `language`, `languageLevel`, `workTime`, `near`, `radiusKm`);
+    // 0976 (#826): świadczenia (klucz `benefits`).
     ...refinementQueryParams(sidebar),
     ...(since ? { since } : {}),
   };
@@ -101,6 +103,8 @@ export interface SavedSearchFilters {
   near?: string;
   /** #824: promień w km (zawsze z `near`). */
   radiusKm?: RadiusKm;
+  /** #826 (0976): świadczenia (kody katalogu, porządek katalogu). */
+  benefits?: JobBenefitCode[];
 }
 
 /** Limit długości słowa kluczowego i miasta w bazie (`get_public_jobs` ucina, zapis odrzuca dłuższe). */
@@ -137,6 +141,7 @@ export function savedSearchFiltersFromQuery(query: JobListQuery): SavedSearchFil
     out.near = p.near;
     if (p.radiusKm !== undefined) out.radiusKm = p.radiusKm;
   }
+  if (p.benefits?.length) out.benefits = [...p.benefits];
   return out;
 }
 

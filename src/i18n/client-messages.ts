@@ -34,6 +34,8 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'home',
   'job',
   'jobAssist',
+  // 0976 (#826): nazwy świadczeń w kreatorze i panelu filtrów.
+  'jobBenefits',
   'jobImport',
   'jobWizard',
   'jobs',

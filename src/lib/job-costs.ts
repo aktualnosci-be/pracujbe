@@ -8,6 +8,7 @@
  */
 import type { JobStep8 } from '@/lib/validation/job';
 import { findJointCommittee } from '@/lib/joint-committees';
+import { normalizeBenefitCodes } from '@/lib/job-benefits';
 import type { Locale } from '@/i18n/routing';
 
 export const ACCOMMODATION_KINDS = ['provided', 'assistance', 'none'] as const;
@@ -107,6 +108,8 @@ export function jobCostsPatch(v: JobStep8): Record<string, unknown> {
     transport_reimbursed: reimbursed,
     meal_voucher_daily: v.mealVoucherDaily ?? null,
     joint_committee: v.jointCommittee ?? null,
+    // 0976 (#826): świadczenia z katalogu — ten sam patch kroku 8 (szkic i rewizja opublikowanej).
+    benefit_codes: normalizeBenefitCodes(v.benefitCodes ?? []),
   };
 }
 

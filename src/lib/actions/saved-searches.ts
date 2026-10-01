@@ -12,6 +12,7 @@ import { captureError } from '@/lib/error-report';
 import { codePointLength, hasNoNul } from '@/lib/validation/text';
 import type { LanguageCode } from '@/lib/languages';
 import { SAVED_SEARCH_QUERY_MAX } from '@/lib/job-list-query';
+import { JOB_BENEFIT_CODES } from '@/lib/job-benefits';
 import {
   LANGUAGE_FILTER_CODES,
   LANGUAGE_FILTER_LEVELS,
@@ -62,6 +63,8 @@ const filtersSchema = z
     radiusKm: z.union(RADIUS_KM_OPTIONS.map((km) => z.literal(km)) as unknown as [
       z.ZodLiteral<RadiusKm>, z.ZodLiteral<RadiusKm>, ...z.ZodLiteral<RadiusKm>[]
     ]).optional(),
+    // 0976 (#826): świadczenia — te same kody co baza (`job_benefit_catalog()`).
+    benefits: z.array(z.enum(JOB_BENEFIT_CODES)).min(1).max(JOB_BENEFIT_CODES.length).optional(),
   })
   .strict()
   .refine((f) => Object.keys(f).length > 0)

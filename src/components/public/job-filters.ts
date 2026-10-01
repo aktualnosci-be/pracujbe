@@ -37,6 +37,7 @@ import {
   type RadiusKm,
   type WorkTimeFilter,
 } from '@/lib/job-filter-options';
+import { normalizeBenefitCodes, type JobBenefitCode } from '@/lib/job-benefits';
 
 /**
  * Widełki suwaka wynagrodzenia (brutto/mies., EUR). `SALARY_MAX_BOUND` oznacza „i więcej”.
@@ -95,6 +96,8 @@ export interface SidebarFilters {
   near: string;
   /** #824: promień w km (URL `radius`), znaczący tylko z miejscowością. */
   radiusKm: RadiusKm;
+  /** #826 (0976): świadczenia (URL `benefits`, CSV kodów) — oferta ma KAŻDE wybrane. */
+  benefits: JobBenefitCode[];
   date: DateValue;
 }
 
@@ -169,6 +172,7 @@ export function emptySidebarFilters(): SidebarFilters {
     workTime: null,
     near: '',
     radiusKm: DEFAULT_RADIUS_KM,
+    benefits: [],
     date: 'any',
   };
 }
@@ -320,6 +324,8 @@ export function parseSidebarFilters(
   f.workTime = isWorkTimeFilter(workTime) ? workTime : null;
   f.near = (sp['near'] ?? '').trim().slice(0, NEAR_MAX_LENGTH).trim();
   f.radiusKm = f.near ? parseRadiusKm(sp['radius']) : DEFAULT_RADIUS_KM;
+  // 0976 (#826): znane kody bez powtórzeń, w porządku katalogu (ten sam adres = ten sam zbiór).
+  f.benefits = normalizeBenefitCodes(splitParam(sp['benefits']));
 
   const date = sp['date'];
   f.date = (DATE_VALUES as readonly string[]).includes(date ?? '')
@@ -515,12 +521,13 @@ export function sidebarFiltersToParams(
     params['near'] = f.near;
     params['radius'] = String(f.radiusKm);
   }
+  if (f.benefits.length) params['benefits'] = f.benefits.join(',');
   if (f.date !== 'any') params['date'] = f.date;
   return params;
 }
 
 /**
- * Filtry 0194 jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
+ * Filtry 0194 i świadczenia (0976) jako parametry `getJobs`/RPC (`p_language`, `p_language_level`, `p_work_time`,
  * `p_near`, `p_radius_km`). Jak słowo kluczowe zawężają BAZĘ wszystkich wymiarów facetów
  * (SQL: warunek w `base`), więc dane demo filtruje nimi `getJobs`, nie `matchesSidebar`.
  */
@@ -530,12 +537,14 @@ export function refinementQueryParams(f: SidebarFilters): {
   workTime?: WorkTimeFilter;
   near?: string;
   radiusKm?: RadiusKm;
+  benefits?: JobBenefitCode[];
 } {
   return {
     ...(f.language ? { language: f.language } : {}),
     ...(f.language && f.languageLevel ? { languageLevel: f.languageLevel } : {}),
     ...(f.workTime ? { workTime: f.workTime } : {}),
     ...(f.near ? { near: f.near, radiusKm: f.radiusKm } : {}),
+    ...(f.benefits.length ? { benefits: [...f.benefits] } : {}),
   };
 }
 
@@ -553,6 +562,7 @@ export function countActiveSidebar(f: SidebarFilters): number {
     (f.language ? 1 : 0) +
     (f.workTime ? 1 : 0) +
     (f.near ? 1 : 0) +
+    f.benefits.length +
     (f.date !== 'any' ? 1 : 0)
   );
 }
