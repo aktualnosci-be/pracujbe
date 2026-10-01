@@ -69,7 +69,18 @@ const expected = {
 };
 assert.deepEqual([...jobs.keys()], Object.keys(expected), 'zmieniono listę lub kolejność jobów CI');
 
-const forkGuard = "github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository";
+// PR z forków dostają pełne CI (#671): workflow jest bezpieczny dla obcego kodu, bo działa
+// na `pull_request` (token tylko do odczytu, bez sekretów), nie używa sekretów ani zapisu
+// i nie pomija jobów dla forków. Zaufane kroki z sekretami wymagałyby osobnego workflowu.
+const ciCode = ci.replace(/^\s*#.*$/gm, '');
+const triggers = ciCode.match(/^on:\s*\r?\n((?:^[ \t]+.*\r?\n|^\s*\r?\n)+)/m)?.[1] ?? '';
+assert.match(triggers, /^  pull_request:\s*$/m, 'ci.yml: CI uruchamia się dla pull_request (także z forków)');
+assert.doesNotMatch(ciCode, /pull_request_target|workflow_run/, 'ci.yml: bez pull_request_target/workflow_run — obcy kod nie może dostać sekretów ani zapisu');
+assert.doesNotMatch(ciCode, /\$\{\{\s*secrets\./, 'ci.yml: bez sekretów — CI PR-ów z forków musi działać bez nich');
+assert.doesNotMatch(ciCode, /\$\{\{\s*github\.token\s*\}\}|GITHUB_TOKEN:/, 'ci.yml: bez przekazywania tokenu do kroków');
+const topPermissions = ciCode.match(/^permissions:\s*\r?\n((?:^[ \t]+.*\r?\n)+)/m)?.[1];
+assert.equal(topPermissions?.trim(), 'contents: read', 'ci.yml: uprawnienia tokenu tylko `contents: read`');
+const forkSkip = /head\.repo|\.fork\b|github\.repository_owner/;
 for (const [name, body] of jobs) {
   const [title, needs] = expected[name];
   assert.match(body, new RegExp(`^    name: ${escapeRegExp(title)}\\s*$`, 'm'), `${name}: nazwa checka musi zostać „${title}”`);
@@ -79,8 +90,10 @@ for (const [name, body] of jobs) {
   assert.match(body, /^    runs-on: ubuntu-latest\s*$/m, `${name}: użyj ubuntu-latest`);
   const timeout = Number(body.match(/^    timeout-minutes:\s*(\d+)\s*$/m)?.[1]);
   assert.ok(timeout > 0 && timeout <= 30, `${name}: ustaw timeout-minutes (1–30), żeby zawieszony job nie działał bez końca`);
-  // PR z forków nie dostają CI z tego repozytorium (bezpieczeństwo sekretów).
-  assert.ok(body.match(/^    if:\s*(.+?)\s*$/m)?.[1].includes(forkGuard), `${name}: brak warunku „bez PR z forków”`);
+  // Każdy job działa także dla PR z forków (#671) — bez warunku pomijającego forki,
+  // bez własnych uprawnień i środowiska z sekretami.
+  assert.doesNotMatch(body, forkSkip, `${name}: job nie może pomijać PR-ów z forków`);
+  assert.doesNotMatch(body, /^    (permissions|environment):/m, `${name}: bez uprawnień jobu i środowiska z sekretami`);
 }
 
 // Vitest ma startować z drzewa odtworzonego przez npm ci, także przy trafieniu
@@ -235,7 +248,7 @@ assert.match(real, /if: failure\(\)\s*\r?\n\s*with:\s*\r?\n\s*name: e2e-real-tes
 // Job zbiorczy: stała nazwa wymaganego checka; `always()`, bo pominięty job liczy się jako
 // zaliczony check; pada, gdy którakolwiek część nie jest `success`; łączy raporty blob.
 const aggregate = jobs.get('e2e');
-assert.match(aggregate, /^    if: always\(\) && \(/m, 'e2e: job zbiorczy musi działać także po czerwonym shardzie (always())');
+assert.match(aggregate, /^    if: always\(\)\s*$/m, 'e2e: job zbiorczy musi działać także po czerwonym shardzie (always())');
 assert.match(aggregate, /RESULTS: \$\{\{ toJSON\(needs\) \}\}/, 'e2e: sprawdź wynik każdej zależności');
 assert.match(aggregate, /job\.result !== "success"/, 'e2e: każda zależność inna niż success = czerwony check');
 assert.match(aggregate, /npx playwright merge-reports --config playwright\.merge\.config\.ts blob-report/, 'e2e: połącz raporty cząstkowe');
@@ -310,11 +323,22 @@ assert.match(
   'package.json: skrypt typecheck musi sprawdzać tests/e2e (tsc --noEmit -p tsconfig.e2e.json)',
 );
 assert.match(ci.match(/^  typecheck:[\s\S]*?(?=^  [a-z][a-z0-9_-]*:\s*$)/m)?.[0] ?? '', /run: npm run typecheck\s*$/m, 'ci.yml: job Typecheck uruchamia npm run typecheck');
-const e2eTsconfig = JSON.parse(await readFile(new URL('tsconfig.e2e.json', root), 'utf8'));
+const e2eTsconfig = JSON.parse(await readFile(process.env.CI_GUARD_E2E_TSCONFIG ?? new URL('tsconfig.e2e.json', root), 'utf8'));
 assert.ok(
   (e2eTsconfig.include ?? []).some((pattern) => pattern.startsWith('tests/e2e/')),
   'tsconfig.e2e.json: include musi obejmować tests/e2e',
 );
+// #1121: specyfikacje E2E sprawdzane tak samo ściśle jak `src/` — bez wyłączania
+// `noUncheckedIndexedAccess` (dziedziczone z tsconfig.json) ani `strict`.
+const baseTsconfig = JSON.parse(await readFile(new URL('tsconfig.json', root), 'utf8'));
+assert.equal(baseTsconfig.compilerOptions?.noUncheckedIndexedAccess, true, 'tsconfig.json: noUncheckedIndexedAccess musi być włączone');
+for (const option of ['noUncheckedIndexedAccess', 'strict']) {
+  assert.notEqual(
+    e2eTsconfig.compilerOptions?.[option],
+    false,
+    `tsconfig.e2e.json: nie wyłączaj ${option} dla tests/e2e (#1121)`,
+  );
+}
 
 // Migration runner (#1246): luka numeracji (numer tymczasowy w PR sesji potomnej) ma własny
 // krok z czytelnym komunikatem; reszta integracji biegnie w osobnym kroku bez testu operatora
@@ -387,4 +411,14 @@ for (const spec of fixtureSpecs) {
 const cleanup = sources.get('delete-old-runs.yml');
 assert.match(cleanup, /^    runs-on: ubuntu-latest\s*$/m);
 assert.match(cleanup, /^    timeout-minutes: \d+\s*$/m);
+// Sprzątanie przebiegów nie może kasować historii potrzebnej przy analizie regresji (#1105):
+// co najmniej 90 dni i 50 ostatnich przebiegów każdego workflowu (także `main`).
+const cleanupNumber = (key) => {
+  const matches = [...cleanup.matchAll(new RegExp(`^\\s+${key}:\\s*(\\d+)\\s*$`, 'gm'))];
+  assert.equal(matches.length, 1, `delete-old-runs.yml: ${key} musi wystąpić dokładnie raz jako liczba`);
+  return Number(matches[0][1]);
+};
+assert.ok(cleanupNumber('retain_days') >= 90, 'delete-old-runs.yml: retain_days < 90 — znika historia przebiegów main (#1105)');
+assert.ok(cleanupNumber('keep_minimum_runs') >= 50, 'delete-old-runs.yml: keep_minimum_runs < 50 — znika historia przebiegów main (#1105)');
+assert.doesNotMatch(cleanup, /^\s+check_branch_existence:/m, 'delete-old-runs.yml: check_branch_existence w v2.0.6 nie działa (indexOf === 1) — nie polegaj na nim');
 console.log('Workflowy CI: ubuntu-latest, limity czasu, stałe nazwy checków, shardy E2E (podział po czasie), części fixture’ów i tryb ogłoszeniowy z jobem zbiorczym, main bez anulowania.');

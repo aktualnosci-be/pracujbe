@@ -523,6 +523,25 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     columns: { profile_id: 'reference', name: 'preferences', filters: 'preferences', query: 'preferences', locale: 'preferences' },
     notPersonal: { filters_hash: 'Skrót filtrów do deduplikacji wyszukiwań — nie identyfikuje osoby poza wierszem.' },
   },
+  'public.candidate_application_journal': {
+    activities: ['candidate-profile', 'data-rights'],
+    subjects: ['candidate'],
+    columns: {
+      profile_id: 'reference',
+      job_title: 'professional',
+      company_name: 'professional',
+      source_url: 'preferences',
+      location: 'professional',
+      note: 'correspondence',
+    },
+    notPersonal: {
+      client_key: 'Losowy klucz idempotencji operacji zapisu — nie identyfikuje osoby poza wierszem.',
+      stage: 'Etap wybrany przez kandydata (planowana/wysłana/rozmowa/oferta/zamknięta) — notatka własna, nie status procesu.',
+      applied_on: 'Data wpisana przez kandydata.',
+      remind_on: 'Data przypomnienia wpisana przez kandydata.',
+    },
+    note: 'Prywatny dziennik aplikacji wysłanych poza portalem (#904, 0196): tylko właściciel (RLS, zapis wyłącznie RPC), bez ścieżki dla firm, bez powiązania z ofertą ani procesem; eksport w export_my_data, usunięcie kaskadą z kontem.',
+  },
   'public.saved_search_alerts': {
     activities: ['matching-search', 'email-notifications'],
     subjects: ['candidate'],
@@ -593,7 +612,49 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
       agency_recognition_number: 'company',
       agency_checked_by: 'reference',
       agency_check_note: 'moderation',
+      // Publiczny profil firmy (#591): opis i logo mogą identyfikować osobę (jednoosobowa działalność).
+      slug: 'company',
+      description: 'company',
+      logo_url: 'company',
+      region: 'company',
+      // 0156 (#729): propozycja nowej strony WWW/logo czeka na decyzję admina — niepubliczna do
+      // zatwierdzenia; stan i historia decyzji to dane moderacji, uzasadnienie odrzucenia pisze admin.
+      website_pending: 'company',
+      logo_url_pending: 'company',
+      links_review_status: 'moderation',
+      links_pending_at: 'moderation',
+      links_review_reason: 'moderation',
+      links_reviewed_at: 'moderation',
+      // 0198 (#868): propozycja opisu firmy czeka na decyzję admina (jak linki z 0156).
+      description_pending: 'company',
+      description_review_status: 'moderation',
+      description_pending_at: 'moderation',
+      description_review_reason: 'moderation',
+      description_reviewed_at: 'moderation',
+      verified_at: 'moderation',
     },
+    notPersonal: {
+      id: 'Identyfikator techniczny firmy.',
+      status: 'Status weryfikacji firmy (słownik).',
+      country: 'Kod kraju siedziby.',
+      size_label: 'Przedział wielkości firmy (słownik).',
+      industry: 'Branża (słownik).',
+      is_demo: 'Znacznik danych demonstracyjnych.',
+      created_at: 'Czas utworzenia wiersza.',
+      updated_at: 'Czas ostatniej zmiany wiersza.',
+      deleted_at: 'Znacznik miękkiego usunięcia.',
+      moderation_decision_id: 'Powiązanie z decyzją moderacyjną (public.moderation_decisions), nie z osobą.',
+      is_agency: 'Deklaracja agencji pracy tymczasowej (0167).',
+      agency_check_status: 'Wynik ręcznego sprawdzenia numeru uznania (słownik, 0167).',
+      agency_checked_at: 'Czas ręcznego sprawdzenia numeru uznania (0167).',
+      description_locale: 'Język opisu firmy zadeklarowany przez firmę (#708, 0201) — kod języka serwisu.',
+      description_locale_pending: 'Język propozycji opisu firmy (0201) — kod języka serwisu; przy akceptacji przechodzi do description_locale.',
+    },
+    note:
+      'Każda kolumna tabeli ma wpis w columns albo notPersonal (strażnik tests/unit/privacy-data-map.test.ts, #729). ' +
+      'Propozycje strony WWW/logo i opisu (`*_pending`) oraz uzasadnienia odrzucenia (`links_review_reason`, `description_review_reason`) są czyszczone po ' +
+      'wycofaniu propozycji albo zastępowane kolejną decyzją (0156, 0198); do czasu decyzji widzi je tylko owner/admin firmy ' +
+      'i admin portalu. Retencja firm: DO USTALENIA (#486).',
   },
   'public.company_members': {
     activities: ['companies'],
@@ -688,6 +749,20 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     activities: ['email-notifications'],
     subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
     columns: { email: 'contact', reason: 'technical', lifted_by: 'reference', lift_reason: 'moderation' },
+  },
+  'public.email_pending_events': {
+    activities: ['email-notifications'],
+    subjects: ['candidate', 'guest', 'employer', 'reporter', 'invitee'],
+    columns: {
+      provider: 'technical',
+      provider_message_id: 'technical',
+      event: 'technical',
+      occurred_at: 'technical',
+      recipient: 'contact',
+      bounce_type: 'technical',
+      received_at: 'technical',
+    },
+    note: 'Zdarzenie doręczenia odebrane przed zapisem identyfikatora wiadomości (0195); przypisywane triggerem, czyszczone po 30 dniach.',
   },
   'public.email_consent_events': {
     activities: ['email-notifications', 'consents'],
@@ -1045,6 +1120,13 @@ export const TABLE_CLASSIFICATION: Record<string, TableClassification> = {
     },
     note:
       'Przegląd treści oferty z sygnałem oszustwa (0167): migawka treści ogłoszenia firmy (content), kategorie sygnału reguł i AI, krótkie uzasadnienie AI bez danych kontaktowych, kto zapisał treść i kto zdecydował, uzasadnienie admina. Bez danych kandydatów.',
+  },
+  'public.job_operation_context': {
+    activities: ['companies'],
+    subjects: [],
+    columns: {},
+    note:
+      'Kontekst zaufanej edycji opublikowanej oferty (0200): identyfikator transakcji, oferty i rodzaj operacji — wiersz istnieje tylko w trakcie update_published_job. Bez danych osobowych.',
   },
   'public.job_duplications': {
     activities: ['companies'],

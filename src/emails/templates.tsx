@@ -44,6 +44,7 @@ import {
   moderationLabels,
 } from '@/emails/copy';
 import { applicationStatusLabel } from '@/emails/status-labels';
+import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import type { EmailSenderIdentity } from '@/lib/email/sender';
 
 /**
@@ -326,10 +327,12 @@ const COUNT_FIELD: Partial<Record<EmailType, string>> = {
 
 /**
  * Treść maila w języku odbiorcy — z neutralnym wariantem, gdy brak kluczowej danej, wariantem
- * liczby pojedynczej (`count` = 1) i wariantem zgłaszającego w odwołaniach.
+ * liczby pojedynczej (`count` = 1) i wariantem zgłaszającego w odwołaniach. Pola bazowe = portal
+ * ogłoszeniowy; wariant `recruitment` tylko w trybie rekrutacyjnym (#1212, #1225).
  */
 function resolveCopy(type: EmailType, locale: Locale, vars: Record<string, unknown>): EmailCopy {
-  let copy = emailCopy[type][locale];
+  const base = emailCopy[type][locale];
+  let copy: EmailCopy = base.recruitment && isRecruitmentEnabled() ? { ...base, ...base.recruitment } : base;
   const field = SUBJECT_FIELD[type];
   if (field && copy.anonymous && isBlank(vars[field])) {
     copy = { ...copy, ...copy.anonymous };

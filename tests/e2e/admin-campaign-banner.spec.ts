@@ -5,6 +5,7 @@ import AxeBuilder, { expectNoindex } from './fixtures/axe';
 import { expect, test, type Page } from '@playwright/test';
 
 import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
+import type { Messages as AppMessages } from './fixtures/messages';
 
 /**
  * Baner kampanii w panelu admina (#175 „Otwarte”) w trybie DEMO (bez bazy): w szczególe firmy
@@ -17,8 +18,8 @@ import { LOCALES, rejectOptionalCookies } from './fixtures/messages';
  */
 
 type Copy = {
-  admin: Record<string, string>;
-  campaignBanner: Record<string, string>;
+  admin: AppMessages['admin'];
+  campaignBanner: AppMessages['campaignBanner'];
 };
 
 function copy(locale: string): Copy {

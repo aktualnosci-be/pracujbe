@@ -7,6 +7,7 @@ import { isPortalAuthConfigured } from '@/lib/env';
 import { getCompanyById, getCompanyModerationDecisions, getMyCompany } from '@/lib/data/company';
 import { CompanyModerationDecisions } from '@/components/employer/CompanyModerationDecisions';
 import { CompanyForm } from '@/components/employer/CompanyForm';
+import { CompanyDescriptionForm } from '@/components/employer/CompanyDescriptionForm';
 import { CompanyLinksForm } from '@/components/employer/CompanyLinksForm';
 import { CompanyAgencyForm } from '@/components/employer/CompanyAgencyForm';
 import { env } from '@/lib/env';
@@ -291,6 +292,24 @@ export default async function EmployerCompanyPage({
                     published={{ website: company.website, logoUrl: company.logoUrl }}
                     review={company.linksReview}
                     ownHost={ownHost}
+                  />
+                </div>
+              </section>
+
+              {/* Opis firmy (#868) — nie cofa weryfikacji; nowy tekst zatwierdza admin portalu (0198). */}
+              <section className={PAPER}>
+                <h2 className={H2_EXTENDED}>{t('descriptionTitle')}</h2>
+                <p className={INTRO}>{t('descriptionSubtitle')}</p>
+                <div className="mt-4">
+                  <CompanyDescriptionForm
+                    companyId={company.id}
+                    companyName={company.name}
+                    defaultValue={
+                      company.descriptionReview ? company.descriptionReview.text : (company.description ?? '')
+                    }
+                    published={company.description}
+                    review={company.descriptionReview}
+                    publishedLocale={company.descriptionLanguage.locale}
                   />
                 </div>
               </section>

@@ -72,6 +72,33 @@ describe('mapa danych — klasyfikacja schematu', () => {
     expect(errors).toContain('Klasyfikacja wskazuje tabelę public.ghost, której nie ma w migracjach.');
   });
 
+  // #729: tabela firm ma PEŁNE pokrycie — każda kolumna (także nowe pola propozycji linków
+  // z 0156 i stan ich przeglądu) ma wpis w columns albo notPersonal, nie tylko te trafione
+  // heurystyką nazw. Nowa kolumna `companies` bez wpisu = czerwony test.
+  function unclassifiedCompanyColumns(tables: ReturnType<typeof parseSchema>): string[] {
+    const entry = TABLE_CLASSIFICATION['public.companies']!;
+    const table = tables.get('public.companies')!;
+    return [...table.columns.keys()].filter(
+      (column) => !(column in entry.columns) && !(column in (entry.notPersonal ?? {})),
+    );
+  }
+
+  it('public.companies: każda kolumna sklasyfikowana (w tym pola propozycji linków z 0156, #729)', () => {
+    expect(unclassifiedCompanyColumns(parseSchema(files))).toEqual([]);
+    const entry = TABLE_CLASSIFICATION['public.companies']!;
+    for (const column of ['website_pending', 'logo_url_pending']) expect(entry.columns[column]).toBe('company');
+    for (const column of ['links_review_status', 'links_pending_at', 'links_review_reason', 'links_reviewed_at']) {
+      expect(entry.columns[column]).toBe('moderation');
+    }
+  });
+
+  it('kontrola ujemna: nowa kolumna companies bez wpisu (nazwa spoza heurystyki) → wykryta', () => {
+    const tables = withExtra('alter table public.companies add column if not exists links_review_note_x text;');
+    // Heurystyka nazw jej nie łapie — dlatego tabela firm ma pełne pokrycie.
+    expect(checkClassification(tables).join('\n')).not.toContain('links_review_note_x');
+    expect(unclassifiedCompanyColumns(tables)).toEqual(['links_review_note_x']);
+  });
+
   it('pomija tabele w ciałach funkcji, komentarzach i literałach', () => {
     const tables = withExtra(`
       -- create table public.commented (email text);

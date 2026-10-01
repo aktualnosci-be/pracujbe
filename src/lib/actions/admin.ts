@@ -1,6 +1,7 @@
 'use server';
 
 import { companyReasonError, companyStatusNeedsReason } from '@/lib/admin/company-review';
+import { companyDescriptionReasonError } from '@/lib/company-description';
 import { companyLinksReasonError } from '@/lib/company-links';
 import { emailLiftReasonError } from '@/lib/admin/email-suppression';
 import {
@@ -13,7 +14,7 @@ import {
   type ModerationField,
   type ModerationFieldError,
 } from '@/lib/admin/moderation';
-import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction, withServiceRole } from '@/lib/db/portal';
 import { queryOne, rpc, type RpcArgs } from '@/lib/db/sql';
@@ -514,6 +515,59 @@ export async function decideCompanyLinks(
   }
 }
 
+/**
+ * Decyzja admina o proponowanym opisie firmy (0198, #868). Akceptacja przenosi tekst do danych
+ * publicznych (profil firmy, JSON-LD, szczegół oferty); odrzucenie wymaga uzasadnienia (widzi je
+ * firma). `expectedPendingAt` = czas zgłoszenia z odczytu (CAS): gdy firma w międzyczasie
+ * zmieniła propozycję albo decyzja już zapadła → `STALE_STATE`.
+ */
+export async function decideCompanyDescription(
+  companyId: string,
+  decision: 'approved' | 'rejected',
+  expectedPendingAt: string,
+  reason: string,
+): Promise<AdminActionResult> {
+  if (decision !== 'approved' && decision !== 'rejected') {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+  const reasonError = companyDescriptionReasonError(decision, typeof reason === 'string' ? reason : '');
+  if (reasonError) {
+    return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: reasonError };
+  }
+  if (!isPortalDataConfigured()) return { ok: true, demo: true };
+  if (
+    typeof companyId !== 'string' || !UUID_RE.test(companyId) ||
+    typeof expectedPendingAt !== 'string' || expectedPendingAt.length === 0
+  ) {
+    return { ok: false, error: 'VALIDATION_FAILED' };
+  }
+
+  try {
+    const trimmed = reason.trim();
+    const call = await callAdminRpc('admin_decide_company_description', {
+      p_company_id: companyId,
+      p_decision: decision,
+      p_expected_pending_at: expectedPendingAt,
+      p_reason: trimmed.length > 0 ? trimmed : null,
+    });
+    if (call.status === 'unauthenticated') return { ok: false, error: 'PERMISSION_DENIED' };
+    if (call.status === 'db_error') {
+      const message = call.message;
+      if (message.includes('REASON_REQUIRED')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'required' };
+      }
+      if (message.includes('REASON_TOO_LONG')) {
+        return { ok: false, error: 'VALIDATION_FAILED', field: 'reason', reason: 'tooLong' };
+      }
+      return { ok: false, error: mapPgError(message) };
+    }
+    return { ok: true };
+  } catch (e) {
+    captureError(e, { area: 'admin.decideCompanyDescription' });
+    return { ok: false, error: 'INTERNAL' };
+  }
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -575,16 +629,21 @@ export async function checkCompanyVies(companyId: string): Promise<ViesActionRes
         p_request_date: result.requestDate,
       });
       if (call.status === 'unauthenticated') saveError = 'PERMISSION_DENIED';
-      else if (call.status === 'db_error') saveError = mapPgError(call.message);
-    } catch {
+      else if (call.status === 'db_error') {
+        saveError = mapPgError(call.message);
+        // #1068: SQLSTATE w kontekście (bez komunikatu bazy), także dla znanych kodów.
+        captureActionError(call.error, 'admin.checkCompanyVies.save');
+      }
+    } catch (e) {
       saveError = 'INTERNAL';
+      captureActionError(e, 'admin.checkCompanyVies.save');
     }
-    if (saveError) {
+    if (saveError === 'PERMISSION_DENIED') {
       captureError(new Error(`admin_record_vies_check: ${saveError}`), {
         area: 'admin.checkCompanyVies.save',
       });
-      return { ok: true, outcome, saved: false };
     }
+    if (saveError) return { ok: true, outcome, saved: false };
     return { ok: true, outcome, saved: true };
   } catch (e) {
     captureError(e, { area: 'admin.checkCompanyVies' });

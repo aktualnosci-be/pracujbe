@@ -87,6 +87,12 @@ export interface EmailCopy {
    */
   anonymous?: Partial<Pick<EmailCopy, 'subject' | 'preview' | 'heading' | 'body' | 'highlight'>>;
   /**
+   * Treść w trybie rekrutacyjnym (#1212, #1225; epik #1128). Pola bazowe opisują portal
+   * ogłoszeniowy (tryb domyślny, fail-closed); ten wariant nadpisuje je tylko przy
+   * `isRecruitmentEnabled()` — np. obietnica powiadomienia o zgłoszeniach przez portal.
+   */
+  recruitment?: Partial<Pick<EmailCopy, 'subject' | 'preview' | 'heading' | 'body' | 'highlight' | 'cta' | 'outro'>>;
+  /**
    * Nadpisanie noty w stopce („masz konto…”) — dla odbiorców, którzy mogą nie mieć konta
    * (np. potwierdzenie zgłoszenia treści wysłanego bez logowania, #41).
    */
@@ -947,33 +953,45 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Twoje ogłoszenie jest już online: {jobTitle}',
       preview: '„{jobTitle}” zostało opublikowane.',
       heading: 'Ogłoszenie opublikowane',
-      body: 'Twoje ogłoszenie „{jobTitle}” jest już widoczne dla kandydatów w Pracuj.be. Powiadomimy Cię, gdy pojawią się pierwsze zgłoszenia.',
+      body: 'Twoje ogłoszenie „{jobTitle}” jest już widoczne dla kandydatów w Pracuj.be. Kandydaci skontaktują się z Tobą kanałem podanym w ogłoszeniu.',
       cta: 'Zobacz ogłoszenie',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Twoje ogłoszenie „{jobTitle}” jest już widoczne dla kandydatów w Pracuj.be. Powiadomimy Cię, gdy pojawią się pierwsze zgłoszenia.',
+      },
     },
     nl: {
       subject: 'Je vacature staat online: {jobTitle}',
       preview: '‘{jobTitle}’ is gepubliceerd.',
       heading: 'Vacature gepubliceerd',
-      body: 'Je vacature ‘{jobTitle}’ is nu zichtbaar voor kandidaten op Pracuj.be. We laten het je weten zodra de eerste sollicitaties binnenkomen.',
+      body: 'Je vacature ‘{jobTitle}’ is nu zichtbaar voor kandidaten op Pracuj.be. Kandidaten nemen contact met je op via het kanaal dat je in de vacature hebt opgegeven.',
       cta: 'Vacature bekijken',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Je vacature ‘{jobTitle}’ is nu zichtbaar voor kandidaten op Pracuj.be. We laten het je weten zodra de eerste sollicitaties binnenkomen.',
+      },
     },
     fr: {
       subject: 'Votre annonce est en ligne : {jobTitle}',
       preview: '« {jobTitle} » a été publiée.',
       heading: 'Annonce publiée',
-      body: 'Votre annonce « {jobTitle} » est désormais visible par les candidats sur Pracuj.be. Nous vous préviendrons dès les premières candidatures.',
+      body: 'Votre annonce « {jobTitle} » est désormais visible par les candidats sur Pracuj.be. Les candidats vous contacteront par le moyen indiqué dans l’annonce.',
       cta: 'Voir l’annonce',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Votre annonce « {jobTitle} » est désormais visible par les candidats sur Pracuj.be. Nous vous préviendrons dès les premières candidatures.',
+      },
     },
     en: {
       subject: 'Your job is now live: {jobTitle}',
       preview: '“{jobTitle}” has been published.',
       heading: 'Job published',
-      body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. We will let you know as soon as the first applications arrive.',
+      body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. Candidates will contact you through the channel given in the job.',
       cta: 'View job',
       highlight: '{jobTitle}',
+      recruitment: {
+        body: 'Your job “{jobTitle}” is now visible to candidates on Pracuj.be. We will let you know as soon as the first applications arrive.',
+      },
     },
   },
 
@@ -982,33 +1000,45 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Firma {companyName} jest zweryfikowana',
       preview: 'Możesz publikować oferty pracy w Pracuj.be.',
       heading: 'Firma zweryfikowana',
-      body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy i odpowiadać kandydatom.',
+      body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy w Pracuj.be.',
       cta: 'Przejdź do danych firmy',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'Sprawdziliśmy dane firmy {companyName}. Możesz teraz publikować oferty pracy i odpowiadać kandydatom.',
+      },
     },
     nl: {
       subject: 'Bedrijf {companyName} is geverifieerd',
       preview: 'Je kunt vacatures publiceren op Pracuj.be.',
       heading: 'Bedrijf geverifieerd',
-      body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren en kandidaten antwoorden.',
+      body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren op Pracuj.be.',
       cta: 'Naar bedrijfsgegevens',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'We hebben de gegevens van {companyName} gecontroleerd. Je kunt nu vacatures publiceren en kandidaten antwoorden.',
+      },
     },
     fr: {
       subject: 'L’entreprise {companyName} est vérifiée',
       preview: 'Vous pouvez publier des offres d’emploi sur Pracuj.be.',
       heading: 'Entreprise vérifiée',
-      body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi et répondre aux candidats.',
+      body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi sur Pracuj.be.',
       cta: 'Voir les données de l’entreprise',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'Nous avons vérifié les données de {companyName}. Vous pouvez maintenant publier des offres d’emploi et répondre aux candidats.',
+      },
     },
     en: {
       subject: '{companyName} is verified',
       preview: 'You can now publish jobs on Pracuj.be.',
       heading: 'Company verified',
-      body: 'We have checked the details of {companyName}. You can now publish jobs and reply to candidates.',
+      body: 'We have checked the details of {companyName}. You can now publish jobs on Pracuj.be.',
       cta: 'Go to company details',
       highlight: '{companyName}',
+      recruitment: {
+        body: 'We have checked the details of {companyName}. You can now publish jobs and reply to candidates.',
+      },
     },
   },
 
@@ -1350,33 +1380,45 @@ export const emailCopy: Record<EmailType, Record<Locale, EmailCopy>> = {
       subject: 'Twoje konto w Pracuj.be zostanie usunięte {deletionDate}',
       preview: 'Zaloguj się przed tą datą, jeśli chcesz zachować konto.',
       heading: 'Twoje konto zostanie usunięte',
-      body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z profilem, zgłoszeniami, propozycjami i wiadomościami.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
+      body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z zapisanymi w nim danymi.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
       cta: 'Zaloguj się',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'Od dłuższego czasu na Twoim koncie w Pracuj.be nie było aktywności. Konto zostanie usunięte {deletionDate} razem z profilem, zgłoszeniami, propozycjami i wiadomościami.\n\nJeśli chcesz je zachować, zaloguj się przed tą datą.',
+      },
     },
     nl: {
       subject: 'Je account op Pracuj.be wordt verwijderd op {deletionDate}',
       preview: 'Log vóór die datum in als je je account wilt behouden.',
       heading: 'Je account wordt verwijderd',
-      body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met je profiel, sollicitaties, voorstellen en berichten.\n\nWil je het behouden, log dan vóór die datum in.',
+      body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met de gegevens die erin zijn opgeslagen.\n\nWil je het behouden, log dan vóór die datum in.',
       cta: 'Inloggen',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'Er is al lange tijd geen activiteit op je account bij Pracuj.be. Het account wordt op {deletionDate} verwijderd, samen met je profiel, sollicitaties, voorstellen en berichten.\n\nWil je het behouden, log dan vóór die datum in.',
+      },
     },
     fr: {
       subject: 'Votre compte Pracuj.be sera supprimé le {deletionDate}',
       preview: 'Connectez-vous avant cette date si vous souhaitez conserver votre compte.',
       heading: 'Votre compte sera supprimé',
-      body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec votre profil, vos candidatures, vos propositions et vos messages.\n\nPour le conserver, connectez-vous avant cette date.',
+      body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec les données qui y sont enregistrées.\n\nPour le conserver, connectez-vous avant cette date.',
       cta: 'Se connecter',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'Aucune activité n’a été constatée sur votre compte Pracuj.be depuis longtemps. Le compte sera supprimé le {deletionDate}, avec votre profil, vos candidatures, vos propositions et vos messages.\n\nPour le conserver, connectez-vous avant cette date.',
+      },
     },
     en: {
       subject: 'Your Pracuj.be account will be deleted on {deletionDate}',
       preview: 'Sign in before that date if you want to keep your account.',
       heading: 'Your account will be deleted',
-      body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with your profile, applications, proposals and messages.\n\nTo keep it, sign in before that date.',
+      body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with the data stored in it.\n\nTo keep it, sign in before that date.',
       cta: 'Sign in',
       highlight: '{deletionDate}',
+      recruitment: {
+        body: 'There has been no activity on your Pracuj.be account for a long time. The account will be deleted on {deletionDate}, together with your profile, applications, job offers and messages.\n\nTo keep it, sign in before that date.',
+      },
     },
   },
 

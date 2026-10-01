@@ -10,17 +10,21 @@ import { captureError } from '@/lib/error-report';
  * Webhook raportów doręczeń EmailLabs — `POST /api/email/webhook/emaillabs`.
  *
  * Kolejność (fail-closed, jak webhook Resend z #44):
- *   1. brak `EMAILLABS_WEBHOOK_SECRET` albo puli service_role → 503 bez czytania treści,
- *   2. suma `X-Webhook-Checksum` (SHA1 sekret|data|Request-Id) i — jeśli skonfigurowany —
- *      Basic auth (`src/lib/email/emaillabs-webhook.ts`) → 401,
+ *   1. brak `EMAILLABS_WEBHOOK_SECRET` albo puli service_role, a w produkcji także brak
+ *      `EMAILLABS_WEBHOOK_BASIC_USER`/`_PASSWORD` (#1234) → 503 bez czytania treści,
+ *   2. suma `X-Webhook-Checksum` (SHA1 sekret|data|Request-Id), Basic auth (w produkcji
+ *      zawsze; poza nią, gdy skonfigurowany) i świeżość `X-Webhook-Date` ±24 h
+ *      (`src/lib/email/emaillabs-webhook.ts`) → 401,
  *   3. surowe body z limitem rozmiaru przy streamingu → 413,
  *   4. treść = tablica zdarzeń; każde normalizowane do modelu (`provider-events.ts`),
  *      zdarzenia spoza modelu i uszkodzone są pomijane (EmailLabs zaleca nie odrzucać paczki),
  *   5. inbox `processed_webhooks` `emaillabs:<Request-Id>`: powtórzona paczka (`duplicate`)
- *      albo równoległa dostawa (`locked`) → 200 bez zmian,
- *   6. `record_email_event` (0098) dla każdego zdarzenia w JEDNEJ transakcji: status tylko
- *      „w górę”, trwałe odbicie → blokada adresu. Błąd → 500 (EmailLabs ponowi na drugi URL /
- *      później; zapis jest idempotentny),
+ *      → 200 bez zmian; równoległa dostawa (`locked`) → 503 + `Retry-After` (#790 — 2xx
+ *      potwierdziłby paczkę, której aktywny worker mógł nie dokończyć),
+ *   6. `record_email_event` (0098/0195) dla każdego zdarzenia w JEDNEJ transakcji: status tylko
+ *      „w górę”, trwałe odbicie → blokada adresu; zdarzenie bez wysyłki (`unknown_message`) baza
+ *      zachowuje do przypisania po zapisie identyfikatora (#788). Błąd → zwolnienie dzierżawy
+ *      (`release_webhook`, #790) i 500 (EmailLabs ponowi; zapis jest idempotentny),
  *   7. inbox `completed` → 200 `ok`.
  * EmailLabs czeka na odpowiedź 500 ms — paczka jest zapisywana jedną krótką transakcją.
  * Logi zawierają wyłącznie obszar i liczby — bez adresów, treści i sekretów.
@@ -46,8 +50,13 @@ function ok(): Response {
 
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.EMAILLABS_WEBHOOK_SECRET?.trim();
-  if (!secret || !isServiceDatabaseConfigured()) {
-    if (isProductionMode()) {
+  const basicUser = process.env.EMAILLABS_WEBHOOK_BASIC_USER?.trim() || null;
+  const basicPassword = process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD || null;
+  const production = isProductionMode();
+  // #1234: w produkcji Basic auth jest obowiązkowy — brak konfiguracji = brak konfiguracji.
+  const basicMissing = production && !(basicUser && basicPassword);
+  if (!secret || basicMissing || !isServiceDatabaseConfigured()) {
+    if (production) {
       captureError(new Error('emaillabs webhook called without configuration'), {
         area: 'email.webhook.emaillabs.config',
       });
@@ -60,8 +69,9 @@ export async function POST(request: Request): Promise<Response> {
   const verified = verifyEmailLabsWebhook(
     {
       secret,
-      basicUser: process.env.EMAILLABS_WEBHOOK_BASIC_USER?.trim() || null,
-      basicPassword: process.env.EMAILLABS_WEBHOOK_BASIC_PASSWORD || null,
+      basicUser,
+      basicPassword,
+      requireBasic: production,
     },
     {
       date: h.get('x-webhook-date'),
@@ -91,10 +101,17 @@ export async function POST(request: Request): Promise<Response> {
     if (normalized.status === 'event') events.push(normalized.event);
   }
 
-  const { claimWebhook, completeWebhook } = await import('@/lib/webhook-inbox');
+  const { claimWebhook, completeWebhook, releaseWebhook } = await import('@/lib/webhook-inbox');
   const inboxId = `emaillabs:${requestId}`;
   const claim = await claimWebhook(inboxId, INBOX_SOURCE);
-  if (claim === 'duplicate' || claim === 'locked') return ok();
+  if (claim === 'duplicate') return ok();
+  if (claim === 'locked') {
+    // #790: nie potwierdzamy paczki, którą aktywny worker mógł nie dokończyć.
+    return Response.json(
+      { error: 'in progress' },
+      { status: 503, headers: { ...NO_STORE, 'Retry-After': '30' } },
+    );
+  }
   if (claim === 'error') {
     captureError(new Error('webhook inbox unavailable'), { area: 'email.webhook.emaillabs.inbox' });
     return json({ error: 'unavailable' }, 503);
@@ -120,6 +137,7 @@ export async function POST(request: Request): Promise<Response> {
         area: 'email.webhook.emaillabs.record',
         events: events.length,
       });
+      await releaseWebhook(inboxId);
       return json({ error: 'processing failed' }, 500);
     }
   }

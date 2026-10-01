@@ -32,7 +32,9 @@ const DEFAULT_LOCK_SECONDS = 300;
 /**
  * Rezerwuje zdarzenie do przetworzenia (atomowo, z dzierżawą — P2-06).
  *  - `duplicate` → zdarzenie już `completed`; pomiń, zwróć 200.
- *  - `locked`    → inny worker trzyma świeżą dzierżawę; pomiń (bez podwójnych skutków), zwróć 200.
+ *  - `locked`    → inny worker trzyma świeżą dzierżawę; pomiń (bez podwójnych skutków). Webhooki poczty
+ *                  odpowiadają 503 z `Retry-After` (#790): 2xx potwierdziłby zdarzenie, którego tamten
+ *                  worker mógł nie dokończyć.
  *  - `claimed`   → przetwarzaj (nowe LUB dzierżawa wygasła — reprocessing jest bezpieczny).
  *  - `error`     → inbox nieosiągalny (brak puli service/infra, błąd bazy). Wołający decyduje.
  */
@@ -49,6 +51,20 @@ export async function claimWebhook(
     return 'error';
   } catch {
     return 'error';
+  }
+}
+
+/**
+ * Zwalnia własną dzierżawę po błędzie przetwarzania (#790), żeby ponowienie dostawcy zaraz po
+ * niepowodzeniu (np. Resend po 5 s) dostało `claimed`, nie `locked`. Best-effort: `false` przy
+ * błędzie/braku wpisu — dzierżawa i tak wygaśnie, a wołający zwraca 500 (dostawca ponowi).
+ */
+export async function releaseWebhook(id: string): Promise<boolean> {
+  try {
+    const done = await withServiceRole((tx) => rpc<boolean>(tx, 'release_webhook', { p_id: id }));
+    return done === true;
+  } catch {
+    return false;
   }
 }
 

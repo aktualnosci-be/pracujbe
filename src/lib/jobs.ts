@@ -14,7 +14,7 @@ import { AppError } from '@/lib/errors';
 import { captureError } from '@/lib/error-report';
 import { routing, type Locale } from '@/i18n/routing';
 import { demoJobContentLocales, resolveDemoJobBySlug, resolveDemoJobs } from '@/lib/data/demo';
-import { resolveJobContentLocales } from '@/lib/job-content-locale';
+import { resolveJobContentLocales, resolveJobListContentLocale } from '@/lib/job-content-locale';
 import {
   applyJobListMachineTranslation,
   applyJobMachineTranslation,
@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
   isApplyPhone,
@@ -37,6 +38,17 @@ import { searchFold } from '@/lib/search-fold';
 import { isJobListPageBeyondLimit, jobListLastPage } from '@/lib/job-list-pagination';
 import { createTtlSingleFlightCache } from '@/lib/cache/ttl-single-flight';
 import type { JobFilterFacets } from '@/types/job-filter-facets';
+import { resolveLanguageCode, type LanguageCode } from '@/lib/languages';
+import { belgianCityCoordinates } from '@/lib/matching/belgian-cities';
+import {
+  isWorkTime,
+  jobWithinRadius,
+  workTimeMatches,
+  type LanguageFilterLevel,
+  type RadiusKm,
+  type WorkTime,
+  type WorkTimeFilter,
+} from '@/lib/job-filter-options';
 
 export type ContractType =
   | 'permanent'
@@ -110,10 +122,21 @@ export interface JobListItem {
    */
   machineTranslation?: JobMachineTranslation;
   /**
+   * Język tytułu i wyróżników karty (#1223) — gdy różni się od języka strony, karta oznacza
+   * je atrybutem `lang`. Brak = język nieznany albo niepoliczony (lista bez kart).
+   * Przekład na język strony (`machineTranslation`) ustawia tu język strony.
+   */
+  contentLocale?: Locale;
+  /**
    * 0167: oferta agencji pracy tymczasowej (deklaracja firmy; numer uznania sprawdza admin).
    * Karta i szczegół pokazują etykietę „agencja”; filtr „bezpośrednio od pracodawcy” je pomija.
    */
   isAgency?: true;
+  /**
+   * Praca zdalna (`jobs.remote`, pole kreatora „Praca zdalna”) — tylko zestaw demonstracyjny
+   * niesie to pole na liście (lustro filtra promienia 0194: zdalna pasuje do każdego promienia).
+   */
+  remote?: boolean;
 }
 
 export interface JobApplyChannel {
@@ -166,6 +189,11 @@ export interface JobDetail extends JobListItem {
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
   /**
+   * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
+   * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
+   */
+  qualifications?: JobQualifications;
+  /**
    * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
    * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
    */
@@ -184,6 +212,11 @@ export interface JobDetail extends JobListItem {
   workMode?: 'onsite' | 'hybrid' | 'remote';
   /** #792: kody krajów (ISO 3166-1 alfa-2) dozwolone dla kandydata przy `workMode: 'remote'`. */
   remoteApplicantCountries?: string[];
+  /**
+   * #811 (0194): wymiar czasu pracy zadeklarowany przez pracodawcę (`jobs.work_time`); brak =
+   * nie podano (nie zgadujemy z opisu godzin).
+   */
+  workTime?: WorkTime;
 }
 
 export interface GetJobsParams {
@@ -208,6 +241,16 @@ export interface GetJobsParams {
   noLanguageRequired?: boolean;
   /** 0167: tylko oferty spoza agencji pracy tymczasowej. */
   directOnly?: boolean;
+  /** #786 (0194): wymagany język oferty (kod słownika). */
+  language?: LanguageCode;
+  /** #786: poziom kandydata — oferty wymagające języka najwyżej na tym poziomie (albo bez poziomu). */
+  languageLevel?: LanguageFilterLevel;
+  /** #811 (0194): wymiar pracy; oferta z oboma wariantami pasuje do obu. */
+  workTime?: WorkTimeFilter;
+  /** #824 (0194): miejscowość środka promienia (nazwa w dowolnym języku, słownik miejscowości). */
+  near?: string;
+  /** #824: promień w km (z `near`). */
+  radiusKm?: RadiusKm;
   /** ISO timestamp — tylko oferty opublikowane >= tej daty (filtr „data"). */
   since?: string;
   /** Sortowanie wyników: 'newest' (domyślne) lub 'salary'. */
@@ -342,6 +385,25 @@ function getJobsFromDemo(
   if (params.immediate) jobs = jobs.filter((job) => job.immediate);
   if (params.noLanguageRequired)
     jobs = jobs.filter((job) => job.noLanguageRequired);
+  // 0194 — lustro warunków SQL dla danych demo: język (demo nie ma poziomów → każdy poziom
+  // pasuje), wymiar pracy (`both` pasuje do obu, brak deklaracji — do żadnego), promień po
+  // współrzędnych miast (nieznane miasto oferty albo środka = brak wyników); oferta zdalna
+  // (`remote`) pasuje do każdego promienia (decyzja właściciela 29.09.2026, jak SQL 0194).
+  if (params.language) {
+    const code = params.language;
+    jobs = jobs.filter((job) => job.languages.some((label) => resolveLanguageCode(label) === code));
+  }
+  if (params.workTime) {
+    const wanted = params.workTime;
+    jobs = jobs.filter((job) => workTimeMatches(job.workTime, wanted));
+  }
+  if (params.near?.trim()) {
+    const center = belgianCityCoordinates(params.near.trim());
+    const radius = params.radiusKm ?? 25;
+    jobs = jobs.filter((job) =>
+      jobWithinRadius({ remote: job.remote, point: belgianCityCoordinates(job.city) }, center, radius),
+    );
+  }
   if (params.since) {
     const sinceTs = Date.parse(params.since);
     if (!Number.isNaN(sinceTs)) {
@@ -488,6 +550,7 @@ function rowToJobDetail(row: unknown): JobDetail {
       const applyChannel = parseJobApplyChannel(r);
       return applyChannel ? { applyChannel } : {};
     })(),
+    ...(isWorkTime(r['work_time']) ? { workTime: r['work_time'] } : {}),
   };
 }
 
@@ -498,6 +561,7 @@ async function getJobsFromDb(
   viewerId: string | null,
   translateCards: boolean,
   withTotal: boolean,
+  withContentLocale: boolean,
 ): Promise<GetJobsResult | JobsPage> {
   const [{ getDomainPool }, { getPublicJobs, getPublicJobsPage }] = await Promise.all([
     import('@/lib/db/runtime'),
@@ -508,7 +572,11 @@ async function getJobsFromDb(
   const counted = withTotal ? await getPublicJobs(pool, query, viewerId) : null;
   const result = counted ?? (await getPublicJobsPage(pool, query, viewerId));
   const listed = await withAgencyFlags(pool, result.rows.map(rowToJobListItem));
-  const jobs = translateCards ? await withListMachineTranslations(pool, listed, toLocale(params.locale)) : listed;
+  const jobs = translateCards
+    ? await withListMachineTranslations(pool, await withListContentLocales(pool, listed, toLocale(params.locale)), toLocale(params.locale))
+    : withContentLocale
+      ? await withListContentLocales(pool, listed, toLocale(params.locale))
+      : listed;
   if (!counted) return { jobs, page: result.page, pageSize: result.pageSize };
   return {
     jobs,
@@ -546,10 +614,20 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
+  let qualifications: JobQualifications | undefined;
+  try {
+    const { getPublicJobQualifications } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobQualifications(pool, job.id, locale);
+    qualifications = parseJobQualifications(rows.skills, rows.certificates);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobQualifications' });
+  }
   const requested = toLocale(locale);
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };
@@ -602,6 +680,32 @@ export async function withListMachineTranslations<T extends JobListItem>(
     return jobs.map((job) => applyJobListMachineTranslation(job, byId.get(job.id) ?? null, locale));
   } catch (error) {
     captureError(error, { area: 'jobs.readListMachineTranslations' });
+    return jobs;
+  }
+}
+
+/**
+ * Język tytułu i wyróżników kart (#1223) — JEDNO zapytanie o tłumaczenia ofert strony, bez zmiany
+ * RPC listy (`resolveJobListContentLocale`). Odczyt pomocniczy: awaria = karty bez `lang`
+ * + kod obszaru w logu.
+ */
+export async function withListContentLocales<T extends JobListItem>(
+  pool: TransactionPool,
+  jobs: T[],
+  locale: Locale,
+): Promise<T[]> {
+  if (jobs.length === 0) return jobs;
+  try {
+    const { getPublicJobListTranslations } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobListTranslations(pool, jobs.map((job) => job.id));
+    const byJob = new Map<string, typeof rows>();
+    for (const row of rows) byJob.set(row.job_id, [...(byJob.get(row.job_id) ?? []), row]);
+    return jobs.map((job) => {
+      const contentLocale = resolveJobListContentLocale(locale, job, byJob.get(job.id) ?? []);
+      return contentLocale ? { ...job, contentLocale } : job;
+    });
+  } catch (error) {
+    captureError(error, { area: 'jobs.readListContentLocales' });
     return jobs;
   }
 }
@@ -671,6 +775,11 @@ export interface JobsViewer {
 export interface GetJobsOptions {
   translateCards?: boolean;
   withTotal?: boolean;
+  /**
+   * #1223: język treści każdej oferty (`contentLocale`) bez przekładu kart — dla list, które
+   * pokazują tytuły poza `JobCard` (pulpit kandydata). `translateCards` liczy go zawsze.
+   */
+  withContentLocale?: boolean;
 }
 
 /** Strona listy bez licznika (`getJobs(…, { withTotal: false })`). */
@@ -711,6 +820,7 @@ export async function getJobs(
         viewer?.candidateId ?? null,
         options.translateCards === true,
         withTotal,
+        options.withContentLocale === true,
       );
     } catch (error) {
       // Skonfigurowana baza NIE może po cichu degradować do danych demonstracyjnych
@@ -879,6 +989,28 @@ export async function getJobFilterFacets(
       throw new AppError('INTERNAL');
     }
   });
+}
+
+/**
+ * Czy miejscowość promienia (#824) jest rozpoznana (słownik z współrzędnymi). Lista i tak jest
+ * wtedy pusta (SQL nie zgaduje odległości) — strona mówi, dlaczego. Awaria odczytu = `true`
+ * (bez fałszywego komunikatu; błąd w kanale).
+ */
+export async function isRadiusPlaceKnown(near: string): Promise<boolean> {
+  const place = near.trim();
+  if (!place) return true;
+  if (!isDatabaseConfigured()) return belgianCityCoordinates(place) !== undefined;
+  if (isBuildPhase()) return true;
+  try {
+    const [{ getDomainPool }, { isPublicRadiusPlaceKnown }] = await Promise.all([
+      import('@/lib/db/runtime'),
+      import('@/lib/db/public-jobs'),
+    ]);
+    return await isPublicRadiusPlaceKnown(await getDomainPool(), place);
+  } catch (error) {
+    captureError(error, { area: 'jobs.isRadiusPlaceKnown' });
+    return true;
+  }
 }
 
 /**

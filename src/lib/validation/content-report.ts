@@ -2,6 +2,7 @@ import { z } from 'zod/v3';
 
 import { routing } from '@/i18n/routing';
 import { isSimpleDisplayName } from '@/lib/validation/display-name';
+import { NO_NUL_REGEX } from '@/lib/validation/text';
 
 /**
  * Walidacja publicznego zgłoszenia treści (DSA, #41) — ten sam schemat w formularzu
@@ -77,12 +78,15 @@ export const contentReportSchema = z.object({
     .trim()
     .min(1, 'contentReport.error.detailsRequired')
     .min(REPORT_LIMITS.detailsMin, 'contentReport.error.detailsTooShort')
-    .max(REPORT_LIMITS.detailsMax, 'contentReport.error.detailsTooLong'),
+    .max(REPORT_LIMITS.detailsMax, 'contentReport.error.detailsTooLong')
+    // NUL baza odrzuca błędem technicznym — komunikat przy polu (#1108).
+    .regex(NO_NUL_REGEX, 'contentReport.error.textInvalid'),
   contentUrl: z
     .string()
     .trim()
     .max(REPORT_LIMITS.urlMax, 'contentReport.error.urlInvalid')
-    .refine((v) => v === '' || /^https?:\/\/\S+$/i.test(v), 'contentReport.error.urlInvalid'),
+    // `\S` przepuszcza znaki sterujące (NUL), których baza nie przyjmuje (#1108).
+    .refine((v) => v === '' || /^https?:\/\/[^\s\u0000-\u001f\u007f]+$/i.test(v), 'contentReport.error.urlInvalid'),
   reporterName: z
     .string()
     .trim()

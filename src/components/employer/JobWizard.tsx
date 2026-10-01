@@ -81,6 +81,7 @@ import {
   JOB_ITEM_LIMITS,
 } from '@/lib/validation/job';
 import type { CategoryKey, ContractType } from '@/lib/jobs';
+import { formatSalaryRange } from '@/lib/salary';
 import { toUserMessageKey, type ErrorCode } from '@/lib/errors';
 import {
   createJobDraft,
@@ -111,6 +112,7 @@ import {
   type AccommodationKind,
 } from '@/lib/job-costs';
 import { JOINT_COMMITTEES, JOINT_COMMITTEE_CODES } from '@/lib/joint-committees';
+import { isWorkTime, type WorkTime } from '@/lib/job-filter-options';
 
 /**
  * JobWizard — kreator oferty pracy (Etap 5), 9 kroków z REALNYM zapisem wersji roboczej.
@@ -164,6 +166,8 @@ interface FormValues {
   contractType: '' | ContractType;
   workingHours: string;
   shifts: string;
+  /** #811 (0194): wymiar pracy ('' = nie podano). */
+  workTime: '' | WorkTime;
   startImmediately: boolean;
   startDate: string;
   // krok 3 — lokalizacja
@@ -228,6 +232,7 @@ const DEFAULT_VALUES: FormValues = {
   contractType: '',
   workingHours: '',
   shifts: '',
+  workTime: '',
   startImmediately: false,
   startDate: '',
   city: '',
@@ -275,7 +280,7 @@ const DEFAULT_VALUES: FormValues = {
 /** Pola należące do kroku (kolejność = kolejność przewijania do pierwszego błędu). */
 const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   1: ['title', 'contentLocale', 'category', 'occupation'],
-  2: ['contractType', 'workingHours', 'shifts', 'startDate'],
+  2: ['contractType', 'workingHours', 'workTime', 'shifts', 'startDate'],
   3: ['city', 'region', 'address'],
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
   5: ['description', 'responsibilities'],
@@ -362,6 +367,7 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         contractType: v.contractType,
         workingHours: v.workingHours,
         shifts: toOptionalText(v.shifts),
+        workTime: v.workTime || undefined,
         startImmediately: v.startImmediately,
         startDate: toOptionalText(v.startDate),
       };
@@ -460,6 +466,7 @@ export interface JobWizardInitialValues
     | 'contractType'
     | 'currency'
     | 'salaryPeriod'
+    | 'workTime'
     | 'languages'
     | 'screeningQuestions'
     | 'accommodationKind'
@@ -477,6 +484,7 @@ export interface JobWizardInitialValues
   contractType?: string;
   currency?: string;
   salaryPeriod?: string;
+  workTime?: string;
   languages?: { language: string; level: string }[];
   screeningQuestions?: { type: string; required: boolean; prompt: ScreeningQuestionDraft['prompt']; options: ScreeningQuestionDraft['options'] }[];
 }
@@ -523,6 +531,11 @@ export interface JobWizardProps {
    * zapisane w szkicu sprzed trybu nie trafiają do formularza.
    */
   screeningEnabled?: boolean;
+  /**
+   * #1225: tryb z serwera dla podtytułu edycji opublikowanej oferty (domyślnie ogłoszeniowy —
+   * bez wzmianki o zgłoszeniach).
+   */
+  recruitmentEnabled?: boolean;
   /**
    * Firma, dla której wyrenderowano kreator nowej oferty (EMP-02). `createJobDraft` tworzy
    * szkic tylko wtedy, gdy to nadal aktywna firma — inaczej `ACTIVE_COMPANY_CHANGED`
@@ -579,6 +592,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     contractType,
     currency,
     salaryPeriod,
+    workTime,
     languages,
     screeningQuestions,
     accommodationKind,
@@ -616,6 +630,7 @@ function narrowInitialValues(raw?: JobWizardInitialValues): Partial<FormValues> 
     narrowed.contractType = contractType as ContractType;
   }
   if (currency === 'EUR' || currency === 'PLN') narrowed.currency = currency;
+  if (isWorkTime(workTime)) narrowed.workTime = workTime;
   if (salaryPeriod && (SALARY_PERIODS as readonly string[]).includes(salaryPeriod)) {
     narrowed.salaryPeriod = salaryPeriod as SalaryPeriod;
   }
@@ -648,6 +663,7 @@ export function JobWizard({
   importReview,
   assistEnabled = false,
   screeningEnabled = false,
+  recruitmentEnabled = false,
   companyId = null,
 }: JobWizardProps = {}): React.JSX.Element {
   const t = useTranslations('jobWizard');
@@ -1265,8 +1281,8 @@ export function JobWizard({
           <p className={INTRO}>
             {isEdit
               ? published?.status === 'paused'
-                ? t('editSubtitlePaused')
-                : t('editSubtitleActive')
+                ? t(recruitmentEnabled ? 'editSubtitlePaused' : 'editSubtitlePausedListing')
+                : t(recruitmentEnabled ? 'editSubtitleActive' : 'editSubtitleActiveListing')
               : t('subtitle')}
           </p>
           {showViewLink ? (
@@ -1483,6 +1499,30 @@ export function JobWizard({
                     {...register('workingHours')}
                   />
                   <FieldError name="workingHours" />
+                </div>
+                {/* #811 (0194): wymiar pracy — filtr „pełny etat / część etatu” na liście ofert. */}
+                <div id={domId('workTime')} className={FORM_FIELD}>
+                  <Label htmlFor="job-work-time-trigger" className={FORM_LABEL_TEXT}>{t('workTimeLabel')}</Label>
+                  <Select
+                    value={values.workTime || 'none'}
+                    onValueChange={(val) =>
+                      setValue('workTime', isWorkTime(val) ? val : '', { shouldDirty: true })
+                    }
+                  >
+                    <SelectTrigger className={FORM_SELECT}
+                      id="job-work-time-trigger"
+                      aria-describedby="job-work-time-hint"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t('workTimeNone')}</SelectItem>
+                      <SelectItem value="full_time">{t('workTimeFull')}</SelectItem>
+                      <SelectItem value="part_time">{t('workTimePart')}</SelectItem>
+                      <SelectItem value="both">{t('workTimeBoth')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p id="job-work-time-hint" className="text-sm text-muted-foreground">{t('workTimeHint')}</p>
                 </div>
                 <div className={FORM_FIELD}>
                   <Label htmlFor={domId('shifts')} className={FORM_LABEL_TEXT}>{t('shiftsLabel')}</Label>
@@ -2194,9 +2234,20 @@ export function JobWizard({
                   <PreviewRow
                     label={t('salaryPeriodLabel')}
                     value={
-                      values.salaryMin || values.salaryMax
-                        ? `${[values.salaryMin, values.salaryMax].filter(Boolean).join(' – ')} ${values.currency} / ${PERIOD_LABEL[values.salaryPeriod]}`
-                        : t('previewSalaryNotProvided')
+                      formatSalaryRange(
+                        {
+                          salaryMin: toOptionalNumber(values.salaryMin) ?? null,
+                          salaryMax: toOptionalNumber(values.salaryMax) ?? null,
+                          currency: values.currency,
+                          salaryPeriod: values.salaryPeriod,
+                        },
+                        locale,
+                        {
+                          from: (value) => tRoot('jobs.passport.salaryFrom', { value }),
+                          to: (value) => tRoot('jobs.passport.salaryTo', { value }),
+                          period: (period) => tRoot(`jobs.passport.salaryPeriods.${period}`),
+                        },
+                      ) ?? t('previewSalaryNotProvided')
                     }
                     empty={t('previewSalaryNotProvided')}
                   />

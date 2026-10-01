@@ -42,6 +42,18 @@ function mutated(edit: (ci: string) => string): string {
   return dir;
 }
 
+/** Kopia workflowów z jednym celowym błędem w delete-old-runs.yml (#1105). */
+function mutatedCleanup(edit: (cleanup: string) => string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'ci-guard-cleanup-'));
+  dirs.push(dir);
+  for (const file of FILES) copyFileSync(join(WORKFLOWS, file), join(dir, file));
+  const cleanup = readFileSync(join(dir, 'delete-old-runs.yml'), 'utf8');
+  const next = edit(cleanup);
+  expect(next, 'mutacja musi zmienić delete-old-runs.yml').not.toBe(cleanup);
+  writeFileSync(join(dir, 'delete-old-runs.yml'), next);
+  return dir;
+}
+
 /** Kopia playwright.config.ts z jednym celowym błędem (workflowy bez zmian). */
 function mutatedConfig(edit: (config: string) => string): string {
   const dir = mkdtempSync(join(tmpdir(), 'ci-guard-config-'));
@@ -77,6 +89,28 @@ describe('strażnik workflowów CI', () => {
     expect(code).toBe(0);
   });
 
+  describe('sprzątanie przebiegów zachowuje historię main (#1105)', () => {
+    it('kopia delete-old-runs.yml bez zmian przechodzi', () => {
+      const dir = mutatedCleanup((cleanup) => `${cleanup}\n`);
+      expect(runGuard(dir).code).toBe(0);
+    });
+
+    it.each([
+      ['krótkie okno retain_days (dawne 6 dni)', (c: string) => c.replace(/retain_days: \d+/, 'retain_days: 6'), 'retain_days < 90'],
+      ['małe keep_minimum_runs (dawne 4)', (c: string) => c.replace(/keep_minimum_runs: \d+/, 'keep_minimum_runs: 4'), 'keep_minimum_runs < 50'],
+      ['brak retain_days', (c: string) => c.replace(/^\s+retain_days: \d+\n/m, ''), 'retain_days musi wystąpić'],
+      [
+        'zepsuty filtr check_branch_existence',
+        (c: string) => c.replace(/(keep_minimum_runs: \d+)/, '$1\n          check_branch_existence: true'),
+        'check_branch_existence',
+      ],
+    ])('kontrola ujemna: %s', (_name, edit, message) => {
+      const { code, output } = runGuard(mutatedCleanup(edit));
+      expect(code).not.toBe(0);
+      expect(output).toContain(message);
+    });
+  });
+
   it('kopia bez zmian przechodzi (argument katalogu działa)', () => {
     const dir = mutated((ci) => `${ci}\n`);
     expect(runGuard(dir).code).toBe(0);
@@ -88,7 +122,16 @@ describe('strażnik workflowów CI', () => {
 
   const negatives: Array<[string, (ci: string) => string, string]> = [
     ['zmieniona nazwa wymaganego checka', (ci) => ci.replace('name: E2E (Playwright)', 'name: E2E'), 'E2E (Playwright)'],
-    ['job zbiorczy bez always()', (ci) => ci.replace('if: always() && (', 'if: ('), 'always()'],
+    ['job zbiorczy bez always()', (ci) => ci.replace('    if: always()\n', ''), 'always()'],
+    // PR z forków (#671): pełne CI bez sekretów i bez zapisu — każde obejście = czerwony.
+    ['job pomija PR z forków', (ci) => ci.replace('    name: Lint\n', "    name: Lint\n    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository\n"), 'pomijać PR-ów z forków'],
+    ['job zbiorczy pomija PR z forków', (ci) => ci.replace('    if: always()\n', "    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)\n"), 'always()'],
+    ['sekret w kroku', (ci) => ci.replace("  NEXT_TELEMETRY_DISABLED: '1'\n", "  NEXT_TELEMETRY_DISABLED: '1'\n  API_KEY: ${{ secrets.API_KEY }}\n"), 'bez sekretów'],
+    ['wyzwalacz pull_request_target', (ci) => ci.replace('  pull_request:\n', '  pull_request_target:\n'), 'pull_request'],
+    ['token przekazany do kroku', (ci) => ci.replace("  NEXT_TELEMETRY_DISABLED: '1'\n", "  NEXT_TELEMETRY_DISABLED: '1'\n  GITHUB_TOKEN: ${{ github.token }}\n"), 'tokenu'],
+    ['uprawnienia zapisu tokenu', (ci) => ci.replace('permissions:\n  contents: read\n', 'permissions:\n  contents: write\n'), 'contents: read'],
+    ['uprawnienia jobu', (ci) => ci.replace('    name: Lint\n', '    name: Lint\n    permissions:\n      pull-requests: write\n'), 'bez uprawnień jobu'],
+    ['środowisko z sekretami', (ci) => ci.replace('    name: Lint\n', '    name: Lint\n    environment: production\n'), 'środowiska'],
     ['job zbiorczy nie sprawdza wyniku części', (ci) => ci.replace('job.result !== "success"', 'job.result === "failure"'), 'success'],
     ['job zbiorczy bez shardów w needs', (ci) => ci.replace('needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]', 'needs: [build, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]'), 'zależności'],
     ['mianownik shardu ≠ macierz', (ci) => ci.replace('E2E_DEMO_SHARD: ${{ matrix.shard }}', 'E2E_DEMO_SHARD: 9'), 'E2E_DEMO_SHARD'],
@@ -223,6 +266,20 @@ describe('strażnik workflowów CI', () => {
       CI_GUARD_ESLINT_CONFIG: mutatedFile('.eslintrc.json', (c) => `${c}\n`),
     };
     expect(runGuard(undefined, undefined, undefined, env).code).toBe(0);
+  });
+
+  it('kontrola ujemna: tsconfig.e2e.json wyłącza noUncheckedIndexedAccess (#1121)', () => {
+    const file = mutatedFile('tsconfig.e2e.json', (source) =>
+      source.replace('"compilerOptions": {', '"compilerOptions": { "noUncheckedIndexedAccess": false,'),
+    );
+    const { code, output } = runGuard(undefined, undefined, undefined, { CI_GUARD_E2E_TSCONFIG: file });
+    expect(code).not.toBe(0);
+    expect(output).toContain('nie wyłączaj noUncheckedIndexedAccess');
+  });
+
+  it('tsconfig.e2e.json bez zmian przechodzi strażnika (kontrola dodatnia #1121)', () => {
+    const file = mutatedFile('tsconfig.e2e.json', (source) => `${source}\n`);
+    expect(runGuard(undefined, undefined, undefined, { CI_GUARD_E2E_TSCONFIG: file }).code).toBe(0);
   });
 
   it('kontrola ujemna: typecheck bez tests/e2e (tsconfig.e2e.json)', () => {

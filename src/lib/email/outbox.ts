@@ -33,9 +33,8 @@ import {
   MAIL_CONFIG_ERROR_MESSAGE,
   mailTransportFromEnv,
   MailSendError,
-  type MailMessage,
-  type MailTransport,
 } from '@/lib/email/transport';
+import { createRunDeadline, SendDeadlineError, sendWithDeadline, type RunDeadline } from '@/lib/email/run-deadline';
 
 /**
  * Worker kolejki e-mail (outbox) — P1-13.
@@ -110,36 +109,8 @@ export const EMAIL_LEASE_SECONDS = 300;
  */
 export const SEND_DEADLINE_MS = 60_000;
 
-/** Wysyłka przerwana terminem — wynik u dostawcy nieznany (ponowienie z tym samym kluczem). */
-export class SendDeadlineError extends MailSendError {
-  constructor() {
-    super('provider_unavailable');
-    this.name = 'SendDeadlineError';
-  }
-}
-
-async function sendWithDeadline(
-  transport: MailTransport,
-  message: MailMessage,
-  idempotencyKey: string,
-): Promise<{ id: string }> {
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      controller.abort();
-      reject(new SendDeadlineError());
-    }, SEND_DEADLINE_MS);
-  });
-  const sending = transport.send(message, { idempotencyKey, signal: controller.signal });
-  // Spóźniony wynik po terminie jest pomijany (bez nieobsłużonego odrzucenia).
-  sending.catch(() => undefined);
-  try {
-    return await Promise.race([sending, deadline]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+/** #731: klasa i wysyłka z terminem są wspólne z kolejką kont (`run-deadline.ts`). */
+export { SendDeadlineError };
 
 // renderEmail jest generyczne po EmailType; na granicy workera dane pochodzą z jsonb (payload),
 // więc rzutujemy raz w kontrolowany sposób (bez `any`).
@@ -394,6 +365,12 @@ export interface ProcessResult {
    */
   configBlocked?: number;
   /**
+   * #731: wiersze zwolnione bez próby wysyłki, bo skończył się budżet czasu przebiegu
+   * (`EMAIL_RUN_BUDGET_MS`) albo caller przerwał żądanie. Wracają do kolejki bez zużycia próby;
+   * przebieg zwraca `ok: false` (503 — zaległość widoczna dla monitoringu).
+   */
+  deadlineDeferred?: number;
+  /**
    * P1-17: sygnał zdrowia dla endpointu (200 vs 503). `false` = realny problem
    * (brak konfiguracji w produkcji, błąd claimu) — monitoring NIE może widzieć „zielonego"
    * cronu, gdy nic nie wychodzi. `true` = przetworzono (także pustą kolejkę) albo oczekiwane
@@ -402,7 +379,11 @@ export interface ProcessResult {
   ok: boolean;
 }
 
-export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
+export async function processEmailQueue(
+  limit = 20,
+  options: { deadline?: RunDeadline } = {},
+): Promise<ProcessResult> {
+  const deadline = options.deadline ?? createRunDeadline();
   const transport = mailTransportFromEnv();
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
@@ -448,6 +429,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   let suppressed = 0;
   let leaseLost = 0;
   let configBlocked = 0;
+  let deadlineDeferred = 0;
   // Pula, która w tej paczce dostała odmowę, czeka do podanego okna (bez kolejnych zapytań).
   const exhausted = new Map<string, string>();
   // #1214: po pierwszym błędzie konfiguracji reszta paczki czeka (bez prób wysyłki).
@@ -560,6 +542,14 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
   const jobTitles = await readRecipientJobTitles(queue);
 
   for (const row of queue) {
+    // #731: za mało czasu na kontrolowaną wysyłkę (albo caller się rozłączył) — wiersz wraca
+    // do kolejki od razu, bez próby i bez zużycia `attempts`; nie jest liczony jako porażka.
+    if (deadline.exhausted()) {
+      const before = deferred;
+      await defer(row.id, row.lock_token, new Date().toISOString());
+      if (deferred > before) deadlineDeferred += 1;
+      continue;
+    }
     if (configRetryAt) {
       await deferForConfig(row.id, row.lock_token, configRetryAt);
       continue;
@@ -651,6 +641,15 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
       // wiersz wróci do puli, ponowienie nie tworzy drugiego listu (Resend: Idempotency-Key,
       // EmailLabs: stały messageId + sprawdzenie przed wysyłką). Transport potwierdza wysyłkę
       // tylko z identyfikatorem wiadomości od dostawcy.
+      // #731: budżet przebiegu skończył się po kontroli zgody i budżecie — bez próby wysyłki.
+      // (Pobrany budżet okna przepada jak przy innych odłożeniach; to rzadki przypadek graniczny.)
+      if (deadline.remainingMs() <= 0) {
+        const before = deferred;
+        await defer(row.id, row.lock_token, new Date().toISOString());
+        if (deferred > before) deadlineDeferred += 1;
+        continue;
+      }
+      // #731: termin wysyłki nie wykracza poza budżet przebiegu (ani poza rozłączenie callera).
       const result = await sendWithDeadline(
         transport,
         {
@@ -663,6 +662,8 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
           ...(replyTo ? { replyTo } : {}),
         },
         row.id,
+        Math.min(SEND_DEADLINE_MS, deadline.remainingMs()),
+        deadline.signal,
       );
 
       const providerMessageId = result.id;
@@ -763,6 +764,7 @@ export async function processEmailQueue(limit = 20): Promise<ProcessResult> {
     suppressed,
     leaseLost,
     ...(configBlocked > 0 ? { configBlocked } : {}),
-    ok: configBlocked === 0,
+    ...(deadlineDeferred > 0 ? { deadlineDeferred } : {}),
+    ok: configBlocked === 0 && deadlineDeferred === 0,
   };
 }

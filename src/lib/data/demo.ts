@@ -24,6 +24,7 @@ import type {
   SalaryPeriod,
 } from '@/lib/jobs';
 import { routing, type Locale } from '@/i18n/routing';
+import type { WorkTime } from '@/lib/job-filter-options';
 
 /** Wartość lokalizowana na wszystkie języki aplikacji. */
 type L<T = string> = Record<Locale, T>;
@@ -290,6 +291,17 @@ const OPT = {
 
 type OptKey = keyof typeof OPT;
 
+/** Umiejętności ofert (#866) — w demo jak nazwy słownika w języku widza. */
+const SKILL = {
+  orderPicking: { pl: 'Kompletowanie zamówień', nl: 'Orderpicking', fr: 'Préparation de commandes', en: 'Order picking' },
+  handScanner: { pl: 'Obsługa skanera ręcznego', nl: 'Werken met een handscanner', fr: 'Utilisation d’un scanner portable', en: 'Handheld scanner operation' },
+  forklift: { pl: 'Obsługa wózka widłowego', nl: 'Heftruck rijden', fr: 'Conduite de chariot élévateur', en: 'Forklift operation' },
+  masonry: { pl: 'Murowanie', nl: 'Metselen', fr: 'Maçonnerie', en: 'Bricklaying' },
+  readPlans: { pl: 'Czytanie rysunku technicznego', nl: 'Bouwplannen lezen', fr: 'Lecture de plans', en: 'Reading construction drawings' },
+} satisfies Record<string, L>;
+
+type SkillKey = keyof typeof SKILL;
+
 /** Warunki zatrudnienia / benefity. */
 const COND = {
   weekly: { pl: 'Wypłata tygodniowa lub miesięczna', nl: 'Wekelijkse of maandelijkse uitbetaling', fr: 'Paiement hebdomadaire ou mensuel', en: 'Weekly or monthly pay' },
@@ -339,6 +351,19 @@ const WH = {
 } satisfies Record<string, L>;
 
 type WhKey = keyof typeof WH;
+
+/**
+ * Wymiar pracy ofert demonstracyjnych (#811, 0194) — jawne dane zestawu (odpowiednik
+ * `jobs.work_time`, deklaracji pracodawcy), nie zgadywanie z tekstu. `undefined` = brak deklaracji.
+ */
+const WH_WORK_TIME: Record<WhKey, WorkTime | undefined> = {
+  fulltime: 'full_time',
+  fulltime40: 'full_time',
+  parttime: 'part_time',
+  dayShift: undefined,
+  flexible: undefined,
+  seasonal: 'full_time',
+};
 
 /** System zmianowy. */
 const SH = {
@@ -547,6 +572,9 @@ interface DemoJobRaw {
   contextKeys: CtxKey[];
   /** Języki, w których oferta ma treść; brak = wszystkie (#301). */
   contentLocales?: readonly Locale[];
+  /** #866: umiejętności (obowiązkowe/opcjonalne) i certyfikaty (nazwy neutralne językowo). */
+  skillKeys?: { mandatory: SkillKey[]; optional: SkillKey[] };
+  certificates?: string[];
 }
 
 const RAW_JOBS: DemoJobRaw[] = [
@@ -561,6 +589,7 @@ const RAW_JOBS: DemoJobRaw[] = [
     languageKeys: [], responsibilityKeys: ['loadUnload', 'orderPick', 'stock'], mandatoryKeys: ['physical', 'reliable', 'workPermit'],
     optionalKeys: ['forklift', 'experienceBonus'], conditionKeys: ['weekly', 'accommodation', 'ppe'], highlightKeys: ['immediate', 'accommodation', 'noLang'],
     workingHoursKey: 'fulltime', shiftsKey: 'earlyLate', contextKeys: ['immediate', 'accommodation', 'noLang'],
+    skillKeys: { mandatory: ['orderPicking', 'handScanner'], optional: ['forklift'] }, certificates: ['VCA Basis'],
   },
   {
     id: '1002', occKey: 'bricklayer', companyId: 'c2', locationKey: 'brussels', category: 'construction', contractType: 'permanent',
@@ -568,6 +597,7 @@ const RAW_JOBS: DemoJobRaw[] = [
     languageKeys: ['fr'], responsibilityKeys: ['masonry', 'readPlans', 'site'], mandatoryKeys: ['experience', 'physical', 'vcaSafety'],
     optionalKeys: ['frenchBonus', 'ownCar'], conditionKeys: ['longTerm', 'travel', 'ppe'], highlightKeys: ['permanent', 'immediate', 'travel'],
     workingHoursKey: 'fulltime', shiftsKey: 'day', contextKeys: ['stable', 'team'],
+    skillKeys: { mandatory: ['masonry', 'readPlans'], optional: [] }, certificates: ['VCA Basis'],
   },
   {
     id: '1003', occKey: 'truckDriver', companyId: 'c3', locationKey: 'ghent', category: 'transport', contractType: 'permanent',
@@ -763,6 +793,21 @@ function composeDescription(raw: DemoJobRaw, locale: Locale, companyName: string
   return extra ? `${lead} ${extra}` : lead;
 }
 
+
+/** #866: kwalifikacje oferty demo — umiejętności w języku widza, certyfikaty bez zmian. */
+function demoQualifications(raw: DemoJobRaw, locale: Locale): Pick<JobDetail, 'qualifications'> {
+  const skills = raw.skillKeys ?? { mandatory: [], optional: [] };
+  const certificates = raw.certificates ?? [];
+  if (skills.mandatory.length + skills.optional.length + certificates.length === 0) return {};
+  return {
+    qualifications: {
+      skillsMandatory: skills.mandatory.map((k) => ({ label: SKILL[k][locale], localized: true })),
+      skillsOptional: skills.optional.map((k) => ({ label: SKILL[k][locale], localized: true })),
+      certificates: certificates.map((label) => ({ label, localized: false })),
+    },
+  };
+}
+
 /**
  * Kanał aplikowania ofert demonstracyjnych (#1129): zarezerwowana domena `example.com`
  * i nieprzydzielony numer — żadnych prawdziwych adresów. Warianty rotują po numerze oferty
@@ -816,10 +861,12 @@ function resolveJobDetail(raw: DemoJobRaw, locale: Locale): JobDetail {
     requirementsOptional: raw.optionalKeys.map((k) => OPT[k][content]),
     conditions: raw.conditionKeys.map((k) => COND[k][content]),
     workingHours: WH[raw.workingHoursKey][content],
+    ...(WH_WORK_TIME[raw.workingHoursKey] ? { workTime: WH_WORK_TIME[raw.workingHoursKey] } : {}),
     shifts: raw.shiftsKey ? SH[raw.shiftsKey][content] : undefined,
     languages: raw.languageKeys.map((k) => LANG[k][locale]),
     transport: raw.transport,
     ...(raw.costs ? { costs: raw.costs } : {}),
+    ...demoQualifications(raw, locale),
     applyChannel: demoApplyChannel(raw.id),
     startDate: raw.startDate,
     companyDescription: company.description[content],

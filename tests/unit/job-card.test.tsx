@@ -69,7 +69,8 @@ describe('Paszport oferty', () => {
     expect(screen.getByText('Flanders')).toBeVisible();
     expect(screen.getByText(en.contractTypes.permanent)).toBeVisible();
     expect(screen.getByText('Transport')).toBeVisible();
-    expect(screen.queryByText(en.job.salaryNotProvided)).not.toBeInTheDocument();
+    // Dawny tekst zastępczy (klucz `job.salaryNotProvided` usunięty w #1114) — pole po prostu znika.
+    expect(screen.queryByText(/salary negotiable|not provided/i)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -160,5 +161,26 @@ describe('tryb ogłoszeniowy (#1131)', () => {
     const { container } = await renderCard({}, locale, 82);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/82\s*%/);
+  });
+});
+
+// #1223: tytuł i wyróżniki z tłumaczenia zastępczego (inny język niż strona) mają `lang`.
+describe('Język treści karty (#1223)', () => {
+  it('tytuł i wyróżniki w innym języku niż strona → atrybut lang na obu', async () => {
+    const { container } = await renderCard(
+      { title: 'Orderpicker magazijn (m/v/x)', highlights: ['Nachtploeg'], contentLocale: 'nl' },
+      'pl',
+    );
+    expect(container.querySelector('h3')).toHaveAttribute('lang', 'nl');
+    expect(screen.getByText('Nachtploeg')).toHaveAttribute('lang', 'nl');
+  });
+
+  it('kontrola ujemna: treść w języku strony albo nieznany język → bez atrybutu lang', async () => {
+    for (const overrides of [{ contentLocale: 'en' as const }, {}]) {
+      const { container, unmount } = await renderCard(overrides, 'en');
+      expect(container.querySelector('h3')).not.toHaveAttribute('lang');
+      expect(screen.getByText('Transport')).not.toHaveAttribute('lang');
+      unmount();
+    }
   });
 });

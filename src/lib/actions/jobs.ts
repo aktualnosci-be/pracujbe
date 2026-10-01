@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 
 import { getActiveCompanyId, getExpectedActiveCompany } from '@/lib/company-context';
-import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import {
   getPortalIdentity,
   isPortalDataConfigured,
@@ -576,6 +576,8 @@ function buildPublishedContent(steps: unknown[]): Record<string, unknown> {
       contract_type: s2.contractType,
       working_hours: s2.workingHours,
       shifts: nullIfEmpty(s2.shifts),
+      // #811 (0194): wymiar pracy (brak = brak deklaracji).
+      work_time: s2.workTime ?? null,
       start_immediately: s2.startImmediately,
       start_date: s2.startDate ?? null,
       city: s3.city,
@@ -724,7 +726,9 @@ async function readJobVersion(me: PortalIdentity, jobId: string): Promise<string
     );
     const value = row?.['updated_at'];
     return value instanceof Date ? value.toISOString() : typeof value === 'string' ? value : null;
-  } catch {
+  } catch (error) {
+    // #1068: awaria odczytu wersji nie może być cicha (CAS sygnału AI traci token).
+    captureActionError(error, 'jobs.readJobVersion');
     return null;
   }
 }
@@ -787,7 +791,8 @@ async function loadScreeningReviewNotices(
            FROM public.screening_question_reviews WHERE job_id = $1`, [jobId]);
       return buildScreeningReviewNotices(questions, reviews);
     });
-  } catch {
+  } catch (error) {
+    captureActionError(error, 'jobs.loadScreeningReviewNotices');
     return [];
   }
 }

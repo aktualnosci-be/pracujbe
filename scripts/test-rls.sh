@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# =============================================================================
+# ======================================================================
 # scripts/test-rls.sh — integracyjne testy RLS/triggerów na czystym PostgreSQL 16.
 #
 # Tworzy świeżą bazę i nakłada PRODUKCYJNY zestaw: bootstrap ról (database/bootstrap)
@@ -13,11 +13,14 @@
 # Lokalnie (peer auth):   sudo -u postgres bash scripts/test-rls.sh
 # Lub z hasłem/hostem:    PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres bash scripts/test-rls.sh
 # W CI: usługa postgres:16 (patrz job „rls" w .github/workflows/ci.yml).
-# =============================================================================
+# ======================================================================
 set -euo pipefail
 
 DB="${RLS_TEST_DB:-pracujbe_rls_ci}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Lista migracji jak w produkcyjnym loaderze (każdy `NNNN_*.sql`, #1114): scripts/lib/migration-files.sh.
+. "$ROOT/scripts/lib/migration-files.sh"
+MIGRATIONS="$(migration_files "$ROOT/supabase/migrations" "$ROOT/database/auth")"
 
 # psql bez pliku ~/.psqlrc (-X), zatrzymanie na pierwszym błędzie, cicho.
 # Host/user/port dokładamy tylko gdy ustawione — pozwala to na lokalny peer auth
@@ -37,9 +40,7 @@ echo ">> bootstrap ról (produkcyjny, bez shimu Supabase)"
 echo ">> migracje domeny i auth (kolejność numerów jak w production-migrations.mjs)"
 while IFS= read -r name; do
   "${psql_base[@]}" -d "$DB" -1 -f "$name" >/dev/null
-done < <(for f in "$ROOT"/supabase/migrations/0*.sql "$ROOT"/database/auth/0*.sql; do
-  printf '%s\t%s\n' "$(basename "$f")" "$f"
-done | LC_ALL=C sort | cut -f2)
+done <<< "$MIGRATIONS"
 
 echo ">> model ról i kontrole ujemne"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/role-guard.sql"
@@ -51,14 +52,22 @@ echo ">> #1140 (0171): świeża baza = tryb ogłoszeniowy (CL1128-0)"
 echo ">> asercje RLS/triggery"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/rls.sql"
 
+echo ">> rollback 0194 (filtry listy ofert, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-filters-rollback.sql"
+
 echo ">> rollback 0097 (ESCO, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/esco93-rollback.sql"
+
+echo ">> rollback 0198 (opis firmy z zatwierdzaniem, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-rollback.sql"
 
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
 echo ">> rollback 0998 (potwierdzenie kontaktu w języku odbiorcy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/contact-recipient-locale-rollback.sql"
+echo ">> rollback 0204 (tryb ogłoszeniowy: szablony odpowiedzi, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-message-templates-rollback.sql"
 
 echo ">> rollback 0192 (czujki poczty i requeue, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-ops-config-rollback.sql"
@@ -72,6 +81,15 @@ echo ">> rollback 0151 (części gmin, w transakcji cofanej)"
 echo ">> rollback 0151 + 0112 (słownik miejscowości, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/locations-rollback.sql"
 
+echo ">> rollback 0202 (reopen = nowa publikacja, zaproszenia usuwanego pracodawcy; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/owner-decisions-0202-rollback.sql"
+
+echo ">> rollback 0200 (kontekst zaufanej edycji oferty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-edit-context-rollback.sql"
+
+echo ">> rollback 0197 (retencja i DSA: termin, anonimizacja; w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/retention-dsa-0197-rollback.sql"
+
 echo ">> rollback 0191 (kolejka automatycznego VIES, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/vies-auto-queue-rollback.sql"
 
@@ -80,6 +98,8 @@ echo ">> rollback 0189 (kontrakt soft-delete i limity plików CV, w transakcji c
 
 echo ">> rollback 0188 (DSA: dowód poinformowania i limity, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/dsa-informed-rollback.sql"
+echo ">> rollback 0203 (tytuł oferty bez heurystyki zaślepki, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/job-title-completeness-rollback.sql"
 echo ">> rollback 0186 (poczta: potwierdzony adres i język e-maili, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-verified-locale-rollback.sql"
 echo ">> rollback 0185 (utwardzenie warstwy danych: oferty, firmy, pliki, sesje i tokeny; w transakcji cofanej)"
@@ -100,6 +120,13 @@ echo ">> rollback 0190 (nazwy chronione w kolejce tłumaczeń, w transakcji cofa
 
 echo ">> rollback 0190 + 0177 + 0176 + 0175 + 0174 + 0173 + 0171 (tryb portalu, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/portal-legal-mode-rollback.sql"
+
+echo ">> rollback 0201 (język opisu firmy, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/company-description-locale-rollback.sql"
+echo ">> rollback 0199 (cel zapisu oferty i relink aliasów, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/saved-jobs-alias-relink-rollback.sql"
+echo ">> rollback 0195 (kolejka zdarzeń poczty, w transakcji cofanej)"
+"${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/email-webhook-pending-rollback.sql"
 
 echo ">> sprzątanie"
 "${psql_base[@]}" -d postgres -c "drop database if exists ${DB};" >/dev/null

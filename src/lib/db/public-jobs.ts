@@ -42,7 +42,15 @@ const FILTER_ARGUMENTS = `
   p_no_language => $11::boolean,
   p_since => $12::timestamptz,
   p_salary_unit => $13::text,
-  p_direct_only => $14::boolean`;
+  p_direct_only => $14::boolean,
+  p_language => $15::text,
+  p_language_level => $16::text,
+  p_work_time => $17::text,
+  p_near => $18::text,
+  p_radius_km => $19::integer`;
+
+/** Liczba parametrów filtra — sortowanie i paginacja listy idą po nich. */
+const FILTER_ARGUMENT_COUNT = 19;
 
 function locale(value: string): string {
   return isLocale(value) ? value : routing.defaultLocale;
@@ -70,6 +78,12 @@ function filterValues(params: GetJobsParams): unknown[] {
     params.since ?? null,
     params.salaryUnit ?? 'month',
     params.directOnly ? true : null,
+    // 0194: język + poziom, wymiar pracy, promień (miejscowość bez promienia nic nie znaczy).
+    params.language ?? null,
+    params.language ? (params.languageLevel ?? null) : null,
+    params.workTime ?? null,
+    params.near?.trim() ? params.near.trim() : null,
+    params.near?.trim() ? (params.radiusKm ?? null) : null,
   ];
 }
 
@@ -117,7 +131,9 @@ async function readRows(
   const result = (await transaction.query(
     `SELECT to_jsonb(job) AS job
     FROM public.get_public_jobs(${FILTER_ARGUMENTS},
-      p_sort => $15::text, p_limit => $16::integer, p_offset => $17::integer) AS job`,
+      p_sort => $${FILTER_ARGUMENT_COUNT + 1}::text,
+      p_limit => $${FILTER_ARGUMENT_COUNT + 2}::integer,
+      p_offset => $${FILTER_ARGUMENT_COUNT + 3}::integer) AS job`,
     [...values, params.sort ?? 'newest', pageSize, jobListNaturalOffset(page, pageSize)],
   )) as { rows: { job: PublicJobRow }[] };
   return result.rows.map((row) => row.job);
@@ -332,6 +348,34 @@ export async function getPublicJobTranslations(
   });
 }
 
+export interface PublicJobListTranslationRow {
+  job_id: string;
+  locale: string;
+  title: string | null;
+  highlights: string[] | null;
+}
+
+/**
+ * Tytuły i wyróżniki tłumaczeń ofert jednej strony listy (#1223) — JEDNO zapytanie pod rolą anon
+ * (RLS: tylko oferty publiczne). Z nich `resolveJobListContentLocale` ustala język treści karty.
+ */
+export async function getPublicJobListTranslations(
+  pool: TransactionPool,
+  jobIds: readonly string[],
+): Promise<PublicJobListTranslationRow[]> {
+  if (jobIds.length === 0) return [];
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT job_id::text AS job_id, locale, title, highlights
+       FROM public.job_translations
+       WHERE job_id = ANY($1::uuid[])
+       ORDER BY job_id, locale`,
+      [jobIds],
+    )) as { rows: PublicJobListTranslationRow[] };
+    return result.rows.filter((row) => isLocale(row.locale));
+  });
+}
+
 export interface PublicJobMachineTranslationRow {
   source_locale: string;
   origin: string;
@@ -402,6 +446,58 @@ export async function getPublicJobsAgency(
       [jobIds.slice(0, 100)],
     )) as { rows: { job_id: string }[] };
     return new Set(result.rows.map((row) => row.job_id));
+  });
+}
+
+/**
+ * Czy miejscowość środka promienia (#824, 0194) jest w słowniku i ma współrzędne — ta sama
+ * funkcja co filtr listy (`locations_within_radius`): środek ze współrzędnymi leży w 1 km od
+ * siebie, więc niepusty wynik = miejscowość rozpoznana.
+ */
+export async function isPublicRadiusPlaceKnown(pool: TransactionPool, near: string): Promise<boolean> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT cardinality(public.locations_within_radius(p_near => $1::text, p_radius_km => 1)) > 0 AS known`,
+      [near.slice(0, 100)],
+    )) as { rows: { known: unknown }[] };
+    return result.rows[0]?.known === true;
+  });
+}
+
+export interface PublicJobQualificationRows {
+  skills: PublicJobRow[];
+  certificates: PublicJobRow[];
+}
+
+/**
+ * Umiejętności i certyfikaty publicznej oferty (#866, decyzja 01.10.2026) — bez RPC: odczyt
+ * relacji pod rolą anon, RLS `job_skills_select`/`job_certificates_select` przepuszcza tylko
+ * ofertę publiczną (`job_is_public`). Nazwa umiejętności ze słownika (`skill_labels`, odczyt
+ * publiczny) tylko w języku strony, gdy umiejętność ma `skill_id`; inaczej wpis pracodawcy.
+ */
+export async function getPublicJobQualifications(
+  pool: TransactionPool,
+  jobId: string,
+  requestedLocale: string,
+): Promise<PublicJobQualificationRows> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const skills = (await transaction.query(
+      `SELECT js.skill_label, js.is_mandatory, sl.label AS localized_label
+       FROM public.job_skills js
+       LEFT JOIN public.skill_labels sl
+         ON sl.skill_id = js.skill_id AND sl.locale = $2::text AND sl.kind = 'preferred'
+       WHERE js.job_id = $1::uuid
+       ORDER BY js.is_mandatory DESC, js.skill_label`,
+      [jobId, locale(requestedLocale)],
+    )) as { rows: PublicJobRow[] };
+    const certificates = (await transaction.query(
+      `SELECT jc.certificate_label
+       FROM public.job_certificates jc
+       WHERE jc.job_id = $1::uuid
+       ORDER BY jc.certificate_label`,
+      [jobId],
+    )) as { rows: PublicJobRow[] };
+    return { skills: skills.rows, certificates: certificates.rows };
   });
 }
 

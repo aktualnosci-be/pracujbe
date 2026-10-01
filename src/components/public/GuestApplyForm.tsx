@@ -29,7 +29,7 @@ import {
   APPLY_AVAILABILITY_OPTIONS,
   APPLY_AVAILABILITY_TO_DB,
   type ApplyAvailabilityOption,
-} from '@/lib/validation/application';
+} from '@/lib/apply/availability';
 import type { PhoneCountry } from '@/lib/validation/phone';
 import {
   isScreeningAnswerMissing,
