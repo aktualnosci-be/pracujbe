@@ -3416,7 +3416,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   strony otwartej z panelu; jednorazowe linki `no-referrer`, #1218, unit `middleware-referrer-policy`,
   E2E `one-time-link-tracking`); cookie aktywnej
   firmy z `Secure` w produkcji przez `activeCompanyCookieOptions`, decyzje moderacyjne i status
-  firmy unieważniają publiczny ISR (#1109, pozostałe punkty checklisty otwarte); `/api/health`
+  firmy unieważniają publiczny ISR (#1109); `/api/health`
   pokazuje szczegóły tylko z tokenem albo w `next dev` (`NODE_ENV=development` poza trybem produkcyjnym —
   nie po `request.url`, który za proxy Railway wskazuje localhost, #1219), zbiorczy budżet błędów
   z przeglądarki (`ERROR_WEBHOOK_CLIENT_BUDGET`),
@@ -3428,7 +3428,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   zakresem); limit akcji firmy, zespołu, agencji i odwołania autora decyzji liczony po sesji na KONTO
   + szeroki próg na IP (`checkAccountRateLimit`, `src/lib/rate-limit-account.ts`, wiadro `<akcja>-ip`
   = 10 × limit), zły format identyfikatora w `setCompanyStatus`/`resolveReport`/
-  `markNotificationsRead` = `VALIDATION_FAILED` (#1109); panel `/admin/operacje` ocenia wiersz doby
+  `markNotificationsRead` = `VALIDATION_FAILED` (#1109; dokończenie: upload CV i załączników liczy limit na konto po sesji przez `checkAccountRateLimit` — anonimowe wywołanie nie zużywa budżetu, a identyfikator rozmowy/zgłoszenia/propozycji w złym formacie w `sendMessage`/`markConversationRead`/`openConversation` = `VALIDATION_FAILED` przed sesją i bazą, tryb demo bez zmian; unit `candidate-cv-route-actions`, `message-attachments-actions`, `messages-actions`); panel `/admin/operacje` ocenia wiersz doby
   i miesiąca budżetu AI według poziomu danego okresu — wspólny `ai_budget_exhausted` nie podnosi
   drugiego okresu do alarmu ani nie kasuje jego ostrzeżenia (#789). Dowód: unit
   `report-unmapped-db-error`, `server-actions-1109`, `admin-ops-dashboard` (kontrole ujemne).
