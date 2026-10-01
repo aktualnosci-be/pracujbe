@@ -1,5 +1,5 @@
 -- =============================================================================
--- CT1093-R — rollback migracji 0998 (potwierdzenie kontaktu w języku odbiorcy, #1093).
+-- CT1093-R — rollback migracji 0205 (potwierdzenie kontaktu w języku odbiorcy, #1093).
 -- Uruchamiany przez scripts/test-rls.sh po rls.sql, na tej samej bazie. Rollback wykonuje się
 -- w transakcji i jest cofany.
 -- =============================================================================
@@ -14,10 +14,10 @@ end $$;
 select pg_temp.assert(
   position('v_mail_locale' in pg_get_functiondef(
     'public.submit_contact_message(uuid,uuid,text,text,text,text,text)'::regprocedure)) > 0,
-  'CT1093-R0 stan przed rollbackiem: definicja z 0998');
+  'CT1093-R0 stan przed rollbackiem: definicja z 0205');
 
 begin;
-\ir ../rollback/0998_contact_recipient_locale.down.sql
+\ir ../rollback/0205_contact_recipient_locale.down.sql
 select pg_temp.assert(
   position('v_mail_locale' in pg_get_functiondef(
     'public.submit_contact_message(uuid,uuid,text,text,text,text,text)'::regprocedure)) = 0
@@ -33,4 +33,4 @@ select pg_temp.assert(
   position('v_mail_locale' in pg_get_functiondef(
     'public.submit_contact_message(uuid,uuid,text,text,text,text,text)'::regprocedure)) > 0,
   'CT1093-R2 rollback testu cofnięty');
-\echo 'CT1093-R rollback 0998: PASS'
+\echo 'CT1093-R rollback 0205: PASS'

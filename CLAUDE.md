@@ -2670,7 +2670,7 @@ polecanych ofert, bez drugiego `<main>`. Testy: unit `candidate-admin-panel-boun
   `applicationViewed`/`guestStatusChanged` worker czyta w języku odbiorcy
   (`readRecipientJobTitles` w `outbox.ts`: tłumaczenie locale wiersza → język oferty → en →
   `jobs.title`, jak digest 0138; błąd = tytuł z payloadu); potwierdzenie kontaktu dla konta
-  w języku konta (migracja `0998` — numer tymczasowy, `rls.sql` CT1093 z kontrolą ujemną,
+  w języku konta (migracja `0205` — numer tymczasowy, `rls.sql` CT1093 z kontrolą ujemną,
   rollback `contact-recipient-locale-rollback.sql`); `EmailCopy.single` (digest z jedną ofertą),
   `EmailCopy.reporter` + `appealSubjectLabels` (odwołanie zgłaszającego = numer SPRAWY i CTA
   strony sprawy, autora = numer decyzji i dane firmy); stopka gościa bez „masz konto”; firma

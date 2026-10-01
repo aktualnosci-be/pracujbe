@@ -13537,7 +13537,7 @@ select pg_temp.assert(
   'CT61-8d audyt zmiany statusu bez treści');
 
 -- ============================================================================
--- CT1093. Potwierdzenie formularza kontaktu w języku ODBIORCY (#1093, 0998 — numer tymczasowy):
+-- CT1093. Potwierdzenie formularza kontaktu w języku ODBIORCY (#1093, 0205 — numer tymczasowy):
 --         zalogowany nadawca → język konta (resolve_recipient_locale), bez konta → język
 --         formularza; kolumna contact_messages.locale nadal = język formularza.
 --         Kontrola ujemna: definicja z 0125 (rollback) wysyła w języku formularza.
@@ -13574,7 +13574,7 @@ select pg_temp.assert(
 
 -- KONTROLA UJEMNA: definicja z 0125 wysyła potwierdzenie zalogowanemu w języku formularza.
 begin;
-\ir ../rollback/0998_contact_recipient_locale.down.sql
+\ir ../rollback/0205_contact_recipient_locale.down.sql
 set local role service_role;
 select message_id as ct93_old from public.submit_contact_message(
   :'CANDB', gen_random_uuid(), 'other', :'CTMSG', null, 'ct1093-stara@test.be', :'ct93_form') \gset
@@ -13582,7 +13582,7 @@ reset role;
 select pg_temp.assert(
   (select bool_and(locale = :'ct93_form') and bool_and(locale <> :'ct93_acc')
      from public.email_deliveries where template = 'supportContact' and entity_id = :'ct93_old'),
-  'CT1093-N kontrola ujemna: bez 0998 zalogowany dostaje język formularza (CT1093-1 by to złapał)');
+  'CT1093-N kontrola ujemna: bez 0205 zalogowany dostaje język formularza (CT1093-1 by to złapał)');
 rollback;
 reset role; reset app.current_uid;
 

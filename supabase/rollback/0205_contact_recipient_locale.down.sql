@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback 0998 — przywraca submit_contact_message z 0125 (potwierdzenie `supportContact`
+-- Rollback 0205 — przywraca submit_contact_message z 0125 (potwierdzenie `supportContact`
 -- zawsze w języku formularza). Uruchamiać ręcznie jako migrator, w jednej transakcji
 -- (psql -1 -f …), i dopiero wtedy usunąć wpis z app_migrations.history. Plik celowo BEZ
 -- BEGIN/COMMIT (supabase/tests/contact-recipient-locale-rollback.sql wykonuje go w transakcji

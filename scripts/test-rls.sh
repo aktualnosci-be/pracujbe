@@ -64,7 +64,7 @@ echo ">> rollback 0198 (opis firmy z zatwierdzaniem, w transakcji cofanej)"
 echo ">> rollback 0102 (materiały kampanii, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/campaign-job-rollback.sql"
 
-echo ">> rollback 0998 (potwierdzenie kontaktu w języku odbiorcy, w transakcji cofanej)"
+echo ">> rollback 0205 (potwierdzenie kontaktu w języku odbiorcy, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/contact-recipient-locale-rollback.sql"
 echo ">> rollback 0204 (tryb ogłoszeniowy: szablony odpowiedzi, w transakcji cofanej)"
 "${psql_base[@]}" -d "$DB" -f "$ROOT/supabase/tests/classifieds-message-templates-rollback.sql"

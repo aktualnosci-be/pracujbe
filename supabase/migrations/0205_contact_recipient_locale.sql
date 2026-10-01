@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0998 (numer tymczasowy) — potwierdzenie formularza kontaktu w języku odbiorcy (#1093).
+-- 0205 (numer tymczasowy) — potwierdzenie formularza kontaktu w języku odbiorcy (#1093).
 --
 -- `submit_contact_message` (0125) kolejkował `supportContact` zawsze w języku FORMULARZA,
 -- także dla zalogowanego nadawcy — inaczej niż potwierdzenie zgłoszenia treści (0094/0188),
@@ -10,7 +10,7 @@
 -- Powiadomienia administratorów bez zmian (każdy w swoim języku). Kolumna
 -- `contact_messages.locale` nadal = język formularza. Sygnatura i granty bez zmian.
 --
--- Rollback: supabase/rollback/0998_contact_recipient_locale.down.sql (test:
+-- Rollback: supabase/rollback/0205_contact_recipient_locale.down.sql (test:
 -- supabase/tests/contact-recipient-locale-rollback.sql).
 -- =============================================================================
 
