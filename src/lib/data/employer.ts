@@ -606,6 +606,8 @@ export interface JobDraftValues {
   region: string;
   address: string;
   remote: boolean;
+  /** #850 (0982): dodatkowe miejsca pracy (kolejność z bazy; miasto główne = `city`). */
+  extraLocations: string[];
   salaryMin: string;
   salaryMax: string;
   currency: string;
@@ -760,6 +762,7 @@ function demoPublishedJob(jobId: string): JobDraftLoad {
       region: 'Flandria',
       address: '',
       remote: false,
+      extraLocations: [],
       salaryMin: '16',
       salaryMax: '18',
       currency: 'EUR',
@@ -843,6 +846,10 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
             WHERE jl.job_id = $1`, [jobId]),
         certificates: await queryRows(tx, 'employer.job-draft-certificates',
           'SELECT certificate_label FROM public.job_certificates WHERE job_id = $1', [jobId]),
+        // #850 (0982): job_work_locations_select_member — członek firmy oferty. Wczytywane, bo
+        // krok 3 zapisuje listę replace-all.
+        workLocations: await queryRows(tx, 'employer.job-draft-work-locations',
+          'SELECT name FROM public.job_work_locations WHERE job_id = $1 ORDER BY position', [jobId]),
         // job_screening_questions_select (0093): członek firmy oferty. Tryb ogłoszeniowy: stare
         // pytania ukryte — bez zapytania (zapis kroku 7 nie rusza ich, `screeningOff` w `updateJobDraft`).
         screening: isRecruitmentEnabled('screening')
@@ -857,7 +864,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
     const { job, jobStatus, relations } = loaded;
     if (!isEditableJobStatus(jobStatus) || !relations) return { status: 'not-editable', jobStatus };
     const locale = asString(job['default_locale'], 'pl');
-    const { translation, requirements, skills, languages, certificates, screening } = relations;
+    const { translation, requirements, skills, languages, certificates, workLocations, screening } = relations;
 
     const tr = asRecord(translation);
     const reqRows = requirements;
@@ -891,6 +898,7 @@ export async function getJobDraft(jobId: string): Promise<JobDraftLoad> {
         region: asString(job['region']),
         address: asString(job['address']),
         remote: job['remote'] === true,
+        extraLocations: workLocations.map((r) => asString(asRecord(r)['name'])).filter(Boolean),
         salaryMin: numToText(job['salary_min']),
         salaryMax: numToText(job['salary_max']),
         currency: asString(job['currency'], 'EUR'),

@@ -486,7 +486,9 @@
       "accommodationCostPeriodRequired": "Indiquez si le coût est hebdomadaire ou mensuel.",
       "accommodationCostRequired": "Indiquez le coût du logement.",
       "accommodationCostMandatory": "Pour un logement fourni, indiquez le coût — saisissez 0 s'il est gratuit.",
-      "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire."
+      "accommodationDeductedRequired": "Indiquez si le coût du logement est retenu sur le salaire.",
+      "workLocationInvalid": "Le nom de la localité doit comporter de 2 à 80 caractères.",
+      "workLocationsTooMany": "Vous pouvez ajouter au maximum 10 lieux de travail supplémentaires."
     },
     "contentLanguageNotice": "Le contenu de cette offre n’est disponible qu’en {language}.",
     "contentLanguageNames": {
@@ -554,7 +556,9 @@
       "skillsMandatory": "Compétences requises",
       "skillsOptional": "Compétences appréciées",
       "certificates": "Certificats et habilitations"
-    }
+    },
+    "workLocationsTitle": "Lieux de travail",
+    "workLocationsNote": "Le travail a lieu dans ces localités."
   },
   "landing": {
     "hubMetaTitle": "Parcourez les emplois en Belgique — secteurs et villes | Pracuj.be",
@@ -1812,7 +1816,11 @@
     "workTimeNone": "Non indiqué",
     "workTimeFull": "Temps plein",
     "workTimePart": "Temps partiel",
-    "workTimeBoth": "Temps plein ou partiel"
+    "workTimeBoth": "Temps plein ou partiel",
+    "extraLocationsLabel": "Lieux de travail supplémentaires",
+    "extraLocationsPlaceholder": "p. ex. Hasselt",
+    "extraLocationsHint": "Travail dans plusieurs localités ? Ajoutez-les ici (au maximum {max}). La recherche par ville trouvera aussi cette offre via ces noms.",
+    "extraLocationsLocked": "La liste des lieux de travail supplémentaires ne peut être modifiée que dans un brouillon."
   },
   "jobImport": {
     "title": "Importer depuis une annonce",

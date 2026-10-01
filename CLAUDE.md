@@ -907,6 +907,25 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   a `trg_zz_jobs_location_only_keep_version` nie podbija `updated_at` (CAS #325) przy zmianie
   samego `location_id`. Dowód: `rls.sql` sekcja AR968 (kontrole ujemne: trigger tylko INSERT z 0153,
   bez strażnika wersji). **Otwarte:** matching nadal liczy odległość z tekstu (`cityKey`).
+  Wiele miejsc pracy w jednej ofercie (#850, etap 1, migracja `0982` — numer tymczasowy):
+  `job_work_locations` = do 10 DODATKOWYCH miejscowości (miasto główne zostaje w `jobs.city`;
+  nazwa 2–80 znaków, klucz `city_key` unikalny w ofercie, `location_id` ze słownika ustala trigger,
+  nowy alias dowiązuje wiersz bez miejscowości). Zapis wyłącznie RPC `set_job_work_locations`
+  (szkic, recruiter+, replace-all, duplikaty i miasto główne pominięte) — kreator woła je w kroku 3
+  w tej samej transakcji co `save_job_draft` (pole „Dodatkowe miejsca pracy”; lustro
+  `src/lib/job-work-locations.ts`, `step3Schema.extraLocations` opcjonalne — brak pola = lista bez
+  zmian); w edycji opublikowanej oferty lista tylko do podglądu. „Kopiuj jako szkic” przenosi listę
+  (trigger na `job_duplications`). Szczegół oferty: sekcja „Miejsca pracy”
+  (`get_public_job_work_locations`, anon, tylko oferta publiczna; odczyt pomocniczy — awaria =
+  samo miasto główne), JobPosting `jobLocation` jako lista miejsc. Wyszukiwanie tekstowe miasta
+  (`p_city` → `search_city_candidates`, wspólne dla listy, licznika, facetów i
+  `saved_search_jobs_after`) znajduje ofertę po dodatkowym miejscu (tekst albo miejscowość ze
+  słownika z częściami gminy); ciała `get_public_jobs`/`saved_search_jobs_after` bez zmian. Dowód:
+  `rls.sql` sekcja JWL850 (kontrole ujemne: polityka USING true, definicja z 0183), rollback
+  `supabase/rollback/0982_…down.sql` (`job-work-locations-rollback.sql`), unit `job-work-locations`.
+  **Etap 2 (otwarte):** filtr `p_locations` i facet miasta po dodatkowych miejscach (po #1270/#1275),
+  edycja listy w opublikowanej ofercie (`update_published_job`), matching/promień, import AI listy,
+  przepięcie przy dezaktywacji/usunięciu aliasu (jak `relink_jobs_for_city_keys`, 0199).
   Podpowiedź a alias techniczny (#807): `pickSuggestions` zamienia alias małymi literami (np.
   „ghent”) na nazwę lokalizowaną (np. „Gandawa”) tylko gdy ta nazwa nadal zaczyna się od
   wpisanego prefiksu (`matchKey`, folded jak `cityKey`) — inaczej zostaje przy dopasowanym

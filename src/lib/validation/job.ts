@@ -23,6 +23,11 @@ import {
   ACCOMMODATION_KINDS,
 } from '@/lib/job-costs';
 import { WORK_TIME_VALUES } from '@/lib/job-filter-options';
+import {
+  WORK_LOCATION_NAME_MAX,
+  WORK_LOCATION_NAME_MIN,
+  WORK_LOCATIONS_MAX,
+} from '@/lib/job-work-locations';
 
 /**
  * Walidacja kreatora oferty pracy — dziewięć kroków + pełny jobSchema.
@@ -126,6 +131,26 @@ const step3Base = z.object({
     .regex(NO_NUL_REGEX, TEXT_INVALID),
   address: z.string().trim().max(160, 'job.error.addressTooLong').regex(NO_NUL_REGEX, TEXT_INVALID).optional(),
   remote: z.boolean().default(false),
+  /**
+   * #850 (0982): dodatkowe miejsca pracy (miasto główne = `city`). Opcjonalne — brak pola =
+   * lista bez zmian (edycja opublikowanej oferty i starsi wołający nie wysyłają go).
+   */
+  extraLocations: z
+    .array(
+      z
+        .string()
+        .transform((v) => v.replace(/\s+/g, ' ').trim())
+        .pipe(
+          z
+            .string()
+            .min(WORK_LOCATION_NAME_MIN, 'job.error.workLocationInvalid')
+            .max(WORK_LOCATION_NAME_MAX, 'job.error.workLocationInvalid')
+            // eslint-disable-next-line no-control-regex -- znaki sterujące odrzuca też RPC 0982
+            .regex(/^[^\u0000-\u001f\u007f]*$/, 'job.error.workLocationInvalid'),
+        ),
+    )
+    .max(WORK_LOCATIONS_MAX, 'job.error.workLocationsTooMany')
+    .optional(),
 });
 export const step3Schema = step3Base;
 

@@ -544,6 +544,12 @@ export async function updateJobDraft(
         p_content: jsonArg(content),
         p_expected_updated_at: versionForSave,
       });
+      // #850 (0982): dodatkowe miejsca pracy — w TEJ SAMEJ transakcji co krok 3 (błąd cofa
+      // cały krok). Brak pola = lista bez zmian (np. wołający sprzed #850).
+      const extraLocations = step === 3 ? (parsed as JobStep3).extraLocations : undefined;
+      if (extraLocations) {
+        await rpc(tx, 'set_job_work_locations', { p_job_id: jobId, p_names: extraLocations });
+      }
       return { version: asString(asRecord(saved)['updated_at']) || undefined };
     });
     if (typeof outcome === 'string') return { ok: false, error: outcome };

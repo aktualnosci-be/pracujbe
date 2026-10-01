@@ -687,6 +687,21 @@ export default async function JobDetailPage({ params }: PageProps) {
               </Section>
             ) : null}
 
+            {job.workLocations && job.workLocations.length > 0 ? (
+              <Section title={t('workLocationsTitle')}>
+                {/* #850 (0982): miasto główne + dodatkowe miejsca pracy (nazwy z kreatora). */}
+                <p className="mb-3 text-sm text-muted-foreground">{t('workLocationsNote')}</p>
+                <ul className="flex flex-wrap gap-2" data-testid="job-work-locations">
+                  {[job.city, ...job.workLocations].map((name) => (
+                    <li key={name} className="inline-flex items-center gap-1.5 rounded-full bg-soft px-3 py-1 text-sm text-foreground">
+                      <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
+
             <Section title={t('costsTitle')}>
               {/*
                 0169: „Koszty i dodatki” (deklaracja pracodawcy). Każda para dt/dd jest bezpośrednio

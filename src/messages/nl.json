@@ -486,7 +486,9 @@
       "accommodationCostPeriodRequired": "Kies of de kosten per week of per maand zijn.",
       "accommodationCostRequired": "Vul de kosten van de huisvesting in.",
       "accommodationCostMandatory": "Vul bij voorziene huisvesting de kosten in — vul 0 in als de huisvesting gratis is.",
-      "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon."
+      "accommodationDeductedRequired": "Kies of de huisvestingskosten worden ingehouden op het loon.",
+      "workLocationInvalid": "De plaatsnaam moet 2 tot 80 tekens lang zijn.",
+      "workLocationsTooMany": "Je kunt maximaal 10 extra werkplekken toevoegen."
     },
     "contentLanguageNotice": "De inhoud van deze vacature is alleen beschikbaar in het {language}.",
     "contentLanguageNames": {
@@ -554,7 +556,9 @@
       "skillsMandatory": "Vereiste vaardigheden",
       "skillsOptional": "Gewenste vaardigheden",
       "certificates": "Attesten en certificaten"
-    }
+    },
+    "workLocationsTitle": "Werkplekken",
+    "workLocationsNote": "Het werk vindt plaats op deze plaatsen."
   },
   "landing": {
     "hubMetaTitle": "Ontdek werk in België — sectoren en steden | Pracuj.be",
@@ -1812,7 +1816,11 @@
     "workTimeNone": "Niet vermeld",
     "workTimeFull": "Voltijds",
     "workTimePart": "Deeltijds",
-    "workTimeBoth": "Voltijds of deeltijds"
+    "workTimeBoth": "Voltijds of deeltijds",
+    "extraLocationsLabel": "Extra werkplekken",
+    "extraLocationsPlaceholder": "bv. Hasselt",
+    "extraLocationsHint": "Werk op meerdere plaatsen? Voeg ze hier toe (maximaal {max}). Zoeken op plaats vindt deze vacature ook via deze namen.",
+    "extraLocationsLocked": "De lijst met extra werkplekken kan alleen in een concept worden gewijzigd."
   },
   "jobImport": {
     "title": "Importeren uit een vacature",

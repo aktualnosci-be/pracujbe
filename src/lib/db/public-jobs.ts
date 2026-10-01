@@ -526,6 +526,24 @@ export async function getPublicJobCosts(
   });
 }
 
+/**
+ * Dodatkowe miejsca pracy oferty publicznej (#850, 0982). RPC pod rolą anon zwraca wiersze
+ * tylko dla oferty publicznej (`job_is_public`), bez wpisu równego miastu głównemu.
+ */
+export async function getPublicJobWorkLocations(
+  pool: TransactionPool,
+  jobId: string,
+): Promise<PublicJobRow[]> {
+  return withUserTransaction(pool, null, async (transaction) => {
+    const result = (await transaction.query(
+      `SELECT name, position
+       FROM public.get_public_job_work_locations(p_job_id => $1::uuid)`,
+      [jobId],
+    )) as { rows: PublicJobRow[] };
+    return result.rows;
+  });
+}
+
 export async function getPublicJobScreeningQuestions(
   pool: TransactionPool,
   jobId: string,

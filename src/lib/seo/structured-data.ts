@@ -188,6 +188,31 @@ function telecommuteFields(job: JobDetail): Record<string, unknown> | undefined 
   };
 }
 
+/**
+ * `jobLocation`: miasto główne (z regionem) + dodatkowe miejsca pracy (#850, 0982) — schema.org
+ * dopuszcza listę miejsc. Dodatkowe miejsca bez regionu (kreator go dla nich nie zbiera).
+ * Jedno miejsce = obiekt (jak przed #850).
+ */
+function jobLocationJsonLd(job: JobDetail): Record<string, unknown> | Record<string, unknown>[] {
+  const main = {
+    '@type': 'Place',
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: job.city,
+      addressRegion: job.region,
+      addressCountry: 'BE',
+    },
+  };
+  const extra = (job.workLocations ?? [])
+    .map((name) => name.trim())
+    .filter((name) => name !== '' && name.toLowerCase() !== job.city.trim().toLowerCase())
+    .map((name) => ({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: name, addressCountry: 'BE' },
+    }));
+  return extra.length > 0 ? [main, ...extra] : main;
+}
+
 export function buildJobPostingJsonLd(
   job: JobDetail,
   url: string,
@@ -255,17 +280,7 @@ export function buildJobPostingJsonLd(
       ...(logo ? { logo } : {}),
     },
     // #792: praca w 100% zdalna = TELECOMMUTE + kraje kandydata, bez fizycznego `jobLocation`.
-    ...(telecommute ?? {
-      jobLocation: {
-        '@type': 'Place',
-        address: {
-          '@type': 'PostalAddress',
-          addressLocality: job.city,
-          addressRegion: job.region,
-          addressCountry: 'BE',
-        },
-      },
-    }),
+    ...(telecommute ?? { jobLocation: jobLocationJsonLd(job) }),
     ...(baseSalary ? { baseSalary } : {}),
     ...(job.startDate ? { jobStartDate: job.startDate } : {}),
     ...(options.jobBenefits?.trim() ? { jobBenefits: options.jobBenefits.trim() } : {}),

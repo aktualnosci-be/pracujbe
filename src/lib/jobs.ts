@@ -24,6 +24,7 @@ import { compareSalaryDesc, salaryInRange, type SalaryUnit } from '@/lib/salary-
 import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
+import { parseWorkLocationRows } from '@/lib/job-work-locations';
 import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
@@ -188,6 +189,11 @@ export interface JobDetail extends JobListItem {
   screeningQuestions?: ScreeningQuestion[];
   /** „Koszty i dodatki” (0169); brak = odczyt nieudany albo oferta demo — strona pokazuje flagi. */
   costs?: JobCosts;
+  /**
+   * #850 (0982): dodatkowe miejsca pracy (bez miasta głównego `city`); brak = oferta z jednym
+   * miejscem albo odczyt nieudany.
+   */
+  workLocations?: string[];
   /**
    * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
    * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
@@ -614,6 +620,14 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobCosts' });
   }
+  // #850 (0982): dodatkowe miejsca pracy — odczyt pomocniczy; awaria = samo miasto główne.
+  let workLocations: string[] = [];
+  try {
+    const { getPublicJobWorkLocations } = await import('@/lib/db/public-jobs');
+    workLocations = parseWorkLocationRows(await getPublicJobWorkLocations(pool, job.id));
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobWorkLocations' });
+  }
   // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
   let qualifications: JobQualifications | undefined;
   try {
@@ -627,6 +641,7 @@ async function getJobBySlugFromDb(
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
+    ...(workLocations.length > 0 ? { workLocations } : {}),
     ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),

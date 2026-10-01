@@ -91,6 +91,7 @@ import {
 } from '@/lib/actions/jobs';
 import { jobCityAssist } from '@/lib/actions/job-location';
 import type { JobCityAssist } from '@/lib/locations/job-city';
+import { WORK_LOCATION_NAME_MAX, WORK_LOCATIONS_MAX } from '@/lib/job-work-locations';
 import { isLocale, routing, type Locale } from '@/i18n/routing';
 import { JobAssistPanel } from '@/components/employer/JobAssistPanel';
 import { ASSIST_FIELDS_BY_STEP, type AssistField, type AssistValue } from '@/lib/ai-assist/fields';
@@ -175,6 +176,8 @@ interface FormValues {
   region: string;
   address: string;
   remote: boolean;
+  /** #850 (0982): dodatkowe miejsca pracy (miasto główne = `city`). */
+  extraLocations: string[];
   // krok 4 — wynagrodzenie
   salaryMin: string;
   salaryMax: string;
@@ -239,6 +242,7 @@ const DEFAULT_VALUES: FormValues = {
   region: '',
   address: '',
   remote: false,
+  extraLocations: [],
   salaryMin: '',
   salaryMax: '',
   currency: 'EUR',
@@ -281,7 +285,7 @@ const DEFAULT_VALUES: FormValues = {
 const STEP_FIELDS: Record<WizardStep, (keyof FormValues)[]> = {
   1: ['title', 'contentLocale', 'category', 'occupation'],
   2: ['contractType', 'workingHours', 'workTime', 'shifts', 'startDate'],
-  3: ['city', 'region', 'address'],
+  3: ['city', 'region', 'address', 'extraLocations'],
   4: ['salaryMin', 'salaryMax', 'currency', 'salaryPeriod'],
   5: ['description', 'responsibilities'],
   6: ['requirementsMandatory', 'mandatorySkills', 'minExperienceYears'],
@@ -320,7 +324,8 @@ type ChipField =
   | 'skills'
   | 'requiredCertificates'
   | 'conditions'
-  | 'benefits';
+  | 'benefits'
+  | 'extraLocations';
 const ITEM_MAX: Record<ChipField, number> = {
   responsibilities: JOB_ITEM_LIMITS.line,
   requirementsMandatory: JOB_ITEM_LIMITS.requirement,
@@ -330,6 +335,7 @@ const ITEM_MAX: Record<ChipField, number> = {
   requiredCertificates: JOB_ITEM_LIMITS.certificate,
   conditions: JOB_ITEM_LIMITS.line,
   benefits: JOB_ITEM_LIMITS.line,
+  extraLocations: WORK_LOCATION_NAME_MAX,
 };
 
 function domId(field: keyof FormValues): string {
@@ -372,7 +378,13 @@ function buildStepData(step: WizardStep, v: FormValues, contentLocale: Locale): 
         startDate: toOptionalText(v.startDate),
       };
     case 3:
-      return { city: v.city, region: v.region, address: toOptionalText(v.address), remote: v.remote };
+      return {
+        city: v.city,
+        region: v.region,
+        address: toOptionalText(v.address),
+        remote: v.remote,
+        extraLocations: v.extraLocations,
+      };
     case 4:
       return {
         salaryMin: toOptionalNumber(v.salaryMin),
@@ -1603,6 +1615,42 @@ export function JobWizard({
                   />
                   <FieldError name="address" />
                 </div>
+                <div className={`${FORM_FIELD} ${FORM_WIDE}`}>
+                  <Label htmlFor={domId('extraLocations')} className={FORM_LABEL_TEXT}>
+                    {t('extraLocationsLabel')}
+                  </Label>
+                  {isEdit ? (
+                    <>
+                      {values.extraLocations.length > 0 ? (
+                        <ul id={domId('extraLocations')} className="mt-[13px] flex flex-wrap gap-2">
+                          {values.extraLocations.map((name) => (
+                            <li key={name} className={cn(STATUS, 'text-[13px] text-foreground')}>{name}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p id={domId('extraLocations')} className={FORM_HINT}>{t('previewNothing')}</p>
+                      )}
+                      <p className={FORM_HINT}>{t('extraLocationsLocked')}</p>
+                    </>
+                  ) : (
+                    <>
+                      <ChipInput
+                        id={domId('extraLocations')}
+                        maxItemLength={ITEM_MAX.extraLocations}
+                        tooLongLabel={t('itemTooLongMax', { max: ITEM_MAX.extraLocations })}
+                        values={values.extraLocations}
+                        onChange={(next) => setValue('extraLocations', next, { shouldDirty: true })}
+                        placeholder={t('extraLocationsPlaceholder')}
+                        addLabel={t('add')}
+                        removeLabel={t('remove')}
+                        invalid={Boolean(errors.extraLocations)}
+                        errorDescription={errorDescription('extraLocations')}
+                      />
+                      <p className={FORM_HINT}>{t('extraLocationsHint', { max: WORK_LOCATIONS_MAX })}</p>
+                    </>
+                  )}
+                  <FieldError name="extraLocations" />
+                </div>
               <CheckboxField
                 id={domId('remote')}
                 label={t('remote')}
@@ -2225,6 +2273,13 @@ export function JobWizard({
                     value={[values.city, values.region].filter(Boolean).join(', ')}
                     empty={t('previewNothing')}
                   />
+                  {values.extraLocations.length > 0 ? (
+                    <PreviewRow
+                      label={t('extraLocationsLabel')}
+                      value={values.extraLocations.join(', ')}
+                      empty={t('previewNothing')}
+                    />
+                  ) : null}
                   <PreviewRow
                     label={t('salaryPeriodLabel')}
                     value={
