@@ -15967,7 +15967,7 @@ select pg_temp.assert(
 -- CVL672-9 (kontrola ujemna): definicja z 0142 dla banera pl wybiera wiersz nl (błąd #672).
 begin;
 \ir ../rollback/0971_consent_receipt_locale.down.sql
-set local role anon;
+set local role anon; select pg_temp.assert_client_role();
 select public.record_consent('{"analytics":true}'::jsonb, 'cookie_banner', 'vis-cvl-neg', null, null, '2026-05');
 reset role;
 select pg_temp.assert(
