@@ -14,7 +14,7 @@ import {
   type ModerationField,
   type ModerationFieldError,
 } from '@/lib/admin/moderation';
-import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
+import { captureActionError, databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { revalidatePublicJobPaths } from '@/lib/jobs/public-cache';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction, withServiceRole } from '@/lib/db/portal';
 import { queryOne, rpc, type RpcArgs } from '@/lib/db/sql';
@@ -629,16 +629,21 @@ export async function checkCompanyVies(companyId: string): Promise<ViesActionRes
         p_request_date: result.requestDate,
       });
       if (call.status === 'unauthenticated') saveError = 'PERMISSION_DENIED';
-      else if (call.status === 'db_error') saveError = mapPgError(call.message);
-    } catch {
+      else if (call.status === 'db_error') {
+        saveError = mapPgError(call.message);
+        // #1068: SQLSTATE w kontekście (bez komunikatu bazy), także dla znanych kodów.
+        captureActionError(call.error, 'admin.checkCompanyVies.save');
+      }
+    } catch (e) {
       saveError = 'INTERNAL';
+      captureActionError(e, 'admin.checkCompanyVies.save');
     }
-    if (saveError) {
+    if (saveError === 'PERMISSION_DENIED') {
       captureError(new Error(`admin_record_vies_check: ${saveError}`), {
         area: 'admin.checkCompanyVies.save',
       });
-      return { ok: true, outcome, saved: false };
     }
+    if (saveError) return { ok: true, outcome, saved: false };
     return { ok: true, outcome, saved: true };
   } catch (e) {
     captureError(e, { area: 'admin.checkCompanyVies' });

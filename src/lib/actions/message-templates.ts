@@ -3,7 +3,7 @@
 import { z } from 'zod';
 
 import { getExpectedActiveCompany } from '@/lib/company-context';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { jsonArg, rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -73,7 +73,9 @@ export async function saveMessageTemplate(
     );
     return saved;
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapTemplateError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'templates.save', mapTemplateError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'templates.save' });
     return { ok: false, error: 'INTERNAL' };
   }
@@ -99,7 +101,9 @@ export async function deleteMessageTemplate(
       return { ok: true };
     });
   } catch (error) {
-    if (isDatabaseError(error)) return { ok: false, error: mapTemplateError(databaseErrorMessage(error)) };
+    if (isDatabaseError(error)) {
+      return { ok: false, error: reportUnmappedDbError(error, 'templates.delete', mapTemplateError(databaseErrorMessage(error))) };
+    }
     captureError(error, { area: 'templates.delete' });
     return { ok: false, error: 'INTERNAL' };
   }

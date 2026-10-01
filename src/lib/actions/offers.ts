@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -18,7 +18,7 @@ import { offerSchema, type OfferInput } from '@/lib/validation/offer';
 
 /** Błąd wywołania RPC → kod użytkowy; wyjątek spoza bazy → kanał błędów + INTERNAL (Invariant #8). */
 function toErrorCode(error: unknown, area: string): ErrorCode {
-  if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
+  if (isDatabaseError(error)) return reportUnmappedDbError(error, area, mapPgError(databaseErrorMessage(error)));
   captureError(error, { area });
   return 'INTERNAL';
 }
