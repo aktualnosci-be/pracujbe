@@ -164,7 +164,7 @@ const DEMO_CAMPAIGNS: Omit<AdminCampaignDetail, 'unavailableJobSlugs'>[] = [
   },
 ];
 
-function toRow(detail: AdminCampaignDetail): AdminCampaignRow {
+function toRow(detail: Omit<AdminCampaignDetail, 'unavailableJobSlugs'>): AdminCampaignRow {
   const { content: _content, revisions: _revisions, ...row } = detail;
   return row;
 }
