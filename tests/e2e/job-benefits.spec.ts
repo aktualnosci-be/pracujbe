@@ -26,7 +26,8 @@ for (const locale of LOCALES) {
     await form.locator('button[type="submit"]').click();
     await page.waitForLoadState('domcontentloaded');
 
-    expect(new URL(page.url()).searchParams.get('benefits')).toBe('eco_vouchers,hospital_insurance');
+    // Formularz GET wysyła powtórzony klucz; strona łączy go w jeden filtr (`flattenSearchParams`).
+    expect(new URL(page.url()).searchParams.getAll('benefits')).toEqual(['eco_vouchers', 'hospital_insurance']);
     const again = page.locator('[data-filter-passport="no-js"]');
     await expect(again.getByRole('checkbox', { name: benefits['eco_vouchers'], exact: true })).toBeChecked();
     await expect(again.getByRole('checkbox', { name: benefits['company_car'], exact: true })).not.toBeChecked();
