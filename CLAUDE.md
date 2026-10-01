@@ -864,6 +864,14 @@ Legenda: `[x]` zrobione · `[~]` częściowo/scaffold · `[ ]` do zrobienia.
   pola. Dowód: `rls.sql` sekcja FL974 (kontrole ujemne N1–N6), rollback `0194_…down.sql`
   (`job-filters-rollback.sql`; w `city-sections-filters-rollback.sql` przed 0183), unit
   `job-filters-0194`, `job-work-time`, E2E `job-filters-0194` (bez JS, axe 320/1280 px).
+  Słowo kluczowe w kwalifikacjach (#866, migracja `0957` — numer tymczasowy, stosowana PO 0960
+  z #1275): lista, licznik, facety i kopia filtrów alertów dopasowują słowo kluczowe także do
+  umiejętności (`job_skills`), certyfikatów (`job_certificates`) i wymagań (`job_requirements`,
+  tylko w języku pokazywanym na szczególe: język strony, a bez wymagań danego rodzaju — język
+  oferty); prefiltr `search_keyword_candidates` po indeksach trigramowych, dokładny warunek
+  `job_keyword_qualification_match`. Opis oferty poza zakresem. Lustro demo szuka w tytule
+  i wymaganiach. Dowód: `rls.sql` sekcja KQ866 (kontrola ujemna: definicje z 0960), rollback
+  `0957_…down.sql` (`keyword-qualifications-rollback.sql`), unit `jobs-demo-search-mirror`.
   Edycja filtra wielokrotnego bez JavaScriptu (#795, a11y/forms UX, bez migracji): formularz
   fallback w `<noscript>` (`NoScriptFilterForm`, `FilterSheet.tsx`) renderował kategorię/
   lokalizację/rodzaj umowy/zakwaterowanie jako pojedynczy `<select>` — istniejący zestaw dało

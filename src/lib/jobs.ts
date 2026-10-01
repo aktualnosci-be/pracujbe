@@ -354,9 +354,16 @@ function getJobsFromDemo(
   if (params.keyword) {
     const q = searchFold(params.keyword.trim());
     if (q) {
-      // Jak SQL (0110/0153): słowo kluczowe szuka wyłącznie w tytule oferty — nie w nazwie
-      // firmy, opisie ani wyróżnikach (#1119, lustro demo nie może szukać szerzej niż baza).
-      jobs = jobs.filter((job) => searchFold(job.title).includes(q));
+      // Jak SQL (0110/0153, 0957): słowo kluczowe szuka w tytule oferty i w jej kwalifikacjach
+      // (#866: wymagania w wyświetlanym języku; umiejętności i certyfikaty — demo ich nie ma),
+      // nie w nazwie firmy, opisie ani wyróżnikach (#1119, lustro demo nie szuka szerzej niż baza).
+      jobs = jobs.filter(
+        (job) =>
+          searchFold(job.title).includes(q) ||
+          [...job.requirementsMandatory, ...job.requirementsOptional].some((line) =>
+            searchFold(line).includes(q),
+          ),
+      );
     }
   }
   // Widełki w wybranej jednostce (#188, reguła jak w SQL 0080/0091): oferta bez
