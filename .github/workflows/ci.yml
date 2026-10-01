@@ -14,7 +14,12 @@ name: CI
 # - E2E: 3 shardy + pomiar + fixture'y (full w 2 częściach) + tryb ogłoszeniowy (produkcyjny,
 #   `e2e-classifieds`) + przepływ na PostgreSQL 16 (`e2e-real`, oba tryby) równolegle, wynik
 #   zbiera wymagany check „E2E (Playwright)”;
-# - akcje przypięte do SHA commita z komentarzem wersji (#1250; strażnik check-ci-workflows.mjs).
+# - akcje przypięte do SHA commita z komentarzem wersji (#1250; strażnik check-ci-workflows.mjs);
+# - PR z forków dostają pełne CI (#671): wyzwalacz `pull_request` (nigdy `pull_request_target`)
+#   daje tokenowi tylko odczyt i nie przekazuje sekretów, a workflow żadnych sekretów nie
+#   używa (placeholdery w `env`, usługi PostgreSQL w kontenerach jobu). Pierwszy przebieg
+#   PR nowego współtwórcy zatwierdza ręcznie opiekun (ustawienie repozytorium Actions →
+#   „Require approval for fork pull requests”). Strażnik pilnuje braku sekretów i zapisu.
 
 on:
   push:
@@ -40,8 +45,6 @@ env:
 jobs:
   install:
     name: Install & cache deps
-    # PR z forków nie dostają CI z tego repozytorium (bezpieczeństwo sekretów).
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -65,7 +68,6 @@ jobs:
 
   lint:
     name: Lint
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -88,7 +90,6 @@ jobs:
 
   typecheck:
     name: Typecheck
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -110,7 +111,6 @@ jobs:
 
   unit:
     name: Unit tests (Vitest)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -154,7 +154,6 @@ jobs:
     # Audyt z package-lock.json (`--package-lock-only`) — deterministyczne drzewo, nie wymaga
     # node_modules. Skrypt blokuje tylko przy
     # realnych podatnościach; niestabilny/wygaszany endpoint audytu npm nie wywala całego CI.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -166,7 +165,6 @@ jobs:
 
   build:
     name: Build (Next.js)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: [lint, typecheck, unit]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -216,7 +214,6 @@ jobs:
     #
     # Klient psql i testy działają w izolowanym kontenerze usługi.
     # Nie wymagamy instalacji klienta na hoście ani wspólnego portu 5432.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -262,7 +259,6 @@ jobs:
 
   migrations:
     name: Migration runner (PostgreSQL 16)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -355,7 +351,6 @@ jobs:
     # podział zgubiłby testy). Każdy shard zapisuje raport cząstkowy (blob); łączy je job
     # zbiorczy „E2E (Playwright)”. Test z pomiarem czasu (projekt `chromium-timing`) biegnie
     # w jobie `e2e-perf`, bez konkurencji o CPU.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -426,7 +421,6 @@ jobs:
     name: E2E perf (lab CWV + INP)
     # Pomiary czasu w jednym miejscu, na osobnym runnerze (bez równoległych kart zabierających CPU):
     # INP otwarcia dialogu (#393, projekt `chromium-timing`) i lab CWV z INP-proxy (#395).
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -501,7 +495,6 @@ jobs:
     # lista części 2, bo `--shard` dzieli pliki po liczbie testów, nie po czasie). Każda część
     # zapisuje raport cząstkowy (blob) dla jobu zbiorczego. Nie używa builda (next dev),
     # ale startuje po nim — jak reszta E2E.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -562,7 +555,6 @@ jobs:
     # panele, a11y stron publicznych) na buildzie z jobu build, potem lejek „Aplikuj u pracodawcy”
     # na serwerze fixture (`CLASSIFIEDS_FIXTURE_SPECS`). Wynik zbiera wymagany check
     # „E2E (Playwright)” — ten job nie jest osobnym wymaganym checkiem.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -649,7 +641,6 @@ jobs:
     # Dwa kroki: przepływy rekrutacyjne (serwer RECRUITMENT, jak dotąd) i tryb produkcyjny
     # portalu — `E2E_PORTAL_LEGAL_MODE: CLASSIFIEDS_ONLY` dla speców, które w przebiegu
     # RECRUITMENT są pomijane (`saved-search-classifieds`, #1148). Każdy krok na świeżej bazie.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -721,7 +712,7 @@ jobs:
     # `always()`: pominięty job liczyłby się jako zaliczony check — tutaj czerwony shard,
     # pomiar albo fixture zawsze daje czerwony „E2E (Playwright)”. Łączy raporty cząstkowe
     # w jeden raport html + raport flaków (#375).
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: always()
     needs: [build, e2e-shard, e2e-perf, e2e-fixtures, e2e-classifieds, e2e-real]
     runs-on: ubuntu-latest
     timeout-minutes: 10

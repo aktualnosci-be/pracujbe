@@ -8,6 +8,7 @@ import { getFormatter, getTranslations, setRequestLocale } from 'next-intl/serve
 import {
   ArrowLeft,
   ArrowRight,
+  Award,
   BadgeCheck,
   Building2,
   CalendarDays,
@@ -22,6 +23,7 @@ import {
   Scale,
   Truck,
   Utensils,
+  Wrench,
 } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
@@ -29,6 +31,7 @@ import { routing, type Locale } from '@/i18n/routing';
 import { env } from '@/lib/env';
 import { HELP_VERIFICATION_HREF } from '@/lib/help-anchors';
 import { buildJobDetailPassportFields } from '@/lib/job-detail-passport';
+import type { JobQualificationItem } from '@/lib/job-qualifications';
 import {
   buildJobBenefitsText,
   buildJobCostItems,
@@ -336,6 +339,19 @@ export default async function JobDetailPage({ params }: PageProps) {
       ? translation.sourceLocale
       : undefined
     : contentLang;
+  // #866: wpis pracodawcy (umiejętność spoza słownika, certyfikat) jest w języku treści oferty —
+  // także przy przekładzie (#33), który kwalifikacji nie tłumaczy; nazwa ze słownika = język strony.
+  const qualificationLang = job.contentLocale && job.contentLocale !== pageLocale ? job.contentLocale : undefined;
+  const qualifications = job.qualifications;
+  const qualificationGroups = qualifications
+    ? ([
+        { key: 'skillsMandatory', label: t('qualifications.skillsMandatory'), icon: Wrench, items: qualifications.skillsMandatory },
+        { key: 'skillsOptional', label: t('qualifications.skillsOptional'), icon: Wrench, items: qualifications.skillsOptional },
+        { key: 'certificates', label: t('qualifications.certificates'), icon: Award, items: qualifications.certificates },
+      ] satisfies { key: string; label: string; icon: typeof Wrench; items: JobQualificationItem[] }[]).filter(
+        (group) => group.items.length > 0,
+      )
+    : [];
 
   // Podobne oferty (ta sama kategoria, bez bieżącej). Sekcja pomocnicza: jej błąd odczytu
   // nie przerywa strony — opis, firma i aplikowanie zostają dostępne (#191).
@@ -627,6 +643,45 @@ export default async function JobDetailPage({ params }: PageProps) {
               </Section>
             ) : null}
 
+            {qualificationGroups.length > 0 ? (
+              <Section title={t('qualifications.title')}>
+                {/*
+                  #866: kwalifikacje, po których kandydat znalazł ofertę (słowo kluczowe listy).
+                  Układ `.info-pairs` prototypu jak „Koszty i dodatki”: para dt/dd w `div` dziecku `dl`.
+                */}
+                <dl className="grid gap-4 sm:grid-cols-2" data-testid="job-qualifications">
+                  {qualificationGroups.map((group) => {
+                    const Icon = group.icon;
+                    return (
+                      <div
+                        key={group.key}
+                        className={cn('relative pl-[1.875rem]', group.key === 'certificates' ? 'sm:col-span-2' : undefined)}
+                        data-qualification-group={group.key}
+                      >
+                        <dt className="text-sm text-muted-foreground">
+                          <Icon className="absolute left-0 top-0.5 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                          {group.label}
+                        </dt>
+                        <dd className="mt-2">
+                          <ul className="flex flex-wrap gap-2">
+                            {group.items.map((item) => (
+                              <li
+                                key={item.label}
+                                lang={item.localized ? undefined : qualificationLang}
+                                className="max-w-full break-words rounded-full border border-[color:var(--pp-line)] bg-background px-3 py-1 text-sm font-medium text-foreground"
+                              >
+                                {item.label}
+                              </li>
+                            ))}
+                          </ul>
+                        </dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </Section>
+            ) : null}
+
             {job.conditions.length > 0 ? (
               <Section title={t('conditions')}>
                 <ul lang={contentLang} className="grid gap-3 sm:grid-cols-2">
@@ -778,7 +833,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </Link>
               ) : null}
               {/* Blokada firmy (tylko zalogowany kandydat; wyspa kliencka, #97). Demo — brak. */}
-              {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} />}
+              {job.isDemo ? null : <JobCompanyBlockControl jobId={job.id} recruitmentEnabled={recruitment} />}
             </div>
           </Section>
           </div>

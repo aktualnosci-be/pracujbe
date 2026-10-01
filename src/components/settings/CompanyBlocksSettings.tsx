@@ -18,8 +18,16 @@ import { PAPER } from '@/components/dashboard/panel-styles';
  * utraty listy, sukces `role="status"`; po odblokowaniu fokus wraca na nagłówek sekcji,
  * bo usunięty wiersz zabiera przycisk, który go miał.
  */
-export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: CompanyBlock[] }): React.JSX.Element {
+export function CompanyBlocksSettings({
+  initialBlocks,
+  recruitmentEnabled = false,
+}: {
+  initialBlocks: CompanyBlock[];
+  /** #1213: tryb z serwera; domyślnie ogłoszeniowy — blokada = oferty firmy ukryte na liście i w alertach. */
+  recruitmentEnabled?: boolean;
+}): React.JSX.Element {
   const t = useTranslations('companyBlocks');
+  const v = (key: string): string => (recruitmentEnabled ? key : `${key}Listing`);
   const format = useFormatter();
   const [blocks, setBlocks] = React.useState(initialBlocks);
   const [pendingId, setPendingId] = React.useState<string | null>(null);
@@ -61,7 +69,7 @@ export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: Compan
         <Ban className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
         {t('sectionTitle')}
       </h2>
-      <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">{t('sectionDescription')}</p>
+      <p className="mt-1 text-[15px] leading-[1.7] text-muted-foreground">{t(v('sectionDescription'))}</p>
 
       <div aria-live="polite">
         {error ? (
@@ -85,7 +93,7 @@ export function CompanyBlocksSettings({ initialBlocks }: { initialBlocks: Compan
       </div>
 
       {blocks.length === 0 ? (
-        <p className="mt-4 text-sm text-foreground">{t('empty')}</p>
+        <p className="mt-4 text-sm text-foreground">{t(v('empty'))}</p>
       ) : (
         <ul className="mt-4 divide-y divide-border">
           {blocks.map((block) => {

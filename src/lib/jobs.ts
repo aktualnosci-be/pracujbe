@@ -25,6 +25,7 @@ import type { TransactionPool } from '@/lib/db/transaction';
 import { parseScreeningQuestions, type ScreeningQuestion } from '@/lib/screening/questions';
 import { parseJobCostsRow, type JobCosts } from '@/lib/job-costs';
 import { benefitsMatch, parseJobBenefitsRow, type JobBenefitCode, type JobBenefits } from '@/lib/job-benefits';
+import { parseJobQualifications, type JobQualifications } from '@/lib/job-qualifications';
 import {
   isApplyEmail,
   isApplyPhone,
@@ -194,6 +195,10 @@ export interface JobDetail extends JobListItem {
    * nic nie podano — strona nie pokazuje sekcji.
    */
   benefits?: JobBenefits;
+   * Umiejętności i certyfikaty oferty (#866, `job_skills`/`job_certificates` pod RLS anon);
+   * brak = oferta bez kwalifikacji albo odczyt nieudany — strona pomija sekcję.
+   */
+  qualifications?: JobQualifications;
   /**
    * Kanał aplikowania u ogłoszeniodawcy (#1129, 0172 — `get_public_job`). Każde pole osobno
    * sprawdzone lustrem reguł bazy; brak pola = kanał niepodany, brak obiektu = żaden.
@@ -630,11 +635,21 @@ async function getJobBySlugFromDb(
   } catch (error) {
     captureError(error, { area: 'jobs.getJobBenefits' });
   }
+  // #866: umiejętności i certyfikaty — odczyt pomocniczy; awaria = strona bez sekcji.
+  let qualifications: JobQualifications | undefined;
+  try {
+    const { getPublicJobQualifications } = await import('@/lib/db/public-jobs');
+    const rows = await getPublicJobQualifications(pool, job.id, locale);
+    qualifications = parseJobQualifications(rows.skills, rows.certificates);
+  } catch (error) {
+    captureError(error, { area: 'jobs.getJobQualifications' });
+  }
   const requested = toLocale(locale);
   const withLocales: JobDetail = {
     ...job,
     ...(costs ? { costs } : {}),
     ...(benefits && (benefits.codes.length > 0 || benefits.other.length > 0) ? { benefits } : {}),
+    ...(qualifications ? { qualifications } : {}),
     ...(await readContentLocales(pool, job, requested)),
     ...(screeningQuestions.length > 0 ? { screeningQuestions } : {}),
   };

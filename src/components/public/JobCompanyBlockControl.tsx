@@ -16,9 +16,18 @@ import type { JobCompanyBlockLoad } from '@/lib/data/company-blocks';
  * gości i robotów. Stan czytany pod sesją (`get_job_company_block`) — dla gościa, pracodawcy
  * i błędu odczytu nic nie renderujemy (kontrolka jest opcjonalna, nie blokuje aplikowania).
  * Publiczny URL oferty zablokowanej firmy pozostaje dostępny, a tu kandydat może ją odblokować.
+ * #1213: tryb z serwera (strona ISR liczy go przy renderze); domyślnie ogłoszeniowy — opis
+ * blokady bez profilu i propozycji (oferty firmy znikają z listy i alertów).
  */
-export function JobCompanyBlockControl({ jobId }: { jobId: string }): React.JSX.Element | null {
+export function JobCompanyBlockControl({
+  jobId,
+  recruitmentEnabled = false,
+}: {
+  jobId: string;
+  recruitmentEnabled?: boolean;
+}): React.JSX.Element | null {
   const t = useTranslations('companyBlocks');
+  const v = (key: string): string => (recruitmentEnabled ? key : `${key}Listing`);
   const [load, setLoad] = React.useState<JobCompanyBlockLoad | null>(null);
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState(false);
@@ -65,9 +74,9 @@ export function JobCompanyBlockControl({ jobId }: { jobId: string }): React.JSX.
 
   return (
     <div data-testid="job-company-block" className="mt-4 border-t border-border pt-4">
-      <h3 className="text-sm font-semibold text-foreground">{t('jobTitle')}</h3>
+      <h3 className="text-sm font-semibold text-foreground">{t(v('jobTitle'))}</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        {load.blocked ? t('jobBlockedDescription', { company }) : t('jobDescription', { company })}
+        {load.blocked ? t(v('jobBlockedDescription'), { company }) : t(v('jobDescription'), { company })}
       </p>
       <div aria-live="polite">
         {error ? (
