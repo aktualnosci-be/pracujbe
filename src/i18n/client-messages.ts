@@ -34,6 +34,7 @@ export const CLIENT_MESSAGE_NAMESPACES = [
   'home',
   'job',
   'jobAssist',
+  'jobSearchAssist',
   'jobImport',
   'jobWizard',
   'jobs',

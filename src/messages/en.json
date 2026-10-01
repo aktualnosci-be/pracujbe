@@ -784,7 +784,10 @@
     "cvImportFailed": "We could not prepare suggestions. Try again later or fill in your profile manually.",
     "jobContentReviewRequired": "The job text must be checked by the portal team before publishing. You can publish it after approval or after changing the text.",
     "jobContentRejected": "The job text was not approved. Change it to publish the job.",
-    "journalLimitReached": "Your journal already has 200 entries. Delete one to add a new one."
+    "journalLimitReached": "Your journal already has 200 entries. Delete one to add a new one.",
+    "jobSearchAssistSuspicious": "The description contains something that looks like instructions for an AI, so we did not prepare a proposal. Use the regular search.",
+    "jobSearchAssistNoFilters": "We found no filters supported by the portal in the description. Describe the sector, city or contract type — or use the regular search.",
+    "jobSearchAssistFailed": "We could not prepare a proposal. Use the regular search and the list filters."
   },
   "offerStatus": {
     "draft": "Draft",
@@ -1863,6 +1866,30 @@
     "droppedInvalid": "The suggestion for the field “{field}” didn't meet the form's rules, so we don't show it.",
     "errorNetwork": "We couldn't connect to the server. Check your connection and try again."
   },
+  "jobSearchAssist": {
+    "title": "Describe the job you are looking for (AI assistant)",
+    "aiNotice": "You are using an AI assistant. A language model turns your description into proposed filters — check them before you apply them.",
+    "scopeNote": "The assistant only proposes filters. It does not send, apply or save anything. We do not store the description and remove e-mail addresses, phone numbers and identification numbers before sending. Do not enter personal data.",
+    "textLabel": "Your description",
+    "textPlaceholder": "E.g. warehouse work near Ghent, full-time, no Dutch required, immediately",
+    "textHint": "From {min} to {max} characters.",
+    "inputLocaleLabel": "Language of the description",
+    "suggest": "Propose filters",
+    "suggesting": "Preparing a proposal…",
+    "resultTitle": "Proposed filters",
+    "resultIntro": "Untick the filters you do not want. The job list changes only after you click “Apply filters”.",
+    "filtersLegend": "Filters from the description",
+    "placesLegend": "These places are not in the portal filters. Search for their name in job offers?",
+    "placeNone": "Do not search by place",
+    "placeOption": "Search for place: {place}",
+    "uncertainTitle": "We did not map these fragments to any filter",
+    "uncertainHint": "If they matter, set them yourself in the list filters.",
+    "droppedNote": "We left out {count, plural, one {# proposal} other {# proposals}} outside the portal filters.",
+    "apply": "Apply filters",
+    "nothingSelected": "No filter selected. Tick at least one or use the regular search.",
+    "fallback": "You can always use the regular search and the list filters.",
+    "errorNetwork": "Could not connect to the server. Check your connection and try again."
+  },
   "messageTemplates": {
     "title": "Reply templates",
     "intro": "Save ready-made replies in several languages. In a message to a candidate you insert the version in their language.",
@@ -2747,6 +2774,7 @@
     "aiCostsFeatureAssist": "Job text assistant",
     "aiCostsFeatureCvImport": "CV import",
     "aiCostsFeatureProfileTranslation": "Candidate profile translation",
+    "aiCostsFeatureSearchFilters": "Search by description",
     "navSettings": "Settings",
     "agePolicyTitle": "Candidate age threshold",
     "agePolicySubtitle": "Minimum age for a candidate account and for profile searchability by companies.",

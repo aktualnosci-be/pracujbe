@@ -70,6 +70,9 @@ const FAIL_SAFE_ACTIONS: ReadonlySet<string> = new Set([
   // Import CV przez AI (#487): jak wyżej — każde wywołanie modelu kosztuje.
   'cv-import',
   'cv-import-day',
+  // Wyszukiwanie opisem (#711): publiczne, płatne API — limit per adres fail-closed.
+  'job-search-assist',
+  'job-search-assist-day',
   // Aplikacja bez konta (#98): publiczny formularz wysyłający e-maile na podany adres.
   'guest-apply',
   'guest-apply-email',

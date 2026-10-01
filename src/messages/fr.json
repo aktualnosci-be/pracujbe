@@ -784,7 +784,10 @@
     "cvImportFailed": "Nous n’avons pas pu préparer de propositions. Réessayez plus tard ou remplissez votre profil manuellement.",
     "jobContentReviewRequired": "Le contenu de l’offre doit d’abord être vérifié par l’équipe du portail. Vous pourrez la publier après acceptation ou après modification du texte.",
     "jobContentRejected": "Le contenu de l’offre n’a pas été accepté. Modifiez-le pour publier l’offre.",
-    "journalLimitReached": "Votre journal contient déjà 200 entrées. Supprimez-en une pour en ajouter une nouvelle."
+    "journalLimitReached": "Votre journal contient déjà 200 entrées. Supprimez-en une pour en ajouter une nouvelle.",
+    "jobSearchAssistSuspicious": "La description contient quelque chose qui ressemble à des instructions pour une IA, nous n’avons donc pas préparé de proposition. Utilisez la recherche habituelle.",
+    "jobSearchAssistNoFilters": "Nous n’avons trouvé dans la description aucun filtre pris en charge par le portail. Décrivez le secteur, la ville ou le type de contrat — ou utilisez la recherche habituelle.",
+    "jobSearchAssistFailed": "La proposition n’a pas pu être préparée. Utilisez la recherche habituelle et les filtres de la liste."
   },
   "offerStatus": {
     "draft": "Brouillon",
@@ -1863,6 +1866,30 @@
     "droppedInvalid": "La proposition pour le champ « {field} » ne respectait pas les règles du formulaire, nous ne l'affichons donc pas.",
     "errorNetwork": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez."
   },
+  "jobSearchAssist": {
+    "title": "Décrivez le travail que vous cherchez (assistant IA)",
+    "aiNotice": "Vous utilisez un assistant IA. Un modèle de langage transforme votre description en proposition de filtres — vérifiez-la avant de l’appliquer.",
+    "scopeNote": "L’assistant propose uniquement des filtres. Il n’envoie rien, ne postule pas et n’enregistre rien. Nous ne conservons pas la description et supprimons les adresses e-mail, numéros de téléphone et numéros d’identification avant l’envoi. N’indiquez pas de données personnelles.",
+    "textLabel": "Votre description",
+    "textPlaceholder": "Par ex. travail en entrepôt près de Gand, temps plein, sans néerlandais, immédiatement",
+    "textHint": "De {min} à {max} caractères.",
+    "inputLocaleLabel": "Langue de la description",
+    "suggest": "Proposer des filtres",
+    "suggesting": "Préparation de la proposition…",
+    "resultTitle": "Filtres proposés",
+    "resultIntro": "Décochez les filtres dont vous ne voulez pas. La liste des offres ne change qu’après un clic sur « Appliquer les filtres ».",
+    "filtersLegend": "Filtres issus de la description",
+    "placesLegend": "Ces localités ne figurent pas dans les filtres du portail. Faut-il chercher leur nom dans les offres ?",
+    "placeNone": "Ne pas chercher par localité",
+    "placeOption": "Chercher la localité : {place}",
+    "uncertainTitle": "Nous n’avons associé ces fragments à aucun filtre",
+    "uncertainHint": "S’ils sont importants, réglez-les vous-même dans les filtres de la liste.",
+    "droppedNote": "Nous avons écarté {count, plural, one {# proposition} other {# propositions}} hors des filtres du portail.",
+    "apply": "Appliquer les filtres",
+    "nothingSelected": "Aucun filtre sélectionné. Cochez-en au moins un ou utilisez la recherche habituelle.",
+    "fallback": "Vous pouvez toujours utiliser la recherche habituelle et les filtres de la liste.",
+    "errorNetwork": "Connexion au serveur impossible. Vérifiez votre connexion et réessayez."
+  },
   "messageTemplates": {
     "title": "Modèles de réponse",
     "intro": "Enregistrez des réponses toutes prêtes en plusieurs langues. Dans un message à un candidat, vous insérez la version dans sa langue.",
@@ -2747,6 +2774,7 @@
     "aiCostsFeatureAssist": "Assistant de rédaction d’offre",
     "aiCostsFeatureCvImport": "Import de CV",
     "aiCostsFeatureProfileTranslation": "Traduction des profils de candidats",
+    "aiCostsFeatureSearchFilters": "Recherche par description",
     "navSettings": "Paramètres",
     "agePolicyTitle": "Seuil d'âge des candidats",
     "agePolicySubtitle": "Âge minimum pour un compte candidat et pour la visibilité du profil pour les entreprises.",

@@ -24611,4 +24611,40 @@ select pg_temp.assert(public.email_recipient_authorized('newApplication', 'appli
 rollback;
 reset role; reset app.current_uid;
 
+-- ============================================================================
+-- AIS711. Wyszukiwanie opisem (#711, 0980): funkcja AI `job_search_filters` w globalnym budżecie.
+--   Rezerwacja dla nowej funkcji działa (service_role), klient nadal bez dostępu, rejestr
+--   przyjmuje identyfikator. Kontrola ujemna: lista funkcji z 0176 (rollback 0980) odrzuca
+--   rezerwację — budżet nie dałby się wywołać, więc wyszukiwanie opisem nie wołałoby modelu.
+-- ============================================================================
+\echo '--- AIS711 budżet AI: wyszukiwanie opisem ---'
+reset role; reset app.current_uid;
+begin;
+set local role service_role;
+update public.ai_budget_limits set limit_micro_usd = 1000000 where period = 'day';
+update public.ai_budget_limits set limit_micro_usd = 5000000 where period = 'month';
+select public.ai_budget_reserve('job_search_filters', 'gpt-6-luna', 1500) as ais_r1 \gset
+select pg_temp.assert(
+  (select feature = 'job_search_filters' and reserved_micro_usd = 1500 from public.ai_usage_ledger where id = :'ais_r1'),
+  'AIS711-1 rezerwacja dla job_search_filters zapisana w rejestrze');
+select pg_temp.assert(public.ai_budget_settle(:'ais_r1', 'ok', 900, 120, 150),
+  'AIS711-2 rozliczenie rezerwacji wyszukiwania opisem');
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_unknown'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-3 nieznana funkcja nadal odrzucona');
+reset role;
+select pg_temp.assert(
+  not has_function_privilege('authenticated', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.ai_budget_reserve(text, text, bigint)', 'EXECUTE'),
+  'AIS711-4 klient nie rezerwuje budżetu (EXECUTE tylko service_role)');
+-- Kontrola ujemna: definicje z 0176.
+\ir ../rollback/0980_ai_budget_job_search_filters.down.sql
+set local role service_role;
+select pg_temp.expect_error(
+  'select public.ai_budget_reserve(''job_search_filters'', ''gpt-6-luna'', 10)',
+  'VALIDATION_FAILED', 'AIS711-N kontrola ujemna: lista funkcji z 0176 odrzuca wyszukiwanie opisem');
+rollback;
+reset role; reset app.current_uid;
+
 \echo '=================== ALL RLS TESTS PASSED ==================='

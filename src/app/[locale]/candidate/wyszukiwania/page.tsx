@@ -11,6 +11,8 @@ import { savedSearchFilterLabels } from '@/lib/job-filter-summary';
 import { CandidatePageHeader } from '@/components/candidate/CandidatePageHeader';
 import { BTN_PRIMARY, BTN_SECONDARY, P_EXTENDED, PAPER } from '@/components/dashboard/panel-styles';
 import { cn } from '@/lib/utils';
+import { JobSearchAssistDisclosure } from '@/components/public/JobSearchAssistLazy';
+import { isJobSearchAssistEnabled } from '@/lib/ai-search/config';
 
 /**
  * Panel kandydata — Zapisane wyszukiwania i alerty o nowych ofertach (#100).
@@ -47,6 +49,8 @@ export default async function CandidateSavedSearchesPage({
 
   const t = await getTranslations({ locale, namespace: 'savedSearches' });
   const td = await getTranslations({ locale, namespace: 'dashboard' });
+  const tSearchAssist = await getTranslations({ locale, namespace: 'jobSearchAssist' });
+  const tCommon = await getTranslations({ locale, namespace: 'common' });
   const [tFilters, tCat, tContract, tLanguageNames, load] = await Promise.all([
     getTranslations({ locale, namespace: 'filters' }),
     getTranslations({ locale, namespace: 'categories' }),
@@ -65,6 +69,14 @@ export default async function CandidateSavedSearchesPage({
   return (
     <div className="min-w-0">
       <CandidatePageHeader eyebrow={td('candidatePlaceEyebrow')} title={td('navSearches')} intro={t('intro')} />
+
+      {/* #711: wyszukiwanie opisem (AI, za flagą) — „Zastosuj filtry” otwiera listę ofert, gdzie
+          kandydat może zapisać wyszukiwanie i alert. */}
+      {isJobSearchAssistEnabled() ? (
+        <div className="mb-6">
+          <JobSearchAssistDisclosure locale={locale} title={tSearchAssist('title')} noScriptText={tCommon('formJsRequired')} />
+        </div>
+      ) : null}
 
       {load.status === 'error' ? (
         <section role="alert" className={PAPER}>

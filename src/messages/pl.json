@@ -784,7 +784,10 @@
     "cvImportFailed": "Nie udało się przygotować propozycji. Spróbuj ponownie później albo wypełnij profil ręcznie.",
     "jobContentReviewRequired": "Treść oferty przed publikacją musi sprawdzić zespół portalu. Opublikujesz ją po akceptacji albo po zmianie treści.",
     "jobContentRejected": "Treść oferty nie została zaakceptowana. Zmień ją, aby opublikować ofertę.",
-    "journalLimitReached": "Dziennik ma już 200 wpisów. Usuń jeden, aby dodać nowy."
+    "journalLimitReached": "Dziennik ma już 200 wpisów. Usuń jeden, aby dodać nowy.",
+    "jobSearchAssistSuspicious": "Opis zawiera coś, co wygląda na polecenia dla AI, więc nie przygotowaliśmy propozycji. Użyj zwykłej wyszukiwarki.",
+    "jobSearchAssistNoFilters": "Nie znaleźliśmy w opisie filtrów, które obsługuje portal. Opisz branżę, miasto albo rodzaj umowy — albo użyj zwykłej wyszukiwarki.",
+    "jobSearchAssistFailed": "Nie udało się przygotować propozycji. Użyj zwykłej wyszukiwarki i filtrów listy."
   },
   "offerStatus": {
     "draft": "Szkic",
@@ -1863,6 +1866,30 @@
     "droppedInvalid": "Propozycja dla pola „{field}” nie spełniała wymagań formularza, więc jej nie pokazujemy.",
     "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
   },
+  "jobSearchAssist": {
+    "title": "Opisz, jakiej pracy szukasz (asystent AI)",
+    "aiNotice": "Korzystasz z asystenta AI. Model językowy zamienia Twój opis na propozycję filtrów — sprawdź ją, zanim ją zastosujesz.",
+    "scopeNote": "Asystent tylko proponuje filtry. Niczego nie wysyła, nie aplikuje i nie zapisuje. Nie przechowujemy opisu, a adresy e-mail, numery telefonu i numery identyfikacyjne usuwamy przed wysłaniem. Nie wpisuj danych osobowych.",
+    "textLabel": "Twój opis",
+    "textPlaceholder": "Np. praca w magazynie w okolicach Gandawy, pełny etat, bez wymogu niderlandzkiego, od zaraz",
+    "textHint": "Od {min} do {max} znaków.",
+    "inputLocaleLabel": "Język opisu",
+    "suggest": "Zaproponuj filtry",
+    "suggesting": "Przygotowujemy propozycję…",
+    "resultTitle": "Proponowane filtry",
+    "resultIntro": "Odznacz filtry, których nie chcesz. Lista ofert zmieni się dopiero po kliknięciu „Zastosuj filtry”.",
+    "filtersLegend": "Filtry z opisu",
+    "placesLegend": "Tych miejscowości nie ma w filtrach portalu. Czy szukać ich nazwy w ofertach?",
+    "placeNone": "Nie szukaj po miejscowości",
+    "placeOption": "Szukaj miejscowości: {place}",
+    "uncertainTitle": "Tych fragmentów nie przypisaliśmy do żadnego filtra",
+    "uncertainHint": "Jeśli są ważne, ustaw je ręcznie w filtrach listy.",
+    "droppedNote": "Pominęliśmy {count, plural, one {# propozycję} few {# propozycje} other {# propozycji}} spoza filtrów portalu.",
+    "apply": "Zastosuj filtry",
+    "nothingSelected": "Nie wybrano żadnego filtra. Zaznacz co najmniej jeden albo użyj zwykłej wyszukiwarki.",
+    "fallback": "Zawsze możesz użyć zwykłej wyszukiwarki i filtrów listy.",
+    "errorNetwork": "Nie udało się połączyć z serwerem. Sprawdź połączenie i spróbuj ponownie."
+  },
   "messageTemplates": {
     "title": "Szablony odpowiedzi",
     "intro": "Zapisz gotowe odpowiedzi w kilku językach. W wiadomości do kandydata wstawisz wersję w jego języku.",
@@ -2747,6 +2774,7 @@
     "aiCostsFeatureAssist": "Asystent treści oferty",
     "aiCostsFeatureCvImport": "Import CV",
     "aiCostsFeatureProfileTranslation": "Tłumaczenie profili kandydatów",
+    "aiCostsFeatureSearchFilters": "Wyszukiwanie opisem",
     "navSettings": "Ustawienia",
     "agePolicyTitle": "Próg wieku kandydatów",
     "agePolicySubtitle": "Minimalny wiek konta kandydata i wyszukiwalności profilu dla firm.",
