@@ -20,9 +20,9 @@ begin;
 
 select pg_temp.assert(
   to_regprocedure('public.translation_entity_exists(text, uuid)') is null
-  and position('lease_expires_at' in pg_get_functiondef('public.complete_translation_job(uuid, uuid, jsonb, text, integer, integer)'::regprocedure)) = 0
-  and position('lease_expires_at <=' in pg_get_functiondef('public.fail_translation_job(uuid, uuid, text, boolean, integer)'::regprocedure)) = 0
-  and position('lease_expires_at <=' in pg_get_functiondef('public.defer_translation_job(uuid, uuid, text, integer)'::regprocedure)) = 0
+  and position('clock_timestamp()' in pg_get_functiondef('public.complete_translation_job(uuid, uuid, jsonb, text, integer, integer)'::regprocedure)) = 0
+  and position('clock_timestamp()' in pg_get_functiondef('public.fail_translation_job(uuid, uuid, text, boolean, integer)'::regprocedure)) = 0
+  and position('clock_timestamp()' in pg_get_functiondef('public.defer_translation_job(uuid, uuid, text, integer)'::regprocedure)) = 0
   and position('translation_entity' in pg_get_functiondef('public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])'::regprocedure)) = 0
   and position('protected_terms' in pg_get_functiondef('public.record_translation_source(text, uuid, text, jsonb, text, integer, text[])'::regprocedure)) > 0
   and position('author' in pg_get_functiondef('public.save_manual_translation(text, uuid, text, jsonb, uuid)'::regprocedure)) > 0
