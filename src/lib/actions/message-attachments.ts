@@ -4,9 +4,9 @@ import { z } from 'zod/v3';
 
 import { getPortalIdentity } from '@/lib/db/portal';
 import { isProductionMode } from '@/lib/env';
-import { AppError, type ErrorCode } from '@/lib/errors';
+import type { ErrorCode } from '@/lib/errors';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { captureError } from '@/lib/error-report';
+import { captureActionError } from '@/lib/db/errors';
 import { isRecruitmentEnabled } from '@/lib/portal-mode';
 import { checkAttachmentFile, type AttachmentFileProblem } from '@/lib/validation/message-attachment';
 
@@ -45,8 +45,9 @@ async function sessionContext(): Promise<Context> {
   return { ok: true, deps, userId: me.id };
 }
 
-function unexpected(area: string): { ok: false; error: 'INTERNAL' } {
-  captureError(new AppError('INTERNAL'), { area });
+function unexpected(area: string, error: unknown): { ok: false; error: 'INTERNAL' } {
+  // #1068: błąd bazy z SQLSTATE (bez komunikatu), inny wyjątek z samym obszarem.
+  captureActionError(error, area);
   return { ok: false, error: 'INTERNAL' };
 }
 
@@ -80,8 +81,8 @@ export async function uploadMessageAttachment(formData: FormData): Promise<Attac
       clientUploadId as string,
       file,
     );
-  } catch {
-    return unexpected('attachments.upload');
+  } catch (error) {
+    return unexpected('attachments.upload', error);
   }
 }
 
@@ -94,8 +95,8 @@ export async function discardMessageAttachment(attachmentId: string): Promise<At
     if (!context.ok) return context;
     const { discardStagedAttachment } = await import('@/lib/files/message-attachments');
     return await discardStagedAttachment(context.deps, context.userId, attachmentId);
-  } catch {
-    return unexpected('attachments.discard');
+  } catch (error) {
+    return unexpected('attachments.discard', error);
   }
 }
 
@@ -108,7 +109,7 @@ export async function prepareMessageAttachmentDownload(attachmentId: string): Pr
     if (!context.ok) return context;
     const { issueAttachmentDownloadLink } = await import('@/lib/files/message-attachments');
     return await issueAttachmentDownloadLink(context.deps, context.userId, attachmentId);
-  } catch {
-    return unexpected('attachments.link');
+  } catch (error) {
+    return unexpected('attachments.link', error);
   }
 }
