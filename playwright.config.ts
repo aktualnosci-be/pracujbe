@@ -300,6 +300,7 @@ const CLASSIFIEDS_SHARED_SPECS = [
   '**/job-detail-tabs.spec.ts',
   '**/job-filter-passport.spec.ts',
   '**/job-passport.spec.ts',
+  '**/job-qualifications.spec.ts',
   '**/jobs-list-chip-reflow.spec.ts',
   '**/jobs-list-empty-exit.spec.ts',
   '**/jobs-list-facets-failure.spec.ts',

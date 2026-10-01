@@ -5,7 +5,7 @@ import { z } from 'zod/v3';
 import { isLocale } from '@/i18n/routing';
 import { getOlderThreadMessages, type ThreadCursor } from '@/lib/data/messages';
 import { toMessageViews, type ThreadMessageView } from '@/lib/messaging/thread-view';
-import { databaseErrorMessage, isDatabaseError } from '@/lib/db/errors';
+import { databaseErrorMessage, isDatabaseError, reportUnmappedDbError } from '@/lib/db/errors';
 import { getPortalIdentity, isPortalDataConfigured, withPortalTransaction } from '@/lib/db/portal';
 import { rpc } from '@/lib/db/sql';
 import type { ErrorCode } from '@/lib/errors';
@@ -62,7 +62,7 @@ function mapPgError(message: string | undefined): ErrorCode {
 
 /** Błąd bazy → kod użytkowy; inny wyjątek (sieć, konfiguracja) → kanał błędów + INTERNAL. */
 function mapFailure(error: unknown, area: string): ErrorCode {
-  if (isDatabaseError(error)) return mapPgError(databaseErrorMessage(error));
+  if (isDatabaseError(error)) return reportUnmappedDbError(error, area, mapPgError(databaseErrorMessage(error)));
   captureError(error, { area });
   return 'INTERNAL';
 }
